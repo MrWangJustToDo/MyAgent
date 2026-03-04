@@ -4,7 +4,7 @@ export const getOllamaApi = (url: string): Promise<{ data?: any; error?: string 
 
 export const postOllamaApi = (url: string, data: any): Promise<{ data?: any; error?: string }> => {
   return browser.runtime.sendMessage({ action: "postOllamaApi", url, data });
-}
+};
 
 export const translateText = ({
   text,

@@ -1,2 +1,2 @@
-export * from './detector';
-export * from './translate';
+export * from "./detector";
+export * from "./translate";

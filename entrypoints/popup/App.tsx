@@ -1,4 +1,4 @@
-import { Card, CardBody, CardHeader, Divider, Input, Select, SelectItem } from "@heroui/react";
+import { Card, CardBody, CardHeader, Divider, Input, Listbox, ListboxItem } from "@heroui/react";
 import useSWR from "swr";
 
 import { Logo } from "@/components/logo";
@@ -19,6 +19,8 @@ function App() {
 
   useSyncConfig({ side: "popup" });
 
+  const selectedSet = useMemo(() => new Set<string>().add(selected), [selected]);
+
   return (
     <div className="p-2">
       <Card className="min-w-[300px]" radius="sm">
@@ -30,21 +32,28 @@ function App() {
         <CardBody>
           <Input label="Ollama api" isRequired value={url} onChange={(s) => setUrl(s.target.value)} />
           <br />
-          <Select
-            items={list}
-            selectedKeys={[selected]}
-            onSelectionChange={(s) => setSelected(s.currentKey)}
-            label="Modal"
-            isDisabled={!connect}
-            size="sm"
-            placeholder="Select a modal"
-          >
-            {(item) => (
-              <SelectItem textValue={item.label}>
-                {item.label}
-              </SelectItem>
-            )}
-          </Select>
+          <div className="max-h-60 overflow-auto">
+            <Listbox
+              disallowEmptySelection
+              aria-label="Single selection example"
+              selectedKeys={selectedSet}
+              selectionMode="single"
+              variant="flat"
+              onSelectionChange={(set) => {
+                if (set) {
+                  const typedSet = set as Set<string>;
+
+                  setSelected(Array.from(typedSet)[0]);
+                } else {
+                  setSelected("");
+                }
+              }}
+            >
+              {list.map((i) => (
+                <ListboxItem key={i.key}>{i.label}</ListboxItem>
+              ))}
+            </Listbox>
+          </div>
         </CardBody>
       </Card>
     </div>

@@ -1,673 +1,125 @@
 (function () {
     'use strict';
 
-    var reactShared = {exports: {}};
+    /******************************************************************************
+    Copyright (c) Microsoft Corporation.
 
-    var index_production$1 = {};
+    Permission to use, copy, modify, and/or distribute this software for any
+    purpose with or without fee is hereby granted.
 
-    var hasRequiredIndex_production$1;
-
-    function requireIndex_production$1 () {
-    	if (hasRequiredIndex_production$1) return index_production$1;
-    	hasRequiredIndex_production$1 = 1;
-    	(function (exports) {
-
-    		var merge = function (src, rest) {
-    		    return src | rest;
-    		};
-    		var remove = function (src, rest) {
-    		    if (src & rest) {
-    		        return src ^ rest;
-    		    }
-    		    else {
-    		        return src;
-    		    }
-    		};
-    		var include = function (src, rest) {
-    		    return !!(src & rest);
-    		};
-    		var exclude = function (src, rest) {
-    		    return !(src & rest);
-    		};
-
-    		/******************************************************************************
-    		Copyright (c) Microsoft Corporation.
-
-    		Permission to use, copy, modify, and/or distribute this software for any
-    		purpose with or without fee is hereby granted.
-
-    		THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-    		REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-    		AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-    		INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-    		LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
-    		OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-    		PERFORMANCE OF THIS SOFTWARE.
-    		***************************************************************************** */
-    		/* global Reflect, Promise, SuppressedError, Symbol, Iterator */
+    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+    REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+    AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+    INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+    LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+    OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+    PERFORMANCE OF THIS SOFTWARE.
+    ***************************************************************************** */
+    /* global Reflect, Promise, SuppressedError, Symbol, Iterator */
 
 
-    		function __spreadArray(to, from, pack) {
-    		    if (arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-    		        if (ar || !(i in from)) {
-    		            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-    		            ar[i] = from[i];
-    		        }
-    		    }
-    		    return to.concat(ar || Array.prototype.slice.call(from));
-    		}
-
-    		typeof SuppressedError === "function" ? SuppressedError : function (error, suppressed, message) {
-    		    var e = new Error(message);
-    		    return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
-    		};
-
-    		var once = function (action) {
-    		    var called = false;
-    		    return function () {
-    		        var args = [];
-    		        for (var _i = 0; _i < arguments.length; _i++) {
-    		            args[_i] = arguments[_i];
-    		        }
-    		        if (called)
-    		            return;
-    		        called = true;
-    		        if (typeof action === "function")
-    		            action.call.apply(action, __spreadArray([null], args, false));
-    		    };
-    		};
-
-    		var TYPEKEY = "$$typeof";
-    		var Element = Symbol.for("react.element");
-    		var Memo = Symbol.for("react.memo");
-    		var ForwardRef = Symbol.for("react.forward_ref");
-    		var Portal = Symbol.for("react.portal");
-    		var Fragment = Symbol.for("react.fragment");
-    		var Context = Symbol.for("react.context");
-    		var Provider = Symbol.for("react.provider");
-    		var Consumer = Symbol.for("react.consumer");
-    		var Lazy = Symbol.for("react.lazy");
-    		var Suspense = Symbol.for("react.suspense");
-    		var Strict = Symbol.for("react.strict_mode");
-    		var Root = Symbol.for("react.root");
-    		var Scope = Symbol.for("react.scope");
-    		var ScopeLazy = Symbol.for("react.scope_lazy");
-    		var ScopeSuspense = Symbol.for("react.scope_suspense");
-    		var Comment = Symbol.for("react.comment");
-    		var Offscreen = Symbol.for("react.offscreen");
-    		var Activity = Symbol.for("react.activity");
-    		var Profiler = Symbol.for("react.profiler");
-
-    		function isObject(target) {
-    		    return typeof target === "object" && target !== null;
-    		}
-    		function isFunction(target) {
-    		    return typeof target === "function";
-    		}
-    		function isArray(target) {
-    		    return Array.isArray(target);
-    		}
-    		function isSymbol(target) {
-    		    return typeof target === "symbol";
-    		}
-    		function isString(target) {
-    		    return typeof target === "string";
-    		}
-    		function isInteger(target) {
-    		    return Number.isInteger(Number(target));
-    		}
-    		function isNumber(target) {
-    		    return typeof target === "number";
-    		}
-    		function isCollection(target) {
-    		    return target instanceof Map || target instanceof Set || target instanceof WeakMap || target instanceof WeakSet;
-    		}
-    		var isPromise = function (val) {
-    		    return (isObject(val) || isFunction(val)) && isFunction(val.then) && isFunction(val.catch);
-    		};
-
-    		var UniqueArray = /** @class */ (function () {
-    		    function UniqueArray() {
-    		        this.set = new Set();
-    		        this.arr = new Array();
-    		        this.length = 0;
-    		    }
-    		    UniqueArray.prototype.uniPop = function () {
-    		        var v = this.arr.pop();
-    		        this.set.delete(v);
-    		        this.length--;
-    		        return v;
-    		    };
-    		    UniqueArray.prototype.uniPush = function (v) {
-    		        if (this.set.has(v))
-    		            return 0;
-    		        this.set.add(v);
-    		        this.arr.push(v);
-    		        this.length++;
-    		    };
-    		    UniqueArray.prototype.uniShift = function () {
-    		        var v = this.arr.shift();
-    		        this.set.delete(v);
-    		        this.length--;
-    		        return v;
-    		    };
-    		    UniqueArray.prototype.uniUnshift = function (v) {
-    		        if (this.set.has(v))
-    		            return 0;
-    		        this.set.add(v);
-    		        this.arr.unshift(v);
-    		        this.length++;
-    		    };
-    		    UniqueArray.prototype.uniDelete = function (v) {
-    		        if (this.set.has(v)) {
-    		            this.set.delete(v);
-    		            this.arr = this.arr.filter(function (i) { return i !== v; });
-    		            this.length--;
-    		        }
-    		    };
-    		    UniqueArray.prototype.clear = function () {
-    		        this.length = 0;
-    		        this.set.clear();
-    		        this.arr.length = 0;
-    		    };
-    		    UniqueArray.prototype.getAll = function () {
-    		        return Array.from(this.arr);
-    		    };
-    		    return UniqueArray;
-    		}());
-
-    		exports.HOOK_TYPE = void 0;
-    		(function (HOOK_TYPE) {
-    		    HOOK_TYPE[HOOK_TYPE["useId"] = 0] = "useId";
-    		    HOOK_TYPE[HOOK_TYPE["useRef"] = 1] = "useRef";
-    		    HOOK_TYPE[HOOK_TYPE["useMemo"] = 2] = "useMemo";
-    		    HOOK_TYPE[HOOK_TYPE["useState"] = 3] = "useState";
-    		    HOOK_TYPE[HOOK_TYPE["useSignal"] = 4] = "useSignal";
-    		    HOOK_TYPE[HOOK_TYPE["useEffect"] = 5] = "useEffect";
-    		    HOOK_TYPE[HOOK_TYPE["useContext"] = 6] = "useContext";
-    		    HOOK_TYPE[HOOK_TYPE["useReducer"] = 7] = "useReducer";
-    		    HOOK_TYPE[HOOK_TYPE["useCallback"] = 8] = "useCallback";
-    		    HOOK_TYPE[HOOK_TYPE["useTransition"] = 9] = "useTransition";
-    		    HOOK_TYPE[HOOK_TYPE["useDebugValue"] = 10] = "useDebugValue";
-    		    HOOK_TYPE[HOOK_TYPE["useLayoutEffect"] = 11] = "useLayoutEffect";
-    		    HOOK_TYPE[HOOK_TYPE["useDeferredValue"] = 12] = "useDeferredValue";
-    		    HOOK_TYPE[HOOK_TYPE["useInsertionEffect"] = 13] = "useInsertionEffect";
-    		    HOOK_TYPE[HOOK_TYPE["useImperativeHandle"] = 14] = "useImperativeHandle";
-    		    HOOK_TYPE[HOOK_TYPE["useSyncExternalStore"] = 15] = "useSyncExternalStore";
-    		    HOOK_TYPE[HOOK_TYPE["useOptimistic"] = 16] = "useOptimistic";
-    		    HOOK_TYPE[HOOK_TYPE["useEffectEvent"] = 17] = "useEffectEvent";
-    		})(exports.HOOK_TYPE || (exports.HOOK_TYPE = {}));
-
-    		exports.UpdateQueueType = void 0;
-    		(function (UpdateQueueType) {
-    		    UpdateQueueType[UpdateQueueType["component"] = 1] = "component";
-    		    UpdateQueueType[UpdateQueueType["hook"] = 2] = "hook";
-    		    UpdateQueueType[UpdateQueueType["context"] = 3] = "context";
-    		    UpdateQueueType[UpdateQueueType["hmr"] = 4] = "hmr";
-    		    UpdateQueueType[UpdateQueueType["trigger"] = 5] = "trigger";
-    		    UpdateQueueType[UpdateQueueType["suspense"] = 6] = "suspense";
-    		    UpdateQueueType[UpdateQueueType["lazy"] = 7] = "lazy";
-    		    UpdateQueueType[UpdateQueueType["promise"] = 8] = "promise";
-    		})(exports.UpdateQueueType || (exports.UpdateQueueType = {}));
-
-    		exports.STATE_TYPE = void 0;
-    		(function (STATE_TYPE) {
-    		    STATE_TYPE[STATE_TYPE["__initial__"] = 0] = "__initial__";
-    		    STATE_TYPE[STATE_TYPE["__create__"] = 1] = "__create__";
-    		    STATE_TYPE[STATE_TYPE["__stable__"] = 2] = "__stable__";
-    		    STATE_TYPE[STATE_TYPE["__inherit__"] = 4] = "__inherit__";
-    		    STATE_TYPE[STATE_TYPE["__triggerConcurrent__"] = 8] = "__triggerConcurrent__";
-    		    STATE_TYPE[STATE_TYPE["__triggerConcurrentForce__"] = 16] = "__triggerConcurrentForce__";
-    		    STATE_TYPE[STATE_TYPE["__triggerSync__"] = 32] = "__triggerSync__";
-    		    STATE_TYPE[STATE_TYPE["__triggerSyncForce__"] = 64] = "__triggerSyncForce__";
-    		    STATE_TYPE[STATE_TYPE["__unmount__"] = 128] = "__unmount__";
-    		    STATE_TYPE[STATE_TYPE["__hmr__"] = 256] = "__hmr__";
-    		    STATE_TYPE[STATE_TYPE["__retrigger__"] = 512] = "__retrigger__";
-    		    STATE_TYPE[STATE_TYPE["__reschedule__"] = 1024] = "__reschedule__";
-    		    STATE_TYPE[STATE_TYPE["__recreate__"] = 2048] = "__recreate__";
-    		    STATE_TYPE[STATE_TYPE["__suspense__"] = 4096] = "__suspense__";
-    		})(exports.STATE_TYPE || (exports.STATE_TYPE = {}));
-
-    		exports.PATCH_TYPE = void 0;
-    		(function (PATCH_TYPE) {
-    		    PATCH_TYPE[PATCH_TYPE["__initial__"] = 0] = "__initial__";
-    		    PATCH_TYPE[PATCH_TYPE["__create__"] = 1] = "__create__";
-    		    PATCH_TYPE[PATCH_TYPE["__update__"] = 2] = "__update__";
-    		    PATCH_TYPE[PATCH_TYPE["__append__"] = 4] = "__append__";
-    		    PATCH_TYPE[PATCH_TYPE["__position__"] = 8] = "__position__";
-    		    PATCH_TYPE[PATCH_TYPE["__effect__"] = 16] = "__effect__";
-    		    PATCH_TYPE[PATCH_TYPE["__layoutEffect__"] = 32] = "__layoutEffect__";
-    		    PATCH_TYPE[PATCH_TYPE["__insertionEffect__"] = 64] = "__insertionEffect__";
-    		    PATCH_TYPE[PATCH_TYPE["__unmount__"] = 128] = "__unmount__";
-    		    PATCH_TYPE[PATCH_TYPE["__ref__"] = 256] = "__ref__";
-    		})(exports.PATCH_TYPE || (exports.PATCH_TYPE = {}));
-
-    		exports.Effect_TYPE = void 0;
-    		(function (Effect_TYPE) {
-    		    Effect_TYPE[Effect_TYPE["__initial__"] = 0] = "__initial__";
-    		    Effect_TYPE[Effect_TYPE["__effect__"] = 1] = "__effect__";
-    		    Effect_TYPE[Effect_TYPE["__unmount__"] = 2] = "__unmount__";
-    		})(exports.Effect_TYPE || (exports.Effect_TYPE = {}));
-
-    		var compareVersion = function (version1, version2) {
-    		    var compare = function (arr1, arr2) {
-    		        if (arr1.length && arr2.length) {
-    		            var v1 = arr1[0];
-    		            var v2 = arr2[0];
-    		            if (v1 > v2)
-    		                return true;
-    		            if (v2 > v1)
-    		                return false;
-    		            return compare(arr1.slice(1), arr2.slice(1));
-    		        }
-    		        if (arr1.length)
-    		            return true;
-    		        if (arr2.length)
-    		            return false;
-    		        return true;
-    		    };
-    		    return compare(version1.split(".").map(Number), version2.split(".").map(Number));
-    		};
-
-    		var isNormalEquals = function (src, target, isSkipKey) {
-    		    var isEquals = Object.is(src, target);
-    		    if (isEquals)
-    		        return true;
-    		    var hasSkipKeyFunction = typeof isSkipKey === "function";
-    		    if (typeof src === "object" && typeof target === "object" && src !== null && target !== null) {
-    		        var srcKeys = Object.keys(src);
-    		        var targetKeys = Object.keys(target);
-    		        if (srcKeys.length !== targetKeys.length)
-    		            return false;
-    		        var res = true;
-    		        if (hasSkipKeyFunction) {
-    		            for (var _i = 0, srcKeys_1 = srcKeys; _i < srcKeys_1.length; _i++) {
-    		                var key = srcKeys_1[_i];
-    		                if (isSkipKey(key) && key in target) {
-    		                    continue;
-    		                }
-    		                else {
-    		                    res = res && Object.is(src[key], target[key]);
-    		                }
-    		                if (!res)
-    		                    return res;
-    		            }
-    		        }
-    		        else {
-    		            for (var _a = 0, srcKeys_2 = srcKeys; _a < srcKeys_2.length; _a++) {
-    		                var key = srcKeys_2[_a];
-    		                res = res && Object.is(src[key], target[key]);
-    		                if (!res)
-    		                    return res;
-    		            }
-    		        }
-    		        return res;
-    		    }
-    		    return false;
-    		};
-    		var isArrayEquals = function (src, target) {
-    		    var isEquals = Object.is(src, target);
-    		    if (isEquals)
-    		        return true;
-    		    if (Array.isArray(src) && Array.isArray(target) && src.length === target.length) {
-    		        var re = true;
-    		        for (var key in src) {
-    		            re = re && Object.is(src[key], target[key]);
-    		            if (!re)
-    		                return re;
-    		        }
-    		        return re;
-    		    }
-    		    return false;
-    		};
-
-    		var ListTreeNode = /** @class */ (function () {
-    		    function ListTreeNode(value) {
-    		        this.prev = null;
-    		        this.next = null;
-    		        this.value = value;
-    		    }
-    		    return ListTreeNode;
-    		}());
-    		var ListTree = /** @class */ (function () {
-    		    function ListTree() {
-    		        this.length = 0;
-    		        var _stickyHead = null;
-    		        Object.defineProperty(this, "stickyHead", {
-    		            get: function () {
-    		                return _stickyHead;
-    		            },
-    		            set: function (v) {
-    		                _stickyHead = v;
-    		            },
-    		        });
-    		        var _stickyFoot = null;
-    		        Object.defineProperty(this, "stickyFoot", {
-    		            get: function () {
-    		                return _stickyFoot;
-    		            },
-    		            set: function (v) {
-    		                _stickyFoot = v;
-    		            },
-    		        });
-    		        var _head = null;
-    		        Object.defineProperty(this, "head", {
-    		            get: function () {
-    		                return _head;
-    		            },
-    		            set: function (v) {
-    		                _head = v;
-    		            },
-    		        });
-    		        var _foot = null;
-    		        Object.defineProperty(this, "foot", {
-    		            get: function () {
-    		                return _foot;
-    		            },
-    		            set: function (v) {
-    		                _foot = v;
-    		            },
-    		        });
-    		    }
-    		    ListTree.prototype.push = function (node) {
-    		        var listNode = new ListTreeNode(node);
-    		        this.length++;
-    		        if (!this.foot) {
-    		            this.head = listNode;
-    		            this.foot = listNode;
-    		        }
-    		        else {
-    		            this.foot.next = listNode;
-    		            listNode.prev = this.foot;
-    		            this.foot = listNode;
-    		        }
-    		    };
-    		    ListTree.prototype.pushToLast = function (node) {
-    		        if (this.stickyFoot) {
-    		            var node_1 = this.stickyFoot;
-    		            this.push(node_1.value);
-    		            this.stickyFoot = null;
-    		        }
-    		        else {
-    		            this.length++;
-    		        }
-    		        var listNode = new ListTreeNode(node);
-    		        this.stickyFoot = listNode;
-    		    };
-    		    ListTree.prototype.pushToHead = function (node) {
-    		        if (this.stickyHead) {
-    		            var node_2 = this.stickyHead;
-    		            this.unshift(node_2.value);
-    		            this.stickyHead = null;
-    		        }
-    		        else {
-    		            this.length++;
-    		        }
-    		        var listNode = new ListTreeNode(node);
-    		        this.stickyHead = listNode;
-    		    };
-    		    ListTree.prototype.pop = function () {
-    		        var foot = this.stickyFoot || this.foot || this.stickyHead;
-    		        if (foot) {
-    		            this.delete(foot);
-    		            return foot.value;
-    		        }
-    		        else {
-    		            return null;
-    		        }
-    		    };
-    		    ListTree.prototype.unshift = function (node) {
-    		        var listNode = new ListTreeNode(node);
-    		        this.length++;
-    		        if (!this.head) {
-    		            this.head = listNode;
-    		            this.foot = listNode;
-    		        }
-    		        else {
-    		            this.head.prev = listNode;
-    		            listNode.next = this.head;
-    		            this.head = listNode;
-    		        }
-    		    };
-    		    ListTree.prototype.unshiftToHead = function (node) {
-    		        if (this.stickyHead) {
-    		            var node_3 = this.stickyHead;
-    		            this.unshift(node_3.value);
-    		            this.stickyHead = null;
-    		        }
-    		        else {
-    		            this.length++;
-    		        }
-    		        var listNode = new ListTreeNode(node);
-    		        this.stickyHead = listNode;
-    		    };
-    		    ListTree.prototype.unshiftToFoot = function (node) {
-    		        if (this.stickyFoot) {
-    		            var node_4 = this.stickyFoot;
-    		            this.push(node_4.value);
-    		            this.stickyFoot = null;
-    		        }
-    		        else {
-    		            this.length++;
-    		        }
-    		        var listNode = new ListTreeNode(node);
-    		        this.stickyFoot = listNode;
-    		    };
-    		    ListTree.prototype.shift = function () {
-    		        var head = this.stickyHead || this.head || this.stickyFoot;
-    		        if (head) {
-    		            this.delete(head);
-    		            return head.value;
-    		        }
-    		        else {
-    		            return null;
-    		        }
-    		    };
-    		    ListTree.prototype.pickHead = function () {
-    		        var _a, _b;
-    		        return ((_a = this.stickyHead) === null || _a === void 0 ? void 0 : _a.value) || ((_b = this.head) === null || _b === void 0 ? void 0 : _b.value);
-    		    };
-    		    ListTree.prototype.pickFoot = function () {
-    		        var _a, _b;
-    		        return ((_a = this.stickyFoot) === null || _a === void 0 ? void 0 : _a.value) || ((_b = this.foot) === null || _b === void 0 ? void 0 : _b.value);
-    		    };
-    		    ListTree.prototype.listToFoot = function (action) {
-    		        if (this.stickyHead) {
-    		            action(this.stickyHead.value);
-    		        }
-    		        var node = this.head;
-    		        while (node) {
-    		            action(node.value);
-    		            node = node.next;
-    		        }
-    		        if (this.stickyFoot) {
-    		            action(this.stickyFoot.value);
-    		        }
-    		    };
-    		    ListTree.prototype.listToHead = function (action) {
-    		        if (this.stickyFoot) {
-    		            action(this.stickyFoot.value);
-    		        }
-    		        var node = this.foot;
-    		        while (node) {
-    		            action(node.value);
-    		            node = node.prev;
-    		        }
-    		        if (this.stickyHead) {
-    		            action(this.stickyHead.value);
-    		        }
-    		    };
-    		    ListTree.prototype.toArray = function () {
-    		        var re = [];
-    		        this.listToFoot(function (v) { return re.push(v); });
-    		        return re;
-    		    };
-    		    ListTree.prototype.delete = function (node) {
-    		        if (this.stickyHead === node) {
-    		            this.stickyHead = null;
-    		            this.length--;
-    		        }
-    		        else if (this.stickyFoot === node) {
-    		            this.stickyFoot = null;
-    		            this.length--;
-    		        }
-    		        else if (this.head === node) {
-    		            var next = node.next;
-    		            node.next = null;
-    		            if (next) {
-    		                this.head = next;
-    		                next.prev = null;
-    		            }
-    		            else {
-    		                this.head = null;
-    		                this.foot = null;
-    		            }
-    		            this.length--;
-    		        }
-    		        else if (this.foot === node) {
-    		            var prev = node.prev;
-    		            node.prev = null;
-    		            if (prev) {
-    		                this.foot = prev;
-    		                prev.next = null;
-    		            }
-    		            else {
-    		                this.head = null;
-    		                this.foot = null;
-    		            }
-    		            this.length--;
-    		        }
-    		        else if (this.hasNode(node)) {
-    		            var prev = node.prev;
-    		            var next = node.next;
-    		            node.prev = null;
-    		            node.next = null;
-    		            prev.next = next;
-    		            next.prev = prev;
-    		            this.length--;
-    		        }
-    		    };
-    		    ListTree.prototype.size = function () {
-    		        return this.length;
-    		    };
-    		    ListTree.prototype.hasNode = function (node) {
-    		        if (this.stickyHead && Object.is(this.stickyHead, node))
-    		            return true;
-    		        if (this.stickyFoot && Object.is(this.stickyFoot, node))
-    		            return true;
-    		        var listNode = this.head;
-    		        while (listNode) {
-    		            if (Object.is(listNode, node))
-    		                return true;
-    		            listNode = listNode.next;
-    		        }
-    		        return false;
-    		    };
-    		    ListTree.prototype.hasValue = function (node) {
-    		        if (this.stickyHead && Object.is(this.stickyHead.value, node))
-    		            return true;
-    		        if (this.stickyFoot && Object.is(this.stickyFoot.value, node))
-    		            return true;
-    		        var listNode = this.head;
-    		        while (listNode) {
-    		            if (Object.is(listNode.value, node))
-    		                return true;
-    		            listNode = listNode.next;
-    		        }
-    		        return false;
-    		    };
-    		    ListTree.prototype.some = function (iterator) {
-    		        var re = false;
-    		        this.listToFoot(function (node) {
-    		            re = re || iterator(node);
-    		        });
-    		        return re;
-    		    };
-    		    ListTree.prototype.every = function (iterator) {
-    		        var re = true;
-    		        this.listToFoot(function (node) {
-    		            re = re && iterator(node);
-    		        });
-    		        return re;
-    		    };
-    		    ListTree.prototype.concat = function (list) {
-    		        var newList = new ListTree();
-    		        this.listToFoot(function (node) { return newList.push(node); });
-    		        list.listToFoot(function (node) { return newList.push(node); });
-    		        return newList;
-    		    };
-    		    ListTree.prototype.clone = function () {
-    		        var newList = new ListTree();
-    		        this.listToFoot(function (v) { return newList.push(v); });
-    		        return newList;
-    		    };
-    		    ListTree.prototype.clear = function () {
-    		        this.length = 0;
-    		        this.head = null;
-    		        this.foot = null;
-    		        this.stickyHead = null;
-    		        this.stickyFoot = null;
-    		    };
-    		    return ListTree;
-    		}());
-
-    		exports.Activity = Activity;
-    		exports.Comment = Comment;
-    		exports.Consumer = Consumer;
-    		exports.Context = Context;
-    		exports.Element = Element;
-    		exports.ForwardRef = ForwardRef;
-    		exports.Fragment = Fragment;
-    		exports.Lazy = Lazy;
-    		exports.ListTree = ListTree;
-    		exports.ListTreeNode = ListTreeNode;
-    		exports.Memo = Memo;
-    		exports.Offscreen = Offscreen;
-    		exports.Portal = Portal;
-    		exports.Profiler = Profiler;
-    		exports.Provider = Provider;
-    		exports.Root = Root;
-    		exports.Scope = Scope;
-    		exports.ScopeLazy = ScopeLazy;
-    		exports.ScopeSuspense = ScopeSuspense;
-    		exports.Strict = Strict;
-    		exports.Suspense = Suspense;
-    		exports.TYPEKEY = TYPEKEY;
-    		exports.UniqueArray = UniqueArray;
-    		exports.compareVersion = compareVersion;
-    		exports.exclude = exclude;
-    		exports.include = include;
-    		exports.isArray = isArray;
-    		exports.isArrayEquals = isArrayEquals;
-    		exports.isCollection = isCollection;
-    		exports.isFunction = isFunction;
-    		exports.isInteger = isInteger;
-    		exports.isNormalEquals = isNormalEquals;
-    		exports.isNumber = isNumber;
-    		exports.isObject = isObject;
-    		exports.isPromise = isPromise;
-    		exports.isString = isString;
-    		exports.isSymbol = isSymbol;
-    		exports.merge = merge;
-    		exports.once = once;
-    		exports.remove = remove; 
-    	} (index_production$1));
-    	return index_production$1;
+    function __spreadArray(to, from, pack) {
+        if (arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+            if (ar || !(i in from)) {
+                if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+                ar[i] = from[i];
+            }
+        }
+        return to.concat(ar || Array.prototype.slice.call(from));
     }
 
-    var hasRequiredReactShared;
+    typeof SuppressedError === "function" ? SuppressedError : function (error, suppressed, message) {
+        var e = new Error(message);
+        return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
+    };
 
-    function requireReactShared () {
-    	if (hasRequiredReactShared) return reactShared.exports;
-    	hasRequiredReactShared = 1;
+    var once = function (action) {
+        var called = false;
+        return function () {
+            var args = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                args[_i] = arguments[_i];
+            }
+            if (called)
+                return;
+            called = true;
+            if (typeof action === "function")
+                action.call.apply(action, __spreadArray([null], args, false));
+        };
+    };
 
-    	{
-    	  reactShared.exports = requireIndex_production$1();
-    	}
-    	return reactShared.exports;
-    }
+    var HOOK_TYPE;
+    (function (HOOK_TYPE) {
+        HOOK_TYPE[HOOK_TYPE["useId"] = 0] = "useId";
+        HOOK_TYPE[HOOK_TYPE["useRef"] = 1] = "useRef";
+        HOOK_TYPE[HOOK_TYPE["useMemo"] = 2] = "useMemo";
+        HOOK_TYPE[HOOK_TYPE["useState"] = 3] = "useState";
+        HOOK_TYPE[HOOK_TYPE["useSignal"] = 4] = "useSignal";
+        HOOK_TYPE[HOOK_TYPE["useEffect"] = 5] = "useEffect";
+        HOOK_TYPE[HOOK_TYPE["useContext"] = 6] = "useContext";
+        HOOK_TYPE[HOOK_TYPE["useReducer"] = 7] = "useReducer";
+        HOOK_TYPE[HOOK_TYPE["useCallback"] = 8] = "useCallback";
+        HOOK_TYPE[HOOK_TYPE["useTransition"] = 9] = "useTransition";
+        HOOK_TYPE[HOOK_TYPE["useDebugValue"] = 10] = "useDebugValue";
+        HOOK_TYPE[HOOK_TYPE["useLayoutEffect"] = 11] = "useLayoutEffect";
+        HOOK_TYPE[HOOK_TYPE["useDeferredValue"] = 12] = "useDeferredValue";
+        HOOK_TYPE[HOOK_TYPE["useInsertionEffect"] = 13] = "useInsertionEffect";
+        HOOK_TYPE[HOOK_TYPE["useImperativeHandle"] = 14] = "useImperativeHandle";
+        HOOK_TYPE[HOOK_TYPE["useSyncExternalStore"] = 15] = "useSyncExternalStore";
+        HOOK_TYPE[HOOK_TYPE["useOptimistic"] = 16] = "useOptimistic";
+        HOOK_TYPE[HOOK_TYPE["useEffectEvent"] = 17] = "useEffectEvent";
+    })(HOOK_TYPE || (HOOK_TYPE = {}));
 
-    var reactSharedExports = requireReactShared();
+    var UpdateQueueType;
+    (function (UpdateQueueType) {
+        UpdateQueueType[UpdateQueueType["component"] = 1] = "component";
+        UpdateQueueType[UpdateQueueType["hook"] = 2] = "hook";
+        UpdateQueueType[UpdateQueueType["context"] = 3] = "context";
+        UpdateQueueType[UpdateQueueType["hmr"] = 4] = "hmr";
+        UpdateQueueType[UpdateQueueType["trigger"] = 5] = "trigger";
+        UpdateQueueType[UpdateQueueType["suspense"] = 6] = "suspense";
+        UpdateQueueType[UpdateQueueType["lazy"] = 7] = "lazy";
+        UpdateQueueType[UpdateQueueType["promise"] = 8] = "promise";
+    })(UpdateQueueType || (UpdateQueueType = {}));
+
+    var STATE_TYPE;
+    (function (STATE_TYPE) {
+        STATE_TYPE[STATE_TYPE["__initial__"] = 0] = "__initial__";
+        STATE_TYPE[STATE_TYPE["__create__"] = 1] = "__create__";
+        STATE_TYPE[STATE_TYPE["__stable__"] = 2] = "__stable__";
+        STATE_TYPE[STATE_TYPE["__inherit__"] = 4] = "__inherit__";
+        STATE_TYPE[STATE_TYPE["__triggerConcurrent__"] = 8] = "__triggerConcurrent__";
+        STATE_TYPE[STATE_TYPE["__triggerConcurrentForce__"] = 16] = "__triggerConcurrentForce__";
+        STATE_TYPE[STATE_TYPE["__triggerSync__"] = 32] = "__triggerSync__";
+        STATE_TYPE[STATE_TYPE["__triggerSyncForce__"] = 64] = "__triggerSyncForce__";
+        STATE_TYPE[STATE_TYPE["__unmount__"] = 128] = "__unmount__";
+        STATE_TYPE[STATE_TYPE["__hmr__"] = 256] = "__hmr__";
+        STATE_TYPE[STATE_TYPE["__retrigger__"] = 512] = "__retrigger__";
+        STATE_TYPE[STATE_TYPE["__reschedule__"] = 1024] = "__reschedule__";
+        STATE_TYPE[STATE_TYPE["__recreate__"] = 2048] = "__recreate__";
+        STATE_TYPE[STATE_TYPE["__suspense__"] = 4096] = "__suspense__";
+    })(STATE_TYPE || (STATE_TYPE = {}));
+
+    var PATCH_TYPE;
+    (function (PATCH_TYPE) {
+        PATCH_TYPE[PATCH_TYPE["__initial__"] = 0] = "__initial__";
+        PATCH_TYPE[PATCH_TYPE["__create__"] = 1] = "__create__";
+        PATCH_TYPE[PATCH_TYPE["__update__"] = 2] = "__update__";
+        PATCH_TYPE[PATCH_TYPE["__append__"] = 4] = "__append__";
+        PATCH_TYPE[PATCH_TYPE["__position__"] = 8] = "__position__";
+        PATCH_TYPE[PATCH_TYPE["__effect__"] = 16] = "__effect__";
+        PATCH_TYPE[PATCH_TYPE["__layoutEffect__"] = 32] = "__layoutEffect__";
+        PATCH_TYPE[PATCH_TYPE["__insertionEffect__"] = 64] = "__insertionEffect__";
+        PATCH_TYPE[PATCH_TYPE["__unmount__"] = 128] = "__unmount__";
+        PATCH_TYPE[PATCH_TYPE["__ref__"] = 256] = "__ref__";
+    })(PATCH_TYPE || (PATCH_TYPE = {}));
+
+    var Effect_TYPE;
+    (function (Effect_TYPE) {
+        Effect_TYPE[Effect_TYPE["__initial__"] = 0] = "__initial__";
+        Effect_TYPE[Effect_TYPE["__effect__"] = 1] = "__effect__";
+        Effect_TYPE[Effect_TYPE["__unmount__"] = 2] = "__unmount__";
+    })(Effect_TYPE || (Effect_TYPE = {}));
 
     var event$1 = {};
 
@@ -735,6 +187,7 @@
     		    DevToolMessageEnum["changed"] = "changed";
     		    DevToolMessageEnum["highlight"] = "highlight";
     		    DevToolMessageEnum["trigger"] = "trigger";
+    		    DevToolMessageEnum["running"] = "running";
     		    DevToolMessageEnum["triggerStatus"] = "triggerStatus";
     		    DevToolMessageEnum["hmr"] = "hmr";
     		    DevToolMessageEnum["hmrStatus"] = "hmrStatus";
@@ -1150,7 +603,6 @@
     	hasRequiredIndex_production = 1;
     	(function (exports) {
 
-    		var reactShared = requireReactShared();
     		var ErrorStackParser = requireErrorStackParser();
 
     		/******************************************************************************
@@ -1199,12 +651,150 @@
     		var id$1 = 0;
     		// PlainNode is a simplified version of FiberNode just for show the structure
     		var PlainNode = /** @class */ (function () {
-    		    // hooks: HOOKTree[];
+    		    // inspect node
     		    function PlainNode(_id) {
     		        this.i = _id || "".concat(id$1++);
+    		        this._r = 0;
     		    }
     		    return PlainNode;
     		}());
+
+    		var merge = function (src, rest) {
+    		    return src | rest;
+    		};
+    		var include = function (src, rest) {
+    		    return !!(src & rest);
+    		};
+
+    		typeof SuppressedError === "function" ? SuppressedError : function (error, suppressed, message) {
+    		    var e = new Error(message);
+    		    return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
+    		};
+
+    		var TYPEKEY = "$$typeof";
+    		var Element$1 = Symbol.for("react.element");
+    		var Memo = Symbol.for("react.memo");
+    		var ForwardRef = Symbol.for("react.forward_ref");
+    		var Portal = Symbol.for("react.portal");
+    		var Fragment = Symbol.for("react.fragment");
+    		var Context = Symbol.for("react.context");
+    		var Provider = Symbol.for("react.provider");
+    		var Consumer = Symbol.for("react.consumer");
+    		var Lazy = Symbol.for("react.lazy");
+    		var Suspense = Symbol.for("react.suspense");
+    		var Strict = Symbol.for("react.strict_mode");
+    		var Root = Symbol.for("react.root");
+    		var Scope = Symbol.for("react.scope");
+    		var ScopeLazy = Symbol.for("react.scope_lazy");
+    		var ScopeSuspense = Symbol.for("react.scope_suspense");
+    		var Comment = Symbol.for("react.comment");
+    		var Profiler = Symbol.for("react.profiler");
+
+    		function isObject$1(target) {
+    		    return typeof target === "object" && target !== null;
+    		}
+    		function isFunction(target) {
+    		    return typeof target === "function";
+    		}
+    		var isPromise = function (val) {
+    		    return (isObject$1(val) || isFunction(val)) && isFunction(val.then) && isFunction(val.catch);
+    		};
+
+    		var HOOK_TYPE;
+    		(function (HOOK_TYPE) {
+    		    HOOK_TYPE[HOOK_TYPE["useId"] = 0] = "useId";
+    		    HOOK_TYPE[HOOK_TYPE["useRef"] = 1] = "useRef";
+    		    HOOK_TYPE[HOOK_TYPE["useMemo"] = 2] = "useMemo";
+    		    HOOK_TYPE[HOOK_TYPE["useState"] = 3] = "useState";
+    		    HOOK_TYPE[HOOK_TYPE["useSignal"] = 4] = "useSignal";
+    		    HOOK_TYPE[HOOK_TYPE["useEffect"] = 5] = "useEffect";
+    		    HOOK_TYPE[HOOK_TYPE["useContext"] = 6] = "useContext";
+    		    HOOK_TYPE[HOOK_TYPE["useReducer"] = 7] = "useReducer";
+    		    HOOK_TYPE[HOOK_TYPE["useCallback"] = 8] = "useCallback";
+    		    HOOK_TYPE[HOOK_TYPE["useTransition"] = 9] = "useTransition";
+    		    HOOK_TYPE[HOOK_TYPE["useDebugValue"] = 10] = "useDebugValue";
+    		    HOOK_TYPE[HOOK_TYPE["useLayoutEffect"] = 11] = "useLayoutEffect";
+    		    HOOK_TYPE[HOOK_TYPE["useDeferredValue"] = 12] = "useDeferredValue";
+    		    HOOK_TYPE[HOOK_TYPE["useInsertionEffect"] = 13] = "useInsertionEffect";
+    		    HOOK_TYPE[HOOK_TYPE["useImperativeHandle"] = 14] = "useImperativeHandle";
+    		    HOOK_TYPE[HOOK_TYPE["useSyncExternalStore"] = 15] = "useSyncExternalStore";
+    		    HOOK_TYPE[HOOK_TYPE["useOptimistic"] = 16] = "useOptimistic";
+    		    HOOK_TYPE[HOOK_TYPE["useEffectEvent"] = 17] = "useEffectEvent";
+    		})(HOOK_TYPE || (HOOK_TYPE = {}));
+
+    		var UpdateQueueType;
+    		(function (UpdateQueueType) {
+    		    UpdateQueueType[UpdateQueueType["component"] = 1] = "component";
+    		    UpdateQueueType[UpdateQueueType["hook"] = 2] = "hook";
+    		    UpdateQueueType[UpdateQueueType["context"] = 3] = "context";
+    		    UpdateQueueType[UpdateQueueType["hmr"] = 4] = "hmr";
+    		    UpdateQueueType[UpdateQueueType["trigger"] = 5] = "trigger";
+    		    UpdateQueueType[UpdateQueueType["suspense"] = 6] = "suspense";
+    		    UpdateQueueType[UpdateQueueType["lazy"] = 7] = "lazy";
+    		    UpdateQueueType[UpdateQueueType["promise"] = 8] = "promise";
+    		})(UpdateQueueType || (UpdateQueueType = {}));
+
+    		var STATE_TYPE;
+    		(function (STATE_TYPE) {
+    		    STATE_TYPE[STATE_TYPE["__initial__"] = 0] = "__initial__";
+    		    STATE_TYPE[STATE_TYPE["__create__"] = 1] = "__create__";
+    		    STATE_TYPE[STATE_TYPE["__stable__"] = 2] = "__stable__";
+    		    STATE_TYPE[STATE_TYPE["__inherit__"] = 4] = "__inherit__";
+    		    STATE_TYPE[STATE_TYPE["__triggerConcurrent__"] = 8] = "__triggerConcurrent__";
+    		    STATE_TYPE[STATE_TYPE["__triggerConcurrentForce__"] = 16] = "__triggerConcurrentForce__";
+    		    STATE_TYPE[STATE_TYPE["__triggerSync__"] = 32] = "__triggerSync__";
+    		    STATE_TYPE[STATE_TYPE["__triggerSyncForce__"] = 64] = "__triggerSyncForce__";
+    		    STATE_TYPE[STATE_TYPE["__unmount__"] = 128] = "__unmount__";
+    		    STATE_TYPE[STATE_TYPE["__hmr__"] = 256] = "__hmr__";
+    		    STATE_TYPE[STATE_TYPE["__retrigger__"] = 512] = "__retrigger__";
+    		    STATE_TYPE[STATE_TYPE["__reschedule__"] = 1024] = "__reschedule__";
+    		    STATE_TYPE[STATE_TYPE["__recreate__"] = 2048] = "__recreate__";
+    		    STATE_TYPE[STATE_TYPE["__suspense__"] = 4096] = "__suspense__";
+    		})(STATE_TYPE || (STATE_TYPE = {}));
+
+    		var PATCH_TYPE;
+    		(function (PATCH_TYPE) {
+    		    PATCH_TYPE[PATCH_TYPE["__initial__"] = 0] = "__initial__";
+    		    PATCH_TYPE[PATCH_TYPE["__create__"] = 1] = "__create__";
+    		    PATCH_TYPE[PATCH_TYPE["__update__"] = 2] = "__update__";
+    		    PATCH_TYPE[PATCH_TYPE["__append__"] = 4] = "__append__";
+    		    PATCH_TYPE[PATCH_TYPE["__position__"] = 8] = "__position__";
+    		    PATCH_TYPE[PATCH_TYPE["__effect__"] = 16] = "__effect__";
+    		    PATCH_TYPE[PATCH_TYPE["__layoutEffect__"] = 32] = "__layoutEffect__";
+    		    PATCH_TYPE[PATCH_TYPE["__insertionEffect__"] = 64] = "__insertionEffect__";
+    		    PATCH_TYPE[PATCH_TYPE["__unmount__"] = 128] = "__unmount__";
+    		    PATCH_TYPE[PATCH_TYPE["__ref__"] = 256] = "__ref__";
+    		})(PATCH_TYPE || (PATCH_TYPE = {}));
+
+    		var Effect_TYPE;
+    		(function (Effect_TYPE) {
+    		    Effect_TYPE[Effect_TYPE["__initial__"] = 0] = "__initial__";
+    		    Effect_TYPE[Effect_TYPE["__effect__"] = 1] = "__effect__";
+    		    Effect_TYPE[Effect_TYPE["__unmount__"] = 2] = "__unmount__";
+    		})(Effect_TYPE || (Effect_TYPE = {}));
+
+    		var isNormalEquals = function (src, target, isSkipKey) {
+    		    var isEquals = Object.is(src, target);
+    		    if (isEquals)
+    		        return true;
+    		    if (typeof src === "object" && typeof target === "object" && src !== null && target !== null) {
+    		        var srcKeys = Object.keys(src);
+    		        var targetKeys = Object.keys(target);
+    		        if (srcKeys.length !== targetKeys.length)
+    		            return false;
+    		        var res = true;
+    		        var key; {
+    		            for (var _a = 0, srcKeys_2 = srcKeys; _a < srcKeys_2.length; _a++) {
+    		                var key = srcKeys_2[_a];
+    		                res = res && Object.is(src[key], target[key]);
+    		                if (!res)
+    		                    return res;
+    		            }
+    		        }
+    		        return res;
+    		    }
+    		    return false;
+    		};
 
     		// sync from import { NODE_TYPE } from '@my-react/react-reconciler';
     		exports.NODE_TYPE = void 0;
@@ -1309,6 +899,9 @@
     		    if (t & exports.NODE_TYPE.__lazy__) {
     		        tag.push("lazy");
     		    }
+    		    if (t & exports.NODE_TYPE.__portal__) {
+    		        tag.push("portal");
+    		    }
     		    if (node.m) {
     		        tag.push("compiler ✨");
     		    }
@@ -1323,7 +916,7 @@
     		        var _a;
     		        if (hasCompiler)
     		            return;
-    		        if (l.type === reactShared.HOOK_TYPE.useMemo && ((_a = l.result) === null || _a === void 0 ? void 0 : _a[reactCompilerSymbol])) {
+    		        if (l.type === HOOK_TYPE.useMemo && ((_a = l.result) === null || _a === void 0 ? void 0 : _a[reactCompilerSymbol])) {
     		            hasCompiler = true;
     		        }
     		    });
@@ -1409,7 +1002,7 @@
     		};
     		// SEE @my-react/react-reconciler
     		var isValidElement = function (element) {
-    		    return typeof element === "object" && !Array.isArray(element) && element !== null && (element === null || element === void 0 ? void 0 : element[reactShared.TYPEKEY]) === reactShared.Element;
+    		    return typeof element === "object" && !Array.isArray(element) && element !== null && (element === null || element === void 0 ? void 0 : element[TYPEKEY]) === Element$1;
     		};
     		// SEE @my-react/react-reconciler
     		var getMockFiberFromElement = function (element) {
@@ -1422,104 +1015,104 @@
     		    var key = (_b = element.key) !== null && _b !== void 0 ? _b : undefined;
     		    if (typeof elementType === "object" && elementType !== null) {
     		        var typedElementType = elementType;
-    		        switch (typedElementType[reactShared.TYPEKEY]) {
-    		            case reactShared.Provider:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__provider__);
+    		        switch (typedElementType[TYPEKEY]) {
+    		            case Provider:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__provider__);
     		                break;
     		            // support react 19 context api
-    		            case reactShared.Context:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__context__);
+    		            case Context:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__context__);
     		                break;
-    		            case reactShared.Consumer:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__consumer__);
+    		            case Consumer:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__consumer__);
     		                break;
-    		            case reactShared.Memo:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__memo__);
+    		            case Memo:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__memo__);
     		                elementType = typedElementType.render;
     		                break;
-    		            case reactShared.ForwardRef:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__forwardRef__);
+    		            case ForwardRef:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__forwardRef__);
     		                elementType = typedElementType.render;
     		                break;
-    		            case reactShared.Lazy:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__lazy__);
+    		            case Lazy:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__lazy__);
     		                break;
     		            default:
-    		                throw new Error("[@my-react/react] invalid object element type \"".concat((_c = typedElementType[reactShared.TYPEKEY]) === null || _c === void 0 ? void 0 : _c.toString(), "\""));
+    		                throw new Error("[@my-react/react] invalid object element type \"".concat((_c = typedElementType[TYPEKEY]) === null || _c === void 0 ? void 0 : _c.toString(), "\""));
     		        }
     		        if (typeof elementType === "object") {
-    		            if (elementType[reactShared.TYPEKEY] === reactShared.ForwardRef) {
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__forwardRef__);
+    		            if (elementType[TYPEKEY] === ForwardRef) {
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__forwardRef__);
     		                elementType = elementType.render;
     		            }
-    		            if (elementType[reactShared.TYPEKEY] === reactShared.Provider) {
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__provider__);
+    		            if (elementType[TYPEKEY] === Provider) {
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__provider__);
     		            }
-    		            if (elementType[reactShared.TYPEKEY] === reactShared.Context) {
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__context__);
+    		            if (elementType[TYPEKEY] === Context) {
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__context__);
     		            }
-    		            if (elementType[reactShared.TYPEKEY] === reactShared.Consumer) {
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__consumer__);
+    		            if (elementType[TYPEKEY] === Consumer) {
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__consumer__);
     		            }
     		        }
     		        if (typeof elementType === "function") {
     		            if ((_d = elementType.prototype) === null || _d === void 0 ? void 0 : _d.isMyReactComponent) {
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__class__);
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__class__);
     		            }
     		            else {
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__function__);
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__function__);
     		            }
     		        }
     		    }
     		    else if (typeof elementType === "function") {
     		        if ((_e = elementType.prototype) === null || _e === void 0 ? void 0 : _e.isMyReactComponent) {
-    		            nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__class__);
+    		            nodeType = merge(nodeType, exports.NODE_TYPE.__class__);
     		        }
     		        else {
-    		            nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__function__);
+    		            nodeType = merge(nodeType, exports.NODE_TYPE.__function__);
     		        }
     		    }
     		    else if (typeof elementType === "symbol") {
     		        switch (elementType) {
-    		            case reactShared.Root:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__internal__);
+    		            case Root:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__internal__);
     		                break;
-    		            case reactShared.Fragment:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__fragment__);
+    		            case Fragment:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__fragment__);
     		                break;
-    		            case reactShared.Strict:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__strict__);
+    		            case Strict:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__strict__);
     		                break;
-    		            case reactShared.Suspense:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__suspense__);
+    		            case Suspense:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__suspense__);
     		                break;
-    		            case reactShared.Scope:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__scope__);
+    		            case Scope:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__scope__);
     		                break;
-    		            case reactShared.ScopeLazy:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__scopeLazy__);
+    		            case ScopeLazy:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__scopeLazy__);
     		                break;
-    		            case reactShared.ScopeSuspense:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__scopeSuspense__);
+    		            case ScopeSuspense:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__scopeSuspense__);
     		                break;
-    		            case reactShared.Comment:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__comment__);
+    		            case Comment:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__comment__);
     		                break;
-    		            case reactShared.Portal:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__portal__);
+    		            case Portal:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__portal__);
     		                break;
-    		            case reactShared.Profiler:
-    		                nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__profiler__);
+    		            case Profiler:
+    		                nodeType = merge(nodeType, exports.NODE_TYPE.__profiler__);
     		                break;
     		            default:
     		                throw new Error("[@my-react/react] invalid symbol element type \"".concat(elementType === null || elementType === void 0 ? void 0 : elementType.toString(), "\""));
     		        }
     		    }
     		    else if (typeof elementType === "string") {
-    		        nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__plain__);
+    		        nodeType = merge(nodeType, exports.NODE_TYPE.__plain__);
     		    }
     		    else {
-    		        nodeType = reactShared.merge(nodeType, exports.NODE_TYPE.__empty__);
+    		        nodeType = merge(nodeType, exports.NODE_TYPE.__empty__);
     		    }
     		    var mockFiber = {
     		        type: nodeType,
@@ -1626,6 +1219,9 @@
     		    var n = undefined;
     		    if (type === "Object" && typeof (value === null || value === void 0 ? void 0 : value.constructor) === "function" && value.constructor !== emptyConstructor && value.constructor.name) {
     		        n = value.constructor.name;
+    		        if (n === "Object") {
+    		            n = undefined;
+    		        }
     		    }
     		    if (type === "ReactElement") {
     		        n = getElementName(value);
@@ -1819,9 +1415,29 @@
     		};
 
     		var getSource = function (fiber) {
+    		    var _a, _b, _c;
     		    if (fiber._debugElement) {
     		        var element = fiber._debugElement;
-    		        return element._source;
+    		        try {
+    		            if (element._debugStack) {
+    		                var stack = ErrorStackParser.parse(element._debugStack);
+    		                var currentStack = stack[1];
+    		                return {
+    		                    type: "stack",
+    		                    value: currentStack.fileName + ":" + currentStack.lineNumber + ":" + currentStack.columnNumber,
+    		                };
+    		            }
+    		            throw new Error("No stack");
+    		        }
+    		        catch (_d) {
+    		            if (element._source && typeof element._source === "object") {
+    		                return {
+    		                    type: "source",
+    		                    // TODO type error
+    		                    value: ((_a = element._source) === null || _a === void 0 ? void 0 : _a.fileName) + ":" + ((_b = element._source) === null || _b === void 0 ? void 0 : _b.lineNumber) + ":" + ((_c = element._source) === null || _c === void 0 ? void 0 : _c.columnNumber),
+    		                };
+    		            }
+    		        }
     		    }
     		    return null;
     		};
@@ -1941,14 +1557,14 @@
     		        var newProps = Object.assign({}, fiber.pendingProps);
     		        parentData.v[params.path] = newVal;
     		        fiber.pendingProps = newProps;
-    		        fiber._update(reactShared.STATE_TYPE.__triggerSyncForce__);
+    		        fiber._update(STATE_TYPE.__triggerSyncForce__);
     		    }
     		    else {
     		        // shallow props update
     		        var newProps = Object.assign({}, fiber.pendingProps);
     		        newProps[params.path] = newVal;
     		        fiber.pendingProps = newProps;
-    		        fiber._update(reactShared.STATE_TYPE.__triggerSyncForce__);
+    		        fiber._update(STATE_TYPE.__triggerSyncForce__);
     		    }
     		};
     		var updateFiberByState = function (fiber, params) {
@@ -2006,7 +1622,7 @@
     		    var hmrEnabled = getHMRState(dispatch);
     		    if (!hmrEnabled)
     		        return;
-    		    if (dispatch && fiber && reactShared.include(fiber.type, reactShared.merge(exports.NODE_TYPE.__function__, exports.NODE_TYPE.__class__))) {
+    		    if (dispatch && fiber && include(fiber.type, merge(exports.NODE_TYPE.__function__, exports.NODE_TYPE.__class__))) {
     		        return getHMRInternal(dispatch, fiber.elementType);
     		    }
     		};
@@ -2104,7 +1720,7 @@
     		        var readHookLog = void 0;
     		        try {
     		            // Use all hooks here to add them to the hook log.
-    		            Dispatcher.useContext((_a = {}, _a[reactShared.TYPEKEY] = reactShared.Context, _a.Provider = { value: null }, _a));
+    		            Dispatcher.useContext((_a = {}, _a[TYPEKEY] = Context, _a.Provider = { value: null }, _a));
     		            Dispatcher.useState(null);
     		            Dispatcher.useReducer(function (s, a) { return s; }, null);
     		            Dispatcher.useRef(null);
@@ -2120,7 +1736,7 @@
     		            Dispatcher.useDeferredValue(null);
     		            Dispatcher.useMemo(function () { return null; });
     		            if (typeof Dispatcher.use === "function") {
-    		                Dispatcher.use((_b = {}, _b[reactShared.TYPEKEY] = reactShared.Context, _b.Provider = { value: null }, _b));
+    		                Dispatcher.use((_b = {}, _b[TYPEKEY] = Context, _b.Provider = { value: null }, _b));
     		                Dispatcher.use({
     		                    then: function () { },
     		                    state: "fulfilled",
@@ -2163,14 +1779,14 @@
     		    if ((fiber === null || fiber === void 0 ? void 0 : fiber.parent) && ContextObject) {
     		        var parent_1 = fiber.parent;
     		        while (parent_1) {
-    		            if (reactShared.include(parent_1.type, exports.NODE_TYPE.__provider__)) {
+    		            if (include(parent_1.type, exports.NODE_TYPE.__provider__)) {
     		                var typedElementType = parent_1.elementType;
     		                var contextObj = typedElementType["Context"];
     		                if (contextObj === ContextObject) {
     		                    return parent_1;
     		                }
     		            }
-    		            if (reactShared.include(parent_1.type, exports.NODE_TYPE.__context__)) {
+    		            if (include(parent_1.type, exports.NODE_TYPE.__context__)) {
     		                var typedElementType = parent_1.elementType;
     		                var contextObj = typedElementType;
     		                if (contextObj === ContextObject) {
@@ -2243,7 +1859,7 @@
     		            });
     		            throw SuspenseException;
     		        }
-    		        else if (usable[reactShared.TYPEKEY] === reactShared.Context) {
+    		        else if (usable[TYPEKEY] === Context) {
     		            var context = usable;
     		            var value = readContext(context);
     		            hookLog.push({
@@ -2260,7 +1876,7 @@
     		}
     		function useContext(context) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useContext) {
+    		    if (hook && hook.type !== HOOK_TYPE.useContext) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    var value = readContext(context);
@@ -2275,7 +1891,7 @@
     		}
     		function useState(initialState) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useState) {
+    		    if (hook && hook.type !== HOOK_TYPE.useState) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    var typedInitialState = initialState;
@@ -2291,7 +1907,7 @@
     		}
     		function useReducer(reducer, initialArg, init) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useReducer) {
+    		    if (hook && hook.type !== HOOK_TYPE.useReducer) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    var state = hook ? hook.result : init !== undefined ? init(initialArg) : initialArg;
@@ -2306,7 +1922,7 @@
     		}
     		function useRef(initialValue) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useRef) {
+    		    if (hook && hook.type !== HOOK_TYPE.useRef) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    var ref = hook ? hook.result : { current: initialValue };
@@ -2321,46 +1937,46 @@
     		}
     		function useLayoutEffect(create, inputs) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useLayoutEffect) {
+    		    if (hook && hook.type !== HOOK_TYPE.useLayoutEffect) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    hookLog.push({
     		        displayName: null,
     		        primitive: "LayoutEffect",
     		        stackError: new Error(),
-    		        value: create,
+    		        value: (hook === null || hook === void 0 ? void 0 : hook.value) || create,
     		        dispatcherHookName: "LayoutEffect",
     		    });
     		}
     		function useInsertionEffect(create, inputs) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useInsertionEffect) {
+    		    if (hook && hook.type !== HOOK_TYPE.useInsertionEffect) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    hookLog.push({
     		        displayName: null,
     		        primitive: "InsertionEffect",
     		        stackError: new Error(),
-    		        value: create,
+    		        value: (hook === null || hook === void 0 ? void 0 : hook.value) || create,
     		        dispatcherHookName: "InsertionEffect",
     		    });
     		}
     		function useEffect(create, deps) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useEffect) {
+    		    if (hook && hook.type !== HOOK_TYPE.useEffect) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    hookLog.push({
     		        displayName: null,
     		        primitive: "Effect",
     		        stackError: new Error(),
-    		        value: create,
+    		        value: (hook === null || hook === void 0 ? void 0 : hook.value) || create,
     		        dispatcherHookName: "Effect",
     		    });
     		}
     		function useImperativeHandle(ref, create, inputs) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useImperativeHandle) {
+    		    if (hook && hook.type !== HOOK_TYPE.useImperativeHandle) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    // We don't actually store the instance anywhere if there is no ref callback
@@ -2375,13 +1991,13 @@
     		        displayName: null,
     		        primitive: "ImperativeHandle",
     		        stackError: new Error(),
-    		        value: instance,
+    		        value: hook && typeof (hook === null || hook === void 0 ? void 0 : hook.value) === "object" ? hook.value : instance,
     		        dispatcherHookName: "ImperativeHandle",
     		    });
     		}
     		function useDebugValue(value, formatterFn) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useDebugValue) {
+    		    if (hook && hook.type !== HOOK_TYPE.useDebugValue) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    hookLog.push({
@@ -2394,7 +2010,7 @@
     		}
     		function useCallback(callback, inputs) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useCallback) {
+    		    if (hook && hook.type !== HOOK_TYPE.useCallback) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    var value = hook ? hook.result : callback;
@@ -2409,7 +2025,7 @@
     		}
     		function useMemo(nextCreate, inputs) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useMemo) {
+    		    if (hook && hook.type !== HOOK_TYPE.useMemo) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    var value = hook ? hook.result : nextCreate();
@@ -2424,7 +2040,7 @@
     		}
     		function useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useSyncExternalStore) {
+    		    if (hook && hook.type !== HOOK_TYPE.useSyncExternalStore) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    var value = getSnapshot();
@@ -2439,7 +2055,7 @@
     		}
     		function useTransition() {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useTransition) {
+    		    if (hook && hook.type !== HOOK_TYPE.useTransition) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    var isPending = hook ? (Array.isArray(hook.result) ? hook.result[0] : hook.result.value) : false;
@@ -2454,7 +2070,7 @@
     		}
     		function useDeferredValue(value, initialValue) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useDeferredValue) {
+    		    if (hook && hook.type !== HOOK_TYPE.useDeferredValue) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    var prevValue = hook ? hook.result : value;
@@ -2469,7 +2085,7 @@
     		}
     		function useId() {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useId) {
+    		    if (hook && hook.type !== HOOK_TYPE.useId) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    var id = hook ? hook.result : "";
@@ -2484,7 +2100,7 @@
     		}
     		function useSignal(initial) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useSignal) {
+    		    if (hook && hook.type !== HOOK_TYPE.useSignal) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    var value = hook ? hook.result.getValue : typeof initial === "function" ? initial : function () { return initial; };
@@ -2500,7 +2116,7 @@
     		function useOptimistic(passthrough, reducer) {
     		    var _a;
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useOptimistic) {
+    		    if (hook && hook.type !== HOOK_TYPE.useOptimistic) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    var state = hook ? (_a = hook.result) === null || _a === void 0 ? void 0 : _a.value : passthrough;
@@ -2515,7 +2131,7 @@
     		}
     		function useEffectEvent(passthrough) {
     		    var hook = nextHook();
-    		    if (hook && hook.type !== reactShared.HOOK_TYPE.useEffectEvent) {
+    		    if (hook && hook.type !== HOOK_TYPE.useEffectEvent) {
     		        throw new Error("Invalid hook type, look like a bug for @my-react/devtools");
     		    }
     		    var state = hook ? hook.result : passthrough;
@@ -2830,7 +2446,7 @@
     		        // the Hooks but we can at least show what ever we got so far.
     		        return;
     		    }
-    		    if (reactShared.isPromise(error)) {
+    		    if (isPromise(error)) {
     		        return;
     		    }
     		    if (error instanceof Error && error.name === "ReactDebugToolsUnsupportedHookError") {
@@ -2893,7 +2509,7 @@
     		    return buildTree(rootStack, readHookLog);
     		}
     		function inspectHooksOfFiber(fiber, dispatch) {
-    		    if (!reactShared.include(fiber.type, exports.NODE_TYPE.__function__)) {
+    		    if (!include(fiber.type, exports.NODE_TYPE.__function__)) {
     		        return;
     		    }
     		    // Warm up the cache so that it doesn't consume the currentHook.
@@ -2905,7 +2521,7 @@
     		    var typedElementType = fiber.elementType;
     		    var props = fiber.memoizedProps;
     		    try {
-    		        if (reactShared.include(fiber.type, exports.NODE_TYPE.__forwardRef__)) {
+    		        if (include(fiber.type, exports.NODE_TYPE.__forwardRef__)) {
     		            return inspectHooksOfForwardRef(typedElementType, props, fiber.ref, dispatch);
     		        }
     		        else {
@@ -2941,37 +2557,37 @@
     		};
     		var getHookName = function (type) {
     		    switch (type) {
-    		        case reactShared.HOOK_TYPE.useReducer:
+    		        case HOOK_TYPE.useReducer:
     		            return "Reducer";
-    		        case reactShared.HOOK_TYPE.useEffect:
+    		        case HOOK_TYPE.useEffect:
     		            return "Effect";
-    		        case reactShared.HOOK_TYPE.useLayoutEffect:
+    		        case HOOK_TYPE.useLayoutEffect:
     		            return "LayoutEffect";
-    		        case reactShared.HOOK_TYPE.useMemo:
+    		        case HOOK_TYPE.useMemo:
     		            return "Memo";
-    		        case reactShared.HOOK_TYPE.useCallback:
+    		        case HOOK_TYPE.useCallback:
     		            return "Callback";
-    		        case reactShared.HOOK_TYPE.useRef:
+    		        case HOOK_TYPE.useRef:
     		            return "Ref";
-    		        case reactShared.HOOK_TYPE.useImperativeHandle:
+    		        case HOOK_TYPE.useImperativeHandle:
     		            return "ImperativeHandle";
-    		        case reactShared.HOOK_TYPE.useDebugValue:
+    		        case HOOK_TYPE.useDebugValue:
     		            return "DebugValue";
-    		        case reactShared.HOOK_TYPE.useContext:
+    		        case HOOK_TYPE.useContext:
     		            return "Context";
-    		        case reactShared.HOOK_TYPE.useDeferredValue:
+    		        case HOOK_TYPE.useDeferredValue:
     		            return "DeferredValue";
-    		        case reactShared.HOOK_TYPE.useTransition:
+    		        case HOOK_TYPE.useTransition:
     		            return "Transition";
-    		        case reactShared.HOOK_TYPE.useId:
+    		        case HOOK_TYPE.useId:
     		            return "Id";
-    		        case reactShared.HOOK_TYPE.useSyncExternalStore:
+    		        case HOOK_TYPE.useSyncExternalStore:
     		            return "SyncExternalStore";
-    		        case reactShared.HOOK_TYPE.useInsertionEffect:
+    		        case HOOK_TYPE.useInsertionEffect:
     		            return "InsertionEffect";
-    		        case reactShared.HOOK_TYPE.useState:
+    		        case HOOK_TYPE.useState:
     		            return "State";
-    		        case reactShared.HOOK_TYPE.useSignal:
+    		        case HOOK_TYPE.useSignal:
     		            return "Signal";
     		    }
     		};
@@ -2983,9 +2599,9 @@
     		    var hookList = fiber.hookList;
     		    var processStack = function (hook, index) {
     		        var _a;
-    		        var isEffect = hook.type === reactShared.HOOK_TYPE.useEffect || hook.type === reactShared.HOOK_TYPE.useLayoutEffect || hook.type === reactShared.HOOK_TYPE.useInsertionEffect;
-    		        var isRef = hook.type === reactShared.HOOK_TYPE.useRef;
-    		        var isContext = hook.type === reactShared.HOOK_TYPE.useContext;
+    		        var isEffect = hook.type === HOOK_TYPE.useEffect || hook.type === HOOK_TYPE.useLayoutEffect || hook.type === HOOK_TYPE.useInsertionEffect;
+    		        var isRef = hook.type === HOOK_TYPE.useRef;
+    		        var isContext = hook.type === HOOK_TYPE.useContext;
     		        final.push({
     		            k: index.toString(),
     		            i: index,
@@ -3025,13 +2641,25 @@
     		    }
     		};
     		var tryLinkStateToHookIndex = function (fiber, state) {
-    		    var _a, _b, _c, _d, _e, _f;
+    		    var _a, _b, _c;
     		    if (state.needUpdate && state.nodes) {
     		        // filter all hook update queue
-    		        var nodes = (_b = (_a = state.nodes) === null || _a === void 0 ? void 0 : _a.filter) === null || _b === void 0 ? void 0 : _b.call(_a, function (node) { return node.type === reactShared.UpdateQueueType.hook; });
+    		        // const nodes = state.nodes?.filter?.((node) => node.type === UpdateQueueType.hook);
     		        // get all the keys from the nodes;
-    		        var allHooksArray_1 = ((_d = (_c = fiber.hookList) === null || _c === void 0 ? void 0 : _c.toArray) === null || _d === void 0 ? void 0 : _d.call(_c)) || [];
-    		        var keys = ((_f = (_e = nodes === null || nodes === void 0 ? void 0 : nodes.map) === null || _e === void 0 ? void 0 : _e.call(nodes, function (node) { var _a; return (_a = allHooksArray_1 === null || allHooksArray_1 === void 0 ? void 0 : allHooksArray_1.findIndex) === null || _a === void 0 ? void 0 : _a.call(allHooksArray_1, function (_node) { return (node === null || node === void 0 ? void 0 : node.trigger) === _node; }); })) === null || _f === void 0 ? void 0 : _f.filter(function (i) { return i !== -1; })) || [];
+    		        var allHooksArray_1 = ((_b = (_a = fiber.hookList) === null || _a === void 0 ? void 0 : _a.toArray) === null || _b === void 0 ? void 0 : _b.call(_a)) || [];
+    		        var nodes = state.nodes || [];
+    		        var keys = ((_c = nodes.map) === null || _c === void 0 ? void 0 : _c.call(nodes, function (node) {
+    		            var _a;
+    		            if (node.type !== UpdateQueueType.hook)
+    		                return -1;
+    		            var index = (_a = allHooksArray_1 === null || allHooksArray_1 === void 0 ? void 0 : allHooksArray_1.findIndex) === null || _a === void 0 ? void 0 : _a.call(allHooksArray_1, function (_node) { return (node === null || node === void 0 ? void 0 : node.trigger) === _node; });
+    		            // there are a valid updater, link the before node value
+    		            // if (index !== -1 && Object.prototype.hasOwnProperty.call(node, "_debugBeforeValue")) {
+    		            //   const data = getNode(node._debugBeforeValue);
+    		            //   indexMap[index] = data;
+    		            // }
+    		            return index;
+    		        })) || [];
     		        // link the keys to the state
     		        linkStateToHookIndex.set(state, keys);
     		    }
@@ -3088,7 +2716,7 @@
     		var loopTree = function (fiber, parent) {
     		    if (!fiber)
     		        return null;
-    		    if (reactShared.include(fiber.state, reactShared.STATE_TYPE.__unmount__))
+    		    if (include(fiber.state, STATE_TYPE.__unmount__))
     		        return null;
     		    var exist = treeMap.get(fiber);
     		    var current = exist || new PlainNode();
@@ -3119,7 +2747,7 @@
     		var loopChangedTree = function (fiber, set, parent) {
     		    if (!fiber)
     		        return null;
-    		    if (reactShared.include(fiber.state, reactShared.STATE_TYPE.__unmount__))
+    		    if (include(fiber.state, STATE_TYPE.__unmount__))
     		        return null;
     		    set.add(fiber);
     		    var exist = treeMap.get(fiber);
@@ -3153,7 +2781,7 @@
     		        return;
     		    var plain = treeMap.get(_fiber);
     		    if (plain) {
-    		        _runtime.notifyUnmountNode(plain.i);
+    		        _runtime.unmountNode(plain.i);
     		        fiberStore.delete(plain.i);
     		        plainStore.delete(plain.i);
     		        delete _runtime._hmr[plain.i];
@@ -3175,6 +2803,22 @@
     		        fiberStore.set(newPlain.i, _fiber);
     		        plainStore.set(newPlain.i, newPlain);
     		    }
+    		    initFiberNode(_fiber, _runtime);
+    		};
+    		var initFiberNode = function (_fiber, _runtime) {
+    		    if (!_fiber)
+    		        return;
+    		    var prototype = Reflect.getPrototypeOf(_fiber);
+    		    if (prototype['_debugSelectInDevtool'])
+    		        return;
+    		    Reflect.defineProperty(prototype, "_debugSelectInDevtool", {
+    		        get: function get() {
+    		            var id = getPlainNodeIdByFiber(this);
+    		            _runtime.setSelect(id);
+    		            _runtime._hasSelectChange = true;
+    		            return true;
+    		        },
+    		    });
     		};
     		var getPlainNodeByFiber = function (fiber) {
     		    return treeMap.get(fiber);
@@ -3202,10 +2846,11 @@
     		    var hasViewList = new WeakSet();
     		    var result = [];
     		    list.listToFoot(function (fiber) {
-    		        if (hasViewList.has(fiber))
+    		        var loopFiber = fiber.parent || fiber;
+    		        if (hasViewList.has(loopFiber))
     		            return;
-    		        hasViewList.add(fiber);
-    		        var re = loopChangedTree(fiber, hasViewList);
+    		        hasViewList.add(loopFiber);
+    		        var re = loopChangedTree(loopFiber, hasViewList);
     		        if (re && re.current) {
     		            result.push(re.current);
     		        }
@@ -3220,11 +2865,16 @@
     		    var exist = detailMap.get(fiber);
     		    if (exist) {
     		        assignFiber(exist, fiber);
+    		        exist._r = plainNode._r;
     		        return exist;
     		    }
     		    else {
     		        var created = new PlainNode(plainNode.i);
     		        assignFiber(created, fiber);
+    		        created._$f = true;
+    		        // sync running count, it is a marker to make use know whether the fiber has been re-rendered
+    		        // only work for development mode
+    		        created._r = plainNode._r;
     		        detailMap.set(fiber, created);
     		        return created;
     		    }
@@ -3249,7 +2899,7 @@
     		        return;
     		    var r = fiber;
     		    while (r) {
-    		        if (reactShared.include(r.type, exports.NODE_TYPE.__class__) || reactShared.include(r.type, exports.NODE_TYPE.__function__)) {
+    		        if (include(r.type, exports.NODE_TYPE.__class__) || include(r.type, exports.NODE_TYPE.__function__)) {
     		            return r;
     		        }
     		        r = r.parent;
@@ -3258,7 +2908,7 @@
     		var getComponentFiberByFiber = function (fiber) {
     		    var r = fiber;
     		    while (r) {
-    		        if (reactShared.include(r.type, exports.NODE_TYPE.__class__) || reactShared.include(r.type, exports.NODE_TYPE.__function__)) {
+    		        if (include(r.type, exports.NODE_TYPE.__class__) || include(r.type, exports.NODE_TYPE.__function__)) {
     		            return r;
     		        }
     		        r = r.parent;
@@ -3284,7 +2934,7 @@
     		};
     		var getDispatchFromFiber = function (fiber) {
     		    if (!fiber)
-    		        return;
+    		        return null;
     		    var typedFiber = fiber;
     		    if (typedFiber.renderDispatch) {
     		        return typedFiber.renderDispatch;
@@ -3525,6 +3175,7 @@
     		    DevToolMessageEnum["changed"] = "changed";
     		    DevToolMessageEnum["highlight"] = "highlight";
     		    DevToolMessageEnum["trigger"] = "trigger";
+    		    DevToolMessageEnum["running"] = "running";
     		    DevToolMessageEnum["triggerStatus"] = "triggerStatus";
     		    DevToolMessageEnum["hmr"] = "hmr";
     		    DevToolMessageEnum["hmrStatus"] = "hmrStatus";
@@ -3552,7 +3203,7 @@
     		var DevToolSource = "@my-react/devtool";
 
     		var patchEvent = function (dispatch, runtime) {
-    		    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
+    		    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
     		    if (dispatch["$$hasDevToolEvent"])
     		        return;
     		    dispatch["$$hasDevToolEvent"] = true;
@@ -3574,15 +3225,16 @@
     		            return;
     		        runtime.update.flushPending();
     		    };
+    		    var notifyChangedWithDebounce = debounce(function (list) { return runtime.notifyChanged(list); }, 100);
     		    var onChange = function (list) {
     		        if (!runtime.hasEnable)
     		            return;
     		        var directory = inspectList(list).directory;
-    		        if (!reactShared.isNormalEquals(runtime._dir, directory)) {
+    		        if (!isNormalEquals(runtime._dir, directory)) {
     		            runtime._dir = __assign({}, directory);
     		            runtime.notifyDir();
     		        }
-    		        runtime.notifyChanged(list);
+    		        notifyChangedWithDebounce(list);
     		    };
     		    var onUnmount = function () {
     		        // if (!runtime.hasEnable) return;
@@ -3654,7 +3306,12 @@
     		            var index = runtime._warn[id].length - 11;
     		            runtime._warn[id][index] = 1;
     		        }
-    		        runtime._warn[id].push(args);
+    		        if (args.length === 1) {
+    		            runtime._warn[id].push(args[0]);
+    		        }
+    		        else {
+    		            runtime._warn[id].push(args);
+    		        }
     		        runtime.notifyWarn();
     		    };
     		    var onFiberError = function (fiber) {
@@ -3670,8 +3327,27 @@
     		            var index = runtime._error[id].length - 11;
     		            runtime._error[id][index] = 1;
     		        }
-    		        runtime._error[id].push(args);
+    		        if (args.length === 1) {
+    		            runtime._error[id].push(args[0]);
+    		        }
+    		        else {
+    		            runtime._error[id].push(args);
+    		        }
     		        runtime.notifyError();
+    		    };
+    		    var onFiberRun = function (fiber) {
+    		        var node = getPlainNodeByFiber(fiber);
+    		        if (!node)
+    		            return;
+    		        var id = node.i;
+    		        if (!runtime._selectNode)
+    		            return;
+    		        var selectTree = runtime._selectNode._t || [];
+    		        if (id !== runtime._selectId && !selectTree.includes(id))
+    		            return;
+    		        if (id === runtime._selectId)
+    		            node._r++;
+    		        runtime.notifyRunning(id);
     		    };
     		    var onPerformanceWarn = function (fiber) {
     		        var id = getPlainNodeIdByFiber(fiber);
@@ -3713,12 +3389,13 @@
     		        (_d = dispatch.onPerformanceWarn) === null || _d === void 0 ? void 0 : _d.call(dispatch, onPerformanceWarn);
     		        (_e = dispatch.onFiberChange) === null || _e === void 0 ? void 0 : _e.call(dispatch, onChange);
     		        (_f = dispatch.onFiberUpdate) === null || _f === void 0 ? void 0 : _f.call(dispatch, onFiberUpdate);
-    		        (_g = dispatch.onFiberHMR) === null || _g === void 0 ? void 0 : _g.call(dispatch, onFiberHMR);
-    		        (_h = dispatch.onDOMUpdate) === null || _h === void 0 ? void 0 : _h.call(dispatch, onDOMUpdate);
-    		        (_j = dispatch.onDOMAppend) === null || _j === void 0 ? void 0 : _j.call(dispatch, onDOMAppend);
-    		        (_k = dispatch.onDOMSetRef) === null || _k === void 0 ? void 0 : _k.call(dispatch, onDOMSetRef);
-    		        (_l = dispatch.onFiberError) === null || _l === void 0 ? void 0 : _l.call(dispatch, onFiberError);
-    		        (_m = dispatch.onFiberWarn) === null || _m === void 0 ? void 0 : _m.call(dispatch, onFiberWarn);
+    		        (_g = dispatch.onAfterFiberRun) === null || _g === void 0 ? void 0 : _g.call(dispatch, onFiberRun);
+    		        (_h = dispatch.onFiberHMR) === null || _h === void 0 ? void 0 : _h.call(dispatch, onFiberHMR);
+    		        (_j = dispatch.onDOMUpdate) === null || _j === void 0 ? void 0 : _j.call(dispatch, onDOMUpdate);
+    		        (_k = dispatch.onDOMAppend) === null || _k === void 0 ? void 0 : _k.call(dispatch, onDOMAppend);
+    		        (_l = dispatch.onDOMSetRef) === null || _l === void 0 ? void 0 : _l.call(dispatch, onDOMSetRef);
+    		        (_m = dispatch.onFiberError) === null || _m === void 0 ? void 0 : _m.call(dispatch, onFiberError);
+    		        (_o = dispatch.onFiberWarn) === null || _o === void 0 ? void 0 : _o.call(dispatch, onFiberWarn);
     		    }
     		    else {
     		        var originalAfterCommit_1 = dispatch.afterCommit;
@@ -3755,10 +3432,10 @@
     		    return false;
     		};
     		var checkIsComponent = function (fiber) {
-    		    return reactShared.include(fiber.type, exports.NODE_TYPE.__class__ | exports.NODE_TYPE.__function__);
+    		    return include(fiber.type, exports.NODE_TYPE.__class__ | exports.NODE_TYPE.__function__);
     		};
-    		var checkIsConCurrent = function (dispatch, list) {
-    		    return dispatch.enableConcurrentMode && list.every(function (f) { return reactShared.include(f.state, reactShared.STATE_TYPE.__triggerConcurrent__ | reactShared.STATE_TYPE.__triggerConcurrentForce__); });
+    		var checkIsConcurrent = function (dispatch, list) {
+    		    return dispatch.enableConcurrentMode && list.every(function (f) { return include(f.state, STATE_TYPE.__triggerConcurrent__ | STATE_TYPE.__triggerConcurrentForce__); });
     		};
     		var getCurrent = function () { return (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now()) * 1000; };
     		var resetArray = [];
@@ -3770,6 +3447,7 @@
     		    runtime._supportRecord = true;
     		    var stack = [];
     		    var map = {};
+    		    var trigger = [];
     		    var mode = "legacy";
     		    var id = "";
     		    var current = null;
@@ -3782,7 +3460,16 @@
     		        current = null;
     		        stack.length = 0;
     		        map = {};
-    		        mode = checkIsConCurrent(dispatch, list) ? "concurrent" : "legacy";
+    		        mode = checkIsConcurrent(dispatch, list) ? "concurrent" : "legacy";
+    		        trigger = list.map(function (f) {
+    		            var plain = getPlainNodeByFiber(f);
+    		            var updater = f._debugLatestUpdateQueue;
+    		            return {
+    		                n: plain ? plain.n : "",
+    		                i: plain ? plain.i : "",
+    		                updater: (updater === null || updater === void 0 ? void 0 : updater.toArray()) || [],
+    		            };
+    		        });
     		        id = dispatch.id;
     		    });
     		    dispatch.onBeforeFiberRun(function (fiber) {
@@ -3832,13 +3519,14 @@
     		        stackTop.d = Math.max(Math.floor(stackTop.e - stackTop.s), 1);
     		        current = stack[stack.length - 1] || null;
     		        if (!current) {
-    		            runtime._stack.push({ stack: stackTop, id: id, mode: mode });
+    		            runtime._stack.push({ stack: stackTop, id: id, mode: mode, list: trigger });
     		        }
     		    });
     		    var reset = function () {
     		        stack.length = 0;
     		        current = null;
     		        map = {};
+    		        trigger = [];
     		    };
     		    resetArray.push(reset);
     		    runtime.startRecord = function () {
@@ -3859,14 +3547,14 @@
     		var getRecord = function (runtime) {
     		    if (!runtime._enabled)
     		        return [];
-    		    var stack = runtime._stack;
+    		    var stack = runtime._stack.map(function (item) { return (__assign(__assign({}, item), { list: item.list.map(function (t) { return (__assign(__assign({}, t), { updater: t.updater.map(function (u) { return getNode(u); }) })); }) })); });
     		    return stack;
     		};
 
     		var getTree = function (dispatch, runtime) {
     		    var _a = inspectDispatch(dispatch), directory = _a.directory, current = _a.current;
     		    runtime._map.set(dispatch, current);
-    		    if (!reactShared.isNormalEquals(runtime._dir, directory)) {
+    		    if (!isNormalEquals(runtime._dir, directory)) {
     		        runtime._dir = __assign({}, directory);
     		        return { directory: directory, current: current };
     		    }
@@ -3912,24 +3600,28 @@
     		function overridePatchToFiberUnmount(dispatch, runtime) {
     		    if (typeof dispatch.onFiberUnmount === "function") {
     		        dispatch.onFiberUnmount(function (f) { return unmountPlainNode(f, runtime); });
+    		        dispatch.onAfterCommitMount(function () { return runtime.notifyUnmountNode(); });
+    		        dispatch.onAfterCommitUpdate(function () { return runtime.notifyUnmountNode(); });
+    		        dispatch.onAfterCommitUnmount(function () { return runtime.notifyUnmountNode(); });
     		    }
     		    else {
     		        var originalPatchUnmount_1 = dispatch.patchToFiberUnmount;
     		        dispatch.patchToFiberUnmount = function (fiber) {
     		            originalPatchUnmount_1.call(this, fiber);
     		            unmountPlainNode(fiber, runtime);
+    		            runtime._notifyUnmountNode();
     		        };
     		    }
     		}
     		function overridePatchToFiberInit(dispatch, runtime) {
     		    if (typeof dispatch.onFiberInitial === "function") {
-    		        dispatch.onFiberInitial(function (f) { return initPlainNode(f); });
+    		        dispatch.onFiberInitial(function (f) { return initPlainNode(f, runtime); });
     		    }
     		    else {
     		        var originalPatchInit_1 = dispatch.patchToFiberInitial;
     		        dispatch.patchToFiberInitial = function (fiber) {
     		            originalPatchInit_1.call(this, fiber);
-    		            initPlainNode(fiber);
+    		            initPlainNode(fiber, runtime);
     		        };
     		    }
     		}
@@ -3937,7 +3629,7 @@
     		    if (dispatch["$$hasDevToolInject"])
     		        return;
     		    dispatch["$$hasDevToolInject"] = true;
-    		    overridePatchToFiberInit(dispatch);
+    		    overridePatchToFiberInit(dispatch, runtime);
     		    overridePatchToFiberUnmount(dispatch, runtime);
     		    Object.defineProperty(dispatch, "__dev_devtool_runtime__", { value: { core: runtime, version: "0.0.1" } });
     		};
@@ -4361,7 +4053,7 @@
     		        var color = _a.color, rect = _a.rect;
     		        context.beginPath();
     		        context.strokeStyle = color;
-    		        context.rect(rect.left - 1, rect.top, rect.width - 1, rect.height - 1);
+    		        context.rect(rect.left, rect.top, rect.width, rect.height);
     		        context.stroke();
     		    });
     		}
@@ -4405,7 +4097,7 @@
     		    var metrics = context.measureText(text);
     		    var backgroundWidth = metrics.width + padding * 2;
     		    var backgroundHeight = textHeight;
-    		    var labelX = left - 1;
+    		    var labelX = left;
     		    var labelY = top - backgroundHeight;
     		    context.fillStyle = color;
     		    context.fillRect(labelX, labelY, backgroundWidth, backgroundHeight);
@@ -4429,7 +4121,7 @@
     		function initialize() {
     		    canvas = window.document.createElement("canvas");
     		    canvas.setAttribute("popover", "manual");
-    		    canvas.style.cssText = "\n    xx-background-color: red;\n    xx-opacity: 0.5;\n    bottom: 0;\n    left: 0;\n    pointer-events: none;\n    position: fixed;\n    right: 0;\n    top: 0;\n    background-color: transparent;\n    outline: none;\n    box-shadow: none;\n    border: none;\n  ";
+    		    canvas.style.cssText = "\n    xx-background-color: red;\n    xx-opacity: 0.5;\n    bottom: 0;\n    left: 0;\n    pointer-events: none;\n    position: fixed;\n    right: 0;\n    top: 0;\n    padding: 0;\n    background-color: transparent;\n    outline: none;\n    box-shadow: none;\n    border: none;\n  ";
     		    canvas.setAttribute("data-update", "@my-react");
     		    var root = window.document.documentElement;
     		    root.insertBefore(canvas, root.firstChild);
@@ -4570,9 +4262,11 @@
     		        this._hmr = {};
     		        this._error = {};
     		        this._warn = {};
+    		        this._unmount = {};
     		        this._hoverId = "";
     		        this._selectId = "";
     		        this._selectDom = null;
+    		        this._selectNode = null;
     		        this._hasSelectChange = false;
     		        this._tempDomHoverId = "";
     		        this._domHoverId = "";
@@ -4593,6 +4287,7 @@
     		        this._listeners = new Set();
     		        this.version = "0.0.1";
     		        this.id = Math.random().toString(16).slice(2);
+    		        this._notifyUnmountNode = debounce(function () { return _this.notifyUnmountNode(); }, 16);
     		        this.notifyAll = debounce(function () {
     		            _this.notifyDetector();
     		            if (_this._needUnmount) {
@@ -4740,6 +4435,12 @@
     		        }
     		        inspectSource(this);
     		    };
+    		    DevToolCore.prototype.inspectFun = function (source) {
+    		        globalThis["inspect"](source);
+    		    };
+    		    DevToolCore.prototype.unmountNode = function (id) {
+    		        this._unmount[id] = true;
+    		    };
     		    DevToolCore.prototype.notifyDir = function () {
     		        if (!this.hasEnable)
     		            return;
@@ -4817,7 +4518,7 @@
     		        if (!this.hasEnable)
     		            return;
     		        var tree = getRootTreeByFiber(list.head.value);
-    		        this._notify({ type: exports.DevToolMessageEnum.ready, data: tree });
+    		        this._notify({ type: exports.DevToolMessageEnum.changed, data: tree });
     		    };
     		    DevToolCore.prototype.notifyHMR = function () {
     		        if (!this.hasEnable)
@@ -4867,11 +4568,18 @@
     		            return;
     		        var fiber = getFiberNodeById(id);
     		        if (fiber) {
-    		            this._notify({ type: exports.DevToolMessageEnum.detail, data: inspectFiber(fiber) });
+    		            var detailNode = inspectFiber(fiber);
+    		            this._selectNode = detailNode;
+    		            this._notify({ type: exports.DevToolMessageEnum.detail, data: detailNode });
     		        }
     		        else {
     		            this._notify({ type: exports.DevToolMessageEnum.detail, data: null });
     		        }
+    		    };
+    		    DevToolCore.prototype.notifyRunning = function (id) {
+    		        if (!this.hasEnable)
+    		            return;
+    		        this._notify({ type: exports.DevToolMessageEnum.running, data: id });
     		    };
     		    DevToolCore.prototype.notifySelectSync = function () {
     		        if (!this.hasEnable)
@@ -4881,10 +4589,14 @@
     		            this._notify({ type: exports.DevToolMessageEnum.selectSync, data: this._selectId });
     		        }
     		    };
-    		    DevToolCore.prototype.notifyUnmountNode = function (id) {
+    		    DevToolCore.prototype.notifyUnmountNode = function () {
     		        if (!this.hasEnable)
     		            return;
-    		        this._notify({ type: exports.DevToolMessageEnum.unmountNode, data: id });
+    		        var allPending = this._unmount;
+    		        if (!Object.keys(allPending).length)
+    		            return;
+    		        this._unmount = {};
+    		        this._notify({ type: exports.DevToolMessageEnum.unmountNode, data: allPending });
     		    };
     		    DevToolCore.prototype.notifyDomHover = function () {
     		        if (!this.hasEnable)
@@ -5174,7 +4886,7 @@
             var id = data.data;
             var f = coreExports.getFiberNodeById(id);
             if (f) {
-                f._update(reactSharedExports.STATE_TYPE.__triggerConcurrentForce__);
+                f._update(STATE_TYPE.__triggerConcurrentForce__);
                 core.notifyMessage("success trigger a update for current id: ".concat(id, " of fiber"), "success");
             }
             else {
@@ -5263,19 +4975,19 @@
     })(PortName || (PortName = {}));
     var sourceFrom;
     (function (sourceFrom) {
-        // message from hook script
+        // message from hook script, `content` dir
         sourceFrom["hook"] = "hook";
-        // message from proxy script
+        // message from proxy script, `backend` dir
         sourceFrom["proxy"] = "proxy";
-        // message from devtool panel
+        // message from devtool panel, `panel` dir
         sourceFrom["panel"] = "panel";
-        // message from background worker
+        // message from background worker, `background` dir
         sourceFrom["worker"] = "worker";
-        // message from iframe 
+        // message from iframe, chrome/src/hooks/useBridgeForward.ts
         sourceFrom["iframe"] = "iframe";
-        // message from socket
+        // message from socket, chrome/src/hooks/useWebDev.ts
         sourceFrom["socket"] = "socket";
-        // message from detector
+        // message from detector, `popover` dir
         sourceFrom["detector"] = "detector";
         // message from another runtime engine
         sourceFrom["forward"] = "forward";
@@ -5327,17 +5039,17 @@
     if (typeof window !== "undefined") {
         window.addEventListener("message", onMessage);
     }
-    var onceMount = reactSharedExports.once(function () {
+    var onceMount = once(function () {
         // current site is render by @my-react
-        hookPostMessageWithSource({ type: eventExports.MessageHookType.mount, to: sourceFrom.detector });
+        hookPostMessageWithSource({ type: eventExports.MessageHookType.mount, data: { forwardMode: true }, to: sourceFrom.detector });
     });
-    var onceDev = reactSharedExports.once(function () {
-        hookPostMessageWithSource({ type: eventExports.MessageHookType.mount, data: "develop", to: sourceFrom.detector });
+    var onceDev = once(function () {
+        hookPostMessageWithSource({ type: eventExports.MessageHookType.mount, data: { mode: "develop", forwardMode: true }, to: sourceFrom.detector });
     });
-    var oncePro = reactSharedExports.once(function () {
-        hookPostMessageWithSource({ type: eventExports.MessageHookType.mount, data: "product", to: sourceFrom.detector });
+    var oncePro = once(function () {
+        hookPostMessageWithSource({ type: eventExports.MessageHookType.mount, data: { mode: "product", forwardMode: true }, to: sourceFrom.detector });
     });
-    var onceOrigin = reactSharedExports.once(function () {
+    var onceOrigin = once(function () {
         try {
             var origin_1 = window.location.origin;
             core._origin = origin_1;

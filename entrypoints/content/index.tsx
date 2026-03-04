@@ -37,7 +37,7 @@ export default defineContentScript({
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-ignore
         import("../../devtool").then(() => {
-          // window?.__MY_REACT_DEVTOOL_FORWARD__?.();
+          window?.__MY_REACT_DEVTOOL_FORWARD__?.();
         });
 
         injectScript("/devtool/index.js");

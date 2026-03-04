@@ -11,20 +11,21 @@ let list: SettingType["list"] = [];
 let url: SettingType["url"] = defaultUrl;
 
 const init = async () => {
-  const config = await storage.getItem<SettingType>("local:ollama-translate");
+  const _url = await storage.getItem<SettingType["url"]>("local:ollama-translate-url");
 
-  list = config?.list || [];
+  const _list = await storage.getItem<SettingType["list"]>("local:ollama-translate-list");
 
-  url = config?.url || defaultUrl;
+  list = _list || [];
+
+  url = _url || defaultUrl;
 };
 
-storage.watch<SettingType>("local:ollama-translate", (newSettings) => {
-  if (newSettings?.list?.length !== list.length) {
-    list = Array.from(newSettings?.list || []);
-  }
-  if (newSettings?.url) {
-    url = newSettings.url;
-  }
+storage.watch<SettingType["url"]>("local:ollama-translate-url", (newValue) => {
+  url = newValue || "";
+});
+
+storage.watch<SettingType["list"]>("local:ollama-translate-list", (newValue) => {
+  list = newValue || [];
 });
 
 init();
@@ -84,6 +85,7 @@ export default defineBackground(() => {
     if (request.action === "translate") {
       (async function () {
         const model = list.find((i) => i.key === request.model);
+
         if (model && url) {
           try {
             if (request.source_lang && request.target_lang) {

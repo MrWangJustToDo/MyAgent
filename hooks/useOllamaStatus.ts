@@ -11,7 +11,13 @@ export const useOllamaStatus = createState(
 
         const url = useOllamaConfig.getReadonlyState().url;
 
-        if (!url) return;
+        if (!url) {
+          s.state = false;
+
+          s.connecting = false;
+
+          return;
+        }
 
         s.connecting = true;
 

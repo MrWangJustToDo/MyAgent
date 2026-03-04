@@ -28,15 +28,11 @@ export const useSyncConfig = ({ side }: { side: "content" | "popup" }) => {
       const init = async () => {
         const url = await storage.getItem<SettingType["url"]>("local:ollama-translate-url");
 
-        if (url) {
-          useOllamaConfig.getActions().setUrl(url);
-        }
+        useOllamaConfig.getActions().setUrl(url || "");
 
         const selected = await storage.getItem<SettingType["selected"]>("local:ollama-translate-selected");
 
-        if (selected) {
-          useOllamaModal.getActions().setSelected(selected);
-        }
+        useOllamaModal.getActions().setSelected(selected || "");
       };
 
       init();
@@ -104,13 +100,17 @@ export const useSyncConfig = ({ side }: { side: "content" | "popup" }) => {
       const init = async () => {
         const url = await storage.getItem<SettingType["url"]>("local:ollama-translate-url");
 
-        useOllamaConfig.getActions().setUrl(url || defaultUrl);
+        useOllamaConfig.getActions().setUrl(url || "");
+
+        useOllamaModal.getActions().reset();
       };
 
       init();
 
       const unWatch = storage.watch<SettingType["url"]>("local:ollama-translate-url", (newValue) => {
-        useOllamaConfig.getActions().setUrl(newValue || defaultUrl);
+        useOllamaConfig.getActions().setUrl(newValue || "");
+
+        useOllamaModal.getActions().reset();
       });
 
       return unWatch;

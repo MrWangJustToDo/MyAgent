@@ -9,11 +9,27 @@ export const useOllamaModal = createState(
       loadList: async () => {
         if (s.loading) return;
 
-        if (!useOllamaStatus.getReadonlyState().state) return;
+        if (!useOllamaStatus.getReadonlyState().state) {
+          s.list = [];
+
+          s.loading = false;
+
+          s.selected = "";
+
+          return;
+        }
 
         const url = useOllamaConfig.getReadonlyState().url;
 
-        if (!url) return;
+        if (!url) {
+          s.list = [];
+
+          s.loading = false;
+
+          s.selected = "";
+
+          return;
+        }
 
         s.loading = true;
 
