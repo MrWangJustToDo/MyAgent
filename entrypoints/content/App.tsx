@@ -150,7 +150,7 @@ export default function App() {
                       <RefreshCcwIcon />
                     </Button>
                   </div>
-                  <div className="mb-1 mt-3 flex flex-col">
+                  <div className="mt-3 mb-1 flex flex-col">
                     <div className="text-sm text-gray-500">原文</div>
                     <div className="text-sm">{translate?.source_text}</div>
                   </div>
@@ -164,7 +164,7 @@ export default function App() {
             {((!translate && !!state) || (loading && !translate)) && (
               <Button
                 isIconOnly
-                className="absolute left-0 top-0 z-10"
+                className="absolute top-0 left-0 z-10"
                 size="sm"
                 onPress={callTranslate}
                 isLoading={loading}

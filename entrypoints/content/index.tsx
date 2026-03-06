@@ -2,6 +2,8 @@ import { HeroUIProvider, ToastProvider } from "@heroui/react";
 import ReactDOM from "react-dom/client";
 
 import App from "./App";
+import { DevTool } from "./DevTool";
+import "@/devtool";
 
 import "@/style.css";
 
@@ -27,20 +29,14 @@ export default defineContentScript({
         container.setAttribute("data-translate", "true");
 
         const root = ReactDOM.createRoot(container);
+
         root.render(
           <HeroUIProvider>
             <ToastProvider />
+            <DevTool />
             <App />
           </HeroUIProvider>
         );
-
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        import("../../devtool").then(() => {
-          window?.__MY_REACT_DEVTOOL_FORWARD__?.();
-        });
-
-        injectScript("/devtool/index.js");
 
         return root;
       },

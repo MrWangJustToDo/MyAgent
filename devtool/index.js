@@ -18,218 +18,59 @@
     /* global Reflect, Promise, SuppressedError, Symbol, Iterator */
 
 
-    function __spreadArray(to, from, pack) {
-        if (arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-            if (ar || !(i in from)) {
-                if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-                ar[i] = from[i];
+    var __assign = function() {
+        __assign = Object.assign || function __assign(t) {
+            for (var s, i = 1, n = arguments.length; i < n; i++) {
+                s = arguments[i];
+                for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
             }
+            return t;
+        };
+        return __assign.apply(this, arguments);
+    };
+
+    function __awaiter(thisArg, _arguments, P, generator) {
+        function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+        return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+            function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+            function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+        });
+    }
+
+    function __generator(thisArg, body) {
+        var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g = Object.create((typeof Iterator === "function" ? Iterator : Object).prototype);
+        return g.next = verb(0), g["throw"] = verb(1), g["return"] = verb(2), typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+        function verb(n) { return function (v) { return step([n, v]); }; }
+        function step(op) {
+            if (f) throw new TypeError("Generator is already executing.");
+            while (g && (g = 0, op[0] && (_ = 0)), _) try {
+                if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+                if (y = 0, t) op = [op[0] & 2, t.value];
+                switch (op[0]) {
+                    case 0: case 1: t = op; break;
+                    case 4: _.label++; return { value: op[1], done: false };
+                    case 5: _.label++; y = op[1]; op = [0]; continue;
+                    case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                    default:
+                        if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                        if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                        if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                        if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                        if (t[2]) _.ops.pop();
+                        _.trys.pop(); continue;
+                }
+                op = body.call(thisArg, _);
+            } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+            if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
         }
-        return to.concat(ar || Array.prototype.slice.call(from));
     }
 
     typeof SuppressedError === "function" ? SuppressedError : function (error, suppressed, message) {
         var e = new Error(message);
         return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
     };
-
-    var once = function (action) {
-        var called = false;
-        return function () {
-            var args = [];
-            for (var _i = 0; _i < arguments.length; _i++) {
-                args[_i] = arguments[_i];
-            }
-            if (called)
-                return;
-            called = true;
-            if (typeof action === "function")
-                action.call.apply(action, __spreadArray([null], args, false));
-        };
-    };
-
-    var HOOK_TYPE;
-    (function (HOOK_TYPE) {
-        HOOK_TYPE[HOOK_TYPE["useId"] = 0] = "useId";
-        HOOK_TYPE[HOOK_TYPE["useRef"] = 1] = "useRef";
-        HOOK_TYPE[HOOK_TYPE["useMemo"] = 2] = "useMemo";
-        HOOK_TYPE[HOOK_TYPE["useState"] = 3] = "useState";
-        HOOK_TYPE[HOOK_TYPE["useSignal"] = 4] = "useSignal";
-        HOOK_TYPE[HOOK_TYPE["useEffect"] = 5] = "useEffect";
-        HOOK_TYPE[HOOK_TYPE["useContext"] = 6] = "useContext";
-        HOOK_TYPE[HOOK_TYPE["useReducer"] = 7] = "useReducer";
-        HOOK_TYPE[HOOK_TYPE["useCallback"] = 8] = "useCallback";
-        HOOK_TYPE[HOOK_TYPE["useTransition"] = 9] = "useTransition";
-        HOOK_TYPE[HOOK_TYPE["useDebugValue"] = 10] = "useDebugValue";
-        HOOK_TYPE[HOOK_TYPE["useLayoutEffect"] = 11] = "useLayoutEffect";
-        HOOK_TYPE[HOOK_TYPE["useDeferredValue"] = 12] = "useDeferredValue";
-        HOOK_TYPE[HOOK_TYPE["useInsertionEffect"] = 13] = "useInsertionEffect";
-        HOOK_TYPE[HOOK_TYPE["useImperativeHandle"] = 14] = "useImperativeHandle";
-        HOOK_TYPE[HOOK_TYPE["useSyncExternalStore"] = 15] = "useSyncExternalStore";
-        HOOK_TYPE[HOOK_TYPE["useOptimistic"] = 16] = "useOptimistic";
-        HOOK_TYPE[HOOK_TYPE["useEffectEvent"] = 17] = "useEffectEvent";
-    })(HOOK_TYPE || (HOOK_TYPE = {}));
-
-    var UpdateQueueType;
-    (function (UpdateQueueType) {
-        UpdateQueueType[UpdateQueueType["component"] = 1] = "component";
-        UpdateQueueType[UpdateQueueType["hook"] = 2] = "hook";
-        UpdateQueueType[UpdateQueueType["context"] = 3] = "context";
-        UpdateQueueType[UpdateQueueType["hmr"] = 4] = "hmr";
-        UpdateQueueType[UpdateQueueType["trigger"] = 5] = "trigger";
-        UpdateQueueType[UpdateQueueType["suspense"] = 6] = "suspense";
-        UpdateQueueType[UpdateQueueType["lazy"] = 7] = "lazy";
-        UpdateQueueType[UpdateQueueType["promise"] = 8] = "promise";
-    })(UpdateQueueType || (UpdateQueueType = {}));
-
-    var STATE_TYPE;
-    (function (STATE_TYPE) {
-        STATE_TYPE[STATE_TYPE["__initial__"] = 0] = "__initial__";
-        STATE_TYPE[STATE_TYPE["__create__"] = 1] = "__create__";
-        STATE_TYPE[STATE_TYPE["__stable__"] = 2] = "__stable__";
-        STATE_TYPE[STATE_TYPE["__inherit__"] = 4] = "__inherit__";
-        STATE_TYPE[STATE_TYPE["__triggerConcurrent__"] = 8] = "__triggerConcurrent__";
-        STATE_TYPE[STATE_TYPE["__triggerConcurrentForce__"] = 16] = "__triggerConcurrentForce__";
-        STATE_TYPE[STATE_TYPE["__triggerSync__"] = 32] = "__triggerSync__";
-        STATE_TYPE[STATE_TYPE["__triggerSyncForce__"] = 64] = "__triggerSyncForce__";
-        STATE_TYPE[STATE_TYPE["__unmount__"] = 128] = "__unmount__";
-        STATE_TYPE[STATE_TYPE["__hmr__"] = 256] = "__hmr__";
-        STATE_TYPE[STATE_TYPE["__retrigger__"] = 512] = "__retrigger__";
-        STATE_TYPE[STATE_TYPE["__reschedule__"] = 1024] = "__reschedule__";
-        STATE_TYPE[STATE_TYPE["__recreate__"] = 2048] = "__recreate__";
-        STATE_TYPE[STATE_TYPE["__suspense__"] = 4096] = "__suspense__";
-    })(STATE_TYPE || (STATE_TYPE = {}));
-
-    var PATCH_TYPE;
-    (function (PATCH_TYPE) {
-        PATCH_TYPE[PATCH_TYPE["__initial__"] = 0] = "__initial__";
-        PATCH_TYPE[PATCH_TYPE["__create__"] = 1] = "__create__";
-        PATCH_TYPE[PATCH_TYPE["__update__"] = 2] = "__update__";
-        PATCH_TYPE[PATCH_TYPE["__append__"] = 4] = "__append__";
-        PATCH_TYPE[PATCH_TYPE["__position__"] = 8] = "__position__";
-        PATCH_TYPE[PATCH_TYPE["__effect__"] = 16] = "__effect__";
-        PATCH_TYPE[PATCH_TYPE["__layoutEffect__"] = 32] = "__layoutEffect__";
-        PATCH_TYPE[PATCH_TYPE["__insertionEffect__"] = 64] = "__insertionEffect__";
-        PATCH_TYPE[PATCH_TYPE["__unmount__"] = 128] = "__unmount__";
-        PATCH_TYPE[PATCH_TYPE["__ref__"] = 256] = "__ref__";
-    })(PATCH_TYPE || (PATCH_TYPE = {}));
-
-    var Effect_TYPE;
-    (function (Effect_TYPE) {
-        Effect_TYPE[Effect_TYPE["__initial__"] = 0] = "__initial__";
-        Effect_TYPE[Effect_TYPE["__effect__"] = 1] = "__effect__";
-        Effect_TYPE[Effect_TYPE["__unmount__"] = 2] = "__unmount__";
-    })(Effect_TYPE || (Effect_TYPE = {}));
-
-    var event$1 = {};
-
-    var hasRequiredEvent$1;
-
-    function requireEvent$1 () {
-    	if (hasRequiredEvent$1) return event$1;
-    	hasRequiredEvent$1 = 1;
-    	(function (exports) {
-
-    		exports.MessageHookType = void 0;
-    		(function (MessageHookType) {
-    		    MessageHookType["init"] = "hook-init";
-    		    MessageHookType["mount"] = "hook-mount";
-    		    MessageHookType["render"] = "hook-render";
-    		    MessageHookType["origin"] = "hook-origin";
-    		    MessageHookType["clear"] = "hook-clear";
-    		})(exports.MessageHookType || (exports.MessageHookType = {}));
-    		exports.MessageDetectorType = void 0;
-    		(function (MessageDetectorType) {
-    		    MessageDetectorType["init"] = "detector-init";
-    		})(exports.MessageDetectorType || (exports.MessageDetectorType = {}));
-    		exports.MessageProxyType = void 0;
-    		(function (MessageProxyType) {
-    		    MessageProxyType["init"] = "proxy-init";
-    		})(exports.MessageProxyType || (exports.MessageProxyType = {}));
-    		exports.MessagePanelType = void 0;
-    		(function (MessagePanelType) {
-    		    MessagePanelType["show"] = "panel-show";
-    		    MessagePanelType["hide"] = "panel-hide";
-    		    MessagePanelType["varStore"] = "panel-var-store";
-    		    MessagePanelType["varSource"] = "panel-var-source";
-    		    MessagePanelType["enableHover"] = "panel-enable-hover";
-    		    MessagePanelType["enableUpdate"] = "panel-enable-update";
-    		    MessagePanelType["enableRetrigger"] = "panel-enable-retrigger";
-    		    MessagePanelType["enableHoverOnBrowser"] = "panel-enable-hover-on-browser";
-    		    MessagePanelType["enableRecord"] = "panel-enable-record";
-    		    MessagePanelType["nodeHover"] = "panel-hover";
-    		    MessagePanelType["nodeSelect"] = "panel-select";
-    		    MessagePanelType["nodeStore"] = "panel-store";
-    		    MessagePanelType["nodeEditor"] = "panel-editor";
-    		    MessagePanelType["nodeTrigger"] = "panel-trigger";
-    		    MessagePanelType["nodeInspect"] = "panel-inspect";
-    		    MessagePanelType["chunks"] = "panel-chunks";
-    		    MessagePanelType["clear"] = "panel-clear";
-    		    MessagePanelType["clearHMR"] = "panel-clear-hmr";
-    		    MessagePanelType["clearMessage"] = "panel-clear-message";
-    		    MessagePanelType["clearTrigger"] = "panel-clear-trigger";
-    		})(exports.MessagePanelType || (exports.MessagePanelType = {}));
-    		exports.MessageWorkerType = void 0;
-    		(function (MessageWorkerType) {
-    		    MessageWorkerType["init"] = "worker-init";
-    		    MessageWorkerType["close"] = "worker-close";
-    		})(exports.MessageWorkerType || (exports.MessageWorkerType = {}));
-    		exports.DevToolMessageEnum = void 0;
-    		(function (DevToolMessageEnum) {
-    		    // 初始化，判断是否用@my-react进行页面渲染
-    		    DevToolMessageEnum["init"] = "init";
-    		    DevToolMessageEnum["dir"] = "dir";
-    		    DevToolMessageEnum["config"] = "config";
-    		    // tree ready
-    		    DevToolMessageEnum["ready"] = "ready";
-    		    // tree update
-    		    DevToolMessageEnum["update"] = "update";
-    		    DevToolMessageEnum["changed"] = "changed";
-    		    DevToolMessageEnum["highlight"] = "highlight";
-    		    DevToolMessageEnum["trigger"] = "trigger";
-    		    DevToolMessageEnum["running"] = "running";
-    		    DevToolMessageEnum["triggerStatus"] = "triggerStatus";
-    		    DevToolMessageEnum["hmr"] = "hmr";
-    		    DevToolMessageEnum["hmrStatus"] = "hmrStatus";
-    		    DevToolMessageEnum["hmrInternal"] = "hmrInternal";
-    		    DevToolMessageEnum["source"] = "source";
-    		    DevToolMessageEnum["detail"] = "detail";
-    		    DevToolMessageEnum["unmount"] = "unmount";
-    		    DevToolMessageEnum["unmountNode"] = "unmount-node";
-    		    DevToolMessageEnum["selectSync"] = "select-sync";
-    		    DevToolMessageEnum["message"] = "message";
-    		    DevToolMessageEnum["warn"] = "warn";
-    		    DevToolMessageEnum["warnStatus"] = "warnStatus";
-    		    DevToolMessageEnum["error"] = "error";
-    		    DevToolMessageEnum["errorStatus"] = "errorStatus";
-    		    DevToolMessageEnum["chunks"] = "chunks";
-    		    DevToolMessageEnum["record"] = "record";
-    		    DevToolMessageEnum["domHover"] = "dom-hover";
-    		})(exports.DevToolMessageEnum || (exports.DevToolMessageEnum = {}));
-    		exports.HMRStatus = void 0;
-    		(function (HMRStatus) {
-    		    HMRStatus[HMRStatus["none"] = 0] = "none";
-    		    HMRStatus[HMRStatus["refresh"] = 1] = "refresh";
-    		    HMRStatus[HMRStatus["remount"] = 2] = "remount";
-    		})(exports.HMRStatus || (exports.HMRStatus = {}));
-    		var DevToolSource = "@my-react/devtool";
-
-    		exports.DevToolSource = DevToolSource; 
-    	} (event$1));
-    	return event$1;
-    }
-
-    var event;
-    var hasRequiredEvent;
-
-    function requireEvent () {
-    	if (hasRequiredEvent) return event;
-    	hasRequiredEvent = 1;
-    	event = requireEvent$1();
-    	return event;
-    }
-
-    var eventExports = requireEvent();
 
     var core$1 = {exports: {}};
 
@@ -4369,6 +4210,9 @@
     		    DevToolCore.prototype.unSubscribe = function (listener) {
     		        this._listeners.delete(listener);
     		    };
+    		    DevToolCore.prototype.clearSubscribe = function () {
+    		        this._listeners.clear();
+    		    };
     		    DevToolCore.prototype._notify = function (data) {
     		        var _this = this;
     		        this._listeners.forEach(function (listener) { return listener(__assign(__assign({}, data), { agentId: _this.id })); });
@@ -4786,38 +4630,140 @@
 
     var core = new coreExports.DevToolCore();
 
-    /******************************************************************************
-    Copyright (c) Microsoft Corporation.
+    var event$1 = {};
 
-    Permission to use, copy, modify, and/or distribute this software for any
-    purpose with or without fee is hereby granted.
+    var hasRequiredEvent$1;
 
-    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-    REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-    AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-    INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-    LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
-    OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-    PERFORMANCE OF THIS SOFTWARE.
-    ***************************************************************************** */
-    /* global Reflect, Promise, SuppressedError, Symbol, Iterator */
+    function requireEvent$1 () {
+    	if (hasRequiredEvent$1) return event$1;
+    	hasRequiredEvent$1 = 1;
+    	(function (exports) {
 
+    		exports.MessageHookType = void 0;
+    		(function (MessageHookType) {
+    		    MessageHookType["init"] = "hook-init";
+    		    MessageHookType["mount"] = "hook-mount";
+    		    MessageHookType["render"] = "hook-render";
+    		    MessageHookType["origin"] = "hook-origin";
+    		    MessageHookType["clear"] = "hook-clear";
+    		})(exports.MessageHookType || (exports.MessageHookType = {}));
+    		exports.MessageDetectorType = void 0;
+    		(function (MessageDetectorType) {
+    		    MessageDetectorType["init"] = "detector-init";
+    		})(exports.MessageDetectorType || (exports.MessageDetectorType = {}));
+    		exports.MessageProxyType = void 0;
+    		(function (MessageProxyType) {
+    		    MessageProxyType["init"] = "proxy-init";
+    		})(exports.MessageProxyType || (exports.MessageProxyType = {}));
+    		exports.MessagePanelType = void 0;
+    		(function (MessagePanelType) {
+    		    MessagePanelType["show"] = "panel-show";
+    		    MessagePanelType["hide"] = "panel-hide";
+    		    MessagePanelType["varStore"] = "panel-var-store";
+    		    MessagePanelType["varSource"] = "panel-var-source";
+    		    MessagePanelType["enableHover"] = "panel-enable-hover";
+    		    MessagePanelType["enableUpdate"] = "panel-enable-update";
+    		    MessagePanelType["enableRetrigger"] = "panel-enable-retrigger";
+    		    MessagePanelType["enableHoverOnBrowser"] = "panel-enable-hover-on-browser";
+    		    MessagePanelType["enableRecord"] = "panel-enable-record";
+    		    MessagePanelType["nodeHover"] = "panel-hover";
+    		    MessagePanelType["nodeSelect"] = "panel-select";
+    		    MessagePanelType["nodeStore"] = "panel-store";
+    		    MessagePanelType["nodeEditor"] = "panel-editor";
+    		    MessagePanelType["nodeTrigger"] = "panel-trigger";
+    		    MessagePanelType["nodeInspect"] = "panel-inspect";
+    		    MessagePanelType["chunks"] = "panel-chunks";
+    		    MessagePanelType["clear"] = "panel-clear";
+    		    MessagePanelType["clearHMR"] = "panel-clear-hmr";
+    		    MessagePanelType["clearMessage"] = "panel-clear-message";
+    		    MessagePanelType["clearTrigger"] = "panel-clear-trigger";
+    		})(exports.MessagePanelType || (exports.MessagePanelType = {}));
+    		exports.MessageWorkerType = void 0;
+    		(function (MessageWorkerType) {
+    		    MessageWorkerType["init"] = "worker-init";
+    		    MessageWorkerType["close"] = "worker-close";
+    		})(exports.MessageWorkerType || (exports.MessageWorkerType = {}));
+    		exports.DevToolMessageEnum = void 0;
+    		(function (DevToolMessageEnum) {
+    		    // 初始化，判断是否用@my-react进行页面渲染
+    		    DevToolMessageEnum["init"] = "init";
+    		    DevToolMessageEnum["dir"] = "dir";
+    		    DevToolMessageEnum["config"] = "config";
+    		    // tree ready
+    		    DevToolMessageEnum["ready"] = "ready";
+    		    // tree update
+    		    DevToolMessageEnum["update"] = "update";
+    		    DevToolMessageEnum["changed"] = "changed";
+    		    DevToolMessageEnum["highlight"] = "highlight";
+    		    DevToolMessageEnum["trigger"] = "trigger";
+    		    DevToolMessageEnum["running"] = "running";
+    		    DevToolMessageEnum["triggerStatus"] = "triggerStatus";
+    		    DevToolMessageEnum["hmr"] = "hmr";
+    		    DevToolMessageEnum["hmrStatus"] = "hmrStatus";
+    		    DevToolMessageEnum["hmrInternal"] = "hmrInternal";
+    		    DevToolMessageEnum["source"] = "source";
+    		    DevToolMessageEnum["detail"] = "detail";
+    		    DevToolMessageEnum["unmount"] = "unmount";
+    		    DevToolMessageEnum["unmountNode"] = "unmount-node";
+    		    DevToolMessageEnum["selectSync"] = "select-sync";
+    		    DevToolMessageEnum["message"] = "message";
+    		    DevToolMessageEnum["warn"] = "warn";
+    		    DevToolMessageEnum["warnStatus"] = "warnStatus";
+    		    DevToolMessageEnum["error"] = "error";
+    		    DevToolMessageEnum["errorStatus"] = "errorStatus";
+    		    DevToolMessageEnum["chunks"] = "chunks";
+    		    DevToolMessageEnum["record"] = "record";
+    		    DevToolMessageEnum["domHover"] = "dom-hover";
+    		})(exports.DevToolMessageEnum || (exports.DevToolMessageEnum = {}));
+    		exports.HMRStatus = void 0;
+    		(function (HMRStatus) {
+    		    HMRStatus[HMRStatus["none"] = 0] = "none";
+    		    HMRStatus[HMRStatus["refresh"] = 1] = "refresh";
+    		    HMRStatus[HMRStatus["remount"] = 2] = "remount";
+    		})(exports.HMRStatus || (exports.HMRStatus = {}));
+    		var DevToolSource = "@my-react/devtool";
 
-    var __assign = function() {
-        __assign = Object.assign || function __assign(t) {
-            for (var s, i = 1, n = arguments.length; i < n; i++) {
-                s = arguments[i];
-                for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
-            }
-            return t;
-        };
-        return __assign.apply(this, arguments);
-    };
+    		exports.DevToolSource = DevToolSource; 
+    	} (event$1));
+    	return event$1;
+    }
 
-    typeof SuppressedError === "function" ? SuppressedError : function (error, suppressed, message) {
-        var e = new Error(message);
-        return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
-    };
+    var event;
+    var hasRequiredEvent;
+
+    function requireEvent () {
+    	if (hasRequiredEvent) return event;
+    	hasRequiredEvent = 1;
+    	event = requireEvent$1();
+    	return event;
+    }
+
+    var eventExports = requireEvent();
+
+    var PortName;
+    (function (PortName) {
+        PortName["proxy"] = "dev-tool/proxy";
+        PortName["panel"] = "dev-tool/panel";
+    })(PortName || (PortName = {}));
+    var sourceFrom;
+    (function (sourceFrom) {
+        // message from hook script, `content` dir
+        sourceFrom["hook"] = "hook";
+        // message from proxy script, `backend` dir
+        sourceFrom["proxy"] = "proxy";
+        // message from devtool panel, `panel` dir
+        sourceFrom["panel"] = "panel";
+        // message from background worker, `background` dir
+        sourceFrom["worker"] = "worker";
+        // message from iframe, chrome/src/hooks/useBridgeForward.ts
+        sourceFrom["iframe"] = "iframe";
+        // message from socket, chrome/src/hooks/useWebDev.ts
+        sourceFrom["socket"] = "socket";
+        // message from detector, `popover` dir
+        sourceFrom["detector"] = "detector";
+        // message from another runtime engine
+        sourceFrom["forward"] = "forward";
+    })(sourceFrom || (sourceFrom = {}));
 
     /* eslint-disable @typescript-eslint/no-require-imports */
     var varId = 0;
@@ -4847,6 +4793,139 @@
             window.postMessage(__assign(__assign({}, _message), { source: eventExports.DevToolSource }), "*");
         };
     };
+
+    var forwardPostMessageWithSource = generatePostMessageWithSource(sourceFrom.forward);
+    var initForward_DEV = function () { return __awaiter(void 0, void 0, void 0, function () {
+        var _a, _b;
+        return __generator(this, function (_c) {
+            (_b = (_a = globalThis.__MY_REACT_DEVTOOL_RUNTIME__) === null || _a === void 0 ? void 0 : _a.prepare) === null || _b === void 0 ? void 0 : _b.call(_a);
+            forwardPostMessageWithSource({ type: eventExports.MessageHookType.init, to: sourceFrom.hook });
+            return [2 /*return*/];
+        });
+    }); };
+    initForward_DEV.close = function () {
+        core.disconnect();
+    };
+
+    /******************************************************************************
+    Copyright (c) Microsoft Corporation.
+
+    Permission to use, copy, modify, and/or distribute this software for any
+    purpose with or without fee is hereby granted.
+
+    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+    REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+    AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+    INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+    LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+    OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+    PERFORMANCE OF THIS SOFTWARE.
+    ***************************************************************************** */
+    /* global Reflect, Promise, SuppressedError, Symbol, Iterator */
+
+
+    function __spreadArray(to, from, pack) {
+        if (arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+            if (ar || !(i in from)) {
+                if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+                ar[i] = from[i];
+            }
+        }
+        return to.concat(ar || Array.prototype.slice.call(from));
+    }
+
+    typeof SuppressedError === "function" ? SuppressedError : function (error, suppressed, message) {
+        var e = new Error(message);
+        return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
+    };
+
+    var once = function (action) {
+        var called = false;
+        return function () {
+            var args = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                args[_i] = arguments[_i];
+            }
+            if (called)
+                return;
+            called = true;
+            if (typeof action === "function")
+                action.call.apply(action, __spreadArray([null], args, false));
+        };
+    };
+
+    var HOOK_TYPE;
+    (function (HOOK_TYPE) {
+        HOOK_TYPE[HOOK_TYPE["useId"] = 0] = "useId";
+        HOOK_TYPE[HOOK_TYPE["useRef"] = 1] = "useRef";
+        HOOK_TYPE[HOOK_TYPE["useMemo"] = 2] = "useMemo";
+        HOOK_TYPE[HOOK_TYPE["useState"] = 3] = "useState";
+        HOOK_TYPE[HOOK_TYPE["useSignal"] = 4] = "useSignal";
+        HOOK_TYPE[HOOK_TYPE["useEffect"] = 5] = "useEffect";
+        HOOK_TYPE[HOOK_TYPE["useContext"] = 6] = "useContext";
+        HOOK_TYPE[HOOK_TYPE["useReducer"] = 7] = "useReducer";
+        HOOK_TYPE[HOOK_TYPE["useCallback"] = 8] = "useCallback";
+        HOOK_TYPE[HOOK_TYPE["useTransition"] = 9] = "useTransition";
+        HOOK_TYPE[HOOK_TYPE["useDebugValue"] = 10] = "useDebugValue";
+        HOOK_TYPE[HOOK_TYPE["useLayoutEffect"] = 11] = "useLayoutEffect";
+        HOOK_TYPE[HOOK_TYPE["useDeferredValue"] = 12] = "useDeferredValue";
+        HOOK_TYPE[HOOK_TYPE["useInsertionEffect"] = 13] = "useInsertionEffect";
+        HOOK_TYPE[HOOK_TYPE["useImperativeHandle"] = 14] = "useImperativeHandle";
+        HOOK_TYPE[HOOK_TYPE["useSyncExternalStore"] = 15] = "useSyncExternalStore";
+        HOOK_TYPE[HOOK_TYPE["useOptimistic"] = 16] = "useOptimistic";
+        HOOK_TYPE[HOOK_TYPE["useEffectEvent"] = 17] = "useEffectEvent";
+    })(HOOK_TYPE || (HOOK_TYPE = {}));
+
+    var UpdateQueueType;
+    (function (UpdateQueueType) {
+        UpdateQueueType[UpdateQueueType["component"] = 1] = "component";
+        UpdateQueueType[UpdateQueueType["hook"] = 2] = "hook";
+        UpdateQueueType[UpdateQueueType["context"] = 3] = "context";
+        UpdateQueueType[UpdateQueueType["hmr"] = 4] = "hmr";
+        UpdateQueueType[UpdateQueueType["trigger"] = 5] = "trigger";
+        UpdateQueueType[UpdateQueueType["suspense"] = 6] = "suspense";
+        UpdateQueueType[UpdateQueueType["lazy"] = 7] = "lazy";
+        UpdateQueueType[UpdateQueueType["promise"] = 8] = "promise";
+    })(UpdateQueueType || (UpdateQueueType = {}));
+
+    var STATE_TYPE;
+    (function (STATE_TYPE) {
+        STATE_TYPE[STATE_TYPE["__initial__"] = 0] = "__initial__";
+        STATE_TYPE[STATE_TYPE["__create__"] = 1] = "__create__";
+        STATE_TYPE[STATE_TYPE["__stable__"] = 2] = "__stable__";
+        STATE_TYPE[STATE_TYPE["__inherit__"] = 4] = "__inherit__";
+        STATE_TYPE[STATE_TYPE["__triggerConcurrent__"] = 8] = "__triggerConcurrent__";
+        STATE_TYPE[STATE_TYPE["__triggerConcurrentForce__"] = 16] = "__triggerConcurrentForce__";
+        STATE_TYPE[STATE_TYPE["__triggerSync__"] = 32] = "__triggerSync__";
+        STATE_TYPE[STATE_TYPE["__triggerSyncForce__"] = 64] = "__triggerSyncForce__";
+        STATE_TYPE[STATE_TYPE["__unmount__"] = 128] = "__unmount__";
+        STATE_TYPE[STATE_TYPE["__hmr__"] = 256] = "__hmr__";
+        STATE_TYPE[STATE_TYPE["__retrigger__"] = 512] = "__retrigger__";
+        STATE_TYPE[STATE_TYPE["__reschedule__"] = 1024] = "__reschedule__";
+        STATE_TYPE[STATE_TYPE["__recreate__"] = 2048] = "__recreate__";
+        STATE_TYPE[STATE_TYPE["__suspense__"] = 4096] = "__suspense__";
+    })(STATE_TYPE || (STATE_TYPE = {}));
+
+    var PATCH_TYPE;
+    (function (PATCH_TYPE) {
+        PATCH_TYPE[PATCH_TYPE["__initial__"] = 0] = "__initial__";
+        PATCH_TYPE[PATCH_TYPE["__create__"] = 1] = "__create__";
+        PATCH_TYPE[PATCH_TYPE["__update__"] = 2] = "__update__";
+        PATCH_TYPE[PATCH_TYPE["__append__"] = 4] = "__append__";
+        PATCH_TYPE[PATCH_TYPE["__position__"] = 8] = "__position__";
+        PATCH_TYPE[PATCH_TYPE["__effect__"] = 16] = "__effect__";
+        PATCH_TYPE[PATCH_TYPE["__layoutEffect__"] = 32] = "__layoutEffect__";
+        PATCH_TYPE[PATCH_TYPE["__insertionEffect__"] = 64] = "__insertionEffect__";
+        PATCH_TYPE[PATCH_TYPE["__unmount__"] = 128] = "__unmount__";
+        PATCH_TYPE[PATCH_TYPE["__ref__"] = 256] = "__ref__";
+    })(PATCH_TYPE || (PATCH_TYPE = {}));
+
+    var Effect_TYPE;
+    (function (Effect_TYPE) {
+        Effect_TYPE[Effect_TYPE["__initial__"] = 0] = "__initial__";
+        Effect_TYPE[Effect_TYPE["__effect__"] = 1] = "__effect__";
+        Effect_TYPE[Effect_TYPE["__unmount__"] = 2] = "__unmount__";
+    })(Effect_TYPE || (Effect_TYPE = {}));
 
     var onMessageFromPanelOrWorkerOrDetector = function (data) {
         if (data.source !== coreExports.DevToolSource)
@@ -4968,41 +5047,16 @@
         }
     };
 
-    var PortName;
-    (function (PortName) {
-        PortName["proxy"] = "dev-tool/proxy";
-        PortName["panel"] = "dev-tool/panel";
-    })(PortName || (PortName = {}));
-    var sourceFrom;
-    (function (sourceFrom) {
-        // message from hook script, `content` dir
-        sourceFrom["hook"] = "hook";
-        // message from proxy script, `backend` dir
-        sourceFrom["proxy"] = "proxy";
-        // message from devtool panel, `panel` dir
-        sourceFrom["panel"] = "panel";
-        // message from background worker, `background` dir
-        sourceFrom["worker"] = "worker";
-        // message from iframe, chrome/src/hooks/useBridgeForward.ts
-        sourceFrom["iframe"] = "iframe";
-        // message from socket, chrome/src/hooks/useWebDev.ts
-        sourceFrom["socket"] = "socket";
-        // message from detector, `popover` dir
-        sourceFrom["detector"] = "detector";
-        // message from another runtime engine
-        sourceFrom["forward"] = "forward";
-    })(sourceFrom || (sourceFrom = {}));
-
     var hookPostMessageWithSource = generatePostMessageWithSource(sourceFrom.hook);
-    var forwardPostMessageWithSource = generatePostMessageWithSource(sourceFrom.forward);
     // default render agentId
     var agentId = core.id;
-    var hasEnable = false;
     core.subscribe(function (message) {
         hookPostMessageWithSource({ type: eventExports.MessageHookType.render, data: message, to: sourceFrom.panel });
     });
     var set = new Set();
     var detectorReady = false;
+    var forwardMode = false;
+    var env = "hook";
     var idMap = new Map();
     var runWhenDetectorReady = function (fn, count) {
         var id = idMap.get(fn);
@@ -5011,7 +5065,7 @@
             fn();
         }
         else {
-            if (count && count > 18) {
+            if (count && count > 60) {
                 return;
             }
             var newId = setTimeout(function () { return runWhenDetectorReady(fn, count ? count + 1 : 1); }, 1000);
@@ -5019,21 +5073,29 @@
         }
     };
     var onMessage = function (message) {
-        var _a, _b, _c;
+        var _a, _b, _c, _d, _e;
         if (typeof window === "undefined")
             return;
-        if (message.source !== window)
+        // allow iframe dev
+        if (message.source !== window && ((_a = message.data) === null || _a === void 0 ? void 0 : _a.from) !== sourceFrom.iframe)
             return;
-        if (((_a = message.data) === null || _a === void 0 ? void 0 : _a.source) !== eventExports.DevToolSource)
+        if (((_b = message.data) === null || _b === void 0 ? void 0 : _b.source) !== eventExports.DevToolSource)
             return;
-        if (((_b = message.data) === null || _b === void 0 ? void 0 : _b.to) !== sourceFrom.hook)
+        if (((_c = message.data) === null || _c === void 0 ? void 0 : _c.to) !== sourceFrom.hook && ((_d = message.data) === null || _d === void 0 ? void 0 : _d.to) !== sourceFrom.forward)
             return;
-        if (!detectorReady && ((_c = message.data) === null || _c === void 0 ? void 0 : _c.type) === eventExports.MessageDetectorType.init) {
+        if (forwardMode)
+            return;
+        if (!detectorReady && ((_e = message.data) === null || _e === void 0 ? void 0 : _e.type) === eventExports.MessageDetectorType.init) {
             detectorReady = true;
         }
-        if (message.data.type === eventExports.MessagePanelType.show) {
-            hookPostMessageWithSource({ type: eventExports.MessageHookType.clear, to: sourceFrom.panel, data: { agentId: agentId, force: true } });
+        if (message.data.from === sourceFrom.forward && env === "hook") {
+            core.clearSubscribe();
+            forwardMode = true;
+            hookPostMessageWithSource({ type: eventExports.MessageHookType.clear, to: sourceFrom.panel, data: { agentId: agentId } });
+            hookPostMessageWithSource({ type: eventExports.MessageDetectorType.init, to: sourceFrom.forward });
         }
+        if (forwardMode && env === "hook")
+            return;
         onMessageFromPanelOrWorkerOrDetector(message.data);
     };
     if (typeof window !== "undefined") {
@@ -5041,28 +5103,22 @@
     }
     var onceMount = once(function () {
         // current site is render by @my-react
-        hookPostMessageWithSource({ type: eventExports.MessageHookType.mount, data: { forwardMode: true }, to: sourceFrom.detector });
+        hookPostMessageWithSource({ type: eventExports.MessageHookType.mount, data: { forwardMode: env === "forward" }, to: sourceFrom.detector });
     });
     var onceDev = once(function () {
-        hookPostMessageWithSource({ type: eventExports.MessageHookType.mount, data: { mode: "develop", forwardMode: true }, to: sourceFrom.detector });
+        hookPostMessageWithSource({ type: eventExports.MessageHookType.mount, data: { mode: "develop", forwardMode: env === "forward" }, to: sourceFrom.detector });
     });
     var oncePro = once(function () {
-        hookPostMessageWithSource({ type: eventExports.MessageHookType.mount, data: { mode: "product", forwardMode: true }, to: sourceFrom.detector });
+        hookPostMessageWithSource({ type: eventExports.MessageHookType.mount, data: { mode: "product", forwardMode: env === "forward" }, to: sourceFrom.detector });
     });
     var onceOrigin = once(function () {
-        try {
+        if (typeof window !== "undefined") {
             var origin_1 = window.location.origin;
             core._origin = origin_1;
-            if (origin_1) {
-                hookPostMessageWithSource({ type: eventExports.MessageHookType.origin, data: origin_1, to: sourceFrom.detector });
-            }
-        }
-        catch (_a) {
+            hookPostMessageWithSource({ type: eventExports.MessageHookType.origin, data: origin_1, to: sourceFrom.detector });
         }
     });
     var globalHook = function (dispatch) {
-        if (!hasEnable)
-            return;
         set.add(dispatch);
         core.addDispatch(dispatch);
         if (dispatch.mode === "development") {
@@ -5076,23 +5132,31 @@
         }
         runWhenDetectorReady(onceOrigin);
     };
+    globalHook.prepare = function () {
+        var _a, _b;
+        if (typeof globalThis["__@my-react/react-devtool-inject-pending__"] === "function") {
+            (_a = globalThis["__@my-react/react-devtool-inject-pending__"]) === null || _a === void 0 ? void 0 : _a.call(globalThis);
+        }
+        else {
+            (_b = globalThis["__@my-react/dispatch__"]) === null || _b === void 0 ? void 0 : _b.forEach(function (d) { var _a; return (_a = globalThis.__MY_REACT_DEVTOOL_RUNTIME__) === null || _a === void 0 ? void 0 : _a.call(globalThis, d); });
+        }
+    };
+    globalHook.getForwardMode = function () { return forwardMode; };
+    globalHook.init = function () { return hookPostMessageWithSource({ type: eventExports.MessageHookType.init, to: sourceFrom.detector }); };
+    var getDetectorReady = function () { return detectorReady; };
+    globalHook.getDetectorReady = getDetectorReady;
+    var getForwardMode = function () { return forwardMode; };
+    globalHook.getForwardMode = getForwardMode;
+    var getEnv = function () { return env; };
+    globalHook.getEnv = getEnv;
+    var setEnv = function (e) { return (env = e); };
+
     if (!globalThis["__MY_REACT_DEVTOOL_INTERNAL__"]) {
+        setEnv("forward");
         globalThis["__MY_REACT_DEVTOOL_INTERNAL__"] = core;
         globalThis["__MY_REACT_DEVTOOL_RUNTIME__"] = globalHook;
         globalThis["__@my-react/react-devtool-inject__"] = globalHook;
-        hookPostMessageWithSource({ type: eventExports.MessageHookType.init, to: sourceFrom.detector });
-        globalHook.init = function () { return hookPostMessageWithSource({ type: eventExports.MessageHookType.init, to: sourceFrom.detector }); };
+        globalThis["__MY_REACT_DEVTOOL_FORWARD__"] = initForward_DEV;
     }
-    var initFORWARD_DEV = function () {
-        hasEnable = true;
-        if (Array.isArray(globalThis["__@my-react/dispatch__"])) {
-            globalThis["__@my-react/dispatch__"].forEach(function (dispatch) {
-                globalHook(dispatch);
-            });
-        }
-        forwardPostMessageWithSource({ to: sourceFrom.hook });
-    };
-
-    globalThis["__MY_REACT_DEVTOOL_FORWARD__"] = initFORWARD_DEV;
 
 })();

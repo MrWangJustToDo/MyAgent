@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 import fs from "fs";
 
 const loadDevToolScript = async () => {
@@ -12,6 +13,6 @@ const init = async () => {
   const devToolScript = await loadDevToolScript();
 
   fs.writeFileSync("./devtool/index.js", devToolScript);
-}
+};
 
 init();

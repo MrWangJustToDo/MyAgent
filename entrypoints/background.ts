@@ -55,6 +55,8 @@ export default defineBackground(() => {
           sendResponse({ error: `Network error: ${(error as Error)?.message}` });
         }
       })();
+
+      return true;
     }
 
     if (request.action === "postOllamaApi") {
@@ -80,6 +82,8 @@ export default defineBackground(() => {
           sendResponse({ error: `Network error: ${(error as Error)?.message}` });
         }
       })();
+
+      return true;
     }
 
     if (request.action === "translate") {
@@ -134,6 +138,8 @@ export default defineBackground(() => {
           sendResponse({ error: `Model not found: ${request.model}` });
         }
       })();
+
+      return true;
     }
 
     return true; // Keep the message channel open for sendResponse
