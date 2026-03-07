@@ -5,4 +5,13 @@ module.exports = [
   {
     ignores: ["dist", "dev", "scripts", "node_modules", ".output", ".wxt", "eslint.config.cjs"],
   },
+  {
+    settings: {
+      "import/resolver": {
+        typescript: {
+          project: ["./tsconfig.json", "./packages/*/tsconfig.json"],
+        },
+      },
+    },
+  },
 ];

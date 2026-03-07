@@ -1,17 +1,17 @@
 import { generateText } from "xsai";
 
+import { DEFAULT_OLLAMA_API_URL } from "./types.js";
+
+import type { DetectOptions, DetectResult } from "./types.js";
+
 export const detector = async ({
   text,
   model,
   target_lang,
-}: {
-  text: string;
-  model: string;
-  source_lang?: string;
-  target_lang: string;
-}): Promise<{ text: string; source_lang: string; target_lang: string }> => {
+  baseURL = DEFAULT_OLLAMA_API_URL,
+}: DetectOptions): Promise<DetectResult> => {
   const response = await generateText({
-    baseURL: "http://localhost:11434/v1/",
+    baseURL,
     messages: [
       {
         role: "system",

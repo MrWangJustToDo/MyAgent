@@ -1,18 +1,18 @@
 import { generateText } from "xsai";
 
+import { DEFAULT_OLLAMA_API_URL } from "./types.js";
+
+import type { TranslateOptions, TranslateResult } from "./types.js";
+
 export const translate = async ({
   text,
   model,
   source_lang,
   target_lang,
-}: {
-  text: string;
-  model: string;
-  source_lang?: string;
-  target_lang: string;
-}) => {
+  baseURL = DEFAULT_OLLAMA_API_URL,
+}: TranslateOptions): Promise<TranslateResult> => {
   const response = await generateText({
-    baseURL: "http://localhost:11434/v1/",
+    baseURL,
     messages: [
       {
         role: "system",
@@ -27,7 +27,7 @@ export const translate = async ({
   });
 
   return {
-    text: response.text,
+    text: response.text ?? "",
     source_lang,
     target_lang,
   };

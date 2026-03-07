@@ -2,6 +2,8 @@ import { createState } from "reactivity-store";
 
 import { getOllamaApi } from "@/service/api";
 
+import { useOllamaConfig } from "./useOllamaConfig";
+
 export const useOllamaStatus = createState(
   () => ({ state: false, connecting: false }) as { state: boolean; connecting: boolean },
   {

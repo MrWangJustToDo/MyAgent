@@ -2,9 +2,6 @@ import { Card, CardBody, CardHeader, Divider, Input, Listbox, ListboxItem } from
 import useSWR from "swr";
 
 import { Logo } from "@/components/logo";
-import { useOllamaModal } from "@/hooks/useOllamaModal";
-import { useOllamaStatus } from "@/hooks/useOllamaStatus";
-import { useSyncConfig } from "@/hooks/useSyncConfig";
 
 const { check } = useOllamaStatus.getActions();
 

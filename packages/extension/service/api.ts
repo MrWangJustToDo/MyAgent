@@ -1,3 +1,5 @@
+import { useOllamaModal } from "@/hooks/useOllamaModal";
+
 export const getOllamaApi = (url: string): Promise<{ data?: any; error?: string }> => {
   return browser.runtime.sendMessage({ action: "getOllamaApi", url });
 };

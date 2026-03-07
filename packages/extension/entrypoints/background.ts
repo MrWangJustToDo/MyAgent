@@ -1,4 +1,4 @@
-import { detector, translate } from "@/core/translate";
+import { detector, translate } from "@my-agent/core";
 
 import type { SettingType } from "@/hooks/useSyncConfig";
 
@@ -92,12 +92,15 @@ export default defineBackground(() => {
 
         if (model && url) {
           try {
+            const baseURL = `${url}/v1/`;
+
             if (request.source_lang && request.target_lang) {
               const { text } = await translate({
                 text: request.text,
                 model: model.label,
                 source_lang: request.source_lang,
                 target_lang: request.target_lang,
+                baseURL,
               });
 
               sendResponse({
@@ -113,6 +116,7 @@ export default defineBackground(() => {
                 text: request.text,
                 model: model.label,
                 target_lang: request.target_lang,
+                baseURL,
               });
 
               const { text } = await translate({
@@ -120,6 +124,7 @@ export default defineBackground(() => {
                 model: model.label,
                 source_lang,
                 target_lang,
+                baseURL,
               });
 
               sendResponse({

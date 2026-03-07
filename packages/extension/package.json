@@ -1,0 +1,45 @@
+{
+  "name": "@my-agent/extension",
+  "description": "Browser extension for My Agent",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "wxt prepare && node init.mjs"
+  },
+  "dependencies": {
+    "@my-agent/core": "workspace:*",
+    "@floating-ui/react": "^0.27.19",
+    "@heroui/react": "2.8.9",
+    "@my-react/react": "^0.3.22",
+    "@my-react/react-dom": "^0.3.22",
+    "@xsai-ext/providers": "0.4.3",
+    "framer-motion": "^12.34.5",
+    "lucide-react": "^0.576.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "reactivity-store": "^0.3.12",
+    "swr": "^2.4.1",
+    "xsai": "0.4.3"
+  },
+  "devDependencies": {
+    "@my-react/react-refresh": "^0.3.22",
+    "@my-react/react-vite": "^0.0.27",
+    "@types/chrome": "^0.0.313",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@wxt-dev/module-react": "^1.1.5",
+    "@tailwindcss/postcss": "^4.2.1",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^4.1.8",
+    "typescript": "^5.6.3",
+    "wxt": "^0.20.18"
+  }
+}

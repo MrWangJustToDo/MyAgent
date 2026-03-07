@@ -2,6 +2,9 @@ import { createState } from "reactivity-store";
 
 import { getOllamaApi, postOllamaApi } from "@/service/api";
 
+import { useOllamaConfig } from "./useOllamaConfig";
+import { useOllamaStatus } from "./useOllamaStatus";
+
 export const useOllamaModal = createState(
   () => ({ list: [] as { label: string; key: string; capabilities: string[] }[], selected: "", loading: false }),
   {

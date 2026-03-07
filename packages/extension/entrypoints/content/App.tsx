@@ -1,5 +1,6 @@
 import { addToast, Button, Input, Popover, PopoverContent, PopoverTrigger } from "@heroui/react";
 import { LanguagesIcon, RefreshCcwIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 
 import { translateText } from "@/service/api";

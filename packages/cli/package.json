@@ -1,0 +1,32 @@
+{
+  "name": "@my-agent/cli",
+  "version": "0.0.1",
+  "description": "CLI for My Agent",
+  "type": "module",
+  "bin": {
+    "my-agent": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@my-agent/core": "workspace:*",
+    "@my-react/react": "^0.3.22",
+    "@my-react/react-terminal": "^0.0.18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.33",
+    "@types/react": "^19.2.14",
+    "ink": "npm:@my-react/react-terminal@0.0.18",
+    "react": "^19.1.0",
+    "tsdown": "^0.21.0",
+    "typescript": "^5.6.3"
+  }
+}
