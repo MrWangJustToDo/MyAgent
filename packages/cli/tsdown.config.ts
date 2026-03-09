@@ -6,9 +6,7 @@ export default defineConfig({
   dts: true,
   clean: true,
   shims: true,
-  alias: {
-    react: "@my-react/react",
-    "react/jsx-runtime": "@my-react/react/jsx-runtime",
-    "react/jsx-dev-runtime": "@my-react/react/jsx-dev-runtime",
+  deps: {
+    neverBundle: ["ink", "react", "react/jsx-runtime", "react/jsx-dev-runtime"],
   },
 });
