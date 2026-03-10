@@ -3,6 +3,7 @@ import { Box, Text, useApp, useInput } from "ink";
 import { useState, useCallback } from "react";
 
 import { parseArgs, getFlagString } from "../hooks/useArgs.js";
+import { Markdown } from "../markdown";
 
 import { Spinner } from "./Spinner.js";
 
@@ -13,6 +14,7 @@ export interface ChatProps {
 interface Message {
   role: "user" | "assistant";
   content: string;
+  reasoning?: string;
 }
 
 export const Chat = ({ args }: ChatProps) => {
@@ -27,6 +29,7 @@ export const Chat = ({ args }: ChatProps) => {
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentResponse, setCurrentResponse] = useState("");
+  const [currentReasoning, setCurrentReasoning] = useState("");
   const [error, setError] = useState<string>("");
   const [chatSession] = useState(() => createChat(systemPrompt || undefined));
 
@@ -38,6 +41,7 @@ export const Chat = ({ args }: ChatProps) => {
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
     setIsStreaming(true);
     setCurrentResponse("");
+    setCurrentReasoning("");
     setError("");
 
     try {
@@ -49,9 +53,13 @@ export const Chat = ({ args }: ChatProps) => {
         onToken: (token) => {
           setCurrentResponse((prev) => prev + token);
         },
-        onComplete: (text) => {
-          setMessages((prev) => [...prev, { role: "assistant", content: text }]);
+        onReasoning: (token) => {
+          setCurrentReasoning((prev) => prev + token);
+        },
+        onComplete: (text, reasoning) => {
+          setMessages((prev) => [...prev, { role: "assistant", content: text, reasoning }]);
           setCurrentResponse("");
+          setCurrentReasoning("");
           setIsStreaming(false);
         },
       });
@@ -115,11 +123,40 @@ export const Chat = ({ args }: ChatProps) => {
                 {msg.role === "user" ? "You" : "Assistant"}:
               </Text>
             </Box>
+            {/* Show reasoning/thinking content if available */}
+            {msg.role === "assistant" && msg.reasoning && (
+              <Box paddingLeft={2} flexDirection="column" marginBottom={1}>
+                <Text color="magenta" dimColor italic>
+                  Thinking:
+                </Text>
+                <Box paddingLeft={2} borderStyle="round" borderColor="magenta" paddingX={1}>
+                  <Text color="gray" dimColor wrap="wrap">
+                    {msg.reasoning}
+                  </Text>
+                </Box>
+              </Box>
+            )}
             <Box paddingLeft={2}>
-              <Text wrap="wrap">{msg.content}</Text>
+              {msg.role === "assistant" ? <Markdown content={msg.content} /> : <Text wrap="wrap">{msg.content}</Text>}
             </Box>
           </Box>
         ))}
+
+        {/* Streaming reasoning */}
+        {isStreaming && currentReasoning && (
+          <Box flexDirection="column" marginBottom={1}>
+            <Box paddingLeft={2} flexDirection="column">
+              <Text color="magenta" dimColor italic>
+                Thinking:
+              </Text>
+              <Box paddingLeft={2} borderStyle="round" borderColor="magenta" paddingX={1}>
+                <Text color="gray" dimColor wrap="wrap">
+                  {currentReasoning + "▌"}
+                </Text>
+              </Box>
+            </Box>
+          </Box>
+        )}
 
         {/* Streaming response */}
         {isStreaming && currentResponse && (
@@ -130,14 +167,13 @@ export const Chat = ({ args }: ChatProps) => {
               </Text>
             </Box>
             <Box paddingLeft={2}>
-              <Text wrap="wrap">{currentResponse}</Text>
-              <Text color="cyan">▌</Text>
+              <Markdown content={currentResponse + "▌"} />
             </Box>
           </Box>
         )}
 
         {/* Loading indicator */}
-        {isStreaming && !currentResponse && (
+        {isStreaming && !currentResponse && !currentReasoning && (
           <Box>
             <Spinner text="Thinking..." />
           </Box>

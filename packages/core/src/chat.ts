@@ -6,7 +6,8 @@ import type { ChatMessage, ChatOptions, ChatResult } from "./schemas.js";
 
 export interface StreamChatOptions extends ChatOptions {
   onToken?: (token: string) => void;
-  onComplete?: (text: string) => void;
+  onReasoning?: (token: string) => void;
+  onComplete?: (text: string, reasoning?: string) => void;
 }
 
 /**
@@ -46,24 +47,53 @@ export const streamChat = async ({
   baseURL = DEFAULT_OLLAMA_API_URL,
   systemPrompt,
   onToken,
+  onReasoning,
   onComplete,
 }: StreamChatOptions): Promise<ChatResult> => {
   const allMessages: ChatMessage[] = systemPrompt ? [{ role: "system", content: systemPrompt }, ...messages] : messages;
 
-  const { textStream } = streamText({
+  const { textStream, reasoningTextStream } = streamText({
     baseURL,
     messages: allMessages,
     model,
   });
 
   let fullText = "";
+  let fullReasoning = "";
 
-  for await (const chunk of textStream) {
-    fullText += chunk;
-    onToken?.(chunk);
-  }
+  // Process both streams concurrently
+  const processTextStream = async () => {
+    const reader = textStream.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        fullText += value;
+        onToken?.(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  };
 
-  onComplete?.(fullText);
+  const processReasoningStream = async () => {
+    if (!onReasoning) return;
+    const reader = reasoningTextStream.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        fullReasoning += value;
+        onReasoning(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  };
+
+  await Promise.all([processTextStream(), processReasoningStream()]);
+
+  onComplete?.(fullText, fullReasoning || undefined);
 
   const assistantMessage: ChatMessage = {
     role: "assistant",
@@ -105,17 +135,24 @@ export const createChat = (systemPrompt?: string) => {
     stream: async (
       userMessage: string,
       options: Omit<StreamChatOptions, "messages" | "systemPrompt">
-    ): Promise<string> => {
+    ): Promise<{ text: string; reasoning?: string }> => {
       messages.push({ role: "user", content: userMessage });
+
+      let reasoning: string | undefined;
+      const originalOnComplete = options.onComplete;
 
       const result = await streamChat({
         messages,
         systemPrompt,
         ...options,
+        onComplete: (text, r) => {
+          reasoning = r;
+          originalOnComplete?.(text, r);
+        },
       });
 
       messages = result.messages;
-      return result.text;
+      return { text: result.text, reasoning };
     },
 
     clear: () => {
