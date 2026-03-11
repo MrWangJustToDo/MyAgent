@@ -32,6 +32,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@mishieck/ink-titled-box':
+        specifier: ^0.4.2
+        version: 0.4.2(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)(typescript@5.9.3)
       '@my-agent/core':
         specifier: workspace:*
         version: link:../core
@@ -53,6 +56,12 @@ importers:
       ink-spinner:
         specifier: ^5.0.0
         version: 5.0.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)
+      ink-text-input:
+        specifier: ^6.0.0
+        version: 6.0.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)
+      lodash-es:
+        specifier: ^4.17.23
+        version: 4.17.23
       reactivity-store:
         specifier: ^0.3.12
         version: 0.3.12(@my-react/react@0.3.22)
@@ -66,6 +75,9 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0
     devDependencies:
+      '@types/lodash-es':
+        specifier: ^4.17.12
+        version: 4.17.12
       '@types/node':
         specifier: ^22.15.33
         version: 22.19.15
@@ -112,6 +124,9 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      '@types/node':
+        specifier: ^22.19.15
+        version: 22.19.15
       tsdown:
         specifier: ^0.21.0
         version: 0.21.0(synckit@0.11.12)(typescript@5.9.3)
@@ -1435,6 +1450,13 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
+  '@mishieck/ink-titled-box@0.4.2':
+    resolution: {integrity: sha512-4tRyg2n9dPGY66EEchpjHSs+QL5Wdv8kAjRLg/BnXVimwwIl38sLhgphw8dGCGIK2pFz+owLi4vuQBdOdJivBA==}
+    peerDependencies:
+      ink: ^6.0.0
+      react: ^19.1.0
+      typescript: ^5
+
   '@mixmark-io/domino@2.2.0':
     resolution: {integrity: sha512-Y28PR25bHXUg88kCV7nivXrP2Nj2RueZ3/l/jdx6J9f8J4nsEGcgX0Qe6lt7Pa+J79+kPiJU3LguR6O/6zrLOw==}
 
@@ -2719,6 +2741,12 @@ packages:
 
   '@types/json5@0.0.29':
     resolution: {integrity: sha512-dRLjCWHYg4oaA77cxO64oO+7JwCwnIzkZPdrrC71jQmQtlhM556pwKo5bUzqvZndkVbeFLIIi+9TC40JNF5hNQ==}
+
+  '@types/lodash-es@4.17.12':
+    resolution: {integrity: sha512-0NgftHUcV4v34VhXm8QBSftKVXtbkBG3ViCjs6+eJ5a6y6Mi/jiFGPc1sC7QK+9BFhWrURE3EOggmWaSxL9OzQ==}
+
+  '@types/lodash@4.17.24':
+    resolution: {integrity: sha512-gIW7lQLZbue7lRSWEFql49QJJWThrTFFeIMJdp3eH4tKoxm1OvEPg02rm4wCCSHS0cL3/Fizimb35b7k8atwsQ==}
 
   '@types/mdast@4.0.4':
     resolution: {integrity: sha512-kGaNbPh1k7AFzgpud/gMdvIm5xuECykRR+JnWKQno9TAXVa6WIVCGTPvYGekIDL4uwCZQSYbUxNBSb1aUo79oA==}
@@ -4296,6 +4324,13 @@ packages:
       ink: '>=4.0.0'
       react: '>=18.0.0'
 
+  ink-text-input@6.0.0:
+    resolution: {integrity: sha512-Fw64n7Yha5deb1rHY137zHTAbSTNelUKuB5Kkk2HACXEtwIHBCf9OH2tP/LQ9fRYTl1F0dZgbW0zPnZk6FA9Lw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      ink: '>=5'
+      react: '>=18'
+
   input-otp@1.4.1:
     resolution: {integrity: sha512-+yvpmKYKHi9jIGngxagY9oWiiblPB7+nEO75F2l2o4vs+6vpPZZmUl4tBNYuTCvQjhvEIbdNeJu70bhfYP2nbw==}
     peerDependencies:
@@ -4760,6 +4795,9 @@ packages:
   locate-path@6.0.0:
     resolution: {integrity: sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==}
     engines: {node: '>=10'}
+
+  lodash-es@4.17.23:
+    resolution: {integrity: sha512-kVI48u3PZr38HdYz98UmfPnXl2DXrpdctLrFLCd3kOx1xUkOmpFPx7gCWWM5MPkL/fD8zb+Ph0QzjGFs4+hHWg==}
 
   lodash.includes@4.3.0:
     resolution: {integrity: sha512-W3Bx6mdkRTGtlJISOvVD/lbqjTlPPUDTMnlXZFnVwi9NKJ6tiAk6LVdlhZMm17VZisqhKcgzpO5Wz91PCt5b0w==}
@@ -8109,6 +8147,12 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
+  '@mishieck/ink-titled-box@0.4.2(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)(typescript@5.9.3)':
+    dependencies:
+      ink: '@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))'
+      react: '@my-react/react@0.3.22(@my-react/react@0.3.22)'
+      typescript: 5.9.3
+
   '@mixmark-io/domino@2.2.0': {}
 
   '@mongodb-js/zstd@7.0.0':
@@ -9809,6 +9853,12 @@ snapshots:
   '@types/json-schema@7.0.15': {}
 
   '@types/json5@0.0.29': {}
+
+  '@types/lodash-es@4.17.12':
+    dependencies:
+      '@types/lodash': 4.17.24
+
+  '@types/lodash@4.17.24': {}
 
   '@types/mdast@4.0.4':
     dependencies:
@@ -11562,6 +11612,13 @@ snapshots:
       ink: '@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))'
       react: '@my-react/react@0.3.22(@my-react/react@0.3.22)'
 
+  ink-text-input@6.0.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22):
+    dependencies:
+      chalk: 5.6.2
+      ink: '@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))'
+      react: '@my-react/react@0.3.22(@my-react/react@0.3.22)'
+      type-fest: 4.41.0
+
   input-otp@1.4.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       react: 19.2.4
@@ -12004,6 +12061,8 @@ snapshots:
   locate-path@6.0.0:
     dependencies:
       p-locate: 5.0.0
+
+  lodash-es@4.17.23: {}
 
   lodash.includes@4.3.0: {}
 

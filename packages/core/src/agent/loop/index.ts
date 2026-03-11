@@ -2,6 +2,7 @@
 import { generateText, streamText, stepCountIs } from "ai";
 import { z } from "zod";
 
+import { type EnvironmentType } from "../../environment/types.js";
 import { useSandbox } from "../../hooks/useSandbox.js";
 import { useTools } from "../../hooks/useTools.js";
 import { createModel } from "../../provider.js";
@@ -24,9 +25,18 @@ export const AgentConfigSchema = z.object({
   maxSteps: z.number().int().min(1).max(100).optional().describe("Maximum number of steps"),
   rootPath: z.string().min(1).describe("The sandbox root path for file operations"),
   envs: z.record(z.string(), z.string()).optional().describe("Environment variables for sandbox"),
+  // Note: environment is validated separately since it can be a string or object
 });
 
-export type AgentConfig = z.infer<typeof AgentConfigSchema>;
+export type AgentConfig = z.infer<typeof AgentConfigSchema> & {
+  /**
+   * Environment to use for sandbox operations.
+   * - 'local': Use local just-bash environment (default)
+   * - 'remote': Use remote compute gateway (requires configuration)
+   * - Environment: Custom environment instance
+   */
+  environment?: EnvironmentType;
+};
 
 /**
  * Tool call information for approval workflow
@@ -162,8 +172,9 @@ export class Agent {
   private initialized = false;
 
   constructor(config: AgentConfig) {
-    // Validate config
-    this.config = AgentConfigSchema.parse(config);
+    // Validate config (environment is validated separately)
+    const { environment, ...restConfig } = config;
+    this.config = { ...AgentConfigSchema.parse(restConfig), environment };
     this.model = createModel(this.config.model, this.config.baseURL ?? DEFAULT_OLLAMA_API_URL);
   }
 
@@ -172,6 +183,11 @@ export class Agent {
    */
   async initialize(): Promise<void> {
     if (this.initialized) return;
+
+    // Set environment if specified
+    if (this.config.environment) {
+      useSandbox.getActions().setEnvironment(this.config.environment);
+    }
 
     // Initialize sandbox
     this.sandbox = await useSandbox.getActions().init(this.config.rootPath);

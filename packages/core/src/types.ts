@@ -1,8 +1,4 @@
 // Re-export types from schemas (project-specific types)
-// Sandbox types for just-bash provider
-import type { JustBashSandbox } from "@computesdk/just-bash";
-import type { ProviderSandbox } from "@computesdk/provider";
-
 export type {
   TranslateOptions,
   TranslateResult,
@@ -10,9 +6,6 @@ export type {
   DetectResult,
   OllamaConfig,
   OllamaModel,
-  ChatMessage,
-  ChatOptions,
-  ChatResult,
 } from "./schemas.js";
 
 // Re-export schemas (project-specific schemas)
@@ -24,16 +17,24 @@ export {
   ollamaConfigSchema,
   ollamaModelSchema,
   ollamaModelsResponseSchema,
-  chatMessageSchema,
-  chatOptionsSchema,
-  chatResultSchema,
 } from "./schemas.js";
 
 /**
- * Sandbox type for the local just-bash provider.
- * Uses the standard SandboxInterface with JustBashSandbox internals.
+ * Re-export Sandbox type from environment module.
+ * This is the unified sandbox interface that all tools use.
+ *
+ * For environment-specific features, import directly from './environment'.
  */
-export type Sandbox = ProviderSandbox<JustBashSandbox>;
+export type {
+  Sandbox,
+  SandboxFileSystem,
+  SandboxConfig,
+  Environment,
+  EnvironmentType,
+  FileEntry,
+  CommandResult,
+  RunCommandOptions,
+} from "./environment/types.js";
 
 // Re-export AI SDK types that are commonly used
 export type {

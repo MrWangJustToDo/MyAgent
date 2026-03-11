@@ -16,6 +16,7 @@ export const createListFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
           "The path to the directory to list, relative to the project directory. Defaults to current directory."
         ),
     }),
+    needsApproval: true,
     inputExamples: [{ input: { path: "/src" } }],
     outputSchema: z.object({
       path: z.string().describe("The path that was listed."),

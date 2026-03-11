@@ -54,24 +54,6 @@ export const ollamaModelsResponseSchema = z.object({
   models: z.array(ollamaModelSchema),
 });
 
-// Chat schemas
-export const chatMessageSchema = z.object({
-  role: z.enum(["system", "user", "assistant"]),
-  content: z.string(),
-});
-
-export const chatOptionsSchema = z.object({
-  messages: z.array(chatMessageSchema),
-  model: z.string(),
-  baseURL: z.string().url().optional(),
-  systemPrompt: z.string().optional(),
-});
-
-export const chatResultSchema = z.object({
-  text: z.string(),
-  messages: z.array(chatMessageSchema),
-});
-
 // Type exports from schemas
 export type TranslateOptions = z.infer<typeof translateOptionsSchema>;
 export type TranslateResult = z.infer<typeof translateResultSchema>;
@@ -79,6 +61,3 @@ export type DetectOptions = z.infer<typeof detectOptionsSchema>;
 export type DetectResult = z.infer<typeof detectResultSchema>;
 export type OllamaConfig = z.infer<typeof ollamaConfigSchema>;
 export type OllamaModel = z.infer<typeof ollamaModelSchema>;
-export type ChatMessage = z.infer<typeof chatMessageSchema>;
-export type ChatOptions = z.infer<typeof chatOptionsSchema>;
-export type ChatResult = z.infer<typeof chatResultSchema>;

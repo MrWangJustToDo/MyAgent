@@ -1,27 +1,25 @@
 import { Box } from "ink";
 
-import { type ParsedArgs, getFlagString } from "../hooks/useArgs.js";
+import { useArgs } from "../hooks/useArgs.js";
 
 import { Agent } from "./Agent.js";
 import { Help } from "./Help.js";
 
-export interface AppProps {
-  args: string[];
-  showHelp: boolean;
-  parsed: ParsedArgs;
-}
+export const App = () => {
+  // Use selector to get specific state (reactive)
+  const config = useArgs((s) => s.config);
+  const helpRequested = useArgs((s) => s.helpRequested);
 
-export const App = ({ args, showHelp, parsed }: AppProps) => {
   // Extract current options for help display
   const currentOptions = {
-    url: getFlagString(parsed, "", "u", "url"),
-    model: getFlagString(parsed, "", "m", "model"),
-    path: getFlagString(parsed, "", "p", "path"),
-    system: getFlagString(parsed, "", "s", "system"),
+    url: config.url,
+    model: config.model,
+    path: config.rootPath,
+    system: config.systemPrompt,
   };
 
   // If help is requested, show help with current options
-  if (showHelp) {
+  if (helpRequested) {
     return (
       <Box flexDirection="column">
         <Help currentOptions={currentOptions} />
@@ -29,10 +27,10 @@ export const App = ({ args, showHelp, parsed }: AppProps) => {
     );
   }
 
-  // Default: run agent with all args
+  // Default: run agent
   return (
     <Box flexDirection="column">
-      <Agent args={args} />
+      <Agent />
     </Box>
   );
 };

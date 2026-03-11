@@ -1,6 +1,9 @@
 // Agent (main export)
 export * from "./agent";
 
+// Environment abstraction
+export * from "./environment";
+
 // Provider utilities
 export * from "./provider.js";
 
