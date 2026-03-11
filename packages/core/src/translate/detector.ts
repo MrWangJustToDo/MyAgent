@@ -1,8 +1,9 @@
-import { generateText } from "xsai";
+import { generateText } from "ai";
 
-import { DEFAULT_OLLAMA_API_URL } from "./types.js";
+import { createModel } from "../provider.js";
+import { DEFAULT_OLLAMA_API_URL } from "../types.js";
 
-import type { DetectOptions, DetectResult } from "./types.js";
+import type { DetectOptions, DetectResult } from "../types.js";
 
 export const detector = async ({
   text,
@@ -10,8 +11,10 @@ export const detector = async ({
   target_lang,
   baseURL = DEFAULT_OLLAMA_API_URL,
 }: DetectOptions): Promise<DetectResult> => {
+  const modelInstance = createModel(model, baseURL);
+
   const response = await generateText({
-    baseURL,
+    model: modelInstance,
     messages: [
       {
         role: "system",
@@ -22,7 +25,6 @@ export const detector = async ({
         content: `Detect the language of the following text: ${text}`,
       },
     ],
-    model: model,
   });
 
   const detector_source_lang = response.text?.trim()?.toString();

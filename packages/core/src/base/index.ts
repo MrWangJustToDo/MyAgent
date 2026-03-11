@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { ollamaModelsResponseSchema, type OllamaModel } from "./schemas.js";
-import { DEFAULT_OLLAMA_URL } from "./types.js";
+import { ollamaModelsResponseSchema, type OllamaModel } from "../schemas.js";
+import { DEFAULT_OLLAMA_URL } from "../types.js";
 
 export const ollamaShowResponseSchema = z.object({
   modelfile: z.string(),

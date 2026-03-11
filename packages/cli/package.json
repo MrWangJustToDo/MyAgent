@@ -24,6 +24,7 @@
     "cli-table3": "^0.6.5",
     "ink-link": "^5.0.0",
     "ink-spinner": "^5.0.0",
+    "reactivity-store": "^0.3.12",
     "shiki": "^3.20.0",
     "stream-markdown-parser": "^0.0.67",
     "terminal-link": "^5.0.0"

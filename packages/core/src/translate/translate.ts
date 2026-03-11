@@ -1,8 +1,9 @@
-import { generateText } from "xsai";
+import { generateText } from "ai";
 
-import { DEFAULT_OLLAMA_API_URL } from "./types.js";
+import { createModel } from "../provider.js";
+import { DEFAULT_OLLAMA_API_URL } from "../types.js";
 
-import type { TranslateOptions, TranslateResult } from "./types.js";
+import type { TranslateOptions, TranslateResult } from "../types.js";
 
 export const translate = async ({
   text,
@@ -11,8 +12,10 @@ export const translate = async ({
   target_lang,
   baseURL = DEFAULT_OLLAMA_API_URL,
 }: TranslateOptions): Promise<TranslateResult> => {
+  const modelInstance = createModel(model, baseURL);
+
   const response = await generateText({
-    baseURL,
+    model: modelInstance,
     messages: [
       {
         role: "system",
@@ -23,7 +26,6 @@ export const translate = async ({
         content: `Translate the following text: ${text}`,
       },
     ],
-    model: model,
   });
 
   return {

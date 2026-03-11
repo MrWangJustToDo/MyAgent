@@ -10,6 +10,10 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
+    },
+    "./ext": {
+      "types": "./dist/ext.d.mts",
+      "import": "./dist/ext.mjs"
     }
   },
   "files": [
@@ -22,7 +26,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "xsai": "^0.4.3",
+    "@ai-sdk/openai-compatible": "^2.0.35",
+    "@computesdk/just-bash": "^0.4.0",
+    "@computesdk/provider": "^1.0.28",
+    "ai": "^6.0.116",
+    "computesdk": "^2.3.0",
+    "just-bash": "^2.12.8",
+    "reactivity-store": "^0.3.12",
     "zod": "^4.3.6"
   },
   "devDependencies": {

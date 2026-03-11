@@ -1,19 +1,14 @@
-// Translation
-export * from "./detector.js";
-export * from "./translate.js";
+// Agent (main export)
+export * from "./agent";
 
-// Chat
-export * from "./chat.js";
-
-// Agent
-export * from "./agent.js";
-
-// Ollama API
-export * from "./ollama.js";
+// Provider utilities
+export * from "./provider.js";
 
 // Types and schemas
 export * from "./types.js";
 
-// Re-export zod and xsai tool utilities for consumers
+// Re-export zod for schema definitions
 export { z } from "zod";
-export { tool, generateText, streamText } from "xsai";
+
+// Re-export AI SDK core functions
+export { tool, generateText, streamText, generateObject, streamObject, stepCountIs } from "ai";

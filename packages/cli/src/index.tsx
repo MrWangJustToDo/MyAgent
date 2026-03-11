@@ -2,8 +2,13 @@
 import { render } from "ink";
 
 import { App } from "./components/App.js";
+import { parseArgs, getFlag } from "./hooks/useArgs.js";
 
 const args = process.argv.slice(2);
-const command = args[0] || "help";
+const parsed = parseArgs(args);
 
-render(<App command={command} args={args.slice(1)} />, { incrementalRendering: true, maxFps: 30 });
+// Check if help is requested
+const showHelp = getFlag(parsed, "h", "help") === true;
+
+// Pass all args to App, let it handle the logic
+render(<App args={args} showHelp={showHelp} parsed={parsed} />, { incrementalRendering: true, maxFps: 30 });

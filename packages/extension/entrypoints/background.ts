@@ -1,4 +1,4 @@
-import { detector, translate } from "@my-agent/core";
+import { detector, translate } from "@my-agent/core/ext";
 
 import type { SettingType } from "@/hooks/useSyncConfig";
 
