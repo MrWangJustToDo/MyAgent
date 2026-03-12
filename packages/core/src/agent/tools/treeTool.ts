@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import type { Sandbox } from "../../types";
+import type { Sandbox } from "../../environment";
 
 export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
   return tool({

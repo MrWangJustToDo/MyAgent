@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getFile } from "./helpers";
 
-import type { Sandbox } from "../../types";
+import type { Sandbox } from "../../environment";
 
 export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
   return tool({

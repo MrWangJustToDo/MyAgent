@@ -4,6 +4,9 @@ export * from "./agent";
 // Environment abstraction
 export * from "./environment";
 
+// Managers (class-based state management)
+export * from "./managers";
+
 // Provider utilities
 export * from "./provider.js";
 

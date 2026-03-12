@@ -47,6 +47,11 @@
  */
 
 // Export types
+// Import for getEnvironment
+import { localEnvironment } from "./local";
+import { remoteEnvironment } from "./remote";
+import { isEnvironmentInstance, type Environment, type EnvironmentType } from "./types";
+
 export type {
   Environment,
   EnvironmentType,
@@ -65,11 +70,6 @@ export { localEnvironment, nativeEnvironment, createLocalEnvironment, type Local
 
 // Export remote environment (uses computesdk)
 export { remoteEnvironment, createRemoteEnvironment, type RemoteEnvironmentConfig } from "./remote";
-
-// Import for getEnvironment
-import { localEnvironment } from "./local";
-import { remoteEnvironment } from "./remote";
-import { isEnvironmentInstance, type Environment, type EnvironmentType } from "./types";
 
 /**
  * Default environment (local)

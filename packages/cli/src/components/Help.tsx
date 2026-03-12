@@ -1,17 +1,13 @@
 import { Box, Text } from "ink";
 
-export interface HelpProps {
-  currentOptions?: {
-    url: string;
-    model: string;
-    path: string;
-    system: string;
-  };
-}
+import { useArgs } from "../hooks";
 
-export const Help = ({ currentOptions }: HelpProps) => {
+export const Help = () => {
+  const currentOptions = useArgs.useDeepSelector((s) => s.config);
+
   const hasOptions =
-    currentOptions && (currentOptions.url || currentOptions.model || currentOptions.path || currentOptions.system);
+    currentOptions &&
+    (currentOptions.url || currentOptions.model || currentOptions.rootPath || currentOptions.systemPrompt);
 
   return (
     <Box flexDirection="column" padding={1}>
@@ -91,20 +87,20 @@ export const Help = ({ currentOptions }: HelpProps) => {
                 <Text>{currentOptions.model}</Text>
               </Box>
             )}
-            {currentOptions.path && (
+            {currentOptions.rootPath && (
               <Box>
                 <Box width={12}>
                   <Text color="cyan">path:</Text>
                 </Box>
-                <Text>{currentOptions.path}</Text>
+                <Text>{currentOptions.rootPath}</Text>
               </Box>
             )}
-            {currentOptions.system && (
+            {currentOptions.systemPrompt && (
               <Box>
                 <Box width={12}>
                   <Text color="cyan">system:</Text>
                 </Box>
-                <Text>{currentOptions.system}</Text>
+                <Text>{currentOptions.systemPrompt}</Text>
               </Box>
             )}
           </Box>

@@ -17,6 +17,9 @@
   "dependencies": {
     "@my-agent/core": "workspace:*",
     "@floating-ui/react": "^0.27.19",
+    "@git-diff-view/cli": "^0.1.2",
+    "@git-diff-view/core": "^0.1.2",
+    "@git-diff-view/file": "^0.1.2",
     "@heroui/react": "2.8.9",
     "@my-react/react": "^0.3.22",
     "@my-react/react-dom": "^0.3.22",
@@ -25,7 +28,7 @@
     "lucide-react": "^0.576.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "reactivity-store": "^0.3.12",
+    "reactivity-store": "^0.4.0",
     "swr": "^2.4.1",
     "xsai": "0.4.3"
   },

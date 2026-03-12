@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getFile, getFileModifiedTime } from "./helpers";
 
-import type { Sandbox } from "../../types";
+import type { Sandbox } from "../../environment";
 
 export const createMoveFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
   return tool({

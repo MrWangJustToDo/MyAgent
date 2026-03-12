@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getFileModifiedTime } from "./helpers";
 
-import type { Sandbox } from "../../types";
+import type { Sandbox } from "../../environment";
 
 export const createDeleteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
   return tool({

@@ -110,7 +110,7 @@ export function createRemoteEnvironment(config: RemoteEnvironmentConfig): Enviro
   return {
     name: "remote",
 
-    async createSandbox(sandboxConfig: SandboxConfig): Promise<Sandbox> {
+    async createSandbox(_sandboxConfig: SandboxConfig): Promise<Sandbox> {
       // Create the computesdk sandbox client
       const remoteSandbox = new ComputeSandbox({
         sandboxUrl: config.sandboxUrl,

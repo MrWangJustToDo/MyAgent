@@ -14,7 +14,7 @@ import { createSearchReplaceTool } from "./searchReplaceTool";
 import { createTreeTool } from "./treeTool";
 import { createWriteFileTool } from "./writeFileTool";
 
-import type { Sandbox } from "../../types";
+import type { Sandbox } from "../../environment";
 
 export * from "./copyFileTool";
 export * from "./deleteFileTool";

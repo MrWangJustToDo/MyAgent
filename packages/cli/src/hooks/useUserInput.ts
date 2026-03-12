@@ -157,6 +157,12 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.cursorPosition = 0;
     },
   }),
+
+  withDeepSelector: false,
+
+  withStableSelector: true,
+
+  withNamespace: "useUserInput",
 });
 
 // ============================================================================

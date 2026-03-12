@@ -1,4 +1,4 @@
-import type { Sandbox } from "../../types";
+import type { Sandbox } from "../../environment";
 
 /**
  * Get file content and a modification identifier.

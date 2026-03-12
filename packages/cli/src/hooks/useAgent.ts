@@ -1,46 +1,17 @@
 import { createAgent } from "@my-agent/core";
-import { useEffect, useMemo } from "react";
-import { createState, toRaw } from "reactivity-store";
+import { createState, markRaw, toRaw } from "reactivity-store";
 
-import { useArgs } from "./useArgs";
-import { useUserTools } from "./useUserTools";
-
-import type { Agent, AgentRunResult, AgentStepInfo, ToolCallInfo, ToolApprovalResponse } from "@my-agent/core";
+import type { Agent, AgentConfig, AgentRunResult } from "@my-agent/core";
 
 // ============================================================================
 // Types
 // ============================================================================
-
-export type AgentStatus = "idle" | "initializing" | "running" | "waiting_approval" | "completed" | "error";
 
 export interface AgentState {
   /** Map of agent instances by key */
   agents: Record<string, Agent>;
   /** Current active agent */
   current: Agent | null;
-  /** Current status */
-  status: AgentStatus;
-  /** Error message if any */
-  error: string;
-  /** Current streaming response */
-  currentResponse: string;
-  /** Current streaming reasoning */
-  currentReasoning: string;
-  /** Completed steps */
-  steps: AgentStepInfo[];
-  /** Current step number */
-  currentStep: number;
-  /** Run result */
-  result: AgentRunResult | null;
-  /** Active tool calls (in progress) */
-  activeToolCalls: ToolCallInfo[];
-  /** Completed tool calls */
-  completedToolCalls: ToolCallInfo[];
-  /** Pending approval info */
-  pendingApproval: {
-    toolCall: ToolCallInfo;
-    resolve: (approved: boolean, reason?: string) => void;
-  } | null;
 }
 
 // ============================================================================
@@ -50,17 +21,9 @@ export interface AgentState {
 const initialState: AgentState = {
   agents: {},
   current: null,
-  status: "idle",
-  error: "",
-  currentResponse: "",
-  currentReasoning: "",
-  steps: [],
-  currentStep: 0,
-  result: null,
-  activeToolCalls: [],
-  completedToolCalls: [],
-  pendingApproval: null,
 };
+
+const noop = () => void 0;
 
 // ============================================================================
 // State Hook
@@ -69,251 +32,227 @@ const initialState: AgentState = {
 /**
  * Global agent state hook (zustand-like API from reactivity-store)
  *
+ * Manages agent instances. Agent state (status, result, error) lives on the Agent class.
+ * Message tracking is handled by Agent.context.
+ *
+ * State Architecture:
+ * - useAgent hook: manages agent instances (agents map, current agent)
+ * - Agent class: manages goal state (status, result, error)
+ * - AgentContext: manages messages (runs, messages, tools)
+ *
+ * For CLI:
+ * - Header/Footer: reads from agent.status, agent.result, agent.error
+ * - Content: reads from agent.context.getCurrentMessages()
+ *
  * @example
- * ```tsx
- * // Initialize agent (typically in useEffect)
- * const { initAgent } = useAgent.getActions();
- * await initAgent();
+ * ```typescript
+ * // Get or create an agent
+ * const { getAgent } = useAgent.getActions();
+ * const agent = await getAgent("my-agent", {
+ *   model: "gpt-4",
+ *   rootPath: "/path/to/project",
+ * });
  *
- * // Use in components (reactive)
- * const { status, currentResponse } = useAgent();
+ * // Run a prompt (state is on agent itself)
+ * await agent.run({ prompt: "Hello" });
  *
- * // Select specific state (reactive, optimized re-renders)
- * const status = useAgent((s) => s.status);
+ * // Access state reactively (agent stored in hook, Vue tracks changes)
+ * const agent = useAgent((s) => s.current);
+ * const status = agent?.status;    // "completed"
+ * const result = agent?.result;    // AgentRunResult
+ * const messages = agent?.context.getCurrentMessages();
  *
- * // Get actions (non-reactive, can call anywhere)
- * const { runPrompt, approveToolCall, rejectToolCall } = useAgent.getActions();
- *
- * // Auto-sync agent with config changes
- * useAgent.getActions().useAutoAgent();
+ * // Tool approval (method on agent)
+ * agent?.approveToolCall();
+ * agent?.rejectToolCall("reason");
  * ```
  */
 export const useAgent = createState(() => ({ ...initialState }), {
   withActions: (state) => {
     /**
-     * Get or create agent for current config
+     * Get or create agent for a given key and config
      */
-    const getOrCreateAgent = async (): Promise<Agent> => {
-      const { config, key } = useArgs.getReadonlyState();
-
-      // Check if we already have an agent for this config
+    const getAgent = async (key: string, config: AgentConfig): Promise<Agent> => {
+      // Check if we already have an agent for this key
       const existing = state.agents[key];
       if (existing) {
         state.current = existing;
         return existing;
       }
 
+      const setUpAgentInstance = (i: Agent) => {
+        // fix zod with vue proxy error
+        return new Proxy(i, {
+          get(target, p, receiver) {
+            const res = Reflect.get(target, p, receiver);
+
+            const rawRes = toRaw(res);
+
+            if (rawRes && typeof rawRes === "object" && p !== "context") {
+              return markRaw(rawRes);
+            }
+
+            return res;
+          },
+        });
+      };
+
       // Create new agent
-      const agent = await createAgent({
-        model: config.model,
-        baseURL: `${config.url}/v1/`,
-        systemPrompt: config.systemPrompt,
-        rootPath: config.rootPath,
-        maxSteps: config.maxSteps,
-      });
+      const agent = await createAgent({ ...config, setUp: setUpAgentInstance });
 
       state.agents[key] = agent;
       state.current = agent;
+
       return agent;
     };
 
     /**
-     * Initialize agent
+     * Initialize agent with config
      */
-    const initAgent = async () => {
-      if (state.status === "initializing" || state.status === "running") return;
+    const initAgent = async (key: string, config: AgentConfig): Promise<Agent | null> => {
+      const current = state.current;
+      if (current && (current.status === "initializing" || current.status === "running")) {
+        return null;
+      }
 
-      state.status = "initializing";
-      state.error = "";
+      return await getAgent(key, config);
+    };
+
+    /**
+     * Set current agent by key
+     */
+    const setCurrentAgent = (key: string): Agent | null => {
+      const agent = state.agents[key];
+      if (agent) {
+        state.current = agent;
+        return agent;
+      }
+      return null;
+    };
+
+    /**
+     * Run a prompt on the current agent
+     */
+    const runPrompt = async (prompt: string): Promise<AgentRunResult | null> => {
+      if (!prompt.trim()) return null;
+
+      const agent = state.current;
+      if (!agent) return null;
+      if (agent.status === "running" || agent.status === "initializing") return null;
 
       try {
-        await getOrCreateAgent();
-        state.status = "idle";
-      } catch (err) {
-        state.error = `Failed to initialize agent: ${(err as Error).message}`;
-        state.status = "error";
+        return await agent.run({ prompt, stream: true, onToken: noop, onReasoning: noop });
+      } catch {
+        return null;
       }
     };
 
     /**
-     * Run a prompt
+     * Approve pending tool call on current agent
      */
-    const runPrompt = async (prompt: string) => {
-      if (!prompt.trim()) return;
-      if (state.status === "running" || state.status === "initializing") return;
-
-      const agent = toRaw(state.current);
-      if (!agent) {
-        state.error = "Agent not initialized";
-        state.status = "error";
-        return;
-      }
-
-      // Reset state for new run
-      state.status = "running";
-      state.currentResponse = "";
-      state.currentReasoning = "";
-      state.steps = [];
-      state.currentStep = 0;
-      state.error = "";
-      state.result = null;
-      state.activeToolCalls = [];
-      state.completedToolCalls = [];
-      state.pendingApproval = null;
-
-      try {
-        const runResult = await agent.run({
-          prompt,
-          stream: true,
-          onToken: (token) => {
-            state.currentResponse += token;
-          },
-          onReasoning: (token) => {
-            state.currentReasoning += token;
-          },
-          onStepStart: (stepNumber) => {
-            state.currentStep = stepNumber;
-          },
-          onStepFinish: (step) => {
-            state.steps = [...state.steps, step];
-            // Clear streaming content when step finishes
-            state.currentResponse = "";
-            state.currentReasoning = "";
-            state.activeToolCalls = [];
-            state.completedToolCalls = [];
-          },
-          onToolApproval: async (toolCall) => {
-            return new Promise<ToolApprovalResponse>((resolve) => {
-              state.pendingApproval = {
-                toolCall,
-                resolve: (approved, reason) => {
-                  state.pendingApproval = null;
-                  state.status = "running";
-                  resolve({
-                    toolCallId: toolCall.toolCallId,
-                    approved,
-                    reason,
-                  });
-                },
-              };
-              state.status = "waiting_approval";
-            });
-          },
-          onToolCallStart: (toolCall) => {
-            state.activeToolCalls = [...state.activeToolCalls, toolCall];
-            useUserTools.getActions().addTool(toolCall);
-          },
-          onToolCallFinish: (toolCall) => {
-            state.activeToolCalls = state.activeToolCalls.filter((tc) => tc.toolCallId !== toolCall.toolCallId);
-            state.completedToolCalls = [...state.completedToolCalls, toolCall];
-            useUserTools.getActions().completeTool(toolCall);
-          },
-          onError: (err) => {
-            state.error = err.message;
-            state.status = "error";
-          },
-        });
-
-        state.result = runResult;
-        state.status = "completed";
-      } catch (err) {
-        state.error = (err as Error).message;
-        state.status = "error";
-      }
+    const approveToolCall = (): void => {
+      const agent = state.current;
+      agent?.approveToolCall();
     };
 
     /**
-     * Approve pending tool call
+     * Reject pending tool call on current agent
      */
-    const approveToolCall = () => {
-      const pending = state.pendingApproval;
-      if (!pending) return;
-      pending.resolve(true);
-    };
-
-    /**
-     * Reject pending tool call
-     */
-    const rejectToolCall = (reason = "User denied the operation") => {
-      const pending = state.pendingApproval;
-      if (!pending) return;
-      pending.resolve(false, reason);
+    const rejectToolCall = (reason = "User denied the operation"): void => {
+      const agent = state.current;
+      agent?.rejectToolCall(reason);
     };
 
     /**
      * Get current agent instance (non-reactive)
      */
-    const getCurrentAgent = (): Agent | null => toRaw(state.current);
+    const getCurrentAgent = (): Agent | null => state.current;
 
     /**
-     * Reset state
+     * Get current agent context (convenience method)
      */
-    const reset = () => {
-      state.status = "idle";
-      state.error = "";
-      state.currentResponse = "";
-      state.currentReasoning = "";
-      state.steps = [];
-      state.currentStep = 0;
-      state.result = null;
-      state.activeToolCalls = [];
-      state.completedToolCalls = [];
-      state.pendingApproval = null;
+    const getContext = () => {
+      const agent = state.current;
+      return agent?.context ?? null;
     };
 
     /**
-     * Destroy current agent and cleanup
+     * Reset current agent state
      */
-    const destroy = () => {
-      const agent = toRaw(state.current);
+    const resetAgent = (): void => {
+      const agent = state.current;
+      agent?.reset();
+    };
+
+    /**
+     * Destroy an agent by key
+     */
+    const destroyAgent = (key: string): void => {
+      const agent = state.agents[key];
       if (agent) {
         agent.destroy();
+        delete state.agents[key];
+
+        if (state.current === agent) {
+          state.current = null;
+        }
       }
-      state.current = null;
-      reset();
     };
 
     /**
-     * Hook to auto-sync agent with config changes
-     * Call this in your main component
+     * Destroy current agent
      */
-    const useAutoAgent = () => {
-      const key = useArgs.useShallowStableSelector((s) => s.key);
-
-      // When key changes, update current agent
-      useMemo(() => {
-        if (!key) {
-          state.current = null;
-          return;
+    const destroyCurrent = (): void => {
+      const agent = state.current;
+      if (agent) {
+        // Find key for this agent
+        const key = Object.entries(state.agents).find(([, a]) => a === agent)?.[0];
+        if (key) {
+          destroyAgent(key);
         }
+      }
+    };
 
-        const existing = state.agents[key];
-        if (existing) {
-          state.current = existing;
-        } else {
-          state.current = null;
-        }
-      }, [key]);
+    /**
+     * Reset all state and destroy all agents
+     */
+    const reset = async (): Promise<void> => {
+      // Destroy all agents
+      for (const key of Object.keys(state.agents)) {
+        destroyAgent(key);
+      }
 
-      // Initialize agent when config changes
-      useEffect(() => {
-        if (key && !state.current) {
-          initAgent();
-        }
-      }, [key]);
+      // Reset state
+      state.agents = {};
+      state.current = null;
     };
 
     return {
+      // Agent management
+      getAgent,
       initAgent,
+      setCurrentAgent,
+      getCurrentAgent,
+      getContext,
+
+      // Running
       runPrompt,
+
+      // Tool approval
       approveToolCall,
       rejectToolCall,
-      getCurrentAgent,
+
+      // Reset / destroy
+      resetAgent,
+      destroyAgent,
+      destroyCurrent,
       reset,
-      destroy,
-      useAutoAgent,
     };
   },
+
+  withDeepSelector: false,
+  withStableSelector: true,
+  withNamespace: "useAgent",
 });
 
 // ============================================================================

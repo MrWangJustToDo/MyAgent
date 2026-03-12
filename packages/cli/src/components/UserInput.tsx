@@ -11,5 +11,16 @@ export const UserInput = () => {
     useUserInput.getActions().setValue(input);
   }, [input]);
 
+  useEffect(() => {
+    const cb = useUserInput.subscribe(
+      (s) => s.value,
+      () => {
+        setInput(useUserInput.getReadonlyState().value);
+      }
+    );
+
+    return cb;
+  }, []);
+
   return <TextInput value={input} onChange={setInput} />;
 };

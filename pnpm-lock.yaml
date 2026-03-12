@@ -63,8 +63,8 @@ importers:
         specifier: ^4.17.23
         version: 4.17.23
       reactivity-store:
-        specifier: ^0.3.12
-        version: 0.3.12(@my-react/react@0.3.22)
+        specifier: ^0.4.0
+        version: 0.4.0(@my-react/react@0.3.22)
       shiki:
         specifier: ^3.20.0
         version: 3.23.0
@@ -117,9 +117,6 @@ importers:
       just-bash:
         specifier: ^2.12.8
         version: 2.12.8
-      reactivity-store:
-        specifier: ^0.3.12
-        version: 0.3.12(react@19.2.4)
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -139,6 +136,15 @@ importers:
       '@floating-ui/react':
         specifier: ^0.27.19
         version: 0.27.19(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@git-diff-view/cli':
+        specifier: ^0.1.2
+        version: 0.1.2(ink@6.8.0(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)
+      '@git-diff-view/core':
+        specifier: ^0.1.2
+        version: 0.1.2
+      '@git-diff-view/file':
+        specifier: ^0.1.2
+        version: 0.1.2
       '@heroui/react':
         specifier: 2.8.9
         version: 2.8.9(@types/react@19.2.14)(framer-motion@12.35.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.2.1)
@@ -167,8 +173,8 @@ importers:
         specifier: ^19.2.4
         version: 19.2.4(react@19.2.4)
       reactivity-store:
-        specifier: ^0.3.12
-        version: 0.3.12(react@19.2.4)
+        specifier: ^0.4.0
+        version: 0.4.0(react@19.2.4)
       swr:
         specifier: ^2.4.1
         version: 2.4.1(react@19.2.4)
@@ -837,6 +843,21 @@ packages:
 
   '@formatjs/intl-localematcher@0.6.2':
     resolution: {integrity: sha512-XOMO2Hupl0wdd172Y06h6kLpBz6Dv+J4okPLl4LPtzbr8f66WbIoy4ev98EBuZ6ZK4h5ydTN6XneT4QVpD7cdA==}
+
+  '@git-diff-view/cli@0.1.2':
+    resolution: {integrity: sha512-3mf+biba/q2MmDNMBGHAgXPJwyy2AVDMzkg9kKS8ObpWeYyaGZ/tC7RebQtn5yc2mKejfeEGfFN+7JxJJ4LT8A==}
+    peerDependencies:
+      ink: ^6.1.0
+      react: ^19.2.0
+
+  '@git-diff-view/core@0.1.2':
+    resolution: {integrity: sha512-E0LS1JM1vY9xT13e3pk6meUmlAm6D7E6Mbua9Rj3KrvC9wkFP+V+v7QQ3NCbHIHipgrKlNWnqg/k357Pr4wRfA==}
+
+  '@git-diff-view/file@0.1.2':
+    resolution: {integrity: sha512-EMQjsI4d52YfEYcK7STgd8UyiG1r2uMw8MHdhAy0p/ZACv3822If8Af81c38QrHukuPnWkyT+tE72HH19M4TWg==}
+
+  '@git-diff-view/lowlight@0.1.2':
+    resolution: {integrity: sha512-GOK0RPKNfI7iFTUwPOXqXK1j2w4VG22FGLnSGCqM4YkA04cQm4eZD9r9/IZ5XOQj3y1Uljky5Au9spQTLbusNA==}
 
   '@heroui/accordion@2.2.28':
     resolution: {integrity: sha512-UuZDAMU0q8gTJZ4x11qq2qJs2VF19RaSsgTrpwaPdZamU+X6cUiiAc8xMkFgQF6XsoNvohTzofU2Id4ykAKdAg==}
@@ -2946,11 +2967,11 @@ packages:
     peerDependencies:
       vite: ^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0
 
-  '@vue/reactivity@3.5.29':
-    resolution: {integrity: sha512-zcrANcrRdcLtmGZETBxWqIkoQei8HaFpZWx/GHKxx79JZsiZ8j1du0VUJtu4eJjgFvU/iKL5lRXFXksVmI+5DA==}
+  '@vue/reactivity@3.5.30':
+    resolution: {integrity: sha512-179YNgKATuwj9gB+66snskRDOitDiuOZqkYia7mHKJaidOMo/WJxHKF8DuGc4V4XbYTJANlfEKb0yxTQotnx4Q==}
 
-  '@vue/shared@3.5.29':
-    resolution: {integrity: sha512-w7SR0A5zyRByL9XUkCfdLs7t9XOHUyJ67qPGQjOou3p6GvBeBW+AVjUUmlxtZ4PIYaRvE+1LmK44O4uajlZwcg==}
+  '@vue/shared@3.5.30':
+    resolution: {integrity: sha512-YXgQ7JjaO18NeK2K9VTbDHaFy62WrObMa6XERNfNOkAhD1F1oDSf3ZJ7K6GqabZ0BvSDHajp8qfS5Sa2I9n8uQ==}
 
   '@webext-core/fake-browser@1.3.4':
     resolution: {integrity: sha512-nZcVWr3JpwpS5E6hKpbAwAMBM/AXZShnfW0F76udW8oLd6Kv0nbW6vFS07md4Na/0ntQonk3hFnlQYGYBAlTrA==}
@@ -4241,6 +4262,10 @@ packages:
   hermes-parser@0.25.1:
     resolution: {integrity: sha512-6pEjquH3rqaI6cYAXYPcz9MS4rY6R4ngRgrgfDshRptUZIc3lw0MCIJIGDj9++mfySOuPTHB4nrSW99BCvOPIA==}
 
+  highlight.js@11.11.1:
+    resolution: {integrity: sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w==}
+    engines: {node: '>=12.0.0'}
+
   hookable@6.0.1:
     resolution: {integrity: sha512-uKGyY8BuzN/a5gvzvA+3FVWo0+wUjgtfSdnmjtrOVwQCZPHpHDH2WRO3VZSOeluYrHoDCiXFffZXs8Dj1ULWtw==}
 
@@ -4330,6 +4355,19 @@ packages:
     peerDependencies:
       ink: '>=5'
       react: '>=18'
+
+  ink@6.8.0:
+    resolution: {integrity: sha512-sbl1RdLOgkO9isK42WCZlJCFN9hb++sX9dsklOvfd1YQ3bQ2AiFu12Q6tFlr0HvEUvzraJntQCCpfEoUe9DSzA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@types/react': '>=19.0.0'
+      react: '>=19.0.0'
+      react-devtools-core: '>=6.1.2'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      react-devtools-core:
+        optional: true
 
   input-otp@1.4.1:
     resolution: {integrity: sha512-+yvpmKYKHi9jIGngxagY9oWiiblPB7+nEO75F2l2o4vs+6vpPZZmUl4tBNYuTCvQjhvEIbdNeJu70bhfYP2nbw==}
@@ -4840,6 +4878,9 @@ packages:
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
     hasBin: true
+
+  lowlight@3.3.0:
+    resolution: {integrity: sha512-0JNhgFoPvP6U6lE/UdVsSq99tn6DhjjpAj5MxG49ewd2mOBVtwWYIT8ClyABhq198aXXODMU6Ox8DrGy/CpTZQ==}
 
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
@@ -5447,6 +5488,12 @@ packages:
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
 
+  react-reconciler@0.33.0:
+    resolution: {integrity: sha512-KetWRytFv1epdpJc3J4G75I4WrplZE5jOL7Yq0p34+OVOKF4Se7WrdIdVC45XsSSmUTlht2FM/fM1FZb1mfQeA==}
+    engines: {node: '>=0.10.0'}
+    peerDependencies:
+      react: ^19.2.0
+
   react-refresh@0.18.0:
     resolution: {integrity: sha512-QgT5//D3jfjJb6Gsjxv0Slpj23ip+HtOpnNgnb2S5zU3CB26G/IDPGoy4RJB42wzFE46DRsstbW6tKHoKbhAxw==}
     engines: {node: '>=0.10.0'}
@@ -5461,8 +5508,8 @@ packages:
     resolution: {integrity: sha512-9nfp2hYpCwOjAN+8TZFGhtWEwgvWHXqESH8qT89AT/lWklpLON22Lc8pEtnpsZz7VmawabSU0gCjnj8aC0euHQ==}
     engines: {node: '>=0.10.0'}
 
-  reactivity-store@0.3.12:
-    resolution: {integrity: sha512-Idz9EL4dFUtQbHySZQzckWOTUfqjdYpUtNW0iOysC32mG7IjiUGB77QrsyR5eAWBkRiS9JscF6A3fuQAIy+LrQ==}
+  reactivity-store@0.4.0:
+    resolution: {integrity: sha512-uL9uoREOBg2o4zUa8vMU0AbvAOk0osPloizscmyZqMvJzcuuKX3ELFYYr1DX8gAcfvlhPduz4QuLZn1eChCu4Q==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
@@ -5975,6 +6022,10 @@ packages:
     resolution: {integrity: sha512-9kY+CygyYM6j02t5YFHbNz2FN5QmYGv9zAjVp4lCDjlCw7amdckXlEt/bjMhUIfj4ThGRE4gCUH5+yGnNuPo5A==}
     engines: {node: '>=10.0.0'}
 
+  tagged-tag@1.0.0:
+    resolution: {integrity: sha512-yEFYrVhod+hdNyx7g5Bnkkb0G6si8HJurOoOEgC8B/O0uXLHlaey/65KRv6cuWBNhBgHKAROVpc7QyYqE5gFng==}
+    engines: {node: '>=20'}
+
   tailwind-merge@3.4.0:
     resolution: {integrity: sha512-uSaO4gnW+b3Y2aWoWfFpX62vn2sR3skfhbjsEnaBI81WD1wBLlHZe5sWf0AqjksNdYTbGBEd0UasQMT3SNV15g==}
 
@@ -6005,6 +6056,10 @@ packages:
   terminal-link@5.0.0:
     resolution: {integrity: sha512-qFAy10MTMwjzjU8U16YS4YoZD+NQLHzLssFMNqgravjbvIPNiqkGFR4yjhJfmY9R5OFU7+yHxc6y+uGHkKwLRA==}
     engines: {node: '>=20'}
+
+  terminal-size@4.0.1:
+    resolution: {integrity: sha512-avMLDQpUI9I5XFrklECw1ZEUPJhqzcwSWsyyI8blhRLT+8N1jLJWLWWYQpB2q2xthq8xDvjZPISVh53T/+CLYQ==}
+    engines: {node: '>=18'}
 
   terser@5.46.0:
     resolution: {integrity: sha512-jTwoImyr/QbOWFFso3YoU3ik0jBBDJ6JTOQiy/J2YxVJdZCc+5u7skhNwiOR3FQIygFqVUPHl7qbbxtjW2K3Qg==}
@@ -6106,6 +6161,10 @@ packages:
   type-fest@4.41.0:
     resolution: {integrity: sha512-TeTSQ6H5YHvpqVwBRcnLDCBnDOHWYu7IvGbHT6N8AOymcr9PJGjc1GTtiWZTYg0NCgYwvnYWEkVChQAr9bjfwA==}
     engines: {node: '>=16'}
+
+  type-fest@5.4.4:
+    resolution: {integrity: sha512-JnTrzGu+zPV3aXIUhnyWJj4z/wigMsdYajGLIYakqyOW1nPllzXEJee0QQbHj+CTIQtXGlAjuK0UY+2xTyjVAw==}
+    engines: {node: '>=20'}
 
   typed-array-buffer@1.0.3:
     resolution: {integrity: sha512-nAYYwfY3qnzX30IkA6AQZjVbtK6duGontcQm1WSG1MD94YLqK0515GNApXkoxKOWMusVssAHWLh9SeaoefYFGw==}
@@ -6401,6 +6460,10 @@ packages:
   widest-line@5.0.0:
     resolution: {integrity: sha512-c9bZp7b5YtRj2wOe6dlj32MK+Bx/M/d+9VB2SHM1OtsUHR0aV0tdP6DWh/iMt0kWi1t5g1Iudu6hQRNd1A4PVA==}
     engines: {node: '>=18'}
+
+  widest-line@6.0.0:
+    resolution: {integrity: sha512-U89AsyEeAsyoF0zVJBkG9zBgekjgjK7yk9sje3F4IQpXBJ10TF6ByLlIfjMhcmHMJgHZI4KHt4rdNfktzxIAMA==}
+    engines: {node: '>=20'}
 
   winreg@0.0.12:
     resolution: {integrity: sha512-typ/+JRmi7RqP1NanzFULK36vczznSNN8kWVA9vIqXyv8GhghUlwhGp1Xj3Nms1FsPcNnsQrJOR10N58/nQ9hQ==}
@@ -7066,6 +7129,41 @@ snapshots:
   '@formatjs/intl-localematcher@0.6.2':
     dependencies:
       tslib: 2.8.1
+
+  '@git-diff-view/cli@0.1.2(ink@6.8.0(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      '@git-diff-view/core': 0.1.2
+      '@types/hast': 3.0.4
+      chalk: 5.6.2
+      fast-diff: 1.3.0
+      highlight.js: 11.11.1
+      ink: 6.8.0(@types/react@19.2.14)(react@19.2.4)
+      lowlight: 3.3.0
+      react: 19.2.4
+      reactivity-store: 0.4.0(react@19.2.4)
+      string-width: 7.2.0
+      use-sync-external-store: 1.6.0(react@19.2.4)
+
+  '@git-diff-view/core@0.1.2':
+    dependencies:
+      '@git-diff-view/lowlight': 0.1.2
+      fast-diff: 1.3.0
+      highlight.js: 11.11.1
+      lowlight: 3.3.0
+
+  '@git-diff-view/file@0.1.2':
+    dependencies:
+      '@git-diff-view/core': 0.1.2
+      diff: 8.0.3
+      fast-diff: 1.3.0
+      highlight.js: 11.11.1
+      lowlight: 3.3.0
+
+  '@git-diff-view/lowlight@0.1.2':
+    dependencies:
+      '@types/hast': 3.0.4
+      highlight.js: 11.11.1
+      lowlight: 3.3.0
 
   '@heroui/accordion@2.2.28(@heroui/system@2.4.27(@heroui/theme@2.4.26(tailwindcss@4.2.1))(framer-motion@12.35.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@heroui/theme@2.4.26(tailwindcss@4.2.1))(framer-motion@12.35.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
@@ -10048,11 +10146,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@vue/reactivity@3.5.29':
+  '@vue/reactivity@3.5.30':
     dependencies:
-      '@vue/shared': 3.5.29
+      '@vue/shared': 3.5.30
 
-  '@vue/shared@3.5.29': {}
+  '@vue/shared@3.5.30': {}
 
   '@webext-core/fake-browser@1.3.4':
     dependencies:
@@ -11553,6 +11651,8 @@ snapshots:
     dependencies:
       hermes-estree: 0.25.1
 
+  highlight.js@11.11.1: {}
+
   hookable@6.0.1: {}
 
   hookified@1.15.1: {}
@@ -11618,6 +11718,40 @@ snapshots:
       ink: '@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))'
       react: '@my-react/react@0.3.22(@my-react/react@0.3.22)'
       type-fest: 4.41.0
+
+  ink@6.8.0(@types/react@19.2.14)(react@19.2.4):
+    dependencies:
+      '@alcalzone/ansi-tokenize': 0.2.5
+      ansi-escapes: 7.3.0
+      ansi-styles: 6.2.3
+      auto-bind: 5.0.1
+      chalk: 5.6.2
+      cli-boxes: 3.0.0
+      cli-cursor: 4.0.0
+      cli-truncate: 5.2.0
+      code-excerpt: 4.0.0
+      es-toolkit: 1.45.1
+      indent-string: 5.0.0
+      is-in-ci: 2.0.0
+      patch-console: 2.0.0
+      react: 19.2.4
+      react-reconciler: 0.33.0(react@19.2.4)
+      scheduler: 0.27.0
+      signal-exit: 3.0.7
+      slice-ansi: 8.0.0
+      stack-utils: 2.0.6
+      string-width: 8.2.0
+      terminal-size: 4.0.1
+      type-fest: 5.4.4
+      widest-line: 6.0.0
+      wrap-ansi: 9.0.2
+      ws: 8.18.3
+      yoga-layout: 3.2.1
+    optionalDependencies:
+      '@types/react': 19.2.14
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   input-otp@1.4.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
@@ -12100,6 +12234,12 @@ snapshots:
   loose-envify@1.4.0:
     dependencies:
       js-tokens: 4.0.0
+
+  lowlight@3.3.0:
+    dependencies:
+      '@types/hast': 3.0.4
+      devlop: 1.1.0
+      highlight.js: 11.11.1
 
   lru-cache@5.1.1:
     dependencies:
@@ -12751,6 +12891,11 @@ snapshots:
 
   react-is@16.13.1: {}
 
+  react-reconciler@0.33.0(react@19.2.4):
+    dependencies:
+      react: 19.2.4
+      scheduler: 0.27.0
+
   react-refresh@0.18.0: {}
 
   react-textarea-autosize@8.5.9(@types/react@19.2.14)(react@19.2.4):
@@ -12764,17 +12909,17 @@ snapshots:
 
   react@19.2.4: {}
 
-  reactivity-store@0.3.12(@my-react/react@0.3.22):
+  reactivity-store@0.4.0(@my-react/react@0.3.22):
     dependencies:
-      '@vue/reactivity': 3.5.29
-      '@vue/shared': 3.5.29
+      '@vue/reactivity': 3.5.30
+      '@vue/shared': 3.5.30
       react: '@my-react/react@0.3.22(@my-react/react@0.3.22)'
       use-sync-external-store: 1.6.0(@my-react/react@0.3.22)
 
-  reactivity-store@0.3.12(react@19.2.4):
+  reactivity-store@0.4.0(react@19.2.4):
     dependencies:
-      '@vue/reactivity': 3.5.29
-      '@vue/shared': 3.5.29
+      '@vue/reactivity': 3.5.30
+      '@vue/shared': 3.5.30
       react: 19.2.4
       use-sync-external-store: 1.6.0(react@19.2.4)
 
@@ -13433,6 +13578,8 @@ snapshots:
       string-width: 4.2.3
       strip-ansi: 6.0.1
 
+  tagged-tag@1.0.0: {}
+
   tailwind-merge@3.4.0: {}
 
   tailwind-variants@3.2.2(tailwind-merge@3.4.0)(tailwindcss@4.2.1):
@@ -13466,6 +13613,8 @@ snapshots:
     dependencies:
       ansi-escapes: 7.3.0
       supports-hyperlinks: 4.4.0
+
+  terminal-size@4.0.1: {}
 
   terser@5.46.0:
     dependencies:
@@ -13567,6 +13716,10 @@ snapshots:
   type-fest@3.13.1: {}
 
   type-fest@4.41.0: {}
+
+  type-fest@5.4.4:
+    dependencies:
+      tagged-tag: 1.0.0
 
   typed-array-buffer@1.0.3:
     dependencies:
@@ -13935,6 +14088,10 @@ snapshots:
   widest-line@5.0.0:
     dependencies:
       string-width: 7.2.0
+
+  widest-line@6.0.0:
+    dependencies:
+      string-width: 8.2.0
 
   winreg@0.0.12: {}
 

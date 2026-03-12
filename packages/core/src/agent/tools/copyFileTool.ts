@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getFile, getFileModifiedTime } from "./helpers";
 
-import type { Sandbox } from "../../types";
+import type { Sandbox } from "../../environment";
 
 export const createCopyFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
   return tool({

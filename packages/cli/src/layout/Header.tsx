@@ -1,11 +1,7 @@
 import { Box, Text } from "ink";
 
-import { useHeight } from "../../hooks/useHeight";
-
-export interface HeaderProps {
-  model: string;
-  path: string;
-}
+import { useArgs } from "../hooks";
+import { useHeight } from "../hooks/useHeight";
 
 const LOGO = `
   __  __            _                    _   
@@ -16,7 +12,9 @@ const LOGO = `
          |___/         |___/                 
 `.trim();
 
-export const Header = ({ model, path }: HeaderProps) => {
+export const Header = () => {
+  const { model, path } = useArgs((s) => ({ model: s.config.model, path: s.config.rootPath }));
+
   return (
     <Box flexDirection="column" ref={useHeight.getActions().setHeader}>
       {/* Logo */}

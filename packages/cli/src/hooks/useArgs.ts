@@ -239,6 +239,12 @@ export const useArgs = createState(
         state.key = "";
       },
     }),
+
+    withDeepSelector: false,
+
+    withStableSelector: true,
+
+    withNamespace: "useArgs",
   }
 );
 

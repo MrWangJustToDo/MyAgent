@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getFile, getFileModifiedTime } from "./helpers";
 
-import type { Sandbox } from "../../types";
+import type { Sandbox } from "../../environment";
 
 const searchReplaceBlockSchema = z.object({
   oldString: z.string().describe("The exact string to search for and replace."),

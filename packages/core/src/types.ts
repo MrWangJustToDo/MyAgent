@@ -19,22 +19,8 @@ export {
   ollamaModelsResponseSchema,
 } from "./schemas.js";
 
-/**
- * Re-export Sandbox type from environment module.
- * This is the unified sandbox interface that all tools use.
- *
- * For environment-specific features, import directly from './environment'.
- */
-export type {
-  Sandbox,
-  SandboxFileSystem,
-  SandboxConfig,
-  Environment,
-  EnvironmentType,
-  FileEntry,
-  CommandResult,
-  RunCommandOptions,
-} from "./environment/types.js";
+// Note: Environment types (Sandbox, SandboxFileSystem, etc.) are exported from './environment'
+// Import from there to avoid duplicate exports
 
 // Re-export AI SDK types that are commonly used
 export type {

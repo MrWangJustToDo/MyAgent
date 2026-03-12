@@ -1,26 +1,18 @@
 import { Box, Text } from "ink";
 
-import { useHeight } from "../../hooks/useHeight.js";
-import { Spinner } from "../Spinner.js";
-import { UserInput } from "../UserInput.js";
+import { Spinner } from "../components/Spinner.js";
+import { UserInput } from "../components/UserInput.js";
+import { useAgent, useAgentContext } from "../hooks";
+import { useHeight } from "../hooks/useHeight.js";
 
-export interface FooterProps {
-  /** Current status */
-  status: "idle" | "initializing" | "running" | "waiting_approval" | "completed" | "error";
-  /** Usage stats */
-  usage?: {
-    inputTokens: number;
-    outputTokens: number;
-  };
-  /** Current step number */
-  currentStep?: number;
-  /** Total steps completed */
-  totalSteps?: number;
-  /** Error message if any */
-  error?: string;
-}
+export const Footer = () => {
+  const { status, error } = useAgent((s) => ({
+    status: s.current?.status || "idle",
+    error: s.current?.error || "",
+  }));
 
-export const Footer = ({ status, usage, currentStep, totalSteps, error }: FooterProps) => {
+  const usage = useAgentContext.useDeepStableSelector((s) => s.context?.getTotalUsage?.());
+
   const isInputEnabled = status === "idle" || status === "completed" || status === "error";
 
   return (
@@ -37,17 +29,13 @@ export const Footer = ({ status, usage, currentStep, totalSteps, error }: Footer
         {/* Status indicator */}
         <Box>
           {status === "initializing" && <Spinner text="Initializing..." />}
-          {status === "running" && <Spinner text={`Step ${currentStep || 1}...`} />}
+          {status === "running" && <Spinner text="Running..." />}
           {status === "waiting_approval" && (
             <Text color="yellow" bold>
               Waiting for approval
             </Text>
           )}
-          {status === "completed" && totalSteps !== undefined && (
-            <Text color="green">
-              Completed in {totalSteps} step{totalSteps > 1 ? "s" : ""}
-            </Text>
-          )}
+          {status === "completed" && <Text color="green">Completed</Text>}
           {status === "idle" && (
             <Text color="gray" dimColor>
               Ready

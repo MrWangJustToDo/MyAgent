@@ -84,5 +84,10 @@ export const useHeight = createState(
         setFooter,
       };
     },
+    withDeepSelector: false,
+
+    withStableSelector: true,
+
+    withNamespace: "useHeight",
   }
 );

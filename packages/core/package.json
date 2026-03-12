@@ -32,7 +32,6 @@
     "ai": "^6.0.116",
     "computesdk": "^2.3.0",
     "just-bash": "^2.12.8",
-    "reactivity-store": "^0.3.12",
     "zod": "^4.3.6"
   },
   "devDependencies": {

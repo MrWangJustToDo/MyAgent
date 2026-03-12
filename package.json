@@ -16,7 +16,9 @@
     "start:cli": "cd packages/cli && DEV=true node ./dist/index.mjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "clean": "pnpm -p -r -c exec rm -rf dist dev .cache .next tsconfig.build.tsbuildinfo",
+    "purge": "pnpm -p -r -c exec rm -rf node_modules && rm -rf node_modules"
   },
   "devDependencies": {
     "@my-agent/core": "workspace:*",
