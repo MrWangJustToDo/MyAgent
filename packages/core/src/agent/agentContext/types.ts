@@ -27,12 +27,12 @@ export interface ToolCall {
   endedAt?: number;
 }
 
-/** Tool approval response */
-export interface ToolApprovalResponse {
-  toolCallId: string;
-  approved: boolean;
-  reason?: string;
-}
+// /** Tool approval response */
+// export interface ToolApprovalResponse {
+//   toolCallId: string;
+//   approved: boolean;
+//   reason?: string;
+// }
 
 // ============================================================================
 // Message Types
@@ -127,68 +127,3 @@ export interface ContextData {
 // These will be removed after migration is complete
 export type MessageRole = "user" | "assistant" | "system" | "tool";
 export type MessageStatus = "pending" | "streaming" | "completed" | "error";
-
-/** @deprecated Use Message instead */
-export interface TextContent {
-  type: "text";
-  text: string;
-}
-
-/** @deprecated Use AssistantMessage.reasoning instead */
-export interface ReasoningContent {
-  type: "reasoning";
-  text: string;
-}
-
-/** @deprecated Use ToolCall instead */
-export interface ToolContent {
-  type: "tool";
-  toolCallId: string;
-  toolName: string;
-  args: Record<string, unknown>;
-  status: ToolStatus;
-  result?: unknown;
-  error?: string;
-  approval?: ToolApprovalResponse;
-  startedAt: number;
-  endedAt?: number;
-}
-
-/** @deprecated No longer used */
-export interface FileContent {
-  type: "file";
-  path: string;
-  operation: "read" | "write" | "delete";
-  content?: string;
-}
-
-/** @deprecated Use Message instead */
-export type MessageContent = TextContent | ReasoningContent | ToolContent | FileContent;
-
-/** @deprecated Use Run instead */
-export interface RunSummary {
-  id: string;
-  prompt: string;
-  startedAt: number;
-  endedAt?: number;
-  status: "running" | "completed" | "error";
-  totalSteps: number;
-  usage?: TokenUsage;
-  error?: string;
-}
-
-/** @deprecated Use ContextData instead */
-export interface ContextState {
-  messages: Array<{
-    id: string;
-    role: MessageRole;
-    contents: MessageContent[];
-    status: MessageStatus;
-    stepNumber?: number;
-    createdAt: number;
-    updatedAt: number;
-  }>;
-  current: unknown;
-  currentIndex: number;
-  pendingApproval: ToolContent | null;
-}

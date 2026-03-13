@@ -1,7 +1,7 @@
 import { createAgent } from "@my-agent/core";
 import { createState, markRaw, toRaw } from "reactivity-store";
 
-import type { Agent, AgentConfig, AgentRunResult } from "@my-agent/core";
+import type { Agent, AgentConfig } from "@my-agent/core";
 
 // ============================================================================
 // Types
@@ -133,7 +133,7 @@ export const useAgent = createState(() => ({ ...initialState }), {
     /**
      * Run a prompt on the current agent
      */
-    const runPrompt = async (prompt: string): Promise<AgentRunResult | null> => {
+    const runPrompt = async (prompt: string) => {
       if (!prompt.trim()) return null;
 
       const agent = state.current;
@@ -145,22 +145,6 @@ export const useAgent = createState(() => ({ ...initialState }), {
       } catch {
         return null;
       }
-    };
-
-    /**
-     * Approve pending tool call on current agent
-     */
-    const approveToolCall = (): void => {
-      const agent = state.current;
-      agent?.approveToolCall();
-    };
-
-    /**
-     * Reject pending tool call on current agent
-     */
-    const rejectToolCall = (reason = "User denied the operation"): void => {
-      const agent = state.current;
-      agent?.rejectToolCall(reason);
     };
 
     /**
@@ -237,10 +221,6 @@ export const useAgent = createState(() => ({ ...initialState }), {
 
       // Running
       runPrompt,
-
-      // Tool approval
-      approveToolCall,
-      rejectToolCall,
 
       // Reset / destroy
       resetAgent,

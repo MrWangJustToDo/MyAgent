@@ -5,10 +5,10 @@ import type {
   AssistantMessage,
   ToolMessage,
   ToolCall,
-  ToolApprovalResponse,
   TokenUsage,
   ContextData,
 } from "./types.js";
+import type { ModelMessage, ToolApprovalResponse } from "ai";
 
 // ============================================================================
 // ID Generators
@@ -76,8 +76,9 @@ export class AgentContext {
   /** Total token usage across all runs */
   private totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 
-  /** Pending tool approval */
-  private pendingApproval: ToolCall | null = null;
+  private messages: ModelMessage[] = [];
+
+  private allPendingApprove: ToolCall[] = [];
 
   /** Current assistant message being streamed */
   private currentAssistant: AssistantMessage | null = null;
@@ -225,7 +226,7 @@ export class AgentContext {
       createdAt: Date.now(),
     };
 
-    this.currentRun.messages.push(message);
+    // this.currentRun.messages.push(message);
     this.currentAssistant = message;
     this.touch();
 
@@ -253,7 +254,7 @@ export class AgentContext {
   }
 
   /**
-   * Set full text (replaces existing)
+   * Set full text
    */
   setText(text: string): void {
     if (!this.currentAssistant) return;
@@ -262,15 +263,28 @@ export class AgentContext {
     this.touch();
   }
 
+  setReasoning(text: string): void {
+    if (!this.currentAssistant) return;
+
+    this.currentAssistant.reasoning = text;
+
+    this.touch();
+  }
+
   /**
    * Complete current assistant message
    */
   completeAssistantMessage(): void {
-    if (!this.currentAssistant) return;
+    if (!this.currentAssistant || !this.currentRun) return;
 
     this.currentAssistant.status = "completed";
+
     this.currentAssistant.endedAt = Date.now();
+
+    this.currentRun.messages.push(this.currentAssistant);
+
     this.currentAssistant = null;
+
     this.touch();
   }
 
@@ -278,12 +292,18 @@ export class AgentContext {
    * Mark current assistant message as error
    */
   errorAssistantMessage(error: string): void {
-    if (!this.currentAssistant) return;
+    if (!this.currentAssistant || !this.currentRun) return;
 
     this.currentAssistant.status = "error";
+
     this.currentAssistant.text += `\n\nError: ${error}`;
+
     this.currentAssistant.endedAt = Date.now();
+
+    this.currentRun.messages.push(this.currentAssistant);
+
     this.currentAssistant = null;
+
     this.touch();
   }
 
@@ -315,11 +335,23 @@ export class AgentContext {
     }
 
     if (needsApproval) {
-      this.pendingApproval = tc;
+      this.allPendingApprove.push(tc);
     }
 
     this.touch();
     return tc;
+  }
+
+  changeToolCall(toolCallId: string, status?: ToolCall["status"]) {
+    const tool = this.findToolCall(toolCallId);
+
+    if (tool) {
+      tool.status = status || tool.status;
+
+      if (tool.status === "need-approve") {
+        this.allPendingApprove.push(tool);
+      }
+    }
   }
 
   /**
@@ -377,24 +409,29 @@ export class AgentContext {
   /**
    * Approve a tool call
    */
-  approveTool(toolCallId: string): ToolApprovalResponse | null {
+  approveTool(toolCallId: string) {
     const tc = this.findToolCall(toolCallId);
     if (!tc || tc.status !== "need-approve") return null;
 
     tc.status = "running";
 
-    if (this.pendingApproval?.id === toolCallId) {
-      this.pendingApproval = null;
-    }
+    const message: ToolApprovalResponse = {
+      type: "tool-approval-response",
+      approvalId: toolCallId,
+      approved: true, // or false to deny
+    };
+
+    this.allPendingApprove = this.allPendingApprove.filter((i) => i.status !== "need-approve");
+
+    this.trackOriginalMessage({ role: "tool", content: [message] });
 
     this.touch();
-    return { toolCallId, approved: true };
   }
 
   /**
    * Reject a tool call
    */
-  rejectTool(toolCallId: string, reason = "User denied"): ToolApprovalResponse | null {
+  rejectTool(toolCallId: string, reason = "User denied") {
     const tc = this.findToolCall(toolCallId);
     if (!tc || tc.status !== "need-approve") return null;
 
@@ -402,12 +439,18 @@ export class AgentContext {
     tc.error = reason;
     tc.endedAt = Date.now();
 
-    if (this.pendingApproval?.id === toolCallId) {
-      this.pendingApproval = null;
-    }
+    const message: ToolApprovalResponse = {
+      type: "tool-approval-response",
+      approvalId: toolCallId,
+      approved: false,
+      reason,
+    };
+
+    this.allPendingApprove = this.allPendingApprove.filter((i) => i.status !== "need-approve");
+
+    this.trackOriginalMessage({ role: "tool", content: [message] });
 
     this.touch();
-    return { toolCallId, approved: false, reason };
   }
 
   // ============================================================================
@@ -481,13 +524,6 @@ export class AgentContext {
   }
 
   /**
-   * Get pending approval
-   */
-  getPendingApproval(): ToolCall | null {
-    return this.pendingApproval;
-  }
-
-  /**
    * Get current assistant message (streaming)
    */
   getCurrentAssistant(): AssistantMessage | null {
@@ -541,6 +577,26 @@ export class AgentContext {
     return messages;
   }
 
+  getAllPendingApprove() {
+    const tools: ToolCall[] = [];
+    for (const tool of this.allPendingApprove) {
+      tools.push(tool);
+    }
+    return tools;
+  }
+
+  trackOriginalMessage(m: ModelMessage) {
+    this.messages.push(m);
+  }
+
+  trackOriginalMessages(m: ModelMessage[]) {
+    this.messages.push(...m);
+  }
+
+  getOriginalMessage() {
+    return this.messages.slice(0);
+  }
+
   // ============================================================================
   // Reset / Clear
   // ============================================================================
@@ -552,7 +608,6 @@ export class AgentContext {
     if (this.currentRun) {
       this.currentRun = null;
       this.currentAssistant = null;
-      this.pendingApproval = null;
     }
     this.touch();
   }
@@ -565,7 +620,6 @@ export class AgentContext {
     this.currentRun = null;
     this.currentAssistant = null;
     this.totalUsage = this.createEmptyUsage();
-    this.pendingApproval = null;
     this.touch();
   }
 
@@ -598,7 +652,6 @@ export class AgentContext {
     // Reset transient state
     this.currentRun = null;
     this.currentAssistant = null;
-    this.pendingApproval = null;
   }
 
   /**

@@ -12,4 +12,4 @@ const args = process.argv.slice(2);
 initArgs(args);
 
 // Render the app
-render(<App />, { incrementalRendering: true, maxFps: 30 });
+render(<App />, { incrementalRendering: true });

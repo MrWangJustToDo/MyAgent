@@ -8,10 +8,7 @@ export {
   type CreateAgentOptions,
   type ToolCallInfo,
   type ToolApprovalResponse as AgentToolApprovalResponse,
-  type AgentStepInfo,
-  type AgentRunResult,
   type AgentCallbacks,
-  type AgentMessage,
   type AgentRunOptions,
 } from "./loop";
 
@@ -24,7 +21,6 @@ export {
   type TokenUsage,
   type ToolStatus,
   type ToolCall,
-  type ToolApprovalResponse,
   type UserMessage,
   type AssistantMessage,
   type ToolMessage,
@@ -35,14 +31,4 @@ export {
 } from "./agentContext";
 
 // Context exports - legacy types (for backward compatibility)
-export {
-  type MessageRole,
-  type MessageStatus,
-  type TextContent,
-  type ReasoningContent,
-  type ToolContent,
-  type FileContent,
-  type MessageContent,
-  type RunSummary,
-  type ContextState,
-} from "./agentContext";
+export { type MessageRole, type MessageStatus } from "./agentContext";

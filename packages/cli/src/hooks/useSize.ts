@@ -7,9 +7,9 @@ import { useTerminalSize } from "./useTerminalSize";
 
 import type { DOMElement } from "ink";
 
-export const useHeight = createState(
+export const useSize = createState(
   () => ({
-    state: { header: 0, footer: 0, content: 0, screen: 0 },
+    state: { header: 0, footer: 0, content: 0, screenHeight: 0, screenWidth: 0 },
     ele: markRaw({
       header: null as null | DOMElement,
       footer: null as null | DOMElement,
@@ -17,12 +17,13 @@ export const useHeight = createState(
   }),
   {
     withActions: (s) => {
-      const useInitTerminalHeight = () => {
+      const useInitTerminalSize = () => {
         const { rows, columns } = useTerminalSize();
 
         useEffect(() => {
-          s.state.screen = rows;
-        }, [rows]);
+          s.state.screenHeight = rows;
+          s.state.screenWidth = columns;
+        }, [rows, columns]);
 
         return { columns, rows };
       };
@@ -48,20 +49,20 @@ export const useHeight = createState(
       };
 
       const updateContent = () => {
-        const total = s.state.screen;
+        const total = s.state.screenHeight;
 
         s.state.content = total - s.state.header - s.state.footer;
       };
 
       const updateHeight = debounce(() => {
         updateHeader();
-        updateContent();
         updateFooter();
+        updateContent();
       }, 100);
 
       const useAutoElementHeight = () => {
         useEffect(() => {
-          const cb = useHeight.subscribe((s) => s.state.screen, updateHeight);
+          const cb = useSize.subscribe((s) => s.state.screenHeight, updateHeight);
 
           return cb;
         }, []);
@@ -78,7 +79,7 @@ export const useHeight = createState(
       };
 
       return {
-        useInitTerminalHeight,
+        useInitTerminalSize,
         useAutoElementHeight,
         setHeader,
         setFooter,

@@ -1,9 +1,13 @@
 import { Box, Text } from "ink";
+import Divider from "ink-divider";
 
 import { Spinner } from "../components/Spinner.js";
+import { UserApprove } from "../components/UserApprove.js";
 import { UserInput } from "../components/UserInput.js";
 import { useAgent, useAgentContext } from "../hooks";
-import { useHeight } from "../hooks/useHeight.js";
+import { useSize } from "../hooks/useSize.js";
+
+import type { TokenUsage } from "../hooks";
 
 export const Footer = () => {
   const { status, error } = useAgent((s) => ({
@@ -11,21 +15,15 @@ export const Footer = () => {
     error: s.current?.error || "",
   }));
 
-  const usage = useAgentContext.useDeepStableSelector((s) => s.context?.getTotalUsage?.());
+  const usage = useAgentContext((s) => s.context?.getTotalUsage() || {}) as TokenUsage;
 
   const isInputEnabled = status === "idle" || status === "completed" || status === "error";
 
   return (
-    <Box flexDirection="column" ref={useHeight.getActions().setFooter} marginBottom={1}>
-      {/* Separator */}
-      <Box>
-        <Text color="gray" dimColor>
-          {"─".repeat(60)}
-        </Text>
-      </Box>
-
+    <Box flexDirection="column" flexGrow={0} ref={useSize.getActions().setFooter} paddingY={1}>
+      <Divider />
       {/* Status bar */}
-      <Box gap={2}>
+      <Box gap={2} width="full">
         {/* Status indicator */}
         <Box>
           {status === "initializing" && <Spinner text="Initializing..." />}
@@ -47,7 +45,7 @@ export const Footer = () => {
         {/* Usage stats */}
         {usage && (
           <Box>
-            <Text color="gray" dimColor>
+            <Text color="gray" dimColor wrap="truncate">
               Tokens: {usage.inputTokens} in / {usage.outputTokens} out
             </Text>
           </Box>
@@ -61,19 +59,24 @@ export const Footer = () => {
         </Box>
       )}
 
+      <Box height={1} />
+
       {/* Input */}
-      <Box>
+      <Box opaque>
         <Text color={isInputEnabled ? "green" : "gray"} bold>
           {">"}{" "}
         </Text>
         {isInputEnabled ? (
           <UserInput />
+        ) : status === "waiting_approval" ? (
+          <UserApprove />
         ) : (
           <Text color="gray" dimColor>
-            {status === "waiting_approval" ? "Press Y to approve, N to deny" : "Processing..."}
+            Processing...
           </Text>
         )}
       </Box>
+      <Divider />
     </Box>
   );
 };

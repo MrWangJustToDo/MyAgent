@@ -25,7 +25,6 @@ export { useUserInput, getInputActions, type UserInputState } from "./useUserInp
 export type {
   // Agent types
   AgentStatus,
-  AgentRunResult,
   AgentContext,
   // Message types (new)
   Message,

@@ -8,9 +8,6 @@ export {
   type CreateAgentOptions,
   type ToolCallInfo,
   type ToolApprovalResponse,
-  type AgentStepInfo,
-  type AgentRunResult,
   type AgentCallbacks,
-  type AgentMessage,
   type AgentRunOptions,
 } from "./Agent.js";

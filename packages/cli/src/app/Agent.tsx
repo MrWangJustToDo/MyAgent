@@ -3,7 +3,7 @@ import { useCallback, useEffect } from "react";
 
 import { useAgent, useAgentContext } from "../hooks";
 import { useArgs } from "../hooks/useArgs.js";
-import { useHeight } from "../hooks/useHeight.js";
+import { useSize } from "../hooks/useSize.js";
 import { useUserInput } from "../hooks/useUserInput.js";
 import { Header, Content, Footer } from "../layout";
 
@@ -15,9 +15,9 @@ export type { AgentStatus } from "@my-agent/core";
 export const Agent = () => {
   const { exit } = useApp();
 
-  const { useAutoElementHeight, useInitTerminalHeight } = useHeight.getActions();
+  const { useInitTerminalSize, useAutoElementHeight } = useSize.getActions();
 
-  const { columns, rows } = useInitTerminalHeight();
+  useInitTerminalSize();
 
   useAutoElementHeight();
 
@@ -81,17 +81,17 @@ export const Agent = () => {
     const context = useAgent.getReadonlyState().current?.context;
 
     // Handle approval input
-    if (status === "waiting_approval" && context?.getPendingApproval()) {
-      if (inputChar === "y" || inputChar === "Y") {
-        agentActions.approveToolCall();
-        return;
-      }
-      if (inputChar === "n" || inputChar === "N") {
-        agentActions.rejectToolCall("User denied the operation");
-        return;
-      }
-      return;
-    }
+    // if (status === "waiting_approval" && context?.getPendingApproval()) {
+    //   if (inputChar === "y" || inputChar === "Y") {
+    //     agentActions.approveToolCall();
+    //     return;
+    //   }
+    //   if (inputChar === "n" || inputChar === "N") {
+    //     agentActions.rejectToolCall("User denied the operation");
+    //     return;
+    //   }
+    //   return;
+    // }
 
     // Normal input handling
     if (status === "running" || status === "initializing") return;
@@ -135,7 +135,7 @@ export const Agent = () => {
   });
 
   return (
-    <Box flexDirection="column" height={rows} width={columns}>
+    <Box flexDirection="column">
       {/* Header - Fixed at top */}
       <Header />
 

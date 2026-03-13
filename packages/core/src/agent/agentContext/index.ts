@@ -3,7 +3,6 @@ export type {
   TokenUsage,
   ToolStatus,
   ToolCall,
-  ToolApprovalResponse,
   UserMessage,
   AssistantMessage,
   ToolMessage,
@@ -14,17 +13,7 @@ export type {
 } from "./types.js";
 
 // Legacy types (for backward compatibility during migration)
-export type {
-  MessageRole,
-  MessageStatus,
-  TextContent,
-  ReasoningContent,
-  ToolContent,
-  FileContent,
-  MessageContent,
-  RunSummary,
-  ContextState,
-} from "./types.js";
+export type { MessageRole, MessageStatus } from "./types.js";
 
 // Context class
 export { AgentContext, generateAgentId } from "./AgentContext.js";

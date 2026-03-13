@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 
 import { Spinner } from "../components/Spinner.js";
 import { useAgentContext } from "../hooks";
-import { useHeight } from "../hooks/useHeight.js";
+import { useSize } from "../hooks/useSize.js";
 import { Markdown } from "../markdown";
 
 import type { Message, UserMessage, AssistantMessage, ToolMessage, ToolCall } from "@my-agent/core";
@@ -149,61 +149,25 @@ const MessageView = ({ message }: { message: Message }) => {
 // ============================================================================
 
 export const Content = () => {
-  const height = useHeight.useShallowStableSelector((s) => s.state.content);
+  const height = useSize((s) => s.state.content);
 
-  const { messages, pendingApproval } = useAgentContext.useDeepStableSelector((s) => ({
+  const { messages, current } = useAgentContext.useDeepStableSelector((s) => ({
     messages: s.context?.getAllMessages() || [],
-    pendingApproval: s.context?.getPendingApproval(),
+    current: s.context?.getCurrentAssistant() || null,
   }));
 
   return (
-    <Box overflowY="scroll" height={height}>
-      <Box flexDirection="column" flexGrow={1} flexShrink={0}>
-        {/* Completed Messages */}
-        {messages.map((msg) => (
-          <Box key={msg.id} flexDirection="column">
-            <MessageView message={msg} />
-          </Box>
-        ))}
-
-        {/* Current Streaming Assistant Message */}
-        {/* {currentAssistant && currentAssistant.status === "streaming" && (
-          <AssistantMessageView message={currentAssistant} isStreaming />
-        )} */}
-
-        {/* Tool Approval Dialog */}
-        {pendingApproval && (
-          <Box flexDirection="column" marginBottom={1} borderStyle="double" borderColor="yellow" padding={1}>
-            <Text color="yellow" bold>
-              Tool Approval Required
-            </Text>
-            <Box marginTop={1}>
-              <Text>
-                Tool: <Text color="cyan">{pendingApproval.name}</Text>
-              </Text>
-            </Box>
-            <Box marginTop={1} flexDirection="column">
-              <Text color="gray">Arguments:</Text>
-              <Box paddingLeft={2}>
-                <Text wrap="wrap">{JSON.stringify(pendingApproval.args, null, 2)}</Text>
-              </Box>
-            </Box>
-            <Box marginTop={1}>
-              <Text>
-                Press{" "}
-                <Text color="green" bold>
-                  Y
-                </Text>{" "}
-                to approve or{" "}
-                <Text color="red" bold>
-                  N
-                </Text>{" "}
-                to deny
-              </Text>
-            </Box>
-          </Box>
-        )}
-      </Box>
+    <Box flexDirection="column" minHeight={height - 1}>
+      {messages.map((msg) => (
+        <Box key={msg.id} flexDirection="column">
+          <MessageView message={msg} />
+        </Box>
+      ))}
+      {current && (
+        <Box>
+          <MessageView message={current} />
+        </Box>
+      )}
     </Box>
   );
 };
