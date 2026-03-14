@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Sandbox } from "../../environment";
 
 export const createListFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "list-file-tool",
     description:
       "Lists files and directories in the specified directory. Returns the name, type (file or directory), size, and modification date for each entry.",
@@ -34,7 +34,8 @@ export const createListFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ path: inputPath }) => {
+  // Create and return the server tool (with execute function)
+  return definition.server(async ({ path: inputPath }) => {
     const path = inputPath ?? ".";
 
     const exists = await sandbox.filesystem.exists(path);
@@ -57,6 +58,4 @@ export const createListFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
       message: `Listed ${entries.length} entries in: ${path}`,
     };
   });
-
-  return tool;
 };

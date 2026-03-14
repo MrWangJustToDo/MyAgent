@@ -6,7 +6,7 @@ import { getFile, getFileModifiedTime } from "./helpers";
 import type { Sandbox } from "../../environment";
 
 export const createEditFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "edit-file-tool",
     description:
       "Edits a file by replacing occurrences of oldString with newString. Requires the modifiedTime from a previous read operation to ensure the file hasn't been modified since it was read. The oldString must match exactly (including whitespace and indentation).",
@@ -33,7 +33,7 @@ export const createEditFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ path, modifiedTime, oldString, newString, replaceAll }) => {
+  return definition.server(async ({ path, modifiedTime, oldString, newString, replaceAll }) => {
     // Validate modification time and get current content
     const fileRes = await getFile(sandbox, path);
     const currentModifiedTime = fileRes.modifiedTime;
@@ -74,6 +74,4 @@ export const createEditFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
       message: `Successfully edited file: ${path}`,
     };
   });
-
-  return tool;
 };

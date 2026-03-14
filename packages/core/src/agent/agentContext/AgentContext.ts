@@ -150,8 +150,7 @@ export const generateContextId = (): string => {
 export class AgentContext {
   readonly id: string;
 
-  /** Conversation messages */
-  private messages: Message[] = [];
+  readonly symbol = Symbol.for("agent-context");
 
   /** Stream events (for UI rendering) */
   private events: StreamEvent[] = [];
@@ -169,7 +168,13 @@ export class AgentContext {
   createdAt: number;
   updatedAt: number;
 
-  constructor({ id, setUp }: { id?: CreateAgentOptions["id"]; setUp?: CreateAgentOptions["setUp"] }) {
+  constructor({
+    id,
+    setUp,
+  }: {
+    id?: CreateAgentOptions<AgentContext>["id"];
+    setUp?: CreateAgentOptions<AgentContext>["setUp"];
+  }) {
     this.id = id ?? generateContextId();
     this.createdAt = Date.now();
     this.updatedAt = Date.now();
@@ -177,71 +182,6 @@ export class AgentContext {
     if (setUp) {
       return setUp(this);
     }
-  }
-
-  // ============================================================================
-  // Message Management
-  // ============================================================================
-
-  /**
-   * Get all messages (for API calls)
-   */
-  getMessages(): Message[] {
-    return [...this.messages];
-  }
-
-  /**
-   * Get messages count
-   */
-  getMessageCount(): number {
-    return this.messages.length;
-  }
-
-  /**
-   * Add a system message
-   */
-  addSystemMessage(content: string): void {
-    this.messages.push({ role: "system", content });
-    this.touch();
-  }
-
-  /**
-   * Add a user message
-   */
-  addUserMessage(content: string): void {
-    this.messages.push({ role: "user", content });
-    this.touch();
-  }
-
-  /**
-   * Add an assistant message
-   */
-  addAssistantMessage(content: string, toolCalls?: ToolCall[], reasoning?: string): void {
-    const message: AssistantMessage = { role: "assistant", content };
-    if (toolCalls?.length) {
-      message.toolCalls = toolCalls;
-    }
-    if (reasoning) {
-      message.reasoning = reasoning;
-    }
-    this.messages.push(message);
-    this.touch();
-  }
-
-  /**
-   * Add tool results
-   */
-  addToolResults(results: ToolResult[]): void {
-    this.messages.push({ role: "tool", content: results });
-    this.touch();
-  }
-
-  /**
-   * Add raw messages (for bulk import)
-   */
-  addMessages(messages: Message[]): void {
-    this.messages.push(...messages);
-    this.touch();
   }
 
   // ============================================================================
@@ -263,6 +203,7 @@ export class AgentContext {
         this.usage.inputTokens += event.usage.inputTokens;
         this.usage.outputTokens += event.usage.outputTokens;
         this.usage.totalTokens += event.usage.totalTokens;
+        this.usage = Object.assign({}, this.usage);
       }
     }
 
@@ -302,112 +243,6 @@ export class AgentContext {
   }
 
   // ============================================================================
-  // Model Message Conversion
-  // ============================================================================
-
-  /**
-   * Convert messages to TanStack AI ModelMessage format for chat()
-   */
-  toModelMessages(): Array<{
-    role: "user" | "assistant" | "tool";
-    content: string | null;
-    toolCalls?: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }>;
-    toolCallId?: string;
-  }> {
-    const modelMessages: Array<{
-      role: "user" | "assistant" | "tool";
-      content: string | null;
-      toolCalls?: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }>;
-      toolCallId?: string;
-    }> = [];
-
-    for (const msg of this.messages) {
-      switch (msg.role) {
-        case "system":
-          // System messages are handled separately via systemPrompts
-          // Skip them in the model messages array
-          break;
-
-        case "user":
-          modelMessages.push({
-            role: "user",
-            content: msg.content,
-          });
-          break;
-
-        case "assistant":
-          modelMessages.push({
-            role: "assistant",
-            content: msg.content || null,
-            ...(msg.toolCalls?.length && {
-              toolCalls: msg.toolCalls.map((tc) => ({
-                id: tc.id,
-                type: "function" as const,
-                function: {
-                  name: tc.name,
-                  arguments: typeof tc.input === "string" ? tc.input : JSON.stringify(tc.input),
-                },
-              })),
-            }),
-          });
-          break;
-
-        case "tool":
-          // Tool results - each result becomes a separate tool message
-          for (const result of msg.content) {
-            modelMessages.push({
-              role: "tool",
-              content: typeof result.output === "string" ? result.output : JSON.stringify(result.output),
-              toolCallId: result.toolCallId,
-            });
-          }
-          break;
-      }
-    }
-
-    return modelMessages;
-  }
-
-  // ============================================================================
-  // Serialization (for web transport)
-  // ============================================================================
-
-  /**
-   * Serialize context to JSON-compatible object
-   */
-  toJSON(): {
-    id: string;
-    messages: Message[];
-    usage: TokenUsage;
-    isStreaming: boolean;
-    createdAt: number;
-    updatedAt: number;
-  } {
-    return {
-      id: this.id,
-      messages: this.messages,
-      usage: this.usage,
-      isStreaming: this.isStreaming,
-      createdAt: this.createdAt,
-      updatedAt: this.updatedAt,
-    };
-  }
-
-  /**
-   * Create context from JSON
-   */
-  static fromJSON(data: { id?: string; messages?: Message[]; usage?: TokenUsage }): AgentContext {
-    const context = new AgentContext({ id: data.id });
-    if (data.messages) {
-      context.messages = data.messages;
-    }
-    if (data.usage) {
-      context.usage = data.usage;
-    }
-    return context;
-  }
-
-  // ============================================================================
   // Reset
   // ============================================================================
 
@@ -415,7 +250,6 @@ export class AgentContext {
    * Clear everything
    */
   reset(): void {
-    this.messages = [];
     this.events = [];
     this.usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
     this.isStreaming = false;

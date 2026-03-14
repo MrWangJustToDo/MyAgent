@@ -26,6 +26,8 @@ export interface CliAgentConfig {
   initialPrompt: string;
   /** Maximum iterations per run */
   maxIterations: number;
+  /** Enable debug logging */
+  debug: boolean;
 }
 
 /** @deprecated Use CliAgentConfig instead */
@@ -82,6 +84,7 @@ export const useArgs = createState(
       systemPrompt: DEFAULT_SYSTEM_PROMPT,
       initialPrompt: "",
       maxIterations: DEFAULT_MAX_ITERATIONS,
+      debug: false,
     } as AgentConfig,
     /** Whether args have been initialized */
     initialized: false,
@@ -105,6 +108,7 @@ export const useArgs = createState(
         state.config.systemPrompt = getFlagString(parsed, DEFAULT_SYSTEM_PROMPT, "system", "s");
         state.config.initialPrompt = parsed.positional.join(" ");
         state.config.maxIterations = getFlagNumber(parsed, DEFAULT_MAX_ITERATIONS, "max-iterations");
+        state.config.debug = getFlagBoolean(parsed, "debug", "d");
         state.helpRequested = getFlagBoolean(parsed, "help", "h");
         state.initialized = true;
       },
@@ -140,6 +144,7 @@ export const useArgs = createState(
         state.config.systemPrompt = DEFAULT_SYSTEM_PROMPT;
         state.config.initialPrompt = "";
         state.config.maxIterations = DEFAULT_MAX_ITERATIONS;
+        state.config.debug = false;
         state.helpRequested = false;
         state.initialized = false;
         state.key = "";

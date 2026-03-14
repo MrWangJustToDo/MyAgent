@@ -2,11 +2,14 @@ import { chat } from "@tanstack/ai";
 import { z } from "zod";
 
 import { AgentContext, generateContextId } from "../agentContext";
+import { AgentLog } from "../agentLog";
 import { createTools, type Tools } from "../tools";
 
 import type { Sandbox } from "../../environment";
-import type { Message, ToolCall, TokenUsage, StreamEvent } from "../agentContext";
-import type { ChatMiddleware, StreamChunk, AnyTextAdapter, ToolDefinition } from "@tanstack/ai";
+import type { ToolCall, TokenUsage, StreamEvent } from "../agentContext";
+import type { ChatMiddleware, StreamChunk, AnyTextAdapter, Tool, SchemaInput } from "@tanstack/ai";
+import type { TextActivityOptions } from "@tanstack/ai/adapters";
+import type { OllamaTextAdapter } from "@tanstack/ai-ollama";
 
 // ============================================================================
 // Types & Schemas
@@ -25,8 +28,8 @@ export const AgentConfigSchema = z.object({
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
 
-/** Tool set type - array of TanStack AI tool definitions */
-export type ToolSet = ToolDefinition[];
+/** Tool set type - array of TanStack AI tools (ServerTool, ClientTool, or ToolDefinition) */
+export type ToolSet = Tool[];
 
 /** Callbacks for streaming events */
 export interface AgentCallbacks {
@@ -42,9 +45,9 @@ export interface AgentCallbacks {
 }
 
 /** Run options */
-export interface AgentRunOptions extends AgentCallbacks {
+export interface AgentRunOptions
+  extends AgentCallbacks, Omit<TextActivityOptions<OllamaTextAdapter<string>, SchemaInput, true>, "stream"> {
   prompt?: string;
-  messages?: Message[];
   abortSignal?: AbortSignal;
   /** Additional middleware to apply */
   middleware?: ChatMiddleware[];
@@ -104,12 +107,16 @@ export interface AgentStreamResult {
 export class Agent {
   readonly id: string;
 
+  readonly symbol = Symbol.for("agent");
+
   // State
   status: AgentStatus = "idle";
   error = "";
 
   // Context
   readonly context: AgentContext;
+
+  readonly log: AgentLog;
 
   // Configuration
   private config: AgentConfig;
@@ -127,16 +134,12 @@ export class Agent {
 
   constructor(
     config: AgentConfig,
-    { id, setUp }: { id?: CreateAgentOptions["id"]; setUp: CreateAgentOptions["setUp"] }
+    { id, setUp }: { id?: CreateAgentOptions<Agent>["id"]; setUp: CreateAgentOptions<Agent>["setUp"] }
   ) {
     this.id = id ?? generateContextId().replace("ctx_", "agent_");
     this.config = AgentConfigSchema.parse(config);
-    this.context = new AgentContext({ setUp });
-
-    // Add system prompt if provided
-    if (this.config.systemPrompt) {
-      this.context.addSystemMessage(this.config.systemPrompt);
-    }
+    this.context = new AgentContext({ setUp: setUp as CreateAgentOptions<AgentContext>["setUp"] });
+    this.log = new AgentLog({ enabled: true });
 
     if (setUp) {
       return setUp(this);
@@ -192,7 +195,7 @@ export class Agent {
     // Add built-in tools
     if (this.builtInTools) {
       for (const tool of Object.values(this.builtInTools)) {
-        tools.push(tool as ToolDefinition);
+        tools.push(tool as Tool);
       }
     }
 
@@ -209,20 +212,19 @@ export class Agent {
   /**
    * Run the agent and return an async iterable stream.
    * This is the primary method for consuming agent responses.
+   *
    */
-  async *run(options: AgentRunOptions = {}): AsyncIterable<StreamChunk> {
+  async *run(options: AgentRunOptions): AsyncIterable<StreamChunk> {
     if (!this.adapter) {
       throw new Error("Adapter not set. Call setAdapter() first.");
     }
 
-    const { prompt, messages, abortSignal, middleware = [] } = options;
+    const { prompt, messages, abortSignal, middleware = [], adapter, ...rest } = options;
 
-    // Add messages to context
-    if (messages?.length) {
-      this.context.addMessages(messages);
-    }
+    const finalMessage = messages || [];
+
     if (prompt) {
-      this.context.addUserMessage(prompt);
+      finalMessage.push({ role: "user", content: prompt });
     }
 
     // Create abort controller
@@ -255,27 +257,36 @@ export class Agent {
       ...middleware,
     ];
 
-    // Convert context messages to model format
-    const modelMessages = this.context.toModelMessages();
-
     try {
       // Create chat stream with TanStack AI
+      // Pass messages directly - chat() handles UIMessage -> ModelMessage conversion
+      // and extracts approval state from UIMessage parts before conversion
+      // Note: We cast to 'any' because chat() internally handles both UIMessage[] and ModelMessage[]
+      // via convertMessagesToModelMessages(), but the type signature is strict
+      const tools = this.getTools();
+      this.log.agent("Starting chat", {
+        messageCount: finalMessage.length,
+        toolCount: tools.length,
+        tools: tools.map((t) => ({ name: t.name, needsApproval: (t as any).needsApproval })),
+      });
       const stream = chat({
-        adapter: this.adapter,
-        messages: modelMessages,
-        tools: this.getTools(),
+        adapter: adapter || (this.adapter as OllamaTextAdapter<string>),
+        messages: finalMessage,
+        tools,
         systemPrompts: this.config.systemPrompt ? [this.config.systemPrompt] : undefined,
         temperature: this.config.temperature,
         maxTokens: this.config.maxTokens,
         middleware: allMiddleware,
         abortController: this.currentAbortController,
+        ...rest,
       });
 
       let iterations = 0;
-      let accumulatedContent = "";
       let lastUsage: TokenUsage | undefined;
 
       // Yield chunks from the stream
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       for await (const chunk of stream) {
         // Track iterations (each RUN_STARTED after the first is a new iteration)
         if (chunk.type === "RUN_STARTED") {
@@ -287,9 +298,9 @@ export class Agent {
         }
 
         // Track content
-        if (chunk.type === "TEXT_MESSAGE_CONTENT") {
-          accumulatedContent += chunk.delta;
-        }
+        // if (chunk.type === "TEXT_MESSAGE_CONTENT") {
+        //   accumulatedContent += chunk.delta;
+        // }
 
         // Track usage
         if (chunk.type === "RUN_FINISHED" && chunk.usage) {
@@ -306,10 +317,6 @@ export class Agent {
       // Update final state
       this.status = "completed";
 
-      // Update context with accumulated content
-      if (accumulatedContent) {
-        this.context.addAssistantMessage(accumulatedContent);
-      }
       if (lastUsage) {
         this.context.usage.inputTokens += lastUsage.inputTokens;
         this.context.usage.outputTokens += lastUsage.outputTokens;
@@ -335,7 +342,7 @@ export class Agent {
    * Run the agent with callbacks (convenience method).
    * Consumes the stream internally and calls callbacks.
    */
-  async runWithCallbacks(options: AgentRunOptions = {}): Promise<AgentStreamResult> {
+  async runWithCallbacks(options: AgentRunOptions): Promise<AgentStreamResult> {
     const { onChunk, onTextDelta, onReasoningDelta, onToolCallStart, onToolCallEnd, onUsage, onFinish, ...rest } =
       options;
 
@@ -482,6 +489,12 @@ export class Agent {
         this.context.emit({ type: "error", error: new Error(info.reason ?? "Aborted") });
         options.onAbort?.(info.reason);
       },
+      onBeforeToolCall: (ctx, hookCtx) => {
+        this.log.info("tool", "tool-call-start", { ctx, hookCtx });
+      },
+      onAfterToolCall: (ctx, hookCtx) => {
+        this.log.info("tool", "tool-call-end", { ctx, hookCtx });
+      },
     };
   }
 
@@ -545,11 +558,6 @@ export class Agent {
     this.status = "idle";
     this.error = "";
     this.context.reset();
-
-    // Re-add system prompt
-    if (this.config.systemPrompt) {
-      this.context.addSystemMessage(this.config.systemPrompt);
-    }
   }
 
   /**
@@ -571,20 +579,20 @@ export class Agent {
 // Factory Function
 // ============================================================================
 
-export interface CreateAgentOptions extends AgentConfig {
+export interface CreateAgentOptions<T> extends AgentConfig {
   id?: string;
   sandbox?: Sandbox;
   tools?: ToolSet;
-  adapter?: AnyTextAdapter;
-  setUp?: <T>(instance: T) => T;
+  adapter: AnyTextAdapter;
+  setUp?: (instance: T) => T;
 }
 
 /**
  * Create a new agent instance
  */
-export function createAgent(options: CreateAgentOptions): Agent {
+export function createAgent(options: CreateAgentOptions<Agent | AgentContext>): Agent {
   const { id, sandbox, tools, adapter, setUp, ...config } = options;
-  const agent = new Agent(config, { id, setUp });
+  const agent = new Agent(config, { id, setUp: setUp as CreateAgentOptions<Agent>["setUp"] });
 
   if (adapter) {
     agent.setAdapter(adapter);

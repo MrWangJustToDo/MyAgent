@@ -1,5 +1,6 @@
 import { Box } from "ink";
 
+import { Debug } from "../components/Debug.js";
 import { Help } from "../components/Help.js";
 import { useArgs } from "../hooks/useArgs.js";
 
@@ -21,6 +22,7 @@ export const App = () => {
   // Default: run agent
   return (
     <Box flexDirection="column">
+      <Debug />
       <Agent />
     </Box>
   );

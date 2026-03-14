@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Sandbox } from "../../environment";
 
 export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "grep-tool",
     description:
       "Searches file contents using regular expressions. Returns file paths and line numbers with matching content. Uses `grep` command internally.",
@@ -42,7 +42,7 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ pattern, path, include, ignoreCase, maxResults }) => {
+  return definition.server(async ({ pattern, path, include, ignoreCase, maxResults }) => {
     const searchPath = path ?? ".";
     const limit = maxResults ?? 100;
 
@@ -100,6 +100,4 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
       message: `Found ${matches.length} matches for pattern: ${pattern}${matches.length >= limit ? " (results truncated)" : ""}`,
     };
   });
-
-  return tool;
 };

@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 
 import { formatToolInput, formatToolOutput } from "../../utils/format.js";
 import { getToolCallColor } from "../../utils/toolState.js";
+import { FullBox } from "../FullBox.js";
 
 import { ToolStatusIcon } from "./ToolStatusIcon.js";
 
@@ -10,24 +11,42 @@ import type { ToolCallPart } from "@my-agent/core";
 export interface ToolCallPartViewProps {
   part: ToolCallPart;
   addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
+  /**
+   * Tool input from approval-requested custom event.
+   * Used when part.arguments is empty (TanStack AI doesn't populate it during approval).
+   */
+  approvalInput?: unknown;
 }
 
 /** Render a tool call part */
-export const ToolCallPartView = ({ part, addToolApprovalResponse }: ToolCallPartViewProps) => {
+export const ToolCallPartView = ({ part, addToolApprovalResponse, approvalInput }: ToolCallPartViewProps) => {
   const needsApproval = part.state === "approval-requested" && part.approval;
 
+  // Get the arguments to display - prefer part.arguments, fallback to approvalInput
+  const getDisplayArguments = (): string | null => {
+    if (part.arguments) {
+      return part.arguments;
+    }
+    if (approvalInput !== undefined) {
+      return typeof approvalInput === "string" ? approvalInput : JSON.stringify(approvalInput);
+    }
+    return null;
+  };
+
+  const displayArguments = getDisplayArguments();
+
   return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Box borderStyle="round" borderColor={getToolCallColor(part.state)} paddingX={1}>
+    <Box flexDirection="column">
+      <FullBox borderStyle="round" width="100%" borderColor={getToolCallColor(part.state)} paddingX={1}>
         <Box flexDirection="column">
           {/* Header */}
           <Box>
             <ToolStatusIcon state={part.state} />
             <Text color={getToolCallColor(part.state)}> {part.name}</Text>
-            {part.arguments && (
+            {displayArguments && (
               <Text color="gray" dimColor>
                 {" "}
-                {formatToolInput(JSON.parse(part.arguments))}
+                {formatToolInput(JSON.parse(displayArguments))}
               </Text>
             )}
           </Box>
@@ -47,10 +66,10 @@ export const ToolCallPartView = ({ part, addToolApprovalResponse }: ToolCallPart
               <Text color="yellow" bold>
                 Approval required. Press Y to approve, N to deny.
               </Text>
-              <Box marginTop={1}>
+              {/* <Box marginTop={1}>
                 <Text color="gray">Arguments: </Text>
-                <Text>{part.arguments}</Text>
-              </Box>
+                <Text>{displayArguments ?? "(no arguments)"}</Text>
+              </Box> */}
             </Box>
           )}
 
@@ -66,7 +85,7 @@ export const ToolCallPartView = ({ part, addToolApprovalResponse }: ToolCallPart
             </Box>
           )}
         </Box>
-      </Box>
+      </FullBox>
     </Box>
   );
 };

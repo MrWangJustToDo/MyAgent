@@ -40,3 +40,20 @@ export {
   type StreamEvent,
   type TokenUsage,
 } from "./agentContext";
+
+// Log exports
+export {
+  AgentLog,
+  agentLog,
+  generateLogId,
+  // Schemas
+  logLevelSchema,
+  logCategorySchema,
+  logEntrySchema,
+  logFilterSchema,
+  // Types
+  type LogLevel,
+  type LogCategory,
+  type LogEntry,
+  type LogFilter,
+} from "./agentLog";

@@ -6,7 +6,7 @@ import { getFile, getFileModifiedTime } from "./helpers";
 import type { Sandbox } from "../../environment";
 
 export const createCopyFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "copy-file-tool",
     description:
       "Copies a file from a source path to a destination path. Requires the modifiedTime from a previous read operation to ensure the source file hasn't been modified since it was read.",
@@ -40,7 +40,7 @@ export const createCopyFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ sourcePath, modifiedTime, targetPath }) => {
+  return definition.server(async ({ sourcePath, modifiedTime, targetPath }) => {
     // Validate modification time and get content
     const fileRes = await getFile(sandbox, sourcePath);
     const currentModifiedTime = fileRes.modifiedTime;
@@ -71,8 +71,6 @@ export const createCopyFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
       message: `Successfully copied file from ${sourcePath} to ${targetPath}`,
     };
   });
-
-  return tool;
 };
 
 // Keep the old name as alias for backward compatibility

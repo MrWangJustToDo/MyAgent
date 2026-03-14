@@ -10,7 +10,7 @@ export interface TextPartViewProps {
 
 /** Render a text part */
 export const TextPartView = ({ part }: TextPartViewProps) => (
-  <Box flexDirection="column" marginBottom={1}>
+  <Box flexDirection="column">
     <Box paddingLeft={1}>
       <Markdown content={part.content} />
     </Box>

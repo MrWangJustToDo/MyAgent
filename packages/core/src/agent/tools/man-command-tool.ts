@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Sandbox } from "../../environment";
 
 export const createManCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "man-command-tool",
     description:
       "Gets the manual page or help information for a command. Tries `man`, `--help`, and `-h` flags to retrieve documentation for the specified command.",
@@ -27,7 +27,7 @@ export const createManCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ command, section }) => {
+  return definition.server(async ({ command, section }) => {
     // Try multiple ways to get help
     const manSection = section ? `${section} ` : "";
     const manCommand = `man ${manSection}${command} 2>/dev/null | col -bx | head -500`;
@@ -86,6 +86,4 @@ export const createManCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
 
     throw new Error(`No help information found for command: ${command}`);
   });
-
-  return tool;
 };

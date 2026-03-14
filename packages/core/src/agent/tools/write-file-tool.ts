@@ -6,7 +6,7 @@ import { getFileModifiedTime } from "./helpers";
 import type { Sandbox } from "../../environment";
 
 export const createWriteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "write-file-tool",
     description:
       "Writes content to a file. If the file exists, requires the modifiedTime from a previous read operation to ensure the file hasn't been modified. If creating a new file, modifiedTime should be omitted. Parent directories will be created if they don't exist.",
@@ -34,7 +34,7 @@ export const createWriteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ path, content, modifiedTime, createDirectories }) => {
+  return definition.server(async ({ path, content, modifiedTime, createDirectories }) => {
     const fileExisted = await sandbox.filesystem.exists(path);
 
     // If file exists, validate modification time
@@ -76,6 +76,4 @@ export const createWriteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
       message: fileExisted ? `Successfully overwrote file: ${path}` : `Successfully created file: ${path}`,
     };
   });
-
-  return tool;
 };

@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Sandbox } from "../../environment";
 
 export const createListCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "list-command-tool",
     description:
       "Lists available commands in the sandbox environment. Can search for specific commands by name or list all commands in a directory. Uses `which`, `type`, or `compgen` to find available commands.",
@@ -27,7 +27,7 @@ export const createListCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ search, type: commandTypeInput }) => {
+  return definition.server(async ({ search, type: commandTypeInput }) => {
     const commandType = commandTypeInput ?? "all";
 
     let command: string;
@@ -74,6 +74,4 @@ export const createListCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
         : `Listed ${commands.length} ${commandType} commands`,
     };
   });
-
-  return tool;
 };

@@ -6,7 +6,7 @@ import { getFileModifiedTime } from "./helpers";
 import type { Sandbox } from "../../environment";
 
 export const createDeleteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "delete-file-tool",
     description:
       "Deletes a file or directory from the sandbox filesystem. Requires the modifiedTime from a previous read operation to ensure the file hasn't been modified since it was read.",
@@ -25,7 +25,7 @@ export const createDeleteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ path, modifiedTime }) => {
+  return definition.server(async ({ path, modifiedTime }) => {
     // Validate modification time
     const currentModifiedTime = await getFileModifiedTime(sandbox, path);
     if (currentModifiedTime !== modifiedTime) {
@@ -41,6 +41,4 @@ export const createDeleteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
       message: `Successfully deleted: ${path}`,
     };
   });
-
-  return tool;
 };

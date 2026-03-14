@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Sandbox } from "../../environment";
 
 export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "tree-tool",
     description:
       "Displays the directory tree structure. Shows files and directories in a hierarchical format. Useful for understanding project structure.",
@@ -28,7 +28,7 @@ export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ path, maxDepth, showHidden, dirsOnly, pattern, ignore }) => {
+  return definition.server(async ({ path, maxDepth, showHidden, dirsOnly, pattern, ignore }) => {
     const rootPath = path ?? ".";
     const depth = maxDepth ?? 3;
 
@@ -111,8 +111,6 @@ export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
       message: `Directory tree for: ${rootPath} (depth: ${depth})`,
     };
   });
-
-  return tool;
 };
 
 /**

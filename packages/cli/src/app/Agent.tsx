@@ -1,14 +1,18 @@
 import { Box, Text, useApp, useInput } from "ink";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { toRaw } from "reactivity-store";
 
 import { MessageList } from "../components/MessageList.js";
 import { Spinner } from "../components/Spinner.js";
+import { useAgent } from "../hooks/useAgent.js";
 import { useArgs } from "../hooks/useArgs.js";
 import { useLocalChat } from "../hooks/useLocalChat.js";
 import { useSize } from "../hooks/useSize.js";
 import { useUserInput } from "../hooks/useUserInput.js";
 import { Footer } from "../layout/Footer.js";
 import { Header } from "../layout/Header.js";
+
+import type { UIMessage, ToolCallPart, AgentLog } from "@my-agent/core";
 
 // ============================================================================
 // Main Agent Component
@@ -24,13 +28,14 @@ export const Agent = () => {
   const config = useArgs((s) => s.config);
 
   // Use local chat with our config
-  const { messages, sendMessage, isLoading, addToolApprovalResponse, initError, initLoading } = useLocalChat({
-    model: config.model,
-    url: config.url,
-    rootPath: config.rootPath,
-    systemPrompt: config.systemPrompt,
-    maxIterations: config.maxIterations,
-  });
+  const { messages, sendMessage, isLoading, addToolApprovalResponse, initError, initLoading, approvalInputs } =
+    useLocalChat({
+      model: config.model,
+      url: config.url,
+      rootPath: config.rootPath,
+      systemPrompt: config.systemPrompt,
+      maxIterations: config.maxIterations,
+    });
 
   const hasInitRef = useRef(false);
 
@@ -38,6 +43,29 @@ export const Agent = () => {
 
   // Input state
   const inputActions = useUserInput.getActions();
+
+  // Find pending approval requests
+  const pendingApproval = useMemo(() => {
+    // Look through messages for tool calls awaiting approval
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i] as UIMessage;
+      if (msg.role === "assistant") {
+        for (const part of msg.parts) {
+          if (part.type === "tool-call") {
+            const toolCall = part as ToolCallPart;
+            if (toolCall.state === "approval-requested" && toolCall.approval) {
+              return {
+                id: toolCall.approval.id,
+                toolName: toolCall.name,
+                toolCallId: toolCall.id,
+              };
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }, [messages]);
 
   useEffect(() => {
     if (isReady && config.initialPrompt && !hasInitRef.current) {
@@ -56,14 +84,33 @@ export const Agent = () => {
 
   // Handle keyboard input
   useInput((inputChar, inputKey) => {
-    // Don't handle input while loading
-    if (isLoading) return;
-
     // Exit on Ctrl+C or Escape
     if ((inputKey.ctrl && inputChar === "c") || inputKey.escape) {
       exit();
       return;
     }
+
+    // Handle approval responses when there's a pending approval
+    if (pendingApproval) {
+      const agentLog = toRaw(useAgent.getReactiveState().agent?.log) as AgentLog | null;
+
+      const char = inputChar?.toLowerCase();
+      if (char === "y") {
+        agentLog?.approval(`user approve ${pendingApproval.id}`);
+        addToolApprovalResponse({ id: pendingApproval.id, approved: true });
+        return;
+      }
+      if (char === "n") {
+        agentLog?.approval(`user denying ${pendingApproval.id}`);
+        addToolApprovalResponse({ id: pendingApproval.id, approved: false });
+        return;
+      }
+      // Ignore other input while waiting for approval
+      return;
+    }
+
+    // Don't handle regular input while loading
+    if (isLoading) return;
 
     // Submit on Enter
     if (inputKey.return) {
@@ -133,7 +180,11 @@ export const Agent = () => {
 
       {/* Messages */}
       <Box flexDirection="column" paddingX={1}>
-        <MessageList messages={messages} addToolApprovalResponse={addToolApprovalResponse} />
+        <MessageList
+          messages={messages}
+          addToolApprovalResponse={addToolApprovalResponse}
+          approvalInputs={approvalInputs}
+        />
       </Box>
 
       {/* Input */}

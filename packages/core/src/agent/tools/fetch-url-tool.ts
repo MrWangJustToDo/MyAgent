@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Sandbox } from "../../environment";
 
 export const createFetchUrlTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "fetch-url-tool",
     description:
       "Fetches content from a URL using curl. Supports HTTP/HTTPS requests and can return text or save to file. Useful for downloading files, fetching API responses, or getting web page content.",
@@ -34,7 +34,7 @@ export const createFetchUrlTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ url, method, headers, body, outputPath, timeout, followRedirects }) => {
+  return definition.server(async ({ url, method, headers, body, outputPath, timeout, followRedirects }) => {
     // Build curl command
     let curlCommand = `curl -s -S --max-time ${timeout ?? 30}`;
 
@@ -102,6 +102,4 @@ export const createFetchUrlTool = ({ sandbox }: { sandbox: Sandbox }) => {
       message: `Successfully fetched URL with status ${statusCode}`,
     };
   });
-
-  return tool;
 };

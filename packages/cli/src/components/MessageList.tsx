@@ -8,6 +8,7 @@ import { Box, Text } from "ink";
 
 import { MessageView } from "./message";
 
+import type { ApprovalInputsMap } from "../hooks";
 import type { UIMessage } from "@my-agent/core";
 
 // ============================================================================
@@ -17,13 +18,15 @@ import type { UIMessage } from "@my-agent/core";
 export interface MessageListProps {
   messages: UIMessage[];
   addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
+  /** Map of toolCallId -> input for pending approvals */
+  approvalInputs?: ApprovalInputsMap;
 }
 
 // ============================================================================
 // Main Component
 // ============================================================================
 
-export const MessageList = ({ messages, addToolApprovalResponse }: MessageListProps) => {
+export const MessageList = ({ messages, addToolApprovalResponse, approvalInputs }: MessageListProps) => {
   if (messages.length === 0) {
     return (
       <Box>
@@ -35,10 +38,14 @@ export const MessageList = ({ messages, addToolApprovalResponse }: MessageListPr
   }
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" rowGap={1}>
       {messages.map((message) => (
         <Box key={message.id}>
-          <MessageView message={message} addToolApprovalResponse={addToolApprovalResponse} />
+          <MessageView
+            message={message}
+            addToolApprovalResponse={addToolApprovalResponse}
+            approvalInputs={approvalInputs}
+          />
         </Box>
       ))}
     </Box>

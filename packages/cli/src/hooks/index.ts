@@ -3,7 +3,12 @@
 // ============================================================================
 
 // Local chat hook (uses TanStack AI useChat with local connection)
-export { useLocalChat, type UseLocalChatConfig, type UseLocalChatReturn } from "./useLocalChat.js";
+export {
+  useLocalChat,
+  type UseLocalChatConfig,
+  type UseLocalChatReturn,
+  type ApprovalInputsMap,
+} from "./useLocalChat.js";
 
 // CLI-specific hooks
 export {

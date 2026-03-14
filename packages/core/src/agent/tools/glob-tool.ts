@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Sandbox } from "../../environment";
 
 export const createGlobTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "glob-tool",
     description:
       "Finds files matching a glob pattern. Supports patterns like '**/*.js', 'src/**/*.ts', '*.json', etc. Uses the `find` command internally to search for matching files.",
@@ -24,7 +24,7 @@ export const createGlobTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ pattern, path }) => {
+  return definition.server(async ({ pattern, path }) => {
     const searchPath = path ?? ".";
 
     // Convert glob pattern to find command
@@ -58,6 +58,4 @@ export const createGlobTool = ({ sandbox }: { sandbox: Sandbox }) => {
       message: `Found ${files.length} files matching pattern: ${pattern}`,
     };
   });
-
-  return tool;
 };

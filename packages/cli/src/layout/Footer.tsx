@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import Divider from "ink-divider";
 
+import { FullBox } from "../components/FullBox.js";
 import { Spinner } from "../components/Spinner.js";
 import { UserInput } from "../components/UserInput.js";
 import { useAgent } from "../hooks/useAgent.js";
@@ -23,7 +24,7 @@ export const Footer = () => {
     <Box flexDirection="column" flexGrow={0} ref={useSize.getActions().setFooter} paddingY={1}>
       <Divider />
       {/* Status bar */}
-      <Box gap={2} width="full">
+      <FullBox gap={2} width="full">
         {/* Status indicator */}
         <Box>
           {status === "running" && <Spinner text="Running..." />}
@@ -44,7 +45,7 @@ export const Footer = () => {
             </Text>
           </Box>
         )}
-      </Box>
+      </FullBox>
 
       {/* Error message */}
       {error && (
@@ -56,7 +57,7 @@ export const Footer = () => {
       <Box height={1} />
 
       {/* Input */}
-      <Box opaque>
+      <FullBox opaque>
         <Text color={isInputEnabled ? "green" : "gray"} bold>
           {">"}{" "}
         </Text>
@@ -67,7 +68,7 @@ export const Footer = () => {
             Processing...
           </Text>
         )}
-      </Box>
+      </FullBox>
       <Divider />
     </Box>
   );

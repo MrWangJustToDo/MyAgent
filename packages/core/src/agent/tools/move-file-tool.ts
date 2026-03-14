@@ -6,7 +6,7 @@ import { getFile, getFileModifiedTime } from "./helpers";
 import type { Sandbox } from "../../environment";
 
 export const createMoveFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "move-file-tool",
     description:
       "Moves or renames a file from a source path to a destination path. Requires the modifiedTime from a previous read operation to ensure the file hasn't been modified since it was read. The source file will be removed after successful copy to destination.",
@@ -32,7 +32,7 @@ export const createMoveFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ sourcePath, modifiedTime, targetPath }) => {
+  return definition.server(async ({ sourcePath, modifiedTime, targetPath }) => {
     // Validate modification time and get content
     const fileRes = await getFile(sandbox, sourcePath);
     const currentModifiedTime = fileRes.modifiedTime;
@@ -67,6 +67,4 @@ export const createMoveFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
       message: `Successfully moved file from ${sourcePath} to ${targetPath}`,
     };
   });
-
-  return tool;
 };

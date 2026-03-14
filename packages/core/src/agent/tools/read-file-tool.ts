@@ -6,7 +6,7 @@ import { getFile } from "./helpers";
 import type { Sandbox } from "../../environment";
 
 export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "read-file-tool",
     description:
       "Reads the content of a file. Returns the file content along with a modifiedTime timestamp that must be used when editing, deleting, or moving the file to ensure no concurrent modifications have occurred.",
@@ -38,7 +38,7 @@ export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ path, offset, limit }) => {
+  return definition.server(async ({ path, offset, limit }) => {
     // Get file info and content
     const fileRes = await getFile(sandbox, path);
     const modifiedTime = fileRes.modifiedTime;
@@ -64,6 +64,4 @@ export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
       message: `Read ${selectedLines.length} lines from ${path} (lines ${startLine}-${endLine - 1} of ${totalLines})`,
     };
   });
-
-  return tool;
 };

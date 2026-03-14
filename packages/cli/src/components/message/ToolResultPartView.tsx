@@ -1,5 +1,7 @@
 import { Box, Text } from "ink";
 
+import { FullBox } from "../FullBox";
+
 import type { ToolResultPart } from "@my-agent/core";
 
 export interface ToolResultPartViewProps {
@@ -11,8 +13,8 @@ export const ToolResultPartView = ({ part }: ToolResultPartViewProps) => {
   const isError = part.state === "error";
 
   return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Box borderStyle="round" borderColor={isError ? "red" : "green"} paddingX={1}>
+    <Box flexDirection="column">
+      <FullBox borderStyle="round" borderColor={isError ? "red" : "green"} paddingX={1}>
         <Box flexDirection="column">
           <Box>
             <Text color={isError ? "red" : "green"}>{isError ? "x" : "v"} </Text>
@@ -29,7 +31,7 @@ export const ToolResultPartView = ({ part }: ToolResultPartViewProps) => {
             </Box>
           )}
         </Box>
-      </Box>
+      </FullBox>
     </Box>
   );
 };

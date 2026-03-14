@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Sandbox } from "../../environment";
 
 export const createRunCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "run-command-tool",
     description:
       "Executes a shell command in the sandbox environment. Returns stdout, stderr, exit code, and execution duration. Use this for running build commands, tests, scripts, or any shell operations.",
@@ -41,7 +41,7 @@ export const createRunCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ command, cwd, env, timeout, background }) => {
+  return definition.server(async ({ command, cwd, env, timeout, background }) => {
     const result = await sandbox.runCommand(command, {
       cwd,
       env,
@@ -62,6 +62,4 @@ export const createRunCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
           : `Command failed with exit code ${result.exitCode}`,
     };
   });
-
-  return tool;
 };

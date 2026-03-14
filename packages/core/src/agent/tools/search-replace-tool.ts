@@ -11,7 +11,7 @@ const searchReplaceBlockSchema = z.object({
 });
 
 export const createSearchReplaceTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const tool = toolDefinition({
+  const definition = toolDefinition({
     name: "search-replace-tool",
     description:
       "Performs multiple search and replace operations on a single file in one atomic operation. Requires the modifiedTime from a previous read operation. All replacements are applied sequentially, so later replacements can match text created by earlier ones.",
@@ -45,7 +45,7 @@ export const createSearchReplaceTool = ({ sandbox }: { sandbox: Sandbox }) => {
     }),
   });
 
-  tool.server(async ({ path, modifiedTime, replacements }) => {
+  return definition.server(async ({ path, modifiedTime, replacements }) => {
     // Validate modification time and get current content
     const fileRes = await getFile(sandbox, path);
     const currentModifiedTime = fileRes.modifiedTime;
@@ -102,6 +102,4 @@ export const createSearchReplaceTool = ({ sandbox }: { sandbox: Sandbox }) => {
       message: `Successfully applied ${successCount} replacements to: ${path}`,
     };
   });
-
-  return tool;
 };

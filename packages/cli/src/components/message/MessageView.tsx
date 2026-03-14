@@ -5,19 +5,22 @@ import { ThinkingPartView } from "./ThinkingPartView.js";
 import { ToolCallPartView } from "./ToolCallPartView.js";
 import { ToolResultPartView } from "./ToolResultPartView.js";
 
+import type { ApprovalInputsMap } from "../../hooks";
 import type { TextPart, ThinkingPart, ToolCallPart, ToolResultPart, UIMessage } from "@my-agent/core";
 
 export interface MessageViewProps {
   message: UIMessage;
   addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
+  /** Map of toolCallId -> input for pending approvals */
+  approvalInputs?: ApprovalInputsMap;
 }
 
 /** Render a single message */
-export const MessageView = ({ message, addToolApprovalResponse }: MessageViewProps) => {
+export const MessageView = ({ message, addToolApprovalResponse, approvalInputs }: MessageViewProps) => {
   const isUser = message.role === "user";
 
   return (
-    <Box flexDirection="column" marginBottom={1}>
+    <Box flexDirection="column">
       {/* Role header */}
       <Box>
         <Text color={isUser ? "green" : "cyan"} bold>
@@ -32,7 +35,11 @@ export const MessageView = ({ message, addToolApprovalResponse }: MessageViewPro
             {part.type === "text" && <TextPartView part={part as TextPart} />}
             {part.type === "thinking" && <ThinkingPartView part={part as ThinkingPart} />}
             {part.type === "tool-call" && (
-              <ToolCallPartView part={part as ToolCallPart} addToolApprovalResponse={addToolApprovalResponse} />
+              <ToolCallPartView
+                part={part as ToolCallPart}
+                addToolApprovalResponse={addToolApprovalResponse}
+                approvalInput={approvalInputs?.get((part as ToolCallPart).id)}
+              />
             )}
             {part.type === "tool-result" && <ToolResultPartView part={part as ToolResultPart} />}
           </Box>
