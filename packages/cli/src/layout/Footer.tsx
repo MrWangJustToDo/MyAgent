@@ -2,17 +2,17 @@ import { Box, Text } from "ink";
 import Divider from "ink-divider";
 
 import { Spinner } from "../components/Spinner.js";
-import { UserApprove } from "../components/UserApprove.js";
 import { UserInput } from "../components/UserInput.js";
-import { useAgent, useAgentContext } from "../hooks";
+import { useAgent } from "../hooks/useAgent.js";
+import { useAgentContext } from "../hooks/useAgentContext.js";
 import { useSize } from "../hooks/useSize.js";
 
-import type { TokenUsage } from "../hooks";
+import type { TokenUsage } from "@my-agent/core";
 
 export const Footer = () => {
   const { status, error } = useAgent((s) => ({
-    status: s.current?.status || "idle",
-    error: s.current?.error || "",
+    status: s.agent?.status || "idle",
+    error: s.agent?.error || "",
   }));
 
   const usage = useAgentContext((s) => s.context?.usage) as TokenUsage | undefined;
@@ -26,13 +26,7 @@ export const Footer = () => {
       <Box gap={2} width="full">
         {/* Status indicator */}
         <Box>
-          {status === "initializing" && <Spinner text="Initializing..." />}
           {status === "running" && <Spinner text="Running..." />}
-          {status === "waiting_approval" && (
-            <Text color="yellow" bold>
-              Waiting for approval
-            </Text>
-          )}
           {status === "completed" && <Text color="green">Completed</Text>}
           {status === "idle" && (
             <Text color="gray" dimColor>
@@ -68,8 +62,6 @@ export const Footer = () => {
         </Text>
         {isInputEnabled ? (
           <UserInput />
-        ) : status === "waiting_approval" ? (
-          <UserApprove />
         ) : (
           <Text color="gray" dimColor>
             Processing...

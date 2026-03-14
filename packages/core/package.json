@@ -26,11 +26,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@standard-schema/spec":"^1.1.0",
-    "@tanstack/ai": "^0.8.0",
-    "@tanstack/ai-ollama": "^0.6.2",
     "@computesdk/just-bash": "^0.4.0",
     "@computesdk/provider": "^1.0.28",
+    "@standard-schema/spec": "^1.1.0",
+    "@tanstack/ai": "^0.8.0",
+    "@tanstack/ai-client": "^0.7.1",
+    "@tanstack/ai-ollama": "^0.6.2",
     "computesdk": "^2.3.0",
     "just-bash": "^2.12.8",
     "zod": "^4.3.6"

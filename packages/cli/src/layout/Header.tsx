@@ -2,13 +2,14 @@ import { Box, Text } from "ink";
 import BigText from "ink-big-text";
 import Gradient from "ink-gradient";
 
-import { useAgent, useArgs } from "../hooks";
+import { useArgs } from "../hooks";
+import { useSandbox } from "../hooks/useSandbox";
 import { useSize } from "../hooks/useSize";
 
 export const Header = () => {
   const { model, path } = useArgs((s) => ({ model: s.config.model, path: s.config.rootPath }));
 
-  const sandbox = useAgent((s) => s.current?.sandboxName) as string;
+  const name = useSandbox((s) => s.state?.provider);
 
   return (
     <Box flexDirection="column" ref={useSize.getActions().setHeader} marginBottom={1}>
@@ -28,7 +29,7 @@ export const Header = () => {
         <Box>
           <Text color="gray">Sandbox: </Text>
           <Text color="green" wrap="truncate-end">
-            {sandbox}
+            {name || "..."}
           </Text>
         </Box>
         <Box>

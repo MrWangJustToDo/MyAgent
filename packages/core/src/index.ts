@@ -10,6 +10,9 @@ export * from "./managers";
 // Provider utilities
 export * from "./provider.js";
 
+// Connection adapters for useChat
+export * from "./connection.js";
+
 // Types and schemas
 export * from "./types.js";
 
@@ -17,4 +20,14 @@ export * from "./types.js";
 export { z } from "zod";
 
 // Re-export commonly used TanStack AI types
-export type { StreamChunk, ChatMiddleware, ToolDefinition, AnyTextAdapter } from "@tanstack/ai";
+export type {
+  StreamChunk,
+  ChatMiddleware,
+  ToolDefinition,
+  AnyTextAdapter,
+  UIMessage,
+  ModelMessage,
+} from "@tanstack/ai";
+
+// Re-export message part types for rendering
+export type { TextPart, ToolCallPart, ToolResultPart, ThinkingPart, MessagePart } from "@tanstack/ai";

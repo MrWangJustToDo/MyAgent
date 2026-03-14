@@ -1,5 +1,3 @@
-import type { ToolCallStatus } from "@my-agent/core";
-
 // ============================================================================
 // Tool Formatting
 // ============================================================================
@@ -30,30 +28,6 @@ export function formatToolOutput(output: unknown): string {
   if (output === undefined || output === null) return "";
   const str = typeof output === "string" ? output : JSON.stringify(output, null, 2);
   return str.length > 200 ? str.slice(0, 200) + "..." : str;
-}
-
-// ============================================================================
-// Status Helpers
-// ============================================================================
-
-/** Get status color for tool */
-export function getStatusColor(status: ToolCallStatus): string {
-  switch (status) {
-    case "streaming":
-    case "pending":
-    case "running":
-    case "approved":
-      return "yellow";
-    case "success":
-      return "green";
-    case "error":
-      return "red";
-    case "rejected":
-    case "need-approve":
-      return "yellow";
-    default:
-      return "gray";
-  }
 }
 
 /** Format tool arguments for detailed display (multi-line) */

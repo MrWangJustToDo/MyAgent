@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { CreateAgentOptions } from "../loop";
+
 // ============================================================================
 // Message Types (TanStack AI compatible)
 // ============================================================================
@@ -167,10 +169,14 @@ export class AgentContext {
   createdAt: number;
   updatedAt: number;
 
-  constructor(id?: string) {
+  constructor({ id, setUp }: { id?: CreateAgentOptions["id"]; setUp?: CreateAgentOptions["setUp"] }) {
     this.id = id ?? generateContextId();
     this.createdAt = Date.now();
     this.updatedAt = Date.now();
+
+    if (setUp) {
+      return setUp(this);
+    }
   }
 
   // ============================================================================
@@ -391,7 +397,7 @@ export class AgentContext {
    * Create context from JSON
    */
   static fromJSON(data: { id?: string; messages?: Message[]; usage?: TokenUsage }): AgentContext {
-    const context = new AgentContext(data.id);
+    const context = new AgentContext({ id: data.id });
     if (data.messages) {
       context.messages = data.messages;
     }

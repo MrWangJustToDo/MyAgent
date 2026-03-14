@@ -1,103 +1,77 @@
-import { Box, useApp, useInput } from "ink";
-import { useCallback, useEffect } from "react";
+import { Box, Text, useApp, useInput } from "ink";
+import { useCallback, useEffect, useRef } from "react";
 
-import { useAgent, useAgentContext } from "../hooks";
+import { MessageList } from "../components/MessageList.js";
+import { Spinner } from "../components/Spinner.js";
 import { useArgs } from "../hooks/useArgs.js";
+import { useLocalChat } from "../hooks/useLocalChat.js";
 import { useSize } from "../hooks/useSize.js";
 import { useUserInput } from "../hooks/useUserInput.js";
-import { Header, Content, Footer } from "../layout";
+import { Footer } from "../layout/Footer.js";
+import { Header } from "../layout/Header.js";
 
-import type { AgentContext } from "@my-agent/core";
-
-// Re-export AgentStatus for convenience
-export type { AgentStatus } from "@my-agent/core";
+// ============================================================================
+// Main Agent Component
+// ============================================================================
 
 export const Agent = () => {
   const { exit } = useApp();
-
-  const { useInitTerminalSize, useAutoElementHeight } = useSize.getActions();
+  const { useInitTerminalSize } = useSize.getActions();
 
   useInitTerminalSize();
 
-  // useAutoElementHeight();
+  // Get config from useArgs hook
+  const config = useArgs((s) => s.config);
 
-  // Get config from useArgs hook (reactive selector)
-  const { key, initialPrompt } = useArgs((s) => ({ key: s.key, initialPrompt: s.config.initialPrompt }));
+  // Use local chat with our config
+  const { messages, sendMessage, isLoading, addToolApprovalResponse, initError, initLoading } = useLocalChat({
+    model: config.model,
+    url: config.url,
+    rootPath: config.rootPath,
+    systemPrompt: config.systemPrompt,
+    maxIterations: config.maxIterations,
+  });
 
-  const status = useAgent((s) => s.current?.status || "idle");
+  const hasInitRef = useRef(false);
 
-  useEffect(() => {
-    const cb = useAgent.subscribe(
-      (s) => s.current?.context,
-      () => {
-        const context = useAgent.getReactiveState().current?.context;
-        useAgentContext.getActions().setContext(context as AgentContext);
-      }
-    );
+  const isReady = !initLoading;
 
-    return cb;
-  }, []);
-
-  // Get actions (non-reactive)
-  const agentActions = useAgent.getActions();
+  // Input state
   const inputActions = useUserInput.getActions();
 
-  // Initialize agent on mount
   useEffect(() => {
-    const { model, url, systemPrompt, rootPath, maxSteps } = useArgs.getReadonlyState().config;
-
-    agentActions.initAgent(key, {
-      model,
-      baseURL: `${url}/v1/`,
-      systemPrompt,
-      rootPath,
-      maxSteps,
-    });
-
-    return () => {
-      agentActions.destroyCurrent();
-    };
-  }, [key]);
-
-  // Auto-run if initial prompt provided
-  useEffect(() => {
-    if (status === "idle" && initialPrompt.trim()) {
-      agentActions.runPrompt(initialPrompt.trim());
+    if (isReady && config.initialPrompt && !hasInitRef.current) {
+      hasInitRef.current = true;
+      sendMessage(config.initialPrompt);
     }
-  }, [status, initialPrompt]);
+  }, [config.initialPrompt, sendMessage]);
 
   // Handle submit
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     const prompt = inputActions.submit();
-    if (prompt) {
-      agentActions.runPrompt(prompt);
+    if (prompt && isReady && !isLoading) {
+      await sendMessage(prompt);
     }
-  }, []);
+  }, [inputActions, isReady, isLoading, sendMessage]);
 
-  // Handle input
+  // Handle keyboard input
   useInput((inputChar, inputKey) => {
-    const status = useAgent.getReadonlyState().current?.status;
+    // Don't handle input while loading
+    if (isLoading) return;
 
-    // Normal input handling
-    if (status === "running" || status === "initializing") return;
-
-    if (inputKey.ctrl && inputChar === "c") {
-      agentActions.destroyCurrent();
+    // Exit on Ctrl+C or Escape
+    if ((inputKey.ctrl && inputChar === "c") || inputKey.escape) {
       exit();
       return;
     }
 
-    if (inputKey.escape) {
-      agentActions.destroyCurrent();
-      exit();
-      return;
-    }
-
+    // Submit on Enter
     if (inputKey.return) {
       handleSubmit();
       return;
     }
 
+    // Backspace
     if (inputKey.backspace || inputKey.delete) {
       inputActions.backspace();
       return;
@@ -108,26 +82,61 @@ export const Agent = () => {
       inputActions.historyPrev();
       return;
     }
-
     if (inputKey.downArrow) {
       inputActions.historyNext();
       return;
     }
 
+    // Regular character input
     if (inputChar && !inputKey.ctrl && !inputKey.meta) {
       inputActions.append(inputChar);
     }
   });
 
+  useEffect(() => {
+    if (initLoading || isLoading) {
+      inputActions.setLoading(true);
+    } else {
+      inputActions.setLoading(false);
+    }
+  }, [isLoading, initLoading]);
+
+  // ============================================================================
+  // Render
+  // ============================================================================
+
+  // Show init error
+  if (initError) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text color="red" bold>
+          Initialization Error:
+        </Text>
+        <Text color="red">{initError.message}</Text>
+      </Box>
+    );
+  }
+
+  // Show loading while initializing
+  if (initLoading) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Spinner text="Initializing sandbox..." />
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column">
-      {/* Header - Fixed at top */}
+      {/* Header */}
       <Header />
 
-      {/* Content - Flexible, takes remaining space */}
-      <Content />
+      {/* Messages */}
+      <Box flexDirection="column" paddingX={1}>
+        <MessageList messages={messages} addToolApprovalResponse={addToolApprovalResponse} />
+      </Box>
 
-      {/* Footer - Fixed at bottom */}
+      {/* Input */}
       <Footer />
     </Box>
   );

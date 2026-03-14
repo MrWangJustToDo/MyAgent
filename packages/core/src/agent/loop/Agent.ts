@@ -125,14 +125,21 @@ export class Agent {
   // Abort controller for current run
   private currentAbortController: AbortController | null = null;
 
-  constructor(config: AgentConfig, id?: string) {
+  constructor(
+    config: AgentConfig,
+    { id, setUp }: { id?: CreateAgentOptions["id"]; setUp: CreateAgentOptions["setUp"] }
+  ) {
     this.id = id ?? generateContextId().replace("ctx_", "agent_");
     this.config = AgentConfigSchema.parse(config);
-    this.context = new AgentContext();
+    this.context = new AgentContext({ setUp });
 
     // Add system prompt if provided
     if (this.config.systemPrompt) {
       this.context.addSystemMessage(this.config.systemPrompt);
+    }
+
+    if (setUp) {
+      return setUp(this);
     }
   }
 
@@ -569,14 +576,15 @@ export interface CreateAgentOptions extends AgentConfig {
   sandbox?: Sandbox;
   tools?: ToolSet;
   adapter?: AnyTextAdapter;
+  setUp?: <T>(instance: T) => T;
 }
 
 /**
  * Create a new agent instance
  */
 export function createAgent(options: CreateAgentOptions): Agent {
-  const { id, sandbox, tools, adapter, ...config } = options;
-  const agent = new Agent(config, id);
+  const { id, sandbox, tools, adapter, setUp, ...config } = options;
+  const agent = new Agent(config, { id, setUp });
 
   if (adapter) {
     agent.setAdapter(adapter);

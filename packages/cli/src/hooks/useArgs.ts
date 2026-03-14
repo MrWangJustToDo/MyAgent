@@ -9,7 +9,11 @@ import type { ParsedArgs } from "../utils/args.js";
 // Types
 // ============================================================================
 
-export interface AgentConfig {
+/**
+ * CLI-specific agent configuration
+ * (Different from core's AgentConfig - includes CLI-specific fields)
+ */
+export interface CliAgentConfig {
   /** Model name (e.g., "qwen2.5-coder:7b") */
   model: string;
   /** API URL (e.g., "http://localhost:11434") */
@@ -20,9 +24,12 @@ export interface AgentConfig {
   systemPrompt: string;
   /** Initial prompt from command line */
   initialPrompt: string;
-  /** Maximum steps per run */
-  maxSteps: number;
+  /** Maximum iterations per run */
+  maxIterations: number;
 }
+
+/** @deprecated Use CliAgentConfig instead */
+export type AgentConfig = CliAgentConfig;
 
 // ============================================================================
 // Default Values
@@ -31,7 +38,7 @@ export interface AgentConfig {
 const DEFAULT_MODEL = "qwen2.5-coder:7b";
 const DEFAULT_SYSTEM_PROMPT =
   "You are a helpful coding assistant. You can read, write, and modify files, run commands, and help with programming tasks.";
-const DEFAULT_MAX_STEPS = 20;
+const DEFAULT_MAX_ITERATIONS = 20;
 
 // ============================================================================
 // State Hook
@@ -74,7 +81,7 @@ export const useArgs = createState(
       rootPath: process.cwd(),
       systemPrompt: DEFAULT_SYSTEM_PROMPT,
       initialPrompt: "",
-      maxSteps: DEFAULT_MAX_STEPS,
+      maxIterations: DEFAULT_MAX_ITERATIONS,
     } as AgentConfig,
     /** Whether args have been initialized */
     initialized: false,
@@ -97,7 +104,7 @@ export const useArgs = createState(
         state.config.rootPath = getFlagString(parsed, process.cwd(), "path", "p");
         state.config.systemPrompt = getFlagString(parsed, DEFAULT_SYSTEM_PROMPT, "system", "s");
         state.config.initialPrompt = parsed.positional.join(" ");
-        state.config.maxSteps = getFlagNumber(parsed, DEFAULT_MAX_STEPS, "max-steps");
+        state.config.maxIterations = getFlagNumber(parsed, DEFAULT_MAX_ITERATIONS, "max-iterations");
         state.helpRequested = getFlagBoolean(parsed, "help", "h");
         state.initialized = true;
       },
@@ -132,7 +139,7 @@ export const useArgs = createState(
         state.config.rootPath = process.cwd();
         state.config.systemPrompt = DEFAULT_SYSTEM_PROMPT;
         state.config.initialPrompt = "";
-        state.config.maxSteps = DEFAULT_MAX_STEPS;
+        state.config.maxIterations = DEFAULT_MAX_ITERATIONS;
         state.helpRequested = false;
         state.initialized = false;
         state.key = "";

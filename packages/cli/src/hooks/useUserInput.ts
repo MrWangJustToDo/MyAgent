@@ -15,6 +15,8 @@ export interface UserInputState {
   focused: boolean;
   /** Cursor position */
   cursorPosition: number;
+  /** */
+  loading: boolean;
 }
 
 // ============================================================================
@@ -27,6 +29,7 @@ const initialState: UserInputState = {
   historyIndex: -1,
   focused: true,
   cursorPosition: 0,
+  loading: false,
 };
 
 // ============================================================================
@@ -146,6 +149,10 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.focused = focused;
     },
 
+    setLoading: (l?: boolean) => {
+      state.loading = !!l;
+    },
+
     /**
      * Reset to initial state
      */
@@ -155,6 +162,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.historyIndex = -1;
       state.focused = true;
       state.cursorPosition = 0;
+      state.loading = false;
     },
   }),
 

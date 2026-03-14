@@ -2,9 +2,8 @@
 // CLI Hooks
 // ============================================================================
 
-// Agent state management hooks (use reactivity-store for React integration)
-export { useAgent, getAgentActions, type AgentState } from "./useAgent.js";
-export { useAgentContext } from "./useAgentContext.js";
+// Local chat hook (uses TanStack AI useChat with local connection)
+export { useLocalChat, type UseLocalChatConfig, type UseLocalChatReturn } from "./useLocalChat.js";
 
 // CLI-specific hooks
 export {
@@ -16,34 +15,12 @@ export {
   getFlagNumber,
   getFlagBoolean,
   type ParsedArgs,
-  type AgentConfig,
+  type CliAgentConfig,
 } from "./useArgs.js";
 
 export { useUserInput, getInputActions, type UserInputState } from "./useUserInput.js";
 
-export {
-  useApprovalState,
-  type ApprovalDecision,
-  type ApprovalState,
-  type ApprovalActions,
-} from "./useApprovalState.js";
+export { useSize } from "./useSize.js";
 
-// Re-export types from core for convenience
-export type {
-  // Agent types
-  AgentStatus,
-  AgentContext,
-  // Token usage
-  TokenUsage,
-  // Render parts
-  RenderPart,
-  UserRenderPart,
-  TextRenderPart,
-  ReasoningRenderPart,
-  ToolRenderPart,
-  SourceRenderPart,
-  FileRenderPart,
-  StepRenderPart,
-  ErrorRenderPart,
-  ToolCallStatus,
-} from "@my-agent/core";
+// Re-export TanStack AI types for UI rendering
+export type { UIMessage, TextPart, ToolCallPart, ToolResultPart, ThinkingPart, MessagePart } from "@my-agent/core";
