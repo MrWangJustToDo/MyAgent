@@ -1,39 +1,39 @@
-import { createCopyFileTools } from "./copyFileTool";
-import { createDeleteFileTool } from "./deleteFileTool";
-import { createEditFileTool } from "./editFileTool";
-import { createFetchUrlTool } from "./fetchUrlTool";
-import { createGlobTool } from "./globTool";
-import { createGrepTool } from "./grepTool";
-import { createListCommandTool } from "./listCommandTool";
-import { createListFileTool } from "./listFileTool";
-import { createManCommandTool } from "./manCommandTool";
-import { createMoveFileTool } from "./moveFileTool";
-import { createReadFileTool } from "./readFileTool";
-import { createRunCommandTool } from "./runCommandTool";
-import { createSearchReplaceTool } from "./searchReplaceTool";
-import { createTreeTool } from "./treeTool";
-import { createWriteFileTool } from "./writeFileTool";
+import { createCopyFileTool } from "./copy-file-tool.js";
+import { createDeleteFileTool } from "./delete-file-tool.js";
+import { createEditFileTool } from "./edit-file-tool.js";
+import { createFetchUrlTool } from "./fetch-url-tool.js";
+import { createGlobTool } from "./glob-tool.js";
+import { createGrepTool } from "./grep-tool.js";
+import { createListCommandTool } from "./list-command-tool.js";
+import { createListFileTool } from "./list-file-tool.js";
+import { createManCommandTool } from "./man-command-tool.js";
+import { createMoveFileTool } from "./move-file-tool.js";
+import { createReadFileTool } from "./read-file-tool.js";
+import { createRunCommandTool } from "./run-command-tool.js";
+import { createSearchReplaceTool } from "./search-replace-tool.js";
+import { createTreeTool } from "./tree-tool.js";
+import { createWriteFileTool } from "./write-file-tool.js";
 
 import type { Sandbox } from "../../environment";
 
-export * from "./copyFileTool";
-export * from "./deleteFileTool";
-export * from "./editFileTool";
-export * from "./fetchUrlTool";
-export * from "./globTool";
-export * from "./grepTool";
-export * from "./listCommandTool";
-export * from "./listFileTool";
-export * from "./manCommandTool";
-export * from "./moveFileTool";
-export * from "./readFileTool";
-export * from "./runCommandTool";
-export * from "./searchReplaceTool";
-export * from "./treeTool";
-export * from "./writeFileTool";
+export * from "./copy-file-tool.js";
+export * from "./delete-file-tool.js";
+export * from "./edit-file-tool.js";
+export * from "./fetch-url-tool.js";
+export * from "./glob-tool.js";
+export * from "./grep-tool.js";
+export * from "./list-command-tool.js";
+export * from "./list-file-tool.js";
+export * from "./man-command-tool.js";
+export * from "./move-file-tool.js";
+export * from "./read-file-tool.js";
+export * from "./run-command-tool.js";
+export * from "./search-replace-tool.js";
+export * from "./tree-tool.js";
+export * from "./write-file-tool.js";
 
 export type Tools = {
-  copy_file: ReturnType<typeof createCopyFileTools>;
+  copy_file: ReturnType<typeof createCopyFileTool>;
   delete_file: ReturnType<typeof createDeleteFileTool>;
   edit_file: ReturnType<typeof createEditFileTool>;
   list_file: ReturnType<typeof createListFileTool>;
@@ -52,7 +52,7 @@ export type Tools = {
 
 export const createTools = ({ sandbox }: { sandbox: Sandbox }): Tools => {
   return {
-    copy_file: createCopyFileTools({ sandbox }),
+    copy_file: createCopyFileTool({ sandbox }),
     delete_file: createDeleteFileTool({ sandbox }),
     edit_file: createEditFileTool({ sandbox }),
     list_file: createListFileTool({ sandbox }),

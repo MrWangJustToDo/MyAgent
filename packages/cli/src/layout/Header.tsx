@@ -8,7 +8,7 @@ import { useSize } from "../hooks/useSize";
 export const Header = () => {
   const { model, path } = useArgs((s) => ({ model: s.config.model, path: s.config.rootPath }));
 
-  const sandbox = useAgent((s) => s.current?.sandboxName);
+  const sandbox = useAgent((s) => s.current?.sandboxName) as string;
 
   return (
     <Box flexDirection="column" ref={useSize.getActions().setHeader} marginBottom={1}>

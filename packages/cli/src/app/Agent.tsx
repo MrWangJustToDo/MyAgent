@@ -19,7 +19,7 @@ export const Agent = () => {
 
   useInitTerminalSize();
 
-  useAutoElementHeight();
+  // useAutoElementHeight();
 
   // Get config from useArgs hook (reactive selector)
   const { key, initialPrompt } = useArgs((s) => ({ key: s.key, initialPrompt: s.config.initialPrompt }));
@@ -77,21 +77,6 @@ export const Agent = () => {
   // Handle input
   useInput((inputChar, inputKey) => {
     const status = useAgent.getReadonlyState().current?.status;
-
-    const context = useAgent.getReadonlyState().current?.context;
-
-    // Handle approval input
-    // if (status === "waiting_approval" && context?.getPendingApproval()) {
-    //   if (inputChar === "y" || inputChar === "Y") {
-    //     agentActions.approveToolCall();
-    //     return;
-    //   }
-    //   if (inputChar === "n" || inputChar === "N") {
-    //     agentActions.rejectToolCall("User denied the operation");
-    //     return;
-    //   }
-    //   return;
-    // }
 
     // Normal input handling
     if (status === "running" || status === "initializing") return;

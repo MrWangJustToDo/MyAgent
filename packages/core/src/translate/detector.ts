@@ -1,4 +1,4 @@
-import { generateText } from "ai";
+import { chat } from "@tanstack/ai";
 
 import { createModel } from "../provider.js";
 import { DEFAULT_OLLAMA_API_URL } from "../types.js";
@@ -13,21 +13,21 @@ export const detector = async ({
 }: DetectOptions): Promise<DetectResult> => {
   const modelInstance = createModel(model, baseURL);
 
-  const response = await generateText({
-    model: modelInstance,
+  const response = await chat({
+    adapter: modelInstance,
+    systemPrompts: [
+      `You are a professional language detector. please detect the language of the following text, and return the language code, do not give any text other than the detected language code. if the text is chinese, please just return "chinese"`,
+    ],
     messages: [
-      {
-        role: "system",
-        content: `You are a professional language detector. please detect the language of the following text, and return the language code, do not give any text other than the detected language code. if the text is chinese, please just return "chinese"`,
-      },
       {
         role: "user",
         content: `Detect the language of the following text: ${text}`,
       },
     ],
+    stream: false,
   });
 
-  const detector_source_lang = response.text?.trim()?.toString();
+  const detector_source_lang = response?.trim()?.toString();
 
   let final_target_lang = target_lang;
 

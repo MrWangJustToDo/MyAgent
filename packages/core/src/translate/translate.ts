@@ -1,4 +1,4 @@
-import { generateText } from "ai";
+import { chat } from "@tanstack/ai";
 
 import { createModel } from "../provider.js";
 import { DEFAULT_OLLAMA_API_URL } from "../types.js";
@@ -14,22 +14,22 @@ export const translate = async ({
 }: TranslateOptions): Promise<TranslateResult> => {
   const modelInstance = createModel(model, baseURL);
 
-  const response = await generateText({
-    model: modelInstance,
+  const response = await chat({
+    adapter: modelInstance,
+    systemPrompts: [
+      `You are a professional translator. please translate the following in ${source_lang} into ${target_lang}, do not give any text other than the translated content, and trim the spaces at the end`,
+    ],
     messages: [
-      {
-        role: "system",
-        content: `You are a professional translator. please translate the following in ${source_lang} into ${target_lang}, do not give any text other than the translated content, and trim the spaces at the end`,
-      },
       {
         role: "user",
         content: `Translate the following text: ${text}`,
       },
     ],
+    stream: false,
   });
 
   return {
-    text: response.text ?? "",
+    text: response ?? "",
     source_lang,
     target_lang,
   };

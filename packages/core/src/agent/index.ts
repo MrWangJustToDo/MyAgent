@@ -6,29 +6,37 @@ export {
   type AgentStatus,
   type AgentConfig,
   type CreateAgentOptions,
-  type ToolCallInfo,
-  type ToolApprovalResponse as AgentToolApprovalResponse,
   type AgentCallbacks,
   type AgentRunOptions,
+  type AgentStreamResult,
+  type ToolSet,
 } from "./loop";
 
 export type { Tools } from "./tools";
 
-// Context exports - new types
+// Context exports
 export {
   AgentContext,
-  generateAgentId,
-  type TokenUsage,
-  type ToolStatus,
-  type ToolCall,
+  generateContextId,
+  // Schemas
+  messageSchema,
+  systemMessageSchema,
+  userMessageSchema,
+  assistantMessageSchema,
+  toolMessageSchema,
+  toolCallSchema,
+  toolResultSchema,
+  tokenUsageSchema,
+  // Types
+  type MessageRole,
+  type Message,
+  type SystemMessage,
   type UserMessage,
   type AssistantMessage,
   type ToolMessage,
-  type Message,
-  type RunStatus,
-  type Run,
-  type ContextData,
+  type ToolCall,
+  type ToolResult,
+  type StreamEventType,
+  type StreamEvent,
+  type TokenUsage,
 } from "./agentContext";
-
-// Context exports - legacy types (for backward compatibility)
-export { type MessageRole, type MessageStatus } from "./agentContext";

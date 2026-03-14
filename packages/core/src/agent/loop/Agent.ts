@@ -1,96 +1,61 @@
-import { generateText, streamText, stepCountIs } from "ai";
+import { chat } from "@tanstack/ai";
 import { z } from "zod";
 
-import { type EnvironmentType, type Sandbox } from "../../environment/types.js";
-import { sandboxManager, toolsManager } from "../../managers";
-import { createModel } from "../../provider.js";
-import { DEFAULT_OLLAMA_API_URL } from "../../types.js";
-import { AgentContext, generateAgentId } from "../agentContext";
-import { type Tools } from "../tools";
+import { AgentContext, generateContextId } from "../agentContext";
+import { createTools, type Tools } from "../tools";
 
-import type { SandboxManager, ToolsManager } from "../../managers";
-import type { ToolSet, LanguageModel, ModelMessage, Tool } from "ai";
+import type { Sandbox } from "../../environment";
+import type { Message, ToolCall, TokenUsage, StreamEvent } from "../agentContext";
+import type { ChatMiddleware, StreamChunk, AnyTextAdapter, ToolDefinition } from "@tanstack/ai";
 
 // ============================================================================
 // Types & Schemas
 // ============================================================================
 
-/**
- * Agent status
- */
-export type AgentStatus = "idle" | "initializing" | "running" | "waiting_approval" | "completed" | "error";
+export type AgentStatus = "idle" | "running" | "completed" | "error" | "aborted";
 
-/**
- * Agent configuration schema for validation
- */
 export const AgentConfigSchema = z.object({
   model: z.string().min(1).describe("Model name to use"),
   baseURL: z.string().optional().describe("Base URL for the model API"),
   systemPrompt: z.string().optional().describe("System prompt for the agent"),
-  maxSteps: z.number().int().min(1).max(100).optional().describe("Maximum number of steps"),
-  rootPath: z.string().min(1).describe("The sandbox root path for file operations"),
-  envs: z.record(z.string(), z.string()).optional().describe("Environment variables for sandbox"),
-  // Note: environment is validated separately since it can be a string or object
+  maxIterations: z.number().int().min(1).max(100).optional().default(10).describe("Maximum agentic loop iterations"),
+  maxTokens: z.number().int().min(1).optional().describe("Maximum tokens per response"),
+  temperature: z.number().min(0).max(2).optional().describe("Sampling temperature"),
 });
 
-export type AgentConfig = z.infer<typeof AgentConfigSchema> & {
-  /**
-   * Environment to use for sandbox operations.
-   * - 'local': Use local just-bash environment (default)
-   * - 'remote': Use remote compute gateway (requires configuration)
-   * - Environment: Custom environment instance
-   */
-  environment?: EnvironmentType;
-};
+export type AgentConfig = z.infer<typeof AgentConfigSchema>;
 
-/**
- * Tool call information for approval workflow
- */
-export interface ToolCallInfo {
-  toolCallId: string;
-  toolName: string;
-  args: Record<string, unknown>;
-}
+/** Tool set type - array of TanStack AI tool definitions */
+export type ToolSet = ToolDefinition[];
 
-/**
- * Tool approval response
- */
-export interface ToolApprovalResponse {
-  toolCallId: string;
-  approved: boolean;
-  reason?: string;
-}
-
-/**
- * Callbacks for agent lifecycle events
- */
+/** Callbacks for streaming events */
 export interface AgentCallbacks {
-  /** Called when text is streamed */
-  onToken?: (token: string) => void;
-  /** Called when reasoning is streamed */
-  onReasoning?: (token: string) => void;
-
-  staticProps?: Omit<Parameters<typeof generateText>[0], "model" | "messages" | "tools" | "abortSignal" | "prompt">;
-
-  streamProps?: Omit<Parameters<typeof streamText>[0], "model" | "messages" | "tools" | "abortSignal" | "prompt">;
+  onChunk?: (chunk: StreamChunk) => void;
+  onTextDelta?: (text: string) => void;
+  onReasoningDelta?: (text: string) => void;
+  onToolCallStart?: (toolCall: ToolCall) => void;
+  onToolCallEnd?: (toolCall: ToolCall, result: unknown, isError: boolean) => void;
+  onUsage?: (usage: TokenUsage) => void;
+  onFinish?: (info: { finishReason?: string; content?: string; usage?: TokenUsage }) => void;
+  onError?: (error: Error) => void;
+  onAbort?: (reason?: string) => void;
 }
 
-/**
- * Options for running the agent
- */
+/** Run options */
 export interface AgentRunOptions extends AgentCallbacks {
-  /** The task/prompt to execute */
-  prompt: string;
-  /** Optional conversation history */
-  messages?: ModelMessage[];
-  /** Additional tools to include (merged with built-in tools) */
-  additionalTools?: ToolSet;
-  /** Override max steps for this run */
-  maxSteps?: number;
-  /** Abort signal for cancellation */
+  prompt?: string;
+  messages?: Message[];
   abortSignal?: AbortSignal;
-  /** Whether to use streaming (default: true) */
-  stream?: boolean;
+  /** Additional middleware to apply */
+  middleware?: ChatMiddleware[];
+}
+
+/** Stream result info */
+export interface AgentStreamResult {
+  content: string;
+  finishReason?: string;
+  usage: TokenUsage;
+  iterations: number;
 }
 
 // ============================================================================
@@ -98,484 +63,467 @@ export interface AgentRunOptions extends AgentCallbacks {
 // ============================================================================
 
 /**
- * Full-featured agent implementation using AI SDK
+ * Agent - AI agent powered by TanStack AI.
  *
- * Features:
- * - Reactive state (status, result, error) for UI binding
- * - Sandbox-based file operations
- * - Built-in tools for file manipulation, command execution, etc.
- * - Streaming support with text and reasoning callbacks
- * - Tool approval workflow for dangerous operations
- * - Step-by-step execution with callbacks
- * - Conversation history support
+ * Uses TanStack AI's `chat()` function for:
+ * - Streaming responses (AG-UI Protocol)
+ * - Automatic agentic cycle (tool calls -> results -> continue)
+ * - Middleware support (logging, caching, etc.)
+ * - Provider-agnostic adapters
  *
- * State Architecture:
- * - Agent: manages high-level state (status, result, error) for header/footer
- * - AgentContext: manages messages (runs, messages, tools) for content display
+ * Design principles:
+ * - Returns async iterable stream for flexible consumption
+ * - Message-centric state management via AgentContext
+ * - Pluggable adapter for different AI providers
  *
  * @example
  * ```typescript
- * const agent = new Agent({ model: "gpt-4", rootPath: "/path" });
- * await agent.initialize();
+ * const agent = new Agent({
+ *   model: "gpt-4",
+ *   systemPrompt: "You are a helpful assistant.",
+ * });
  *
- * // Reactive state for UI
- * console.log(agent.status);  // "idle"
+ * // Set adapter and sandbox
+ * agent.setAdapter(openaiText("gpt-4"));
+ * agent.setSandbox(sandbox);
  *
- * await agent.run({ prompt: "Hello" });
+ * // Stream responses
+ * for await (const chunk of agent.run({ prompt: "Hello!" })) {
+ *   if (chunk.type === "TEXT_MESSAGE_CONTENT") {
+ *     process.stdout.write(chunk.delta);
+ *   }
+ * }
  *
- * console.log(agent.status);  // "completed"
- * console.log(agent.result);  // AgentRunResult
- *
- * // Messages from context
- * const messages = agent.context.getCurrentMessages();
+ * // Or use callbacks
+ * await agent.runWithCallbacks({
+ *   prompt: "Hello!",
+ *   onTextDelta: (text) => process.stdout.write(text),
+ * });
  * ```
  */
 export class Agent {
-  /** Unique agent identifier */
   readonly id: string;
 
-  // ============================================================================
-  // Reactive State (for UI binding via reactivity-store)
-  // ============================================================================
-
-  /** Current agent status */
+  // State
   status: AgentStatus = "idle";
-
-  /** Error message (if status is "error") */
   error = "";
 
-  resume = () => Promise.resolve<null | undefined>(null);
-
-  // ============================================================================
-  // Internal State
-  // ============================================================================
-
-  private config: AgentConfig;
-  private model: LanguageModel;
-  private sandbox: Sandbox | null = null;
-  private tools: Tools | null = null;
-  private initialized = false;
-
-  modelName = "";
-
-  sandboxName = "";
-
-  /** Context for tracking runs, messages, tools, and token usage */
+  // Context
   readonly context: AgentContext;
 
-  /** Manager for sandbox instances */
-  private readonly sandboxManager: SandboxManager;
+  // Configuration
+  private config: AgentConfig;
 
-  /** Manager for tool instances */
-  private readonly toolsManager: ToolsManager;
+  // Resources
+  private sandbox: Sandbox | null = null;
+  private customTools: ToolSet = [];
+  private builtInTools: Tools | null = null;
 
-  constructor(
-    config: AgentConfig,
-    agentId?: string,
-    managers?: { sandbox?: SandboxManager; tools?: ToolsManager },
-    setUp?: (item: Agent) => Agent
-  ) {
-    // Generate or use provided agent ID
-    this.id = agentId ?? generateAgentId();
+  // Adapter (TanStack AI)
+  private adapter: AnyTextAdapter | null = null;
 
-    // Initialize context with agent ID
-    this.context = new AgentContext(this.id);
+  // Abort controller for current run
+  private currentAbortController: AbortController | null = null;
 
-    // Use provided managers or default singletons
-    this.sandboxManager = managers?.sandbox ?? sandboxManager;
-    this.toolsManager = managers?.tools ?? toolsManager;
+  constructor(config: AgentConfig, id?: string) {
+    this.id = id ?? generateContextId().replace("ctx_", "agent_");
+    this.config = AgentConfigSchema.parse(config);
+    this.context = new AgentContext();
 
-    // Validate config (environment is validated separately)
-    const { environment, ...restConfig } = config;
-    this.config = { ...AgentConfigSchema.parse(restConfig), environment };
-    this.model = createModel(this.config.model, this.config.baseURL ?? DEFAULT_OLLAMA_API_URL);
-
-    if (setUp) {
-      return setUp(this);
-    }
-  }
-
-  // ============================================================================
-  // Initialization
-  // ============================================================================
-
-  /**
-   * Initialize the agent (sandbox and tools)
-   */
-  async initialize(): Promise<void> {
-    if (this.initialized) return;
-
-    this.modelName = this.config.model;
-
-    this.status = "initializing";
-
-    try {
-      // Set environment if specified
-      if (this.config.environment) {
-        this.sandboxManager.setEnvironment(this.config.environment);
-      }
-
-      // Initialize sandbox
-      this.sandbox = await this.sandboxManager.getSandbox(this.config.rootPath);
-
-      this.sandboxName = this.sandbox.provider;
-
-      // Initialize tools
-      this.tools = await this.toolsManager.getTools(this.config.rootPath);
-
-      this.initialized = true;
-
-      this.status = "idle";
-    } catch (err) {
-      this.error = `Failed to initialize: ${(err as Error).message}`;
-
-      this.status = "error";
-
-      throw err;
-    }
-
+    // Add system prompt if provided
     if (this.config.systemPrompt) {
-      this.context.trackOriginalMessage({ role: "system", content: this.config.systemPrompt });
+      this.context.addSystemMessage(this.config.systemPrompt);
     }
   }
 
+  // ============================================================================
+  // Resource Management
+  // ============================================================================
+
   /**
-   * Get the built-in tools as a ToolSet
+   * Set the TanStack AI adapter (e.g., openaiText, anthropicText, ollamaText)
+   */
+  setAdapter(adapter: AnyTextAdapter): void {
+    this.adapter = adapter;
+  }
+
+  /**
+   * Get the current adapter
+   */
+  getAdapter(): AnyTextAdapter | null {
+    return this.adapter;
+  }
+
+  /**
+   * Set sandbox and create built-in tools
+   */
+  setSandbox(sandbox: Sandbox): void {
+    this.sandbox = sandbox;
+    this.builtInTools = createTools({ sandbox });
+  }
+
+  /**
+   * Get sandbox
+   */
+  getSandbox(): Sandbox | null {
+    return this.sandbox;
+  }
+
+  /**
+   * Add custom tools (TanStack AI ToolDefinition)
+   */
+  addTools(tools: ToolSet): void {
+    this.customTools = [...this.customTools, ...tools];
+  }
+
+  /**
+   * Get all tools as array for TanStack AI chat()
    */
   getTools(): ToolSet {
-    if (!this.tools) {
-      throw new Error("Agent not initialized. Call initialize() first.");
+    const tools: ToolSet = [];
+
+    // Add built-in tools
+    if (this.builtInTools) {
+      for (const tool of Object.values(this.builtInTools)) {
+        tools.push(tool as ToolDefinition);
+      }
     }
-    return this.tools as unknown as ToolSet;
+
+    // Add custom tools
+    tools.push(...this.customTools);
+
+    return tools;
   }
 
   // ============================================================================
-  // Private Helpers
+  // Run (Streaming)
   // ============================================================================
 
   /**
-   * Merge built-in tools with additional tools
+   * Run the agent and return an async iterable stream.
+   * This is the primary method for consuming agent responses.
    */
-  private mergeTools(additionalTools?: ToolSet): ToolSet {
-    const builtInTools = this.getTools();
-    if (!additionalTools) return builtInTools;
-    return { ...builtInTools, ...additionalTools };
+  async *run(options: AgentRunOptions = {}): AsyncIterable<StreamChunk> {
+    if (!this.adapter) {
+      throw new Error("Adapter not set. Call setAdapter() first.");
+    }
+
+    const { prompt, messages, abortSignal, middleware = [] } = options;
+
+    // Add messages to context
+    if (messages?.length) {
+      this.context.addMessages(messages);
+    }
+    if (prompt) {
+      this.context.addUserMessage(prompt);
+    }
+
+    // Create abort controller
+    this.currentAbortController = new AbortController();
+
+    // If external abort signal provided, forward abort to our controller
+    if (abortSignal) {
+      if (abortSignal.aborted) {
+        this.currentAbortController.abort(abortSignal.reason);
+      } else {
+        abortSignal.addEventListener(
+          "abort",
+          () => {
+            this.currentAbortController?.abort(abortSignal.reason);
+          },
+          { once: true }
+        );
+      }
+    }
+
+    // Update state
+    this.status = "running";
+    this.error = "";
+
+    // Build middleware stack
+    const allMiddleware: ChatMiddleware[] = [
+      // Context sync middleware
+      this.createContextSyncMiddleware(options),
+      // Custom middleware
+      ...middleware,
+    ];
+
+    // Convert context messages to model format
+    const modelMessages = this.context.toModelMessages();
+
+    try {
+      // Create chat stream with TanStack AI
+      const stream = chat({
+        adapter: this.adapter,
+        messages: modelMessages,
+        tools: this.getTools(),
+        systemPrompts: this.config.systemPrompt ? [this.config.systemPrompt] : undefined,
+        temperature: this.config.temperature,
+        maxTokens: this.config.maxTokens,
+        middleware: allMiddleware,
+        abortController: this.currentAbortController,
+      });
+
+      let iterations = 0;
+      let accumulatedContent = "";
+      let lastUsage: TokenUsage | undefined;
+
+      // Yield chunks from the stream
+      for await (const chunk of stream) {
+        // Track iterations (each RUN_STARTED after the first is a new iteration)
+        if (chunk.type === "RUN_STARTED") {
+          iterations++;
+          if (iterations > this.config.maxIterations!) {
+            this.currentAbortController.abort("Max iterations reached");
+            break;
+          }
+        }
+
+        // Track content
+        if (chunk.type === "TEXT_MESSAGE_CONTENT") {
+          accumulatedContent += chunk.delta;
+        }
+
+        // Track usage
+        if (chunk.type === "RUN_FINISHED" && chunk.usage) {
+          lastUsage = {
+            inputTokens: chunk.usage.promptTokens ?? 0,
+            outputTokens: chunk.usage.completionTokens ?? 0,
+            totalTokens: chunk.usage.totalTokens ?? 0,
+          };
+        }
+
+        yield chunk;
+      }
+
+      // Update final state
+      this.status = "completed";
+
+      // Update context with accumulated content
+      if (accumulatedContent) {
+        this.context.addAssistantMessage(accumulatedContent);
+      }
+      if (lastUsage) {
+        this.context.usage.inputTokens += lastUsage.inputTokens;
+        this.context.usage.outputTokens += lastUsage.outputTokens;
+        this.context.usage.totalTokens += lastUsage.totalTokens;
+      }
+    } catch (err) {
+      if (this.isAbortError(err)) {
+        this.status = "aborted";
+        options.onAbort?.("Run was aborted");
+      } else {
+        const error = err instanceof Error ? err : new Error(String(err));
+        this.error = error.message;
+        this.status = "error";
+        options.onError?.(error);
+        throw error;
+      }
+    } finally {
+      this.currentAbortController = null;
+    }
   }
 
   /**
-   * Convert AI SDK tool call to ToolCallInfo
+   * Run the agent with callbacks (convenience method).
+   * Consumes the stream internally and calls callbacks.
    */
-  private toToolCallInfo(tc: { toolCallId: string; toolName: string; args?: unknown }): ToolCallInfo {
+  async runWithCallbacks(options: AgentRunOptions = {}): Promise<AgentStreamResult> {
+    const { onChunk, onTextDelta, onReasoningDelta, onToolCallStart, onToolCallEnd, onUsage, onFinish, ...rest } =
+      options;
+
+    let content = "";
+    let finishReason: string | undefined;
+    let usage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    let iterations = 0;
+
+    // Track tool calls in progress
+    const toolCallsInProgress: Map<string, ToolCall> = new Map();
+
+    for await (const chunk of this.run(rest)) {
+      onChunk?.(chunk);
+
+      switch (chunk.type) {
+        case "RUN_STARTED":
+          iterations++;
+          break;
+
+        case "TEXT_MESSAGE_CONTENT":
+          content += chunk.delta;
+          onTextDelta?.(chunk.delta);
+          break;
+
+        case "STEP_FINISHED":
+          // Thinking/reasoning content
+          if (chunk.delta) {
+            onReasoningDelta?.(chunk.delta);
+          }
+          break;
+
+        case "TOOL_CALL_START":
+          if (chunk.toolCallId && chunk.toolName) {
+            const toolCall: ToolCall = {
+              id: chunk.toolCallId,
+              name: chunk.toolName,
+              input: {},
+            };
+            toolCallsInProgress.set(chunk.toolCallId, toolCall);
+            onToolCallStart?.(toolCall);
+          }
+          break;
+
+        case "TOOL_CALL_END":
+          if (chunk.toolCallId) {
+            const toolCall = toolCallsInProgress.get(chunk.toolCallId);
+            if (toolCall && chunk.input) {
+              toolCall.input = chunk.input;
+              onToolCallEnd?.(toolCall, chunk.input, false);
+            }
+            toolCallsInProgress.delete(chunk.toolCallId);
+          }
+          break;
+
+        case "RUN_FINISHED":
+          finishReason = chunk.finishReason ?? undefined;
+          if (chunk.usage) {
+            usage = {
+              inputTokens: chunk.usage.promptTokens ?? 0,
+              outputTokens: chunk.usage.completionTokens ?? 0,
+              totalTokens: chunk.usage.totalTokens ?? 0,
+            };
+            onUsage?.(usage);
+          }
+          break;
+      }
+    }
+
+    const result: AgentStreamResult = {
+      content,
+      finishReason,
+      usage,
+      iterations,
+    };
+
+    onFinish?.({ finishReason, content, usage });
+
+    return result;
+  }
+
+  // ============================================================================
+  // Abort
+  // ============================================================================
+
+  /**
+   * Abort the current run
+   */
+  abort(reason?: string): void {
+    if (this.currentAbortController) {
+      this.currentAbortController.abort(reason);
+    }
+  }
+
+  /**
+   * Check if an error is an abort error
+   */
+  private isAbortError(err: unknown): boolean {
+    if (err instanceof Error) {
+      return err.name === "AbortError" || err.message.includes("aborted");
+    }
+    return false;
+  }
+
+  // ============================================================================
+  // Middleware
+  // ============================================================================
+
+  /**
+   * Create middleware to sync events with context and callbacks
+   */
+  private createContextSyncMiddleware(options: AgentCallbacks): ChatMiddleware {
     return {
-      toolCallId: tc.toolCallId,
-      toolName: tc.toolName,
-      args: "args" in tc && tc.args ? (tc.args as Record<string, unknown>) : {},
+      name: "context-sync",
+      onChunk: (_ctx, chunk) => {
+        // Emit events to context
+        this.context.emit(this.chunkToStreamEvent(chunk));
+        return chunk;
+      },
+      onUsage: (_ctx, usage) => {
+        options.onUsage?.({
+          inputTokens: usage.promptTokens ?? 0,
+          outputTokens: usage.completionTokens ?? 0,
+          totalTokens: usage.totalTokens ?? 0,
+        });
+      },
+      onFinish: (_ctx, info) => {
+        this.context.emit({
+          type: "finish",
+          usage: info.usage
+            ? {
+                inputTokens: info.usage.promptTokens ?? 0,
+                outputTokens: info.usage.completionTokens ?? 0,
+                totalTokens: info.usage.totalTokens ?? 0,
+              }
+            : undefined,
+          finishReason: info.finishReason ?? undefined,
+        });
+      },
+      onError: (_ctx, info) => {
+        this.context.emit({ type: "error", error: info.error as Error });
+        options.onError?.(info.error as Error);
+      },
+      onAbort: (_ctx, info) => {
+        this.context.emit({ type: "error", error: new Error(info.reason ?? "Aborted") });
+        options.onAbort?.(info.reason);
+      },
     };
   }
 
-  private getToolCall(toolCallName: string) {
-    return this.tools?.[toolCallName as keyof Tools] as Tool | null;
-  }
-
-  // private createToolApproval
-
-  // ============================================================================
-  // Run Methods
-  // ============================================================================
-
   /**
-   * Run the agent with streaming
+   * Convert TanStack AI chunk to our StreamEvent format
    */
-  async runStream(options: AgentRunOptions) {
-    await this.initialize();
-
-    const {
-      prompt,
-      messages,
-      additionalTools,
-      maxSteps = this.config.maxSteps ?? 10,
-      abortSignal,
-      onToken,
-      onReasoning,
-      streamProps = {},
-    } = options;
-
-    const {
-      stopWhen,
-      experimental_onStepStart,
-      experimental_onToolCallStart,
-      experimental_onToolCallFinish,
-      onStepFinish,
-      onFinish,
-      onError,
-      ...restProps
-    } = streamProps;
-
-    if (messages && messages.length) {
-      this.context.trackOriginalMessages(messages);
+  private chunkToStreamEvent(chunk: StreamChunk): StreamEvent {
+    switch (chunk.type) {
+      case "RUN_STARTED":
+        return { type: "start" };
+      case "TEXT_MESSAGE_CONTENT":
+        return { type: "text-delta", text: chunk.delta };
+      case "STEP_FINISHED":
+        return { type: "reasoning-delta", reasoning: chunk.delta ?? chunk.content };
+      case "TOOL_CALL_START":
+        return {
+          type: "tool-call-start",
+          toolCallId: chunk.toolCallId,
+          toolName: chunk.toolName,
+        };
+      case "TOOL_CALL_ARGS":
+        return {
+          type: "tool-call-delta",
+          toolCallId: chunk.toolCallId,
+          toolInputDelta: chunk.delta,
+        };
+      case "TOOL_CALL_END":
+        return {
+          type: "tool-call-end",
+          toolCallId: chunk.toolCallId,
+          toolName: chunk.toolName,
+        };
+      case "RUN_FINISHED":
+        return {
+          type: "finish",
+          usage: chunk.usage
+            ? {
+                inputTokens: chunk.usage.promptTokens ?? 0,
+                outputTokens: chunk.usage.completionTokens ?? 0,
+                totalTokens: chunk.usage.totalTokens ?? 0,
+              }
+            : undefined,
+          finishReason: chunk.finishReason ?? undefined,
+        };
+      case "RUN_ERROR":
+        return { type: "error", error: new Error(chunk.error?.message ?? "Unknown error") };
+      default:
+        return { type: "start" }; // Fallback for unknown chunk types
     }
-
-    if (prompt) {
-      this.context.trackOriginalMessage({ role: "user", content: prompt });
-    }
-
-    const history = this.context.getOriginalMessage();
-
-    // Reset state for new run
-    this.status = "running";
-    this.error = "";
-
-    const mergedTools = this.mergeTools(additionalTools);
-
-    // Start run in context (this also creates the user message)
-    this.context.startRun(prompt);
-
-    try {
-      const result = streamText({
-        model: this.model,
-        messages: history,
-        tools: mergedTools,
-        stopWhen: stopWhen || stepCountIs(maxSteps),
-        abortSignal,
-        experimental_onStepStart: (event) => {
-          // Start new assistant message for this step
-          this.context.startAssistantMessage();
-          experimental_onStepStart?.(event);
-        },
-        experimental_onToolCallStart: (event) => {
-          const toolCallInfo = this.toToolCallInfo(event.toolCall);
-
-          this.context.startTool(toolCallInfo.toolCallId);
-
-          experimental_onToolCallStart?.(event);
-        },
-        experimental_onToolCallFinish: (event) => {
-          const toolCallInfo = this.toToolCallInfo(event.toolCall);
-          const toolResult = event.success ? event.output : event.error;
-          if (event.success) {
-            this.context.completeTool(toolCallInfo.toolCallId, toolResult);
-          } else {
-            this.context.failTool(toolCallInfo.toolCallId, String(event.error));
-          }
-          // Add tool result message
-          this.context.startToolMessage(toolCallInfo.toolCallId, toolCallInfo.toolName);
-          this.context.completeToolMessage(
-            toolCallInfo.toolCallId,
-            event.success ? toolResult : undefined,
-            event.success ? undefined : String(event.error)
-          );
-          experimental_onToolCallFinish?.(event);
-        },
-        onStepFinish: (event) => {
-          const { inputTokens = 0, outputTokens = 0, totalTokens = 0 } = event.usage;
-
-          this.context.updateUsage({ inputTokens, outputTokens, totalTokens });
-
-          this.context.completeAssistantMessage();
-
-          onStepFinish?.(event);
-        },
-        onFinish: (event) => {
-          const { inputTokens = 0, outputTokens = 0, totalTokens = 0 } = event.usage;
-
-          this.context.completeRun({ inputTokens, outputTokens, totalTokens });
-
-          this.context.trackOriginalMessages(event.response.messages);
-
-          onFinish?.(event);
-        },
-        onError: (event) => {
-          this.status = "error";
-
-          this.error = (event.error as Error).message;
-
-          onError?.(event);
-        },
-        ...restProps,
-      });
-
-      // Process fullStream to handle both text and reasoning in one pass
-      for await (const part of result.fullStream) {
-        if (part.type === "text-delta") {
-          this.context.appendText(part.text);
-          onToken?.(part.text);
-        } else if (part.type === "reasoning-delta") {
-          this.context.appendReasoning(part.text);
-          onReasoning?.(part.text);
-        } else if (part.type === "tool-call") {
-          this.context.addToolCall({
-            id: part.toolCallId,
-            name: part.toolName,
-            args: part.input,
-          });
-        } else if (part.type === "tool-approval-request") {
-          this.context.changeToolCall(part.toolCall.toolCallId, "need-approve");
-          this.status = "waiting_approval";
-          this.resume = () =>
-            Promise.all([
-              this.runStream({ prompt: "I have process all the request, continue" }),
-              (this.resume = () => Promise.resolve(null)),
-            ]).then(() => null);
-        } else if (part.type === "tool-input-start") {
-          // const toolCallInfo = this.toToolCallInfo(part.);
-          // this.context.startTool(toolCallInfo.toolCallId);
-        }
-      }
-      if (this.status === "waiting_approval") return;
-      this.status = "completed";
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.context.errorRun(err.message);
-      this.error = err.message;
-      this.status = "error";
-      throw err;
-    }
-  }
-
-  /**
-   * Run the agent without streaming (simpler, returns full result)
-   */
-  async runGenerate(options: AgentRunOptions) {
-    await this.initialize();
-
-    const {
-      prompt,
-      messages,
-      additionalTools,
-      maxSteps = this.config.maxSteps ?? 10,
-      abortSignal,
-      staticProps = {},
-    } = options;
-
-    const {
-      stopWhen,
-      experimental_onStepStart,
-      experimental_onToolCallStart,
-      experimental_onToolCallFinish,
-      onStepFinish,
-      onFinish,
-      ...restProps
-    } = staticProps;
-
-    if (messages && messages.length) {
-      this.context.trackOriginalMessages(messages);
-    }
-
-    if (prompt) {
-      this.context.trackOriginalMessage({ role: "user", content: prompt });
-    }
-
-    const history = this.context.getOriginalMessage();
-
-    // Reset state for new run
-    this.status = "running";
-    this.error = "";
-
-    const mergedTools = this.mergeTools(additionalTools);
-
-    // Start run in context (this also creates the user message)
-    this.context.startRun(prompt);
-
-    try {
-      const result = await generateText({
-        model: this.model,
-        messages: history,
-        tools: mergedTools,
-        stopWhen: stopWhen || stepCountIs(maxSteps),
-        abortSignal,
-        experimental_onStepStart: (event) => {
-          this.context.startAssistantMessage();
-          experimental_onStepStart?.(event);
-        },
-        experimental_onToolCallStart: (event) => {
-          const toolCallInfo = this.toToolCallInfo(event.toolCall);
-
-          this.context.startTool(toolCallInfo.toolCallId);
-          experimental_onToolCallStart?.(event);
-        },
-        experimental_onToolCallFinish: (event) => {
-          const toolCallInfo = this.toToolCallInfo(event.toolCall);
-          const toolResult = event.success ? event.output : event.error;
-          if (event.success) {
-            this.context.completeTool(toolCallInfo.toolCallId, toolResult);
-          } else {
-            this.context.failTool(toolCallInfo.toolCallId, String(event.error));
-          }
-          // Add tool result message
-          this.context.startToolMessage(toolCallInfo.toolCallId, toolCallInfo.toolName);
-          this.context.completeToolMessage(
-            toolCallInfo.toolCallId,
-            event.success ? toolResult : undefined,
-            event.success ? undefined : String(event.error)
-          );
-          experimental_onToolCallFinish?.(event);
-        },
-        onStepFinish: (event) => {
-          const { inputTokens = 0, outputTokens = 0, totalTokens = 0 } = event.usage;
-
-          this.context.updateUsage({ inputTokens, outputTokens, totalTokens });
-
-          this.context.completeAssistantMessage();
-
-          onStepFinish?.(event);
-        },
-        onFinish: (event) => {
-          const { inputTokens = 0, outputTokens = 0, totalTokens = 0 } = event.usage;
-
-          this.context.completeRun({ inputTokens, outputTokens, totalTokens });
-
-          this.context.trackOriginalMessages(event.response.messages);
-
-          onFinish?.(event);
-        },
-        ...restProps,
-      });
-
-      this.context.setText(result.text);
-
-      this.context.setReasoning(result.reasoningText || "");
-
-      for (const part of result.content) {
-        if (part.type === "tool-call") {
-          this.context.addToolCall({
-            id: part.toolCallId,
-            name: part.toolName,
-            args: part.input,
-          });
-        } else if (part.type === "tool-approval-request") {
-          this.context.changeToolCall(part.toolCall.toolCallId, "need-approve");
-          this.status = "waiting_approval";
-          this.resume = () =>
-            Promise.all([
-              this.runStream({ prompt: "I have process all the request, continue" }),
-              (this.resume = () => Promise.resolve(null)),
-            ]).then(() => null);
-        }
-      }
-
-      if (this.status === "waiting_approval") return;
-
-      this.status = "completed";
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.context.errorRun(err.message);
-      this.error = err.message;
-      this.status = "error";
-      throw err;
-    }
-  }
-
-  /**
-   * Run the agent (auto-selects streaming based on options)
-   */
-  async run(options: AgentRunOptions) {
-    const shouldStream =
-      options.stream !== false && (options.onToken !== undefined || options.onReasoning !== undefined);
-
-    if (shouldStream) {
-      return this.runStream(options);
-    }
-    return this.runGenerate(options);
   }
 
   // ============================================================================
@@ -583,53 +531,32 @@ export class Agent {
   // ============================================================================
 
   /**
-   * Cleanup agent resources
-   */
-  async destroy(): Promise<void> {
-    if (this.config.rootPath) {
-      // Clean up tools first, then sandbox
-      this.toolsManager.deleteTools(this.config.rootPath);
-      await this.sandboxManager.deleteSandbox(this.config.rootPath);
-    }
-    this.sandbox = null;
-    this.tools = null;
-    this.initialized = false;
-    this.status = "idle";
-    this.error = "";
-  }
-
-  /**
-   * Reset agent state (keeps agent initialized)
+   * Reset agent state
    */
   reset(): void {
+    this.abort("Reset");
     this.status = "idle";
     this.error = "";
     this.context.reset();
+
+    // Re-add system prompt
+    if (this.config.systemPrompt) {
+      this.context.addSystemMessage(this.config.systemPrompt);
+    }
   }
 
-  // ============================================================================
-  // Getters
-  // ============================================================================
-
   /**
-   * Get agent configuration
+   * Get configuration
    */
   getConfig(): Readonly<AgentConfig> {
     return { ...this.config };
   }
 
   /**
-   * Check if agent is initialized
+   * Update configuration (partial)
    */
-  isInitialized(): boolean {
-    return this.initialized;
-  }
-
-  /**
-   * Get the sandbox instance
-   */
-  getSandbox(): Sandbox | null {
-    return this.sandbox;
+  updateConfig(updates: Partial<AgentConfig>): void {
+    this.config = AgentConfigSchema.parse({ ...this.config, ...updates });
   }
 }
 
@@ -637,52 +564,29 @@ export class Agent {
 // Factory Function
 // ============================================================================
 
-/**
- * Options for creating an agent
- */
 export interface CreateAgentOptions extends AgentConfig {
-  /** Optional agent ID (auto-generated if not provided) */
-  agentId?: string;
-  /** Optional custom managers (defaults to singletons) */
-  managers?: {
-    sandbox?: SandboxManager;
-    tools?: ToolsManager;
-  };
-  /** Optional setUp function for transforming the agent (used for Vue reactivity proxy wrapping) */
-  setUp?: (agent: Agent) => Agent;
+  id?: string;
+  sandbox?: Sandbox;
+  tools?: ToolSet;
+  adapter?: AnyTextAdapter;
 }
 
 /**
  * Create a new agent instance
- *
- * @example
- * ```typescript
- * const agent = await createAgent({
- *   model: "gpt-4",
- *   rootPath: "/path/to/project",
- *   systemPrompt: "You are a helpful coding assistant.",
- * });
- *
- * // Agent state
- * console.log(agent.status);  // "idle"
- *
- * const result = await agent.run({
- *   prompt: "Create a hello world function",
- *   onToken: (token) => process.stdout.write(token),
- * });
- *
- * console.log(agent.status);  // "completed"
- * console.log(agent.result);  // AgentRunResult
- *
- * // Messages from context
- * const messages = agent.context.getCurrentMessages();
- *
- * await agent.destroy();
- * ```
  */
-export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
-  const { agentId, setUp, managers, ...config } = options;
-  const agent = new Agent(config, agentId, managers, setUp);
-  await agent.initialize();
+export function createAgent(options: CreateAgentOptions): Agent {
+  const { id, sandbox, tools, adapter, ...config } = options;
+  const agent = new Agent(config, id);
+
+  if (adapter) {
+    agent.setAdapter(adapter);
+  }
+  if (sandbox) {
+    agent.setSandbox(sandbox);
+  }
+  if (tools) {
+    agent.addTools(tools);
+  }
+
   return agent;
 }

@@ -6,8 +6,8 @@ export {
   type AgentStatus,
   type AgentConfig,
   type CreateAgentOptions,
-  type ToolCallInfo,
-  type ToolApprovalResponse,
   type AgentCallbacks,
   type AgentRunOptions,
+  type AgentStreamResult,
+  type ToolSet,
 } from "./Agent.js";

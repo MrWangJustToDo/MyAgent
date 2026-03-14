@@ -1,11 +1,11 @@
-import { tool } from "ai";
+import { toolDefinition } from "@tanstack/ai";
 import { z } from "zod";
 
 import type { Sandbox } from "../../environment";
 
 export const createListFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  return tool({
-    title: "list-file-tool",
+  const tool = toolDefinition({
+    name: "list-file-tool",
     description:
       "Lists files and directories in the specified directory. Returns the name, type (file or directory), size, and modification date for each entry.",
     inputSchema: z.object({
@@ -17,7 +17,6 @@ export const createListFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
         ),
     }),
     needsApproval: true,
-    inputExamples: [{ input: { path: "/src" } }],
     outputSchema: z.object({
       path: z.string().describe("The path that was listed."),
       entries: z
@@ -33,32 +32,31 @@ export const createListFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
       count: z.number().describe("Number of entries."),
       message: z.string().describe("A message describing the result."),
     }),
-    execute: async ({ path: inputPath }, { abortSignal }) => {
-      if (abortSignal?.aborted) {
-        throw new Error(abortSignal.reason as string);
-      }
-
-      const path = inputPath ?? ".";
-
-      const exists = await sandbox.filesystem.exists(path);
-
-      if (!exists) {
-        throw new Error(`Directory does not exist: ${path}`);
-      }
-
-      const entries = await sandbox.filesystem.readdir(path);
-
-      return {
-        path,
-        entries: entries.map((entry) => ({
-          name: entry.name,
-          type: entry.type,
-          size: entry.size,
-          modified: entry.modified?.toISOString(),
-        })),
-        count: entries.length,
-        message: `Listed ${entries.length} entries in: ${path}`,
-      };
-    },
   });
+
+  tool.server(async ({ path: inputPath }) => {
+    const path = inputPath ?? ".";
+
+    const exists = await sandbox.filesystem.exists(path);
+
+    if (!exists) {
+      throw new Error(`Directory does not exist: ${path}`);
+    }
+
+    const entries = await sandbox.filesystem.readdir(path);
+
+    return {
+      path,
+      entries: entries.map((entry) => ({
+        name: entry.name,
+        type: entry.type,
+        size: entry.size,
+        modified: entry.modified?.toISOString(),
+      })),
+      count: entries.length,
+      message: `Listed ${entries.length} entries in: ${path}`,
+    };
+  });
+
+  return tool;
 };

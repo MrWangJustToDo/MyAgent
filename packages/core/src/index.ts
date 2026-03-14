@@ -16,5 +16,5 @@ export * from "./types.js";
 // Re-export zod for schema definitions
 export { z } from "zod";
 
-// Re-export AI SDK core functions
-export { tool, generateText, streamText, generateObject, streamObject, stepCountIs } from "ai";
+// Re-export commonly used TanStack AI types
+export type { StreamChunk, ChatMiddleware, ToolDefinition, AnyTextAdapter } from "@tanstack/ai";

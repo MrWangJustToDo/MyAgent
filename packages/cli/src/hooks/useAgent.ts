@@ -1,7 +1,7 @@
 import { createAgent } from "@my-agent/core";
 import { createState, markRaw, toRaw } from "reactivity-store";
 
-import type { Agent, AgentConfig } from "@my-agent/core";
+import type { AgentType, AgentConfig, Agent } from "@my-agent/core";
 
 // ============================================================================
 // Types
@@ -9,9 +9,9 @@ import type { Agent, AgentConfig } from "@my-agent/core";
 
 export interface AgentState {
   /** Map of agent instances by key */
-  agents: Record<string, Agent>;
+  agents: Record<string, AgentType>;
   /** Current active agent */
-  current: Agent | null;
+  current: AgentType | null;
 }
 
 // ============================================================================
@@ -72,7 +72,7 @@ export const useAgent = createState(() => ({ ...initialState }), {
     /**
      * Get or create agent for a given key and config
      */
-    const getAgent = async (key: string, config: AgentConfig): Promise<Agent> => {
+    const getAgent = async (key: string, config: AgentConfig): Promise<AgentType> => {
       // Check if we already have an agent for this key
       const existing = state.agents[key];
       if (existing) {
@@ -81,13 +81,14 @@ export const useAgent = createState(() => ({ ...initialState }), {
       }
 
       const setUpAgentInstance = (i: Agent) => {
-        // fix zod with vue proxy error
+        // !NOTE fix zod with vue proxy error
         return new Proxy(i, {
           get(target, p, receiver) {
             const res = Reflect.get(target, p, receiver);
 
             const rawRes = toRaw(res);
 
+            // make the agent object field keep original
             if (rawRes && typeof rawRes === "object" && p !== "context") {
               return markRaw(rawRes);
             }
@@ -101,6 +102,7 @@ export const useAgent = createState(() => ({ ...initialState }), {
       const agent = await createAgent({ ...config, setUp: setUpAgentInstance });
 
       state.agents[key] = agent;
+
       state.current = agent;
 
       return agent;
@@ -109,7 +111,7 @@ export const useAgent = createState(() => ({ ...initialState }), {
     /**
      * Initialize agent with config
      */
-    const initAgent = async (key: string, config: AgentConfig): Promise<Agent | null> => {
+    const initAgent = async (key: string, config: AgentConfig): Promise<AgentType | null> => {
       const current = state.current;
       if (current && (current.status === "initializing" || current.status === "running")) {
         return null;
@@ -121,7 +123,7 @@ export const useAgent = createState(() => ({ ...initialState }), {
     /**
      * Set current agent by key
      */
-    const setCurrentAgent = (key: string): Agent | null => {
+    const setCurrentAgent = (key: string): AgentType | null => {
       const agent = state.agents[key];
       if (agent) {
         state.current = agent;
@@ -150,7 +152,7 @@ export const useAgent = createState(() => ({ ...initialState }), {
     /**
      * Get current agent instance (non-reactive)
      */
-    const getCurrentAgent = (): Agent | null => state.current;
+    const getCurrentAgent = (): AgentType | null => state.current;
 
     /**
      * Get current agent context (convenience method)

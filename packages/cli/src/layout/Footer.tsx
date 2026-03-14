@@ -15,7 +15,7 @@ export const Footer = () => {
     error: s.current?.error || "",
   }));
 
-  const usage = useAgentContext((s) => s.context?.getTotalUsage() || {}) as TokenUsage;
+  const usage = useAgentContext((s) => s.context?.usage) as TokenUsage | undefined;
 
   const isInputEnabled = status === "idle" || status === "completed" || status === "error";
 
