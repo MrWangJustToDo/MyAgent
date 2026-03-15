@@ -65,7 +65,7 @@ export class ToolsManager {
     const sandbox = await this.sandboxManager.getSandbox(rootPath);
 
     // Create tools
-    const tools = createTools({ sandbox });
+    const tools = await createTools({ sandbox });
 
     this.toolsMap.set(rootPath, tools);
 

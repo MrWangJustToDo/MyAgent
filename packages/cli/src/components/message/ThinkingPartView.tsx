@@ -1,4 +1,5 @@
-import { Box, Text } from "ink";
+import { TitledBox } from "@mishieck/ink-titled-box";
+import { Text } from "ink";
 
 import { FullBox } from "../FullBox";
 
@@ -10,14 +11,18 @@ export interface ThinkingPartViewProps {
 
 /** Render a thinking/reasoning part */
 export const ThinkingPartView = ({ part }: ThinkingPartViewProps) => (
-  <Box flexDirection="column">
-    <Text color="magenta" dimColor italic>
-      Thinking:
-    </Text>
-    <FullBox paddingLeft={2} borderStyle="round" borderColor="magenta" paddingX={1}>
+  <FullBox>
+    <TitledBox
+      titles={["Thinking:"]}
+      width="100%"
+      borderStyle="round"
+      borderColor="magenta"
+      paddingLeft={2}
+      paddingX={1}
+    >
       <Text color="gray" dimColor wrap="wrap">
-        {part.content}
+        {part.content.trimEnd()}
       </Text>
-    </FullBox>
-  </Box>
+    </TitledBox>
+  </FullBox>
 );

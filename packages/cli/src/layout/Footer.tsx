@@ -16,7 +16,7 @@ export const Footer = () => {
     error: s.agent?.error || "",
   }));
 
-  const usage = useAgentContext((s) => s.context?.usage) as TokenUsage | undefined;
+  const usage = useAgentContext((s) => s.context?.getUsage()) as TokenUsage | undefined;
 
   const isInputEnabled = status === "idle" || status === "completed" || status === "error";
 
@@ -29,6 +29,11 @@ export const Footer = () => {
         <Box>
           {status === "running" && <Spinner text="Running..." />}
           {status === "completed" && <Text color="green">Completed</Text>}
+          {status === "waiting" && (
+            <Text color="yellow" bold>
+              Waiting for approval
+            </Text>
+          )}
           {status === "idle" && (
             <Text color="gray" dimColor>
               Ready

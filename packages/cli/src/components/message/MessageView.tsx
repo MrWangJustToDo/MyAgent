@@ -29,7 +29,7 @@ export const MessageView = ({ message, addToolApprovalResponse, approvalInputs }
       </Box>
 
       {/* Parts */}
-      <Box flexDirection="column" paddingLeft={1}>
+      <Box flexDirection="column" paddingLeft={1} rowGap={1}>
         {message.parts.map((part, index) => (
           <Box key={`${part.type}-${index}`}>
             {part.type === "text" && <TextPartView part={part as TextPart} />}

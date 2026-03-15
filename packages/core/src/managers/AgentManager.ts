@@ -1,11 +1,11 @@
-import { z } from "zod";
+import { AgentLog, type Tools } from "../agent";
+import { AgentContext } from "../agent/agentContext";
+import { Agent } from "../agent/loop/Agent.js";
 
-import { generateContextId } from "../agent/agentContext";
-import { createAgent } from "../agent/loop/Agent.js";
+import { sandboxManager } from "./SandboxManager";
+import { toolsManager } from "./ToolsManager";
 
-import type { TokenUsage, AgentContext } from "../agent/agentContext";
-import type { ToolSet, Agent } from "../agent/loop/Agent.js";
-import type { Tools } from "../agent/tools";
+import type { AgentConfig } from "../agent/loop/Agent.js";
 import type { Sandbox } from "../environment";
 import type { AnyTextAdapter } from "@tanstack/ai";
 
@@ -14,31 +14,28 @@ import type { AnyTextAdapter } from "@tanstack/ai";
 // ============================================================================
 
 /** Status of a managed agent */
-export type ManagedAgentStatus = "idle" | "initializing" | "running" | "completed" | "error" | "aborted" | "paused";
+// export type ManagedAgentStatus = "idle" | "initializing" | "running" | "completed" | "error" | "aborted" | "paused";
 
-/** Configuration for creating a managed agent */
-export const ManagedAgentConfigSchema = z.object({
-  name: z.string().min(1).describe("Agent name/identifier"),
-  model: z.string().min(1).describe("Model name to use"),
-  baseURL: z.string().optional().describe("Base URL for the model API"),
-  systemPrompt: z.string().optional().describe("System prompt for the agent"),
-  maxIterations: z.number().int().min(1).max(100).optional().default(10).describe("Maximum agentic loop iterations"),
-  maxTokens: z.number().int().min(1).optional().describe("Maximum tokens per response"),
-  temperature: z.number().min(0).max(2).optional().describe("Sampling temperature"),
-});
-
-export type ManagedAgentConfig = z.infer<typeof ManagedAgentConfigSchema>;
+export type ManagedAgentConfig<T = Agent | AgentContext> = AgentConfig & {
+  name: string;
+  rootPath: string;
+  adapter: AnyTextAdapter;
+  setUp?: (instance: T) => T;
+};
 
 /** Agent instance managed by AgentManager */
 export interface ManagedAgent {
   id: string;
   name: string;
-  config: ManagedAgentConfig;
+  config: ManagedAgentConfig<Agent | AgentContext>;
   /** The actual Agent instance */
   agent: Agent;
+  log: AgentLog;
   /** Convenience accessor for agent.context */
   context: AgentContext;
-  status: ManagedAgentStatus;
+  tools: Tools;
+  sandbox: Sandbox;
+  status: Agent["status"];
   error?: string;
   parentId?: string; // For subagent support
   childIds: string[]; // For agent team support
@@ -46,142 +43,13 @@ export interface ManagedAgent {
   updatedAt: number;
 }
 
-/** Event types for agent lifecycle */
-export type AgentEventType =
-  | "agent:created"
-  | "agent:started"
-  | "agent:completed"
-  | "agent:error"
-  | "agent:aborted"
-  | "agent:paused"
-  | "agent:resumed"
-  | "agent:destroyed"
-  | "subagent:spawned"
-  | "subagent:completed";
-
-export interface AgentEvent {
-  type: AgentEventType;
-  agentId: string;
-  parentId?: string;
-  data?: unknown;
-  timestamp: number;
-}
-
 // ============================================================================
 // AgentManager Class
 // ============================================================================
 
-/**
- * AgentManager - Manages agent lifecycle and orchestration.
- *
- * Responsibilities:
- * - Create, track, and destroy agents
- * - Support subagent/agent team patterns
- * - Coordinate shared resources (sandbox, tools, adapter)
- * - Event-driven lifecycle management
- *
- * Design for web platform:
- * - Agents can be serialized for client/server transport
- * - Manager can run on server, agents connect from web clients
- * - Supports multiple concurrent agents
- *
- * @example
- * ```typescript
- * const manager = new AgentManager();
- *
- * // Set shared resources
- * manager.setAdapter(ollamaText("llama3"));
- * manager.setSandbox(sandbox);
- *
- * // Create main agent
- * const mainAgent = manager.createAgent({
- *   name: "main",
- *   model: "llama3",
- *   systemPrompt: "You are a helpful assistant.",
- * });
- *
- * // Run the agent
- * for await (const chunk of mainAgent.agent.run({ prompt: "Hello!" })) {
- *   // Handle chunks
- * }
- *
- * // Listen to events
- * manager.onEvent((event) => {
- *   console.log(`${event.type}: ${event.agentId}`);
- * });
- * ```
- */
 export class AgentManager {
   /** Managed agents by ID */
   private agents: Map<string, ManagedAgent> = new Map();
-
-  /** Event listeners */
-  private eventListeners: Set<(event: AgentEvent) => void> = new Set();
-
-  /** Shared sandbox (optional - set via setSandbox) */
-  private sandbox: Sandbox | null = null;
-
-  /** Shared tools (optional - set via setTools) */
-  private tools: Tools | null = null;
-
-  /** Shared adapter (optional - set via setAdapter) */
-  private adapter: AnyTextAdapter | null = null;
-
-  /** Custom tools to add to all agents */
-  private customTools: ToolSet = [];
-
-  // ============================================================================
-  // Resource Management
-  // ============================================================================
-
-  /**
-   * Set shared adapter for all agents
-   */
-  setAdapter(adapter: AnyTextAdapter): void {
-    this.adapter = adapter;
-  }
-
-  /**
-   * Get shared adapter
-   */
-  getAdapter(): AnyTextAdapter | null {
-    return this.adapter;
-  }
-
-  /**
-   * Set shared sandbox for all agents
-   */
-  setSandbox(sandbox: Sandbox): void {
-    this.sandbox = sandbox;
-  }
-
-  /**
-   * Get shared sandbox
-   */
-  getSandbox(): Sandbox | null {
-    return this.sandbox;
-  }
-
-  /**
-   * Set shared tools for all agents
-   */
-  setTools(tools: Tools): void {
-    this.tools = tools;
-  }
-
-  /**
-   * Get shared tools
-   */
-  getTools(): Tools | null {
-    return this.tools;
-  }
-
-  /**
-   * Add custom tools for all agents
-   */
-  addTools(tools: ToolSet): void {
-    this.customTools = [...this.customTools, ...tools];
-  }
 
   // ============================================================================
   // Agent Lifecycle
@@ -190,29 +58,40 @@ export class AgentManager {
   /**
    * Create a new agent
    */
-  createManagedAgent(config: ManagedAgentConfig, parentId?: string): ManagedAgent {
-    const id = generateContextId().replace("ctx_", "agent_");
+  async createManagedAgent(_config: ManagedAgentConfig, parentId?: string): Promise<Agent> {
+    const { rootPath, setUp, adapter, ...config } = _config;
 
-    // Create the actual Agent instance
-    const agent = createAgent({
-      id,
-      model: config.model,
-      baseURL: config.baseURL,
-      systemPrompt: config.systemPrompt,
-      maxIterations: config.maxIterations,
-      maxTokens: config.maxTokens,
-      temperature: config.temperature,
-      sandbox: this.sandbox ?? undefined,
-      adapter: this.adapter ?? undefined,
-      tools: this.customTools,
-    });
+    const sandbox = await sandboxManager.getSandbox(rootPath);
+
+    const tools = await toolsManager.getTools(rootPath);
+
+    const context = new AgentContext({ setUp: setUp as ManagedAgentConfig<AgentContext>["setUp"] });
+
+    const log = new AgentLog();
+
+    const agent = new Agent(config, { setUp: setUp as ManagedAgentConfig<Agent>["setUp"] });
+
+    agent.setAdapter(adapter);
+
+    agent.setTools(tools);
+
+    agent.setSandbox(sandbox);
+
+    agent.setContext(context);
+
+    agent.setLog(log);
+
+    const id = agent.id;
 
     const managedAgent: ManagedAgent = {
       id,
       name: config.name,
-      config,
+      config: _config,
       agent,
-      context: agent.context,
+      context,
+      sandbox,
+      tools,
+      log,
       status: "idle",
       parentId,
       childIds: [],
@@ -231,32 +110,18 @@ export class AgentManager {
       }
     }
 
-    this.emit({
-      type: parentId ? "subagent:spawned" : "agent:created",
-      agentId: id,
-      parentId,
-      timestamp: Date.now(),
-    });
-
-    return managedAgent;
-  }
-
-  /**
-   * @deprecated Use createManagedAgent instead
-   */
-  createAgent(config: ManagedAgentConfig, parentId?: string): ManagedAgent {
-    return this.createManagedAgent(config, parentId);
+    return agent;
   }
 
   /**
    * Spawn a subagent from a parent agent
    */
-  spawnSubagent(parentId: string, config: ManagedAgentConfig): ManagedAgent {
+  async spawnSubagent(parentId: string, config: ManagedAgentConfig): Promise<Agent> {
     const parent = this.agents.get(parentId);
     if (!parent) {
       throw new Error(`Parent agent not found: ${parentId}`);
     }
-    return this.createManagedAgent(config, parentId);
+    return await this.createManagedAgent(config, parentId);
   }
 
   /**
@@ -290,58 +155,6 @@ export class AgentManager {
   }
 
   /**
-   * Update agent status
-   */
-  updateStatus(id: string, status: ManagedAgentStatus, error?: string): void {
-    const managedAgent = this.agents.get(id);
-    if (!managedAgent) return;
-
-    const oldStatus = managedAgent.status;
-    managedAgent.status = status;
-    managedAgent.error = error;
-    managedAgent.updatedAt = Date.now();
-
-    // Emit appropriate event
-    let eventType: AgentEventType;
-    switch (status) {
-      case "running":
-        eventType = "agent:started";
-        break;
-      case "completed":
-        eventType = managedAgent.parentId ? "subagent:completed" : "agent:completed";
-        break;
-      case "error":
-        eventType = "agent:error";
-        break;
-      case "aborted":
-        eventType = "agent:aborted";
-        break;
-      case "paused":
-        eventType = "agent:paused";
-        break;
-      case "idle":
-      case "initializing":
-        // Check for resume from paused
-        if (oldStatus === "paused") {
-          eventType = "agent:resumed";
-        } else {
-          return; // No event for other transitions
-        }
-        break;
-      default:
-        return;
-    }
-
-    this.emit({
-      type: eventType,
-      agentId: id,
-      parentId: managedAgent.parentId,
-      data: error ? { error } : undefined,
-      timestamp: Date.now(),
-    });
-  }
-
-  /**
    * Destroy an agent and its subagents
    */
   destroyAgent(id: string): void {
@@ -366,13 +179,6 @@ export class AgentManager {
     }
 
     this.agents.delete(id);
-
-    this.emit({
-      type: "agent:destroyed",
-      agentId: id,
-      parentId: managedAgent.parentId,
-      timestamp: Date.now(),
-    });
   }
 
   /**
@@ -383,71 +189,6 @@ export class AgentManager {
     for (const agent of this.getRootAgents()) {
       this.destroyAgent(agent.id);
     }
-    this.customTools = [];
-  }
-
-  // ============================================================================
-  // Event System
-  // ============================================================================
-
-  /**
-   * Subscribe to agent events
-   */
-  onEvent(listener: (event: AgentEvent) => void): () => void {
-    this.eventListeners.add(listener);
-    return () => this.eventListeners.delete(listener);
-  }
-
-  /**
-   * Emit an event
-   */
-  private emit(event: AgentEvent): void {
-    for (const listener of this.eventListeners) {
-      try {
-        listener(event);
-      } catch {
-        // Ignore listener errors
-      }
-    }
-  }
-
-  // ============================================================================
-  // Serialization
-  // ============================================================================
-
-  /**
-   * Get agent summary (for UI display)
-   */
-  getAgentSummary(id: string): {
-    id: string;
-    name: string;
-    status: ManagedAgentStatus;
-    model: string;
-    messageCount: number;
-    usage: TokenUsage;
-    childCount: number;
-  } | null {
-    const managedAgent = this.agents.get(id);
-    if (!managedAgent) return null;
-
-    return {
-      id: managedAgent.id,
-      name: managedAgent.name,
-      status: managedAgent.status,
-      model: managedAgent.config.model,
-      messageCount: managedAgent.context.getMessageCount(),
-      usage: managedAgent.context.usage,
-      childCount: managedAgent.childIds.length,
-    };
-  }
-
-  /**
-   * Get all agent summaries
-   */
-  getAllSummaries(): ReturnType<typeof this.getAgentSummary>[] {
-    return this.getAgents()
-      .map((a) => this.getAgentSummary(a.id))
-      .filter((s): s is NonNullable<typeof s> => s !== null);
   }
 }
 

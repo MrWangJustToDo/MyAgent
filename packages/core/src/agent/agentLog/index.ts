@@ -1,5 +1,5 @@
-// AgentLog class and singleton
-export { AgentLog, agentLog, generateLogId } from "./AgentLog.js";
+// AgentLog class
+export { AgentLog, generateLogId } from "./AgentLog.js";
 
 // Types
 export type { LogLevel, LogCategory, LogEntry, LogFilter } from "./AgentLog.js";

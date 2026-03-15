@@ -92,7 +92,7 @@ export const Agent = () => {
 
     // Handle approval responses when there's a pending approval
     if (pendingApproval) {
-      const agentLog = toRaw(useAgent.getReactiveState().agent?.log) as AgentLog | null;
+      const agentLog = toRaw(useAgent.getReactiveState().agent?.getLog()) as AgentLog | null;
 
       const char = inputChar?.toLowerCase();
       if (char === "y") {

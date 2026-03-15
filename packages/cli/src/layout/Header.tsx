@@ -3,13 +3,13 @@ import BigText from "ink-big-text";
 import Gradient from "ink-gradient";
 
 import { useArgs } from "../hooks";
-import { useSandbox } from "../hooks/useSandbox";
+import { useAgentSandbox } from "../hooks/useAgentSandbox";
 import { useSize } from "../hooks/useSize";
 
 export const Header = () => {
   const { model, path } = useArgs((s) => ({ model: s.config.model, path: s.config.rootPath }));
 
-  const name = useSandbox((s) => s.state?.provider);
+  const name = useAgentSandbox((s) => s.sandbox?.provider);
 
   return (
     <Box flexDirection="column" ref={useSize.getActions().setHeader} marginBottom={1}>

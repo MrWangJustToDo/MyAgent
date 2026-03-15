@@ -12,7 +12,7 @@ import { toRaw, reactive } from "reactivity-store";
 import { useAgent } from "./useAgent";
 import { useAgentContext } from "./useAgentContext";
 import { useAgentLog } from "./useAgentLog";
-import { useSandbox } from "./useSandbox";
+import { useAgentSandbox } from "./useAgentSandbox";
 
 import type { Agent, AgentContext, AgentLog, ConnectionAdapter } from "@my-agent/core";
 import type { UseChatReturn } from "@tanstack/ai-react";
@@ -97,50 +97,21 @@ export interface UseLocalChatReturn extends Omit<UseChatReturn, "sendMessage"> {
 export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
   const { model, url, rootPath, systemPrompt, maxIterations = 10 } = config;
 
-  const { sandbox, loading, error } = useSandbox((s) => ({ sandbox: s.state, loading: s.loading, error: s.error }));
+  const [loading, setLoading] = useState(false);
+
+  const [error, setError] = useState<Error | null>(null);
+
+  const [connection, setConnection] = useState<ConnectionAdapter>(() => ({
+    // eslint-disable-next-line require-yield
+    async *connect() {
+      console.log("[useLocalChat] placeholder connect called - this should not happen!");
+      // Yield nothing - this shouldn't be called before ready
+    },
+  }));
 
   // Store tool inputs from approval-requested events
   // We use a ref to avoid re-renders, and useState for the Map to trigger re-renders when needed
   const [approvalInputs, setApprovalInputs] = useState<ApprovalInputsMap>(() => new Map());
-
-  useEffect(() => {
-    useSandbox.getActions().getSandbox(rootPath);
-  }, [rootPath]);
-
-  // Create connection adapter when sandbox is ready
-  const connection = useMemo<ConnectionAdapter | null>(() => {
-    if (!sandbox) return null;
-
-    const adapter = createOllamaAdapter(model, url);
-
-    const connector = createLocalConnection({
-      model,
-      adapter,
-      sandbox,
-      systemPrompt,
-      maxIterations,
-      // make the agent instance reactive
-      setUp: (instance: Agent | AgentContext) => {
-        // if ((instance as Agent).symbol === Symbol.for("agent")) {
-        //   return reactive(instance) as Agent;
-        // } else {
-        //   return instance;
-        // }
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        instance["$$symbol"] = Symbol.for("patch");
-        return reactive(instance) as Agent | AgentContext;
-      },
-    });
-
-    useAgent.getActions().setAgent(connector.agent);
-
-    useAgentLog.getActions().setLog(connector.log);
-
-    useAgentContext.getActions().setContext(connector.context);
-
-    return connector;
-  }, [sandbox, model, url, systemPrompt, maxIterations]);
 
   // Generate a unique ID that changes when connection changes
   // This forces useChat to recreate its ChatClient when connection is ready
@@ -149,23 +120,58 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
     return `chat-${Date.now()}`;
   }, [connection]);
 
-  // Create a placeholder connection for when sandbox isn't ready
-  const placeholderConnection = useMemo<ConnectionAdapter>(
-    () => ({
-      // eslint-disable-next-line require-yield
-      async *connect() {
-        console.log("[useLocalChat] placeholder connect called - this should not happen!");
-        // Yield nothing - this shouldn't be called before ready
-      },
-    }),
-    []
-  );
+  useEffect(() => {
+    const init = async (config: UseLocalChatConfig) => {
+      setLoading(true);
+
+      const { model, url } = config;
+
+      try {
+        const adapter = createOllamaAdapter(model, url);
+
+        const connector = await createLocalConnection({
+          ...config,
+          adapter,
+          maxIterations: config.maxIterations || 10,
+          name: "local-connector",
+          // make the agent instance reactive
+          setUp: (instance: Agent | AgentContext) => {
+            // if ((instance as Agent).symbol === Symbol.for("agent")) {
+            //   return reactive(instance) as Agent;
+            // } else {
+            //   return instance;
+            // }
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            instance["$$symbol"] = Symbol.for("patch");
+            return reactive(instance) as Agent | AgentContext;
+          },
+        });
+
+        useAgent.getActions().setAgent(connector.agent);
+
+        useAgentLog.getActions().setLog(connector.agent.getLog());
+
+        useAgentContext.getActions().setContext(connector.agent.getContext());
+
+        useAgentSandbox.getActions().setSandbox(connector.agent.getSandbox());
+
+        setConnection(connector);
+      } catch (e) {
+        setError(e as Error);
+      }
+
+      setLoading(false);
+    };
+
+    init({ model, maxIterations, systemPrompt, rootPath, url });
+  }, [model, url, maxIterations, systemPrompt, rootPath]);
 
   // Use the chat hook with our connection
   // The id changes when connection changes, forcing a new ChatClient
   const chatResult = useChat({
     id: chatId,
-    connection: connection ?? placeholderConnection,
+    connection: connection,
     onChunk: (chunk) => {
       if (chunk.type === "CUSTOM") {
         const value = chunk.value as {
@@ -190,12 +196,12 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
       if (!connection) {
         return;
       }
-      const agentLog = toRaw(useAgent.getReactiveState().agent?.log) as AgentLog | null;
+      const agentLog = toRaw(useAgent.getReactiveState().agent?.getLog()) as AgentLog | null;
       agentLog?.chat(`user send message \`${content}\` start`);
       await chatResult.sendMessage(content);
       agentLog?.chat(`user send message \`${content}\` end`);
     },
-    [connection, sandbox, chatResult.sendMessage]
+    [connection, chatResult.sendMessage]
   );
 
   return {

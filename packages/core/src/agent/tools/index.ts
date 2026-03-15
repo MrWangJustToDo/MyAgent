@@ -50,8 +50,14 @@ export type Tools = {
   search_replace: ReturnType<typeof createSearchReplaceTool>;
 };
 
-export const createTools = ({ sandbox }: { sandbox: Sandbox }): Tools => {
-  return {
+export const createTools = async ({
+  sandbox,
+  processTools,
+}: {
+  sandbox: Sandbox;
+  processTools?: (t: Tools) => Promise<void>;
+}): Promise<Tools> => {
+  const res = {
     copy_file: createCopyFileTool({ sandbox }),
     delete_file: createDeleteFileTool({ sandbox }),
     edit_file: createEditFileTool({ sandbox }),
@@ -68,4 +74,8 @@ export const createTools = ({ sandbox }: { sandbox: Sandbox }): Tools => {
     run_command: createRunCommandTool({ sandbox }),
     search_replace: createSearchReplaceTool({ sandbox }),
   };
+
+  await processTools?.(res);
+
+  return res;
 };

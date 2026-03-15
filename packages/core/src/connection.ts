@@ -7,10 +7,9 @@
  * a simple chat() wrapper.
  */
 
-import { createAgent } from "./agent/loop/Agent.js";
+import { agentManager, type ManagedAgentConfig } from "./managers";
 
-import type { AgentContext, AgentLog } from "./agent";
-import type { Agent, CreateAgentOptions } from "./agent/loop/Agent.js";
+import type { Agent, AgentRunOptions } from "./agent/loop/Agent.js";
 import type { Sandbox } from "./environment";
 import type { AnyTextAdapter, ChatMiddleware, Tool } from "@tanstack/ai";
 import type { ConnectionAdapter } from "@tanstack/ai-client";
@@ -146,40 +145,11 @@ function backfillToolCallArguments<T>(messages: T[], approvalInputs: ApprovalInp
   });
 }
 
-export function createLocalConnection(
-  config: LocalConnectionConfig<Agent | AgentContext>
-): ConnectionAdapter & { agent: Agent; log: AgentLog; context: AgentContext } {
-  const {
-    adapter,
-    sandbox,
-    systemPrompt,
-    tools: customTools = [],
-    middleware = [],
-    maxTokens,
-    temperature,
-    maxIterations = 10,
-    model = "unknown",
-    setUp,
-  } = config;
-
-  // Create the agent once
-  const agentOptions: CreateAgentOptions<Agent | AgentContext> = {
-    model,
-    systemPrompt,
-    maxIterations,
-    maxTokens,
-    temperature,
-    adapter,
-    sandbox,
-    setUp,
-    tools: customTools,
-  };
-
-  const agent = createAgent(agentOptions);
-
-  const log = agent.log;
-
-  const context = agent.context;
+export async function createLocalConnection(
+  config: ManagedAgentConfig,
+  runConfig?: AgentRunOptions
+): Promise<ConnectionAdapter & { agent: Agent }> {
+  const agent = await agentManager.createManagedAgent(config);
 
   // Store tool inputs from approval-requested events
   // This is needed because TanStack AI's StreamProcessor doesn't populate
@@ -192,9 +162,9 @@ export function createLocalConnection(
       // @ts-ignore
       const patchedMessages = backfillToolCallArguments(messages, approvalInputs);
 
-      agent.log.connection("connect called", { messageCount: patchedMessages.length, data: _data });
+      agent.getLog()?.connection("connect called", { messageCount: patchedMessages.length, data: _data });
 
-      agent.log.debug("connection", "UIMessages detail", { messages: patchedMessages });
+      agent.getLog()?.debug("connection", "UIMessages detail", { messages: patchedMessages });
 
       const otherChunk = [];
 
@@ -209,7 +179,7 @@ export function createLocalConnection(
           // @ts-ignore - messages type mismatch with AgentRunOptions
           messages: patchedMessages,
           abortSignal,
-          middleware,
+          ...runConfig,
           ..._data,
         })) {
           // Store input from CUSTOM approval-requested events
@@ -228,19 +198,16 @@ export function createLocalConnection(
           }
           yield chunk;
         }
-        agent.log.chunk("stream", { customChunk, toolChunk, runChunk, otherChunk });
-        agent.log.connection("agent.run completed successfully");
+        agent.getLog()?.chunk("stream", { customChunk, toolChunk, runChunk, otherChunk });
+        agent.getLog()?.connection("agent.run completed successfully");
       } catch (error) {
-        agent.log.error("connection", "agent.run error", error instanceof Error ? error : new Error(String(error)));
+        agent
+          .getLog()
+          ?.error("connection", "agent.run error", error instanceof Error ? error : new Error(String(error)));
         throw error;
       }
     },
-
     agent,
-
-    log,
-
-    context,
   };
 }
 

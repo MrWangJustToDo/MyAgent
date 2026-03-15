@@ -1,13 +1,13 @@
 import { chat } from "@tanstack/ai";
 import { z } from "zod";
 
-import { AgentContext, generateContextId } from "../agentContext";
-import { AgentLog } from "../agentLog";
-import { createTools, type Tools } from "../tools";
+import { generateContextId } from "../agentContext";
+import { type Tools } from "../tools";
 
 import type { Sandbox } from "../../environment";
-import type { ToolCall, TokenUsage, StreamEvent } from "../agentContext";
-import type { ChatMiddleware, StreamChunk, AnyTextAdapter, Tool, SchemaInput } from "@tanstack/ai";
+import type { AgentContext } from "../agentContext";
+import type { AgentLog } from "../agentLog";
+import type { ChatMiddleware, StreamChunk, AnyTextAdapter, Tool, SchemaInput, AGUIEvent } from "@tanstack/ai";
 import type { TextActivityOptions } from "@tanstack/ai/adapters";
 import type { OllamaTextAdapter } from "@tanstack/ai-ollama";
 
@@ -15,7 +15,7 @@ import type { OllamaTextAdapter } from "@tanstack/ai-ollama";
 // Types & Schemas
 // ============================================================================
 
-export type AgentStatus = "idle" | "running" | "completed" | "error" | "aborted";
+export type AgentStatus = "idle" | "running" | "completed" | "error" | "aborted" | "waiting";
 
 export const AgentConfigSchema = z.object({
   model: z.string().min(1).describe("Model name to use"),
@@ -31,79 +31,21 @@ export type AgentConfig = z.infer<typeof AgentConfigSchema>;
 /** Tool set type - array of TanStack AI tools (ServerTool, ClientTool, or ToolDefinition) */
 export type ToolSet = Tool[];
 
-/** Callbacks for streaming events */
-export interface AgentCallbacks {
-  onChunk?: (chunk: StreamChunk) => void;
-  onTextDelta?: (text: string) => void;
-  onReasoningDelta?: (text: string) => void;
-  onToolCallStart?: (toolCall: ToolCall) => void;
-  onToolCallEnd?: (toolCall: ToolCall, result: unknown, isError: boolean) => void;
-  onUsage?: (usage: TokenUsage) => void;
-  onFinish?: (info: { finishReason?: string; content?: string; usage?: TokenUsage }) => void;
-  onError?: (error: Error) => void;
-  onAbort?: (reason?: string) => void;
-}
-
 /** Run options */
 export interface AgentRunOptions
-  extends AgentCallbacks, Omit<TextActivityOptions<OllamaTextAdapter<string>, SchemaInput, true>, "stream"> {
+  extends
+    Omit<ChatMiddleware, "name">,
+    Omit<TextActivityOptions<OllamaTextAdapter<string>, SchemaInput, true>, "stream"> {
   prompt?: string;
   abortSignal?: AbortSignal;
   /** Additional middleware to apply */
   middleware?: ChatMiddleware[];
 }
 
-/** Stream result info */
-export interface AgentStreamResult {
-  content: string;
-  finishReason?: string;
-  usage: TokenUsage;
-  iterations: number;
-}
-
 // ============================================================================
 // Agent Class
 // ============================================================================
 
-/**
- * Agent - AI agent powered by TanStack AI.
- *
- * Uses TanStack AI's `chat()` function for:
- * - Streaming responses (AG-UI Protocol)
- * - Automatic agentic cycle (tool calls -> results -> continue)
- * - Middleware support (logging, caching, etc.)
- * - Provider-agnostic adapters
- *
- * Design principles:
- * - Returns async iterable stream for flexible consumption
- * - Message-centric state management via AgentContext
- * - Pluggable adapter for different AI providers
- *
- * @example
- * ```typescript
- * const agent = new Agent({
- *   model: "gpt-4",
- *   systemPrompt: "You are a helpful assistant.",
- * });
- *
- * // Set adapter and sandbox
- * agent.setAdapter(openaiText("gpt-4"));
- * agent.setSandbox(sandbox);
- *
- * // Stream responses
- * for await (const chunk of agent.run({ prompt: "Hello!" })) {
- *   if (chunk.type === "TEXT_MESSAGE_CONTENT") {
- *     process.stdout.write(chunk.delta);
- *   }
- * }
- *
- * // Or use callbacks
- * await agent.runWithCallbacks({
- *   prompt: "Hello!",
- *   onTextDelta: (text) => process.stdout.write(text),
- * });
- * ```
- */
 export class Agent {
   readonly id: string;
 
@@ -113,15 +55,12 @@ export class Agent {
   status: AgentStatus = "idle";
   error = "";
 
-  // Context
-  readonly context: AgentContext;
-
-  readonly log: AgentLog;
-
   // Configuration
   private config: AgentConfig;
 
   // Resources
+  private log: AgentLog | null = null;
+  private context: AgentContext | null = null;
   private sandbox: Sandbox | null = null;
   private customTools: ToolSet = [];
   private builtInTools: Tools | null = null;
@@ -132,14 +71,39 @@ export class Agent {
   // Abort controller for current run
   private currentAbortController: AbortController | null = null;
 
-  constructor(
-    config: AgentConfig,
-    { id, setUp }: { id?: CreateAgentOptions<Agent>["id"]; setUp: CreateAgentOptions<Agent>["setUp"] }
-  ) {
+  private contextSyntaxMiddleware: ChatMiddleware = {
+    name: "context-sync",
+    onChunk: (_ctx, chunk) => {
+      // Emit events to context
+      this.context?.emit?.(chunk);
+    },
+    onUsage: (_ctx, usage) => {
+      const c = {
+        inputTokens: usage.promptTokens ?? 0,
+        outputTokens: usage.completionTokens ?? 0,
+        totalTokens: usage.totalTokens ?? 0,
+      };
+
+      this.context?.updateUsage?.(c);
+    },
+    onFinish: (_ctx, info) => {
+      this.context?.updateFinal?.(info);
+    },
+  };
+
+  private logSyntaxMiddleware: ChatMiddleware = {
+    name: "log-sync",
+    onBeforeToolCall: (ctx, hookCtx) => {
+      this.log?.info?.("tool", "tool-call-start", { ctx, hookCtx });
+    },
+    onAfterToolCall: (ctx, hookCtx) => {
+      this.log?.info?.("tool", "tool-call-end", { ctx, hookCtx });
+    },
+  };
+
+  constructor(config: AgentConfig, { id, setUp }: { id?: string; setUp?: (t: Agent) => Agent }) {
     this.id = id ?? generateContextId().replace("ctx_", "agent_");
     this.config = AgentConfigSchema.parse(config);
-    this.context = new AgentContext({ setUp: setUp as CreateAgentOptions<AgentContext>["setUp"] });
-    this.log = new AgentLog({ enabled: true });
 
     if (setUp) {
       return setUp(this);
@@ -169,7 +133,6 @@ export class Agent {
    */
   setSandbox(sandbox: Sandbox): void {
     this.sandbox = sandbox;
-    this.builtInTools = createTools({ sandbox });
   }
 
   /**
@@ -177,6 +140,10 @@ export class Agent {
    */
   getSandbox(): Sandbox | null {
     return this.sandbox;
+  }
+
+  setTools(tools: Tools) {
+    this.builtInTools = tools;
   }
 
   /**
@@ -203,6 +170,22 @@ export class Agent {
     tools.push(...this.customTools);
 
     return tools;
+  }
+
+  setLog(c: AgentLog) {
+    this.log = c;
+  }
+
+  getLog() {
+    return this.log;
+  }
+
+  setContext(c: AgentContext) {
+    this.context = c;
+  }
+
+  getContext() {
+    return this.context;
   }
 
   // ============================================================================
@@ -251,8 +234,10 @@ export class Agent {
 
     // Build middleware stack
     const allMiddleware: ChatMiddleware[] = [
+      this.logSyntaxMiddleware,
+      this.contextSyntaxMiddleware,
       // Context sync middleware
-      this.createContextSyncMiddleware(options),
+      this.createOptionMiddleware(options),
       // Custom middleware
       ...middleware,
     ];
@@ -264,12 +249,12 @@ export class Agent {
       // Note: We cast to 'any' because chat() internally handles both UIMessage[] and ModelMessage[]
       // via convertMessagesToModelMessages(), but the type signature is strict
       const tools = this.getTools();
-      this.log.agent("Starting chat", {
+      this.log?.agent("Starting chat", {
         messageCount: finalMessage.length,
         toolCount: tools.length,
         tools: tools.map((t) => ({ name: t.name, needsApproval: (t as any).needsApproval })),
       });
-      const stream = chat({
+      const stream = chat<OllamaTextAdapter<string>, AgentRunOptions["outputSchema"], true>({
         adapter: adapter || (this.adapter as OllamaTextAdapter<string>),
         messages: finalMessage,
         tools,
@@ -279,14 +264,11 @@ export class Agent {
         middleware: allMiddleware,
         abortController: this.currentAbortController,
         ...rest,
-      });
+      }) as AsyncIterable<AGUIEvent>;
 
       let iterations = 0;
-      let lastUsage: TokenUsage | undefined;
 
       // Yield chunks from the stream
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
       for await (const chunk of stream) {
         // Track iterations (each RUN_STARTED after the first is a new iteration)
         if (chunk.type === "RUN_STARTED") {
@@ -297,130 +279,36 @@ export class Agent {
           }
         }
 
-        // Track content
-        // if (chunk.type === "TEXT_MESSAGE_CONTENT") {
-        //   accumulatedContent += chunk.delta;
-        // }
-
-        // Track usage
-        if (chunk.type === "RUN_FINISHED" && chunk.usage) {
-          lastUsage = {
-            inputTokens: chunk.usage.promptTokens ?? 0,
-            outputTokens: chunk.usage.completionTokens ?? 0,
-            totalTokens: chunk.usage.totalTokens ?? 0,
+        if (chunk.type === "CUSTOM") {
+          const value = chunk.value as {
+            toolCallId: string;
+            toolCallName: string;
+            input: unknown;
           };
+          if (value.input && value.toolCallId) {
+            this.status = "waiting";
+          }
         }
 
         yield chunk;
       }
 
-      // Update final state
-      this.status = "completed";
-
-      if (lastUsage) {
-        this.context.usage.inputTokens += lastUsage.inputTokens;
-        this.context.usage.outputTokens += lastUsage.outputTokens;
-        this.context.usage.totalTokens += lastUsage.totalTokens;
+      if (this.status !== "waiting") {
+        // Update final state
+        this.status = "completed";
       }
     } catch (err) {
       if (this.isAbortError(err)) {
         this.status = "aborted";
-        options.onAbort?.("Run was aborted");
       } else {
         const error = err instanceof Error ? err : new Error(String(err));
         this.error = error.message;
         this.status = "error";
-        options.onError?.(error);
         throw error;
       }
     } finally {
       this.currentAbortController = null;
     }
-  }
-
-  /**
-   * Run the agent with callbacks (convenience method).
-   * Consumes the stream internally and calls callbacks.
-   */
-  async runWithCallbacks(options: AgentRunOptions): Promise<AgentStreamResult> {
-    const { onChunk, onTextDelta, onReasoningDelta, onToolCallStart, onToolCallEnd, onUsage, onFinish, ...rest } =
-      options;
-
-    let content = "";
-    let finishReason: string | undefined;
-    let usage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-    let iterations = 0;
-
-    // Track tool calls in progress
-    const toolCallsInProgress: Map<string, ToolCall> = new Map();
-
-    for await (const chunk of this.run(rest)) {
-      onChunk?.(chunk);
-
-      switch (chunk.type) {
-        case "RUN_STARTED":
-          iterations++;
-          break;
-
-        case "TEXT_MESSAGE_CONTENT":
-          content += chunk.delta;
-          onTextDelta?.(chunk.delta);
-          break;
-
-        case "STEP_FINISHED":
-          // Thinking/reasoning content
-          if (chunk.delta) {
-            onReasoningDelta?.(chunk.delta);
-          }
-          break;
-
-        case "TOOL_CALL_START":
-          if (chunk.toolCallId && chunk.toolName) {
-            const toolCall: ToolCall = {
-              id: chunk.toolCallId,
-              name: chunk.toolName,
-              input: {},
-            };
-            toolCallsInProgress.set(chunk.toolCallId, toolCall);
-            onToolCallStart?.(toolCall);
-          }
-          break;
-
-        case "TOOL_CALL_END":
-          if (chunk.toolCallId) {
-            const toolCall = toolCallsInProgress.get(chunk.toolCallId);
-            if (toolCall && chunk.input) {
-              toolCall.input = chunk.input;
-              onToolCallEnd?.(toolCall, chunk.input, false);
-            }
-            toolCallsInProgress.delete(chunk.toolCallId);
-          }
-          break;
-
-        case "RUN_FINISHED":
-          finishReason = chunk.finishReason ?? undefined;
-          if (chunk.usage) {
-            usage = {
-              inputTokens: chunk.usage.promptTokens ?? 0,
-              outputTokens: chunk.usage.completionTokens ?? 0,
-              totalTokens: chunk.usage.totalTokens ?? 0,
-            };
-            onUsage?.(usage);
-          }
-          break;
-      }
-    }
-
-    const result: AgentStreamResult = {
-      content,
-      finishReason,
-      usage,
-      iterations,
-    };
-
-    onFinish?.({ finishReason, content, usage });
-
-    return result;
   }
 
   // ============================================================================
@@ -450,100 +338,11 @@ export class Agent {
   // Middleware
   // ============================================================================
 
-  /**
-   * Create middleware to sync events with context and callbacks
-   */
-  private createContextSyncMiddleware(options: AgentCallbacks): ChatMiddleware {
+  private createOptionMiddleware(options: AgentRunOptions): ChatMiddleware {
     return {
-      name: "context-sync",
-      onChunk: (_ctx, chunk) => {
-        // Emit events to context
-        this.context.emit(this.chunkToStreamEvent(chunk));
-        return chunk;
-      },
-      onUsage: (_ctx, usage) => {
-        options.onUsage?.({
-          inputTokens: usage.promptTokens ?? 0,
-          outputTokens: usage.completionTokens ?? 0,
-          totalTokens: usage.totalTokens ?? 0,
-        });
-      },
-      onFinish: (_ctx, info) => {
-        this.context.emit({
-          type: "finish",
-          usage: info.usage
-            ? {
-                inputTokens: info.usage.promptTokens ?? 0,
-                outputTokens: info.usage.completionTokens ?? 0,
-                totalTokens: info.usage.totalTokens ?? 0,
-              }
-            : undefined,
-          finishReason: info.finishReason ?? undefined,
-        });
-      },
-      onError: (_ctx, info) => {
-        this.context.emit({ type: "error", error: info.error as Error });
-        options.onError?.(info.error as Error);
-      },
-      onAbort: (_ctx, info) => {
-        this.context.emit({ type: "error", error: new Error(info.reason ?? "Aborted") });
-        options.onAbort?.(info.reason);
-      },
-      onBeforeToolCall: (ctx, hookCtx) => {
-        this.log.info("tool", "tool-call-start", { ctx, hookCtx });
-      },
-      onAfterToolCall: (ctx, hookCtx) => {
-        this.log.info("tool", "tool-call-end", { ctx, hookCtx });
-      },
+      name: "options-listener",
+      ...options,
     };
-  }
-
-  /**
-   * Convert TanStack AI chunk to our StreamEvent format
-   */
-  private chunkToStreamEvent(chunk: StreamChunk): StreamEvent {
-    switch (chunk.type) {
-      case "RUN_STARTED":
-        return { type: "start" };
-      case "TEXT_MESSAGE_CONTENT":
-        return { type: "text-delta", text: chunk.delta };
-      case "STEP_FINISHED":
-        return { type: "reasoning-delta", reasoning: chunk.delta ?? chunk.content };
-      case "TOOL_CALL_START":
-        return {
-          type: "tool-call-start",
-          toolCallId: chunk.toolCallId,
-          toolName: chunk.toolName,
-        };
-      case "TOOL_CALL_ARGS":
-        return {
-          type: "tool-call-delta",
-          toolCallId: chunk.toolCallId,
-          toolInputDelta: chunk.delta,
-        };
-      case "TOOL_CALL_END":
-        return {
-          type: "tool-call-end",
-          toolCallId: chunk.toolCallId,
-          toolName: chunk.toolName,
-        };
-      case "RUN_FINISHED":
-        return {
-          type: "finish",
-          usage: chunk.usage
-            ? {
-                inputTokens: chunk.usage.promptTokens ?? 0,
-                outputTokens: chunk.usage.completionTokens ?? 0,
-                totalTokens: chunk.usage.totalTokens ?? 0,
-              }
-            : undefined,
-          finishReason: chunk.finishReason ?? undefined,
-        };
-      case "RUN_ERROR":
-        return { type: "error", error: new Error(chunk.error?.message ?? "Unknown error") };
-      default:
-        return { type: "start" }; // Fallback for unknown chunk types
-    }
   }
 
   // ============================================================================
@@ -557,7 +356,8 @@ export class Agent {
     this.abort("Reset");
     this.status = "idle";
     this.error = "";
-    this.context.reset();
+    this.log?.clear();
+    this.context?.reset();
   }
 
   /**
@@ -573,36 +373,4 @@ export class Agent {
   updateConfig(updates: Partial<AgentConfig>): void {
     this.config = AgentConfigSchema.parse({ ...this.config, ...updates });
   }
-}
-
-// ============================================================================
-// Factory Function
-// ============================================================================
-
-export interface CreateAgentOptions<T> extends AgentConfig {
-  id?: string;
-  sandbox?: Sandbox;
-  tools?: ToolSet;
-  adapter: AnyTextAdapter;
-  setUp?: (instance: T) => T;
-}
-
-/**
- * Create a new agent instance
- */
-export function createAgent(options: CreateAgentOptions<Agent | AgentContext>): Agent {
-  const { id, sandbox, tools, adapter, setUp, ...config } = options;
-  const agent = new Agent(config, { id, setUp: setUp as CreateAgentOptions<Agent>["setUp"] });
-
-  if (adapter) {
-    agent.setAdapter(adapter);
-  }
-  if (sandbox) {
-    agent.setSandbox(sandbox);
-  }
-  if (tools) {
-    agent.addTools(tools);
-  }
-
-  return agent;
 }

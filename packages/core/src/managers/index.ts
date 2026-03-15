@@ -27,13 +27,4 @@
 
 export { SandboxManager, sandboxManager } from "./SandboxManager.js";
 export { ToolsManager, toolsManager } from "./ToolsManager.js";
-export {
-  AgentManager,
-  agentManager,
-  ManagedAgentConfigSchema,
-  type ManagedAgentConfig,
-  type ManagedAgentStatus,
-  type ManagedAgent,
-  type AgentEvent,
-  type AgentEventType,
-} from "./AgentManager.js";
+export { AgentManager, agentManager, type ManagedAgentConfig, type ManagedAgent } from "./AgentManager.js";
