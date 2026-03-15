@@ -4,10 +4,10 @@ import { memo } from "react";
 import { TextPartView } from "./TextPartView.js";
 import { ThinkingPartView } from "./ThinkingPartView.js";
 import { ToolCallPartView } from "./ToolCallPartView.js";
-import { ToolResultPartView } from "./ToolResultPartView.js";
+// import { ToolResultPartView } from "./ToolResultPartView.js";
 
 import type { ApprovalInputsMap } from "../hooks";
-import type { TextPart, ThinkingPart, ToolCallPart, ToolResultPart, UIMessage } from "@my-agent/core";
+import type { TextPart, ThinkingPart, ToolCallPart, UIMessage } from "@my-agent/core";
 
 export interface MessageViewProps {
   message: UIMessage;
@@ -42,7 +42,7 @@ export const MessageView = memo(({ message, addToolApprovalResponse, approvalInp
                 approvalInput={approvalInputs?.get((part as ToolCallPart).id)}
               />
             )}
-            {part.type === "tool-result" && <ToolResultPartView part={part as ToolResultPart} />}
+            {/* {part.type === "tool-result" && <ToolResultPartView part={part as ToolResultPart} />} */}
           </Box>
         ))}
       </Box>

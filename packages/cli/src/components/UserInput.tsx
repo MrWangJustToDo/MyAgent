@@ -15,7 +15,10 @@ export const UserInput = () => {
     const cb = useUserInput.subscribe(
       (s) => s.value,
       () => {
-        setInput(useUserInput.getReadonlyState().value);
+        const v = useUserInput.getReadonlyState().value;
+        if (!v) {
+          setInput("");
+        }
       }
     );
 

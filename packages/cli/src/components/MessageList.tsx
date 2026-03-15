@@ -5,7 +5,9 @@
  */
 
 import { Box, Text } from "ink";
+import { useEffect, useMemo } from "react";
 
+import { useStatic } from "../hooks/useStatic";
 import { MessageView } from "../messages";
 
 import type { ApprovalInputsMap } from "../hooks";
@@ -27,6 +29,22 @@ export interface MessageListProps {
 // ============================================================================
 
 export const MessageList = ({ messages, addToolApprovalResponse, approvalInputs }: MessageListProps) => {
+  const staticList = useMemo(() => messages.slice(0, -1), [messages.length]);
+
+  useEffect(() => {
+    useStatic.getActions().setStaticItem(
+      staticList.map((item) => (
+        <Box key={item.id} paddingX={1} marginY={1}>
+          <MessageView
+            message={item}
+            addToolApprovalResponse={addToolApprovalResponse}
+            approvalInputs={approvalInputs}
+          />
+        </Box>
+      ))
+    );
+  }, [staticList]);
+
   if (messages.length === 0) {
     return (
       <Box>
@@ -37,9 +55,22 @@ export const MessageList = ({ messages, addToolApprovalResponse, approvalInputs 
     );
   }
 
+  const current = messages.slice(-1);
+
   return (
     <Box flexDirection="column" rowGap={1}>
-      {messages.map((message) => (
+      {/* <Static items={staticList}>
+        {(item) => (
+          <Box key={item.id}>
+            <MessageView
+              message={item}
+              addToolApprovalResponse={addToolApprovalResponse}
+              approvalInputs={approvalInputs}
+            />
+          </Box>
+        )}
+      </Static> */}
+      {current.map((message) => (
         <Box key={message.id}>
           <MessageView
             message={message}

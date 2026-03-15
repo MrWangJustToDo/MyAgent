@@ -1,3 +1,4 @@
+import { debounce } from "lodash-es";
 import { useLayoutEffect, useState } from "react";
 
 const TERMINAL_PADDING_X = 4;
@@ -30,9 +31,11 @@ export function useTerminalSize(): { columns: number; rows: number } {
 
     updateSize();
 
-    process.stdout.on("resize", updateSize);
+    const debounceUpdateSize = debounce(updateSize, 20);
+
+    process.stdout.on("resize", debounceUpdateSize);
     return () => {
-      process.stdout.off("resize", updateSize);
+      process.stdout.off("resize", debounceUpdateSize);
     };
   }, []);
 

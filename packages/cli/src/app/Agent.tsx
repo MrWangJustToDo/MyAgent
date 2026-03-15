@@ -8,7 +8,9 @@ import { useAgent } from "../hooks/useAgent.js";
 import { useArgs } from "../hooks/useArgs.js";
 import { useLocalChat } from "../hooks/useLocalChat.js";
 import { useSize } from "../hooks/useSize.js";
+import { useStatic } from "../hooks/useStatic.js";
 import { useUserInput } from "../hooks/useUserInput.js";
+import { Content } from "../layout/Content.js";
 import { Footer } from "../layout/Footer.js";
 import { Header } from "../layout/Header.js";
 
@@ -20,9 +22,14 @@ import type { UIMessage, ToolCallPart, AgentLog } from "@my-agent/core";
 
 export const Agent = () => {
   const { exit } = useApp();
+
   const { useInitTerminalSize } = useSize.getActions();
 
   useInitTerminalSize();
+
+  const { useInitStdout } = useStatic.getActions();
+
+  useInitStdout();
 
   // Get config from useArgs hook
   const config = useArgs((s) => s.config);
@@ -177,6 +184,8 @@ export const Agent = () => {
     <Box flexDirection="column">
       {/* Header */}
       <Header />
+
+      <Content />
 
       {/* Messages */}
       <Box flexDirection="column" paddingX={1}>

@@ -53,6 +53,9 @@ importers:
       '@tanstack/ai-react':
         specifier: ^0.7.1
         version: 0.7.1(@my-react/react@0.3.22)(@tanstack/ai@0.8.0)(@types/react@19.2.14)
+      ansi-escapes:
+        specifier: ^7.3.0
+        version: 7.3.0
       chalk:
         specifier: ^5.6.2
         version: 5.6.2

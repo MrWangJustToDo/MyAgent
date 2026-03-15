@@ -6,7 +6,6 @@ import { Spinner } from "../components/Spinner.js";
 import { UserInput } from "../components/UserInput.js";
 import { useAgent } from "../hooks/useAgent.js";
 import { useAgentContext } from "../hooks/useAgentContext.js";
-import { useSize } from "../hooks/useSize.js";
 
 import type { TokenUsage } from "@my-agent/core";
 
@@ -21,7 +20,7 @@ export const Footer = () => {
   const isInputEnabled = status === "idle" || status === "completed" || status === "error";
 
   return (
-    <Box flexDirection="column" flexGrow={0} ref={useSize.getActions().setFooter} paddingY={1}>
+    <Box flexDirection="column" flexGrow={0} paddingY={1}>
       <Divider />
       {/* Status bar */}
       <FullBox gap={2} width="full">
