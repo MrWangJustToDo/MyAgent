@@ -1,5 +1,6 @@
 import { TitledBox } from "@mishieck/ink-titled-box";
 import { Text } from "ink";
+import { memo } from "react";
 
 import { FullBox } from "../FullBox";
 
@@ -10,19 +11,24 @@ export interface ThinkingPartViewProps {
 }
 
 /** Render a thinking/reasoning part */
-export const ThinkingPartView = ({ part }: ThinkingPartViewProps) => (
-  <FullBox>
-    <TitledBox
-      titles={["Thinking:"]}
-      width="100%"
-      borderStyle="round"
-      borderColor="magenta"
-      paddingLeft={2}
-      paddingX={1}
-    >
-      <Text color="gray" dimColor wrap="wrap">
-        {part.content.trimEnd()}
-      </Text>
-    </TitledBox>
-  </FullBox>
+export const ThinkingPartView = memo(
+  ({ part }: ThinkingPartViewProps) => (
+    <FullBox>
+      <TitledBox
+        titles={["Thinking:"]}
+        width="100%"
+        borderStyle="round"
+        borderColor="magenta"
+        paddingLeft={2}
+        paddingX={1}
+      >
+        <Text color="gray" dimColor wrap="wrap">
+          {part.content.trimEnd()}
+        </Text>
+      </TitledBox>
+    </FullBox>
+  ),
+  (p, c) => p.part.content === c.part.content
 );
+
+ThinkingPartView.displayName = "ThinkingPartView";

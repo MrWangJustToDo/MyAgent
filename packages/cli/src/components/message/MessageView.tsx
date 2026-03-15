@@ -1,4 +1,5 @@
 import { Box, Text } from "ink";
+import { memo } from "react";
 
 import { TextPartView } from "./TextPartView.js";
 import { ThinkingPartView } from "./ThinkingPartView.js";
@@ -16,7 +17,7 @@ export interface MessageViewProps {
 }
 
 /** Render a single message */
-export const MessageView = ({ message, addToolApprovalResponse, approvalInputs }: MessageViewProps) => {
+export const MessageView = memo(({ message, addToolApprovalResponse, approvalInputs }: MessageViewProps) => {
   const isUser = message.role === "user";
 
   return (
@@ -47,4 +48,6 @@ export const MessageView = ({ message, addToolApprovalResponse, approvalInputs }
       </Box>
     </Box>
   );
-};
+});
+
+MessageView.displayName = "MessageView";
