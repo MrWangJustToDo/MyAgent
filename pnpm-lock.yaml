@@ -41,9 +41,6 @@ importers:
       '@git-diff-view/file':
         specifier: ^0.1.2
         version: 0.1.2
-      '@mishieck/ink-titled-box':
-        specifier: ^0.4.2
-        version: 0.4.2(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)(typescript@5.9.3)
       '@my-agent/core':
         specifier: workspace:*
         version: link:../core
@@ -1482,13 +1479,6 @@ packages:
 
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
-
-  '@mishieck/ink-titled-box@0.4.2':
-    resolution: {integrity: sha512-4tRyg2n9dPGY66EEchpjHSs+QL5Wdv8kAjRLg/BnXVimwwIl38sLhgphw8dGCGIK2pFz+owLi4vuQBdOdJivBA==}
-    peerDependencies:
-      ink: ^6.0.0
-      react: ^19.1.0
-      typescript: ^5
 
   '@mixmark-io/domino@2.2.0':
     resolution: {integrity: sha512-Y28PR25bHXUg88kCV7nivXrP2Nj2RueZ3/l/jdx6J9f8J4nsEGcgX0Qe6lt7Pa+J79+kPiJU3LguR6O/6zrLOw==}
@@ -8378,12 +8368,6 @@ snapshots:
       keyv: 5.6.0
 
   '@keyv/serialize@1.1.1': {}
-
-  '@mishieck/ink-titled-box@0.4.2(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)(typescript@5.9.3)':
-    dependencies:
-      ink: '@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))'
-      react: '@my-react/react@0.3.22(@my-react/react@0.3.22)'
-      typescript: 5.9.3
 
   '@mixmark-io/domino@2.2.0': {}
 

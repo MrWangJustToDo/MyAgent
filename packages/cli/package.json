@@ -20,7 +20,6 @@
     "@git-diff-view/file": "^0.1.2",
     "@git-diff-view/cli": "^0.1.2",
     "@git-diff-view/core": "^0.1.2",
-    "@mishieck/ink-titled-box": "^0.4.2",
     "@my-agent/core": "workspace:*",
     "@my-react/react": "^0.3.22",
     "@my-react/react-terminal": "^0.0.18",
