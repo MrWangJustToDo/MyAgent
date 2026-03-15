@@ -1,8 +1,8 @@
 import { Text } from "ink";
 
-import { Spinner } from "../Spinner.js";
+import { Spinner } from "../components/Spinner.js";
 
-import type { ToolCallState } from "../../utils/toolState.js";
+import type { ToolCallState } from "../utils/toolState.js";
 
 export interface ToolStatusIconProps {
   state: ToolCallState;

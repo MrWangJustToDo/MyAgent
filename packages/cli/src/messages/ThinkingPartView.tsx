@@ -2,7 +2,7 @@ import { TitledBox } from "@mishieck/ink-titled-box";
 import { Text } from "ink";
 import { memo } from "react";
 
-import { FullBox } from "../FullBox";
+import { FullBox } from "../components/FullBox";
 
 import type { ThinkingPart } from "@my-agent/core";
 

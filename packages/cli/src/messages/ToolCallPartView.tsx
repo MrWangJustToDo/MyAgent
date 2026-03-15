@@ -1,9 +1,10 @@
 import { Box, Text } from "ink";
 
-import { formatToolInput, formatToolOutput } from "../../utils/format.js";
-import { getToolCallColor } from "../../utils/toolState.js";
-import { FullBox } from "../FullBox.js";
+import { FullBox } from "../components/FullBox.js";
+import { formatToolInput } from "../utils/format.js";
+import { getToolCallColor } from "../utils/toolState.js";
 
+import { ToolOutputView } from "./ToolOutputView.js";
 import { ToolStatusIcon } from "./ToolStatusIcon.js";
 
 import type { ToolCallPart } from "@my-agent/core";
@@ -37,8 +38,8 @@ export const ToolCallPartView = ({ part, addToolApprovalResponse, approvalInput 
 
   return (
     <Box flexDirection="column">
-      <FullBox borderStyle="round" width="100%" borderColor={getToolCallColor(part.state)} paddingX={1}>
-        <Box flexDirection="column">
+      <FullBox borderStyle="round" borderColor={getToolCallColor(part.state)} paddingX={1}>
+        <Box flexDirection="column" width="100%">
           {/* Header */}
           <Box>
             <ToolStatusIcon state={part.state} />
@@ -66,22 +67,13 @@ export const ToolCallPartView = ({ part, addToolApprovalResponse, approvalInput 
               <Text color="yellow" bold>
                 Approval required. Press Y to approve, N to deny.
               </Text>
-              {/* <Box marginTop={1}>
-                <Text color="gray">Arguments: </Text>
-                <Text>{displayArguments ?? "(no arguments)"}</Text>
-              </Box> */}
             </Box>
           )}
 
           {/* Show output if available */}
           {part.output !== undefined && (
-            <Box marginTop={1} flexDirection="column">
-              <Text color="gray" dimColor>
-                Output:
-              </Text>
-              <Box paddingLeft={1}>
-                <Text color="gray">{formatToolOutput(part.output)}</Text>
-              </Box>
+            <Box marginTop={1} flexDirection="column" width="100%">
+              <ToolOutputView part={part} />
             </Box>
           )}
         </Box>

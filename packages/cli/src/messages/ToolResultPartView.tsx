@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 
-import { FullBox } from "../FullBox";
+import { FullBox } from "../components/FullBox";
 
 import type { ToolResultPart } from "@my-agent/core";
 

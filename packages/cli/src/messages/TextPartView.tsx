@@ -1,7 +1,7 @@
 import { Box } from "ink";
 import { memo } from "react";
 
-import { Markdown } from "../../markdown";
+import { Markdown } from "../markdown";
 
 import type { TextPart } from "@my-agent/core";
 

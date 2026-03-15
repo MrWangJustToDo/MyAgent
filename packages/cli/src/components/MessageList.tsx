@@ -6,7 +6,7 @@
 
 import { Box, Text } from "ink";
 
-import { MessageView } from "./message";
+import { MessageView } from "../messages";
 
 import type { ApprovalInputsMap } from "../hooks";
 import type { UIMessage } from "@my-agent/core";

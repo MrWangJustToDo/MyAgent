@@ -6,7 +6,7 @@ import { ThinkingPartView } from "./ThinkingPartView.js";
 import { ToolCallPartView } from "./ToolCallPartView.js";
 import { ToolResultPartView } from "./ToolResultPartView.js";
 
-import type { ApprovalInputsMap } from "../../hooks";
+import type { ApprovalInputsMap } from "../hooks";
 import type { TextPart, ThinkingPart, ToolCallPart, ToolResultPart, UIMessage } from "@my-agent/core";
 
 export interface MessageViewProps {

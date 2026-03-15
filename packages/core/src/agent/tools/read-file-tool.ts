@@ -25,7 +25,6 @@ export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
         .optional()
         .describe("The maximum number of lines to read. If not specified, reads the entire file."),
     }),
-    needsApproval: true,
     outputSchema: z.object({
       path: z.string().describe("The path to the file that was read."),
       content: z.string().describe("The content of the file."),
