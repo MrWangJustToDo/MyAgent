@@ -44,33 +44,6 @@ export interface LocalConnectionConfig<T> {
   setUp?: (instance: T) => T;
 }
 
-/**
- * Create a local connection with a shared agent instance.
- *
- * This allows you to manage the agent lifecycle yourself and share
- * the same agent across multiple connections.
- *
- * @example
- * ```typescript
- * const agent = createAgent({ ... });
- * agent.setAdapter(adapter);
- * agent.setSandbox(sandbox);
- *
- * const connection = createConnectionFromAgent(agent);
- * ```
- */
-export function createConnectionFromAgent(agent: Agent): ConnectionAdapter {
-  return {
-    async *connect(messages, _data, abortSignal) {
-      yield* agent.run({
-        // @ts-ignore
-        messages,
-        abortSignal,
-      });
-    },
-  };
-}
-
 // ============================================================================
 // Local Connection Factory
 // ============================================================================

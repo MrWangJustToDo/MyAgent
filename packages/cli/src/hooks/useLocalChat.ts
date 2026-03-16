@@ -131,6 +131,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
 
         const connector = await createLocalConnection({
           ...config,
+          systemPrompt: `You are a helpful coding assistant at sandbox. You can read, write, and modify files, run commands in bash, and help with programming tasks.`,
           adapter,
           maxIterations: config.maxIterations || 10,
           name: "local-connector",

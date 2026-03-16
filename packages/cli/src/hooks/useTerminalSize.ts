@@ -1,6 +1,8 @@
 import { debounce } from "lodash-es";
 import { useLayoutEffect, useState } from "react";
 
+import { useAgentLog } from "./useAgentLog";
+
 const TERMINAL_PADDING_X = 4;
 
 const getValidSize = (size: number): number => {
@@ -31,7 +33,10 @@ export function useTerminalSize(): { columns: number; rows: number } {
 
     updateSize();
 
-    const debounceUpdateSize = debounce(updateSize, 20);
+    const debounceUpdateSize = debounce(() => {
+      useAgentLog.getReactiveState().log?.agent("resize call");
+      updateSize();
+    }, 16);
 
     process.stdout.on("resize", debounceUpdateSize);
     return () => {
