@@ -19,7 +19,7 @@ export const ToolStatusIcon = ({ state }: ToolStatusIconProps) => {
     case "approval-requested":
       return <Text color="yellow">?</Text>;
     case "approval-responded":
-      return <Text color="green">v</Text>;
+      return <Text color="green">✓</Text>;
     default:
       return null;
   }

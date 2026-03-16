@@ -23,8 +23,10 @@ export const useStatic = createState(
         setStaticHeader: (item: JSX.Element) => (s.header = item),
         setStaticItem: (items: JSX.Element[]) => (s.state = items),
         refreshRemount: () => {
+          useStatic.getLifeCycle().syncUpdateComponent = true;
           s.stdoutRef.current?.write(ansiEscapes.clearTerminal);
           s.remountKey++;
+          useStatic.getLifeCycle().syncUpdateComponent = false;
         },
       };
     },

@@ -188,13 +188,11 @@ export const Agent = () => {
       <Content />
 
       {/* Messages */}
-      <Box flexDirection="column" paddingX={1}>
-        <MessageList
-          messages={messages}
-          addToolApprovalResponse={addToolApprovalResponse}
-          approvalInputs={approvalInputs}
-        />
-      </Box>
+      <MessageList
+        messages={messages}
+        addToolApprovalResponse={addToolApprovalResponse}
+        approvalInputs={approvalInputs}
+      />
 
       {/* Input */}
       <Footer />

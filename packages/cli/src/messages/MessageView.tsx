@@ -1,4 +1,4 @@
-import { Box, Text } from "ink";
+import { Box } from "ink";
 import { memo } from "react";
 
 import { TextPartView } from "./TextPartView.js";
@@ -11,33 +11,25 @@ import type { TextPart, ThinkingPart, ToolCallPart, UIMessage } from "@my-agent/
 
 export interface MessageViewProps {
   message: UIMessage;
+  staticItem?: boolean;
   addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
   /** Map of toolCallId -> input for pending approvals */
   approvalInputs?: ApprovalInputsMap;
 }
 
 /** Render a single message */
-export const MessageView = memo(({ message, addToolApprovalResponse, approvalInputs }: MessageViewProps) => {
-  const isUser = message.role === "user";
-
-  return (
-    <Box flexDirection="column">
-      {/* Role header */}
-      <Box>
-        <Text color={isUser ? "green" : "cyan"} bold>
-          {isUser ? "You" : "Assistant"}:
-        </Text>
-      </Box>
-
-      {/* Parts */}
-      <Box flexDirection="column" paddingLeft={1} rowGap={1}>
+export const MessageView = memo(
+  ({ message, addToolApprovalResponse, approvalInputs, staticItem }: MessageViewProps) => {
+    return (
+      <Box flexDirection="column" rowGap={1}>
         {message.parts.map((part, index) => (
           <Box key={`${part.type}-${index}`}>
-            {part.type === "text" && <TextPartView part={part as TextPart} />}
+            {part.type === "text" && <TextPartView part={part as TextPart} role={message.role} />}
             {part.type === "thinking" && <ThinkingPartView part={part as ThinkingPart} />}
             {part.type === "tool-call" && (
               <ToolCallPartView
                 part={part as ToolCallPart}
+                staticItem={staticItem}
                 addToolApprovalResponse={addToolApprovalResponse}
                 approvalInput={approvalInputs?.get((part as ToolCallPart).id)}
               />
@@ -46,8 +38,8 @@ export const MessageView = memo(({ message, addToolApprovalResponse, approvalInp
           </Box>
         ))}
       </Box>
-    </Box>
-  );
-});
+    );
+  }
+);
 
 MessageView.displayName = "MessageView";

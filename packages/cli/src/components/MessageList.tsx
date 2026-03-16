@@ -35,11 +35,7 @@ export const MessageList = ({ messages, addToolApprovalResponse, approvalInputs 
     useStatic.getActions().setStaticItem(
       staticList.map((item) => (
         <Box key={item.id} paddingX={1} marginY={1}>
-          <MessageView
-            message={item}
-            addToolApprovalResponse={addToolApprovalResponse}
-            approvalInputs={approvalInputs}
-          />
+          <MessageView message={item} approvalInputs={approvalInputs} staticItem />
         </Box>
       ))
     );
@@ -58,20 +54,9 @@ export const MessageList = ({ messages, addToolApprovalResponse, approvalInputs 
   const current = messages.slice(-1);
 
   return (
-    <Box flexDirection="column" rowGap={1}>
-      {/* <Static items={staticList}>
-        {(item) => (
-          <Box key={item.id}>
-            <MessageView
-              message={item}
-              addToolApprovalResponse={addToolApprovalResponse}
-              approvalInputs={approvalInputs}
-            />
-          </Box>
-        )}
-      </Static> */}
+    <Box flexDirection="column">
       {current.map((message) => (
-        <Box key={message.id}>
+        <Box key={message.id} paddingX={1} marginY={1}>
           <MessageView
             message={message}
             addToolApprovalResponse={addToolApprovalResponse}

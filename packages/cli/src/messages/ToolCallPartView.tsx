@@ -11,6 +11,7 @@ import type { ToolCallPart } from "@my-agent/core";
 
 export interface ToolCallPartViewProps {
   part: ToolCallPart;
+  staticItem?: boolean;
   addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
   /**
    * Tool input from approval-requested custom event.
@@ -20,7 +21,12 @@ export interface ToolCallPartViewProps {
 }
 
 /** Render a tool call part */
-export const ToolCallPartView = ({ part, addToolApprovalResponse, approvalInput }: ToolCallPartViewProps) => {
+export const ToolCallPartView = ({
+  part,
+  addToolApprovalResponse,
+  approvalInput,
+  staticItem,
+}: ToolCallPartViewProps) => {
   const needsApproval = part.state === "approval-requested" && part.approval;
 
   // Get the arguments to display - prefer part.arguments, fallback to approvalInput
@@ -71,7 +77,7 @@ export const ToolCallPartView = ({ part, addToolApprovalResponse, approvalInput 
           )}
 
           {/* Show output if available */}
-          {part.output !== undefined && (
+          {!staticItem && part.output !== undefined && (
             <Box marginTop={1} flexDirection="column" width="100%">
               <ToolOutputView part={part} />
             </Box>

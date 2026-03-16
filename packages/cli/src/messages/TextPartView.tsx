@@ -1,21 +1,21 @@
-import { Box } from "ink";
+import { Box, Text } from "ink";
 import { memo } from "react";
 
 import { Markdown } from "../markdown";
 
-import type { TextPart } from "@my-agent/core";
+import type { TextPart, UIMessage } from "@my-agent/core";
 
 export interface TextPartViewProps {
   part: TextPart;
+  role: UIMessage["role"];
 }
 
 /** Render a text part */
 export const TextPartView = memo(
-  ({ part }: TextPartViewProps) => (
-    <Box flexDirection="column">
-      <Box paddingLeft={1}>
-        <Markdown content={part.content} />
-      </Box>
+  ({ part, role }: TextPartViewProps) => (
+    <Box>
+      {role === "user" ? <Text>{"> "}</Text> : <Text>{"⏺ "}</Text>}
+      <Markdown content={part.content} />
     </Box>
   ),
   (p, n) => p.part.content === n.part.content
