@@ -1,25 +1,23 @@
-import { AgentLog, type Tools } from "../agent";
+import { AgentLog } from "../agent";
 import { AgentContext } from "../agent/agentContext";
 import { Agent } from "../agent/loop/Agent.js";
 
-import { sandboxManager } from "./SandboxManager";
-import { toolsManager } from "./ToolsManager";
+import { sandboxManager } from "./SandboxManager.js";
+import { toolsManager } from "./ToolsManager.js";
 
-import type { AgentConfig } from "../agent/loop/Agent.js";
+import type { AgentConfig, ToolSet } from "../agent/loop/Agent.js";
 import type { Sandbox } from "../environment";
-import type { AnyTextAdapter } from "@tanstack/ai";
+import type { LanguageModel } from "ai";
 
 // ============================================================================
 // Types & Schemas
 // ============================================================================
 
-/** Status of a managed agent */
-// export type ManagedAgentStatus = "idle" | "initializing" | "running" | "completed" | "error" | "aborted" | "paused";
-
 export type ManagedAgentConfig<T = Agent | AgentContext> = AgentConfig & {
   name: string;
   rootPath: string;
-  adapter: AnyTextAdapter;
+  /** Vercel AI SDK LanguageModel instance */
+  languageModel: LanguageModel;
   setUp?: (instance: T) => T;
 };
 
@@ -33,7 +31,7 @@ export interface ManagedAgent {
   log: AgentLog;
   /** Convenience accessor for agent.context */
   context: AgentContext;
-  tools: Tools;
+  tools: ToolSet;
   sandbox: Sandbox;
   status: Agent["status"];
   error?: string;
@@ -58,8 +56,8 @@ export class AgentManager {
   /**
    * Create a new agent
    */
-  async createManagedAgent(_config: ManagedAgentConfig, parentId?: string): Promise<Agent> {
-    const { rootPath, setUp, adapter, ...config } = _config;
+  async createManagedAgent(config: ManagedAgentConfig, parentId?: string): Promise<Agent> {
+    const { rootPath, setUp, languageModel, name, ...restConfig } = config;
 
     const sandbox = await sandboxManager.getSandbox(rootPath);
 
@@ -69,10 +67,12 @@ export class AgentManager {
 
     const log = new AgentLog();
 
-    const agent = new Agent(config, { setUp: setUp as ManagedAgentConfig<Agent>["setUp"] });
+    const agent = new Agent(restConfig, { setUp: setUp as ManagedAgentConfig<Agent>["setUp"] });
 
-    agent.setAdapter(adapter);
+    // Set the Vercel AI SDK model
+    agent.setModel(languageModel);
 
+    // Set tools - convert from Tools record to ToolSet
     agent.setTools(tools);
 
     agent.setSandbox(sandbox);
@@ -85,12 +85,12 @@ export class AgentManager {
 
     const managedAgent: ManagedAgent = {
       id,
-      name: config.name,
-      config: _config,
+      name,
+      config,
       agent,
       context,
       sandbox,
-      tools,
+      tools: tools as unknown as ToolSet,
       log,
       status: "idle",
       parentId,

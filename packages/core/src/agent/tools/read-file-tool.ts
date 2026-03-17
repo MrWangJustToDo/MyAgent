@@ -1,13 +1,19 @@
-import { toolDefinition } from "@tanstack/ai";
+import { tool } from "ai";
 import { z } from "zod";
 
-import { getFile } from "./helpers";
+import { getFile } from "./helpers.js";
 
 import type { Sandbox } from "../../environment";
 
+/**
+ * Creates a read-file tool using Vercel AI SDK.
+ *
+ * This tool reads file contents and returns metadata including a modifiedTime
+ * timestamp that must be used when editing, deleting, or moving the file to
+ * ensure no concurrent modifications have occurred.
+ */
 export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const definition = toolDefinition({
-    name: "read-file-tool",
+  return tool({
     description:
       "Reads the content of a file. Returns the file content along with a modifiedTime timestamp that must be used when editing, deleting, or moving the file to ensure no concurrent modifications have occurred.",
     inputSchema: z.object({
@@ -26,41 +32,40 @@ export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
         .describe("The maximum number of lines to read. If not specified, reads the entire file."),
     }),
     outputSchema: z.object({
-      path: z.string().describe("The path to the file that was read."),
-      content: z.string().describe("The content of the file."),
-      modifiedTime: z.string().describe("The modification timestamp of the file."),
+      path: z.string().describe("The path of the file that was read."),
+      content: z.string().describe("The content of the file (or selected lines)."),
+      modifiedTime: z.string().describe("The modification timestamp of the file. Use this when editing/deleting."),
       totalLines: z.number().describe("Total number of lines in the file."),
-      startLine: z.number().describe("The starting line number."),
-      endLine: z.number().describe("The ending line number."),
-      linesReturned: z.number().describe("Number of lines returned."),
-      message: z.string().describe("A message describing the result."),
+      startLine: z.number().describe("The starting line number (0-indexed)."),
+      endLine: z.number().describe("The ending line number (exclusive)."),
+      linesReturned: z.number().describe("Number of lines returned in content."),
+      message: z.string().describe("Human-readable summary of the operation."),
     }),
-  });
+    execute: async ({ path, offset, limit }) => {
+      // Get file info and content
+      const fileRes = await getFile(sandbox, path);
+      const modifiedTime = fileRes.modifiedTime;
+      const content = fileRes.content;
 
-  return definition.server(async ({ path, offset, limit }) => {
-    // Get file info and content
-    const fileRes = await getFile(sandbox, path);
-    const modifiedTime = fileRes.modifiedTime;
-    const content = fileRes.content;
+      const lines = content.split("\n");
+      const totalLines = lines.length;
 
-    const lines = content.split("\n");
-    const totalLines = lines.length;
+      const startLine = offset ?? 0;
+      const endLine = limit !== undefined ? Math.min(startLine + limit, totalLines) : totalLines;
 
-    const startLine = offset ?? 0;
-    const endLine = limit !== undefined ? Math.min(startLine + limit, totalLines) : totalLines;
+      const selectedLines = lines.slice(startLine, endLine);
+      const selectedContent = selectedLines.join("\n");
 
-    const selectedLines = lines.slice(startLine, endLine);
-    const selectedContent = selectedLines.join("\n");
-
-    return {
-      path,
-      content: selectedContent,
-      modifiedTime,
-      totalLines,
-      startLine,
-      endLine,
-      linesReturned: selectedLines.length,
-      message: `Read ${selectedLines.length} lines from ${path} (lines ${startLine}-${endLine - 1} of ${totalLines})`,
-    };
+      return {
+        path,
+        content: selectedContent,
+        modifiedTime,
+        totalLines,
+        startLine,
+        endLine,
+        linesReturned: selectedLines.length,
+        message: `Read ${selectedLines.length} lines from ${path} (lines ${startLine}-${endLine - 1} of ${totalLines})`,
+      };
+    },
   });
 };

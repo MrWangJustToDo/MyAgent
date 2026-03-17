@@ -14,7 +14,20 @@ import { Content } from "../layout/Content.js";
 import { Footer } from "../layout/Footer.js";
 import { Header } from "../layout/Header.js";
 
-import type { UIMessage, ToolCallPart, AgentLog } from "@my-agent/core";
+import type { ToolInvocationUIPart } from "../messages/ToolCallPartView.js";
+import type { AgentLog } from "@my-agent/core";
+import type { UIMessage } from "ai";
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+/**
+ * Check if a part is a tool invocation part
+ */
+function isToolPart(part: { type: string }): part is ToolInvocationUIPart {
+  return part.type.startsWith("tool-") || part.type === "dynamic-tool";
+}
 
 // ============================================================================
 // Main Agent Component
@@ -35,14 +48,13 @@ export const Agent = () => {
   const config = useArgs((s) => s.config);
 
   // Use local chat with our config
-  const { messages, sendMessage, isLoading, addToolApprovalResponse, initError, initLoading, approvalInputs } =
-    useLocalChat({
-      model: config.model,
-      url: config.url,
-      rootPath: config.rootPath,
-      systemPrompt: config.systemPrompt,
-      maxIterations: config.maxIterations,
-    });
+  const { messages, sendMessage, isLoading, addToolApprovalResponse, initError, initLoading } = useLocalChat({
+    model: config.model,
+    url: config.url,
+    rootPath: config.rootPath,
+    systemPrompt: config.systemPrompt,
+    maxIterations: config.maxIterations,
+  });
 
   const hasInitRef = useRef(false);
 
@@ -58,13 +70,13 @@ export const Agent = () => {
       const msg = messages[i] as UIMessage;
       if (msg.role === "assistant") {
         for (const part of msg.parts) {
-          if (part.type === "tool-call") {
-            const toolCall = part as ToolCallPart;
-            if (toolCall.state === "approval-requested" && toolCall.approval) {
+          if (isToolPart(part)) {
+            const toolPart = part;
+            if (toolPart.state === "approval-requested" && toolPart.approval) {
               return {
-                id: toolCall.approval.id,
-                toolName: toolCall.name,
-                toolCallId: toolCall.id,
+                id: toolPart.approval.id,
+                toolName: toolPart.toolName || toolPart.type.slice(5),
+                toolCallId: toolPart.toolCallId,
               };
             }
           }
@@ -188,11 +200,7 @@ export const Agent = () => {
       <Content />
 
       {/* Messages */}
-      <MessageList
-        messages={messages}
-        addToolApprovalResponse={addToolApprovalResponse}
-        approvalInputs={approvalInputs}
-      />
+      <MessageList messages={messages} addToolApprovalResponse={addToolApprovalResponse} />
 
       {/* Input */}
       <Footer />

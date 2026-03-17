@@ -7,40 +7,51 @@ import { getToolCallColor } from "../utils/toolState.js";
 import { ToolOutputView } from "./ToolOutputView.js";
 import { ToolStatusIcon } from "./ToolStatusIcon.js";
 
-import type { ToolCallPart } from "@my-agent/core";
+import type { ToolInvocationState } from "../utils/toolState.js";
 
-export interface ToolCallPartViewProps {
-  part: ToolCallPart;
-  staticItem?: boolean;
-  addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
-  /**
-   * Tool input from approval-requested custom event.
-   * Used when part.arguments is empty (TanStack AI doesn't populate it during approval).
-   */
-  approvalInput?: unknown;
+/**
+ * Tool invocation part from AI SDK
+ * Represents a tool call with its state, input, and optionally output
+ */
+export interface ToolInvocationUIPart {
+  type: string; // "tool-${name}" or "dynamic-tool"
+  toolCallId: string;
+  toolName: string;
+  state: ToolInvocationState;
+  input?: unknown;
+  output?: unknown;
+  errorText?: string;
+  approval?: {
+    id: string;
+    approved?: boolean;
+    reason?: string;
+  };
 }
 
-/** Render a tool call part */
-export const ToolCallPartView = ({
-  part,
-  addToolApprovalResponse,
-  approvalInput,
-  staticItem,
-}: ToolCallPartViewProps) => {
+export interface ToolCallPartViewProps {
+  part: ToolInvocationUIPart;
+  staticItem?: boolean;
+  addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
+}
+
+/** Render a tool invocation part */
+export const ToolCallPartView = ({ part, addToolApprovalResponse, staticItem }: ToolCallPartViewProps) => {
   const needsApproval = part.state === "approval-requested" && part.approval;
 
-  // Get the arguments to display - prefer part.arguments, fallback to approvalInput
-  const getDisplayArguments = (): string | null => {
-    if (part.arguments) {
-      return part.arguments;
-    }
-    if (approvalInput !== undefined) {
-      return typeof approvalInput === "string" ? approvalInput : JSON.stringify(approvalInput);
+  const toolName = part.toolName || part.type.slice(5);
+
+  // Get the input to display - prefer part.input, fallback to approvalInput
+  const getDisplayInput = (): string | null => {
+    if (part.input !== undefined && part.input !== null) {
+      return typeof part.input === "string" ? part.input : JSON.stringify(part.input);
     }
     return null;
   };
 
-  const displayArguments = getDisplayArguments();
+  const displayInput = getDisplayInput();
+
+  // Check if output is available (state indicates completion)
+  const hasOutput = part.state === "output-available" || part.state === "output-error";
 
   return (
     <Box flexDirection="column">
@@ -49,20 +60,20 @@ export const ToolCallPartView = ({
           {/* Header */}
           <Box>
             <ToolStatusIcon state={part.state} />
-            <Text color={getToolCallColor(part.state)}> {part.name}</Text>
-            {displayArguments && (
+            <Text color={getToolCallColor(part.state)}> {toolName}</Text>
+            {displayInput && (
               <Text color="gray" dimColor>
                 {" "}
-                {formatToolInput(JSON.parse(displayArguments))}
+                {formatToolInput(JSON.parse(displayInput))}
               </Text>
             )}
           </Box>
 
-          {/* Show streaming arguments */}
-          {(part.state === "awaiting-input" || part.state === "input-streaming") && part.arguments && (
+          {/* Show streaming input */}
+          {part.state === "input-streaming" && displayInput && (
             <Box marginTop={1}>
               <Text color="gray" dimColor>
-                {part.arguments}...
+                {displayInput}...
               </Text>
             </Box>
           )}
@@ -77,7 +88,7 @@ export const ToolCallPartView = ({
           )}
 
           {/* Show output if available */}
-          {!staticItem && part.output !== undefined && (
+          {!staticItem && hasOutput && (
             <Box marginTop={1} flexDirection="column" width="100%">
               <ToolOutputView part={part} />
             </Box>

@@ -26,12 +26,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.41",
     "@computesdk/just-bash": "^0.4.0",
     "@computesdk/provider": "^1.0.28",
     "@standard-schema/spec": "^1.1.0",
-    "@tanstack/ai": "^0.8.0",
-    "@tanstack/ai-client": "^0.7.1",
-    "@tanstack/ai-ollama": "^0.6.2",
+    "ai": "^6.0.116",
+    "ai-sdk-ollama": "^3.8.1",
     "computesdk": "^2.3.0",
     "just-bash": "^2.12.8",
     "zod": "^4.3.6"

@@ -17,13 +17,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/react": "^3.0.118",
     "@git-diff-view/file": "^0.1.2",
     "@git-diff-view/cli": "^0.1.2",
     "@git-diff-view/core": "^0.1.2",
     "@my-agent/core": "workspace:*",
     "@my-react/react": "^0.3.22",
     "@my-react/react-terminal": "^0.0.18",
-    "@tanstack/ai-react": "^0.7.1",
+    "ai": "^6.0.116",
     "ansi-escapes": "^7.3.0",
     "chalk": "^5.6.2",
     "cli-table3": "^0.6.5",
@@ -48,8 +49,5 @@
     "react": "npm:@my-react/react@0.3.22",
     "tsdown": "^0.21.0",
     "typescript": "^5.6.3"
-  },
-  "overrides": {
-    "react": "npm:@my-react/react@0.3.22"
   }
 }

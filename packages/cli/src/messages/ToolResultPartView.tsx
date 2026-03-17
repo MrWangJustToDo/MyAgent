@@ -1,16 +1,20 @@
 import { Box, Text } from "ink";
 
 import { FullBox } from "../components/FullBox";
+import { formatToolOutput } from "../utils/format";
 
-import type { ToolResultPart } from "@my-agent/core";
+import type { ToolInvocationUIPart } from "./ToolCallPartView.js";
 
 export interface ToolResultPartViewProps {
-  part: ToolResultPart;
+  part: ToolInvocationUIPart;
 }
 
-/** Render a tool result part */
+/** Render a tool result part (output available state) */
 export const ToolResultPartView = ({ part }: ToolResultPartViewProps) => {
-  const isError = part.state === "error";
+  const isError = part.state === "output-error";
+
+  // Format output for display
+  const displayContent = part.output !== undefined && part.output !== null ? formatToolOutput(part.output) : null;
 
   return (
     <Box flexDirection="column">
@@ -18,16 +22,16 @@ export const ToolResultPartView = ({ part }: ToolResultPartViewProps) => {
         <Box flexDirection="column">
           <Box>
             <Text color={isError ? "red" : "green"}>{isError ? "x" : "v"} </Text>
-            <Text color="gray">Tool Result</Text>
+            <Text color="gray">Tool Result: {part.toolName}</Text>
           </Box>
-          {part.content && (
+          {displayContent && (
             <Box marginTop={1}>
-              <Text color={isError ? "red" : "gray"}>{part.content}</Text>
+              <Text color={isError ? "red" : "gray"}>{displayContent}</Text>
             </Box>
           )}
-          {part.error && (
+          {part.errorText && (
             <Box marginTop={1}>
-              <Text color="red">{part.error}</Text>
+              <Text color="red">{part.errorText}</Text>
             </Box>
           )}
         </Box>

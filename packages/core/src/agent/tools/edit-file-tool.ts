@@ -1,13 +1,21 @@
-import { toolDefinition } from "@tanstack/ai";
+import { tool } from "ai";
 import { z } from "zod";
 
-import { getFile, getFileModifiedTime } from "./helpers";
+import { getFile, getFileModifiedTime } from "./helpers.js";
 
 import type { Sandbox } from "../../environment";
 
+/**
+ * Creates an edit-file tool using Vercel AI SDK.
+ *
+ * This tool edits a file by replacing occurrences of oldString with newString.
+ * Requires the modifiedTime from a previous read operation to ensure
+ * the file hasn't been modified since it was read.
+ *
+ * Requires user approval before execution.
+ */
 export const createEditFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const definition = toolDefinition({
-    name: "edit-file-tool",
+  return tool({
     description:
       "Edits a file by replacing occurrences of oldString with newString. Requires the modifiedTime from a previous read operation to ensure the file hasn't been modified since it was read. The oldString must match exactly (including whitespace and indentation).",
     inputSchema: z.object({
@@ -24,54 +32,53 @@ export const createEditFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
         .optional()
         .describe("If true, replace all occurrences of oldString. If false, replace only the first occurrence."),
     }),
-    needsApproval: true,
     outputSchema: z.object({
-      path: z.string().describe("The path to the file that was edited."),
+      path: z.string().describe("The path of the file that was edited."),
       replacements: z.number().describe("Number of replacements made."),
-      modifiedTime: z.string().describe("The new modification timestamp of the file."),
-      message: z.string().describe("A message describing the result."),
+      modifiedTime: z.string().describe("The new modification timestamp after editing."),
+      message: z.string().describe("Human-readable summary of the operation."),
     }),
-  });
+    needsApproval: true,
+    execute: async ({ path, modifiedTime, oldString, newString, replaceAll }) => {
+      // Validate modification time and get current content
+      const fileRes = await getFile(sandbox, path);
+      const currentModifiedTime = fileRes.modifiedTime;
 
-  return definition.server(async ({ path, modifiedTime, oldString, newString, replaceAll }) => {
-    // Validate modification time and get current content
-    const fileRes = await getFile(sandbox, path);
-    const currentModifiedTime = fileRes.modifiedTime;
+      if (currentModifiedTime !== modifiedTime) {
+        throw new Error(
+          `File has been modified since it was read. Expected modifiedTime: ${modifiedTime}, current: ${currentModifiedTime}. Please read the file again before editing.`
+        );
+      }
 
-    if (currentModifiedTime !== modifiedTime) {
-      throw new Error(
-        `File has been modified since it was read. Expected modifiedTime: ${modifiedTime}, current: ${currentModifiedTime}. Please read the file again before editing.`
-      );
-    }
+      const content = fileRes.content;
 
-    const content = fileRes.content;
+      if (!content.includes(oldString)) {
+        throw new Error(`oldString not found in file content`);
+      }
 
-    if (!content.includes(oldString)) {
-      throw new Error(`oldString not found in file content`);
-    }
+      // Count occurrences
+      const occurrences = content.split(oldString).length - 1;
 
-    // Count occurrences
-    const occurrences = content.split(oldString).length - 1;
+      if (occurrences > 1 && !replaceAll) {
+        throw new Error(
+          `Found ${occurrences} matches for oldString. Set replaceAll to true to replace all occurrences, or provide more context in oldString to make it unique.`
+        );
+      }
 
-    if (occurrences > 1 && !replaceAll) {
-      throw new Error(
-        `Found ${occurrences} matches for oldString. Set replaceAll to true to replace all occurrences, or provide more context in oldString to make it unique.`
-      );
-    }
+      const newContent =
+        (replaceAll ?? false) ? content.replaceAll(oldString, newString) : content.replace(oldString, newString);
 
-    const newContent =
-      (replaceAll ?? false) ? content.replaceAll(oldString, newString) : content.replace(oldString, newString);
+      await sandbox.filesystem.writeFile(path, newContent);
 
-    await sandbox.filesystem.writeFile(path, newContent);
+      // Get new modification time after edit
+      const newModifiedTime = await getFileModifiedTime(sandbox, path);
 
-    // Get new modification time after edit
-    const newModifiedTime = await getFileModifiedTime(sandbox, path);
-
-    return {
-      path,
-      replacements: replaceAll ? occurrences : 1,
-      modifiedTime: newModifiedTime,
-      message: `Successfully edited file: ${path}`,
-    };
+      return {
+        path,
+        replacements: replaceAll ? occurrences : 1,
+        modifiedTime: newModifiedTime,
+        message: `Successfully edited file: ${path}`,
+      };
+    },
   });
 };

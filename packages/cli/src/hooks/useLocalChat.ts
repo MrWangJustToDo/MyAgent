@@ -1,21 +1,23 @@
 /**
- * useLocalChat - A hook that wraps useChat with a local connection adapter.
+ * useLocalChat - A hook that provides chat functionality with a local Agent.
  *
- * This provides the same API as useChat but runs locally without HTTP.
+ * This manages chat state using @ai-sdk/react's useChat hook with DirectChatTransport
+ * to interface directly with the Agent class.
  */
 
-import { createLocalConnection, createOllamaAdapter } from "@my-agent/core";
-import { useChat } from "@tanstack/ai-react";
-import { useEffect, useMemo, useCallback, useState } from "react";
-import { toRaw, reactive } from "reactivity-store";
+import { Chat, useChat as useAiSdkChat } from "@ai-sdk/react";
+import { agentManager, createOllamaModel } from "@my-agent/core";
+import { DirectChatTransport, lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
+import { useEffect, useCallback, useState, useRef } from "react";
+import { reactive, toRaw } from "reactivity-store";
 
-import { useAgent } from "./useAgent";
-import { useAgentContext } from "./useAgentContext";
-import { useAgentLog } from "./useAgentLog";
-import { useAgentSandbox } from "./useAgentSandbox";
+import { useAgent } from "./useAgent.js";
+import { useAgentContext } from "./useAgentContext.js";
+import { useAgentLog } from "./useAgentLog.js";
+import { useAgentSandbox } from "./useAgentSandbox.js";
 
-import type { Agent, AgentContext, AgentLog, ConnectionAdapter } from "@my-agent/core";
-import type { UseChatReturn } from "@tanstack/ai-react";
+import type { Agent, AgentContext } from "@my-agent/core";
+import type { ChatTransport, UIMessage } from "ai";
 
 // ============================================================================
 // Types
@@ -35,34 +37,54 @@ export interface UseLocalChatConfig {
 }
 
 /**
- * Stores tool input from approval-requested events.
- * This is needed because TanStack AI's StreamProcessor doesn't populate
- * the tool-call part's `arguments` field when updating approval state.
+ * Chat status from AI SDK
  */
-export type ApprovalInputsMap = Map<string, unknown>;
+export type ChatStatus = "ready" | "submitted" | "streaming" | "error";
 
-export interface UseLocalChatReturn extends Omit<UseChatReturn, "sendMessage"> {
+export interface UseLocalChatReturn {
+  /** Current chat messages */
+  messages: UIMessage[];
   /** Send a message */
   sendMessage: (content: string) => Promise<void>;
-
+  /** Current status */
+  status: ChatStatus;
+  /** Whether the chat is streaming */
+  isLoading: boolean;
+  /** Whether the connection is ready */
+  isReady: boolean;
+  /** Stop the current stream */
+  stop: () => void;
+  /** Clear all messages */
+  clearMessages: () => void;
+  /** Set messages directly */
+  setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) => void;
+  /** Error if any */
+  error: Error | null;
+  /** Initialization loading state */
   initLoading: boolean;
-
+  /** Initialization error */
   initError: Error | null | undefined;
-
-  /**
-   * Map of toolCallId -> input for pending approvals.
-   * Used to display tool arguments in approval prompts since the
-   * StreamProcessor doesn't populate arguments when setting approval state.
-   */
-  approvalInputs: ApprovalInputsMap;
+  /** Add tool approval response */
+  addToolApprovalResponse: (options: { id: string; approved: boolean; reason?: string }) => void;
 }
+
+// ============================================================================
+// Helper: Generate unique ID
+// ============================================================================
+
+const generateId = (): string => {
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 8);
+  return `msg_${timestamp}_${random}`;
+};
 
 // ============================================================================
 // Hook
 // ============================================================================
 
 /**
- * Hook that provides useChat functionality with a local connection.
+ * Hook that provides chat functionality with a local Agent connection.
+ * Uses @ai-sdk/react's useChat hook with DirectChatTransport from AI SDK.
  *
  * @example
  * ```typescript
@@ -88,8 +110,8 @@ export interface UseLocalChatReturn extends Omit<UseChatReturn, "sendMessage"> {
  * // Render messages
  * messages.map(msg => (
  *   msg.parts.map(part => {
- *     if (part.type === "text") return <Text>{part.content}</Text>;
- *     if (part.type === "tool-call") return <ToolView part={part} />;
+ *     if (part.type === "text") return <Text>{part.text}</Text>;
+ *     if (part.type === "tool-invocation") return <ToolView part={part} />;
  *   })
  * ))
  * ```
@@ -97,119 +119,150 @@ export interface UseLocalChatReturn extends Omit<UseChatReturn, "sendMessage"> {
 export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
   const { model, url, rootPath, systemPrompt, maxIterations = 10 } = config;
 
-  const [loading, setLoading] = useState(false);
+  // Connection state
+  const [initLoading, setInitLoading] = useState(true);
+  const [initError, setInitError] = useState<Error | null>(null);
+  const [agent, setAgent] = useState<Agent | null>(null);
 
-  const [error, setError] = useState<Error | null>(null);
+  const [_, setNum] = useState(0);
 
-  const [connection, setConnection] = useState<ConnectionAdapter>(() => ({
-    // eslint-disable-next-line require-yield
-    async *connect() {
-      console.log("[useLocalChat] placeholder connect called - this should not happen!");
-      // Yield nothing - this shouldn't be called before ready
-    },
-  }));
+  // Chat instance ref - created once when connection is ready
+  const chatRef = useRef<Chat<UIMessage> | null>(null);
 
-  // Store tool inputs from approval-requested events
-  // We use a ref to avoid re-renders, and useState for the Map to trigger re-renders when needed
-  const [approvalInputs, setApprovalInputs] = useState<ApprovalInputsMap>(() => new Map());
-
-  // Generate a unique ID that changes when connection changes
-  // This forces useChat to recreate its ChatClient when connection is ready
-  const chatId = useMemo(() => {
-    if (!connection) return "placeholder";
-    return `chat-${Date.now()}`;
-  }, [connection]);
-
+  // Initialize connection and create Chat instance
   useEffect(() => {
-    const init = async (config: UseLocalChatConfig) => {
-      setLoading(true);
+    const init = async () => {
+      setInitLoading(true);
 
-      const { model, url } = config;
+      setInitError(null);
 
       try {
-        const adapter = createOllamaAdapter(model, url);
+        const languageModel = createOllamaModel(model, url, { reasoning: true });
 
-        const connector = await createLocalConnection({
-          ...config,
-          systemPrompt: `You are a helpful coding assistant at sandbox. You can read, write, and modify files, run commands in bash, and help with programming tasks.`,
-          adapter,
-          maxIterations: config.maxIterations || 10,
-          name: "local-connector",
-          // make the agent instance reactive
-          setUp: (instance: Agent | AgentContext) => {
-            // if ((instance as Agent).symbol === Symbol.for("agent")) {
-            //   return reactive(instance) as Agent;
-            // } else {
-            //   return instance;
-            // }
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore
+        const agent = await agentManager.createManagedAgent({
+          languageModel,
+          model,
+          rootPath,
+          name: "local-chat",
+          systemPrompt:
+            systemPrompt ||
+            "You are a helpful coding assistant. You can read, write, and modify files, run commands in bash, and help with programming tasks.",
+          maxIterations,
+          setUp: (instance: (Agent | AgentContext) & { ["$$symbol"]?: symbol }) => {
+            if (instance["$$symbol"]) return instance;
             instance["$$symbol"] = Symbol.for("patch");
-            return reactive(instance) as Agent | AgentContext;
+            const pInstance = reactive(instance);
+            return new Proxy(pInstance, {
+              get(target, p, receiver) {
+                const key = p.toString()?.toLowerCase?.() || "";
+                if (key.includes("tool") || key.includes("config")) {
+                  return toRaw(Reflect.get(target, p, receiver));
+                }
+                return Reflect.get(target, p, receiver);
+              },
+            }) as Agent | AgentContext;
           },
         });
 
-        useAgent.getActions().setAgent(connector.agent);
+        // Set up global agent state
+        useAgent.getActions().setAgent(agent);
+        useAgentLog.getActions().setLog(agent.getLog());
+        useAgentContext.getActions().setContext(agent.getContext());
+        useAgentSandbox.getActions().setSandbox(agent.getSandbox());
 
-        useAgentLog.getActions().setLog(connector.agent.getLog());
+        // Create DirectChatTransport with the agent
+        // Note: Using type assertion due to complex SDK generic constraints
+        const transport = new DirectChatTransport({
+          agent,
+        }) as ChatTransport<UIMessage>;
 
-        useAgentContext.getActions().setContext(connector.agent.getContext());
+        // Create Chat instance with the transport
+        chatRef.current = new Chat<UIMessage>({
+          id: generateId(),
+          transport: transport,
+          messages: [],
+          sendAutomaticallyWhen(options) {
+            toRaw(agent.getLog())?.tool(`call 'sendAutomaticallyWhen'`, options);
+            return lastAssistantMessageIsCompleteWithApprovalResponses(options);
+          },
+        });
 
-        useAgentSandbox.getActions().setSandbox(connector.agent.getSandbox());
-
-        setConnection(connector);
+        setAgent(agent);
       } catch (e) {
-        setError(e as Error);
+        setInitError(e as Error);
       }
 
-      setLoading(false);
+      setInitLoading(false);
     };
 
-    init({ model, maxIterations, systemPrompt, rootPath, url });
-  }, [model, url, maxIterations, systemPrompt, rootPath]);
+    init();
+  }, [model, url, rootPath, systemPrompt, maxIterations]);
 
-  // Use the chat hook with our connection
-  // The id changes when connection changes, forcing a new ChatClient
-  const chatResult = useChat({
-    id: chatId,
-    connection: connection,
-    onChunk: (chunk) => {
-      if (chunk.type === "CUSTOM") {
-        const value = chunk.value as {
-          toolCallId: string;
-          input: object;
-          approval: {
-            id: string;
-          };
-        };
-        setApprovalInputs((prev) => {
-          const next = new Map(prev);
-          next.set(value.toolCallId, value.input);
-          return next;
-        });
-      }
-    },
-  });
-
-  // Wrap sendMessage to prevent sending before ready
-  const sendMessage = useCallback(
-    async (content: string) => {
-      if (!connection) {
-        return;
-      }
-      const agentLog = toRaw(useAgent.getReactiveState().agent?.getLog()) as AgentLog | null;
-      agentLog?.chat(`user send message \`${content}\` start`);
-      await chatResult.sendMessage(content);
-      agentLog?.chat(`user send message \`${content}\` end`);
-    },
-    [connection, chatResult.sendMessage]
+  // Use @ai-sdk/react's useChat hook with our Chat instance
+  const chatHelpers = useAiSdkChat<UIMessage>(
+    chatRef.current
+      ? {
+          chat: chatRef.current,
+          experimental_throttle: 50,
+        }
+      : {}
   );
 
+  // 强制刷新 更新 status，当前 @my-react 实现瑕疵
+  // TODO！message更新后 status的排在了effect之后，
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setNum((l) => l + 1);
+    }, 500);
+
+    return () => clearTimeout(id);
+  }, [chatHelpers.messages]);
+
+  // Wrap sendMessage to handle string input (useChat expects object)
+  const sendMessage = useCallback(
+    async (content: string) => {
+      if (!agent || !chatRef.current) {
+        return;
+      }
+
+      await chatHelpers.sendMessage({ text: content });
+    },
+    [agent, chatHelpers]
+  );
+
+  // Clear messages
+  const clearMessages = useCallback(() => {
+    chatHelpers.setMessages([]);
+    chatHelpers.clearError();
+  }, [chatHelpers]);
+
+  // Add tool approval response
+  const addToolApprovalResponse = useCallback(
+    (options: { id: string; approved: boolean; reason?: string }) => {
+      // Use the SDK's built-in method for handling tool approvals
+      chatHelpers.addToolApprovalResponse({
+        id: options.id,
+        approved: options.approved,
+        reason: options.reason,
+      });
+    },
+    [chatHelpers]
+  );
+
+  const status = chatHelpers.status;
+
   return {
-    ...chatResult,
+    messages: chatHelpers.messages,
     sendMessage,
-    initLoading: loading,
-    initError: error,
-    approvalInputs,
+    status,
+    isLoading: status === "streaming" || status === "submitted",
+    isReady: agent !== null && !initLoading && chatRef.current !== null,
+    stop: chatHelpers.stop,
+    clearMessages,
+    setMessages: chatHelpers.setMessages,
+    error: chatHelpers.error ?? null,
+    initLoading,
+    initError,
+    addToolApprovalResponse,
   };
 }

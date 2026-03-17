@@ -1,11 +1,16 @@
-import { toolDefinition } from "@tanstack/ai";
+import { tool } from "ai";
 import { z } from "zod";
 
 import type { Sandbox } from "../../environment";
 
+/**
+ * Creates a fetch-url tool using Vercel AI SDK.
+ *
+ * This tool fetches content from a URL using curl. Supports HTTP/HTTPS
+ * requests and can return text or save to file.
+ */
 export const createFetchUrlTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const definition = toolDefinition({
-    name: "fetch-url-tool",
+  return tool({
     description:
       "Fetches content from a URL using curl. Supports HTTP/HTTPS requests and can return text or save to file. Useful for downloading files, fetching API responses, or getting web page content.",
     inputSchema: z.object({
@@ -26,80 +31,79 @@ export const createFetchUrlTool = ({ sandbox }: { sandbox: Sandbox }) => {
     outputSchema: z.object({
       url: z.string().describe("The URL that was fetched."),
       method: z.string().describe("The HTTP method used."),
-      statusCode: z.number().describe("HTTP status code."),
-      content: z.string().optional().describe("Response content (if not saved to file)."),
-      contentLength: z.number().optional().describe("Content length."),
-      savedTo: z.string().optional().describe("Path where content was saved (if outputPath provided)."),
-      message: z.string().describe("A message describing the result."),
+      statusCode: z.number().describe("The HTTP status code of the response."),
+      content: z.string().optional().describe("The response content (if not saved to file)."),
+      contentLength: z.number().optional().describe("Length of the content in characters."),
+      savedTo: z.string().optional().describe("The file path where content was saved (if outputPath was provided)."),
+      message: z.string().describe("Human-readable summary of the operation."),
     }),
-  });
+    execute: async ({ url, method, headers, body, outputPath, timeout, followRedirects }) => {
+      // Build curl command
+      let curlCommand = `curl -s -S --max-time ${timeout ?? 30}`;
 
-  return definition.server(async ({ url, method, headers, body, outputPath, timeout, followRedirects }) => {
-    // Build curl command
-    let curlCommand = `curl -s -S --max-time ${timeout ?? 30}`;
-
-    // Method
-    if (method && method !== "GET") {
-      curlCommand += ` -X ${method}`;
-    }
-
-    // Follow redirects
-    if (followRedirects !== false) {
-      curlCommand += " -L";
-    }
-
-    // Headers
-    if (headers) {
-      for (const [key, value] of Object.entries(headers)) {
-        curlCommand += ` -H "${key}: ${String(value).replace(/"/g, '\\"')}"`;
+      // Method
+      if (method && method !== "GET") {
+        curlCommand += ` -X ${method}`;
       }
-    }
 
-    // Body
-    if (body) {
-      curlCommand += ` -d '${body.replace(/'/g, "'\\''")}'`;
-    }
+      // Follow redirects
+      if (followRedirects !== false) {
+        curlCommand += " -L";
+      }
 
-    // Output to file or stdout
-    if (outputPath) {
-      curlCommand += ` -o "${outputPath}"`;
-    }
+      // Headers
+      if (headers) {
+        for (const [key, value] of Object.entries(headers)) {
+          curlCommand += ` -H "${key}: ${String(value).replace(/"/g, '\\"')}"`;
+        }
+      }
 
-    // Include response headers in output for status code
-    curlCommand += " -w '\\n__HTTP_STATUS__:%{http_code}'";
+      // Body
+      if (body) {
+        curlCommand += ` -d '${body.replace(/'/g, "'\\''")}'`;
+      }
 
-    // Add URL
-    curlCommand += ` "${url}"`;
+      // Output to file or stdout
+      if (outputPath) {
+        curlCommand += ` -o "${outputPath}"`;
+      }
 
-    const result = await sandbox.runCommand(curlCommand);
+      // Include response headers in output for status code
+      curlCommand += " -w '\\n__HTTP_STATUS__:%{http_code}'";
 
-    if (result.exitCode !== 0) {
-      throw new Error(`Failed to fetch URL: ${result.stderr || "Unknown error"}`);
-    }
+      // Add URL
+      curlCommand += ` "${url}"`;
 
-    // Parse output to extract status code
-    const outputLines = result.stdout.split("\n");
-    const statusLine = outputLines.find((line) => line.startsWith("__HTTP_STATUS__:"));
-    const statusCode = statusLine ? parseInt(statusLine.split(":")[1], 10) : 0;
-    const content = outputLines.filter((line) => !line.startsWith("__HTTP_STATUS__:")).join("\n");
+      const result = await sandbox.runCommand(curlCommand);
 
-    if (outputPath) {
+      if (result.exitCode !== 0) {
+        throw new Error(`Failed to fetch URL: ${result.stderr || "Unknown error"}`);
+      }
+
+      // Parse output to extract status code
+      const outputLines = result.stdout.split("\n");
+      const statusLine = outputLines.find((line) => line.startsWith("__HTTP_STATUS__:"));
+      const statusCode = statusLine ? parseInt(statusLine.split(":")[1], 10) : 0;
+      const content = outputLines.filter((line) => !line.startsWith("__HTTP_STATUS__:")).join("\n");
+
+      if (outputPath) {
+        return {
+          url,
+          method: method ?? "GET",
+          statusCode,
+          savedTo: outputPath,
+          message: `Successfully fetched and saved to: ${outputPath}`,
+        };
+      }
+
       return {
         url,
         method: method ?? "GET",
         statusCode,
-        savedTo: outputPath,
-        message: `Successfully fetched and saved to: ${outputPath}`,
+        content,
+        contentLength: content.length,
+        message: `Successfully fetched URL with status ${statusCode}`,
       };
-    }
-
-    return {
-      url,
-      method: method ?? "GET",
-      statusCode,
-      content,
-      contentLength: content.length,
-      message: `Successfully fetched URL with status ${statusCode}`,
-    };
+    },
   });
 };

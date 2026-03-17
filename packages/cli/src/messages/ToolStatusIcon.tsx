@@ -2,24 +2,29 @@ import { Text } from "ink";
 
 import { Spinner } from "../components/Spinner.js";
 
-import type { ToolCallState } from "../utils/toolState.js";
+import type { ToolInvocationState } from "../utils/toolState.js";
 
 export interface ToolStatusIconProps {
-  state: ToolCallState;
+  state: ToolInvocationState | string;
 }
 
-/** Get status icon for tool call */
+/** Get status icon for tool invocation */
 export const ToolStatusIcon = ({ state }: ToolStatusIconProps) => {
   switch (state) {
-    case "awaiting-input":
     case "input-streaming":
       return <Spinner text="" />;
-    case "input-complete":
+    case "input-available":
       return <Text color="cyan">...</Text>;
+    case "output-available":
+      return <Text color="green">v</Text>;
+    case "output-error":
+      return <Text color="red">x</Text>;
     case "approval-requested":
       return <Text color="yellow">?</Text>;
     case "approval-responded":
-      return <Text color="green">✓</Text>;
+      return <Text color="cyan">...</Text>;
+    case "output-denied":
+      return <Text color="red">x</Text>;
     default:
       return null;
   }

@@ -1,8 +1,9 @@
-import type { AGUIEvent, FinishInfo } from "@tanstack/ai";
-
 // ============================================================================
 // Token Usage
 // ============================================================================
+
+import type { StreamPart, ToolSet } from "../loop/Agent";
+import type { OnFinishEvent } from "ai";
 
 export interface TokenUsage {
   inputTokens: number;
@@ -30,15 +31,17 @@ export class AgentContext {
   readonly symbol = Symbol.for("agent-context");
 
   /** Stream events (for UI rendering) */
-  private events: AGUIEvent[] = [];
+  // current emit the raw vercel type
+  // SEE https://github.com/ag-ui-protocol/ag-ui/blob/main/sdks/typescript/packages/core/src/events.ts ag-ui protocol
+  private events: StreamPart[] = [];
 
   /** Token usage */
   private usage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 
   /** Event listeners */
-  private eventListeners: Set<(event: AGUIEvent) => void> = new Set();
+  private eventListeners: Set<(event: StreamPart) => void> = new Set();
 
-  finishInfo: FinishInfo | null = null;
+  finishInfo: OnFinishEvent<ToolSet> | null = null;
 
   /** Streaming state */
   isStreaming = false;
@@ -64,13 +67,13 @@ export class AgentContext {
   /**
    * Emit a stream event
    */
-  emit(event: AGUIEvent): void {
+  emit(event: StreamPart): void {
     this.events.push(event);
 
     // Update streaming state
-    if (event.type === "RUN_STARTED") {
+    if (event.type === "start") {
       this.isStreaming = true;
-    } else if (event.type === "RUN_FINISHED" || event.type === "RUN_ERROR") {
+    } else if (event.type === "finish" || event.type === "error") {
       this.isStreaming = false;
     }
 
@@ -89,7 +92,7 @@ export class AgentContext {
   /**
    * Subscribe to stream events
    */
-  onEvent(listener: (event: AGUIEvent) => void): () => void {
+  onEvent(listener: (event: StreamPart) => void): () => void {
     this.eventListeners.add(listener);
     return () => this.eventListeners.delete(listener);
   }
@@ -97,7 +100,7 @@ export class AgentContext {
   /**
    * Get all events (for replay/debugging)
    */
-  getEvents(): AGUIEvent[] {
+  getEvents(): StreamPart[] {
     return [...this.events];
   }
 
@@ -111,7 +114,7 @@ export class AgentContext {
     };
   }
 
-  updateFinal(t: FinishInfo) {
+  updateFinal(t: OnFinishEvent<ToolSet>) {
     this.finishInfo = t;
   }
 

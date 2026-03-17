@@ -1,11 +1,18 @@
-import { toolDefinition } from "@tanstack/ai";
+import { tool } from "ai";
 import { z } from "zod";
 
 import type { Sandbox } from "../../environment";
 
+/**
+ * Creates a run-command tool using Vercel AI SDK.
+ *
+ * This tool executes a shell command in the sandbox environment.
+ * Returns stdout, stderr, exit code, and execution duration.
+ *
+ * Requires user approval before execution.
+ */
 export const createRunCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
-  const definition = toolDefinition({
-    name: "run-command-tool",
+  return tool({
     description:
       "Executes a shell command in the sandbox environment. Returns stdout, stderr, exit code, and execution duration. Use this for running build commands, tests, scripts, or any shell operations.",
     inputSchema: z.object({
@@ -29,37 +36,36 @@ export const createRunCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
         .optional()
         .describe("If true, run the command in the background and return immediately. Defaults to false."),
     }),
-    needsApproval: true,
     outputSchema: z.object({
       command: z.string().describe("The command that was executed."),
-      stdout: z.string().describe("Standard output."),
-      stderr: z.string().describe("Standard error."),
-      exitCode: z.number().describe("Exit code."),
+      stdout: z.string().describe("Standard output from the command."),
+      stderr: z.string().describe("Standard error output from the command."),
+      exitCode: z.number().describe("Exit code of the command (0 = success)."),
       durationMs: z.number().describe("Execution duration in milliseconds."),
-      success: z.boolean().describe("Whether the command succeeded."),
-      message: z.string().describe("A message describing the result."),
+      success: z.boolean().describe("Whether the command succeeded (exit code 0)."),
+      message: z.string().describe("Human-readable summary of the operation."),
     }),
-  });
+    needsApproval: true,
+    execute: async ({ command, cwd, env, timeout, background }) => {
+      const result = await sandbox.runCommand(command, {
+        cwd,
+        env,
+        timeout,
+        background: background ?? false,
+      });
 
-  return definition.server(async ({ command, cwd, env, timeout, background }) => {
-    const result = await sandbox.runCommand(command, {
-      cwd,
-      env,
-      timeout,
-      background: background ?? false,
-    });
-
-    return {
-      command,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      exitCode: result.exitCode,
-      durationMs: result.durationMs,
-      success: result.exitCode === 0,
-      message:
-        result.exitCode === 0
-          ? `Command executed successfully in ${result.durationMs}ms`
-          : `Command failed with exit code ${result.exitCode}`,
-    };
+      return {
+        command,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        exitCode: result.exitCode,
+        durationMs: result.durationMs,
+        success: result.exitCode === 0,
+        message:
+          result.exitCode === 0
+            ? `Command executed successfully in ${result.durationMs}ms`
+            : `Command failed with exit code ${result.exitCode}`,
+      };
+    },
   });
 };

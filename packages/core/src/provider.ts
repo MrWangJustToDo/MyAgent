@@ -1,64 +1,169 @@
-import { createOllamaChat } from "@tanstack/ai-ollama";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createOllama, wrapLanguageModel, extractReasoningMiddleware } from "ai-sdk-ollama";
 
-import { DEFAULT_OLLAMA_API_URL } from "./types.js";
+import { DEFAULT_OLLAMA_URL } from "./types.js";
 
-import type { AnyTextAdapter } from "@tanstack/ai";
-import type { OllamaTextAdapter } from "@tanstack/ai-ollama";
+import type { LanguageModel } from "ai";
 
 // ============================================================================
 // Provider Types
 // ============================================================================
 
-export type ProviderType = "ollama";
+export type ProviderType = "ollama" | "openai" | "openai-compatible";
+
+export interface OllamaModelOptions {
+  /** Enable reasoning/thinking extraction for models like qwen3, deepseek-r1 */
+  reasoning?: boolean;
+  /** Tag name for reasoning extraction (default: "think") */
+  reasoningTagName?: string;
+}
 
 export interface ProviderConfig {
   type: ProviderType;
   model: string;
   baseURL?: string;
+  apiKey?: string;
+  /** Ollama-specific options */
+  ollamaOptions?: OllamaModelOptions;
 }
 
 // ============================================================================
-// Adapter Creation
+// Model Creation
 // ============================================================================
 
 /**
- * Create an Ollama adapter
+ * Create an Ollama model using the native ai-sdk-ollama provider
+ *
+ * Supports native Ollama features including:
+ * - Thinking/reasoning extraction for models like qwen3, deepseek-r1
+ * - Native Ollama API (not OpenAI-compatible endpoint)
+ * - Advanced Ollama options (mirostat, repeat_penalty, num_ctx, etc.)
  *
  * @example
  * ```typescript
- * const adapter = createOllamaAdapter("llama3");
- * agent.setAdapter(adapter);
+ * // Basic usage
+ * const model = createOllamaModel("llama3");
+ *
+ * // With reasoning enabled (for qwen3, deepseek-r1, etc.)
+ * const model = createOllamaModel("qwen3", "http://localhost:11434", {
+ *   reasoning: true,
+ * });
+ *
+ * agent.setModel(model);
  * ```
  */
-export const createOllamaAdapter = (
+export const createOllamaModel = (
   modelName: string,
-  baseURL: string = DEFAULT_OLLAMA_API_URL
-): OllamaTextAdapter<string> => {
-  return createOllamaChat(modelName, baseURL);
+  baseURL: string = DEFAULT_OLLAMA_URL,
+  options: OllamaModelOptions = {}
+): LanguageModel => {
+  const { reasoning = true, reasoningTagName = "think" } = options;
+
+  // Create Ollama provider with native API
+  const ollama = createOllama({
+    baseURL: baseURL.replace(/\/+$/, ""), // Remove trailing slashes
+  });
+
+  // Create the base model
+  const baseModel = ollama(modelName, { think: reasoning });
+
+  // If reasoning is enabled, wrap with extractReasoningMiddleware
+  if (reasoning) {
+    return wrapLanguageModel({
+      model: baseModel,
+      middleware: extractReasoningMiddleware({
+        tagName: reasoningTagName,
+        separator: "\n",
+        // startWithReasoning: false - only extract content within <think> tags
+        // Don't assume the model always starts with reasoning
+        startWithReasoning: false,
+      }),
+    });
+  }
+
+  return baseModel;
 };
 
 /**
- * Create a model adapter from provider config
+ * Create an OpenAI model
  *
  * @example
  * ```typescript
- * const adapter = createAdapter({
+ * const model = createOpenAIModel("gpt-4o", "your-api-key");
+ * agent.setModel(model);
+ * ```
+ */
+export const createOpenAIModel = (modelName: string, apiKey: string, baseURL?: string): LanguageModel => {
+  const openai = createOpenAI({
+    apiKey,
+    baseURL,
+  });
+  return openai(modelName);
+};
+
+/**
+ * Create an OpenAI-compatible model (for LMStudio, vLLM, etc.)
+ *
+ * @example
+ * ```typescript
+ * // Use LMStudio with OpenAI-compatible endpoint
+ * const model = createOpenAICompatibleModel("local-model", "http://localhost:1234/v1");
+ * agent.setModel(model);
+ * ```
+ */
+export const createOpenAICompatibleModel = (
+  modelName: string,
+  baseURL: string,
+  apiKey: string = "not-needed"
+): LanguageModel => {
+  const provider = createOpenAI({
+    baseURL,
+    apiKey,
+  });
+  // Use .chat() to explicitly use the Chat API instead of the Responses API
+  // The Responses API is not supported by most OpenAI-compatible providers
+  return provider.chat(modelName);
+};
+
+/**
+ * Create a model from provider config
+ *
+ * @example
+ * ```typescript
+ * // Using Ollama
+ * const model = createModel({
  *   type: "ollama",
  *   model: "llama3",
- *   baseURL: "http://localhost:11434/api",
+ *   baseURL: "http://localhost:11434",
+ * });
+ *
+ * // Using Ollama with reasoning (qwen3, deepseek-r1)
+ * const model = createModel({
+ *   type: "ollama",
+ *   model: "qwen3",
+ *   ollamaOptions: { reasoning: true },
+ * });
+ *
+ * // Using OpenAI
+ * const model = createModel({
+ *   type: "openai",
+ *   model: "gpt-4o",
+ *   apiKey: "sk-...",
  * });
  * ```
  */
-export const createAdapter = (config: ProviderConfig): AnyTextAdapter => {
+export const createModel = (config: ProviderConfig): LanguageModel => {
   switch (config.type) {
     case "ollama":
-      return createOllamaAdapter(config.model, config.baseURL ?? DEFAULT_OLLAMA_API_URL);
+      return createOllamaModel(config.model, config.baseURL ?? DEFAULT_OLLAMA_URL, config.ollamaOptions);
+    case "openai":
+      if (!config.apiKey) {
+        throw new Error("OpenAI provider requires an API key");
+      }
+      return createOpenAIModel(config.model, config.apiKey, config.baseURL);
+    case "openai-compatible":
+      return createOpenAICompatibleModel(config.model, config.baseURL ?? DEFAULT_OLLAMA_URL, config.apiKey);
     default:
       throw new Error(`Unknown provider type: ${config.type}`);
   }
 };
-
-/**
- * @deprecated Use createOllamaAdapter instead
- */
-export const createModel = createOllamaAdapter;

@@ -3,29 +3,36 @@
 // ============================================================================
 
 /**
- * Tool call state from TanStack AI
+ * Tool invocation state from AI SDK
  */
-export type ToolCallState =
-  | "awaiting-input"
+export type ToolInvocationState =
   | "input-streaming"
-  | "input-complete"
+  | "input-available"
   | "approval-requested"
-  | "approval-responded";
+  | "approval-responded"
+  | "output-available"
+  | "output-error"
+  | "output-denied";
 
 /**
- * Get status color for tool call state
+ * Get status color for tool invocation state
  */
-export function getToolCallColor(state: ToolCallState): string {
+export function getToolCallColor(state: ToolInvocationState | string): string {
   switch (state) {
-    case "awaiting-input":
     case "input-streaming":
       return "yellow";
-    case "input-complete":
+    case "input-available":
       return "cyan";
+    case "output-available":
+      return "green";
+    case "output-error":
+      return "red";
     case "approval-requested":
       return "yellow";
     case "approval-responded":
-      return "green";
+      return "cyan";
+    case "output-denied":
+      return "red";
     default:
       return "gray";
   }

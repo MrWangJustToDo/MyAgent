@@ -1,7 +1,7 @@
 /**
  * MessageList - Renders a list of UIMessages with their parts.
  *
- * Uses TanStack AI's UIMessage format with parts (text, tool-call, tool-result, thinking).
+ * Uses AI SDK's UIMessage format with parts (text, reasoning, tool-*, etc).
  */
 
 import { Box, Text } from "ink";
@@ -10,8 +10,7 @@ import { useEffect, useMemo } from "react";
 import { useStatic } from "../hooks/useStatic";
 import { MessageView } from "../messages";
 
-import type { ApprovalInputsMap } from "../hooks";
-import type { UIMessage } from "@my-agent/core";
+import type { UIMessage } from "ai";
 
 // ============================================================================
 // Props
@@ -20,22 +19,20 @@ import type { UIMessage } from "@my-agent/core";
 export interface MessageListProps {
   messages: UIMessage[];
   addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
-  /** Map of toolCallId -> input for pending approvals */
-  approvalInputs?: ApprovalInputsMap;
 }
 
 // ============================================================================
 // Main Component
 // ============================================================================
 
-export const MessageList = ({ messages, addToolApprovalResponse, approvalInputs }: MessageListProps) => {
+export const MessageList = ({ messages, addToolApprovalResponse }: MessageListProps) => {
   const staticList = useMemo(() => messages.slice(0, -1), [messages.length]);
 
   useEffect(() => {
     useStatic.getActions().setStaticItem(
       staticList.map((item) => (
         <Box key={item.id} paddingX={1} marginY={1}>
-          <MessageView message={item} approvalInputs={approvalInputs} staticItem />
+          <MessageView message={item} staticItem />
         </Box>
       ))
     );
@@ -57,11 +54,7 @@ export const MessageList = ({ messages, addToolApprovalResponse, approvalInputs 
     <Box flexDirection="column">
       {current.map((message) => (
         <Box key={message.id} paddingX={1} marginY={1}>
-          <MessageView
-            message={message}
-            addToolApprovalResponse={addToolApprovalResponse}
-            approvalInputs={approvalInputs}
-          />
+          <MessageView message={message} addToolApprovalResponse={addToolApprovalResponse} />
         </Box>
       ))}
     </Box>

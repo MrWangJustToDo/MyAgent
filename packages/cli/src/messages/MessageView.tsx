@@ -1,45 +1,47 @@
 import { Box } from "ink";
-import { memo } from "react";
 
 import { TextPartView } from "./TextPartView.js";
 import { ThinkingPartView } from "./ThinkingPartView.js";
 import { ToolCallPartView } from "./ToolCallPartView.js";
-// import { ToolResultPartView } from "./ToolResultPartView.js";
 
-import type { ApprovalInputsMap } from "../hooks";
-import type { TextPart, ThinkingPart, ToolCallPart, UIMessage } from "@my-agent/core";
+import type { TextUIPart } from "./TextPartView.js";
+import type { ReasoningUIPart } from "./ThinkingPartView.js";
+import type { ToolInvocationUIPart } from "./ToolCallPartView.js";
+import type { UIMessage } from "ai";
 
 export interface MessageViewProps {
   message: UIMessage;
   staticItem?: boolean;
   addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
-  /** Map of toolCallId -> input for pending approvals */
-  approvalInputs?: ApprovalInputsMap;
+}
+
+/**
+ * Check if a part is a tool invocation part
+ * In AI SDK, tool parts have type "tool-{toolName}" or "dynamic-tool"
+ */
+function isToolPart(part: { type: string }): part is ToolInvocationUIPart {
+  return part.type.startsWith("tool-") || part.type === "dynamic-tool";
 }
 
 /** Render a single message */
-export const MessageView = memo(
-  ({ message, addToolApprovalResponse, approvalInputs, staticItem }: MessageViewProps) => {
-    return (
-      <Box flexDirection="column" rowGap={1}>
-        {message.parts.map((part, index) => (
-          <Box key={`${part.type}-${index}`}>
-            {part.type === "text" && <TextPartView part={part as TextPart} role={message.role} />}
-            {part.type === "thinking" && <ThinkingPartView part={part as ThinkingPart} />}
-            {part.type === "tool-call" && (
-              <ToolCallPartView
-                part={part as ToolCallPart}
-                staticItem={staticItem}
-                addToolApprovalResponse={addToolApprovalResponse}
-                approvalInput={approvalInputs?.get((part as ToolCallPart).id)}
-              />
-            )}
-            {/* {part.type === "tool-result" && <ToolResultPartView part={part as ToolResultPart} />} */}
-          </Box>
-        ))}
-      </Box>
-    );
-  }
-);
+export const MessageView = ({ message, addToolApprovalResponse, staticItem }: MessageViewProps) => {
+  const validPart = message.parts.filter((i) => Object.keys(i).length > 1);
 
-MessageView.displayName = "MessageView";
+  return (
+    <Box flexDirection="column" rowGap={1}>
+      {validPart.map((part, index) => (
+        <Box key={`${part.type}-${index}`}>
+          {part.type === "text" && <TextPartView part={part as TextUIPart} role={message.role} />}
+          {part.type === "reasoning" && <ThinkingPartView part={part as ReasoningUIPart} />}
+          {isToolPart(part) && (
+            <ToolCallPartView
+              part={part as ToolInvocationUIPart}
+              staticItem={staticItem}
+              addToolApprovalResponse={addToolApprovalResponse}
+            />
+          )}
+        </Box>
+      ))}
+    </Box>
+  );
+};

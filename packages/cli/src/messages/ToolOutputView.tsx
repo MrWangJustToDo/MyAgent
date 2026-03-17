@@ -4,27 +4,52 @@ import { memo } from "react";
 
 import { formatToolOutput } from "../utils/format";
 
-import type { ToolCallPart, Tools, z } from "@my-agent/core";
+import type { ToolInvocationUIPart } from "./ToolCallPartView.js";
 
 const getLang = (name = "") => name.slice(name.lastIndexOf(".") + 1);
 
-export const ToolOutputView = memo(
-  ({ part }: { part: ToolCallPart }) => {
-    if (part.name === "read-file-tool") {
-      const content = part.output as z.infer<SplitUndefined<Tools["read_file"]["outputSchema"]>>;
+interface ToolOutputViewProps {
+  /** Tool invocation part */
+  part: ToolInvocationUIPart;
+  /** Direct output override */
+  output?: unknown;
+}
 
-      return (
-        <CodeView
-          data={{ fileName: content.path, fileLang: getLang(content.path), content: content.content }}
-          codeViewTheme="dark"
-          codeViewHighlight
-        />
-      );
+export const ToolOutputView = memo(
+  ({ part, output }: ToolOutputViewProps) => {
+    // Get output from either direct prop or part.output
+    const displayOutput = output ?? part.output;
+
+    if (displayOutput === undefined) {
+      return <Text color="gray">No output</Text>;
     }
 
-    return <Text color="gray">{formatToolOutput(part.output)}</Text>;
+    const toolName = part.toolName;
+
+    if (toolName === "read-file-tool") {
+      const content = displayOutput as { path?: string; content?: string };
+      if (content && typeof content === "object" && "content" in content) {
+        return (
+          <CodeView
+            data={{
+              fileName: content.path || "unknown",
+              fileLang: getLang(content.path),
+              content: content.content || "",
+            }}
+            codeViewTheme="dark"
+            codeViewHighlight
+          />
+        );
+      }
+    }
+
+    return <Text color="gray">{formatToolOutput(displayOutput)}</Text>;
   },
-  (p, c) => p.part.output === c.part.output
+  (p, c) => {
+    const pOutput = p.output ?? p.part.output;
+    const cOutput = c.output ?? c.part.output;
+    return pOutput === cOutput;
+  }
 );
 
 ToolOutputView.displayName = "ToolOutputView";

@@ -1,24 +1,27 @@
 import { Box, Text } from "ink";
-import { memo } from "react";
 
 import { Markdown } from "../markdown";
 
-import type { TextPart, UIMessage } from "@my-agent/core";
+import type { UIMessage } from "ai";
+
+/**
+ * Text part from AI SDK
+ */
+export interface TextUIPart {
+  type: "text";
+  text: string;
+  state?: "streaming" | "done";
+}
 
 export interface TextPartViewProps {
-  part: TextPart;
+  part: TextUIPart;
   role: UIMessage["role"];
 }
 
 /** Render a text part */
-export const TextPartView = memo(
-  ({ part, role }: TextPartViewProps) => (
-    <Box>
-      {role === "user" ? <Text>{"> "}</Text> : <Text>{"⏺ "}</Text>}
-      <Markdown content={part.content} />
-    </Box>
-  ),
-  (p, n) => p.part.content === n.part.content
+export const TextPartView = ({ part, role }: TextPartViewProps) => (
+  <Box>
+    {role === "user" ? <Text>{"> "}</Text> : <Text>{"- "}</Text>}
+    <Markdown content={part.text} />
+  </Box>
 );
-
-TextPartView.displayName = "TextPartView";
