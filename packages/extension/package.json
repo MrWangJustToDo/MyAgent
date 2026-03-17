@@ -23,14 +23,12 @@
     "@heroui/react": "2.8.9",
     "@my-react/react": "^0.3.22",
     "@my-react/react-dom": "^0.3.22",
-    "@xsai-ext/providers": "0.4.3",
     "framer-motion": "^12.34.5",
     "lucide-react": "^0.576.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "reactivity-store": "^0.4.0",
-    "swr": "^2.4.1",
-    "xsai": "0.4.3"
+    "swr": "^2.4.1"
   },
   "devDependencies": {
     "@my-react/react-refresh": "^0.3.22",

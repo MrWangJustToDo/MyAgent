@@ -37,7 +37,7 @@ importers:
         version: 3.0.118(@my-react/react@0.3.22)(zod@4.3.6)
       '@git-diff-view/cli':
         specifier: ^0.1.2
-        version: 0.1.2(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)
+        version: 0.1.2(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)
       '@git-diff-view/core':
         specifier: ^0.1.2
         version: 0.1.2
@@ -51,8 +51,8 @@ importers:
         specifier: ^0.3.22
         version: 0.3.22(@my-react/react@0.3.22)
       '@my-react/react-terminal':
-        specifier: ^0.0.18
-        version: 0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))
+        specifier: ^0.0.19
+        version: 0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22))
       ai:
         specifier: ^6.0.116
         version: 6.0.116(zod@4.3.6)
@@ -67,25 +67,25 @@ importers:
         version: 0.6.5
       ink-big-text:
         specifier: ^2.0.0
-        version: 2.0.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)
+        version: 2.0.0(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)
       ink-divider:
         specifier: ^4.1.1
         version: 4.1.1(@my-react/react@0.3.22)(@types/react@19.2.14)
       ink-gradient:
         specifier: ^4.0.0
-        version: 4.0.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))
+        version: 4.0.0(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22)))
       ink-link:
         specifier: ^5.0.0
-        version: 5.0.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))
+        version: 5.0.0(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22)))
       ink-select-input:
         specifier: ^6.2.0
-        version: 6.2.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)
+        version: 6.2.0(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)
       ink-tab:
         specifier: ^5.2.0
-        version: 5.2.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)(@types/react@19.2.14)
+        version: 5.2.0(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)(@types/react@19.2.14)
       ink-text-input:
         specifier: ^6.0.0
-        version: 6.0.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)
+        version: 6.0.0(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)
       lodash-es:
         specifier: ^4.17.23
         version: 4.17.23
@@ -112,8 +112,8 @@ importers:
         specifier: ^19.2.14
         version: 19.2.14
       ink:
-        specifier: npm:@my-react/react-terminal@0.0.18
-        version: '@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))'
+        specifier: npm:@my-react/react-terminal@0.0.19
+        version: '@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22))'
       react:
         specifier: npm:@my-react/react@0.3.22
         version: '@my-react/react@0.3.22(@my-react/react@0.3.22)'
@@ -190,9 +190,6 @@ importers:
       '@my-react/react-dom':
         specifier: ^0.3.22
         version: 0.3.22(@my-react/react@0.3.22(react@19.2.4))
-      '@xsai-ext/providers':
-        specifier: 0.4.3
-        version: 0.4.3
       framer-motion:
         specifier: ^12.34.5
         version: 12.35.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -211,9 +208,6 @@ importers:
       swr:
         specifier: ^2.4.1
         version: 2.4.1(react@19.2.4)
-      xsai:
-        specifier: 0.4.3
-        version: 0.4.3(zod@4.3.6)
     devDependencies:
       '@my-react/react-refresh':
         specifier: ^0.3.22
@@ -1536,8 +1530,8 @@ packages:
     peerDependencies:
       '@my-react/react': '>=0.3.22'
 
-  '@my-react/react-terminal@0.0.18':
-    resolution: {integrity: sha512-TVPSahACybmQqR6vIaavOn23+21uDkUyMtR0JM4jKSzIl2L5m/zYKnEtnHtV2H4L476SRS2IGa3MelR+2XRKqw==}
+  '@my-react/react-terminal@0.0.19':
+    resolution: {integrity: sha512-4/aHqgnsat6usQsVc1o92vcWh8zTrANN1vqf0jGEsTuM6yN0/g7aXvwWY38TJOxsXGxBsMmoZ+q/WH3ZQ0nrlg==}
     peerDependencies:
       '@my-react/react': '>=0.3.22'
 
@@ -3035,57 +3029,6 @@ packages:
 
   '@wxt-dev/storage@1.2.8':
     resolution: {integrity: sha512-GWCFKgF5+d7eslOxUDFC70ypA9njupmJb1nQM8uZoX0J3sWT2BO5xJLzb1sYahWAfID9p2BMtnUBN1lkWxPsbQ==}
-
-  '@xsai-ext/providers@0.4.3':
-    resolution: {integrity: sha512-lXHyddv6erxMPy9W3jsu0xYCuy6IOsNG6M9y1yUOxmi1t6+3mKuthhtnOJimkI65wXjawHYgt9cAePTGO8Kwww==}
-
-  '@xsai/embed@0.4.3':
-    resolution: {integrity: sha512-ZfF1/6wms+1GFG8WIlAOrYWvhHuUVWFEVdXa+gdg8j8Kdt80rxVPuQUD3vBK/4O9Uz2RXlWuBkzchEz3tnnYwQ==}
-
-  '@xsai/generate-image@0.4.3':
-    resolution: {integrity: sha512-lNJS2nYbFltQxbOr5iFVQ/GN48jgaBqgmBKbOQroroHQcP8kCBokDYwtCYh+2vvWfvTerR3EDSi005TPHK6Tlg==}
-
-  '@xsai/generate-object@0.4.3':
-    resolution: {integrity: sha512-0vdCcDr2YZW+7vJXook6FYgay82qzr99NFPL0rUkp5lQKW/g16KWa20D3TfOF115Ps3+7101pIGxLE9Jca5w/Q==}
-
-  '@xsai/generate-speech@0.4.3':
-    resolution: {integrity: sha512-SEbdFpWZHz1ePIK6ogRQvwDP5JqRIqk6WVYY5ic01Xa+2ftOhAvdGEou0uTlhZYbD5K8S213wtVO1YsRQasRvw==}
-
-  '@xsai/generate-text@0.4.3':
-    resolution: {integrity: sha512-3WWD/n8DVzI3HkdUtQYfz1/gNQfvOD4ULjG0z5mPTeWkdanWRbHODmVdlhgmL/2FU8VMJ5qydVFtPDH9WSyP6g==}
-
-  '@xsai/generate-transcription@0.4.3':
-    resolution: {integrity: sha512-hEVekjE4XXRLpf35eRZImBj228uOCH1P+43xqRuaXYWbG/xADxVBKWHMWZg7ph3sJJsiEk7IMqAvjI3MjUMU1A==}
-
-  '@xsai/model@0.4.3':
-    resolution: {integrity: sha512-fHqHiRlcSiU9rbyTbXIok6NrFqt/CucLx1p6tewgWiQhsUxlVIV3Wu1RNPG73So52zJhFYhZm9kc9LEaq2gszg==}
-
-  '@xsai/shared-chat@0.4.3':
-    resolution: {integrity: sha512-/xXyr1inY0I6PFZ0YP47DSdAp8Qrcf8dU/FICW8XeQK3JljscAGgGziATr7EI9x0vh77bARj5G8xPR1GMlREUA==}
-
-  '@xsai/shared@0.4.3':
-    resolution: {integrity: sha512-yrpwOigtriiGvE+gnpwVBqc9G9ZCQ6OPTow419ArROaSJ/JuMwyc5CJzKOAxpEsZmXpyN3yBCbzQlZIQjheBuQ==}
-
-  '@xsai/stream-object@0.4.3':
-    resolution: {integrity: sha512-JmPPNVGxdQca5syFKAC7ikqJ6OyQ8ePXNoM3CFKBdwhhCmpBZXoEAXxaHO1UnK3S7qERkSjaHTorSQq+plnT2Q==}
-
-  '@xsai/stream-text@0.4.3':
-    resolution: {integrity: sha512-GztZsrZDxSxzni04gRyJC5bUnQqnEtoVK6nWyAIpWNO4c7fi1zXCTV2z57DbPMPei+blsHCoG6zEUvoQ+ooMoA==}
-
-  '@xsai/stream-transcription@0.4.3':
-    resolution: {integrity: sha512-ZPc0TXjK4sbNqPuAZ3htQi8mBx6tZ/Rq9TWLllSEdWTtLzqcqig4H3fl+7QJrS8lTPgMr8qxGqPue+ecFJMf/Q==}
-
-  '@xsai/tool@0.4.3':
-    resolution: {integrity: sha512-ng90HFTXZ17kwL/Qk0vWIHe+4FMHyXkU3ihumhtAjhldptz9a+JqumUoP4tCqIEwJ8ZT5Sa28F3v7K1MhvqZYA==}
-
-  '@xsai/utils-chat@0.4.3':
-    resolution: {integrity: sha512-dIr9y987NkL15u9KE0LxnovmVesTTDXaMXVQP9p6OHnG3H46drMGhDdzLZAsGhROcsqijD90nXYGafTc6BZ/fg==}
-
-  '@xsai/utils-reasoning@0.4.3':
-    resolution: {integrity: sha512-ntAm74GLZf9tKpbvMeeTyDT8nHEwkcJN4TpLX7Zm8pnFYca8JCEipm2ZD47IqK/8XWo8kMpxVMv0WSBD+/AxBg==}
-
-  '@xsai/utils-stream@0.4.3':
-    resolution: {integrity: sha512-rFWMglMYMGlqPMNfivsSAj5fY2ydvZYd4GZKJRGAyj3kKqmLrOo6TnY8ciN91GqwQbmvByd2u5Lf2iFVD2XDxg==}
 
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
@@ -6698,32 +6641,6 @@ packages:
     resolution: {integrity: sha512-TEU+nJVUUnA4CYJFLvK5X9AOeH4KvDvhIfm0vV1GaQRtchnG0hgK5p8hw/xjv8cunWYCsiPCSDzObPyhEwq3KQ==}
     engines: {node: '>=0.4.0'}
 
-  xsai@0.4.3:
-    resolution: {integrity: sha512-zfxJ1jNup+ZCGXgSoDyVY7Y3xNh6wS6SSvYSxssOatLddLG0s9xxogwcUUAg+oJ+uCdid2cfrRcX6Y840nWWuQ==}
-
-  xsschema@0.4.3:
-    resolution: {integrity: sha512-8MFtONewz49S+R5ZfOGfJzEaPAmJ+Gw1ILjvuerYG0mOMVYe7OrsVQNlpiUTct4L3toAJAKD5NMwmCfmTIGYHQ==}
-    peerDependencies:
-      '@valibot/to-json-schema': ^1.0.0
-      arktype: ^2.1.20
-      effect: ^3.16.0
-      sury: ^10.0.0
-      zod: ^3.25.0 || ^4.0.0
-      zod-to-json-schema: ^3.25.0
-    peerDependenciesMeta:
-      '@valibot/to-json-schema':
-        optional: true
-      arktype:
-        optional: true
-      effect:
-        optional: true
-      sury:
-        optional: true
-      zod:
-        optional: true
-      zod-to-json-schema:
-        optional: true
-
   y18n@5.0.8:
     resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
     engines: {node: '>=10'}
@@ -7311,14 +7228,14 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@git-diff-view/cli@0.1.2(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)':
+  '@git-diff-view/cli@0.1.2(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)':
     dependencies:
       '@git-diff-view/core': 0.1.2
       '@types/hast': 3.0.4
       chalk: 5.6.2
       fast-diff: 1.3.0
       highlight.js: 11.11.1
-      ink: '@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))'
+      ink: '@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22))'
       lowlight: 3.3.0
       react: '@my-react/react@0.3.22(@my-react/react@0.3.22)'
       reactivity-store: 0.4.0(@my-react/react@0.3.22)
@@ -8464,7 +8381,7 @@ snapshots:
     dependencies:
       '@my-react/react': 0.3.22(react@19.2.4)
 
-  '@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))':
+  '@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22))':
     dependencies:
       '@alcalzone/ansi-tokenize': 0.2.5
       '@my-react/react': 0.3.22(@my-react/react@0.3.22)
@@ -10376,95 +10293,6 @@ snapshots:
       async-mutex: 0.5.0
       dequal: 2.0.3
 
-  '@xsai-ext/providers@0.4.3':
-    dependencies:
-      '@xsai/shared': 0.4.3
-
-  '@xsai/embed@0.4.3':
-    dependencies:
-      '@xsai/shared': 0.4.3
-
-  '@xsai/generate-image@0.4.3':
-    dependencies:
-      '@xsai/shared': 0.4.3
-
-  '@xsai/generate-object@0.4.3(zod@4.3.6)':
-    dependencies:
-      '@xsai/generate-text': 0.4.3
-      xsschema: 0.4.3(zod@4.3.6)
-    transitivePeerDependencies:
-      - '@valibot/to-json-schema'
-      - arktype
-      - effect
-      - sury
-      - zod
-      - zod-to-json-schema
-
-  '@xsai/generate-speech@0.4.3':
-    dependencies:
-      '@xsai/shared': 0.4.3
-
-  '@xsai/generate-text@0.4.3':
-    dependencies:
-      '@xsai/shared': 0.4.3
-      '@xsai/shared-chat': 0.4.3
-
-  '@xsai/generate-transcription@0.4.3':
-    dependencies:
-      '@xsai/shared': 0.4.3
-
-  '@xsai/model@0.4.3':
-    dependencies:
-      '@xsai/shared': 0.4.3
-
-  '@xsai/shared-chat@0.4.3':
-    dependencies:
-      '@xsai/shared': 0.4.3
-
-  '@xsai/shared@0.4.3': {}
-
-  '@xsai/stream-object@0.4.3(zod@4.3.6)':
-    dependencies:
-      '@xsai/stream-text': 0.4.3
-      xsschema: 0.4.3(zod@4.3.6)
-    transitivePeerDependencies:
-      - '@valibot/to-json-schema'
-      - arktype
-      - effect
-      - sury
-      - zod
-      - zod-to-json-schema
-
-  '@xsai/stream-text@0.4.3':
-    dependencies:
-      '@xsai/shared': 0.4.3
-      '@xsai/shared-chat': 0.4.3
-
-  '@xsai/stream-transcription@0.4.3':
-    dependencies:
-      '@xsai/shared': 0.4.3
-
-  '@xsai/tool@0.4.3(zod@4.3.6)':
-    dependencies:
-      '@xsai/shared': 0.4.3
-      '@xsai/shared-chat': 0.4.3
-      xsschema: 0.4.3(zod@4.3.6)
-    transitivePeerDependencies:
-      - '@valibot/to-json-schema'
-      - arktype
-      - effect
-      - sury
-      - zod
-      - zod-to-json-schema
-
-  '@xsai/utils-chat@0.4.3':
-    dependencies:
-      '@xsai/shared-chat': 0.4.3
-
-  '@xsai/utils-reasoning@0.4.3': {}
-
-  '@xsai/utils-stream@0.4.3': {}
-
   acorn-jsx@5.3.2(acorn@8.16.0):
     dependencies:
       acorn: 8.16.0
@@ -11922,10 +11750,10 @@ snapshots:
 
   ini@6.0.0: {}
 
-  ink-big-text@2.0.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22):
+  ink-big-text@2.0.0(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22):
     dependencies:
       cfonts: 3.3.1
-      ink: '@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))'
+      ink: '@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22))'
       prop-types: 15.8.1
       react: '@my-react/react@0.3.22(@my-react/react@0.3.22)'
 
@@ -11939,36 +11767,36 @@ snapshots:
       - react-devtools-core
       - utf-8-validate
 
-  ink-gradient@4.0.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))):
+  ink-gradient@4.0.0(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22))):
     dependencies:
       '@types/gradient-string': 1.1.6
       gradient-string: 3.0.0
-      ink: '@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))'
+      ink: '@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22))'
       strip-ansi: 7.2.0
 
-  ink-link@5.0.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))):
+  ink-link@5.0.0(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22))):
     dependencies:
-      ink: '@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))'
+      ink: '@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22))'
       terminal-link: 5.0.0
 
-  ink-select-input@6.2.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22):
+  ink-select-input@6.2.0(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22):
     dependencies:
       figures: 6.1.0
-      ink: '@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))'
+      ink: '@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22))'
       react: '@my-react/react@0.3.22(@my-react/react@0.3.22)'
       to-rotated: 1.0.0
 
-  ink-tab@5.2.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)(@types/react@19.2.14):
+  ink-tab@5.2.0(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)(@types/react@19.2.14):
     dependencies:
-      ink: '@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))'
+      ink: '@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22))'
       react: '@my-react/react@0.3.22(@my-react/react@0.3.22)'
     optionalDependencies:
       '@types/react': 19.2.14
 
-  ink-text-input@6.0.0(@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22):
+  ink-text-input@6.0.0(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22):
     dependencies:
       chalk: 5.6.2
-      ink: '@my-react/react-terminal@0.0.18(@my-react/react@0.3.22(@my-react/react@0.3.22))'
+      ink: '@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22))'
       react: '@my-react/react@0.3.22(@my-react/react@0.3.22)'
       type-fest: 4.41.0
 
@@ -14556,36 +14384,6 @@ snapshots:
   xmlbuilder@11.0.1: {}
 
   xmlhttprequest-ssl@2.1.2: {}
-
-  xsai@0.4.3(zod@4.3.6):
-    dependencies:
-      '@xsai/embed': 0.4.3
-      '@xsai/generate-image': 0.4.3
-      '@xsai/generate-object': 0.4.3(zod@4.3.6)
-      '@xsai/generate-speech': 0.4.3
-      '@xsai/generate-text': 0.4.3
-      '@xsai/generate-transcription': 0.4.3
-      '@xsai/model': 0.4.3
-      '@xsai/shared': 0.4.3
-      '@xsai/shared-chat': 0.4.3
-      '@xsai/stream-object': 0.4.3(zod@4.3.6)
-      '@xsai/stream-text': 0.4.3
-      '@xsai/stream-transcription': 0.4.3
-      '@xsai/tool': 0.4.3(zod@4.3.6)
-      '@xsai/utils-chat': 0.4.3
-      '@xsai/utils-reasoning': 0.4.3
-      '@xsai/utils-stream': 0.4.3
-    transitivePeerDependencies:
-      - '@valibot/to-json-schema'
-      - arktype
-      - effect
-      - sury
-      - zod
-      - zod-to-json-schema
-
-  xsschema@0.4.3(zod@4.3.6):
-    optionalDependencies:
-      zod: 4.3.6
 
   y18n@5.0.8: {}
 

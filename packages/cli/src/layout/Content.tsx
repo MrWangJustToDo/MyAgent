@@ -8,10 +8,12 @@ export const Content = memo(() => {
 
   const typedList = list as JSX.Element[];
 
+  const validList = [head, ...typedList].filter(Boolean);
+
   return (
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
-    <Static key={key} items={[head, ...typedList]}>
+    <Static key={key} items={validList}>
       {(item) => item}
     </Static>
   );

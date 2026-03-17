@@ -5,45 +5,21 @@ This file provides guidelines for AI coding agents working in this repository.
 ## Project Overview
 
 A pnpm monorepo with three packages:
-- `@my-agent/core` - Core AI agent, tools, environment abstraction, and TanStack AI integration
-- `@my-agent/cli` - Terminal CLI using Ink (React for terminal)
+- `@my-agent/core` - Core AI agent, tools, environment abstraction, and Vercel AI SDK integration
+- `@my-agent/cli` - Terminal CLI using @my-react/react-terminal (React for terminal)
 - `@my-agent/extension` - Browser extension using WXT framework
 
 ## Architecture
 
-### TanStack AI Integration
+### Vercel AI SDK Integration
 
-This project uses **TanStack AI SDK** (`@tanstack/ai`, `@tanstack/ai-react`, `@tanstack/ai-client`) for AI interactions.
+This project uses **Vercel AI SDK** (`ai`, `@ai-sdk/openai`, `@ai-sdk/react`) for AI interactions.
 
 Key integration points:
-- `connection.ts` - Creates a `ConnectionAdapter` that bridges TanStack AI's `useChat` hook with our local `Agent` class
-- `Agent.ts` - Main agent loop that handles tool execution, approval flows, and streaming
-- `AgentContext.ts` - Manages conversation state, tool calls, and context
-
-### Known SDK Issues & Workarounds
-
-#### Empty Tool Call Arguments (PR #372)
-
-**Issue**: TanStack AI SDK has a bug where continuation re-executions only emit `TOOL_CALL_END`, skipping `TOOL_CALL_START` and `TOOL_CALL_ARGS`. This causes `StreamProcessor` to store tool calls with empty `arguments`.
-
-**Workaround** (in `connection.ts`):
-```typescript
-// Store inputs from CUSTOM approval-requested events
-const approvalInputs: ApprovalInputsMap = new Map();
-
-// On CUSTOM chunk, store the input
-if (chunk.type === "CUSTOM") {
-  const { toolCallId, input } = chunk.value;
-  approvalInputs.set(toolCallId, input);
-}
-
-// Before each connect, backfill missing arguments
-const patchedMessages = backfillToolCallArguments(messages, approvalInputs);
-```
-
-**Reference**: https://github.com/TanStack/ai/pull/372
-
-This workaround can be removed once PR #372 is merged.
+- `provider.ts` - LLM provider adapters (OpenAI, Ollama via `ai-sdk-ollama`)
+- `agent/loop/` - Main Agent class that handles tool execution, approval flows, and streaming
+- `agent/agentContext/` - Manages conversation state, tool calls, and context
+- `agent/mcp/` - MCP (Model Context Protocol) integration
 
 ## Build, Lint, Test Commands
 
@@ -212,12 +188,26 @@ Use section separators in large files:
 
 ## Key Technologies
 
-- **TanStack AI** (`@tanstack/ai`, `@tanstack/ai-react`, `@tanstack/ai-client`) - AI SDK for LLM interactions
+### Core & CLI
+- **Vercel AI SDK** (`ai`, `@ai-sdk/openai`, `@ai-sdk/react`) - AI SDK for LLM interactions
+- **ai-sdk-ollama** - Ollama provider for Vercel AI SDK
 - **Zod** (v4.x) - Schema validation
-- **Ink** - React for terminal UIs (CLI package)
-- **WXT** - Browser extension framework
+- **@my-react/react-terminal** - React for terminal UIs (CLI package)
 - **reactivity-store** - State management (Zustand-like API)
 - **tsdown** - TypeScript build tool
+- **shiki** - Syntax highlighting
+- **stream-markdown-parser** - Markdown parsing and streaming
+- **@git-diff-view** - Git diff visualization
+- **computesdk** / **just-bash** - Remote compute and bash execution
+
+### Extension
+- **WXT** - Browser extension framework
+- **@heroui/react** - UI component library
+- **@floating-ui/react** - Floating UI positioning
+- **framer-motion** - Animation library
+- **lucide-react** - Icon library
+- **swr** - Data fetching and caching
+- **tailwindcss** (v4.x) - CSS framework
 
 ## File Structure
 
@@ -229,25 +219,32 @@ packages/
 │   │   ├── tools/          # AI tools (read, write, grep, glob, bash, etc.)
 │   │   ├── agentContext/   # AgentContext - conversation state management
 │   │   ├── agentLog/       # AgentLog - structured logging system
+│   │   ├── mcp/            # MCP (Model Context Protocol) integration
 │   │   └── index.ts        # Agent exports
+│   ├── base/               # Base utilities and shared code
 │   ├── environment/        # Sandbox abstraction (local/remote)
 │   ├── managers/           # Manager classes (AgentManager, SandboxManager)
-│   ├── connection.ts       # TanStack AI ConnectionAdapter
-│   ├── provider.ts         # LLM provider adapters (Ollama, etc.)
+│   ├── translate/          # Translation utilities
+│   ├── provider.ts         # LLM provider adapters (OpenAI, Ollama, etc.)
+│   ├── schemas.ts          # Shared Zod schemas
 │   ├── index.ts            # Main exports
 │   └── types.ts            # Type definitions
 ├── cli/src/
 │   ├── app/                # Main app components (App, Agent)
-│   ├── components/         # Ink React components
-│   │   └── message/        # Message rendering (ToolCallPartView, etc.)
+│   ├── components/         # React terminal components
 │   ├── hooks/              # CLI hooks (useAgent, useLocalChat, etc.)
 │   ├── layout/             # Layout components (Header, Footer)
 │   ├── markdown/           # Markdown rendering utilities
+│   ├── messages/           # Message rendering components
 │   ├── utils/              # Utility functions
 │   └── index.tsx           # Entry point
 └── extension/
-    ├── entrypoints/        # WXT entry points
-    └── components/         # React components
+    ├── entrypoints/        # WXT entry points (background, content, popup)
+    ├── components/         # React components
+    ├── devtool/            # DevTools panel components
+    ├── hooks/              # Extension-specific hooks
+    ├── service/            # Background service utilities
+    └── assets/             # Static assets
 ```
 
 ## Task Completion Checklist

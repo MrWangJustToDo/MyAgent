@@ -19,7 +19,9 @@ export const useSize = createState(
           s.state.screenHeight = rows;
 
           s.state.screenWidth = columns;
+        }, [rows, columns]);
 
+        useEffect(() => {
           if (initMountRef.current) {
             initMountRef.current = false;
             return;
@@ -27,10 +29,10 @@ export const useSize = createState(
 
           const id = setTimeout(() => {
             useStatic.getActions().refreshRemount();
-          }, 300);
+          }, 100);
 
           return () => clearTimeout(id);
-        }, [rows, columns]);
+        }, [columns]);
 
         return { columns, rows };
       };
