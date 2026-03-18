@@ -3,6 +3,9 @@ import { z } from "zod";
 import { ollamaModelsResponseSchema, type OllamaModel } from "../schemas.js";
 import { DEFAULT_OLLAMA_URL } from "../types.js";
 
+// Re-export utilities
+export { generateId, generateShortId, createSequentialIdGenerator } from "./utils.js";
+
 export const ollamaShowResponseSchema = z.object({
   modelfile: z.string(),
   parameters: z.string(),

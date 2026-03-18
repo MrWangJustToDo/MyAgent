@@ -1,6 +1,7 @@
 import { AgentLog } from "../agent";
 import { AgentContext } from "../agent/agentContext";
 import { Agent } from "../agent/loop/Agent.js";
+import { TodoManager } from "../agent/todoManager";
 
 import { sandboxManager } from "./SandboxManager.js";
 import { toolsManager } from "./ToolsManager.js";
@@ -33,6 +34,7 @@ export interface ManagedAgent {
   context: AgentContext;
   tools: ToolSet;
   sandbox: Sandbox;
+  todoManager: TodoManager;
   status: Agent["status"];
   error?: string;
   parentId?: string; // For subagent support
@@ -67,6 +69,8 @@ export class AgentManager {
 
     const log = new AgentLog();
 
+    const todoManager = new TodoManager();
+
     const agent = new Agent(restConfig, { setUp: setUp as ManagedAgentConfig<Agent>["setUp"] });
 
     // Set the Vercel AI SDK model
@@ -81,6 +85,8 @@ export class AgentManager {
 
     agent.setLog(log);
 
+    agent.setTodoManager(todoManager);
+
     const id = agent.id;
 
     const managedAgent: ManagedAgent = {
@@ -92,6 +98,7 @@ export class AgentManager {
       sandbox,
       tools: tools as unknown as ToolSet,
       log,
+      todoManager,
       status: "idle",
       parentId,
       childIds: [],

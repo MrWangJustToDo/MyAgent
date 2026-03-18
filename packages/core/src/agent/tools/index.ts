@@ -11,10 +11,12 @@ import { createMoveFileTool } from "./move-file-tool.js";
 import { createReadFileTool } from "./read-file-tool.js";
 import { createRunCommandTool } from "./run-command-tool.js";
 import { createSearchReplaceTool } from "./search-replace-tool.js";
+import { createTodoTool } from "./todo-tool.js";
 import { createTreeTool } from "./tree-tool.js";
 import { createWriteFileTool } from "./write-file-tool.js";
 
 import type { Sandbox } from "../../environment";
+import type { TodoManager } from "../todoManager";
 
 export * from "./copy-file-tool.js";
 export * from "./delete-file-tool.js";
@@ -29,7 +31,9 @@ export * from "./move-file-tool.js";
 export * from "./read-file-tool.js";
 export * from "./run-command-tool.js";
 export * from "./search-replace-tool.js";
+export * from "./todo-tool.js";
 export * from "./tree-tool.js";
+export * from "./types.js";
 export * from "./write-file-tool.js";
 
 export type Tools = {
@@ -48,16 +52,19 @@ export type Tools = {
   man_command: ReturnType<typeof createManCommandTool>;
   run_command: ReturnType<typeof createRunCommandTool>;
   search_replace: ReturnType<typeof createSearchReplaceTool>;
+  todo?: ReturnType<typeof createTodoTool>;
 };
 
 export const createTools = async ({
   sandbox,
+  todoManager,
   processTools,
 }: {
   sandbox: Sandbox;
+  todoManager?: TodoManager;
   processTools?: (t: Tools) => Promise<void>;
 }): Promise<Tools> => {
-  const res = {
+  const res: Tools = {
     copy_file: createCopyFileTool({ sandbox }),
     delete_file: createDeleteFileTool({ sandbox }),
     edit_file: createEditFileTool({ sandbox }),
@@ -74,6 +81,11 @@ export const createTools = async ({
     run_command: createRunCommandTool({ sandbox }),
     search_replace: createSearchReplaceTool({ sandbox }),
   };
+
+  // Add todo tool if TodoManager is provided
+  if (todoManager) {
+    res.todo = createTodoTool({ todoManager });
+  }
 
   await processTools?.(res);
 

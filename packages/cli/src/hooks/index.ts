@@ -22,5 +22,7 @@ export { useUserInput, getInputActions, type UserInputState } from "./useUserInp
 
 export { useSize } from "./useSize.js";
 
+export { useTodoManager, type TodoStats } from "./useTodoManager.js";
+
 // Re-export TanStack AI types for UI rendering
 export type { UIMessage, TextPart, ToolCallPart, ToolResultPart, ThinkingPart, MessagePart } from "@my-agent/core";

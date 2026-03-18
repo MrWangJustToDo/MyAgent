@@ -8,7 +8,18 @@ export {
   type ToolSet,
 } from "./loop";
 
-export type { Tools } from "./tools";
+export type {
+  Tools,
+  // Tool output types
+  ListFileOutput,
+  RunCommandOutput,
+  ReadFileOutput,
+  WriteFileOutput,
+  EditFileOutput,
+  GlobOutput,
+  GrepOutput,
+  TodoOutput,
+} from "./tools";
 
 // Context exports
 export { AgentContext, generateContextId, type TokenUsage } from "./agentContext";
@@ -28,3 +39,25 @@ export {
   type LogEntry,
   type LogFilter,
 } from "./agentLog";
+
+// TodoManager exports
+export {
+  TodoManager,
+  generateTodoManagerId,
+  // Schemas
+  todoItemInputSchema,
+  todoToolInputSchema,
+  // Types
+  type TodoItem,
+  type TodoItemInput,
+  type TodoStatus,
+  type TodoPriority,
+  type TodoManagerConfig,
+  type TodoToolInput,
+  // Constants
+  TODO_STATUSES,
+  TODO_PRIORITIES,
+  STATUS_ICONS,
+  DEFAULT_MAX_TODOS,
+  DEFAULT_NAG_REMINDER_THRESHOLD,
+} from "./todoManager";

@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { getFileModifiedTime, withDuration } from "./helpers.js";
+import { writeFileOutputSchema } from "./types.js";
 
 import type { Sandbox } from "../../environment";
 
@@ -32,14 +33,7 @@ export const createWriteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
         .optional()
         .describe("If true, create parent directories if they don't exist. Defaults to true."),
     }),
-    outputSchema: z.object({
-      path: z.string().describe("The path of the file that was written."),
-      bytesWritten: z.number().describe("Number of bytes written to the file."),
-      created: z.boolean().describe("True if a new file was created, false if an existing file was overwritten."),
-      modifiedTime: z.string().describe("The new modification timestamp after writing."),
-      message: z.string().describe("Human-readable summary of the operation."),
-      durationMs: z.number().describe("Execution duration in milliseconds."),
-    }),
+    outputSchema: writeFileOutputSchema,
     needsApproval: true,
     execute: async ({ path, content, modifiedTime, createDirectories }) => {
       return withDuration(async () => {

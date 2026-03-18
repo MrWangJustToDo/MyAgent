@@ -236,7 +236,7 @@ const renderList = (node: ListNode, context: RenderContext): string => {
     .join("\n");
 
   while (items.endsWith("\n")) {
-    items = items.slice(-1);
+    items = items.substring(0, items.length - 1);
   }
 
   // Nested lists need a leading newline to separate from parent item text

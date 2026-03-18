@@ -1,6 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { runCommandOutputSchema } from "./types.js";
+
 import type { Sandbox } from "../../environment";
 
 /**
@@ -36,15 +38,7 @@ export const createRunCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
         .optional()
         .describe("If true, run the command in the background and return immediately. Defaults to false."),
     }),
-    outputSchema: z.object({
-      command: z.string().describe("The command that was executed."),
-      stdout: z.string().describe("Standard output from the command."),
-      stderr: z.string().describe("Standard error output from the command."),
-      exitCode: z.number().describe("Exit code of the command (0 = success)."),
-      durationMs: z.number().describe("Execution duration in milliseconds."),
-      success: z.boolean().describe("Whether the command succeeded (exit code 0)."),
-      message: z.string().describe("Human-readable summary of the operation."),
-    }),
+    outputSchema: runCommandOutputSchema,
     needsApproval: true,
     execute: async ({ command, cwd, env, timeout, background }) => {
       const result = await sandbox.runCommand(command, {

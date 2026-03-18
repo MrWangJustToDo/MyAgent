@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { getFile, getFileModifiedTime, withDuration } from "./helpers.js";
+import { editFileOutputSchema } from "./types.js";
 
 import type { Sandbox } from "../../environment";
 
@@ -32,13 +33,7 @@ export const createEditFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
         .optional()
         .describe("If true, replace all occurrences of oldString. If false, replace only the first occurrence."),
     }),
-    outputSchema: z.object({
-      path: z.string().describe("The path of the file that was edited."),
-      replacements: z.number().describe("Number of replacements made."),
-      modifiedTime: z.string().describe("The new modification timestamp after editing."),
-      message: z.string().describe("Human-readable summary of the operation."),
-      durationMs: z.number().describe("Execution duration in milliseconds."),
-    }),
+    outputSchema: editFileOutputSchema,
     needsApproval: true,
     execute: async ({ path, modifiedTime, oldString, newString, replaceAll }) => {
       return withDuration(async () => {

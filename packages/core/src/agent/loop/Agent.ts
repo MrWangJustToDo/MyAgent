@@ -1,7 +1,7 @@
 import { streamText, generateText, tool as vercelTool, stepCountIs } from "ai";
 import { z } from "zod";
 
-import { generateContextId } from "../agentContext";
+import { generateId } from "../../base/utils.js";
 
 import { Base } from "./Base";
 
@@ -63,7 +63,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
   constructor(config: AgentConfig, { id, setUp }: { id?: string; setUp?: (t: Agent) => Agent } = {}) {
     super();
 
-    this.id = id ?? generateContextId().replace("ctx_", "agent_");
+    this.id = id ?? generateId("agent");
     this.config = AgentConfigSchema.parse(config);
 
     if (setUp) {

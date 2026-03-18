@@ -16,7 +16,7 @@ export const ToolStatusIcon = ({ state }: ToolStatusIconProps) => {
     case "input-available":
       return <Text color="cyan">...</Text>;
     case "output-available":
-      return <Text color="green">v</Text>;
+      return <Text color="green">✓</Text>;
     case "output-error":
       return <Text color="red">x</Text>;
     case "approval-requested":

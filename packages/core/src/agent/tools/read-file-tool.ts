@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { getFile, withDuration } from "./helpers.js";
+import { readFileOutputSchema } from "./types.js";
 
 import type { Sandbox } from "../../environment";
 
@@ -31,17 +32,7 @@ export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
         .optional()
         .describe("The maximum number of lines to read. If not specified, reads the entire file."),
     }),
-    outputSchema: z.object({
-      path: z.string().describe("The path of the file that was read."),
-      content: z.string().describe("The content of the file (or selected lines)."),
-      modifiedTime: z.string().describe("The modification timestamp of the file. Use this when editing/deleting."),
-      totalLines: z.number().describe("Total number of lines in the file."),
-      startLine: z.number().describe("The starting line number (0-indexed)."),
-      endLine: z.number().describe("The ending line number (exclusive)."),
-      linesReturned: z.number().describe("Number of lines returned in content."),
-      message: z.string().describe("Human-readable summary of the operation."),
-      durationMs: z.number().describe("Execution duration in milliseconds."),
-    }),
+    outputSchema: readFileOutputSchema,
     execute: async ({ path, offset, limit }) => {
       return withDuration(async () => {
         // Get file info and content

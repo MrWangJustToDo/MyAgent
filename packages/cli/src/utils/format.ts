@@ -1,3 +1,14 @@
+import type {
+  EditFileOutput,
+  GlobOutput,
+  GrepOutput,
+  ListFileOutput,
+  ReadFileOutput,
+  RunCommandOutput,
+  TodoOutput,
+  WriteFileOutput,
+} from "@my-agent/core";
+
 // ============================================================================
 // Tool Formatting
 // ============================================================================
@@ -37,9 +48,157 @@ export function formatToolInput(input: unknown): string {
   return entries.length > 2 ? `(${formatted}, ...)` : `(${formatted})`;
 }
 
-/** Format tool output for display */
-export function formatToolOutput(output: unknown): string {
+// ============================================================================
+// Tool-Specific Formatters
+// ============================================================================
+
+function formatListFileOutput(output: ListFileOutput): string {
+  const { entries, count } = output;
+  if (count === 0) return "Empty directory";
+
+  // Show first few entries
+  const maxShow = 5;
+  const shown = entries.slice(0, maxShow);
+  const lines = shown.map((e) => {
+    const icon = e.type === "directory" ? "/" : "";
+    return `  ${e.name}${icon}`;
+  });
+
+  if (count > maxShow) {
+    lines.push(`  ... and ${count - maxShow} more`);
+  }
+
+  return `${count} entries:\n${lines.join("\n")}`;
+}
+
+function formatRunCommandOutput(output: RunCommandOutput): string {
+  const { stdout, stderr, exitCode, success } = output;
+
+  const lines: string[] = [];
+
+  // Show exit status if failed
+  if (!success) {
+    lines.push(`Exit code: ${exitCode}`);
+  }
+
+  // Show stderr if present (often contains errors/warnings)
+  if (stderr && stderr.trim()) {
+    const stderrLines = stderr.trim().split("\n");
+    const maxLines = 3;
+    if (stderrLines.length <= maxLines) {
+      lines.push(...stderrLines.map((l) => `stderr: ${l}`));
+    } else {
+      lines.push(...stderrLines.slice(0, maxLines).map((l) => `stderr: ${l}`));
+      lines.push(`stderr: ... (${stderrLines.length - maxLines} more lines)`);
+    }
+  }
+
+  // Show stdout summary
+  if (stdout && stdout.trim()) {
+    const stdoutLines = stdout.trim().split("\n");
+    const maxLines = 5;
+    if (stdoutLines.length <= maxLines) {
+      lines.push(...stdoutLines);
+    } else {
+      lines.push(...stdoutLines.slice(0, maxLines));
+      lines.push(`... (${stdoutLines.length - maxLines} more lines)`);
+    }
+  }
+
+  if (lines.length === 0) {
+    return success ? "Command completed successfully" : `Command failed (exit ${exitCode})`;
+  }
+
+  return lines.join("\n");
+}
+
+function formatReadFileOutput(output: ReadFileOutput): string {
+  return output.message;
+}
+
+function formatWriteFileOutput(output: WriteFileOutput): string {
+  return output.message;
+}
+
+function formatEditFileOutput(output: EditFileOutput): string {
+  return output.message;
+}
+
+function formatGlobOutput(output: GlobOutput): string {
+  const { files, count } = output;
+  if (count === 0) return "No files found";
+
+  const maxShow = 5;
+  const shown = files.slice(0, maxShow);
+  const lines = shown.map((f) => `  ${f}`);
+
+  if (count > maxShow) {
+    lines.push(`  ... and ${count - maxShow} more`);
+  }
+
+  return `${count} files found:\n${lines.join("\n")}`;
+}
+
+function formatGrepOutput(output: GrepOutput): string {
+  const { matches, count, truncated } = output;
+  if (count === 0) return "No matches found";
+
+  const maxShow = 5;
+  const shown = matches.slice(0, maxShow);
+  const lines = shown.map((m) => `  ${m.file}:${m.lineNumber}`);
+
+  if (count > maxShow || truncated) {
+    const remaining = count - maxShow;
+    if (remaining > 0) {
+      lines.push(`  ... and ${remaining} more matches`);
+    }
+  }
+
+  return `${count} matches:\n${lines.join("\n")}`;
+}
+
+function formatTodoOutput(output: TodoOutput): string {
+  return output.message;
+}
+
+// ============================================================================
+// Main Format Function
+// ============================================================================
+
+/** Format tool output for display based on tool name */
+export function formatToolOutput(output: unknown, toolName?: string): string {
   if (output === undefined || output === null) return "";
+
+  // Try to use tool-specific formatter
+  if (toolName && typeof output === "object") {
+    const out = output as Record<string, unknown>;
+
+    switch (toolName) {
+      case "list_file":
+        return formatListFileOutput(out as unknown as ListFileOutput);
+      case "run_command":
+        return formatRunCommandOutput(out as unknown as RunCommandOutput);
+      case "read_file":
+        return formatReadFileOutput(out as unknown as ReadFileOutput);
+      case "write_file":
+        return formatWriteFileOutput(out as unknown as WriteFileOutput);
+      case "edit_file":
+        return formatEditFileOutput(out as unknown as EditFileOutput);
+      case "glob":
+        return formatGlobOutput(out as unknown as GlobOutput);
+      case "grep":
+        return formatGrepOutput(out as unknown as GrepOutput);
+      case "todo":
+        return formatTodoOutput(out as unknown as TodoOutput);
+      default:
+        // For unknown tools, try to use message field if available
+        if ("message" in out && typeof out.message === "string") {
+          return out.message;
+        }
+    }
+  }
+
+  // Fallback: show truncated JSON
   const str = typeof output === "string" ? output : JSON.stringify(output, null, 2);
   return str.length > 200 ? str.slice(0, 200) + "..." : str;
 }

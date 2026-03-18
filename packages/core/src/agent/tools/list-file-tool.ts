@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { withDuration } from "./helpers.js";
+import { listFileOutputSchema } from "./types.js";
 
 import type { Sandbox } from "../../environment";
 
@@ -25,22 +26,7 @@ export const createListFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
           "The path to the directory to list, relative to the project directory. Defaults to current directory."
         ),
     }),
-    outputSchema: z.object({
-      path: z.string().describe("The directory path that was listed."),
-      entries: z
-        .array(
-          z.object({
-            name: z.string().describe("Name of the file or directory."),
-            type: z.string().describe("Type: 'file' or 'directory'."),
-            size: z.number().optional().describe("Size in bytes (for files)."),
-            modified: z.string().optional().describe("ISO timestamp of last modification."),
-          })
-        )
-        .describe("Array of directory entries."),
-      count: z.number().describe("Number of entries in the directory."),
-      message: z.string().describe("Human-readable summary of the operation."),
-      durationMs: z.number().describe("Execution duration in milliseconds."),
-    }),
+    outputSchema: listFileOutputSchema,
     needsApproval: true,
     execute: async ({ path: inputPath }) => {
       return withDuration(async () => {

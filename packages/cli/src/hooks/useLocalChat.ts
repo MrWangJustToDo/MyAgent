@@ -6,7 +6,7 @@
  */
 
 import { Chat, useChat as useAiSdkChat } from "@ai-sdk/react";
-import { agentManager, createOllamaModel, getOllamaBuildInTools } from "@my-agent/core";
+import { agentManager, createOllamaModel, generateId, getOllamaBuildInTools } from "@my-agent/core";
 import { DirectChatTransport, lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 import { useEffect, useCallback, useState, useRef } from "react";
 import { reactive, toRaw } from "reactivity-store";
@@ -15,6 +15,7 @@ import { useAgent } from "./useAgent.js";
 import { useAgentContext } from "./useAgentContext.js";
 import { useAgentLog } from "./useAgentLog.js";
 import { useAgentSandbox } from "./useAgentSandbox.js";
+import { useTodoManager } from "./useTodoManager.js";
 
 import type { Agent, AgentContext } from "@my-agent/core";
 import type { ChatTransport, UIMessage } from "ai";
@@ -67,16 +68,6 @@ export interface UseLocalChatReturn {
   /** Add tool approval response */
   addToolApprovalResponse: (options: { id: string; approved: boolean; reason?: string }) => void;
 }
-
-// ============================================================================
-// Helper: Generate unique ID
-// ============================================================================
-
-const generateId = (): string => {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 8);
-  return `msg_${timestamp}_${random}`;
-};
 
 // ============================================================================
 // Hook
@@ -171,11 +162,22 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
 
         agent.addTools(tools);
 
+        // Get TodoManager from agent (created by AgentManager)
+        const todoManager = agent.getTodoManager();
+
+        // Subscribe to TodoManager changes to refresh UI state
+        if (todoManager) {
+          todoManager.onChange(() => {
+            useTodoManager.getActions().refresh();
+          });
+        }
+
         // Set up global agent state
         useAgent.getActions().setAgent(agent);
         useAgentLog.getActions().setLog(agent.getLog());
         useAgentContext.getActions().setContext(agent.getContext());
         useAgentSandbox.getActions().setSandbox(agent.getSandbox());
+        useTodoManager.getActions().setManager(todoManager ?? null);
 
         // Create DirectChatTransport with the agent
         // Note: Using type assertion due to complex SDK generic constraints
@@ -185,7 +187,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
 
         // Create Chat instance with the transport
         chatRef.current = new Chat<UIMessage>({
-          id: generateId(),
+          id: generateId("chat"),
           transport: transport,
           messages: [],
           sendAutomaticallyWhen(options) {
@@ -246,6 +248,40 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
   // Add tool approval response
   const addToolApprovalResponse = useCallback(
     (options: { id: string; approved: boolean; reason?: string }) => {
+      // When rejecting a tool, we need to manually update the message state
+      // because the AI SDK doesn't properly set the 'output-denied' state
+      // for client-side rejections, causing the model to not know the tool was denied.
+      // if (!options.approved) {
+      //   const messages = chatHelpers.messages;
+      //   const updatedMessages = messages.map((msg) => {
+      //     if (msg.role !== "assistant") return msg;
+
+      //     const updatedParts = msg.parts.map((part) => {
+      //       // Check if this is the tool part being denied
+      //       if (
+      //         part.type === "tool-invocation" &&
+      //         "approval" in part &&
+      //         (part as { approval?: { id?: string } }).approval?.id === options.id
+      //       ) {
+      //         return {
+      //           ...part,
+      //           state: "output-denied" as const,
+      //           approval: {
+      //             id: options.id,
+      //             approved: false,
+      //             reason: options.reason ?? "Tool execution denied by user.",
+      //           },
+      //         };
+      //       }
+      //       return part;
+      //     });
+
+      //     return { ...msg, parts: updatedParts };
+      //   });
+
+      //   chatHelpers.setMessages(updatedMessages as UIMessage[]);
+      // }
+
       // Use the SDK's built-in method for handling tool approvals
       chatHelpers.addToolApprovalResponse({
         id: options.id,

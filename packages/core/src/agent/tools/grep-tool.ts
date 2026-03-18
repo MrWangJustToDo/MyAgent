@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { withDuration } from "./helpers.js";
+import { grepOutputSchema } from "./types.js";
 
 import type { Sandbox } from "../../environment";
 
@@ -30,24 +31,7 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
       ignoreCase: z.boolean().optional().describe("If true, perform case-insensitive matching. Defaults to false."),
       maxResults: z.number().int().min(1).optional().describe("Maximum number of matches to return. Defaults to 100."),
     }),
-    outputSchema: z.object({
-      pattern: z.string().describe("The regex pattern that was searched for."),
-      path: z.string().describe("The directory that was searched."),
-      include: z.string().describe("The file pattern filter used."),
-      matches: z
-        .array(
-          z.object({
-            file: z.string().describe("The file path containing the match."),
-            lineNumber: z.number().describe("The line number of the match."),
-            content: z.string().describe("The content of the matching line."),
-          })
-        )
-        .describe("Array of matches found."),
-      count: z.number().describe("Number of matches found."),
-      truncated: z.boolean().describe("Whether results were truncated due to maxResults limit."),
-      message: z.string().describe("Human-readable summary of the operation."),
-      durationMs: z.number().describe("Execution duration in milliseconds."),
-    }),
+    outputSchema: grepOutputSchema,
     execute: async ({ pattern, path, include, ignoreCase, maxResults }) => {
       return withDuration(async () => {
         const searchPath = path ?? ".";

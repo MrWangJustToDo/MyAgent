@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { withDuration } from "./helpers.js";
+import { globOutputSchema } from "./types.js";
 
 import type { Sandbox } from "../../environment";
 
@@ -21,14 +22,7 @@ export const createGlobTool = ({ sandbox }: { sandbox: Sandbox }) => {
         .optional()
         .describe("The directory to search in, relative to the project directory. Defaults to current directory."),
     }),
-    outputSchema: z.object({
-      pattern: z.string().describe("The glob pattern that was searched for."),
-      path: z.string().describe("The directory that was searched."),
-      files: z.array(z.string()).describe("Array of file paths matching the pattern."),
-      count: z.number().describe("Number of files found."),
-      message: z.string().describe("Human-readable summary of the operation."),
-      durationMs: z.number().describe("Execution duration in milliseconds."),
-    }),
+    outputSchema: globOutputSchema,
     execute: async ({ pattern, path }) => {
       return withDuration(async () => {
         const searchPath = path ?? ".";

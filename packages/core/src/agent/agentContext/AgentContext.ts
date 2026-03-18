@@ -2,6 +2,8 @@
 // Token Usage
 // ============================================================================
 
+import { generateId } from "../../base/utils.js";
+
 import type { StreamPart, ToolSet } from "../loop/Agent";
 import type { OnFinishEvent } from "ai";
 
@@ -15,11 +17,7 @@ export interface TokenUsage {
 // AgentContext ID Generator
 // ============================================================================
 
-export const generateContextId = (): string => {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 8);
-  return `ctx_${timestamp}_${random}`;
-};
+export const generateContextId = (): string => generateId("ctx");
 
 // ============================================================================
 // AgentContext Class

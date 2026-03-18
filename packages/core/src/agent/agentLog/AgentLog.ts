@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { createSequentialIdGenerator } from "../../base/utils.js";
+
 // ============================================================================
 // Log Types
 // ============================================================================
@@ -16,6 +18,7 @@ export type LogCategory =
   | "approval" // Approval flow
   | "stream" // Stream events
   | "middleware" // Middleware processing
+  | "todo" // Todo tracking
   | "error" // Errors
   | "custom"; // Custom logs
 
@@ -65,13 +68,7 @@ export interface LogFilter {
 // Log ID Generator
 // ============================================================================
 
-let logCounter = 0;
-
-export const generateLogId = (): string => {
-  const timestamp = Date.now().toString(36);
-  const counter = (logCounter++).toString(36).padStart(4, "0");
-  return `log_${timestamp}_${counter}`;
-};
+export const generateLogId = createSequentialIdGenerator("log");
 
 // ============================================================================
 // AgentLog Class

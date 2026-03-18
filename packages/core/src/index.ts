@@ -1,6 +1,9 @@
 // Agent (main export)
 export * from "./agent";
 
+// Base utilities
+export { generateId, generateShortId, createSequentialIdGenerator } from "./base/utils.js";
+
 // Environment abstraction
 export * from "./environment";
 

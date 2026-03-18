@@ -4,6 +4,7 @@ import type { StreamPart } from "./Agent";
 import type { Sandbox } from "../../environment";
 import type { AgentContext } from "../agentContext";
 import type { AgentLog } from "../agentLog";
+import type { TodoManager } from "../todoManager";
 import type {
   ToolSet,
   LanguageModel,
@@ -39,6 +40,7 @@ export class Base {
   log: AgentLog | null = null;
   context: AgentContext | null = null;
   sandbox: Sandbox | null = null;
+  todoManager: TodoManager | null = null;
   customTools: ToolSet = {};
   builtInTools: ToolSet = {};
 
@@ -133,8 +135,23 @@ export class Base {
   }
 
   /**
+   * Set todo manager for task tracking
+   */
+  setTodoManager(t: TodoManager): void {
+    this.todoManager = t;
+  }
+
+  /**
+   * Get todo manager
+   */
+  getTodoManager(): TodoManager | null {
+    return this.todoManager;
+  }
+
+  /**
    * Prepare messages from AgentCallParameters format.
    * Handles both `prompt` (string or ModelMessage[]) and `messages` parameters.
+   * Also injects nag reminder if needed.
    */
   prepareMessages(options: { prompt?: string | ModelMessage[]; messages?: ModelMessage[] }): ModelMessage[] {
     const { prompt, messages } = options;
@@ -150,6 +167,20 @@ export class Base {
       } else {
         finalMessages.push(...prompt);
       }
+    }
+
+    // Inject nag reminder if todo manager says we should
+    if (this.todoManager?.shouldNag()) {
+      const reminder = this.todoManager.getNagReminder();
+      this.log?.info("todo", "Injecting nag reminder", {
+        roundsSinceUpdate: this.todoManager.getRoundsSinceUpdate(),
+      });
+
+      // Add reminder as a system message at the end
+      finalMessages.push({
+        role: "user" as const,
+        content: reminder,
+      });
     }
 
     return finalMessages;
@@ -178,6 +209,7 @@ export class Base {
 
   /**
    * Create onStepFinish callback that logs and updates context usage.
+   * Also handles todo tracking for nag reminders.
    */
   createOnStepFinish(
     userCallback?: StreamTextOnStepFinishCallback<ToolSet> | GenerateTextOnStepFinishCallback<NoInfer<ToolSet>>
@@ -197,6 +229,18 @@ export class Base {
           outputTokens: usage.outputTokens ?? 0,
           totalTokens: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
         });
+      }
+
+      // Track todo tool usage for nag reminder
+      if (this.todoManager) {
+        const usedTodo = toolCalls?.some((tc) => tc.toolName === "todo") ?? false;
+        if (usedTodo) {
+          this.todoManager.resetRoundCounter();
+          this.log?.debug("todo", "Todo tool used, reset round counter");
+        } else {
+          this.todoManager.incrementRound();
+          this.log?.debug("todo", `Todo not used, round ${this.todoManager.getRoundsSinceUpdate()}`);
+        }
       }
 
       userCallback?.(event);
@@ -379,5 +423,6 @@ export class Base {
     this.error = "";
     this.log?.clear();
     this.context?.reset();
+    this.todoManager?.reset();
   }
 }

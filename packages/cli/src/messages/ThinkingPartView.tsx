@@ -20,7 +20,7 @@ export interface ThinkingPartViewProps {
 export const ThinkingPartView = ({ part }: ThinkingPartViewProps) => {
   return (
     <FullBox paddingLeft={2} paddingX={1}>
-      {part.state === "streaming" ? <Spinner /> : <Text color="green">v</Text>}
+      {part.state === "streaming" ? <Spinner /> : <Text color="green">✓</Text>}
       <Text> </Text>
       <Text color="gray" dimColor wrap="wrap" italic>
         Thinking...

@@ -121,7 +121,11 @@ export const Agent = () => {
       }
       if (char === "n") {
         agentLog?.approval(`user denying ${pendingApproval.id}`);
-        addToolApprovalResponse({ id: pendingApproval.id, approved: false });
+        addToolApprovalResponse({
+          id: pendingApproval.id,
+          approved: false,
+          reason: "User denied this tool execution. Do not assume the action was performed.",
+        });
         return;
       }
       // Ignore other input while waiting for approval
