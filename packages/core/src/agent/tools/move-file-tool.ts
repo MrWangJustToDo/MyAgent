@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { getFile, getFileModifiedTime } from "./helpers.js";
+import { getFile, getFileModifiedTime, withDuration } from "./helpers.js";
 
 import type { Sandbox } from "../../environment";
 
@@ -36,42 +36,45 @@ export const createMoveFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
       targetPath: z.string().describe("The new path where the file was moved to."),
       modifiedTime: z.string().describe("The modification timestamp of the file at the new location."),
       message: z.string().describe("Human-readable summary of the operation."),
+      durationMs: z.number().describe("Execution duration in milliseconds."),
     }),
     needsApproval: true,
     execute: async ({ sourcePath, modifiedTime, targetPath }) => {
-      // Validate modification time and get content
-      const fileRes = await getFile(sandbox, sourcePath);
-      const currentModifiedTime = fileRes.modifiedTime;
+      return withDuration(async () => {
+        // Validate modification time and get content
+        const fileRes = await getFile(sandbox, sourcePath);
+        const currentModifiedTime = fileRes.modifiedTime;
 
-      if (currentModifiedTime !== modifiedTime) {
-        throw new Error(
-          `File has been modified since it was read. Expected modifiedTime: ${modifiedTime}, current: ${currentModifiedTime}. Please read the file again before moving.`
-        );
-      }
+        if (currentModifiedTime !== modifiedTime) {
+          throw new Error(
+            `File has been modified since it was read. Expected modifiedTime: ${modifiedTime}, current: ${currentModifiedTime}. Please read the file again before moving.`
+          );
+        }
 
-      const targetExists = await sandbox.filesystem.exists(targetPath);
+        const targetExists = await sandbox.filesystem.exists(targetPath);
 
-      if (targetExists) {
-        throw new Error(`Target file already exists: ${targetPath}`);
-      }
+        if (targetExists) {
+          throw new Error(`Target file already exists: ${targetPath}`);
+        }
 
-      const content = fileRes.content;
+        const content = fileRes.content;
 
-      // Write to target location
-      await sandbox.filesystem.writeFile(targetPath, content);
+        // Write to target location
+        await sandbox.filesystem.writeFile(targetPath, content);
 
-      // Remove source file
-      await sandbox.filesystem.remove(sourcePath);
+        // Remove source file
+        await sandbox.filesystem.remove(sourcePath);
 
-      // Get new modification time of target file
-      const newModifiedTime = await getFileModifiedTime(sandbox, targetPath);
+        // Get new modification time of target file
+        const newModifiedTime = await getFileModifiedTime(sandbox, targetPath);
 
-      return {
-        sourcePath,
-        targetPath,
-        modifiedTime: newModifiedTime,
-        message: `Successfully moved file from ${sourcePath} to ${targetPath}`,
-      };
+        return {
+          sourcePath,
+          targetPath,
+          modifiedTime: newModifiedTime,
+          message: `Successfully moved file from ${sourcePath} to ${targetPath}`,
+        };
+      });
     },
   });
 };

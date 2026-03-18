@@ -1,7 +1,7 @@
 import { Box, Text } from "ink";
 
 import { FullBox } from "../components/FullBox.js";
-import { formatToolInput } from "../utils/format.js";
+import { formatToolInput, formatDuration } from "../utils/format.js";
 import { getToolCallColor } from "../utils/toolState.js";
 
 import { ToolOutputViewDynamic } from "./ToolOutputViewDynamic.js";
@@ -35,6 +35,17 @@ export interface ToolCallPartViewProps {
   addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
 }
 
+/** Extract durationMs from tool output if available */
+const getDurationMs = (output: unknown): number | null => {
+  if (output && typeof output === "object" && "durationMs" in output) {
+    const durationMs = (output as { durationMs?: unknown }).durationMs;
+    if (typeof durationMs === "number") {
+      return durationMs;
+    }
+  }
+  return null;
+};
+
 /** Render a tool invocation part */
 export const ToolCallPartView = ({ part, addToolApprovalResponse, staticItem }: ToolCallPartViewProps) => {
   const needsApproval = part.state === "approval-requested" && part.approval;
@@ -54,6 +65,9 @@ export const ToolCallPartView = ({ part, addToolApprovalResponse, staticItem }: 
   // Check if output is available (state indicates completion)
   const hasOutput = part.state === "output-available" || part.state === "output-error";
 
+  // Get duration from output if available
+  const durationMs = hasOutput ? getDurationMs(part.output) : null;
+
   return (
     <Box flexDirection="column">
       <FullBox borderStyle="round" borderColor={getToolCallColor(part.state)} paddingX={1}>
@@ -66,6 +80,12 @@ export const ToolCallPartView = ({ part, addToolApprovalResponse, staticItem }: 
               <Text color="gray" dimColor>
                 {" "}
                 {formatToolInput(JSON.parse(displayInput))}
+              </Text>
+            )}
+            {durationMs !== null && (
+              <Text color="gray" dimColor>
+                {" "}
+                ({formatDuration(durationMs)})
               </Text>
             )}
           </Box>

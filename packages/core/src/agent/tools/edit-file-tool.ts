@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { getFile, getFileModifiedTime } from "./helpers.js";
+import { getFile, getFileModifiedTime, withDuration } from "./helpers.js";
 
 import type { Sandbox } from "../../environment";
 
@@ -37,48 +37,51 @@ export const createEditFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
       replacements: z.number().describe("Number of replacements made."),
       modifiedTime: z.string().describe("The new modification timestamp after editing."),
       message: z.string().describe("Human-readable summary of the operation."),
+      durationMs: z.number().describe("Execution duration in milliseconds."),
     }),
     needsApproval: true,
     execute: async ({ path, modifiedTime, oldString, newString, replaceAll }) => {
-      // Validate modification time and get current content
-      const fileRes = await getFile(sandbox, path);
-      const currentModifiedTime = fileRes.modifiedTime;
+      return withDuration(async () => {
+        // Validate modification time and get current content
+        const fileRes = await getFile(sandbox, path);
+        const currentModifiedTime = fileRes.modifiedTime;
 
-      if (currentModifiedTime !== modifiedTime) {
-        throw new Error(
-          `File has been modified since it was read. Expected modifiedTime: ${modifiedTime}, current: ${currentModifiedTime}. Please read the file again before editing.`
-        );
-      }
+        if (currentModifiedTime !== modifiedTime) {
+          throw new Error(
+            `File has been modified since it was read. Expected modifiedTime: ${modifiedTime}, current: ${currentModifiedTime}. Please read the file again before editing.`
+          );
+        }
 
-      const content = fileRes.content;
+        const content = fileRes.content;
 
-      if (!content.includes(oldString)) {
-        throw new Error(`oldString not found in file content`);
-      }
+        if (!content.includes(oldString)) {
+          throw new Error(`oldString not found in file content`);
+        }
 
-      // Count occurrences
-      const occurrences = content.split(oldString).length - 1;
+        // Count occurrences
+        const occurrences = content.split(oldString).length - 1;
 
-      if (occurrences > 1 && !replaceAll) {
-        throw new Error(
-          `Found ${occurrences} matches for oldString. Set replaceAll to true to replace all occurrences, or provide more context in oldString to make it unique.`
-        );
-      }
+        if (occurrences > 1 && !replaceAll) {
+          throw new Error(
+            `Found ${occurrences} matches for oldString. Set replaceAll to true to replace all occurrences, or provide more context in oldString to make it unique.`
+          );
+        }
 
-      const newContent =
-        (replaceAll ?? false) ? content.replaceAll(oldString, newString) : content.replace(oldString, newString);
+        const newContent =
+          (replaceAll ?? false) ? content.replaceAll(oldString, newString) : content.replace(oldString, newString);
 
-      await sandbox.filesystem.writeFile(path, newContent);
+        await sandbox.filesystem.writeFile(path, newContent);
 
-      // Get new modification time after edit
-      const newModifiedTime = await getFileModifiedTime(sandbox, path);
+        // Get new modification time after edit
+        const newModifiedTime = await getFileModifiedTime(sandbox, path);
 
-      return {
-        path,
-        replacements: replaceAll ? occurrences : 1,
-        modifiedTime: newModifiedTime,
-        message: `Successfully edited file: ${path}`,
-      };
+        return {
+          path,
+          replacements: replaceAll ? occurrences : 1,
+          modifiedTime: newModifiedTime,
+          message: `Successfully edited file: ${path}`,
+        };
+      });
     },
   });
 };

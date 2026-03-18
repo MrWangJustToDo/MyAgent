@@ -1,6 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { withDuration } from "./helpers.js";
+
 import type { Sandbox } from "../../environment";
 
 /**
@@ -25,40 +27,43 @@ export const createGlobTool = ({ sandbox }: { sandbox: Sandbox }) => {
       files: z.array(z.string()).describe("Array of file paths matching the pattern."),
       count: z.number().describe("Number of files found."),
       message: z.string().describe("Human-readable summary of the operation."),
+      durationMs: z.number().describe("Execution duration in milliseconds."),
     }),
     execute: async ({ pattern, path }) => {
-      const searchPath = path ?? ".";
+      return withDuration(async () => {
+        const searchPath = path ?? ".";
 
-      // Convert glob pattern to find command
-      // Handle common glob patterns
-      let findCommand: string;
+        // Convert glob pattern to find command
+        // Handle common glob patterns
+        let findCommand: string;
 
-      if (pattern.includes("**")) {
-        // Recursive pattern like **/*.js
-        const namePattern = pattern.replace(/\*\*\//g, "");
-        findCommand = `find ${searchPath} -type f -name "${namePattern}" 2>/dev/null`;
-      } else if (pattern.includes("*")) {
-        // Simple wildcard pattern like *.js
-        findCommand = `find ${searchPath} -type f -name "${pattern}" 2>/dev/null`;
-      } else {
-        // Exact name match
-        findCommand = `find ${searchPath} -type f -name "${pattern}" 2>/dev/null`;
-      }
+        if (pattern.includes("**")) {
+          // Recursive pattern like **/*.js
+          const namePattern = pattern.replace(/\*\*\//g, "");
+          findCommand = `find ${searchPath} -type f -name "${namePattern}" 2>/dev/null`;
+        } else if (pattern.includes("*")) {
+          // Simple wildcard pattern like *.js
+          findCommand = `find ${searchPath} -type f -name "${pattern}" 2>/dev/null`;
+        } else {
+          // Exact name match
+          findCommand = `find ${searchPath} -type f -name "${pattern}" 2>/dev/null`;
+        }
 
-      const result = await sandbox.runCommand(findCommand);
+        const result = await sandbox.runCommand(findCommand);
 
-      const files = result.stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
+        const files = result.stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
 
-      return {
-        pattern,
-        path: searchPath,
-        files,
-        count: files.length,
-        message: `Found ${files.length} files matching pattern: ${pattern}`,
-      };
+        return {
+          pattern,
+          path: searchPath,
+          files,
+          count: files.length,
+          message: `Found ${files.length} files matching pattern: ${pattern}`,
+        };
+      });
     },
   });
 };

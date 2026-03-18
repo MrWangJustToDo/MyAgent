@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { getFileModifiedTime } from "./helpers.js";
+import { getFileModifiedTime, withDuration } from "./helpers.js";
 
 import type { Sandbox } from "../../environment";
 
@@ -29,23 +29,26 @@ export const createDeleteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
     outputSchema: z.object({
       path: z.string().describe("The path of the file or directory that was deleted."),
       message: z.string().describe("Human-readable summary of the operation."),
+      durationMs: z.number().describe("Execution duration in milliseconds."),
     }),
     needsApproval: true,
     execute: async ({ path, modifiedTime }) => {
-      // Validate modification time
-      const currentModifiedTime = await getFileModifiedTime(sandbox, path);
-      if (currentModifiedTime !== modifiedTime) {
-        throw new Error(
-          `File has been modified since it was read. Expected modifiedTime: ${modifiedTime}, current: ${currentModifiedTime}. Please read the file again before deleting.`
-        );
-      }
+      return withDuration(async () => {
+        // Validate modification time
+        const currentModifiedTime = await getFileModifiedTime(sandbox, path);
+        if (currentModifiedTime !== modifiedTime) {
+          throw new Error(
+            `File has been modified since it was read. Expected modifiedTime: ${modifiedTime}, current: ${currentModifiedTime}. Please read the file again before deleting.`
+          );
+        }
 
-      await sandbox.filesystem.remove(path);
+        await sandbox.filesystem.remove(path);
 
-      return {
-        path,
-        message: `Successfully deleted: ${path}`,
-      };
+        return {
+          path,
+          message: `Successfully deleted: ${path}`,
+        };
+      });
     },
   });
 };

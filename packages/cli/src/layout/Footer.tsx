@@ -7,12 +7,12 @@ import { UserInput } from "../components/UserInput.js";
 import { useAgent } from "../hooks/useAgent.js";
 import { useAgentContext } from "../hooks/useAgentContext.js";
 
-import type { TokenUsage } from "@my-agent/core";
+import type { Agent, TokenUsage } from "@my-agent/core";
 
 export const Footer = () => {
   const { status, error } = useAgent((s) => ({
-    status: s.agent?.status || "idle",
-    error: s.agent?.error || "",
+    status: (s.agent as Agent)?.status || "idle",
+    error: (s.agent as Agent)?.error || "",
   }));
 
   const usage = useAgentContext((s) => s.context?.getUsage() as TokenUsage);

@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { getFile } from "./helpers.js";
+import { getFile, withDuration } from "./helpers.js";
 
 import type { Sandbox } from "../../environment";
 
@@ -40,32 +40,35 @@ export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
       endLine: z.number().describe("The ending line number (exclusive)."),
       linesReturned: z.number().describe("Number of lines returned in content."),
       message: z.string().describe("Human-readable summary of the operation."),
+      durationMs: z.number().describe("Execution duration in milliseconds."),
     }),
     execute: async ({ path, offset, limit }) => {
-      // Get file info and content
-      const fileRes = await getFile(sandbox, path);
-      const modifiedTime = fileRes.modifiedTime;
-      const content = fileRes.content;
+      return withDuration(async () => {
+        // Get file info and content
+        const fileRes = await getFile(sandbox, path);
+        const modifiedTime = fileRes.modifiedTime;
+        const content = fileRes.content;
 
-      const lines = content.split("\n");
-      const totalLines = lines.length;
+        const lines = content.split("\n");
+        const totalLines = lines.length;
 
-      const startLine = offset ?? 0;
-      const endLine = limit !== undefined ? Math.min(startLine + limit, totalLines) : totalLines;
+        const startLine = offset ?? 0;
+        const endLine = limit !== undefined ? Math.min(startLine + limit, totalLines) : totalLines;
 
-      const selectedLines = lines.slice(startLine, endLine);
-      const selectedContent = selectedLines.join("\n");
+        const selectedLines = lines.slice(startLine, endLine);
+        const selectedContent = selectedLines.join("\n");
 
-      return {
-        path,
-        content: selectedContent,
-        modifiedTime,
-        totalLines,
-        startLine,
-        endLine,
-        linesReturned: selectedLines.length,
-        message: `Read ${selectedLines.length} lines from ${path} (lines ${startLine}-${endLine - 1} of ${totalLines})`,
-      };
+        return {
+          path,
+          content: selectedContent,
+          modifiedTime,
+          totalLines,
+          startLine,
+          endLine,
+          linesReturned: selectedLines.length,
+          message: `Read ${selectedLines.length} lines from ${path} (lines ${startLine}-${endLine - 1} of ${totalLines})`,
+        };
+      });
     },
   });
 };

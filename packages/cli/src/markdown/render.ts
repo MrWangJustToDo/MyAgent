@@ -216,7 +216,7 @@ const renderCodeBlock = (node: HighlightedCodeBlockNode): string => {
   // Language label on first line if present
   const langLabel = node.language ? colors.muted(node.language) + "\n" : "";
 
-  return "\n" + langLabel + lines + loadingIndicator;
+  return "\n" + langLabel + lines + loadingIndicator + "\n";
 };
 
 const renderInlineCode = (node: InlineCodeNode): string => {
@@ -227,13 +227,17 @@ const renderList = (node: ListNode, context: RenderContext): string => {
   const indent = "  ".repeat(context.listDepth);
   const nestedContext = { ...context, listDepth: context.listDepth + 1 };
 
-  const items = node.items
+  let items = node.items
     .map((item, index) => {
       const marker = node.ordered ? colors.muted(`${(node.start ?? 1) + index}. `) : colors.muted("• ");
       const content = renderListItem(item, nestedContext);
       return indent + marker + content;
     })
     .join("\n");
+
+  while (items.endsWith("\n")) {
+    items = items.slice(-1);
+  }
 
   // Nested lists need a leading newline to separate from parent item text
   return context.listDepth === 0 ? items : "\n\n" + items + "\n\n";

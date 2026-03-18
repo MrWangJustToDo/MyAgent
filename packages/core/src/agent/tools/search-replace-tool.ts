@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { getFile, getFileModifiedTime } from "./helpers.js";
+import { getFile, getFileModifiedTime, withDuration } from "./helpers.js";
 
 import type { Sandbox } from "../../environment";
 
@@ -48,64 +48,67 @@ export const createSearchReplaceTool = ({ sandbox }: { sandbox: Sandbox }) => {
         )
         .describe("Details of each replacement operation."),
       message: z.string().describe("Human-readable summary of the operation."),
+      durationMs: z.number().describe("Execution duration in milliseconds."),
     }),
     needsApproval: true,
     execute: async ({ path, modifiedTime, replacements }) => {
-      // Validate modification time and get current content
-      const fileRes = await getFile(sandbox, path);
-      const currentModifiedTime = fileRes.modifiedTime;
+      return withDuration(async () => {
+        // Validate modification time and get current content
+        const fileRes = await getFile(sandbox, path);
+        const currentModifiedTime = fileRes.modifiedTime;
 
-      if (currentModifiedTime !== modifiedTime) {
-        throw new Error(
-          `File has been modified since it was read. Expected modifiedTime: ${modifiedTime}, current: ${currentModifiedTime}. Please read the file again before editing.`
-        );
-      }
-
-      let content = fileRes.content;
-      const results: Array<{ oldString: string; found: boolean; replaced: boolean }> = [];
-
-      // Apply each replacement in order
-      for (const { oldString, newString } of replacements) {
-        const found = content.includes(oldString);
-        if (found) {
-          content = content.replace(oldString, newString);
-          results.push({
-            oldString: oldString.substring(0, 50) + (oldString.length > 50 ? "..." : ""),
-            found: true,
-            replaced: true,
-          });
-        } else {
-          results.push({
-            oldString: oldString.substring(0, 50) + (oldString.length > 50 ? "..." : ""),
-            found: false,
-            replaced: false,
-          });
+        if (currentModifiedTime !== modifiedTime) {
+          throw new Error(
+            `File has been modified since it was read. Expected modifiedTime: ${modifiedTime}, current: ${currentModifiedTime}. Please read the file again before editing.`
+          );
         }
-      }
 
-      const successCount = results.filter((r) => r.replaced).length;
-      const failedCount = results.filter((r) => !r.found).length;
+        let content = fileRes.content;
+        const results: Array<{ oldString: string; found: boolean; replaced: boolean }> = [];
 
-      if (failedCount > 0) {
-        const failedStrings = results
-          .filter((r) => !r.found)
-          .map((r) => r.oldString)
-          .join(", ");
-        throw new Error(`Some search strings were not found in the file: ${failedStrings}. No changes were made.`);
-      }
+        // Apply each replacement in order
+        for (const { oldString, newString } of replacements) {
+          const found = content.includes(oldString);
+          if (found) {
+            content = content.replace(oldString, newString);
+            results.push({
+              oldString: oldString.substring(0, 50) + (oldString.length > 50 ? "..." : ""),
+              found: true,
+              replaced: true,
+            });
+          } else {
+            results.push({
+              oldString: oldString.substring(0, 50) + (oldString.length > 50 ? "..." : ""),
+              found: false,
+              replaced: false,
+            });
+          }
+        }
 
-      await sandbox.filesystem.writeFile(path, content);
+        const successCount = results.filter((r) => r.replaced).length;
+        const failedCount = results.filter((r) => !r.found).length;
 
-      // Get new modification time after edit
-      const newModifiedTime = await getFileModifiedTime(sandbox, path);
+        if (failedCount > 0) {
+          const failedStrings = results
+            .filter((r) => !r.found)
+            .map((r) => r.oldString)
+            .join(", ");
+          throw new Error(`Some search strings were not found in the file: ${failedStrings}. No changes were made.`);
+        }
 
-      return {
-        path,
-        replacementsApplied: successCount,
-        modifiedTime: newModifiedTime,
-        results,
-        message: `Successfully applied ${successCount} replacements to: ${path}`,
-      };
+        await sandbox.filesystem.writeFile(path, content);
+
+        // Get new modification time after edit
+        const newModifiedTime = await getFileModifiedTime(sandbox, path);
+
+        return {
+          path,
+          replacementsApplied: successCount,
+          modifiedTime: newModifiedTime,
+          results,
+          message: `Successfully applied ${successCount} replacements to: ${path}`,
+        };
+      });
     },
   });
 };

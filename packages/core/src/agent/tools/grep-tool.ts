@@ -1,6 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { withDuration } from "./helpers.js";
+
 import type { Sandbox } from "../../environment";
 
 /**
@@ -44,64 +46,67 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
       count: z.number().describe("Number of matches found."),
       truncated: z.boolean().describe("Whether results were truncated due to maxResults limit."),
       message: z.string().describe("Human-readable summary of the operation."),
+      durationMs: z.number().describe("Execution duration in milliseconds."),
     }),
     execute: async ({ pattern, path, include, ignoreCase, maxResults }) => {
-      const searchPath = path ?? ".";
-      const limit = maxResults ?? 100;
+      return withDuration(async () => {
+        const searchPath = path ?? ".";
+        const limit = maxResults ?? 100;
 
-      // Build grep command
-      let grepCommand = "grep -rn";
+        // Build grep command
+        let grepCommand = "grep -rn";
 
-      if (ignoreCase) {
-        grepCommand += " -i";
-      }
+        if (ignoreCase) {
+          grepCommand += " -i";
+        }
 
-      // Add include pattern if specified
-      if (include) {
-        grepCommand += ` --include="${include}"`;
-      }
+        // Add include pattern if specified
+        if (include) {
+          grepCommand += ` --include="${include}"`;
+        }
 
-      // Escape the pattern for shell and add it
-      const escapedPattern = pattern.replace(/"/g, '\\"');
-      grepCommand += ` "${escapedPattern}" ${searchPath}`;
+        // Escape the pattern for shell and add it
+        const escapedPattern = pattern.replace(/"/g, '\\"');
+        grepCommand += ` "${escapedPattern}" ${searchPath}`;
 
-      // Limit results
-      grepCommand += ` | head -n ${limit}`;
+        // Limit results
+        grepCommand += ` | head -n ${limit}`;
 
-      // Add 2>/dev/null to suppress errors for non-readable files
-      grepCommand += " 2>/dev/null || true";
+        // Add 2>/dev/null to suppress errors for non-readable files
+        grepCommand += " 2>/dev/null || true";
 
-      const result = await sandbox.runCommand(grepCommand);
+        const result = await sandbox.runCommand(grepCommand);
 
-      const matches = result.stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-        .map((line) => {
-          // Parse grep output format: filename:lineNumber:content
-          const firstColon = line.indexOf(":");
-          const secondColon = line.indexOf(":", firstColon + 1);
+        const matches = result.stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+          .map((line) => {
+            // Parse grep output format: filename:lineNumber:content
+            const firstColon = line.indexOf(":");
+            const secondColon = line.indexOf(":", firstColon + 1);
 
-          if (firstColon === -1 || secondColon === -1) {
-            return { file: line, lineNumber: 0, content: "" };
-          }
+            if (firstColon === -1 || secondColon === -1) {
+              return { file: line, lineNumber: 0, content: "" };
+            }
 
-          return {
-            file: line.substring(0, firstColon),
-            lineNumber: parseInt(line.substring(firstColon + 1, secondColon), 10),
-            content: line.substring(secondColon + 1),
-          };
-        });
+            return {
+              file: line.substring(0, firstColon),
+              lineNumber: parseInt(line.substring(firstColon + 1, secondColon), 10),
+              content: line.substring(secondColon + 1),
+            };
+          });
 
-      return {
-        pattern,
-        path: searchPath,
-        include: include ?? "*",
-        matches,
-        count: matches.length,
-        truncated: matches.length >= limit,
-        message: `Found ${matches.length} matches for pattern: ${pattern}${matches.length >= limit ? " (results truncated)" : ""}`,
-      };
+        return {
+          pattern,
+          path: searchPath,
+          include: include ?? "*",
+          matches,
+          count: matches.length,
+          truncated: matches.length >= limit,
+          message: `Found ${matches.length} matches for pattern: ${pattern}${matches.length >= limit ? " (results truncated)" : ""}`,
+        };
+      });
     },
   });
 };

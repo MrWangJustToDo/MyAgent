@@ -1,6 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { withDuration } from "./helpers.js";
+
 import type { Sandbox } from "../../environment";
 
 /**
@@ -37,30 +39,33 @@ export const createListFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
         .describe("Array of directory entries."),
       count: z.number().describe("Number of entries in the directory."),
       message: z.string().describe("Human-readable summary of the operation."),
+      durationMs: z.number().describe("Execution duration in milliseconds."),
     }),
     needsApproval: true,
     execute: async ({ path: inputPath }) => {
-      const path = inputPath ?? ".";
+      return withDuration(async () => {
+        const path = inputPath ?? ".";
 
-      const exists = await sandbox.filesystem.exists(path);
+        const exists = await sandbox.filesystem.exists(path);
 
-      if (!exists) {
-        throw new Error(`Directory does not exist: ${path}`);
-      }
+        if (!exists) {
+          throw new Error(`Directory does not exist: ${path}`);
+        }
 
-      const entries = await sandbox.filesystem.readdir(path);
+        const entries = await sandbox.filesystem.readdir(path);
 
-      return {
-        path,
-        entries: entries.map((entry) => ({
-          name: entry.name,
-          type: entry.type,
-          size: entry.size,
-          modified: entry.modified?.toISOString(),
-        })),
-        count: entries.length,
-        message: `Listed ${entries.length} entries in: ${path}`,
-      };
+        return {
+          path,
+          entries: entries.map((entry) => ({
+            name: entry.name,
+            type: entry.type,
+            size: entry.size,
+            modified: entry.modified?.toISOString(),
+          })),
+          count: entries.length,
+          message: `Listed ${entries.length} entries in: ${path}`,
+        };
+      });
     },
   });
 };

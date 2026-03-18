@@ -1,6 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { withDuration } from "./helpers.js";
+
 import type { Sandbox } from "../../environment";
 
 /**
@@ -29,53 +31,56 @@ export const createListCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
       commands: z.array(z.string()).describe("Array of command names found."),
       count: z.number().describe("Number of commands found."),
       message: z.string().describe("Human-readable summary of the operation."),
+      durationMs: z.number().describe("Execution duration in milliseconds."),
     }),
     execute: async ({ search, type: commandTypeInput }) => {
-      const commandType = commandTypeInput ?? "all";
+      return withDuration(async () => {
+        const commandType = commandTypeInput ?? "all";
 
-      let command: string;
+        let command: string;
 
-      if (search) {
-        // Search for specific command
-        command = `compgen -c 2>/dev/null | grep -i "${search}" | sort -u | head -100 || which "${search}" 2>/dev/null || type "${search}" 2>/dev/null || echo "No commands found matching: ${search}"`;
-      } else {
-        // List commands based on type
-        switch (commandType) {
-          case "builtin":
-            command = "compgen -b | sort -u";
-            break;
-          case "alias":
-            command = "compgen -a | sort -u";
-            break;
-          case "function":
-            command = "compgen -A function | sort -u";
-            break;
-          case "executable":
-            command = "compgen -c | sort -u | head -200";
-            break;
-          case "all":
-          default:
-            command = "compgen -c | sort -u | head -200";
-            break;
+        if (search) {
+          // Search for specific command
+          command = `compgen -c 2>/dev/null | grep -i "${search}" | sort -u | head -100 || which "${search}" 2>/dev/null || type "${search}" 2>/dev/null || echo "No commands found matching: ${search}"`;
+        } else {
+          // List commands based on type
+          switch (commandType) {
+            case "builtin":
+              command = "compgen -b | sort -u";
+              break;
+            case "alias":
+              command = "compgen -a | sort -u";
+              break;
+            case "function":
+              command = "compgen -A function | sort -u";
+              break;
+            case "executable":
+              command = "compgen -c | sort -u | head -200";
+              break;
+            case "all":
+            default:
+              command = "compgen -c | sort -u | head -200";
+              break;
+          }
         }
-      }
 
-      const result = await sandbox.runCommand(command);
+        const result = await sandbox.runCommand(command);
 
-      const commands = result.stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0 && !line.startsWith("No commands found"));
+        const commands = result.stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0 && !line.startsWith("No commands found"));
 
-      return {
-        search: search ?? null,
-        type: commandType,
-        commands,
-        count: commands.length,
-        message: search
-          ? `Found ${commands.length} commands matching: ${search}`
-          : `Listed ${commands.length} ${commandType} commands`,
-      };
+        return {
+          search: search ?? null,
+          type: commandType,
+          commands,
+          count: commands.length,
+          message: search
+            ? `Found ${commands.length} commands matching: ${search}`
+            : `Listed ${commands.length} ${commandType} commands`,
+        };
+      });
     },
   });
 };

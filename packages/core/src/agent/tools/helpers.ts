@@ -40,3 +40,14 @@ function hashContent(content: string): string {
   // Convert to positive hex string
   return (hash >>> 0).toString(16);
 }
+
+/**
+ * Wraps an async function and measures its execution duration.
+ * Returns the result along with durationMs.
+ */
+export async function withDuration<T>(fn: () => Promise<T>): Promise<T & { durationMs: number }> {
+  const startTime = performance.now();
+  const result = await fn();
+  const durationMs = Math.round(performance.now() - startTime);
+  return { ...result, durationMs };
+}

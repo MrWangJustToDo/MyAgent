@@ -1,6 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { withDuration } from "./helpers.js";
+
 import type { Sandbox } from "../../environment";
 
 /**
@@ -30,89 +32,92 @@ export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
       tree: z.string().describe("The tree structure as a formatted string."),
       totalEntries: z.number().describe("Total number of entries (files and directories) shown."),
       message: z.string().describe("Human-readable summary of the operation."),
+      durationMs: z.number().describe("Execution duration in milliseconds."),
     }),
     execute: async ({ path, maxDepth, showHidden, dirsOnly, pattern, ignore }) => {
-      const rootPath = path ?? ".";
-      const depth = maxDepth ?? 3;
+      return withDuration(async () => {
+        const rootPath = path ?? ".";
+        const depth = maxDepth ?? 3;
 
-      // Build tree command (try 'tree' first, fall back to 'find' based approach)
-      let treeCommand = `tree "${rootPath}" -L ${depth}`;
-
-      if (!showHidden) {
-        treeCommand += " -I '.*'";
-      }
-
-      if (dirsOnly) {
-        treeCommand += " -d";
-      }
-
-      if (pattern) {
-        treeCommand += ` -P '${pattern}'`;
-      }
-
-      if (ignore && ignore.length > 0) {
-        const ignorePattern = ignore.join("|");
-        treeCommand += ` -I '${ignorePattern}'`;
-      }
-
-      // Add file count summary
-      treeCommand += " --noreport";
-
-      let result = await sandbox.runCommand(treeCommand + " 2>/dev/null");
-
-      // If tree command not available, use find-based fallback
-      if (result.exitCode !== 0 || result.stdout.trim() === "") {
-        // Fallback using find command
-        let findCommand = `find "${rootPath}" -maxdepth ${depth}`;
-
-        if (dirsOnly) {
-          findCommand += " -type d";
-        }
+        // Build tree command (try 'tree' first, fall back to 'find' based approach)
+        let treeCommand = `tree "${rootPath}" -L ${depth}`;
 
         if (!showHidden) {
-          findCommand += " -not -path '*/.*'";
+          treeCommand += " -I '.*'";
+        }
+
+        if (dirsOnly) {
+          treeCommand += " -d";
         }
 
         if (pattern) {
-          findCommand += ` -name '${pattern}'`;
+          treeCommand += ` -P '${pattern}'`;
         }
 
         if (ignore && ignore.length > 0) {
-          for (const ig of ignore) {
-            findCommand += ` -not -path '*/${ig}/*' -not -name '${ig}'`;
+          const ignorePattern = ignore.join("|");
+          treeCommand += ` -I '${ignorePattern}'`;
+        }
+
+        // Add file count summary
+        treeCommand += " --noreport";
+
+        let result = await sandbox.runCommand(treeCommand + " 2>/dev/null");
+
+        // If tree command not available, use find-based fallback
+        if (result.exitCode !== 0 || result.stdout.trim() === "") {
+          // Fallback using find command
+          let findCommand = `find "${rootPath}" -maxdepth ${depth}`;
+
+          if (dirsOnly) {
+            findCommand += " -type d";
           }
+
+          if (!showHidden) {
+            findCommand += " -not -path '*/.*'";
+          }
+
+          if (pattern) {
+            findCommand += ` -name '${pattern}'`;
+          }
+
+          if (ignore && ignore.length > 0) {
+            for (const ig of ignore) {
+              findCommand += ` -not -path '*/${ig}/*' -not -name '${ig}'`;
+            }
+          }
+
+          findCommand += " | sort | head -500";
+
+          result = await sandbox.runCommand(findCommand);
+
+          if (result.exitCode !== 0) {
+            throw new Error(`Failed to list directory tree: ${result.stderr}`);
+          }
+
+          // Convert find output to tree-like format
+          const paths = result.stdout.split("\n").filter((p) => p.trim());
+          const tree = formatAsTree(paths, rootPath);
+
+          return {
+            path: rootPath,
+            maxDepth: depth,
+            tree,
+            totalEntries: paths.length,
+            message: `Directory tree for: ${rootPath} (depth: ${depth})`,
+          };
         }
 
-        findCommand += " | sort | head -500";
-
-        result = await sandbox.runCommand(findCommand);
-
-        if (result.exitCode !== 0) {
-          throw new Error(`Failed to list directory tree: ${result.stderr}`);
-        }
-
-        // Convert find output to tree-like format
-        const paths = result.stdout.split("\n").filter((p) => p.trim());
-        const tree = formatAsTree(paths, rootPath);
+        const lines = result.stdout.split("\n").filter((l) => l.trim());
 
         return {
           path: rootPath,
           maxDepth: depth,
-          tree,
-          totalEntries: paths.length,
+          tree: result.stdout,
+          totalEntries: lines.length,
           message: `Directory tree for: ${rootPath} (depth: ${depth})`,
         };
-      }
-
-      const lines = result.stdout.split("\n").filter((l) => l.trim());
-
-      return {
-        path: rootPath,
-        maxDepth: depth,
-        tree: result.stdout,
-        totalEntries: lines.length,
-        message: `Directory tree for: ${rootPath} (depth: ${depth})`,
-      };
+      });
     },
   });
 };
