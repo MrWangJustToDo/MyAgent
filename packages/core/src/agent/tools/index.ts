@@ -16,7 +16,7 @@ import { createTreeTool } from "./tree-tool.js";
 import { createWriteFileTool } from "./write-file-tool.js";
 
 import type { Sandbox } from "../../environment";
-import type { TodoManager } from "../todoManager";
+import type { TodoManager } from "../todo-manager";
 
 export * from "./copy-file-tool.js";
 export * from "./delete-file-tool.js";

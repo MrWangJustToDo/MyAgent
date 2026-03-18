@@ -1,12 +1,12 @@
 import { AgentLog } from "../agent";
-import { AgentContext } from "../agent/agentContext";
-import { Agent } from "../agent/loop/Agent.js";
-import { TodoManager } from "../agent/todoManager";
+import { AgentContext } from "../agent/agent-context";
+import { Agent } from "../agent/loop/agent.js";
+import { TodoManager } from "../agent/todo-manager";
 
-import { sandboxManager } from "./SandboxManager.js";
-import { toolsManager } from "./ToolsManager.js";
+import { sandboxManager } from "./manager-sandbox.js";
+import { toolsManager } from "./manager-tools.js";
 
-import type { AgentConfig, ToolSet } from "../agent/loop/Agent.js";
+import type { AgentConfig, ToolSet } from "../agent/loop/agent.js";
 import type { Sandbox } from "../environment";
 import type { LanguageModel } from "ai";
 

@@ -1,10 +1,10 @@
 import { streamText } from "ai";
 
-import type { StreamPart } from "./Agent";
+import type { StreamPart } from "./agent";
 import type { Sandbox } from "../../environment";
-import type { AgentContext } from "../agentContext";
-import type { AgentLog } from "../agentLog";
-import type { TodoManager } from "../todoManager";
+import type { AgentContext } from "../agent-context";
+import type { AgentLog } from "../agent-log";
+import type { TodoManager } from "../todo-manager";
 import type {
   ToolSet,
   LanguageModel,

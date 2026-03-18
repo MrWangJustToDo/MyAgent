@@ -1,8 +1,8 @@
 import { createTools, type Tools } from "../agent/tools";
 
-import { sandboxManager } from "./SandboxManager";
+import { sandboxManager } from "./manager-sandbox";
 
-import type { SandboxManager } from "./SandboxManager";
+import type { SandboxManager } from "./manager-sandbox";
 
 // ============================================================================
 // ToolsManager Class

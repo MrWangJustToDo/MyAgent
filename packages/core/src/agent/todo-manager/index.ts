@@ -32,7 +32,7 @@
  * ```
  */
 
-export { TodoManager, generateTodoManagerId } from "./TodoManager.js";
+export { TodoManager, generateTodoManagerId } from "./todo-manager.js";
 export {
   // Types
   type TodoItem,

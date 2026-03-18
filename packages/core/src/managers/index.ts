@@ -25,6 +25,6 @@
  * ```
  */
 
-export { SandboxManager, sandboxManager } from "./SandboxManager.js";
-export { ToolsManager, toolsManager } from "./ToolsManager.js";
-export { AgentManager, agentManager, type ManagedAgentConfig, type ManagedAgent } from "./AgentManager.js";
+export { SandboxManager, sandboxManager } from "./manager-sandbox.js";
+export { ToolsManager, toolsManager } from "./manager-tools.js";
+export { AgentManager, agentManager, type ManagedAgentConfig, type ManagedAgent } from "./manager-agent.js";

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { generateId } from "../../base/utils.js";
 
-import { Base } from "./Base";
+import { Base } from "./base.js";
 
 import type {
   TextStreamPart,
@@ -308,4 +308,4 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
 
 export { vercelTool as tool };
 
-export type { AgentStatus, AgentRunOptions } from "./Base";
+export type { AgentStatus, AgentRunOptions } from "./base.js";

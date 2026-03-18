@@ -22,7 +22,7 @@ export type {
 } from "./tools";
 
 // Context exports
-export { AgentContext, generateContextId, type TokenUsage } from "./agentContext";
+export { AgentContext, generateContextId, type TokenUsage } from "./agent-context";
 
 // Log exports
 export {
@@ -38,7 +38,7 @@ export {
   type LogCategory,
   type LogEntry,
   type LogFilter,
-} from "./agentLog";
+} from "./agent-log";
 
 // TodoManager exports
 export {
@@ -60,4 +60,4 @@ export {
   STATUS_ICONS,
   DEFAULT_MAX_TODOS,
   DEFAULT_NAG_REMINDER_THRESHOLD,
-} from "./todoManager";
+} from "./todo-manager";

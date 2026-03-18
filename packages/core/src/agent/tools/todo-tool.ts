@@ -4,7 +4,7 @@ import { z } from "zod";
 import { withDuration } from "./helpers.js";
 import { todoOutputSchema } from "./types.js";
 
-import type { TodoManager } from "../todoManager";
+import type { TodoManager } from "../todo-manager";
 
 /**
  * Creates a todo tool using Vercel AI SDK.

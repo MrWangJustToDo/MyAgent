@@ -4,7 +4,7 @@
 
 import { generateId } from "../../base/utils.js";
 
-import type { StreamPart, ToolSet } from "../loop/Agent";
+import type { StreamPart, ToolSet } from "../loop/agent.js";
 import type { OnFinishEvent } from "ai";
 
 export interface TokenUsage {
