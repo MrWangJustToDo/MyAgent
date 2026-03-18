@@ -6,7 +6,7 @@
  */
 
 import { Chat, useChat as useAiSdkChat } from "@ai-sdk/react";
-import { agentManager, createOllamaModel } from "@my-agent/core";
+import { agentManager, createOllamaModel, getOllamaBuildInTools } from "@my-agent/core";
 import { DirectChatTransport, lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 import { useEffect, useCallback, useState, useRef } from "react";
 import { reactive, toRaw } from "reactivity-store";
@@ -139,6 +139,11 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
       try {
         const languageModel = createOllamaModel(model, url, { reasoning: true });
 
+        const tools = getOllamaBuildInTools((p) => ({
+          ["ollama-web-fetch"]: p.tools.webFetch(),
+          ["ollama-web-search"]: p.tools.webSearch(),
+        }));
+
         const agent = await agentManager.createManagedAgent({
           languageModel,
           model,
@@ -163,6 +168,8 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
             }) as Agent | AgentContext;
           },
         });
+
+        agent.addTools(tools);
 
         // Set up global agent state
         useAgent.getActions().setAgent(agent);

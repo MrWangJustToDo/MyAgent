@@ -1,9 +1,9 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { createOllama, wrapLanguageModel, extractReasoningMiddleware } from "ai-sdk-ollama";
+import { createOllama, wrapLanguageModel, extractReasoningMiddleware, ollama } from "ai-sdk-ollama";
 
 import { DEFAULT_OLLAMA_URL } from "./types.js";
 
-import type { LanguageModel } from "ai";
+import type { LanguageModel, ToolSet } from "ai";
 
 // ============================================================================
 // Provider Types
@@ -82,6 +82,10 @@ export const createOllamaModel = (
   }
 
   return baseModel;
+};
+
+export const getOllamaBuildInTools = (genTools: (pkg: typeof ollama) => ToolSet) => {
+  return genTools(ollama);
 };
 
 /**

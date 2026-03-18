@@ -27,11 +27,7 @@ export const useSize = createState(
             return;
           }
 
-          const id = setTimeout(() => {
-            useStatic.getActions().refreshRemount();
-          }, 100);
-
-          return () => clearTimeout(id);
+          useStatic.getActions().refreshRemount();
         }, [columns]);
 
         return { columns, rows };

@@ -4,7 +4,8 @@ import { FullBox } from "../components/FullBox.js";
 import { formatToolInput } from "../utils/format.js";
 import { getToolCallColor } from "../utils/toolState.js";
 
-import { ToolOutputView } from "./ToolOutputView.js";
+import { ToolOutputViewDynamic } from "./ToolOutputViewDynamic.js";
+import { ToolOutputViewStatic } from "./ToolOutputViewStatic.js";
 import { ToolStatusIcon } from "./ToolStatusIcon.js";
 
 import type { ToolInvocationState } from "../utils/toolState.js";
@@ -78,19 +79,19 @@ export const ToolCallPartView = ({ part, addToolApprovalResponse, staticItem }: 
             </Box>
           )}
 
+          {/* Show output if available */}
+          {!staticItem && hasOutput && (
+            <Box marginTop={1} flexDirection="column" width="100%">
+              {staticItem ? <ToolOutputViewStatic part={part} /> : <ToolOutputViewDynamic part={part} />}
+            </Box>
+          )}
+
           {/* Approval prompt */}
           {needsApproval && addToolApprovalResponse && (
             <Box marginTop={1} flexDirection="column">
               <Text color="yellow" bold>
                 Approval required. Press Y to approve, N to deny.
               </Text>
-            </Box>
-          )}
-
-          {/* Show output if available */}
-          {!staticItem && hasOutput && (
-            <Box marginTop={1} flexDirection="column" width="100%">
-              <ToolOutputView part={part} />
             </Box>
           )}
         </Box>
