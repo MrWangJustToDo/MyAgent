@@ -154,9 +154,11 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
             if (instance["$$symbol"]) return instance;
             instance["$$symbol"] = Symbol.for("patch");
             const pInstance = reactive(instance);
+            // make all the class.action change trigger update so reactivity-store can observe it
             return new Proxy(pInstance, {
               get(target, p, receiver) {
                 const key = p.toString()?.toLowerCase?.() || "";
+                // fix error when vue reactivity and zod work together
                 if (key.includes("tool") || key.includes("config")) {
                   return toRaw(Reflect.get(target, p, receiver));
                 }
