@@ -39,7 +39,6 @@ const TodoItemView = ({ item }: { item: TodoItem }) => {
  */
 export const TodoList = () => {
   const items = useTodoManager((s) => s.items);
-  const stats = useTodoManager((s) => s.stats);
 
   // Don't render anything if no todos
   if (items.length === 0) {
@@ -49,35 +48,13 @@ export const TodoList = () => {
   // Find current in_progress task
   const currentTask = items.find((item) => item.status === "in_progress");
 
-  // Get pending tasks count
-  const pendingCount = stats.pending;
-
-  return (
-    <Box flexDirection="column" gap={0}>
-      {/* Progress summary */}
-      <Box gap={2}>
-        <Text color="cyan" bold>
-          Tasks:
-        </Text>
-        <Text color="green">{stats.completed}</Text>
-        <Text color="gray">/</Text>
-        <Text>{stats.total}</Text>
-        {pendingCount > 0 && (
-          <Text color="gray" dimColor>
-            ({pendingCount} pending)
-          </Text>
-        )}
+  if (currentTask) {
+    return (
+      <Box>
+        <TodoItemView item={currentTask} />
       </Box>
+    );
+  }
 
-      {/* Current task */}
-      {currentTask && (
-        <Box>
-          <Text color="yellow" bold>
-            {"  "}
-          </Text>
-          <TodoItemView item={currentTask} />
-        </Box>
-      )}
-    </Box>
-  );
+  return null;
 };

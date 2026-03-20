@@ -1,4 +1,5 @@
 const baseLint = require("project-tool/baseLint");
+const reactLint = require("project-tool/reactLint");
 
 module.exports = [
   ...baseLint,
@@ -9,7 +10,7 @@ module.exports = [
     settings: {
       "import/resolver": {
         typescript: {
-          project: ["./tsconfig.json", "./packages/*/tsconfig.json"],
+          project: ["./tsconfig.json"],
         },
       },
     },
@@ -17,6 +18,28 @@ module.exports = [
   {
     rules: {
       "max-lines": ["error", { max: 800, skipBlankLines: true }],
+    },
+  },
+  // React config for ui/* and site/graphql
+  {
+    files: ["cli/src/**/*.{ts,tsx}", "extension/**/*.{ts,tsx}"],
+    ...reactLint.reduce((acc, config) => {
+      return {
+        ...acc,
+        ...config,
+        plugins: { ...acc.plugins, ...config.plugins },
+        rules: { ...acc.rules, ...config.rules },
+        settings: { ...acc.settings, ...config.settings },
+      };
+    }, {}),
+    languageOptions: {
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+        projectService: true,
+        tsconfigRootDir: __dirname,
+      },
     },
   },
 ];

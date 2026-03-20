@@ -14,5 +14,11 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
+  "files": [],
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/cli" },
+    { "path": "./packages/extension" }
+  ],
   "exclude": ["node_modules", "**/node_modules", "**/dist"]
 }

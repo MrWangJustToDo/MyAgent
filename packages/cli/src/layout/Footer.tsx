@@ -1,22 +1,19 @@
 import { Box, Text } from "ink";
 import Divider from "ink-divider";
 
+import { ErrorDetail } from "../components/ErrorDetail.js";
 import { FullBox } from "../components/FullBox.js";
+import { LLMUsage } from "../components/LLMUsage.js";
 import { Spinner } from "../components/Spinner.js";
 import { TodoList } from "../components/TodoList.js";
+import { TodoStats } from "../components/TodoStats.js";
 import { UserInput } from "../components/UserInput.js";
-import { useAgentContext } from "../hooks/use-agent-context.js";
 import { useAgent } from "../hooks/use-agent.js";
 
-import type { Agent, TokenUsage } from "@my-agent/core";
+import type { Agent } from "@my-agent/core";
 
 export const Footer = () => {
-  const { status, error } = useAgent((s) => ({
-    status: (s.agent as Agent)?.status || "idle",
-    error: (s.agent as Agent)?.error || "",
-  }));
-
-  const usage = useAgentContext((s) => s.context?.getUsage() as TokenUsage);
+  const status = useAgent((s) => (s.agent as Agent)?.status || "idle");
 
   const isInputEnabled = status === "idle" || status === "completed" || status === "error";
 
@@ -43,21 +40,13 @@ export const Footer = () => {
         </Box>
 
         {/* Usage stats */}
-        {usage && (
-          <Box>
-            <Text color="gray" dimColor wrap="truncate">
-              Tokens: {usage.inputTokens} in / {usage.outputTokens} out
-            </Text>
-          </Box>
-        )}
+        <LLMUsage />
+
+        <TodoStats />
       </FullBox>
 
       {/* Error message */}
-      {error && (
-        <Box>
-          <Text color="red">{error}</Text>
-        </Box>
-      )}
+      <ErrorDetail />
 
       {/* Todo list */}
       <TodoList />

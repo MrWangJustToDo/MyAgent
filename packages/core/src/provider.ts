@@ -1,5 +1,6 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { createOllama, wrapLanguageModel, extractReasoningMiddleware, ollama } from "ai-sdk-ollama";
+import { extractReasoningMiddleware, wrapLanguageModel } from "ai";
+import { createOllama, ollama } from "ai-sdk-ollama";
 
 import { DEFAULT_OLLAMA_URL } from "./types.js";
 
