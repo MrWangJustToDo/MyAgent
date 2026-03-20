@@ -1,7 +1,7 @@
 import { debounce } from "lodash-es";
 import { useLayoutEffect, useState } from "react";
 
-import { useAgentLog } from "./useAgentLog";
+import { useAgentLog } from "./use-agent-log";
 
 const TERMINAL_PADDING_X = 4;
 

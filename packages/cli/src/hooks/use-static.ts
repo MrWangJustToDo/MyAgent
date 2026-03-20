@@ -10,29 +10,13 @@ export const useStatic = createState(
   () => ({
     stdoutRef: markRaw({ current: null as WriteStream | null }),
     header: null as JSX.Element | null,
-    state: [] as JSX.Element[],
+    list: [] as JSX.Element[],
     headerSet: 0,
     stateSet: 0,
     remountKey: 0,
-    cache: {
-      header: null as null | JSX.Element,
-      state: [] as JSX.Element[],
-    },
   }),
   {
     withActions(s) {
-      const setToCache = () => {
-        s.cache.header = s.header;
-        s.cache.state = s.state;
-        s.header = null;
-        s.state = [];
-      };
-
-      const restoreCache = () => {
-        s.header = s.cache.header;
-        s.state = s.state.length ? s.state : s.cache.state;
-      };
-
       const refresh = debounce(() => {
         const stdout = toRaw(s.stdoutRef.current);
         stdout?.write?.(ansiEscapes.clearTerminal);
@@ -55,10 +39,8 @@ export const useStatic = createState(
 
           useEffect(() => refresh, []);
         },
-        setToCache,
-        restoreCache,
         setStaticHeader: (item: JSX.Element) => ((s.header = item), s.headerSet++),
-        setStaticItem: (items: JSX.Element[]) => ((s.state = items), s.stateSet++),
+        setStaticList: (items: JSX.Element[]) => ((s.list = items), s.stateSet++),
         refreshRemount: refresh,
       };
     },

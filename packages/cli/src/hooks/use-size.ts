@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { createState } from "reactivity-store";
 
-import { useStatic } from "./useStatic";
-import { useTerminalSize } from "./useTerminalSize";
+import { useStatic } from "./use-static";
+import { useTerminalSize } from "./use-terminal-size";
 
 export const useSize = createState(
   () => ({

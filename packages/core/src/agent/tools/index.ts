@@ -11,12 +11,11 @@ import { createMoveFileTool } from "./move-file-tool.js";
 import { createReadFileTool } from "./read-file-tool.js";
 import { createRunCommandTool } from "./run-command-tool.js";
 import { createSearchReplaceTool } from "./search-replace-tool.js";
-import { createTodoTool } from "./todo-tool.js";
 import { createTreeTool } from "./tree-tool.js";
 import { createWriteFileTool } from "./write-file-tool.js";
 
+import type { createTodoTool } from "./todo-tool.js";
 import type { Sandbox } from "../../environment";
-import type { TodoManager } from "../todo-manager";
 
 export * from "./copy-file-tool.js";
 export * from "./delete-file-tool.js";
@@ -57,11 +56,9 @@ export type Tools = {
 
 export const createTools = async ({
   sandbox,
-  todoManager,
   processTools,
 }: {
   sandbox: Sandbox;
-  todoManager?: TodoManager;
   processTools?: (t: Tools) => Promise<void>;
 }): Promise<Tools> => {
   const res: Tools = {
@@ -81,11 +78,6 @@ export const createTools = async ({
     run_command: createRunCommandTool({ sandbox }),
     search_replace: createSearchReplaceTool({ sandbox }),
   };
-
-  // Add todo tool if TodoManager is provided
-  if (todoManager) {
-    res.todo = createTodoTool({ todoManager });
-  }
 
   await processTools?.(res);
 

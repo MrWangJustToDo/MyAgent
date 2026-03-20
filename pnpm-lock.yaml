@@ -89,6 +89,9 @@ importers:
       lodash-es:
         specifier: ^4.17.23
         version: 4.17.23
+      minilru:
+        specifier: ^1.0.2
+        version: 1.0.2
       reactivity-store:
         specifier: ^0.4.0
         version: 0.4.0(@my-react/react@0.3.22)
@@ -5078,6 +5081,10 @@ packages:
   mimic-response@3.1.0:
     resolution: {integrity: sha512-z0yWI+4FDrrweS8Zmt4Ej5HdJmky15+L2e6Wgn3+iK5fWzb6T3fhNFq2+MeTRb064c6Wr4N/wv0DzQTjNzHNGQ==}
     engines: {node: '>=10'}
+
+  minilru@1.0.2:
+    resolution: {integrity: sha512-G3yEVu0NZq9CLb8Upwn3G2oU67b/l5kdUMmzcr+eM9xSebB1lXvOeynxMVLNvvxWsEdOL8XKw8aT4Z21cU2AcQ==}
+    engines: {node: '>=18'}
 
   minimatch@10.2.4:
     resolution: {integrity: sha512-oRjTw/97aTBN0RHbYCdtF1MQfvusSIBQM0IZEgzl6426+8jSC0nF1a/GmnVLpfB9yyr6g6FTqWqiZVbxrtaCIg==}
@@ -12520,6 +12527,8 @@ snapshots:
 
   mimic-response@3.1.0:
     optional: true
+
+  minilru@1.0.2: {}
 
   minimatch@10.2.4:
     dependencies:

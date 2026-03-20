@@ -7,8 +7,9 @@
 import { Box, Text } from "ink";
 import { useEffect, useMemo } from "react";
 
-import { useStatic } from "../hooks/useStatic";
+import { useStatic } from "../hooks/use-static";
 import { MessageView } from "../messages";
+import { getMessages } from "../utils/get-messages";
 
 import type { UIMessage } from "ai";
 
@@ -26,17 +27,17 @@ export interface MessageListProps {
 // ============================================================================
 
 export const MessageList = ({ messages, addToolApprovalResponse }: MessageListProps) => {
-  const staticList = useMemo(() => messages.slice(0, -1), [messages.length]);
+  const { staticMessages, dynamicMessages } = useMemo(() => getMessages(messages), [messages]);
 
   useEffect(() => {
-    useStatic.getActions().setStaticItem(
-      staticList.map((item) => (
-        <Box key={item.id} paddingX={1} marginY={1}>
-          <MessageView message={item} staticItem />
+    useStatic.getActions().setStaticList(
+      staticMessages.map((item) => (
+        <Box key={item.id} paddingX={1} marginTop={1}>
+          <MessageView message={item} />
         </Box>
       ))
     );
-  }, [staticList]);
+  }, [staticMessages]);
 
   if (messages.length === 0) {
     return (
@@ -48,12 +49,10 @@ export const MessageList = ({ messages, addToolApprovalResponse }: MessageListPr
     );
   }
 
-  const current = messages.slice(-1);
-
   return (
     <>
-      {current.map((message) => (
-        <Box key={message.id} paddingX={1} marginY={1}>
+      {dynamicMessages.map((message) => (
+        <Box key={message.id} paddingX={1} marginTop={1}>
           <MessageView message={message} addToolApprovalResponse={addToolApprovalResponse} />
         </Box>
       ))}

@@ -5,8 +5,8 @@ import { FullBox } from "../components/FullBox.js";
 import { Spinner } from "../components/Spinner.js";
 import { TodoList } from "../components/TodoList.js";
 import { UserInput } from "../components/UserInput.js";
-import { useAgent } from "../hooks/useAgent.js";
-import { useAgentContext } from "../hooks/useAgentContext.js";
+import { useAgentContext } from "../hooks/use-agent-context.js";
+import { useAgent } from "../hooks/use-agent.js";
 
 import type { Agent, TokenUsage } from "@my-agent/core";
 

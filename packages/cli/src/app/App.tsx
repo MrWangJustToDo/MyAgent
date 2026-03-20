@@ -2,7 +2,7 @@ import { Box } from "ink";
 
 import { Debug } from "../components/Debug.js";
 import { Help } from "../components/Help.js";
-import { useArgs } from "../hooks/useArgs.js";
+import { useArgs } from "../hooks/use-args.js";
 
 import { Agent } from "./Agent.js";
 

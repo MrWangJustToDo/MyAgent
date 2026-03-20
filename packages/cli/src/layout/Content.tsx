@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 import { Static } from "ink";
 import { memo, type JSX } from "react";
 
-import { useStatic } from "../hooks/useStatic";
+import { useStatic } from "../hooks/use-static";
 
 export const Content = memo(() => {
   const { head, list, key } = useStatic((s) => ({ list: s.state, head: s.header, key: s.remountKey }));
@@ -11,7 +12,6 @@ export const Content = memo(() => {
   const validList = [head, ...typedList].filter(Boolean);
 
   return (
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     <Static key={key} items={validList}>
       {(item) => item}

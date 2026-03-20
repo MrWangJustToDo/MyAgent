@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 
-import { useTodoManager } from "../hooks/useTodoManager.js";
+import { useTodoManager } from "../hooks/use-todo-manager.js";
 
 import type { TodoItem, TodoStatus } from "@my-agent/core";
 

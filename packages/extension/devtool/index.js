@@ -1355,6 +1355,15 @@
     		    }
     		};
 
+    		var getValidStackItem = function (stack) {
+    		    while (stack.length) {
+    		        var item = stack.shift();
+    		        if (item.fileName.includes('@my-react/react-jsx')) {
+    		            continue;
+    		        }
+    		        return item;
+    		    }
+    		};
     		var getSource = function (fiber) {
     		    var _a, _b, _c;
     		    if (fiber._debugElement) {
@@ -1362,7 +1371,8 @@
     		        try {
     		            if (element._debugStack) {
     		                var stack = ErrorStackParser.parse(element._debugStack);
-    		                var currentStack = stack[1];
+    		                stack.shift();
+    		                var currentStack = getValidStackItem(stack);
     		                return {
     		                    type: "stack",
     		                    value: currentStack.fileName + ":" + currentStack.lineNumber + ":" + currentStack.columnNumber,

@@ -1,5 +1,7 @@
 import { streamText } from "ai";
 
+import { createTodoTool } from "../tools";
+
 import type { StreamPart } from "./agent";
 import type { Sandbox } from "../../environment";
 import type { AgentContext } from "../agent-context";
@@ -138,7 +140,11 @@ export class Base {
    * Set todo manager for task tracking
    */
   setTodoManager(t: TodoManager): void {
+    if (this.todoManager) return;
+
     this.todoManager = t;
+
+    this.addTools({ todo: createTodoTool({ todoManager: t }) });
   }
 
   /**

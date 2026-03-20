@@ -36,6 +36,7 @@
     "ink-tab": "^5.2.0",
     "ink-text-input": "^6.0.0",
     "lodash-es": "^4.17.23",
+    "minilru": "^1.0.2",
     "reactivity-store": "^0.4.0",
     "shiki": "^3.20.0",
     "stream-markdown-parser": "^0.0.67",

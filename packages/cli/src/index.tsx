@@ -3,7 +3,7 @@ import { render } from "ink";
 import { configureEnv } from "reactivity-store";
 
 import { App } from "./app";
-import { initArgs } from "./hooks/useArgs.js";
+import { initArgs } from "./hooks/use-args.js";
 
 configureEnv({ allowNonBrowserUpdates: true });
 

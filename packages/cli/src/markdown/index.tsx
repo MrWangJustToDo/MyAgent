@@ -2,7 +2,7 @@ import { Text } from "ink";
 import { useMemo } from "react";
 import { getMarkdown } from "stream-markdown-parser";
 
-import { parseMarkdownWithHighlight } from "./parseWithHighlight";
+import { parseMarkdownWithHighlight } from "./parse-with-highlight";
 import { renderNodesToString } from "./render";
 
 export interface MarkdownProps {
@@ -34,6 +34,6 @@ export const Markdown = ({ content }: MarkdownProps) => {
   return <Text>{rendered}</Text>;
 };
 
-export { parseMarkdownWithHighlight, createHighlightedParser } from "./parseWithHighlight";
+export { parseMarkdownWithHighlight, createHighlightedParser } from "./parse-with-highlight";
 export { renderNodesToString, renderNodeToString } from "./render";
-export type { HighlightedCodeBlockNode, HighlightedParsedNode } from "./parseWithHighlight";
+export type { HighlightedCodeBlockNode, HighlightedParsedNode } from "./parse-with-highlight";

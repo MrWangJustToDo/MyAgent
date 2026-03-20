@@ -2,7 +2,7 @@ import chalk from "chalk";
 import Table from "cli-table3";
 import terminalLink from "terminal-link";
 
-import type { HighlightedCodeBlockNode, HighlightedParsedNode } from "./parseWithHighlight";
+import type { HighlightedCodeBlockNode, HighlightedParsedNode } from "./parse-with-highlight";
 import type { ThemedToken } from "shiki";
 import type {
   ParsedNode,

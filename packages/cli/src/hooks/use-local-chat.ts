@@ -16,11 +16,11 @@ import {
 import { useEffect, useCallback, useState, useRef } from "react";
 import { reactive, toRaw } from "reactivity-store";
 
-import { useAgent } from "./useAgent.js";
-import { useAgentContext } from "./useAgentContext.js";
-import { useAgentLog } from "./useAgentLog.js";
-import { useAgentSandbox } from "./useAgentSandbox.js";
-import { useTodoManager } from "./useTodoManager.js";
+import { useAgentContext } from "./use-agent-context.js";
+import { useAgentLog } from "./use-agent-log.js";
+import { useAgentSandbox } from "./use-agent-sandbox.js";
+import { useAgent } from "./use-agent.js";
+import { useTodoManager } from "./use-todo-manager.js";
 
 import type { Agent, AgentContext } from "@my-agent/core";
 import type { ChatTransport, UIMessage } from "ai";

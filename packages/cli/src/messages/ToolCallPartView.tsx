@@ -2,7 +2,7 @@ import { getToolName } from "ai";
 import { Box, Text } from "ink";
 
 import { formatToolInput, formatDuration } from "../utils/format.js";
-import { getToolCallColor } from "../utils/toolState.js";
+import { getToolCallColor } from "../utils/tool-state.js";
 
 import { ToolInputView } from "./ToolInputView.js";
 import { ToolOutputViewDynamic } from "./ToolOutputViewDynamic.js";

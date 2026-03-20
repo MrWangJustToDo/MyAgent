@@ -5,8 +5,8 @@ import { useEffect } from "react";
 
 import { FullBox } from "../components/FullBox";
 import { useArgs } from "../hooks";
-import { useAgentSandbox } from "../hooks/useAgentSandbox";
-import { useStatic } from "../hooks/useStatic";
+import { useAgentSandbox } from "../hooks/use-agent-sandbox";
+import { useStatic } from "../hooks/use-static";
 
 export const Header = () => {
   const { model, path } = useArgs((s) => ({ model: s.config.model, path: s.config.rootPath }));
