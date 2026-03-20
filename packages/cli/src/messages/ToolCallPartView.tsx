@@ -1,3 +1,4 @@
+import { getToolName } from "ai";
 import { Box, Text } from "ink";
 
 import { formatToolInput, formatDuration } from "../utils/format.js";
@@ -8,29 +9,10 @@ import { ToolOutputViewDynamic } from "./ToolOutputViewDynamic.js";
 import { ToolOutputViewStatic } from "./ToolOutputViewStatic.js";
 import { ToolStatusIcon } from "./ToolStatusIcon.js";
 
-import type { ToolInvocationState } from "../utils/toolState.js";
-
-/**
- * Tool invocation part from AI SDK
- * Represents a tool call with its state, input, and optionally output
- */
-export interface ToolInvocationUIPart {
-  type: string; // "tool-${name}" or "dynamic-tool"
-  toolCallId: string;
-  toolName: string;
-  state: ToolInvocationState;
-  input?: unknown;
-  output?: unknown;
-  errorText?: string;
-  approval?: {
-    id: string;
-    approved?: boolean;
-    reason?: string;
-  };
-}
+import type { ToolUIPart } from "ai";
 
 export interface ToolCallPartViewProps {
-  part: ToolInvocationUIPart;
+  part: ToolUIPart;
   staticItem?: boolean;
   addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
 }
@@ -50,7 +32,7 @@ const getDurationMs = (output: unknown): number | null => {
 export const ToolCallPartView = ({ part, addToolApprovalResponse, staticItem }: ToolCallPartViewProps) => {
   const needsApproval = part.state === "approval-requested" && part.approval;
 
-  const toolName = part.toolName || part.type.slice(5);
+  const toolName = getToolName(part);
 
   // Get the input to display - prefer part.input, fallback to approvalInput
   const getDisplayInput = (): string | null => {

@@ -1,26 +1,16 @@
+import { isToolUIPart } from "ai";
 import { Box } from "ink";
 
 import { TextPartView } from "./TextPartView.js";
 import { ThinkingPartView } from "./ThinkingPartView.js";
 import { ToolCallPartView } from "./ToolCallPartView.js";
 
-import type { TextUIPart } from "./TextPartView.js";
-import type { ReasoningUIPart } from "./ThinkingPartView.js";
-import type { ToolInvocationUIPart } from "./ToolCallPartView.js";
-import type { UIMessage } from "ai";
+import type { ReasoningUIPart, TextUIPart, ToolUIPart, UIMessage } from "ai";
 
 export interface MessageViewProps {
   message: UIMessage;
   staticItem?: boolean;
   addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
-}
-
-/**
- * Check if a part is a tool invocation part
- * In AI SDK, tool parts have type "tool-{toolName}" or "dynamic-tool"
- */
-function isToolPart(part: { type: string }): part is ToolInvocationUIPart {
-  return part.type.startsWith("tool-") || part.type === "dynamic-tool";
 }
 
 /** Render a single message */
@@ -33,9 +23,9 @@ export const MessageView = ({ message, addToolApprovalResponse, staticItem }: Me
         <Box key={`${part.type}-${index}`} width="100%">
           {part.type === "text" && <TextPartView part={part as TextUIPart} role={message.role} />}
           {part.type === "reasoning" && <ThinkingPartView part={part as ReasoningUIPart} />}
-          {isToolPart(part) && (
+          {isToolUIPart(part) && (
             <ToolCallPartView
-              part={part as ToolInvocationUIPart}
+              part={part as ToolUIPart}
               staticItem={staticItem}
               addToolApprovalResponse={addToolApprovalResponse}
             />

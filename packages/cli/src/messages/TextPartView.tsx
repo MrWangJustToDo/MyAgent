@@ -2,16 +2,7 @@ import { Box, Text } from "ink";
 
 import { Markdown } from "../markdown";
 
-import type { UIMessage } from "ai";
-
-/**
- * Text part from AI SDK
- */
-export interface TextUIPart {
-  type: "text";
-  text: string;
-  state?: "streaming" | "done";
-}
+import type { TextUIPart, UIMessage } from "ai";
 
 export interface TextPartViewProps {
   part: TextUIPart;

@@ -1,3 +1,4 @@
+import { getToolName, isToolUIPart, type UIMessage } from "ai";
 import { Box, Text, useApp, useInput } from "ink";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toRaw } from "reactivity-store";
@@ -15,20 +16,7 @@ import { Content } from "../layout/Content.js";
 import { Footer } from "../layout/Footer.js";
 import { Header } from "../layout/Header.js";
 
-import type { ToolInvocationUIPart } from "../messages/ToolCallPartView.js";
 import type { AgentLog } from "@my-agent/core";
-import type { UIMessage } from "ai";
-
-// ============================================================================
-// Helper functions
-// ============================================================================
-
-/**
- * Check if a part is a tool invocation part
- */
-function isToolPart(part: { type: string }): part is ToolInvocationUIPart {
-  return part.type.startsWith("tool-") || part.type === "dynamic-tool";
-}
 
 // ============================================================================
 // Main Agent Component
@@ -71,12 +59,12 @@ export const Agent = () => {
       const msg = messages[i] as UIMessage;
       if (msg.role === "assistant") {
         for (const part of msg.parts) {
-          if (isToolPart(part)) {
+          if (isToolUIPart(part)) {
             const toolPart = part;
             if (toolPart.state === "approval-requested" && toolPart.approval) {
               return {
                 id: toolPart.approval.id,
-                toolName: toolPart.toolName || toolPart.type.slice(5),
+                toolName: getToolName(toolPart),
                 toolCallId: toolPart.toolCallId,
               };
             }

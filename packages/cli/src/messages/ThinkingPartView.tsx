@@ -2,14 +2,7 @@ import { Box, Text } from "ink";
 
 import { Spinner } from "../components/Spinner";
 
-/**
- * Reasoning part from AI SDK (previously called "thinking")
- */
-export interface ReasoningUIPart {
-  type: "reasoning";
-  text: string;
-  state?: "streaming" | "done";
-}
+import type { ReasoningUIPart } from "ai";
 
 export interface ThinkingPartViewProps {
   part: ReasoningUIPart;

@@ -38,8 +38,11 @@ export type AgentConfig = CliAgentConfig;
 // ============================================================================
 
 const DEFAULT_MODEL = "qwen2.5-coder:7b";
-const DEFAULT_SYSTEM_PROMPT =
-  "You are a helpful coding assistant. You can read, write, and modify files, run commands, and help with programming tasks.";
+const DEFAULT_SYSTEM_PROMPT = `You are a helpful coding agent.
+Use the todo tool to plan multi-step tasks. Mark in_progress before starting, completed when done.
+Prefer tools over prose.`;
+// "You are a helpful coding assistant. You can read, write, and modify files, run commands, and help with programming tasks.";
+
 const DEFAULT_MAX_ITERATIONS = 20;
 
 // ============================================================================

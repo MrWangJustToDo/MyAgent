@@ -2,22 +2,12 @@
 // Tool State Utilities
 // ============================================================================
 
-/**
- * Tool invocation state from AI SDK
- */
-export type ToolInvocationState =
-  | "input-streaming"
-  | "input-available"
-  | "approval-requested"
-  | "approval-responded"
-  | "output-available"
-  | "output-error"
-  | "output-denied";
+import type { ToolUIPart } from "ai";
 
 /**
  * Get status color for tool invocation state
  */
-export function getToolCallColor(state: ToolInvocationState | string): string {
+export function getToolCallColor(state: ToolUIPart["state"] | string): string {
   switch (state) {
     case "input-streaming":
       return "yellow";

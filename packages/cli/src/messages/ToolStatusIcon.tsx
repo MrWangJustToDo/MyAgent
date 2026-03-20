@@ -2,14 +2,10 @@ import { Text } from "ink";
 
 import { Spinner } from "../components/Spinner.js";
 
-import type { ToolInvocationState } from "../utils/toolState.js";
-
-export interface ToolStatusIconProps {
-  state: ToolInvocationState | string;
-}
+import type { ToolUIPart } from "ai";
 
 /** Get status icon for tool invocation */
-export const ToolStatusIcon = ({ state }: ToolStatusIconProps) => {
+export const ToolStatusIcon = ({ state }: { state: ToolUIPart["state"] }) => {
   switch (state) {
     case "input-streaming":
       return <Spinner text="" />;

@@ -1,12 +1,11 @@
+import { getToolName, type ToolUIPart } from "ai";
 import { Text } from "ink";
 import { memo } from "react";
 
 import { formatToolOutput } from "../utils/format";
 
-import type { ToolInvocationUIPart } from "./ToolCallPartView";
-
 export const ToolOutputViewDynamic = memo(
-  ({ part }: { part: ToolInvocationUIPart }) => {
+  ({ part }: { part: ToolUIPart }) => {
     // Check if output is available (state indicates completion)
     const hasOutput = part.state === "output-available" || part.state === "output-error";
 
@@ -16,7 +15,7 @@ export const ToolOutputViewDynamic = memo(
       return <Text color="red">{part.errorText}</Text>;
     }
 
-    const toolName = part.toolName || part.type.slice(5);
+    const toolName = getToolName(part);
 
     // Use tool-specific formatter for better output display
     return <Text color="gray">{formatToolOutput(part.output, toolName)}</Text>;

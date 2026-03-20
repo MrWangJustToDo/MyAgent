@@ -1,10 +1,10 @@
 import { Text } from "ink";
 import { memo } from "react";
 
-import type { ToolInvocationUIPart } from "./ToolCallPartView";
+import type { ToolUIPart } from "ai";
 
 export const ToolOutputViewStatic = memo(
-  ({ part }: { part: ToolInvocationUIPart }) => {
+  ({ part }: { part: ToolUIPart }) => {
     // Check if output is available (state indicates completion)
     const hasOutput = part.state === "output-available" || part.state === "output-error";
 

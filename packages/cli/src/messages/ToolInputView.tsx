@@ -1,10 +1,10 @@
 import { DiffView, DiffModeEnum } from "@git-diff-view/cli";
 import { generateDiffFile } from "@git-diff-view/file";
+import { getToolName, type ToolUIPart } from "ai";
 import { memo } from "react";
 
 import { useSize } from "../hooks";
 
-import type { ToolInvocationUIPart } from "./ToolCallPartView";
 import type { DiffFile } from "@git-diff-view/cli";
 
 const map = new Map<string, DiffFile>();
@@ -12,8 +12,8 @@ const map = new Map<string, DiffFile>();
 globalThis.diffFileMap = map;
 
 export const ToolInputView = memo(
-  ({ part }: { part: ToolInvocationUIPart }) => {
-    const toolName = part.toolName || part.type.slice(5);
+  ({ part }: { part: ToolUIPart }) => {
+    const toolName = getToolName(part);
 
     const width = useSize((s) => s.state.screenWidth);
 
