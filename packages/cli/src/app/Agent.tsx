@@ -2,6 +2,7 @@ import { Box, Text, useApp, useInput } from "ink";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toRaw } from "reactivity-store";
 
+import { FullBox } from "../components/FullBox.js";
 import { MessageList } from "../components/MessageList.js";
 import { Spinner } from "../components/Spinner.js";
 import { useAgent } from "../hooks/useAgent.js";
@@ -197,7 +198,7 @@ export const Agent = () => {
   }
 
   return (
-    <Box flexDirection="column">
+    <FullBox flexDirection="column">
       {/* Header */}
       <Header />
 
@@ -208,6 +209,6 @@ export const Agent = () => {
 
       {/* Input */}
       <Footer />
-    </Box>
+    </FullBox>
   );
 };

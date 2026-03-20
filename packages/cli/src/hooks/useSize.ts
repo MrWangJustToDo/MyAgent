@@ -13,15 +13,11 @@ export const useSize = createState(
       const useInitTerminalSize = () => {
         const initMountRef = useRef(true);
 
-        const { rows, columns } = useTerminalSize();
+        const { columns } = useTerminalSize();
 
         useEffect(() => {
-          s.state.screenHeight = rows;
-
           s.state.screenWidth = columns;
-        }, [rows, columns]);
 
-        useEffect(() => {
           if (initMountRef.current) {
             initMountRef.current = false;
             return;
@@ -30,7 +26,7 @@ export const useSize = createState(
           useStatic.getActions().refreshRemount();
         }, [columns]);
 
-        return { columns, rows };
+        return { columns };
       };
 
       return {

@@ -1,6 +1,5 @@
-import { Text } from "ink";
+import { Box, Text } from "ink";
 
-import { FullBox } from "../components/FullBox";
 import { Spinner } from "../components/Spinner";
 
 /**
@@ -19,13 +18,13 @@ export interface ThinkingPartViewProps {
 /** Render a reasoning/thinking part */
 export const ThinkingPartView = ({ part }: ThinkingPartViewProps) => {
   return (
-    <FullBox paddingLeft={2} paddingX={1}>
+    <Box paddingLeft={2} paddingX={1}>
       {part.state === "streaming" ? <Spinner /> : <Text color="green">✓</Text>}
       <Text> </Text>
       <Text color="gray" dimColor wrap="wrap" italic>
         Thinking...
       </Text>
-    </FullBox>
+    </Box>
   );
 };
 

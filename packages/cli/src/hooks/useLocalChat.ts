@@ -7,7 +7,12 @@
 
 import { Chat, useChat as useAiSdkChat } from "@ai-sdk/react";
 import { agentManager, createOllamaModel, generateId, getOllamaBuildInTools } from "@my-agent/core";
-import { DirectChatTransport, lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
+import {
+  DirectChatTransport,
+  getToolName,
+  isToolUIPart,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+} from "ai";
 import { useEffect, useCallback, useState, useRef } from "react";
 import { reactive, toRaw } from "reactivity-store";
 
@@ -102,7 +107,8 @@ export interface UseLocalChatReturn {
  * messages.map(msg => (
  *   msg.parts.map(part => {
  *     if (part.type === "text") return <Text>{part.text}</Text>;
- *     if (part.type === "tool-invocation") return <ToolView part={part} />;
+ *     // Tool parts have type "tool-{name}" (static) or "dynamic-tool" (dynamic)
+ *     if (isToolUIPart(part)) return <ToolView part={part} />;
  *   })
  * ))
  * ```
@@ -191,7 +197,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
           transport: transport,
           messages: [],
           sendAutomaticallyWhen(options) {
-            toRaw(agent.getLog())?.tool(`call 'sendAutomaticallyWhen'`, options);
+            toRaw(agent.getLog())?.tool(`call 'sendAutomaticallyWhen' with `, options);
             return lastAssistantMessageIsCompleteWithApprovalResponses(options);
           },
         });
@@ -248,46 +254,54 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
   // Add tool approval response
   const addToolApprovalResponse = useCallback(
     (options: { id: string; approved: boolean; reason?: string }) => {
-      // When rejecting a tool, we need to manually update the message state
-      // because the AI SDK doesn't properly set the 'output-denied' state
-      // for client-side rejections, causing the model to not know the tool was denied.
-      // if (!options.approved) {
-      //   const messages = chatHelpers.messages;
-      //   const updatedMessages = messages.map((msg) => {
-      //     if (msg.role !== "assistant") return msg;
+      if (options.approved) {
+        // For approvals, use the SDK's built-in method
+        chatHelpers.addToolApprovalResponse({
+          id: options.id,
+          approved: true,
+          reason: options.reason,
+        });
+      } else {
+        // For denials, use addToolOutput with output-error state
+        // This is the recommended approach per Vercel community:
+        // https://community.vercel.com/t/handling-user-denial-for-client-side-tool-calls-in-the-vercel-ai-sdk/33651
+        const errorText = options.reason ?? "Tool execution denied by user.";
 
-      //     const updatedParts = msg.parts.map((part) => {
-      //       // Check if this is the tool part being denied
-      //       if (
-      //         part.type === "tool-invocation" &&
-      //         "approval" in part &&
-      //         (part as { approval?: { id?: string } }).approval?.id === options.id
-      //       ) {
-      //         return {
-      //           ...part,
-      //           state: "output-denied" as const,
-      //           approval: {
-      //             id: options.id,
-      //             approved: false,
-      //             reason: options.reason ?? "Tool execution denied by user.",
-      //           },
-      //         };
-      //       }
-      //       return part;
-      //     });
+        // Find the tool call ID and name from the approval ID
+        const messages = chatHelpers.messages;
+        let toolCallId: string | undefined;
+        let toolName: string | undefined;
 
-      //     return { ...msg, parts: updatedParts };
-      //   });
+        for (const msg of messages) {
+          if (msg.role !== "assistant") continue;
+          for (const part of msg.parts) {
+            // Check if it's a tool part (static: "tool-{name}" or dynamic: "dynamic-tool")
+            if (
+              isToolUIPart(part) &&
+              "approval" in part &&
+              (part as { approval?: { id?: string } }).approval?.id === options.id
+            ) {
+              toolCallId = (part as { toolCallId?: string }).toolCallId;
+              // Use getToolName to extract name from both static and dynamic tools
+              toolName = getToolName(part);
+              break;
+            }
+          }
+          if (toolCallId) break;
+        }
 
-      //   chatHelpers.setMessages(updatedMessages as UIMessage[]);
-      // }
+        useAgentLog.getReactiveState().log?.tool(`denied tool call`, { toolCallId, toolName, messages });
 
-      // Use the SDK's built-in method for handling tool approvals
-      chatHelpers.addToolApprovalResponse({
-        id: options.id,
-        approved: options.approved,
-        reason: options.reason,
-      });
+        if (toolCallId && toolName) {
+          // Use addToolOutput with output-error state to tell the LLM the tool was denied
+          chatHelpers.addToolOutput({
+            tool: toolName as never,
+            toolCallId,
+            state: "output-error",
+            errorText,
+          });
+        }
+      }
     },
     [chatHelpers]
   );

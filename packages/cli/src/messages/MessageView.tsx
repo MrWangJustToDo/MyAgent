@@ -28,9 +28,9 @@ export const MessageView = ({ message, addToolApprovalResponse, staticItem }: Me
   const validPart = message.parts.filter((i) => Object.keys(i).length > 1);
 
   return (
-    <Box flexDirection="column" rowGap={1}>
+    <Box flexDirection="column" width="100%" rowGap={1}>
       {validPart.map((part, index) => (
-        <Box key={`${part.type}-${index}`}>
+        <Box key={`${part.type}-${index}`} width="100%">
           {part.type === "text" && <TextPartView part={part as TextUIPart} role={message.role} />}
           {part.type === "reasoning" && <ThinkingPartView part={part as ReasoningUIPart} />}
           {isToolPart(part) && (

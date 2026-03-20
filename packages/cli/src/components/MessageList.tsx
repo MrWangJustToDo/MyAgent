@@ -51,12 +51,12 @@ export const MessageList = ({ messages, addToolApprovalResponse }: MessageListPr
   const current = messages.slice(-1);
 
   return (
-    <Box flexDirection="column">
+    <>
       {current.map((message) => (
         <Box key={message.id} paddingX={1} marginY={1}>
           <MessageView message={message} addToolApprovalResponse={addToolApprovalResponse} />
         </Box>
       ))}
-    </Box>
+    </>
   );
 };

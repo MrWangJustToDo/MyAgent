@@ -13,22 +13,14 @@ const getValidSize = (size: number): number => {
   }
 };
 
-export function useTerminalSize(): { columns: number; rows: number } {
-  const [size, setSize] = useState({
-    columns: 0,
-    rows: process.stdout.rows || 20,
-  });
+export function useTerminalSize(): { columns: number } {
+  const [size, setSize] = useState(() => getValidSize((process.stdout.columns || 60) - TERMINAL_PADDING_X));
 
   useLayoutEffect(() => {
     function updateSize() {
       const terminalWidth = getValidSize((process.stdout.columns || 60) - TERMINAL_PADDING_X);
 
-      const terminalHeight = getValidSize(process.stdout.rows || 20);
-
-      setSize({
-        columns: terminalWidth,
-        rows: terminalHeight,
-      });
+      setSize(terminalWidth);
     }
 
     updateSize();
@@ -36,7 +28,7 @@ export function useTerminalSize(): { columns: number; rows: number } {
     const debounceUpdateSize = debounce(() => {
       useAgentLog.getReactiveState().log?.agent("resize call");
       updateSize();
-    }, 16);
+    }, 200);
 
     process.stdout.on("resize", debounceUpdateSize);
     return () => {
@@ -44,5 +36,5 @@ export function useTerminalSize(): { columns: number; rows: number } {
     };
   }, []);
 
-  return size;
+  return { columns: size };
 }

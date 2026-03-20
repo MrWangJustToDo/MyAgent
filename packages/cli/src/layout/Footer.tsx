@@ -21,7 +21,7 @@ export const Footer = () => {
   const isInputEnabled = status === "idle" || status === "completed" || status === "error";
 
   return (
-    <Box flexDirection="column" flexGrow={0} paddingY={1}>
+    <FullBox flexDirection="column" flexGrow={0} paddingY={1}>
       <Divider />
       {/* Status bar */}
       <FullBox gap={2} width="full">
@@ -78,6 +78,6 @@ export const Footer = () => {
         )}
       </FullBox>
       <Divider />
-    </Box>
+    </FullBox>
   );
 };

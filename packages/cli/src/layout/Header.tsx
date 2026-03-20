@@ -3,6 +3,7 @@ import BigText from "ink-big-text";
 import Gradient from "ink-gradient";
 import { useEffect } from "react";
 
+import { FullBox } from "../components/FullBox";
 import { useArgs } from "../hooks";
 import { useAgentSandbox } from "../hooks/useAgentSandbox";
 import { useStatic } from "../hooks/useStatic";
@@ -16,7 +17,7 @@ export const Header = () => {
     if (!model || !path || !name) return;
 
     useStatic.getActions().setStaticHeader(
-      <Box flexDirection="column" key="header" marginBottom={1}>
+      <FullBox flexDirection="column" key="header" marginBottom={1}>
         {/* Logo */}
         <Gradient name="rainbow">
           <BigText text="My Agent" />
@@ -43,7 +44,7 @@ export const Header = () => {
             </Text>
           </Box>
         </Box>
-      </Box>
+      </FullBox>
     );
 
     useStatic.getActions().refreshRemount();
