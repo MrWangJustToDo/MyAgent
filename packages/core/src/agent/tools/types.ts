@@ -90,6 +90,7 @@ export const grepOutputSchema = z.object({
 
 export const todoOutputSchema = z.object({
   success: z.boolean().describe("Whether the update was successful."),
+  title: z.string().describe("Title for the current todo set."),
   todoList: z.string().describe("Rendered todo list for display."),
   stats: z
     .object({

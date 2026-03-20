@@ -53,6 +53,8 @@ export const todoItemInputSchema = z.object({
 export type TodoItemInput = z.infer<typeof todoItemInputSchema>;
 
 export const todoToolInputSchema = z.object({
+  /** Title for this todo set */
+  title: z.string().min(1).describe("Short title for this todo set"),
   /** Array of todo items to set (replaces all existing todos) */
   todos: z
     .array(todoItemInputSchema)

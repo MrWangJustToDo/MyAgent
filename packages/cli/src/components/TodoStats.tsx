@@ -2,6 +2,8 @@ import { Box, Text } from "ink";
 
 import { useTodoManager } from "../hooks";
 
+import { TodoList } from "./TodoList";
+
 export const TodoStats = () => {
   const { items, stats } = useTodoManager((s) => ({ items: s.items, stats: s.stats }));
 
@@ -13,6 +15,7 @@ export const TodoStats = () => {
 
   return (
     <Box gap={2}>
+      <Text>|</Text>
       <Text color="cyan" bold>
         Tasks:
       </Text>
@@ -24,6 +27,7 @@ export const TodoStats = () => {
           ({pendingCount} pending)
         </Text>
       )}
+      <TodoList />
     </Box>
   );
 };

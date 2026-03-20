@@ -6,23 +6,19 @@
  */
 
 import { Chat, useChat as useAiSdkChat } from "@ai-sdk/react";
-import { agentManager, createOllamaModel, generateId, getOllamaBuildInTools } from "@my-agent/core";
+import { generateId } from "@my-agent/core";
 import {
   DirectChatTransport,
   getToolName,
   isToolUIPart,
   lastAssistantMessageIsCompleteWithApprovalResponses,
 } from "ai";
-import { useEffect, useCallback, useState, useRef } from "react";
-import { reactive, toRaw } from "reactivity-store";
+import { useEffect, useCallback, useState, useRef, useMemo } from "react";
+import { toRaw } from "reactivity-store";
 
-import { useAgentContext } from "./use-agent-context.js";
-import { useAgentLog } from "./use-agent-log.js";
-import { useAgentSandbox } from "./use-agent-sandbox.js";
-import { useAgent } from "./use-agent.js";
-import { useTodoManager } from "./use-todo-manager.js";
+import { createAgent } from "../utils/create.js";
 
-import type { Agent, AgentContext } from "@my-agent/core";
+import type { Agent } from "@my-agent/core";
 import type { ChatTransport, UIMessage } from "ai";
 
 // ============================================================================
@@ -71,7 +67,20 @@ export interface UseLocalChatReturn {
   /** Initialization error */
   initError: Error | null | undefined;
   /** Add tool approval response */
-  addToolApprovalResponse: (options: { id: string; approved: boolean; reason?: string }) => void;
+  addToolApprovalResponse: (options: {
+    id: string;
+    approved: boolean;
+    reason?: string;
+    isLast?: boolean;
+    toolCallId?: string;
+    toolName?: string;
+  }) => void;
+
+  allPendingApproval: Array<{
+    id: string;
+    toolName: string;
+    toolCallId: string;
+  }>;
 }
 
 // ============================================================================
@@ -134,58 +143,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
       setInitError(null);
 
       try {
-        const languageModel = createOllamaModel(model, url, { reasoning: true });
-
-        const tools = getOllamaBuildInTools((p) => ({
-          ["ollama-web-fetch"]: p.tools.webFetch(),
-          ["ollama-web-search"]: p.tools.webSearch(),
-        }));
-
-        const agent = await agentManager.createManagedAgent({
-          languageModel,
-          model,
-          rootPath,
-          name: "local-chat",
-          systemPrompt:
-            systemPrompt ||
-            "You are a helpful coding assistant. You can read, write, and modify files, run commands in bash, and help with programming tasks.",
-          maxIterations,
-          setUp: (instance: (Agent | AgentContext) & { ["$$symbol"]?: symbol }) => {
-            if (instance["$$symbol"]) return instance;
-            instance["$$symbol"] = Symbol.for("patch");
-            const pInstance = reactive(instance);
-            // make all the class.action change trigger update so reactivity-store can observe it
-            return new Proxy(pInstance, {
-              get(target, p, receiver) {
-                const key = p.toString()?.toLowerCase?.() || "";
-                // fix error when vue reactivity and zod work together
-                if (key.includes("tool") || key.includes("config")) {
-                  return toRaw(Reflect.get(target, p, receiver));
-                }
-                return Reflect.get(target, p, receiver);
-              },
-            }) as Agent | AgentContext;
-          },
-        });
-
-        agent.addTools(tools);
-
-        // Get TodoManager from agent (created by AgentManager)
-        const todoManager = agent.getTodoManager();
-
-        // Subscribe to TodoManager changes to refresh UI state
-        if (todoManager) {
-          todoManager.onChange(() => {
-            useTodoManager.getActions().refresh();
-          });
-        }
-
-        // Set up global agent state
-        useAgent.getActions().setAgent(agent);
-        useAgentLog.getActions().setLog(agent.getLog());
-        useAgentContext.getActions().setContext(agent.getContext());
-        useAgentSandbox.getActions().setSandbox(agent.getSandbox());
-        useTodoManager.getActions().setManager(todoManager ?? null);
+        const agent = await createAgent({ model, url, rootPath, systemPrompt, maxIterations });
 
         // Create DirectChatTransport with the agent
         // Note: Using type assertion due to complex SDK generic constraints
@@ -226,7 +184,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
   );
 
   // 强制刷新 更新 status，当前 @my-react 实现瑕疵
-  // TODO！message更新后 status的排在了effect之后，
+  // TODO！message更新后 status更新的排在了effect之后
   useEffect(() => {
     const id = setTimeout(() => {
       setNum((l) => l + 1);
@@ -255,7 +213,14 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
 
   // Add tool approval response
   const addToolApprovalResponse = useCallback(
-    (options: { id: string; approved: boolean; reason?: string }) => {
+    (options: {
+      id: string;
+      approved: boolean;
+      reason?: string;
+      isLast?: boolean;
+      toolCallId?: string;
+      toolName?: string;
+    }) => {
       if (options.approved) {
         // For approvals, use the SDK's built-in method
         chatHelpers.addToolApprovalResponse({
@@ -264,45 +229,13 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
           reason: options.reason,
         });
       } else {
-        // For denials, use addToolOutput with output-error state
-        // This is the recommended approach per Vercel community:
-        // https://community.vercel.com/t/handling-user-denial-for-client-side-tool-calls-in-the-vercel-ai-sdk/33651
         const errorText = options.reason ?? "Tool execution denied by user.";
 
-        // Find the tool call ID and name from the approval ID
-        const messages = chatHelpers.messages;
-        let toolCallId: string | undefined;
-        let toolName: string | undefined;
-
-        for (const msg of messages) {
-          if (msg.role !== "assistant") continue;
-          for (const part of msg.parts) {
-            // Check if it's a tool part (static: "tool-{name}" or dynamic: "dynamic-tool")
-            if (
-              isToolUIPart(part) &&
-              "approval" in part &&
-              (part as { approval?: { id?: string } }).approval?.id === options.id
-            ) {
-              toolCallId = (part as { toolCallId?: string }).toolCallId;
-              // Use getToolName to extract name from both static and dynamic tools
-              toolName = getToolName(part);
-              break;
-            }
-          }
-          if (toolCallId) break;
-        }
-
-        useAgentLog.getReactiveState().log?.tool(`denied tool call`, { toolCallId, toolName, messages });
-
-        if (toolCallId && toolName) {
-          // Use addToolOutput with output-error state to tell the LLM the tool was denied
-          chatHelpers.addToolOutput({
-            tool: toolName as never,
-            toolCallId,
-            state: "output-error",
-            errorText,
-          });
-        }
+        chatHelpers.addToolApprovalResponse({
+          id: options.id,
+          approved: false,
+          reason: errorText,
+        });
       }
     },
     [chatHelpers]
@@ -310,9 +243,36 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
 
   const status = chatHelpers.status;
 
+  const messages = chatHelpers.messages;
+
+  const allPendingApproval = useMemo(() => {
+    const all: UseLocalChatReturn["allPendingApproval"] = [];
+    // Look through messages for tool calls awaiting approval
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i] as UIMessage;
+      if (msg.role === "assistant") {
+        for (const part of msg.parts) {
+          if (isToolUIPart(part)) {
+            const toolPart = part;
+            if (toolPart.state === "approval-requested" && toolPart.approval) {
+              all.push({
+                id: toolPart.approval.id,
+                toolName: getToolName(toolPart),
+                toolCallId: toolPart.toolCallId,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return all;
+  }, [messages]);
+
   return {
-    messages: chatHelpers.messages,
+    messages,
     sendMessage,
+    allPendingApproval,
     status,
     isLoading: status === "streaming" || status === "submitted",
     isReady: agent !== null && !initLoading && chatRef.current !== null,

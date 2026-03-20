@@ -5,7 +5,6 @@ import { ErrorDetail } from "../components/ErrorDetail.js";
 import { FullBox } from "../components/FullBox.js";
 import { LLMUsage } from "../components/LLMUsage.js";
 import { Spinner } from "../components/Spinner.js";
-import { TodoList } from "../components/TodoList.js";
 import { TodoStats } from "../components/TodoStats.js";
 import { UserInput } from "../components/UserInput.js";
 import { useAgent } from "../hooks/use-agent.js";
@@ -21,7 +20,7 @@ export const Footer = () => {
     <FullBox flexDirection="column" flexGrow={0} paddingY={1}>
       <Divider />
       {/* Status bar */}
-      <FullBox gap={2} width="full">
+      <Box gap={2} width="full">
         {/* Status indicator */}
         <Box>
           {status === "running" && <Spinner text="Running..." />}
@@ -38,23 +37,16 @@ export const Footer = () => {
           )}
           {status === "error" && <Text color="red">Error</Text>}
         </Box>
-
-        {/* Usage stats */}
-        <LLMUsage />
-
         <TodoStats />
-      </FullBox>
+      </Box>
 
       {/* Error message */}
       <ErrorDetail />
 
-      {/* Todo list */}
-      <TodoList />
-
       <Box height={1} />
 
       {/* Input */}
-      <FullBox opaque>
+      <Box opaque>
         <Text color={isInputEnabled ? "green" : "gray"} bold>
           {">"}{" "}
         </Text>
@@ -65,8 +57,16 @@ export const Footer = () => {
             Processing...
           </Text>
         )}
-      </FullBox>
+      </Box>
       <Divider />
+      <Box gap={2} justifyContent="space-between">
+        <Box>
+          <Text color="gray" dimColor>
+            Exit: Ctrl + C
+          </Text>
+        </Box>
+        <LLMUsage />
+      </Box>
     </FullBox>
   );
 };

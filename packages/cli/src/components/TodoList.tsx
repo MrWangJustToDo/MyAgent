@@ -15,7 +15,7 @@ const STATUS_COLORS: Record<TodoStatus, string> = {
 const STATUS_ICONS: Record<TodoStatus, string> = {
   pending: "[ ]",
   in_progress: "[>]",
-  completed: "[x]",
+  completed: "[✓]",
 };
 
 /**
@@ -26,7 +26,7 @@ const TodoItemView = ({ item }: { item: TodoItem }) => {
   const color = STATUS_COLORS[item.status];
 
   return (
-    <Text color={color}>
+    <Text color={color} wrap="truncate">
       {icon} {item.content}
     </Text>
   );

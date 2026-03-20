@@ -1,5 +1,6 @@
 import { tool } from "ai";
-import { z } from "zod";
+
+import { todoToolInputSchema } from "../todo-manager/types.js";
 
 import { withDuration } from "./helpers.js";
 import { todoOutputSchema } from "./types.js";
@@ -34,40 +35,28 @@ import type { TodoManager } from "../todo-manager";
 export const createTodoTool = ({ todoManager }: { todoManager: TodoManager }) => {
   return tool({
     description: `Create and manage a task list to track progress on multi-step work. Use this tool to:
-- Plan complex tasks by breaking them into steps
-- Track what you're currently working on (mark as in_progress)
-- Mark tasks as completed when done
-- Keep the user informed of your progress
+ - Plan complex tasks by breaking them into steps
+ - Track what you're currently working on (mark as in_progress)
+ - Mark tasks as completed when done
+ - Keep the user informed of your progress
 
 IMPORTANT RULES:
-- Only ONE task can be in_progress at a time
-- Update todos frequently - mark tasks complete immediately when done
-- Each call REPLACES all todos, so include the full updated list
-- Maximum 20 todos allowed`,
-    inputSchema: z.object({
-      todos: z
-        .array(
-          z.object({
-            content: z.string().min(1).describe("Brief description of the task"),
-            status: z
-              .enum(["pending", "in_progress", "completed"])
-              .describe("pending=not started, in_progress=working on now, completed=done"),
-            priority: z.enum(["high", "medium", "low"]).describe("Task priority level"),
-          })
-        )
-        .min(1)
-        .max(20)
-        .describe("Complete list of todos (replaces existing todos)"),
-    }),
+ - Always include a short title for the current todo set
+ - Only ONE task can be in_progress at a time
+ - Update todos frequently - mark tasks complete immediately when done
+ - Each call REPLACES all todos, so include the full updated list
+ - Maximum 20 todos allowed`,
+    inputSchema: todoToolInputSchema,
     outputSchema: todoOutputSchema,
-    execute: async ({ todos }) => {
+    execute: async ({ todos, title }) => {
       return withDuration(async () => {
         // Update the todo manager
-        const todoList = todoManager.update(todos);
+        const todoList = todoManager.update(todos, title);
         const stats = todoManager.getStats();
 
         return {
           success: true,
+          title,
           todoList,
           stats,
           message: `Updated ${stats.total} todos: ${stats.completed} completed, ${stats.inProgress} in progress, ${stats.pending} pending`,

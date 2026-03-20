@@ -7,6 +7,7 @@
 import { Box, Text } from "ink";
 import { useEffect, useMemo } from "react";
 
+import { useDynamic } from "../hooks/use-dynamic";
 import { useStatic } from "../hooks/use-static";
 import { MessageView } from "../messages";
 import { getMessages } from "../utils/get-messages";
@@ -19,14 +20,13 @@ import type { UIMessage } from "ai";
 
 export interface MessageListProps {
   messages: UIMessage[];
-  addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
 }
 
 // ============================================================================
 // Main Component
 // ============================================================================
 
-export const MessageList = ({ messages, addToolApprovalResponse }: MessageListProps) => {
+export const MessageList = ({ messages }: MessageListProps) => {
   const { staticMessages, dynamicMessages } = useMemo(() => getMessages(messages), [messages]);
 
   useEffect(() => {
@@ -39,23 +39,23 @@ export const MessageList = ({ messages, addToolApprovalResponse }: MessageListPr
     );
   }, [staticMessages]);
 
-  if (messages.length === 0) {
-    return (
-      <Box>
-        <Text color="gray" dimColor>
-          No messages yet. Type a message to start.
-        </Text>
-      </Box>
-    );
-  }
-
-  return (
-    <>
-      {dynamicMessages.map((message) => (
-        <Box key={message.id} paddingX={1} marginTop={1}>
-          <MessageView message={message} addToolApprovalResponse={addToolApprovalResponse} />
+  useEffect(() => {
+    useDynamic.getActions().setDynamicList(
+      dynamicMessages.length ? (
+        dynamicMessages.map((message) => (
+          <Box key={message.id} paddingX={1} marginTop={1}>
+            <MessageView message={message} />
+          </Box>
+        ))
+      ) : (
+        <Box paddingX={1} marginTop={1}>
+          <Text color="gray" dimColor>
+            No messages yet. Type a message to start.
+          </Text>
         </Box>
-      ))}
-    </>
-  );
+      )
+    );
+  }, [dynamicMessages]);
+
+  return null;
 };

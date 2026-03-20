@@ -9,11 +9,10 @@ import type { ReasoningUIPart, TextUIPart, ToolUIPart, UIMessage } from "ai";
 
 export interface MessageViewProps {
   message: UIMessage;
-  addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
 }
 
 /** Render a single message */
-export const MessageView = ({ message, addToolApprovalResponse }: MessageViewProps) => {
+export const MessageView = ({ message }: MessageViewProps) => {
   const validPart = message.parts.filter((i) => Object.keys(i).length > 1);
 
   return (
@@ -22,9 +21,7 @@ export const MessageView = ({ message, addToolApprovalResponse }: MessageViewPro
         <Box key={`${part.type}-${index}`} width="100%">
           {part.type === "text" && <TextPartView part={part as TextUIPart} role={message.role} />}
           {part.type === "reasoning" && <ThinkingPartView part={part as ReasoningUIPart} />}
-          {isToolUIPart(part) && (
-            <ToolCallPartView part={part as ToolUIPart} addToolApprovalResponse={addToolApprovalResponse} />
-          )}
+          {isToolUIPart(part) && <ToolCallPartView part={part as ToolUIPart} />}
         </Box>
       ))}
     </>

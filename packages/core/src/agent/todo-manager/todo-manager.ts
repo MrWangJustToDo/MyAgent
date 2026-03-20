@@ -34,15 +34,18 @@ export const generateTodoManagerId = (): string => generateId("todo");
  * const todoManager = new TodoManager();
  *
  * // Update todos (from tool call)
- * todoManager.update([
+ * todoManager.update(
+ *   [
  *   { content: "Read the file", status: "completed", priority: "high" },
  *   { content: "Edit the function", status: "in_progress", priority: "high" },
  *   { content: "Run tests", status: "pending", priority: "medium" },
- * ]);
+ *   ],
+ *   "Refactor auth module"
+ * );
  *
  * // Render for display
  * console.log(todoManager.render());
- * // [x] Read the file
+ * // [✓] Read the file
  * // [>] Edit the function
  * // [ ] Run tests
  * // (1/3 completed)
@@ -60,6 +63,9 @@ export class TodoManager {
   /** Todo items */
   private items: TodoItem[] = [];
 
+  /** Current todo set title */
+  private title: string | null = null;
+
   /** Configuration */
   private maxTodos: number;
   private nagReminderThreshold: number;
@@ -69,6 +75,9 @@ export class TodoManager {
 
   /** Event listeners */
   private changeListeners: Set<(items: TodoItem[]) => void> = new Set();
+
+  /** Auto-clear timer (when all todos completed) */
+  private autoClearTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   /** Timestamps */
   createdAt: number;
@@ -92,7 +101,7 @@ export class TodoManager {
    *
    * @throws Error if validation fails (max todos, multiple in_progress)
    */
-  update(inputs: TodoItemInput[]): string {
+  update(inputs: TodoItemInput[], title: string): string {
     // Validate max todos
     if (inputs.length > this.maxTodos) {
       throw new Error(`Maximum ${this.maxTodos} todos allowed, got ${inputs.length}`);
@@ -112,6 +121,7 @@ export class TodoManager {
     }
 
     const now = Date.now();
+    this.title = title.trim();
 
     // Convert inputs to TodoItems
     this.items = inputs.map((input) => {
@@ -133,6 +143,7 @@ export class TodoManager {
 
     this.touch();
     this.notifyListeners();
+    this.scheduleAutoClearIfNeeded();
 
     return this.render();
   }
@@ -146,6 +157,11 @@ export class TodoManager {
     }
 
     const lines: string[] = [];
+
+    if (this.title) {
+      lines.push(`Title: ${this.title}`);
+      lines.push("");
+    }
 
     for (const item of this.items) {
       const icon = STATUS_ICONS[item.status];
@@ -217,6 +233,13 @@ export class TodoManager {
    */
   getItems(): TodoItem[] {
     return [...this.items];
+  }
+
+  /**
+   * Get the current todo set title.
+   */
+  getTitle(): string | null {
+    return this.title;
   }
 
   /**
@@ -292,6 +315,8 @@ export class TodoManager {
   clear(): void {
     this.items = [];
     this.roundsSinceUpdate = 0;
+    this.title = null;
+    this.clearAutoClearTimer();
     this.touch();
     this.notifyListeners();
   }
@@ -309,5 +334,26 @@ export class TodoManager {
 
   private touch(): void {
     this.updatedAt = Date.now();
+  }
+
+  private scheduleAutoClearIfNeeded(): void {
+    this.clearAutoClearTimer();
+
+    if (!this.isAllCompleted()) {
+      return;
+    }
+
+    this.autoClearTimeoutId = setTimeout(() => {
+      if (this.isAllCompleted()) {
+        this.clear();
+      }
+    }, 3_000);
+  }
+
+  private clearAutoClearTimer(): void {
+    if (this.autoClearTimeoutId) {
+      clearTimeout(this.autoClearTimeoutId);
+      this.autoClearTimeoutId = null;
+    }
   }
 }

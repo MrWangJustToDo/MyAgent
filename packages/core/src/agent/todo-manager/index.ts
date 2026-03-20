@@ -14,11 +14,14 @@
  * const todoManager = new TodoManager();
  *
  * // Update from tool call
- * todoManager.update([
- *   { content: "Analyze the codebase", status: "completed", priority: "high" },
- *   { content: "Implement the feature", status: "in_progress", priority: "high" },
- *   { content: "Write tests", status: "pending", priority: "medium" },
- * ]);
+ * todoManager.update(
+ *   [
+ *     { content: "Analyze the codebase", status: "completed", priority: "high" },
+ *     { content: "Implement the feature", status: "in_progress", priority: "high" },
+ *     { content: "Write tests", status: "pending", priority: "medium" },
+ *   ],
+ *   "Feature rollout plan"
+ * );
  *
  * // Check progress
  * console.log(todoManager.render());

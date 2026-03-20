@@ -5,16 +5,13 @@ import { formatToolInput, formatDuration } from "../utils/format.js";
 import { getToolCallColor } from "../utils/tool-state.js";
 
 import { ToolInputView } from "./ToolInputView.js";
-import { ToolOutputViewDynamic } from "./ToolOutputViewDynamic.js";
-import { ToolOutputViewStatic } from "./ToolOutputViewStatic.js";
+import { ToolOutputView } from "./ToolOutputView.js";
 import { ToolStatusIcon } from "./ToolStatusIcon.js";
 
 import type { ToolUIPart } from "ai";
 
 export interface ToolCallPartViewProps {
   part: ToolUIPart;
-  staticItem?: boolean;
-  addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
 }
 
 /** Extract durationMs from tool output if available */
@@ -29,7 +26,7 @@ const getDurationMs = (output: unknown): number | null => {
 };
 
 /** Render a tool invocation part */
-export const ToolCallPartView = ({ part, addToolApprovalResponse, staticItem }: ToolCallPartViewProps) => {
+export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
   const needsApproval = part.state === "approval-requested" && part.approval;
 
   const toolName = getToolName(part);
@@ -45,7 +42,8 @@ export const ToolCallPartView = ({ part, addToolApprovalResponse, staticItem }: 
   const displayInput = getDisplayInput();
 
   // Check if output is available (state indicates completion)
-  const hasOutput = part.state === "output-available" || part.state === "output-error";
+  const hasOutput =
+    part.state === "output-available" || part.state === "output-error" || part.state === "output-denied";
 
   // Get duration from output if available
   const durationMs = hasOutput ? getDurationMs(part.output) : null;
@@ -85,12 +83,12 @@ export const ToolCallPartView = ({ part, addToolApprovalResponse, staticItem }: 
         {/* Show output if available */}
         {hasOutput && (
           <Box marginTop={1} flexDirection="column" width="100%">
-            {staticItem ? <ToolOutputViewStatic part={part} /> : <ToolOutputViewDynamic part={part} />}
+            <ToolOutputView part={part} />
           </Box>
         )}
 
         {/* Approval prompt */}
-        {needsApproval && addToolApprovalResponse && (
+        {needsApproval && (
           <Box marginTop={1} flexDirection="column">
             <Text color="yellow" bold>
               Approval required. Press Y to approve, N to deny.

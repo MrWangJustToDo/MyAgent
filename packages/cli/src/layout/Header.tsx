@@ -51,35 +51,4 @@ export const Header = () => {
   }, [model, path, name]);
 
   return null;
-
-  // return (
-  //   <Box flexDirection="column" marginBottom={1}>
-  //     {/* Logo */}
-  //     <Gradient name="rainbow">
-  //       <BigText text="My Agent" />
-  //     </Gradient>
-
-  //     {/* Info bar */}
-  //     <Box gap={2}>
-  //       <Box>
-  //         <Text color="gray">Model: </Text>
-  //         <Text color="yellow" wrap="truncate-end">
-  //           {model}
-  //         </Text>
-  //       </Box>
-  //       <Box>
-  //         <Text color="gray">Sandbox: </Text>
-  //         <Text color="green" wrap="truncate-end">
-  //           {name || "..."}
-  //         </Text>
-  //       </Box>
-  //       <Box>
-  //         <Text color="gray">Path: </Text>
-  //         <Text color="blue" wrap="truncate-end">
-  //           {path}
-  //         </Text>
-  //       </Box>
-  //     </Box>
-  //   </Box>
-  // );
 };

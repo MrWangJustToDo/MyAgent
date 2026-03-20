@@ -1,6 +1,5 @@
-import { getToolName, isToolUIPart, type UIMessage } from "ai";
 import { Box, Text, useApp, useInput } from "ink";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { toRaw } from "reactivity-store";
 
 import { FullBox } from "../components/FullBox.js";
@@ -37,13 +36,14 @@ export const Agent = () => {
   const config = useArgs((s) => s.config);
 
   // Use local chat with our config
-  const { messages, sendMessage, isLoading, addToolApprovalResponse, initError, initLoading } = useLocalChat({
-    model: config.model,
-    url: config.url,
-    rootPath: config.rootPath,
-    systemPrompt: config.systemPrompt,
-    maxIterations: config.maxIterations,
-  });
+  const { messages, sendMessage, isLoading, addToolApprovalResponse, initError, initLoading, allPendingApproval } =
+    useLocalChat({
+      model: config.model,
+      url: config.url,
+      rootPath: config.rootPath,
+      systemPrompt: config.systemPrompt,
+      maxIterations: config.maxIterations,
+    });
 
   const hasInitRef = useRef(false);
 
@@ -52,28 +52,11 @@ export const Agent = () => {
   // Input state
   const inputActions = useUserInput.getActions();
 
-  // Find pending approval requests
-  const pendingApproval = useMemo(() => {
-    // Look through messages for tool calls awaiting approval
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i] as UIMessage;
-      if (msg.role === "assistant") {
-        for (const part of msg.parts) {
-          if (isToolUIPart(part)) {
-            const toolPart = part;
-            if (toolPart.state === "approval-requested" && toolPart.approval) {
-              return {
-                id: toolPart.approval.id,
-                toolName: getToolName(toolPart),
-                toolCallId: toolPart.toolCallId,
-              };
-            }
-          }
-        }
-      }
-    }
-    return null;
-  }, [messages]);
+  // current pending
+  const pendingApproval = allPendingApproval[0];
+
+  // current is last pending
+  const currentPendingIsLast = allPendingApproval.length === 1;
 
   useEffect(() => {
     if (isReady && config.initialPrompt && !hasInitRef.current) {
@@ -114,6 +97,9 @@ export const Agent = () => {
           id: pendingApproval.id,
           approved: false,
           reason: "User denied this tool execution. Do not assume the action was performed.",
+          isLast: currentPendingIsLast,
+          toolCallId: pendingApproval.toolCallId,
+          toolName: pendingApproval.toolName,
         });
         return;
       }
@@ -190,10 +176,10 @@ export const Agent = () => {
       {/* Header */}
       <Header />
 
-      <Content />
-
       {/* Messages */}
-      <MessageList messages={messages} addToolApprovalResponse={addToolApprovalResponse} />
+      <MessageList messages={messages} />
+
+      <Content />
 
       {/* Input */}
       <Footer />
