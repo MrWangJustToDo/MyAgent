@@ -5,7 +5,7 @@ import { memo, type JSX } from "react";
 import { useStatic } from "../hooks/use-static";
 
 export const Content = memo(() => {
-  const { head, list, key } = useStatic((s) => ({ list: s.state, head: s.header, key: s.remountKey }));
+  const { head, list, key } = useStatic((s) => ({ list: s.list, head: s.header, key: s.remountKey }));
 
   const typedList = list as JSX.Element[];
 
