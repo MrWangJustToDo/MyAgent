@@ -6,12 +6,6 @@ import { memo } from "react";
 import { useSize } from "../hooks";
 import { useDiffFileCache } from "../hooks/use-diff-file-cache";
 
-import type { DiffFile } from "@git-diff-view/cli";
-
-const map = new Map<string, DiffFile>();
-
-globalThis.diffFileMap = map;
-
 const { getDiffFile, setDiffFile } = useDiffFileCache.getActions();
 
 export const ToolInputView = memo(
