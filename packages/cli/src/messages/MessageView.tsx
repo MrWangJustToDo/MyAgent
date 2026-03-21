@@ -1,5 +1,6 @@
 import { isToolUIPart } from "ai";
 import { Box } from "ink";
+import { memo, useMemo } from "react";
 
 import { TextPartView } from "./TextPartView.js";
 import { ThinkingPartView } from "./ThinkingPartView.js";
@@ -12,12 +13,13 @@ export interface MessageViewProps {
 }
 
 /** Render a single message */
-export const MessageView = ({ message }: MessageViewProps) => {
-  const validPart = message.parts.filter((i) => Object.keys(i).length > 1);
+export const MessageView = memo(({ message }: MessageViewProps) => {
+  // Memoize filtered parts to avoid recalculation on every render
+  const validParts = useMemo(() => message.parts.filter((i) => Object.keys(i).length > 1), [message.parts]);
 
   return (
     <>
-      {validPart.map((part, index) => (
+      {validParts.map((part, index) => (
         <Box key={`${part.type}-${index}`} width="100%">
           {part.type === "text" && <TextPartView part={part as TextUIPart} role={message.role} />}
           {part.type === "reasoning" && <ThinkingPartView part={part as ReasoningUIPart} />}
@@ -26,4 +28,6 @@ export const MessageView = ({ message }: MessageViewProps) => {
       ))}
     </>
   );
-};
+});
+
+MessageView.displayName = "MessageView";

@@ -5,7 +5,7 @@
  */
 
 import { Box, Text } from "ink";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { useDynamic } from "../hooks/use-dynamic";
 import { useStatic } from "../hooks/use-static";
@@ -29,18 +29,23 @@ export interface MessageListProps {
 export const MessageList = ({ messages }: MessageListProps) => {
   const { staticMessages, dynamicMessages } = useMemo(() => getMessages(messages), [messages]);
 
-  useEffect(() => {
-    useStatic.getActions().setStaticList(
+  // Track the last static messages length to detect actual changes
+  const lastStaticLengthRef = useRef(0);
+
+  // Memoize static list rendering to prevent unnecessary re-renders
+  const staticList = useMemo(
+    () =>
       staticMessages.map((item) => (
         <Box key={item.id} paddingX={1} marginTop={1}>
           <MessageView message={item} />
         </Box>
-      ))
-    );
-  }, [staticMessages]);
+      )),
+    [staticMessages]
+  );
 
-  useEffect(() => {
-    useDynamic.getActions().setDynamicList(
+  // Memoize dynamic list rendering
+  const dynamicList = useMemo(
+    () =>
       dynamicMessages.length ? (
         dynamicMessages.map((message) => (
           <Box key={message.id} paddingX={1} marginTop={1}>
@@ -53,9 +58,22 @@ export const MessageList = ({ messages }: MessageListProps) => {
             No messages yet. Type a message to start.
           </Text>
         </Box>
-      )
-    );
-  }, [dynamicMessages]);
+      ),
+    [dynamicMessages]
+  );
+
+  // Only update static list when length actually changes
+  // This prevents flickering during streaming when static content is stable
+  useEffect(() => {
+    if (staticMessages.length !== lastStaticLengthRef.current) {
+      lastStaticLengthRef.current = staticMessages.length;
+      useStatic.getActions().setStaticList(staticList);
+    }
+  }, [staticMessages.length, staticList]);
+
+  useEffect(() => {
+    useDynamic.getActions().setDynamicList(dynamicList);
+  }, [dynamicList]);
 
   return null;
 };

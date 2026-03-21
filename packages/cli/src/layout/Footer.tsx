@@ -1,5 +1,4 @@
 import { Box, Text } from "ink";
-import Divider from "ink-divider";
 
 import { ErrorDetail } from "../components/ErrorDetail.js";
 import { FullBox } from "../components/FullBox.js";
@@ -17,10 +16,19 @@ export const Footer = () => {
   const isInputEnabled = status === "idle" || status === "completed" || status === "error";
 
   return (
-    <FullBox flexDirection="column" flexGrow={0} paddingY={1}>
-      <Divider />
+    <FullBox flexDirection="column" flexGrow={1} flexShrink={0} paddingY={1}>
       {/* Status bar */}
-      <Box gap={2} width="full">
+      <Box
+        gap={2}
+        borderLeft={false}
+        borderRight={false}
+        borderBottom={false}
+        borderTop
+        borderTopColor="gray"
+        borderStyle="single"
+        borderTopDimColor
+        width="full"
+      >
         {/* Status indicator */}
         <Box>
           {status === "running" && <Spinner text="Running..." />}
@@ -43,7 +51,7 @@ export const Footer = () => {
       {/* Error message */}
       <ErrorDetail />
 
-      <Box height={1} />
+      <Box height={1} flexGrow={1} flexShrink={0} />
 
       {/* Input */}
       <Box opaque>
@@ -58,8 +66,18 @@ export const Footer = () => {
           </Text>
         )}
       </Box>
-      <Divider />
-      <Box gap={2} justifyContent="space-between">
+      <Box height={1} flexGrow={1} flexShrink={0} />
+      <Box
+        gap={2}
+        borderTop
+        borderLeft={false}
+        borderRight={false}
+        borderBottom={false}
+        borderTopColor="gray"
+        borderStyle="single"
+        borderTopDimColor
+        justifyContent="space-between"
+      >
         <Box>
           <Text color="gray" dimColor>
             Exit: Ctrl + C

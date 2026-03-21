@@ -175,11 +175,13 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
   }, [model, url, rootPath, systemPrompt, maxIterations]);
 
   // Use @ai-sdk/react's useChat hook with our Chat instance
+  // Note: Using 100ms throttle to reduce UI flickering/corruption in terminal
+  // Lower values (e.g., 50ms) can cause visual artifacts due to rapid re-renders
   const chatHelpers = useAiSdkChat<UIMessage>(
     chatRef.current
       ? {
           chat: chatRef.current,
-          experimental_throttle: 50,
+          experimental_throttle: 100,
         }
       : {}
   );

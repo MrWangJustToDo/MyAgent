@@ -13,7 +13,7 @@ export const Spinner = ({ text }: SpinnerProps) => {
   useEffect(() => {
     const timer = setInterval(() => {
       setFrame((prev) => (prev + 1) % frames.length);
-    }, 80);
+    }, 100);
 
     return () => clearInterval(timer);
   }, []);
