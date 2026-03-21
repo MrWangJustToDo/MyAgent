@@ -257,6 +257,8 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
         chatHelpers.sendMessage();
 
         // avoid call the original method
+        // 默认拒绝方法只会讲state修改为 approval-responded . SEE https://github.com/vercel/ai/blob/50c29b0dc2d23dff959bde8eea21594ba61c46c6/packages/ai/src/ui/chat.ts#L496C23-L496C41
+        // 而在cover转换种，需要 output- 才会生成结果传给llm . SEE https://github.com/vercel/ai/blob/50c29b0dc2d23dff959bde8eea21594ba61c46c6/packages/ai/src/ui/convert-to-model-messages.ts#L310
         // chatHelpers.addToolApprovalResponse({
         //   id: options.id,
         //   approved: false,

@@ -61,6 +61,3 @@ export {
   DEFAULT_MAX_TODOS,
   DEFAULT_NAG_REMINDER_THRESHOLD,
 } from "./todo-manager";
-
-// Transport exports (patched DirectChatTransport with approval denial fix)
-export { PatchedDirectChatTransport, type PatchedDirectChatTransportOptions } from "./transport";
