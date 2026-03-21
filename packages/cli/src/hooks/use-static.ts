@@ -2,7 +2,7 @@ import ansiEscapes from "ansi-escapes";
 import { useStdout, getExistInstance } from "ink";
 import { debounce } from "lodash-es";
 import { useEffect, type JSX } from "react";
-import { createState, markRaw, toRaw, watch } from "reactivity-store";
+import { createState, markRaw, toRaw } from "reactivity-store";
 
 import type { WriteStream } from "tty";
 
@@ -33,9 +33,9 @@ export const useStatic = createState(
 
       const refresh = debounce(rawRefresh, 16);
 
-      const staticRefresh = debounce(rawRefresh, 300);
+      // const staticRefresh = debounce(rawRefresh, 300);
 
-      watch(() => s.listSet, staticRefresh);
+      // watch(() => s.listSet, staticRefresh);
 
       return {
         useInitStdout: () => {

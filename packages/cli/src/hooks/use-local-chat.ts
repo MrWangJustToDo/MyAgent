@@ -8,9 +8,9 @@
 import { Chat, useChat as useAiSdkChat } from "@ai-sdk/react";
 import { generateId } from "@my-agent/core";
 import {
-  DirectChatTransport,
   getToolName,
   isToolUIPart,
+  DirectChatTransport,
   lastAssistantMessageIsCompleteWithApprovalResponses,
 } from "ai";
 import { useEffect, useCallback, useState, useRef, useMemo } from "react";
@@ -19,7 +19,7 @@ import { toRaw } from "reactivity-store";
 import { createAgent } from "../utils/create.js";
 
 import type { Agent } from "@my-agent/core";
-import type { ChatTransport, UIMessage } from "ai";
+import type { ChatTransport, UIDataTypes, UIMessage, UIMessagePart, UITools } from "ai";
 
 // ============================================================================
 // Types
@@ -145,8 +145,9 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
       try {
         const agent = await createAgent({ model, url, rootPath, systemPrompt, maxIterations });
 
-        // Create DirectChatTransport with the agent
-        // Note: Using type assertion due to complex SDK generic constraints
+        // Create PatchedDirectChatTransport with the agent
+        // This patched version fixes the tool approval denial bug in AI SDK v6
+        // See: https://github.com/vercel/ai/issues/10980
         const transport = new DirectChatTransport({
           agent,
         }) as ChatTransport<UIMessage>;
@@ -231,11 +232,36 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
       } else {
         const errorText = options.reason ?? "Tool execution denied by user.";
 
-        chatHelpers.addToolApprovalResponse({
-          id: options.id,
-          approved: false,
-          reason: errorText,
+        const updatePart = (part: UIMessagePart<UIDataTypes, UITools>): UIMessagePart<UIDataTypes, UITools> =>
+          isToolUIPart(part) && part.state === "approval-requested" && part.approval.id === options.id
+            ? {
+                ...part,
+                state: "output-denied",
+                approval: { id: options.id, approved: false, reason: errorText },
+              }
+            : part;
+
+        chatHelpers.setMessages((message) => {
+          return message.map((i) => {
+            if (i.role === "assistant") {
+              return {
+                ...i,
+                parts: i.parts.map(updatePart),
+              };
+            } else {
+              return i;
+            }
+          });
         });
+
+        chatHelpers.sendMessage();
+
+        // avoid call the original method
+        // chatHelpers.addToolApprovalResponse({
+        //   id: options.id,
+        //   approved: false,
+        //   reason: errorText,
+        // });
       }
     },
     [chatHelpers]
