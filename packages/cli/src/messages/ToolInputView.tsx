@@ -1,10 +1,13 @@
 import { DiffView, DiffModeEnum } from "@git-diff-view/cli";
 import { generateDiffFile } from "@git-diff-view/file";
 import { getToolName, type ToolUIPart } from "ai";
+// import { Box, Text } from "ink";
 import { memo } from "react";
 
 import { useSize } from "../hooks";
 import { useDiffFileCache } from "../hooks/use-diff-file-cache";
+
+import { TaskToolInputView } from "./TaskToolInputView";
 
 const { getDiffFile, setDiffFile } = useDiffFileCache.getActions();
 
@@ -13,6 +16,23 @@ export const ToolInputView = memo(
     const toolName = getToolName(part);
 
     const width = useSize((s) => s.state.screenWidth);
+
+    // Show task/subagent prompt
+    if (toolName === "task") {
+      const content = part.input as { prompt?: string; description?: string };
+
+      if (!content?.prompt) return null;
+
+      return <TaskToolInputView part={part} />;
+
+      // return (
+      //   <Box marginTop={1} flexDirection="column">
+      //     <Text color="cyan" dimColor>
+      //       {content.prompt}
+      //     </Text>
+      //   </Box>
+      // );
+    }
 
     if (toolName === "write_file") {
       const content = part.input as { content?: string; path?: string };
@@ -87,7 +107,10 @@ export const ToolInputView = memo(
       pInput?.path === cInput?.path &&
       pInput.content === cInput.content &&
       pInput.oldString === cInput.oldString &&
-      pInput.newString === cInput.newString
+      pInput.newString === cInput.newString &&
+      pInput.id === cInput.id &&
+      pInput.prompt === cInput.prompt &&
+      pInput.description === cInput.description
     );
   }
 );

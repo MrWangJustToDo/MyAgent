@@ -27,7 +27,6 @@ export const createListFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
         ),
     }),
     outputSchema: listFileOutputSchema,
-    needsApproval: true,
     execute: async ({ path: inputPath }) => {
       return withDuration(async () => {
         const path = inputPath ?? ".";

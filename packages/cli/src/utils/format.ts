@@ -5,6 +5,7 @@ import type {
   ListFileOutput,
   ReadFileOutput,
   RunCommandOutput,
+  TaskOutput,
   TodoOutput,
   WriteFileOutput,
 } from "@my-agent/core";
@@ -161,6 +162,32 @@ function formatTodoOutput(output: TodoOutput): string {
   return output.message;
 }
 
+function formatTaskOutput(output: TaskOutput): string {
+  const { summary, iterations, truncated, reachedLimit, usage } = output;
+
+  const lines: string[] = [];
+
+  // Status line
+  const statusParts: string[] = [];
+  statusParts.push(`${iterations} iteration${iterations !== 1 ? "s" : ""}`);
+  statusParts.push(`${usage.totalTokens} tokens`);
+  if (truncated) statusParts.push("truncated");
+  if (reachedLimit) statusParts.push("limit reached");
+  lines.push(`[${statusParts.join(", ")}]`);
+
+  // Summary (show first few lines)
+  const summaryLines = summary.trim().split("\n");
+  const maxSummaryLines = 10;
+  if (summaryLines.length <= maxSummaryLines) {
+    lines.push(...summaryLines);
+  } else {
+    lines.push(...summaryLines.slice(0, maxSummaryLines));
+    lines.push(`... (${summaryLines.length - maxSummaryLines} more lines)`);
+  }
+
+  return lines.join("\n");
+}
+
 // ============================================================================
 // Main Format Function
 // ============================================================================
@@ -190,6 +217,8 @@ export function formatToolOutput(output: unknown, toolName?: string): string {
         return formatGrepOutput(out as unknown as GrepOutput);
       case "todo":
         return formatTodoOutput(out as unknown as TodoOutput);
+      case "task":
+        return formatTaskOutput(out as unknown as TaskOutput);
       default:
         // For unknown tools, try to use message field if available
         if ("message" in out && typeof out.message === "string") {

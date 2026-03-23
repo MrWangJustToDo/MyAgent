@@ -2,6 +2,7 @@ import { AgentLog } from "../agent";
 import { AgentContext } from "../agent/agent-context";
 import { Agent } from "../agent/loop/agent.js";
 import { TodoManager } from "../agent/todo-manager";
+import { createTaskTool } from "../agent/tools/task-tool.js";
 
 import { sandboxManager } from "./manager-sandbox.js";
 import { toolsManager } from "./manager-tools.js";
@@ -15,6 +16,8 @@ import type { LanguageModel } from "ai";
 // ============================================================================
 
 export type ManagedAgentConfig<T = Agent | AgentContext> = AgentConfig & {
+  /** Optional custom ID for the agent (auto-generated if not provided) */
+  id?: string;
   name: string;
   rootPath: string;
   /** Vercel AI SDK LanguageModel instance */
@@ -44,12 +47,115 @@ export interface ManagedAgent {
 }
 
 // ============================================================================
+// Event Types
+// ============================================================================
+
+/** Subagent lifecycle events */
+export type SubagentEventType =
+  | "subagent:created"
+  | "subagent:started"
+  | "subagent:step"
+  | "subagent:completed"
+  | "subagent:error"
+  | "subagent:destroyed";
+
+export interface SubagentEvent {
+  type: SubagentEventType;
+  subagentId: string;
+  parentId: string;
+  agent: Agent;
+  /** Additional data depending on event type */
+  data?: {
+    /** For step events */
+    step?: number;
+    finishReason?: string;
+    /** For completed events */
+    summary?: string;
+    iterations?: number;
+    /** For error events */
+    error?: Error;
+  };
+}
+
+export type SubagentEventListener = (event: SubagentEvent) => void;
+
+// ============================================================================
 // AgentManager Class
 // ============================================================================
 
 export class AgentManager {
   /** Managed agents by ID */
   private agents: Map<string, ManagedAgent> = new Map();
+
+  /** Event listeners for subagent lifecycle */
+  private eventListeners: Map<SubagentEventType | "*", Set<SubagentEventListener>> = new Map();
+
+  // ============================================================================
+  // Event Emitter
+  // ============================================================================
+
+  /**
+   * Subscribe to subagent events.
+   *
+   * @param type - Event type or "*" for all events
+   * @param listener - Callback function
+   * @returns Unsubscribe function
+   *
+   * @example
+   * ```typescript
+   * // Listen to specific event
+   * const unsubscribe = agentManager.on("subagent:created", (event) => {
+   *   console.log(`Subagent ${event.subagentId} created`);
+   * });
+   *
+   * // Listen to all events
+   * agentManager.on("*", (event) => {
+   *   console.log(`Event: ${event.type}`);
+   * });
+   *
+   * // Unsubscribe
+   * unsubscribe();
+   * ```
+   */
+  on(type: SubagentEventType | "*", listener: SubagentEventListener): () => void {
+    if (!this.eventListeners.has(type)) {
+      this.eventListeners.set(type, new Set());
+    }
+    this.eventListeners.get(type)!.add(listener);
+
+    return () => {
+      this.eventListeners.get(type)?.delete(listener);
+    };
+  }
+
+  /**
+   * Emit a subagent event.
+   */
+  emit(event: SubagentEvent): void {
+    // Notify specific listeners
+    const listeners = this.eventListeners.get(event.type);
+    if (listeners) {
+      for (const listener of listeners) {
+        try {
+          listener(event);
+        } catch {
+          // Ignore listener errors
+        }
+      }
+    }
+
+    // Notify wildcard listeners
+    const wildcardListeners = this.eventListeners.get("*");
+    if (wildcardListeners) {
+      for (const listener of wildcardListeners) {
+        try {
+          listener(event);
+        } catch {
+          // Ignore listener errors
+        }
+      }
+    }
+  }
 
   // ============================================================================
   // Agent Lifecycle
@@ -59,7 +165,7 @@ export class AgentManager {
    * Create a new agent
    */
   async createManagedAgent(config: ManagedAgentConfig, parentId?: string): Promise<Agent> {
-    const { rootPath, setUp, languageModel, name, ...restConfig } = config;
+    const { id: customId, rootPath, setUp, languageModel, name, ...restConfig } = config;
 
     const sandbox = await sandboxManager.getSandbox(rootPath);
 
@@ -71,7 +177,7 @@ export class AgentManager {
 
     const todoManager = new TodoManager();
 
-    const agent = new Agent(restConfig, { setUp: setUp as ManagedAgentConfig<Agent>["setUp"] });
+    const agent = new Agent(restConfig, { id: customId, setUp: setUp as ManagedAgentConfig<Agent>["setUp"] });
 
     // Set the Vercel AI SDK model
     agent.setModel(languageModel);
@@ -86,6 +192,12 @@ export class AgentManager {
     agent.setLog(log);
 
     agent.setTodoManager(todoManager);
+
+    // Add task tool for subagent delegation (only for root agents, not subagents)
+    if (!parentId) {
+      const taskTool = createTaskTool({ parentAgentId: agent.id, agentManager: this });
+      agent.addTools({ task: taskTool });
+    }
 
     const id = agent.id;
 
@@ -128,7 +240,8 @@ export class AgentManager {
     if (!parent) {
       throw new Error(`Parent agent not found: ${parentId}`);
     }
-    return await this.createManagedAgent(config, parentId);
+    const finalConfig = { ...parent.config, ...config };
+    return await this.createManagedAgent(finalConfig, parentId);
   }
 
   /**

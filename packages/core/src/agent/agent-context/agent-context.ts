@@ -5,7 +5,7 @@
 import { generateId } from "../../base/utils.js";
 
 import type { StreamPart, ToolSet } from "../loop/agent.js";
-import type { OnFinishEvent } from "ai";
+import type { OnFinishEvent, TypedToolCall } from "ai";
 
 export interface TokenUsage {
   inputTokens: number;
@@ -31,7 +31,12 @@ export class AgentContext {
   /** Stream events (for UI rendering) */
   // current emit the raw vercel type
   // SEE https://github.com/ag-ui-protocol/ag-ui/blob/main/sdks/typescript/packages/core/src/events.ts ag-ui protocol
+  /**
+   * @internal
+   */
   private events: StreamPart[] = [];
+
+  private tools: TypedToolCall<NoInfer<ToolSet>>[] = [];
 
   /** Token usage */
   private usage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
@@ -120,6 +125,14 @@ export class AgentContext {
     return this.usage;
   }
 
+  addTool(tool: TypedToolCall<NoInfer<ToolSet>>) {
+    this.tools.push(tool);
+  }
+
+  getTools() {
+    return this.tools;
+  }
+
   /**
    * Clear events (keep messages)
    */
@@ -136,6 +149,7 @@ export class AgentContext {
    * Clear everything
    */
   reset(): void {
+    this.tools = [];
     this.events = [];
     this.usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
     this.isStreaming = false;

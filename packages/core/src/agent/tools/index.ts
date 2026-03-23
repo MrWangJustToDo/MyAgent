@@ -14,6 +14,7 @@ import { createSearchReplaceTool } from "./search-replace-tool.js";
 import { createTreeTool } from "./tree-tool.js";
 import { createWriteFileTool } from "./write-file-tool.js";
 
+import type { createTaskTool } from "./task-tool.js";
 import type { createTodoTool } from "./todo-tool.js";
 import type { Sandbox } from "../../environment";
 
@@ -34,6 +35,7 @@ export * from "./todo-tool.js";
 export * from "./tree-tool.js";
 export * from "./types.js";
 export * from "./write-file-tool.js";
+export * from "./task-tool.js";
 
 export type Tools = {
   copy_file: ReturnType<typeof createCopyFileTool>;
@@ -52,6 +54,7 @@ export type Tools = {
   run_command: ReturnType<typeof createRunCommandTool>;
   search_replace: ReturnType<typeof createSearchReplaceTool>;
   todo?: ReturnType<typeof createTodoTool>;
+  task?: ReturnType<typeof createTaskTool>;
 };
 
 export const createTools = async ({

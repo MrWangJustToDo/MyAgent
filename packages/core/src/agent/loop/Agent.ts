@@ -180,6 +180,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
           toolCallId: toolCall.toolCallId,
           input: toolCall.input,
         });
+        this.context?.addTool(toolCall);
         experimental_onToolCallStart?.(event);
       },
       onAbort: () => {
@@ -265,6 +266,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
             toolCallId: toolCall.toolCallId,
             input: toolCall.input,
           });
+          this.context?.addTool(toolCall);
           experimental_onToolCallStart?.(event);
         },
         experimental_onToolCallFinish: (event) => {

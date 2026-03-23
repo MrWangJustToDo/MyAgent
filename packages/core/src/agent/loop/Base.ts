@@ -1,8 +1,5 @@
-import { streamText } from "ai";
-
 import { createTodoTool } from "../tools";
 
-import type { StreamPart } from "./agent";
 import type { Sandbox } from "../../environment";
 import type { AgentContext } from "../agent-context";
 import type { AgentLog } from "../agent-log";
@@ -16,8 +13,6 @@ import type {
   StreamTextOnFinishCallback,
   GenerateTextOnFinishCallback,
 } from "ai";
-
-type Params = Parameters<typeof streamText>[0];
 
 export type AgentStatus = "idle" | "running" | "completed" | "error" | "aborted" | "waiting";
 
@@ -296,128 +291,6 @@ export class Base {
     const tool = tools[toolName];
 
     return tool ? tool.needsApproval === true : false;
-  }
-
-  // ============================================================================
-  // Run (Streaming Generator)
-  // ============================================================================
-
-  /**
-   * Run the agent and return an async iterable stream.
-   * Uses Vercel AI SDK's streamText with built-in multi-step support.
-   *
-   * This is the original generator-based API that yields StreamPart directly.
-   * For DirectChatTransport integration, use `stream()` instead.
-   */
-  async *run(options: AgentRunOptions & Params): AsyncIterable<StreamPart> {
-    if (!this.model) {
-      throw new Error("Model not set. Call setModel() first.");
-    }
-
-    const {
-      prompt,
-      messages = [],
-      abortSignal,
-      model: overrideModel,
-      onStepFinish,
-      onFinish,
-      experimental_onToolCallStart,
-      experimental_onToolCallFinish,
-      tools: extendTools,
-      ...rest
-    } = options;
-
-    const finalMessages = this.prepareMessages({ prompt, messages });
-
-    this.setupAbortController(abortSignal);
-    this.status = "running";
-    this.error = "";
-
-    const tools = this.getTools();
-    const finalTools = Object.assign(tools, extendTools);
-
-    this.log?.agent("Starting streamText", {
-      messageCount: finalMessages.length,
-      messages: finalMessages,
-      toolCount: Object.keys(tools).length,
-      tools: Object.entries(tools).map(([name, t]) => ({
-        name,
-        needsApproval: t.needsApproval ?? false,
-      })),
-    });
-
-    try {
-      // Use Vercel AI SDK streamText
-      const result = streamText({
-        model: overrideModel || this.model,
-        messages: finalMessages,
-        tools: finalTools,
-        abortSignal: this.currentAbortController!.signal,
-        onStepFinish: this.createOnStepFinish(onStepFinish),
-        onFinish: this.createOnFinish(onFinish),
-        experimental_onToolCallStart: (event) => {
-          const { toolCall } = event;
-          this.log?.info("tool", "tool-call-start", {
-            toolName: toolCall.toolName,
-            toolCallId: toolCall.toolCallId,
-            input: toolCall.input,
-          });
-          experimental_onToolCallStart?.(event);
-        },
-        experimental_onToolCallFinish: (event) => {
-          const { toolCall, durationMs } = event;
-          const output = "output" in event ? event.output : undefined;
-          const error = "error" in event ? event.error : undefined;
-
-          this.log?.info("tool", "tool-call-end", {
-            toolName: toolCall.toolName,
-            toolCallId: toolCall.toolCallId,
-            output,
-            error: error instanceof Error ? error.message : error,
-            durationMs,
-          });
-          experimental_onToolCallFinish?.(event);
-        },
-
-        ...rest,
-      });
-
-      // Stream the full response
-      for await (const part of result.fullStream) {
-        // Handle approval requests - update status
-        if (part.type === "tool-call" && this.isToolNeedsApproval(part.toolName)) {
-          this.status = "waiting";
-        }
-
-        // Emit to context for UI updates
-        this.context?.emit(part);
-
-        yield part;
-      }
-
-      // Check final status
-      if (this.status !== "waiting") {
-        this.status = "completed";
-      }
-
-      this.log?.agent("streamText completed", {
-        finishReason: await result.finishReason,
-        status: this.status,
-      });
-    } catch (err) {
-      if (this.isAbortError(err)) {
-        this.status = "aborted";
-        this.log?.agent("Run aborted");
-      } else {
-        const error = err instanceof Error ? err : new Error(String(err));
-        this.error = error.message;
-        this.status = "error";
-        this.log?.error("agent", "Run error", error);
-        throw error;
-      }
-    } finally {
-      this.currentAbortController = null;
-    }
   }
 
   /**

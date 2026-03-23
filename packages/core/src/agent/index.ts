@@ -61,3 +61,21 @@ export {
   DEFAULT_MAX_TODOS,
   DEFAULT_NAG_REMINDER_THRESHOLD,
 } from "./todo-manager";
+
+// Subagent exports
+export {
+  runSubagent,
+  getSubagent,
+  destroySubagent,
+  createSubagentTools,
+  extractSummary,
+  truncateSummary,
+  SUBAGENT_MAX_ITERATIONS,
+  SUBAGENT_MAX_SUMMARY_LENGTH,
+  SUBAGENT_SYSTEM_PROMPT,
+  type SubagentConfig,
+  type SubagentResult,
+} from "./subagent";
+
+// Task tool export (for subagent delegation)
+export { createTaskTool, taskOutputSchema, type TaskToolConfig, type TaskOutput } from "./tools/task-tool.js";
