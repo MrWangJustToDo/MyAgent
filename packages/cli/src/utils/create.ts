@@ -1,4 +1,4 @@
-import { agentManager, createOllamaModel, getOllamaBuildInTools } from "@my-agent/core";
+import { agentManager, createOllamaModel, createOpenRouterModel, getOllamaBuildInTools } from "@my-agent/core";
 import { reactive, toRaw } from "reactivity-store";
 
 import { useTodoManager } from "../hooks";
@@ -7,7 +7,9 @@ import { useAgentContext } from "../hooks/use-agent-context";
 import { useAgentLog } from "../hooks/use-agent-log";
 import { useAgentSandbox } from "../hooks/use-agent-sandbox";
 
-import type { Agent, AgentContext } from "@my-agent/core";
+import type { CliAgentConfig } from "../hooks";
+import type { Agent, AgentContext, LanguageModel } from "@my-agent/core";
+import type { ToolSet } from "ai";
 
 export const createAgent = async ({
   model,
@@ -15,19 +17,29 @@ export const createAgent = async ({
   rootPath,
   systemPrompt,
   maxIterations,
+  provider,
 }: {
-  model: string;
-  url: string;
-  rootPath: string;
-  systemPrompt?: string;
-  maxIterations: number;
+  model: CliAgentConfig["model"];
+  url: CliAgentConfig["url"];
+  rootPath: CliAgentConfig["rootPath"];
+  systemPrompt?: CliAgentConfig["systemPrompt"];
+  maxIterations: CliAgentConfig["maxIterations"];
+  provider: CliAgentConfig["provider"];
 }) => {
-  const languageModel = createOllamaModel(model, url, { reasoning: true });
+  let languageModel: LanguageModel | null = null;
 
-  const tools = getOllamaBuildInTools((p) => ({
-    ["ollama-web-fetch"]: p.tools.webFetch(),
-    ["ollama-web-search"]: p.tools.webSearch(),
-  }));
+  let extendTools: ToolSet = {};
+
+  if (provider === "ollama") {
+    languageModel = createOllamaModel(model, url, { reasoning: true });
+
+    extendTools = getOllamaBuildInTools((p) => ({
+      ["ollama-web-fetch"]: p.tools.webFetch(),
+      ["ollama-web-search"]: p.tools.webSearch(),
+    }));
+  } else {
+    languageModel = createOpenRouterModel(model);
+  }
 
   const agent = await agentManager.createManagedAgent({
     languageModel,
@@ -56,7 +68,7 @@ export const createAgent = async ({
     },
   });
 
-  agent.addTools(tools);
+  agent.addTools(extendTools);
 
   // Get TodoManager from agent (created by AgentManager)
   const todoManager = agent.getTodoManager();

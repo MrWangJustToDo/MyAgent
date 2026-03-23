@@ -32,40 +32,40 @@ export const getMessages = (messages: UIMessage[]) => {
 
       staticMessages.push(...flatMessage);
     } else {
-      message.parts.forEach((part, index) => {
-        dynamicMessages.push({ ...message, id: message.id + "-" + index, parts: [part] });
-      });
+      // message.parts.forEach((part, index) => {
+      //   dynamicMessages.push({ ...message, id: message.id + "-" + index, parts: [part] });
+      // });
       // Last message - split into static (completed steps) and dynamic (current step)
-      // if (message.role === "user") {
-      //   message.parts.forEach((part, index) => {
-      //     dynamicMessages.push({ ...message, id: message.id + "-" + index, parts: [part] });
-      //   });
-      // } else {
-      //   // For assistant messages, split at step-start boundaries
-      //   // Parts before the last step-start are static, parts after are dynamic
-      //   let staticParts: UIMessage["parts"] = [];
-      //   let dynamicParts: UIMessage["parts"] = [];
+      if (message.role === "user") {
+        message.parts.forEach((part, index) => {
+          dynamicMessages.push({ ...message, id: message.id + "-" + index, parts: [part] });
+        });
+      } else {
+        // For assistant messages, split at step-start boundaries
+        // Parts before the last step-start are static, parts after are dynamic
+        let staticParts: UIMessage["parts"] = [];
+        let dynamicParts: UIMessage["parts"] = [];
 
-      //   for (const part of message.parts) {
-      //     if (part.type === "step-start") {
-      //       // Move current dynamic parts to static when we hit a new step
-      //       staticParts = [...staticParts, ...dynamicParts];
-      //       dynamicParts = [];
-      //     } else {
-      //       dynamicParts = [...dynamicParts, part];
-      //     }
-      //   }
+        for (const part of message.parts) {
+          if (part.type === "step-start") {
+            // Move current dynamic parts to static when we hit a new step
+            staticParts = [...staticParts, ...dynamicParts];
+            dynamicParts = [];
+          } else {
+            dynamicParts = [...dynamicParts, part];
+          }
+        }
 
-      //   // Add static parts as individual messages
-      //   staticParts.forEach((p, index) => {
-      //     staticMessages.push({ ...message, id: message.id + "-static-" + index, parts: [p] });
-      //   });
+        // Add static parts as individual messages
+        staticParts.forEach((p, index) => {
+          staticMessages.push({ ...message, id: message.id + "-static-" + index, parts: [p] });
+        });
 
-      //   // Add dynamic parts as individual messages
-      //   dynamicParts.forEach((p, index) => {
-      //     dynamicMessages.push({ ...message, id: message.id + "-dynamic-" + index, parts: [p] });
-      //   });
-      // }
+        // Add dynamic parts as individual messages
+        dynamicParts.forEach((p, index) => {
+          dynamicMessages.push({ ...message, id: message.id + "-dynamic-" + index, parts: [p] });
+        });
+      }
     }
   }
 

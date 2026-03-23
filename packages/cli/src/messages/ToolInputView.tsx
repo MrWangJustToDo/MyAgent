@@ -105,12 +105,12 @@ export const ToolInputView = memo(
 
     return (
       pInput?.path === cInput?.path &&
-      pInput.content === cInput.content &&
-      pInput.oldString === cInput.oldString &&
-      pInput.newString === cInput.newString &&
-      pInput.id === cInput.id &&
-      pInput.prompt === cInput.prompt &&
-      pInput.description === cInput.description
+      pInput?.content === cInput?.content &&
+      pInput?.oldString === cInput?.oldString &&
+      pInput?.newString === cInput?.newString &&
+      pInput?.id === cInput?.id &&
+      pInput?.prompt === cInput?.prompt &&
+      pInput?.description === cInput?.description
     );
   }
 );

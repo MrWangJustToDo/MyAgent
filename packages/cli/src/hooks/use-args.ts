@@ -28,6 +28,8 @@ export interface CliAgentConfig {
   maxIterations: number;
   /** Enable debug logging */
   debug: boolean;
+
+  provider: "ollama" | "openRouter";
 }
 
 /** @deprecated Use CliAgentConfig instead */

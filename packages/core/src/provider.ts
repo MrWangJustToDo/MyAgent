@@ -1,4 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { extractReasoningMiddleware, wrapLanguageModel } from "ai";
 import { createOllama, ollama } from "ai-sdk-ollama";
 
@@ -10,7 +11,7 @@ import type { LanguageModel, ToolSet } from "ai";
 // Provider Types
 // ============================================================================
 
-export type ProviderType = "ollama" | "openai" | "openai-compatible";
+export type ProviderType = "ollama" | "openai" | "openai-compatible" | "open-router";
 
 export interface OllamaModelOptions {
   /** Enable reasoning/thinking extraction for models like qwen3, deepseek-r1 */
@@ -130,6 +131,15 @@ export const createOpenAICompatibleModel = (
   return provider.chat(modelName);
 };
 
+export const createOpenRouterModel = (modelName: string) => {
+  const provider = createOpenRouter({ apiKey: process.env.openRouter });
+
+  return provider(modelName, {
+    reasoning: { enabled: true, effort: "medium" },
+    usage: { include: true },
+  }) as LanguageModel;
+};
+
 /**
  * Create a model from provider config
  *
@@ -168,6 +178,8 @@ export const createModel = (config: ProviderConfig): LanguageModel => {
       return createOpenAIModel(config.model, config.apiKey, config.baseURL);
     case "openai-compatible":
       return createOpenAICompatibleModel(config.model, config.baseURL ?? DEFAULT_OLLAMA_URL, config.apiKey);
+    case "open-router":
+      return createOpenRouterModel(config.model);
     default:
       throw new Error(`Unknown provider type: ${config.type}`);
   }

@@ -13,7 +13,7 @@
     "dev:core": "pnpm --filter @my-agent/core dev",
     "dev:cli": "pnpm --filter @my-agent/cli dev",
     "dev:extension": "pnpm --filter @my-agent/extension dev",
-    "start:cli": "cd packages/cli && DEV=true NODE_ENV=development node --inspect ./dist/index.mjs",
+    "start:cli": "cd packages/cli && DEV=true NODE_ENV=development node --env-file=.env --inspect ./dist/index.mjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "format": "prettier --write .",
