@@ -77,5 +77,68 @@ export {
   type SubagentResult,
 } from "./subagent";
 
+// Skill exports
+export {
+  SkillLoader,
+  SkillRegistry,
+  skillMetadataSchema,
+  skillSchema,
+  type Skill,
+  type SkillMetadata,
+  type SkillSummary,
+} from "./skills";
+
 // Task tool export (for subagent delegation)
 export { createTaskTool, taskOutputSchema, type TaskToolConfig, type TaskOutput } from "./tools/task-tool.js";
+
+// Skill tools export
+export {
+  createListSkillsTool,
+  listSkillsOutputSchema,
+  type ListSkillsToolConfig,
+  type ListSkillsOutput,
+} from "./tools/list-skills-tool.js";
+
+export {
+  createLoadSkillTool,
+  loadSkillOutputSchema,
+  type LoadSkillToolConfig,
+  type LoadSkillOutput,
+} from "./tools/load-skill-tool.js";
+
+// Compaction exports
+export {
+  // Types and schemas
+  compactionConfigSchema,
+  compactionResultSchema,
+  transcriptEntrySchema,
+  type CompactionConfig,
+  type CompactionConfigInput,
+  type CompactionResult,
+  type TranscriptEntry,
+  // Defaults
+  DEFAULT_COMPACTION_CONFIG,
+  createCompactionConfig,
+  // Token estimation
+  estimateTokens,
+  estimateMessageTokens,
+  // Compaction prompt
+  COMPACTION_PROMPT,
+  buildCompactionPrompt,
+  // Micro compaction (Layer 1)
+  microCompact,
+  // Auto compaction (Layer 2)
+  shouldAutoCompact,
+  saveTranscript,
+  summarizeConversation,
+  autoCompact,
+  createCompactedMessages,
+} from "./compaction";
+
+// Compact tool export
+export {
+  createCompactTool,
+  compactOutputSchema,
+  type CompactToolConfig,
+  type CompactOutput,
+} from "./tools/compact-tool.js";

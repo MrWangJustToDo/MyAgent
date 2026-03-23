@@ -1,12 +1,18 @@
 import { AgentLog } from "../agent";
 import { AgentContext } from "../agent/agent-context";
+import { createCompactionConfig } from "../agent/compaction/types.js";
 import { Agent } from "../agent/loop/agent.js";
+import { SkillRegistry } from "../agent/skills/skill-registry.js";
 import { TodoManager } from "../agent/todo-manager";
+import { createCompactTool } from "../agent/tools/compact-tool.js";
+import { createListSkillsTool } from "../agent/tools/list-skills-tool.js";
+import { createLoadSkillTool } from "../agent/tools/load-skill-tool.js";
 import { createTaskTool } from "../agent/tools/task-tool.js";
 
 import { sandboxManager } from "./manager-sandbox.js";
 import { toolsManager } from "./manager-tools.js";
 
+import type { CompactionConfigInput } from "../agent/compaction/types.js";
 import type { AgentConfig, ToolSet } from "../agent/loop/agent.js";
 import type { Sandbox } from "../environment";
 import type { LanguageModel } from "ai";
@@ -14,6 +20,9 @@ import type { LanguageModel } from "ai";
 // ============================================================================
 // Types & Schemas
 // ============================================================================
+
+/** Default skill directories */
+export const DEFAULT_SKILL_DIRS = [".opencode/skills"];
 
 export type ManagedAgentConfig<T = Agent | AgentContext> = AgentConfig & {
   /** Optional custom ID for the agent (auto-generated if not provided) */
@@ -23,6 +32,10 @@ export type ManagedAgentConfig<T = Agent | AgentContext> = AgentConfig & {
   /** Vercel AI SDK LanguageModel instance */
   languageModel: LanguageModel;
   setUp?: (instance: T) => T;
+  /** Skill directories to load (relative to rootPath or absolute). Defaults to [".opencode/skills"] */
+  skillDirs?: string[];
+  /** Compaction configuration for context management */
+  compaction?: CompactionConfigInput;
 };
 
 /** Agent instance managed by AgentManager */
@@ -165,7 +178,7 @@ export class AgentManager {
    * Create a new agent
    */
   async createManagedAgent(config: ManagedAgentConfig, parentId?: string): Promise<Agent> {
-    const { id: customId, rootPath, setUp, languageModel, name, ...restConfig } = config;
+    const { id: customId, rootPath, setUp, languageModel, name, skillDirs, compaction, ...restConfig } = config;
 
     const sandbox = await sandboxManager.getSandbox(rootPath);
 
@@ -193,10 +206,60 @@ export class AgentManager {
 
     agent.setTodoManager(todoManager);
 
-    // Add task tool for subagent delegation (only for root agents, not subagents)
+    // Load skills and add skill tools (only for root agents, not subagents)
     if (!parentId) {
+      const skillRegistry = new SkillRegistry({
+        sandbox,
+        logger: {
+          warn: (msg, data) => log.warn("agent", msg, data as Record<string, unknown>),
+          debug: (msg, data) => log.debug("agent", msg, data as Record<string, unknown>),
+        },
+      });
+
+      agent.setSkillRegister(skillRegistry);
+
+      // Load skills from configured directories (or default)
+      // Paths are relative to sandbox root (which is already rootPath)
+      const dirsToLoad = skillDirs ?? DEFAULT_SKILL_DIRS;
+      await skillRegistry.loadFromDirectories(dirsToLoad);
+
+      // Add skill tools
+      const listSkillsTool = createListSkillsTool({ skillRegistry });
+      const loadSkillTool = createLoadSkillTool({ skillRegistry });
+      agent.addTools({ list_skills: listSkillsTool, load_skill: loadSkillTool });
+
+      // Add task tool for subagent delegation
       const taskTool = createTaskTool({ parentAgentId: agent.id, agentManager: this });
       agent.addTools({ task: taskTool });
+
+      // Set up compaction config and tool
+      const compactionConfig = createCompactionConfig(compaction);
+      agent.setCompactionConfig(compactionConfig);
+
+      const compactTool = createCompactTool({
+        getMessages: () => context.getCompactMessages(),
+        getModel: () => languageModel,
+        sandbox,
+        config: compactionConfig,
+        todoManager, // Pass todoManager to check for incomplete todos
+        onCompact: (result) => {
+          // const prevMessages = context.getMessages();
+          // for build modelMessage, all of the history before this can be ignore
+          // mark current state as compact message
+          context.setCompactStart(-1);
+          // Apply the compacted messages to context
+          context.setCompactMessages(result.messages);
+          // Reset token usage since we've compressed the context
+          context.resetUsage();
+
+          log.info("agent", "Compaction completed", {
+            tokensBefore: result.tokensBefore,
+            tokensAfter: result.tokensAfter,
+            transcriptPath: result.transcriptPath,
+          });
+        },
+      });
+      agent.addTools({ compact: compactTool });
     }
 
     const id = agent.id;

@@ -282,6 +282,22 @@ export class TodoManager {
     return this.items.length > 0;
   }
 
+  /**
+   * Check if there are incomplete todos (pending or in_progress).
+   * Useful for determining if context compaction should be blocked.
+   */
+  hasIncompleteTodos(): boolean {
+    return this.items.some((item) => item.status === "pending" || item.status === "in_progress");
+  }
+
+  /**
+   * Get incomplete todos for inclusion in compaction summary.
+   * Returns pending and in_progress items.
+   */
+  getIncompleteTodos(): TodoItem[] {
+    return this.items.filter((item) => item.status === "pending" || item.status === "in_progress");
+  }
+
   // ============================================================================
   // Event Subscription
   // ============================================================================

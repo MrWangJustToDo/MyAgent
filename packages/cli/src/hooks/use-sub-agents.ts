@@ -33,16 +33,19 @@ export const useSubAgents = ({ subId }: { subId: string }) => {
   useEffect(() => {
     const managerAgent = getManagerSubagent(subId);
 
-    if (managerAgent) {
-      useSubagentContext.getActions().setContext(managerAgent.context);
+    const exist = useSubagentContext.getReadonlyState().state;
+
+    if (managerAgent && toRaw(exist) !== toRaw(managerAgent.context)) {
+      useSubagentContext.getActions().setContext(toRaw(managerAgent.context));
 
       return;
     }
 
     const cb = agentManager.on("subagent:created", ({ subagentId }) => {
       const managerAgent = agentManager.getAgent(subagentId);
-      if (managerAgent?.id === subId) {
-        useSubagentContext.getActions().setContext(managerAgent.context);
+      const exist = useSubagentContext.getReadonlyState().state;
+      if (managerAgent?.id === subId && toRaw(exist) !== toRaw(managerAgent.context)) {
+        useSubagentContext.getActions().setContext(toRaw(managerAgent.context));
       }
     });
 

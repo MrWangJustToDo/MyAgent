@@ -82,10 +82,10 @@ export const createAgent = async ({
 
   // Set up global agent state
   useAgent.getActions().setAgent(agent);
-  useAgentLog.getActions().setLog(agent.getLog());
-  useAgentContext.getActions().setContext(agent.getContext());
-  useAgentSandbox.getActions().setSandbox(agent.getSandbox());
-  useTodoManager.getActions().setManager(todoManager ?? null);
+  useAgentLog.getActions().setLog(toRaw(agent.getLog()));
+  useAgentContext.getActions().setContext(toRaw(agent.getContext()));
+  useAgentSandbox.getActions().setSandbox(toRaw(agent.getSandbox()));
+  useTodoManager.getActions().setManager(toRaw(todoManager ?? null));
 
   return agent;
 };

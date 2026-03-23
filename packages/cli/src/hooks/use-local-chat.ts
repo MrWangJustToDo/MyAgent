@@ -143,7 +143,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
       setInitError(null);
 
       try {
-        const agent = await createAgent({ model, url, rootPath, systemPrompt, maxIterations, provider: "openRouter" });
+        const agent = await createAgent({ model, url, rootPath, systemPrompt, maxIterations, provider: "ollama" });
 
         // Create PatchedDirectChatTransport with the agent
         // This patched version fixes the tool approval denial bug in AI SDK v6

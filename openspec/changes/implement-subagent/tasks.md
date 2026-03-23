@@ -46,4 +46,4 @@
 
 - [x] 7.1 Export SubAgent and task tool from `packages/core/src/agent/index.ts` - all types and functions exported
 - [x] 7.2 Add JSDoc documentation to SubAgent class and runSubagent function - comprehensive JSDoc with examples
-- [ ] 7.3 Update AGENTS.md with subagent usage examples
+- [x] 7.3 Update AGENTS.md with subagent usage examples

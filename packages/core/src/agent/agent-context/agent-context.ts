@@ -5,7 +5,7 @@
 import { generateId } from "../../base/utils.js";
 
 import type { StreamPart, ToolSet } from "../loop/agent.js";
-import type { OnFinishEvent, TypedToolCall } from "ai";
+import type { ModelMessage, OnFinishEvent, TypedToolCall } from "ai";
 
 export interface TokenUsage {
   inputTokens: number;
@@ -35,6 +35,12 @@ export class AgentContext {
    * @internal
    */
   private events: StreamPart[] = [];
+
+  private compactStart = 0;
+
+  private compactMessages: ModelMessage[] = [];
+
+  private messages: ModelMessage[] = [];
 
   private tools: TypedToolCall<NoInfer<ToolSet>>[] = [];
 
@@ -133,6 +139,38 @@ export class AgentContext {
     return this.tools;
   }
 
+  setMessages(m: ModelMessage[]) {
+    this.messages = m;
+  }
+
+  getMessages() {
+    return this.messages;
+  }
+
+  setCompactStart(i: number) {
+    this.compactStart = i;
+  }
+
+  getCompactStart() {
+    return this.compactStart;
+  }
+
+  setCompactMessages(m: ModelMessage[]) {
+    this.compactMessages = m;
+  }
+
+  getCompactMessages() {
+    return this.compactMessages;
+  }
+
+  /**
+   * Reset token usage counters (e.g., after compaction)
+   */
+  resetUsage(): void {
+    this.usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    this.touch();
+  }
+
   /**
    * Clear events (keep messages)
    */
@@ -151,6 +189,7 @@ export class AgentContext {
   reset(): void {
     this.tools = [];
     this.events = [];
+    this.messages = [];
     this.usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
     this.isStreaming = false;
     this.touch();

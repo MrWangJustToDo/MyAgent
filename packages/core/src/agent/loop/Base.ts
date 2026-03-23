@@ -1,8 +1,12 @@
+import { microCompact } from "../compaction/micro-compact.js";
+import { estimateTokens } from "../compaction/token-estimator.js";
 import { createTodoTool } from "../tools";
 
 import type { Sandbox } from "../../environment";
 import type { AgentContext } from "../agent-context";
 import type { AgentLog } from "../agent-log";
+import type { CompactionConfig } from "../compaction/types.js";
+import type { SkillRegistry } from "../skills";
 import type { TodoManager } from "../todo-manager";
 import type {
   ToolSet,
@@ -38,6 +42,8 @@ export class Base {
   context: AgentContext | null = null;
   sandbox: Sandbox | null = null;
   todoManager: TodoManager | null = null;
+  skillRegister: SkillRegistry | null = null;
+  compactionConfig: CompactionConfig | null = null;
   customTools: ToolSet = {};
   builtInTools: ToolSet = {};
 
@@ -149,17 +155,56 @@ export class Base {
     return this.todoManager;
   }
 
+  setSkillRegister(t: SkillRegistry) {
+    if (this.skillRegister) return;
+
+    this.skillRegister = t;
+  }
+
+  getSkillRegister() {
+    return this.skillRegister;
+  }
+
+  /**
+   * Set compaction configuration
+   */
+  setCompactionConfig(config: CompactionConfig): void {
+    this.compactionConfig = config;
+  }
+
+  /**
+   * Get compaction configuration
+   */
+  getCompactionConfig(): CompactionConfig | null {
+    return this.compactionConfig;
+  }
+
   /**
    * Prepare messages from AgentCallParameters format.
    * Handles both `prompt` (string or ModelMessage[]) and `messages` parameters.
-   * Also injects nag reminder if needed.
+   * Also applies micro compaction and injects nag reminder if needed.
    */
   prepareMessages(options: { prompt?: string | ModelMessage[]; messages?: ModelMessage[] }): ModelMessage[] {
     const { prompt, messages } = options;
-    const finalMessages: ModelMessage[] = [];
+    let finalMessages: ModelMessage[] = [];
 
     if (messages) {
       finalMessages.push(...messages);
+    }
+
+    // Apply micro compaction (Layer 1) if enabled
+    if (this.compactionConfig?.enabled) {
+      const tokensBefore = estimateTokens(finalMessages);
+      finalMessages = microCompact(finalMessages, this.compactionConfig);
+      const tokensAfter = estimateTokens(finalMessages);
+
+      if (tokensBefore !== tokensAfter) {
+        this.log?.debug("agent", "Micro compaction applied", {
+          tokensBefore,
+          tokensAfter,
+          reduction: tokensBefore - tokensAfter,
+        });
+      }
     }
 
     if (prompt) {
@@ -184,7 +229,104 @@ export class Base {
       });
     }
 
-    return finalMessages;
+    // has compact
+    const hasCompact = this.context?.getCompactStart() === -1;
+
+    this.context?.setMessages(finalMessages);
+
+    if (!hasCompact) {
+      this.context?.setCompactStart(finalMessages.length);
+    } else {
+      const currentSummary = this.context?.getCompactMessages().slice(0, 2) || [];
+      this.context?.setCompactMessages(currentSummary.concat(finalMessages.slice(this.context.getCompactStart())));
+    }
+
+    return this.context?.getCompactMessages() || [];
+  }
+
+  /**
+   * Check if auto compaction should be triggered.
+   *
+   * Uses actual token usage from AgentContext if available (more accurate),
+   * otherwise falls back to character-based estimation.
+   *
+   * **Important**: Will NOT trigger if there are incomplete todos, as we need
+   * to preserve that context for task completion.
+   *
+   * @param messages - Optional messages to estimate if context not available
+   * @returns True if tokens exceed the configured threshold and no incomplete todos
+   */
+  shouldAutoCompact(messages?: ModelMessage[]): boolean {
+    if (!this.compactionConfig?.enabled) {
+      return false;
+    }
+
+    // Don't auto-compact if there are incomplete todos
+    // We need to preserve context for task completion
+    if (this.todoManager?.hasIncompleteTodos()) {
+      this.log?.debug("agent", "Skipping auto-compact: incomplete todos exist", {
+        incompleteTodos: this.todoManager.getIncompleteTodos().length,
+      });
+      return false;
+    }
+
+    const threshold = this.compactionConfig.tokenThreshold ?? 100000;
+
+    // Prefer actual usage from context (accumulated inputTokens)
+    if (this.context) {
+      const usage = this.context.getUsage();
+      // Use inputTokens as the metric - this represents the context window usage
+      if (usage.inputTokens > 0) {
+        return usage.inputTokens >= threshold;
+      }
+    }
+
+    // Fall back to estimation if no context or no usage recorded yet
+    if (messages) {
+      const estimated = estimateTokens(messages);
+      return estimated >= threshold;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if compaction is blocked due to incomplete todos.
+   */
+  isCompactionBlocked(): boolean {
+    return this.todoManager?.hasIncompleteTodos() ?? false;
+  }
+
+  /**
+   * Get current token usage.
+   *
+   * Returns actual usage from context if available, otherwise estimates from messages.
+   *
+   * @param messages - Optional messages to estimate if context not available
+   * @returns Token count (actual or estimated)
+   */
+  getCurrentTokens(messages?: ModelMessage[]): number {
+    // Prefer actual usage from context
+    if (this.context) {
+      const usage = this.context.getUsage();
+      if (usage.inputTokens > 0) {
+        return usage.inputTokens;
+      }
+    }
+
+    // Fall back to estimation
+    if (messages) {
+      return estimateTokens(messages);
+    }
+
+    return 0;
+  }
+
+  /**
+   * Get estimated token count for messages (character-based approximation).
+   */
+  getEstimatedTokens(messages: ModelMessage[]): number {
+    return estimateTokens(messages);
   }
 
   /**

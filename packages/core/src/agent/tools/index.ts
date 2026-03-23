@@ -14,6 +14,9 @@ import { createSearchReplaceTool } from "./search-replace-tool.js";
 import { createTreeTool } from "./tree-tool.js";
 import { createWriteFileTool } from "./write-file-tool.js";
 
+import type { createCompactTool } from "./compact-tool.js";
+import type { createListSkillsTool } from "./list-skills-tool.js";
+import type { createLoadSkillTool } from "./load-skill-tool.js";
 import type { createTaskTool } from "./task-tool.js";
 import type { createTodoTool } from "./todo-tool.js";
 import type { Sandbox } from "../../environment";
@@ -36,6 +39,9 @@ export * from "./tree-tool.js";
 export * from "./types.js";
 export * from "./write-file-tool.js";
 export * from "./task-tool.js";
+export * from "./list-skills-tool.js";
+export * from "./load-skill-tool.js";
+export * from "./compact-tool.js";
 
 export type Tools = {
   copy_file: ReturnType<typeof createCopyFileTool>;
@@ -55,6 +61,9 @@ export type Tools = {
   search_replace: ReturnType<typeof createSearchReplaceTool>;
   todo?: ReturnType<typeof createTodoTool>;
   task?: ReturnType<typeof createTaskTool>;
+  list_skills?: ReturnType<typeof createListSkillsTool>;
+  load_skill?: ReturnType<typeof createLoadSkillTool>;
+  compact?: ReturnType<typeof createCompactTool>;
 };
 
 export const createTools = async ({
