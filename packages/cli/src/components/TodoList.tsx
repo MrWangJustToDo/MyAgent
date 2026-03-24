@@ -33,7 +33,6 @@ const TodoItemView = ({ item }: { item: TodoItem }) => {
 };
 
 /**
- * TodoList component for displaying todos in the footer.
  *
  * Shows a compact summary when there are todos, or nothing when empty.
  */

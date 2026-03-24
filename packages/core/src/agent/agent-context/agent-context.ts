@@ -36,6 +36,8 @@ export class AgentContext {
    */
   private events: StreamPart[] = [];
 
+  private compactSource = 0;
+
   private compactStart = 0;
 
   private compactMessages: ModelMessage[] = [];
@@ -149,10 +151,17 @@ export class AgentContext {
 
   setCompactStart(i: number) {
     this.compactStart = i;
+    if (i === -1) {
+      this.compactSource = 2;
+    }
   }
 
   getCompactStart() {
     return this.compactStart;
+  }
+
+  getCompactSource() {
+    return this.compactSource;
   }
 
   setCompactMessages(m: ModelMessage[]) {
@@ -190,6 +199,9 @@ export class AgentContext {
     this.tools = [];
     this.events = [];
     this.messages = [];
+    this.compactStart = 0;
+    this.compactSource = 0;
+    this.compactMessages = [];
     this.usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
     this.isStreaming = false;
     this.touch();

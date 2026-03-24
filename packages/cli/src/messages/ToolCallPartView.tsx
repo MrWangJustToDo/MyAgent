@@ -8,11 +8,10 @@ import { ToolInputView } from "./ToolInputView.js";
 import { ToolOutputView } from "./ToolOutputView.js";
 import { ToolStatusIcon } from "./ToolStatusIcon.js";
 
-import type { Tools } from "@my-agent/core";
-import type { InferUITools, ToolUIPart } from "ai";
+import type { ToolUIPart } from "ai";
 
 export interface ToolCallPartViewProps {
-  part: ToolUIPart<InferUITools<Tools>>;
+  part: ToolUIPart;
 }
 
 /** Extract durationMs from tool output if available */

@@ -173,6 +173,7 @@ export async function summarizeConversation(
   // Build the summarization prompt
   const systemPrompt = buildCompactionPrompt(focus);
 
+  // TODO
   // Call LLM for summarization
   const result = await generateText({
     model,

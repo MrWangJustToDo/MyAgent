@@ -192,6 +192,14 @@ export class Base {
       finalMessages.push(...messages);
     }
 
+    if (prompt) {
+      if (typeof prompt === "string") {
+        finalMessages.push({ role: "user" as const, content: prompt });
+      } else {
+        finalMessages.push(...prompt);
+      }
+    }
+
     // Apply micro compaction (Layer 1) if enabled
     if (this.compactionConfig?.enabled) {
       const tokensBefore = estimateTokens(finalMessages);
@@ -204,14 +212,6 @@ export class Base {
           tokensAfter,
           reduction: tokensBefore - tokensAfter,
         });
-      }
-    }
-
-    if (prompt) {
-      if (typeof prompt === "string") {
-        finalMessages.push({ role: "user" as const, content: prompt });
-      } else {
-        finalMessages.push(...prompt);
       }
     }
 
@@ -234,12 +234,13 @@ export class Base {
 
     this.context?.setMessages(finalMessages);
 
-    if (!hasCompact) {
-      this.context?.setCompactStart(finalMessages.length);
-    } else {
-      const currentSummary = this.context?.getCompactMessages().slice(0, 2) || [];
-      this.context?.setCompactMessages(currentSummary.concat(finalMessages.slice(this.context.getCompactStart())));
+    const currentSummary = this.context?.getCompactMessages().slice(0, this.context.getCompactSource()) || [];
+
+    if (hasCompact) {
+      this.context?.setCompactStart(finalMessages.length - 2 > 0 ? finalMessages.length - 2 : 0);
     }
+
+    this.context?.setCompactMessages(currentSummary.concat(finalMessages.slice(this.context.getCompactStart())));
 
     return this.context?.getCompactMessages() || [];
   }

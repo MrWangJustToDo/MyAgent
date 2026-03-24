@@ -132,8 +132,10 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
     const tools = this.getTools();
 
     this.log?.agent("Starting stream (Agent interface)", {
-      messageCount: finalMessages.length,
-      messages: finalMessages,
+      prompt,
+      messages,
+      finalMessages,
+      finalMessagesCount: finalMessages.length,
       toolCount: Object.keys(tools).length,
     });
 
