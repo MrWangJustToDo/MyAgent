@@ -250,7 +250,8 @@ export class AgentManager {
           // Apply the compacted messages to context
           context.setCompactMessages(result.messages);
           // Reset token usage since we've compressed the context
-          context.resetUsage();
+          // we should reset after this conversation is done
+          // context.resetUsage();
 
           log.info("agent", "Compaction completed", {
             tokensBefore: result.tokensBefore,

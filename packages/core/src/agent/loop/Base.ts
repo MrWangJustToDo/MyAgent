@@ -237,6 +237,7 @@ export class Base {
     const currentSummary = this.context?.getCompactMessages().slice(0, this.context.getCompactSource()) || [];
 
     if (hasCompact) {
+      this.context?.resetUsage();
       this.context?.setCompactStart(finalMessages.length - 2 > 0 ? finalMessages.length - 2 : 0);
     }
 
