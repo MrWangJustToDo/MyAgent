@@ -18,6 +18,7 @@ export const createAgent = async ({
   systemPrompt,
   maxIterations,
   provider,
+  apiKey,
 }: {
   model: CliAgentConfig["model"];
   url: CliAgentConfig["url"];
@@ -25,6 +26,7 @@ export const createAgent = async ({
   systemPrompt?: CliAgentConfig["systemPrompt"];
   maxIterations: CliAgentConfig["maxIterations"];
   provider: CliAgentConfig["provider"];
+  apiKey?: CliAgentConfig["apiKey"];
 }) => {
   let languageModel: LanguageModel | null = null;
 
@@ -38,7 +40,7 @@ export const createAgent = async ({
       ["ollama-web-search"]: p.tools.webSearch(),
     }));
   } else {
-    languageModel = createOpenRouterModel(model);
+    languageModel = createOpenRouterModel(model, apiKey);
   }
 
   const agent = await agentManager.createManagedAgent({

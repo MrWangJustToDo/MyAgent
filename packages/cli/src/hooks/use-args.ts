@@ -9,14 +9,17 @@ import type { ParsedArgs } from "../utils/args.js";
 // Types
 // ============================================================================
 
+/** Supported LLM providers */
+export type Provider = "ollama" | "openRouter";
+
 /**
  * CLI-specific agent configuration
  * (Different from core's AgentConfig - includes CLI-specific fields)
  */
 export interface CliAgentConfig {
-  /** Model name (e.g., "qwen2.5-coder:7b") */
+  /** Model name (e.g., "qwen2.5-coder:7b", "anthropic/claude-3.5-sonnet") */
   model: string;
-  /** API URL (e.g., "http://localhost:11434") */
+  /** API URL for Ollama (default: http://localhost:11434) */
   url: string;
   /** Working directory path */
   rootPath: string;
@@ -28,9 +31,33 @@ export interface CliAgentConfig {
   maxIterations: number;
   /** Enable debug logging */
   debug: boolean;
-
-  provider: "ollama" | "openRouter";
+  /** LLM provider: "ollama" or "openRouter" */
+  provider: Provider;
+  /** API key for OpenRouter (required when provider is "openRouter") */
+  apiKey: string;
 }
+
+// ============================================================================
+// Environment Variable Helpers
+// ============================================================================
+
+/**
+ * Get environment variable value with fallback
+ */
+const getEnv = (key: string, fallback: string = ""): string => {
+  return process.env[key] ?? fallback;
+};
+
+/**
+ * Get environment variable as Provider type
+ */
+const getEnvProvider = (key: string, fallback: Provider = "ollama"): Provider => {
+  const value = process.env[key]?.toLowerCase();
+  if (value === "ollama" || value === "openrouter") {
+    return value === "openrouter" ? "openRouter" : "ollama";
+  }
+  return fallback;
+};
 
 /** @deprecated Use CliAgentConfig instead */
 export type AgentConfig = CliAgentConfig;
@@ -40,6 +67,7 @@ export type AgentConfig = CliAgentConfig;
 // ============================================================================
 
 const DEFAULT_MODEL = "qwen2.5-coder:7b";
+const DEFAULT_PROVIDER: Provider = "ollama";
 const DEFAULT_SYSTEM_PROMPT = `You are an elite AI software engineer specializing in writing high-quality, maintainable code. Your expertise lies in understanding complex requirements, architecting robust solutions, and implementing them with precision and care.
 
 **Core Principles**:
@@ -73,7 +101,7 @@ const DEFAULT_SYSTEM_PROMPT = `You are an elite AI software engineer specializin
 4. **Research & Discovery**:
    - Use task tool to spawn subagents for exploring the codebase or researching specific topics
    - Use man_command and list_command to discover available commands and their options
-   - Use fetch_url to retrieve external documentation or resources when needed
+   - Use webfetch to retrieve external documentation or web resources (returns markdown by default)
 
 5. **Skills System**:
    - Use list_skills to discover available specialized knowledge
@@ -151,7 +179,7 @@ export const useArgs = createState(
   () => ({
     /** Raw parsed arguments */
     parsed: { positional: [], flags: {} } as ParsedArgs,
-    /** Resolved configuration */
+    /** Resolved configuration (priority: CLI args > env vars > defaults) */
     config: {
       model: DEFAULT_MODEL,
       url: DEFAULT_OLLAMA_URL,
@@ -160,7 +188,9 @@ export const useArgs = createState(
       initialPrompt: "",
       maxIterations: DEFAULT_MAX_ITERATIONS,
       debug: false,
-    } as AgentConfig,
+      provider: DEFAULT_PROVIDER,
+      apiKey: "",
+    } as CliAgentConfig,
     /** Whether args have been initialized */
     initialized: false,
     /** Whether help was requested */
@@ -171,27 +201,57 @@ export const useArgs = createState(
   {
     withActions: (state) => ({
       /**
-       * Initialize with command line arguments
+       * Initialize with command line arguments.
+       * Priority: CLI args > environment variables > defaults
        */
       init: (args: string[]) => {
         const parsed = parseArgs(args);
 
+        // Get env vars (loaded by dotenv in index.tsx)
+        const envModel = getEnv("model") || getEnv("MODEL");
+        const envUrl = getEnv("url") || getEnv("URL") || getEnv("OLLAMA_URL");
+        const envProvider = getEnvProvider("provider") || getEnvProvider("PROVIDER");
+        const envApiKey = getEnv("apiKey") || getEnv("API_KEY") || getEnv("OPENROUTER_API_KEY");
+        const envMaxIterations = getEnv("maxIterations") || getEnv("MAX_ITERATIONS");
+
         state.parsed = parsed;
-        state.config.model = getFlagString(parsed, DEFAULT_MODEL, "model", "m");
-        state.config.url = getFlagString(parsed, DEFAULT_OLLAMA_URL, "url", "u");
+
+        // CLI args take priority over env vars, which take priority over defaults
+        state.config.model = getFlagString(parsed, envModel || DEFAULT_MODEL, "model", "m");
+        state.config.url = getFlagString(parsed, envUrl || DEFAULT_OLLAMA_URL, "url", "u");
         state.config.rootPath = getFlagString(parsed, process.cwd(), "path", "p");
         state.config.systemPrompt = getFlagString(parsed, DEFAULT_SYSTEM_PROMPT, "system", "s");
         state.config.initialPrompt = parsed.positional.join(" ");
-        state.config.maxIterations = getFlagNumber(parsed, DEFAULT_MAX_ITERATIONS, "max-iterations");
+
+        // Parse max iterations from env or CLI
+        const envMaxIter = envMaxIterations ? parseInt(envMaxIterations, 10) : DEFAULT_MAX_ITERATIONS;
+        state.config.maxIterations = getFlagNumber(
+          parsed,
+          isNaN(envMaxIter) ? DEFAULT_MAX_ITERATIONS : envMaxIter,
+          "max-iterations"
+        );
+
         state.config.debug = getFlagBoolean(parsed, "debug", "d");
+
+        // Provider: CLI --provider flag > env var > default
+        const cliProvider = getFlagString(parsed, "", "provider");
+        if (cliProvider === "ollama" || cliProvider === "openRouter" || cliProvider === "openrouter") {
+          state.config.provider = cliProvider === "openrouter" ? "openRouter" : (cliProvider as Provider);
+        } else {
+          state.config.provider = envProvider;
+        }
+
+        // API key: CLI --api-key flag > env var
+        state.config.apiKey = getFlagString(parsed, envApiKey, "api-key", "k");
+
         state.helpRequested = getFlagBoolean(parsed, "help", "h");
         state.initialized = true;
       },
 
       getKey: () => {
-        const { model, url, rootPath, systemPrompt } = state.config;
+        const { model, url, rootPath, systemPrompt, provider } = state.config;
 
-        state.key = `::${model}::${url}::${rootPath}::${systemPrompt}`;
+        state.key = `::${provider}::${model}::${url}::${rootPath}::${systemPrompt}`;
       },
 
       /**
@@ -220,6 +280,8 @@ export const useArgs = createState(
         state.config.initialPrompt = "";
         state.config.maxIterations = DEFAULT_MAX_ITERATIONS;
         state.config.debug = false;
+        state.config.provider = DEFAULT_PROVIDER;
+        state.config.apiKey = "";
         state.helpRequested = false;
         state.initialized = false;
         state.key = "";

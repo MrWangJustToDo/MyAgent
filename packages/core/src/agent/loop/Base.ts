@@ -61,6 +61,9 @@ export class Base {
    * Set the Vercel AI SDK LanguageModel
    */
   setModel(model: LanguageModel): void {
+    this.log?.debug("agent", "Setting model", {
+      hadPreviousModel: !!this.model,
+    });
     this.model = model;
   }
 
@@ -75,6 +78,10 @@ export class Base {
    * Set sandbox for tool execution
    */
   setSandbox(sandbox: Sandbox): void {
+    this.log?.debug("agent", "Setting sandbox", {
+      sandboxId: sandbox.sandboxId,
+      provider: sandbox.provider,
+    });
     this.sandbox = sandbox;
   }
 
@@ -169,6 +176,11 @@ export class Base {
    * Set compaction configuration
    */
   setCompactionConfig(config: CompactionConfig): void {
+    this.log?.debug("agent", "Setting compaction config", {
+      enabled: config.enabled,
+      tokenThreshold: config.tokenThreshold,
+      keepRecentToolResults: config.keepRecentToolResults,
+    });
     this.compactionConfig = config;
   }
 
@@ -218,7 +230,7 @@ export class Base {
     // Inject nag reminder if todo manager says we should
     if (this.todoManager?.shouldNag()) {
       const reminder = this.todoManager.getNagReminder();
-      this.log?.info("todo", "Injecting nag reminder", {
+      this.log?.todo("Injecting nag reminder", {
         roundsSinceUpdate: this.todoManager.getRoundsSinceUpdate(),
       });
 
@@ -381,10 +393,10 @@ export class Base {
         const usedTodo = toolCalls?.some((tc) => tc.toolName === "todo") ?? false;
         if (usedTodo) {
           this.todoManager.resetRoundCounter();
-          this.log?.debug("todo", "Todo tool used, reset round counter");
+          this.log?.todo("Todo tool used, reset round counter");
         } else {
           this.todoManager.incrementRound();
-          this.log?.debug("todo", `Todo not used, round ${this.todoManager.getRoundsSinceUpdate()}`);
+          this.log?.todo(`Todo not used, round ${this.todoManager.getRoundsSinceUpdate()}`);
         }
       }
 
@@ -400,7 +412,12 @@ export class Base {
         this.status = "completed";
       }
 
-      this.log?.agent(`agent response finish`, event);
+      // Log summary of finish event (not the full event which can be huge)
+      this.log?.agent("Agent response finished", {
+        finishReason: event.finishReason,
+        totalSteps: event.steps?.length ?? 0,
+        usage: event.usage,
+      });
 
       this.context?.updateFinal?.(event);
 
@@ -422,6 +439,7 @@ export class Base {
    * Abort the current run
    */
   abort(reason?: string): void {
+    this.log?.info("agent", "Aborting agent", { reason: reason ?? "(no reason)" });
     if (this.currentAbortController) {
       this.currentAbortController.abort(reason);
     }
@@ -441,6 +459,11 @@ export class Base {
    * Reset agent state
    */
   reset(): void {
+    const prevStatus = this.status;
+    this.log?.info("agent", "Resetting agent", {
+      previousStatus: prevStatus,
+      hadTodos: this.todoManager?.hasTodos() ?? false,
+    });
     this.abort("Reset");
     this.status = "idle";
     this.error = "";

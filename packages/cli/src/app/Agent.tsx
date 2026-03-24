@@ -43,6 +43,8 @@ export const Agent = () => {
       rootPath: config.rootPath,
       systemPrompt: config.systemPrompt,
       maxIterations: config.maxIterations,
+      provider: config.provider,
+      apiKey: config.apiKey,
     });
 
   const hasInitRef = useRef(false);

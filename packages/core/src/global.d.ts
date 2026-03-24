@@ -4,7 +4,9 @@ declare global {
 
   namespace NodeJS {
     interface ProcessEnv {
-      openRouter: string
+      provider: "ollama" | 'openRouter';
+      apiKey: string
+      model: string;
     }
   }
 }

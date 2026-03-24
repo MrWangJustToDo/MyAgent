@@ -50,7 +50,7 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
 
   return (
     <Box borderStyle="round" width="100%" borderColor={getToolCallColor(part.state)} paddingX={1}>
-      <Box flexDirection="column" width="100%">
+      <Box flexDirection="column" rowGap={1} width="100%">
         {/* Header */}
         <Box>
           <ToolStatusIcon state={part.state} />
@@ -71,7 +71,7 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
 
         {/* Show streaming input */}
         {part.state === "input-streaming" && displayInput && (
-          <Box marginTop={1}>
+          <Box>
             <Text color="gray" dimColor>
               {displayInput}...
             </Text>
@@ -82,14 +82,14 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
 
         {/* Show output if available */}
         {hasOutput && (
-          <Box marginTop={1} flexDirection="column" width="100%">
+          <Box flexDirection="column" width="100%">
             <ToolOutputView part={part} />
           </Box>
         )}
 
         {/* Approval prompt */}
         {needsApproval && (
-          <Box marginTop={1} flexDirection="column">
+          <Box flexDirection="column">
             <Text color="yellow" bold>
               Approval required. Press Y to approve, N to deny.
             </Text>

@@ -13,7 +13,7 @@
     "dev:core": "pnpm --filter @my-agent/core dev",
     "dev:cli": "pnpm --filter @my-agent/cli dev",
     "dev:extension": "pnpm --filter @my-agent/extension dev",
-    "start:cli": "cd packages/cli && DEV=true NODE_ENV=development node --env-file=.env --inspect ./dist/index.mjs",
+    "start:cli": "DEV=true NODE_ENV=development node --inspect ./main.mjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@my-agent/core": "workspace:*",
+    "@my-agent/cli": "workspace:*",
     "eslint": "^9",
     "eslint-import-resolver-typescript": "^4.4.4",
     "prettier": "^3.8.1",

@@ -169,7 +169,6 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
         } else {
           otherChunk.push(chunk);
         }
-        // this.log?.chunk(chunk.type, chunk);
         this.context?.emit(chunk);
         if (chunk.type === "tool-call" && this.isToolNeedsApproval(chunk.toolName)) {
           this.status = "waiting";
@@ -263,7 +262,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
         onFinish: this.createOnFinish(onFinish),
         experimental_onToolCallStart: (event) => {
           const { toolCall } = event;
-          this.log?.info("tool", "tool-call-start", {
+          this.log?.tool("tool-call-start", {
             toolName: toolCall.toolName,
             toolCallId: toolCall.toolCallId,
             input: toolCall.input,
@@ -276,7 +275,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
           const output = "output" in event ? event.output : undefined;
           const error = "error" in event ? event.error : undefined;
 
-          this.log?.info("tool", "tool-call-end", {
+          this.log?.tool("tool-call-end", {
             toolName: toolCall.toolName,
             toolCallId: toolCall.toolCallId,
             output,

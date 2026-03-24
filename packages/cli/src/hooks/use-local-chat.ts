@@ -26,9 +26,9 @@ import type { ChatTransport, UIDataTypes, UIMessage, UIMessagePart, UITools } fr
 // ============================================================================
 
 export interface UseLocalChatConfig {
-  /** Model name (e.g., "llama3", "qwen2.5-coder:7b") */
+  /** Model name (e.g., "llama3", "qwen2.5-coder:7b", "anthropic/claude-3.5-sonnet") */
   model: string;
-  /** Ollama API URL */
+  /** Ollama API URL (used when provider is "ollama") */
   url: string;
   /** Working directory for sandbox */
   rootPath: string;
@@ -36,6 +36,10 @@ export interface UseLocalChatConfig {
   systemPrompt?: string;
   /** Max iterations for agentic loop */
   maxIterations?: number;
+  /** LLM provider: "ollama" or "openRouter" */
+  provider?: "ollama" | "openRouter";
+  /** API key for OpenRouter */
+  apiKey?: string;
 }
 
 /**
@@ -123,7 +127,7 @@ export interface UseLocalChatReturn {
  * ```
  */
 export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
-  const { model, url, rootPath, systemPrompt, maxIterations = 10 } = config;
+  const { model, url, rootPath, systemPrompt, maxIterations = 10, provider = "ollama", apiKey } = config;
 
   // Connection state
   const [initLoading, setInitLoading] = useState(true);
@@ -143,7 +147,15 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
       setInitError(null);
 
       try {
-        const agent = await createAgent({ model, url, rootPath, systemPrompt, maxIterations, provider: "ollama" });
+        const agent = await createAgent({
+          model,
+          url,
+          rootPath,
+          systemPrompt,
+          maxIterations,
+          provider,
+          apiKey,
+        });
 
         // Create PatchedDirectChatTransport with the agent
         // This patched version fixes the tool approval denial bug in AI SDK v6
@@ -158,7 +170,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
           transport: transport,
           messages: [],
           sendAutomaticallyWhen(options) {
-            toRaw(agent.getLog())?.tool(`call 'sendAutomaticallyWhen' with `, options);
+            toRaw(agent.getLog())?.tool(`call 'sendAutomaticallyWhen'`, options);
             return lastAssistantMessageIsCompleteWithApprovalResponses(options);
           },
         });
@@ -172,7 +184,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
     };
 
     init();
-  }, [model, url, rootPath, systemPrompt, maxIterations]);
+  }, [model, url, rootPath, systemPrompt, maxIterations, provider, apiKey]);
 
   // Use @ai-sdk/react's useChat hook with our Chat instance
   // Note: Using 100ms throttle to reduce UI flickering/corruption in terminal

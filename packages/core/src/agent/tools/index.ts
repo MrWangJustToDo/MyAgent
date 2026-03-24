@@ -1,7 +1,6 @@
 import { createCopyFileTool } from "./copy-file-tool.js";
 import { createDeleteFileTool } from "./delete-file-tool.js";
 import { createEditFileTool } from "./edit-file-tool.js";
-import { createFetchUrlTool } from "./fetch-url-tool.js";
 import { createGlobTool } from "./glob-tool.js";
 import { createGrepTool } from "./grep-tool.js";
 import { createListCommandTool } from "./list-command-tool.js";
@@ -12,6 +11,7 @@ import { createReadFileTool } from "./read-file-tool.js";
 import { createRunCommandTool } from "./run-command-tool.js";
 import { createSearchReplaceTool } from "./search-replace-tool.js";
 import { createTreeTool } from "./tree-tool.js";
+import { createWebfetchTool } from "./webfetch-tool.js";
 import { createWriteFileTool } from "./write-file-tool.js";
 
 import type { createCompactTool } from "./compact-tool.js";
@@ -24,7 +24,6 @@ import type { Sandbox } from "../../environment";
 export * from "./copy-file-tool.js";
 export * from "./delete-file-tool.js";
 export * from "./edit-file-tool.js";
-export * from "./fetch-url-tool.js";
 export * from "./glob-tool.js";
 export * from "./grep-tool.js";
 export * from "./list-command-tool.js";
@@ -37,6 +36,7 @@ export * from "./search-replace-tool.js";
 export * from "./todo-tool.js";
 export * from "./tree-tool.js";
 export * from "./types.js";
+export * from "./webfetch-tool.js";
 export * from "./write-file-tool.js";
 export * from "./task-tool.js";
 export * from "./list-skills-tool.js";
@@ -51,7 +51,7 @@ export type Tools = {
   move_file: ReturnType<typeof createMoveFileTool>;
   read_file: ReturnType<typeof createReadFileTool>;
   write_file: ReturnType<typeof createWriteFileTool>;
-  fetch_url: ReturnType<typeof createFetchUrlTool>;
+  webfetch: ReturnType<typeof createWebfetchTool>;
   glob: ReturnType<typeof createGlobTool>;
   grep: ReturnType<typeof createGrepTool>;
   tree: ReturnType<typeof createTreeTool>;
@@ -81,7 +81,7 @@ export const createTools = async ({
     move_file: createMoveFileTool({ sandbox }),
     read_file: createReadFileTool({ sandbox }),
     write_file: createWriteFileTool({ sandbox }),
-    fetch_url: createFetchUrlTool({ sandbox }),
+    webfetch: createWebfetchTool(),
     glob: createGlobTool({ sandbox }),
     grep: createGrepTool({ sandbox }),
     tree: createTreeTool({ sandbox }),

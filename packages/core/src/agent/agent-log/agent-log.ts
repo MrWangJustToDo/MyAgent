@@ -195,7 +195,6 @@ export class AgentLog {
     }
 
     this.entries.push(entry);
-    this.entries = Array.from(this.entries);
     this.trimEntries();
 
     // Notify listeners
@@ -273,6 +272,11 @@ export class AgentLog {
   /** Log stream chunk (verbose) */
   chunk(chunkType: string, data?: Record<string, unknown>): LogEntry | null {
     return this.debug("stream", `Chunk: ${chunkType}`, data, ["chunk"]);
+  }
+
+  /** Log todo tracking event */
+  todo(message: string, data?: Record<string, unknown>): LogEntry | null {
+    return this.debug("todo", message, data);
   }
 
   // ============================================================================
@@ -458,6 +462,7 @@ const logCategories = [
   "approval",
   "stream",
   "middleware",
+  "todo",
   "error",
   "custom",
 ] as const;

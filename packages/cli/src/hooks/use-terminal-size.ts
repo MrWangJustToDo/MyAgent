@@ -26,7 +26,7 @@ export function useTerminalSize(): { columns: number } {
     updateSize();
 
     const debounceUpdateSize = debounce(() => {
-      useAgentLog.getReactiveState().log?.agent("resize call");
+      useAgentLog.getReactiveState().log?.chat?.("resize ui");
       updateSize();
     }, 200);
 

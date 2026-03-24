@@ -131,8 +131,9 @@ export const createOpenAICompatibleModel = (
   return provider.chat(modelName);
 };
 
-export const createOpenRouterModel = (modelName: string) => {
-  const provider = createOpenRouter({ apiKey: process.env.openRouter });
+export const createOpenRouterModel = (modelName: string, apiKey?: string) => {
+  const resolvedApiKey = apiKey || process.env.apiKey || process.env.OPENROUTER_API_KEY || process.env.openRouter;
+  const provider = createOpenRouter({ apiKey: resolvedApiKey });
 
   return provider(modelName, {
     reasoning: { enabled: true, effort: "medium" },

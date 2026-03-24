@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@my-agent/cli':
+        specifier: workspace:*
+        version: link:packages/cli
       '@my-agent/core':
         specifier: workspace:*
         version: link:packages/core
@@ -65,6 +68,9 @@ importers:
       cli-table3:
         specifier: ^0.6.5
         version: 0.6.5
+      dotenv:
+        specifier: ^17.3.1
+        version: 17.3.1
       ink-big-text:
         specifier: ^2.0.0
         version: 2.0.0(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)
@@ -153,6 +159,9 @@ importers:
       just-bash:
         specifier: ^2.12.8
         version: 2.12.8
+      turndown:
+        specifier: ^7.2.2
+        version: 7.2.2
       yaml:
         specifier: ^2.8.3
         version: 2.8.3
@@ -163,6 +172,9 @@ importers:
       '@types/node':
         specifier: ^22.19.15
         version: 22.19.15
+      '@types/turndown':
+        specifier: ^5.0.6
+        version: 5.0.6
       tsdown:
         specifier: ^0.21.0
         version: 0.21.0(synckit@0.11.12)(typescript@5.9.3)
@@ -2848,6 +2860,9 @@ packages:
 
   '@types/tinycolor2@1.4.6':
     resolution: {integrity: sha512-iEN8J0BoMnsWBqjVbWH/c0G0Hh7O21lpR2/+PrvAVgWdzL7eexIFm4JN/Wn10PTcmNdtS6U67r499mlWMXOxNw==}
+
+  '@types/turndown@5.0.6':
+    resolution: {integrity: sha512-ru00MoyeeouE5BX4gRL+6m/BsDfbRayOskWqUvh7CLGW+UXxHQItqALa38kKnOiZPqJrtzJUgAC2+F0rL1S4Pg==}
 
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
@@ -10113,6 +10128,8 @@ snapshots:
   '@types/resolve@1.20.2': {}
 
   '@types/tinycolor2@1.4.6': {}
+
+  '@types/turndown@5.0.6': {}
 
   '@types/unist@3.0.3': {}
 
