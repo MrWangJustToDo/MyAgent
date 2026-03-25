@@ -152,7 +152,7 @@ export class AgentContext {
   setCompactStart(i: number) {
     this.compactStart = i;
     if (i === -1) {
-      this.compactSource = 2;
+      this.compactSource = 1;
     }
   }
 

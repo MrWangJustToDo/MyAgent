@@ -19,7 +19,7 @@ import type {
   GenerateTextOnFinishCallback,
 } from "ai";
 
-export type AgentStatus = "idle" | "running" | "completed" | "error" | "aborted" | "waiting";
+export type AgentStatus = "idle" | "running" | "completed" | "error" | "aborted" | "waiting" | "compacting";
 
 /** Run options */
 export interface AgentRunOptions {
@@ -34,6 +34,9 @@ export interface AgentRunOptions {
 }
 
 export class Base {
+  // Identity - subclasses should set this
+  protected agentId: string = "";
+
   // State
   status: AgentStatus = "idle";
   error = "";
@@ -288,6 +291,8 @@ export class Base {
         threshold: this.compactionConfig?.tokenThreshold ?? 100000,
       });
 
+      this.status = "compacting";
+
       // Need model and sandbox for auto-compaction
       if (this.model && this.sandbox) {
         try {
@@ -299,7 +304,7 @@ export class Base {
             priority: t.priority as "high" | "medium" | "low",
           }));
 
-          const result = await autoCompact(finalMessages, this.compactionConfig ?? {}, this.model, this.sandbox, {
+          const result = await autoCompact(finalMessages, this.compactionConfig ?? {}, this.agentId, this.sandbox, {
             todos: todos.length > 0 ? todos : undefined,
           });
 
@@ -330,6 +335,8 @@ export class Base {
           !this.model ? { missingModel: true } : { missingSandbox: true }
         );
       }
+
+      this.status = "running";
     }
 
     return { messages: finalMessages };

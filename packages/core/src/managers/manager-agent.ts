@@ -229,7 +229,7 @@ export class AgentManager {
       agent.addTools({ list_skills: listSkillsTool, load_skill: loadSkillTool });
 
       // Add task tool for subagent delegation
-      const taskTool = createTaskTool({ parentAgentId: agent.id, agentManager: this });
+      const taskTool = createTaskTool({ parentAgentId: agent.id });
       agent.addTools({ task: taskTool });
 
       // Set up compaction config and tool
@@ -238,8 +238,8 @@ export class AgentManager {
 
       const compactTool = createCompactTool({
         getMessages: () => context.getCompactMessages(),
-        getModel: () => languageModel,
         sandbox,
+        agent,
         config: compactionConfig,
         todoManager, // Pass todoManager to check for incomplete todos
         onCompact: (result) => {
@@ -299,7 +299,7 @@ export class AgentManager {
   /**
    * Spawn a subagent from a parent agent
    */
-  async spawnSubagent(parentId: string, config: ManagedAgentConfig): Promise<Agent> {
+  async spawnSubagent(parentId: string, config: Partial<ManagedAgentConfig>): Promise<Agent> {
     const parent = this.agents.get(parentId);
     if (!parent) {
       throw new Error(`Parent agent not found: ${parentId}`);

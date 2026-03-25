@@ -1,31 +1,40 @@
 /**
- * Subagent - Context-isolated agent for delegated tasks.
+ * Subagent - Flexible context-isolated agent for delegated tasks.
  *
- * Uses Agent + AgentManager for proper lifecycle management:
+ * A generic subagent runner that can be configured for different purposes:
+ * - Task exploration (read-only tools, exploration system prompt)
+ * - Compaction (no tools, summarization system prompt)
+ * - Custom use cases (custom tools, custom system prompt)
+ *
+ * Features:
  * - Fresh messages=[] (context isolation)
- * - Restricted read-only tool set
- * - Specialized system prompt
- * - Summary-only return to parent
+ * - Configurable tool set (or no tools)
+ * - Configurable system prompt
+ * - Token usage tracking
  * - Proper parent/child tracking via AgentManager
- * - Subagent instance accessible via AgentManager.getAgent(subagentId)
  *
  * @example
  * ```typescript
+ * // For task exploration (default)
  * const result = await runSubagent({
  *   prompt: "Find what testing framework this project uses",
  *   parentAgentId: agent.id,
- *   agentManager: manager,
  * });
  *
- * // Access subagent instance if needed
- * const subagent = manager.getAgent(result.subagentId);
- *
- * // Clean up when done
- * manager.destroyAgent(result.subagentId);
+ * // For compaction (no tools, custom prompt)
+ * const result = await runSubagent({
+ *   prompt: conversationText,
+ *   parentAgentId: agent.id,
+ *   systemPrompt: COMPACTION_PROMPT,
+ *   tools: {}, // No tools
+ *   maxIterations: 1, // Single pass
+ *   description: "compaction",
+ * });
  * ```
  */
 
 import { generateId } from "../../base/utils.js";
+import { agentManager, type AgentManager } from "../../managers/manager-agent.js";
 import { createGlobTool } from "../tools/glob-tool.js";
 import { createGrepTool } from "../tools/grep-tool.js";
 import { createListFileTool } from "../tools/list-file-tool.js";
@@ -34,21 +43,29 @@ import { createRunCommandTool } from "../tools/run-command-tool.js";
 import { createTreeTool } from "../tools/tree-tool.js";
 
 import type { Sandbox } from "../../environment";
-import type { AgentManager } from "../../managers/manager-agent.js";
 import type { ToolSet } from "ai";
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-/** Maximum iterations for subagent loop (safety limit) */
-export const SUBAGENT_MAX_ITERATIONS = 30;
+/** Default maximum iterations for subagent loop */
+export const SUBAGENT_DEFAULT_MAX_ITERATIONS = 30;
 
-/** Maximum characters for summary (truncation limit) */
-export const SUBAGENT_MAX_SUMMARY_LENGTH = 5000;
+/** Default maximum characters for output (truncation limit) */
+export const SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH = 5000;
 
-/** System prompt for subagents */
-export const SUBAGENT_SYSTEM_PROMPT = `You are a subagent with READ-ONLY access to the codebase.
+/** Maximum retries when output is empty */
+export const SUBAGENT_MAX_RETRIES = 2;
+
+/** Default retry prompt when result.text is empty */
+const DEFAULT_RETRY_PROMPT = `Please provide a summary of what you found or accomplished. Be clear and concise.`;
+
+/** @deprecated Use SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH instead */
+export const SUBAGENT_MAX_SUMMARY_LENGTH = SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH;
+
+/** Default system prompt for task exploration subagents */
+export const SUBAGENT_EXPLORE_SYSTEM_PROMPT = `You are a subagent with READ-ONLY access to the codebase.
 
 Your role:
 - Complete the delegated task thoroughly
@@ -63,6 +80,9 @@ Constraints:
 
 When done, provide a clear summary of what you found or accomplished.`;
 
+/** @deprecated Use SUBAGENT_EXPLORE_SYSTEM_PROMPT instead */
+export const SUBAGENT_SYSTEM_PROMPT = SUBAGENT_EXPLORE_SYSTEM_PROMPT;
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -72,24 +92,36 @@ export interface SubagentConfig {
   subagentId?: string;
   /** The prompt/task for the subagent to complete */
   prompt: string;
-  /** Short description for UI display */
+  /** Short description for UI display (default: "subtask") */
   description?: string;
   /** Parent agent ID (to get agent instance from AgentManager) */
   parentAgentId: string;
-  /** Agent manager for spawning and lifecycle management */
-  agentManager: AgentManager;
+  /** Custom system prompt (default: SUBAGENT_EXPLORE_SYSTEM_PROMPT) */
+  systemPrompt?: string;
+  /** Custom tools (default: read-only exploration tools, pass {} for no tools) */
+  tools?: ToolSet;
+  /** Maximum iterations (default: 30) */
+  maxIterations?: number;
+  /** Maximum output length before truncation (default: 5000) */
+  maxOutputLength?: number;
+  /** Retry prompt when output is empty (default: asks for summary) */
+  retryPrompt?: string;
+  /** Whether to retry when output is empty (default: true) */
+  retryOnEmpty?: boolean;
   /** Abort signal */
   abortSignal?: AbortSignal;
   /** Auto-destroy subagent after completion (default: true) */
   autoDestroy?: boolean;
+  /** Whether to aggregate usage to parent context (default: true) */
+  aggregateUsageToParent?: boolean;
 }
 
 export interface SubagentResult {
   /** Subagent ID - use to get instance via agentManager.getAgent(subagentId) */
   subagentId: string;
-  /** Final summary text */
-  summary: string;
-  /** Whether the summary was truncated */
+  /** Final output text */
+  output: string;
+  /** Whether the output was truncated */
   truncated: boolean;
   /** Number of iterations used */
   iterations: number;
@@ -101,14 +133,19 @@ export interface SubagentResult {
   };
   /** Whether iteration limit was reached */
   reachedLimit: boolean;
+  /** Number of retries attempted */
+  retries: number;
 }
+
+/** @deprecated Use SubagentResult.output instead of summary */
+export type SubagentResultLegacy = SubagentResult & { summary: string };
 
 // ============================================================================
 // Read-Only Tool Set
 // ============================================================================
 
 /**
- * Creates the restricted read-only tool set for subagents.
+ * Creates the restricted read-only tool set for exploration subagents.
  * These tools allow exploration but not modification.
  */
 export const createSubagentTools = (sandbox: Sandbox): ToolSet => {
@@ -122,15 +159,19 @@ export const createSubagentTools = (sandbox: Sandbox): ToolSet => {
   };
 };
 
+/** Alias for backward compatibility */
+export const createExploreTools = createSubagentTools;
+
 // ============================================================================
 // Summary Extraction
 // ============================================================================
 
 /**
- * Extracts the final text content from generateText result.
+ * Extracts the summary from generateText result.
+ * Simply returns the final result.text - that's the agent's final response.
  */
-export const extractSummary = (text: string | undefined): string => {
-  return text?.trim() || "(no summary)";
+export const extractSummary = (result: { text: string }): string => {
+  return result.text?.trim() || "(no summary)";
 };
 
 /**
@@ -163,12 +204,12 @@ export const truncateSummary = (
  * Uses AgentManager to spawn a proper subagent with:
  * 1. Parent/child relationship tracking
  * 2. Fresh context (empty messages)
- * 3. Read-only tools only
- * 4. Subagent system prompt
+ * 3. Configurable tools (default: read-only exploration tools)
+ * 4. Configurable system prompt (default: exploration prompt)
  * 5. Accessible via agentManager.getAgent(subagentId)
  *
  * @param config - Subagent configuration
- * @returns SubagentResult with subagentId, summary and metadata
+ * @returns SubagentResult with subagentId, output and metadata
  */
 export async function runSubagent(config: SubagentConfig): Promise<SubagentResult> {
   const {
@@ -176,9 +217,15 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
     prompt,
     description = "subtask",
     parentAgentId,
-    agentManager,
+    systemPrompt = SUBAGENT_EXPLORE_SYSTEM_PROMPT,
+    tools: customTools,
+    maxIterations = SUBAGENT_DEFAULT_MAX_ITERATIONS,
+    maxOutputLength = SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH,
+    retryPrompt = DEFAULT_RETRY_PROMPT,
+    retryOnEmpty = true,
     abortSignal,
     autoDestroy = true,
+    aggregateUsageToParent = true,
   } = config;
 
   // Generate or use custom subagent ID
@@ -190,42 +237,32 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
     throw new Error(`Parent agent not found: ${parentAgentId}`);
   }
 
-  const { agent: parentAgent, sandbox, config: managedConfig } = parentManagedAgent;
-  const rootPath = managedConfig.rootPath;
+  const { agent: parentAgent, sandbox } = parentManagedAgent;
 
   // Get resources from parent agent
-  const model = parentAgent.getModel();
   const parentContext = parentAgent.getContext();
   const parentLog = parentAgent.getLog();
-  const parentConfig = parentAgent.getConfig();
-
-  if (!model) {
-    throw new Error("Parent agent has no model set");
-  }
 
   parentLog?.info("agent", `Starting subagent: ${description}`, { subagentId, prompt });
 
   // Track iterations and usage
   let iterations = 0;
   let reachedLimit = false;
+  let retries = 0;
   const usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 
   // Spawn subagent via AgentManager (creates parent/child relationship)
+  // Inherits model, languageModel, rootPath from parent config
   const subagent = await agentManager.spawnSubagent(parentAgentId, {
     id: subagentId,
     name: `subagent-${description}`,
-    rootPath,
-    languageModel: model,
-    model: parentConfig.model,
-    systemPrompt: SUBAGENT_SYSTEM_PROMPT,
-    maxIterations: SUBAGENT_MAX_ITERATIONS,
-    maxTokens: parentConfig.maxTokens,
-    temperature: parentConfig.temperature,
+    systemPrompt,
+    maxIterations,
   });
 
-  // Override tools with read-only set (subagent was created with full tools by AgentManager)
-  const readOnlyTools = createSubagentTools(sandbox);
-  subagent.setTools(readOnlyTools);
+  // Set tools - use custom tools if provided, otherwise use read-only exploration tools
+  const subagentTools = customTools !== undefined ? customTools : createSubagentTools(sandbox);
+  subagent.setTools(subagentTools);
 
   // Emit subagent:created event
   agentManager.emit({
@@ -244,50 +281,83 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
       agent: subagent,
     });
 
+    // Helper to track step progress
+    const onStepFinish = (event: {
+      usage?: { inputTokens?: number; outputTokens?: number };
+      finishReason?: string;
+    }) => {
+      iterations++;
+      const { usage: stepUsage, finishReason } = event;
+
+      // Accumulate usage
+      if (stepUsage) {
+        usage.inputTokens += stepUsage.inputTokens ?? 0;
+        usage.outputTokens += stepUsage.outputTokens ?? 0;
+        usage.totalTokens += (stepUsage.inputTokens ?? 0) + (stepUsage.outputTokens ?? 0);
+      }
+
+      parentLog?.debug("agent", `Subagent step ${iterations}`, { subagentId, finishReason });
+
+      // Emit subagent:step event
+      agentManager.emit({
+        type: "subagent:step",
+        subagentId,
+        parentId: parentAgentId,
+        agent: subagent,
+        data: { step: iterations, finishReason },
+      });
+
+      // Check if we hit the limit
+      if (iterations >= maxIterations) {
+        reachedLimit = true;
+      }
+    };
+
     // Run subagent with fresh context using Agent.generate()
-    const result = await subagent.generate({
+    let result = await subagent.generate({
       prompt, // Fresh prompt, no message history
       abortSignal,
-      onStepFinish: (event) => {
-        iterations++;
-        const { usage: stepUsage, finishReason } = event;
-
-        // Accumulate usage
-        if (stepUsage) {
-          usage.inputTokens += stepUsage.inputTokens ?? 0;
-          usage.outputTokens += stepUsage.outputTokens ?? 0;
-          usage.totalTokens += (stepUsage.inputTokens ?? 0) + (stepUsage.outputTokens ?? 0);
-        }
-
-        parentLog?.debug("agent", `Subagent step ${iterations}`, { subagentId, finishReason });
-
-        // Emit subagent:step event
-        agentManager.emit({
-          type: "subagent:step",
-          subagentId,
-          parentId: parentAgentId,
-          agent: subagent,
-          data: { step: iterations, finishReason },
-        });
-
-        // Check if we hit the limit
-        if (iterations >= SUBAGENT_MAX_ITERATIONS) {
-          reachedLimit = true;
-        }
-      },
+      onStepFinish,
     });
 
-    // Extract final summary
-    const rawSummary = extractSummary(result.text);
+    // Extract output from result
+    let rawOutput = extractSummary(result);
+
+    // Retry if output is empty (up to max retries)
+    if (retryOnEmpty) {
+      while (!rawOutput || rawOutput === "(no summary)") {
+        if (retries >= SUBAGENT_MAX_RETRIES) {
+          parentLog?.warn("agent", "Subagent output empty after max retries", {
+            subagentId,
+            retries,
+          });
+          break;
+        }
+
+        retries++;
+        parentLog?.debug("agent", `Subagent output empty, retrying (${retries}/${SUBAGENT_MAX_RETRIES})`, {
+          subagentId,
+        });
+
+        // Ask for output explicitly
+        result = await subagent.generate({
+          prompt: retryPrompt,
+          abortSignal,
+          onStepFinish,
+        });
+
+        rawOutput = extractSummary(result);
+      }
+    }
 
     // Truncate if needed
-    const { summary, truncated } = truncateSummary(rawSummary);
+    const { summary: output, truncated } = truncateSummary(rawOutput, maxOutputLength);
 
     parentLog?.info("agent", "Subagent completed", {
       subagentId,
       iterations,
       reachedLimit,
-      summaryLength: summary.length,
+      outputLength: output.length,
       truncated,
       usage,
     });
@@ -298,11 +368,11 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
       subagentId,
       parentId: parentAgentId,
       agent: subagent,
-      data: { summary, iterations },
+      data: { summary: output, iterations },
     });
 
     // Aggregate usage to parent's context
-    if (parentContext) {
+    if (aggregateUsageToParent && parentContext) {
       parentContext.updateUsage({
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
@@ -312,11 +382,12 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
 
     return {
       subagentId,
-      summary,
+      output,
       truncated,
       iterations,
       usage,
       reachedLimit,
+      retries,
     };
   } catch (error) {
     parentLog?.error("agent", "Subagent error", error as Error);
@@ -330,15 +401,16 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
       data: { error: error instanceof Error ? error : new Error(String(error)) },
     });
 
-    // Return error as summary
+    // Return error as output
     const errorMessage = error instanceof Error ? error.message : String(error);
     return {
       subagentId,
-      summary: `Subagent error: ${errorMessage}`,
+      output: `Subagent error: ${errorMessage}`,
       truncated: false,
       iterations,
       usage,
       reachedLimit,
+      retries,
     };
   } finally {
     // Emit subagent:destroyed event before cleanup

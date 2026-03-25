@@ -3,20 +3,26 @@
  *
  * When estimated tokens exceed the configured threshold:
  * 1. Save full conversation transcript to disk (JSONL format)
- * 2. Use LLM to generate a summary of the conversation
+ * 2. Use a subagent to generate a summary of the conversation
  * 3. Replace messages with compressed summary + acknowledgment
  *
  * This allows agents to work indefinitely by compressing context strategically.
+ *
+ * The summarization is done via a subagent with:
+ * - No tools (pure summarization task)
+ * - Custom compaction system prompt
+ * - Single iteration (maxIterations: 1)
+ * - No retry on empty (the prompt is explicit about output format)
  */
 
-import { generateText } from "ai";
+import { runSubagent } from "../subagent/subagent.js";
 
 import { buildCompactionPrompt, type CompactionTodoItem } from "./compaction-prompt.js";
 import { estimateTokens } from "./token-estimator.js";
 
 import type { CompactionConfig, CompactionResult, TranscriptEntry } from "./types.js";
-import type { Sandbox } from "../../environment";
-import type { LanguageModel, ModelMessage } from "ai";
+import type { Sandbox } from "../../environment/types.js";
+import type { ModelMessage } from "ai";
 
 // ============================================================================
 // Helper Functions
@@ -160,26 +166,32 @@ export interface SummarizeOptions {
 }
 
 /**
- * Use LLM to summarize the conversation.
+ * Use a subagent to summarize the conversation.
+ *
+ * The subagent is spawned with:
+ * - No tools (pure summarization task)
+ * - Custom compaction system prompt
+ * - Single iteration
+ * - No retry on empty output
  *
  * @param messages - Messages to summarize
- * @param model - Language model to use for summarization
+ * @param parentAgentId - Parent agent ID for spawning subagent
  * @param options - Optional summarization options (focus, todos)
  * @returns Summary text
  *
  * @example
  * ```typescript
- * const summary = await summarizeConversation(messages, model, { focus: "API decisions" });
+ * const summary = await summarizeConversation(messages, "agent-123", { focus: "API decisions" });
  *
  * // With todos
- * const summary = await summarizeConversation(messages, model, {
+ * const summary = await summarizeConversation(messages, "agent-123", {
  *   todos: [{ content: "Add tests", status: "pending", priority: "high" }]
  * });
  * ```
  */
 export async function summarizeConversation(
   messages: ModelMessage[],
-  model: LanguageModel,
+  parentAgentId: string,
   options?: SummarizeOptions
 ): Promise<string> {
   const { focus, todos } = options ?? {};
@@ -190,34 +202,36 @@ export async function summarizeConversation(
   // Build the summarization prompt with focus and todos
   const systemPrompt = buildCompactionPrompt({ focus, todos });
 
-  // Call LLM for summarization
-  const result = await generateText({
-    model,
-    system: systemPrompt,
+  // Run subagent for summarization
+  const result = await runSubagent({
     prompt: conversationText,
-    maxOutputTokens: 4000, // Summaries should be concise
-    temperature: 0.3, // Low temperature for consistent summarization
+    parentAgentId,
+    systemPrompt,
+    tools: {}, // No tools - pure summarization
+    maxIterations: 1, // Single pass
+    maxOutputLength: 10000, // Allow longer summaries for compaction
+    retryOnEmpty: false, // Don't retry - prompt is explicit
+    autoDestroy: true, // Clean up after
+    aggregateUsageToParent: true, // Track usage
+    description: "compaction",
   });
 
-  return result.text;
+  return result.output;
 }
 
 /**
- * Create the compressed message pair (summary + acknowledgment).
+ * Create the compressed message with the conversation summary.
  *
  * @param summary - The generated summary
- * @returns Array with user summary message and assistant acknowledgment
+ * @returns Array with just the summary as a system/user message
  */
 export function createCompactedMessages(summary: string): ModelMessage[] {
+  // Only include the summary as context - no fake assistant response needed.
+  // The agent will naturally continue from whatever the user sends next.
   return [
     {
       role: "user" as const,
       content: `[CONVERSATION SUMMARY]\n\nThe following is a summary of the previous conversation:\n\n${summary}\n\n[END SUMMARY]\n\nPlease continue from where we left off.`,
-    },
-    {
-      role: "assistant" as const,
-      content:
-        "I've reviewed the conversation summary and understand the context. I'm ready to continue from where we left off. What would you like me to do next?",
     },
   ];
 }
@@ -227,26 +241,26 @@ export function createCompactedMessages(summary: string): ModelMessage[] {
  *
  * This is the main entry point for Layer 2 compaction:
  * 1. Save transcript to disk
- * 2. Summarize conversation via LLM (including any active todos)
+ * 2. Summarize conversation via subagent (including any active todos)
  * 3. Return compressed messages
  *
  * @param messages - Current messages array
  * @param config - Compaction configuration
- * @param model - Language model for summarization
+ * @param parentAgentId - Parent agent ID for spawning summarization subagent
  * @param sandbox - Sandbox for filesystem access
  * @param options - Optional summarization options (focus, todos)
  * @returns Compaction result with compressed messages
  *
  * @example
  * ```typescript
- * const result = await autoCompact(messages, config, model, sandbox);
+ * const result = await autoCompact(messages, config, "agent-123", sandbox);
  * if (result.compacted) {
  *   messages = result.messages; // Use compressed messages
  *   console.log(`Saved transcript to ${result.transcriptPath}`);
  * }
  *
  * // With todos included
- * const result = await autoCompact(messages, config, model, sandbox, {
+ * const result = await autoCompact(messages, config, "agent-123", sandbox, {
  *   todos: [{ content: "Add tests", status: "pending", priority: "high" }]
  * });
  * ```
@@ -254,7 +268,7 @@ export function createCompactedMessages(summary: string): ModelMessage[] {
 export async function autoCompact(
   messages: ModelMessage[],
   config: Partial<CompactionConfig>,
-  model: LanguageModel,
+  parentAgentId: string,
   sandbox: Sandbox,
   options?: SummarizeOptions
 ): Promise<CompactionResult & { messages: ModelMessage[] }> {
@@ -263,8 +277,8 @@ export async function autoCompact(
   // Save transcript before compression
   const transcriptPath = await saveTranscript(messages, config, sandbox);
 
-  // Generate summary with optional focus and todos
-  const summary = await summarizeConversation(messages, model, options);
+  // Generate summary via subagent with optional focus and todos
+  const summary = await summarizeConversation(messages, parentAgentId, options);
 
   // Create compressed messages
   const compactedMessages = createCompactedMessages(summary);

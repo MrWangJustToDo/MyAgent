@@ -3,7 +3,7 @@
  *
  * Implements three-layer context compaction:
  * - Layer 1 (micro_compact): Replace old tool results with placeholders
- * - Layer 2 (auto_compact): LLM-based summarization when threshold exceeded
+ * - Layer 2 (auto_compact): Subagent-based summarization when threshold exceeded
  * - Layer 3 (compact tool): Manual trigger for conversation compression
  *
  * @example
@@ -18,7 +18,7 @@
  *
  * // Check if auto compaction needed
  * if (shouldAutoCompact(compactedMessages, config)) {
- *   const result = await autoCompact(compactedMessages, config, model, sandbox);
+ *   const result = await autoCompact(compactedMessages, config, agentId, sandbox);
  * }
  * ```
  */

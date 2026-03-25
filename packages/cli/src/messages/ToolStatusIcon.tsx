@@ -4,8 +4,12 @@ import { Spinner } from "../components/Spinner.js";
 
 import type { ToolUIPart } from "ai";
 
+export interface ToolStatusIconProps {
+  state: ToolUIPart["state"];
+}
+
 /** Get status icon for tool invocation */
-export const ToolStatusIcon = ({ state }: { state: ToolUIPart["state"] }) => {
+export const ToolStatusIcon = ({ state }: ToolStatusIconProps) => {
   switch (state) {
     case "input-streaming":
       return <Spinner text="" />;

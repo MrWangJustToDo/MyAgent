@@ -64,6 +64,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
     super();
 
     this.id = id ?? generateId("agent");
+    this.agentId = this.id; // Set base class agentId for compaction
     this.config = AgentConfigSchema.parse(config);
 
     if (setUp) {

@@ -20,53 +20,50 @@
  * - Key user requests, constraints, or preferences
  * - Important technical decisions and why
  */
-export const COMPACTION_PROMPT = `You are a conversation compactor. Your task is to summarize the conversation history while preserving all essential context needed for the AI assistant to continue working effectively.
+export const COMPACTION_PROMPT = `You are a summarizer. Your ONLY task is to create a summary of the conversation.
 
-## Output Format
+CRITICAL RULES:
+- Output ONLY a summary in plain text/markdown
+- Do NOT include any tool calls, function calls, or XML tags
+- Do NOT include "<tool_call>", "<function>", "<parameter>" or similar
+- Do NOT say "I'll do this" or "Let me do that" - just summarize what WAS done
+- Do NOT respond to questions - only summarize
 
-Create a structured summary with these sections:
+## What to Include
 
-### Completed Work
-- List what has been accomplished in this session
-- Include specific file paths, function names, and changes made
+Provide a detailed but concise summary focusing on:
 
-### Current State
-- What is currently being worked on
-- Any in-progress tasks or partial implementations
-- Current file context (which files are open/being edited)
+1. **What was done** - Completed work with specific file paths and changes
+2. **Current state** - What is being worked on right now
+3. **Files modified** - List of files created, modified, or deleted
+4. **What needs to be done next** - Pending tasks and next steps
+5. **User preferences** - Any requirements or constraints mentioned
+6. **Technical decisions** - Important choices made and why
 
-### Files Modified
-- List all files that have been created, modified, or deleted
-- Include brief description of changes to each file
+## Format
 
-### Pending Tasks
-- What still needs to be done
-- Any tasks mentioned but not yet started
-- Follow-up items identified during the work
+Write in clear, structured prose or bullet points. Example:
 
-### User Preferences
-- Any specific requirements or constraints mentioned by the user
-- Coding style preferences, conventions to follow
-- Things the user explicitly asked to do or avoid
+---
+## Summary
 
-### Technical Decisions
-- Important architectural or implementation decisions made
-- Rationale for key choices
-- Any trade-offs discussed
+### Completed
+- Created src/utils/helper.ts with validation functions
+- Updated src/index.ts to use new helper
 
-### Important Context
-- Error messages or issues encountered and their resolutions
-- Dependencies or external systems involved
-- Any other information critical for continuing the work
+### In Progress
+- Implementing user authentication in src/auth/
 
-## Guidelines
+### Next Steps
+- Add unit tests for helper functions
+- Configure database connection
 
-1. Be concise but complete - include all information needed to continue the work
-2. Use specific names (file paths, function names, variable names) rather than vague descriptions
-3. Preserve exact error messages and their resolutions
-4. Keep the summary organized and scannable
-5. Do not include general conversation pleasantries or acknowledgments
-6. Focus on technical content and actionable information`;
+### User Requirements
+- Must use TypeScript strict mode
+- Prefer functional programming style
+---
+
+Be concise but complete. Include specific file paths, function names, and technical details.`;
 
 // ============================================================================
 // Public API

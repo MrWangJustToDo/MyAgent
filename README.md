@@ -1,4 +1,4 @@
-## AI Agent build on TanStack AI
+## AI Agent build on Vercel AI SDK
 
 
 ![wip](wip.png)

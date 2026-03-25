@@ -25,8 +25,6 @@ import { runSubagent } from "../subagent/subagent.js";
 
 import { withDuration } from "./helpers.js";
 
-import type { AgentManager } from "../../managers/manager-agent.js";
-
 // ============================================================================
 // Types
 // ============================================================================
@@ -34,8 +32,6 @@ import type { AgentManager } from "../../managers/manager-agent.js";
 export interface TaskToolConfig {
   /** Parent agent ID to spawn subagent from */
   parentAgentId: string;
-  /** Agent manager for spawning */
-  agentManager: AgentManager;
 }
 
 // ============================================================================
@@ -83,7 +79,7 @@ export type TaskOutput = z.infer<typeof taskOutputSchema>;
  * @param config - Tool configuration with parent agent ID and manager
  * @returns Vercel AI SDK tool
  */
-export const createTaskTool = ({ parentAgentId, agentManager }: TaskToolConfig) => {
+export const createTaskTool = ({ parentAgentId }: TaskToolConfig) => {
   return tool({
     description: `Spawn a subagent with fresh context to complete a delegated task.
 
@@ -125,7 +121,6 @@ Example use cases:
           prompt,
           description,
           parentAgentId,
-          agentManager,
           abortSignal,
           // Auto-destroy since task tool manages the lifecycle
           autoDestroy: false,
@@ -133,10 +128,11 @@ Example use cases:
 
         return {
           subagentId: result.subagentId,
-          summary: result.summary,
+          summary: result.output,
           truncated: result.truncated,
           iterations: result.iterations,
           reachedLimit: result.reachedLimit,
+          retries: result.retries,
           usage: result.usage,
         };
       });

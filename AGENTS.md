@@ -407,20 +407,20 @@ Runs automatically in `prepareMessages()` before each LLM call:
 Triggers when estimated tokens exceed threshold:
 1. Saves full conversation to `.transcripts/transcript_{timestamp}.jsonl`
 2. Uses LLM to generate structured summary
-3. Replaces all messages with summary + acknowledgment
-
-**Important**: Auto compaction is **blocked** if there are incomplete todos (pending or in_progress). This ensures task context is preserved until work is complete.
+3. **Includes incomplete todos in the summary** so they can be restored
+4. Replaces all messages with summary + acknowledgment
 
 ```typescript
-// Check if compaction is needed (also checks for incomplete todos)
+// Check if compaction is needed
 if (agent.shouldAutoCompact(messages)) {
   const result = await autoCompact(messages, config, model, sandbox);
   // result.messages contains the compressed conversation
+  // Incomplete todos are included in the summary
 }
 
-// Check if compaction is blocked due to incomplete todos
-if (agent.isCompactionBlocked()) {
-  console.log("Cannot compact: incomplete todos exist");
+// Check if there are incomplete todos (for informational purposes)
+if (agent.hasIncompleteTodos()) {
+  console.log("Compaction will include incomplete todos in summary");
 }
 ```
 
@@ -433,13 +433,28 @@ Manual trigger via the `compact` tool:
 {
   tool: "compact",
   input: {
-    focus: "preserve the API design decisions",  // Optional
-    force: false  // Set to true to compact even with incomplete todos (not recommended)
+    focus: "preserve the API design decisions"  // Optional
   }
 }
 ```
 
-**Note**: The compact tool will refuse to run if there are incomplete todos, unless `force: true` is specified. This prevents losing important task context.
+### Todo Preservation in Compaction
+
+When compaction occurs with incomplete todos:
+1. Todos are formatted and included in the LLM summarization prompt
+2. The summary includes an "Active Todo List" section with status icons
+3. After compaction, the agent sees the todos in the summary
+4. The agent should use the `todo` tool to re-create the tasks
+
+Example summary section:
+```
+## IMPORTANT: Active Todo List
+
+- 🔄 [HIGH] Implement user auth (in_progress)
+- ⏳ Add tests (pending)
+
+These todos represent the current work state and should be restored immediately.
+```
 
 ### Configuration
 
@@ -517,6 +532,69 @@ packages/core/src/agent/
 1. **prepareMessages()** in `base.ts` - Applies micro_compact automatically
 2. **shouldAutoCompact()** - Check before LLM call if threshold exceeded
 3. **compact tool** - Manual trigger by agent
+
+## Sandbox Environment Configuration
+
+The sandbox environment can be configured via the `SANDBOX_ENV` environment variable in your `.env` file.
+
+### Environment Types
+
+| Value | Description |
+|-------|-------------|
+| `local` | (default) Uses just-bash for isolated sandbox execution |
+| `native` | Direct system access via real bash and Node.js fs |
+| `remote` | Cloud execution via computesdk |
+
+### Configuration
+
+Add to your `.env` file:
+
+```bash
+# Sandbox environment type
+SANDBOX_ENV=local    # or 'native' or 'remote'
+```
+
+### Programmatic Configuration
+
+```typescript
+import { configureSandboxEnv } from '@my-agent/core';
+
+// Set sandbox environment before creating agents
+configureSandboxEnv('native');
+
+// Then create agents as normal
+const agent = await agentManager.createManagedAgent({ ... });
+```
+
+## Tool Output Truncation
+
+Tools that can return large outputs have built-in truncation to prevent context window overflow:
+
+### grep Tool
+- Max 500 chars per matching line content
+- Max 50KB total content across all matches
+- Adds `[truncated]` markers when content is cut
+
+### read_file Tool
+- Default line limit: 500 lines (when not specified)
+- Max 100KB content per read (~25k tokens)
+- Suggests using `offset` parameter for pagination
+
+### run_command Tool
+- Max 50KB for stdout and stderr each
+- Keeps the **end** of output (usually more relevant for errors)
+- Adds truncation notice to message
+
+## CLI Keyboard Shortcuts
+
+| Key | When Running | When Idle |
+|-----|--------------|-----------|
+| `Esc` | Aborts current agent run | Exits the app |
+| `Ctrl+C` | Exits the app | Exits the app |
+| `y` | Approves pending tool | - |
+| `n` | Denies pending tool | - |
+| `↑/↓` | - | Navigate input history |
+| `Enter` | - | Submit input |
 
 ## File Structure
 

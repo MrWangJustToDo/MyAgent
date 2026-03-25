@@ -8,10 +8,14 @@ import { TodoStats } from "../components/TodoStats.js";
 import { UserInput } from "../components/UserInput.js";
 import { useAgent } from "../hooks/use-agent.js";
 
-import type { Agent } from "@my-agent/core";
+import type { AgentStatus } from "@my-agent/core";
 
 export const Footer = () => {
-  const status = useAgent((s) => (s.agent as Agent)?.status || "idle");
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  const _status = useAgent((s) => s.agent?.status) || "idle";
+
+  const status = _status as AgentStatus;
 
   const isInputEnabled = status === "idle" || status === "completed" || status === "error" || status === "aborted";
 
@@ -32,6 +36,7 @@ export const Footer = () => {
         {/* Status indicator */}
         <Box>
           {status === "running" && <Spinner text="Running..." />}
+          {status === "compacting" && <Spinner text="Compacting..." />}
           {status === "completed" && <Text color="green">Completed</Text>}
           {status === "aborted" && (
             <Text color="green" dimColor>

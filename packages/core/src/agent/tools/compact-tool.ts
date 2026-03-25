@@ -34,8 +34,9 @@ import { withDuration } from "./helpers.js";
 
 import type { Sandbox } from "../../environment";
 import type { CompactionConfig, CompactionResult } from "../compaction/types.js";
+import type { Agent } from "../loop/agent.js";
 import type { TodoManager } from "../todo-manager";
-import type { LanguageModel, ModelMessage } from "ai";
+import type { ModelMessage } from "ai";
 
 // ============================================================================
 // Types
@@ -44,8 +45,9 @@ import type { LanguageModel, ModelMessage } from "ai";
 export interface CompactToolConfig {
   /** Function to get current messages */
   getMessages: () => ModelMessage[];
-  /** Function to get the model for summarization */
-  getModel: () => LanguageModel;
+
+  /** The agent instance (used for ID and other properties) */
+  agent: Agent;
   /** Sandbox for filesystem access */
   sandbox: Sandbox;
   /** Compaction configuration */
@@ -96,7 +98,7 @@ export type CompactOutput = z.infer<typeof compactOutputSchema>;
  */
 export const createCompactTool = ({
   getMessages,
-  getModel,
+  agent,
   sandbox,
   config = {},
   todoManager,
@@ -112,7 +114,7 @@ Use this tool when:
 
 What happens:
 1. Full conversation is saved to a transcript file (preserves everything)
-2. LLM summarizes the key information from the conversation
+2. A subagent summarizes the key information from the conversation
 3. Incomplete todos are included in the summary so you can restore them
 4. Messages are replaced with the summary to reduce token usage
 
@@ -134,7 +136,6 @@ IMPORTANT: After compaction, read the summary carefully and use the todo tool to
     execute: async ({ focus }) => {
       return withDuration(async () => {
         const messages = getMessages();
-        const model = getModel();
 
         // Check if there's anything to compact
         if (messages.length === 0) {
@@ -159,8 +160,8 @@ IMPORTANT: After compaction, read the summary carefully and use the todo tool to
 
         const tokensBefore = estimateTokens(messages);
 
-        // Perform compaction with todos included
-        const result = await autoCompact(messages, config, model, sandbox, { focus, todos });
+        // Perform compaction with todos included (uses subagent for summarization)
+        const result = await autoCompact(messages, config, agent.id, sandbox, { focus, todos });
 
         // Notify the agent to replace messages
         if (onCompact) {
