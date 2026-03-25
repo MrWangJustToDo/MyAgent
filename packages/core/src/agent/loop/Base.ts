@@ -257,7 +257,7 @@ export class Base {
 
     if (hasCompact) {
       this.context?.resetUsage();
-      this.context?.setCompactStart(finalMessages.length - 2 > 0 ? finalMessages.length - 2 : 0);
+      this.context?.setCompactStart(finalMessages.length);
     }
 
     this.context?.setCompactMessages(currentSummary.concat(finalMessages.slice(this.context.getCompactStart())));

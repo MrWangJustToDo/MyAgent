@@ -79,7 +79,7 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
             />
           }
         >
-          {content.replacements.map((item, index) => (
+          {content?.replacements?.map((item, index) => (
             <EditDiff
               width={width - 6}
               id={id + "-" + index}

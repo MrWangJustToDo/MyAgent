@@ -14,7 +14,7 @@ import { ReadWriteFs } from "just-bash";
 import * as path from "path";
 import { promisify } from "util";
 
-import type { Environment, FileEntry, Sandbox, SandboxConfig } from "./types";
+import type { Environment, FileEntry, FileStat, Sandbox, SandboxConfig } from "./types";
 
 const execAsync = promisify(exec);
 
@@ -73,6 +73,11 @@ async function createJustBashSandbox(config: SandboxConfig): Promise<Sandbox> {
     directory: config.cwd ?? "/",
   });
 
+  // Get the native just-bash instance which has full IFileSystem support
+  // including readFileBuffer() and stat()
+  const nativeInstance = internalSandbox.getInstance();
+  const bashFs = nativeInstance.bash.fs;
+
   // Wrap the internal sandbox to match our Sandbox interface
   const sandbox: Sandbox = {
     sandboxId: internalSandbox.sandboxId,
@@ -80,6 +85,22 @@ async function createJustBashSandbox(config: SandboxConfig): Promise<Sandbox> {
 
     filesystem: {
       readFile: (filePath: string) => internalSandbox.filesystem.readFile(filePath),
+      readFileBuffer: async (filePath: string) => {
+        // Use just-bash's native readFileBuffer which returns Uint8Array
+        const uint8Array = await bashFs.readFileBuffer(filePath);
+        // Convert Uint8Array to Buffer for Node.js compatibility
+        return Buffer.from(uint8Array);
+      },
+      stat: async (filePath: string): Promise<FileStat> => {
+        // Use just-bash's native stat
+        const fsStat = await bashFs.stat(filePath);
+        return {
+          size: fsStat.size,
+          isDirectory: fsStat.isDirectory,
+          isFile: fsStat.isFile,
+          mtime: fsStat.mtime,
+        };
+      },
       writeFile: (filePath: string, content: string) => internalSandbox.filesystem.writeFile(filePath, content),
       readdir: async (dirPath: string) => {
         const entries = await internalSandbox.filesystem.readdir(dirPath);
@@ -150,6 +171,22 @@ async function createNativeSandbox(config: SandboxConfig): Promise<Sandbox> {
       readFile: async (filePath: string) => {
         const fullPath = resolvePath(filePath);
         return fs.readFile(fullPath, "utf-8");
+      },
+
+      readFileBuffer: async (filePath: string) => {
+        const fullPath = resolvePath(filePath);
+        return fs.readFile(fullPath);
+      },
+
+      stat: async (filePath: string): Promise<FileStat> => {
+        const fullPath = resolvePath(filePath);
+        const stats = await fs.stat(fullPath);
+        return {
+          size: stats.size,
+          isDirectory: stats.isDirectory(),
+          isFile: stats.isFile(),
+          mtime: stats.mtime,
+        };
       },
 
       writeFile: async (filePath: string, content: string) => {
@@ -303,6 +340,10 @@ export function createLocalEnvironment(config: LocalEnvironmentConfig = {}): Env
         for (const [rootPath, provider] of providerInstances.entries()) {
           const internalSandbox = await provider.sandbox.getById(sandboxId);
           if (internalSandbox) {
+            // Get the native just-bash instance
+            const nativeInstance = internalSandbox.getInstance();
+            const bashFs = nativeInstance.bash.fs;
+
             // Re-wrap the sandbox
             const sandbox: Sandbox = {
               sandboxId: internalSandbox.sandboxId,
@@ -310,6 +351,21 @@ export function createLocalEnvironment(config: LocalEnvironmentConfig = {}): Env
 
               filesystem: {
                 readFile: (filePath: string) => internalSandbox.filesystem.readFile(filePath),
+                readFileBuffer: async (filePath: string) => {
+                  // Use just-bash's native readFileBuffer
+                  const uint8Array = await bashFs.readFileBuffer(filePath);
+                  return Buffer.from(uint8Array);
+                },
+                stat: async (filePath: string): Promise<FileStat> => {
+                  // Use just-bash's native stat
+                  const fsStat = await bashFs.stat(filePath);
+                  return {
+                    size: fsStat.size,
+                    isDirectory: fsStat.isDirectory,
+                    isFile: fsStat.isFile,
+                    mtime: fsStat.mtime,
+                  };
+                },
                 writeFile: (filePath: string, content: string) =>
                   internalSandbox.filesystem.writeFile(filePath, content),
                 readdir: async (dirPath: string) => {

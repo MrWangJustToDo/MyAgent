@@ -59,6 +59,7 @@ export type {
   SandboxConfig,
   SandboxFileSystem,
   FileEntry,
+  FileStat,
   CommandResult,
   RunCommandOptions,
 } from "./types";

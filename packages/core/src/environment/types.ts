@@ -42,10 +42,29 @@ export interface CommandResult {
 }
 
 /**
+ * File stat information
+ */
+export interface FileStat {
+  /** File size in bytes */
+  size: number;
+  /** Whether this is a directory */
+  isDirectory: boolean;
+  /** Whether this is a file */
+  isFile: boolean;
+  /** Last modification time */
+  mtime: Date;
+}
+
+/**
  * Filesystem interface that all environments must implement
  */
 export interface SandboxFileSystem {
+  /** Read file as UTF-8 text */
   readFile(path: string): Promise<string>;
+  /** Read file as binary buffer (for images, PDFs, etc.) */
+  readFileBuffer?(path: string): Promise<Buffer>;
+  /** Get file/directory stats */
+  stat?(path: string): Promise<FileStat>;
   writeFile(path: string, content: string): Promise<void>;
   readdir(path: string): Promise<FileEntry[]>;
   mkdir(path: string): Promise<void>;

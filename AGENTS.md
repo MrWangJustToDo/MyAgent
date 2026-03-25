@@ -576,9 +576,27 @@ Tools that can return large outputs have built-in truncation to prevent context 
 - Adds `[truncated]` markers when content is cut
 
 ### read_file Tool
-- Default line limit: 500 lines (when not specified)
+
+The read_file tool supports multiple file types:
+
+| Type | Extensions | Behavior |
+|------|------------|----------|
+| Text | `.ts`, `.js`, `.py`, `.md`, etc. | Returns content with line numbers (1-indexed), supports offset/limit pagination |
+| Directory | (path to directory) | Returns list of entries with `/` suffix for subdirectories |
+| Image | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg` | Returns base64 encoded data for LLM vision |
+| PDF | `.pdf` | Returns base64 encoded data for document analysis |
+| Binary | `.mp3`, `.zip`, `.exe`, etc. | Returns error (cannot read) |
+
+**Text file limits:**
+- Default line limit: 2000 lines (when not specified)
 - Max 100KB content per read (~25k tokens)
+- Max 2000 chars per line (truncated with notice)
+- Lines prefixed with 1-indexed line numbers
 - Suggests using `offset` parameter for pagination
+
+**Binary file limits:**
+- Max 10MB for images and PDFs
+- Auto-detects binary content by sampling first 4KB
 
 ### run_command Tool
 - Max 50KB for stdout and stderr each

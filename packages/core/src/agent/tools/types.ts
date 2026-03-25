@@ -31,17 +31,8 @@ export const runCommandOutputSchema = z.object({
   message: z.string().describe("Human-readable summary of the operation."),
 });
 
-export const readFileOutputSchema = z.object({
-  path: z.string().describe("The file path that was read."),
-  content: z.string().describe("The file content (may be partial if offset/limit used)."),
-  modifiedTime: z.string().describe("ISO timestamp of last modification."),
-  totalLines: z.number().describe("Total number of lines in the file."),
-  startLine: z.number().describe("Starting line number (0-indexed)."),
-  endLine: z.number().describe("Ending line number (exclusive)."),
-  linesReturned: z.number().describe("Number of lines returned."),
-  message: z.string().describe("Human-readable summary of the operation."),
-  durationMs: z.number().describe("Execution duration in milliseconds."),
-});
+// Note: readFileOutputSchema is now defined in read-file-tool.ts
+// as a discriminated union to support multiple file types (text, image, pdf, directory, error)
 
 export const writeFileOutputSchema = z.object({
   path: z.string().describe("The file path that was written."),
@@ -110,7 +101,7 @@ export const todoOutputSchema = z.object({
 
 export type ListFileOutput = z.infer<typeof listFileOutputSchema>;
 export type RunCommandOutput = z.infer<typeof runCommandOutputSchema>;
-export type ReadFileOutput = z.infer<typeof readFileOutputSchema>;
+// Note: ReadFileOutput is now exported from read-file-tool.ts
 export type WriteFileOutput = z.infer<typeof writeFileOutputSchema>;
 export type EditFileOutput = z.infer<typeof editFileOutputSchema>;
 export type GlobOutput = z.infer<typeof globOutputSchema>;
