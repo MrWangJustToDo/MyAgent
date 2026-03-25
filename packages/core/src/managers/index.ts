@@ -25,7 +25,7 @@
  * ```
  */
 
-export { SandboxManager, sandboxManager } from "./manager-sandbox.js";
+export { SandboxManager, sandboxManager, configureSandboxEnv } from "./manager-sandbox.js";
 export { ToolsManager, toolsManager } from "./manager-tools.js";
 export {
   AgentManager,

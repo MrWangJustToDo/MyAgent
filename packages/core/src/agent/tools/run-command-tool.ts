@@ -5,6 +5,21 @@ import { runCommandOutputSchema } from "./types.js";
 
 import type { Sandbox } from "../../environment";
 
+/** Maximum characters for stdout/stderr (to prevent context overflow) */
+const MAX_OUTPUT_LENGTH = 50000; // ~50KB, roughly 12.5k tokens
+
+/**
+ * Truncates output and adds a notice if it exceeds the limit.
+ */
+function truncateOutput(output: string, maxLength: number): string {
+  if (output.length <= maxLength) {
+    return output;
+  }
+  // Keep the end of the output (usually more relevant for errors/results)
+  const truncated = output.slice(-maxLength);
+  return `[...truncated ${output.length - maxLength} chars from start...]\n${truncated}`;
+}
+
 /**
  * Creates a run-command tool using Vercel AI SDK.
  *
@@ -48,17 +63,26 @@ export const createRunCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
         background: background ?? false,
       });
 
+      // Truncate stdout/stderr to prevent context overflow
+      const stdout = truncateOutput(result.stdout, MAX_OUTPUT_LENGTH);
+      const stderr = truncateOutput(result.stderr, MAX_OUTPUT_LENGTH);
+
+      const truncationNote =
+        result.stdout.length > MAX_OUTPUT_LENGTH || result.stderr.length > MAX_OUTPUT_LENGTH
+          ? " (output truncated)"
+          : "";
+
       return {
         command,
-        stdout: result.stdout,
-        stderr: result.stderr,
+        stdout,
+        stderr,
         exitCode: result.exitCode,
         durationMs: result.durationMs,
         success: result.exitCode === 0,
         message:
           result.exitCode === 0
-            ? `Command executed successfully in ${result.durationMs}ms`
-            : `Command failed with exit code ${result.exitCode}`,
+            ? `Command executed successfully in ${result.durationMs}ms${truncationNote}`
+            : `Command failed with exit code ${result.exitCode}${truncationNote}`,
       };
     },
   });

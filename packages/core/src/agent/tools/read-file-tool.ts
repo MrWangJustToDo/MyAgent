@@ -6,6 +6,12 @@ import { readFileOutputSchema } from "./types.js";
 
 import type { Sandbox } from "../../environment";
 
+/** Maximum characters for file content (to prevent context overflow) */
+const MAX_CONTENT_LENGTH = 100000; // ~100KB, roughly 25k tokens
+
+/** Default line limit when not specified */
+const DEFAULT_LINE_LIMIT = 500;
+
 /**
  * Creates a read-file tool using Vercel AI SDK.
  *
@@ -44,10 +50,23 @@ export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
         const totalLines = lines.length;
 
         const startLine = offset ?? 0;
-        const endLine = limit !== undefined ? Math.min(startLine + limit, totalLines) : totalLines;
+        // Apply default line limit if not specified to prevent reading huge files
+        const effectiveLimit = limit ?? DEFAULT_LINE_LIMIT;
+        const endLine = Math.min(startLine + effectiveLimit, totalLines);
 
         const selectedLines = lines.slice(startLine, endLine);
-        const selectedContent = selectedLines.join("\n");
+        let selectedContent = selectedLines.join("\n");
+
+        // Truncate content if it exceeds max length
+        let contentTruncated = false;
+        if (selectedContent.length > MAX_CONTENT_LENGTH) {
+          selectedContent = selectedContent.slice(0, MAX_CONTENT_LENGTH) + "\n...[content truncated for context limit]";
+          contentTruncated = true;
+        }
+
+        const hasMore = endLine < totalLines;
+        const truncationNote = contentTruncated ? " (content truncated)" : "";
+        const moreNote = hasMore ? ` Use offset=${endLine} to read more.` : "";
 
         return {
           path,
@@ -57,7 +76,7 @@ export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
           startLine,
           endLine,
           linesReturned: selectedLines.length,
-          message: `Read ${selectedLines.length} lines from ${path} (lines ${startLine}-${endLine - 1} of ${totalLines})`,
+          message: `Read ${selectedLines.length} lines from ${path} (lines ${startLine}-${endLine - 1} of ${totalLines})${truncationNote}${moreNote}`,
         };
       });
     },

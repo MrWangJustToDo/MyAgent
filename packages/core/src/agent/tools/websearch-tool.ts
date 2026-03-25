@@ -5,13 +5,11 @@
  * - Uses DuckDuckGo HTML search (no API key required)
  * - Returns search results with title, snippet, and URL
  * - Supports domain filtering (allow/block specific domains)
- * - Uses TurndownService for clean HTML-to-text conversion
  *
  * Based on Kode-Agent's WebSearchTool implementation.
  */
 
 import { tool } from "ai";
-import TurndownService from "turndown";
 import { z } from "zod";
 
 import { withDuration } from "./helpers.js";
@@ -83,60 +81,25 @@ function cleanDuckDuckGoUrl(url: string): string {
 }
 
 /**
- * Create a TurndownService instance configured for extracting plain text
- */
-function createTurndownService(): TurndownService {
-  const turndown = new TurndownService({
-    headingStyle: "atx",
-    hr: "---",
-    bulletListMarker: "-",
-    codeBlockStyle: "fenced",
-    emDelimiter: "*",
-  });
-
-  // Remove script, style, and other non-content elements
-  turndown.remove(["script", "style", "meta", "link", "noscript", "nav", "footer", "header"]);
-
-  return turndown;
-}
-
-// Shared TurndownService instance
-const turndownService = createTurndownService();
-
-/**
- * Extract clean text from HTML using TurndownService
+ * Extract clean text from HTML
  */
 function extractText(html: string): string {
-  try {
-    // Use turndown to convert HTML to markdown, then strip markdown formatting for plain text
-    const markdown = turndownService.turndown(html);
-    // Remove markdown links but keep text: [text](url) -> text
-    return markdown
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-      .replace(/\*\*([^*]+)\*\*/g, "$1") // Remove bold
-      .replace(/\*([^*]+)\*/g, "$1") // Remove italic
-      .replace(/`([^`]+)`/g, "$1") // Remove inline code
-      .replace(/\s+/g, " ")
-      .trim();
-  } catch {
-    // Fallback to simple regex extraction
-    return html
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /**
- * Parse DuckDuckGo HTML search results using TurndownService for clean text extraction.
+ * Parse DuckDuckGo HTML search results using Regex for clean text extraction.
  * DuckDuckGo HTML structure:
  * - .result.web-result contains each result
  * - .result__a is the title link with href

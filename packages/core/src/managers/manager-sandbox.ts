@@ -25,8 +25,10 @@ import {
  * // Set environment (optional, defaults to local)
  * manager.setEnvironment("remote");
  *
- * // Get or create sandbox
- * const sandbox = await manager.getSandbox("/path/to/project");
+ * // Get or create sandbox with environment variables
+ * const sandbox = await manager.getSandbox("/path/to/project", {
+ *   env: { NODE_ENV: "development", API_KEY: "secret" }
+ * });
  *
  * // Use sandbox
  * const content = await sandbox.filesystem.readFile("src/index.ts");
@@ -40,13 +42,21 @@ import {
  */
 export class SandboxManager {
   /** Current environment for creating sandboxes */
-  private environment: Environment = defaultEnvironment;
+  private environment: Environment;
 
   /** Cache of sandbox instances by root path */
   private sandboxes: Map<string, Sandbox> = new Map();
 
   /** Cache of sandbox IDs by root path (for retrieval) */
   private sandboxIds: Map<string, string> = new Map();
+
+  /**
+   * Create a SandboxManager with an optional environment.
+   * @param env - Environment type ('local', 'remote') or Environment instance. Defaults to 'local' (just-bash sandbox).
+   */
+  constructor(env?: EnvironmentType) {
+    this.environment = env ? getEnvironment(env) : defaultEnvironment;
+  }
 
   // ============================================================================
   // Environment Management
@@ -146,3 +156,26 @@ export class SandboxManager {
  * Default singleton instance for global use
  */
 export const sandboxManager = new SandboxManager();
+
+/**
+ * Configure the sandbox environment for the global sandboxManager.
+ *
+ * Call this before creating any agents to set the execution environment.
+ *
+ * @param env - Environment type: 'local' (just-bash sandbox), 'native' (direct system), 'remote' (cloud), or a custom Environment instance
+ *
+ * @example
+ * ```typescript
+ * import { configureSandboxEnv } from '@my-agent/core';
+ *
+ * // Set from .env file
+ * const sandboxEnv = process.env.SANDBOX_ENV || 'local';
+ * configureSandboxEnv(sandboxEnv as 'local' | 'native' | 'remote');
+ *
+ * // Then create agents as normal
+ * const agent = await agentManager.createManagedAgent({ ... });
+ * ```
+ */
+export function configureSandboxEnv(env: EnvironmentType): void {
+  sandboxManager.setEnvironment(env);
+}

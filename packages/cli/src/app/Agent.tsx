@@ -36,16 +36,24 @@ export const Agent = () => {
   const config = useArgs((s) => s.config);
 
   // Use local chat with our config
-  const { messages, sendMessage, isLoading, addToolApprovalResponse, initError, initLoading, allPendingApproval } =
-    useLocalChat({
-      model: config.model,
-      url: config.url,
-      rootPath: config.rootPath,
-      systemPrompt: config.systemPrompt,
-      maxIterations: config.maxIterations,
-      provider: config.provider,
-      apiKey: config.apiKey,
-    });
+  const {
+    messages,
+    sendMessage,
+    isLoading,
+    stop,
+    addToolApprovalResponse,
+    initError,
+    initLoading,
+    allPendingApproval,
+  } = useLocalChat({
+    model: config.model,
+    url: config.url,
+    rootPath: config.rootPath,
+    systemPrompt: config.systemPrompt,
+    maxIterations: config.maxIterations,
+    provider: config.provider,
+    apiKey: config.apiKey,
+  });
 
   const hasInitRef = useRef(false);
 
@@ -77,8 +85,20 @@ export const Agent = () => {
 
   // Handle keyboard input
   useInput((inputChar, inputKey) => {
-    // Exit on Ctrl+C or Escape
-    if ((inputKey.ctrl && inputChar === "c") || inputKey.escape) {
+    // Exit on Ctrl+C
+    if (inputKey.ctrl && inputChar === "c") {
+      exit();
+      return;
+    }
+
+    // Escape: abort if running, otherwise exit
+    if (inputKey.escape) {
+      if (isLoading) {
+        // Abort the current agent run
+        stop();
+        return;
+      }
+      // Exit app when not running
       exit();
       return;
     }

@@ -123,8 +123,16 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       ...rest
     } = options;
 
-    const finalMessages = this.prepareMessages({ prompt, messages });
+    // Use async preparation with auto-compaction support
+    const { messages: finalMessages, compactionResult } = await this.prepareMessagesAsync({ prompt, messages });
     this.setupAbortController(abortSignal);
+
+    if (compactionResult?.compacted) {
+      this.log?.info("agent", "Using compacted messages for stream", {
+        tokensBefore: compactionResult.tokensBefore,
+        tokensAfter: compactionResult.tokensAfter,
+      });
+    }
 
     this.status = "running";
     this.error = "";
@@ -234,9 +242,17 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       ...rest
     } = options;
 
-    const finalMessages = this.prepareMessages({ prompt, messages });
+    // Use async preparation with auto-compaction support
+    const { messages: finalMessages, compactionResult } = await this.prepareMessagesAsync({ prompt, messages });
 
     this.setupAbortController(abortSignal);
+
+    if (compactionResult?.compacted) {
+      this.log?.info("agent", "Using compacted messages for generate", {
+        tokensBefore: compactionResult.tokensBefore,
+        tokensAfter: compactionResult.tokensAfter,
+      });
+    }
 
     this.status = "running";
     this.error = "";

@@ -11,7 +11,7 @@
 
 import { generateText } from "ai";
 
-import { buildCompactionPrompt } from "./compaction-prompt.js";
+import { buildCompactionPrompt, type CompactionTodoItem } from "./compaction-prompt.js";
 import { estimateTokens } from "./token-estimator.js";
 
 import type { CompactionConfig, CompactionResult, TranscriptEntry } from "./types.js";
@@ -150,30 +150,46 @@ export async function saveTranscript(
 }
 
 /**
+ * Options for summarizing a conversation
+ */
+export interface SummarizeOptions {
+  /** Optional focus guidance for the summary */
+  focus?: string;
+  /** Optional todos to include in the summary */
+  todos?: CompactionTodoItem[];
+}
+
+/**
  * Use LLM to summarize the conversation.
  *
  * @param messages - Messages to summarize
  * @param model - Language model to use for summarization
- * @param focus - Optional focus guidance for the summary
+ * @param options - Optional summarization options (focus, todos)
  * @returns Summary text
  *
  * @example
  * ```typescript
- * const summary = await summarizeConversation(messages, model, "API decisions");
+ * const summary = await summarizeConversation(messages, model, { focus: "API decisions" });
+ *
+ * // With todos
+ * const summary = await summarizeConversation(messages, model, {
+ *   todos: [{ content: "Add tests", status: "pending", priority: "high" }]
+ * });
  * ```
  */
 export async function summarizeConversation(
   messages: ModelMessage[],
   model: LanguageModel,
-  focus?: string
+  options?: SummarizeOptions
 ): Promise<string> {
+  const { focus, todos } = options ?? {};
+
   // Build the conversation text for summarization
   const conversationText = messages.map(formatMessageForSummary).join("\n\n");
 
-  // Build the summarization prompt
-  const systemPrompt = buildCompactionPrompt(focus);
+  // Build the summarization prompt with focus and todos
+  const systemPrompt = buildCompactionPrompt({ focus, todos });
 
-  // TODO
   // Call LLM for summarization
   const result = await generateText({
     model,
@@ -211,14 +227,14 @@ export function createCompactedMessages(summary: string): ModelMessage[] {
  *
  * This is the main entry point for Layer 2 compaction:
  * 1. Save transcript to disk
- * 2. Summarize conversation via LLM
+ * 2. Summarize conversation via LLM (including any active todos)
  * 3. Return compressed messages
  *
  * @param messages - Current messages array
  * @param config - Compaction configuration
  * @param model - Language model for summarization
  * @param sandbox - Sandbox for filesystem access
- * @param focus - Optional focus guidance for the summary
+ * @param options - Optional summarization options (focus, todos)
  * @returns Compaction result with compressed messages
  *
  * @example
@@ -228,6 +244,11 @@ export function createCompactedMessages(summary: string): ModelMessage[] {
  *   messages = result.messages; // Use compressed messages
  *   console.log(`Saved transcript to ${result.transcriptPath}`);
  * }
+ *
+ * // With todos included
+ * const result = await autoCompact(messages, config, model, sandbox, {
+ *   todos: [{ content: "Add tests", status: "pending", priority: "high" }]
+ * });
  * ```
  */
 export async function autoCompact(
@@ -235,15 +256,15 @@ export async function autoCompact(
   config: Partial<CompactionConfig>,
   model: LanguageModel,
   sandbox: Sandbox,
-  focus?: string
+  options?: SummarizeOptions
 ): Promise<CompactionResult & { messages: ModelMessage[] }> {
   const tokensBefore = estimateTokens(messages);
 
   // Save transcript before compression
   const transcriptPath = await saveTranscript(messages, config, sandbox);
 
-  // Generate summary
-  const summary = await summarizeConversation(messages, model, focus);
+  // Generate summary with optional focus and todos
+  const summary = await summarizeConversation(messages, model, options);
 
   // Create compressed messages
   const compactedMessages = createCompactedMessages(summary);

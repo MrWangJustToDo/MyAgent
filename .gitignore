@@ -28,3 +28,6 @@ web-ext.config.ts
 
 .env
 */.env
+.transcripts
+
+tsconfig.tsbuildinfo

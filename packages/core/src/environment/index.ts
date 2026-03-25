@@ -48,7 +48,7 @@
 
 // Export types
 // Import for getEnvironment
-import { localEnvironment } from "./local";
+import { localEnvironment, nativeEnvironment } from "./local";
 import { remoteEnvironment } from "./remote";
 import { isEnvironmentInstance, type Environment, type EnvironmentType } from "./types";
 
@@ -79,14 +79,15 @@ export const defaultEnvironment: Environment = localEnvironment;
 /**
  * Get an environment by type or return the provided environment
  *
- * @param env - Environment type ('local', 'remote') or Environment instance
+ * @param env - Environment type ('local', 'native', 'remote') or Environment instance
  * @returns The resolved Environment instance
  *
  * @example
  * ```typescript
  * // Get by type
- * const localEnv = getEnvironment('local');
- * const remoteEnv = getEnvironment('remote');
+ * const localEnv = getEnvironment('local');     // just-bash sandbox (isolated)
+ * const nativeEnv = getEnvironment('native');   // direct system access
+ * const remoteEnv = getEnvironment('remote');   // cloud execution
  *
  * // Pass through custom environment
  * const customEnv = createRemoteEnvironment({ apiUrl: '...' });
@@ -101,6 +102,8 @@ export function getEnvironment(env: EnvironmentType): Environment {
   switch (env) {
     case "local":
       return localEnvironment;
+    case "native":
+      return nativeEnvironment;
     case "remote":
       return remoteEnvironment;
     default: {

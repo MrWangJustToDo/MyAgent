@@ -13,7 +13,7 @@ import type { Agent } from "@my-agent/core";
 export const Footer = () => {
   const status = useAgent((s) => (s.agent as Agent)?.status || "idle");
 
-  const isInputEnabled = status === "idle" || status === "completed" || status === "error";
+  const isInputEnabled = status === "idle" || status === "completed" || status === "error" || status === "aborted";
 
   return (
     <FullBox flexDirection="column" flexGrow={1} flexShrink={0} paddingY={1}>
@@ -33,6 +33,11 @@ export const Footer = () => {
         <Box>
           {status === "running" && <Spinner text="Running..." />}
           {status === "completed" && <Text color="green">Completed</Text>}
+          {status === "aborted" && (
+            <Text color="green" dimColor>
+              Aborted
+            </Text>
+          )}
           {status === "waiting" && (
             <Text color="yellow" bold>
               Waiting for approval
@@ -78,10 +83,15 @@ export const Footer = () => {
         borderTopDimColor
         justifyContent="space-between"
       >
-        <Box>
+        <Box gap={2}>
           <Text color="gray" dimColor>
             Exit: Ctrl + C
           </Text>
+          {status === "running" && (
+            <Text color="yellow" dimColor>
+              Abort: Esc
+            </Text>
+          )}
         </Box>
         <LLMUsage />
       </Box>

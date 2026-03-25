@@ -73,9 +73,20 @@ Create a structured summary with these sections:
 // ============================================================================
 
 /**
- * Build the compaction prompt with optional focus guidance.
+ * Structured todo item for inclusion in compaction
+ */
+export interface CompactionTodoItem {
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+  priority: "high" | "medium" | "low";
+}
+
+/**
+ * Build the compaction prompt with optional focus guidance and active todos.
  *
- * @param focus - Optional focus area to emphasize in summarization
+ * @param options - Prompt configuration
+ * @param options.focus - Optional focus area to emphasize in summarization
+ * @param options.todos - Optional list of active todos to include in summary
  * @returns The complete prompt string
  *
  * @example
@@ -84,14 +95,37 @@ Create a structured summary with these sections:
  * const prompt = buildCompactionPrompt();
  *
  * // With focus
- * const prompt = buildCompactionPrompt("preserve the API design decisions");
+ * const prompt = buildCompactionPrompt({ focus: "preserve the API design decisions" });
+ *
+ * // With active todos
+ * const prompt = buildCompactionPrompt({
+ *   todos: [
+ *     { content: "Implement user auth", status: "in_progress", priority: "high" },
+ *     { content: "Add tests", status: "pending", priority: "medium" },
+ *   ]
+ * });
  * ```
  */
-export function buildCompactionPrompt(focus?: string): string {
+export function buildCompactionPrompt(options?: { focus?: string; todos?: CompactionTodoItem[] }): string {
+  const { focus, todos } = options ?? {};
+
   let prompt = COMPACTION_PROMPT;
 
   if (focus) {
     prompt += `\n\n## Special Focus\n\nPay particular attention to preserving information about: ${focus}`;
+  }
+
+  // Include active todos if provided
+  if (todos && todos.length > 0) {
+    prompt += `\n\n## IMPORTANT: Active Todo List\n\nThe following todos are currently active and MUST be included in the summary. The agent should re-create these todos using the todo tool after reading this summary:\n\n`;
+
+    for (const todo of todos) {
+      const statusIcon = todo.status === "in_progress" ? "🔄" : todo.status === "completed" ? "✅" : "⏳";
+      const priorityLabel = todo.priority === "high" ? "[HIGH]" : todo.priority === "low" ? "[LOW]" : "";
+      prompt += `- ${statusIcon} ${priorityLabel} ${todo.content} (${todo.status})\n`;
+    }
+
+    prompt += `\nThese todos represent the current work state and should be restored immediately when continuing.`;
   }
 
   prompt += `\n\n## Your Task\n\nSummarize the conversation that follows. Output ONLY the structured summary, nothing else.`;

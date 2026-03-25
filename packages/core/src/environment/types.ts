@@ -104,8 +104,11 @@ export interface Environment {
 
 /**
  * Environment type identifier for easy switching
+ * - "local": Uses just-bash for isolated sandbox execution (default)
+ * - "native": Uses real bash and Node.js fs for direct system access
+ * - "remote": Uses remote compute gateway for cloud execution
  */
-export type EnvironmentType = "local" | "remote" | Environment;
+export type EnvironmentType = "local" | "native" | "remote" | Environment;
 
 /**
  * Resolve environment type to an Environment instance

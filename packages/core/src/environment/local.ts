@@ -218,10 +218,13 @@ async function createNativeSandbox(config: SandboxConfig): Promise<Sandbox> {
       const startTime = Date.now();
       const cwd = options?.cwd ? resolvePath(options.cwd) : rootPath;
 
+      // Merge process.env with per-command env (per-command takes priority)
+      const mergedEnv = options?.env ? { ...process.env, ...options.env } : process.env;
+
       try {
         const { stdout, stderr } = await execAsync(command, {
           cwd,
-          env: options?.env ? { ...process.env, ...options.env } : process.env,
+          env: mergedEnv,
           timeout: options?.timeout,
           maxBuffer: 50 * 1024 * 1024, // 50MB buffer
         });

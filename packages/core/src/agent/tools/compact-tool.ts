@@ -110,15 +110,15 @@ Use this tool when:
 - You're about to start a significantly different task
 - You want to ensure important context is summarized before it's lost
 
-IMPORTANT: This tool will be BLOCKED if there are incomplete todos (pending or in_progress tasks).
-Complete all todos first before compacting to preserve task context.
-
 What happens:
 1. Full conversation is saved to a transcript file (preserves everything)
 2. LLM summarizes the key information from the conversation
-3. Messages are replaced with the summary to reduce token usage
+3. Incomplete todos are included in the summary so you can restore them
+4. Messages are replaced with the summary to reduce token usage
 
-The summary focuses on: what was done, current work, files modified, next steps, user preferences, and technical decisions.`,
+The summary focuses on: what was done, current work, files modified, next steps, user preferences, technical decisions, and active todos.
+
+IMPORTANT: After compaction, read the summary carefully and use the todo tool to re-create any incomplete tasks that were preserved.`,
 
     inputSchema: z.object({
       focus: z
@@ -127,15 +127,11 @@ The summary focuses on: what was done, current work, files modified, next steps,
         .describe(
           "Optional focus area for the summary. E.g., 'preserve the API design decisions' or 'focus on the error handling approach'"
         ),
-      force: z
-        .boolean()
-        .optional()
-        .describe("Force compaction even if there are incomplete todos. Use with caution - may lose task context."),
     }),
 
     outputSchema: compactOutputSchema,
 
-    execute: async ({ focus, force }) => {
+    execute: async ({ focus }) => {
       return withDuration(async () => {
         const messages = getMessages();
         const model = getModel();
@@ -153,25 +149,18 @@ The summary focuses on: what was done, current work, files modified, next steps,
           };
         }
 
-        // Check for incomplete todos (unless force is set)
-        if (!force && todoManager?.hasIncompleteTodos()) {
-          const incompleteTodos = todoManager.getIncompleteTodos();
-          const todoList = incompleteTodos.map((t) => `- [${t.status}] ${t.content}`).join("\n");
-          return {
-            success: false,
-            tokensBefore: estimateTokens(messages),
-            tokensAfter: estimateTokens(messages),
-            transcriptPath: "",
-            summary: "",
-            compressionRatio: "0%",
-            message: `Cannot compact: ${incompleteTodos.length} incomplete todo(s) exist. Complete them first to preserve task context.\n\nIncomplete todos:\n${todoList}\n\nUse force=true to compact anyway (not recommended).`,
-          };
-        }
+        // Get incomplete todos to include in summary
+        const incompleteTodos = todoManager?.getIncompleteTodos() ?? [];
+        const todos = incompleteTodos.map((t) => ({
+          content: t.content,
+          status: t.status as "pending" | "in_progress" | "completed",
+          priority: t.priority as "high" | "medium" | "low",
+        }));
 
         const tokensBefore = estimateTokens(messages);
 
-        // Perform compaction
-        const result = await autoCompact(messages, config, model, sandbox, focus);
+        // Perform compaction with todos included
+        const result = await autoCompact(messages, config, model, sandbox, { focus, todos });
 
         // Notify the agent to replace messages
         if (onCompact) {
@@ -180,6 +169,11 @@ The summary focuses on: what was done, current work, files modified, next steps,
 
         const compressionRatio = tokensBefore > 0 ? Math.round((1 - result.tokensAfter / tokensBefore) * 100) : 0;
 
+        const todoNote =
+          incompleteTodos.length > 0
+            ? ` ${incompleteTodos.length} incomplete todo(s) included in summary - restore them with the todo tool.`
+            : "";
+
         return {
           success: true,
           tokensBefore: result.tokensBefore,
@@ -187,7 +181,7 @@ The summary focuses on: what was done, current work, files modified, next steps,
           transcriptPath: result.transcriptPath || "",
           summary: result.summary || "",
           compressionRatio: `${compressionRatio}%`,
-          message: `Compacted conversation from ~${tokensBefore} to ~${result.tokensAfter} tokens (${compressionRatio}% reduction). Transcript saved to ${result.transcriptPath}`,
+          message: `Compacted conversation from ~${tokensBefore} to ~${result.tokensAfter} tokens (${compressionRatio}% reduction). Transcript saved to ${result.transcriptPath}.${todoNote}`,
         };
       });
     },

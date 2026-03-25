@@ -6,6 +6,22 @@ import { grepOutputSchema } from "./types.js";
 
 import type { Sandbox } from "../../environment";
 
+/** Maximum characters per matching line content (to prevent context overflow) */
+const MAX_CONTENT_LENGTH = 500;
+
+/** Maximum total characters for all match content combined */
+const MAX_TOTAL_CONTENT = 50000;
+
+/**
+ * Truncates a string to a maximum length with an ellipsis indicator.
+ */
+function truncateContent(content: string, maxLength: number): string {
+  if (content.length <= maxLength) {
+    return content;
+  }
+  return content.slice(0, maxLength) + "...[truncated]";
+}
+
 /**
  * Creates a grep tool using Vercel AI SDK.
  *
@@ -61,6 +77,9 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
 
         const result = await sandbox.runCommand(grepCommand);
 
+        let totalContentLength = 0;
+        let contentTruncated = false;
+
         const matches = result.stdout
           .split("\n")
           .map((line) => line.trim())
@@ -74,12 +93,29 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
               return { file: line, lineNumber: 0, content: "" };
             }
 
+            let content = line.substring(secondColon + 1);
+
+            // Truncate individual line content to prevent huge context
+            if (content.length > MAX_CONTENT_LENGTH) {
+              content = truncateContent(content, MAX_CONTENT_LENGTH);
+              contentTruncated = true;
+            }
+
+            // Track total content size to prevent overwhelming the context
+            totalContentLength += content.length;
+            if (totalContentLength > MAX_TOTAL_CONTENT) {
+              content = "[content omitted - total size limit reached]";
+              contentTruncated = true;
+            }
+
             return {
               file: line.substring(0, firstColon),
               lineNumber: parseInt(line.substring(firstColon + 1, secondColon), 10),
-              content: line.substring(secondColon + 1),
+              content,
             };
           });
+
+        const truncationNote = contentTruncated ? " (some content truncated for context limit)" : "";
 
         return {
           pattern,
@@ -87,8 +123,8 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
           include: include ?? "*",
           matches,
           count: matches.length,
-          truncated: matches.length >= limit,
-          message: `Found ${matches.length} matches for pattern: ${pattern}${matches.length >= limit ? " (results truncated)" : ""}`,
+          truncated: matches.length >= limit || contentTruncated,
+          message: `Found ${matches.length} matches for pattern: ${pattern}${matches.length >= limit ? " (results truncated)" : ""}${truncationNote}`,
         };
       });
     },
