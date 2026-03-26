@@ -370,6 +370,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           outputLength: output.length,
           truncated,
           usage,
+          output,
         });
 
         // Emit subagent:completed event
