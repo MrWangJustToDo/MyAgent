@@ -45,6 +45,8 @@ export const compactionResultSchema = z.object({
   transcriptPath: z.string().optional(),
   /** Summary generated if auto/manual compaction */
   summary: z.string().optional(),
+  /** Error message if compaction failed */
+  error: z.string().optional(),
 });
 
 /**

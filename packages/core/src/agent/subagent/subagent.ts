@@ -58,9 +58,6 @@ export const SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH = 5000;
 /** Maximum retries when output is empty */
 export const SUBAGENT_MAX_RETRIES = 2;
 
-/** Default retry prompt when result.text is empty */
-const DEFAULT_RETRY_PROMPT = `Please provide a summary of what you found or accomplished. Be clear and concise.`;
-
 /** @deprecated Use SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH instead */
 export const SUBAGENT_MAX_SUMMARY_LENGTH = SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH;
 
@@ -102,10 +99,12 @@ export interface SubagentConfig {
   tools?: ToolSet;
   /** Maximum iterations (default: 30) */
   maxIterations?: number;
+  /** Maximum retry (default: 2) */
+  maxRetried?: number;
   /** Maximum output length before truncation (default: 5000) */
   maxOutputLength?: number;
   /** Retry prompt when output is empty (default: asks for summary) */
-  retryPrompt?: string;
+  // retryPrompt?: string;
   /** Whether to retry when output is empty (default: true) */
   retryOnEmpty?: boolean;
   /** Abort signal */
@@ -226,8 +225,8 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
     systemPrompt = SUBAGENT_EXPLORE_SYSTEM_PROMPT,
     tools: customTools,
     maxIterations = SUBAGENT_DEFAULT_MAX_ITERATIONS,
+    maxRetried = SUBAGENT_MAX_RETRIES,
     maxOutputLength = SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH,
-    retryPrompt = DEFAULT_RETRY_PROMPT,
     retryOnEmpty = true,
     abortSignal,
     autoDestroy = true,
@@ -250,7 +249,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
   const parentContext = parentAgent.getContext();
   const parentLog = parentAgent.getLog();
 
-  parentLog?.info("agent", `Starting subagent: ${description}`, { subagentId, prompt });
+  parentLog?.info("agent", `Starting subagent: ${description}`, { subagentId, prompt, initialMessages });
 
   // Track iterations and usage
   let iterations = 0;
@@ -271,14 +270,6 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
   const subagentTools = customTools !== undefined ? customTools : createSubagentTools(sandbox);
   subagent.setTools(subagentTools);
 
-  // Seed initial messages if provided (for compaction use case)
-  if (initialMessages && initialMessages.length > 0) {
-    const subagentContext = subagent.getContext();
-    if (subagentContext) {
-      subagentContext.setMessages(initialMessages);
-    }
-  }
-
   // Emit subagent:created event
   agentManager.emit({
     type: "subagent:created",
@@ -287,147 +278,131 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
     agent: subagent,
   });
 
-  try {
-    // Emit subagent:started event
+  // Helper to track step progress
+  const onStepFinish = (event: { usage?: { inputTokens?: number; outputTokens?: number }; finishReason?: string }) => {
+    iterations++;
+    const { usage: stepUsage, finishReason } = event;
+
+    // Accumulate usage
+    if (stepUsage) {
+      usage.inputTokens += stepUsage.inputTokens ?? 0;
+      usage.outputTokens += stepUsage.outputTokens ?? 0;
+      usage.totalTokens += (stepUsage.inputTokens ?? 0) + (stepUsage.outputTokens ?? 0);
+    }
+
+    parentLog?.debug("agent", `Subagent step ${iterations}`, { subagentId, finishReason });
+
+    // Emit subagent:step event
     agentManager.emit({
-      type: "subagent:started",
+      type: "subagent:step",
       subagentId,
       parentId: parentAgentId,
       agent: subagent,
+      data: { step: iterations, finishReason },
     });
 
-    // Helper to track step progress
-    const onStepFinish = (event: {
-      usage?: { inputTokens?: number; outputTokens?: number };
-      finishReason?: string;
-    }) => {
-      iterations++;
-      const { usage: stepUsage, finishReason } = event;
+    // Check if we hit the limit
+    if (iterations >= maxIterations) {
+      reachedLimit = true;
+    }
+  };
 
-      // Accumulate usage
-      if (stepUsage) {
-        usage.inputTokens += stepUsage.inputTokens ?? 0;
-        usage.outputTokens += stepUsage.outputTokens ?? 0;
-        usage.totalTokens += (stepUsage.inputTokens ?? 0) + (stepUsage.outputTokens ?? 0);
+  try {
+    while (true) {
+      if (retries > maxRetried) {
+        throw new Error("max retry for current task");
       }
 
-      parentLog?.debug("agent", `Subagent step ${iterations}`, { subagentId, finishReason });
-
-      // Emit subagent:step event
+      // Emit subagent:started event
       agentManager.emit({
-        type: "subagent:step",
+        type: "subagent:started",
         subagentId,
         parentId: parentAgentId,
         agent: subagent,
-        data: { step: iterations, finishReason },
       });
 
-      // Check if we hit the limit
-      if (iterations >= maxIterations) {
-        reachedLimit = true;
-      }
-    };
+      retries++;
 
-    // Run subagent - context was pre-seeded with initialMessages if provided
-    // The prompt becomes the final user message
-    let result = await subagent.generate({
-      prompt,
-      abortSignal,
-      onStepFinish,
-    });
+      // reset step
+      iterations = 0;
 
-    // Extract output from result
-    let rawOutput = extractSummary(result);
-
-    // Retry if output is empty (up to max retries)
-    if (retryOnEmpty) {
-      while (!rawOutput || rawOutput === "(no summary)") {
-        if (retries >= SUBAGENT_MAX_RETRIES) {
-          parentLog?.warn("agent", "Subagent output empty after max retries", {
-            subagentId,
-            retries,
-          });
-          break;
-        }
-
-        retries++;
-        parentLog?.debug("agent", `Subagent output empty, retrying (${retries}/${SUBAGENT_MAX_RETRIES})`, {
-          subagentId,
-        });
-
-        // Ask for output explicitly
-        result = await subagent.generate({
-          prompt: retryPrompt,
+      // Run subagent - context was pre-seeded with initialMessages if provided
+      // The prompt becomes the final user message
+      // break the type, but current flow is ok, we will compact the message in prepareMessagesAsync function
+      try {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        const result = await subagent.generate({
+          prompt,
+          messages: initialMessages || [],
           abortSignal,
           onStepFinish,
         });
 
-        rawOutput = extractSummary(result);
+        // Extract output from result
+        const rawOutput = extractSummary(result);
+
+        // Aggregate usage to parent's context
+        if (aggregateUsageToParent && parentContext) {
+          parentContext.updateUsage({
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            totalTokens: usage.totalTokens,
+          });
+        }
+
+        if (retryOnEmpty && (!rawOutput || rawOutput === "(no summary)")) {
+          parentLog?.warn("agent", "Subagent output empty", {
+            subagentId,
+            retries,
+          });
+
+          continue;
+        }
+
+        // Truncate if needed
+        const { summary: output, truncated } = truncateSummary(rawOutput, maxOutputLength);
+
+        parentLog?.info("agent", "Subagent completed", {
+          subagentId,
+          iterations,
+          reachedLimit,
+          outputLength: output.length,
+          truncated,
+          usage,
+        });
+
+        // Emit subagent:completed event
+        agentManager.emit({
+          type: "subagent:completed",
+          subagentId,
+          parentId: parentAgentId,
+          agent: subagent,
+          data: { summary: output, iterations },
+        });
+
+        return {
+          subagentId,
+          output,
+          truncated,
+          iterations,
+          usage,
+          reachedLimit,
+          retries,
+        };
+      } catch (error) {
+        parentLog?.error("agent", "Subagent error", error as Error);
+
+        // Emit subagent:error event
+        agentManager.emit({
+          type: "subagent:error",
+          subagentId,
+          parentId: parentAgentId,
+          agent: subagent,
+          data: { error: error instanceof Error ? error : new Error(String(error)) },
+        });
       }
     }
-
-    // Truncate if needed
-    const { summary: output, truncated } = truncateSummary(rawOutput, maxOutputLength);
-
-    parentLog?.info("agent", "Subagent completed", {
-      subagentId,
-      iterations,
-      reachedLimit,
-      outputLength: output.length,
-      truncated,
-      usage,
-    });
-
-    // Emit subagent:completed event
-    agentManager.emit({
-      type: "subagent:completed",
-      subagentId,
-      parentId: parentAgentId,
-      agent: subagent,
-      data: { summary: output, iterations },
-    });
-
-    // Aggregate usage to parent's context
-    if (aggregateUsageToParent && parentContext) {
-      parentContext.updateUsage({
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
-        totalTokens: usage.totalTokens,
-      });
-    }
-
-    return {
-      subagentId,
-      output,
-      truncated,
-      iterations,
-      usage,
-      reachedLimit,
-      retries,
-    };
-  } catch (error) {
-    parentLog?.error("agent", "Subagent error", error as Error);
-
-    // Emit subagent:error event
-    agentManager.emit({
-      type: "subagent:error",
-      subagentId,
-      parentId: parentAgentId,
-      agent: subagent,
-      data: { error: error instanceof Error ? error : new Error(String(error)) },
-    });
-
-    // Return error as output
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return {
-      subagentId,
-      output: `Subagent error: ${errorMessage}`,
-      truncated: false,
-      iterations,
-      usage,
-      reachedLimit,
-      retries,
-    };
   } finally {
     // Emit subagent:destroyed event before cleanup
     if (autoDestroy) {

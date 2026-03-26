@@ -224,6 +224,7 @@ export async function summarizeConversation(
   // - systemPrompt: tells the LLM it's a summarizer (not a conversational agent)
   // - initialMessages: the conversation history to summarize
   // - prompt: the instruction template (becomes final user message)
+  // - retryOnEmpty: true - use subagent's built-in retry logic
   const result = await runSubagent({
     prompt: summarizationPrompt,
     initialMessages: strippedMessages, // Pass conversation as context
@@ -232,7 +233,7 @@ export async function summarizeConversation(
     tools: {}, // No tools - pure summarization
     maxIterations: 1, // Single pass
     maxOutputLength: 10000, // Allow longer summaries for compaction
-    retryOnEmpty: false, // Don't retry - prompt is explicit
+    retryOnEmpty: true, // Use subagent's built-in retry logic
     autoDestroy: true, // Clean up after
     aggregateUsageToParent: true, // Track usage
     description: "compaction",
@@ -268,16 +269,19 @@ Continue if you have next steps, or stop and ask for clarification if you are un
  * Perform auto compaction on messages.
  *
  * This is the main entry point for Layer 2 compaction:
- * 1. Save transcript to disk
+ * 1. Save transcript to disk (always, for safety)
  * 2. Summarize conversation via subagent (including any active todos)
  * 3. Return compressed messages
+ *
+ * If compaction fails after retries, returns the ORIGINAL messages with an error flag.
+ * This ensures the user never loses their conversation context due to compaction errors.
  *
  * @param messages - Current messages array
  * @param config - Compaction configuration
  * @param parentAgentId - Parent agent ID for spawning summarization subagent
  * @param sandbox - Sandbox for filesystem access
  * @param options - Optional summarization options (focus, todos)
- * @returns Compaction result with compressed messages
+ * @returns Compaction result with compressed messages (or original messages if failed)
  *
  * @example
  * ```typescript
@@ -285,6 +289,9 @@ Continue if you have next steps, or stop and ask for clarification if you are un
  * if (result.compacted) {
  *   messages = result.messages; // Use compressed messages
  *   console.log(`Saved transcript to ${result.transcriptPath}`);
+ * } else if (result.error) {
+ *   console.error(`Compaction failed: ${result.error}`);
+ *   // result.messages contains original messages - nothing lost!
  * }
  *
  * // With todos included
@@ -301,25 +308,48 @@ export async function autoCompact(
   options?: SummarizeOptions
 ): Promise<CompactionResult & { messages: ModelMessage[] }> {
   const tokensBefore = estimateTokens(messages);
+  let transcriptPath: string | undefined;
 
-  // Save transcript before compression
-  const transcriptPath = await saveTranscript(messages, config, sandbox);
+  try {
+    // Save transcript before compression (always do this for safety)
+    transcriptPath = await saveTranscript(messages, config, sandbox);
+  } catch (error) {
+    // If transcript save fails, log but continue - it's not critical
+    // The messages are still in memory
+    console.error("Failed to save transcript:", error);
+  }
 
-  // Generate summary via subagent with optional focus and todos
-  const summary = await summarizeConversation(messages, parentAgentId, options);
+  try {
+    // Generate summary via subagent with optional focus and todos
+    const summary = await summarizeConversation(messages, parentAgentId, options);
 
-  // Create compressed messages
-  const compactedMessages = createCompactedMessages(summary);
+    // Create compressed messages
+    const compactedMessages = createCompactedMessages(summary);
 
-  const tokensAfter = estimateTokens(compactedMessages);
+    const tokensAfter = estimateTokens(compactedMessages);
 
-  return {
-    compacted: true,
-    tokensBefore,
-    tokensAfter,
-    type: "auto",
-    transcriptPath,
-    summary,
-    messages: compactedMessages,
-  };
+    return {
+      compacted: true,
+      tokensBefore,
+      tokensAfter,
+      type: "auto",
+      transcriptPath,
+      summary,
+      messages: compactedMessages,
+    };
+  } catch (error) {
+    // Compaction failed after all retries
+    // Return ORIGINAL messages so user doesn't lose anything
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    return {
+      compacted: false,
+      tokensBefore,
+      tokensAfter: tokensBefore, // No reduction
+      type: "auto",
+      transcriptPath,
+      error: `Compaction failed: ${errorMessage}. Original messages preserved.`,
+      messages, // Return original messages - nothing lost!
+    };
+  }
 }

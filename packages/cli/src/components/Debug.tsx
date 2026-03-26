@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
+import { useUserInput } from "../hooks";
 import { useAgent } from "../hooks/use-agent";
 import { useAgentContext } from "../hooks/use-agent-context";
 import { useAgentLog } from "../hooks/use-agent-log";
@@ -22,6 +23,8 @@ export const Debug = () => {
 
   // @ts-ignore
   useStatic();
+
+  useUserInput((s) => s);
 
   return null;
 };

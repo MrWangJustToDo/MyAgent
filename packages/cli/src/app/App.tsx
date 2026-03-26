@@ -22,7 +22,7 @@ export const App = () => {
   // Default: run agent
   return (
     <Box flexDirection="column">
-      <Debug />
+      {process.env.DEV && <Debug />}
       <Agent />
     </Box>
   );

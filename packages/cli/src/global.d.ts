@@ -7,6 +7,7 @@ declare global {
       provider: "ollama" | 'openRouter';
       apiKey: string
       model: string;
+      DEV: string
     }
   }
 }

@@ -14,9 +14,10 @@ import {
   lastAssistantMessageIsCompleteWithApprovalResponses,
 } from "ai";
 import { useEffect, useCallback, useState, useRef, useMemo } from "react";
-import { toRaw } from "reactivity-store";
 
 import { createAgent } from "../utils/create.js";
+
+import { useForceUpdate } from "./use-force-update.js";
 
 import type { Agent } from "@my-agent/core";
 import type { ChatTransport, UIDataTypes, UIMessage, UIMessagePart, UITools } from "ai";
@@ -134,7 +135,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
   const [initError, setInitError] = useState<Error | null>(null);
   const [agent, setAgent] = useState<Agent | null>(null);
 
-  const [_, setNum] = useState(0);
+  const forceUpdate = useForceUpdate({ time: 600 });
 
   // Chat instance ref - created once when connection is ready
   const chatRef = useRef<Chat<UIMessage> | null>(null);
@@ -170,7 +171,6 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
           transport: transport,
           messages: [],
           sendAutomaticallyWhen(options) {
-            toRaw(agent.getLog())?.tool(`call 'sendAutomaticallyWhen'`, options);
             return lastAssistantMessageIsCompleteWithApprovalResponses(options);
           },
         });
@@ -201,12 +201,14 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
   // 强制刷新 更新 status，当前 @my-react 实现瑕疵
   // TODO！message更新后 status更新的排在了effect之后
   useEffect(() => {
-    const id = setTimeout(() => {
-      setNum((l) => l + 1);
-    }, 500);
-
-    return () => clearTimeout(id);
+    forceUpdate();
   }, [chatHelpers.messages]);
+
+  const stop = () => {
+    chatHelpers.stop();
+
+    forceUpdate();
+  };
 
   // Wrap sendMessage to handle string input (useChat expects object)
   const sendMessage = useCallback(
@@ -318,7 +320,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
     status,
     isLoading: status === "streaming" || status === "submitted",
     isReady: agent !== null && !initLoading && chatRef.current !== null,
-    stop: chatHelpers.stop,
+    stop,
     clearMessages,
     setMessages: chatHelpers.setMessages,
     error: chatHelpers.error ?? null,
