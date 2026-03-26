@@ -43,7 +43,7 @@ export {
 export { estimateTokens, estimateMessageTokens } from "./token-estimator.js";
 
 // Compaction prompt
-export { COMPACTION_PROMPT, buildCompactionPrompt } from "./compaction-prompt.js";
+export { COMPACTION_PROMPT, COMPACTION_SYSTEM_PROMPT, buildCompactionPrompt } from "./compaction-prompt.js";
 
 // Micro compaction (Layer 1)
 export { microCompact } from "./micro-compact.js";

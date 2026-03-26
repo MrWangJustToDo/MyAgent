@@ -17,7 +17,7 @@
 
 import { runSubagent } from "../subagent/subagent.js";
 
-import { buildCompactionPrompt, type CompactionTodoItem } from "./compaction-prompt.js";
+import { buildCompactionPrompt, COMPACTION_SYSTEM_PROMPT, type CompactionTodoItem } from "./compaction-prompt.js";
 import { estimateTokens } from "./token-estimator.js";
 
 import type { CompactionConfig, CompactionResult, TranscriptEntry } from "./types.js";
@@ -29,81 +29,40 @@ import type { ModelMessage } from "ai";
 // ============================================================================
 
 /**
- * Extract text content from a message part.
- * Handles various Vercel AI SDK content part types.
+ * Strip media (images, files) from messages for summarization.
+ * This reduces token usage and avoids issues with vision models.
  */
-function extractPartText(part: unknown): string | null {
-  if (!part || typeof part !== "object") return null;
-
-  const p = part as Record<string, unknown>;
-  const type = p.type as string | undefined;
-
-  switch (type) {
-    case "text":
-      return (p.text as string) || null;
-
-    case "tool-call":
-      // Summarize tool calls concisely
-      return `[Tool: ${p.toolName}]`;
-
-    case "tool-result": {
-      // Summarize tool results concisely - don't dump full output
-      const toolName = (p.toolName as string) || "tool";
-      const result = p.result;
-      if (typeof result === "string" && result.length < 200) {
-        return `[${toolName} result: ${result}]`;
-      }
-      return `[${toolName} result: ...]`;
+function stripMediaFromMessages(messages: ModelMessage[]): ModelMessage[] {
+  return messages.map((message) => {
+    if (typeof message.content === "string") {
+      return message;
     }
 
-    case "reasoning":
-      // Skip reasoning blocks entirely - they're internal LLM thinking
-      return null;
-
-    case "image":
-    case "file":
-      // Skip media attachments
-      return "[Attachment]";
-
-    default:
-      // For unknown types, try to get text property
-      if (typeof p.text === "string") {
-        return p.text;
-      }
-      return null;
-  }
-}
-
-/**
- * Format a message for inclusion in the summarization prompt.
- * Extracts meaningful text content, skipping reasoning blocks and simplifying tool calls.
- */
-function formatMessageForSummary(message: ModelMessage): string {
-  const role = message.role.toUpperCase();
-
-  if (typeof message.content === "string") {
-    return `[${role}]: ${message.content}`;
-  }
-
-  // For array content, extract text parts
-  if (Array.isArray(message.content)) {
-    const textParts: string[] = [];
-
-    for (const part of message.content) {
-      const text = extractPartText(part);
-      if (text) {
-        textParts.push(text);
-      }
+    if (!Array.isArray(message.content)) {
+      return message;
     }
 
-    if (textParts.length === 0) {
-      return `[${role}]: [No text content]`;
-    }
+    // Filter out media parts, keep text and tool parts
+    const filteredContent = message.content
+      .map((part) => {
+        const p = part as Record<string, unknown>;
+        const type = p.type as string | undefined;
 
-    return `[${role}]: ${textParts.join("\n")}`;
-  }
+        // Skip image/file attachments
+        if (type === "image" || type === "file") {
+          return { type: "text", text: `[Attachment: ${type}]` };
+        }
 
-  return `[${role}]: [Complex content]`;
+        // Keep everything else
+        return part;
+      })
+      .filter(Boolean);
+
+    return {
+      ...message,
+      content: filteredContent.length > 0 ? filteredContent : [{ type: "text", text: "[Empty message]" }],
+    } as ModelMessage;
+  });
 }
 
 /**
@@ -255,17 +214,21 @@ export async function summarizeConversation(
 ): Promise<string> {
   const { focus, todos } = options ?? {};
 
-  // Build the conversation text for summarization
-  const conversationText = messages.map(formatMessageForSummary).join("\n\n");
+  // Build the summarization instruction prompt (this becomes the final user message)
+  const summarizationPrompt = buildCompactionPrompt({ focus, todos });
 
-  // Build the summarization prompt with focus and todos
-  const systemPrompt = buildCompactionPrompt({ focus, todos });
+  // Strip media from messages for summarization (like OpenCode does)
+  const strippedMessages = stripMediaFromMessages(messages);
 
   // Run subagent for summarization
+  // - systemPrompt: tells the LLM it's a summarizer (not a conversational agent)
+  // - initialMessages: the conversation history to summarize
+  // - prompt: the instruction template (becomes final user message)
   const result = await runSubagent({
-    prompt: conversationText,
+    prompt: summarizationPrompt,
+    initialMessages: strippedMessages, // Pass conversation as context
     parentAgentId,
-    systemPrompt,
+    systemPrompt: COMPACTION_SYSTEM_PROMPT, // Tell LLM its role is to summarize
     tools: {}, // No tools - pure summarization
     maxIterations: 1, // Single pass
     maxOutputLength: 10000, // Allow longer summaries for compaction

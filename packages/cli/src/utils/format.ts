@@ -141,14 +141,14 @@ function formatGlobOutput(output: GlobOutput): string {
 }
 
 function formatGrepOutput(output: GrepOutput): string {
-  const { matches, count, truncated } = output;
+  const { matches, count, contentTruncated } = output;
   if (count === 0) return "No matches found";
 
   const maxShow = 5;
   const shown = matches.slice(0, maxShow);
   const lines = shown.map((m) => `  ${m.file}:${m.lineNumber}`);
 
-  if (count > maxShow || truncated) {
+  if (count > maxShow || contentTruncated) {
     const remaining = count - maxShow;
     if (remaining > 0) {
       lines.push(`  ... and ${remaining} more matches`);

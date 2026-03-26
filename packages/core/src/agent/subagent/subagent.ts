@@ -43,7 +43,7 @@ import { createRunCommandTool } from "../tools/run-command-tool.js";
 import { createTreeTool } from "../tools/tree-tool.js";
 
 import type { Sandbox } from "../../environment";
-import type { ToolSet } from "ai";
+import type { ModelMessage, ToolSet } from "ai";
 
 // ============================================================================
 // Constants
@@ -114,6 +114,12 @@ export interface SubagentConfig {
   autoDestroy?: boolean;
   /** Whether to aggregate usage to parent context (default: true) */
   aggregateUsageToParent?: boolean;
+  /**
+   * Initial messages to seed the subagent's context.
+   * If provided, these are used instead of starting from empty.
+   * Useful for compaction where you want to pass conversation history.
+   */
+  initialMessages?: ModelMessage[];
 }
 
 export interface SubagentResult {
@@ -226,6 +232,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
     abortSignal,
     autoDestroy = true,
     aggregateUsageToParent = true,
+    initialMessages,
   } = config;
 
   // Generate or use custom subagent ID
@@ -263,6 +270,14 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
   // Set tools - use custom tools if provided, otherwise use read-only exploration tools
   const subagentTools = customTools !== undefined ? customTools : createSubagentTools(sandbox);
   subagent.setTools(subagentTools);
+
+  // Seed initial messages if provided (for compaction use case)
+  if (initialMessages && initialMessages.length > 0) {
+    const subagentContext = subagent.getContext();
+    if (subagentContext) {
+      subagentContext.setMessages(initialMessages);
+    }
+  }
 
   // Emit subagent:created event
   agentManager.emit({
@@ -313,9 +328,10 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
       }
     };
 
-    // Run subagent with fresh context using Agent.generate()
+    // Run subagent - context was pre-seeded with initialMessages if provided
+    // The prompt becomes the final user message
     let result = await subagent.generate({
-      prompt, // Fresh prompt, no message history
+      prompt,
       abortSignal,
       onStepFinish,
     });

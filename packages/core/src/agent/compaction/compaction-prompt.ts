@@ -10,7 +10,28 @@
 // ============================================================================
 
 /**
- * The core compaction prompt template.
+ * System prompt for the compaction subagent.
+ * This tells the LLM its role is to summarize, not to continue the conversation.
+ *
+ * Based on OpenCode's compaction.txt prompt.
+ */
+export const COMPACTION_SYSTEM_PROMPT = `You are a helpful AI assistant tasked with summarizing conversations.
+
+When asked to summarize, provide a detailed but concise summary of the conversation.
+Focus on information that would be helpful for continuing the conversation, including:
+- What was done
+- What is currently being worked on
+- Which files are being modified
+- What needs to be done next
+- Key user requests, constraints, or preferences that should persist
+- Important technical decisions and why they were made
+
+Your summary should be comprehensive enough to provide context but concise enough to be quickly understood.
+
+Do not respond to any questions in the conversation, only output the summary.`;
+
+/**
+ * The core compaction prompt template (used as the final user message).
  *
  * Based on the reference implementation from opencode, this prompt focuses on:
  * - What goal(s) the user is trying to accomplish
