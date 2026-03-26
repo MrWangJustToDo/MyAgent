@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { withDuration } from "./helpers.js";
+import { OUTPUT_LIMITS, withDuration } from "./helpers.js";
 import { grepOutputSchema } from "./types.js";
 
 import type { Sandbox } from "../../environment";
@@ -10,7 +10,10 @@ import type { Sandbox } from "../../environment";
 const MAX_CONTENT_LENGTH = 500;
 
 /** Maximum total characters for all match content combined */
-const MAX_TOTAL_CONTENT = 50000;
+const MAX_TOTAL_CONTENT = OUTPUT_LIMITS.MAX_CONTENT_CHARS;
+
+/** Default number of matches per page */
+const DEFAULT_LIMIT = 100;
 
 /**
  * Truncates a string to a maximum length with an ellipsis indicator.
@@ -27,11 +30,12 @@ function truncateContent(content: string, maxLength: number): string {
  *
  * This tool searches file contents using regular expressions and returns
  * file paths and line numbers with matching content.
+ * Supports pagination with offset/limit parameters.
  */
 export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
   return tool({
     description:
-      "Searches file contents using regular expressions. Returns file paths and line numbers with matching content. Uses `grep` command internally.",
+      "Searches file contents using regular expressions. Returns file paths and line numbers with matching content. Uses `grep` command internally. Supports pagination with offset/limit.",
     inputSchema: z.object({
       pattern: z.string().describe("The regex pattern to search for in file contents."),
       path: z
@@ -45,13 +49,29 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
           "File pattern to include in the search (e.g., '*.js', '*.{ts,tsx}'). If not specified, searches all files."
         ),
       ignoreCase: z.boolean().optional().describe("If true, perform case-insensitive matching. Defaults to false."),
-      maxResults: z.number().int().min(1).optional().describe("Maximum number of matches to return. Defaults to 100."),
+      offset: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe("Number of matches to skip (0-indexed). Use for pagination. Defaults to 0."),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .optional()
+        .describe(`Maximum number of matches to return. Defaults to ${DEFAULT_LIMIT}.`),
     }),
     outputSchema: grepOutputSchema,
-    execute: async ({ pattern, path, include, ignoreCase, maxResults }) => {
+    execute: async ({ pattern, path, include, ignoreCase, offset, limit }) => {
       return withDuration(async () => {
         const searchPath = path ?? ".";
-        const limit = maxResults ?? 100;
+        const skip = offset ?? 0;
+        const take = limit ?? DEFAULT_LIMIT;
+
+        // We need to fetch more results to support pagination
+        const fetchCount = skip + take + 1;
 
         // Build grep command
         let grepCommand = "grep -rn";
@@ -69,8 +89,8 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
         const escapedPattern = pattern.replace(/"/g, '\\"');
         grepCommand += ` "${escapedPattern}" ${searchPath}`;
 
-        // Limit results
-        grepCommand += ` | head -n ${limit}`;
+        // Limit results (fetch more than needed for pagination)
+        grepCommand += ` | head -n ${fetchCount}`;
 
         // Add 2>/dev/null to suppress errors for non-readable files
         grepCommand += " 2>/dev/null || true";
@@ -80,7 +100,7 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
         let totalContentLength = 0;
         let contentTruncated = false;
 
-        const matches = result.stdout
+        const allMatches = result.stdout
           .split("\n")
           .map((line) => line.trim())
           .filter((line) => line.length > 0)
@@ -115,16 +135,34 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
             };
           });
 
-        const truncationNote = contentTruncated ? " (some content truncated for context limit)" : "";
+        // Apply pagination
+        const paginatedMatches = allMatches.slice(skip, skip + take);
+        const hasMore = allMatches.length > skip + take;
+
+        // Build message
+        let message = `Found ${paginatedMatches.length} matches for pattern: ${pattern}`;
+        if (skip > 0) {
+          message += ` (offset: ${skip})`;
+        }
+        if (hasMore) {
+          const nextOffset = skip + take;
+          message += `. Use offset=${nextOffset} to see more.`;
+        }
+        if (contentTruncated) {
+          message += " (some content truncated)";
+        }
 
         return {
           pattern,
           path: searchPath,
           include: include ?? "*",
-          matches,
-          count: matches.length,
-          truncated: matches.length >= limit || contentTruncated,
-          message: `Found ${matches.length} matches for pattern: ${pattern}${matches.length >= limit ? " (results truncated)" : ""}${truncationNote}`,
+          matches: paginatedMatches,
+          count: paginatedMatches.length,
+          offset: skip,
+          hasMore,
+          nextOffset: hasMore ? skip + take : null,
+          contentTruncated,
+          message,
         };
       });
     },

@@ -29,7 +29,54 @@ import type { ModelMessage } from "ai";
 // ============================================================================
 
 /**
+ * Extract text content from a message part.
+ * Handles various Vercel AI SDK content part types.
+ */
+function extractPartText(part: unknown): string | null {
+  if (!part || typeof part !== "object") return null;
+
+  const p = part as Record<string, unknown>;
+  const type = p.type as string | undefined;
+
+  switch (type) {
+    case "text":
+      return (p.text as string) || null;
+
+    case "tool-call":
+      // Summarize tool calls concisely
+      return `[Tool: ${p.toolName}]`;
+
+    case "tool-result": {
+      // Summarize tool results concisely - don't dump full output
+      const toolName = (p.toolName as string) || "tool";
+      const result = p.result;
+      if (typeof result === "string" && result.length < 200) {
+        return `[${toolName} result: ${result}]`;
+      }
+      return `[${toolName} result: ...]`;
+    }
+
+    case "reasoning":
+      // Skip reasoning blocks entirely - they're internal LLM thinking
+      return null;
+
+    case "image":
+    case "file":
+      // Skip media attachments
+      return "[Attachment]";
+
+    default:
+      // For unknown types, try to get text property
+      if (typeof p.text === "string") {
+        return p.text;
+      }
+      return null;
+  }
+}
+
+/**
  * Format a message for inclusion in the summarization prompt.
+ * Extracts meaningful text content, skipping reasoning blocks and simplifying tool calls.
  */
 function formatMessageForSummary(message: ModelMessage): string {
   const role = message.role.toUpperCase();
@@ -38,13 +85,25 @@ function formatMessageForSummary(message: ModelMessage): string {
     return `[${role}]: ${message.content}`;
   }
 
-  // For complex content (parts array), stringify it
-  try {
-    const contentStr = JSON.stringify(message.content, null, 2);
-    return `[${role}]: ${contentStr}`;
-  } catch {
-    return `[${role}]: [Complex content]`;
+  // For array content, extract text parts
+  if (Array.isArray(message.content)) {
+    const textParts: string[] = [];
+
+    for (const part of message.content) {
+      const text = extractPartText(part);
+      if (text) {
+        textParts.push(text);
+      }
+    }
+
+    if (textParts.length === 0) {
+      return `[${role}]: [No text content]`;
+    }
+
+    return `[${role}]: ${textParts.join("\n")}`;
   }
+
+  return `[${role}]: [Complex content]`;
 }
 
 /**
@@ -223,7 +282,7 @@ export async function summarizeConversation(
  * Create the compressed message with the conversation summary.
  *
  * @param summary - The generated summary
- * @returns Array with just the summary as a system/user message
+ * @returns Array with just the summary as a user message
  */
 export function createCompactedMessages(summary: string): ModelMessage[] {
   // Only include the summary as context - no fake assistant response needed.
@@ -231,7 +290,13 @@ export function createCompactedMessages(summary: string): ModelMessage[] {
   return [
     {
       role: "user" as const,
-      content: `[CONVERSATION SUMMARY]\n\nThe following is a summary of the previous conversation:\n\n${summary}\n\n[END SUMMARY]\n\nPlease continue from where we left off.`,
+      content: `[CONVERSATION SUMMARY]
+
+${summary}
+
+[END SUMMARY]
+
+Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.`,
     },
   ];
 }

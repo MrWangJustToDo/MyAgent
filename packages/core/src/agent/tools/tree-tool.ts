@@ -1,9 +1,15 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { withDuration } from "./helpers.js";
+import { OUTPUT_LIMITS, truncateString, withDuration } from "./helpers.js";
 
 import type { Sandbox } from "../../environment";
+
+/** Maximum characters for tree output */
+const MAX_TREE_CHARS = OUTPUT_LIMITS.MAX_CONTENT_CHARS;
+
+/** Maximum entries to show in tree */
+const MAX_TREE_ENTRIES = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
 
 /**
  * Creates a tree tool using Vercel AI SDK.
@@ -31,6 +37,7 @@ export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
       maxDepth: z.number().describe("The maximum depth that was traversed."),
       tree: z.string().describe("The tree structure as a formatted string."),
       totalEntries: z.number().describe("Total number of entries (files and directories) shown."),
+      truncated: z.boolean().describe("Whether the tree output was truncated."),
       message: z.string().describe("Human-readable summary of the operation."),
       durationMs: z.number().describe("Execution duration in milliseconds."),
     }),
@@ -87,7 +94,7 @@ export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
             }
           }
 
-          findCommand += " | sort | head -500";
+          findCommand += ` | sort | head -${MAX_TREE_ENTRIES}`;
 
           result = await sandbox.runCommand(findCommand);
 
@@ -97,25 +104,38 @@ export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
 
           // Convert find output to tree-like format
           const paths = result.stdout.split("\n").filter((p) => p.trim());
-          const tree = formatAsTree(paths, rootPath);
+          let tree = formatAsTree(paths, rootPath);
+
+          // Truncate tree output if too long
+          const { text: truncatedTree, truncated } = truncateString(tree, MAX_TREE_CHARS);
+          tree = truncatedTree;
+
+          const truncationNote = truncated ? " (output truncated)" : "";
 
           return {
             path: rootPath,
             maxDepth: depth,
             tree,
             totalEntries: paths.length,
-            message: `Directory tree for: ${rootPath} (depth: ${depth})`,
+            truncated,
+            message: `Directory tree for: ${rootPath} (depth: ${depth})${truncationNote}`,
           };
         }
 
         const lines = result.stdout.split("\n").filter((l) => l.trim());
 
+        // Truncate tree output if too long
+        const { text: truncatedTree, truncated } = truncateString(result.stdout, MAX_TREE_CHARS);
+
+        const truncationNote = truncated ? " (output truncated)" : "";
+
         return {
           path: rootPath,
           maxDepth: depth,
-          tree: result.stdout,
+          tree: truncatedTree,
           totalEntries: lines.length,
-          message: `Directory tree for: ${rootPath} (depth: ${depth})`,
+          truncated,
+          message: `Directory tree for: ${rootPath} (depth: ${depth})${truncationNote}`,
         };
       });
     },

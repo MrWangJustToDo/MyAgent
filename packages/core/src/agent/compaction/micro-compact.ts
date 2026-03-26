@@ -16,6 +16,16 @@ import type { CompactionConfig } from "./types.js";
 import type { ModelMessage } from "ai";
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/**
+ * Tools whose results should never be pruned/compacted.
+ * These contain important context that should always be preserved.
+ */
+const PROTECTED_TOOLS = new Set(["skill", "load_skill", "compact"]);
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -165,8 +175,17 @@ export function microCompact(messages: ModelMessage[], config: Partial<Compactio
   // Determine which tool results to compact (oldest ones, excluding recent N)
   const toCompact = toolResults.slice(0, toolResults.length - keepRecentToolResults);
 
-  // Filter out small results
-  const compactTargets = toCompact.filter((tr) => tr.size >= minToolResultSize);
+  // Filter out small results and protected tools
+  const compactTargets = toCompact.filter((tr) => {
+    // Don't compact small results
+    if (tr.size < minToolResultSize) return false;
+
+    // Don't compact protected tools (skill, load_skill, compact)
+    const toolName = toolCallMap.get(tr.toolCallId);
+    if (toolName && PROTECTED_TOOLS.has(toolName)) return false;
+
+    return true;
+  });
 
   // If nothing to compact after filtering, return original
   if (compactTargets.length === 0) {

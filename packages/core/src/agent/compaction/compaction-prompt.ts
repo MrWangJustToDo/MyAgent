@@ -13,54 +13,38 @@
  * The core compaction prompt template.
  *
  * Based on the reference implementation from opencode, this prompt focuses on:
- * - What was done
- * - What is currently being worked on
- * - Which files are being modified
- * - What needs to be done next
- * - Key user requests, constraints, or preferences
- * - Important technical decisions and why
+ * - What goal(s) the user is trying to accomplish
+ * - What important instructions the user gave
+ * - What notable things were learned (discoveries)
+ * - What work was done, is in progress, or remains
+ * - Which files are relevant
  */
-export const COMPACTION_PROMPT = `You are a summarizer. Your ONLY task is to create a summary of the conversation.
+export const COMPACTION_PROMPT = `Provide a detailed prompt for continuing the conversation above.
+Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next.
+The summary that you construct will be used so that another agent can read it and continue the work.
 
-CRITICAL RULES:
-- Output ONLY a summary in plain text/markdown
-- Do NOT include any tool calls, function calls, or XML tags
-- Do NOT include "<tool_call>", "<function>", "<parameter>" or similar
-- Do NOT say "I'll do this" or "Let me do that" - just summarize what WAS done
-- Do NOT respond to questions - only summarize
-
-## What to Include
-
-Provide a detailed but concise summary focusing on:
-
-1. **What was done** - Completed work with specific file paths and changes
-2. **Current state** - What is being worked on right now
-3. **Files modified** - List of files created, modified, or deleted
-4. **What needs to be done next** - Pending tasks and next steps
-5. **User preferences** - Any requirements or constraints mentioned
-6. **Technical decisions** - Important choices made and why
-
-## Format
-
-Write in clear, structured prose or bullet points. Example:
-
+When constructing the summary, stick to this template:
 ---
-## Summary
+## Goal
 
-### Completed
-- Created src/utils/helper.ts with validation functions
-- Updated src/index.ts to use new helper
+[What goal(s) is the user trying to accomplish?]
 
-### In Progress
-- Implementing user authentication in src/auth/
+## Instructions
 
-### Next Steps
-- Add unit tests for helper functions
-- Configure database connection
+- [What important instructions did the user give you that are relevant]
+- [If there is a plan or spec, include information about it so next agent can continue using it]
 
-### User Requirements
-- Must use TypeScript strict mode
-- Prefer functional programming style
+## Discoveries
+
+[What notable things were learned during this conversation that would be useful for the next agent to know when continuing the work]
+
+## Accomplished
+
+[What work has been completed, what work is still in progress, and what work is left?]
+
+## Relevant files / directories
+
+[Construct a structured list of relevant files that have been read, edited, or created that pertain to the task at hand. If all the files in a directory are relevant, include the path to the directory.]
 ---
 
 Be concise but complete. Include specific file paths, function names, and technical details.`;
@@ -106,26 +90,26 @@ export interface CompactionTodoItem {
 export function buildCompactionPrompt(options?: { focus?: string; todos?: CompactionTodoItem[] }): string {
   const { focus, todos } = options ?? {};
 
-  let prompt = COMPACTION_PROMPT;
+  const parts: string[] = [COMPACTION_PROMPT];
 
   if (focus) {
-    prompt += `\n\n## Special Focus\n\nPay particular attention to preserving information about: ${focus}`;
+    parts.push(`\n## Special Focus\n\nPay particular attention to preserving information about: ${focus}`);
   }
 
-  // Include active todos if provided
+  // Include active todos if provided - these go in the Accomplished section
   if (todos && todos.length > 0) {
-    prompt += `\n\n## IMPORTANT: Active Todo List\n\nThe following todos are currently active and MUST be included in the summary. The agent should re-create these todos using the todo tool after reading this summary:\n\n`;
+    parts.push(
+      `\n## Active Todo List\n\nThe following todos are currently active and should be included in the "Accomplished" section:\n`
+    );
 
     for (const todo of todos) {
-      const statusIcon = todo.status === "in_progress" ? "🔄" : todo.status === "completed" ? "✅" : "⏳";
-      const priorityLabel = todo.priority === "high" ? "[HIGH]" : todo.priority === "low" ? "[LOW]" : "";
-      prompt += `- ${statusIcon} ${priorityLabel} ${todo.content} (${todo.status})\n`;
+      const statusIcon =
+        todo.status === "in_progress" ? "[IN PROGRESS]" : todo.status === "completed" ? "[DONE]" : "[PENDING]";
+      const priorityLabel =
+        todo.priority === "high" ? "(high priority)" : todo.priority === "low" ? "(low priority)" : "";
+      parts.push(`- ${statusIcon} ${todo.content} ${priorityLabel}`.trim());
     }
-
-    prompt += `\nThese todos represent the current work state and should be restored immediately when continuing.`;
   }
 
-  prompt += `\n\n## Your Task\n\nSummarize the conversation that follows. Output ONLY the structured summary, nothing else.`;
-
-  return prompt;
+  return parts.join("\n");
 }

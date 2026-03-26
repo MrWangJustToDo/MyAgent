@@ -21,6 +21,7 @@ import { withDuration } from "./helpers.js";
 // ============================================================================
 
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_CONTENT_CHARS = 100000; // ~100KB, roughly 25k tokens
 const DEFAULT_TIMEOUT = 30; // 30 seconds
 const MAX_TIMEOUT = 120; // 2 minutes
 
@@ -112,6 +113,8 @@ export const webfetchOutputSchema = z.object({
   contentLength: z.number().describe("Length of the content in characters"),
   /** Whether the content is an image (base64 encoded) */
   isImage: z.boolean().describe("Whether the content is an image"),
+  /** Whether the content was truncated due to size limits */
+  truncated: z.boolean().describe("Whether content was truncated due to size limits"),
   /** Human-readable message */
   message: z.string().describe("Human-readable result message"),
   /** Execution duration in milliseconds */
@@ -242,6 +245,7 @@ Usage notes:
               content: `data:${mime};base64,${base64Content}`,
               contentLength: base64Content.length,
               isImage: true,
+              truncated: false,
               message: `Fetched image (${mime}, ${arrayBuffer.byteLength} bytes)`,
             };
           }
@@ -274,13 +278,24 @@ Usage notes:
               break;
           }
 
+          // Truncate content if too long
+          const originalLength = content.length;
+          let truncated = false;
+          if (content.length > MAX_CONTENT_CHARS) {
+            content = content.slice(0, MAX_CONTENT_CHARS) + "\n\n[...content truncated...]";
+            truncated = true;
+          }
+
+          const truncationNote = truncated ? ` (truncated from ${originalLength} chars)` : "";
+
           return {
             url,
             contentType,
             content,
-            contentLength: content.length,
+            contentLength: originalLength,
             isImage: false,
-            message: `Fetched ${url} (${contentType}, ${content.length} chars)`,
+            truncated,
+            message: `Fetched ${url} (${contentType}, ${originalLength} chars)${truncationNote}`,
           };
         } finally {
           clearTimeout(timeoutId);

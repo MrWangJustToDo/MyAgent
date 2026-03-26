@@ -24,7 +24,7 @@ const DEFAULT_LINE_LIMIT = 2000;
 const MAX_LINE_LENGTH = 2000;
 
 // ============================================================================
-// File Type Detection (using mime-types)
+// File Type Detection
 // ============================================================================
 
 type FileType = "text" | "image" | "pdf" | "directory" | "binary";
@@ -35,10 +35,67 @@ interface FileTypeInfo {
 }
 
 /**
- * Detect file type based on MIME type lookup
+ * Known binary file extensions that should never be read as text.
+ * Based on OpenCode's approach - only list known binary types.
+ */
+const BINARY_EXTENSIONS = new Set([
+  // Archives
+  ".zip",
+  ".tar",
+  ".gz",
+  ".7z",
+  ".rar",
+  ".bz2",
+  ".xz",
+  // Executables and libraries
+  ".exe",
+  ".dll",
+  ".so",
+  ".dylib",
+  ".bin",
+  // Compiled code
+  ".class",
+  ".jar",
+  ".war",
+  ".pyc",
+  ".pyo",
+  ".wasm",
+  ".o",
+  ".a",
+  ".lib",
+  ".obj",
+  // Office documents (binary formats)
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".odt",
+  ".ods",
+  ".odp",
+  // Data files
+  ".dat",
+  ".db",
+  ".sqlite",
+  ".sqlite3",
+]);
+
+/**
+ * Check if a file has a known binary extension
+ */
+function isBinaryExtension(filePath: string): boolean {
+  const ext = nodePath.extname(filePath).toLowerCase();
+  return BINARY_EXTENSIONS.has(ext);
+}
+
+/**
+ * Detect file type based on MIME type and extension.
  *
- * Uses the mime-types package for accurate MIME type detection.
- * Falls back to binary content detection for unknown extensions.
+ * Strategy (following OpenCode's approach):
+ * 1. Use MIME type to detect images and PDFs
+ * 2. Use extension list to detect known binary files
+ * 3. Everything else is assumed to be text (with binary content check later)
  */
 function detectFileType(filePath: string, stat?: FileStat): FileTypeInfo {
   // Check if it's a directory
@@ -46,23 +103,18 @@ function detectFileType(filePath: string, stat?: FileStat): FileTypeInfo {
     return { type: "directory" };
   }
 
-  // Get MIME type from extension using mime-types
-  const mimeType = mime.lookup(filePath);
-
-  // If no MIME type found, treat as unknown (will do binary content check later)
-  if (!mimeType) {
-    return { type: "text" }; // Will be verified by binary content check
-  }
+  // Get MIME type from extension
+  const mimeType = mime.lookup(filePath) || undefined;
 
   // Check for images (supported for LLM vision)
-  if (mimeType.startsWith("image/")) {
-    // Only support common web-safe image formats
-    const supportedImageTypes = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"];
-    if (supportedImageTypes.includes(mimeType)) {
-      return { type: "image", mimeType };
-    }
-    // Other image formats (tiff, bmp, ico, etc.) are treated as binary
-    return { type: "binary", mimeType };
+  // Exclude SVG (XML-based, can be read as text) and vnd.fastbidsheet
+  if (
+    mimeType &&
+    mimeType.startsWith("image/") &&
+    mimeType !== "image/svg+xml" &&
+    mimeType !== "image/vnd.fastbidsheet"
+  ) {
+    return { type: "image", mimeType };
   }
 
   // Check for PDF
@@ -70,30 +122,14 @@ function detectFileType(filePath: string, stat?: FileStat): FileTypeInfo {
     return { type: "pdf", mimeType };
   }
 
-  // Check for text-based MIME types
-  if (
-    mimeType.startsWith("text/") ||
-    mimeType === "application/json" ||
-    mimeType === "application/javascript" ||
-    mimeType === "application/typescript" ||
-    mimeType === "application/xml" ||
-    mimeType === "application/xhtml+xml" ||
-    mimeType === "application/x-sh" ||
-    mimeType === "application/x-httpd-php" ||
-    mimeType === "application/sql" ||
-    mimeType === "application/graphql" ||
-    mimeType === "application/ld+json" ||
-    mimeType === "application/manifest+json" ||
-    mimeType === "application/x-yaml" ||
-    mimeType === "application/toml" ||
-    mimeType.endsWith("+xml") ||
-    mimeType.endsWith("+json")
-  ) {
-    return { type: "text", mimeType };
+  // Check for known binary extensions
+  if (isBinaryExtension(filePath)) {
+    return { type: "binary", mimeType };
   }
 
-  // Everything else is binary (audio, video, archives, executables, fonts, etc.)
-  return { type: "binary", mimeType };
+  // Everything else is assumed to be text
+  // Binary content check will be done later when reading the file
+  return { type: "text", mimeType };
 }
 
 /**

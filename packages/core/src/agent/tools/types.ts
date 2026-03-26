@@ -16,7 +16,11 @@ export const listFileOutputSchema = z.object({
       })
     )
     .describe("Array of directory entries."),
-  count: z.number().describe("Number of entries in the directory."),
+  count: z.number().describe("Number of entries returned in this page."),
+  totalEntries: z.number().describe("Total number of entries in the directory."),
+  offset: z.number().describe("The offset used for this query (0-indexed)."),
+  hasMore: z.boolean().describe("Whether there are more entries available."),
+  nextOffset: z.number().nullable().describe("The offset to use for the next page, or null if no more entries."),
   message: z.string().describe("Human-readable summary of the operation."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
 });
@@ -55,7 +59,10 @@ export const globOutputSchema = z.object({
   pattern: z.string().describe("The glob pattern that was searched."),
   path: z.string().describe("The directory that was searched."),
   files: z.array(z.string()).describe("Array of matching file paths."),
-  count: z.number().describe("Number of files found."),
+  count: z.number().describe("Number of files returned in this page."),
+  offset: z.number().describe("The offset used for this query (0-indexed)."),
+  hasMore: z.boolean().describe("Whether there are more results available."),
+  nextOffset: z.number().nullable().describe("The offset to use for the next page, or null if no more results."),
   message: z.string().describe("Human-readable summary of the operation."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
 });
@@ -73,8 +80,11 @@ export const grepOutputSchema = z.object({
       })
     )
     .describe("Array of matches found."),
-  count: z.number().describe("Total number of matches found."),
-  truncated: z.boolean().describe("Whether results were truncated due to limit."),
+  count: z.number().describe("Number of matches returned in this page."),
+  offset: z.number().describe("The offset used for this query (0-indexed)."),
+  hasMore: z.boolean().describe("Whether there are more matches available."),
+  nextOffset: z.number().nullable().describe("The offset to use for the next page, or null if no more matches."),
+  contentTruncated: z.boolean().describe("Whether some match content was truncated."),
   message: z.string().describe("Human-readable summary of the operation."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
 });

@@ -289,6 +289,7 @@ export class Base {
       this.log?.info("agent", "Auto-compaction triggered", {
         estimatedTokens: this.getCurrentTokens(finalMessages),
         threshold: this.compactionConfig?.tokenThreshold ?? 100000,
+        incompleteTodos: this.todoManager?.getIncompleteTodos().length,
       });
 
       this.status = "compacting";
@@ -357,13 +358,6 @@ export class Base {
   shouldAutoCompact(messages?: ModelMessage[]): boolean {
     if (!this.compactionConfig?.enabled) {
       return false;
-    }
-
-    // Log if we have incomplete todos (they'll be included in the summary)
-    if (this.todoManager?.hasIncompleteTodos()) {
-      this.log?.debug("agent", "Auto-compact with incomplete todos - will include in summary", {
-        incompleteTodos: this.todoManager.getIncompleteTodos().length,
-      });
     }
 
     const threshold = this.compactionConfig.tokenThreshold ?? 100000;
