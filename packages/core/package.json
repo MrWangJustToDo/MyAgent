@@ -26,6 +26,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/mcp": "^1.0.30",
     "@ai-sdk/openai": "^3.0.41",
     "@computesdk/just-bash": "^0.4.0",
     "@computesdk/provider": "^1.0.28",

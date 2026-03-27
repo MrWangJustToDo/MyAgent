@@ -35,6 +35,8 @@ export interface CliAgentConfig {
   provider: Provider;
   /** API key for OpenRouter (required when provider is "openRouter") */
   apiKey: string;
+  /** Path to MCP config file (relative to rootPath). Defaults to ".opencode/mcp.json" */
+  mcpConfigPath: string;
 }
 
 // ============================================================================
@@ -190,6 +192,7 @@ export const useArgs = createState(
       debug: false,
       provider: DEFAULT_PROVIDER,
       apiKey: "",
+      mcpConfigPath: "",
     } as CliAgentConfig,
     /** Whether args have been initialized */
     initialized: false,
@@ -244,6 +247,10 @@ export const useArgs = createState(
         // API key: CLI --api-key flag > env var
         state.config.apiKey = getFlagString(parsed, envApiKey, "api-key", "k");
 
+        // MCP config path: CLI --mcp-config flag > env var > empty (uses default)
+        const envMcpConfig = getEnv("MCP_CONFIG_PATH");
+        state.config.mcpConfigPath = getFlagString(parsed, envMcpConfig, "mcp-config");
+
         state.helpRequested = getFlagBoolean(parsed, "help", "h");
         state.initialized = true;
       },
@@ -282,6 +289,7 @@ export const useArgs = createState(
         state.config.debug = false;
         state.config.provider = DEFAULT_PROVIDER;
         state.config.apiKey = "";
+        state.config.mcpConfigPath = "";
         state.helpRequested = false;
         state.initialized = false;
         state.key = "";

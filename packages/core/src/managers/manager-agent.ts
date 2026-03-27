@@ -2,6 +2,8 @@ import { AgentLog } from "../agent";
 import { AgentContext } from "../agent/agent-context";
 import { createCompactionConfig } from "../agent/compaction/types.js";
 import { Agent } from "../agent/loop/agent.js";
+import { loadMcpConfig } from "../agent/mcp/config.js";
+import { McpManager } from "../agent/mcp/manager.js";
 import { SkillRegistry } from "../agent/skills/skill-registry.js";
 import { TodoManager } from "../agent/todo-manager";
 import { createCompactTool } from "../agent/tools/compact-tool.js";
@@ -36,6 +38,8 @@ export type ManagedAgentConfig<T = Agent | AgentContext> = AgentConfig & {
   skillDirs?: string[];
   /** Compaction configuration for context management */
   compaction?: CompactionConfigInput;
+  /** Path to MCP config file (relative to rootPath). Defaults to ".opencode/mcp.json" */
+  mcpConfigPath?: string;
 };
 
 /** Agent instance managed by AgentManager */
@@ -53,6 +57,7 @@ export interface ManagedAgent {
   todoManager: TodoManager;
   status: Agent["status"];
   error?: string;
+  mcpManager?: McpManager;
   parentId?: string; // For subagent support
   childIds: string[]; // For agent team support
   createdAt: number;
@@ -178,7 +183,17 @@ export class AgentManager {
    * Create a new agent
    */
   async createManagedAgent(config: ManagedAgentConfig, parentId?: string): Promise<Agent> {
-    const { id: customId, rootPath, setUp, languageModel, name, skillDirs, compaction, ...restConfig } = config;
+    const {
+      id: customId,
+      rootPath,
+      setUp,
+      languageModel,
+      name,
+      skillDirs,
+      compaction,
+      mcpConfigPath,
+      ...restConfig
+    } = config;
 
     const sandbox = await sandboxManager.getSandbox(rootPath);
 
@@ -263,6 +278,19 @@ export class AgentManager {
       agent.addTools({ compact: compactTool });
     }
 
+    // MCP Integration: connect to configured MCP servers and register their tools (root agents only)
+    let mcpManager: McpManager | undefined;
+    if (!parentId) {
+      const mcpConfig = await loadMcpConfig(sandbox, mcpConfigPath);
+      if (mcpConfig && Object.keys(mcpConfig.mcpServers).length > 0) {
+        mcpManager = new McpManager();
+        const mcpTools = await mcpManager.initialize(mcpConfig, log);
+        if (Object.keys(mcpTools).length > 0) {
+          agent.addTools(mcpTools);
+        }
+      }
+    }
+
     const id = agent.id;
 
     const managedAgent: ManagedAgent = {
@@ -275,6 +303,7 @@ export class AgentManager {
       tools: tools as unknown as ToolSet,
       log,
       todoManager,
+      mcpManager,
       status: "idle",
       parentId,
       childIds: [],
@@ -344,6 +373,9 @@ export class AgentManager {
   destroyAgent(id: string): void {
     const managedAgent = this.agents.get(id);
     if (!managedAgent) return;
+
+    // Shut down MCP connections
+    managedAgent.mcpManager?.shutdown().catch(() => {});
 
     // Abort the agent if running
     managedAgent.agent.abort("Agent destroyed");

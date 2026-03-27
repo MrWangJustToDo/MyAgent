@@ -19,6 +19,7 @@ export const createAgent = async ({
   maxIterations,
   provider,
   apiKey,
+  mcpConfigPath,
 }: {
   model: CliAgentConfig["model"];
   url: CliAgentConfig["url"];
@@ -27,6 +28,7 @@ export const createAgent = async ({
   maxIterations: CliAgentConfig["maxIterations"];
   provider: CliAgentConfig["provider"];
   apiKey?: CliAgentConfig["apiKey"];
+  mcpConfigPath?: CliAgentConfig["mcpConfigPath"];
 }) => {
   let languageModel: LanguageModel | null = null;
 
@@ -52,6 +54,7 @@ export const createAgent = async ({
       systemPrompt ||
       "You are a helpful coding assistant. You can read, write, and modify files, run commands in bash, and help with programming tasks.",
     maxIterations,
+    mcpConfigPath: mcpConfigPath || undefined,
     setUp: (instance: (Agent | AgentContext) & { ["$$symbol"]?: symbol }) => {
       if (instance["$$symbol"]) return instance;
       instance["$$symbol"] = Symbol.for("patch");

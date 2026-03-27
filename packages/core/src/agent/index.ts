@@ -149,3 +149,16 @@ export {
   type CompactToolConfig,
   type CompactOutput,
 } from "./tools/compact-tool.js";
+
+// MCP exports
+export {
+  McpManager,
+  loadMcpConfig,
+  DEFAULT_MCP_CONFIG_PATH,
+  mcpConfigSchema,
+  mcpServerConfigSchema,
+  type McpConfig,
+  type McpServerConfig,
+  type McpServerConfigStdio,
+  type McpServerConfigHttp,
+} from "./mcp";

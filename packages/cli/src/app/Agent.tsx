@@ -53,6 +53,7 @@ export const Agent = () => {
     maxIterations: config.maxIterations,
     provider: config.provider,
     apiKey: config.apiKey,
+    mcpConfigPath: config.mcpConfigPath,
   });
 
   const hasInitRef = useRef(false);

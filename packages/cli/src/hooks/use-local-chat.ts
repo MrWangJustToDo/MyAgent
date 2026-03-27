@@ -41,6 +41,8 @@ export interface UseLocalChatConfig {
   provider?: "ollama" | "openRouter";
   /** API key for OpenRouter */
   apiKey?: string;
+  /** Path to MCP config file (relative to rootPath) */
+  mcpConfigPath?: string;
 }
 
 /**
@@ -128,7 +130,7 @@ export interface UseLocalChatReturn {
  * ```
  */
 export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
-  const { model, url, rootPath, systemPrompt, maxIterations = 10, provider = "ollama", apiKey } = config;
+  const { model, url, rootPath, systemPrompt, maxIterations = 10, provider = "ollama", apiKey, mcpConfigPath } = config;
 
   // Connection state
   const [initLoading, setInitLoading] = useState(true);
@@ -156,6 +158,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
           maxIterations,
           provider,
           apiKey,
+          mcpConfigPath,
         });
 
         // Create PatchedDirectChatTransport with the agent
