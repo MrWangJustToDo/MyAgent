@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(find /Users/mrwang/Documents/GitHub/translate/node_modules/.pnpm -path *@ai-sdk*provider-utils* -name *.d.mts)",
-      "WebFetch(domain:ai-sdk.dev)",
-      "Bash(pnpm add:*)"
-    ]
-  }
-}
