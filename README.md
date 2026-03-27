@@ -25,6 +25,12 @@ An AI coding agent built on [Vercel AI SDK](https://sdk.vercel.ai/docs) with a b
 ### Codebase Exploration
 ![WIP](wip.png)
 
+### Devtools Debug
+[myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools)
+
+![Debug](debug.png)
+![Debug 2](debug_2.png)
+
 ## Architecture
 
 This is a pnpm monorepo with three packages:
@@ -79,6 +85,12 @@ pnpm start:cli
 
 # Or run in development mode
 pnpm dev:cli
+```
+
+### Running the Web Devtools
+
+```bash
+pnpm run dev:web
 ```
 
 ## Available Tools
