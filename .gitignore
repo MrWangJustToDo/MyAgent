@@ -30,5 +30,6 @@ web-ext.config.ts
 */.env
 .transcripts
 .claude
+.mcp.json
 
 tsconfig.tsbuildinfo

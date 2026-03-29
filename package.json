@@ -16,6 +16,7 @@
     "dev:extension": "pnpm --filter @my-agent/extension dev",
     "dev:server": "pnpm --filter @my-agent/server dev",
     "start:cli": "DEV=true NODE_ENV=development node --inspect ./main.mjs",
+    "start:server": "cd packages/server && node ./dist/index.mjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "format": "prettier --write .",

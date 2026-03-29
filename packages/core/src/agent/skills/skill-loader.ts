@@ -20,6 +20,7 @@ import { skillMetadataSchema } from "./types.js";
 
 import type { Skill, SkillMetadata } from "./types.js";
 import type { Sandbox } from "../../environment";
+import type { AgentLog } from "../agent-log/agent-log.js";
 
 // ============================================================================
 // Types
@@ -29,10 +30,7 @@ export interface SkillLoaderConfig {
   /** Sandbox for file system operations */
   sandbox: Sandbox;
   /** Optional logger for warnings */
-  logger?: {
-    warn: (message: string, data?: unknown) => void;
-    debug: (message: string, data?: unknown) => void;
-  };
+  logger?: AgentLog;
 }
 
 export interface ParsedFrontmatter {
@@ -53,7 +51,7 @@ export interface ParsedFrontmatter {
  */
 export class SkillLoader {
   private sandbox: Sandbox;
-  private logger?: SkillLoaderConfig["logger"];
+  private logger?: AgentLog;
 
   constructor(config: SkillLoaderConfig) {
     this.sandbox = config.sandbox;
@@ -133,7 +131,7 @@ export class SkillLoader {
     // Check if directory exists
     const dirExists = await this.sandbox.filesystem.exists(dirPath);
     if (!dirExists) {
-      this.logger?.debug(`Skill directory does not exist: ${dirPath}`);
+      this.logger?.skill(`Skill directory does not exist: ${dirPath}`);
       return skills;
     }
 
@@ -151,7 +149,7 @@ export class SkillLoader {
         const { metadata, body, error } = this.parseFrontmatter(content);
 
         if (error) {
-          this.logger?.warn(`Skipping skill file with error: ${filePath}`, { error });
+          this.logger?.skill(`Skipping skill file with error: ${filePath}`, { error });
           continue;
         }
 
@@ -176,11 +174,11 @@ export class SkillLoader {
 
         skills.set(name, skill);
       } catch (error) {
-        this.logger?.warn(`Failed to load skill file: ${filePath}`, { error });
+        this.logger?.skill(`Failed to load skill file: ${filePath}`, { error });
       }
     }
 
-    this.logger?.debug(`Loaded skills from ${dirPath} success`, { skills });
+    this.logger?.skill(`Loaded skills from ${dirPath} success`, { skills });
 
     return skills;
   }

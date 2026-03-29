@@ -19,6 +19,7 @@ export type LogCategory =
   | "stream" // Stream events
   | "middleware" // Middleware processing
   | "todo" // Todo tracking
+  | "skill" // skill load
   | "error" // Errors
   | "custom"; // Custom logs
 
@@ -277,6 +278,10 @@ export class AgentLog {
   /** Log todo tracking event */
   todo(message: string, data?: Record<string, unknown>): LogEntry | null {
     return this.debug("todo", message, data);
+  }
+
+  skill(message: string, data?: Record<string, unknown>): LogEntry | null {
+    return this.debug("skill", message, data);
   }
 
   // ============================================================================

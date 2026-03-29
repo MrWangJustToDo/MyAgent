@@ -7,6 +7,7 @@ import type { Sandbox } from "../../environment";
 import type { AgentContext } from "../agent-context";
 import type { AgentLog } from "../agent-log";
 import type { CompactionConfig, CompactionResult } from "../compaction/types.js";
+import type { McpManager } from "../mcp/manager.js";
 import type { SkillRegistry } from "../skills";
 import type { TodoManager } from "../todo-manager";
 import type {
@@ -46,6 +47,7 @@ export class Base {
   context: AgentContext | null = null;
   sandbox: Sandbox | null = null;
   todoManager: TodoManager | null = null;
+  mcpManager: McpManager | null = null;
   skillRegister: SkillRegistry | null = null;
   compactionConfig: CompactionConfig | null = null;
   customTools: ToolSet = {};
@@ -174,6 +176,16 @@ export class Base {
 
   getSkillRegister() {
     return this.skillRegister;
+  }
+
+  setMcpManager(m: McpManager) {
+    if (this.mcpManager) return;
+
+    this.mcpManager = m;
+  }
+
+  getMcpManager() {
+    return this.mcpManager;
   }
 
   /**

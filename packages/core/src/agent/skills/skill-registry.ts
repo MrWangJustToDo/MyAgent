@@ -21,6 +21,7 @@ import { SkillLoader } from "./skill-loader.js";
 
 import type { Skill, SkillSummary } from "./types.js";
 import type { Sandbox } from "../../environment";
+import type { AgentLog } from "../agent-log/agent-log.js";
 
 // ============================================================================
 // Types
@@ -30,10 +31,7 @@ export interface SkillRegistryConfig {
   /** Sandbox for file system operations */
   sandbox: Sandbox;
   /** Optional logger for warnings and debug info */
-  logger?: {
-    warn: (message: string, data?: unknown) => void;
-    debug: (message: string, data?: unknown) => void;
-  };
+  logger?: AgentLog;
 }
 
 // ============================================================================
@@ -45,7 +43,7 @@ export interface SkillRegistryConfig {
  */
 export class SkillRegistry {
   private sandbox: Sandbox;
-  private logger?: SkillRegistryConfig["logger"];
+  private logger?: AgentLog;
   private skills: Map<string, Skill> = new Map();
   private loader: SkillLoader;
 
@@ -70,14 +68,14 @@ export class SkillRegistry {
       // Normalize: remove leading ./ if present
       const normalizedPath = dir.startsWith("./") ? dir.slice(2) : dir;
 
-      this.logger?.debug(`Loading skills from: ${normalizedPath}`);
+      this.logger?.skill(`Loading skills from: ${normalizedPath}`);
 
       const dirSkills = await this.loader.loadFromDirectory(normalizedPath);
 
       // Add skills to registry, first loaded wins
       for (const [name, skill] of dirSkills) {
         if (this.skills.has(name)) {
-          this.logger?.warn(`Duplicate skill name ignored: ${name}`, {
+          this.logger?.skill(`Duplicate skill name ignored: ${name}`, {
             existing: this.skills.get(name)?.path,
             duplicate: skill.path,
           });
@@ -87,7 +85,7 @@ export class SkillRegistry {
       }
     }
 
-    this.logger?.debug(`Loaded ${this.skills.size} skills total`);
+    this.logger?.skill(`Loaded ${this.skills.size} skills total`);
   }
 
   /**

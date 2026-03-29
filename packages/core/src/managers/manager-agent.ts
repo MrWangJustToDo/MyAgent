@@ -57,7 +57,6 @@ export interface ManagedAgent {
   todoManager: TodoManager;
   status: Agent["status"];
   error?: string;
-  mcpManager?: McpManager;
   parentId?: string; // For subagent support
   childIds: string[]; // For agent team support
   createdAt: number;
@@ -225,10 +224,7 @@ export class AgentManager {
     if (!parentId) {
       const skillRegistry = new SkillRegistry({
         sandbox,
-        logger: {
-          warn: (msg, data) => log.warn("agent", msg, data as Record<string, unknown>),
-          debug: (msg, data) => log.debug("agent", msg, data as Record<string, unknown>),
-        },
+        logger: log,
       });
 
       agent.setSkillRegister(skillRegistry);
@@ -276,14 +272,12 @@ export class AgentManager {
         },
       });
       agent.addTools({ compact: compactTool });
-    }
 
-    // MCP Integration: connect to configured MCP servers and register their tools (root agents only)
-    let mcpManager: McpManager | undefined;
-    if (!parentId) {
-      const mcpConfig = await loadMcpConfig(sandbox, mcpConfigPath);
+      // MCP Integration: connect to configured MCP servers and register their tools (root agents only)
+      const mcpManager = new McpManager();
+      agent.setMcpManager(mcpManager);
+      const mcpConfig = await loadMcpConfig(sandbox, log, mcpConfigPath);
       if (mcpConfig && Object.keys(mcpConfig.mcpServers).length > 0) {
-        mcpManager = new McpManager();
         const mcpTools = await mcpManager.initialize(mcpConfig, log);
         if (Object.keys(mcpTools).length > 0) {
           agent.addTools(mcpTools);
@@ -303,7 +297,6 @@ export class AgentManager {
       tools: tools as unknown as ToolSet,
       log,
       todoManager,
-      mcpManager,
       status: "idle",
       parentId,
       childIds: [],
@@ -375,7 +368,7 @@ export class AgentManager {
     if (!managedAgent) return;
 
     // Shut down MCP connections
-    managedAgent.mcpManager?.shutdown().catch(() => {});
+    managedAgent.agent.mcpManager?.shutdown().catch(() => {});
 
     // Abort the agent if running
     managedAgent.agent.abort("Agent destroyed");
