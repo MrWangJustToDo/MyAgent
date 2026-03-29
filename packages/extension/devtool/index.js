@@ -175,7 +175,7 @@
   function requireStackframe() {
     if (hasRequiredStackframe) return stackframe$1.exports;
     hasRequiredStackframe = 1;
-    (function (module, exports) {
+    (function (module, exports$1) {
       (function (root, factory) {
         // Universal Module Definition (UMD) to support AMD, CommonJS/Node.js, Rhino, and browsers.
 
@@ -324,7 +324,7 @@
   function requireErrorStackParser() {
     if (hasRequiredErrorStackParser) return errorStackParser$1.exports;
     hasRequiredErrorStackParser = 1;
-    (function (module, exports) {
+    (function (module, exports$1) {
       (function (root, factory) {
         // Universal Module Definition (UMD) to support AMD, CommonJS/Node.js, Rhino, and browsers.
 
@@ -535,7 +535,7 @@
   function requireIndex_production() {
     if (hasRequiredIndex_production) return index_production;
     hasRequiredIndex_production = 1;
-    (function (exports) {
+    (function (exports$1) {
       var ErrorStackParser = requireErrorStackParser();
 
       /******************************************************************************
@@ -736,7 +736,7 @@
       };
 
       // sync from import { NODE_TYPE } from '@my-react/react-reconciler';
-      exports.NODE_TYPE = void 0;
+      exports$1.NODE_TYPE = void 0;
       (function (NODE_TYPE) {
         NODE_TYPE[(NODE_TYPE["__initial__"] = 0)] = "__initial__";
         NODE_TYPE[(NODE_TYPE["__class__"] = 1)] = "__class__";
@@ -762,65 +762,65 @@
         NODE_TYPE[(NODE_TYPE["__scopeLazy__"] = 1048576)] = "__scopeLazy__";
         NODE_TYPE[(NODE_TYPE["__scopeSuspense__"] = 2097152)] = "__scopeSuspense__";
         NODE_TYPE[(NODE_TYPE["__activity__"] = 4194304)] = "__activity__";
-      })(exports.NODE_TYPE || (exports.NODE_TYPE = {}));
+      })(exports$1.NODE_TYPE || (exports$1.NODE_TYPE = {}));
 
       var typeKeys = [];
       // SEE https://github.com/facebook/react/blob/main/compiler/packages/react-compiler-runtime/src/index.ts
       var reactCompilerSymbol = Symbol.for("react.memo_cache_sentinel");
-      Object.keys(exports.NODE_TYPE).forEach(function (key) {
+      Object.keys(exports$1.NODE_TYPE).forEach(function (key) {
         if (!key.startsWith("__")) {
           typeKeys.push(+key);
         }
       });
       var getTypeName = function (type) {
         switch (type) {
-          case exports.NODE_TYPE.__internal__:
+          case exports$1.NODE_TYPE.__internal__:
             return "KEEP——Internal (not used)";
-          case exports.NODE_TYPE.__memo__:
+          case exports$1.NODE_TYPE.__memo__:
             return "Memo";
-          case exports.NODE_TYPE.__forwardRef__:
+          case exports$1.NODE_TYPE.__forwardRef__:
             return "ForwardRef";
-          case exports.NODE_TYPE.__lazy__:
+          case exports$1.NODE_TYPE.__lazy__:
             return "Lazy";
-          case exports.NODE_TYPE.__provider__:
+          case exports$1.NODE_TYPE.__provider__:
             return "Provider";
-          case exports.NODE_TYPE.__consumer__:
+          case exports$1.NODE_TYPE.__consumer__:
             return "Consumer";
-          case exports.NODE_TYPE.__fragment__:
+          case exports$1.NODE_TYPE.__fragment__:
             return "Fragment";
-          case exports.NODE_TYPE.__scope__:
+          case exports$1.NODE_TYPE.__scope__:
             return "Scope";
-          case exports.NODE_TYPE.__strict__:
+          case exports$1.NODE_TYPE.__strict__:
             return "Strict";
-          case exports.NODE_TYPE.__profiler__:
+          case exports$1.NODE_TYPE.__profiler__:
             return "Profiler";
-          case exports.NODE_TYPE.__suspense__:
+          case exports$1.NODE_TYPE.__suspense__:
             return "Suspense";
-          case exports.NODE_TYPE.__portal__:
+          case exports$1.NODE_TYPE.__portal__:
             return "Portal";
-          case exports.NODE_TYPE.__comment__:
+          case exports$1.NODE_TYPE.__comment__:
             return "Comment";
-          case exports.NODE_TYPE.__empty__:
+          case exports$1.NODE_TYPE.__empty__:
             return "Empty";
-          case exports.NODE_TYPE.__null__:
+          case exports$1.NODE_TYPE.__null__:
             return "Null";
-          case exports.NODE_TYPE.__text__:
+          case exports$1.NODE_TYPE.__text__:
             return "Text";
-          case exports.NODE_TYPE.__function__:
+          case exports$1.NODE_TYPE.__function__:
             return "Function";
-          case exports.NODE_TYPE.__class__:
+          case exports$1.NODE_TYPE.__class__:
             return "Class";
-          case exports.NODE_TYPE.__plain__:
+          case exports$1.NODE_TYPE.__plain__:
             return "Plain";
-          case exports.NODE_TYPE.__initial__:
+          case exports$1.NODE_TYPE.__initial__:
             return "Initial";
-          case exports.NODE_TYPE.__context__:
+          case exports$1.NODE_TYPE.__context__:
             return "Context";
-          case exports.NODE_TYPE.__scopeLazy__:
+          case exports$1.NODE_TYPE.__scopeLazy__:
             return "ScopeLazy";
-          case exports.NODE_TYPE.__scopeSuspense__:
+          case exports$1.NODE_TYPE.__scopeSuspense__:
             return "ScopeSuspense";
-          case exports.NODE_TYPE.__activity__:
+          case exports$1.NODE_TYPE.__activity__:
             return "Activity";
           default:
             return "";
@@ -829,16 +829,16 @@
       var getFiberTag = function (node) {
         var t = node.t;
         var tag = [];
-        if (t & exports.NODE_TYPE.__memo__) {
+        if (t & exports$1.NODE_TYPE.__memo__) {
           tag.push("memo");
         }
-        if (t & exports.NODE_TYPE.__forwardRef__) {
+        if (t & exports$1.NODE_TYPE.__forwardRef__) {
           tag.push("forwardRef");
         }
-        if (t & exports.NODE_TYPE.__lazy__) {
+        if (t & exports$1.NODE_TYPE.__lazy__) {
           tag.push("lazy");
         }
-        if (t & exports.NODE_TYPE.__portal__) {
+        if (t & exports$1.NODE_TYPE.__portal__) {
           tag.push("portal");
         }
         if (node.m) {
@@ -876,22 +876,22 @@
       // SEE @my-react/react-reconciler
       var getFiberName = function (fiber) {
         var typedFiber = fiber;
-        if (fiber.type & exports.NODE_TYPE.__provider__) {
+        if (fiber.type & exports$1.NODE_TYPE.__provider__) {
           var typedElementType = fiber.elementType;
           var name_1 = typedElementType.Context.displayName;
           return "".concat(name_1 || "Context", ".Provider");
         }
-        if (fiber.type & exports.NODE_TYPE.__context__) {
+        if (fiber.type & exports$1.NODE_TYPE.__context__) {
           var typedElementType = fiber.elementType;
           var name_2 = typedElementType.displayName;
           return "".concat(name_2 || "Context");
         }
-        if (fiber.type & exports.NODE_TYPE.__consumer__) {
+        if (fiber.type & exports$1.NODE_TYPE.__consumer__) {
           var typedElementType = fiber.elementType;
           var name_3 = typedElementType.Context.displayName;
           return "".concat(name_3 || "Context", ".Consumer");
         }
-        if (fiber.type & exports.NODE_TYPE.__lazy__) {
+        if (fiber.type & exports$1.NODE_TYPE.__lazy__) {
           var typedElementType = fiber.elementType;
           var typedRender = typedElementType === null || typedElementType === void 0 ? void 0 : typedElementType.render;
           var name_4 =
@@ -903,20 +903,20 @@
           name_4 = (type === null || type === void 0 ? void 0 : type.displayName) || name_4;
           return "".concat(name_4 || "Anonymous");
         }
-        if (fiber.type & exports.NODE_TYPE.__portal__) return "Portal";
-        if (fiber.type & exports.NODE_TYPE.__null__) return "Null";
-        if (fiber.type & exports.NODE_TYPE.__empty__) return "Empty";
-        if (fiber.type & exports.NODE_TYPE.__scope__) return "Scope";
-        if (fiber.type & exports.NODE_TYPE.__scopeLazy__) return "ScopeLazy";
-        if (fiber.type & exports.NODE_TYPE.__scopeSuspense__) return "ScopeSuspense";
-        if (fiber.type & exports.NODE_TYPE.__activity__) return "Activity";
-        if (fiber.type & exports.NODE_TYPE.__strict__) return "Strict";
-        if (fiber.type & exports.NODE_TYPE.__profiler__) return "Profiler";
-        if (fiber.type & exports.NODE_TYPE.__suspense__) return "Suspense";
-        if (fiber.type & exports.NODE_TYPE.__comment__) return "Comment";
-        if (fiber.type & exports.NODE_TYPE.__internal__) return "KEEP\u2014\u2014Internal";
-        if (fiber.type & exports.NODE_TYPE.__fragment__) return "Fragment";
-        if (fiber.type & exports.NODE_TYPE.__text__) return "text";
+        if (fiber.type & exports$1.NODE_TYPE.__portal__) return "Portal";
+        if (fiber.type & exports$1.NODE_TYPE.__null__) return "Null";
+        if (fiber.type & exports$1.NODE_TYPE.__empty__) return "Empty";
+        if (fiber.type & exports$1.NODE_TYPE.__scope__) return "Scope";
+        if (fiber.type & exports$1.NODE_TYPE.__scopeLazy__) return "ScopeLazy";
+        if (fiber.type & exports$1.NODE_TYPE.__scopeSuspense__) return "ScopeSuspense";
+        if (fiber.type & exports$1.NODE_TYPE.__activity__) return "Activity";
+        if (fiber.type & exports$1.NODE_TYPE.__strict__) return "Strict";
+        if (fiber.type & exports$1.NODE_TYPE.__profiler__) return "Profiler";
+        if (fiber.type & exports$1.NODE_TYPE.__suspense__) return "Suspense";
+        if (fiber.type & exports$1.NODE_TYPE.__comment__) return "Comment";
+        if (fiber.type & exports$1.NODE_TYPE.__internal__) return "KEEP\u2014\u2014Internal";
+        if (fiber.type & exports$1.NODE_TYPE.__fragment__) return "Fragment";
+        if (fiber.type & exports$1.NODE_TYPE.__text__) return "text";
         if (typeof fiber.elementType === "string") return "".concat(fiber.elementType);
         if (typeof fiber.elementType === "function") {
           var typedElementType = fiber.elementType;
@@ -943,7 +943,7 @@
       // SEE @my-react/react-reconciler
       var getMockFiberFromElement = function (element) {
         var _a, _b, _c, _d, _e;
-        var nodeType = exports.NODE_TYPE.__initial__;
+        var nodeType = exports$1.NODE_TYPE.__initial__;
         var elementType = element.type;
         var finalElement = element;
         var pendingProps = element.props;
@@ -953,25 +953,25 @@
           var typedElementType = elementType;
           switch (typedElementType[TYPEKEY]) {
             case Provider:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__provider__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__provider__);
               break;
             // support react 19 context api
             case Context:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__context__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__context__);
               break;
             case Consumer:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__consumer__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__consumer__);
               break;
             case Memo:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__memo__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__memo__);
               elementType = typedElementType.render;
               break;
             case ForwardRef:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__forwardRef__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__forwardRef__);
               elementType = typedElementType.render;
               break;
             case Lazy:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__lazy__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__lazy__);
               break;
             default:
               throw new Error(
@@ -983,63 +983,63 @@
           }
           if (typeof elementType === "object") {
             if (elementType[TYPEKEY] === ForwardRef) {
-              nodeType = merge(nodeType, exports.NODE_TYPE.__forwardRef__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__forwardRef__);
               elementType = elementType.render;
             }
             if (elementType[TYPEKEY] === Provider) {
-              nodeType = merge(nodeType, exports.NODE_TYPE.__provider__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__provider__);
             }
             if (elementType[TYPEKEY] === Context) {
-              nodeType = merge(nodeType, exports.NODE_TYPE.__context__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__context__);
             }
             if (elementType[TYPEKEY] === Consumer) {
-              nodeType = merge(nodeType, exports.NODE_TYPE.__consumer__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__consumer__);
             }
           }
           if (typeof elementType === "function") {
             if ((_d = elementType.prototype) === null || _d === void 0 ? void 0 : _d.isMyReactComponent) {
-              nodeType = merge(nodeType, exports.NODE_TYPE.__class__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__class__);
             } else {
-              nodeType = merge(nodeType, exports.NODE_TYPE.__function__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__function__);
             }
           }
         } else if (typeof elementType === "function") {
           if ((_e = elementType.prototype) === null || _e === void 0 ? void 0 : _e.isMyReactComponent) {
-            nodeType = merge(nodeType, exports.NODE_TYPE.__class__);
+            nodeType = merge(nodeType, exports$1.NODE_TYPE.__class__);
           } else {
-            nodeType = merge(nodeType, exports.NODE_TYPE.__function__);
+            nodeType = merge(nodeType, exports$1.NODE_TYPE.__function__);
           }
         } else if (typeof elementType === "symbol") {
           switch (elementType) {
             case Root:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__internal__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__internal__);
               break;
             case Fragment:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__fragment__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__fragment__);
               break;
             case Strict:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__strict__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__strict__);
               break;
             case Suspense:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__suspense__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__suspense__);
               break;
             case Scope:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__scope__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__scope__);
               break;
             case ScopeLazy:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__scopeLazy__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__scopeLazy__);
               break;
             case ScopeSuspense:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__scopeSuspense__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__scopeSuspense__);
               break;
             case Comment:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__comment__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__comment__);
               break;
             case Portal:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__portal__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__portal__);
               break;
             case Profiler:
-              nodeType = merge(nodeType, exports.NODE_TYPE.__profiler__);
+              nodeType = merge(nodeType, exports$1.NODE_TYPE.__profiler__);
               break;
             default:
               throw new Error(
@@ -1050,9 +1050,9 @@
               );
           }
         } else if (typeof elementType === "string") {
-          nodeType = merge(nodeType, exports.NODE_TYPE.__plain__);
+          nodeType = merge(nodeType, exports$1.NODE_TYPE.__plain__);
         } else {
-          nodeType = merge(nodeType, exports.NODE_TYPE.__empty__);
+          nodeType = merge(nodeType, exports$1.NODE_TYPE.__empty__);
         }
         var mockFiber = {
           type: nodeType,
@@ -1424,7 +1424,7 @@
             // Cannot reconstruct functions, return a placeholder or the string representation
             return v;
           case "Symbol":
-            return Symbol(v);
+            return Symbol(v === null || v === void 0 ? void 0 : v.substring(7, v.length - 1));
           case "RegExp": {
             // v is like "/pattern/flags"
             var match = String(v).match(/^\/(.*)\/([gimsuy]*)$/);
@@ -1732,7 +1732,7 @@
         if (
           dispatch &&
           fiber &&
-          include(fiber.type, merge(exports.NODE_TYPE.__function__, exports.NODE_TYPE.__class__))
+          include(fiber.type, merge(exports$1.NODE_TYPE.__function__, exports$1.NODE_TYPE.__class__))
         ) {
           return getHMRInternal(dispatch, fiber.elementType);
         }
@@ -1905,14 +1905,14 @@
         if ((fiber === null || fiber === void 0 ? void 0 : fiber.parent) && ContextObject) {
           var parent_1 = fiber.parent;
           while (parent_1) {
-            if (include(parent_1.type, exports.NODE_TYPE.__provider__)) {
+            if (include(parent_1.type, exports$1.NODE_TYPE.__provider__)) {
               var typedElementType = parent_1.elementType;
               var contextObj = typedElementType["Context"];
               if (contextObj === ContextObject) {
                 return parent_1;
               }
             }
-            if (include(parent_1.type, exports.NODE_TYPE.__context__)) {
+            if (include(parent_1.type, exports$1.NODE_TYPE.__context__)) {
               var typedElementType = parent_1.elementType;
               var contextObj = typedElementType;
               if (contextObj === ContextObject) {
@@ -2636,7 +2636,7 @@
         return buildTree(rootStack, readHookLog);
       }
       function inspectHooksOfFiber(fiber, dispatch) {
-        if (!include(fiber.type, exports.NODE_TYPE.__function__)) {
+        if (!include(fiber.type, exports$1.NODE_TYPE.__function__)) {
           return;
         }
         // Warm up the cache so that it doesn't consume the currentHook.
@@ -2648,7 +2648,7 @@
         var typedElementType = fiber.elementType;
         var props = fiber.memoizedProps;
         try {
-          if (include(fiber.type, exports.NODE_TYPE.__forwardRef__)) {
+          if (include(fiber.type, exports$1.NODE_TYPE.__forwardRef__)) {
             return inspectHooksOfForwardRef(typedElementType, props, fiber.ref, dispatch);
           } else {
             return inspectHooks(typedElementType, props, dispatch);
@@ -2868,7 +2868,7 @@
         plain._s = getSource(fiber);
         plain._t = getTree$1(fiber);
         plain._h = getHook(fiber);
-        if (fiber.type & exports.NODE_TYPE.__class__) {
+        if (fiber.type & exports$1.NODE_TYPE.__class__) {
           plain.s = getState(fiber);
         }
       };
@@ -3042,7 +3042,7 @@
         if (!fiber) return;
         var r = fiber;
         while (r) {
-          if (include(r.type, exports.NODE_TYPE.__class__) || include(r.type, exports.NODE_TYPE.__function__)) {
+          if (include(r.type, exports$1.NODE_TYPE.__class__) || include(r.type, exports$1.NODE_TYPE.__function__)) {
             return r;
           }
           r = r.parent;
@@ -3051,7 +3051,7 @@
       var getComponentFiberByFiber = function (fiber) {
         var r = fiber;
         while (r) {
-          if (include(r.type, exports.NODE_TYPE.__class__) || include(r.type, exports.NODE_TYPE.__function__)) {
+          if (include(r.type, exports$1.NODE_TYPE.__class__) || include(r.type, exports$1.NODE_TYPE.__function__)) {
             return r;
           }
           r = r.parent;
@@ -3251,23 +3251,23 @@
         core.notifyTriggerStatus();
       };
 
-      exports.MessageHookType = void 0;
+      exports$1.MessageHookType = void 0;
       (function (MessageHookType) {
         MessageHookType["init"] = "hook-init";
         MessageHookType["mount"] = "hook-mount";
         MessageHookType["render"] = "hook-render";
         MessageHookType["origin"] = "hook-origin";
         MessageHookType["clear"] = "hook-clear";
-      })(exports.MessageHookType || (exports.MessageHookType = {}));
-      exports.MessageDetectorType = void 0;
+      })(exports$1.MessageHookType || (exports$1.MessageHookType = {}));
+      exports$1.MessageDetectorType = void 0;
       (function (MessageDetectorType) {
         MessageDetectorType["init"] = "detector-init";
-      })(exports.MessageDetectorType || (exports.MessageDetectorType = {}));
-      exports.MessageProxyType = void 0;
+      })(exports$1.MessageDetectorType || (exports$1.MessageDetectorType = {}));
+      exports$1.MessageProxyType = void 0;
       (function (MessageProxyType) {
         MessageProxyType["init"] = "proxy-init";
-      })(exports.MessageProxyType || (exports.MessageProxyType = {}));
-      exports.MessagePanelType = void 0;
+      })(exports$1.MessageProxyType || (exports$1.MessageProxyType = {}));
+      exports$1.MessagePanelType = void 0;
       (function (MessagePanelType) {
         MessagePanelType["show"] = "panel-show";
         MessagePanelType["hide"] = "panel-hide";
@@ -3290,13 +3290,13 @@
         MessagePanelType["clearHMR"] = "panel-clear-hmr";
         MessagePanelType["clearMessage"] = "panel-clear-message";
         MessagePanelType["clearTrigger"] = "panel-clear-trigger";
-      })(exports.MessagePanelType || (exports.MessagePanelType = {}));
-      exports.MessageWorkerType = void 0;
+      })(exports$1.MessagePanelType || (exports$1.MessagePanelType = {}));
+      exports$1.MessageWorkerType = void 0;
       (function (MessageWorkerType) {
         MessageWorkerType["init"] = "worker-init";
         MessageWorkerType["close"] = "worker-close";
-      })(exports.MessageWorkerType || (exports.MessageWorkerType = {}));
-      exports.DevToolMessageEnum = void 0;
+      })(exports$1.MessageWorkerType || (exports$1.MessageWorkerType = {}));
+      exports$1.DevToolMessageEnum = void 0;
       (function (DevToolMessageEnum) {
         // 初始化，判断是否用@my-react进行页面渲染
         DevToolMessageEnum["init"] = "init";
@@ -3328,13 +3328,13 @@
         DevToolMessageEnum["global"] = "global";
         DevToolMessageEnum["record"] = "record";
         DevToolMessageEnum["domHover"] = "dom-hover";
-      })(exports.DevToolMessageEnum || (exports.DevToolMessageEnum = {}));
-      exports.HMRStatus = void 0;
+      })(exports$1.DevToolMessageEnum || (exports$1.DevToolMessageEnum = {}));
+      exports$1.HMRStatus = void 0;
       (function (HMRStatus) {
         HMRStatus[(HMRStatus["none"] = 0)] = "none";
         HMRStatus[(HMRStatus["refresh"] = 1)] = "refresh";
         HMRStatus[(HMRStatus["remount"] = 2)] = "remount";
-      })(exports.HMRStatus || (exports.HMRStatus = {}));
+      })(exports$1.HMRStatus || (exports$1.HMRStatus = {}));
       var DevToolSource = "@my-react/devtool";
 
       var patchEvent = function (dispatch, runtime) {
@@ -3418,9 +3418,9 @@
           runtime._hmr[id].push(
             typeof forceRefresh === "boolean"
               ? forceRefresh
-                ? exports.HMRStatus.remount
-                : exports.HMRStatus.refresh
-              : exports.HMRStatus.none
+                ? exports$1.HMRStatus.remount
+                : exports$1.HMRStatus.refresh
+              : exports$1.HMRStatus.none
           );
           if (!runtime.hasEnable) return;
           runtime.notifyHMR();
@@ -3571,7 +3571,7 @@
         return false;
       };
       var checkIsComponent = function (fiber) {
-        return include(fiber.type, exports.NODE_TYPE.__class__ | exports.NODE_TYPE.__function__);
+        return include(fiber.type, exports$1.NODE_TYPE.__class__ | exports$1.NODE_TYPE.__function__);
       };
       var checkIsConcurrent = function (dispatch, list) {
         return (
@@ -4487,7 +4487,7 @@
           this.notifyAll = debounce(function () {
             _this.notifyDetector();
             if (_this._needUnmount) {
-              _this._notify({ type: exports.DevToolMessageEnum.unmount, data: null });
+              _this._notify({ type: exports$1.DevToolMessageEnum.unmount, data: null });
               _this._needUnmount = false;
             }
             if (_this._dispatch.size) {
@@ -4638,16 +4638,16 @@
         };
         DevToolCore.prototype.notifyDir = function () {
           if (!this.hasEnable) return;
-          this._notify({ type: exports.DevToolMessageEnum.dir, data: this._dir });
+          this._notify({ type: exports$1.DevToolMessageEnum.dir, data: this._dir });
         };
         DevToolCore.prototype.notifyDetector = function () {
           if (!this.hasEnable) return;
-          this._notify({ type: exports.DevToolMessageEnum.init, data: this._detector });
+          this._notify({ type: exports$1.DevToolMessageEnum.init, data: this._detector });
         };
         DevToolCore.prototype.notifyTrigger = function () {
           if (!this.hasEnable) return;
           var state = getValidTrigger(this);
-          this._notify({ type: exports.DevToolMessageEnum.trigger, data: state });
+          this._notify({ type: exports$1.DevToolMessageEnum.trigger, data: state });
         };
         DevToolCore.prototype.notifyTriggerStatus = function () {
           if (!this.hasEnable) return;
@@ -4655,16 +4655,16 @@
           if (!id) return;
           var state = getValidTriggerStatus(id, this);
           if (!state) return;
-          this._notify({ type: exports.DevToolMessageEnum.triggerStatus, data: state });
+          this._notify({ type: exports$1.DevToolMessageEnum.triggerStatus, data: state });
         };
         DevToolCore.prototype.notifyHighlight = function (id, type) {
           if (!this.hasEnable) return;
-          this._notify({ type: exports.DevToolMessageEnum.highlight, data: { id: id, type: type } });
+          this._notify({ type: exports$1.DevToolMessageEnum.highlight, data: { id: id, type: type } });
         };
         DevToolCore.prototype.notifyWarn = function () {
           if (!this.hasEnable) return;
           this._notify({
-            type: exports.DevToolMessageEnum.warn,
+            type: exports$1.DevToolMessageEnum.warn,
             data: getMapValueLengthObject(this._warn),
           });
         };
@@ -4676,7 +4676,7 @@
           if (!status) return;
           var finalStatus = status.slice(-10);
           this._notify({
-            type: exports.DevToolMessageEnum.warnStatus,
+            type: exports$1.DevToolMessageEnum.warnStatus,
             data: finalStatus.map(function (i) {
               return getNode(i);
             }),
@@ -4685,7 +4685,7 @@
         DevToolCore.prototype.notifyError = function () {
           if (!this.hasEnable) return;
           this._notify({
-            type: exports.DevToolMessageEnum.error,
+            type: exports$1.DevToolMessageEnum.error,
             data: getMapValueLengthObject(this._error),
           });
         };
@@ -4697,7 +4697,7 @@
           if (!status) return;
           var finalStatus = status.slice(-10);
           this._notify({
-            type: exports.DevToolMessageEnum.errorStatus,
+            type: exports$1.DevToolMessageEnum.errorStatus,
             data: finalStatus.map(function (i) {
               return getNode(i);
             }),
@@ -4707,11 +4707,11 @@
         DevToolCore.prototype.notifyChanged = function (list) {
           if (!this.hasEnable) return;
           var tree = getRootTreeByFiber(list.head.value);
-          this._notify({ type: exports.DevToolMessageEnum.changed, data: tree });
+          this._notify({ type: exports$1.DevToolMessageEnum.changed, data: tree });
         };
         DevToolCore.prototype.notifyHMR = function () {
           if (!this.hasEnable) return;
-          this._notify({ type: exports.DevToolMessageEnum.hmr, data: getMapValueLengthObject(this._hmr) });
+          this._notify({ type: exports$1.DevToolMessageEnum.hmr, data: getMapValueLengthObject(this._hmr) });
         };
         DevToolCore.prototype.notifyHMRStatus = function () {
           if (!this.hasEnable) return;
@@ -4719,19 +4719,19 @@
           if (!id) return;
           var status = this._hmr[id];
           if (!status) return;
-          this._notify({ type: exports.DevToolMessageEnum.hmrStatus, data: status });
+          this._notify({ type: exports$1.DevToolMessageEnum.hmrStatus, data: status });
         };
         DevToolCore.prototype.notifyHMRExtend = function () {
           if (!this.hasEnable) return;
           var id = this._selectId;
           if (!id) return;
           var extend = getHMRInternalFromId(id);
-          this._notify({ type: exports.DevToolMessageEnum.hmrInternal, data: extend ? getNode(extend) : null });
+          this._notify({ type: exports$1.DevToolMessageEnum.hmrInternal, data: extend ? getNode(extend) : null });
         };
         DevToolCore.prototype.notifyConfig = function () {
           if (!this.hasEnable) return;
           this._notify({
-            type: exports.DevToolMessageEnum.config,
+            type: exports$1.DevToolMessageEnum.config,
             data: {
               enableHover: this._enableHover,
               enableUpdate: this._enableUpdate,
@@ -4750,20 +4750,20 @@
           if (fiber) {
             var detailNode = inspectFiber(fiber);
             this._selectNode = detailNode;
-            this._notify({ type: exports.DevToolMessageEnum.detail, data: detailNode });
+            this._notify({ type: exports$1.DevToolMessageEnum.detail, data: detailNode });
           } else {
-            this._notify({ type: exports.DevToolMessageEnum.detail, data: null });
+            this._notify({ type: exports$1.DevToolMessageEnum.detail, data: null });
           }
         };
         DevToolCore.prototype.notifyRunning = function (id) {
           if (!this.hasEnable) return;
-          this._notify({ type: exports.DevToolMessageEnum.running, data: id });
+          this._notify({ type: exports$1.DevToolMessageEnum.running, data: id });
         };
         DevToolCore.prototype.notifySelectSync = function () {
           if (!this.hasEnable) return;
           if (this._hasSelectChange) {
             this._hasSelectChange = false;
-            this._notify({ type: exports.DevToolMessageEnum.selectSync, data: this._selectId });
+            this._notify({ type: exports$1.DevToolMessageEnum.selectSync, data: this._selectId });
           }
         };
         DevToolCore.prototype.notifyUnmountNode = function () {
@@ -4771,27 +4771,27 @@
           var allPending = this._unmount;
           if (!Object.keys(allPending).length) return;
           this._unmount = {};
-          this._notify({ type: exports.DevToolMessageEnum.unmountNode, data: allPending });
+          this._notify({ type: exports$1.DevToolMessageEnum.unmountNode, data: allPending });
         };
         DevToolCore.prototype.notifyDomHover = function () {
           if (!this.hasEnable) return;
-          this._notify({ type: exports.DevToolMessageEnum.domHover, data: this._domHoverId });
+          this._notify({ type: exports$1.DevToolMessageEnum.domHover, data: this._domHoverId });
         };
         DevToolCore.prototype.notifySource = function () {
           if (!this.hasEnable) return;
           // notify devtool to inspect source
-          this._notify({ type: exports.DevToolMessageEnum.source, data: true });
+          this._notify({ type: exports$1.DevToolMessageEnum.source, data: true });
         };
         DevToolCore.prototype.notifyChunks = function (ids) {
           if (!this.hasEnable) return;
           var data = getChunkDataFromIds(ids);
-          this._notify({ type: exports.DevToolMessageEnum.chunks, data: data });
+          this._notify({ type: exports$1.DevToolMessageEnum.chunks, data: data });
         };
         DevToolCore.prototype.notifyGlobal = function () {
           if (!this.hasEnable) return;
           try {
             var data = getNode(globalThis);
-            this._notify({ type: exports.DevToolMessageEnum.global, data: data });
+            this._notify({ type: exports$1.DevToolMessageEnum.global, data: data });
           } catch (e) {
             this.notifyMessage("failed transport globalThis to devtool, ".concat(e.message), "error");
           }
@@ -4809,7 +4809,7 @@
         };
         DevToolCore.prototype.notifyMessage = function (message, type) {
           if (!this.hasEnable) return;
-          this._notify({ type: exports.DevToolMessageEnum.message, data: { message: message, type: type } });
+          this._notify({ type: exports$1.DevToolMessageEnum.message, data: { message: message, type: type } });
         };
         DevToolCore.prototype.notifyDispatch = function (dispatch, force) {
           if (!this.hasEnable) return;
@@ -4821,7 +4821,7 @@
                 current = _a.current,
                 directory = _a.directory;
               if (directory) this.notifyDir();
-              this._notify({ type: exports.DevToolMessageEnum.ready, data: current });
+              this._notify({ type: exports$1.DevToolMessageEnum.ready, data: current });
             } else {
               var last = this._timeMap.get(dispatch);
               if (last && now - last < 200) return;
@@ -4830,7 +4830,7 @@
                 current = _b.current,
                 directory = _b.directory;
               if (directory) this.notifyDir();
-              this._notify({ type: exports.DevToolMessageEnum.ready, data: current });
+              this._notify({ type: exports$1.DevToolMessageEnum.ready, data: current });
             }
           }
         };
@@ -4839,9 +4839,9 @@
           if (!this.hasEnable) return;
           var data = getRecord(this);
           data.map(function (item) {
-            return _this._notify({ type: exports.DevToolMessageEnum.record, data: item });
+            return _this._notify({ type: exports$1.DevToolMessageEnum.record, data: item });
           });
-          this._notify({ type: exports.DevToolMessageEnum.record, data: true });
+          this._notify({ type: exports$1.DevToolMessageEnum.record, data: true });
         };
         DevToolCore.prototype.getNode = function (v) {
           return getNode(v);
@@ -4899,56 +4899,56 @@
         return DevToolCore;
       })();
 
-      exports.DevToolCore = DevToolCore;
-      exports.DevToolSource = DevToolSource;
-      exports.PlainNode = PlainNode;
-      exports.assignFiber = assignFiber;
-      exports.debounce = debounce;
-      exports.getComponentFiberByDom = getComponentFiberByDom;
-      exports.getComponentFiberByFiber = getComponentFiberByFiber;
-      exports.getContextName = getContextName;
-      exports.getDirectoryIdByFiber = getDirectoryIdByFiber;
-      exports.getDispatchFromFiber = getDispatchFromFiber;
-      exports.getElementName = getElementName;
-      exports.getElementNodesFromFiber = getElementNodesFromFiber;
-      exports.getFiberByDom = getFiberByDom;
-      exports.getFiberName = getFiberName;
-      exports.getFiberNodeById = getFiberNodeById;
-      exports.getFiberTag = getFiberTag;
-      exports.getFiberType = getFiberType;
-      exports.getHMRInternal = getHMRInternal;
-      exports.getHMRInternalFromId = getHMRInternalFromId;
-      exports.getHMRState = getHMRState;
-      exports.getMockFiberFromElement = getMockFiberFromElement;
-      exports.getNode = getNode;
-      exports.getNodeFromId = getNodeFromId;
-      exports.getObj = getObj;
-      exports.getPlainNodeByFiber = getPlainNodeByFiber;
-      exports.getPlainNodeIdByFiber = getPlainNodeIdByFiber;
-      exports.getProps = getProps;
-      exports.getRootTreeByFiber = getRootTreeByFiber;
-      exports.getSource = getSource;
-      exports.getState = getState;
-      exports.getTree = getTree$1;
-      exports.getTypeName = getTypeName;
-      exports.getValueFromId = getValueFromId;
-      exports.initPlainNode = initPlainNode;
-      exports.inspectDispatch = inspectDispatch;
-      exports.inspectFiber = inspectFiber;
-      exports.inspectList = inspectList;
-      exports.isProxy = isProxy;
-      exports.isReactive = isReactive;
-      exports.isReadonly = isReadonly;
-      exports.isRef = isRef;
-      exports.isShallow = isShallow;
-      exports.isValidElement = isValidElement;
-      exports.loopChangedTree = loopChangedTree;
-      exports.loopTree = loopTree;
-      exports.shallowAssignFiber = shallowAssignFiber;
-      exports.throttle = throttle;
-      exports.typeKeys = typeKeys;
-      exports.unmountPlainNode = unmountPlainNode;
-      exports.updateFiberNode = updateFiberNode;
+      exports$1.DevToolCore = DevToolCore;
+      exports$1.DevToolSource = DevToolSource;
+      exports$1.PlainNode = PlainNode;
+      exports$1.assignFiber = assignFiber;
+      exports$1.debounce = debounce;
+      exports$1.getComponentFiberByDom = getComponentFiberByDom;
+      exports$1.getComponentFiberByFiber = getComponentFiberByFiber;
+      exports$1.getContextName = getContextName;
+      exports$1.getDirectoryIdByFiber = getDirectoryIdByFiber;
+      exports$1.getDispatchFromFiber = getDispatchFromFiber;
+      exports$1.getElementName = getElementName;
+      exports$1.getElementNodesFromFiber = getElementNodesFromFiber;
+      exports$1.getFiberByDom = getFiberByDom;
+      exports$1.getFiberName = getFiberName;
+      exports$1.getFiberNodeById = getFiberNodeById;
+      exports$1.getFiberTag = getFiberTag;
+      exports$1.getFiberType = getFiberType;
+      exports$1.getHMRInternal = getHMRInternal;
+      exports$1.getHMRInternalFromId = getHMRInternalFromId;
+      exports$1.getHMRState = getHMRState;
+      exports$1.getMockFiberFromElement = getMockFiberFromElement;
+      exports$1.getNode = getNode;
+      exports$1.getNodeFromId = getNodeFromId;
+      exports$1.getObj = getObj;
+      exports$1.getPlainNodeByFiber = getPlainNodeByFiber;
+      exports$1.getPlainNodeIdByFiber = getPlainNodeIdByFiber;
+      exports$1.getProps = getProps;
+      exports$1.getRootTreeByFiber = getRootTreeByFiber;
+      exports$1.getSource = getSource;
+      exports$1.getState = getState;
+      exports$1.getTree = getTree$1;
+      exports$1.getTypeName = getTypeName;
+      exports$1.getValueFromId = getValueFromId;
+      exports$1.initPlainNode = initPlainNode;
+      exports$1.inspectDispatch = inspectDispatch;
+      exports$1.inspectFiber = inspectFiber;
+      exports$1.inspectList = inspectList;
+      exports$1.isProxy = isProxy;
+      exports$1.isReactive = isReactive;
+      exports$1.isReadonly = isReadonly;
+      exports$1.isRef = isRef;
+      exports$1.isShallow = isShallow;
+      exports$1.isValidElement = isValidElement;
+      exports$1.loopChangedTree = loopChangedTree;
+      exports$1.loopTree = loopTree;
+      exports$1.shallowAssignFiber = shallowAssignFiber;
+      exports$1.throttle = throttle;
+      exports$1.typeKeys = typeKeys;
+      exports$1.unmountPlainNode = unmountPlainNode;
+      exports$1.updateFiberNode = updateFiberNode;
     })(index_production);
     return index_production;
   }
@@ -4976,24 +4976,24 @@
   function requireEvent$1() {
     if (hasRequiredEvent$1) return event$1;
     hasRequiredEvent$1 = 1;
-    (function (exports) {
-      exports.MessageHookType = void 0;
+    (function (exports$1) {
+      exports$1.MessageHookType = void 0;
       (function (MessageHookType) {
         MessageHookType["init"] = "hook-init";
         MessageHookType["mount"] = "hook-mount";
         MessageHookType["render"] = "hook-render";
         MessageHookType["origin"] = "hook-origin";
         MessageHookType["clear"] = "hook-clear";
-      })(exports.MessageHookType || (exports.MessageHookType = {}));
-      exports.MessageDetectorType = void 0;
+      })(exports$1.MessageHookType || (exports$1.MessageHookType = {}));
+      exports$1.MessageDetectorType = void 0;
       (function (MessageDetectorType) {
         MessageDetectorType["init"] = "detector-init";
-      })(exports.MessageDetectorType || (exports.MessageDetectorType = {}));
-      exports.MessageProxyType = void 0;
+      })(exports$1.MessageDetectorType || (exports$1.MessageDetectorType = {}));
+      exports$1.MessageProxyType = void 0;
       (function (MessageProxyType) {
         MessageProxyType["init"] = "proxy-init";
-      })(exports.MessageProxyType || (exports.MessageProxyType = {}));
-      exports.MessagePanelType = void 0;
+      })(exports$1.MessageProxyType || (exports$1.MessageProxyType = {}));
+      exports$1.MessagePanelType = void 0;
       (function (MessagePanelType) {
         MessagePanelType["show"] = "panel-show";
         MessagePanelType["hide"] = "panel-hide";
@@ -5016,13 +5016,13 @@
         MessagePanelType["clearHMR"] = "panel-clear-hmr";
         MessagePanelType["clearMessage"] = "panel-clear-message";
         MessagePanelType["clearTrigger"] = "panel-clear-trigger";
-      })(exports.MessagePanelType || (exports.MessagePanelType = {}));
-      exports.MessageWorkerType = void 0;
+      })(exports$1.MessagePanelType || (exports$1.MessagePanelType = {}));
+      exports$1.MessageWorkerType = void 0;
       (function (MessageWorkerType) {
         MessageWorkerType["init"] = "worker-init";
         MessageWorkerType["close"] = "worker-close";
-      })(exports.MessageWorkerType || (exports.MessageWorkerType = {}));
-      exports.DevToolMessageEnum = void 0;
+      })(exports$1.MessageWorkerType || (exports$1.MessageWorkerType = {}));
+      exports$1.DevToolMessageEnum = void 0;
       (function (DevToolMessageEnum) {
         // 初始化，判断是否用@my-react进行页面渲染
         DevToolMessageEnum["init"] = "init";
@@ -5054,16 +5054,16 @@
         DevToolMessageEnum["global"] = "global";
         DevToolMessageEnum["record"] = "record";
         DevToolMessageEnum["domHover"] = "dom-hover";
-      })(exports.DevToolMessageEnum || (exports.DevToolMessageEnum = {}));
-      exports.HMRStatus = void 0;
+      })(exports$1.DevToolMessageEnum || (exports$1.DevToolMessageEnum = {}));
+      exports$1.HMRStatus = void 0;
       (function (HMRStatus) {
         HMRStatus[(HMRStatus["none"] = 0)] = "none";
         HMRStatus[(HMRStatus["refresh"] = 1)] = "refresh";
         HMRStatus[(HMRStatus["remount"] = 2)] = "remount";
-      })(exports.HMRStatus || (exports.HMRStatus = {}));
+      })(exports$1.HMRStatus || (exports$1.HMRStatus = {}));
       var DevToolSource = "@my-react/devtool";
 
-      exports.DevToolSource = DevToolSource;
+      exports$1.DevToolSource = DevToolSource;
     })(event$1);
     return event$1;
   }
@@ -5105,7 +5105,6 @@
     sourceFrom["forward"] = "forward";
   })(sourceFrom || (sourceFrom = {}));
 
-  /* eslint-disable @typescript-eslint/no-require-imports */
   var varId = 0;
   var getValidGlobalVarName = function () {
     var varName = "$my-react-var-".concat(varId++);

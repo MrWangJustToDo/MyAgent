@@ -29,5 +29,6 @@ web-ext.config.ts
 .env
 */.env
 .transcripts
+.claude
 
 tsconfig.tsbuildinfo

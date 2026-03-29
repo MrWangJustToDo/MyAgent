@@ -18,7 +18,8 @@
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/cli" },
-    { "path": "./packages/extension" }
+    { "path": "./packages/extension" },
+    { "path": "./packages/server" }
   ],
   "exclude": ["node_modules", "**/node_modules", "**/dist"]
 }

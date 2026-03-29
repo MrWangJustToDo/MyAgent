@@ -175,11 +175,12 @@ export class SkillLoader {
         };
 
         skills.set(name, skill);
-        this.logger?.debug(`Loaded skill: ${name}`, { path: filePath });
       } catch (error) {
         this.logger?.warn(`Failed to load skill file: ${filePath}`, { error });
       }
     }
+
+    this.logger?.debug(`Loaded skills from ${dirPath} success`, { skills });
 
     return skills;
   }

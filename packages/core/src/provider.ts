@@ -132,7 +132,7 @@ export const createOpenAICompatibleModel = (
 };
 
 export const createOpenRouterModel = (modelName: string, apiKey?: string) => {
-  const resolvedApiKey = apiKey || process.env.apiKey || process.env.OPENROUTER_API_KEY || process.env.openRouter;
+  const resolvedApiKey = apiKey || process.env.API_KEY || process.env.OPENROUTER_API_KEY;
   const provider = createOpenRouter({ apiKey: resolvedApiKey });
 
   return provider(modelName, {

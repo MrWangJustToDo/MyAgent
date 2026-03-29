@@ -211,11 +211,11 @@ export const useArgs = createState(
         const parsed = parseArgs(args);
 
         // Get env vars (loaded by dotenv in index.tsx)
-        const envModel = getEnv("model") || getEnv("MODEL");
-        const envUrl = getEnv("url") || getEnv("URL") || getEnv("OLLAMA_URL");
-        const envProvider = getEnvProvider("provider") || getEnvProvider("PROVIDER");
-        const envApiKey = getEnv("apiKey") || getEnv("API_KEY") || getEnv("OPENROUTER_API_KEY");
-        const envMaxIterations = getEnv("maxIterations") || getEnv("MAX_ITERATIONS");
+        const envModel = getEnv("MODEL") || getEnv("model");
+        const envUrl = getEnv("URL") || getEnv("OLLAMA_URL") || getEnv("url");
+        const envProvider = getEnvProvider("PROVIDER") || getEnvProvider("provider");
+        const envApiKey = getEnv("API_KEY") || getEnv("OPENROUTER_API_KEY") || getEnv("apiKey");
+        const envMaxIterations = getEnv("MAX_ITERATIONS") || getEnv("maxIterations");
 
         state.parsed = parsed;
 

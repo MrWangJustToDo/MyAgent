@@ -1,0 +1,37 @@
+{
+  "name": "@my-agent/server",
+  "version": "0.0.1",
+  "description": "MCP server exposing My Agent capabilities",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "bin": {
+    "my-agent-server": "./dist/index.mjs"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "start": "node dist/index.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cyanheads/mcp-ts-core": "^0.2.8",
+    "@my-agent/core": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.15",
+    "tsdown": "^0.21.0",
+    "typescript": "^5.6.3"
+  }
+}
