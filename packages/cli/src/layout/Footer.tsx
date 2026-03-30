@@ -1,5 +1,7 @@
 import { Box, Text } from "ink";
 
+import { AttachmentList } from "../components/AttachmentList.js";
+import { AutocompleteList } from "../components/AutocompleteList.js";
 import { ErrorDetail } from "../components/ErrorDetail.js";
 import { FullBox } from "../components/FullBox.js";
 import { LLMUsage } from "../components/LLMUsage.js";
@@ -66,6 +68,12 @@ export const Footer = () => {
       <ErrorDetail />
 
       <Box height={1} flexGrow={1} flexShrink={0} />
+
+      {/* Attachments */}
+      {isInputEnabled && <AttachmentList />}
+
+      {/* Autocomplete suggestions */}
+      {isInputEnabled && <AutocompleteList />}
 
       {/* Input */}
       <Box opaque>

@@ -3,11 +3,13 @@ import { Box, Text, useApp, useInput } from "ink";
 import { useCallback, useEffect, useRef } from "react";
 import { toRaw } from "reactivity-store";
 
+import { dispatchCommand } from "../commands";
 import { FullBox } from "../components/FullBox.js";
 import { MessageList } from "../components/MessageList.js";
 import { Spinner } from "../components/Spinner.js";
 import { useAgent } from "../hooks/use-agent.js";
 import { useArgs } from "../hooks/use-args.js";
+import { useAutocomplete } from "../hooks/use-autocomplete.js";
 import { useLocalChat } from "../hooks/use-local-chat.js";
 import { useSize } from "../hooks/use-size.js";
 import { useStatic } from "../hooks/use-static.js";
@@ -15,6 +17,10 @@ import { useUserInput } from "../hooks/use-user-input.js";
 import { Content } from "../layout/Content.js";
 import { Footer } from "../layout/Footer.js";
 import { Header } from "../layout/Header.js";
+import { attachmentToFileUIPart } from "../types/attachment.js";
+import { readImageFromClipboard } from "../utils/clipboard.js";
+
+import type { CommandContext } from "../commands";
 
 // ============================================================================
 // Main Agent Component
@@ -62,6 +68,10 @@ export const Agent = () => {
   // Input state
   const inputActions = useUserInput.getActions();
 
+  // Autocomplete state
+  const autocompleteActions = useAutocomplete.getActions();
+  const isAutocompleteVisible = useAutocomplete((s) => s.visible);
+
   // current pending
   const pendingApproval = allPendingApproval[0];
 
@@ -75,13 +85,36 @@ export const Agent = () => {
     }
   }, [config.initialPrompt, sendMessage]);
 
+  // Command context for the command system
+  const commandCtx: CommandContext = {
+    inputActions,
+    getInputState: () => useUserInput.getReadonlyState(),
+  };
+
   // Handle submit
   const handleSubmit = useCallback(async () => {
-    const prompt = inputActions.submit();
-    if (prompt && isReady && !isLoading) {
+    const { text: prompt, attachments } = inputActions.submit();
+
+    // Dispatch slash commands via the command registry
+    if (prompt.startsWith("/")) {
+      if (await dispatchCommand(prompt, commandCtx)) {
+        return;
+      }
+      // Unknown slash command
+      inputActions.setInputError(`Unknown command: ${prompt.split(" ")[0]}`);
+      return;
+    }
+
+    if (!prompt && !attachments.length) return;
+    if (!isReady || isLoading) return;
+
+    if (attachments.length > 0) {
+      const files = attachments.map((a) => attachmentToFileUIPart(a));
+      await sendMessage({ text: prompt, files });
+    } else {
       await sendMessage(prompt);
     }
-  }, [inputActions, isReady, isLoading, sendMessage]);
+  }, [inputActions, isReady, isLoading, sendMessage, commandCtx]);
 
   // Handle keyboard input
   useInput((inputChar, inputKey) => {
@@ -97,11 +130,30 @@ export const Agent = () => {
       return;
     }
 
-    // Escape: abort if running, otherwise exit
+    // Ctrl+V / Cmd+V: paste image from clipboard
+    if ((inputKey.ctrl || inputKey.meta) && inputChar === "v") {
+      if (!isLoading && !pendingApproval) {
+        readImageFromClipboard().then((attachment) => {
+          if (attachment) {
+            inputActions.addAttachment(attachment);
+            inputActions.setInputError(null);
+          } else {
+            inputActions.setInputError("No image found in clipboard");
+          }
+        });
+      }
+      return;
+    }
+
+    // Escape: abort if running
     if (inputKey.escape) {
       if (isLoading) {
-        // Abort the current agent run
         stop();
+        return;
+      }
+      // Dismiss autocomplete if visible
+      if (isAutocompleteVisible) {
+        autocompleteActions.dismiss();
         return;
       }
     }
@@ -135,31 +187,85 @@ export const Agent = () => {
     // Don't handle regular input while loading
     if (isLoading) return;
 
-    // Submit on Enter
+    const { attachments, selectedAttachment } = useUserInput.getReadonlyState();
+    const hasAttachments = attachments.length > 0;
+    const hasSelection = selectedAttachment >= 0;
+
+    // Tab: accept autocomplete suggestion
+    if (inputKey.tab) {
+      if (isAutocompleteVisible) {
+        const accepted = autocompleteActions.accept();
+        if (accepted) {
+          inputActions.setValue(accepted);
+        }
+      }
+      return;
+    }
+
+    // Enter: accept autocomplete if visible, otherwise submit
     if (inputKey.return) {
+      if (isAutocompleteVisible) {
+        const accepted = autocompleteActions.accept();
+        if (accepted) {
+          inputActions.setValue(accepted);
+        }
+        return;
+      }
       handleSubmit();
       return;
     }
 
-    // Backspace
-    if (inputKey.backspace || inputKey.delete) {
+    // Delete: remove selected attachment only when an attachment is actively selected
+    if (inputKey.delete) {
+      if (hasSelection) {
+        inputActions.removeSelectedAttachment();
+        return;
+      }
+      // Normal text delete
       inputActions.backspace();
+      const newValue = useUserInput.getReadonlyState().value;
+      autocompleteActions.update(newValue);
       return;
     }
 
-    // History navigation
-    if (inputKey.upArrow) {
-      inputActions.historyPrev();
+    // Backspace
+    if (inputKey.backspace) {
+      inputActions.backspace();
+      const newValue = useUserInput.getReadonlyState().value;
+      autocompleteActions.update(newValue);
       return;
     }
+
+    // Arrow Up: autocomplete > attachment selection > history
+    if (inputKey.upArrow) {
+      if (isAutocompleteVisible) {
+        autocompleteActions.selectPrev();
+      } else if (hasAttachments) {
+        inputActions.selectPrevAttachment();
+      } else {
+        inputActions.historyPrev();
+      }
+      return;
+    }
+
+    // Arrow Down: autocomplete > deselect attachment > history
     if (inputKey.downArrow) {
-      inputActions.historyNext();
+      if (isAutocompleteVisible) {
+        autocompleteActions.selectNext();
+      } else if (hasSelection) {
+        inputActions.selectNextAttachment();
+      } else {
+        inputActions.historyNext();
+      }
       return;
     }
 
     // Regular character input
     if (inputChar && !inputKey.ctrl && !inputKey.meta) {
+      inputActions.deselectAttachment();
       inputActions.append(inputChar);
+      const newValue = useUserInput.getReadonlyState().value;
+      autocompleteActions.update(newValue);
     }
   });
 

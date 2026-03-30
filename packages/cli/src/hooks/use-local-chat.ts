@@ -20,7 +20,7 @@ import { createAgent } from "../utils/create.js";
 import { useForceUpdate } from "./use-force-update.js";
 
 import type { Agent } from "@my-agent/core";
-import type { ChatTransport, UIDataTypes, UIMessage, UIMessagePart, UITools } from "ai";
+import type { ChatTransport, FileUIPart, UIDataTypes, UIMessage, UIMessagePart, UITools } from "ai";
 
 // ============================================================================
 // Types
@@ -50,11 +50,16 @@ export interface UseLocalChatConfig {
  */
 export type ChatStatus = "ready" | "submitted" | "streaming" | "error";
 
+export interface SendMessageContent {
+  text: string;
+  files?: FileUIPart[];
+}
+
 export interface UseLocalChatReturn {
   /** Current chat messages */
   messages: UIMessage[];
-  /** Send a message */
-  sendMessage: (content: string) => Promise<void>;
+  /** Send a message (string or text+files) */
+  sendMessage: (content: string | SendMessageContent) => Promise<void>;
   /** Current status */
   status: ChatStatus;
   /** Whether the chat is streaming */
@@ -213,14 +218,20 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
     forceUpdate();
   };
 
-  // Wrap sendMessage to handle string input (useChat expects object)
+  // Wrap sendMessage to handle string or multimodal input
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string | SendMessageContent) => {
       if (!agent || !chatRef.current) {
         return;
       }
 
-      await chatHelpers.sendMessage({ text: content });
+      if (typeof content === "string") {
+        await chatHelpers.sendMessage({ text: content });
+      } else if (content.files && content.files.length > 0) {
+        await chatHelpers.sendMessage({ text: content.text, files: content.files });
+      } else {
+        await chatHelpers.sendMessage({ text: content.text });
+      }
     },
     [agent, chatHelpers]
   );

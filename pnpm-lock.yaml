@@ -41,6 +41,9 @@ importers:
       '@ai-sdk/react':
         specifier: ^3.0.118
         version: 3.0.118(@my-react/react@0.3.22)(zod@4.3.6)
+      '@crosscopy/clipboard':
+        specifier: ^0.3.6
+        version: 0.3.6
       '@git-diff-view/cli':
         specifier: ^0.1.3
         version: 0.1.3(@my-react/react-terminal@0.0.19(@my-react/react@0.3.22(@my-react/react@0.3.22)))(@my-react/react@0.3.22)
@@ -493,6 +496,35 @@ packages:
 
   '@computesdk/provider@1.0.28':
     resolution: {integrity: sha512-ecn/AFiLpr5GCU0r6VkwBrwYnFULIoJ2K1oiJ7TBqj0pAYmQsFgv8i5b4VRbKab1FGG5zCXthaFY/3liTYjzCg==}
+
+  '@crosscopy/clipboard-darwin-arm64@0.3.6':
+    resolution: {integrity: sha512-l2FtoiefGpYIWL8Fvku/pEth8KlI4j4andtn8WveumMiNx/0TNI2OEhSe+mX4X/me0+b5le/PTVrOPXrxvZuiA==}
+    engines: {node: '>= 10.20.0 < 11 || >= 12.17.0 < 13 || >= 14.0.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@crosscopy/clipboard-darwin-x64@0.3.6':
+    resolution: {integrity: sha512-fXVk7oLUkCyjVakW6VZc1JIeUcXH0/edJXAUREFpWastMlcZAp4AF/7njtlimWmANxtAQu3R2YI3ziFzEF4Neg==}
+    engines: {node: '>= 10.20.0 < 11 || >= 12.17.0 < 13 || >= 14.0.0'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@crosscopy/clipboard-linux-x64-gnu@0.3.6':
+    resolution: {integrity: sha512-bPKMdbmPM6wa9smgpA9RSpIfWhQxd93XWmRQf9vkwrmvnP43shgXegV+vO8SyDd3ZPZy/OvHe3p/YyWNBC4S6g==}
+    engines: {node: '>= 10.20.0 < 11 || >= 12.17.0 < 13 || >= 14.0.0'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@crosscopy/clipboard-win32-x64-msvc@0.3.6':
+    resolution: {integrity: sha512-GZ0i9XoPYQV5DhTQWiHjArE3ZTuovHmHNL7yE6Pm/91icOtrm9Mk9tVnpU/rQR9bzOn3MqN8+AFsp5NKZqTg7Q==}
+    engines: {node: '>= 10.20.0 < 11 || >= 12.17.0 < 13 || >= 14.0.0'}
+    cpu: [x64]
+    os: [win32]
+
+  '@crosscopy/clipboard@0.3.6':
+    resolution: {integrity: sha512-h/LlfI5t/xsxLr63g3Os0mjoeITj7/8x8Goy5PZ+f4bk3DDgc1r5VXO462U3e8/+LjHixtvS9sTk/MoKEwSutw==}
+    engines: {node: '>= 10.20.0 < 11 || >= 12.17.0 < 13 || >= 14.0.0'}
 
   '@csstools/css-calc@3.1.1':
     resolution: {integrity: sha512-HJ26Z/vmsZQqs/o3a6bgKslXGFAungXGbinULZO3eMsOyNJHeBBZfup5FiZInOghgoM4Hwnmw+OgbJCNg1wwUQ==}
@@ -7539,6 +7571,25 @@ snapshots:
     dependencies:
       '@computesdk/cmd': 0.4.1
       computesdk: 2.3.0
+
+  '@crosscopy/clipboard-darwin-arm64@0.3.6':
+    optional: true
+
+  '@crosscopy/clipboard-darwin-x64@0.3.6':
+    optional: true
+
+  '@crosscopy/clipboard-linux-x64-gnu@0.3.6':
+    optional: true
+
+  '@crosscopy/clipboard-win32-x64-msvc@0.3.6':
+    optional: true
+
+  '@crosscopy/clipboard@0.3.6':
+    optionalDependencies:
+      '@crosscopy/clipboard-darwin-arm64': 0.3.6
+      '@crosscopy/clipboard-darwin-x64': 0.3.6
+      '@crosscopy/clipboard-linux-x64-gnu': 0.3.6
+      '@crosscopy/clipboard-win32-x64-msvc': 0.3.6
 
   '@csstools/css-calc@3.1.1(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)':
     dependencies:

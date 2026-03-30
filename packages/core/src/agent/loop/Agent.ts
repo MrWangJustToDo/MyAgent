@@ -98,6 +98,29 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
   }
 
   // ============================================================================
+  // System Prompt
+  // ============================================================================
+
+  /**
+   * Build the final system prompt by appending dynamic sections (e.g. available skills).
+   */
+  private buildSystemPrompt(): string | undefined {
+    const base = this.config.systemPrompt;
+    if (!this.skillRegister || this.skillRegister.size === 0) {
+      return base;
+    }
+
+    const skillSection = [
+      "",
+      "## Available Skills",
+      "Use `load_skill` to load any of these skills when relevant to the user's task:",
+      this.skillRegister.getDescriptions(),
+    ].join("\n");
+
+    return base ? base + "\n" + skillSection : skillSection;
+  }
+
+  // ============================================================================
   // Vercel AI SDK Agent Interface Methods
   // ============================================================================
 
@@ -161,7 +184,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       model: this.model,
       messages: finalMessages,
       tools,
-      system: this.config.systemPrompt,
+      system: this.buildSystemPrompt(),
       maxOutputTokens: this.config.maxTokens,
       temperature: this.config.temperature,
       abortSignal: this.currentAbortController!.signal,
@@ -273,7 +296,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
         model: this.model,
         messages: finalMessages,
         tools,
-        system: this.config.systemPrompt,
+        system: this.buildSystemPrompt(),
         maxOutputTokens: this.config.maxTokens,
         temperature: this.config.temperature,
         abortSignal: this.currentAbortController!.signal,

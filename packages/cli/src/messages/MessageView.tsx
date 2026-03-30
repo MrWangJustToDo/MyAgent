@@ -1,12 +1,13 @@
-import { isToolUIPart } from "ai";
+import { isFileUIPart, isToolUIPart } from "ai";
 import { Box } from "ink";
 import { memo, useMemo } from "react";
 
+import { FilePartView } from "./FilePartView.js";
 import { TextPartView } from "./TextPartView.js";
 import { ThinkingPartView } from "./ThinkingPartView.js";
 import { ToolCallPartView } from "./ToolCallPartView.js";
 
-import type { ReasoningUIPart, TextUIPart, ToolUIPart, UIMessage } from "ai";
+import type { FileUIPart, ReasoningUIPart, TextUIPart, ToolUIPart, UIMessage } from "ai";
 
 export interface MessageViewProps {
   message: UIMessage;
@@ -23,6 +24,7 @@ export const MessageView = memo(({ message }: MessageViewProps) => {
         <Box key={`${part.type}-${index}`} width="100%">
           {part.type === "text" && <TextPartView part={part as TextUIPart} role={message.role} />}
           {part.type === "reasoning" && <ThinkingPartView part={part as ReasoningUIPart} />}
+          {isFileUIPart(part) && <FilePartView part={part as FileUIPart} />}
           {isToolUIPart(part) && <ToolCallPartView part={part as ToolUIPart} />}
         </Box>
       ))}

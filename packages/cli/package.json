@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.118",
+    "@crosscopy/clipboard": "^0.3.6",
     "@git-diff-view/cli": "^0.1.3",
     "@git-diff-view/core": "^0.1.3",
     "@git-diff-view/file": "^0.1.3",
