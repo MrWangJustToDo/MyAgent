@@ -1,7 +1,7 @@
 {
   "name": "@my-agent/server",
   "version": "0.0.1",
-  "description": "MCP server exposing My Agent capabilities",
+  "description": "MCP server",
   "type": "module",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -26,7 +26,8 @@
   },
   "dependencies": {
     "@cyanheads/mcp-ts-core": "^0.2.8",
-    "@my-agent/core": "workspace:*",
+    "screenshot-desktop": "^1.15.3",
+    "sharp": "^0.34.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {

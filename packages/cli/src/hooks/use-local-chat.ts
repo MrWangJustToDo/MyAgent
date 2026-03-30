@@ -6,7 +6,7 @@
  */
 
 import { Chat, useChat as useAiSdkChat } from "@ai-sdk/react";
-import { generateId } from "@my-agent/core";
+import { agentManager, generateId } from "@my-agent/core";
 import {
   getToolName,
   isToolUIPart,
@@ -315,6 +315,14 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
 
     return all;
   }, [messages]);
+
+  useEffect(() => {
+    return () => {
+      if (agent) {
+        agentManager.destroyAgent(agent.id);
+      }
+    };
+  }, [agent]);
 
   return {
     messages,

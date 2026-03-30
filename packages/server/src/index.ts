@@ -2,10 +2,10 @@
 
 import { createApp } from "@cyanheads/mcp-ts-core";
 
-import { runAgentTool } from "./tools/run-agent.js";
+import { screenshotTool } from "./tools/screenshot.js";
 
 await createApp({
   name: "my-agent-server",
   version: "0.0.1",
-  tools: [runAgentTool],
+  tools: [screenshotTool],
 });
