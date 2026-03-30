@@ -5,7 +5,7 @@ import sharp from "sharp";
 import type { ContentBlock } from "@cyanheads/mcp-ts-core";
 
 const MAX_WIDTH = 1024;
-const JPEG_QUALITY = 40;
+const JPEG_QUALITY = 80;
 
 /** Holds the last captured image for format() without duplicating in structuredContent. */
 let lastCapturedImage = "";

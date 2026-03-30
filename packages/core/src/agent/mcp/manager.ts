@@ -5,6 +5,7 @@ import type { McpConfig, McpServerConfig } from "./types.js";
 import type { AgentLog } from "../agent-log";
 import type { MCPClient, MCPClientConfig } from "@ai-sdk/mcp";
 import type { ToolSet } from "ai";
+import type { ChildProcess } from "child_process";
 
 // ============================================================================
 // Transport Factory
@@ -25,12 +26,21 @@ function createTransport(config: McpServerConfig): MCPClientConfig["transport"] 
   };
 }
 
+/**
+ * Extract the child process from a stdio transport instance.
+ * The transport stores it as a public `process` property internally.
+ */
+function getTransportProcess(transport: Experimental_StdioMCPTransport): ChildProcess | undefined {
+  return (transport as unknown as { process?: ChildProcess }).process;
+}
+
 // ============================================================================
 // McpManager
 // ============================================================================
 
 export class McpManager {
   private clients: Map<string, MCPClient> = new Map();
+  private stdioTransports: Experimental_StdioMCPTransport[] = [];
 
   /**
    * Connect to all configured MCP servers and return their tools as a merged ToolSet.
@@ -43,6 +53,11 @@ export class McpManager {
     for (const [name, serverConfig] of Object.entries(servers) as [string, McpServerConfig][]) {
       try {
         const transport = createTransport(serverConfig);
+
+        // Track stdio transports for synchronous force-kill on exit
+        if (transport instanceof Experimental_StdioMCPTransport) {
+          this.stdioTransports.push(transport);
+        }
 
         const client = await createMCPClient({
           transport,
@@ -74,6 +89,27 @@ export class McpManager {
   }
 
   /**
+   * Synchronously force-kill all MCP child processes.
+   * Directly sends SIGKILL to each stdio child process to guarantee termination.
+   */
+  forceKill(): void {
+    for (const transport of this.stdioTransports) {
+      try {
+        // Directly kill the child process with SIGKILL (cannot be caught/ignored)
+        const child = getTransportProcess(transport);
+        if (child && !child.killed) {
+          child.kill("SIGKILL");
+        }
+        transport.close();
+      } catch {
+        // Ignore errors during force kill
+      }
+    }
+    this.stdioTransports = [];
+    this.clients.clear();
+  }
+
+  /**
    * Disconnect all MCP server connections.
    */
   async shutdown(): Promise<void> {
@@ -85,6 +121,7 @@ export class McpManager {
       }
     }
     this.clients.clear();
+    this.stdioTransports = [];
   }
 
   /**

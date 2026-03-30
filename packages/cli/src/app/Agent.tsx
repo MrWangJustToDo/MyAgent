@@ -1,3 +1,4 @@
+import { agentManager, type AgentLog } from "@my-agent/core";
 import { Box, Text, useApp, useInput } from "ink";
 import { useCallback, useEffect, useRef } from "react";
 import { toRaw } from "reactivity-store";
@@ -14,8 +15,6 @@ import { useUserInput } from "../hooks/use-user-input.js";
 import { Content } from "../layout/Content.js";
 import { Footer } from "../layout/Footer.js";
 import { Header } from "../layout/Header.js";
-
-import type { AgentLog } from "@my-agent/core";
 
 // ============================================================================
 // Main Agent Component
@@ -88,7 +87,13 @@ export const Agent = () => {
   useInput((inputChar, inputKey) => {
     // Exit on Ctrl+C
     if (inputKey.ctrl && inputChar === "c") {
+      const agent = useAgent.getReadonlyState().agent;
+      if (agent) {
+        agentManager.destroyAgent(agent.id);
+      }
       exit();
+      // Force exit after ink cleanup — MCP event loop handles may linger
+      setTimeout(() => process.exit(0), 200);
       return;
     }
 
@@ -99,9 +104,6 @@ export const Agent = () => {
         stop();
         return;
       }
-      // Exit app when not running
-      exit();
-      return;
     }
 
     // Handle approval responses when there's a pending approval

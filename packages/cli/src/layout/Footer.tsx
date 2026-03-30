@@ -13,7 +13,11 @@ import type { AgentStatus } from "@my-agent/core";
 export const Footer = () => {
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  const _status = useAgent((s) => s.agent?.status) || "idle";
+  const _status = useAgent((s) => s.agent?.status || "idle");
+
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  const allMcp = useAgent((s) => s.agent?.mcpManager?.getConnectedServers());
 
   const status = _status as AgentStatus;
 
@@ -98,6 +102,13 @@ export const Footer = () => {
             </Text>
           )}
         </Box>
+        {allMcp && allMcp.length > 0 && (
+          <Box>
+            <Text color="blue" dimColor>
+              MCP: {allMcp.length}
+            </Text>
+          </Box>
+        )}
         <LLMUsage />
       </Box>
     </FullBox>

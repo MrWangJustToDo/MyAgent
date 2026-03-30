@@ -367,8 +367,8 @@ export class AgentManager {
     const managedAgent = this.agents.get(id);
     if (!managedAgent) return;
 
-    // Shut down MCP connections
-    managedAgent.agent.mcpManager?.shutdown().catch(() => {});
+    // Force-kill MCP child processes synchronously to prevent orphans on exit
+    managedAgent.agent.mcpManager?.forceKill();
 
     // Abort the agent if running
     managedAgent.agent.abort("Agent destroyed");
