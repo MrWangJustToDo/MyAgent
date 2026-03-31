@@ -17,9 +17,9 @@
   "dependencies": {
     "@my-agent/core": "workspace:*",
     "@floating-ui/react": "^0.27.19",
-    "@git-diff-view/cli": "^0.1.2",
-    "@git-diff-view/core": "^0.1.2",
-    "@git-diff-view/file": "^0.1.2",
+    "@git-diff-view/cli": "^0.1.3",
+    "@git-diff-view/core": "^0.1.3",
+    "@git-diff-view/file": "^0.1.3",
     "@heroui/react": "2.8.9",
     "@my-react/react": "^0.3.22",
     "@my-react/react-dom": "^0.3.22",
