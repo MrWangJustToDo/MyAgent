@@ -1,6 +1,7 @@
 import { createState } from "reactivity-store";
 
 import type { Attachment } from "../types/attachment.js";
+import type { Key } from "ink";
 
 // ============================================================================
 // Types
@@ -26,8 +27,8 @@ export interface UserInputState {
   /** Error message to display (e.g. file validation failure) */
   inputError: string | null;
 
-  // remount key
-  key: number;
+  // debug only
+  event: any[];
 }
 
 // ============================================================================
@@ -35,8 +36,8 @@ export interface UserInputState {
 // ============================================================================
 
 const initialState: UserInputState = {
+  event: [],
   value: "",
-  key: 0,
   history: [],
   historyIndex: -1,
   focused: true,
@@ -77,23 +78,105 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.historyIndex = -1;
     },
 
+    addEvent: (chart: string, key: Key) => {
+      state.event.push({ chart, key });
+    },
+
     /**
-     * Append character(s) to input
+     * Insert character(s) at cursor position
      */
     append: (chars: string) => {
-      state.value = state.value + chars;
-      state.cursorPosition = state.value.length;
+      const pos = state.cursorPosition;
+      state.value = state.value.slice(0, pos) + chars + state.value.slice(pos);
+      state.cursorPosition = pos + chars.length;
       state.historyIndex = -1;
     },
 
     /**
-     * Handle backspace
+     * Delete character before cursor (backspace)
      */
     backspace: () => {
-      if (state.value.length > 0) {
-        state.value = state.value.slice(0, -1);
-        state.cursorPosition = state.value.length;
+      if (state.cursorPosition > 0) {
+        const pos = state.cursorPosition;
+        state.value = state.value.slice(0, pos - 1) + state.value.slice(pos);
+        state.cursorPosition = pos - 1;
       }
+    },
+
+    /**
+     * Delete character after cursor (forward delete)
+     */
+    deleteForward: () => {
+      if (state.cursorPosition < state.value.length) {
+        const pos = state.cursorPosition;
+        state.value = state.value.slice(0, pos) + state.value.slice(pos + 1);
+      }
+    },
+
+    /**
+     * Insert a newline at cursor position (Shift+Enter)
+     */
+    insertNewline: () => {
+      const pos = state.cursorPosition;
+      state.value = state.value.slice(0, pos) + "\n" + state.value.slice(pos);
+      state.cursorPosition = pos + 1;
+      state.historyIndex = -1;
+    },
+
+    /**
+     * Move cursor left. Wraps to end of previous line.
+     */
+    moveCursorLeft: () => {
+      if (state.cursorPosition > 0) {
+        state.cursorPosition -= 1;
+      }
+    },
+
+    /**
+     * Move cursor right. Wraps to start of next line.
+     */
+    moveCursorRight: () => {
+      if (state.cursorPosition < state.value.length) {
+        state.cursorPosition += 1;
+      }
+    },
+
+    /**
+     * Move cursor up one line. Returns false if already on first line.
+     */
+    moveCursorUp: (): boolean => {
+      const val = state.value;
+      const pos = state.cursorPosition;
+      // Find start of current line
+      const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
+      if (lineStart === 0) return false; // already on first line
+      // Column in current line
+      const col = pos - lineStart;
+      // Find start of previous line
+      const prevLineStart = val.lastIndexOf("\n", lineStart - 2) + 1;
+      const prevLineLen = lineStart - 1 - prevLineStart;
+      state.cursorPosition = prevLineStart + Math.min(col, prevLineLen);
+      return true;
+    },
+
+    /**
+     * Move cursor down one line. Returns false if already on last line.
+     */
+    moveCursorDown: (): boolean => {
+      const val = state.value;
+      const pos = state.cursorPosition;
+      // Find end of current line
+      const lineEnd = val.indexOf("\n", pos);
+      if (lineEnd === -1) return false; // already on last line
+      // Column in current line
+      const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
+      const col = pos - lineStart;
+      // Find end of next line
+      const nextLineStart = lineEnd + 1;
+      const nextLineEnd = val.indexOf("\n", nextLineStart);
+      const nextLineLen = (nextLineEnd === -1 ? val.length : nextLineEnd) - nextLineStart;
+      state.cursorPosition = nextLineStart + Math.min(col, nextLineLen);
+      return true;
     },
 
     /**
@@ -142,7 +225,6 @@ export const useUserInput = createState(() => ({ ...initialState }), {
 
       state.value = state.history[state.historyIndex] ?? "";
       state.cursorPosition = state.value.length;
-      state.key++;
     },
 
     /**
@@ -160,7 +242,6 @@ export const useUserInput = createState(() => ({ ...initialState }), {
         state.value = "";
       }
       state.cursorPosition = state.value.length;
-      state.key++;
     },
 
     /**
@@ -268,8 +349,6 @@ export const useUserInput = createState(() => ({ ...initialState }), {
 
       setTimeout(() => (state.inputError = null), 2000);
     },
-
-    addRemountKey: () => state.key++,
 
     /**
      * Reset to initial state

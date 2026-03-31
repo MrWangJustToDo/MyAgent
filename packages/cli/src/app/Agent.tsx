@@ -118,6 +118,8 @@ export const Agent = () => {
 
   // Handle keyboard input
   useInput((inputChar, inputKey) => {
+    inputActions.addEvent(inputChar, inputKey);
+
     // Exit on Ctrl+C
     if (inputKey.ctrl && inputChar === "c") {
       const agent = useAgent.getReadonlyState().agent;
@@ -127,6 +129,12 @@ export const Agent = () => {
       exit();
       // Force exit after ink cleanup — MCP event loop handles may linger
       setTimeout(() => process.exit(0), 200);
+      return;
+    }
+
+    // clear on Ctrl+U
+    if (inputKey.ctrl && inputChar === "u") {
+      inputActions.setValue("");
       return;
     }
 
@@ -197,19 +205,25 @@ export const Agent = () => {
         const accepted = autocompleteActions.accept();
         if (accepted) {
           inputActions.setValue(accepted);
-          inputActions.addRemountKey();
         }
       }
       return;
     }
 
-    // Enter: accept autocomplete if visible, otherwise submit
+    // Enter key handling
     if (inputKey.return) {
+      // Backslash continuation: if input ends with \, replace it with newline
+      const currentValue = useUserInput.getReadonlyState().value;
+      if (currentValue.endsWith("\\")) {
+        inputActions.backspace(); // remove the trailing \
+        inputActions.insertNewline();
+        return;
+      }
+
       if (isAutocompleteVisible) {
         const accepted = autocompleteActions.accept();
         if (accepted) {
           inputActions.setValue(accepted);
-          inputActions.addRemountKey();
         }
         return;
       }
@@ -217,31 +231,52 @@ export const Agent = () => {
       return;
     }
 
-    // Delete: remove selected attachment only when an attachment is actively selected
+    // \n from terminal (iTerm2/Ghostty/WezTerm Shift+Enter) → insert newline
+    if (inputChar === "\n") {
+      inputActions.insertNewline();
+      return;
+    }
+
+    // Delete: remove selected attachment, or forward-delete text
+    // if (inputChar === "fn" && inputKey.delete) {
+    //   if (hasSelection) {
+    //     inputActions.removeSelectedAttachment();
+    //     return;
+    //   }
+    //   inputActions.deleteForward();
+    //   const newValue = useUserInput.getReadonlyState().value;
+    //   autocompleteActions.update(newValue);
+    //   return;
+    // }
+
+    // Backspace
     if (inputKey.delete) {
       if (hasSelection) {
         inputActions.removeSelectedAttachment();
         return;
       }
-      // Normal text delete
       inputActions.backspace();
       const newValue = useUserInput.getReadonlyState().value;
       autocompleteActions.update(newValue);
       return;
     }
 
-    // Backspace
-    if (inputKey.backspace) {
-      inputActions.backspace();
-      const newValue = useUserInput.getReadonlyState().value;
-      autocompleteActions.update(newValue);
+    // Left/Right arrows: cursor movement within text
+    if (inputKey.leftArrow) {
+      inputActions.moveCursorLeft();
+      return;
+    }
+    if (inputKey.rightArrow) {
+      inputActions.moveCursorRight();
       return;
     }
 
-    // Arrow Up: autocomplete > attachment selection > history
+    // Arrow Up: multi-line cursor > autocomplete > attachment selection > history
     if (inputKey.upArrow) {
       if (isAutocompleteVisible) {
         autocompleteActions.selectPrev();
+      } else if (inputActions.moveCursorUp()) {
+        // Cursor moved up within multi-line text
       } else if (hasAttachments) {
         inputActions.selectPrevAttachment();
       } else {
@@ -250,10 +285,12 @@ export const Agent = () => {
       return;
     }
 
-    // Arrow Down: autocomplete > deselect attachment > history
+    // Arrow Down: multi-line cursor > autocomplete > deselect attachment > history
     if (inputKey.downArrow) {
       if (isAutocompleteVisible) {
         autocompleteActions.selectNext();
+      } else if (inputActions.moveCursorDown()) {
+        // Cursor moved down within multi-line text
       } else if (hasSelection) {
         inputActions.selectNextAttachment();
       } else {

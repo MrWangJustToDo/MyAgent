@@ -35,7 +35,6 @@
     "ink-link": "^5.0.0",
     "ink-select-input": "^6.2.0",
     "ink-tab": "^5.2.0",
-    "ink-text-input": "^6.0.0",
     "lodash-es": "^4.17.23",
     "minilru": "^1.0.2",
     "reactivity-store": "^0.4.0",
