@@ -197,6 +197,7 @@ export const Agent = () => {
         const accepted = autocompleteActions.accept();
         if (accepted) {
           inputActions.setValue(accepted);
+          inputActions.addRemountKey();
         }
       }
       return;
@@ -208,6 +209,7 @@ export const Agent = () => {
         const accepted = autocompleteActions.accept();
         if (accepted) {
           inputActions.setValue(accepted);
+          inputActions.addRemountKey();
         }
         return;
       }

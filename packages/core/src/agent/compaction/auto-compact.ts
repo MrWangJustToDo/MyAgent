@@ -42,15 +42,32 @@ function stripMediaFromMessages(messages: ModelMessage[]): ModelMessage[] {
       return message;
     }
 
-    // Filter out media parts, keep text and tool parts
+    // Replace media parts with descriptive placeholders, keep text and tool parts
     const filteredContent = message.content
       .map((part) => {
         const p = part as Record<string, unknown>;
         const type = p.type as string | undefined;
 
-        // Skip image/file attachments
-        if (type === "image" || type === "file") {
-          return { type: "text", text: `[Attachment: ${type}]` };
+        // Replace image/file attachments with descriptive placeholders
+        if (type === "image") {
+          const mediaType = (p.mediaType as string) || "image";
+          return {
+            type: "text",
+            text: `[Image was attached here (${mediaType}). The image content was already seen and discussed in this conversation.]`,
+          };
+        }
+
+        if (type === "file") {
+          const mediaType = (p.mediaType as string) || "unknown";
+          const filename = (p.filename as string) || "";
+          const label = filename ? `${filename} (${mediaType})` : mediaType;
+          if (mediaType.startsWith("image/")) {
+            return {
+              type: "text",
+              text: `[Image file was attached: ${label}. The image content was already seen and discussed in this conversation.]`,
+            };
+          }
+          return { type: "text", text: `[File was attached: ${label}]` };
         }
 
         // Keep everything else

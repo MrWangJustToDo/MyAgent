@@ -25,6 +25,7 @@ Focus on information that would be helpful for continuing the conversation, incl
 - What needs to be done next
 - Key user requests, constraints, or preferences that should persist
 - Important technical decisions and why they were made
+- If images or files were shared, describe what they contained and what was discussed about them
 
 Your summary should be comprehensive enough to provide context but concise enough to be quickly understood.
 

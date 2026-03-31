@@ -25,6 +25,9 @@ export interface UserInputState {
   selectedAttachment: number;
   /** Error message to display (e.g. file validation failure) */
   inputError: string | null;
+
+  // remount key
+  key: number;
 }
 
 // ============================================================================
@@ -33,6 +36,7 @@ export interface UserInputState {
 
 const initialState: UserInputState = {
   value: "",
+  key: 0,
   history: [],
   historyIndex: -1,
   focused: true,
@@ -138,6 +142,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
 
       state.value = state.history[state.historyIndex] ?? "";
       state.cursorPosition = state.value.length;
+      state.key++;
     },
 
     /**
@@ -155,6 +160,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
         state.value = "";
       }
       state.cursorPosition = state.value.length;
+      state.key++;
     },
 
     /**
@@ -259,7 +265,11 @@ export const useUserInput = createState(() => ({ ...initialState }), {
      */
     setInputError: (error: string | null) => {
       state.inputError = error;
+
+      setTimeout(() => (state.inputError = null), 2000);
     },
+
+    addRemountKey: () => state.key++,
 
     /**
      * Reset to initial state
