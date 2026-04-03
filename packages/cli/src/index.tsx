@@ -22,4 +22,4 @@ const args = process.argv.slice(2);
 initArgs(args);
 
 // Render the app
-render(<App />, { incrementalRendering: false, maxFps: 30, exitOnCtrlC: false });
+render(<App />, { incrementalRendering: false, maxFps: 30, exitOnCtrlC: false, renderProcess: true });

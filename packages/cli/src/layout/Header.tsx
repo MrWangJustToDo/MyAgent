@@ -46,8 +46,6 @@ export const Header = () => {
         </Box>
       </FullBox>
     );
-
-    useStatic.getActions().refreshRemount();
   }, [model, path, name]);
 
   return null;

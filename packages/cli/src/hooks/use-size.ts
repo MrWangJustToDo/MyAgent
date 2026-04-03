@@ -1,7 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { createState } from "reactivity-store";
 
-import { useStatic } from "./use-static";
 import { useTerminalSize } from "./use-terminal-size";
 
 export const useSize = createState(
@@ -11,19 +10,10 @@ export const useSize = createState(
   {
     withActions: (s) => {
       const useInitTerminalSize = () => {
-        const initMountRef = useRef(true);
-
         const { columns } = useTerminalSize();
 
         useEffect(() => {
           s.state.screenWidth = columns;
-
-          if (initMountRef.current) {
-            initMountRef.current = false;
-            return;
-          }
-
-          useStatic.getActions().refreshRemount();
         }, [columns]);
 
         return { columns };

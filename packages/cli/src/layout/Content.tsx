@@ -1,14 +1,16 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-import { Static } from "ink";
+import { StaticRender } from "ink";
 import { memo, type JSX } from "react";
 
+import { useSize } from "../hooks";
 import { useDynamic } from "../hooks/use-dynamic";
 import { useStatic } from "../hooks/use-static";
 
 export const Content = memo(() => {
-  const { head, list, key } = useStatic((s) => ({ list: s.list, head: s.header, key: s.remountKey }));
+  const { head, list } = useStatic((s) => ({ list: s.list, head: s.header }));
 
   const dynamicList = useDynamic((s) => s.list);
+
+  const width = useSize((s) => s.state.screenWidth);
 
   const typedList = list as JSX.Element[];
 
@@ -16,10 +18,9 @@ export const Content = memo(() => {
 
   return (
     <>
-      {/* @ts-ignore */}
-      <Static key={key} items={validList}>
-        {(item) => item}
-      </Static>
+      <StaticRender width={width} key={validList.length}>
+        {validList}
+      </StaticRender>
       {dynamicList}
     </>
   );
