@@ -65,7 +65,7 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
     const id = part.toolCallId;
 
     return (
-      <Box>
+      <Box flexDirection="column">
         <SplitNode
           split={
             <Box

@@ -83,6 +83,54 @@ function stripMediaFromMessages(messages: ModelMessage[]): ModelMessage[] {
 }
 
 /**
+ * Check if a message contains tool approval parts.
+ */
+function messageHasApproval(message: ModelMessage): boolean {
+  if (!Array.isArray(message.content)) {
+    return false;
+  }
+
+  return message.content.some((part) => {
+    if (!part || typeof part !== "object") return false;
+    const p = part as Record<string, unknown>;
+    const type = p.type as string | undefined;
+    return type === "tool-approval-request" || type === "tool-approval-response";
+  });
+}
+
+/**
+ * Split messages into a summary portion and a tail that should be preserved.
+ *
+ * If the latest message is a tool approval request/response, we must preserve it
+ * verbatim so the user can still approve/deny after compaction.
+ */
+function splitApprovalTail(messages: ModelMessage[]): {
+  summaryMessages: ModelMessage[];
+  approvalTail: ModelMessage[];
+} {
+  if (messages.length === 0) {
+    return { summaryMessages: messages, approvalTail: [] };
+  }
+
+  let approvalIndex = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messageHasApproval(messages[i])) {
+      approvalIndex = i;
+      break;
+    }
+  }
+
+  if (approvalIndex === -1) {
+    return { summaryMessages: messages, approvalTail: [] };
+  }
+
+  return {
+    summaryMessages: messages.slice(0, approvalIndex),
+    approvalTail: messages.slice(approvalIndex),
+  };
+}
+
+/**
  * Generate a timestamped filename for transcripts.
  */
 function generateTranscriptFilename(): string {
@@ -327,6 +375,9 @@ export async function autoCompact(
   const tokensBefore = estimateTokens(messages);
   let transcriptPath: string | undefined;
 
+  // Preserve any trailing tool approval messages so user can still respond
+  const { summaryMessages, approvalTail } = splitApprovalTail(messages);
+
   try {
     // Save transcript before compression (always do this for safety)
     transcriptPath = await saveTranscript(messages, config, sandbox);
@@ -338,10 +389,13 @@ export async function autoCompact(
 
   try {
     // Generate summary via subagent with optional focus and todos
-    const summary = await summarizeConversation(messages, parentAgentId, options);
+    const summary =
+      summaryMessages.length > 0
+        ? await summarizeConversation(summaryMessages, parentAgentId, options)
+        : "No prior conversation to summarize.";
 
-    // Create compressed messages
-    const compactedMessages = createCompactedMessages(summary);
+    // Create compressed messages and re-append approval tail
+    const compactedMessages = createCompactedMessages(summary).concat(approvalTail);
 
     const tokensAfter = estimateTokens(compactedMessages);
 
