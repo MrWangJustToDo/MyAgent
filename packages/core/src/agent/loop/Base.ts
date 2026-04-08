@@ -18,6 +18,7 @@ import type {
   GenerateTextOnStepFinishCallback,
   StreamTextOnFinishCallback,
   GenerateTextOnFinishCallback,
+  PrepareStepFunction,
 } from "ai";
 
 export type AgentStatus = "idle" | "running" | "completed" | "error" | "aborted" | "waiting" | "compacting";
@@ -461,6 +462,16 @@ export class Base {
         );
       }
     }
+  }
+
+  createPrepareStep(userCallback?: PrepareStepFunction) {
+    return (async (options) => {
+      const res = userCallback ? await userCallback(options) : options;
+
+      this.log?.agent("prepareStep", options);
+
+      return res;
+    }) as PrepareStepFunction;
   }
 
   /**

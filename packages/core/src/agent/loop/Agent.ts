@@ -3,14 +3,12 @@ import { z } from "zod";
 
 import { generateId } from "../../base/utils.js";
 
-import { Base } from "./base.js";
+import { Base } from "./Base.js";
 
 import type {
   TextStreamPart,
   ToolSet as VercelToolSet,
   Agent as VercelAgent,
-  AgentCallParameters,
-  AgentStreamParameters,
   StreamTextResult,
   GenerateTextResult,
   GenerateTextOnStepFinishCallback,
@@ -42,6 +40,10 @@ export interface UsageInfo {
   inputTokens?: number;
   outputTokens?: number;
 }
+
+type StreamParams = Omit<Parameters<typeof streamText>[0], "model">;
+
+type TextParams = Omit<Parameters<typeof generateText>[0], "model">;
 
 // ============================================================================
 // Agent Class
@@ -131,7 +133,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
    * Returns the StreamTextResult directly, allowing the caller to use
    * `result.fullStream`, `result.toUIMessageStream()`, etc.
    */
-  async stream(options: AgentStreamParameters<never, ToolSet>): Promise<StreamTextResult<ToolSet, never>> {
+  async stream(options: StreamParams): Promise<StreamTextResult<ToolSet, never>> {
     if (!this.model) {
       throw new Error("Model not set. Call setModel() first.");
     }
@@ -142,6 +144,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       abortSignal,
       onStepFinish,
       onFinish,
+      prepareStep,
       experimental_onToolCallStart,
       experimental_onToolCallFinish,
       ...rest
@@ -190,6 +193,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       abortSignal: this.currentAbortController!.signal,
       stopWhen: stepCountIs(this.config.maxIterations ?? 10),
       onStepFinish: this.createOnStepFinish(onStepFinish),
+      prepareStep: this.createPrepareStep(prepareStep),
       onFinish: this.createOnFinish(onFinish),
       onChunk: ({ chunk }) => {
         if (chunk.type.includes("text")) {
@@ -250,7 +254,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
    *
    * Uses generateText internally and waits for completion.
    */
-  async generate(options: AgentCallParameters<never, ToolSet>): Promise<GenerateTextResult<ToolSet, never>> {
+  async generate(options: TextParams): Promise<GenerateTextResult<ToolSet, never>> {
     if (!this.model) {
       throw new Error("Model not set. Call setModel() first.");
     }
@@ -354,4 +358,4 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
 
 export { vercelTool as tool };
 
-export type { AgentStatus, AgentRunOptions } from "./base.js";
+export type { AgentStatus, AgentRunOptions } from "./Base.js";
