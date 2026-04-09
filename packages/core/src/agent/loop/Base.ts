@@ -398,11 +398,10 @@ export class Base {
           incompleteTodos: this.todoManager?.getIncompleteTodos().length,
         });
 
-        this.status = "compacting";
-
         // Need model and sandbox for auto-compaction
         if (this.model && this.sandbox) {
           try {
+            this.status = "compacting";
             // Get incomplete todos to include in summary
             const incompleteTodos = this.todoManager?.getIncompleteTodos() ?? [];
             const todos = incompleteTodos.map((t) => ({
@@ -428,13 +427,14 @@ export class Base {
             this.context?.setCompactMessages(result.messages);
 
             this.context?.resetUsage();
-
-            return { ...res, messages: this.context?.getCompactMessages() };
           } catch (err) {
             const error = err instanceof Error ? err : new Error(String(err));
             this.log?.error("agent", "Auto-compaction failed, continuing with original messages", error);
             // Continue with original messages if compaction fails
+          } finally {
+            this.status = "running";
           }
+          return { ...res, messages: this.context?.getCompactMessages() };
         } else {
           this.log?.warn(
             "agent",
@@ -442,8 +442,6 @@ export class Base {
             !this.model ? { missingModel: true } : { missingSandbox: true }
           );
         }
-
-        this.status = "running";
       }
 
       return { ...res, messages: this.context?.getCompactMessages() };
