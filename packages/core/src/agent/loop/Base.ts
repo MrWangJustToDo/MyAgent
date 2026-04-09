@@ -434,6 +434,7 @@ export class Base {
           } finally {
             this.status = "running";
           }
+
           return { ...res, messages: this.context?.getCompactMessages() };
         } else {
           this.log?.warn(
