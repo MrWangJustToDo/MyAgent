@@ -392,37 +392,56 @@ The project implements a **three-layer context compaction system** for infinite 
 
 ### Layer 1: Micro Compaction
 
-Runs automatically in `prepareMessages()` before each LLM call:
+Runs automatically in `createPrepareStep()` before each LLM call:
 - Replaces old tool_result content with `[Previous: used {tool_name}]`
 - Preserves the N most recent tool results (default: 3)
 - Skips small results (< 100 chars)
 
 ```typescript
-// Automatic - no explicit call needed
+// Automatic - applied in createPrepareStep() callback
 // Configured via compaction.keepRecentToolResults
+finalMessages = microCompact(finalMessages, this.compactionConfig || {});
 ```
 
 ### Layer 2: Auto Compaction
 
-Triggers when estimated tokens exceed threshold:
-1. Saves full conversation to `.transcripts/transcript_{timestamp}.jsonl`
-2. Uses LLM to generate structured summary
-3. **Includes incomplete todos in the summary** so they can be restored
-4. Replaces all messages with summary + acknowledgment
+Triggers in `createPrepareStep()` when estimated tokens exceed threshold:
+1. Logs compaction trigger with token count and threshold
+2. Sets agent status to "compacting"
+3. Saves full conversation to `.transcripts/transcript_{timestamp}.jsonl`
+4. Gets incomplete todos from TodoManager
+5. Uses LLM to generate structured summary **including incomplete todos**
+6. Replaces all messages with summary + acknowledgment
+7. Resets context usage counters
+8. Returns updated messages to continue the conversation
 
 ```typescript
-// Check if compaction is needed
-if (agent.shouldAutoCompact(messages)) {
-  const result = await autoCompact(messages, config, model, sandbox);
-  // result.messages contains the compressed conversation
-  // Incomplete todos are included in the summary
-}
-
-// Check if there are incomplete todos (for informational purposes)
-if (agent.hasIncompleteTodos()) {
-  console.log("Compaction will include incomplete todos in summary");
+// Inside createPrepareStep() callback
+if (this.shouldAutoCompact(finalMessages)) {
+  this.status = "compacting";
+  
+  // Get incomplete todos to preserve in summary
+  const incompleteTodos = this.todoManager?.getIncompleteTodos() ?? [];
+  const todos = incompleteTodos.map((t) => ({
+    content: t.content,
+    status: t.status,
+    priority: t.priority,
+  }));
+  
+  // Run auto-compaction with todos
+  const result = await autoCompact(finalMessages, config, agentId, sandbox, {
+    todos: todos.length > 0 ? todos : undefined,
+  });
+  
+  // Apply compacted messages and reset usage
+  this.context?.setCompactMessages(result.messages);
+  this.context?.resetUsage();
+  
+  return { ...res, messages: this.context?.getCompactMessages() };
 }
 ```
+
+**Note:** Compaction includes incomplete todos in the summary, so the agent can restore them after compaction. No longer blocks on incomplete todos.
 
 ### Layer 3: Compact Tool
 
@@ -524,14 +543,18 @@ packages/core/src/agent/
 ├── tools/
 │   └── compact-tool.ts     # compact tool - Layer 3
 ├── loop/
-│   └── base.ts             # prepareMessages() integration
+│   └── base.ts             # createPrepareStep() integration
 ```
 
 ### Integration Points
 
-1. **prepareMessages()** in `base.ts` - Applies micro_compact automatically
-2. **shouldAutoCompact()** - Check before LLM call if threshold exceeded
-3. **compact tool** - Manual trigger by agent
+1. **createPrepareStep()** in `Base.ts` - Main integration point that:
+   - Applies micro_compact (Layer 1) on every LLM call
+   - Checks if auto-compaction is needed via `shouldAutoCompact()`
+   - Runs `autoCompact()` (Layer 2) when token threshold exceeded
+   - Updates context messages via `setCompactMessages()`
+2. **shouldAutoCompact()** - Check if token threshold exceeded (uses actual context.usage.inputTokens when available)
+3. **compact tool** - Manual trigger by agent (Layer 3)
 
 ## Sandbox Environment Configuration
 

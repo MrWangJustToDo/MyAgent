@@ -330,8 +330,6 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
       // The prompt becomes the final user message
       // break the type, but current flow is ok, we will compact the message in prepareMessagesAsync function
       try {
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
         const result = await subagent.generate({
           prompt,
           messages: initialMessages || [],

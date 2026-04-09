@@ -17,8 +17,6 @@ import { z } from "zod";
  * Schema for compaction configuration.
  */
 export const compactionConfigSchema = z.object({
-  /** Enable/disable compaction (default: true) */
-  enabled: z.boolean().default(true),
   /** Token threshold for auto-compaction (default: 100000) */
   tokenThreshold: z.number().int().positive().default(100000),
   /** Number of recent tool results to preserve in micro-compact (default: 3) */
@@ -93,7 +91,6 @@ export type TranscriptEntry = z.infer<typeof transcriptEntrySchema>;
  * Default compaction configuration values.
  */
 export const DEFAULT_COMPACTION_CONFIG: CompactionConfig = {
-  enabled: true,
   tokenThreshold: 100000,
   keepRecentToolResults: 3,
   transcriptDir: ".transcripts",

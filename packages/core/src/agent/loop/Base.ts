@@ -6,7 +6,7 @@ import { createTodoTool } from "../tools";
 import type { Sandbox } from "../../environment";
 import type { AgentContext } from "../agent-context";
 import type { AgentLog } from "../agent-log";
-import type { CompactionConfig, CompactionResult } from "../compaction/types.js";
+import type { CompactionConfig } from "../compaction/types.js";
 import type { McpManager } from "../mcp/manager.js";
 import type { SkillRegistry } from "../skills";
 import type { TodoManager } from "../todo-manager";
@@ -194,7 +194,6 @@ export class Base {
    */
   setCompactionConfig(config: CompactionConfig): void {
     this.log?.debug("agent", "Setting compaction config", {
-      enabled: config.enabled,
       tokenThreshold: config.tokenThreshold,
       keepRecentToolResults: config.keepRecentToolResults,
     });
@@ -218,7 +217,7 @@ export class Base {
    */
   prepareMessages(options: { prompt?: string | ModelMessage[]; messages?: ModelMessage[] }): ModelMessage[] {
     const { prompt, messages } = options;
-    let finalMessages: ModelMessage[] = [];
+    const finalMessages: ModelMessage[] = [];
 
     if (messages) {
       finalMessages.push(...messages);
@@ -229,21 +228,6 @@ export class Base {
         finalMessages.push({ role: "user" as const, content: prompt });
       } else {
         finalMessages.push(...prompt);
-      }
-    }
-
-    // Apply micro compaction (Layer 1) if enabled
-    if (this.compactionConfig?.enabled) {
-      const tokensBefore = estimateTokens(finalMessages);
-      finalMessages = microCompact(finalMessages, this.compactionConfig);
-      const tokensAfter = estimateTokens(finalMessages);
-
-      if (tokensBefore !== tokensAfter) {
-        this.log?.debug("agent", "Micro compaction applied", {
-          tokensBefore,
-          tokensAfter,
-          reduction: tokensBefore - tokensAfter,
-        });
       }
     }
 
@@ -261,99 +245,7 @@ export class Base {
       });
     }
 
-    // has compact
-    const hasCompact = this.context?.getCompactStart() === -1;
-
-    this.context?.setMessages(finalMessages);
-
-    const currentSummary = this.context?.getCompactMessages().slice(0, this.context.getCompactSource()) || [];
-
-    if (hasCompact) {
-      this.context?.resetUsage();
-      this.context?.setCompactStart(finalMessages.length);
-    }
-
-    this.context?.setCompactMessages(currentSummary.concat(finalMessages.slice(this.context.getCompactStart())));
-
-    return this.context?.getCompactMessages() || [];
-  }
-
-  /**
-   * Prepare messages with async auto-compaction support (Layer 2).
-   *
-   * This method should be used instead of prepareMessages() when the caller
-   * can handle async operations. It will:
-   * 1. Apply micro compaction (Layer 1)
-   * 2. Check if auto-compaction is needed based on token threshold
-   * 3. If needed, run LLM summarization and replace messages
-   *
-   * @param options - Prompt and messages options
-   * @returns Prepared messages (possibly compacted)
-   */
-  async prepareMessagesAsync(options: {
-    prompt?: string | ModelMessage[];
-    messages?: ModelMessage[];
-  }): Promise<{ messages: ModelMessage[]; compactionResult?: CompactionResult }> {
-    // First apply sync preparation (micro compaction + nag reminder)
-    let finalMessages = this.prepareMessages(options);
-
-    // Check if auto-compaction (Layer 2) is needed
-    if (this.shouldAutoCompact(finalMessages)) {
-      this.log?.info("agent", "Auto-compaction triggered", {
-        estimatedTokens: this.getCurrentTokens(finalMessages),
-        threshold: this.compactionConfig?.tokenThreshold ?? 100000,
-        incompleteTodos: this.todoManager?.getIncompleteTodos().length,
-      });
-
-      this.status = "compacting";
-
-      // Need model and sandbox for auto-compaction
-      if (this.model && this.sandbox) {
-        try {
-          // Get incomplete todos to include in summary
-          const incompleteTodos = this.todoManager?.getIncompleteTodos() ?? [];
-          const todos = incompleteTodos.map((t) => ({
-            content: t.content,
-            status: t.status as "pending" | "in_progress" | "completed",
-            priority: t.priority as "high" | "medium" | "low",
-          }));
-
-          const result = await autoCompact(finalMessages, this.compactionConfig ?? {}, this.agentId, this.sandbox, {
-            todos: todos.length > 0 ? todos : undefined,
-          });
-
-          this.log?.info("agent", "Auto-compaction completed", {
-            tokensBefore: result.tokensBefore,
-            tokensAfter: result.tokensAfter,
-            transcriptPath: result.transcriptPath,
-            todosIncluded: todos.length,
-          });
-
-          // Update context with compacted messages
-          finalMessages = result.messages;
-          // make next loop to reset
-          this.context?.setCompactStart(-1);
-          // Apply the compacted messages to context
-          this.context?.setCompactMessages(finalMessages);
-
-          return { messages: finalMessages, compactionResult: result };
-        } catch (err) {
-          const error = err instanceof Error ? err : new Error(String(err));
-          this.log?.error("agent", "Auto-compaction failed, continuing with original messages", error);
-          // Continue with original messages if compaction fails
-        }
-      } else {
-        this.log?.warn(
-          "agent",
-          "Auto-compaction needed but model/sandbox not available",
-          !this.model ? { missingModel: true } : { missingSandbox: true }
-        );
-      }
-
-      this.status = "running";
-    }
-
-    return { messages: finalMessages };
+    return finalMessages;
   }
 
   /**
@@ -369,11 +261,7 @@ export class Base {
    * @returns True if tokens exceed the configured threshold
    */
   shouldAutoCompact(messages?: ModelMessage[]): boolean {
-    if (!this.compactionConfig?.enabled) {
-      return false;
-    }
-
-    const threshold = this.compactionConfig.tokenThreshold ?? 100000;
+    const threshold = this.compactionConfig?.tokenThreshold ?? 100000;
 
     // Prefer actual usage from context (accumulated inputTokens)
     if (this.context) {
@@ -468,9 +356,97 @@ export class Base {
     return (async (options) => {
       const res = userCallback ? await userCallback(options) : options;
 
-      this.log?.agent("prepareStep", options);
+      const contextMessage = this.context?.getMessages() || [];
 
-      return res;
+      let finalMessages = res?.messages || [];
+
+      const beforeLength = contextMessage.length;
+
+      const afterLength = finalMessages.length;
+
+      const pendingAppend = afterLength - beforeLength;
+
+      // Apply micro compaction (Layer 1) if enabled
+      const tokensBefore = estimateTokens(finalMessages);
+
+      finalMessages = microCompact(finalMessages, this.compactionConfig || {});
+
+      const tokensAfter = estimateTokens(finalMessages);
+
+      if (tokensBefore !== tokensAfter) {
+        this.log?.debug("agent", "Micro compaction applied", {
+          tokensBefore,
+          tokensAfter,
+          reduction: tokensBefore - tokensAfter,
+        });
+      }
+
+      this.context?.setMessages(finalMessages);
+
+      // append latest message
+      for (let i = 0; i < pendingAppend; i++) {
+        this.context?.addCompactMessage(finalMessages[beforeLength + i]);
+      }
+
+      finalMessages = this.context?.getCompactMessages() || [];
+
+      // Check if auto-compaction (Layer 2) is needed
+      if (this.shouldAutoCompact(finalMessages)) {
+        this.log?.info("agent", "Auto-compaction triggered", {
+          estimatedTokens: this.getCurrentTokens(finalMessages),
+          threshold: this.compactionConfig?.tokenThreshold ?? 100000,
+          incompleteTodos: this.todoManager?.getIncompleteTodos().length,
+        });
+
+        this.status = "compacting";
+
+        // Need model and sandbox for auto-compaction
+        if (this.model && this.sandbox) {
+          try {
+            // Get incomplete todos to include in summary
+            const incompleteTodos = this.todoManager?.getIncompleteTodos() ?? [];
+            const todos = incompleteTodos.map((t) => ({
+              content: t.content,
+              status: t.status as "pending" | "in_progress" | "completed",
+              priority: t.priority as "high" | "medium" | "low",
+            }));
+
+            const result = await autoCompact(finalMessages, this.compactionConfig ?? {}, this.agentId, this.sandbox, {
+              todos: todos.length > 0 ? todos : undefined,
+            });
+
+            this.log?.info("agent", "Auto-compaction completed", {
+              tokensBefore: result.tokensBefore,
+              tokensAfter: result.tokensAfter,
+              transcriptPath: result.transcriptPath,
+              todosIncluded: todos.length,
+              beforeMessage: finalMessages,
+              afterMessage: result.messages,
+            });
+
+            // Apply the compacted messages to context
+            this.context?.setCompactMessages(result.messages);
+
+            this.context?.resetUsage();
+
+            return { ...res, messages: this.context?.getCompactMessages() };
+          } catch (err) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            this.log?.error("agent", "Auto-compaction failed, continuing with original messages", error);
+            // Continue with original messages if compaction fails
+          }
+        } else {
+          this.log?.warn(
+            "agent",
+            "Auto-compaction needed but model/sandbox not available",
+            !this.model ? { missingModel: true } : { missingSandbox: true }
+          );
+        }
+
+        this.status = "running";
+      }
+
+      return { ...res, messages: this.context?.getCompactMessages() };
     }) as PrepareStepFunction;
   }
 

@@ -4,7 +4,7 @@
 
 import { generateId } from "../../base/utils.js";
 
-import type { StreamPart, ToolSet } from "../loop/agent.js";
+import type { StreamPart, ToolSet } from "../loop/Agent.js";
 import type { ModelMessage, OnFinishEvent, TypedToolCall } from "ai";
 
 export interface TokenUsage {
@@ -35,10 +35,6 @@ export class AgentContext {
    * @internal
    */
   private events: StreamPart[] = [];
-
-  private compactSource = 0;
-
-  private compactStart = 0;
 
   private compactMessages: ModelMessage[] = [];
 
@@ -142,30 +138,19 @@ export class AgentContext {
   }
 
   setMessages(m: ModelMessage[]) {
-    this.messages = m;
+    this.messages = [...m];
   }
 
   getMessages() {
     return this.messages;
   }
 
-  setCompactStart(i: number) {
-    this.compactStart = i;
-    if (i === -1) {
-      this.compactSource = 1;
-    }
-  }
-
-  getCompactStart() {
-    return this.compactStart;
-  }
-
-  getCompactSource() {
-    return this.compactSource;
-  }
-
   setCompactMessages(m: ModelMessage[]) {
     this.compactMessages = m;
+  }
+
+  addCompactMessage(m: ModelMessage) {
+    this.compactMessages.push(m);
   }
 
   getCompactMessages() {
@@ -199,8 +184,6 @@ export class AgentContext {
     this.tools = [];
     this.events = [];
     this.messages = [];
-    this.compactStart = 0;
-    this.compactSource = 0;
     this.compactMessages = [];
     this.usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
     this.isStreaming = false;

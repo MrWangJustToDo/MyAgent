@@ -168,11 +168,7 @@ export function shouldAutoCompact(
   tokensOrMessages: number | ModelMessage[],
   config: Partial<CompactionConfig> = {}
 ): boolean {
-  const { enabled = true, tokenThreshold = 100000 } = config;
-
-  if (!enabled) {
-    return false;
-  }
+  const { tokenThreshold = 100000 } = config;
 
   // If a number is passed, use it directly as the token count
   if (typeof tokensOrMessages === "number") {

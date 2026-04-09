@@ -6,4 +6,4 @@ export {
   type AgentConfig,
   type AgentRunOptions,
   type ToolSet,
-} from "./agent.js";
+} from "./Agent.js";

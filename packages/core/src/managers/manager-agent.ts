@@ -1,7 +1,7 @@
 import { AgentLog } from "../agent";
 import { AgentContext } from "../agent/agent-context";
 import { createCompactionConfig } from "../agent/compaction/types.js";
-import { Agent } from "../agent/loop/agent.js";
+import { Agent } from "../agent/loop/Agent.js";
 import { loadMcpConfig } from "../agent/mcp/config.js";
 import { McpManager } from "../agent/mcp/manager.js";
 import { SkillRegistry } from "../agent/skills/skill-registry.js";
@@ -15,7 +15,7 @@ import { sandboxManager } from "./manager-sandbox.js";
 import { toolsManager } from "./manager-tools.js";
 
 import type { CompactionConfigInput } from "../agent/compaction/types.js";
-import type { AgentConfig, ToolSet } from "../agent/loop/agent.js";
+import type { AgentConfig, ToolSet } from "../agent/loop/Agent.js";
 import type { Sandbox } from "../environment";
 import type { LanguageModel } from "ai";
 
@@ -254,15 +254,11 @@ export class AgentManager {
         config: compactionConfig,
         todoManager, // Pass todoManager to check for incomplete todos
         onCompact: (result) => {
-          // const prevMessages = context.getMessages();
-          // for build modelMessage, all of the history before this can be ignore
-          // mark current state as compact message
-          context.setCompactStart(-1);
           // Apply the compacted messages to context
           context.setCompactMessages(result.messages);
           // Reset token usage since we've compressed the context
           // we should reset after this conversation is done
-          // context.resetUsage();
+          context.resetUsage();
 
           log.info("agent", "Compaction completed", {
             tokensBefore: result.tokensBefore,
