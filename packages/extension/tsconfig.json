@@ -6,7 +6,6 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "esModuleInterop": true,
-    "baseUrl": ".",
     "composite": true,
     "paths": {
       "@/*": ["./*"]
