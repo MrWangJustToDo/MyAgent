@@ -4,11 +4,39 @@ import type { Attachment } from "../types/attachment.js";
 import type { Key } from "ink";
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/**
+ * Unicode Private Use Area characters for image placeholders.
+ * Each image gets a unique character: \uE000, \uE001, \uE002, etc.
+ * This allows images to be treated as single characters in the input string.
+ */
+export const IMAGE_PLACEHOLDER_START = 0xe000;
+export const IMAGE_PLACEHOLDER_END = 0xe0ff;
+
+/** Check if a character is an image placeholder */
+export function isImagePlaceholder(char: string): boolean {
+  const code = char.charCodeAt(0);
+  return code >= IMAGE_PLACEHOLDER_START && code <= IMAGE_PLACEHOLDER_END;
+}
+
+/** Get the image index from a placeholder character */
+export function getImageIndex(char: string): number {
+  return char.charCodeAt(0) - IMAGE_PLACEHOLDER_START;
+}
+
+/** Create a placeholder character for an image index */
+export function createImagePlaceholder(index: number): string {
+  return String.fromCharCode(IMAGE_PLACEHOLDER_START + index);
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
 export interface UserInputState {
-  /** Current input value */
+  /** Current input value (may contain image placeholder characters) */
   value: string;
   /** Input history */
   history: string[];
@@ -18,14 +46,18 @@ export interface UserInputState {
   focused: boolean;
   /** Cursor position */
   cursorPosition: number;
+  /** Whether all text is selected (Ctrl+A) */
+  selectAll: boolean;
   /** */
   loading: boolean;
-  /** Pending file attachments */
+  /** Pending file attachments (indexed by placeholder character) */
   attachments: Attachment[];
   /** Currently selected attachment index (-1 means none selected) */
   selectedAttachment: number;
   /** Error message to display (e.g. file validation failure) */
   inputError: string | null;
+  /** Next image index to use for placeholder */
+  nextImageIndex: number;
 
   // debug only
   event: any[];
@@ -42,10 +74,12 @@ const initialState: UserInputState = {
   historyIndex: -1,
   focused: true,
   cursorPosition: 0,
+  selectAll: false,
   loading: false,
   attachments: [],
   selectedAttachment: -1,
   inputError: null,
+  nextImageIndex: 0,
 };
 
 // ============================================================================
@@ -76,6 +110,14 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.value = value;
       state.cursorPosition = value.length;
       state.historyIndex = -1;
+      state.selectAll = false;
+    },
+
+    /**
+     * Select all text (Ctrl+A)
+     */
+    setSelectAll: (selected: boolean) => {
+      state.selectAll = selected && state.value.length > 0;
     },
 
     addEvent: (chart: string, key: Key) => {
@@ -84,8 +126,20 @@ export const useUserInput = createState(() => ({ ...initialState }), {
 
     /**
      * Insert character(s) at cursor position
+     * If selectAll is true, replaces everything with the new chars.
      */
     append: (chars: string) => {
+      // If all selected, replace everything
+      if (state.selectAll) {
+        state.value = chars;
+        state.cursorPosition = chars.length;
+        state.attachments = [];
+        state.nextImageIndex = 0;
+        state.selectAll = false;
+        state.historyIndex = -1;
+        return;
+      }
+
       const pos = state.cursorPosition;
       state.value = state.value.slice(0, pos) + chars + state.value.slice(pos);
       state.cursorPosition = pos + chars.length;
@@ -94,10 +148,33 @@ export const useUserInput = createState(() => ({ ...initialState }), {
 
     /**
      * Delete character before cursor (backspace)
+     * If selectAll is true, clears everything.
+     * If the character is an image placeholder, also removes the attachment.
      */
     backspace: () => {
+      // If all selected, clear everything
+      if (state.selectAll) {
+        state.value = "";
+        state.cursorPosition = 0;
+        state.attachments = [];
+        state.nextImageIndex = 0;
+        state.selectAll = false;
+        return;
+      }
+
       if (state.cursorPosition > 0) {
         const pos = state.cursorPosition;
+        const charToDelete = state.value[pos - 1];
+
+        // Check if we're deleting an image placeholder
+        if (charToDelete && isImagePlaceholder(charToDelete)) {
+          const imageIdx = getImageIndex(charToDelete);
+          // Remove the attachment
+          state.attachments = state.attachments
+            .map((a, i) => (i === imageIdx ? null : a))
+            .filter(Boolean) as Attachment[];
+        }
+
         state.value = state.value.slice(0, pos - 1) + state.value.slice(pos);
         state.cursorPosition = pos - 1;
       }
@@ -105,10 +182,22 @@ export const useUserInput = createState(() => ({ ...initialState }), {
 
     /**
      * Delete character after cursor (forward delete)
+     * If the character is an image placeholder, also removes the attachment
      */
     deleteForward: () => {
       if (state.cursorPosition < state.value.length) {
         const pos = state.cursorPosition;
+        const charToDelete = state.value[pos];
+
+        // Check if we're deleting an image placeholder
+        if (charToDelete && isImagePlaceholder(charToDelete)) {
+          const imageIdx = getImageIndex(charToDelete);
+          // Remove the attachment
+          state.attachments = state.attachments
+            .map((a, i) => (i === imageIdx ? null : a))
+            .filter(Boolean) as Attachment[];
+        }
+
         state.value = state.value.slice(0, pos) + state.value.slice(pos + 1);
       }
     },
@@ -127,6 +216,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
      * Move cursor left. Wraps to end of previous line.
      */
     moveCursorLeft: () => {
+      state.selectAll = false;
       if (state.cursorPosition > 0) {
         state.cursorPosition -= 1;
       }
@@ -136,6 +226,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
      * Move cursor right. Wraps to start of next line.
      */
     moveCursorRight: () => {
+      state.selectAll = false;
       if (state.cursorPosition < state.value.length) {
         state.cursorPosition += 1;
       }
@@ -145,6 +236,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
      * Move cursor up one line. Returns false if already on first line.
      */
     moveCursorUp: (): boolean => {
+      state.selectAll = false;
       const val = state.value;
       const pos = state.cursorPosition;
       // Find start of current line
@@ -163,6 +255,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
      * Move cursor down one line. Returns false if already on last line.
      */
     moveCursorDown: (): boolean => {
+      state.selectAll = false;
       const val = state.value;
       const pos = state.cursorPosition;
       // Find end of current line
@@ -186,28 +279,50 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.value = "";
       state.cursorPosition = 0;
       state.historyIndex = -1;
+      state.attachments = [];
+      state.nextImageIndex = 0;
     },
 
     /**
      * Submit current input and add to history
-     * Returns the submitted text and any attachments
+     * Returns the submitted text (with placeholders removed) and any attachments in order
      */
     submit: (): { text: string; attachments: Attachment[] } => {
-      const value = state.value.trim();
-      const attachments = [...state.attachments];
-      if (value) {
-        // Add to history (avoid duplicates)
-        if (state.history[state.history.length - 1] !== value) {
-          state.history = [...state.history, value];
+      const rawValue = state.value;
+
+      // Extract text without image placeholders and collect attachments in order
+      let text = "";
+      const orderedAttachments: Attachment[] = [];
+
+      for (const char of rawValue) {
+        if (isImagePlaceholder(char)) {
+          const idx = getImageIndex(char);
+          const attachment = state.attachments[idx];
+          if (attachment) {
+            orderedAttachments.push(attachment);
+          }
+        } else {
+          text += char;
         }
       }
+
+      text = text.trim();
+
+      if (text) {
+        // Add to history (avoid duplicates) - store without placeholders
+        if (state.history[state.history.length - 1] !== text) {
+          state.history = [...state.history, text];
+        }
+      }
+
       state.value = "";
       state.cursorPosition = 0;
       state.historyIndex = -1;
       state.attachments = [];
       state.selectedAttachment = -1;
       state.inputError = null;
-      return { text: value, attachments };
+      state.nextImageIndex = 0;
+      return { text, attachments: orderedAttachments };
     },
 
     /**
@@ -256,89 +371,37 @@ export const useUserInput = createState(() => ({ ...initialState }), {
     },
 
     /**
-     * Add a file attachment
+     * Add a file attachment and insert placeholder at cursor position
      */
     addAttachment: (attachment: Attachment) => {
-      state.attachments = [...state.attachments, attachment];
+      const imageIndex = state.nextImageIndex;
+      const placeholder = createImagePlaceholder(imageIndex);
+
+      // Store attachment at the index
+      const newAttachments = [...state.attachments];
+      newAttachments[imageIndex] = attachment;
+      state.attachments = newAttachments;
+
+      // Insert placeholder at cursor position
+      const pos = state.cursorPosition;
+      state.value = state.value.slice(0, pos) + placeholder + state.value.slice(pos);
+      state.cursorPosition = pos + 1;
+
+      state.nextImageIndex = imageIndex + 1;
       state.selectedAttachment = -1;
       state.inputError = null;
     },
 
     /**
-     * Remove an attachment by index (0-based)
+     * Check if there are any image attachments in the current value
      */
-    removeAttachment: (index: number) => {
-      state.attachments = state.attachments.filter((_, i) => i !== index);
-      // Adjust selection
-      if (state.attachments.length === 0) {
-        state.selectedAttachment = -1;
-      } else if (state.selectedAttachment >= state.attachments.length) {
-        state.selectedAttachment = state.attachments.length - 1;
+    hasAttachments: (): boolean => {
+      for (const char of state.value) {
+        if (isImagePlaceholder(char)) {
+          return true;
+        }
       }
-    },
-
-    /**
-     * Remove the currently selected attachment
-     */
-    removeSelectedAttachment: () => {
-      if (state.selectedAttachment < 0 || state.selectedAttachment >= state.attachments.length) return;
-      const idx = state.selectedAttachment;
-      state.attachments = state.attachments.filter((_, i) => i !== idx);
-      if (state.attachments.length === 0) {
-        state.selectedAttachment = -1;
-      } else if (state.selectedAttachment >= state.attachments.length) {
-        state.selectedAttachment = state.attachments.length - 1;
-      }
-    },
-
-    /**
-     * Select previous attachment (Up). First press enters selection at last item.
-     * Returns true if selection moved, false if already at top (caller can do history nav).
-     */
-    selectPrevAttachment: (): boolean => {
-      if (state.attachments.length === 0) return false;
-      if (state.selectedAttachment === -1) {
-        // Enter selection at last item
-        state.selectedAttachment = state.attachments.length - 1;
-        return true;
-      }
-      if (state.selectedAttachment > 0) {
-        state.selectedAttachment -= 1;
-        return true;
-      }
-      // Already at top — can't go further
-      return true;
-    },
-
-    /**
-     * Select next attachment (Down). If at last item, deselects (exits selection).
-     * Returns true if handled, false if not in selection mode.
-     */
-    selectNextAttachment: (): boolean => {
-      if (state.attachments.length === 0) return false;
-      if (state.selectedAttachment === -1) return false;
-      if (state.selectedAttachment < state.attachments.length - 1) {
-        state.selectedAttachment += 1;
-      } else {
-        // Exit selection
-        state.selectedAttachment = -1;
-      }
-      return true;
-    },
-
-    /**
-     * Deselect any attachment
-     */
-    deselectAttachment: () => {
-      state.selectedAttachment = -1;
-    },
-
-    /**
-     * Clear all attachments
-     */
-    clearAttachments: () => {
-      state.attachments = [];
-      state.selectedAttachment = -1;
+      return false;
     },
 
     /**
@@ -359,10 +422,12 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.historyIndex = -1;
       state.focused = true;
       state.cursorPosition = 0;
+      state.selectAll = false;
       state.loading = false;
       state.attachments = [];
       state.selectedAttachment = -1;
       state.inputError = null;
+      state.nextImageIndex = 0;
     },
   }),
 

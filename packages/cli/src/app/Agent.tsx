@@ -138,8 +138,16 @@ export const Agent = () => {
       return;
     }
 
-    // Ctrl+V / Cmd+V: paste image from clipboard
-    if ((inputKey.ctrl || inputKey.meta) && inputChar === "v") {
+    // Ctrl+A: select all
+    if (inputKey.ctrl && inputChar === "a") {
+      if (!isLoading && !pendingApproval) {
+        inputActions.setSelectAll(true);
+      }
+      return;
+    }
+
+    // Ctrl+V: paste image from clipboard
+    if (inputKey.ctrl && inputChar === "v") {
       if (!isLoading && !pendingApproval) {
         readImageFromClipboard().then((attachment) => {
           if (attachment) {
@@ -195,16 +203,18 @@ export const Agent = () => {
     // Don't handle regular input while loading
     if (isLoading) return;
 
-    const { attachments, selectedAttachment } = useUserInput.getReadonlyState();
-    const hasAttachments = attachments.length > 0;
-    const hasSelection = selectedAttachment >= 0;
-
     // Tab: accept autocomplete suggestion
     if (inputKey.tab) {
       if (isAutocompleteVisible) {
-        const accepted = autocompleteActions.accept();
-        if (accepted) {
-          inputActions.setValue(accepted);
+        const result = autocompleteActions.accept();
+        if (result) {
+          if (result.type === "execute") {
+            inputActions.setValue(result.value);
+            // Trigger submit for immediate commands
+            setTimeout(() => handleSubmit(), 0);
+          } else {
+            inputActions.setValue(result.value);
+          }
         }
       }
       return;
@@ -221,9 +231,15 @@ export const Agent = () => {
       }
 
       if (isAutocompleteVisible) {
-        const accepted = autocompleteActions.accept();
-        if (accepted) {
-          inputActions.setValue(accepted);
+        const result = autocompleteActions.accept();
+        if (result) {
+          if (result.type === "execute") {
+            inputActions.setValue(result.value);
+            // Trigger submit for immediate commands
+            setTimeout(() => handleSubmit(), 0);
+          } else {
+            inputActions.setValue(result.value);
+          }
         }
         return;
       }
@@ -237,24 +253,8 @@ export const Agent = () => {
       return;
     }
 
-    // Delete: remove selected attachment, or forward-delete text
-    // if (inputChar === "fn" && inputKey.delete) {
-    //   if (hasSelection) {
-    //     inputActions.removeSelectedAttachment();
-    //     return;
-    //   }
-    //   inputActions.deleteForward();
-    //   const newValue = useUserInput.getReadonlyState().value;
-    //   autocompleteActions.update(newValue);
-    //   return;
-    // }
-
-    // Backspace
+    // Backspace: delete character before cursor (handles both text and image placeholders)
     if (inputKey.delete) {
-      if (hasSelection) {
-        inputActions.removeSelectedAttachment();
-        return;
-      }
       inputActions.backspace();
       const newValue = useUserInput.getReadonlyState().value;
       autocompleteActions.update(newValue);
@@ -271,28 +271,24 @@ export const Agent = () => {
       return;
     }
 
-    // Arrow Up: multi-line cursor > autocomplete > attachment selection > history
+    // Arrow Up: multi-line cursor > autocomplete > history
     if (inputKey.upArrow) {
       if (isAutocompleteVisible) {
         autocompleteActions.selectPrev();
       } else if (inputActions.moveCursorUp()) {
         // Cursor moved up within multi-line text
-      } else if (hasAttachments) {
-        inputActions.selectPrevAttachment();
       } else {
         inputActions.historyPrev();
       }
       return;
     }
 
-    // Arrow Down: multi-line cursor > autocomplete > deselect attachment > history
+    // Arrow Down: multi-line cursor > autocomplete > history
     if (inputKey.downArrow) {
       if (isAutocompleteVisible) {
         autocompleteActions.selectNext();
       } else if (inputActions.moveCursorDown()) {
         // Cursor moved down within multi-line text
-      } else if (hasSelection) {
-        inputActions.selectNextAttachment();
       } else {
         inputActions.historyNext();
       }
@@ -301,7 +297,6 @@ export const Agent = () => {
 
     // Regular character input
     if (inputChar && !inputKey.ctrl && !inputKey.meta) {
-      inputActions.deselectAttachment();
       inputActions.append(inputChar);
       const newValue = useUserInput.getReadonlyState().value;
       autocompleteActions.update(newValue);

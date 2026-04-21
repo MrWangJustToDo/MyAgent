@@ -1,4 +1,10 @@
-import { agentManager, createOllamaModel, createOpenRouterModel, getOllamaBuildInTools } from "@my-agent/core";
+import {
+  agentManager,
+  createOllamaModel,
+  createOpenRouterModel,
+  createOpenAICompatibleModel,
+  getOllamaBuildInTools,
+} from "@my-agent/core";
 import { reactive, toRaw } from "reactivity-store";
 
 import { useTodoManager } from "../hooks";
@@ -41,6 +47,8 @@ export const createAgent = async ({
       ["ollama-web-fetch"]: p.tools.webFetch(),
       ["ollama-web-search"]: p.tools.webSearch(),
     }));
+  } else if (provider === "openaiCompatible") {
+    languageModel = createOpenAICompatibleModel(model, url);
   } else {
     languageModel = createOpenRouterModel(model, apiKey);
   }

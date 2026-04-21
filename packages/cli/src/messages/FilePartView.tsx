@@ -5,6 +5,8 @@ import type { FileUIPart } from "ai";
 
 export interface FilePartViewProps {
   part: FileUIPart;
+  /** 1-based index for display (e.g., "Image #1") */
+  index?: number;
 }
 
 function formatFileSize(dataUrl: string): string {
@@ -18,14 +20,17 @@ function formatFileSize(dataUrl: string): string {
 }
 
 /** Render a file attachment part in a message */
-export const FilePartView = memo(({ part }: FilePartViewProps) => {
+export const FilePartView = memo(({ part, index }: FilePartViewProps) => {
   const isImage = part.mediaType?.startsWith("image/");
   const size = formatFileSize(part.url);
 
+  // Use [Image #N] format for images, [FILE] for others
+  const label = isImage && index !== undefined ? `[Image #${index}]` : isImage ? "[IMG]" : "[FILE]";
+
   return (
     <Box gap={1}>
-      <Text color={isImage ? "magenta" : "cyan"}>{isImage ? "[IMG]" : "[FILE]"}</Text>
-      <Text>{part.filename || "unnamed"}</Text>
+      <Text color={isImage ? "magenta" : "cyan"}>{label}</Text>
+      {!isImage && <Text>{part.filename || "unnamed"}</Text>}
       {size && (
         <Text color="gray" dimColor>
           ({size})

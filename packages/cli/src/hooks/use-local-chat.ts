@@ -37,8 +37,8 @@ export interface UseLocalChatConfig {
   systemPrompt?: string;
   /** Max iterations for agentic loop */
   maxIterations?: number;
-  /** LLM provider: "ollama" or "openRouter" */
-  provider?: "ollama" | "openRouter";
+  /** LLM provider: "ollama", "openRouter", or "openaiCompatible" */
+  provider?: "ollama" | "openRouter" | "openaiCompatible";
   /** API key for OpenRouter */
   apiKey?: string;
   /** Path to MCP config file (relative to rootPath) */

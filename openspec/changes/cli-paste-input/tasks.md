@@ -24,9 +24,11 @@
 
 ## 5. Attachment UI
 
-- [x] 5.1 Create `packages/cli/src/components/AttachmentList.tsx` — renders pending attachments with filename, type label, and size
-- [x] 5.2 Integrate `AttachmentList` into `Footer.tsx` — show above the input line when attachments exist
-- [x] 5.3 Show error messages inline when file validation fails (size limit, unsupported type, not found)
+- [x] 5.1 Inline image placeholders in `MultiLineInput.tsx` — renders images as `[Image #N]` within the input text
+- [x] 5.2 Images behave like normal characters — cursor movement, backspace deletion work naturally
+- [x] 5.3 Show error messages via `InputError.tsx` when file validation fails (size limit, unsupported type, not found)
+- [x] 5.4 Support Ctrl+A to select all, backspace to delete selection
+- [x] 5.5 Message list displays submitted images as `[Image #N]` via `FilePartView.tsx`
 
 ## 6. Validation & Build
 

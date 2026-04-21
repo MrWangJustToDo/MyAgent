@@ -10,7 +10,7 @@ import type { ParsedArgs } from "../utils/args.js";
 // ============================================================================
 
 /** Supported LLM providers */
-export type Provider = "ollama" | "openRouter";
+export type Provider = "ollama" | "openRouter" | "openaiCompatible";
 
 /**
  * CLI-specific agent configuration
@@ -31,7 +31,7 @@ export interface CliAgentConfig {
   maxIterations: number;
   /** Enable debug logging */
   debug: boolean;
-  /** LLM provider: "ollama" or "openRouter" */
+  /** LLM provider: "ollama", "openRouter", or "openaiCompatible" */
   provider: Provider;
   /** API key for OpenRouter (required when provider is "openRouter") */
   apiKey: string;
@@ -55,8 +55,10 @@ const getEnv = (key: string, fallback: string = ""): string => {
  */
 const getEnvProvider = (key: string, fallback: Provider = "ollama"): Provider => {
   const value = process.env[key]?.toLowerCase();
-  if (value === "ollama" || value === "openrouter") {
-    return value === "openrouter" ? "openRouter" : "ollama";
+  if (value === "ollama" || value === "openrouter" || value === "openai-compatible" || value === "openaicompatible") {
+    if (value === "openrouter") return "openRouter";
+    if (value === "openai-compatible" || value === "openaicompatible") return "openaiCompatible";
+    return "ollama";
   }
   return fallback;
 };
@@ -212,7 +214,7 @@ export const useArgs = createState(
 
         // Get env vars (loaded by dotenv in index.tsx)
         const envModel = getEnv("MODEL") || getEnv("model");
-        const envUrl = getEnv("URL") || getEnv("OLLAMA_URL") || getEnv("url");
+        const envUrl = getEnv("URL") || getEnv("OLLAMA_URL") || getEnv("OPENAI_COMPATIBLE_URL") || getEnv("url");
         const envProvider = getEnvProvider("PROVIDER") || getEnvProvider("provider");
         const envApiKey = getEnv("API_KEY") || getEnv("OPENROUTER_API_KEY") || getEnv("apiKey");
         const envMaxIterations = getEnv("MAX_ITERATIONS") || getEnv("maxIterations");
@@ -238,8 +240,20 @@ export const useArgs = createState(
 
         // Provider: CLI --provider flag > env var > default
         const cliProvider = getFlagString(parsed, "", "provider");
-        if (cliProvider === "ollama" || cliProvider === "openRouter" || cliProvider === "openrouter") {
-          state.config.provider = cliProvider === "openrouter" ? "openRouter" : (cliProvider as Provider);
+        if (
+          cliProvider === "ollama" ||
+          cliProvider === "openRouter" ||
+          cliProvider === "openrouter" ||
+          cliProvider === "openai-compatible" ||
+          cliProvider === "openaicompatible"
+        ) {
+          if (cliProvider === "openrouter") {
+            state.config.provider = "openRouter";
+          } else if (cliProvider === "openai-compatible" || cliProvider === "openaicompatible") {
+            state.config.provider = "openaiCompatible";
+          } else {
+            state.config.provider = cliProvider as Provider;
+          }
         } else {
           state.config.provider = envProvider;
         }

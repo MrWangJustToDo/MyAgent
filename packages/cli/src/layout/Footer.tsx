@@ -1,9 +1,9 @@
 import { Box, Text } from "ink";
 
-import { AttachmentList } from "../components/AttachmentList.js";
 import { AutocompleteList } from "../components/AutocompleteList.js";
 import { ErrorDetail } from "../components/ErrorDetail.js";
 import { FullBox } from "../components/FullBox.js";
+import { InputError } from "../components/InputError.js";
 import { LLMUsage } from "../components/LLMUsage.js";
 import { Spinner } from "../components/Spinner.js";
 import { TodoStats } from "../components/TodoStats.js";
@@ -69,8 +69,8 @@ export const Footer = () => {
 
       <Box height={1} flexGrow={1} flexShrink={0} />
 
-      {/* Attachments */}
-      {isInputEnabled && <AttachmentList />}
+      {/* Input error (e.g. "No image in clipboard") */}
+      {isInputEnabled && <InputError />}
 
       {/* Autocomplete suggestions */}
       {isInputEnabled && <AutocompleteList />}

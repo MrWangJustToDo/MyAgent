@@ -4,4 +4,4 @@ import "./help.js";
 
 export { dispatchCommand, getAllCommands, getCommand } from "./registry.js";
 
-export type { Command, CommandContext, CommandResult } from "./types.js";
+export type { Command, CommandContext, CommandOption, CommandResult } from "./types.js";

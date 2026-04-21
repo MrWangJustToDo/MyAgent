@@ -1,5 +1,4 @@
 import { Box, Text } from "ink";
-import { memo } from "react";
 
 import { Markdown } from "../markdown";
 
@@ -11,15 +10,9 @@ export interface TextPartViewProps {
 }
 
 /** Render a text part */
-export const TextPartView = memo(
-  ({ part, role }: TextPartViewProps) => (
-    <Box>
-      {role === "user" ? <Text>{"> "}</Text> : <Text>{"- "}</Text>}
-      <Markdown content={part.text} />
-    </Box>
-  ),
-  // Custom comparison - only re-render when text actually changes
-  (prevProps, nextProps) => prevProps.part.text === nextProps.part.text && prevProps.role === nextProps.role
+export const TextPartView = ({ part, role }: TextPartViewProps) => (
+  <Box>
+    {role === "user" ? <Text>{"> "}</Text> : <Text>{"- "}</Text>}
+    <Markdown content={part.text} />
+  </Box>
 );
-
-TextPartView.displayName = "TextPartView";
