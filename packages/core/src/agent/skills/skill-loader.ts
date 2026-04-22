@@ -4,9 +4,13 @@
  * Scans directories for SKILL.md files, extracts YAML frontmatter metadata,
  * and provides the skill body content.
  *
+ * Supports both:
+ * - Absolute paths (e.g., ~/.agents/skills) - uses Node.js fs directly
+ * - Relative paths (e.g., .agents/skills) - uses sandbox filesystem
+ *
  * @example
  * ```typescript
- * const loader = new SkillLoader();
+ * const loader = new SkillLoader({ sandbox, rootPath: "/project" });
  * const skills = await loader.loadFromDirectory("/path/to/skills");
  *
  * // skills is a Map<string, Skill> keyed by skill name
@@ -14,6 +18,8 @@
  * ```
  */
 
+import * as fs from "fs/promises";
+import * as nodePath from "path";
 import { parse as parseYaml } from "yaml";
 
 import { skillMetadataSchema } from "./types.js";
@@ -27,8 +33,10 @@ import type { AgentLog } from "../agent-log/agent-log.js";
 // ============================================================================
 
 export interface SkillLoaderConfig {
-  /** Sandbox for file system operations */
+  /** Sandbox for file system operations (used for relative paths) */
   sandbox: Sandbox;
+  /** Root path for resolving relative paths */
+  rootPath: string;
   /** Optional logger for warnings */
   logger?: AgentLog;
 }
@@ -51,11 +59,89 @@ export interface ParsedFrontmatter {
  */
 export class SkillLoader {
   private sandbox: Sandbox;
+  private rootPath: string;
   private logger?: AgentLog;
 
   constructor(config: SkillLoaderConfig) {
     this.sandbox = config.sandbox;
+    this.rootPath = config.rootPath;
     this.logger = config.logger;
+  }
+
+  /**
+   * Check if a path is absolute.
+   */
+  private isAbsolutePath(dirPath: string): boolean {
+    return nodePath.isAbsolute(dirPath);
+  }
+
+  /**
+   * Check if directory exists using appropriate method based on path type.
+   */
+  private async directoryExists(dirPath: string): Promise<boolean> {
+    if (this.isAbsolutePath(dirPath)) {
+      try {
+        const stat = await fs.stat(dirPath);
+        return stat.isDirectory();
+      } catch {
+        return false;
+      }
+    }
+    return this.sandbox.filesystem.exists(dirPath);
+  }
+
+  /**
+   * Read file content using appropriate method based on path type.
+   */
+  private async readFileContent(filePath: string): Promise<string> {
+    if (this.isAbsolutePath(filePath)) {
+      return fs.readFile(filePath, "utf-8");
+    }
+    return this.sandbox.filesystem.readFile(filePath);
+  }
+
+  /**
+   * Find SKILL.md files in a directory.
+   */
+  private async findSkillFiles(dirPath: string): Promise<string[]> {
+    if (this.isAbsolutePath(dirPath)) {
+      return this.findSkillFilesRecursive(dirPath);
+    }
+
+    // For relative paths, resolve to absolute and use sandbox runCommand
+    const resolvedPath = nodePath.join(this.rootPath, dirPath);
+    const findResult = await this.sandbox.runCommand(`find "${resolvedPath}" -name "SKILL.md" -type f 2>/dev/null`);
+
+    return findResult.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  }
+
+  /**
+   * Recursively find SKILL.md files using Node.js fs.
+   */
+  private async findSkillFilesRecursive(dirPath: string): Promise<string[]> {
+    const files: string[] = [];
+
+    try {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const fullPath = nodePath.join(dirPath, entry.name);
+
+        if (entry.isDirectory()) {
+          const subFiles = await this.findSkillFilesRecursive(fullPath);
+          files.push(...subFiles);
+        } else if (entry.isFile() && entry.name === "SKILL.md") {
+          files.push(fullPath);
+        }
+      }
+    } catch {
+      // Directory doesn't exist or can't be read
+    }
+
+    return files;
   }
 
   /**
@@ -122,30 +208,28 @@ export class SkillLoader {
    * Scans recursively for SKILL.md files. Each skill is identified by its
    * parent directory name.
    *
-   * @param dirPath - Directory path to scan
+   * Supports both absolute paths (e.g., /home/user/.agents/skills) and
+   * relative paths (e.g., .agents/skills).
+   *
+   * @param dirPath - Directory path to scan (absolute or relative to rootPath)
    * @returns Map of skill name to Skill object
    */
   async loadFromDirectory(dirPath: string): Promise<Map<string, Skill>> {
     const skills = new Map<string, Skill>();
 
     // Check if directory exists
-    const dirExists = await this.sandbox.filesystem.exists(dirPath);
+    const dirExists = await this.directoryExists(dirPath);
     if (!dirExists) {
       this.logger?.skill(`Skill directory does not exist: ${dirPath}`);
       return skills;
     }
 
     // Find all SKILL.md files
-    const findResult = await this.sandbox.runCommand(`find "${dirPath}" -name "SKILL.md" -type f 2>/dev/null`);
-
-    const files = findResult.stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
+    const files = await this.findSkillFiles(dirPath);
 
     for (const filePath of files) {
       try {
-        const content = await this.sandbox.filesystem.readFile(filePath);
+        const content = await this.readFileContent(filePath);
         const { metadata, body, error } = this.parseFrontmatter(content);
 
         if (error) {

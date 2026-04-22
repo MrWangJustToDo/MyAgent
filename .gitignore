@@ -31,5 +31,7 @@ web-ext.config.ts
 .transcripts
 .claude
 .mcp.json
+.agents
+skills-lock.json
 
 tsconfig.tsbuildinfo

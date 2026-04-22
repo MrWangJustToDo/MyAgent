@@ -1,4 +1,5 @@
 import type { useUserInput } from "../hooks/use-user-input.js";
+import type { Agent } from "@my-agent/core";
 
 /**
  * Context passed to every command's execute function.
@@ -8,6 +9,8 @@ export interface CommandContext {
   inputActions: ReturnType<typeof useUserInput.getActions>;
   /** Get readonly snapshot of current input state */
   getInputState: () => ReturnType<typeof useUserInput.getReadonlyState>;
+  /** Get the current agent instance (may be null if not initialized) */
+  getAgent: () => Agent | null;
 }
 
 /**

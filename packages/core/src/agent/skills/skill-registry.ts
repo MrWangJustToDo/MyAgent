@@ -30,6 +30,8 @@ import type { AgentLog } from "../agent-log/agent-log.js";
 export interface SkillRegistryConfig {
   /** Sandbox for file system operations */
   sandbox: Sandbox;
+  /** Root path for resolving relative paths */
+  rootPath: string;
   /** Optional logger for warnings and debug info */
   logger?: AgentLog;
 }
@@ -43,14 +45,20 @@ export interface SkillRegistryConfig {
  */
 export class SkillRegistry {
   private sandbox: Sandbox;
+  private rootPath: string;
   private logger?: AgentLog;
   private skills: Map<string, Skill> = new Map();
   private loader: SkillLoader;
 
   constructor(config: SkillRegistryConfig) {
     this.sandbox = config.sandbox;
+    this.rootPath = config.rootPath;
     this.logger = config.logger;
-    this.loader = new SkillLoader({ sandbox: config.sandbox, logger: config.logger });
+    this.loader = new SkillLoader({
+      sandbox: config.sandbox,
+      rootPath: config.rootPath,
+      logger: config.logger,
+    });
   }
 
   /**

@@ -1,3 +1,6 @@
+import * as os from "os";
+import * as path from "path";
+
 import { AgentLog } from "../agent";
 import { AgentContext } from "../agent/agent-context";
 import { createCompactionConfig } from "../agent/compaction/types.js";
@@ -23,8 +26,41 @@ import type { LanguageModel } from "ai";
 // Types & Schemas
 // ============================================================================
 
-/** Default skill directories */
-export const DEFAULT_SKILL_DIRS = [".opencode/skills"];
+/** Environment variable for additional skill directories (comma-separated paths) */
+export const SKILL_DIRS_ENV_VAR = "AGENT_SKILL_DIRS";
+
+/**
+ * Get default skill directories to load.
+ *
+ * Default load order (first loaded wins for duplicate skill names):
+ * 1. Environment variable paths (AGENT_SKILL_DIRS, comma-separated)
+ * 2. User home directory: ~/.agents/skills
+ * 3. Current project directory: .agents/skills
+ *
+ * @returns Array of skill directory paths (absolute or relative)
+ */
+export function getDefaultSkillDirs(): string[] {
+  const dirs: string[] = [];
+
+  // 1. Environment variable paths (highest priority)
+  const envDirs = process.env[SKILL_DIRS_ENV_VAR];
+  if (envDirs) {
+    const parsedDirs = envDirs
+      .split(",")
+      .map((d) => d.trim())
+      .filter((d) => d.length > 0);
+    dirs.push(...parsedDirs);
+  }
+
+  // 2. User home directory (global skills)
+  const userSkillDir = path.join(os.homedir(), ".agents", "skills");
+  dirs.push(userSkillDir);
+
+  // 3. Current project directory (project-specific skills, lowest priority)
+  dirs.push(".agents/skills");
+
+  return dirs;
+}
 
 export type ManagedAgentConfig<T = Agent | AgentContext> = AgentConfig & {
   /** Optional custom ID for the agent (auto-generated if not provided) */
@@ -224,14 +260,15 @@ export class AgentManager {
     if (!parentId) {
       const skillRegistry = new SkillRegistry({
         sandbox,
+        rootPath,
         logger: log,
       });
 
       agent.setSkillRegister(skillRegistry);
 
       // Load skills from configured directories (or default)
-      // Paths are relative to sandbox root (which is already rootPath)
-      const dirsToLoad = skillDirs ?? DEFAULT_SKILL_DIRS;
+      // Default order: env var paths -> user home ~/.agents/skills -> project .agents/skills
+      const dirsToLoad = skillDirs ?? getDefaultSkillDirs();
       await skillRegistry.loadFromDirectories(dirsToLoad);
 
       // Add skill tools

@@ -1,6 +1,7 @@
 // Import command files to trigger registration
-import "./paste.js";
+import "./compact.js";
 import "./help.js";
+import "./paste.js";
 
 export { dispatchCommand, getAllCommands, getCommand } from "./registry.js";
 

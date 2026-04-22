@@ -1,6 +1,6 @@
-import { agentManager, type AgentLog } from "@my-agent/core";
+import { agentManager } from "@my-agent/core";
 import { Box, Text, useApp, useInput } from "ink";
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { toRaw } from "reactivity-store";
 
 import { dispatchCommand } from "../commands";
@@ -21,6 +21,7 @@ import { attachmentToFileUIPart } from "../types/attachment.js";
 import { readImageFromClipboard } from "../utils/clipboard.js";
 
 import type { CommandContext } from "../commands";
+import type { AgentLog, Agent as CoreAgent } from "@my-agent/core";
 
 // ============================================================================
 // Main Agent Component
@@ -89,10 +90,12 @@ export const Agent = () => {
   const commandCtx: CommandContext = {
     inputActions,
     getInputState: () => useUserInput.getReadonlyState(),
+    // will trigger update, change to use `getReactiveState`
+    getAgent: () => useAgent.getReactiveState().agent as CoreAgent,
   };
 
   // Handle submit
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = async () => {
     const { text: prompt, attachments } = inputActions.submit();
 
     // Dispatch slash commands via the command registry
@@ -114,7 +117,7 @@ export const Agent = () => {
     } else {
       await sendMessage(prompt);
     }
-  }, [inputActions, isReady, isLoading, sendMessage, commandCtx]);
+  };
 
   // Handle keyboard input
   useInput((inputChar, inputKey) => {

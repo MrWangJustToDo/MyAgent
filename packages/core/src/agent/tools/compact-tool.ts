@@ -34,7 +34,7 @@ import { withDuration } from "./helpers.js";
 
 import type { Sandbox } from "../../environment";
 import type { CompactionConfig, CompactionResult } from "../compaction/types.js";
-import type { Agent } from "../loop/agent.js";
+import type { Agent } from "../loop/Agent.js";
 import type { TodoManager } from "../todo-manager";
 import type { ModelMessage } from "ai";
 

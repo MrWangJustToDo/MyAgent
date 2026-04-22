@@ -30,6 +30,8 @@ export { ToolsManager, toolsManager } from "./manager-tools.js";
 export {
   AgentManager,
   agentManager,
+  getDefaultSkillDirs,
+  SKILL_DIRS_ENV_VAR,
   type ManagedAgentConfig,
   type ManagedAgent,
   type SubagentEventType,
