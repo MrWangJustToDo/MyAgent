@@ -1,13 +1,13 @@
 # My Agent
 
-An AI coding agent built on [Vercel AI SDK](https://sdk.vercel.ai/docs) with a beautiful terminal interface.
+An AI coding agent built on [Vercel AI SDK](https://sdk.vercel.ai/docs) with a beautiful terminal interface powered by [@my-react framework](https://github.com/MrWangJustToDo/MyReact).
 
 ![My Agent CLI](example.png)
 
 ## Features
 
 - **Multi-Model Support** - Works with OpenAI, Ollama, and other providers via Vercel AI SDK
-- **Terminal UI** - Beautiful React-based terminal interface using Ink
+- **Terminal UI** - Beautiful React-based terminal interface using [@my-react/react-terminal](https://github.com/MrWangJustToDo/MyReact/tree/main/packages/myreact-terminal)
 - **Tool Approval** - Interactive approval flow for sensitive operations
 - **Subagent System** - Delegate complex tasks to context-isolated subagents
 - **Skill System** - On-demand domain knowledge loading
@@ -26,7 +26,7 @@ An AI coding agent built on [Vercel AI SDK](https://sdk.vercel.ai/docs) with a b
 ![WIP](wip.png)
 
 ### Devtools Debug
-[myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools)
+Built with [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools) powered by [@my-react framework](https://github.com/MrWangJustToDo/MyReact)
 
 ![Debug](debug.png)
 ![Debug 2](debug_2.png)
@@ -38,7 +38,7 @@ This is a pnpm monorepo with three packages:
 | Package | Description |
 |---------|-------------|
 | `@my-agent/core` | Core AI agent, tools, environment abstraction, and Vercel AI SDK integration |
-| `@my-agent/cli` | Terminal CLI using Ink (React for terminal) |
+| `@my-agent/cli` | Terminal CLI using [@my-react/react-terminal](https://github.com/MrWangJustToDo/MyReact/tree/main/packages/myreact-terminal) |
 | `@my-agent/extension` | Browser extension using WXT framework |
 
 ## Quick Start
@@ -141,7 +141,7 @@ pnpm build:extension
 ## Key Technologies
 
 - **[Vercel AI SDK](https://sdk.vercel.ai)** - AI SDK for LLM interactions
-- **[Ink](https://github.com/vadimdemedes/ink)** - React for terminal UIs
+- **[@my-react/react-terminal](https://github.com/MrWangJustToDo/MyReact/tree/main/packages/myreact-terminal)** - Terminal UI renderer powered by @my-react framework
 - **[Zod](https://zod.dev)** - Schema validation
 - **[WXT](https://wxt.dev)** - Browser extension framework
 
@@ -170,4 +170,4 @@ MIT
 
 ---
 
-Built with [Vercel AI SDK](https://sdk.vercel.ai/docs) and [Ollama](https://ollama.ai)
+Built with [@my-react framework](https://github.com/MrWangJustToDo/MyReact), [Vercel AI SDK](https://sdk.vercel.ai/docs), and [Ollama](https://ollama.ai)
