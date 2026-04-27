@@ -18,9 +18,8 @@ export const Content = memo(() => {
 
   return (
     <>
-      {/* @ts-expect-error - ink StaticRender types don't include key but React handles it */}
-      <StaticRender width={width} key={validList.length}>
-        {validList}
+      <StaticRender width={width} deps={[width, validList.length]}>
+        {() => validList}
       </StaticRender>
       {dynamicList}
     </>

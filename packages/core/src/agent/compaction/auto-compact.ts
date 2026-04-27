@@ -99,19 +99,92 @@ function messageHasApproval(message: ModelMessage): boolean {
 }
 
 /**
- * Split messages into a summary portion and a tail that should be preserved.
- *
- * If the latest message is a tool approval request/response, we must preserve it
- * verbatim so the user can still approve/deny after compaction.
+ * Get all tool call IDs from a message.
  */
-function splitApprovalTail(messages: ModelMessage[]): {
-  summaryMessages: ModelMessage[];
-  approvalTail: ModelMessage[];
-} {
-  if (messages.length === 0) {
-    return { summaryMessages: messages, approvalTail: [] };
+function getToolCallIds(message: ModelMessage): string[] {
+  if (!Array.isArray(message.content)) {
+    return [];
   }
 
+  const ids: string[] = [];
+  for (const part of message.content) {
+    if (!part || typeof part !== "object") continue;
+    const p = part as Record<string, unknown>;
+    if (p.type === "tool-call" && typeof p.toolCallId === "string") {
+      ids.push(p.toolCallId);
+    }
+  }
+  return ids;
+}
+
+/**
+ * Get all tool result IDs from a message.
+ */
+function getToolResultIds(message: ModelMessage): string[] {
+  if (!Array.isArray(message.content)) {
+    return [];
+  }
+
+  const ids: string[] = [];
+  for (const part of message.content) {
+    if (!part || typeof part !== "object") continue;
+    const p = part as Record<string, unknown>;
+    if (p.type === "tool-result" && typeof p.toolCallId === "string") {
+      ids.push(p.toolCallId);
+    }
+  }
+  return ids;
+}
+
+/**
+ * Find the index of the first message that contains a pending (unprocessed) tool call.
+ * A pending tool call is one that doesn't have a corresponding tool result in subsequent messages.
+ */
+function findFirstPendingToolCallIndex(messages: ModelMessage[]): number {
+  // Collect all tool result IDs from all messages
+  const allToolResultIds = new Set<string>();
+  for (const message of messages) {
+    for (const id of getToolResultIds(message)) {
+      allToolResultIds.add(id);
+    }
+  }
+
+  // Find the first message with a tool call that has no corresponding result
+  for (let i = 0; i < messages.length; i++) {
+    const toolCallIds = getToolCallIds(messages[i]);
+    for (const callId of toolCallIds) {
+      if (!allToolResultIds.has(callId)) {
+        return i;
+      }
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * Split messages into a summary portion and a tail that should be preserved.
+ *
+ * Preserves messages from the earliest of:
+ * - First pending tool call (tool call without corresponding tool result)
+ * - First tool approval request/response
+ *
+ * This ensures that:
+ * 1. Pending tool calls are preserved so they can still be executed
+ * 2. Tool approval dialogs are preserved so user can still approve/deny
+ */
+function splitPendingTail(messages: ModelMessage[]): {
+  summaryMessages: ModelMessage[];
+  pendingTail: ModelMessage[];
+} {
+  if (messages.length === 0) {
+    return { summaryMessages: messages, pendingTail: [] };
+  }
+
+  // Find first pending tool call
+  const pendingToolCallIndex = findFirstPendingToolCallIndex(messages);
+
+  // Find first approval message (searching from the end)
   let approvalIndex = -1;
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messageHasApproval(messages[i])) {
@@ -120,13 +193,23 @@ function splitApprovalTail(messages: ModelMessage[]): {
     }
   }
 
-  if (approvalIndex === -1) {
-    return { summaryMessages: messages, approvalTail: [] };
+  // Determine the split point (earliest of the two, if any)
+  let splitIndex = -1;
+  if (pendingToolCallIndex !== -1 && approvalIndex !== -1) {
+    splitIndex = Math.min(pendingToolCallIndex, approvalIndex);
+  } else if (pendingToolCallIndex !== -1) {
+    splitIndex = pendingToolCallIndex;
+  } else if (approvalIndex !== -1) {
+    splitIndex = approvalIndex;
+  }
+
+  if (splitIndex === -1) {
+    return { summaryMessages: messages, pendingTail: [] };
   }
 
   return {
-    summaryMessages: messages.slice(0, approvalIndex),
-    approvalTail: messages.slice(approvalIndex),
+    summaryMessages: messages.slice(0, splitIndex),
+    pendingTail: messages.slice(splitIndex),
   };
 }
 
@@ -371,8 +454,8 @@ export async function autoCompact(
   const tokensBefore = estimateTokens(messages);
   let transcriptPath: string | undefined;
 
-  // Preserve any trailing tool approval messages so user can still respond
-  const { summaryMessages, approvalTail } = splitApprovalTail(messages);
+  // Preserve pending tool calls and approval messages so they can still be processed
+  const { summaryMessages, pendingTail } = splitPendingTail(messages);
 
   try {
     // Save transcript before compression (always do this for safety)
@@ -390,8 +473,8 @@ export async function autoCompact(
         ? await summarizeConversation(summaryMessages, parentAgentId, options)
         : "No prior conversation to summarize.";
 
-    // Create compressed messages and re-append approval tail
-    const compactedMessages = createCompactedMessages(summary).concat(approvalTail);
+    // Create compressed messages and re-append pending tail
+    const compactedMessages = createCompactedMessages(summary).concat(pendingTail);
 
     const tokensAfter = estimateTokens(compactedMessages);
 

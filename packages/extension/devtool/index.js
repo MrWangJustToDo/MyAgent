@@ -3501,6 +3501,21 @@
             runtime.update.addPending(fiber, "setRef");
           }
         };
+        // global error
+        var onGlobalError = function (error) {
+          if (runtime.hasEnable) {
+            if (error instanceof Error) {
+              runtime.notifyMessage(
+                "global error: "
+                  .concat(error === null || error === void 0 ? void 0 : error.message, " ")
+                  .concat(error.stack),
+                "error"
+              );
+            } else {
+              runtime.notifyMessage("global error: ".concat(error), "error");
+            }
+          }
+        };
         if (typeof dispatch.onFiberTrigger === "function") {
           if (typeof dispatch.onAfterCommitMount === "function") {
             dispatch.onAfterCommitMount(onLoad);
@@ -3559,6 +3574,9 @@
             onUnmount();
           };
         }
+        globalThis.addEventListener("unhandledrejection", function (e) {
+          return onGlobalError(e.reason);
+        });
       };
 
       var checkIsValidDispatchVersion = function (dispatch) {
