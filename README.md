@@ -31,6 +31,9 @@ Built with [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools
 ![Debug](debug.png)
 ![Debug 2](debug_2.png)
 
+### Conversation Summary
+![Terminal Demo](terminal-demo.png)
+
 ## Architecture
 
 This is a pnpm monorepo with three packages:
