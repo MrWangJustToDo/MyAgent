@@ -42,8 +42,14 @@ export class AgentContext {
 
   private tools: TypedToolCall<NoInfer<ToolSet>>[] = [];
 
-  /** Token usage */
+  /** Token usage (resets on compaction) */
   private usage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+
+  /** Lifetime token usage (never resets, survives compaction) */
+  private totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+
+  /** Token limit (from compaction config threshold) */
+  private tokenLimit = 0;
 
   /** Event listeners */
   private eventListeners: Set<(event: StreamPart) => void> = new Set();
@@ -119,6 +125,12 @@ export class AgentContext {
       outputTokens: prev.outputTokens + t.outputTokens,
       totalTokens: prev.totalTokens + t.totalTokens,
     };
+
+    this.totalUsage = {
+      inputTokens: this.totalUsage.inputTokens + t.inputTokens,
+      outputTokens: this.totalUsage.outputTokens + t.outputTokens,
+      totalTokens: this.totalUsage.totalTokens + t.totalTokens,
+    };
   }
 
   updateFinal(t: OnFinishEvent<ToolSet>) {
@@ -127,6 +139,29 @@ export class AgentContext {
 
   getUsage(): TokenUsage {
     return this.usage;
+  }
+
+  /** Lifetime usage across all compaction cycles */
+  getTotalUsage(): TokenUsage {
+    return this.totalUsage;
+  }
+
+  setTokenLimit(limit: number): void {
+    this.tokenLimit = limit;
+    this.touch();
+  }
+
+  getTokenLimit(): number {
+    return this.tokenLimit;
+  }
+
+  /**
+   * Current token usage as a percentage of the token limit (0–100).
+   * Returns 0 if no limit is set.
+   */
+  getTokenLimitPercent(): number {
+    if (this.tokenLimit <= 0) return 0;
+    return Math.min(100, (this.usage.inputTokens / this.tokenLimit) * 100);
   }
 
   addTool(tool: TypedToolCall<NoInfer<ToolSet>>) {
@@ -186,6 +221,7 @@ export class AgentContext {
     this.messages = [];
     this.compactMessages = [];
     this.usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    this.totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
     this.isStreaming = false;
     this.touch();
   }

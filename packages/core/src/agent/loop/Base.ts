@@ -142,6 +142,9 @@ export class Base {
    */
   setContext(c: AgentContext): void {
     this.context = c;
+    if (this.compactionConfig) {
+      c.setTokenLimit(this.compactionConfig.tokenThreshold);
+    }
   }
 
   /**
@@ -198,6 +201,7 @@ export class Base {
       keepRecentToolResults: config.keepRecentToolResults,
     });
     this.compactionConfig = config;
+    this.context?.setTokenLimit(config.tokenThreshold);
   }
 
   /**

@@ -1,8 +1,15 @@
 packages:
   - "packages/*"
 allowBuilds:
+  '@heroui/shared-utils': true
+  '@mongodb-js/zstd': true
   a: true
+  esbuild: true
   h: true
+  node-liblzma: false
   p: true
   r: true
   s: true
+  sharp: false
+  spawn-sync: false
+  unrs-resolver: false

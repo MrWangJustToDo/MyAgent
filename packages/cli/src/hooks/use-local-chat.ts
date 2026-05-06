@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 /**
  * useLocalChat - A hook that provides chat functionality with a local Agent.
  *
@@ -17,6 +18,7 @@ import { useEffect, useCallback, useState, useRef, useMemo } from "react";
 
 import { createAgent } from "../utils/create.js";
 
+import { useAgent } from "./use-agent.js";
 import { useForceUpdate } from "./use-force-update.js";
 
 import type { Agent } from "@my-agent/core";
@@ -142,6 +144,9 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
   const [initError, setInitError] = useState<Error | null>(null);
   const [agent, setAgent] = useState<Agent | null>(null);
 
+  // @ts-ignore
+  const agentError = useAgent((s) => (s.agent as Agent)?.error || "");
+
   const forceUpdate = useForceUpdate({ time: 600 });
 
   // Chat instance ref - created once when connection is ready
@@ -210,7 +215,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
   // TODO！message更新后 status更新的排在了effect之后
   useEffect(() => {
     forceUpdate();
-  }, [chatHelpers.messages]);
+  }, [chatHelpers.messages, agentError]);
 
   const stop = () => {
     chatHelpers.stop();
