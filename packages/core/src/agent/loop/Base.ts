@@ -501,6 +501,10 @@ export class Base {
         this.status = "completed";
       }
 
+      if (this.error) {
+        this.status = "error";
+      }
+
       // Log summary of finish event (not the full event which can be huge)
       this.log?.agent("Agent response finished", {
         finishReason: event.finishReason,
