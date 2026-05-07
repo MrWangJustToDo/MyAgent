@@ -16,7 +16,7 @@ import type { Agent } from "@my-agent/core";
 
 const PORT = parseInt(process.env.SERVER_PORT || "3100", 10);
 const MODEL = process.env.MODEL || "qwen3:8b";
-const PROVIDER = (process.env.PROVIDER || "ollama") as "ollama" | "openRouter" | "openaiCompatible";
+const PROVIDER = (process.env.PROVIDER || "ollama") as "ollama" | "openRouter" | "openaiCompatible" | "deepseek";
 const API_URL = process.env.API_URL || "http://localhost:11434";
 const API_KEY = process.env.API_KEY || "";
 const ROOT_PATH = process.env.ROOT_PATH || process.cwd();

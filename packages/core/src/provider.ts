@@ -1,3 +1,4 @@
+import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { extractReasoningMiddleware, wrapLanguageModel } from "ai";
@@ -11,7 +12,7 @@ import type { LanguageModel, ToolSet } from "ai";
 // Provider Types
 // ============================================================================
 
-export type ProviderType = "ollama" | "openai" | "openai-compatible" | "open-router";
+export type ProviderType = "ollama" | "openai" | "openai-compatible" | "open-router" | "deepseek";
 
 export interface OllamaModelOptions {
   /** Enable reasoning/thinking extraction for models like qwen3, deepseek-r1 */
@@ -142,6 +143,27 @@ export const createOpenRouterModel = (modelName: string, apiKey?: string) => {
 };
 
 /**
+ * Create a DeepSeek model
+ *
+ * @example
+ * ```typescript
+ * const model = createDeepSeekModel("deepseek-chat", "your-api-key");
+ * agent.setModel(model);
+ *
+ * // With reasoning (deepseek-reasoner)
+ * const model = createDeepSeekModel("deepseek-reasoner", "your-api-key");
+ * ```
+ */
+export const createDeepSeekModel = (modelName: string, apiKey?: string, baseURL?: string): LanguageModel => {
+  const resolvedApiKey = apiKey || process.env.API_KEY || process.env.DEEPSEEK_API_KEY;
+  const deepseek = createDeepSeek({
+    apiKey: resolvedApiKey,
+    ...(baseURL ? { baseURL } : {}),
+  });
+  return deepseek(modelName);
+};
+
+/**
  * Create a model from provider config
  *
  * @example
@@ -181,6 +203,8 @@ export const createModel = (config: ProviderConfig): LanguageModel => {
       return createOpenAICompatibleModel(config.model, config.baseURL ?? DEFAULT_OLLAMA_URL, config.apiKey);
     case "open-router":
       return createOpenRouterModel(config.model);
+    case "deepseek":
+      return createDeepSeekModel(config.model, config.apiKey, config.baseURL);
     default:
       throw new Error(`Unknown provider type: ${config.type}`);
   }

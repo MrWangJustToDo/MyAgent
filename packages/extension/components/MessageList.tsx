@@ -22,7 +22,7 @@ export const MessageList = ({ messages, isLoading, allPendingApproval, addToolAp
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [messages, isLoading]);
 
   if (messages.length === 0) {

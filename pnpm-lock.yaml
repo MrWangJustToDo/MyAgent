@@ -141,6 +141,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@ai-sdk/deepseek':
+        specifier: ^2.0.33
+        version: 2.0.33(zod@4.4.3)
       '@ai-sdk/mcp':
         specifier: ^1.0.40
         version: 1.0.40(zod@4.4.3)
@@ -327,6 +330,12 @@ packages:
 
   '@1natsu/wait-element@4.1.2':
     resolution: {integrity: sha512-qWxSJD+Q5b8bKOvESFifvfZ92DuMsY+03SBNjTO34ipJLP6mZ9yK4bQz/vlh48aEQXoJfaZBqUwKL5BdI5iiWw==}
+
+  '@ai-sdk/deepseek@2.0.33':
+    resolution: {integrity: sha512-yiy3v2hRF1MZ5TInkPBkisyPiFd+5NiXa396cdosAZaN/jYYBD24EU4rOxd37DB2ldMjimrbzgB1cQLZLqZ/AQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
 
   '@ai-sdk/gateway@3.0.110':
     resolution: {integrity: sha512-sbv8+1L9/BRKydn8dMNwoMQKupA4iLJ9N+yvxgW6wMQ/94UepDf3FeYWMj/dLdzolAHZ6izRUP4s5WqQkmJ2Zg==}
@@ -7191,6 +7200,12 @@ snapshots:
     dependencies:
       defu: 6.1.7
       many-keys-map: 2.0.1
+
+  '@ai-sdk/deepseek@2.0.33(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.10
+      '@ai-sdk/provider-utils': 4.0.26(zod@4.4.3)
+      zod: 4.4.3
 
   '@ai-sdk/gateway@3.0.110(zod@4.4.3)':
     dependencies:

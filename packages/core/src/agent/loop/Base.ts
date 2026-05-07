@@ -387,9 +387,14 @@ export class Base {
 
       this.context?.setMessages(finalMessages);
 
-      // append latest message
-      for (let i = 0; i < pendingAppend; i++) {
-        this.context?.addCompactMessage(finalMessages[beforeLength + i]);
+      if (pendingAppend <= 0 && afterLength > 0 && afterLength !== beforeLength) {
+        // SDK sent a fresh/shorter message list (new request) — re-sync compactMessages
+        this.context?.setCompactMessages(finalMessages);
+      } else {
+        // Normal append for growing messages within a multi-step run
+        for (let i = 0; i < pendingAppend; i++) {
+          this.context?.addCompactMessage(finalMessages[beforeLength + i]);
+        }
       }
 
       finalMessages = this.context?.getCompactMessages() || [];

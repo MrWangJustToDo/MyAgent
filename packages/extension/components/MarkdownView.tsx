@@ -6,7 +6,7 @@ interface MarkdownViewProps {
 
 export const MarkdownView = ({ content }: MarkdownViewProps) => {
   return (
-    <div className="prose prose-sm dark:prose-invert max-w-none overflow-hidden text-sm break-words [&_pre]:overflow-x-auto [&_pre]:text-xs">
+    <div className="markstream-compact max-w-none overflow-hidden text-sm break-words">
       <Markdown content={content} />
     </div>
   );

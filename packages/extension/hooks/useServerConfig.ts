@@ -36,6 +36,7 @@ export const useServerConfig = createState(
     }),
     withDeepSelector: false,
     withStableSelector: true,
+    withNamespace: "server-config",
     withPersist: "agent-server-config",
   }
 );

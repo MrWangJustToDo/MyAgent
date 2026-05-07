@@ -1,5 +1,6 @@
 import {
   agentManager,
+  createDeepSeekModel,
   createOllamaModel,
   createOpenRouterModel,
   createOpenAICompatibleModel,
@@ -49,6 +50,8 @@ export const createAgent = async ({
     }));
   } else if (provider === "openaiCompatible") {
     languageModel = createOpenAICompatibleModel(model, url);
+  } else if (provider === "deepseek") {
+    languageModel = createDeepSeekModel(model, apiKey);
   } else {
     languageModel = createOpenRouterModel(model, apiKey);
   }

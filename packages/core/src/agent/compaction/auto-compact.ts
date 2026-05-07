@@ -18,7 +18,7 @@
 import { runSubagent } from "../subagent/subagent.js";
 
 import { buildCompactionPrompt, COMPACTION_SYSTEM_PROMPT, type CompactionTodoItem } from "./compaction-prompt.js";
-import { estimateTokens } from "./token-estimator.js";
+import { estimateMessageTokens, estimateTokens } from "./token-estimator.js";
 
 import type { CompactionConfig, CompactionResult, TranscriptEntry } from "./types.js";
 import type { Sandbox } from "../../environment/types.js";
@@ -83,134 +83,55 @@ function stripMediaFromMessages(messages: ModelMessage[]): ModelMessage[] {
 }
 
 /**
- * Check if a message contains tool approval parts.
- */
-function messageHasApproval(message: ModelMessage): boolean {
-  if (!Array.isArray(message.content)) {
-    return false;
-  }
-
-  return message.content.some((part) => {
-    if (!part || typeof part !== "object") return false;
-    const p = part as Record<string, unknown>;
-    const type = p.type as string | undefined;
-    return type === "tool-approval-request" || type === "tool-approval-response";
-  });
-}
-
-/**
- * Get all tool call IDs from a message.
- */
-function getToolCallIds(message: ModelMessage): string[] {
-  if (!Array.isArray(message.content)) {
-    return [];
-  }
-
-  const ids: string[] = [];
-  for (const part of message.content) {
-    if (!part || typeof part !== "object") continue;
-    const p = part as Record<string, unknown>;
-    if (p.type === "tool-call" && typeof p.toolCallId === "string") {
-      ids.push(p.toolCallId);
-    }
-  }
-  return ids;
-}
-
-/**
- * Get all tool result IDs from a message.
- */
-function getToolResultIds(message: ModelMessage): string[] {
-  if (!Array.isArray(message.content)) {
-    return [];
-  }
-
-  const ids: string[] = [];
-  for (const part of message.content) {
-    if (!part || typeof part !== "object") continue;
-    const p = part as Record<string, unknown>;
-    if (p.type === "tool-result" && typeof p.toolCallId === "string") {
-      ids.push(p.toolCallId);
-    }
-  }
-  return ids;
-}
-
-/**
- * Find the index of the first message that contains a pending (unprocessed) tool call.
- * A pending tool call is one that doesn't have a corresponding tool result in subsequent messages.
- */
-function findFirstPendingToolCallIndex(messages: ModelMessage[]): number {
-  // Collect all tool result IDs from all messages
-  const allToolResultIds = new Set<string>();
-  for (const message of messages) {
-    for (const id of getToolResultIds(message)) {
-      allToolResultIds.add(id);
-    }
-  }
-
-  // Find the first message with a tool call that has no corresponding result
-  for (let i = 0; i < messages.length; i++) {
-    const toolCallIds = getToolCallIds(messages[i]);
-    for (const callId of toolCallIds) {
-      if (!allToolResultIds.has(callId)) {
-        return i;
-      }
-    }
-  }
-
-  return -1;
-}
-
-/**
- * Split messages into a summary portion and a tail that should be preserved.
+ * Find the cut point index using a token-budget approach.
  *
- * Preserves messages from the earliest of:
- * - First pending tool call (tool call without corresponding tool result)
- * - First tool approval request/response
+ * Walks backward from the end accumulating token estimates until the
+ * `keepRecentTokens` budget is exceeded, then finds the nearest valid
+ * cut point (a user or assistant message, never a tool message).
  *
- * This ensures that:
- * 1. Pending tool calls are preserved so they can still be executed
- * 2. Tool approval dialogs are preserved so user can still approve/deny
+ * This ensures we always keep a predictable amount of recent context
+ * and summarize everything before the cut.
  */
-function splitPendingTail(messages: ModelMessage[]): {
-  summaryMessages: ModelMessage[];
-  pendingTail: ModelMessage[];
-} {
-  if (messages.length === 0) {
-    return { summaryMessages: messages, pendingTail: [] };
-  }
+function findCutPoint(messages: ModelMessage[], keepRecentTokens: number): number {
+  if (messages.length === 0) return 0;
 
-  // Find first pending tool call
-  const pendingToolCallIndex = findFirstPendingToolCallIndex(messages);
+  let accumulated = 0;
+  let rawCutIndex = 0;
 
-  // Find first approval message (searching from the end)
-  let approvalIndex = -1;
+  // Walk backward, accumulating token estimates
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messageHasApproval(messages[i])) {
-      approvalIndex = i;
+    accumulated += estimateMessageTokens(messages[i]);
+    if (accumulated >= keepRecentTokens) {
+      rawCutIndex = i;
       break;
     }
   }
 
-  // Determine the split point (earliest of the two, if any)
-  let splitIndex = -1;
-  if (pendingToolCallIndex !== -1 && approvalIndex !== -1) {
-    splitIndex = Math.min(pendingToolCallIndex, approvalIndex);
-  } else if (pendingToolCallIndex !== -1) {
-    splitIndex = pendingToolCallIndex;
-  } else if (approvalIndex !== -1) {
-    splitIndex = approvalIndex;
+  // If we never exceeded the budget, keep everything (cut at 0 = summarize nothing)
+  if (accumulated < keepRecentTokens) {
+    return 0;
   }
 
-  if (splitIndex === -1) {
-    return { summaryMessages: messages, pendingTail: [] };
+  // Find the nearest valid cut point at or after rawCutIndex.
+  // Valid = user or assistant message (never cut at a tool message,
+  // which would orphan it from its preceding assistant).
+  for (let i = rawCutIndex; i < messages.length; i++) {
+    const role = messages[i].role;
+    if (role === "user" || role === "assistant") {
+      return i;
+    }
   }
 
-  return {
-    summaryMessages: messages.slice(0, splitIndex),
-    pendingTail: messages.slice(splitIndex),
-  };
+  // Fallback: if no valid cut found forward, try backward
+  for (let i = rawCutIndex - 1; i >= 0; i--) {
+    const role = messages[i].role;
+    if (role === "user" || role === "assistant") {
+      return i + 1;
+    }
+  }
+
+  // Ultimate fallback: summarize everything
+  return 0;
 }
 
 /**
@@ -451,18 +372,20 @@ export async function autoCompact(
   sandbox: Sandbox,
   options?: SummarizeOptions
 ): Promise<CompactionResult & { messages: ModelMessage[] }> {
+  const { keepRecentTokens = 20000 } = config;
   const tokensBefore = estimateTokens(messages);
   let transcriptPath: string | undefined;
 
-  // Preserve pending tool calls and approval messages so they can still be processed
-  const { summaryMessages, pendingTail } = splitPendingTail(messages);
+  // Find cut point: keep recent tokens, summarize the rest
+  const cutIndex = findCutPoint(messages, keepRecentTokens);
+  const summaryMessages = messages.slice(0, cutIndex);
+  const keptMessages = messages.slice(cutIndex);
 
   try {
     // Save transcript before compression (always do this for safety)
     transcriptPath = await saveTranscript(messages, config, sandbox);
   } catch (error) {
     // If transcript save fails, log but continue - it's not critical
-    // The messages are still in memory
     console.error("Failed to save transcript:", error);
   }
 
@@ -473,8 +396,8 @@ export async function autoCompact(
         ? await summarizeConversation(summaryMessages, parentAgentId, options)
         : "No prior conversation to summarize.";
 
-    // Create compressed messages and re-append pending tail
-    const compactedMessages = createCompactedMessages(summary).concat(pendingTail);
+    // Create compressed messages and append kept recent messages
+    const compactedMessages = createCompactedMessages(summary).concat(keptMessages);
 
     const tokensAfter = estimateTokens(compactedMessages);
 
@@ -488,18 +411,17 @@ export async function autoCompact(
       messages: compactedMessages,
     };
   } catch (error) {
-    // Compaction failed after all retries
-    // Return ORIGINAL messages so user doesn't lose anything
+    // Compaction failed — return ORIGINAL messages so user doesn't lose anything
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     return {
       compacted: false,
       tokensBefore,
-      tokensAfter: tokensBefore, // No reduction
+      tokensAfter: tokensBefore,
       type: "auto",
       transcriptPath,
       error: `Compaction failed: ${errorMessage}. Original messages preserved.`,
-      messages, // Return original messages - nothing lost!
+      messages,
     };
   }
 }

@@ -25,6 +25,8 @@ export const compactionConfigSchema = z.object({
   transcriptDir: z.string().default(".transcripts"),
   /** Minimum size of tool result to consider for compaction (default: 100 chars) */
   minToolResultSize: z.number().int().nonnegative().default(100),
+  /** Number of recent tokens to keep after compaction (default: 20000) */
+  keepRecentTokens: z.number().int().positive().default(20000),
 });
 
 /**
@@ -95,6 +97,7 @@ export const DEFAULT_COMPACTION_CONFIG: CompactionConfig = {
   keepRecentToolResults: 3,
   transcriptDir: ".transcripts",
   minToolResultSize: 100,
+  keepRecentTokens: 20000,
 };
 
 /**

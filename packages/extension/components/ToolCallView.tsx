@@ -9,6 +9,8 @@ interface ToolCallViewProps {
   part: ToolUIPart;
 }
 
+const SpinnerEle = <Spinner size="sm" />;
+
 export const ToolCallView = ({ part }: ToolCallViewProps) => {
   const [expanded, setExpanded] = useState(false);
   const toolName = getToolName(part);
@@ -17,7 +19,7 @@ export const ToolCallView = ({ part }: ToolCallViewProps) => {
   const isError = part.state === "output-error" || part.state === "output-denied";
 
   const StatusIcon = () => {
-    if (isRunning) return <Spinner size="sm" />;
+    if (isRunning) return SpinnerEle;
     if (isDone) return <CheckCircleIcon className="text-success h-3.5 w-3.5" />;
     if (isError) return <XCircleIcon className="text-danger h-3.5 w-3.5" />;
     return <WrenchIcon className="text-default-400 h-3.5 w-3.5" />;

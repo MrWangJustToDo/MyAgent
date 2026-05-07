@@ -4991,185 +4991,6 @@
 
   var core = new coreExports.DevToolCore();
 
-  var event$1 = {};
-
-  var hasRequiredEvent$1;
-
-  function requireEvent$1() {
-    if (hasRequiredEvent$1) return event$1;
-    hasRequiredEvent$1 = 1;
-    (function (exports$1) {
-      exports$1.MessageHookType = void 0;
-      (function (MessageHookType) {
-        MessageHookType["init"] = "hook-init";
-        MessageHookType["mount"] = "hook-mount";
-        MessageHookType["render"] = "hook-render";
-        MessageHookType["origin"] = "hook-origin";
-        MessageHookType["clear"] = "hook-clear";
-      })(exports$1.MessageHookType || (exports$1.MessageHookType = {}));
-      exports$1.MessageDetectorType = void 0;
-      (function (MessageDetectorType) {
-        MessageDetectorType["init"] = "detector-init";
-      })(exports$1.MessageDetectorType || (exports$1.MessageDetectorType = {}));
-      exports$1.MessageProxyType = void 0;
-      (function (MessageProxyType) {
-        MessageProxyType["init"] = "proxy-init";
-      })(exports$1.MessageProxyType || (exports$1.MessageProxyType = {}));
-      exports$1.MessagePanelType = void 0;
-      (function (MessagePanelType) {
-        MessagePanelType["show"] = "panel-show";
-        MessagePanelType["hide"] = "panel-hide";
-        MessagePanelType["varStore"] = "panel-var-store";
-        MessagePanelType["varSource"] = "panel-var-source";
-        MessagePanelType["enableHover"] = "panel-enable-hover";
-        MessagePanelType["enableUpdate"] = "panel-enable-update";
-        MessagePanelType["enableRetrigger"] = "panel-enable-retrigger";
-        MessagePanelType["enableHoverOnBrowser"] = "panel-enable-hover-on-browser";
-        MessagePanelType["enableRecord"] = "panel-enable-record";
-        MessagePanelType["nodeHover"] = "panel-hover";
-        MessagePanelType["nodeSelect"] = "panel-select";
-        MessagePanelType["nodeStore"] = "panel-store";
-        MessagePanelType["nodeEditor"] = "panel-editor";
-        MessagePanelType["nodeTrigger"] = "panel-trigger";
-        MessagePanelType["nodeInspect"] = "panel-inspect";
-        MessagePanelType["chunks"] = "panel-chunks";
-        MessagePanelType["global"] = "panel-global";
-        MessagePanelType["clear"] = "panel-clear";
-        MessagePanelType["clearHMR"] = "panel-clear-hmr";
-        MessagePanelType["clearMessage"] = "panel-clear-message";
-        MessagePanelType["clearTrigger"] = "panel-clear-trigger";
-      })(exports$1.MessagePanelType || (exports$1.MessagePanelType = {}));
-      exports$1.MessageWorkerType = void 0;
-      (function (MessageWorkerType) {
-        MessageWorkerType["init"] = "worker-init";
-        MessageWorkerType["close"] = "worker-close";
-      })(exports$1.MessageWorkerType || (exports$1.MessageWorkerType = {}));
-      exports$1.DevToolMessageEnum = void 0;
-      (function (DevToolMessageEnum) {
-        // 初始化，判断是否用@my-react进行页面渲染
-        DevToolMessageEnum["init"] = "init";
-        DevToolMessageEnum["dir"] = "dir";
-        DevToolMessageEnum["config"] = "config";
-        // tree ready
-        DevToolMessageEnum["ready"] = "ready";
-        // tree update
-        DevToolMessageEnum["update"] = "update";
-        DevToolMessageEnum["changed"] = "changed";
-        DevToolMessageEnum["highlight"] = "highlight";
-        DevToolMessageEnum["trigger"] = "trigger";
-        DevToolMessageEnum["running"] = "running";
-        DevToolMessageEnum["triggerStatus"] = "triggerStatus";
-        DevToolMessageEnum["hmr"] = "hmr";
-        DevToolMessageEnum["hmrStatus"] = "hmrStatus";
-        DevToolMessageEnum["hmrInternal"] = "hmrInternal";
-        DevToolMessageEnum["source"] = "source";
-        DevToolMessageEnum["detail"] = "detail";
-        DevToolMessageEnum["unmount"] = "unmount";
-        DevToolMessageEnum["unmountNode"] = "unmount-node";
-        DevToolMessageEnum["selectSync"] = "select-sync";
-        DevToolMessageEnum["message"] = "message";
-        DevToolMessageEnum["warn"] = "warn";
-        DevToolMessageEnum["warnStatus"] = "warnStatus";
-        DevToolMessageEnum["error"] = "error";
-        DevToolMessageEnum["errorStatus"] = "errorStatus";
-        DevToolMessageEnum["chunks"] = "chunks";
-        DevToolMessageEnum["global"] = "global";
-        DevToolMessageEnum["record"] = "record";
-        DevToolMessageEnum["domHover"] = "dom-hover";
-      })(exports$1.DevToolMessageEnum || (exports$1.DevToolMessageEnum = {}));
-      exports$1.HMRStatus = void 0;
-      (function (HMRStatus) {
-        HMRStatus[(HMRStatus["none"] = 0)] = "none";
-        HMRStatus[(HMRStatus["refresh"] = 1)] = "refresh";
-        HMRStatus[(HMRStatus["remount"] = 2)] = "remount";
-      })(exports$1.HMRStatus || (exports$1.HMRStatus = {}));
-      var DevToolSource = "@my-react/devtool";
-
-      exports$1.DevToolSource = DevToolSource;
-    })(event$1);
-    return event$1;
-  }
-
-  var event;
-  var hasRequiredEvent;
-
-  function requireEvent() {
-    if (hasRequiredEvent) return event;
-    hasRequiredEvent = 1;
-    event = requireEvent$1();
-    return event;
-  }
-
-  var eventExports = requireEvent();
-
-  var PortName;
-  (function (PortName) {
-    PortName["proxy"] = "dev-tool/proxy";
-    PortName["panel"] = "dev-tool/panel";
-  })(PortName || (PortName = {}));
-  var sourceFrom;
-  (function (sourceFrom) {
-    // message from hook script, `content` dir
-    sourceFrom["hook"] = "hook";
-    // message from proxy script, `backend` dir
-    sourceFrom["proxy"] = "proxy";
-    // message from devtool panel, `panel` dir
-    sourceFrom["panel"] = "panel";
-    // message from background worker, `background` dir
-    sourceFrom["worker"] = "worker";
-    // message from iframe, chrome/src/hooks/useBridgeForward.ts
-    sourceFrom["iframe"] = "iframe";
-    // message from socket, chrome/src/hooks/useWebDev.ts
-    sourceFrom["socket"] = "socket";
-    // message from detector, `popover` dir
-    sourceFrom["detector"] = "detector";
-    // message from another runtime engine
-    sourceFrom["forward"] = "forward";
-  })(sourceFrom || (sourceFrom = {}));
-
-  var varId = 0;
-  var getValidGlobalVarName = function () {
-    var varName = "$my-react-var-".concat(varId++);
-    while (globalThis[varName]) {
-      varName = "$my-react-var-".concat(varId++);
-    }
-    return varName;
-  };
-  var generatePostMessageWithSource = function (from) {
-    return function (message) {
-      if (typeof window === "undefined") return;
-      var _message = __assign({}, message);
-      if (_message.from && _message.forward) {
-        _message.forward += "->".concat(from);
-      } else if (_message.from) {
-        if (_message.from !== from) {
-          _message.forward = from;
-        }
-      } else {
-        _message.from = from;
-      }
-      window.postMessage(__assign(__assign({}, _message), { source: eventExports.DevToolSource }), "*");
-    };
-  };
-
-  var forwardPostMessageWithSource = generatePostMessageWithSource(sourceFrom.forward);
-  var initForward_DEV = function () {
-    return __awaiter(void 0, void 0, void 0, function () {
-      var _a, _b;
-      return __generator(this, function (_c) {
-        (_b = (_a = globalThis.__MY_REACT_DEVTOOL_RUNTIME__) === null || _a === void 0 ? void 0 : _a.prepare) ===
-          null || _b === void 0
-          ? void 0
-          : _b.call(_a);
-        forwardPostMessageWithSource({ type: eventExports.MessageHookType.init, to: sourceFrom.hook });
-        return [2 /*return*/];
-      });
-    });
-  };
-  initForward_DEV.close = function () {
-    core.disconnect();
-  };
-
   /******************************************************************************
     Copyright (c) Microsoft Corporation.
 
@@ -5289,6 +5110,142 @@
     Effect_TYPE[(Effect_TYPE["__effect__"] = 1)] = "__effect__";
     Effect_TYPE[(Effect_TYPE["__unmount__"] = 2)] = "__unmount__";
   })(Effect_TYPE || (Effect_TYPE = {}));
+
+  var event$1 = {};
+
+  var hasRequiredEvent$1;
+
+  function requireEvent$1() {
+    if (hasRequiredEvent$1) return event$1;
+    hasRequiredEvent$1 = 1;
+    (function (exports$1) {
+      exports$1.MessageHookType = void 0;
+      (function (MessageHookType) {
+        MessageHookType["init"] = "hook-init";
+        MessageHookType["mount"] = "hook-mount";
+        MessageHookType["render"] = "hook-render";
+        MessageHookType["origin"] = "hook-origin";
+        MessageHookType["clear"] = "hook-clear";
+      })(exports$1.MessageHookType || (exports$1.MessageHookType = {}));
+      exports$1.MessageDetectorType = void 0;
+      (function (MessageDetectorType) {
+        MessageDetectorType["init"] = "detector-init";
+      })(exports$1.MessageDetectorType || (exports$1.MessageDetectorType = {}));
+      exports$1.MessageProxyType = void 0;
+      (function (MessageProxyType) {
+        MessageProxyType["init"] = "proxy-init";
+      })(exports$1.MessageProxyType || (exports$1.MessageProxyType = {}));
+      exports$1.MessagePanelType = void 0;
+      (function (MessagePanelType) {
+        MessagePanelType["show"] = "panel-show";
+        MessagePanelType["hide"] = "panel-hide";
+        MessagePanelType["varStore"] = "panel-var-store";
+        MessagePanelType["varSource"] = "panel-var-source";
+        MessagePanelType["enableHover"] = "panel-enable-hover";
+        MessagePanelType["enableUpdate"] = "panel-enable-update";
+        MessagePanelType["enableRetrigger"] = "panel-enable-retrigger";
+        MessagePanelType["enableHoverOnBrowser"] = "panel-enable-hover-on-browser";
+        MessagePanelType["enableRecord"] = "panel-enable-record";
+        MessagePanelType["nodeHover"] = "panel-hover";
+        MessagePanelType["nodeSelect"] = "panel-select";
+        MessagePanelType["nodeStore"] = "panel-store";
+        MessagePanelType["nodeEditor"] = "panel-editor";
+        MessagePanelType["nodeTrigger"] = "panel-trigger";
+        MessagePanelType["nodeInspect"] = "panel-inspect";
+        MessagePanelType["chunks"] = "panel-chunks";
+        MessagePanelType["global"] = "panel-global";
+        MessagePanelType["clear"] = "panel-clear";
+        MessagePanelType["clearHMR"] = "panel-clear-hmr";
+        MessagePanelType["clearMessage"] = "panel-clear-message";
+        MessagePanelType["clearTrigger"] = "panel-clear-trigger";
+      })(exports$1.MessagePanelType || (exports$1.MessagePanelType = {}));
+      exports$1.MessageWorkerType = void 0;
+      (function (MessageWorkerType) {
+        MessageWorkerType["init"] = "worker-init";
+        MessageWorkerType["close"] = "worker-close";
+      })(exports$1.MessageWorkerType || (exports$1.MessageWorkerType = {}));
+      exports$1.DevToolMessageEnum = void 0;
+      (function (DevToolMessageEnum) {
+        // 初始化，判断是否用@my-react进行页面渲染
+        DevToolMessageEnum["init"] = "init";
+        DevToolMessageEnum["dir"] = "dir";
+        DevToolMessageEnum["config"] = "config";
+        // tree ready
+        DevToolMessageEnum["ready"] = "ready";
+        // tree update
+        DevToolMessageEnum["update"] = "update";
+        DevToolMessageEnum["changed"] = "changed";
+        DevToolMessageEnum["highlight"] = "highlight";
+        DevToolMessageEnum["trigger"] = "trigger";
+        DevToolMessageEnum["running"] = "running";
+        DevToolMessageEnum["triggerStatus"] = "triggerStatus";
+        DevToolMessageEnum["hmr"] = "hmr";
+        DevToolMessageEnum["hmrStatus"] = "hmrStatus";
+        DevToolMessageEnum["hmrInternal"] = "hmrInternal";
+        DevToolMessageEnum["source"] = "source";
+        DevToolMessageEnum["detail"] = "detail";
+        DevToolMessageEnum["unmount"] = "unmount";
+        DevToolMessageEnum["unmountNode"] = "unmount-node";
+        DevToolMessageEnum["selectSync"] = "select-sync";
+        DevToolMessageEnum["message"] = "message";
+        DevToolMessageEnum["warn"] = "warn";
+        DevToolMessageEnum["warnStatus"] = "warnStatus";
+        DevToolMessageEnum["error"] = "error";
+        DevToolMessageEnum["errorStatus"] = "errorStatus";
+        DevToolMessageEnum["chunks"] = "chunks";
+        DevToolMessageEnum["global"] = "global";
+        DevToolMessageEnum["record"] = "record";
+        DevToolMessageEnum["domHover"] = "dom-hover";
+      })(exports$1.DevToolMessageEnum || (exports$1.DevToolMessageEnum = {}));
+      exports$1.HMRStatus = void 0;
+      (function (HMRStatus) {
+        HMRStatus[(HMRStatus["none"] = 0)] = "none";
+        HMRStatus[(HMRStatus["refresh"] = 1)] = "refresh";
+        HMRStatus[(HMRStatus["remount"] = 2)] = "remount";
+      })(exports$1.HMRStatus || (exports$1.HMRStatus = {}));
+      var DevToolSource = "@my-react/devtool";
+
+      exports$1.DevToolSource = DevToolSource;
+    })(event$1);
+    return event$1;
+  }
+
+  var event;
+  var hasRequiredEvent;
+
+  function requireEvent() {
+    if (hasRequiredEvent) return event;
+    hasRequiredEvent = 1;
+    event = requireEvent$1();
+    return event;
+  }
+
+  var eventExports = requireEvent();
+
+  var varId = 0;
+  var getValidGlobalVarName = function () {
+    var varName = "$my-react-var-".concat(varId++);
+    while (globalThis[varName]) {
+      varName = "$my-react-var-".concat(varId++);
+    }
+    return varName;
+  };
+  var generatePostMessageWithSource = function (from) {
+    return function (message) {
+      if (typeof window === "undefined") return;
+      var _message = __assign({}, message);
+      if (_message.from && _message.forward) {
+        _message.forward += "->".concat(from);
+      } else if (_message.from) {
+        if (_message.from !== from) {
+          _message.forward = from;
+        }
+      } else {
+        _message.from = from;
+      }
+      window.postMessage(__assign(__assign({}, _message), { source: eventExports.DevToolSource }), "*");
+    };
+  };
 
   var onMessageFromPanelOrWorkerOrDetector = function (data) {
     if (data.source !== coreExports.DevToolSource) return;
@@ -5431,6 +5388,184 @@
     }
   };
 
+  var WebSocketClient = /** @class */ (function () {
+    function WebSocketClient(url, options) {
+      var _a, _b;
+      this.ws = null;
+      this.listeners = new Map();
+      this.reconnectAttempts = 0;
+      this.url = url;
+      this.type = (options === null || options === void 0 ? void 0 : options.type) || "client";
+      this.maxReconnectAttempts =
+        (_a = options === null || options === void 0 ? void 0 : options.reconnectionAttempts) !== null && _a !== void 0
+          ? _a
+          : 5;
+      this.reconnectDelay =
+        (_b = options === null || options === void 0 ? void 0 : options.reconnectionDelay) !== null && _b !== void 0
+          ? _b
+          : 1000;
+    }
+    WebSocketClient.prototype.connect = function () {
+      var _this = this;
+      var urlWithType = "".concat(this.url, "?type=").concat(this.type);
+      this.ws = new WebSocket(urlWithType);
+      this.ws.onopen = function () {
+        _this.reconnectAttempts = 0;
+        _this.trigger("connect", undefined);
+      };
+      this.ws.onclose = function () {
+        _this.trigger("disconnect", undefined);
+        _this.attemptReconnect();
+      };
+      this.ws.onerror = function (error) {
+        console.error("[WebSocket] error:", error);
+      };
+      this.ws.onmessage = function (event) {
+        try {
+          var _a = JSON.parse(event.data),
+            eventName = _a.event,
+            data = _a.data;
+          _this.trigger(eventName, data);
+        } catch (e) {
+          console.error("[WebSocket] failed to parse message:", e);
+        }
+      };
+      return this;
+    };
+    WebSocketClient.prototype.attemptReconnect = function () {
+      var _this = this;
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.reconnectAttempts++;
+        setTimeout(function () {
+          _this.connect();
+        }, this.reconnectDelay * this.reconnectAttempts);
+      }
+    };
+    WebSocketClient.prototype.on = function (event, callback) {
+      if (!this.listeners.has(event)) {
+        this.listeners.set(event, new Set());
+      }
+      this.listeners.get(event).add(callback);
+      return this;
+    };
+    WebSocketClient.prototype.off = function (event, callback) {
+      var _a;
+      (_a = this.listeners.get(event)) === null || _a === void 0 ? void 0 : _a.delete(callback);
+      return this;
+    };
+    WebSocketClient.prototype.trigger = function (event, data) {
+      var _a;
+      (_a = this.listeners.get(event)) === null || _a === void 0
+        ? void 0
+        : _a.forEach(function (cb) {
+            return cb(data);
+          });
+    };
+    WebSocketClient.prototype.emit = function (event, data) {
+      var _a;
+      if (((_a = this.ws) === null || _a === void 0 ? void 0 : _a.readyState) === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ event: event, data: data }));
+      }
+      return this;
+    };
+    WebSocketClient.prototype.close = function () {
+      var _a;
+      this.maxReconnectAttempts = 0;
+      (_a = this.ws) === null || _a === void 0 ? void 0 : _a.close();
+      this.ws = null;
+      this.listeners.clear();
+    };
+    return WebSocketClient;
+  })();
+  var wsClient = function (_a) {
+    var url = _a.url,
+      name = _a.name,
+      options = _a.options;
+    core.clearSubscribe();
+    var ws = new WebSocketClient(url, {
+      type: "client",
+      reconnectionAttempts: options === null || options === void 0 ? void 0 : options.reconnectionAttempts,
+      reconnectionDelay: options === null || options === void 0 ? void 0 : options.reconnectionDelay,
+    });
+    var unSubscribe = function () {};
+    ws.on("connect", function () {
+      ws.emit("init", {
+        name: name,
+        type: "client",
+        url: options === null || options === void 0 ? void 0 : options.originalUrl,
+        title: options === null || options === void 0 ? void 0 : options.originalTitle,
+      });
+      unSubscribe = core.subscribe(function (message) {
+        ws.emit("render", message);
+      });
+    });
+    ws.on("disconnect", function () {
+      unSubscribe();
+      core.disconnect();
+    });
+    ws.on("action", function (data) {
+      onMessageFromPanelOrWorkerOrDetector(data);
+    });
+    ws.on("duplicate", function () {
+      console.warn("[@my-react-devtool/hook] duplicate client detected, disconnecting...");
+      ws.close();
+    });
+    ws.connect();
+    return ws;
+  };
+
+  var connectSocket = null;
+  var initBundleWS_DEV = function (url) {
+    return __awaiter(void 0, void 0, void 0, function () {
+      var _a, _b, _c, _d;
+      return __generator(this, function (_e) {
+        console.log("[@my-react-devtool/hook] start a app devtool (websocket)");
+        (_b = (_a = globalThis.__MY_REACT_DEVTOOL_RUNTIME__) === null || _a === void 0 ? void 0 : _a.prepare) ===
+          null || _b === void 0
+          ? void 0
+          : _b.call(_a);
+        (_d = (_c = globalThis.__MY_REACT_DEVTOOL_RUNTIME__) === null || _c === void 0 ? void 0 : _c.init) === null ||
+        _d === void 0
+          ? void 0
+          : _d.call(_c);
+        connectSocket = wsClient({ url: url, name: "bundle-app-engine" });
+        return [2 /*return*/];
+      });
+    });
+  };
+  initBundleWS_DEV.close = function () {
+    var _a;
+    (_a = connectSocket === null || connectSocket === void 0 ? void 0 : connectSocket.close) === null || _a === void 0
+      ? void 0
+      : _a.call(connectSocket);
+    connectSocket = null;
+  };
+
+  var PortName;
+  (function (PortName) {
+    PortName["proxy"] = "dev-tool/proxy";
+    PortName["panel"] = "dev-tool/panel";
+  })(PortName || (PortName = {}));
+  var sourceFrom;
+  (function (sourceFrom) {
+    // message from hook script, `content` dir
+    sourceFrom["hook"] = "hook";
+    // message from proxy script, `backend` dir
+    sourceFrom["proxy"] = "proxy";
+    // message from devtool panel, `panel` dir
+    sourceFrom["panel"] = "panel";
+    // message from background worker, `background` dir
+    sourceFrom["worker"] = "worker";
+    // message from iframe, chrome/src/hooks/useBridgeForward.ts
+    sourceFrom["iframe"] = "iframe";
+    // message from socket, chrome/src/hooks/useWebDev.ts
+    sourceFrom["socket"] = "socket";
+    // message from detector, `popover` dir
+    sourceFrom["detector"] = "detector";
+    // message from another runtime engine
+    sourceFrom["forward"] = "forward";
+  })(sourceFrom || (sourceFrom = {}));
+
   var hookPostMessageWithSource = generatePostMessageWithSource(sourceFrom.hook);
   // default render agentId
   var agentId = core.id;
@@ -5571,15 +5706,11 @@
     return env;
   };
   globalHook.getEnv = getEnv;
-  var setEnv = function (e) {
-    return (env = e);
-  };
 
   if (!globalThis["__MY_REACT_DEVTOOL_INTERNAL__"]) {
-    setEnv("forward");
     globalThis["__MY_REACT_DEVTOOL_INTERNAL__"] = core;
     globalThis["__MY_REACT_DEVTOOL_RUNTIME__"] = globalHook;
     globalThis["__@my-react/react-devtool-inject__"] = globalHook;
-    globalThis["__MY_REACT_DEVTOOL_FORWARD__"] = initForward_DEV;
+    globalThis["__MY_REACT_DEVTOOL_BUNDLE_WS__"] = initBundleWS_DEV;
   }
 })();

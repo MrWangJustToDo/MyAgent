@@ -43,7 +43,7 @@ export function useAgentChat(): UseAgentChatReturn {
     chatRef.current
       ? {
           chat: chatRef.current,
-          experimental_throttle: 20,
+          experimental_throttle: 80,
         }
       : {}
   );

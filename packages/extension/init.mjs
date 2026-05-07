@@ -2,7 +2,7 @@
 import fs from "fs";
 
 const loadDevToolScript = async () => {
-  const res = await fetch("https://mrwangjusttodo.github.io/myreact-devtools/bundle/forward-dev.js");
+  const res = await fetch("https://mrwangjusttodo.github.io/myreact-devtools/bundle/bundle-ws-dev.js");
 
   const text = await res.text();
 

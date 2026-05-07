@@ -274,8 +274,19 @@ const renderImage = (node: ImageNode): string => {
 };
 
 const renderTable = (node: TableNode, context: RenderContext): string => {
+  const numCols = node.header.cells.length;
+  const termWidth = process.stdout.columns || 80;
+  // Reserve space for borders: 1 left + 3 per separator (| + spaces) + 1 right = 1 + (numCols+1)*3 ~= numCols*3+4
+  const availableWidth = termWidth - (numCols + 1) * 3 - 1;
+  const colWidth = Math.max(10, Math.floor(availableWidth / numCols));
+
+  const colWidths = Array.from({ length: numCols }, () => colWidth);
+
   const table = new Table({
     head: node.header.cells.map((cell) => colors.heading(renderChildren(cell.children, context)).toString()),
+    colWidths,
+    wordWrap: true,
+    wrapOnWordBoundary: true,
     style: {
       head: [],
       border: ["gray"],

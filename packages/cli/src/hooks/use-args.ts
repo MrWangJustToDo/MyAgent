@@ -10,7 +10,7 @@ import type { ParsedArgs } from "../utils/args.js";
 // ============================================================================
 
 /** Supported LLM providers */
-export type Provider = "ollama" | "openRouter" | "openaiCompatible";
+export type Provider = "ollama" | "openRouter" | "openaiCompatible" | "deepseek";
 
 /**
  * CLI-specific agent configuration
@@ -55,9 +55,16 @@ const getEnv = (key: string, fallback: string = ""): string => {
  */
 const getEnvProvider = (key: string, fallback: Provider = "ollama"): Provider => {
   const value = process.env[key]?.toLowerCase();
-  if (value === "ollama" || value === "openrouter" || value === "openai-compatible" || value === "openaicompatible") {
+  if (
+    value === "ollama" ||
+    value === "openrouter" ||
+    value === "openai-compatible" ||
+    value === "openaicompatible" ||
+    value === "deepseek"
+  ) {
     if (value === "openrouter") return "openRouter";
     if (value === "openai-compatible" || value === "openaicompatible") return "openaiCompatible";
+    if (value === "deepseek") return "deepseek";
     return "ollama";
   }
   return fallback;
@@ -216,7 +223,8 @@ export const useArgs = createState(
         const envModel = getEnv("MODEL") || getEnv("model");
         const envUrl = getEnv("URL") || getEnv("OLLAMA_URL") || getEnv("OPENAI_COMPATIBLE_URL") || getEnv("url");
         const envProvider = getEnvProvider("PROVIDER") || getEnvProvider("provider");
-        const envApiKey = getEnv("API_KEY") || getEnv("OPENROUTER_API_KEY") || getEnv("apiKey");
+        const envApiKey =
+          getEnv("API_KEY") || getEnv("OPENROUTER_API_KEY") || getEnv("DEEPSEEK_API_KEY") || getEnv("apiKey");
         const envMaxIterations = getEnv("MAX_ITERATIONS") || getEnv("maxIterations");
 
         state.parsed = parsed;
@@ -245,7 +253,8 @@ export const useArgs = createState(
           cliProvider === "openRouter" ||
           cliProvider === "openrouter" ||
           cliProvider === "openai-compatible" ||
-          cliProvider === "openaicompatible"
+          cliProvider === "openaicompatible" ||
+          cliProvider === "deepseek"
         ) {
           if (cliProvider === "openrouter") {
             state.config.provider = "openRouter";

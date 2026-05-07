@@ -1,5 +1,6 @@
 import {
   agentManager,
+  createDeepSeekModel,
   createOllamaModel,
   createOpenRouterModel,
   createOpenAICompatibleModel,
@@ -11,7 +12,7 @@ import type { ToolSet } from "ai";
 
 export interface ServerAgentConfig {
   model: string;
-  provider: "ollama" | "openRouter" | "openaiCompatible";
+  provider: "ollama" | "openRouter" | "openaiCompatible" | "deepseek";
   url: string;
   apiKey?: string;
   rootPath: string;
@@ -34,6 +35,8 @@ export async function createServerAgent(config: ServerAgentConfig): Promise<Agen
     }));
   } else if (provider === "openaiCompatible") {
     languageModel = createOpenAICompatibleModel(model, url);
+  } else if (provider === "deepseek") {
+    languageModel = createDeepSeekModel(model, apiKey, url !== "http://localhost:11434" ? url : undefined);
   } else {
     languageModel = createOpenRouterModel(model, apiKey);
   }

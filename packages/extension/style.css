@@ -4,6 +4,8 @@
 
 @source "../../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}";
 
+@source "./node_modules/markstream-react/dist/**/*.{css,js,ts}";
+
 @custom-variant dark (&:is(.dark *));
 
 html,
@@ -11,4 +13,63 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
+}
+
+.markstream-compact .paragraph-node {
+  margin: 0.5em 0;
+}
+
+.markstream-compact .heading-1 {
+  margin-top: 0.75em;
+  margin-bottom: 0.5em;
+  font-size: 1.5rem;
+}
+
+.markstream-compact .heading-2 {
+  margin-top: 0.75em;
+  margin-bottom: 0.4em;
+  font-size: 1.25rem;
+}
+
+.markstream-compact .heading-3 {
+  margin-top: 0.6em;
+  margin-bottom: 0.3em;
+  font-size: 1.1rem;
+}
+
+.markstream-compact .heading-4,
+.markstream-compact .heading-5,
+.markstream-compact .heading-6 {
+  margin-top: 0.5em;
+  margin-bottom: 0.25em;
+  font-size: 1rem;
+}
+
+.markstream-compact .blockquote-node {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.markstream-compact .hr-node,
+.markstream-compact .thematic-break {
+  margin: 1em 0;
+}
+
+.markstream-compact .code-block,
+.markstream-compact .code-block-node {
+  margin: 0.5em 0;
+}
+
+.markstream-compact .markdown-renderer {
+  contain-intrinsic-size: auto;
+}
+
+.markstream-compact ul,
+.markstream-compact ol {
+  margin: 0.4em 0;
+  padding-left: 1.5em;
+}
+
+.markstream-compact li {
+  margin: 0.15em 0;
 }
