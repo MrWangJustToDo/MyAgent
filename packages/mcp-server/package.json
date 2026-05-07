@@ -1,7 +1,7 @@
 {
-  "name": "@my-agent/server",
+  "name": "@my-agent/mcp-server",
   "version": "0.0.1",
-  "description": "HTTP server exposing core Agent for browser extension and web clients",
+  "description": "MCP server for My Agent",
   "type": "module",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -12,7 +12,7 @@
     }
   },
   "bin": {
-    "my-agent-server": "./dist/index.mjs"
+    "my-agent-mcp-server": "./dist/index.mjs"
   },
   "files": [
     "dist",
@@ -25,11 +25,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hono/node-server": "^1.14.3",
-    "@my-agent/core": "workspace:*",
-    "ai": "^6.0.175",
-    "dotenv": "^16.5.0",
-    "hono": "^4.7.11"
+    "@cyanheads/mcp-ts-core": "^0.8.17",
+    "screenshot-desktop": "^1.15.4",
+    "sharp": "^0.34.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.19.15",

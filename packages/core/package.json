@@ -38,7 +38,7 @@
     "mime-types": "^3.0.2",
     "turndown": "^7.2.4",
     "yaml": "^2.8.4",
-    "zod": "^4.3.6"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/mime-types": "^3.0.1",

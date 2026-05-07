@@ -10,13 +10,13 @@ export default defineConfig({
     disabled: true,
   },
   manifest: {
-    permissions: ["storage", "activeTab"],
-    web_accessible_resources: [
-      {
-        matches: ["<all_urls>"],
-        resources: ["devtool/index.js"],
-      },
-    ],
+    permissions: ["storage", "sidePanel"],
+    side_panel: {
+      default_path: "sidepanel.html",
+    },
+    action: {
+      default_title: "My Agent",
+    },
   },
   outDir: "dist",
   modules: ["@wxt-dev/module-react"],
