@@ -378,6 +378,18 @@ export async function autoCompact(
 
   // Find cut point: keep recent tokens, summarize the rest
   const cutIndex = findCutPoint(messages, keepRecentTokens);
+
+  // Nothing to summarize — everything fits within the keep-recent budget
+  if (cutIndex === 0) {
+    return {
+      compacted: false,
+      tokensBefore,
+      tokensAfter: tokensBefore,
+      type: "auto",
+      messages,
+    };
+  }
+
   const summaryMessages = messages.slice(0, cutIndex);
   const keptMessages = messages.slice(cutIndex);
 
@@ -391,10 +403,7 @@ export async function autoCompact(
 
   try {
     // Generate summary via subagent with optional focus and todos
-    const summary =
-      summaryMessages.length > 0
-        ? await summarizeConversation(summaryMessages, parentAgentId, options)
-        : "No prior conversation to summarize.";
+    const summary = await summarizeConversation(summaryMessages, parentAgentId, options);
 
     // Create compressed messages and append kept recent messages
     const compactedMessages = createCompactedMessages(summary).concat(keptMessages);

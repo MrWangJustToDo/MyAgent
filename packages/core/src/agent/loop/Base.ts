@@ -424,6 +424,7 @@ export class Base {
             });
 
             this.log?.info("agent", "Auto-compaction completed", {
+              compacted: result.compacted,
               tokensBefore: result.tokensBefore,
               tokensAfter: result.tokensAfter,
               transcriptPath: result.transcriptPath,
@@ -432,10 +433,12 @@ export class Base {
               afterMessage: result.messages,
             });
 
-            // Apply the compacted messages to context
-            this.context?.setCompactMessages(result.messages);
+            if (result.compacted) {
+              // Apply the compacted messages to context
+              this.context?.setCompactMessages(result.messages);
 
-            this.context?.resetUsage();
+              this.context?.resetUsage();
+            }
           } catch (err) {
             const error = err instanceof Error ? err : new Error(String(err));
             this.log?.error("agent", "Auto-compaction failed, continuing with original messages", error);
