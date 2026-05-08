@@ -2,6 +2,7 @@ import { streamText, generateText, tool as vercelTool, stepCountIs } from "ai";
 import { z } from "zod";
 
 import { generateId } from "../../base/utils.js";
+import { setActiveContext } from "../active-agent.js";
 
 import { Base } from "./Base.js";
 
@@ -157,6 +158,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
 
     this.status = "running";
     this.error = "";
+    setActiveContext(this.context);
 
     const tools = this.getTools();
 
@@ -271,6 +273,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
 
     this.status = "running";
     this.error = "";
+    setActiveContext(this.context);
 
     const tools = this.getTools();
 

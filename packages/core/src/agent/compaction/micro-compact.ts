@@ -40,19 +40,44 @@ type ToolCallMap = Map<string, string>;
 
 /**
  * Get the string length of a tool result's output.
+ * Handles both `result` field and `content` array (for multi-modal outputs like images).
  */
-function getToolResultSize(result: unknown): number {
-  if (result === null || result === undefined) {
-    return 0;
+function getToolResultSize(part: Record<string, unknown>): number {
+  let size = 0;
+
+  // Check `result` field (standard tool results)
+  const result = part.result;
+  if (result !== null && result !== undefined) {
+    if (typeof result === "string") {
+      size += result.length;
+    } else {
+      try {
+        size += JSON.stringify(result).length;
+      } catch {
+        // ignore
+      }
+    }
   }
-  if (typeof result === "string") {
-    return result.length;
+
+  // Check `content` field (multi-modal tool results from toModelOutput)
+  const content = part.content;
+  if (Array.isArray(content)) {
+    for (const c of content) {
+      if (c && typeof c === "object") {
+        const cp = c as Record<string, unknown>;
+        if (cp.type === "image-data" || cp.type === "image") {
+          // base64 image data is very large
+          size += typeof cp.data === "string" ? cp.data.length : 0;
+        } else if (cp.type === "file-data") {
+          size += typeof cp.data === "string" ? cp.data.length : 0;
+        } else if (cp.type === "text") {
+          size += typeof cp.text === "string" ? cp.text.length : 0;
+        }
+      }
+    }
   }
-  try {
-    return JSON.stringify(result).length;
-  } catch {
-    return 0;
-  }
+
+  return size;
 }
 
 /**
@@ -126,7 +151,7 @@ function findToolResults(
             messageIndex: mi,
             partIndex: pi,
             toolCallId: (p.toolCallId as string) || "",
-            size: getToolResultSize(p.result),
+            size: getToolResultSize(p),
           });
         }
       }
@@ -206,6 +231,11 @@ export function microCompact(messages: ModelMessage[], config: Partial<Compactio
 
       // Replace result with placeholder
       part.result = createPlaceholder(toolName);
+
+      // Also clear multi-modal content array (images, PDFs from toModelOutput)
+      if (Array.isArray(part.content)) {
+        part.content = [{ type: "text", text: createPlaceholder(toolName) }];
+      }
     }
   }
 

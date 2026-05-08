@@ -75,19 +75,33 @@ function estimatePartChars(part: unknown): number {
       return getStringLength(p.toolName) + getStringLength(p.result);
 
     case "image":
-      // LLM providers use fixed token budgets for images (typically 85-1000 tokens),
-      // not proportional to base64 size. Use a conservative fixed estimate to avoid
-      // premature compaction when images are present.
+      // Images sent as base64 in tool results consume tokens proportional to their data size.
+      // For user-provided images (URL-based), providers may use fixed budgets,
+      // but for inline base64 data, use actual data length for accurate estimation.
+      if (typeof p.data === "string" && p.data.length > 100) {
+        return p.data.length;
+      }
+      if (typeof p.image === "string" && p.image.length > 100) {
+        return p.image.length;
+      }
+      return 1000 * CHARS_PER_TOKEN;
+
+    case "image-data":
+      // image-data parts in tool results contain full base64 data
+      if (typeof p.data === "string") {
+        return p.data.length;
+      }
       return 1000 * CHARS_PER_TOKEN;
 
     case "file": {
       const mediaType =
         typeof p.mediaType === "string" ? p.mediaType : typeof p.mimeType === "string" ? p.mimeType : "";
       if (mediaType.startsWith("image/")) {
-        // Same fixed estimate for image files
-        return 1000 * CHARS_PER_TOKEN;
+        // Image files contain base64 data that counts toward context
+        const dataLen = typeof p.data === "string" ? p.data.length : 0;
+        return dataLen > 100 ? dataLen : 1000 * CHARS_PER_TOKEN;
       }
-      // Text files: estimate based on content length, but cap at a reasonable size
+      // Text files: estimate based on content length
       const dataLen = getStringLength(p.data);
       return Math.min(dataLen, 20000) + 50;
     }

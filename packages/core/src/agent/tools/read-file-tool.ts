@@ -3,6 +3,8 @@ import mime from "mime-types";
 import * as nodePath from "path";
 import { z } from "zod";
 
+import { getRemainingTokenBudget } from "../active-agent.js";
+
 import { getFile, withDuration } from "./helpers.js";
 
 import type { Sandbox, FileStat } from "../../environment";
@@ -14,7 +16,7 @@ import type { Sandbox, FileStat } from "../../environment";
 /** Maximum characters for text file content (to prevent context overflow) */
 const MAX_CONTENT_LENGTH = 100000; // ~100KB, roughly 25k tokens
 
-/** Maximum bytes for binary files (images, PDFs) */
+/** Maximum bytes for binary files (PDFs) */
 const MAX_BINARY_SIZE = 10 * 1024 * 1024; // 10MB
 
 /** Default line limit when not specified */
@@ -22,6 +24,9 @@ const DEFAULT_LINE_LIMIT = 2000;
 
 /** Maximum characters per line before truncation */
 const MAX_LINE_LENGTH = 2000;
+
+/** Characters per token for budget estimation */
+const CHARS_PER_TOKEN = 4;
 
 // ============================================================================
 // File Type Detection
@@ -242,7 +247,9 @@ Supports multiple file types:
 - **Binary files**: Cannot be read (audio, video, archives, executables, etc.)
 
 For text files, each line is prefixed with its line number (1-indexed).
-Use the offset parameter to read from a specific line, and limit to control how many lines to read.`,
+Use the offset parameter to read from a specific line, and limit to control how many lines to read.
+
+IMPORTANT: Reading images adds significant data to context. Avoid reading more than 2-3 images in a single turn. If you need to process many images, do them in separate turns.`,
 
     inputSchema: z.object({
       path: z.string().describe("The path to the file or directory to read, relative to the project root."),
@@ -362,20 +369,26 @@ Use the offset parameter to read from a specific line, and limit to control how 
 
           const buffer = await fsys.readFileBuffer(filePath);
 
-          if (buffer.length > MAX_BINARY_SIZE) {
+          // Check context budget — base64 is ~33% larger than raw bytes
+          const base64Chars = Math.ceil(buffer.length * 1.37);
+          const remainingTokens = getRemainingTokenBudget();
+          const remainingChars = remainingTokens * CHARS_PER_TOKEN;
+          if (base64Chars > remainingChars) {
             return {
               type: "error" as const,
               path: filePath,
-              error: `Image file too large: ${Math.round(buffer.length / 1024 / 1024)}MB (max ${MAX_BINARY_SIZE / 1024 / 1024}MB)`,
-              message: `Image file too large`,
+              error: `Skipping image to avoid context overflow: ${Math.round(buffer.length / 1024)}KB image would use ~${Math.ceil(base64Chars / CHARS_PER_TOKEN)} tokens, but only ~${remainingTokens} tokens remain in budget. Try reading fewer images per turn.`,
+              message: `Context budget exceeded, skipping: ${filePath} (${Math.round(buffer.length / 1024)}KB)`,
             };
           }
+
+          const base64 = buffer.toString("base64");
 
           return {
             type: "image" as const,
             path: filePath,
             mimeType: fileTypeInfo.mimeType || "image/png",
-            base64: buffer.toString("base64"),
+            base64,
             size: buffer.length,
             message: `Image read successfully: ${filePath} (${Math.round(buffer.length / 1024)}KB)`,
           };
@@ -470,10 +483,27 @@ Use the offset parameter to read from a specific line, and limit to control how 
 
         let selectedContent = numberedLines.join("\n");
 
-        // Truncate total content if too large
+        // Truncate total content if too large (static cap)
         let contentTruncated = false;
         if (selectedContent.length > MAX_CONTENT_LENGTH) {
           selectedContent = selectedContent.slice(0, MAX_CONTENT_LENGTH) + "\n...[content truncated for context limit]";
+          contentTruncated = true;
+        }
+
+        // Also truncate based on remaining context budget
+        const remainingTokens = getRemainingTokenBudget();
+        const remainingChars = remainingTokens * CHARS_PER_TOKEN;
+        if (remainingChars <= 0) {
+          return {
+            type: "error" as const,
+            path: filePath,
+            error: `Context budget exhausted. Cannot read more files this turn. The file has ${totalLines} lines — try reading it in a subsequent turn or use offset/limit for a smaller range.`,
+            message: `Context budget exhausted, skipping: ${filePath}`,
+          };
+        }
+        if (selectedContent.length > remainingChars) {
+          selectedContent =
+            selectedContent.slice(0, remainingChars) + "\n...[content truncated: context budget limit reached]";
           contentTruncated = true;
         }
 
