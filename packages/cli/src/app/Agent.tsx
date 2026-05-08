@@ -60,6 +60,8 @@ export const Agent = () => {
     provider: config.provider,
     apiKey: config.apiKey,
     mcpConfigPath: config.mcpConfigPath,
+    continueSession: config.continueSession,
+    resumeSession: config.resumeSession,
   });
 
   const hasInitRef = useRef(false);

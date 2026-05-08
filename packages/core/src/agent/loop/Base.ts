@@ -8,12 +8,15 @@ import type { AgentContext } from "../agent-context";
 import type { AgentLog } from "../agent-log";
 import type { CompactionConfig } from "../compaction/types.js";
 import type { McpManager } from "../mcp/manager.js";
+import type { SessionStore } from "../session/session-store.js";
+import type { SessionData } from "../session/types.js";
 import type { SkillRegistry } from "../skills";
 import type { TodoManager } from "../todo-manager";
 import type {
   ToolSet,
   LanguageModel,
   ModelMessage,
+  UIMessage,
   StreamTextOnStepFinishCallback,
   GenerateTextOnStepFinishCallback,
   StreamTextOnFinishCallback,
@@ -51,6 +54,8 @@ export class Base {
   mcpManager: McpManager | null = null;
   skillRegister: SkillRegistry | null = null;
   compactionConfig: CompactionConfig | null = null;
+  sessionStore: SessionStore | null = null;
+  sessionData: SessionData | null = null;
   customTools: ToolSet = {};
   builtInTools: ToolSet = {};
 
@@ -190,6 +195,34 @@ export class Base {
 
   getMcpManager() {
     return this.mcpManager;
+  }
+
+  setSessionStore(store: SessionStore): void {
+    this.sessionStore = store;
+  }
+
+  getSessionStore(): SessionStore | null {
+    return this.sessionStore;
+  }
+
+  setSessionData(data: SessionData): void {
+    this.sessionData = data;
+  }
+
+  getSessionData(): SessionData | null {
+    return this.sessionData;
+  }
+
+  /**
+   * Update stored UIMessages from the client.
+   * Called by CLI/extension after each interaction to persist the authoritative UI state.
+   */
+  updateSessionUIMessages(uiMessages: UIMessage[]): void {
+    if (!this.sessionStore || !this.sessionData) return;
+    this.sessionData.uiMessages = uiMessages;
+    this.sessionStore.save(this.sessionData).catch((err) => {
+      this.log?.warn("agent", "Failed to save session UIMessages", err);
+    });
   }
 
   /**
@@ -427,7 +460,6 @@ export class Base {
               compacted: result.compacted,
               tokensBefore: result.tokensBefore,
               tokensAfter: result.tokensAfter,
-              transcriptPath: result.transcriptPath,
               todosIncluded: todos.length,
               beforeMessage: finalMessages,
               afterMessage: result.messages,
@@ -522,8 +554,55 @@ export class Base {
 
       this.context?.updateFinal?.(event);
 
+      // Auto-save session after each interaction
+      this.saveSession();
+
       userCallback?.(event);
     };
+  }
+
+  /**
+   * Persist the current session state to disk (server-side data only).
+   * UIMessages are stored separately when pushed from the client.
+   */
+  private saveSession(): void {
+    if (!this.sessionStore || !this.sessionData || !this.context) return;
+
+    const messages = this.context.getMessages();
+    const compactMessages = this.context.getCompactMessages();
+
+    this.sessionData.compactMessages = compactMessages;
+    this.sessionData.usage = this.context.getTotalUsage();
+
+    if (this.todoManager) {
+      this.sessionData.todos = this.todoManager.getItems();
+    }
+
+    // Update name from first user message if still default
+    if (this.sessionData.name === "New Session") {
+      const firstUser = messages.find((m) => m.role === "user");
+      if (firstUser) {
+        const text =
+          typeof firstUser.content === "string"
+            ? firstUser.content
+            : Array.isArray(firstUser.content)
+              ? (
+                  firstUser.content.find((p) => (p as Record<string, unknown>).type === "text") as Record<
+                    string,
+                    unknown
+                  >
+                )?.text || ""
+              : "";
+        if (typeof text === "string" && text.length > 0) {
+          this.sessionData.name = text.slice(0, 50);
+        }
+      }
+    }
+
+    // Fire and forget — don't block the agent on session save
+    this.sessionStore.save(this.sessionData).catch((err) => {
+      this.log?.warn("agent", "Failed to save session", err);
+    });
   }
 
   /**

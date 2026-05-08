@@ -2,11 +2,11 @@
  * Auto Compaction (Layer 2) - LLM-based conversation compression.
  *
  * When estimated tokens exceed the configured threshold:
- * 1. Save full conversation transcript to disk (JSONL format)
- * 2. Use a subagent to generate a summary of the conversation
- * 3. Replace messages with compressed summary + acknowledgment
+ * 1. Use a subagent to generate a summary of the conversation
+ * 2. Replace messages with compressed summary + acknowledgment
  *
  * This allows agents to work indefinitely by compressing context strategically.
+ * Session persistence (save/restore) is handled by the session store separately.
  *
  * The summarization is done via a subagent with:
  * - No tools (pure summarization task)
@@ -20,7 +20,7 @@ import { runSubagent } from "../subagent/subagent.js";
 import { buildCompactionPrompt, COMPACTION_SYSTEM_PROMPT, type CompactionTodoItem } from "./compaction-prompt.js";
 import { estimateMessageTokens, estimateTokens } from "./token-estimator.js";
 
-import type { CompactionConfig, CompactionResult, TranscriptEntry } from "./types.js";
+import type { CompactionConfig, CompactionResult } from "./types.js";
 import type { Sandbox } from "../../environment/types.js";
 import type { ModelMessage } from "ai";
 
@@ -134,15 +134,6 @@ function findCutPoint(messages: ModelMessage[], keepRecentTokens: number): numbe
   return 0;
 }
 
-/**
- * Generate a timestamped filename for transcripts.
- */
-function generateTranscriptFilename(): string {
-  const now = new Date();
-  const timestamp = now.toISOString().replace(/[:.]/g, "-");
-  return `transcript_${timestamp}.jsonl`;
-}
-
 // ============================================================================
 // Public API
 // ============================================================================
@@ -182,60 +173,6 @@ export function shouldAutoCompact(
   // Otherwise estimate from messages
   const estimatedTokens = estimateTokens(tokensOrMessages);
   return estimatedTokens >= tokenThreshold;
-}
-
-/**
- * Save conversation transcript to disk.
- *
- * Saves messages as JSONL (one JSON line per message) for easy streaming reads.
- * Creates the transcript directory if it doesn't exist.
- *
- * @param messages - Messages to save
- * @param config - Compaction configuration
- * @param sandbox - Sandbox for filesystem access
- * @returns Path to the saved transcript file
- *
- * @example
- * ```typescript
- * const transcriptPath = await saveTranscript(messages, config, sandbox);
- * // Returns: ".transcripts/transcript_2024-01-15T10-30-00-000Z.jsonl"
- * ```
- */
-export async function saveTranscript(
-  messages: ModelMessage[],
-  config: Partial<CompactionConfig>,
-  sandbox: Sandbox
-): Promise<string> {
-  const { transcriptDir = ".transcripts" } = config;
-  const fs = sandbox.filesystem;
-
-  // Ensure transcript directory exists
-  const dirExists = await fs.exists(transcriptDir);
-  if (!dirExists) {
-    await fs.mkdir(transcriptDir);
-  }
-
-  // Generate filename and path
-  const filename = generateTranscriptFilename();
-  const filePath = `${transcriptDir}/${filename}`;
-
-  // Convert messages to JSONL format
-  const lines: string[] = [];
-  const timestamp = new Date().toISOString();
-
-  for (const message of messages) {
-    const entry: TranscriptEntry = {
-      timestamp,
-      role: message.role,
-      content: message.content,
-    };
-    lines.push(JSON.stringify(entry));
-  }
-
-  // Write to file
-  await fs.writeFile(filePath, lines.join("\n"));
-
-  return filePath;
 }
 
 /**
@@ -334,17 +271,17 @@ Continue if you have next steps, or stop and ask for clarification if you are un
  * Perform auto compaction on messages.
  *
  * This is the main entry point for Layer 2 compaction:
- * 1. Save transcript to disk (always, for safety)
- * 2. Summarize conversation via subagent (including any active todos)
- * 3. Return compressed messages
+ * 1. Summarize conversation via subagent (including any active todos)
+ * 2. Return compressed messages
  *
- * If compaction fails after retries, returns the ORIGINAL messages with an error flag.
+ * If compaction fails, returns the ORIGINAL messages with an error flag.
  * This ensures the user never loses their conversation context due to compaction errors.
+ * Session persistence is handled separately by the session store.
  *
  * @param messages - Current messages array
  * @param config - Compaction configuration
  * @param parentAgentId - Parent agent ID for spawning summarization subagent
- * @param sandbox - Sandbox for filesystem access
+ * @param sandbox - Sandbox (kept for API compatibility)
  * @param options - Optional summarization options (focus, todos)
  * @returns Compaction result with compressed messages (or original messages if failed)
  *
@@ -353,16 +290,9 @@ Continue if you have next steps, or stop and ask for clarification if you are un
  * const result = await autoCompact(messages, config, "agent-123", sandbox);
  * if (result.compacted) {
  *   messages = result.messages; // Use compressed messages
- *   console.log(`Saved transcript to ${result.transcriptPath}`);
  * } else if (result.error) {
  *   console.error(`Compaction failed: ${result.error}`);
- *   // result.messages contains original messages - nothing lost!
  * }
- *
- * // With todos included
- * const result = await autoCompact(messages, config, "agent-123", sandbox, {
- *   todos: [{ content: "Add tests", status: "pending", priority: "high" }]
- * });
  * ```
  */
 export async function autoCompact(
@@ -374,7 +304,6 @@ export async function autoCompact(
 ): Promise<CompactionResult & { messages: ModelMessage[] }> {
   const { keepRecentTokens = 20000 } = config;
   const tokensBefore = estimateTokens(messages);
-  let transcriptPath: string | undefined;
 
   // Find cut point: keep recent tokens, summarize the rest
   const cutIndex = findCutPoint(messages, keepRecentTokens);
@@ -394,14 +323,6 @@ export async function autoCompact(
   const keptMessages = messages.slice(cutIndex);
 
   try {
-    // Save transcript before compression (always do this for safety)
-    transcriptPath = await saveTranscript(messages, config, sandbox);
-  } catch (error) {
-    // If transcript save fails, log but continue - it's not critical
-    console.error("Failed to save transcript:", error);
-  }
-
-  try {
     // Generate summary via subagent with optional focus and todos
     const summary = await summarizeConversation(summaryMessages, parentAgentId, options);
 
@@ -415,7 +336,6 @@ export async function autoCompact(
       tokensBefore,
       tokensAfter,
       type: "auto",
-      transcriptPath,
       summary,
       messages: compactedMessages,
     };
@@ -428,7 +348,6 @@ export async function autoCompact(
       tokensBefore,
       tokensAfter: tokensBefore,
       type: "auto",
-      transcriptPath,
       error: `Compaction failed: ${errorMessage}. Original messages preserved.`,
       messages,
     };

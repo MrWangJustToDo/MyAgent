@@ -387,7 +387,7 @@ The project implements a **three-layer context compaction system** for infinite 
 | Layer | Name | Trigger | Action |
 |-------|------|---------|--------|
 | Layer 1 | `micro_compact` | Every LLM call | Replace old tool results with placeholders |
-| Layer 2 | `auto_compact` | Token threshold exceeded | Save transcript + LLM summarization |
+| Layer 2 | `auto_compact` | Token threshold exceeded | LLM summarization |
 | Layer 3 | `compact` tool | Manual agent trigger | Same as auto_compact |
 
 ### Layer 1: Micro Compaction
@@ -408,12 +408,11 @@ finalMessages = microCompact(finalMessages, this.compactionConfig || {});
 Triggers in `createPrepareStep()` when estimated tokens exceed threshold:
 1. Logs compaction trigger with token count and threshold
 2. Sets agent status to "compacting"
-3. Saves full conversation to `.transcripts/transcript_{timestamp}.jsonl`
-4. Gets incomplete todos from TodoManager
-5. Uses LLM to generate structured summary **including incomplete todos**
-6. Replaces all messages with summary + acknowledgment
-7. Resets context usage counters
-8. Returns updated messages to continue the conversation
+3. Gets incomplete todos from TodoManager
+4. Uses LLM to generate structured summary **including incomplete todos**
+5. Replaces all messages with summary + acknowledgment
+6. Resets context usage counters
+7. Returns updated messages to continue the conversation
 
 ```typescript
 // Inside createPrepareStep() callback
@@ -485,10 +484,8 @@ const agent = await agentManager.createManagedAgent({
   rootPath: "/project",
   languageModel: model,
   compaction: {
-    enabled: true,               // Default: true
     tokenThreshold: 100000,      // Default: 100000 (~100k tokens)
     keepRecentToolResults: 3,    // Default: 3
-    transcriptDir: ".transcripts", // Default: ".transcripts"
     minToolResultSize: 100,      // Default: 100 chars
   },
 });
@@ -515,19 +512,6 @@ console.log(`Estimated tokens: ${estimated}`);
 ```
 
 Token estimation uses: `tokens ≈ characters / 4`
-
-### Transcript Storage
-
-When compaction occurs, full conversation is saved to JSONL:
-
-```
-.transcripts/
-├── transcript_2024-01-15T10-30-00-000Z.jsonl
-├── transcript_2024-01-15T14-45-30-500Z.jsonl
-└── ...
-```
-
-Each line is a JSON object: `{ timestamp, role, content }`
 
 ### Architecture
 

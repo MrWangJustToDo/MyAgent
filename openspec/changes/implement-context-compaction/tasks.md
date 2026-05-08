@@ -2,7 +2,7 @@
 
 - [x] 1.1 Create `packages/core/src/agent/compaction/types.ts` with CompactionConfig, CompactionResult interfaces
 - [x] 1.2 Add Zod schemas for compaction configuration validation
-- [x] 1.3 Define default compaction settings (threshold=100000, keepRecent=3, transcriptDir=".transcripts")
+- [x] 1.3 Define default compaction settings (threshold=100000, keepRecent=3)
 - [x] 1.4 Export types from `packages/core/src/agent/compaction/index.ts`
 
 ## 2. Token Estimation
@@ -29,7 +29,7 @@
 
 - [x] 5.1 Create `packages/core/src/agent/compaction/auto-compact.ts`
 - [x] 5.2 Implement `shouldAutoCompact(messages, config)` threshold check
-- [x] 5.3 Implement `saveTranscript(messages, config, sandbox)` to write JSONL file
+- [x] 5.3 ~~Implement `saveTranscript(messages, config, sandbox)` to write JSONL file~~ (removed: replaced by session store)
 - [x] 5.4 Implement `summarizeConversation(messages, model, focus?)` using LLM
 - [x] 5.5 Implement `autoCompact(messages, config, model, sandbox)` full flow
 - [x] 5.6 Return compressed messages (summary + acknowledgment)

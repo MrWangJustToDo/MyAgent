@@ -326,6 +326,16 @@ export class TodoManager {
   // ============================================================================
 
   /**
+   * Restore todo items from a saved session (bypasses validation).
+   */
+  restoreTodos(items: TodoItem[]): void {
+    this.items = [...items];
+    this.roundsSinceUpdate = 0;
+    this.touch();
+    this.notifyListeners();
+  }
+
+  /**
    * Clear all todos.
    */
   clear(): void {

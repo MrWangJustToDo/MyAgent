@@ -121,11 +121,9 @@ export {
   // Types and schemas
   compactionConfigSchema,
   compactionResultSchema,
-  transcriptEntrySchema,
   type CompactionConfig,
   type CompactionConfigInput,
   type CompactionResult,
-  type TranscriptEntry,
   // Defaults
   DEFAULT_COMPACTION_CONFIG,
   createCompactionConfig,
@@ -139,7 +137,6 @@ export {
   microCompact,
   // Auto compaction (Layer 2)
   shouldAutoCompact,
-  saveTranscript,
   summarizeConversation,
   autoCompact,
   createCompactedMessages,
@@ -152,6 +149,17 @@ export {
   type CompactToolConfig,
   type CompactOutput,
 } from "./tools/compact-tool.js";
+
+// Session exports
+export {
+  SessionStore,
+  SESSION_DIR,
+  SESSION_VERSION,
+  sessionMetaSchema,
+  type SessionData,
+  type SessionMeta,
+  type ResumeResult,
+} from "./session";
 
 // MCP exports
 export {

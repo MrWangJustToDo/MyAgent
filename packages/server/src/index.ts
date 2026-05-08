@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { serve } from "@hono/node-server";
+import { agentManager } from "@my-agent/core";
 import { createAgentUIStreamResponse } from "ai";
 import "dotenv/config";
 import { Hono } from "hono";
@@ -107,6 +108,10 @@ app.post("/api/chat", async (c) => {
       abortSignal: currentAbortController.signal,
       onFinish: () => {
         currentAbortController = null;
+        // Persist UIMessages from the client to session store
+        if (agent && messages) {
+          agent.updateSessionUIMessages(messages);
+        }
       },
     });
   } catch (err) {
@@ -136,6 +141,38 @@ app.post("/api/chat/stop", (c) => {
     return c.json({ stopped: true });
   }
   return c.json({ stopped: false });
+});
+
+// ============================================================================
+// Session Endpoints
+// ============================================================================
+
+app.get("/api/sessions", async (c) => {
+  if (!agent) return c.json({ error: "Agent not ready" }, 503);
+  const store = agent.getSessionStore();
+  if (!store) return c.json([]);
+  const sessions = await store.list();
+  return c.json(sessions);
+});
+
+app.get("/api/sessions/:id", async (c) => {
+  if (!agent) return c.json({ error: "Agent not ready" }, 503);
+  const store = agent.getSessionStore();
+  if (!store) return c.json({ error: "Session store not available" }, 500);
+  const session = await store.load(c.req.param("id"));
+  if (!session) return c.json({ error: "Session not found" }, 404);
+  return c.json(session);
+});
+
+app.post("/api/sessions/:id/resume", async (c) => {
+  if (!agent) return c.json({ error: "Agent not ready" }, 503);
+  try {
+    const result = await agentManager.resumeSession(agent.id, c.req.param("id"));
+    return c.json(result);
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    return c.json({ error: error.message }, 400);
+  }
 });
 
 // ============================================================================

@@ -27,4 +27,3 @@ The context window is finite. A single file read can cost ~4000 tokens. After re
 - `packages/core/src/agent/loop/base.ts` - Integrate compaction in message preparation
 - `packages/core/src/agent/agent-context/` - Add token tracking and estimation
 - `packages/core/src/agent/tools/` - New `compact` tool
-- `.transcripts/` directory - Storage for compressed conversation transcripts

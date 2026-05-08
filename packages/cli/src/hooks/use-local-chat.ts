@@ -45,6 +45,10 @@ export interface UseLocalChatConfig {
   apiKey?: string;
   /** Path to MCP config file (relative to rootPath) */
   mcpConfigPath?: string;
+  /** Resume the most recent session */
+  continueSession?: boolean;
+  /** Resume a specific session by ID or name */
+  resumeSession?: string;
 }
 
 /**
@@ -137,7 +141,18 @@ export interface UseLocalChatReturn {
  * ```
  */
 export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
-  const { model, url, rootPath, systemPrompt, maxIterations = 10, provider = "ollama", apiKey, mcpConfigPath } = config;
+  const {
+    model,
+    url,
+    rootPath,
+    systemPrompt,
+    maxIterations = 10,
+    provider = "ollama",
+    apiKey,
+    mcpConfigPath,
+    continueSession,
+    resumeSession,
+  } = config;
 
   // Connection state
   const [initLoading, setInitLoading] = useState(true);
@@ -160,7 +175,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
       setInitError(null);
 
       try {
-        const agent = await createAgent({
+        const { agent, initialMessages } = await createAgent({
           model,
           url,
           rootPath,
@@ -169,6 +184,8 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
           provider,
           apiKey,
           mcpConfigPath,
+          continueSession,
+          resumeSession,
         });
 
         // Create PatchedDirectChatTransport with the agent
@@ -182,7 +199,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
         chatRef.current = new Chat<UIMessage>({
           id: generateId("chat"),
           transport: transport,
-          messages: [],
+          messages: initialMessages ?? [],
           sendAutomaticallyWhen(options) {
             return lastAssistantMessageIsCompleteWithApprovalResponses(options);
           },
@@ -216,6 +233,18 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
   useEffect(() => {
     forceUpdate();
   }, [chatHelpers.messages, agentError]);
+
+  // Persist UIMessages to session store after each completed interaction
+  const prevStatusRef = useRef(chatHelpers.status);
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = chatHelpers.status;
+    if ((prev === "streaming" || prev === "submitted") && chatHelpers.status === "ready") {
+      if (agent && chatHelpers.messages.length > 0) {
+        agent.updateSessionUIMessages(chatHelpers.messages as UIMessage[]);
+      }
+    }
+  }, [chatHelpers.status, chatHelpers.messages, agent]);
 
   const stop = () => {
     chatHelpers.stop();

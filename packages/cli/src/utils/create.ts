@@ -15,8 +15,13 @@ import { useAgentLog } from "../hooks/use-agent-log";
 import { useAgentSandbox } from "../hooks/use-agent-sandbox";
 
 import type { CliAgentConfig } from "../hooks";
-import type { Agent, AgentContext, LanguageModel } from "@my-agent/core";
-import type { ToolSet } from "ai";
+import type { Agent, AgentContext, LanguageModel, ResumeResult } from "@my-agent/core";
+import type { ToolSet, UIMessage } from "ai";
+
+export interface CreateAgentResult {
+  agent: Agent;
+  initialMessages?: UIMessage[];
+}
 
 export const createAgent = async ({
   model,
@@ -27,6 +32,8 @@ export const createAgent = async ({
   provider,
   apiKey,
   mcpConfigPath,
+  continueSession,
+  resumeSession,
 }: {
   model: CliAgentConfig["model"];
   url: CliAgentConfig["url"];
@@ -36,7 +43,9 @@ export const createAgent = async ({
   provider: CliAgentConfig["provider"];
   apiKey?: CliAgentConfig["apiKey"];
   mcpConfigPath?: CliAgentConfig["mcpConfigPath"];
-}) => {
+  continueSession?: boolean;
+  resumeSession?: string;
+}): Promise<CreateAgentResult> => {
   let languageModel: LanguageModel | null = null;
 
   let extendTools: ToolSet = {};
@@ -66,6 +75,7 @@ export const createAgent = async ({
       "You are a helpful coding assistant. You can read, write, and modify files, run commands in bash, and help with programming tasks.",
     maxIterations,
     mcpConfigPath: mcpConfigPath || undefined,
+    skipSessionCreate: !!(continueSession || resumeSession),
     setUp: (instance: (Agent | AgentContext) & { ["$$symbol"]?: symbol }) => {
       if (instance["$$symbol"]) return instance;
       instance["$$symbol"] = Symbol.for("patch");
@@ -103,5 +113,19 @@ export const createAgent = async ({
   useAgentSandbox.getActions().setSandbox(toRaw(agent.getSandbox()));
   useTodoManager.getActions().setManager(toRaw(todoManager ?? null));
 
-  return agent;
+  // Handle session resume
+  let initialMessages: UIMessage[] | undefined;
+  if (continueSession || resumeSession) {
+    let result: ResumeResult | null = null;
+    if (continueSession) {
+      result = await agentManager.continueLatestSession(agent.id);
+    } else if (resumeSession) {
+      result = await agentManager.resumeSession(agent.id, resumeSession);
+    }
+    if (result) {
+      initialMessages = result.uiMessages;
+    }
+  }
+
+  return { agent, initialMessages };
 };

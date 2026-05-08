@@ -29,6 +29,7 @@ web-ext.config.ts
 .env
 */.env
 .transcripts
+.sessions
 .claude
 .mcp.json
 .agents

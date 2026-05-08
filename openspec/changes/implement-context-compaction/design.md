@@ -52,9 +52,7 @@ Current architecture:
 
 ### 4. Transcript Storage
 
-**Decision:** Save transcripts to `.transcripts/` directory relative to rootPath with timestamped JSONL files.
-
-**Rationale:** Matches reference implementation. JSONL for easy streaming writes. Timestamps for uniqueness and ordering.
+> **Note:** Transcript storage has been removed. Session persistence is now handled by the session store (`.sessions/`).
 
 ### 5. Summarization Prompt
 
@@ -103,11 +101,10 @@ compaction?: {
   enabled?: boolean;           // default: true
   tokenThreshold?: number;     // default: 100000
   keepRecentToolResults?: number;  // default: 3
-  transcriptDir?: string;      // default: ".transcripts"
 }
 ```
 
-**Rationale:** Configurable thresholds, can disable for testing, customizable transcript location.
+**Rationale:** Configurable thresholds, can disable for testing.
 
 ## Risks / Trade-offs
 

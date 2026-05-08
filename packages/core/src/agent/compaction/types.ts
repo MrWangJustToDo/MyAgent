@@ -21,8 +21,6 @@ export const compactionConfigSchema = z.object({
   tokenThreshold: z.number().int().positive().default(100000),
   /** Number of recent tool results to preserve in micro-compact (default: 3) */
   keepRecentToolResults: z.number().int().nonnegative().default(3),
-  /** Directory for transcript storage relative to rootPath (default: ".transcripts") */
-  transcriptDir: z.string().default(".transcripts"),
   /** Minimum size of tool result to consider for compaction (default: 100 chars) */
   minToolResultSize: z.number().int().nonnegative().default(100),
   /** Number of recent tokens to keep after compaction (default: 20000) */
@@ -41,24 +39,10 @@ export const compactionResultSchema = z.object({
   tokensAfter: z.number().int().nonnegative(),
   /** Type of compaction performed */
   type: z.enum(["micro", "auto", "manual"]).optional(),
-  /** Path to transcript file if saved */
-  transcriptPath: z.string().optional(),
   /** Summary generated if auto/manual compaction */
   summary: z.string().optional(),
   /** Error message if compaction failed */
   error: z.string().optional(),
-});
-
-/**
- * Schema for transcript entry (one message per line in JSONL).
- */
-export const transcriptEntrySchema = z.object({
-  /** Timestamp when the message was recorded */
-  timestamp: z.string(),
-  /** Message role */
-  role: z.string(),
-  /** Message content (can be complex for tool calls) */
-  content: z.unknown(),
 });
 
 // ============================================================================
@@ -80,11 +64,6 @@ export type CompactionConfigInput = z.input<typeof compactionConfigSchema>;
  */
 export type CompactionResult = z.infer<typeof compactionResultSchema>;
 
-/**
- * A single entry in a transcript file.
- */
-export type TranscriptEntry = z.infer<typeof transcriptEntrySchema>;
-
 // ============================================================================
 // Defaults
 // ============================================================================
@@ -95,7 +74,6 @@ export type TranscriptEntry = z.infer<typeof transcriptEntrySchema>;
 export const DEFAULT_COMPACTION_CONFIG: CompactionConfig = {
   tokenThreshold: 100000,
   keepRecentToolResults: 3,
-  transcriptDir: ".transcripts",
   minToolResultSize: 100,
   keepRecentTokens: 20000,
 };

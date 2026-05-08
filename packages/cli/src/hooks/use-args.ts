@@ -1,7 +1,7 @@
 import { DEFAULT_OLLAMA_URL } from "@my-agent/core";
 import { createState } from "reactivity-store";
 
-import { parseArgs, getFlagString, getFlagNumber, getFlagBoolean } from "../utils/args.js";
+import { parseArgs, getFlag, getFlagString, getFlagNumber, getFlagBoolean } from "../utils/args.js";
 
 import type { ParsedArgs } from "../utils/args.js";
 
@@ -37,6 +37,10 @@ export interface CliAgentConfig {
   apiKey: string;
   /** Path to MCP config file (relative to rootPath). Defaults to ".opencode/mcp.json" */
   mcpConfigPath: string;
+  /** Resume the most recent session (--continue flag) */
+  continueSession: boolean;
+  /** Resume a specific session by ID or name (--resume flag) */
+  resumeSession: string;
 }
 
 // ============================================================================
@@ -202,6 +206,8 @@ export const useArgs = createState(
       provider: DEFAULT_PROVIDER,
       apiKey: "",
       mcpConfigPath: "",
+      continueSession: false,
+      resumeSession: "",
     } as CliAgentConfig,
     /** Whether args have been initialized */
     initialized: false,
@@ -274,6 +280,16 @@ export const useArgs = createState(
         const envMcpConfig = getEnv("MCP_CONFIG_PATH");
         state.config.mcpConfigPath = getFlagString(parsed, envMcpConfig, "mcp-config");
 
+        // Session resume flags
+        state.config.continueSession = getFlagBoolean(parsed, "continue", "c");
+        const resumeFlag = getFlag(parsed, "resume", "r");
+        if (typeof resumeFlag === "string") {
+          state.config.resumeSession = resumeFlag;
+        } else if (resumeFlag === true) {
+          // --resume without value: show session picker
+          state.config.resumeSession = "__picker__";
+        }
+
         state.helpRequested = getFlagBoolean(parsed, "help", "h");
         state.initialized = true;
       },
@@ -313,6 +329,8 @@ export const useArgs = createState(
         state.config.provider = DEFAULT_PROVIDER;
         state.config.apiKey = "";
         state.config.mcpConfigPath = "";
+        state.config.continueSession = false;
+        state.config.resumeSession = "";
         state.helpRequested = false;
         state.initialized = false;
         state.key = "";

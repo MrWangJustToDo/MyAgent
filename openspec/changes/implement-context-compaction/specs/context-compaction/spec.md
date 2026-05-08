@@ -35,15 +35,11 @@ The system SHALL automatically trigger full conversation compression when estima
 
 #### Scenario: Threshold exceeded triggers compression
 - **WHEN** estimated tokens exceed the configured threshold before an LLM call
-- **THEN** the system saves the transcript to disk and summarizes via LLM
+- **THEN** the system summarizes the conversation via LLM
 
 #### Scenario: Below threshold no action
 - **WHEN** estimated tokens are below the configured threshold
 - **THEN** no automatic compression occurs
-
-#### Scenario: Transcript saved before summarization
-- **WHEN** auto compaction is triggered
-- **THEN** the full conversation is saved to a timestamped JSONL file in the transcripts directory
 
 #### Scenario: Messages replaced with summary
 - **WHEN** auto compaction completes summarization
@@ -62,22 +58,7 @@ The system SHALL provide a `compact` tool that allows the agent to manually trig
 
 #### Scenario: Compact tool returns confirmation
 - **WHEN** compact tool completes
-- **THEN** the tool returns a message indicating compression was performed and transcript location
-
-### Requirement: Transcript storage
-The system SHALL preserve full conversation history in transcript files when compression occurs.
-
-#### Scenario: Transcript file created
-- **WHEN** compression (auto or manual) is triggered
-- **THEN** a new file is created at `{transcriptDir}/transcript_{timestamp}.jsonl`
-
-#### Scenario: Transcript contains full history
-- **WHEN** a transcript file is written
-- **THEN** each message is written as a JSON line preserving the complete content
-
-#### Scenario: Transcript directory created if missing
-- **WHEN** compression is triggered and transcriptDir does not exist
-- **THEN** the directory is created automatically
+- **THEN** the tool returns a message indicating compression was performed
 
 ### Requirement: LLM-based summarization
 The system SHALL use the same language model as the agent to generate conversation summaries with a domain-specific prompt.
@@ -99,7 +80,7 @@ The system SHALL support configurable compaction settings in the agent configura
 
 #### Scenario: Default configuration
 - **WHEN** no compaction config is provided
-- **THEN** defaults are used: enabled=true, tokenThreshold=100000, keepRecentToolResults=3, transcriptDir=".transcripts"
+- **THEN** defaults are used: enabled=true, tokenThreshold=100000, keepRecentToolResults=3
 
 #### Scenario: Custom threshold
 - **WHEN** compaction config specifies `tokenThreshold: 50000`
@@ -108,10 +89,6 @@ The system SHALL support configurable compaction settings in the agent configura
 #### Scenario: Compaction disabled
 - **WHEN** compaction config specifies `enabled: false`
 - **THEN** no automatic compaction occurs (micro or auto)
-
-#### Scenario: Custom transcript directory
-- **WHEN** compaction config specifies `transcriptDir: "my-transcripts"`
-- **THEN** transcripts are saved to the specified directory
 
 ### Requirement: Integration with agent loop
 The system SHALL integrate compaction into the message preparation phase before each LLM call.

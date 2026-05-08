@@ -7,6 +7,7 @@ import { createCompactionConfig } from "../agent/compaction/types.js";
 import { Agent } from "../agent/loop/Agent.js";
 import { loadMcpConfig } from "../agent/mcp/config.js";
 import { McpManager } from "../agent/mcp/manager.js";
+import { SessionStore } from "../agent/session/session-store.js";
 import { SkillRegistry } from "../agent/skills/skill-registry.js";
 import { TodoManager } from "../agent/todo-manager";
 import { createCompactTool } from "../agent/tools/compact-tool.js";
@@ -19,8 +20,9 @@ import { toolsManager } from "./manager-tools.js";
 
 import type { CompactionConfigInput } from "../agent/compaction/types.js";
 import type { AgentConfig, ToolSet } from "../agent/loop/Agent.js";
+import type { ResumeResult, SessionData } from "../agent/session/types.js";
 import type { Sandbox } from "../environment";
-import type { LanguageModel } from "ai";
+import type { LanguageModel, UIMessage } from "ai";
 
 // ============================================================================
 // Types & Schemas
@@ -76,6 +78,8 @@ export type ManagedAgentConfig<T = Agent | AgentContext> = AgentConfig & {
   compaction?: CompactionConfigInput;
   /** Path to MCP config file (relative to rootPath). Defaults to ".opencode/mcp.json" */
   mcpConfigPath?: string;
+  /** Skip auto-creating a new session (set true when resuming an existing session) */
+  skipSessionCreate?: boolean;
 };
 
 /** Agent instance managed by AgentManager */
@@ -227,6 +231,7 @@ export class AgentManager {
       skillDirs,
       compaction,
       mcpConfigPath,
+      skipSessionCreate,
       ...restConfig
     } = config;
 
@@ -300,7 +305,6 @@ export class AgentManager {
           log.info("agent", "Compaction completed", {
             tokensBefore: result.tokensBefore,
             tokensAfter: result.tokensAfter,
-            transcriptPath: result.transcriptPath,
           });
         },
       });
@@ -315,6 +319,20 @@ export class AgentManager {
         if (Object.keys(mcpTools).length > 0) {
           agent.addTools(mcpTools);
         }
+      }
+    }
+
+    // Session persistence (root agents only)
+    if (!parentId) {
+      const sessionStore = new SessionStore(sandbox.filesystem);
+      agent.setSessionStore(sessionStore);
+
+      if (!skipSessionCreate) {
+        const session = await sessionStore.create({
+          provider: languageModel.provider ?? "unknown",
+          model: restConfig.model,
+        });
+        agent.setSessionData(session);
       }
     }
 
@@ -421,6 +439,81 @@ export class AgentManager {
     }
 
     this.agents.delete(id);
+  }
+
+  /**
+   * Resume a session by ID. Restores compactMessages, usage, and todos into the agent.
+   * Returns UIMessages for the client to display.
+   */
+  async resumeSession(agentId: string, sessionId: string): Promise<ResumeResult> {
+    const managed = this.agents.get(agentId);
+    if (!managed) throw new Error(`Agent not found: ${agentId}`);
+
+    const { agent, context, todoManager } = managed;
+    const store = agent.getSessionStore();
+    if (!store) throw new Error("Session store not available");
+
+    const session = await store.load(sessionId);
+    if (!session) throw new Error(`Session not found: ${sessionId}`);
+
+    // Restore compactMessages into context (what LLM will see)
+    context.setCompactMessages(session.compactMessages);
+    context.setMessages(session.compactMessages);
+
+    // Restore usage
+    if (session.usage) {
+      context.updateUsage(session.usage);
+    }
+
+    // Restore todos
+    if (session.todos?.length && todoManager) {
+      todoManager.restoreTodos(session.todos);
+    }
+
+    // Update agent's session reference
+    agent.setSessionData(session);
+
+    return {
+      uiMessages: session.uiMessages as UIMessage[],
+      session: {
+        id: session.id,
+        name: session.name,
+        version: session.version,
+        provider: session.provider,
+        model: session.model,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+      },
+    };
+  }
+
+  /**
+   * Continue the most recent session. Returns null if no sessions exist.
+   */
+  async continueLatestSession(agentId: string): Promise<ResumeResult | null> {
+    const managed = this.agents.get(agentId);
+    if (!managed) throw new Error(`Agent not found: ${agentId}`);
+
+    const store = managed.agent.getSessionStore();
+    if (!store) throw new Error("Session store not available");
+
+    const latest = await store.getLatest();
+    if (!latest) return null;
+
+    return this.resumeSession(agentId, latest.id);
+  }
+
+  /**
+   * List all sessions for a given agent's session store.
+   */
+  async listSessions(agentId: string): Promise<SessionData[]> {
+    const managed = this.agents.get(agentId);
+    if (!managed) throw new Error(`Agent not found: ${agentId}`);
+
+    const store = managed.agent.getSessionStore();
+    if (!store) return [];
+
+    return (await store.list()) as unknown as SessionData[];
   }
 
   /**

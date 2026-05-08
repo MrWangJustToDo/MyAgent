@@ -28,12 +28,10 @@ export {
   // Schemas
   compactionConfigSchema,
   compactionResultSchema,
-  transcriptEntrySchema,
   // Types
   type CompactionConfig,
   type CompactionConfigInput,
   type CompactionResult,
-  type TranscriptEntry,
   // Defaults
   DEFAULT_COMPACTION_CONFIG,
   createCompactionConfig,
@@ -49,10 +47,4 @@ export { COMPACTION_PROMPT, COMPACTION_SYSTEM_PROMPT, buildCompactionPrompt } fr
 export { microCompact } from "./micro-compact.js";
 
 // Auto compaction (Layer 2)
-export {
-  shouldAutoCompact,
-  saveTranscript,
-  summarizeConversation,
-  autoCompact,
-  createCompactedMessages,
-} from "./auto-compact.js";
+export { shouldAutoCompact, summarizeConversation, autoCompact, createCompactedMessages } from "./auto-compact.js";

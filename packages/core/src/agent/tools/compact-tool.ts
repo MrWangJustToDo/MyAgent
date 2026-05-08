@@ -72,8 +72,6 @@ export const compactOutputSchema = z.object({
   tokensBefore: z.number().describe("Estimated tokens before compaction"),
   /** Estimated tokens after compaction */
   tokensAfter: z.number().describe("Estimated tokens after compaction"),
-  /** Path to the saved transcript file */
-  transcriptPath: z.string().describe("Path to the saved transcript file"),
   /** Summary that was generated */
   summary: z.string().describe("The generated conversation summary"),
   /** Compression ratio achieved */
@@ -143,7 +141,6 @@ IMPORTANT: After compaction, read the summary carefully and use the todo tool to
             success: false,
             tokensBefore: 0,
             tokensAfter: 0,
-            transcriptPath: "",
             summary: "",
             compressionRatio: "0%",
             message: "No messages to compact.",
@@ -179,10 +176,9 @@ IMPORTANT: After compaction, read the summary carefully and use the todo tool to
           success: true,
           tokensBefore: result.tokensBefore,
           tokensAfter: result.tokensAfter,
-          transcriptPath: result.transcriptPath || "",
           summary: result.summary || "",
           compressionRatio: `${compressionRatio}%`,
-          message: `Compacted conversation from ~${tokensBefore} to ~${result.tokensAfter} tokens (${compressionRatio}% reduction). Transcript saved to ${result.transcriptPath}.${todoNote}`,
+          message: `Compacted conversation from ~${tokensBefore} to ~${result.tokensAfter} tokens (${compressionRatio}% reduction).${todoNote}`,
         };
       });
     },
