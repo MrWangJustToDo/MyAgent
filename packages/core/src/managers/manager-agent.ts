@@ -3,6 +3,7 @@ import * as path from "path";
 
 import { AgentLog } from "../agent";
 import { AgentContext } from "../agent/agent-context";
+import { repairOrphanedToolMessages } from "../agent/compaction/repair-messages.js";
 import { createCompactionConfig } from "../agent/compaction/types.js";
 import { Agent } from "../agent/loop/Agent.js";
 import { loadMcpConfig } from "../agent/mcp/config.js";
@@ -451,8 +452,10 @@ export class AgentManager {
     if (!session) throw new Error(`Session not found: ${sessionId}`);
 
     // Restore compactMessages into context (what LLM will see)
-    context.setCompactMessages(session.compactMessages);
-    context.setMessages(session.compactMessages);
+    // Repair any orphaned tool messages from a previously saved session
+    const repairedMessages = repairOrphanedToolMessages(session.compactMessages);
+    context.setCompactMessages(repairedMessages);
+    context.setMessages(repairedMessages);
 
     // Restore usage
     if (session.usage) {

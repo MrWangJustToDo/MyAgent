@@ -2,6 +2,7 @@ import { generateText } from "ai";
 
 import { autoCompact } from "../compaction/auto-compact.js";
 import { microCompact } from "../compaction/micro-compact.js";
+import { repairOrphanedToolMessages } from "../compaction/repair-messages.js";
 import { estimateTokens } from "../compaction/token-estimator.js";
 import { createTodoTool } from "../tools";
 
@@ -469,7 +470,8 @@ export class Base {
         }
       }
 
-      finalMessages = this.context?.getCompactMessages() || [];
+      finalMessages = repairOrphanedToolMessages(this.context?.getCompactMessages() || []);
+      this.context?.setCompactMessages(finalMessages);
 
       // Check if auto-compaction (Layer 2) is needed
       if (this.shouldAutoCompact(finalMessages)) {

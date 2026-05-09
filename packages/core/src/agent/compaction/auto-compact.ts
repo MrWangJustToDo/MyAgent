@@ -83,14 +83,30 @@ function stripMediaFromMessages(messages: ModelMessage[]): ModelMessage[] {
 }
 
 /**
+ * Check whether an assistant message contains tool calls.
+ */
+function hasToolCalls(message: ModelMessage): boolean {
+  if (message.role !== "assistant") return false;
+  const content = message.content;
+  if (!Array.isArray(content)) return false;
+  return content.some((part) => {
+    const p = part as Record<string, unknown>;
+    return p.type === "tool-call";
+  });
+}
+
+/**
  * Find the cut point index using a token-budget approach.
  *
  * Walks backward from the end accumulating token estimates until the
  * `keepRecentTokens` budget is exceeded, then finds the nearest valid
- * cut point (a user or assistant message, never a tool message).
+ * cut point that won't orphan tool messages from their assistant.
  *
- * This ensures we always keep a predictable amount of recent context
- * and summarize everything before the cut.
+ * A valid cut point must satisfy:
+ * 1. It's a user or assistant message (never a tool message)
+ * 2. The kept messages (from cutIndex onward) don't start with tool
+ *    messages that belong to a summarized assistant
+ * 3. An assistant(tool_calls) message isn't separated from its tool results
  */
 function findCutPoint(messages: ModelMessage[], keepRecentTokens: number): number {
   if (messages.length === 0) return 0;
@@ -112,21 +128,42 @@ function findCutPoint(messages: ModelMessage[], keepRecentTokens: number): numbe
     return 0;
   }
 
-  // Find the nearest valid cut point at or after rawCutIndex.
-  // Valid = user or assistant message (never cut at a tool message,
-  // which would orphan it from its preceding assistant).
+  // Find a valid cut point at or after rawCutIndex.
+  // Must be a user message, or an assistant message that is NOT followed
+  // by tool results that would get orphaned.
   for (let i = rawCutIndex; i < messages.length; i++) {
     const role = messages[i].role;
-    if (role === "user" || role === "assistant") {
+    if (role === "tool") continue;
+
+    if (role === "user") {
+      return i;
+    }
+
+    if (role === "assistant") {
+      // If this assistant has tool_calls, we must include it AND all its
+      // subsequent tool results in the kept portion — so this is a valid cut.
+      // If it doesn't have tool_calls, it's also safe to cut here.
       return i;
     }
   }
 
-  // Fallback: if no valid cut found forward, try backward
+  // Backward fallback: find the nearest user or assistant going back,
+  // but make sure we don't land just after an assistant(tool_calls)
+  // whose tool results would become the start of keptMessages.
   for (let i = rawCutIndex - 1; i >= 0; i--) {
     const role = messages[i].role;
     if (role === "user" || role === "assistant") {
-      return i + 1;
+      const candidateCut = i + 1;
+      // Verify the kept portion doesn't start with orphaned tool messages
+      if (candidateCut < messages.length && messages[candidateCut].role === "tool") {
+        // This would orphan tool messages — include the assistant(tool_calls) too
+        if (hasToolCalls(messages[i])) {
+          return i;
+        }
+        // The tool message belongs to an even earlier assistant; keep scanning back
+        continue;
+      }
+      return candidateCut;
     }
   }
 
@@ -319,8 +356,33 @@ export async function autoCompact(
     };
   }
 
-  const summaryMessages = messages.slice(0, cutIndex);
-  const keptMessages = messages.slice(cutIndex);
+  // Walk the cut backward if keptMessages would start with orphaned tool messages.
+  // This is a safety net — findCutPoint should already handle this, but we
+  // guard against edge cases where the message structure is unexpected.
+  let safeCutIndex = cutIndex;
+  while (safeCutIndex > 0 && messages[safeCutIndex].role === "tool") {
+    safeCutIndex--;
+  }
+  // If we moved back and landed on an assistant with tool_calls, include it
+  if (safeCutIndex < cutIndex && safeCutIndex > 0 && messages[safeCutIndex].role !== "user") {
+    // Keep going back to find a user message or assistant without dangling tools
+    while (safeCutIndex > 0 && messages[safeCutIndex].role === "tool") {
+      safeCutIndex--;
+    }
+  }
+  // If safeCutIndex is 0 and it's a tool message, summarize everything
+  if (safeCutIndex === 0 && messages[0].role === "tool") {
+    return {
+      compacted: false,
+      tokensBefore,
+      tokensAfter: tokensBefore,
+      type: "auto",
+      messages,
+    };
+  }
+
+  const summaryMessages = messages.slice(0, safeCutIndex);
+  const keptMessages = messages.slice(safeCutIndex);
 
   try {
     // Generate summary via subagent with optional focus and todos

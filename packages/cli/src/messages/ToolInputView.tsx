@@ -26,6 +26,8 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
 
     if (!content) return null;
 
+    if (part.state === "input-streaming") return null;
+
     const id = part.toolCallId;
 
     return (
@@ -45,6 +47,8 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
 
     if (!content) return null;
 
+    if (part.state === "input-streaming") return null;
+
     const id = part.toolCallId;
 
     return (
@@ -60,6 +64,8 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
   }
 
   if (toolName === "search_replace") {
+    if (part.state === "input-streaming") return null;
+
     const content = part.input as { replacements: Array<{ oldString: string; newString: string }>; path: string };
 
     const id = part.toolCallId;

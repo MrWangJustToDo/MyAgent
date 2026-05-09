@@ -11,3 +11,5 @@ export const useDiffFileCache = createState(() => ({ state: {} as Record<string,
     clear: () => (s.state = {}),
   }),
 });
+
+(globalThis as any).useDiffFileCache = useDiffFileCache;

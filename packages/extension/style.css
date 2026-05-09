@@ -73,3 +73,10 @@ body {
 .markstream-compact li {
   margin: 0.15em 0;
 }
+
+.markstream-compact .table-node {
+  border: 1px solid #393b3c;
+  border-radius: 0.5em;
+  padding: 0.5em;
+  margin: 0.5em 0;
+}

@@ -158,7 +158,7 @@ const DEFAULT_SYSTEM_PROMPT = `You are an elite AI software engineer specializin
 
 **Important**: You are an autonomous expert capable of handling tasks with minimal guidance. Your system prompt is your complete operational manual - use it to guide every decision.`;
 
-const DEFAULT_MAX_ITERATIONS = 20;
+const DEFAULT_MAX_ITERATIONS = 50;
 
 // ============================================================================
 // State Hook

@@ -74,6 +74,7 @@ Constraints:
 - You cannot modify files or create new files
 - You cannot spawn additional subagents
 - Focus on answering the specific question or completing the specific task
+- Do not run more than 40 steps — complete the task efficiently without excessive tool calls
 
 When done, provide a clear summary of what you found or accomplished.`;
 

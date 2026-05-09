@@ -15,11 +15,11 @@
     "postinstall": "wxt prepare && node init.mjs"
   },
   "dependencies": {
-    "@ai-sdk/react": "^3.0.177",
+    "@ai-sdk/react": "^3.0.179",
     "@heroui/react": "2.8.9",
     "@my-react/react": "^0.3.24",
     "@my-react/react-dom": "^0.3.24",
-    "ai": "^6.0.175",
+    "ai": "^6.0.177",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.576.0",
     "markstream-react": "^0.0.47",

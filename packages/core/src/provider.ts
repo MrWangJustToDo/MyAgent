@@ -1,4 +1,5 @@
 import { createDeepSeek } from "@ai-sdk/deepseek";
+import { devToolsMiddleware } from "@ai-sdk/devtools";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { extractReasoningMiddleware, wrapLanguageModel } from "ai";
@@ -160,7 +161,7 @@ export const createDeepSeekModel = (modelName: string, apiKey?: string, baseURL?
     apiKey: resolvedApiKey,
     ...(baseURL ? { baseURL } : {}),
   });
-  return deepseek(modelName);
+  return wrapLanguageModel({ model: deepseek(modelName), middleware: devToolsMiddleware() });
 };
 
 /**

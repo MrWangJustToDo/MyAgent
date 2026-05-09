@@ -36,3 +36,4 @@ web-ext.config.ts
 skills-lock.json
 
 tsconfig.tsbuildinfo
+.devtools
