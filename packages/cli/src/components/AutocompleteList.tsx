@@ -47,6 +47,7 @@ export const AutocompleteList = () => {
           ↓ more below
         </Text>
       )}
+      <Box height={1} flexGrow={1} flexShrink={0} />
     </Box>
   );
 };

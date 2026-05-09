@@ -342,7 +342,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
 
         // Aggregate usage to parent's context
         if (aggregateUsageToParent && parentContext) {
-          parentContext.updateUsage({
+          parentContext.addTotalUsage({
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
             totalTokens: usage.totalTokens,

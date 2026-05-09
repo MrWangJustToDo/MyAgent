@@ -56,6 +56,8 @@ export interface UserInputState {
   selectedAttachment: number;
   /** Error message to display (e.g. file validation failure) */
   inputError: string | null;
+  /** Feedback message from commands (success/info/error) */
+  inputFeedback: { text: string; type: "success" | "info" | "error" } | null;
   /** Next image index to use for placeholder */
   nextImageIndex: number;
 
@@ -79,6 +81,7 @@ const initialState: UserInputState = {
   attachments: [],
   selectedAttachment: -1,
   inputError: null,
+  inputFeedback: null,
   nextImageIndex: 0,
 };
 
@@ -411,6 +414,17 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.inputError = error;
 
       setTimeout(() => (state.inputError = null), 2000);
+    },
+
+    /**
+     * Set a feedback message (success/info/error) from commands
+     */
+    setInputFeedback: (text: string | null, type: "success" | "info" | "error" = "info") => {
+      state.inputFeedback = text ? { text, type } : null;
+
+      if (text) {
+        setTimeout(() => (state.inputFeedback = null), 3000);
+      }
     },
 
     /**

@@ -1,3 +1,5 @@
+import { generateText } from "ai";
+
 import { autoCompact } from "../compaction/auto-compact.js";
 import { microCompact } from "../compaction/micro-compact.js";
 import { estimateTokens } from "../compaction/token-estimator.js";
@@ -56,6 +58,7 @@ export class Base {
   compactionConfig: CompactionConfig | null = null;
   sessionStore: SessionStore | null = null;
   sessionData: SessionData | null = null;
+  private sessionConfig: { provider: string; model: string } | null = null;
   customTools: ToolSet = {};
   builtInTools: ToolSet = {};
 
@@ -197,8 +200,9 @@ export class Base {
     return this.mcpManager;
   }
 
-  setSessionStore(store: SessionStore): void {
+  setSessionStore(store: SessionStore, config: { provider: string; model: string }): void {
     this.sessionStore = store;
+    this.sessionConfig = config;
   }
 
   getSessionStore(): SessionStore | null {
@@ -214,11 +218,46 @@ export class Base {
   }
 
   /**
+   * Lazily create a session on first use (when user sends first message).
+   */
+  private async ensureSession(): Promise<void> {
+    if (this.sessionData || !this.sessionStore || !this.sessionConfig) return;
+    const session = await this.sessionStore.create({
+      provider: this.sessionConfig.provider,
+      model: this.sessionConfig.model,
+    });
+    this.sessionData = session;
+  }
+
+  /**
+   * Generate a concise session title from the first user message using LLM.
+   */
+  private async generateSessionTitle(userMessage: string): Promise<string> {
+    if (!this.model) return userMessage.slice(0, 50);
+    try {
+      const { text } = await generateText({
+        model: this.model,
+        maxOutputTokens: 30,
+        system:
+          "Generate a concise title (3-8 words) for a conversation that starts with the following message. Return ONLY the title, no quotes or punctuation.",
+        prompt: userMessage.slice(0, 500),
+      });
+      return text.trim().slice(0, 80) || userMessage.slice(0, 50);
+    } catch {
+      return userMessage.slice(0, 50);
+    }
+  }
+
+  /**
    * Update stored UIMessages from the client.
    * Called by CLI/extension after each interaction to persist the authoritative UI state.
    */
   updateSessionUIMessages(uiMessages: UIMessage[]): void {
-    if (!this.sessionStore || !this.sessionData) return;
+    if (!this.sessionStore) return;
+    if (!this.sessionData) {
+      this.ensureSession().then(() => this.updateSessionUIMessages(uiMessages));
+      return;
+    }
     this.sessionData.uiMessages = uiMessages;
     this.sessionStore.save(this.sessionData).catch((err) => {
       this.log?.warn("agent", "Failed to save session UIMessages", err);
@@ -435,7 +474,8 @@ export class Base {
       // Check if auto-compaction (Layer 2) is needed
       if (this.shouldAutoCompact(finalMessages)) {
         this.log?.info("agent", "Auto-compaction triggered", {
-          estimatedTokens: this.getCurrentTokens(finalMessages),
+          usage: this.context?.getUsage(),
+          estimatedFullMessages: estimateTokens(finalMessages),
           threshold: this.compactionConfig?.tokenThreshold ?? 100000,
           incompleteTodos: this.todoManager?.getIncompleteTodos().length,
         });
@@ -487,6 +527,12 @@ export class Base {
             !this.model ? { missingModel: true } : { missingSandbox: true }
           );
         }
+      } else {
+        this.log?.agent("skip auto compaction because the tokens are not exceeded the threshold", {
+          usage: this.context?.getUsage(),
+          threshold: this.compactionConfig?.tokenThreshold ?? 100000,
+          incompleteTodos: this.todoManager?.getIncompleteTodos().length,
+        });
       }
 
       return { ...res, messages: this.context?.getCompactMessages() };
@@ -566,7 +612,11 @@ export class Base {
    * UIMessages are stored separately when pushed from the client.
    */
   private saveSession(): void {
-    if (!this.sessionStore || !this.sessionData || !this.context) return;
+    if (!this.sessionStore || !this.context) return;
+    if (!this.sessionData) {
+      this.ensureSession().then(() => this.saveSession());
+      return;
+    }
 
     const messages = this.context.getMessages();
     const compactMessages = this.context.getCompactMessages();
@@ -578,7 +628,7 @@ export class Base {
       this.sessionData.todos = this.todoManager.getItems();
     }
 
-    // Update name from first user message if still default
+    // Auto-generate session title from first user message
     if (this.sessionData.name === "New Session") {
       const firstUser = messages.find((m) => m.role === "user");
       if (firstUser) {
@@ -586,15 +636,15 @@ export class Base {
           typeof firstUser.content === "string"
             ? firstUser.content
             : Array.isArray(firstUser.content)
-              ? (
-                  firstUser.content.find((p) => (p as Record<string, unknown>).type === "text") as Record<
-                    string,
-                    unknown
-                  >
-                )?.text || ""
+              ? firstUser.content.find((p) => p.type === "text")?.text || ""
               : "";
         if (typeof text === "string" && text.length > 0) {
-          this.sessionData.name = text.slice(0, 50);
+          this.generateSessionTitle(text as string).then((title) => {
+            if (this.sessionData && this.sessionStore) {
+              this.sessionData.name = title;
+              this.sessionStore.save(this.sessionData).catch(() => {});
+            }
+          });
         }
       }
     }

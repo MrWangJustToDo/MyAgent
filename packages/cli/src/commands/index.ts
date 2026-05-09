@@ -2,6 +2,8 @@
 import "./compact.js";
 import "./help.js";
 import "./paste.js";
+import "./rename.js";
+import "./resume.js";
 
 export { dispatchCommand, getAllCommands, getCommand } from "./registry.js";
 

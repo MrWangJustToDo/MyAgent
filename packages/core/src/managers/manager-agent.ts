@@ -78,8 +78,6 @@ export type ManagedAgentConfig<T = Agent | AgentContext> = AgentConfig & {
   compaction?: CompactionConfigInput;
   /** Path to MCP config file (relative to rootPath). Defaults to ".opencode/mcp.json" */
   mcpConfigPath?: string;
-  /** Skip auto-creating a new session (set true when resuming an existing session) */
-  skipSessionCreate?: boolean;
 };
 
 /** Agent instance managed by AgentManager */
@@ -231,7 +229,6 @@ export class AgentManager {
       skillDirs,
       compaction,
       mcpConfigPath,
-      skipSessionCreate,
       ...restConfig
     } = config;
 
@@ -325,15 +322,12 @@ export class AgentManager {
     // Session persistence (root agents only)
     if (!parentId) {
       const sessionStore = new SessionStore(sandbox.filesystem);
-      agent.setSessionStore(sessionStore);
-
-      if (!skipSessionCreate) {
-        const session = await sessionStore.create({
-          provider: languageModel.provider ?? "unknown",
-          model: restConfig.model,
-        });
-        agent.setSessionData(session);
-      }
+      agent.setSessionStore(sessionStore, {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        provider: languageModel?.provider ?? "unknown",
+        model: restConfig.model,
+      });
     }
 
     const id = agent.id;

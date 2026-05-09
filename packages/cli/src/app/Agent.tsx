@@ -22,6 +22,7 @@ import { readImageFromClipboard } from "../utils/clipboard.js";
 
 import type { CommandContext } from "../commands";
 import type { AgentLog, Agent as CoreAgent } from "@my-agent/core";
+import type { UIMessage } from "ai";
 
 // ============================================================================
 // Main Agent Component
@@ -51,6 +52,7 @@ export const Agent = () => {
     initError,
     initLoading,
     allPendingApproval,
+    setMessages,
   } = useLocalChat({
     model: config.model,
     url: config.url,
@@ -94,6 +96,7 @@ export const Agent = () => {
     getInputState: () => useUserInput.getReadonlyState(),
     // will trigger update, change to use `getReactiveState`
     getAgent: () => useAgent.getReactiveState().agent as CoreAgent,
+    setMessages: setMessages as (messages: UIMessage[]) => void,
   };
 
   // Handle submit

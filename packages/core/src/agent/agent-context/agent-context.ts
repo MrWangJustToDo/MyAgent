@@ -120,12 +120,26 @@ export class AgentContext {
   updateUsage(t: TokenUsage) {
     const prev = this.usage;
 
+    const prevTotalInputToken = this.totalUsage.inputTokens - prev.inputTokens;
+
     this.usage = {
-      inputTokens: prev.inputTokens + t.inputTokens,
+      inputTokens: t.inputTokens,
       outputTokens: prev.outputTokens + t.outputTokens,
-      totalTokens: prev.totalTokens + t.totalTokens,
+      totalTokens: prev.totalTokens,
     };
 
+    this.usage.totalTokens = this.usage.inputTokens + this.usage.outputTokens;
+
+    this.totalUsage = {
+      inputTokens: prevTotalInputToken + t.inputTokens,
+      outputTokens: this.totalUsage.outputTokens + t.outputTokens,
+      totalTokens: this.totalUsage.totalTokens,
+    };
+
+    this.totalUsage.totalTokens = this.totalUsage.inputTokens + this.totalUsage.outputTokens;
+  }
+
+  addTotalUsage(t: TokenUsage) {
     this.totalUsage = {
       inputTokens: this.totalUsage.inputTokens + t.inputTokens,
       outputTokens: this.totalUsage.outputTokens + t.outputTokens,

@@ -16,9 +16,9 @@ export function getAllCommands(): readonly Command[] {
 
 function handleResult(result: CommandResult, ctx: CommandContext): void {
   if (!result.ok) {
-    ctx.inputActions.setInputError(result.error);
+    ctx.inputActions.setInputFeedback(result.error, "error");
   } else if (result.message) {
-    ctx.inputActions.setInputError(result.message);
+    ctx.inputActions.setInputFeedback(result.message, "success");
   }
 }
 

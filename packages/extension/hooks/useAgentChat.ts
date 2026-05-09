@@ -5,7 +5,7 @@ import {
   getToolName,
   lastAssistantMessageIsCompleteWithApprovalResponses,
 } from "ai";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { useServerConfig } from "./useServerConfig";
 
@@ -66,6 +66,24 @@ export function useAgentChat(): UseAgentChatReturn {
     }
     return all;
   }, [chatHelpers.messages]);
+
+  // Persist UIMessages to server after each completed interaction
+  const prevStatusRef = useRef(chatHelpers.status);
+  const messagesRef = useRef(chatHelpers.messages);
+  messagesRef.current = chatHelpers.messages;
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = chatHelpers.status;
+    if ((prev === "streaming" || prev === "submitted") && chatHelpers.status === "ready") {
+      if (messagesRef.current.length > 0) {
+        fetch(`${url}/api/sessions/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: messagesRef.current }),
+        }).catch(() => {});
+      }
+    }
+  }, [chatHelpers.status, url]);
 
   const sendMessage = (text: string, files?: FileUIPart[]) => {
     if (!text.trim() && (!files || files.length === 0)) return;

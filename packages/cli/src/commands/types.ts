@@ -1,5 +1,6 @@
 import type { useUserInput } from "../hooks/use-user-input.js";
 import type { Agent } from "@my-agent/core";
+import type { UIMessage } from "ai";
 
 /**
  * Context passed to every command's execute function.
@@ -11,6 +12,8 @@ export interface CommandContext {
   getInputState: () => ReturnType<typeof useUserInput.getReadonlyState>;
   /** Get the current agent instance (may be null if not initialized) */
   getAgent: () => Agent | null;
+  /** Set chat messages (for commands that manipulate conversation history) */
+  setMessages?: (messages: UIMessage[]) => void;
 }
 
 /**

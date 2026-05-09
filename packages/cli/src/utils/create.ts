@@ -75,7 +75,6 @@ export const createAgent = async ({
       "You are a helpful coding assistant. You can read, write, and modify files, run commands in bash, and help with programming tasks.",
     maxIterations,
     mcpConfigPath: mcpConfigPath || undefined,
-    skipSessionCreate: !!(continueSession || resumeSession),
     setUp: (instance: (Agent | AgentContext) & { ["$$symbol"]?: symbol }) => {
       if (instance["$$symbol"]) return instance;
       instance["$$symbol"] = Symbol.for("patch");

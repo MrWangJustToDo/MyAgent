@@ -108,10 +108,6 @@ app.post("/api/chat", async (c) => {
       abortSignal: currentAbortController.signal,
       onFinish: () => {
         currentAbortController = null;
-        // Persist UIMessages from the client to session store
-        if (agent && messages) {
-          agent.updateSessionUIMessages(messages);
-        }
       },
     });
   } catch (err) {
@@ -173,6 +169,16 @@ app.post("/api/sessions/:id/resume", async (c) => {
     const error = err instanceof Error ? err : new Error(String(err));
     return c.json({ error: error.message }, 400);
   }
+});
+
+app.post("/api/sessions/messages", async (c) => {
+  if (!agent) return c.json({ error: "Agent not ready" }, 503);
+  const body = await c.req.json();
+  const { messages } = body;
+  if (messages) {
+    agent.updateSessionUIMessages(messages);
+  }
+  return c.json({ ok: true });
 });
 
 // ============================================================================
