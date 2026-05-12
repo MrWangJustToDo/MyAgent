@@ -2,7 +2,7 @@ import { generateText } from "ai";
 
 import { autoCompact } from "../compaction/auto-compact.js";
 import { microCompact } from "../compaction/micro-compact.js";
-import { repairOrphanedToolMessages } from "../compaction/repair-messages.js";
+// import { repairOrphanedToolMessages } from "../compaction/repair-messages.js";
 import { estimateTokens } from "../compaction/token-estimator.js";
 import { createTodoTool } from "../tools";
 
@@ -435,6 +435,8 @@ export class Base {
 
       let finalMessages = res?.messages || [];
 
+      this.context?.setMessages(finalMessages);
+
       // Apply micro compaction (Layer 1) if enabled
       const tokensBefore = estimateTokens(finalMessages);
 
@@ -448,14 +450,17 @@ export class Base {
           tokensAfter,
           reduction: tokensBefore - tokensAfter,
         });
+      } else {
+        this.log?.debug("agent", "Micro compaction not applied", {
+          tokensBefore,
+          tokensAfter,
+        });
       }
-
-      this.context?.setMessages(finalMessages);
 
       // Sync compactMessages to the current message list (what LLM will see).
       // This ensures compactMessages always reflects the actual conversation state
       // regardless of session resume, new requests, or multi-step continuations.
-      this.context?.setCompactMessages(repairOrphanedToolMessages(finalMessages));
+      this.context?.setCompactMessages(finalMessages);
 
       // Check if auto-compaction (Layer 2) is needed
       if (this.shouldAutoCompact(finalMessages)) {
