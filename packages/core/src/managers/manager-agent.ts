@@ -1,9 +1,9 @@
+import { convertToModelMessages, type LanguageModel, type UIMessage } from "ai";
 import * as os from "os";
 import * as path from "path";
 
 import { AgentLog } from "../agent";
 import { AgentContext } from "../agent/agent-context";
-import { repairOrphanedToolMessages } from "../agent/compaction/repair-messages.js";
 import { createCompactionConfig } from "../agent/compaction/types.js";
 import { Agent } from "../agent/loop/Agent.js";
 import { loadMcpConfig } from "../agent/mcp/config.js";
@@ -23,7 +23,6 @@ import type { CompactionConfigInput } from "../agent/compaction/types.js";
 import type { AgentConfig, ToolSet } from "../agent/loop/Agent.js";
 import type { ResumeResult, SessionData } from "../agent/session/types.js";
 import type { Sandbox } from "../environment";
-import type { LanguageModel, UIMessage } from "ai";
 
 // ============================================================================
 // Types & Schemas
@@ -452,10 +451,9 @@ export class AgentManager {
     if (!session) throw new Error(`Session not found: ${sessionId}`);
 
     // Restore compactMessages into context (what LLM will see)
-    // Repair any orphaned tool messages from a previously saved session
-    const repairedMessages = repairOrphanedToolMessages(session.compactMessages);
-    context.setCompactMessages(repairedMessages);
-    context.setMessages(repairedMessages);
+    context.setCompactMessages(session.compactMessages);
+    const messages = await convertToModelMessages(session.uiMessages);
+    context.setMessages(messages.slice(0, session.messageLength));
 
     // Restore usage
     if (session.usage) {

@@ -17,8 +17,10 @@ import { z } from "zod";
  * Schema for compaction configuration.
  */
 export const compactionConfigSchema = z.object({
-  /** Token threshold for auto-compaction (default: 100000) */
+  /** Token threshold (context window size) for auto-compaction (default: 100000) */
   tokenThreshold: z.number().int().positive().default(100000),
+  /** Percentage of tokenThreshold at which compaction triggers (default: 85, like Claude Code's ~83.5%) */
+  compactAtPercent: z.number().min(50).max(99).default(85),
   /** Number of recent tool results to preserve in micro-compact (default: 3) */
   keepRecentToolResults: z.number().int().nonnegative().default(3),
   /** Minimum size of tool result to consider for compaction (default: 100 chars) */

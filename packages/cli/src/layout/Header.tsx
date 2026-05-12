@@ -1,6 +1,4 @@
 import { Box, Text } from "ink";
-import BigText from "ink-big-text";
-import Gradient from "ink-gradient";
 import { useEffect } from "react";
 
 import { FullBox } from "../components/FullBox";
@@ -17,11 +15,27 @@ export const Header = () => {
     if (!model || !path || !name) return;
 
     useStatic.getActions().setStaticHeader(
-      <FullBox flexDirection="column" key="header" marginBottom={1}>
-        {/* Logo */}
-        <Gradient name="rainbow">
-          <BigText text="My Agent" />
-        </Gradient>
+      <FullBox
+        flexDirection="column"
+        key="header"
+        marginBottom={1}
+        borderStyle="round"
+        borderColor="cyan"
+        paddingX={2}
+        paddingY={1}
+      >
+        {/* Logo line */}
+        <Box>
+          <Text color="yellow">⚡</Text>
+          <Text> </Text>
+          <Text bold color="cyan">
+            My
+          </Text>
+          <Text bold color="magenta">
+            Agent
+          </Text>
+          <Text color="gray">  —  AI Coding Agent</Text>
+        </Box>
 
         {/* Info bar */}
         <Box gap={2}>

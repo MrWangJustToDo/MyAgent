@@ -42,6 +42,7 @@ export class SessionStore {
       model: options.model,
       uiMessages: [],
       compactMessages: [],
+      messageLength: 0,
       usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
       todos: [],
       createdAt: now,

@@ -46,6 +46,8 @@ export interface SessionData {
   uiMessages: UIMessage[];
   /** Compacted messages (for LLM context on resume) */
   compactMessages: ModelMessage[];
+  /** Length of the conversation */
+  messageLength: number;
   /** Token usage statistics */
   usage: TokenUsage;
   /** Active todos */

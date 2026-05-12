@@ -337,13 +337,23 @@ export async function autoCompact(
   config: Partial<CompactionConfig>,
   parentAgentId: string,
   sandbox: Sandbox,
-  options?: SummarizeOptions
+  options?: SummarizeOptions & { actualTokens?: number }
 ): Promise<CompactionResult & { messages: ModelMessage[] }> {
   const { keepRecentTokens = 20000 } = config;
-  const tokensBefore = estimateTokens(messages);
+  const estimated = estimateTokens(messages);
+  const tokensBefore = options?.actualTokens ?? estimated;
+
+  // Scale keepRecentTokens if actual token count diverges from estimation.
+  // estimateTokens uses chars/4 which underestimates heavily for micro-compacted messages.
+  // Use the ratio to correct findCutPoint's budget so it doesn't keep everything.
+  let scaledKeepRecent = keepRecentTokens;
+  if (options?.actualTokens && estimated > 0) {
+    const ratio = estimated / options.actualTokens;
+    scaledKeepRecent = Math.floor(keepRecentTokens * ratio);
+  }
 
   // Find cut point: keep recent tokens, summarize the rest
-  const cutIndex = findCutPoint(messages, keepRecentTokens);
+  const cutIndex = findCutPoint(messages, scaledKeepRecent);
 
   // Nothing to summarize — everything fits within the keep-recent budget
   if (cutIndex === 0) {

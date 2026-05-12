@@ -2,7 +2,6 @@ import { generateText } from "ai";
 
 import { autoCompact } from "../compaction/auto-compact.js";
 import { microCompact } from "../compaction/micro-compact.js";
-// import { repairOrphanedToolMessages } from "../compaction/repair-messages.js";
 import { estimateTokens } from "../compaction/token-estimator.js";
 import { createTodoTool } from "../tools";
 
@@ -308,18 +307,22 @@ export class Base {
       }
     }
 
-    // Inject nag reminder if todo manager says we should
+    // Inject nag reminder following Claude Code's pattern:
+    // - If last message is a tool message, append reminder into its content array
+    //   (same-turn delivery, keeps history immutable, doesn't break tool flow)
+    // - Otherwise, add as a standalone user message
     if (this.todoManager?.shouldNag()) {
       const reminder = this.todoManager.getNagReminder();
       this.log?.todo("Injecting nag reminder", {
         roundsSinceUpdate: this.todoManager.getRoundsSinceUpdate(),
       });
 
-      // Add reminder as a system message at the end
-      finalMessages.push({
-        role: "user" as const,
-        content: reminder,
-      });
+      const lastMsg = finalMessages[finalMessages.length - 1];
+      if (lastMsg?.role === "tool" && Array.isArray(lastMsg.content)) {
+        lastMsg.content.push({ type: "text", text: reminder } as never);
+      } else if (lastMsg?.role !== "tool") {
+        finalMessages.push({ role: "user" as const, content: reminder });
+      }
     }
 
     return finalMessages;
@@ -338,21 +341,22 @@ export class Base {
    * @returns True if tokens exceed the configured threshold
    */
   shouldAutoCompact(messages?: ModelMessage[]): boolean {
-    const threshold = this.compactionConfig?.tokenThreshold ?? 100000;
+    const tokenThreshold = this.compactionConfig?.tokenThreshold ?? 100000;
+    const compactAtPercent = this.compactionConfig?.compactAtPercent ?? 85;
+    const triggerAt = Math.floor(tokenThreshold * (compactAtPercent / 100));
 
     // Prefer actual usage from context (accumulated inputTokens)
     if (this.context) {
       const usage = this.context.getUsage();
-      // Use inputTokens as the metric - this represents the context window usage
       if (usage.inputTokens > 0) {
-        return usage.inputTokens >= threshold;
+        return usage.inputTokens >= triggerAt;
       }
     }
 
     // Fall back to estimation if no context or no usage recorded yet
     if (messages) {
       const estimated = estimateTokens(messages);
-      return estimated >= threshold;
+      return estimated >= triggerAt;
     }
 
     return false;
@@ -433,9 +437,15 @@ export class Base {
     return (async (options) => {
       const res = userCallback ? await userCallback(options) : options;
 
+      const contextMessage = Array.from(this.context?.getMessages() || []);
+
       let finalMessages = res?.messages || [];
 
-      this.context?.setMessages(finalMessages);
+      const beforeLength = contextMessage.length;
+
+      const afterLength = finalMessages.length;
+
+      const pendingAppend = afterLength - beforeLength;
 
       // Apply micro compaction (Layer 1) if enabled
       const tokensBefore = estimateTokens(finalMessages);
@@ -450,23 +460,22 @@ export class Base {
           tokensAfter,
           reduction: tokensBefore - tokensAfter,
         });
-      } else {
-        this.log?.debug("agent", "Micro compaction not applied", {
-          tokensBefore,
-          tokensAfter,
-        });
       }
 
-      // Sync compactMessages to the current message list (what LLM will see).
-      // This ensures compactMessages always reflects the actual conversation state
-      // regardless of session resume, new requests, or multi-step continuations.
-      this.context?.setCompactMessages(finalMessages);
+      this.context?.setMessages(finalMessages);
+
+      // append latest message
+      for (let i = 0; i < pendingAppend; i++) {
+        this.context?.addCompactMessage(finalMessages[beforeLength + i]);
+      }
+
+      finalMessages = this.context?.getCompactMessages() || [];
 
       // Check if auto-compaction (Layer 2) is needed
       if (this.shouldAutoCompact(finalMessages)) {
         this.log?.info("agent", "Auto-compaction triggered", {
           usage: this.context?.getUsage(),
-          estimatedFullMessages: estimateTokens(finalMessages),
+          estimatedTokens: tokensAfter,
           threshold: this.compactionConfig?.tokenThreshold ?? 100000,
           incompleteTodos: this.todoManager?.getIncompleteTodos().length,
         });
@@ -483,8 +492,10 @@ export class Base {
               priority: t.priority as "high" | "medium" | "low",
             }));
 
+            const actualTokens = this.context?.getUsage().inputTokens ?? 0;
             const result = await autoCompact(finalMessages, this.compactionConfig ?? {}, this.agentId, this.sandbox, {
               todos: todos.length > 0 ? todos : undefined,
+              actualTokens: actualTokens || undefined,
             });
 
             this.log?.info("agent", "Auto-compaction completed", {
@@ -611,7 +622,8 @@ export class Base {
     const compactMessages = this.context.getCompactMessages();
 
     this.sessionData.compactMessages = compactMessages;
-    this.sessionData.usage = this.context.getTotalUsage();
+    this.sessionData.usage = this.context.getUsage();
+    this.sessionData.messageLength = messages.length;
 
     if (this.todoManager) {
       this.sessionData.todos = this.todoManager.getItems();
