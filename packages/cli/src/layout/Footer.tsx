@@ -100,19 +100,19 @@ export const Footer = () => {
         borderTopDimColor
         justifyContent="space-between"
       >
-        <Box gap={2}>
-          <Text color="gray" dimColor>
+        <Box gap={2} flexShrink={0}>
+          <Text color="gray" dimColor wrap="truncate">
             Exit: Ctrl + C
           </Text>
           {status === "running" && (
-            <Text color="yellow" dimColor>
+            <Text color="yellow" dimColor wrap="truncate">
               Abort: Esc
             </Text>
           )}
         </Box>
         {allMcp && allMcp.length > 0 && (
-          <Box>
-            <Text color="blue" dimColor>
+          <Box flexShrink={0}>
+            <Text color="blue" dimColor wrap="truncate">
               MCP: {allMcp.length}
             </Text>
           </Box>

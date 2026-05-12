@@ -34,6 +34,11 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
   // Get the input to display - prefer part.input, fallback to approvalInput
   const getDisplayInput = (): string | null => {
     if (part.input !== undefined && part.input !== null) {
+      // For task tool, only show the prompt
+      if (toolName === "task" && typeof part.input === "object") {
+        const { prompt } = part.input as { prompt?: string };
+        return prompt ? JSON.stringify({ prompt }) : null;
+      }
       return typeof part.input === "string" ? part.input : JSON.stringify(part.input);
     }
     return null;

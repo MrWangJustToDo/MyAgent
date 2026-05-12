@@ -433,15 +433,7 @@ export class Base {
     return (async (options) => {
       const res = userCallback ? await userCallback(options) : options;
 
-      const contextMessage = this.context?.getMessages() || [];
-
       let finalMessages = res?.messages || [];
-
-      const beforeLength = contextMessage.length;
-
-      const afterLength = finalMessages.length;
-
-      const pendingAppend = afterLength - beforeLength;
 
       // Apply micro compaction (Layer 1) if enabled
       const tokensBefore = estimateTokens(finalMessages);
@@ -460,18 +452,10 @@ export class Base {
 
       this.context?.setMessages(finalMessages);
 
-      if (pendingAppend <= 0 && afterLength > 0 && afterLength !== beforeLength) {
-        // SDK sent a fresh/shorter message list (new request) — re-sync compactMessages
-        this.context?.setCompactMessages(finalMessages);
-      } else {
-        // Normal append for growing messages within a multi-step run
-        for (let i = 0; i < pendingAppend; i++) {
-          this.context?.addCompactMessage(finalMessages[beforeLength + i]);
-        }
-      }
-
-      finalMessages = repairOrphanedToolMessages(this.context?.getCompactMessages() || []);
-      this.context?.setCompactMessages(finalMessages);
+      // Sync compactMessages to the current message list (what LLM will see).
+      // This ensures compactMessages always reflects the actual conversation state
+      // regardless of session resume, new requests, or multi-step continuations.
+      this.context?.setCompactMessages(repairOrphanedToolMessages(finalMessages));
 
       // Check if auto-compaction (Layer 2) is needed
       if (this.shouldAutoCompact(finalMessages)) {
@@ -503,8 +487,6 @@ export class Base {
               tokensBefore: result.tokensBefore,
               tokensAfter: result.tokensAfter,
               todosIncluded: todos.length,
-              beforeMessage: finalMessages,
-              afterMessage: result.messages,
             });
 
             if (result.compacted) {
