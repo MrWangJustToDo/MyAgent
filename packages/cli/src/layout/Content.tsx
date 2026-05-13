@@ -10,6 +10,8 @@ export const Content = memo(() => {
 
   const dynamicList = useDynamic((s) => s.list);
 
+  const dynamicKey = useDynamic((s) => s.key);
+
   const width = useSize((s) => s.state.screenWidth);
 
   const typedList = list as JSX.Element[];
@@ -18,7 +20,7 @@ export const Content = memo(() => {
 
   return (
     <>
-      <StaticRender width={width} deps={[width, validList.length]}>
+      <StaticRender width={width} deps={[width, validList.length, dynamicKey]}>
         {() => validList}
       </StaticRender>
       {dynamicList}
