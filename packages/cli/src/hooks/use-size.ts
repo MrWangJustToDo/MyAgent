@@ -27,6 +27,6 @@ export const useSize = createState(
 
     withStableSelector: true,
 
-    withNamespace: "useHeight",
+    withNamespace: "useSize",
   }
 );

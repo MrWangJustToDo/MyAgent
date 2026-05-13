@@ -21,6 +21,7 @@ import { createAgent } from "../utils/create.js";
 
 import { useAgent } from "./use-agent.js";
 import { useForceUpdate } from "./use-force-update.js";
+import { useLocalChatStatus } from "./use-local-chat-status.js";
 
 import type { Agent } from "@my-agent/core";
 import type { ChatTransport, FileUIPart, UIDataTypes, UIMessage, UIMessagePart, UITools } from "ai";
@@ -340,6 +341,11 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
   );
 
   const status = chatHelpers.status;
+
+  useEffect(() => {
+    useLocalChatStatus.getActions().setStatus(chatHelpers.status);
+    useLocalChatStatus.getActions().setError(chatHelpers.error ?? null);
+  }, [chatHelpers.status, chatHelpers.error]);
 
   const messages = chatHelpers.messages;
 

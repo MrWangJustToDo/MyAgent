@@ -9,6 +9,7 @@ import { Spinner } from "../components/Spinner.js";
 import { TodoStats } from "../components/TodoStats.js";
 import { UserInput } from "../components/UserInput.js";
 import { useAgent } from "../hooks/use-agent.js";
+import { useLocalChatStatus } from "../hooks/use-local-chat-status.js";
 
 import type { AgentStatus } from "@my-agent/core";
 
@@ -21,7 +22,13 @@ export const Footer = () => {
   // @ts-ignore
   const allMcp = useAgent((s) => s.agent?.mcpManager?.getConnectedServers());
 
-  const status = _status as AgentStatus;
+  let status = _status as AgentStatus;
+
+  const chatStatus = useLocalChatStatus((s) => s.state);
+
+  if (chatStatus === "error") {
+    status = "error";
+  }
 
   const isInputEnabled = status === "idle" || status === "completed" || status === "error" || status === "aborted";
 
