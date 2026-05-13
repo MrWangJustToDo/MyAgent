@@ -12,6 +12,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { agentManager } from "../../managers/manager-agent.js";
+
 import { withDuration } from "./helpers.js";
 
 // ============================================================================
@@ -211,15 +213,19 @@ function parseDuckDuckGoResults(html: string): SearchResult[] {
 /**
  * Search DuckDuckGo and return results
  */
-async function searchDuckDuckGo(query: string, timeoutMs: number): Promise<SearchResult[]> {
+async function searchDuckDuckGo(
+  query: string,
+  timeoutMs: number,
+  abortController?: AbortController
+): Promise<SearchResult[]> {
   const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  // const controller = new AbortController();
+  const timeoutId = setTimeout(() => abortController?.abort(), timeoutMs);
 
   try {
     const response = await fetch(searchUrl, {
-      signal: controller.signal,
+      signal: abortController?.signal,
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
@@ -315,7 +321,7 @@ export type WebsearchOutput = z.infer<typeof websearchOutputSchema>;
  * const websearchTool = createWebsearchTool();
  * ```
  */
-export const createWebsearchTool = () => {
+export const createWebsearchTool = ({ agentId }: { agentId: string }) => {
   const today = getTodayISO();
 
   return tool({
@@ -374,7 +380,7 @@ Example response format:
 
     outputSchema: websearchOutputSchema,
 
-    execute: async ({ query, maxResults, allowedDomains, blockedDomains, timeout }) => {
+    execute: async ({ query, maxResults, allowedDomains, blockedDomains, timeout }, { abortSignal }) => {
       return withDuration(async () => {
         // Validate that we don't have both allowed and blocked domains
         if (allowedDomains?.length && blockedDomains?.length) {
@@ -384,8 +390,26 @@ Example response format:
         const timeoutMs = Math.min((timeout ?? DEFAULT_TIMEOUT) * 1000, MAX_TIMEOUT * 1000);
         const limit = maxResults ?? DEFAULT_RESULTS;
 
+        const controller = new AbortController();
+
+        const managedAgent = agentManager.getAgent(agentId);
+
+        const hasParentAgent = managedAgent?.parentId;
+
+        abortSignal?.addEventListener("abort", () => {
+          controller.abort();
+        });
+
+        if (!hasParentAgent) {
+          managedAgent?.agent.addPendingAbortController(controller);
+        }
+
         // Perform search
-        const rawResults = await searchDuckDuckGo(query, timeoutMs);
+        const rawResults = await searchDuckDuckGo(query, timeoutMs, controller);
+
+        if (!hasParentAgent) {
+          managedAgent?.agent.removePendingAbortController(controller);
+        }
 
         // Filter by domains
         const filteredResults = filterResultsByDomain(rawResults, allowedDomains, blockedDomains);

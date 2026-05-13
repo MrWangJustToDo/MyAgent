@@ -206,6 +206,15 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
           this.status = "waiting";
         }
       },
+      onAbort: () => {
+        this.status = "aborted";
+        this.log?.agent("stream aborted");
+      },
+      onError: (event) => {
+        this.status = "error";
+        this.error = (event.error as Error)?.message;
+        this.log?.error("agent", "Generate error", event.error as Error);
+      },
       experimental_onToolCallStart: (event) => {
         const { toolCall } = event;
         this.log?.tool("tool-call-start", {
@@ -215,15 +224,6 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
         });
         this.context?.addTool(toolCall);
         experimental_onToolCallStart?.(event);
-      },
-      onAbort: () => {
-        this.status = "aborted";
-        this.log?.agent("stream aborted");
-      },
-      onError: (event) => {
-        this.status = "error";
-        this.error = (event.error as Error)?.message;
-        this.log?.error("agent", "Generate error", event.error as Error);
       },
       experimental_onToolCallFinish: (event) => {
         const { toolCall, durationMs } = event;

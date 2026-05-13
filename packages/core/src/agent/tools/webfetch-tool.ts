@@ -14,6 +14,8 @@ import { tool } from "ai";
 import TurndownService from "turndown";
 import { z } from "zod";
 
+import { agentManager } from "../../managers/manager-agent.js";
+
 import { withDuration } from "./helpers.js";
 
 // ============================================================================
@@ -141,7 +143,7 @@ export type WebfetchOutput = z.infer<typeof webfetchOutputSchema>;
  * const webfetchTool = createWebfetchTool();
  * ```
  */
-export const createWebfetchTool = () => {
+export const createWebfetchTool = ({ agentId }: { agentId: string }) => {
   return tool({
     description: `Fetches content from a URL and returns it in the specified format.
 
@@ -181,7 +183,7 @@ Usage notes:
 
     outputSchema: webfetchOutputSchema,
 
-    execute: async ({ url, format, timeout }) => {
+    execute: async ({ url, format, timeout }, { abortSignal }) => {
       return withDuration(async () => {
         // Validate URL
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
@@ -194,7 +196,19 @@ Usage notes:
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+        const managedAgent = agentManager.getAgent(agentId);
+
+        const hasParentAgent = managedAgent?.parentId;
+
+        abortSignal?.addEventListener("abort", () => {
+          controller.abort();
+        });
+
         try {
+          if (!hasParentAgent) {
+            managedAgent?.agent?.addPendingAbortController(controller);
+          }
+
           const headers = {
             "User-Agent":
               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
@@ -298,6 +312,9 @@ Usage notes:
             message: `Fetched ${url} (${contentType}, ${originalLength} chars)${truncationNote}`,
           };
         } finally {
+          if (!hasParentAgent) {
+            managedAgent?.agent?.removePendingAbortController(controller);
+          }
           clearTimeout(timeoutId);
         }
       });

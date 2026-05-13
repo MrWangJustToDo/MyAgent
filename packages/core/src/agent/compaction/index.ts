@@ -48,6 +48,3 @@ export { microCompact } from "./micro-compact.js";
 
 // Auto compaction (Layer 2)
 export { shouldAutoCompact, summarizeConversation, autoCompact, createCompactedMessages } from "./auto-compact.js";
-
-// Message repair utilities
-export { repairOrphanedToolMessages } from "./repair-messages.js";

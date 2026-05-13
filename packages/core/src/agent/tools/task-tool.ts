@@ -21,6 +21,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { generateId } from "../../base/utils.js";
+import { agentManager } from "../../managers/manager-agent.js";
 import { runSubagent } from "../subagent/subagent.js";
 
 import { withDuration } from "./helpers.js";
@@ -114,17 +115,23 @@ Example use cases:
 
     outputSchema: taskOutputSchema,
 
-    execute: async ({ id, prompt, description }, { abortSignal }) => {
+    execute: async ({ id, prompt, description }) => {
       return withDuration(async () => {
+        const abortController = new AbortController();
+
+        agentManager.getAgent(parentAgentId)?.agent?.addPendingAbortController(abortController);
+
         const result = await runSubagent({
           subagentId: id,
           prompt,
           description,
           parentAgentId,
-          abortSignal,
+          abortSignal: abortController.signal,
           // Auto-destroy since task tool manages the lifecycle
           autoDestroy: false,
         });
+
+        agentManager.getAgent(parentAgentId)?.agent?.removePendingAbortController(abortController);
 
         return {
           subagentId: result.subagentId,

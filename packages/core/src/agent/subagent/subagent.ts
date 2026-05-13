@@ -401,6 +401,16 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           agent: subagent,
           data: { error: error instanceof Error ? error : new Error(String(error)) },
         });
+
+        return {
+          subagentId,
+          output: (error as Error)?.message || "Unknown error",
+          truncated: false,
+          iterations: 0,
+          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+          reachedLimit: false,
+          retries: retries,
+        };
       }
     }
   } finally {

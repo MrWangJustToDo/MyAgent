@@ -11,8 +11,6 @@ import { createReadFileTool } from "./read-file-tool.js";
 import { createRunCommandTool } from "./run-command-tool.js";
 import { createSearchReplaceTool } from "./search-replace-tool.js";
 import { createTreeTool } from "./tree-tool.js";
-import { createWebfetchTool } from "./webfetch-tool.js";
-import { createWebsearchTool } from "./websearch-tool.js";
 import { createWriteFileTool } from "./write-file-tool.js";
 
 import type { createCompactTool } from "./compact-tool.js";
@@ -20,6 +18,8 @@ import type { createListSkillsTool } from "./list-skills-tool.js";
 import type { createLoadSkillTool } from "./load-skill-tool.js";
 import type { createTaskTool } from "./task-tool.js";
 import type { createTodoTool } from "./todo-tool.js";
+// import type { createWebfetchTool } from "./webfetch-tool.js";
+// import type { createWebsearchTool } from "./websearch-tool.js";
 import type { Sandbox } from "../../environment";
 
 export * from "./copy-file-tool.js";
@@ -53,8 +53,8 @@ export type Tools = {
   move_file: ReturnType<typeof createMoveFileTool>;
   read_file: ReturnType<typeof createReadFileTool>;
   write_file: ReturnType<typeof createWriteFileTool>;
-  webfetch: ReturnType<typeof createWebfetchTool>;
-  websearch: ReturnType<typeof createWebsearchTool>;
+  // webfetch?: ReturnType<typeof createWebfetchTool>;
+  // websearch?: ReturnType<typeof createWebsearchTool>;
   glob: ReturnType<typeof createGlobTool>;
   grep: ReturnType<typeof createGrepTool>;
   tree: ReturnType<typeof createTreeTool>;
@@ -84,8 +84,6 @@ export const createTools = async ({
     move_file: createMoveFileTool({ sandbox }),
     read_file: createReadFileTool({ sandbox }),
     write_file: createWriteFileTool({ sandbox }),
-    webfetch: createWebfetchTool(),
-    websearch: createWebsearchTool(),
     glob: createGlobTool({ sandbox }),
     grep: createGrepTool({ sandbox }),
     tree: createTreeTool({ sandbox }),

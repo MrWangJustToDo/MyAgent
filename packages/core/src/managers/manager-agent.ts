@@ -11,6 +11,7 @@ import { McpManager } from "../agent/mcp/manager.js";
 import { SessionStore } from "../agent/session/session-store.js";
 import { SkillRegistry } from "../agent/skills/skill-registry.js";
 import { TodoManager } from "../agent/todo-manager";
+import { createWebfetchTool, createWebsearchTool } from "../agent/tools";
 import { createCompactTool } from "../agent/tools/compact-tool.js";
 import { createListSkillsTool } from "../agent/tools/list-skills-tool.js";
 import { createLoadSkillTool } from "../agent/tools/load-skill-tool.js";
@@ -258,6 +259,11 @@ export class AgentManager {
 
     agent.setTodoManager(todoManager);
 
+    agent.addTools({
+      webfetch: createWebfetchTool({ agentId: agent.id }),
+      websearch: createWebsearchTool({ agentId: agent.id }),
+    });
+
     // Load skills and add skill tools (only for root agents, not subagents)
     if (!parentId) {
       const skillRegistry = new SkillRegistry({
@@ -339,7 +345,7 @@ export class AgentManager {
       agent,
       context,
       sandbox,
-      tools: tools as unknown as ToolSet,
+      tools: tools as ToolSet,
       log,
       todoManager,
       status: "idle",

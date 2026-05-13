@@ -68,6 +68,10 @@ export class Base {
   // Abort controller for current run
   currentAbortController: AbortController | null = null;
 
+  cancelAbortController: () => void = () => {};
+
+  pendingAbortControllers: AbortController[] = [];
+
   // ============================================================================
   // Resource Management
   // ============================================================================
@@ -406,29 +410,38 @@ export class Base {
    * Set up abort controller and forward external abort signal.
    */
   setupAbortController(abortSignal?: AbortSignal): void {
+    this.cancelAbortController();
+
     this.currentAbortController = new AbortController();
 
+    const abortListener = (reason: Event) => {
+      this.status = "aborted";
+      this.log?.agent("current flow is aborted", { reason });
+    };
+
     // sync status to agent instance
-    this.currentAbortController.signal.addEventListener(
-      "abort",
-      (reason) => {
-        this.status = "aborted";
-        this.log?.agent("current flow is aborted", { reason });
-      },
-      { once: true }
-    );
+    this.currentAbortController.signal.addEventListener("abort", abortListener, { once: true });
+
+    this.cancelAbortController = () => this.currentAbortController?.signal.removeEventListener("abort", abortListener);
 
     if (abortSignal) {
       if (abortSignal.aborted) {
-        this.currentAbortController.abort(abortSignal.reason);
+        let item = this.pendingAbortControllers.pop();
+        while (item) {
+          item.abort(abortSignal.reason);
+          item = this.pendingAbortControllers.pop();
+        }
+        setTimeout(() => this.currentAbortController?.abort(abortSignal.reason));
       } else {
-        abortSignal.addEventListener(
-          "abort",
-          () => {
-            this.currentAbortController?.abort(abortSignal.reason);
-          },
-          { once: true }
-        );
+        const abortListener = (reason: Event) => {
+          let item = this.pendingAbortControllers.pop();
+          while (item) {
+            item.abort(reason);
+            item = this.pendingAbortControllers.pop();
+          }
+          setTimeout(() => this.currentAbortController?.abort(reason));
+        };
+        abortSignal.addEventListener("abort", abortListener);
       }
     }
   }
@@ -559,6 +572,14 @@ export class Base {
 
       return { ...res, messages: this.context?.getCompactMessages() };
     }) as PrepareStepFunction;
+  }
+
+  addPendingAbortController(abortController: AbortController): void {
+    this.pendingAbortControllers.push(abortController);
+  }
+
+  removePendingAbortController(abortController: AbortController): void {
+    this.pendingAbortControllers = this.pendingAbortControllers.filter((ac) => ac !== abortController);
   }
 
   /**
