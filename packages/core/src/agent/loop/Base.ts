@@ -469,6 +469,28 @@ export class Base {
         this.context?.addCompactMessage(finalMessages[beforeLength + i]);
       }
 
+      const fullMessages = this.context?.getMessages() || [];
+
+      finalMessages = this.context?.getCompactMessages() || [];
+
+      const finalMessagesLength = finalMessages.length;
+
+      const fullMessagesLength = fullMessages.length;
+
+      // align the compact message item, the modelMessage item may change after convert from ui;
+      for (let i = 0; i < finalMessagesLength - 1; i++) {
+        const compactMessageItem = finalMessages[finalMessagesLength - i - 1];
+        const modelMessageItem = fullMessages[fullMessagesLength - i - 1];
+        if (
+          compactMessageItem.role !== modelMessageItem.role ||
+          compactMessageItem.content.length !== modelMessageItem.content.length
+        ) {
+          this.context?.setCompactMessage(modelMessageItem, finalMessagesLength - i - 1);
+        }
+      }
+
+      // this.context?.processCompactMessage();
+
       finalMessages = this.context?.getCompactMessages() || [];
 
       // Check if auto-compaction (Layer 2) is needed

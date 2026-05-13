@@ -261,6 +261,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       abortSignal,
       onStepFinish,
       onFinish,
+      prepareStep,
       experimental_onToolCallStart,
       experimental_onToolCallFinish,
       ...rest
@@ -296,6 +297,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
         abortSignal: this.currentAbortController!.signal,
         stopWhen: stepCountIs(this.config.maxIterations ?? 10),
         onStepFinish: this.createOnStepFinish(onStepFinish) as GenerateTextOnStepFinishCallback<NoInfer<ToolSet>>,
+        prepareStep: this.createPrepareStep(prepareStep),
         onFinish: this.createOnFinish(onFinish),
         experimental_onToolCallStart: (event) => {
           const { toolCall } = event;

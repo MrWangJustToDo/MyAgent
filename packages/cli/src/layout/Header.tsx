@@ -1,10 +1,56 @@
 import { Box, Text } from "ink";
+import BigText from "ink-big-text";
+import Gradient from "ink-gradient";
 import { useEffect } from "react";
 
 import { FullBox } from "../components/FullBox";
 import { useArgs } from "../hooks";
 import { useAgentSandbox } from "../hooks/use-agent-sandbox";
 import { useStatic } from "../hooks/use-static";
+
+// ============================================================================
+// Logo Config
+// ============================================================================
+
+const GRADIENT_COLORS: [string, string, string] = ["#00D4FF", "#7B61FF", "#FF6B9D"];
+
+const LOGO_FONT = "simple";
+
+// ============================================================================
+// Logo Component
+// ============================================================================
+
+const Logo = () => {
+  return (
+    <Box flexDirection="column" alignItems="center" width="100%">
+      {/* Gradient big text logo */}
+      <Gradient colors={GRADIENT_COLORS}>
+        <BigText text="MyAgent" font={LOGO_FONT} letterSpacing={2} space={false} />
+      </Gradient>
+
+      {/* Tagline */}
+      <Box marginTop={-1}>
+        <Text color="#6366F1" italic>
+          AI-Powered Coding Agent
+        </Text>
+      </Box>
+    </Box>
+  );
+};
+
+// ============================================================================
+// Status Dot
+// ============================================================================
+
+const StatusDot = ({ color }: { color: string }) => (
+  <Text color={color} bold>
+    ●
+  </Text>
+);
+
+// ============================================================================
+// Header Component
+// ============================================================================
 
 export const Header = () => {
   const { model, path } = useArgs((s) => ({ model: s.config.model, path: s.config.rootPath }));
@@ -19,41 +65,54 @@ export const Header = () => {
         flexDirection="column"
         key="header"
         marginBottom={1}
-        borderStyle="round"
-        borderColor="cyan"
-        paddingX={2}
+        // borderStyle="round"
+        // borderColor="#334155"
+        paddingX={3}
         paddingY={1}
       >
-        {/* Logo line */}
-        <Box>
-          <Text color="yellow">⚡</Text>
-          <Text> </Text>
-          <Text bold color="cyan">
-            My
-          </Text>
-          <Text bold color="magenta">
-            Agent
-          </Text>
-          <Text color="gray">  —  AI Coding Agent</Text>
-        </Box>
+        {/* Logo */}
+        <Logo />
+
+        {/* Divider */}
+        {/* <Box marginY={1}>
+          <Text color="#334155">{"─".repeat(48)}</Text>
+        </Box> */}
+        <Box height={1} />
 
         {/* Info bar */}
-        <Box gap={2}>
+        <Box gap={3} justifyContent="center" width="100%">
           <Box>
-            <Text color="gray">Model: </Text>
-            <Text color="yellow" wrap="truncate-end">
+            <StatusDot color="#00D4FF" />
+            <Text> </Text>
+            <Text color="#A1A1AA" dimColor>
+              Model
+            </Text>
+            <Text> </Text>
+            <Text color="#E4E4E7" bold wrap="truncate-end">
               {model}
             </Text>
           </Box>
+
           <Box>
-            <Text color="gray">Sandbox: </Text>
-            <Text color="green" wrap="truncate-end">
-              {name || "..."}
+            <StatusDot color="#7B61FF" />
+            <Text> </Text>
+            <Text color="#A1A1AA" dimColor>
+              Sandbox
+            </Text>
+            <Text> </Text>
+            <Text color="#E4E4E7" wrap="truncate-end">
+              {name}
             </Text>
           </Box>
+
           <Box>
-            <Text color="gray">Path: </Text>
-            <Text color="blue" wrap="truncate-end">
+            <StatusDot color="#22D3EE" />
+            <Text> </Text>
+            <Text color="#A1A1AA" dimColor>
+              Path
+            </Text>
+            <Text> </Text>
+            <Text color="#E4E4E7" wrap="truncate-end">
               {path}
             </Text>
           </Box>

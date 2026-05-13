@@ -22,3 +22,6 @@ export { z } from "zod";
 // Re-export Vercel AI SDK types and classes
 export type { LanguageModel, Tool, UIMessage as VercelUIMessage, UIMessageChunk } from "ai";
 export { DirectChatTransport, ToolLoopAgent } from "ai";
+
+// waiting issue fix for vercel ai sdk
+// https://github.com/vercel/ai/issues/13591
