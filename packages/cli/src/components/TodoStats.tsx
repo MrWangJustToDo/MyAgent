@@ -14,7 +14,7 @@ export const TodoStats = () => {
   const pendingCount = stats.pending;
 
   return (
-    <Box gap={2}>
+    <Box gap={2} flexShrink={0}>
       <Text>|</Text>
       <Text color="cyan" bold>
         Tasks:

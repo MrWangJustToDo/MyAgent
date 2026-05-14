@@ -23,7 +23,7 @@ import type { ModelMessage } from "ai";
  * Tools whose results should never be pruned/compacted.
  * These contain important context that should always be preserved.
  */
-const PROTECTED_TOOLS = new Set(["skill", "load_skill", "compact"]);
+const PROTECTED_TOOLS = new Set(["skill", "load_skill", "compact", "todo"]);
 
 // ============================================================================
 // Types

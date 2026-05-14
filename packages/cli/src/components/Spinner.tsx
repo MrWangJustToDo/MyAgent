@@ -19,7 +19,7 @@ export const Spinner = ({ text }: SpinnerProps) => {
   }, []);
 
   return (
-    <Text>
+    <Text wrap="truncate-end">
       <Text color="cyan">{frames[frame]}</Text>
       {text && <Text> {text}</Text>}
     </Text>

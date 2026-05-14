@@ -276,7 +276,7 @@ async function createNativeSandbox(config: SandboxConfig): Promise<Sandbox> {
         const execError = error as {
           stdout?: string;
           stderr?: string;
-          code?: number;
+          code?: number | string;
           killed?: boolean;
           signal?: string;
         };
@@ -284,7 +284,7 @@ async function createNativeSandbox(config: SandboxConfig): Promise<Sandbox> {
         return {
           stdout: execError.stdout ?? "",
           stderr: execError.stderr ?? String(error),
-          exitCode: execError.code ?? 1,
+          exitCode: typeof execError.code === "number" ? execError.code : 1,
           durationMs: Date.now() - startTime,
         };
       }

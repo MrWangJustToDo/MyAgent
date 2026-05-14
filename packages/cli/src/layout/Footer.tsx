@@ -47,7 +47,7 @@ export const Footer = () => {
         width="full"
       >
         {/* Status indicator */}
-        <Box>
+        <Box flexShrink={0}>
           {status === "running" && <Spinner text="Running..." />}
           {status === "compacting" && <Spinner text="Compacting..." />}
           {status === "completed" && <Text color="green">Completed</Text>}

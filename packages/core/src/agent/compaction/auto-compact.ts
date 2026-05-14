@@ -83,6 +83,62 @@ function stripMediaFromMessages(messages: ModelMessage[]): ModelMessage[] {
 }
 
 /**
+ * Get text content from the first text part of a content array.
+ * Needed because strict SDK types prevent casting to Record for find().
+ */
+function getFirstTextPartContent(content: Array<unknown>): string {
+  for (const part of content) {
+    if (part && typeof part === "object") {
+      const p = part as Record<string, unknown>;
+      if (p.type === "text" && typeof p.text === "string") {
+        return p.text;
+      }
+    }
+  }
+  return "";
+}
+
+/**
+ * Detect and extract existing conversation summary from the first message.
+ *
+ * After compaction, the first message in compactMessages is always a user message
+ * with format:
+ *   [CONVERSATION SUMMARY]
+ *   ...summary text...
+ *   [END SUMMARY]
+ *   ...
+ *
+ * When detected, we strip this message from the conversation and pass it separately
+ * via <previous-summary> tags, enabling incremental (update-style) compaction.
+ *
+ * @returns extracted summary text and remaining messages (without the summary message)
+ */
+function extractExistingSummary(
+  messages: ModelMessage[]
+): { existingSummary?: string; cleanMessages: ModelMessage[] } {
+  if (messages.length === 0) return { cleanMessages: messages };
+
+  const first = messages[0];
+  if (first.role !== "user") return { cleanMessages: messages };
+
+  const text =
+    typeof first.content === "string"
+      ? first.content
+      : Array.isArray(first.content)
+        ? getFirstTextPartContent(first.content)
+        : "";
+
+  // Match [CONVERSATION SUMMARY] ... [END SUMMARY] at the start of the message
+  const match = text.match(/^\[CONVERSATION SUMMARY\]\n\n([\s\S]*?)\n\n\[END SUMMARY\]/);
+  if (!match) return { cleanMessages: messages };
+
+  return {
+    existingSummary: match[1].trim(),
+    cleanMessages: messages.slice(1),
+  };
+}
+
+/**
  * Check whether an assistant message contains tool calls.
  */
 function hasToolCalls(message: ModelMessage): boolean {
@@ -172,6 +228,136 @@ function findCutPoint(messages: ModelMessage[], keepRecentTokens: number): numbe
 }
 
 // ============================================================================
+// File Operation Tracking
+// ============================================================================
+
+/**
+ * Tracked file operations from tool calls.
+ * Used to append an accurate file list to the compaction summary,
+ * so the LLM doesn't have to rely on memory to list which files were involved.
+ */
+interface FileOps {
+  /** Files that were read (read_file, list_file, tree, etc.) */
+  readFiles: Set<string>;
+  /** Files that were created or modified (write_file, edit_file, search_replace, etc.) */
+  modifiedFiles: Set<string>;
+}
+
+/** Tools that read file content or structure */
+const READ_TOOLS = new Set(["read_file", "list_file", "tree"]);
+
+/** Tools that create or modify files */
+const WRITE_TOOLS = new Set(["write_file", "edit_file", "search_replace", "copy_file", "move_file", "delete_file"]);
+
+/**
+ * Extract a string path field from a tool-call's args.
+ * Handles both object args and JSON-string args.
+ */
+function extractPathFromArgs(args: unknown, field: string): string | undefined {
+  if (typeof args === "string") {
+    try {
+      const parsed = JSON.parse(args);
+      const val = parsed[field];
+      return typeof val === "string" && val.length > 0 ? val : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  if (args && typeof args === "object") {
+    const val = (args as Record<string, unknown>)[field];
+    return typeof val === "string" && val.length > 0 ? val : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Extract file operations from assistant tool-call messages.
+ *
+ * Scans all assistant messages for tool-call parts and tracks:
+ * - Files read: read_file, list_file, tree calls
+ * - Files modified: write_file, edit_file, search_replace, copy_file, move_file, delete_file
+ *
+ * @param messages - Messages to scan for tool calls
+ * @returns Deduplicated sets of read and modified file paths
+ *
+ * @example
+ * ```typescript
+ * const ops = extractFileOpsFromMessages(messages);
+ * console.log(ops.readFiles);   // Set {"src/index.ts", "package.json"}
+ * console.log(ops.modifiedFiles); // Set {"src/new-file.ts"}
+ * ```
+ */
+function extractFileOpsFromMessages(messages: ModelMessage[]): FileOps {
+  const ops: FileOps = { readFiles: new Set(), modifiedFiles: new Set() };
+
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+
+    const content = message.content;
+    if (!Array.isArray(content)) continue;
+
+    for (const part of content) {
+      const p = part as Record<string, unknown>;
+      if (p.type !== "tool-call") continue;
+
+      const toolName = p.toolName as string | undefined;
+      if (!toolName) continue;
+
+      const args = p.args;
+
+      if (READ_TOOLS.has(toolName)) {
+        const path = extractPathFromArgs(args, "path");
+        if (path && path !== "." && path !== "./") {
+          ops.readFiles.add(path);
+        }
+      } else if (WRITE_TOOLS.has(toolName)) {
+        if (toolName === "copy_file" || toolName === "move_file") {
+          // Both source and target are relevant for these operations
+          const sourcePath = extractPathFromArgs(args, "sourcePath");
+          const targetPath = extractPathFromArgs(args, "targetPath");
+          if (targetPath) ops.modifiedFiles.add(targetPath);
+          if (toolName === "move_file" && sourcePath) ops.modifiedFiles.add(sourcePath);
+          if (toolName === "copy_file" && sourcePath) ops.readFiles.add(sourcePath);
+        } else {
+          const path = extractPathFromArgs(args, "path");
+          if (path) ops.modifiedFiles.add(path);
+        }
+      }
+    }
+  }
+
+  return ops;
+}
+
+/**
+ * Format file operations into markdown sections for appending to a summary.
+ *
+ * Returns empty string if no operations were tracked.
+ *
+ * @param ops - File operations to format
+ * @returns Markdown string with "Files Read" and/or "Files Modified" sections
+ */
+function formatFileOperations(ops: FileOps): string {
+  const parts: string[] = [];
+
+  if (ops.readFiles.size > 0) {
+    parts.push("## Files Read");
+    for (const f of [...ops.readFiles].sort()) {
+      parts.push(`- \`${f}\``);
+    }
+  }
+
+  if (ops.modifiedFiles.size > 0) {
+    parts.push("## Files Modified");
+    for (const f of [...ops.modifiedFiles].sort()) {
+      parts.push(`- \`${f}\``);
+    }
+  }
+
+  return parts.length > 0 ? "\n\n" + parts.join("\n") : "";
+}
+
+// ============================================================================
 // Public API
 // ============================================================================
 
@@ -253,16 +439,28 @@ export async function summarizeConversation(
 ): Promise<string> {
   const { focus, todos } = options ?? {};
 
-  // Build the summarization instruction prompt (this becomes the final user message)
-  const summarizationPrompt = buildCompactionPrompt({ focus, todos });
+  // Detect existing summary from the first message (incremental update).
+  // If found: the old summary is passed via <previous-summary> tags in the prompt,
+  // and cleanMessages excludes it so the subagent only sees NEW messages.
+  // If not found: first-time compaction, summarize everything normally.
+  const { existingSummary, cleanMessages } = extractExistingSummary(messages);
 
-  // Strip media from messages for summarization (like OpenCode does)
-  const strippedMessages = stripMediaFromMessages(messages);
+  // Build prompt — uses UPDATE_COMPACTION_PROMPT if existingSummary is provided,
+  // wraps it in <previous-summary> tags for explicit context preservation.
+  const summarizationPrompt = buildCompactionPrompt({
+    focus,
+    todos,
+    existingSummary,
+  });
+
+  // Strip media from the CLEAN messages (without the old summary message).
+  // For update mode: initialMessages only contains messages since last compaction.
+  const strippedMessages = stripMediaFromMessages(cleanMessages);
 
   // Run subagent for summarization
   // - systemPrompt: tells the LLM it's a summarizer (not a conversational agent)
-  // - initialMessages: the conversation history to summarize
-  // - prompt: the instruction template (becomes final user message)
+  // - initialMessages: the conversation history to summarize (NEW messages only in update mode)
+  // - prompt: the instruction template (includes <previous-summary> tags in update mode)
   // - retryOnEmpty: true - use subagent's built-in retry logic
   const result = await runSubagent({
     prompt: summarizationPrompt,
@@ -398,8 +596,13 @@ export async function autoCompact(
     // Generate summary via subagent with optional focus and todos
     const summary = await summarizeConversation(summaryMessages, parentAgentId, options);
 
+    // Augment summary with tracked file operations from the summarized messages.
+    // This provides accurate file lists without relying on LLM memory.
+    const fileOps = extractFileOpsFromMessages(summaryMessages);
+    const summaryWithFileOps = summary + formatFileOperations(fileOps);
+
     // Create compressed messages and append kept recent messages
-    const compactedMessages = createCompactedMessages(summary).concat(keptMessages);
+    const compactedMessages = createCompactedMessages(summaryWithFileOps).concat(keptMessages);
 
     const tokensAfter = estimateTokens(compactedMessages);
 
