@@ -85,7 +85,7 @@ function formatRunCommandOutput(output: RunCommandOutput): string {
   // Show stderr if present (often contains errors/warnings)
   if (stderr && stderr.trim()) {
     const stderrLines = stderr.trim().split("\n");
-    const maxLines = 3;
+    const maxLines = 20;
     if (stderrLines.length <= maxLines) {
       lines.push(...stderrLines.map((l) => `stderr: ${l}`));
     } else {
@@ -97,7 +97,7 @@ function formatRunCommandOutput(output: RunCommandOutput): string {
   // Show stdout summary
   if (stdout && stdout.trim()) {
     const stdoutLines = stdout.trim().split("\n");
-    const maxLines = 5;
+    const maxLines = 30;
     if (stdoutLines.length <= maxLines) {
       lines.push(...stdoutLines);
     } else {

@@ -1,6 +1,7 @@
 import { getToolName } from "ai";
 import { Box, Text } from "ink";
 
+import { Spinner } from "../components/Spinner.js";
 import { formatToolInput, formatDuration } from "../utils/format.js";
 import { getToolCallColor } from "../utils/tool-state.js";
 
@@ -39,6 +40,11 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
         const { prompt } = part.input as { prompt?: string };
         return prompt ? JSON.stringify({ prompt }) : null;
       }
+      // For run_command, extract just the command text (not full JSON)
+      if (toolName === "run_command" && typeof part.input === "object") {
+        const { command } = part.input as { command?: string };
+        return command ?? null;
+      }
       return typeof part.input === "string" ? part.input : JSON.stringify(part.input);
     }
     return null;
@@ -60,7 +66,14 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
         <Box>
           <ToolStatusIcon state={part.state} />
           <Text color={getToolCallColor(part.state)}> {toolName}</Text>
-          {displayInput && (
+          {displayInput && toolName === "run_command" && (
+            <Text color="gray" dimColor wrap="truncate-end">
+              {" "}
+              <Text color="green">$ </Text>
+              {displayInput}
+            </Text>
+          )}
+          {displayInput && toolName !== "run_command" && (
             <Text color="gray" dimColor>
               {" "}
               {formatToolInput(JSON.parse(displayInput))}
@@ -77,9 +90,10 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
         {/* Show streaming input */}
         {part.state === "input-streaming" && displayInput && (
           <Box>
-            <Text color="gray" dimColor>
+            <Spinner />
+            {/* <Text color="gray" dimColor>
               {displayInput}...
-            </Text>
+            </Text> */}
           </Box>
         )}
 

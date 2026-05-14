@@ -30,7 +30,7 @@ export class SessionStore {
   /**
    * Create a new empty session and return its ID.
    */
-  async create(options: { provider: string; model: string; name?: string }): Promise<SessionData> {
+  create(options: { provider: string; model: string; name?: string }): SessionData {
     const id = generateId("ses");
     const now = Date.now();
 
@@ -49,7 +49,6 @@ export class SessionStore {
       updatedAt: now,
     };
 
-    await this.save(session);
     return session;
   }
 

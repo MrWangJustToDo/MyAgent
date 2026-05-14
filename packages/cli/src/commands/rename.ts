@@ -1,6 +1,11 @@
 import { generateText } from "ai";
+import { toRaw } from "reactivity-store";
+
+import { useAgent } from "../hooks/use-agent.js";
 
 import { registerCommand } from "./registry.js";
+
+import type { AgentLog } from "@my-agent/core";
 
 registerCommand({
   name: "rename",
@@ -61,13 +66,20 @@ registerCommand({
     ctx.inputActions.setInputFeedback("Generating title...", "info");
 
     try {
+      const agentLog = toRaw(useAgent.getReactiveState().agent?.getLog()) as AgentLog | null;
+
+      agentLog?.info("chat", "Generating title...", { recentText, model });
+
       const { text } = await generateText({
         model,
-        maxOutputTokens: 30,
+        maxOutputTokens: 60,
         system:
           "Generate a concise title (3-8 words) for the following conversation. Return ONLY the title, no quotes or punctuation.",
         prompt: recentText,
+        temperature: 0.3,
       });
+
+      agentLog?.info("chat", "Title generated", { text });
 
       const generated = text.trim().slice(0, 80);
       if (!generated) {

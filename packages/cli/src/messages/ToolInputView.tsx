@@ -1,5 +1,5 @@
 import { getToolName, type ToolUIPart } from "ai";
-import { Box } from "ink";
+import { Box, Text } from "ink";
 
 import { EditDiff } from "../components/EditDiff";
 import { SplitNode } from "../components/SplitNode";
@@ -96,6 +96,63 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
             />
           ))}
         </SplitNode>
+      </Box>
+    );
+  }
+
+  // Show run_command input: display the full command text in terminal style
+  if (toolName === "run_command") {
+    if (part.state === "input-streaming") return null;
+
+    const content = part.input as {
+      command: string;
+      cwd?: string;
+      env?: Record<string, string>;
+      timeout?: number;
+      background?: boolean;
+    };
+
+    if (!content?.command) return null;
+
+    return (
+      <Box flexDirection="column" paddingLeft={1}>
+        {/* Show the command with a terminal prompt */}
+        <Box>
+          <Text color="green">$ </Text>
+          <Text>{content.command}</Text>
+        </Box>
+        {/* Show cwd if present */}
+        {content.cwd && (
+          <Box paddingLeft={2}>
+            <Text color="gray" dimColor>
+              cwd: {content.cwd}
+            </Text>
+          </Box>
+        )}
+        {/* Show timeout if present */}
+        {content.timeout && (
+          <Box paddingLeft={2}>
+            <Text color="gray" dimColor>
+              timeout: {content.timeout}ms
+            </Text>
+          </Box>
+        )}
+        {/* Show background flag if true */}
+        {content.background && (
+          <Box paddingLeft={2}>
+            <Text color="gray" dimColor>
+              background: true
+            </Text>
+          </Box>
+        )}
+        {/* Show env vars if present */}
+        {content.env && Object.keys(content.env).length > 0 && (
+          <Box paddingLeft={2}>
+            <Text color="gray" dimColor>
+              env: {JSON.stringify(content.env)}
+            </Text>
+          </Box>
+        )}
       </Box>
     );
   }

@@ -224,9 +224,9 @@ export class Base {
   /**
    * Lazily create a session on first use (when user sends first message).
    */
-  private async ensureSession(): Promise<void> {
+  private ensureSession(): void {
     if (this.sessionData || !this.sessionStore || !this.sessionConfig) return;
-    const session = await this.sessionStore.create({
+    const session = this.sessionStore.create({
       provider: this.sessionConfig.provider,
       model: this.sessionConfig.model,
     });
@@ -259,7 +259,8 @@ export class Base {
   updateSessionUIMessages(uiMessages: UIMessage[]): void {
     if (!this.sessionStore) return;
     if (!this.sessionData) {
-      this.ensureSession().then(() => this.updateSessionUIMessages(uiMessages));
+      this.ensureSession();
+      this.updateSessionUIMessages(uiMessages);
       return;
     }
     this.sessionData.uiMessages = uiMessages;
@@ -657,7 +658,8 @@ export class Base {
   private saveSession(): void {
     if (!this.sessionStore || !this.context) return;
     if (!this.sessionData) {
-      this.ensureSession().then(() => this.saveSession());
+      this.ensureSession();
+      this.saveSession();
       return;
     }
 

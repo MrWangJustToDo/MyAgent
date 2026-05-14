@@ -166,6 +166,8 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
 
   const forceUpdate = useForceUpdate({ time: 600 });
 
+  const immediateForceUpdate = useForceUpdate({ time: 0 });
+
   // Chat instance ref - created once when connection is ready
   const chatRef = useRef<Chat<UIMessage> | null>(null);
 
@@ -273,6 +275,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
       } else {
         await chatHelpers.sendMessage({ text: content.text });
       }
+      immediateForceUpdate();
     },
     [agent, chatHelpers]
   );
