@@ -83,7 +83,17 @@ export type AgentConfig = CliAgentConfig;
 
 const DEFAULT_MODEL = "qwen2.5-coder:7b";
 const DEFAULT_PROVIDER: Provider = "ollama";
-const DEFAULT_SYSTEM_PROMPT = `You are an elite AI software engineer specializing in writing high-quality, maintainable code. Your expertise lies in understanding complex requirements, architecting robust solutions, and implementing them with precision and care.
+/**
+ * Build the default system prompt with dynamic context information.
+ */
+const buildDefaultSystemPrompt = (rootPath: string): string => {
+  const platform = `${process.platform} (${process.arch})`;
+
+  return `You are an elite AI software engineer specializing in writing high-quality, maintainable code. Your expertise lies in understanding complex requirements, architecting robust solutions, and implementing them with precision and care.
+
+**Environment Context**:
+- Working Directory: ${rootPath}
+- Platform: ${platform}
 
 **Core Principles**:
 - Write clean, readable, and well-documented code
@@ -157,6 +167,7 @@ const DEFAULT_SYSTEM_PROMPT = `You are an elite AI software engineer specializin
 - Prefer demonstrating through tools rather than lengthy explanations
 
 **Important**: You are an autonomous expert capable of handling tasks with minimal guidance. Your system prompt is your complete operational manual - use it to guide every decision.`;
+};
 
 const DEFAULT_MAX_ITERATIONS = 50;
 
@@ -199,7 +210,7 @@ export const useArgs = createState(
       model: DEFAULT_MODEL,
       url: DEFAULT_OLLAMA_URL,
       rootPath: process.cwd(),
-      systemPrompt: DEFAULT_SYSTEM_PROMPT,
+      systemPrompt: buildDefaultSystemPrompt(process.cwd()),
       initialPrompt: "",
       maxIterations: DEFAULT_MAX_ITERATIONS,
       debug: false,
@@ -235,11 +246,18 @@ export const useArgs = createState(
 
         state.parsed = parsed;
 
+        const isSandboxEnv = process.env.SANDBOX_ENV !== "native";
+
         // CLI args take priority over env vars, which take priority over defaults
         state.config.model = getFlagString(parsed, envModel || DEFAULT_MODEL, "model", "m");
         state.config.url = getFlagString(parsed, envUrl || DEFAULT_OLLAMA_URL, "url", "u");
         state.config.rootPath = getFlagString(parsed, process.cwd(), "path", "p");
-        state.config.systemPrompt = getFlagString(parsed, DEFAULT_SYSTEM_PROMPT, "system", "s");
+        state.config.systemPrompt = getFlagString(
+          parsed,
+          buildDefaultSystemPrompt(!isSandboxEnv ? state.config.rootPath : "/"),
+          "system",
+          "s"
+        );
         state.config.initialPrompt = parsed.positional.join(" ");
 
         // Parse max iterations from env or CLI
@@ -322,7 +340,7 @@ export const useArgs = createState(
         state.config.model = DEFAULT_MODEL;
         state.config.url = DEFAULT_OLLAMA_URL;
         state.config.rootPath = process.cwd();
-        state.config.systemPrompt = DEFAULT_SYSTEM_PROMPT;
+        state.config.systemPrompt = buildDefaultSystemPrompt(process.cwd());
         state.config.initialPrompt = "";
         state.config.maxIterations = DEFAULT_MAX_ITERATIONS;
         state.config.debug = false;

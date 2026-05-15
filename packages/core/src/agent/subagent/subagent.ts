@@ -314,6 +314,10 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
         throw new Error("max retry for current task");
       }
 
+      subagent.todoManager?.reset();
+      subagent.context?.reset();
+      subagent.context?.resetUsage();
+
       // Emit subagent:started event
       agentManager.emit({
         type: "subagent:started",
