@@ -203,6 +203,9 @@ MCP server with screenshot capability:
 ### 🔍 Codebase Exploration
 ![Codebase Exploration](codebase-exploration.png)
 
+### ✏️ Edit with Diff View
+![Edit Diff View](edit-diff-view.png)
+
 ### 🐛 Devtools Debug
 Built with [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools) powered by [@my-react framework](https://github.com/MrWangJustToDo/MyReact)
 
