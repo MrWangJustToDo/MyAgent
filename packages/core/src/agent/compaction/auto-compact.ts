@@ -18,7 +18,7 @@
 import { runSubagent } from "../subagent/subagent.js";
 
 import { buildCompactionPrompt, COMPACTION_SYSTEM_PROMPT, type CompactionTodoItem } from "./compaction-prompt.js";
-import { estimateMessageTokens, estimateTokens } from "./token-estimator.js";
+import { estimateTokens } from "./token-estimator.js";
 
 import type { CompactionConfig, CompactionResult } from "./types.js";
 import type { Sandbox } from "../../environment/types.js";
@@ -113,9 +113,7 @@ function getFirstTextPartContent(content: Array<unknown>): string {
  *
  * @returns extracted summary text and remaining messages (without the summary message)
  */
-function extractExistingSummary(
-  messages: ModelMessage[]
-): { existingSummary?: string; cleanMessages: ModelMessage[] } {
+function extractExistingSummary(messages: ModelMessage[]): { existingSummary?: string; cleanMessages: ModelMessage[] } {
   if (messages.length === 0) return { cleanMessages: messages };
 
   const first = messages[0];
@@ -139,92 +137,55 @@ function extractExistingSummary(
 }
 
 /**
- * Check whether an assistant message contains tool calls.
- */
-function hasToolCalls(message: ModelMessage): boolean {
-  if (message.role !== "assistant") return false;
-  const content = message.content;
-  if (!Array.isArray(content)) return false;
-  return content.some((part) => {
-    const p = part as Record<string, unknown>;
-    return p.type === "tool-call";
-  });
-}
-
-/**
- * Find the cut point index using a token-budget approach.
+ * Find the cut point by keeping the latest N assistant-tool flows.
  *
- * Walks backward from the end accumulating token estimates until the
- * `keepRecentTokens` budget is exceeded, then finds the nearest valid
- * cut point that won't orphan tool messages from their assistant.
+ * A "flow" is an assistant message followed by its tool result messages.
+ * The message pattern looks like:
+ *   [user] [assistant] [tool]* [assistant] [tool]* [assistant] [tool]* ...
  *
- * A valid cut point must satisfy:
- * 1. It's a user or assistant message (never a tool message)
- * 2. The kept messages (from cutIndex onward) don't start with tool
- *    messages that belong to a summarized assistant
- * 3. An assistant(tool_calls) message isn't separated from its tool results
+ * We walk backward counting flows, and cut before the Nth flow from the end.
+ * Everything before the cut point gets summarized.
  */
-function findCutPoint(messages: ModelMessage[], keepRecentTokens: number): number {
+function findCutPoint(messages: ModelMessage[], keepRecentFlows: number): number {
   if (messages.length === 0) return 0;
 
-  let accumulated = 0;
-  let rawCutIndex = 0;
+  let flowCount = 0;
+  let cutIndex = messages.length;
 
-  // Walk backward, accumulating token estimates
   for (let i = messages.length - 1; i >= 0; i--) {
-    accumulated += estimateMessageTokens(messages[i]);
-    if (accumulated >= keepRecentTokens) {
-      rawCutIndex = i;
-      break;
+    const role = messages[i].role;
+
+    if (role === "assistant" || role === "user") {
+      flowCount++;
+      if (flowCount > keepRecentFlows) {
+        // Cut right after this assistant message's preceding user message (if any),
+        // or at this assistant message itself
+        cutIndex = i;
+        break;
+      }
     }
   }
 
-  // If we never exceeded the budget, keep everything (cut at 0 = summarize nothing)
-  if (accumulated < keepRecentTokens) {
+  // If we didn't find enough flows, nothing to compact
+  if (flowCount <= keepRecentFlows) {
     return 0;
   }
 
-  // Find a valid cut point at or after rawCutIndex.
-  // Must be a user message, or an assistant message that is NOT followed
-  // by tool results that would get orphaned.
-  for (let i = rawCutIndex; i < messages.length; i++) {
-    const role = messages[i].role;
-    if (role === "tool") continue;
+  // Adjust: include any user message right before the cut point in the kept portion,
+  // since a user message is a natural boundary for the kept context
+  if (cutIndex > 0 && messages[cutIndex].role === "user") {
+    return cutIndex;
+  }
 
-    if (role === "user") {
-      return i;
-    }
-
-    if (role === "assistant") {
-      // If this assistant has tool_calls, we must include it AND all its
-      // subsequent tool results in the kept portion — so this is a valid cut.
-      // If it doesn't have tool_calls, it's also safe to cut here.
+  // If the cut lands on an assistant, include it in the summarized portion
+  // and find the next user boundary for the kept portion
+  for (let i = cutIndex + 1; i < messages.length; i++) {
+    if (messages[i].role === "user") {
       return i;
     }
   }
 
-  // Backward fallback: find the nearest user or assistant going back,
-  // but make sure we don't land just after an assistant(tool_calls)
-  // whose tool results would become the start of keptMessages.
-  for (let i = rawCutIndex - 1; i >= 0; i--) {
-    const role = messages[i].role;
-    if (role === "user" || role === "assistant") {
-      const candidateCut = i + 1;
-      // Verify the kept portion doesn't start with orphaned tool messages
-      if (candidateCut < messages.length && messages[candidateCut].role === "tool") {
-        // This would orphan tool messages — include the assistant(tool_calls) too
-        if (hasToolCalls(messages[i])) {
-          return i;
-        }
-        // The tool message belongs to an even earlier assistant; keep scanning back
-        continue;
-      }
-      return candidateCut;
-    }
-  }
-
-  // Ultimate fallback: summarize everything
-  return 0;
+  return cutIndex;
 }
 
 // ============================================================================
@@ -537,21 +498,12 @@ export async function autoCompact(
   sandbox: Sandbox,
   options?: SummarizeOptions & { actualTokens?: number }
 ): Promise<CompactionResult & { messages: ModelMessage[] }> {
-  const { keepRecentTokens = 20000 } = config;
+  const { keepRecentFlows = 4 } = config;
   const estimated = estimateTokens(messages);
   const tokensBefore = options?.actualTokens ?? estimated;
 
-  // Scale keepRecentTokens if actual token count diverges from estimation.
-  // estimateTokens uses chars/4 which underestimates heavily for micro-compacted messages.
-  // Use the ratio to correct findCutPoint's budget so it doesn't keep everything.
-  let scaledKeepRecent = keepRecentTokens;
-  if (options?.actualTokens && estimated > 0) {
-    const ratio = estimated / options.actualTokens;
-    scaledKeepRecent = Math.floor(keepRecentTokens * ratio);
-  }
-
-  // Find cut point: keep recent tokens, summarize the rest
-  const cutIndex = findCutPoint(messages, scaledKeepRecent);
+  // Find cut point: keep recent N assistant-tool flows, summarize the rest
+  const cutIndex = findCutPoint(messages, keepRecentFlows);
 
   // Nothing to summarize — everything fits within the keep-recent budget
   if (cutIndex === 0) {
@@ -564,33 +516,8 @@ export async function autoCompact(
     };
   }
 
-  // Walk the cut backward if keptMessages would start with orphaned tool messages.
-  // This is a safety net — findCutPoint should already handle this, but we
-  // guard against edge cases where the message structure is unexpected.
-  let safeCutIndex = cutIndex;
-  while (safeCutIndex > 0 && messages[safeCutIndex].role === "tool") {
-    safeCutIndex--;
-  }
-  // If we moved back and landed on an assistant with tool_calls, include it
-  if (safeCutIndex < cutIndex && safeCutIndex > 0 && messages[safeCutIndex].role !== "user") {
-    // Keep going back to find a user message or assistant without dangling tools
-    while (safeCutIndex > 0 && messages[safeCutIndex].role === "tool") {
-      safeCutIndex--;
-    }
-  }
-  // If safeCutIndex is 0 and it's a tool message, summarize everything
-  if (safeCutIndex === 0 && messages[0].role === "tool") {
-    return {
-      compacted: false,
-      tokensBefore,
-      tokensAfter: tokensBefore,
-      type: "auto",
-      messages,
-    };
-  }
-
-  const summaryMessages = messages.slice(0, safeCutIndex);
-  const keptMessages = messages.slice(safeCutIndex);
+  const summaryMessages = messages.slice(0, cutIndex);
+  const keptMessages = messages.slice(cutIndex);
 
   try {
     // Generate summary via subagent with optional focus and todos

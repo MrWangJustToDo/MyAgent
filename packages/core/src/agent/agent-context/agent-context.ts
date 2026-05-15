@@ -5,7 +5,7 @@
 import { generateId } from "../../base/utils.js";
 
 import type { StreamPart, ToolSet } from "../loop/Agent.js";
-import type { ModelMessage, OnFinishEvent, ToolModelMessage, TypedToolCall } from "ai";
+import type { ModelMessage, OnFinishEvent, TypedToolCall } from "ai";
 
 export interface TokenUsage {
   inputTokens: number;
@@ -204,17 +204,6 @@ export class AgentContext {
 
   setCompactMessage(m: ModelMessage, index: number) {
     this.compactMessages[index] = m;
-  }
-
-  processCompactMessage() {
-    const exist = this.compactMessages;
-    const final = Array.from(exist);
-    while (final[final.length - 1].role === "tool" && final[final.length - 2]?.role === "tool") {
-      const last = final.pop() as ToolModelMessage;
-      const newLast = final[final.length - 1] as ToolModelMessage;
-      newLast.content = [...newLast.content, ...last.content];
-    }
-    this.compactMessages = final;
   }
 
   getCompactMessages() {

@@ -25,8 +25,8 @@ export const compactionConfigSchema = z.object({
   keepRecentToolResults: z.number().int().nonnegative().default(3),
   /** Minimum size of tool result to consider for compaction (default: 100 chars) */
   minToolResultSize: z.number().int().nonnegative().default(100),
-  /** Number of recent tokens to keep after compaction (default: 20000) */
-  keepRecentTokens: z.number().int().positive().default(20000),
+  /** Number of recent assistant-tool flows to keep after compaction (default: 4) */
+  keepRecentFlows: z.number().int().positive().default(4),
 });
 
 /**
@@ -78,7 +78,7 @@ export const DEFAULT_COMPACTION_CONFIG: CompactionConfig = {
   compactAtPercent: 85,
   keepRecentToolResults: 3,
   minToolResultSize: 100,
-  keepRecentTokens: 20000,
+  keepRecentFlows: 4,
 };
 
 /**
