@@ -126,12 +126,21 @@ function extractExistingSummary(messages: ModelMessage[]): { existingSummary?: s
         ? getFirstTextPartContent(first.content)
         : "";
 
-  // Match [CONVERSATION SUMMARY] ... [END SUMMARY] at the start of the message
-  const match = text.match(/^\[CONVERSATION SUMMARY\]\n\n([\s\S]*?)\n\n\[END SUMMARY\]/);
-  if (!match) return { cleanMessages: messages };
+  // Detect [CONVERSATION SUMMARY] ... [END SUMMARY] at the start of the message.
+  // Uses startsWith/endsWith instead of regex for robustness against spacing variations.
+  const START_MARKER = "[CONVERSATION SUMMARY]";
+  const END_MARKER = "[END SUMMARY]";
+
+  if (!text.startsWith(START_MARKER)) return { cleanMessages: messages };
+
+  const endIndex = text.indexOf(END_MARKER);
+  if (endIndex === -1) return { cleanMessages: messages };
+
+  const summary = text.slice(START_MARKER.length, endIndex).trim();
+  if (!summary) return { cleanMessages: messages };
 
   return {
-    existingSummary: match[1].trim(),
+    existingSummary: summary,
     cleanMessages: messages.slice(1),
   };
 }
@@ -196,11 +205,15 @@ function findCutPoint(messages: ModelMessage[], keepRecentFlows: number): number
  * Tracked file operations from tool calls.
  * Used to append an accurate file list to the compaction summary,
  * so the LLM doesn't have to rely on memory to list which files were involved.
+ *
+ * To add new tools, update READ_TOOLS or WRITE_TOOLS below.
+ * For tools with non-standard arg field names (e.g., copy_file uses sourcePath/targetPath
+ * instead of path), add special handling in extractFileOpsFromMessages().
  */
 interface FileOps {
-  /** Files that were read (read_file, list_file, tree, etc.) */
+  /** Files that were read (read_file, list_file, tree, glob, grep, etc.) */
   readFiles: Set<string>;
-  /** Files that were created or modified (write_file, edit_file, search_replace, etc.) */
+  /** Files that were created or modified (write_file, edit_file, search_replace, copy_file, move_file, delete_file, etc.) */
   modifiedFiles: Set<string>;
 }
 

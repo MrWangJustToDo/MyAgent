@@ -205,7 +205,7 @@ export function microCompact(messages: ModelMessage[], config: Partial<Compactio
     // Don't compact small results
     if (tr.size < minToolResultSize) return false;
 
-    // Don't compact protected tools (skill, load_skill, compact)
+    // Don't compact protected tools (skill, load_skill, compact, todo)
     const toolName = toolCallMap.get(tr.toolCallId);
     if (toolName && PROTECTED_TOOLS.has(toolName)) return false;
 
