@@ -174,9 +174,25 @@ export const createExploreTools = createSubagentTools;
 
 /**
  * Extracts the summary from generateText result.
- * Simply returns the final result.text - that's the agent's final response.
+ *
+ * When the last step is a tool call (e.g. todo), result.text only contains
+ * that step's brief text, missing the actual findings from earlier steps.
+ * We find the last step where the LLM stopped naturally (finishReason !== "tool-calls")
+ * — that's the real summary/answer step.
  */
-export const extractSummary = (result: { text: string }): string => {
+export const extractSummary = (result: {
+  text: string;
+  steps?: Array<{ text?: string; finishReason?: string }>;
+}): string => {
+  if (result.steps && result.steps.length > 1) {
+    // Walk backward to find the last step that ended with text output, not a tool call
+    for (let i = result.steps.length - 1; i >= 0; i--) {
+      const step = result.steps[i];
+      if (step.finishReason !== "tool-calls" && step.text?.trim()) {
+        return step.text.trim();
+      }
+    }
+  }
   return result.text?.trim() || "(no summary)";
 };
 
@@ -250,7 +266,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
   const parentContext = parentAgent.getContext();
   const parentLog = parentAgent.getLog();
 
-  parentLog?.info("agent", `Starting subagent: ${description}`, { subagentId, prompt, initialMessages });
+  parentLog?.info("agent", `Starting subagent: ${description}`, { systemPrompt, subagentId, prompt, initialMessages });
 
   // Track iterations and usage
   let iterations = 0;

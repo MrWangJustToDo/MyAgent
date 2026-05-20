@@ -293,14 +293,13 @@ export class AgentManager {
       agent.setCompactionConfig(compactionConfig);
 
       const compactTool = createCompactTool({
-        getMessages: () => context.getMessagesForLLMWithoutInject({ agent }),
+        getMessages: () => context.getMessagesForLLM(),
         context,
         sandbox,
         agent,
         config: compactionConfig,
         todoManager,
         onCompact: () => {
-          agent.resetCompactHint();
           log.info("agent", "Compaction completed via compact tool");
         },
       });

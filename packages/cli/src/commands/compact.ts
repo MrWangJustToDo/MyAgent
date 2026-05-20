@@ -54,7 +54,6 @@ registerCommand({
         const absoluteCut = context.getCompactIndex() + result.cutIndex;
         context.setCompactIndex(absoluteCut);
         context.resetUsage();
-        agent.resetCompactHint();
       }
 
       const compressionRatio = tokensBefore > 0 ? Math.round((1 - result.tokensAfter / tokensBefore) * 100) : 0;

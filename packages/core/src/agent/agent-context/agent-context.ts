@@ -4,7 +4,7 @@
 
 import { generateId } from "../../base/utils.js";
 
-import type { Agent, StreamPart, ToolSet } from "../loop/Agent.js";
+import type { StreamPart, ToolSet } from "../loop/Agent.js";
 import type { ModelMessage, OnFinishEvent, TypedToolCall } from "ai";
 
 export interface TokenUsage {
@@ -205,28 +205,14 @@ export class AgentContext {
    */
   getMessagesForLLM(): ModelMessage[] {
     if (this.summaryMessage) {
-      return [this.summaryMessage, ...this.messages.slice(this.compactIndex)];
+      let list = this.messages.slice(this.compactIndex);
+      while (list[0].role !== "assistant") {
+        this.compactIndex--;
+        list = this.messages.slice(this.compactIndex);
+      }
+      return [this.summaryMessage, ...list];
     }
     return this.messages;
-  }
-
-  getMessagesForLLMWithoutInject({ agent }: { agent: Agent }): ModelMessage[] {
-    const items = this.getMessagesForLLM();
-
-    return items
-      .map((i) => {
-        if (i.role === "user") {
-          const content = i.content;
-          if (content.length === 1 && content[0].toString() === agent.todoManager?.getNagReminder()) {
-            return null;
-          }
-          if (content.length === 1 && content[0].toString() === agent.getCompactHint()) {
-            return null;
-          }
-        }
-        return i;
-      })
-      .filter(Boolean) as ModelMessage[];
   }
 
   setSummaryMessage(m: ModelMessage | null) {

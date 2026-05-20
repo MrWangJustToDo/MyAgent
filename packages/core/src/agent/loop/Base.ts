@@ -1,5 +1,6 @@
 import { generateText } from "ai";
 
+import { autoCompact, createCompactedMessages } from "../compaction/auto-compact.js";
 import { microCompact } from "../compaction/micro-compact.js";
 import { estimateTokens } from "../compaction/token-estimator.js";
 import { createTodoTool } from "../tools";
@@ -325,7 +326,7 @@ export class Base {
       if (lastMsg?.role === "tool" && Array.isArray(lastMsg.content)) {
         lastMsg.content.push({ type: "text", text: reminder } as never);
       } else if (lastMsg?.role !== "tool") {
-        finalMessages.push({ role: "user" as const, content: reminder });
+        finalMessages.push({ role: "user" as const, content: [{ type: "text", text: reminder }] });
       }
     }
 
@@ -446,12 +447,6 @@ export class Base {
     }
   }
 
-  private compactHintInjected = false;
-
-  getCompactHint() {
-    return "<system> The conversation context is getting large and approaching the token limit. Please call the `compact` tool now to compress the conversation history before continuing. </system>";
-  }
-
   createPrepareStep(userCallback?: PrepareStepFunction) {
     return (async (options) => {
       const res = userCallback ? await userCallback(options) : options;
@@ -473,35 +468,59 @@ export class Base {
 
       this.context?.setMessages(finalMessages);
 
-      const llmMessages = this.context?.getMessagesForLLM() || [];
+      let llmMessages = this.context?.getMessagesForLLM() || [];
 
-      // When threshold is exceeded, inject a transient hint asking the LLM to call compact tool.
-      // Follow the same pattern as nag reminders: if the last message is a tool message,
-      // append into its content array to avoid breaking the assistant→tool flow.
-      // The hint is only injected into the returned messages, not persisted into context.
-      if (this.shouldAutoCompact(llmMessages) && !this.compactHintInjected) {
-        this.log?.info("agent", "Injecting compact hint", {
-          usage: this.context?.getUsage(),
-          threshold: this.compactionConfig?.tokenThreshold ?? 100000,
-        });
+      // Auto-compaction: when threshold is exceeded, run compaction directly
+      // and update summaryMessage + compactIndex
+      if (this.shouldAutoCompact(llmMessages) && this.model && this.sandbox && this.context) {
+        try {
+          this.status = "compacting";
 
-        const hint = this.getCompactHint();
+          const incompleteTodos = this.todoManager?.getIncompleteTodos() ?? [];
+          const todos = incompleteTodos.map((t) => ({
+            content: t.content,
+            status: t.status as "pending" | "in_progress" | "completed",
+            priority: t.priority as "high" | "medium" | "low",
+          }));
 
-        const lastMsg = llmMessages[llmMessages.length - 1];
-        if (lastMsg?.role === "tool" && Array.isArray(lastMsg.content)) {
-          lastMsg.content.push({ type: "text", text: hint } as never);
-        } else {
-          llmMessages.push({ role: "user" as const, content: hint });
+          const actualTokens = this.context.getUsage().inputTokens ?? 0;
+          const result = await autoCompact(llmMessages, this.compactionConfig ?? {}, this.agentId, this.sandbox, {
+            todos: todos.length > 0 ? todos : undefined,
+            actualTokens: actualTokens || undefined,
+          });
+
+          const beforeLLMMessages = Array.from(llmMessages);
+
+          if (result.compacted && result.summary && result.cutIndex != null) {
+            const summaryMsg = createCompactedMessages(result.summary)[0];
+            this.context.setSummaryMessage(summaryMsg);
+            const absoluteCut = this.context.getCompactIndex() + result.cutIndex;
+            this.context.setCompactIndex(absoluteCut);
+            this.context.resetUsage();
+
+            // Re-read LLM messages after compaction
+            llmMessages = this.context.getMessagesForLLM();
+          }
+
+          this.log?.info("agent", "Auto-compaction completed", {
+            compacted: result.compacted,
+            summary: result.summary,
+            tokensBefore: result.tokensBefore,
+            tokensAfter: result.tokensAfter,
+            cutIndex: result.cutIndex,
+            beforeLLMMessages,
+            llmMessages,
+          });
+        } catch (err) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          this.log?.error("agent", "Auto-compaction failed, continuing with original messages", error);
+        } finally {
+          this.status = "running";
         }
-        this.compactHintInjected = true;
       }
 
       return { ...res, messages: llmMessages };
     }) as PrepareStepFunction;
-  }
-
-  resetCompactHint(): void {
-    this.compactHintInjected = false;
   }
 
   addPendingAbortController(abortController: AbortController): void {
