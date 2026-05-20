@@ -33,15 +33,22 @@ function getCompactOutput(part: ToolUIPart): string | null {
   return null;
 }
 
+/** Tools where displayInput is a raw string (path or command), not JSON */
+const RAW_INPUT_TOOLS = new Set(["run_command", "write_file", "edit_file", "search_replace"]);
+
 /** Build the header text: " toolName args (duration)" */
 function buildHeaderText(toolName: string, displayInput: string | null, durationMs: number | null): string {
   let header = ` ${toolName}`;
 
-  if (displayInput && toolName !== "run_command") {
-    try {
-      header += ` ${formatToolInput(JSON.parse(displayInput))}`;
-    } catch {
+  if (displayInput) {
+    if (RAW_INPUT_TOOLS.has(toolName)) {
       header += ` ${displayInput}`;
+    } else {
+      try {
+        header += ` ${formatToolInput(JSON.parse(displayInput))}`;
+      } catch {
+        header += ` ${displayInput}`;
+      }
     }
   }
 
@@ -57,6 +64,9 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
   const needsApproval = part.state === "approval-requested" && part.approval;
   const toolName = getToolName(part);
 
+  /** Tools that only need the file path in the header */
+  const FILE_PATH_TOOLS = new Set(["write_file", "edit_file", "search_replace"]);
+
   const getDisplayInput = (): string | null => {
     if (part.input !== undefined && part.input !== null) {
       if (toolName === "task" && typeof part.input === "object") {
@@ -66,6 +76,10 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
       if (toolName === "run_command" && typeof part.input === "object") {
         const { command } = part.input as { command?: string };
         return command ?? null;
+      }
+      if (FILE_PATH_TOOLS.has(toolName) && typeof part.input === "object") {
+        const { path } = part.input as { path?: string };
+        return path ?? null;
       }
       return typeof part.input === "string" ? part.input : JSON.stringify(part.input);
     }

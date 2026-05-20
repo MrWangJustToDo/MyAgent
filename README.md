@@ -7,7 +7,7 @@
 
 An open-source AI coding agent built on [Vercel AI SDK](https://sdk.vercel.ai/docs) with a beautiful terminal interface powered by [@my-react framework](https://github.com/MrWangJustToDo/MyReact).
 
-![My Agent CLI](cli-demo.png)
+![My Agent CLI](toolflow.png)
 
 ---
 
@@ -59,7 +59,7 @@ Works with **any LLM provider** via the Vercel AI SDK — **OpenAI, Ollama (nati
 A **React-powered terminal interface** using [@my-react/react-terminal](https://github.com/MrWangJustToDo/MyReact/tree/main/packages/myreact-terminal) — syntax highlighting via Shiki, diff views, streaming markdown rendering, input history, and ink-inspired components.
 
 ### ✅ Tool Approval Flow
-**Interactive approval** for sensitive operations. Review file writes, command executions, and web requests before they happen. Press `y` to approve, `n` to deny.
+**Interactive approval** for sensitive operations. Review file writes, command executions, and web requests before they happen. Press `y` to approve, `n` to enter deny-reason mode where you can type a custom reason. Slash commands (`/help`, etc.) are available during approval.
 
 ### 🧠 Subagent System
 Delegate complex tasks to **context-isolated subagents** — each with its own conversation history, read-only tools, and a 30-step iteration limit. Perfect for parallel research or focused problem-solving.
@@ -191,20 +191,17 @@ MCP server with screenshot capability:
 
 ## 📸 Screenshots
 
-### 🖥️ CLI Terminal
-![CLI Terminal Demo](cli-demo.png)
-
-### ✅ Tool Approval Flow
-![Tool Approval](tool_approval.png)
-
-### 🌐 Web Search & Fetch
-![Web Tools](web_tool.png)
-
-### 🔍 Codebase Exploration
-![Codebase Exploration](codebase-exploration.png)
+### 🖥️ Tool Flow
+![Tool Flow](toolflow.png)
 
 ### ✏️ Edit with Diff View
-![Edit Diff View](edit-diff-view.png)
+![Edit Diff View](editdiff.png)
+
+### 📝 Markdown Rendering
+![Markdown Rendering](markdown.png)
+
+### 🧠 Subagent
+![Subagent](subagent.png)
 
 ### 🐛 Devtools Debug
 Built with [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools) powered by [@my-react framework](https://github.com/MrWangJustToDo/MyReact)
@@ -214,9 +211,6 @@ Built with [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools
 
 ### 🌍 Browser Extension
 ![Extension](extension.png)
-
-### 💬 Conversation Summary
-![Terminal Demo](terminal-demo.png)
 
 ---
 
@@ -465,14 +459,18 @@ Add to your `claude_desktop_config.json`:
 
 ### CLI
 
-| Key | When Running | When Idle |
-|-----|--------------|-----------|
-| `Esc` | Abort current run | Exit app |
-| `Ctrl+C` | Exit app | Exit app |
-| `y` | Approve pending tool | — |
-| `n` | Deny pending tool | — |
-| `↑` / `↓` | — | Navigate input history |
-| `Enter` | — | Submit input |
+| Key | When Running | When Idle | When Approval Pending |
+|-----|--------------|-----------|----------------------|
+| `Esc` | Abort current run | — | Cancel deny-reason input |
+| `Ctrl+C` | Exit app | Exit app | Exit app |
+| `Ctrl+U` | — | Clear input | — |
+| `Ctrl+A` | — | Select all | — |
+| `Ctrl+V` | — | Paste image | — |
+| `y` | — | — | Approve (when input empty) |
+| `n` | — | — | Enter deny-reason mode (when input empty) |
+| `↑` / `↓` | — | Navigate history / autocomplete | Navigate autocomplete |
+| `Enter` | — | Submit input | Submit deny reason / slash command |
+| `/...` | — | Slash commands | Slash commands |
 
 ---
 

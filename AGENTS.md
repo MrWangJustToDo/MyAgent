@@ -487,6 +487,7 @@ const agent = await agentManager.createManagedAgent({
     tokenThreshold: 100000,      // Default: 100000 (~100k tokens)
     keepRecentToolResults: 3,    // Default: 3
     minToolResultSize: 100,      // Default: 100 chars
+    keepRecentFlows: 4,          // Default: 4 (assistant-tool flows to keep)
   },
 });
 ```
@@ -522,13 +523,15 @@ packages/core/src/agent/
 │   ├── token-estimator.ts  # estimateTokens(), estimateMessageTokens()
 │   ├── compaction-prompt.ts # COMPACTION_PROMPT, buildCompactionPrompt()
 │   ├── micro-compact.ts    # microCompact() - Layer 1
-│   ├── auto-compact.ts     # autoCompact(), shouldAutoCompact() - Layer 2
+│   ├── auto-compact.ts     # autoCompact(), shouldAutoCompact(), findCutPoint() - Layer 2
 │   └── index.ts            # Exports
 ├── tools/
 │   └── compact-tool.ts     # compact tool - Layer 3
 ├── loop/
 │   └── base.ts             # createPrepareStep() integration
 ```
+
+**Auto-compact cut-point strategy:** Instead of token-budget estimation, `findCutPoint()` counts assistant-tool "flows" from the end and keeps the latest N (default: 4). Everything before the Nth flow is summarized. This is simpler and more predictable than token estimation.
 
 ### Integration Points
 
@@ -612,14 +615,18 @@ The read_file tool supports multiple file types:
 
 ## CLI Keyboard Shortcuts
 
-| Key | When Running | When Idle |
-|-----|--------------|-----------|
-| `Esc` | Aborts current agent run | Exits the app |
-| `Ctrl+C` | Exits the app | Exits the app |
-| `y` | Approves pending tool | - |
-| `n` | Denies pending tool | - |
-| `↑/↓` | - | Navigate input history |
-| `Enter` | - | Submit input |
+| Key | When Running | When Idle | When Approval Pending |
+|-----|--------------|-----------|----------------------|
+| `Esc` | Aborts current agent run | - | Cancel deny-reason input |
+| `Ctrl+C` | Exits the app | Exits the app | Exits the app |
+| `Ctrl+U` | - | Clear input | - |
+| `Ctrl+A` | - | Select all | - |
+| `Ctrl+V` | - | Paste image | - |
+| `y` | - | - | Approve (when input empty) |
+| `n` | - | - | Enter deny-reason mode (when input empty) |
+| `↑/↓` | - | Navigate input history / autocomplete | Navigate autocomplete |
+| `Enter` | - | Submit input | Submit deny reason / slash command |
+| `/...` | - | Slash commands | Slash commands (during approval) |
 
 ## File Structure
 
