@@ -155,11 +155,14 @@ async function createNativeSandbox(config: SandboxConfig): Promise<Sandbox> {
   const sandboxId = `native-${++nativeSandboxCounter}-${Date.now()}`;
 
   /**
-   * Resolve a path relative to the sandbox root
+   * Resolve a path relative to the sandbox root.
+   * If the path is already absolute and within rootPath, use it directly.
    */
-  const resolvePath = (relativePath: string): string => {
-    // Handle absolute paths within the sandbox
-    const normalized = relativePath.startsWith("/") ? relativePath.slice(1) : relativePath;
+  const resolvePath = (inputPath: string): string => {
+    if (inputPath.startsWith(rootPath)) {
+      return inputPath;
+    }
+    const normalized = inputPath.startsWith("/") ? inputPath.slice(1) : inputPath;
     return path.join(rootPath, normalized);
   };
 

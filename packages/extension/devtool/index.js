@@ -1884,13 +1884,17 @@
             }
             Dispatcher.useSignal(null);
             Dispatcher.useId();
+            if (typeof Dispatcher.useEffectEvent === "function") {
+              Dispatcher.useEffectEvent(function (args) {});
+            }
           } finally {
             readHookLog = hookLog;
             hookLog = [];
           }
           for (var i = 0; i < readHookLog.length; i++) {
             var hook = readHookLog[i];
-            cache.set(hook.primitive, ErrorStackParser.parse(hook.stackError));
+            hook.hookStack = deduplicateFrames(ErrorStackParser.parse(hook.stackError));
+            cache.set(hook.primitive, hook.hookStack);
           }
           primitiveStackCache = cache;
         }
@@ -2332,6 +2336,23 @@
       // frame as the last frame of the hook call because long stack traces can be
       // truncated to a stack trace limit.
       var mostLikelyAncestorIndex = 0;
+      // Bun's JSC-based runtime produces duplicate consecutive stack frames for the
+      // same function (one at the declaration line, one at the call-site line). This
+      // breaks the stack comparison logic. Deduplicate by collapsing consecutive
+      // frames that share the same fileName and functionName.
+      function deduplicateFrames(frames) {
+        if (frames.length <= 1) return frames;
+        var result = [frames[0]];
+        for (var i = 1; i < frames.length; i++) {
+          var prev = frames[i - 1];
+          var curr = frames[i];
+          if (prev.fileName === curr.fileName && prev.functionName === curr.functionName) {
+            continue;
+          }
+          result.push(curr);
+        }
+        return result;
+      }
       function findSharedIndex(hookStack, rootStack, rootIndex) {
         var source = rootStack[rootIndex].source;
         hookSearch: for (var i = 0; i < hookStack.length; i++) {
@@ -2374,6 +2395,7 @@
       function findPrimitiveIndex(hookStack, hook) {
         var stackCache = getPrimitiveStackCache();
         var primitiveStack = stackCache.get(hook.primitive);
+        hook.primitiveStack = primitiveStack;
         if (primitiveStack === undefined) {
           return -1;
         }
@@ -2397,7 +2419,9 @@
       function parseTrimmedStack(rootStack, hook) {
         // Get the stack trace between the primitive hook function and
         // the root function call. I.e. the stack frames of custom hooks.
-        var hookStack = ErrorStackParser.parse(hook.stackError);
+        var hookStack = deduplicateFrames(ErrorStackParser.parse(hook.stackError));
+        hook.hookStack = hookStack;
+        hook.rootStack = rootStack;
         var rootIndex = findCommonAncestorIndex(rootStack, hookStack);
         var primitiveIndex = findPrimitiveIndex(hookStack, hook);
         if (rootIndex === -1 || primitiveIndex === -1 || rootIndex - primitiveIndex < 2) {
@@ -2442,6 +2466,9 @@
         return functionName.slice(startIndex);
       }
       function buildTree(rootStack, readHookLog) {
+        globalThis["$$$$hookStack"] = rootStack;
+        globalThis["$$$$hookLog"] = readHookLog;
+        mostLikelyAncestorIndex = 0;
         var rootChildren = [];
         var prevStack = null;
         var levelChildren = rootChildren;
@@ -2465,13 +2492,18 @@
           }
           if (stack !== null) {
             stack = Array.isArray(stack) ? stack : [stack];
-            // Note: The indices 0 <= n < length-1 will contain the names.
-            // The indices 1 <= n < length will contain the source locations.
-            // That's why we get the name from n - 1 and don't check the source
-            // of index 0.
+            // The stack array represents the custom hook wrappers between the primitive
+            // hook and the component, ordered from innermost to outermost:
+            //   [innerCustomHook, outerCustomHook, ..., componentCallSite]
+            //
+            // Indices 0..length-2 contain the functionName used as wrapper names.
+            // Indices 1..length-1 contain the source locations used for hookSource.
+            //
+            // We compare from the END (outermost) to find how many wrapper levels
+            // are shared with the previous hook (commonSteps). Shared levels mean
+            // both hooks live inside the same custom hook instance.
             var commonSteps = 0;
             if (prevStack !== null) {
-              // Compare the current level's stack to the new stack.
               while (commonSteps < stack.length && commonSteps < prevStack.length) {
                 var stackSource = stack[stack.length - commonSteps - 1].source;
                 var prevSource = prevStack[prevStack.length - commonSteps - 1].source;
@@ -2480,9 +2512,23 @@
                 }
                 commonSteps++;
               }
-              // Pop back the stack as many steps as were not common.
-              for (var j = prevStack.length - 1; j > commonSteps; j--) {
-                // $FlowFixMe[incompatible-type]
+              // Pop back to the correct tree depth.
+              //
+              // React's original code: `for (j = prevStack.length - 1; j > commonSteps; j--)`
+              // It works in React because composite hooks like useSyncExternalStore internally
+              // call nextHook() multiple times (e.g. once for state, once for effect), so their
+              // stack always passes through the same custom hook wrappers as sibling primitives.
+              // This means prevStack.length always equals stackOfChildren.length + 1 in React.
+              //
+              // In @my-react, useSyncExternalStore is a single hook node — it doesn't compose
+              // multiple internal hooks. So when useAppState() calls:
+              //   1. useContext() via useAppStore() → stack: [useAppStore, useAppState, REPL] (len=3)
+              //   2. useSyncExternalStore() directly → stack: [REPL] (len=1)
+              // After #2, prevStack.length=1 but stackOfChildren still has depth=1 from #1's pushes.
+              // The old loop `for(j=0; j>0;)` never pops, so the next hook nests incorrectly.
+              //
+              // Fix: use stackOfChildren.length (actual depth) instead of prevStack.length.
+              while (stackOfChildren.length > commonSteps) {
                 levelChildren = stackOfChildren.pop();
               }
             }
@@ -2541,6 +2587,7 @@
         }
         // Associate custom hook values (useDebugValue() hook entries) with the correct hooks.
         processDebugValues(rootChildren, null);
+        globalThis["$$$$hookTree"] = rootChildren;
         return rootChildren;
       }
       // Custom hooks support user-configurable labels (via the special useDebugValue() hook).
@@ -2619,7 +2666,8 @@
           hookLog = [];
           currentDispatcher.current.proxy = null;
         }
-        var rootStack = ancestorStackError === undefined ? [] : ErrorStackParser.parse(ancestorStackError);
+        var rootStack =
+          ancestorStackError === undefined ? [] : deduplicateFrames(ErrorStackParser.parse(ancestorStackError));
         return buildTree(rootStack, readHookLog);
       }
       function inspectHooksOfForwardRef(renderFunction, props, ref, currentDispatcher) {
@@ -2636,7 +2684,8 @@
           hookLog = [];
           currentDispatcher.current.proxy = null;
         }
-        var rootStack = ancestorStackError === undefined ? [] : ErrorStackParser.parse(ancestorStackError);
+        var rootStack =
+          ancestorStackError === undefined ? [] : deduplicateFrames(ErrorStackParser.parse(ancestorStackError));
         return buildTree(rootStack, readHookLog);
       }
       function inspectHooksOfFiber(fiber, dispatch) {
@@ -3019,6 +3068,7 @@
       };
       var inspectFiber = function (fiber) {
         var plainNode = getPlainNodeByFiber(fiber);
+        globalThis["$$$$1"] = fiber;
         if (!plainNode) {
           throw new Error("plainNode not found, look like a bug for @my-react/devtools");
         }

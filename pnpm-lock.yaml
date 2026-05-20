@@ -43,28 +43,28 @@ importers:
     dependencies:
       '@ai-sdk/react':
         specifier: ^3.0.179
-        version: 3.0.179(@my-react/react@0.3.24)(zod@4.4.3)
+        version: 3.0.179(@my-react/react@0.3.25)(zod@4.4.3)
       '@crosscopy/clipboard':
         specifier: ^0.3.6
         version: 0.3.6
       '@git-diff-view/cli':
-        specifier: ^0.1.3
-        version: 0.1.3(@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24)))(@my-react/react@0.3.24)
+        specifier: ^0.1.4
+        version: 0.1.4(@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25)))(@my-react/react@0.3.25)
       '@git-diff-view/core':
-        specifier: ^0.1.3
-        version: 0.1.3
+        specifier: ^0.1.4
+        version: 0.1.4
       '@git-diff-view/file':
-        specifier: ^0.1.3
-        version: 0.1.3
+        specifier: ^0.1.4
+        version: 0.1.4
       '@my-agent/core':
         specifier: workspace:*
         version: link:../core
       '@my-react/react':
-        specifier: ^0.3.24
-        version: 0.3.24(@my-react/react@0.3.24)
+        specifier: ^0.3.25
+        version: 0.3.25(@my-react/react@0.3.25)
       '@my-react/react-terminal':
-        specifier: ^0.0.23
-        version: 0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24))
+        specifier: ^0.0.24
+        version: 0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25))
       ai:
         specifier: ^6.0.177
         version: 6.0.177(zod@4.4.3)
@@ -82,19 +82,19 @@ importers:
         version: 17.3.1
       ink-big-text:
         specifier: ^2.0.0
-        version: 2.0.0(@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24)))(@my-react/react@0.3.24)
+        version: 2.0.0(@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25)))(@my-react/react@0.3.25)
       ink-gradient:
         specifier: ^4.0.0
-        version: 4.0.0(@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24)))
+        version: 4.0.0(@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25)))
       ink-link:
         specifier: ^5.0.0
-        version: 5.0.0(@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24)))
+        version: 5.0.0(@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25)))
       ink-select-input:
         specifier: ^6.2.0
-        version: 6.2.0(@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24)))(@my-react/react@0.3.24)
+        version: 6.2.0(@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25)))(@my-react/react@0.3.25)
       ink-tab:
         specifier: ^5.2.0
-        version: 5.2.0(@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24)))(@my-react/react@0.3.24)(@types/react@19.2.14)
+        version: 5.2.0(@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25)))(@my-react/react@0.3.25)(@types/react@19.2.14)
       lodash-es:
         specifier: ^4.17.23
         version: 4.17.23
@@ -103,7 +103,7 @@ importers:
         version: 1.0.2
       reactivity-store:
         specifier: ^0.4.0
-        version: 0.4.0(@my-react/react@0.3.24)
+        version: 0.4.0(@my-react/react@0.3.25)
       shiki:
         specifier: ^3.20.0
         version: 3.23.0
@@ -124,11 +124,11 @@ importers:
         specifier: ^19.2.14
         version: 19.2.14
       ink:
-        specifier: npm:@my-react/react-terminal@0.0.23
-        version: '@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24))'
+        specifier: npm:@my-react/react-terminal@0.0.24
+        version: '@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25))'
       react:
-        specifier: npm:@my-react/react@0.3.24
-        version: '@my-react/react@0.3.24(@my-react/react@0.3.24)'
+        specifier: npm:@my-react/react@0.3.25
+        version: '@my-react/react@0.3.25(@my-react/react@0.3.25)'
       socket.io-client:
         specifier: ^4.8.3
         version: 4.8.3
@@ -212,11 +212,11 @@ importers:
         specifier: 2.8.9
         version: 2.8.9(@types/react@19.2.14)(framer-motion@12.38.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.2.4)
       '@my-react/react':
-        specifier: ^0.3.24
-        version: 0.3.24(react@19.2.4)
+        specifier: ^0.3.25
+        version: 0.3.25(react@19.2.4)
       '@my-react/react-dom':
-        specifier: ^0.3.24
-        version: 0.3.24(@my-react/react@0.3.24(react@19.2.4))(react-dom@19.2.4(react@19.2.4))
+        specifier: ^0.3.25
+        version: 0.3.25(@my-react/react@0.3.25(react@19.2.4))(react-dom@19.2.4(react@19.2.4))
       ai:
         specifier: ^6.0.177
         version: 6.0.177(zod@4.4.3)
@@ -243,11 +243,11 @@ importers:
         version: 0.0.15
     devDependencies:
       '@my-react/react-refresh':
-        specifier: ^0.3.24
-        version: 0.3.24(@my-react/react@0.3.24(react@19.2.4))
+        specifier: ^0.3.25
+        version: 0.3.25(@my-react/react@0.3.25(react@19.2.4))
       '@my-react/react-vite':
-        specifier: ^0.0.30
-        version: 0.0.30(@my-react/react-refresh@0.3.24(@my-react/react@0.3.24(react@19.2.4)))(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(yaml@2.8.4))
+        specifier: ^0.0.31
+        version: 0.0.31(@my-react/react-refresh@0.3.25(@my-react/react@0.3.25(react@19.2.4)))(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(yaml@2.8.4))
       '@tailwindcss/postcss':
         specifier: ^4.2.4
         version: 4.2.4
@@ -941,20 +941,20 @@ packages:
   '@formatjs/intl-localematcher@0.6.2':
     resolution: {integrity: sha512-XOMO2Hupl0wdd172Y06h6kLpBz6Dv+J4okPLl4LPtzbr8f66WbIoy4ev98EBuZ6ZK4h5ydTN6XneT4QVpD7cdA==}
 
-  '@git-diff-view/cli@0.1.3':
-    resolution: {integrity: sha512-WDreSUF6DpJRzEpT4ehd5dHEQTHzILa/FZUDdMDoNpJwW7Kg7Lv8TSRg7KZW38dr/+NWleH9WPMKq6C+vqdXnQ==}
+  '@git-diff-view/cli@0.1.4':
+    resolution: {integrity: sha512-HPJ57LlLMFUU3v+rMOTYW5Mcc4+PK7DK8Eas2lQH5ivEhiff1tXxD3BEYwOvJK90meehclMITMRXhSgawoxTdw==}
     peerDependencies:
       ink: ^6.1.0
       react: ^19.2.0
 
-  '@git-diff-view/core@0.1.3':
-    resolution: {integrity: sha512-HNuxWv/DqxFRuZMq4EHmnFL4bVM68ON/GnCoTz35Q9SfIScgN3Qppoh2rj/GEpWV1XG+TjBFuSSoW8XBcx8+ew==}
+  '@git-diff-view/core@0.1.4':
+    resolution: {integrity: sha512-aYj29AmCYp3b6kVkfeWSdY4gNw8rFFncbo9pAQz8dLIxyDa8lvKu4/CZhMJdadxywKISFj6dgXpdYeL8iNiZvA==}
 
-  '@git-diff-view/file@0.1.3':
-    resolution: {integrity: sha512-ECafXpjH543lLTWtv7CaPrLlQEld3bBplPCUlly4uzO8Usbk4qqdtVJLmOiHIHMGXYMOIO4Ic5YSwseZnLgWUg==}
+  '@git-diff-view/file@0.1.4':
+    resolution: {integrity: sha512-dpl5LTwpxQKcTTWHWo0+YDgvXaxAQug5OEbqU9esN2Eqe6oA0jcGJD7gurNFhAuunRqokAyjsjish87Mqb4DPQ==}
 
-  '@git-diff-view/lowlight@0.1.3':
-    resolution: {integrity: sha512-X96p4GPc95vpnyhkdfOFnMqL+rD6vyCuwjUmSwk9vHbPL2bLGfYwg9qZ8s7tqmpIgqsDnVgjN0WIA4pIzJwZHQ==}
+  '@git-diff-view/lowlight@0.1.4':
+    resolution: {integrity: sha512-aLAccqEV/JSYjwmybCxp0OphQsEMI8iQ6khkyOVFE6zZFwXUE4sHy9Uiic7DuiwAZpKMZQLyD0RpggS89W+cQA==}
 
   '@heroui/accordion@2.2.28':
     resolution: {integrity: sha512-UuZDAMU0q8gTJZ4x11qq2qJs2VF19RaSsgTrpwaPdZamU+X6cUiiAc8xMkFgQF6XsoNvohTzofU2Id4ykAKdAg==}
@@ -1787,39 +1787,39 @@ packages:
     resolution: {integrity: sha512-mQ2s0pYYiav+tzCDR05Zptem8Ey2v8s11lri5RKGhTtL4COVCvVCk5vtyRYNT+9L8qSfyOqqefF9UtnW8mC5jA==}
     engines: {node: '>= 20.19.0'}
 
-  '@my-react/react-dom@0.3.24':
-    resolution: {integrity: sha512-gPODJUXOaJuSpaCe4XKvoFsw0HLttp1q0k2jkU4MtVsbw46lhY/QRrAqeeUbqvsqIeL38BtFfDvofIt4UmZosA==}
+  '@my-react/react-dom@0.3.25':
+    resolution: {integrity: sha512-i4wwzaW386mJybbFBEf+cLCGP38QGTVNcDQIXfEy004HUHvgPsWsWX75ZjU82JTYlFnSuzKJgpEnIv5t1D3D8g==}
     peerDependencies:
-      '@my-react/react': '>=0.3.24'
+      '@my-react/react': '>=0.3.25'
       react-dom: ^17 || ^18 || ^19
 
-  '@my-react/react-jsx@0.3.24':
-    resolution: {integrity: sha512-RgviSVFhgpTEvzQml0OZGZ9ib0fB4MaWauskhVOxhMtaBnXQ0OkeY58iksjg1B5qafOiHY5qDmQ8Lep3gPDtJg==}
+  '@my-react/react-jsx@0.3.25':
+    resolution: {integrity: sha512-FkjG76y62FDcPXOvDuM2uzBp/RJZf+gLd4lHgGPYIDCamck2pujQgAoZ383gbNfOUq9de7BrGT9Zm7pmEbQ/Gw==}
     peerDependencies:
-      '@my-react/react': '>=0.3.24'
+      '@my-react/react': '>=0.3.25'
 
-  '@my-react/react-refresh@0.3.24':
-    resolution: {integrity: sha512-tPlgxfZvDJBtQyJnUbSpT/DmvD6y2sRw86OTND0pD3wcwHco1jl5gy40hvEmIRhM2ER5Sfzp6UKwb1ZR6Ks4Dw==}
+  '@my-react/react-refresh@0.3.25':
+    resolution: {integrity: sha512-lEfohj16TNxRjpcwpS/Sq7gSa6YCIV7fqGoNnYeO2Q9jVpBpgekEKjKDAr5ZLQhJHVRVwRlfMkRFDSTvoFln0A==}
     peerDependencies:
-      '@my-react/react': '>=0.3.24'
+      '@my-react/react': '>=0.3.25'
 
-  '@my-react/react-terminal@0.0.23':
-    resolution: {integrity: sha512-Y1XX5/ruhXlICfU6t52nSkaz80fjVH03uqKQxY690HkoHUwDkuG1QIsX1wlfqrHmth/XG0xTcO9gFcJy9Mg9jA==}
+  '@my-react/react-terminal@0.0.24':
+    resolution: {integrity: sha512-cCSbT+WdLQVzqLfydzgMkb3Q/rFRRog0U5Upq8FdHYaDuj3J+1H/n3dOVrEP52Ap7S9gucFczNm9k5trd0KAag==}
     peerDependencies:
-      '@my-react/react': '>=0.3.24'
+      '@my-react/react': '>=0.3.25'
 
-  '@my-react/react-vite@0.0.30':
-    resolution: {integrity: sha512-z0fCP8RwUqTdC3Q3v7j/7XspgMxpqu7vIELMla0wBrD61s/ttZLqNJrd7er0b/KUFzOvmOwVuxpXUHYsvT+qhw==}
+  '@my-react/react-vite@0.0.31':
+    resolution: {integrity: sha512-Vf3glYOf6FcUB0TRfOvabmRd/t24nx+NW+OfdpQRA3/GN1zWLgxbxJSGmAlWg7YGQryp59yCFaxowL3Ug0IAAw==}
     peerDependencies:
       '@lazarv/rsc': ^0.0.0-experimental
-      '@my-react/react-refresh': '>=0.3.24'
+      '@my-react/react-refresh': '>=0.3.25'
       vite: ^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0
     peerDependenciesMeta:
       '@lazarv/rsc':
         optional: true
 
-  '@my-react/react@0.3.24':
-    resolution: {integrity: sha512-U2gWlzBNuiKTRtKLOOpvfCupddNSB+CmN6NjspPC/AOVTezsPhV02DfeiheRFL2BG1xqFKjUVOMfy8HXleZPTg==}
+  '@my-react/react@0.3.25':
+    resolution: {integrity: sha512-liFIYpvI4U+4NWtpZrjZA17P77u+fJQMTwzgKtUFMkR184rvbX6ohs4WHKEqmdt9OdvT/yu+TMgi9lwMp+Afhg==}
     peerDependencies:
       react: ^17 || ^18 || ^19
 
@@ -7268,12 +7268,12 @@ snapshots:
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/react@3.0.179(@my-react/react@0.3.24)(zod@4.4.3)':
+  '@ai-sdk/react@3.0.179(@my-react/react@0.3.25)(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider-utils': 4.0.27(zod@4.4.3)
       ai: 6.0.177(zod@4.4.3)
-      react: '@my-react/react@0.3.24(@my-react/react@0.3.24)'
-      swr: 2.4.1(@my-react/react@0.3.24)
+      react: '@my-react/react@0.3.25(@my-react/react@0.3.25)'
+      swr: 2.4.1(@my-react/react@0.3.25)
       throttleit: 2.1.0
     transitivePeerDependencies:
       - zod
@@ -7745,36 +7745,36 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@git-diff-view/cli@0.1.3(@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24)))(@my-react/react@0.3.24)':
+  '@git-diff-view/cli@0.1.4(@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25)))(@my-react/react@0.3.25)':
     dependencies:
-      '@git-diff-view/core': 0.1.3
+      '@git-diff-view/core': 0.1.4
       '@types/hast': 3.0.4
       chalk: 5.6.2
       fast-diff: 1.3.0
       highlight.js: 11.11.1
-      ink: '@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24))'
+      ink: '@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25))'
       lowlight: 3.3.0
-      react: '@my-react/react@0.3.24(@my-react/react@0.3.24)'
-      reactivity-store: 0.4.0(@my-react/react@0.3.24)
+      react: '@my-react/react@0.3.25(@my-react/react@0.3.25)'
+      reactivity-store: 0.4.0(@my-react/react@0.3.25)
       string-width: 7.2.0
-      use-sync-external-store: 1.6.0(@my-react/react@0.3.24)
+      use-sync-external-store: 1.6.0(@my-react/react@0.3.25)
 
-  '@git-diff-view/core@0.1.3':
+  '@git-diff-view/core@0.1.4':
     dependencies:
-      '@git-diff-view/lowlight': 0.1.3
+      '@git-diff-view/lowlight': 0.1.4
       fast-diff: 1.3.0
       highlight.js: 11.11.1
       lowlight: 3.3.0
 
-  '@git-diff-view/file@0.1.3':
+  '@git-diff-view/file@0.1.4':
     dependencies:
-      '@git-diff-view/core': 0.1.3
+      '@git-diff-view/core': 0.1.4
       diff: 8.0.3
       fast-diff: 1.3.0
       highlight.js: 11.11.1
       lowlight: 3.3.0
 
-  '@git-diff-view/lowlight@0.1.3':
+  '@git-diff-view/lowlight@0.1.4':
     dependencies:
       '@types/hast': 3.0.4
       highlight.js: 11.11.1
@@ -9029,26 +9029,26 @@ snapshots:
       prebuild-install: 7.1.3
     optional: true
 
-  '@my-react/react-dom@0.3.24(@my-react/react@0.3.24(react@19.2.4))(react-dom@19.2.4(react@19.2.4))':
+  '@my-react/react-dom@0.3.25(@my-react/react@0.3.25(react@19.2.4))(react-dom@19.2.4(react@19.2.4))':
     dependencies:
-      '@my-react/react': 0.3.24(react@19.2.4)
+      '@my-react/react': 0.3.25(react@19.2.4)
       react-dom: 19.2.4(react@19.2.4)
 
-  '@my-react/react-jsx@0.3.24(@my-react/react@0.3.24(@my-react/react@0.3.24))':
+  '@my-react/react-jsx@0.3.25(@my-react/react@0.3.25(@my-react/react@0.3.25))':
     dependencies:
-      '@my-react/react': 0.3.24(@my-react/react@0.3.24)
+      '@my-react/react': 0.3.25(@my-react/react@0.3.25)
 
-  '@my-react/react-jsx@0.3.24(@my-react/react@0.3.24(react@19.2.4))':
+  '@my-react/react-jsx@0.3.25(@my-react/react@0.3.25(react@19.2.4))':
     dependencies:
-      '@my-react/react': 0.3.24(react@19.2.4)
+      '@my-react/react': 0.3.25(react@19.2.4)
 
-  '@my-react/react-refresh@0.3.24(@my-react/react@0.3.24(react@19.2.4))':
+  '@my-react/react-refresh@0.3.25(@my-react/react@0.3.25(react@19.2.4))':
     dependencies:
-      '@my-react/react': 0.3.24(react@19.2.4)
+      '@my-react/react': 0.3.25(react@19.2.4)
 
-  '@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24))':
+  '@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25))':
     dependencies:
-      '@my-react/react': 0.3.24(@my-react/react@0.3.24)
+      '@my-react/react': 0.3.25(@my-react/react@0.3.25)
       ansi-escapes: 7.3.0
       ansi-styles: 6.2.3
       auto-bind: 5.0.1
@@ -9072,12 +9072,12 @@ snapshots:
       wrap-ansi: 9.0.2
       yoga-layout: 3.2.1
 
-  '@my-react/react-vite@0.0.30(@my-react/react-refresh@0.3.24(@my-react/react@0.3.24(react@19.2.4)))(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(yaml@2.8.4))':
+  '@my-react/react-vite@0.0.31(@my-react/react-refresh@0.3.25(@my-react/react@0.3.25(react@19.2.4)))(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(yaml@2.8.4))':
     dependencies:
       '@babel/core': 7.29.0
       '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.29.0)
       '@babel/plugin-transform-react-jsx-source': 7.27.1(@babel/core@7.29.0)
-      '@my-react/react-refresh': 0.3.24(@my-react/react@0.3.24(react@19.2.4))
+      '@my-react/react-refresh': 0.3.25(@my-react/react@0.3.25(react@19.2.4))
       '@rolldown/pluginutils': 1.0.0-rc.6
       es-module-lexer: 1.7.0
       estree-walker: 3.0.3
@@ -9088,15 +9088,15 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@my-react/react@0.3.24(@my-react/react@0.3.24)':
+  '@my-react/react@0.3.25(@my-react/react@0.3.25)':
     dependencies:
-      '@my-react/react-jsx': 0.3.24(@my-react/react@0.3.24(@my-react/react@0.3.24))
-      react: '@my-react/react@0.3.24(@my-react/react@0.3.24)'
-      react-compiler-runtime: 1.0.0(@my-react/react@0.3.24)
+      '@my-react/react-jsx': 0.3.25(@my-react/react@0.3.25(@my-react/react@0.3.25))
+      react: '@my-react/react@0.3.25(@my-react/react@0.3.25)'
+      react-compiler-runtime: 1.0.0(@my-react/react@0.3.25)
 
-  '@my-react/react@0.3.24(react@19.2.4)':
+  '@my-react/react@0.3.25(react@19.2.4)':
     dependencies:
-      '@my-react/react-jsx': 0.3.24(@my-react/react@0.3.24(react@19.2.4))
+      '@my-react/react-jsx': 0.3.25(@my-react/react@0.3.25(react@19.2.4))
       react: 19.2.4
       react-compiler-runtime: 1.0.0(react@19.2.4)
 
@@ -12552,36 +12552,36 @@ snapshots:
 
   ini@6.0.0: {}
 
-  ink-big-text@2.0.0(@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24)))(@my-react/react@0.3.24):
+  ink-big-text@2.0.0(@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25)))(@my-react/react@0.3.25):
     dependencies:
       cfonts: 3.3.1
-      ink: '@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24))'
+      ink: '@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25))'
       prop-types: 15.8.1
-      react: '@my-react/react@0.3.24(@my-react/react@0.3.24)'
+      react: '@my-react/react@0.3.25(@my-react/react@0.3.25)'
 
-  ink-gradient@4.0.0(@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24))):
+  ink-gradient@4.0.0(@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25))):
     dependencies:
       '@types/gradient-string': 1.1.6
       gradient-string: 3.0.0
-      ink: '@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24))'
+      ink: '@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25))'
       strip-ansi: 7.2.0
 
-  ink-link@5.0.0(@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24))):
+  ink-link@5.0.0(@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25))):
     dependencies:
-      ink: '@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24))'
+      ink: '@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25))'
       terminal-link: 5.0.0
 
-  ink-select-input@6.2.0(@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24)))(@my-react/react@0.3.24):
+  ink-select-input@6.2.0(@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25)))(@my-react/react@0.3.25):
     dependencies:
       figures: 6.1.0
-      ink: '@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24))'
-      react: '@my-react/react@0.3.24(@my-react/react@0.3.24)'
+      ink: '@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25))'
+      react: '@my-react/react@0.3.25(@my-react/react@0.3.25)'
       to-rotated: 1.0.0
 
-  ink-tab@5.2.0(@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24)))(@my-react/react@0.3.24)(@types/react@19.2.14):
+  ink-tab@5.2.0(@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25)))(@my-react/react@0.3.25)(@types/react@19.2.14):
     dependencies:
-      ink: '@my-react/react-terminal@0.0.23(@my-react/react@0.3.24(@my-react/react@0.3.24))'
-      react: '@my-react/react@0.3.24(@my-react/react@0.3.24)'
+      ink: '@my-react/react-terminal@0.0.24(@my-react/react@0.3.25(@my-react/react@0.3.25))'
+      react: '@my-react/react@0.3.25(@my-react/react@0.3.25)'
     optionalDependencies:
       '@types/react': 19.2.14
 
@@ -13854,9 +13854,9 @@ snapshots:
 
   re2js@1.2.2: {}
 
-  react-compiler-runtime@1.0.0(@my-react/react@0.3.24):
+  react-compiler-runtime@1.0.0(@my-react/react@0.3.25):
     dependencies:
-      react: '@my-react/react@0.3.24(@my-react/react@0.3.24)'
+      react: '@my-react/react@0.3.25(@my-react/react@0.3.25)'
 
   react-compiler-runtime@1.0.0(react@19.2.4):
     dependencies:
@@ -13882,12 +13882,12 @@ snapshots:
 
   react@19.2.4: {}
 
-  reactivity-store@0.4.0(@my-react/react@0.3.24):
+  reactivity-store@0.4.0(@my-react/react@0.3.25):
     dependencies:
       '@vue/reactivity': 3.5.30
       '@vue/shared': 3.5.30
-      react: '@my-react/react@0.3.24(@my-react/react@0.3.24)'
-      use-sync-external-store: 1.6.0(@my-react/react@0.3.24)
+      react: '@my-react/react@0.3.25(@my-react/react@0.3.25)'
+      use-sync-external-store: 1.6.0(@my-react/react@0.3.25)
 
   reactivity-store@0.4.0(react@19.2.4):
     dependencies:
@@ -14643,11 +14643,11 @@ snapshots:
 
   svg-tags@1.0.0: {}
 
-  swr@2.4.1(@my-react/react@0.3.24):
+  swr@2.4.1(@my-react/react@0.3.25):
     dependencies:
       dequal: 2.0.3
-      react: '@my-react/react@0.3.24(@my-react/react@0.3.24)'
-      use-sync-external-store: 1.6.0(@my-react/react@0.3.24)
+      react: '@my-react/react@0.3.25(@my-react/react@0.3.25)'
+      use-sync-external-store: 1.6.0(@my-react/react@0.3.25)
 
   swr@2.4.1(react@19.2.4):
     dependencies:
@@ -15027,9 +15027,9 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.14
 
-  use-sync-external-store@1.6.0(@my-react/react@0.3.24):
+  use-sync-external-store@1.6.0(@my-react/react@0.3.25):
     dependencies:
-      react: '@my-react/react@0.3.24(@my-react/react@0.3.24)'
+      react: '@my-react/react@0.3.25(@my-react/react@0.3.25)'
 
   use-sync-external-store@1.6.0(react@19.2.4):
     dependencies:
