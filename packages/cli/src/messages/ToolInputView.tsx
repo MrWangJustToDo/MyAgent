@@ -117,8 +117,10 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
     return (
       <Box flexDirection="column" paddingLeft={1}>
         {/* Show the command with a terminal prompt */}
-        <Box>
-          <Text color="green">$ </Text>
+        <Box flexDirection="row">
+          <Box flexShrink={0}>
+            <Text color="green">$ </Text>
+          </Box>
           <Text>{content.command}</Text>
         </Box>
         {/* Show cwd if present */}

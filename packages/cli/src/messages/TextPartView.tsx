@@ -11,8 +11,8 @@ export interface TextPartViewProps {
 
 /** Render a text part */
 export const TextPartView = ({ part, role }: TextPartViewProps) => (
-  <Box>
-    {role === "user" ? <Text>{"> "}</Text> : <Text>{"- "}</Text>}
+  <Box flexDirection="row">
+    <Box flexShrink={0}>{role === "user" ? <Text>{"> "}</Text> : <Text>{"- "}</Text>}</Box>
     <Markdown content={part.text} />
   </Box>
 );
