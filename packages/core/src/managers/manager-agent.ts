@@ -469,6 +469,8 @@ export class AgentManager {
     // Restore todos
     if (session.todos?.length && todoManager) {
       todoManager.restoreTodos(session.todos);
+    } else {
+      todoManager.reset();
     }
 
     // Update agent's session reference

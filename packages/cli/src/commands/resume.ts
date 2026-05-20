@@ -62,7 +62,7 @@ registerCommand({
         ctx.setMessages(result.uiMessages);
         setTimeout(() => {
           useDynamic.getActions().setDynamicKey(Date.now());
-        }, 100);
+        }, 200);
       }
 
       return {

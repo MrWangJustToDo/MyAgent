@@ -11,10 +11,10 @@ export interface ThinkingPartViewProps {
 /** Render a reasoning/thinking part */
 export const ThinkingPartView = ({ part }: ThinkingPartViewProps) => {
   return (
-    <Box paddingLeft={2} paddingX={1} paddingY={0} marginY={0}>
+    <Box paddingLeft={2}>
       {part.state === "streaming" ? <Spinner /> : <Text color="green">✓</Text>}
       <Text> </Text>
-      <Text color="gray" dimColor wrap="wrap" italic>
+      <Text color="gray" dimColor italic>
         Thinking...
       </Text>
     </Box>

@@ -10,6 +10,7 @@ import { TodoStats } from "../components/TodoStats.js";
 import { UserInput } from "../components/UserInput.js";
 import { useAgent } from "../hooks/use-agent.js";
 import { useLocalChatStatus } from "../hooks/use-local-chat-status.js";
+import { useUserInput } from "../hooks/use-user-input.js";
 
 import type { AgentStatus } from "@my-agent/core";
 
@@ -30,7 +31,14 @@ export const Footer = () => {
     status = "error";
   }
 
-  const isInputEnabled = status === "idle" || status === "completed" || status === "error" || status === "aborted";
+  const denyMode = useUserInput((s) => s.denyMode);
+  const isInputEnabled =
+    denyMode ||
+    status === "idle" ||
+    status === "completed" ||
+    status === "error" ||
+    status === "aborted" ||
+    status === "waiting";
 
   return (
     <FullBox flexDirection="column" flexGrow={1} flexShrink={0} paddingY={1}>
@@ -84,9 +92,15 @@ export const Footer = () => {
 
       {/* Input */}
       <Box opaque>
-        <Text color={isInputEnabled ? "green" : "gray"} bold>
-          {">"}{" "}
-        </Text>
+        {denyMode ? (
+          <Text color="red" bold>
+            {"Deny reason > "}{" "}
+          </Text>
+        ) : (
+          <Text color={isInputEnabled ? "green" : "gray"} bold>
+            {">"}{" "}
+          </Text>
+        )}
         {isInputEnabled ? (
           <UserInput />
         ) : (
@@ -114,6 +128,11 @@ export const Footer = () => {
           {status === "running" && (
             <Text color="yellow" dimColor wrap="truncate">
               Abort: Esc
+            </Text>
+          )}
+          {denyMode && (
+            <Text color="yellow" dimColor wrap="truncate">
+              Submit: Enter | Cancel: Esc
             </Text>
           )}
         </Box>

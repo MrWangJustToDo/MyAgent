@@ -1,5 +1,6 @@
 import { DiffModeEnum, DiffView } from "@git-diff-view/cli";
 import { generateDiffFile } from "@git-diff-view/file";
+import { Box } from "ink";
 import { memo } from "react";
 
 import { useDiffFileCache } from "../hooks/use-diff-file-cache";
@@ -31,14 +32,16 @@ export const EditDiff = memo(
     diffFile.init();
 
     return (
-      <DiffView
-        width={width}
-        diffViewMode={DiffModeEnum.Unified}
-        diffFile={diffFile}
-        diffViewHideOperator
-        diffViewHighlight
-        diffViewTheme="dark"
-      />
+      <Box borderStyle="single" borderDimColor>
+        <DiffView
+          width={width - 4}
+          diffViewMode={DiffModeEnum.Unified}
+          diffFile={diffFile}
+          diffViewHideOperator
+          diffViewHighlight
+          diffViewTheme="dark"
+        />
+      </Box>
     );
   }
 );

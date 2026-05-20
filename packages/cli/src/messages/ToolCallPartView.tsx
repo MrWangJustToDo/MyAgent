@@ -26,21 +26,44 @@ const getDurationMs = (output: unknown): number | null => {
   return null;
 };
 
-/** Render a tool invocation part */
+/** Get a compact one-line output summary */
+function getCompactOutput(part: ToolUIPart): string | null {
+  const output = part.output as Record<string, unknown> | undefined;
+  if (!output) return null;
+  if (typeof output.message === "string") return output.message;
+  return null;
+}
+
+/** Build the header text: " toolName args (duration)" */
+function buildHeaderText(toolName: string, displayInput: string | null, durationMs: number | null): string {
+  let header = ` ${toolName}`;
+
+  if (displayInput && toolName !== "run_command") {
+    try {
+      header += ` ${formatToolInput(JSON.parse(displayInput))}`;
+    } catch {
+      header += ` ${displayInput}`;
+    }
+  }
+
+  if (durationMs !== null) {
+    header += ` (${formatDuration(durationMs)})`;
+  }
+
+  return header;
+}
+
+/** Render a tool invocation part — unified compact style for all tools */
 export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
   const needsApproval = part.state === "approval-requested" && part.approval;
-
   const toolName = getToolName(part);
 
-  // Get the input to display - prefer part.input, fallback to approvalInput
   const getDisplayInput = (): string | null => {
     if (part.input !== undefined && part.input !== null) {
-      // For task tool, only show the prompt
       if (toolName === "task" && typeof part.input === "object") {
         const { prompt } = part.input as { prompt?: string };
         return prompt ? JSON.stringify({ prompt }) : null;
       }
-      // For run_command, extract just the command text (not full JSON)
       if (toolName === "run_command" && typeof part.input === "object") {
         const { command } = part.input as { command?: string };
         return command ?? null;
@@ -51,70 +74,70 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
   };
 
   const displayInput = getDisplayInput();
-
-  // Check if output is available (state indicates completion)
   const hasOutput =
     part.state === "output-available" || part.state === "output-error" || part.state === "output-denied";
-
-  // Get duration from output if available
   const durationMs = hasOutput ? getDurationMs(part.output) : null;
 
+  const hasError = part.state === "output-error" || part.state === "output-denied";
+  const errorText =
+    hasError && part.state === "output-denied"
+      ? (part.approval?.reason ?? "Tool execution denied.")
+      : hasError
+        ? part.errorText
+        : null;
+
+  const compactOutput = hasOutput ? getCompactOutput(part) : null;
+  const headerText = buildHeaderText(toolName, displayInput, durationMs);
+
   return (
-    <Box borderStyle="round" width="100%" borderColor={getToolCallColor(part.state)} paddingX={1}>
-      <Box flexDirection="column" rowGap={1} width="100%">
-        {/* Header */}
-        <Box>
+    <Box flexDirection="column" paddingLeft={2}>
+      {/* Header: ✓ toolName args (duration) */}
+      <Box>
+        <Box flexShrink={0}>
           <ToolStatusIcon state={part.state} />
-          <Text color={getToolCallColor(part.state)}> {toolName}</Text>
-          {displayInput && toolName === "run_command" && (
-            <Text color="gray" dimColor wrap="truncate-end">
-              {" "}
-              <Text color="green">$ </Text>
-              {displayInput}
-            </Text>
-          )}
-          {displayInput && toolName !== "run_command" && (
-            <Text color="gray" dimColor>
-              {" "}
-              {formatToolInput(JSON.parse(displayInput))}
-            </Text>
-          )}
-          {durationMs !== null && (
-            <Text color="gray" dimColor>
-              {" "}
-              ({formatDuration(durationMs)})
-            </Text>
-          )}
         </Box>
-
-        {/* Show streaming input */}
-        {part.state === "input-streaming" && displayInput && (
-          <Box>
-            <Spinner />
-            {/* <Text color="gray" dimColor>
-              {displayInput}...
-            </Text> */}
-          </Box>
-        )}
-
-        <ToolInputView part={part} />
-
-        {/* Show output if available */}
-        {hasOutput && (
-          <Box flexDirection="column" width="100%">
-            <ToolOutputView part={part} />
-          </Box>
-        )}
-
-        {/* Approval prompt */}
-        {needsApproval && (
-          <Box flexDirection="column">
-            <Text color="yellow" bold>
-              Approval required. Press Y to approve, N to deny.
-            </Text>
-          </Box>
-        )}
+        <Text color={getToolCallColor(part.state)} dimColor wrap="truncate-end">
+          {headerText}
+        </Text>
       </Box>
+
+      {/* Streaming spinner */}
+      {part.state === "input-streaming" && (
+        <Box paddingLeft={2}>
+          <Spinner />
+        </Box>
+      )}
+
+      {/* Tool input (diffs, command text) */}
+      <ToolInputView part={part} />
+
+      {/* Detailed output for run_command/task */}
+      {hasOutput && <ToolOutputView part={part} />}
+
+      {/* Compact output or error */}
+      {errorText && (
+        <Box paddingLeft={2}>
+          <Text color="red" wrap="truncate-end">
+            {errorText}
+          </Text>
+        </Box>
+      )}
+      {compactOutput && !errorText && (
+        <Box paddingLeft={2}>
+          <Text color="gray" dimColor wrap="truncate-end">
+            {compactOutput}
+          </Text>
+        </Box>
+      )}
+
+      {/* Approval prompt */}
+      {needsApproval && (
+        <Box paddingLeft={2}>
+          <Text color="yellow" bold>
+            Approval required. Press Y to approve, N to deny.
+          </Text>
+        </Box>
+      )}
     </Box>
   );
 };

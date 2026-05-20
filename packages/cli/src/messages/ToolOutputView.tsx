@@ -1,25 +1,23 @@
 import { getToolName, type ToolUIPart } from "ai";
-import { Text } from "ink";
+import { Box, Text } from "ink";
 
-import { Spinner } from "../components/Spinner";
 import { formatToolOutput } from "../utils/format";
 
+/** Tools that show detailed multi-line output */
+const DETAILED_OUTPUT_TOOLS = new Set(["run_command", "task"]);
+
 export const ToolOutputView = ({ part }: { part: ToolUIPart }) => {
-  // Check if output is available (state indicates completion)
-  const hasOutput =
-    part.state === "output-available" || part.state === "output-error" || part.state === "output-denied";
-
-  if (!hasOutput) return <Spinner />;
-
-  const deniedReason = part.state === "output-denied" ? (part.approval?.reason ?? "Tool execution denied.") : undefined;
-  const errorText = part.errorText ?? deniedReason;
-
-  if (errorText) {
-    return <Text color="red">{errorText}</Text>;
-  }
+  if (part.state !== "output-available") return null;
 
   const toolName = getToolName(part);
 
-  // Use tool-specific formatter for better output display
-  return <Text color="gray">{formatToolOutput(part.output, toolName)}</Text>;
+  if (!DETAILED_OUTPUT_TOOLS.has(toolName)) return null;
+
+  return (
+    <Box paddingLeft={2}>
+      <Text color="gray" dimColor>
+        {formatToolOutput(part.output, toolName)}
+      </Text>
+    </Box>
+  );
 };

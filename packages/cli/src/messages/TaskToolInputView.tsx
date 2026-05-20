@@ -10,8 +10,13 @@ export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
 
   const useSubagent = useSubAgents({ subId: content.id });
 
-  const { allTools, length: total } = useSubagent.useDeepStableSelector((s) => ({
+  const {
+    allTools,
+    length: total,
+    finish,
+  } = useSubagent.useDeepStableSelector((s) => ({
     allTools: s.state?.getTools(),
+    finish: !s.state || !!s.state.finishInfo,
     length: s.state?.getTools().length || 0,
   }));
 
@@ -20,6 +25,8 @@ export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
   const toolName = currentTool ? currentTool.toolName : "";
 
   const toolInput = formatToolInput(currentTool?.input || {});
+
+  if (finish) return null;
 
   return (
     <Box>

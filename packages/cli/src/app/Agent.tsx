@@ -67,6 +67,12 @@ export const Agent = () => {
   });
 
   const hasInitRef = useRef(false);
+  const denyingRef = useRef<{
+    id: string;
+    isLast: boolean;
+    toolCallId?: string;
+    toolName?: string;
+  } | null>(null);
 
   const isReady = !initLoading;
 
@@ -182,29 +188,136 @@ export const Agent = () => {
       }
     }
 
-    // Handle approval responses when there's a pending approval
-    if (pendingApproval) {
-      const agentLog = toRaw(useAgent.getReactiveState().agent?.getLog()) as AgentLog | null;
-
-      const char = inputChar?.toLowerCase();
-      if (char === "y") {
-        agentLog?.approval(`user approve ${pendingApproval.id}`);
-        addToolApprovalResponse({ id: pendingApproval.id, approved: true });
+    // Handle deny-reason input mode: user is typing a reason after pressing 'n'
+    if (denyingRef.current) {
+      if (inputKey.escape) {
+        denyingRef.current = null;
+        inputActions.clear();
+        inputActions.setDenyMode(false);
         return;
       }
-      if (char === "n") {
-        agentLog?.approval(`user denying ${pendingApproval.id}`);
+      if (inputKey.return) {
+        const { text: reason } = inputActions.submit();
+
+        const info = denyingRef.current;
+        denyingRef.current = null;
+        inputActions.setDenyMode(false);
+        const agentLog = toRaw(useAgent.getReactiveState().agent?.getLog()) as AgentLog | null;
+        agentLog?.approval(`user denying ${info.id}: ${reason || "(no reason)"}`);
         addToolApprovalResponse({
-          id: pendingApproval.id,
+          id: info.id,
           approved: false,
-          reason: "User denied this tool execution. Do not assume the action was performed.",
-          isLast: currentPendingIsLast,
-          toolCallId: pendingApproval.toolCallId,
-          toolName: pendingApproval.toolName,
+          reason: reason || "User denied this tool execution. Do not assume the action was performed.",
+          isLast: info.isLast,
+          toolCallId: info.toolCallId,
+          toolName: info.toolName,
         });
         return;
       }
-      // Ignore other input while waiting for approval
+      if (inputKey.delete) {
+        inputActions.backspace();
+        return;
+      }
+      if (inputKey.leftArrow) {
+        inputActions.moveCursorLeft();
+        return;
+      }
+      if (inputKey.rightArrow) {
+        inputActions.moveCursorRight();
+        return;
+      }
+      if (inputChar && !inputKey.ctrl && !inputKey.meta) {
+        inputActions.append(inputChar);
+      }
+      return;
+    }
+
+    // Handle approval responses when there's a pending approval
+    if (pendingApproval) {
+      const currentValue = useUserInput.getReadonlyState().value;
+
+      // y/n only when input is empty — avoids conflict with typing
+      if (!currentValue) {
+        const char = inputChar?.toLowerCase();
+        if (char === "y") {
+          const agentLog = toRaw(useAgent.getReactiveState().agent?.getLog()) as AgentLog | null;
+          agentLog?.approval(`user approve ${pendingApproval.id}`);
+          addToolApprovalResponse({ id: pendingApproval.id, approved: true });
+          return;
+        }
+        if (char === "n") {
+          denyingRef.current = {
+            id: pendingApproval.id,
+            isLast: currentPendingIsLast,
+            toolCallId: pendingApproval.toolCallId,
+            toolName: pendingApproval.toolName,
+          };
+          inputActions.clear();
+          inputActions.setLoading(false);
+          inputActions.setDenyMode(true);
+          return;
+        }
+      }
+
+      // Tab: accept autocomplete suggestion
+      if (inputKey.tab && isAutocompleteVisible) {
+        const result = autocompleteActions.accept();
+        if (result) {
+          inputActions.setValue(result.value);
+        }
+        return;
+      }
+
+      // Up/Down: navigate autocomplete
+      if (inputKey.upArrow && isAutocompleteVisible) {
+        autocompleteActions.selectPrev();
+        return;
+      }
+      if (inputKey.downArrow && isAutocompleteVisible) {
+        autocompleteActions.selectNext();
+        return;
+      }
+
+      // Enter: accept autocomplete or dispatch slash command
+      if (inputKey.return) {
+        if (isAutocompleteVisible) {
+          const result = autocompleteActions.accept();
+          if (result) {
+            inputActions.setValue(result.value);
+          }
+          return;
+        }
+        const { text: input } = inputActions.submit();
+        if (input.startsWith("/")) {
+          dispatchCommand(input, commandCtx).then((handled) => {
+            if (!handled) {
+              inputActions.setInputError(`Unknown command: ${input.split(" ")[0]}`);
+            }
+          });
+        }
+        return;
+      }
+
+      // Allow typing during approval
+      if (inputKey.delete) {
+        inputActions.backspace();
+        const newValue = useUserInput.getReadonlyState().value;
+        autocompleteActions.update(newValue);
+        return;
+      }
+      if (inputKey.leftArrow) {
+        inputActions.moveCursorLeft();
+        return;
+      }
+      if (inputKey.rightArrow) {
+        inputActions.moveCursorRight();
+        return;
+      }
+      if (inputChar && !inputKey.ctrl && !inputKey.meta) {
+        inputActions.append(inputChar);
+        const newValue = useUserInput.getReadonlyState().value;
+        autocompleteActions.update(newValue);
+      }
       return;
     }
 

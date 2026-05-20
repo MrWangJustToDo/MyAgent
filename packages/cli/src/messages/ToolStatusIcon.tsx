@@ -12,19 +12,16 @@ export interface ToolStatusIconProps {
 export const ToolStatusIcon = ({ state }: ToolStatusIconProps) => {
   switch (state) {
     case "input-streaming":
-      return <Spinner text="" />;
     case "input-available":
-      return <Text color="cyan">...</Text>;
+    case "approval-responded":
+      return <Spinner text="" />;
     case "output-available":
       return <Text color="green">✓</Text>;
     case "output-error":
-      return <Text color="red">x</Text>;
+    case "output-denied":
+      return <Text color="red">✗</Text>;
     case "approval-requested":
       return <Text color="yellow">?</Text>;
-    case "approval-responded":
-      return <Text color="cyan">...</Text>;
-    case "output-denied":
-      return <Text color="red">x</Text>;
     default:
       return null;
   }
