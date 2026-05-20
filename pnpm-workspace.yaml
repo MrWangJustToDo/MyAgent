@@ -16,6 +16,7 @@ minimumReleaseAgeExclude:
   - "@my-react/react-terminal@0.0.24"
   - "@my-react/react-vite@0.0.31"
   - "@my-react/react@0.3.25"
+  - ink-stream-markdown@0.0.1
 
 publicHoistPattern:
   - "*eslint-*"

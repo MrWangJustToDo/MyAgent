@@ -28,19 +28,15 @@
     "ai": "^6.0.177",
     "ansi-escapes": "^7.3.0",
     "chalk": "^5.6.2",
-    "cli-table3": "^0.6.5",
     "dotenv": "^17.3.1",
     "ink-big-text": "^2.0.0",
     "ink-gradient": "^4.0.0",
     "ink-link": "^5.0.0",
     "ink-select-input": "^6.2.0",
+    "ink-stream-markdown": "^0.0.1",
     "ink-tab": "^5.2.0",
     "lodash-es": "^4.17.23",
-    "minilru": "^1.0.2",
-    "reactivity-store": "^0.4.0",
-    "shiki": "^3.20.0",
-    "stream-markdown-parser": "^0.0.67",
-    "terminal-link": "^5.0.0"
+    "reactivity-store": "^0.4.0"
   },
   "devDependencies": {
     "@types/lodash-es": "^4.17.12",

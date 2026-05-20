@@ -2,6 +2,7 @@
 import { configureSandboxEnv } from "@my-agent/core";
 import { config as loadEnv } from "dotenv";
 import { render } from "ink";
+import { initHighlighter } from "ink-stream-markdown";
 import { configureEnv } from "reactivity-store";
 
 import { App } from "./app";
@@ -22,4 +23,7 @@ const args = process.argv.slice(2);
 initArgs(args);
 
 // Render the app
-render(<App />, { incrementalRendering: false, maxFps: 30, exitOnCtrlC: false, renderProcess: true });
+
+initHighlighter().then(() => {
+  render(<App />, { incrementalRendering: false, maxFps: 30, exitOnCtrlC: false, renderProcess: true });
+});
