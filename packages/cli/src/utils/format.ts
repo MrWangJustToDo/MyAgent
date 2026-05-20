@@ -77,33 +77,28 @@ function formatRunCommandOutput(output: RunCommandOutput): string {
 
   const lines: string[] = [];
 
-  // Show exit status if failed
   if (!success) {
     lines.push(`Exit code: ${exitCode}`);
   }
 
-  // Show stderr if present (often contains errors/warnings)
+  // Show last few lines of stderr (most relevant for errors)
   if (stderr && stderr.trim()) {
     const stderrLines = stderr.trim().split("\n");
-    const maxLines = 20;
-    if (stderrLines.length <= maxLines) {
-      lines.push(...stderrLines.map((l) => `stderr: ${l}`));
-    } else {
-      lines.push(...stderrLines.slice(0, maxLines).map((l) => `stderr: ${l}`));
-      lines.push(`stderr: ... (${stderrLines.length - maxLines} more lines)`);
+    const tail = stderrLines.slice(-3);
+    if (stderrLines.length > 3) {
+      lines.push(`stderr: ... (${stderrLines.length - 3} more lines)`);
     }
+    lines.push(...tail.map((l) => `stderr: ${l}`));
   }
 
-  // Show stdout summary
+  // Show last few lines of stdout
   if (stdout && stdout.trim()) {
     const stdoutLines = stdout.trim().split("\n");
-    const maxLines = 30;
-    if (stdoutLines.length <= maxLines) {
-      lines.push(...stdoutLines);
-    } else {
-      lines.push(...stdoutLines.slice(0, maxLines));
-      lines.push(`... (${stdoutLines.length - maxLines} more lines)`);
+    const tail = stdoutLines.slice(-3);
+    if (stdoutLines.length > 3) {
+      lines.push(`... (${stdoutLines.length - 3} more lines)`);
     }
+    lines.push(...tail);
   }
 
   if (lines.length === 0) {

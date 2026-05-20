@@ -1,7 +1,6 @@
 import { getToolName } from "ai";
 import { Box, Text } from "ink";
 
-import { Spinner } from "../components/Spinner.js";
 import { formatToolInput, formatDuration } from "../utils/format.js";
 import { getToolCallColor } from "../utils/tool-state.js";
 
@@ -100,13 +99,6 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
           {headerText}
         </Text>
       </Box>
-
-      {/* Streaming spinner */}
-      {part.state === "input-streaming" && (
-        <Box paddingLeft={2}>
-          <Spinner />
-        </Box>
-      )}
 
       {/* Tool input (diffs, command text) */}
       <ToolInputView part={part} />
