@@ -1,4 +1,4 @@
-import { autoCompact, estimateTokens } from "@my-agent/core";
+import { autoCompact, createCompactedMessages, estimateTokens } from "@my-agent/core";
 
 import { registerCommand } from "./registry.js";
 
@@ -18,7 +18,7 @@ registerCommand({
       return { ok: false, error: "Agent context not available" };
     }
 
-    const messages = context.getCompactMessages();
+    const messages = context.getMessagesForLLM();
     if (messages.length === 0) {
       return { ok: false, error: "No messages to compact" };
     }
@@ -32,7 +32,6 @@ registerCommand({
 
     const focus = args.trim() || undefined;
 
-    // Get incomplete todos to include in summary (same as compact tool)
     const todoManager = agent.getTodoManager();
     const incompleteTodos = todoManager?.getIncompleteTodos() ?? [];
     const todos = incompleteTodos.map((t) => ({
@@ -49,8 +48,14 @@ registerCommand({
         todos: todos.length > 0 ? todos : undefined,
       });
 
-      context.setCompactMessages(result.messages);
-      context.resetUsage();
+      if (result.compacted && result.summary && result.cutIndex != null) {
+        const summaryMsg = createCompactedMessages(result.summary)[0];
+        context.setSummaryMessage(summaryMsg);
+        const absoluteCut = context.getCompactIndex() + result.cutIndex;
+        context.setCompactIndex(absoluteCut);
+        context.resetUsage();
+        agent.resetCompactHint();
+      }
 
       const compressionRatio = tokensBefore > 0 ? Math.round((1 - result.tokensAfter / tokensBefore) * 100) : 0;
       const todoNote = incompleteTodos.length > 0 ? ` (${incompleteTodos.length} todos preserved)` : "";

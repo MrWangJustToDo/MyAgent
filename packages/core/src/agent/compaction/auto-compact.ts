@@ -149,9 +149,6 @@ function extractExistingSummary(messages: ModelMessage[]): { existingSummary?: s
  * Find the cut point by keeping the latest N assistant-tool flows.
  *
  * A "flow" is an assistant message followed by its tool result messages.
- * The message pattern looks like:
- *   [user] [assistant] [tool]* [assistant] [tool]* [assistant] [tool]* ...
- *
  * We walk backward counting flows, and cut before the Nth flow from the end.
  * Everything before the cut point gets summarized.
  */
@@ -167,27 +164,20 @@ function findCutPoint(messages: ModelMessage[], keepRecentFlows: number): number
     if (role === "assistant" || role === "user") {
       flowCount++;
       if (flowCount > keepRecentFlows) {
-        // Cut right after this assistant message's preceding user message (if any),
-        // or at this assistant message itself
         cutIndex = i;
         break;
       }
     }
   }
 
-  // If we didn't find enough flows, nothing to compact
   if (flowCount <= keepRecentFlows) {
     return 0;
   }
 
-  // Adjust: include any user message right before the cut point in the kept portion,
-  // since a user message is a natural boundary for the kept context
   if (cutIndex > 0 && messages[cutIndex].role === "user") {
     return cutIndex;
   }
 
-  // If the cut lands on an assistant, include it in the summarized portion
-  // and find the next user boundary for the kept portion
   for (let i = cutIndex + 1; i < messages.length; i++) {
     if (messages[i].role === "user") {
       return i;
@@ -479,28 +469,23 @@ Continue if you have next steps, or stop and ask for clarification if you are un
 /**
  * Perform auto compaction on messages.
  *
- * This is the main entry point for Layer 2 compaction:
- * 1. Summarize conversation via subagent (including any active todos)
- * 2. Return compressed messages
+ * Splits messages using keepRecentFlows: summarizes older messages, keeps recent ones.
+ * Returns the summary and cutIndex so the caller can set summaryMessage and compactIndex.
  *
- * If compaction fails, returns the ORIGINAL messages with an error flag.
- * This ensures the user never loses their conversation context due to compaction errors.
- * Session persistence is handled separately by the session store.
- *
- * @param messages - Current messages array
- * @param config - Compaction configuration
+ * @param messages - Current LLM-visible messages
+ * @param config - Compaction configuration (uses keepRecentFlows for splitting)
  * @param parentAgentId - Parent agent ID for spawning summarization subagent
  * @param sandbox - Sandbox (kept for API compatibility)
  * @param options - Optional summarization options (focus, todos)
- * @returns Compaction result with compressed messages (or original messages if failed)
+ * @returns Compaction result with summary and cutIndex
  *
  * @example
  * ```typescript
- * const result = await autoCompact(messages, config, "agent-123", sandbox);
+ * const result = await autoCompact(llmMessages, config, "agent-123", sandbox);
  * if (result.compacted) {
- *   messages = result.messages; // Use compressed messages
- * } else if (result.error) {
- *   console.error(`Compaction failed: ${result.error}`);
+ *   context.setSummaryMessage(createCompactedMessages(result.summary)[0]);
+ *   // cutIndex is relative to the input messages; caller must translate to absolute index
+ *   context.setCompactIndex(absoluteOffset + result.cutIndex);
  * }
  * ```
  */
@@ -510,22 +495,28 @@ export async function autoCompact(
   parentAgentId: string,
   sandbox: Sandbox,
   options?: SummarizeOptions & { actualTokens?: number }
-): Promise<CompactionResult & { messages: ModelMessage[] }> {
+): Promise<CompactionResult> {
   const { keepRecentFlows = 4 } = config;
   const estimated = estimateTokens(messages);
   const tokensBefore = options?.actualTokens ?? estimated;
 
-  // Find cut point: keep recent N assistant-tool flows, summarize the rest
+  if (messages.length === 0) {
+    return {
+      compacted: false,
+      tokensBefore,
+      tokensAfter: tokensBefore,
+      type: "auto",
+    };
+  }
+
   const cutIndex = findCutPoint(messages, keepRecentFlows);
 
-  // Nothing to summarize — everything fits within the keep-recent budget
   if (cutIndex === 0) {
     return {
       compacted: false,
       tokensBefore,
       tokensAfter: tokensBefore,
       type: "auto",
-      messages,
     };
   }
 
@@ -533,29 +524,23 @@ export async function autoCompact(
   const keptMessages = messages.slice(cutIndex);
 
   try {
-    // Generate summary via subagent with optional focus and todos
     const summary = await summarizeConversation(summaryMessages, parentAgentId, options);
 
-    // Augment summary with tracked file operations from the summarized messages.
-    // This provides accurate file lists without relying on LLM memory.
     const fileOps = extractFileOpsFromMessages(summaryMessages);
     const summaryWithFileOps = summary + formatFileOperations(fileOps);
 
-    // Create compressed messages and append kept recent messages
-    const compactedMessages = createCompactedMessages(summaryWithFileOps).concat(keptMessages);
-
-    const tokensAfter = estimateTokens(compactedMessages);
+    const keptTokens = estimateTokens(keptMessages);
+    const summaryTokens = estimateTokens(createCompactedMessages(summaryWithFileOps));
 
     return {
       compacted: true,
       tokensBefore,
-      tokensAfter,
+      tokensAfter: summaryTokens + keptTokens,
       type: "auto",
-      summary,
-      messages: compactedMessages,
+      summary: summaryWithFileOps,
+      cutIndex,
     };
   } catch (error) {
-    // Compaction failed — return ORIGINAL messages so user doesn't lose anything
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     return {
@@ -564,7 +549,6 @@ export async function autoCompact(
       tokensAfter: tokensBefore,
       type: "auto",
       error: `Compaction failed: ${errorMessage}. Original messages preserved.`,
-      messages,
     };
   }
 }

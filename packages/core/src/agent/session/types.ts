@@ -44,10 +44,10 @@ export interface SessionData {
   model: string;
   /** Full conversation as UIMessages (for client display on resume) */
   uiMessages: UIMessage[];
-  /** Compacted messages (for LLM context on resume) */
-  compactMessages: ModelMessage[];
-  /** Length of the conversation */
-  messageLength: number;
+  /** Compaction summary message (null if never compacted) */
+  summaryMessage: ModelMessage | null;
+  /** Index in messages where the last compaction cut happened (0 = no compaction) */
+  compactIndex: number;
   /** Token usage statistics */
   usage: TokenUsage;
   /** Active todos */

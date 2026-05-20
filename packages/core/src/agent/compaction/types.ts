@@ -43,6 +43,8 @@ export const compactionResultSchema = z.object({
   type: z.enum(["micro", "auto", "manual"]).optional(),
   /** Summary generated if auto/manual compaction */
   summary: z.string().optional(),
+  /** Index in the input messages where the kept portion starts (messages before this were summarized) */
+  cutIndex: z.number().int().nonnegative().optional(),
   /** Error message if compaction failed */
   error: z.string().optional(),
 });

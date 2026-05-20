@@ -1,39 +1,23 @@
 /**
- * Compact Tool (Layer 3) - Manual conversation compression.
- *
- * This tool allows the agent to manually trigger context compaction.
- * It performs the same operation as auto_compact but on demand.
+ * Compact Tool - Conversation compression via summary + split pointer.
  *
  * When called:
- * 1. Saves full conversation transcript to disk
- * 2. Uses LLM to summarize the conversation
- * 3. Signals that messages should be replaced with the summary
- *
- * The actual message replacement happens at the agent level,
- * not within this tool (similar to how the task tool spawns subagents).
- *
- * @example
- * ```typescript
- * const compactTool = createCompactTool({
- *   getMessages: () => agent.getMessages(),
- *   getModel: () => agent.getModel(),
- *   sandbox,
- *   config: compactionConfig,
- *   onCompact: (result) => agent.replaceMessages(result.messages),
- * });
- * ```
+ * 1. Summarizes the current LLM-visible messages via a subagent
+ * 2. Sets the summary as the new summaryMessage on the context
+ * 3. Advances compactIndex so future LLM calls only see summary + new messages
  */
 
 import { tool } from "ai";
 import { z } from "zod";
 
-import { autoCompact } from "../compaction/auto-compact.js";
+import { autoCompact, createCompactedMessages } from "../compaction/auto-compact.js";
 import { estimateTokens } from "../compaction/token-estimator.js";
 
 import { withDuration } from "./helpers.js";
 
 import type { Sandbox } from "../../environment";
-import type { CompactionConfig, CompactionResult } from "../compaction/types.js";
+import type { AgentContext } from "../agent-context";
+import type { CompactionConfig } from "../compaction/types.js";
 import type { Agent } from "../loop/Agent.js";
 import type { TodoManager } from "../todo-manager";
 import type { ModelMessage } from "ai";
@@ -43,22 +27,20 @@ import type { ModelMessage } from "ai";
 // ============================================================================
 
 export interface CompactToolConfig {
-  /** Function to get current messages */
+  /** Function to get current LLM-visible messages */
   getMessages: () => ModelMessage[];
-
-  /** The agent instance (used for ID and other properties) */
+  /** The agent context (for updating summaryMessage and compactIndex) */
+  context: AgentContext;
+  /** The agent instance (used for ID) */
   agent: Agent;
-  /** Sandbox for filesystem access */
+  /** Sandbox for subagent execution */
   sandbox: Sandbox;
   /** Compaction configuration */
   config?: Partial<CompactionConfig>;
   /** Optional TodoManager to check for incomplete todos */
   todoManager?: TodoManager | null;
-  /**
-   * Callback when compaction is complete.
-   * The agent should use this to replace messages with the compressed version.
-   */
-  onCompact?: (result: CompactionResult & { messages: ModelMessage[] }) => void | Promise<void>;
+  /** Callback after compaction completes (e.g. reset compact hint flag) */
+  onCompact?: () => void;
 }
 
 // ============================================================================
@@ -96,6 +78,7 @@ export type CompactOutput = z.infer<typeof compactOutputSchema>;
  */
 export const createCompactTool = ({
   getMessages,
+  context,
   agent,
   sandbox,
   config = {},
@@ -103,18 +86,17 @@ export const createCompactTool = ({
   onCompact,
 }: CompactToolConfig) => {
   return tool({
-    description: `Manually compact the conversation to reduce context size.
+    description: `Compact the conversation to reduce context size.
 
 Use this tool when:
+- The system tells you the context is getting large
 - The conversation is getting long and you want to preserve context
 - You're about to start a significantly different task
-- You want to ensure important context is summarized before it's lost
 
 What happens:
-1. Full conversation is saved to a transcript file (preserves everything)
-2. A subagent summarizes the key information from the conversation
-3. Incomplete todos are included in the summary so you can restore them
-4. Messages are replaced with the summary to reduce token usage
+1. A subagent summarizes the key information from the conversation
+2. Incomplete todos are included in the summary so you can restore them
+3. A compaction summary is created — future LLM calls only see the summary + new messages
 
 The summary focuses on: what was done, current work, files modified, next steps, user preferences, technical decisions, and active todos.
 
@@ -135,7 +117,6 @@ IMPORTANT: After compaction, read the summary carefully and use the todo tool to
       return withDuration(async () => {
         const messages = getMessages();
 
-        // Check if there's anything to compact
         if (messages.length === 0) {
           return {
             success: false,
@@ -147,7 +128,6 @@ IMPORTANT: After compaction, read the summary carefully and use the todo tool to
           };
         }
 
-        // Get incomplete todos to include in summary
         const incompleteTodos = todoManager?.getIncompleteTodos() ?? [];
         const todos = incompleteTodos.map((t) => ({
           content: t.content,
@@ -157,12 +137,18 @@ IMPORTANT: After compaction, read the summary carefully and use the todo tool to
 
         const tokensBefore = estimateTokens(messages);
 
-        // Perform compaction with todos included (uses subagent for summarization)
-        const result = await autoCompact(messages, config, agent.id, sandbox, { focus, todos });
+        const actualTokens = agent.context?.getUsage().inputTokens ?? 0;
 
-        // Notify the agent to replace messages
-        if (onCompact) {
-          await onCompact(result);
+        const result = await autoCompact(messages, config, agent.id, sandbox, { focus, todos, actualTokens });
+
+        if (result.compacted && result.summary && result.cutIndex != null) {
+          const summaryMsg = createCompactedMessages(result.summary)[0];
+          context.setSummaryMessage(summaryMsg);
+          // cutIndex is relative to LLM-visible messages; translate to absolute index
+          const absoluteCut = context.getCompactIndex() + result.cutIndex;
+          context.setCompactIndex(absoluteCut);
+          context.resetUsage();
+          onCompact?.();
         }
 
         const compressionRatio = tokensBefore > 0 ? Math.round((1 - result.tokensAfter / tokensBefore) * 100) : 0;
@@ -173,12 +159,14 @@ IMPORTANT: After compaction, read the summary carefully and use the todo tool to
             : "";
 
         return {
-          success: true,
+          success: result.compacted,
           tokensBefore: result.tokensBefore,
           tokensAfter: result.tokensAfter,
           summary: result.summary || "",
           compressionRatio: `${compressionRatio}%`,
-          message: `Compacted conversation from ~${tokensBefore} to ~${result.tokensAfter} tokens (${compressionRatio}% reduction).${todoNote}`,
+          message: result.compacted
+            ? `Compacted conversation from ~${tokensBefore} to ~${result.tokensAfter} tokens (${compressionRatio}% reduction).${todoNote}`
+            : result.error || "Nothing to compact.",
         };
       });
     },

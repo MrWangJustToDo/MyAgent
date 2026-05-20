@@ -293,22 +293,15 @@ export class AgentManager {
       agent.setCompactionConfig(compactionConfig);
 
       const compactTool = createCompactTool({
-        getMessages: () => context.getCompactMessages(),
+        getMessages: () => context.getMessagesForLLMWithoutInject({ agent }),
+        context,
         sandbox,
         agent,
         config: compactionConfig,
-        todoManager, // Pass todoManager to check for incomplete todos
-        onCompact: (result) => {
-          // Apply the compacted messages to context
-          context.setCompactMessages(result.messages);
-          // Reset token usage since we've compressed the context
-          // we should reset after this conversation is done
-          context.resetUsage();
-
-          log.info("agent", "Compaction completed", {
-            tokensBefore: result.tokensBefore,
-            tokensAfter: result.tokensAfter,
-          });
+        todoManager,
+        onCompact: () => {
+          agent.resetCompactHint();
+          log.info("agent", "Compaction completed via compact tool");
         },
       });
       agent.addTools({ compact: compactTool });
@@ -442,7 +435,7 @@ export class AgentManager {
   }
 
   /**
-   * Resume a session by ID. Restores compactMessages, usage, and todos into the agent.
+   * Resume a session by ID. Restores messages, summary, compactIndex, usage, and todos.
    * Returns UIMessages for the client to display.
    */
   async resumeSession(agentId: string, sessionId: string): Promise<ResumeResult> {
@@ -456,10 +449,11 @@ export class AgentManager {
     const session = await store.load(sessionId);
     if (!session) throw new Error(`Session not found: ${sessionId}`);
 
-    // Restore compactMessages into context (what LLM will see)
-    context.setCompactMessages(session.compactMessages);
+    // Restore messages and compaction state
     const messages = await convertToModelMessages(session.uiMessages);
-    context.setMessages(messages.slice(0, session.messageLength));
+    context.setMessages(messages);
+    context.setSummaryMessage(session.summaryMessage ?? null);
+    context.setCompactIndex(session.compactIndex ?? 0);
 
     // Restore usage
     if (session.usage) {

@@ -4,7 +4,7 @@
 
 import { generateId } from "../../base/utils.js";
 
-import type { StreamPart, ToolSet } from "../loop/Agent.js";
+import type { Agent, StreamPart, ToolSet } from "../loop/Agent.js";
 import type { ModelMessage, OnFinishEvent, TypedToolCall } from "ai";
 
 export interface TokenUsage {
@@ -36,9 +36,13 @@ export class AgentContext {
    */
   private events: StreamPart[] = [];
 
-  private compactMessages: ModelMessage[] = [];
-
   private messages: ModelMessage[] = [];
+
+  /** The compaction summary message (null if never compacted) */
+  private summaryMessage: ModelMessage | null = null;
+
+  /** Index in messages where the last compaction cut happened (0 = no compaction) */
+  private compactIndex = 0;
 
   private tools: TypedToolCall<NoInfer<ToolSet>>[] = [];
 
@@ -194,20 +198,51 @@ export class AgentContext {
     return this.messages;
   }
 
-  setCompactMessages(m: ModelMessage[]) {
-    this.compactMessages = m;
+  /**
+   * Get messages to send to the LLM.
+   * Returns [summaryMessage, ...messages.slice(compactIndex)] if compacted,
+   * or all messages if no compaction has occurred.
+   */
+  getMessagesForLLM(): ModelMessage[] {
+    if (this.summaryMessage) {
+      return [this.summaryMessage, ...this.messages.slice(this.compactIndex)];
+    }
+    return this.messages;
   }
 
-  addCompactMessage(m: ModelMessage) {
-    this.compactMessages.push(m);
+  getMessagesForLLMWithoutInject({ agent }: { agent: Agent }): ModelMessage[] {
+    const items = this.getMessagesForLLM();
+
+    return items
+      .map((i) => {
+        if (i.role === "user") {
+          const content = i.content;
+          if (content.length === 1 && content[0].toString() === agent.todoManager?.getNagReminder()) {
+            return null;
+          }
+          if (content.length === 1 && content[0].toString() === agent.getCompactHint()) {
+            return null;
+          }
+        }
+        return i;
+      })
+      .filter(Boolean) as ModelMessage[];
   }
 
-  setCompactMessage(m: ModelMessage, index: number) {
-    this.compactMessages[index] = m;
+  setSummaryMessage(m: ModelMessage | null) {
+    this.summaryMessage = m;
   }
 
-  getCompactMessages() {
-    return this.compactMessages;
+  getSummaryMessage(): ModelMessage | null {
+    return this.summaryMessage;
+  }
+
+  setCompactIndex(index: number) {
+    this.compactIndex = index;
+  }
+
+  getCompactIndex(): number {
+    return this.compactIndex;
   }
 
   /**
@@ -237,7 +272,8 @@ export class AgentContext {
     this.tools = [];
     this.events = [];
     this.messages = [];
-    this.compactMessages = [];
+    this.summaryMessage = null;
+    this.compactIndex = 0;
     this.usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
     this.totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
     this.isStreaming = false;
