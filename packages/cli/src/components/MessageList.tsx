@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef } from "react";
 
 import { useDynamic } from "../hooks/use-dynamic";
 import { useStatic } from "../hooks/use-static";
-import { MessageView } from "../messages";
+import { MessageView, StaticContext } from "../messages";
 import { getMessages } from "../utils/get-messages";
 
 import type { UIMessage } from "ai";
@@ -37,7 +37,9 @@ export const MessageList = ({ messages }: MessageListProps) => {
     () =>
       staticMessages.map((item) => (
         <Box key={item.id} paddingX={1} marginTop={1}>
-          <MessageView message={item} />
+          <StaticContext value={{ staticMessage: true }}>
+            <MessageView message={item} />
+          </StaticContext>
         </Box>
       )),
     [staticMessages]
@@ -49,7 +51,9 @@ export const MessageList = ({ messages }: MessageListProps) => {
       dynamicMessages.length ? (
         dynamicMessages.map((message) => (
           <Box key={message.id} paddingX={1} marginTop={1}>
-            <MessageView message={message} />
+            <StaticContext value={{ staticMessage: false }}>
+              <MessageView message={message} />
+            </StaticContext>
           </Box>
         ))
       ) : (

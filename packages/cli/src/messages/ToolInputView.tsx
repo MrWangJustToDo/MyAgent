@@ -5,6 +5,7 @@ import { EditDiff } from "../components/EditDiff";
 import { SplitNode } from "../components/SplitNode";
 import { useSize } from "../hooks";
 
+import { useStaticContext } from "./StaticContext";
 import { TaskToolInputView } from "./TaskToolInputView";
 
 export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
@@ -101,29 +102,35 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
 
     if (!content?.command) return null;
 
+    const { staticMessage } = useStaticContext();
+
+    if (staticMessage) return null;
+
     return (
       <Box flexDirection="column" paddingLeft={2}>
         <Box>
           <Box flexShrink={0}>
             <Text color="green">$ </Text>
           </Box>
-          <Text dimColor>{content.command}</Text>
+          <Text dimColor>
+            {content.command}
+            {content.cwd && (
+              <Text color="gray" dimColor>
+                cwd: {content.cwd}
+              </Text>
+            )}
+            {content.timeout && (
+              <Text color="gray" dimColor>
+                timeout: {content.timeout}ms
+              </Text>
+            )}
+            {content.background && (
+              <Text color="gray" dimColor>
+                background: true
+              </Text>
+            )}
+          </Text>
         </Box>
-        {content.cwd && (
-          <Text color="gray" dimColor>
-            cwd: {content.cwd}
-          </Text>
-        )}
-        {content.timeout && (
-          <Text color="gray" dimColor>
-            timeout: {content.timeout}ms
-          </Text>
-        )}
-        {content.background && (
-          <Text color="gray" dimColor>
-            background: true
-          </Text>
-        )}
       </Box>
     );
   }

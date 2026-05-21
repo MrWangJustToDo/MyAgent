@@ -4,6 +4,7 @@ import { Box, Text } from "ink";
 import { formatToolInput, formatDuration } from "../utils/format.js";
 import { getToolCallColor } from "../utils/tool-state.js";
 
+import { useStaticContext } from "./StaticContext.js";
 import { ToolInputView } from "./ToolInputView.js";
 import { ToolOutputView } from "./ToolOutputView.js";
 import { ToolStatusIcon } from "./ToolStatusIcon.js";
@@ -64,6 +65,8 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
   const needsApproval = part.state === "approval-requested" && part.approval;
   const toolName = getToolName(part);
 
+  const { staticMessage } = useStaticContext();
+
   /** Tools that only need the file path in the header */
   const FILE_PATH_TOOLS = new Set(["write_file", "edit_file", "search_replace"]);
 
@@ -75,7 +78,10 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
       }
       if (toolName === "run_command" && typeof part.input === "object") {
         const { command } = part.input as { command?: string };
-        return command ?? null;
+        if (staticMessage) {
+          return command ?? null;
+        }
+        return null;
       }
       if (FILE_PATH_TOOLS.has(toolName) && typeof part.input === "object") {
         const { path } = part.input as { path?: string };
@@ -118,7 +124,7 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
       <ToolInputView part={part} />
 
       {/* Detailed output for run_command/task */}
-      {hasOutput && <ToolOutputView part={part} />}
+      {hasOutput && !staticMessage && <ToolOutputView part={part} />}
 
       {/* Compact output or error */}
       {errorText && (

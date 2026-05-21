@@ -4,6 +4,7 @@ import * as path from "path";
 
 import { AgentLog } from "../agent";
 import { AgentContext } from "../agent/agent-context";
+import { loadAgentDoc, formatAgentDocResult } from "../agent/agent-doc-loader.js";
 import { createCompactionConfig } from "../agent/compaction/types.js";
 import { Agent } from "../agent/loop/Agent.js";
 import { loadMcpConfig } from "../agent/mcp/config.js";
@@ -16,7 +17,6 @@ import { createCompactTool } from "../agent/tools/compact-tool.js";
 import { createListSkillsTool } from "../agent/tools/list-skills-tool.js";
 import { createLoadSkillTool } from "../agent/tools/load-skill-tool.js";
 import { createTaskTool } from "../agent/tools/task-tool.js";
-import { loadAgentDoc, formatAgentDocResult } from "../agent/agent-doc-loader.js";
 
 import { sandboxManager } from "./manager-sandbox.js";
 import { toolsManager } from "./manager-tools.js";

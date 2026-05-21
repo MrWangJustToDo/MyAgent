@@ -3,3 +3,4 @@ export { ThinkingPartView, type ThinkingPartViewProps } from "./ThinkingPartView
 export { ToolStatusIcon, type ToolStatusIconProps } from "./ToolStatusIcon.js";
 export { ToolCallPartView, type ToolCallPartViewProps } from "./ToolCallPartView.js";
 export { MessageView, type MessageViewProps } from "./MessageView.js";
+export { StaticContext, useStaticContext } from "./StaticContext.js";
