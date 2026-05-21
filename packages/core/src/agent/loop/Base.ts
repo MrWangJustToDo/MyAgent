@@ -49,6 +49,7 @@ export class Base {
   error = "";
 
   // Resources
+  systemPrompt = "";
   log: AgentLog | null = null;
   context: AgentContext | null = null;
   sandbox: Sandbox | null = null;
@@ -182,6 +183,34 @@ export class Base {
    */
   getTodoManager(): TodoManager | null {
     return this.todoManager;
+  }
+
+  // Agent documentation content (loaded from AGENTS.md / CLAUDE.md)
+  agentDocContent: string = "";
+  agentDocSource: string = "";
+
+  /**
+   * Set agent documentation content (loaded from AGENTS.md / CLAUDE.md).
+   * This content is injected into the system prompt automatically.
+   */
+  setAgentDocContent(content: string, source?: string): void {
+    this.agentDocContent = content;
+    this.agentDocSource = source ?? "";
+    this.log?.info("system", `Agent doc content set`, { source: source ?? "(none)", length: content.length });
+  }
+
+  /**
+   * Get agent documentation content
+   */
+  getAgentDocContent(): string {
+    return this.agentDocContent;
+  }
+
+  /**
+   * Get agent documentation source filename
+   */
+  getAgentDocSource(): string {
+    return this.agentDocSource;
   }
 
   setSkillRegister(t: SkillRegistry) {

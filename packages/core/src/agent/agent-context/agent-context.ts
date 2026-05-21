@@ -41,6 +41,8 @@ export class AgentContext {
   /** The compaction summary message (null if never compacted) */
   private summaryMessage: ModelMessage | null = null;
 
+  private messagesForLLM: ModelMessage[] = [];
+
   /** Index in messages where the last compaction cut happened (0 = no compaction) */
   private compactIndex = 0;
 
@@ -210,8 +212,11 @@ export class AgentContext {
         this.compactIndex--;
         list = this.messages.slice(this.compactIndex);
       }
-      return [this.summaryMessage, ...list];
+      const finalList = [this.summaryMessage, ...list];
+      this.messagesForLLM = finalList;
+      return finalList;
     }
+    this.messagesForLLM = this.messages;
     return this.messages;
   }
 

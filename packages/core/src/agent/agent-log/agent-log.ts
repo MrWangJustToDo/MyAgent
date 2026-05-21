@@ -21,6 +21,7 @@ export type LogCategory =
   | "todo" // Todo tracking
   | "skill" // skill load
   | "error" // Errors
+  | "system" // System/initialization events
   | "custom"; // Custom logs
 
 /** Log entry */

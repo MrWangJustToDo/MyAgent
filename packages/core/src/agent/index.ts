@@ -173,3 +173,13 @@ export {
   type McpServerConfigStdio,
   type McpServerConfigHttp,
 } from "./mcp";
+
+// Agent documentation loader exports (AGENTS.md / CLAUDE.md)
+export {
+  loadAgentDoc,
+  formatAgentDocResult,
+  DEFAULT_AGENT_DOC_FILENAMES,
+  DEFAULT_AGENT_DOC_MAX_BYTES,
+  type AgentDocLoaderConfig,
+  type AgentDocLoadResult,
+} from "./agent-doc-loader.js";

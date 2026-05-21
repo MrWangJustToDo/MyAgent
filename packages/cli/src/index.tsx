@@ -25,5 +25,5 @@ initArgs(args);
 // Render the app
 
 initHighlighter().then(() => {
-  render(<App />, { incrementalRendering: false, maxFps: 30, exitOnCtrlC: false, renderProcess: true });
+  render(<App />, { incrementalRendering: true, maxFps: 30, exitOnCtrlC: false, renderProcess: true });
 });

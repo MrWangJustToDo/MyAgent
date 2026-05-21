@@ -105,22 +105,44 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
   // ============================================================================
 
   /**
-   * Build the final system prompt by appending dynamic sections (e.g. available skills).
+   * Build the final system prompt by appending dynamic sections:
+   * 1. Agent documentation (AGENTS.md / CLAUDE.md)
+   * 2. Available skills (two-layer injection pattern)
+   *
+   * The agent documentation is loaded from the project root on startup
+   * and follows the cross-tool AGENTS.md standard.
    */
   private buildSystemPrompt(): string | undefined {
-    const base = this.config.systemPrompt;
-    if (!this.skillRegister || this.skillRegister.size === 0) {
-      return base;
+    const parts: string[] = [];
+
+    // 1. Base system prompt (from config or default)
+    if (this.config.systemPrompt) {
+      parts.push(this.config.systemPrompt);
     }
 
-    const skillSection = [
-      "",
-      "## Available Skills",
-      "Use `load_skill` to load any of these skills when relevant to the user's task:",
-      this.skillRegister.getDescriptions(),
-    ].join("\n");
+    // 2. Agent documentation (AGENTS.md / CLAUDE.md content)
+    // This is loaded during agent creation via agent-doc-loader.ts
+    if (this.agentDocContent) {
+      parts.push(`\n## Project Instructions\n\n${this.agentDocContent}`);
+    }
 
-    return base ? base + "\n" + skillSection : skillSection;
+    // 3. Available skills (two-layer injection)
+    if (this.skillRegister && this.skillRegister.size > 0) {
+      const skillSection = [
+        "## Available Skills",
+        "Use `load_skill` to load any of these skills when relevant to the user's task:",
+        this.skillRegister.getDescriptions(),
+      ].join("\n");
+      parts.push(skillSection);
+    }
+
+    if (parts.length === 0) return undefined;
+
+    const str = parts.join("\n\n");
+
+    this.systemPrompt = str;
+
+    return str;
   }
 
   // ============================================================================

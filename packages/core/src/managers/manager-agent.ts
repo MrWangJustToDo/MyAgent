@@ -16,6 +16,7 @@ import { createCompactTool } from "../agent/tools/compact-tool.js";
 import { createListSkillsTool } from "../agent/tools/list-skills-tool.js";
 import { createLoadSkillTool } from "../agent/tools/load-skill-tool.js";
 import { createTaskTool } from "../agent/tools/task-tool.js";
+import { loadAgentDoc, formatAgentDocResult } from "../agent/agent-doc-loader.js";
 
 import { sandboxManager } from "./manager-sandbox.js";
 import { toolsManager } from "./manager-tools.js";
@@ -79,6 +80,23 @@ export type ManagedAgentConfig<T = Agent | AgentContext> = AgentConfig & {
   compaction?: CompactionConfigInput;
   /** Path to MCP config file (relative to rootPath). Defaults to ".opencode/mcp.json" */
   mcpConfigPath?: string;
+  /**
+   * Agent documentation filenames to search for, in priority order.
+   * These files (e.g., AGENTS.md, CLAUDE.md) are loaded and injected into
+   * the system prompt to provide project instructions to the agent.
+   *
+   * Default: ["CLAUDE.md", "AGENTS.md"] (CLAUDE.md has higher priority)
+   * Set to [] to disable auto-loading.
+   *
+   * @see https://agents.md/ for the cross-tool AGENTS.md standard
+   */
+  agentDocFilenames?: string[];
+  /**
+   * Whether to also look for a local override file (e.g., AGENTS.override.md).
+   * Override files are gitignored and contain personal/local overrides.
+   * Default: true
+   */
+  agentDocLoadOverride?: boolean;
 };
 
 /** Agent instance managed by AgentManager */
@@ -256,6 +274,25 @@ export class AgentManager {
     agent.setContext(context);
 
     agent.setLog(log);
+
+    // Load agent documentation (AGENTS.md / CLAUDE.md) for root agents
+    // This happens early so the content is available for buildSystemPrompt() on the first call
+    if (!parentId) {
+      const docResult = await loadAgentDoc({
+        filesystem: sandbox.filesystem,
+        rootPath,
+        filenames: config.agentDocFilenames,
+        loadOverride: config.agentDocLoadOverride !== false, // Default: true
+        logger: log,
+      });
+      if (docResult.content) {
+        const instructions = docResult.overrideContent
+          ? `${docResult.content}\n\n## Local Override\n\n${docResult.overrideContent}`
+          : docResult.content;
+        agent.setAgentDocContent(instructions, docResult.source);
+        log.info("system", formatAgentDocResult(docResult));
+      }
+    }
 
     agent.setTodoManager(todoManager);
 
