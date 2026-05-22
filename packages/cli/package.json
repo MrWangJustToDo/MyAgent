@@ -33,7 +33,7 @@
     "ink-gradient": "^4.0.0",
     "ink-link": "^5.0.0",
     "ink-select-input": "^6.2.0",
-    "ink-stream-markdown": "^0.0.1",
+    "ink-stream-markdown": "^0.0.2",
     "ink-tab": "^5.2.0",
     "lodash-es": "^4.17.23",
     "reactivity-store": "^0.4.0"

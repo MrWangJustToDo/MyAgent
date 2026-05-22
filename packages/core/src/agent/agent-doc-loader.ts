@@ -131,7 +131,14 @@ export function formatAgentDocResult(result: AgentDocLoadResult): string {
  * ```
  */
 export async function loadAgentDoc(config: AgentDocLoaderConfig): Promise<AgentDocLoadResult> {
-  const { filesystem, rootPath, filenames = DEFAULT_AGENT_DOC_FILENAMES, maxBytes = DEFAULT_AGENT_DOC_MAX_BYTES, loadOverride = true, logger } = config;
+  const {
+    filesystem,
+    rootPath,
+    filenames = DEFAULT_AGENT_DOC_FILENAMES,
+    maxBytes = DEFAULT_AGENT_DOC_MAX_BYTES,
+    loadOverride = true,
+    logger,
+  } = config;
 
   let result: AgentDocLoadResult = { content: "" };
 

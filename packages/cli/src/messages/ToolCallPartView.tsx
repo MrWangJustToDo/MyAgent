@@ -34,23 +34,12 @@ function getCompactOutput(part: ToolUIPart): string | null {
   return null;
 }
 
-/** Tools where displayInput is a raw string (path or command), not JSON */
-const RAW_INPUT_TOOLS = new Set(["run_command", "write_file", "edit_file", "search_replace"]);
-
 /** Build the header text: " toolName args (duration)" */
 function buildHeaderText(toolName: string, displayInput: string | null, durationMs: number | null): string {
   let header = ` ${toolName}`;
 
   if (displayInput) {
-    if (RAW_INPUT_TOOLS.has(toolName)) {
-      header += ` ${displayInput}`;
-    } else {
-      try {
-        header += ` ${formatToolInput(JSON.parse(displayInput))}`;
-      } catch {
-        header += ` ${displayInput}`;
-      }
-    }
+    header += ` ${displayInput}`;
   }
 
   if (durationMs !== null) {
@@ -67,29 +56,12 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
 
   const { staticMessage } = useStaticContext();
 
-  /** Tools that only need the file path in the header */
-  const FILE_PATH_TOOLS = new Set(["write_file", "edit_file", "search_replace"]);
-
   const getDisplayInput = (): string | null => {
-    if (part.input !== undefined && part.input !== null) {
-      if (toolName === "task" && typeof part.input === "object") {
-        const { prompt } = part.input as { prompt?: string };
-        return prompt ? JSON.stringify({ prompt }) : null;
-      }
-      if (toolName === "run_command" && typeof part.input === "object") {
-        const { command } = part.input as { command?: string };
-        if (staticMessage) {
-          return command ?? null;
-        }
-        return null;
-      }
-      if (FILE_PATH_TOOLS.has(toolName) && typeof part.input === "object") {
-        const { path } = part.input as { path?: string };
-        return path ?? null;
-      }
-      return typeof part.input === "string" ? part.input : JSON.stringify(part.input);
-    }
-    return null;
+    if (part.input === undefined || part.input === null) return null;
+    // For run_command, only show in header for static (history) messages; live input is shown by ToolInputView
+    if (toolName === "run_command" && !staticMessage) return null;
+    const formatted = formatToolInput(part.input, toolName);
+    return formatted || null;
   };
 
   const displayInput = getDisplayInput();

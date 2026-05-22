@@ -5373,13 +5373,7 @@
     return function (message) {
       if (typeof window === "undefined") return;
       var _message = __assign({}, message);
-      if (_message.from && _message.forward) {
-        _message.forward += "->".concat(from);
-      } else if (_message.from) {
-        if (_message.from !== from) {
-          _message.forward = from;
-        }
-      } else {
+      if (!_message.from) {
         _message.from = from;
       }
       window.postMessage(__assign(__assign({}, _message), { source: eventExports.DevToolSource }), "*");
@@ -5438,9 +5432,6 @@
         core.notifyMessage("current id: ".concat(id, " of fiber not exist"), "error");
       }
     }
-    // if (data?.type === MessagePanelType.nodeInspect) {
-    //   core.inspectDom();
-    // }
     if ((data === null || data === void 0 ? void 0 : data.type) === coreExports.MessagePanelType.nodeHover) {
       core.setHover(data.data);
       core.showHover();
@@ -5686,7 +5677,6 @@
   var PortName;
   (function (PortName) {
     PortName["proxy"] = "dev-tool/proxy";
-    PortName["panel"] = "dev-tool/panel";
   })(PortName || (PortName = {}));
   var sourceFrom;
   (function (sourceFrom) {
@@ -5698,44 +5688,30 @@
     sourceFrom["panel"] = "panel";
     // message from background worker, `background` dir
     sourceFrom["worker"] = "worker";
-    // message from iframe, chrome/src/hooks/useBridgeForward.ts
+    // message from iframe, chrome/src/hooks/useBridgeForward.ts (local dev bridge)
     sourceFrom["iframe"] = "iframe";
     // message from socket, chrome/src/hooks/useWebDev.ts
     sourceFrom["socket"] = "socket";
     // message from detector, `popover` dir
     sourceFrom["detector"] = "detector";
-    // message from another runtime engine
-    sourceFrom["forward"] = "forward";
   })(sourceFrom || (sourceFrom = {}));
 
   var hookPostMessageWithSource = generatePostMessageWithSource(sourceFrom.hook);
-  // default render agentId
-  var agentId = core.id;
   core.subscribe(function (message) {
     hookPostMessageWithSource({ type: eventExports.MessageHookType.render, data: message, to: sourceFrom.panel });
   });
   var set = new Set();
   var detectorReady = false;
-  var forwardMode = false;
-  var env = "hook";
-  var idMap = new Map();
-  var runWhenDetectorReady = function (fn, count) {
-    var id = idMap.get(fn);
-    clearTimeout(id);
+  var pendingDetectorCallbacks = [];
+  var runWhenDetectorReady = function (fn) {
     if (detectorReady) {
       fn();
     } else {
-      if (count && count > 60) {
-        return;
-      }
-      var newId = setTimeout(function () {
-        return runWhenDetectorReady(fn, count ? count + 1 : 1);
-      }, 1000);
-      idMap.set(fn, newId);
+      pendingDetectorCallbacks.push(fn);
     }
   };
   var onMessage = function (message) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d;
     if (typeof window === "undefined") return;
     // allow iframe dev
     if (
@@ -5744,53 +5720,41 @@
     )
       return;
     if (((_b = message.data) === null || _b === void 0 ? void 0 : _b.source) !== eventExports.DevToolSource) return;
-    if (
-      ((_c = message.data) === null || _c === void 0 ? void 0 : _c.to) !== sourceFrom.hook &&
-      ((_d = message.data) === null || _d === void 0 ? void 0 : _d.to) !== sourceFrom.forward
-    )
-      return;
-    if (forwardMode) return;
+    if (((_c = message.data) === null || _c === void 0 ? void 0 : _c.to) !== sourceFrom.hook) return;
     if (
       !detectorReady &&
-      ((_e = message.data) === null || _e === void 0 ? void 0 : _e.type) === eventExports.MessageDetectorType.init
+      ((_d = message.data) === null || _d === void 0 ? void 0 : _d.type) === eventExports.MessageDetectorType.init
     ) {
       detectorReady = true;
+      for (
+        var _i = 0, pendingDetectorCallbacks_1 = pendingDetectorCallbacks;
+        _i < pendingDetectorCallbacks_1.length;
+        _i++
+      ) {
+        var cb = pendingDetectorCallbacks_1[_i];
+        cb();
+      }
+      pendingDetectorCallbacks.length = 0;
     }
-    if (message.data.from === sourceFrom.forward && env === "hook") {
-      core.clearSubscribe();
-      forwardMode = true;
-      hookPostMessageWithSource({
-        type: eventExports.MessageHookType.clear,
-        to: sourceFrom.panel,
-        data: { agentId: agentId },
-      });
-      hookPostMessageWithSource({ type: eventExports.MessageDetectorType.init, to: sourceFrom.forward });
-    }
-    if (forwardMode && env === "hook") return;
     onMessageFromPanelOrWorkerOrDetector(message.data);
   };
   if (typeof window !== "undefined") {
     window.addEventListener("message", onMessage);
   }
   var onceMount = once(function () {
-    // current site is render by @my-react
-    hookPostMessageWithSource({
-      type: eventExports.MessageHookType.mount,
-      data: { forwardMode: env === "forward" },
-      to: sourceFrom.detector,
-    });
+    hookPostMessageWithSource({ type: eventExports.MessageHookType.mount, to: sourceFrom.detector });
   });
   var onceDev = once(function () {
     hookPostMessageWithSource({
       type: eventExports.MessageHookType.mount,
-      data: { mode: "develop", forwardMode: env === "forward" },
+      data: { mode: "develop" },
       to: sourceFrom.detector,
     });
   });
   var oncePro = once(function () {
     hookPostMessageWithSource({
       type: eventExports.MessageHookType.mount,
-      data: { mode: "product", forwardMode: env === "forward" },
+      data: { mode: "product" },
       to: sourceFrom.detector,
     });
   });
@@ -5830,9 +5794,6 @@
           });
     }
   };
-  globalHook.getForwardMode = function () {
-    return forwardMode;
-  };
   globalHook.init = function () {
     return hookPostMessageWithSource({ type: eventExports.MessageHookType.init, to: sourceFrom.detector });
   };
@@ -5840,14 +5801,22 @@
     return detectorReady;
   };
   globalHook.getDetectorReady = getDetectorReady;
-  var getForwardMode = function () {
-    return forwardMode;
-  };
-  globalHook.getForwardMode = getForwardMode;
-  var getEnv = function () {
-    return env;
-  };
-  globalHook.getEnv = getEnv;
+  // Re-send mount message when the page is restored from bfcache,
+  // since the once() guards prevent the initial mount handlers from firing again.
+  if (typeof window !== "undefined") {
+    window.addEventListener("pageshow", function (event) {
+      if (event.persisted && set.size > 0) {
+        var dispatch = Array.from(set)[0];
+        var data = {};
+        if ((dispatch === null || dispatch === void 0 ? void 0 : dispatch.mode) === "development") {
+          data.mode = "develop";
+        } else if ((dispatch === null || dispatch === void 0 ? void 0 : dispatch.mode) === "production") {
+          data.mode = "product";
+        }
+        hookPostMessageWithSource({ type: eventExports.MessageHookType.mount, data: data, to: sourceFrom.detector });
+      }
+    });
+  }
 
   if (!globalThis["__MY_REACT_DEVTOOL_INTERNAL__"]) {
     globalThis["__MY_REACT_DEVTOOL_INTERNAL__"] = core;

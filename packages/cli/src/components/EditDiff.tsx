@@ -31,11 +31,13 @@ export const EditDiff = memo(
 
     diffFile.init();
 
+    const finalWidth = width - 4;
+
     return (
       <Box borderStyle="single" borderDimColor>
         <DiffView
-          width={width - 4}
-          diffViewMode={DiffModeEnum.Unified}
+          width={finalWidth}
+          diffViewMode={finalWidth > 20 && oldFile ? DiffModeEnum.Split : DiffModeEnum.Unified}
           diffFile={diffFile}
           diffViewHideOperator
           diffViewHighlight

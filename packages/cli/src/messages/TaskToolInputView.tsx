@@ -24,7 +24,7 @@ export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
 
   const toolName = currentTool ? currentTool.toolName : "";
 
-  const toolInput = formatToolInput(currentTool?.input || {});
+  const toolInput = formatToolInput(currentTool?.input || {}, toolName || undefined);
 
   if (finish) return null;
 
