@@ -193,7 +193,7 @@ export class AgentContext {
   }
 
   setMessages(m: ModelMessage[]) {
-    this.messages = [...m];
+    this.messages = m;
   }
 
   getMessages() {
@@ -207,11 +207,11 @@ export class AgentContext {
    */
   getMessagesForLLM(): ModelMessage[] {
     if (this.summaryMessage) {
-      let list = this.messages.slice(this.compactIndex);
-      while (list[0].role !== "assistant") {
+      // Walk compactIndex back to ensure we start on an assistant message
+      while (this.compactIndex > 0 && this.messages[this.compactIndex]?.role !== "assistant") {
         this.compactIndex--;
-        list = this.messages.slice(this.compactIndex);
       }
+      const list = this.messages.slice(this.compactIndex);
       const finalList = [this.summaryMessage, ...list];
       this.messagesForLLM = finalList;
       return finalList;

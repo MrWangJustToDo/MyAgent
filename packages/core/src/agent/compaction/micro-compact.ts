@@ -217,27 +217,22 @@ export function microCompact(messages: ModelMessage[], config: Partial<Compactio
     return messages;
   }
 
-  // Create a deep copy and apply compaction
-  const compacted = JSON.parse(JSON.stringify(messages)) as ModelMessage[];
-
+  // Mutate in place — the caller passes a working copy, no need to deep-clone
   for (const target of compactTargets) {
-    const message = compacted[target.messageIndex];
+    const message = messages[target.messageIndex];
     const content = message.content;
     if (Array.isArray(content)) {
       const part = content[target.partIndex] as Record<string, unknown>;
 
-      // Get tool name from map or use generic placeholder
       const toolName = toolCallMap.get(target.toolCallId) || (part.toolName as string) || "tool";
 
-      // Replace result with placeholder
       part.result = createPlaceholder(toolName);
 
-      // Also clear multi-modal content array (images, PDFs from toModelOutput)
       if (Array.isArray(part.content)) {
         part.content = [{ type: "text", text: createPlaceholder(toolName) }];
       }
     }
   }
 
-  return compacted;
+  return messages;
 }

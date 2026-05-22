@@ -480,20 +480,10 @@ export class Base {
     return (async (options) => {
       const res = userCallback ? await userCallback(options) : options;
 
-      let finalMessages = res?.messages || [];
+      const finalMessages = res?.messages || [];
 
-      // Apply micro compaction (Layer 1)
-      const tokensBefore = estimateTokens(finalMessages);
-      finalMessages = microCompact(finalMessages, this.compactionConfig || {});
-      const tokensAfter = estimateTokens(finalMessages);
-
-      if (tokensBefore !== tokensAfter) {
-        this.log?.debug("agent", "Micro compaction applied", {
-          tokensBefore,
-          tokensAfter,
-          reduction: tokensBefore - tokensAfter,
-        });
-      }
+      // Apply micro compaction (Layer 1) — mutates in place
+      microCompact(finalMessages, this.compactionConfig || {});
 
       this.context?.setMessages(finalMessages);
 
@@ -518,7 +508,7 @@ export class Base {
             actualTokens: actualTokens || undefined,
           });
 
-          const beforeLLMMessages = Array.from(llmMessages);
+          const beforeLength = llmMessages.length;
 
           if (result.compacted && result.summary && result.cutIndex != null) {
             const summaryMsg = createCompactedMessages(result.summary)[0];
@@ -527,7 +517,6 @@ export class Base {
             this.context.setCompactIndex(absoluteCut);
             this.context.resetUsage();
 
-            // Re-read LLM messages after compaction
             llmMessages = this.context.getMessagesForLLM();
           }
 
@@ -537,8 +526,8 @@ export class Base {
             tokensBefore: result.tokensBefore,
             tokensAfter: result.tokensAfter,
             cutIndex: result.cutIndex,
-            beforeLLMMessages,
-            llmMessages,
+            beforeMessageCount: beforeLength,
+            messageCount: llmMessages.length,
           });
         } catch (err) {
           const error = err instanceof Error ? err : new Error(String(err));

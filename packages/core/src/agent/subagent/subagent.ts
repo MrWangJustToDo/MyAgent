@@ -67,7 +67,6 @@ export const SUBAGENT_EXPLORE_SYSTEM_PROMPT = `You are a subagent with READ-ONLY
 Your role:
 - Complete the delegated task thoroughly
 - Use available tools to explore and gather information
-- Summarize your findings clearly and concisely
 
 Constraints:
 - You have read-only tools only (read_file, glob, grep, run_command, list_file, tree)
@@ -76,7 +75,9 @@ Constraints:
 - Focus on answering the specific question or completing the specific task
 - Do not run more than 40 steps — complete the task efficiently without excessive tool calls
 
-When done, provide a clear summary of what you found or accomplished.`;
+IMPORTANT: Only your final text response is returned to the parent agent as the task result.
+You MUST end with a comprehensive text summary — never end on a tool call.
+Your last message must be a complete, standalone answer to the task.`;
 
 /** @deprecated Use SUBAGENT_EXPLORE_SYSTEM_PROMPT instead */
 export const SUBAGENT_SYSTEM_PROMPT = SUBAGENT_EXPLORE_SYSTEM_PROMPT;
@@ -175,10 +176,10 @@ export const createExploreTools = createSubagentTools;
 /**
  * Extracts the summary from generateText result.
  *
- * When the last step is a tool call (e.g. todo), result.text only contains
- * that step's brief text, missing the actual findings from earlier steps.
- * We find the last step where the LLM stopped naturally (finishReason !== "tool-calls")
- * — that's the real summary/answer step.
+ * The system prompt instructs the LLM to always end with a text summary,
+ * so result.text should normally be sufficient. This is a safety net for
+ * edge cases where the LLM ends on a tool call — we walk backward to find
+ * the last step that finished with text output.
  */
 export const extractSummary = (result: {
   text: string;
