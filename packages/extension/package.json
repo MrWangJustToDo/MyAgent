@@ -17,8 +17,8 @@
   "dependencies": {
     "@ai-sdk/react": "^3.0.179",
     "@heroui/react": "2.8.9",
-    "@my-react/react": "^0.3.25",
-    "@my-react/react-dom": "^0.3.25",
+    "@my-react/react": "^0.3.27",
+    "@my-react/react-dom": "^0.3.27",
     "ai": "^6.0.177",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.576.0",
@@ -29,8 +29,8 @@
     "stream-markdown-parser": "^0.0.15"
   },
   "devDependencies": {
-    "@my-react/react-refresh": "^0.3.25",
-    "@my-react/react-vite": "^0.0.31",
+    "@my-react/react-refresh": "^0.3.27",
+    "@my-react/react-vite": "^0.0.33",
     "@types/chrome": "^0.0.313",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
