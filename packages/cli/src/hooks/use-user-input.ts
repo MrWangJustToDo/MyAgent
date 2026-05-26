@@ -32,6 +32,120 @@ export function createImagePlaceholder(index: number): string {
 }
 
 // ============================================================================
+// Visual Line Helpers
+// ============================================================================
+
+/** Build a map from image index to display number (1, 2, 3... in order of appearance) */
+function buildImageDisplayNumbers(value: string): Map<number, number> {
+  const displayNumbers = new Map<number, number>();
+  let displayNum = 1;
+
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if (code >= IMAGE_PLACEHOLDER_START && code <= IMAGE_PLACEHOLDER_END) {
+      displayNumbers.set(code - IMAGE_PLACEHOLDER_START, displayNum++);
+    }
+  }
+
+  return displayNumbers;
+}
+
+/** Get the visual display width of a character (image placeholders are wider) */
+function getCharVisualWidth(char: string, displayNumbers: Map<number, number>): number {
+  const code = char.charCodeAt(0);
+  if (code >= IMAGE_PLACEHOLDER_START && code <= IMAGE_PLACEHOLDER_END) {
+    const displayNum = displayNumbers.get(code - IMAGE_PLACEHOLDER_START) ?? 0;
+    return `[Image #${displayNum}]`.length;
+  }
+  return 1;
+}
+
+/**
+ * Compute visual line boundaries (start and end character indices) for width-based wrapping.
+ * Respects explicit \n characters and wraps long lines at the given width.
+ */
+function computeVisualLineBoundaries(
+  value: string,
+  maxWidth: number,
+  displayNumbers: Map<number, number>
+): { start: number; end: number }[] {
+  const boundaries: { start: number; end: number }[] = [];
+  let lineStart = 0;
+  let currentWidth = 0;
+
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i]!;
+
+    if (char === "\n") {
+      boundaries.push({ start: lineStart, end: i + 1 });
+      lineStart = i + 1;
+      currentWidth = 0;
+      continue;
+    }
+
+    const w = getCharVisualWidth(char, displayNumbers);
+
+    if (currentWidth + w > maxWidth && currentWidth > 0) {
+      boundaries.push({ start: lineStart, end: i });
+      lineStart = i;
+      currentWidth = w;
+    } else {
+      currentWidth += w;
+    }
+  }
+
+  // Add final line (or first line if value is empty)
+  if (lineStart < value.length || boundaries.length === 0) {
+    boundaries.push({ start: lineStart, end: value.length });
+  }
+
+  return boundaries;
+}
+
+/** Compute the visual column (display width) at a given raw position within a line */
+function getVisualColumn(value: string, lineStart: number, pos: number, displayNumbers: Map<number, number>): number {
+  let col = 0;
+
+  for (let i = lineStart; i < pos; i++) {
+    const char = value[i]!;
+    if (char === "\n") {
+      col = 0;
+    } else {
+      col += getCharVisualWidth(char, displayNumbers);
+    }
+  }
+
+  return col;
+}
+
+/**
+ * Find the raw character position at a target visual column on a given line.
+ * Returns the closest position that matches or exceeds the target column.
+ */
+function getRawPositionAtVisualColumn(
+  value: string,
+  lineStart: number,
+  lineEnd: number,
+  targetCol: number,
+  displayNumbers: Map<number, number>
+): number {
+  let col = 0;
+
+  for (let i = lineStart; i < lineEnd; i++) {
+    const char = value[i]!;
+    const w = getCharVisualWidth(char, displayNumbers);
+
+    if (col + w > targetCol) {
+      return i;
+    }
+
+    col += w;
+  }
+
+  return lineEnd;
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -239,42 +353,110 @@ export const useUserInput = createState(() => ({ ...initialState }), {
     },
 
     /**
-     * Move cursor up one line. Returns false if already on first line.
+     * Move cursor up one visual line. Returns false if already on first visual line
+     * (triggers history navigation in the caller).
+     *
+     * @param maxWidth - Optional max width for visual line wrapping. If provided, wraps
+     *   text at this width (handles image placeholders). If omitted, uses \n-based lines only.
      */
-    moveCursorUp: (): boolean => {
+    moveCursorUp: (maxWidth?: number): boolean => {
       state.selectAll = false;
       const val = state.value;
       const pos = state.cursorPosition;
-      // Find start of current line
-      const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
-      if (lineStart === 0) return false; // already on first line
-      // Column in current line
-      const col = pos - lineStart;
-      // Find start of previous line
-      const prevLineStart = val.lastIndexOf("\n", lineStart - 2) + 1;
-      const prevLineLen = lineStart - 1 - prevLineStart;
-      state.cursorPosition = prevLineStart + Math.min(col, prevLineLen);
+
+      if (!maxWidth) {
+        // Legacy behavior: \n-based lines only
+        const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
+        if (lineStart === 0) return false; // already on first line
+        const col = pos - lineStart;
+        const prevLineStart = val.lastIndexOf("\n", lineStart - 2) + 1;
+        const prevLineLen = lineStart - 1 - prevLineStart;
+        state.cursorPosition = prevLineStart + Math.min(col, prevLineLen);
+        return true;
+      }
+
+      // Visual wrapping behavior
+      const displayNumbers = buildImageDisplayNumbers(val);
+      const boundaries = computeVisualLineBoundaries(val, maxWidth, displayNumbers);
+
+      // Find the visual line containing the cursor
+      let currentIdx = -1;
+      for (let i = 0; i < boundaries.length; i++) {
+        if (pos >= boundaries[i]!.start && pos < boundaries[i]!.end) {
+          currentIdx = i;
+          break;
+        }
+      }
+      if (currentIdx === -1 && boundaries.length > 0) {
+        // Cursor at end of value, assign to last line
+        currentIdx = boundaries.length - 1;
+      }
+
+      if (currentIdx === -1 || currentIdx === 0) return false; // already on first visual line
+
+      const currentLine = boundaries[currentIdx]!;
+      const prevLine = boundaries[currentIdx - 1]!;
+
+      // Calculate visual column of cursor on current line
+      const visualCol = getVisualColumn(val, currentLine.start, pos, displayNumbers);
+
+      // Find raw position on previous line at target visual column
+      state.cursorPosition = getRawPositionAtVisualColumn(val, prevLine.start, prevLine.end, visualCol, displayNumbers);
       return true;
     },
 
     /**
-     * Move cursor down one line. Returns false if already on last line.
+     * Move cursor down one visual line. Returns false if already on last visual line
+     * (triggers history navigation in the caller).
+     *
+     * @param maxWidth - Optional max width for visual line wrapping. If provided, wraps
+     *   text at this width (handles image placeholders). If omitted, uses \n-based lines only.
      */
-    moveCursorDown: (): boolean => {
+    moveCursorDown: (maxWidth?: number): boolean => {
       state.selectAll = false;
       const val = state.value;
       const pos = state.cursorPosition;
-      // Find end of current line
-      const lineEnd = val.indexOf("\n", pos);
-      if (lineEnd === -1) return false; // already on last line
-      // Column in current line
-      const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
-      const col = pos - lineStart;
-      // Find end of next line
-      const nextLineStart = lineEnd + 1;
-      const nextLineEnd = val.indexOf("\n", nextLineStart);
-      const nextLineLen = (nextLineEnd === -1 ? val.length : nextLineEnd) - nextLineStart;
-      state.cursorPosition = nextLineStart + Math.min(col, nextLineLen);
+
+      if (!maxWidth) {
+        // Legacy behavior: \n-based lines only
+        const lineEnd = val.indexOf("\n", pos);
+        if (lineEnd === -1) return false; // already on last line
+        const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
+        const col = pos - lineStart;
+        const nextLineStart = lineEnd + 1;
+        const nextLineEnd = val.indexOf("\n", nextLineStart);
+        const nextLineLen = (nextLineEnd === -1 ? val.length : nextLineEnd) - nextLineStart;
+        state.cursorPosition = nextLineStart + Math.min(col, nextLineLen);
+        return true;
+      }
+
+      // Visual wrapping behavior
+      const displayNumbers = buildImageDisplayNumbers(val);
+      const boundaries = computeVisualLineBoundaries(val, maxWidth, displayNumbers);
+
+      // Find the visual line containing the cursor
+      let currentIdx = -1;
+      for (let i = 0; i < boundaries.length; i++) {
+        if (pos >= boundaries[i]!.start && pos < boundaries[i]!.end) {
+          currentIdx = i;
+          break;
+        }
+      }
+      if (currentIdx === -1 && boundaries.length > 0) {
+        // Cursor at end of value, assign to last line
+        currentIdx = boundaries.length - 1;
+      }
+
+      if (currentIdx === -1 || currentIdx >= boundaries.length - 1) return false; // already on last visual line
+
+      const currentLine = boundaries[currentIdx]!;
+      const nextLine = boundaries[currentIdx + 1]!;
+
+      // Calculate visual column of cursor on current line
+      const visualCol = getVisualColumn(val, currentLine.start, pos, displayNumbers);
+
+      // Find raw position on next line at target visual column
+      state.cursorPosition = getRawPositionAtVisualColumn(val, nextLine.start, nextLine.end, visualCol, displayNumbers);
       return true;
     },
 

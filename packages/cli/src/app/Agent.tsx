@@ -33,7 +33,7 @@ export const Agent = () => {
 
   const { useInitTerminalSize } = useSize.getActions();
 
-  useInitTerminalSize();
+  const { columns } = useInitTerminalSize();
 
   const { useInitStdout } = useStatic.getActions();
 
@@ -396,7 +396,7 @@ export const Agent = () => {
     if (inputKey.upArrow) {
       if (isAutocompleteVisible) {
         autocompleteActions.selectPrev();
-      } else if (inputActions.moveCursorUp()) {
+      } else if (inputActions.moveCursorUp(columns)) {
         // Cursor moved up within multi-line text
       } else {
         inputActions.historyPrev();
@@ -408,7 +408,7 @@ export const Agent = () => {
     if (inputKey.downArrow) {
       if (isAutocompleteVisible) {
         autocompleteActions.selectNext();
-      } else if (inputActions.moveCursorDown()) {
+      } else if (inputActions.moveCursorDown(columns)) {
         // Cursor moved down within multi-line text
       } else {
         inputActions.historyNext();

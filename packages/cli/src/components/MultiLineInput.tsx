@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import { Box, Text } from "ink";
 
-import { IMAGE_PLACEHOLDER_START, IMAGE_PLACEHOLDER_END, getImageIndex } from "../hooks/use-user-input.js";
+import { IMAGE_PLACEHOLDER_START, IMAGE_PLACEHOLDER_END } from "../hooks/use-user-input.js";
 
 export interface MultiLineInputProps {
   value: string;
@@ -10,6 +10,8 @@ export interface MultiLineInputProps {
   placeholder?: string;
   /** Whether all text is selected (Ctrl+A) */
   selectAll?: boolean;
+  /** Maximum width in characters per visual line. Wraps text at this width. */
+  maxWidth?: number;
 }
 
 /** Check if a character code is an image placeholder */
@@ -33,9 +35,105 @@ function buildImageDisplayNumbers(value: string): Map<number, number> {
   return displayNumbers;
 }
 
+/** Get the visual display width of a character (image placeholders are wider) */
+function getCharVisualWidth(char: string, imageDisplayNumbers: Map<number, number>): number {
+  const code = char.charCodeAt(0);
+  if (isImagePlaceholderCode(code)) {
+    const imageIdx = code - IMAGE_PLACEHOLDER_START;
+    const displayNum = imageDisplayNumbers.get(imageIdx) ?? 0;
+    return `[Image #${displayNum}]`.length;
+  }
+  return 1;
+}
+
+/** Get the visual display text for a character (image placeholders are expanded) */
+function getCharDisplay(char: string, imageDisplayNumbers: Map<number, number>): string {
+  const code = char.charCodeAt(0);
+  if (isImagePlaceholderCode(code)) {
+    const imageIdx = code - IMAGE_PLACEHOLDER_START;
+    const displayNum = imageDisplayNumbers.get(imageIdx) ?? "?";
+    return `[Image #${displayNum}]`;
+  }
+  return char;
+}
+
+/**
+ * Split text into visual lines based on maxWidth.
+ * Respects explicit \n characters and wraps long lines at the given width.
+ * Image placeholder characters are expanded to their full label (e.g. "[Image #1]").
+ */
+function getVisualLines(value: string, maxWidth: number, imageDisplayNumbers: Map<number, number>): string[] {
+  const lines: string[] = [];
+
+  for (const rawLine of value.split("\n")) {
+    let currentLine = "";
+    let currentWidth = 0;
+
+    for (const char of rawLine) {
+      const w = getCharVisualWidth(char, imageDisplayNumbers);
+      const display = getCharDisplay(char, imageDisplayNumbers);
+
+      // If adding this char exceeds maxWidth, wrap to next line first
+      if (currentWidth + w > maxWidth && currentWidth > 0) {
+        lines.push(currentLine);
+        currentLine = display;
+        currentWidth = w;
+      } else {
+        currentLine += display;
+        currentWidth += w;
+      }
+    }
+
+    lines.push(currentLine);
+  }
+
+  return lines;
+}
+
+/**
+ * Convert an absolute character position in the raw value string to
+ * (visualLine, visualCol) coordinates in the wrapped display.
+ */
+function getCursorVisualPosition(
+  value: string,
+  cursorPosition: number,
+  maxWidth: number,
+  imageDisplayNumbers: Map<number, number>
+): { line: number; col: number } {
+  let line = 0;
+  let col = 0;
+  let currentLineWidth = 0;
+
+  for (let i = 0; i < cursorPosition; i++) {
+    const char = value[i]!;
+
+    if (char === "\n") {
+      line++;
+      col = 0;
+      currentLineWidth = 0;
+      continue;
+    }
+
+    const w = getCharVisualWidth(char, imageDisplayNumbers);
+
+    // Check if this character would exceed maxWidth
+    if (currentLineWidth + w > maxWidth) {
+      line++;
+      col = w;
+      currentLineWidth = w;
+    } else {
+      col += w;
+      currentLineWidth += w;
+    }
+  }
+
+  return { line, col };
+}
+
 /**
  * Custom multi-line input component replacing ink-text-input.
  * Renders text with a cursor using chalk.inverse, supports multiple lines.
+ * Wraps text at maxWidth for visual line breaks.
  * Image placeholder characters (\uE000-\uE0FF) are rendered as [Image #N].
  */
 export const MultiLineInput = ({
@@ -44,6 +142,7 @@ export const MultiLineInput = ({
   showCursor = true,
   placeholder = "",
   selectAll = false,
+  maxWidth = 80,
 }: MultiLineInputProps) => {
   if (!value && showCursor) {
     if (placeholder) {
@@ -60,61 +159,32 @@ export const MultiLineInput = ({
   // Build display numbers for images (1, 2, 3... in order of appearance)
   const imageDisplayNumbers = buildImageDisplayNumbers(value);
 
-  const lines = value.split("\n");
+  // Get visual lines with width-based wrapping
+  const visualLines = getVisualLines(value, maxWidth, imageDisplayNumbers);
 
-  // Compute which line and column the cursor is on
-  let cursorLine = 0;
-  let cursorCol = 0;
-  let offset = 0;
-  for (let i = 0; i < lines.length; i++) {
-    const lineLen = lines[i]!.length;
-    if (offset + lineLen >= cursorPosition && cursorPosition >= offset) {
-      cursorLine = i;
-      cursorCol = cursorPosition - offset;
-      break;
-    }
-    offset += lineLen + 1; // +1 for the \n
-    cursorLine = i + 1;
-    cursorCol = 0;
-  }
+  // Compute cursor position in visual coordinates
+  const cursorPos = getCursorVisualPosition(value, cursorPosition, maxWidth, imageDisplayNumbers);
 
   return (
     <Box flexDirection="column">
-      {lines.map((line, lineIdx) => {
+      {visualLines.map((line, lineIdx) => {
         let rendered = "";
 
         for (let i = 0; i < line.length; i++) {
           const char = line[i]!;
-          const code = char.charCodeAt(0);
-          const isCursorHere = showCursor && !selectAll && lineIdx === cursorLine && i === cursorCol;
+          const isCursorHere = showCursor && !selectAll && lineIdx === cursorPos.line && i === cursorPos.col;
 
-          if (isImagePlaceholderCode(code)) {
-            // Render image placeholder
-            const imageIdx = getImageIndex(char);
-            const displayNum = imageDisplayNumbers.get(imageIdx) ?? "?";
-            const label = `[Image #${displayNum}]`;
-
-            if (selectAll) {
-              rendered += chalk.bgCyan.black(label);
-            } else if (isCursorHere) {
-              rendered += chalk.bgMagenta.white.bold(label);
-            } else {
-              rendered += chalk.magenta(label);
-            }
+          if (selectAll) {
+            rendered += chalk.bgCyan.black(char);
+          } else if (isCursorHere) {
+            rendered += chalk.inverse(char);
           } else {
-            // Render normal character
-            if (selectAll) {
-              rendered += chalk.bgCyan.black(char);
-            } else if (isCursorHere) {
-              rendered += chalk.inverse(char);
-            } else {
-              rendered += char;
-            }
+            rendered += char;
           }
         }
 
         // Cursor at end of line (only show if not selectAll)
-        if (showCursor && !selectAll && lineIdx === cursorLine && cursorCol >= line.length) {
+        if (showCursor && !selectAll && lineIdx === cursorPos.line && cursorPos.col >= line.length) {
           rendered += chalk.inverse(" ");
         }
 
