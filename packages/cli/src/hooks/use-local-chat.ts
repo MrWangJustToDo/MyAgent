@@ -164,9 +164,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
   // @ts-ignore
   const agentError = useAgent((s) => (s.agent as Agent)?.error || "");
 
-  const forceUpdate = useForceUpdate({ time: 600 });
-
-  const immediateForceUpdate = useForceUpdate({ time: 0 });
+  const forceUpdate = useForceUpdate({ time: 100 });
 
   // Chat instance ref - created once when connection is ready
   const chatRef = useRef<Chat<UIMessage> | null>(null);
@@ -237,8 +235,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
       : {}
   );
 
-  // 强制刷新 更新 status，当前 @my-react 实现瑕疵
-  // TODO！message更新后 status更新的排在了effect之后
+  // Force re-render on message/error changes to sync status (workaround for @my-react timing issue)
   useEffect(() => {
     forceUpdate();
   }, [chatHelpers.messages, agentError]);
@@ -275,7 +272,7 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
       } else {
         await chatHelpers.sendMessage({ text: content.text });
       }
-      immediateForceUpdate();
+      forceUpdate();
     },
     [agent, chatHelpers]
   );

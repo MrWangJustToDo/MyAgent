@@ -116,17 +116,17 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
             {content.command}
             {content.cwd && (
               <Text color="gray" dimColor>
-                cwd: {content.cwd}
+                (cwd: {content.cwd})
               </Text>
             )}
             {content.timeout && (
               <Text color="gray" dimColor>
-                timeout: {content.timeout}ms
+                (timeout: {content.timeout}ms)
               </Text>
             )}
             {content.background && (
               <Text color="gray" dimColor>
-                background: true
+                (background: true)
               </Text>
             )}
           </Text>
