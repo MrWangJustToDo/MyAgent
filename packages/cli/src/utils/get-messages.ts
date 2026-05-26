@@ -10,28 +10,17 @@ const { setMessage, getMessage } = useMessageCache.getActions();
  * Static messages are cached and rendered via Ink's <Static> component.
  * Dynamic messages are the currently streaming content that updates frequently.
  *
- * The split point is the latest user message. Everything from the latest user
- * input onward (user input + assistant response) is dynamic, everything before
- * is static. This ensures only the active turn re-renders, not the full history.
+ * The split happens at "step-start" boundaries to allow completed steps
+ * to become static while the current step remains dynamic.
  */
 export const getMessages = (messages: UIMessage[]) => {
   const staticMessages: UIMessage[] = [];
   const dynamicMessages: UIMessage[] = [];
 
-  // Find the latest user message index — everything from there onward is dynamic
-  let latestUserIdx = -1;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === "user") {
-      latestUserIdx = i;
-      break;
-    }
-  }
-
   for (let i = 0; i < messages.length; i++) {
     const message = messages[i];
-
-    if (i < latestUserIdx) {
-      // Messages before the latest user input are fully static — use cache
+    if (i < messages.length - 1) {
+      // Previous messages are fully static - use cache if available
       const flatMessage =
         getMessage(message.id) ||
         message.parts.reduce<UIMessage[]>((p, c, index) => {
@@ -43,10 +32,40 @@ export const getMessages = (messages: UIMessage[]) => {
 
       staticMessages.push(...flatMessage);
     } else {
-      // Messages from the latest user input onward are dynamic
-      message.parts.forEach((part, index) => {
-        dynamicMessages.push({ ...message, id: message.id + "-" + index, parts: [part] });
-      });
+      // message.parts.forEach((part, index) => {
+      //   dynamicMessages.push({ ...message, id: message.id + "-" + index, parts: [part] });
+      // });
+      // Last message - split into static (completed steps) and dynamic (current step)
+      if (message.role === "user") {
+        message.parts.forEach((part, index) => {
+          dynamicMessages.push({ ...message, id: message.id + "-" + index, parts: [part] });
+        });
+      } else {
+        // For assistant messages, split at step-start boundaries
+        // Parts before the last step-start are static, parts after are dynamic
+        let staticParts: UIMessage["parts"] = [];
+        let dynamicParts: UIMessage["parts"] = [];
+
+        for (const part of message.parts) {
+          if (part.type === "step-start") {
+            // Move current dynamic parts to static when we hit a new step
+            staticParts = [...staticParts, ...dynamicParts];
+            dynamicParts = [];
+          } else {
+            dynamicParts = [...dynamicParts, part];
+          }
+        }
+
+        // Add static parts as individual messages
+        staticParts.forEach((p, index) => {
+          staticMessages.push({ ...message, id: message.id + "-static-" + index, parts: [p] });
+        });
+
+        // Add dynamic parts as individual messages
+        dynamicParts.forEach((p, index) => {
+          dynamicMessages.push({ ...message, id: message.id + "-dynamic-" + index, parts: [p] });
+        });
+      }
     }
   }
 
