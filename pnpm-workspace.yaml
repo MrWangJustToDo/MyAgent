@@ -21,6 +21,8 @@ minimumReleaseAgeExclude:
   - "@my-react/react-terminal@0.0.26"
   - "@my-react/react-vite@0.0.33"
   - "@my-react/react@0.3.27"
+  - '@ai-sdk/mcp@1.0.44'
+  - '@ai-sdk/openai@3.0.66'
 
 publicHoistPattern:
   - "*eslint-*"
