@@ -3,7 +3,7 @@ import { useUserInput } from "../hooks/use-user-input.js";
 
 import { MultiLineInput } from "./MultiLineInput.js";
 
-export const UserInput = () => {
+export const UserInput = ({ prefixWidth = 2 }: { prefixWidth?: number }) => {
   const value = useUserInput((s) => s.value);
   const cursorPosition = useUserInput((s) => s.cursorPosition);
   const selectAll = useUserInput((s) => s.selectAll);
@@ -15,7 +15,7 @@ export const UserInput = () => {
       placeholder="Type to start a Task"
       cursorPosition={cursorPosition}
       selectAll={selectAll}
-      maxWidth={columns}
+      maxWidth={columns - prefixWidth}
     />
   );
 };

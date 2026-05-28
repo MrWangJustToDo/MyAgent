@@ -96,7 +96,7 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
       <ToolInputView part={part} />
 
       {/* Detailed output for run_command/task */}
-      {hasOutput && !staticMessage && <ToolOutputView part={part} />}
+      {hasOutput && <ToolOutputView part={part} />}
 
       {/* Compact output or error */}
       {errorText && (

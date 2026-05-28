@@ -32,39 +32,36 @@ export const getMessages = (messages: UIMessage[]) => {
 
       staticMessages.push(...flatMessage);
     } else {
-      // message.parts.forEach((part, index) => {
-      //   dynamicMessages.push({ ...message, id: message.id + "-" + index, parts: [part] });
-      // });
       // Last message - split into static (completed steps) and dynamic (current step)
       if (message.role === "user") {
-        message.parts.forEach((part, index) => {
-          dynamicMessages.push({ ...message, id: message.id + "-" + index, parts: [part] });
-        });
+        for (let idx = 0; idx < message.parts.length; idx++) {
+          dynamicMessages.push({ ...message, id: message.id + "-" + idx, parts: [message.parts[idx]] });
+        }
       } else {
-        // For assistant messages, split at step-start boundaries
-        // Parts before the last step-start are static, parts after are dynamic
-        let staticParts: UIMessage["parts"] = [];
-        let dynamicParts: UIMessage["parts"] = [];
-
-        for (const part of message.parts) {
-          if (part.type === "step-start") {
-            // Move current dynamic parts to static when we hit a new step
-            staticParts = [...staticParts, ...dynamicParts];
-            dynamicParts = [];
-          } else {
-            dynamicParts = [...dynamicParts, part];
+        // For assistant messages, find the last step-start boundary.
+        // Parts before it are static, parts from it onward are dynamic.
+        let lastStepStartIdx = -1;
+        for (let j = message.parts.length - 1; j >= 0; j--) {
+          if (message.parts[j].type === "step-start") {
+            lastStepStartIdx = j;
+            break;
           }
         }
 
-        // Add static parts as individual messages
-        staticParts.forEach((p, index) => {
-          staticMessages.push({ ...message, id: message.id + "-static-" + index, parts: [p] });
-        });
+        // Everything before lastStepStartIdx is static
+        for (let j = 0; j < lastStepStartIdx; j++) {
+          const part = message.parts[j];
+          if (part.type === "step-start") continue;
+          staticMessages.push({ ...message, id: message.id + "-static-" + j, parts: [part] });
+        }
 
-        // Add dynamic parts as individual messages
-        dynamicParts.forEach((p, index) => {
-          dynamicMessages.push({ ...message, id: message.id + "-dynamic-" + index, parts: [p] });
-        });
+        // Everything from lastStepStartIdx onward is dynamic (skip the step-start itself)
+        const dynamicStart = lastStepStartIdx >= 0 ? lastStepStartIdx + 1 : 0;
+        for (let j = dynamicStart; j < message.parts.length; j++) {
+          const part = message.parts[j];
+          if (part.type === "step-start") continue;
+          dynamicMessages.push({ ...message, id: message.id + "-dynamic-" + j, parts: [part] });
+        }
       }
     }
   }

@@ -13,6 +13,7 @@ import { MessageView, StaticContext } from "../messages";
 import { getMessages } from "../utils/get-messages";
 
 import type { UIMessage } from "ai";
+import type { JSX } from "react";
 
 // ============================================================================
 // Props
@@ -29,55 +30,46 @@ export interface MessageListProps {
 export const MessageList = ({ messages }: MessageListProps) => {
   const { staticMessages, dynamicMessages } = useMemo(() => getMessages(messages), [messages]);
 
-  // Track the last static messages length to detect actual changes
+  // Only rebuild static list JSX when its length changes (new items appended).
+  // This avoids re-creating the entire static JSX tree on every streaming tick.
   const lastStaticLengthRef = useRef(0);
+  const staticListRef = useRef<JSX.Element[]>([]);
 
-  // Memoize static list rendering to prevent unnecessary re-renders
-  const staticList = useMemo(
-    () =>
-      staticMessages.map((item) => (
-        <Box key={item.id} paddingX={1} marginTop={1}>
-          <StaticContext value={{ staticMessage: true }}>
-            <MessageView message={item} />
-          </StaticContext>
-        </Box>
-      )),
-    [staticMessages]
+  if (staticMessages.length !== lastStaticLengthRef.current) {
+    lastStaticLengthRef.current = staticMessages.length;
+    staticListRef.current = staticMessages.map((item) => (
+      <Box key={item.id} paddingX={1} marginTop={1}>
+        <StaticContext value={{ staticMessage: true }}>
+          <MessageView message={item} />
+        </StaticContext>
+      </Box>
+    ));
+  }
+
+  // Dynamic list — actively streaming/executing parts that change frequently
+  const dynamicList = dynamicMessages.length ? (
+    dynamicMessages.map((message) => (
+      <Box key={message.id} paddingX={1} marginTop={1}>
+        <StaticContext value={{ staticMessage: false }}>
+          <MessageView message={message} />
+        </StaticContext>
+      </Box>
+    ))
+  ) : (
+    <Box paddingX={1} marginTop={1}>
+      <Text color="gray" dimColor>
+        No messages yet. Type a message to start.
+      </Text>
+    </Box>
   );
 
-  // Memoize dynamic list rendering
-  const dynamicList = useMemo(
-    () =>
-      dynamicMessages.length ? (
-        dynamicMessages.map((message) => (
-          <Box key={message.id} paddingX={1} marginTop={1}>
-            <StaticContext value={{ staticMessage: false }}>
-              <MessageView message={message} />
-            </StaticContext>
-          </Box>
-        ))
-      ) : (
-        <Box paddingX={1} marginTop={1}>
-          <Text color="gray" dimColor>
-            No messages yet. Type a message to start.
-          </Text>
-        </Box>
-      ),
-    [dynamicMessages]
-  );
-
-  // Only update static list when length actually changes
-  // This prevents flickering during streaming when static content is stable
   useEffect(() => {
-    if (staticMessages.length !== lastStaticLengthRef.current) {
-      lastStaticLengthRef.current = staticMessages.length;
-      useStatic.getActions().setStaticList(staticList);
-    }
-  }, [staticMessages.length, staticList]);
+    useStatic.getActions().setStaticList(staticListRef.current);
+  }, [staticMessages.length]);
 
   useEffect(() => {
     useDynamic.getActions().setDynamicList(dynamicList);
-  }, [dynamicList]);
+  });
 
   return null;
 };

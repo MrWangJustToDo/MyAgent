@@ -102,7 +102,7 @@ export const Footer = () => {
           </Text>
         )}
         {isInputEnabled ? (
-          <UserInput />
+          <UserInput prefixWidth={denyMode ? 15 : 2} />
         ) : (
           <Text color="gray" dimColor>
             Processing...
