@@ -161,6 +161,9 @@ export const createDeepSeekModel = (modelName: string, apiKey?: string, baseURL?
     apiKey: resolvedApiKey,
     ...(baseURL ? { baseURL } : {}),
   });
+  if (process.env.NODE_ENV === "production") {
+    return deepseek(modelName);
+  }
   return wrapLanguageModel({ model: deepseek(modelName), middleware: devToolsMiddleware() });
 };
 

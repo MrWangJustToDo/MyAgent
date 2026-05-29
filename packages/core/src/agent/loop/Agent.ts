@@ -194,20 +194,13 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
 
     const tools = this.getTools();
 
+    const systemPrompt = this.buildSystemPrompt();
+
     this.log?.agent("Starting stream (Agent interface)", {
-      prompt,
-      messages,
+      systemPrompt,
       finalMessages,
-      finalMessagesCount: finalMessages.length,
       toolCount: Object.keys(tools).length,
     });
-
-    const toolChunk: StreamPart[] = [];
-    const reasonChunk: StreamPart[] = [];
-    const textChunk: StreamPart[] = [];
-    const otherChunk: StreamPart[] = [];
-
-    this.log?.chunk("all", { toolChunk, reasonChunk, textChunk, otherChunk });
 
     // Use Vercel AI SDK streamText and return the result directly
     // The caller (DirectChatTransport) will call result.toUIMessageStream()
@@ -215,7 +208,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       model: this.model,
       messages: finalMessages,
       tools,
-      system: this.buildSystemPrompt(),
+      system: systemPrompt,
       maxOutputTokens: this.config.maxTokens,
       temperature: this.config.temperature,
       abortSignal: this.currentAbortController!.signal,
@@ -224,15 +217,6 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       prepareStep: this.createPrepareStep(prepareStep),
       onFinish: this.createOnFinish(onFinish),
       onChunk: ({ chunk }) => {
-        if (chunk.type.includes("text")) {
-          textChunk.push(chunk);
-        } else if (chunk.type.includes("tool")) {
-          toolChunk.push(chunk);
-        } else if (chunk.type.includes("reasoning")) {
-          reasonChunk.push(chunk);
-        } else {
-          otherChunk.push(chunk);
-        }
         this.context?.emit(chunk);
         if (chunk.type === "tool-call" && this.isToolNeedsApproval(chunk.toolName)) {
           this.status = "waiting";
@@ -310,11 +294,11 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
 
     const tools = this.getTools();
 
+    const systemPrompt = this.buildSystemPrompt();
+
     this.log?.agent("Starting generate (Agent interface)", {
-      prompt,
-      messages,
+      systemPrompt,
       finalMessages,
-      finalMessagesCount: finalMessages.length,
       toolCount: Object.keys(tools).length,
     });
 

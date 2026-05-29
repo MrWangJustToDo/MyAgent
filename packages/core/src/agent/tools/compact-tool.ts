@@ -148,6 +148,9 @@ IMPORTANT: After compaction, read the summary carefully and use the todo tool to
           const absoluteCut = context.getCompactIndex() + result.cutIndex;
           context.setCompactIndex(absoluteCut);
           context.resetUsage();
+
+          context.clearTools();
+
           onCompact?.();
         }
 

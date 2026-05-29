@@ -245,6 +245,14 @@ export class AgentContext {
   }
 
   /**
+   * Clear tool call history (e.g., after compaction when old tool calls are no longer relevant)
+   */
+  clearTools(): void {
+    this.tools = [];
+    this.touch();
+  }
+
+  /**
    * Clear events (keep messages)
    */
   clearEvents(): void {
@@ -267,6 +275,7 @@ export class AgentContext {
     this.compactIndex = 0;
     this.usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
     this.totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    this.finishInfo = null;
     this.isStreaming = false;
     this.touch();
   }

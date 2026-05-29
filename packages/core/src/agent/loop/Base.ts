@@ -499,6 +499,8 @@ export class Base {
             this.context.setCompactIndex(absoluteCut);
             this.context.resetUsage();
 
+            this.context.clearTools();
+
             llmMessages = this.context.getMessagesForLLM();
           }
 
@@ -591,6 +593,9 @@ export class Base {
       });
 
       this.context?.updateFinal?.(event);
+
+      // Release stream events accumulated during this turn (consumed in real-time by listeners)
+      this.context?.clearEvents();
 
       // Auto-save session after each interaction
       this.saveSession();
