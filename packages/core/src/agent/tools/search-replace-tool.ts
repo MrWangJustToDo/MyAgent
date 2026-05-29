@@ -8,6 +8,12 @@ import type { Sandbox } from "../../environment";
 const searchReplaceBlockSchema = z.object({
   oldString: z.string().describe("The exact string to search for and replace."),
   newString: z.string().describe("The string to replace oldString with."),
+  startLine: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe("The 1-indexed line number where oldString starts in the file. Used for UI display."),
 });
 
 /**

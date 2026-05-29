@@ -17,6 +17,9 @@ import { z } from "zod";
 import { agentManager } from "../../managers/manager-agent.js";
 
 import { withDuration } from "./helpers.js";
+import { maybeCacheOutput } from "./tool-output-cache.js";
+
+import type { Sandbox } from "../../environment";
 
 // ============================================================================
 // Constants
@@ -121,6 +124,8 @@ export const webfetchOutputSchema = z.object({
   message: z.string().describe("Human-readable result message"),
   /** Execution duration in milliseconds */
   durationMs: z.number().describe("Execution duration in milliseconds"),
+  /** Path to cached full output */
+  cachedOutputPath: z.string().nullable().optional().describe("Path to cached full output. Use read_file to read it."),
 });
 
 export type WebfetchOutput = z.infer<typeof webfetchOutputSchema>;
@@ -143,7 +148,7 @@ export type WebfetchOutput = z.infer<typeof webfetchOutputSchema>;
  * const webfetchTool = createWebfetchTool();
  * ```
  */
-export const createWebfetchTool = ({ agentId }: { agentId: string }) => {
+export const createWebfetchTool = ({ agentId, sandbox }: { agentId: string; sandbox?: Sandbox }) => {
   return tool({
     description: `Fetches content from a URL and returns it in the specified format.
 
@@ -183,7 +188,7 @@ Usage notes:
 
     outputSchema: webfetchOutputSchema,
 
-    execute: async ({ url, format, timeout }, { abortSignal }) => {
+    execute: async ({ url, format, timeout }, { abortSignal, toolCallId }) => {
       return withDuration(async () => {
         // Validate URL
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
@@ -261,6 +266,7 @@ Usage notes:
               isImage: true,
               truncated: false,
               message: `Fetched image (${mime}, ${arrayBuffer.byteLength} bytes)`,
+              cachedOutputPath: null,
             };
           }
 
@@ -292,15 +298,26 @@ Usage notes:
               break;
           }
 
-          // Truncate content if too long
+          // Cache large content to disk instead of inline truncation
           const originalLength = content.length;
+          let cachedOutputPath: string | null = null;
           let truncated = false;
-          if (content.length > MAX_CONTENT_CHARS) {
+
+          if (sandbox && content.length > MAX_CONTENT_CHARS) {
+            const cached = await maybeCacheOutput(sandbox, content, `${toolCallId}-webfetch`);
+            content = cached.content;
+            cachedOutputPath = cached.cachedOutputPath;
+            truncated = cachedOutputPath !== null;
+          } else if (content.length > MAX_CONTENT_CHARS) {
             content = content.slice(0, MAX_CONTENT_CHARS) + "\n\n[...content truncated...]";
             truncated = true;
           }
 
-          const truncationNote = truncated ? ` (truncated from ${originalLength} chars)` : "";
+          const truncationNote = cachedOutputPath
+            ? " (large content cached to disk)"
+            : truncated
+              ? ` (truncated from ${originalLength} chars)`
+              : "";
 
           return {
             url,
@@ -310,6 +327,7 @@ Usage notes:
             isImage: false,
             truncated,
             message: `Fetched ${url} (${contentType}, ${originalLength} chars)${truncationNote}`,
+            cachedOutputPath,
           };
         } finally {
           if (!hasParentAgent) {

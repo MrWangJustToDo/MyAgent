@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { OUTPUT_LIMITS, withDuration } from "./helpers.js";
+import { maybeCacheOutput, CACHE_THRESHOLD } from "./tool-output-cache.js";
 import { grepOutputSchema } from "./types.js";
 
 import type { Sandbox } from "../../environment";
@@ -64,7 +65,7 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
         .describe(`Maximum number of matches to return. Defaults to ${DEFAULT_LIMIT}.`),
     }),
     outputSchema: grepOutputSchema,
-    execute: async ({ pattern, path, include, ignoreCase, offset, limit }) => {
+    execute: async ({ pattern, path, include, ignoreCase, offset, limit }, { toolCallId }) => {
       return withDuration(async () => {
         const searchPath = path ?? ".";
         const skip = offset ?? 0;
@@ -139,6 +140,17 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
         const paginatedMatches = allMatches.slice(skip, skip + take);
         const hasMore = allMatches.length > skip + take;
 
+        // Cache large match output to disk
+        let cachedOutputPath: string | null = null;
+        const fullMatchText = paginatedMatches.map((m) => `${m.file}:${m.lineNumber}:${m.content}`).join("\n");
+        if (fullMatchText.length > CACHE_THRESHOLD) {
+          const cached = await maybeCacheOutput(sandbox, fullMatchText, `${toolCallId}-grep`);
+          cachedOutputPath = cached.cachedOutputPath;
+          if (cachedOutputPath) {
+            contentTruncated = true;
+          }
+        }
+
         // Build message
         let message = `Found ${paginatedMatches.length} matches for pattern: ${pattern}`;
         if (skip > 0) {
@@ -148,7 +160,9 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
           const nextOffset = skip + take;
           message += `. Use offset=${nextOffset} to see more.`;
         }
-        if (contentTruncated) {
+        if (cachedOutputPath) {
+          message += ` (full output cached to ${cachedOutputPath})`;
+        } else if (contentTruncated) {
           message += " (some content truncated)";
         }
 
@@ -163,6 +177,7 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
           nextOffset: hasMore ? skip + take : null,
           contentTruncated,
           message,
+          cachedOutputPath,
         };
       });
     },

@@ -1,32 +1,25 @@
 /**
- * SessionStore - Append-only JSONL session persistence.
+ * SessionStore - Single-file JSON session persistence.
  *
- * Stores sessions as `.session.jsonl` files in `.sessions/` directory.
- * Uses an append-only format where:
- *   - Line 1 is a header entry with session metadata (written once)
- *   - Subsequent lines are event entries that update individual fields
- *   - On load, entries are replayed in order to reconstruct full state
- *
- * Benefits over single-file JSON:
- *   - O(1) writes per event — no full file rewrite
- *   - Survives partial writes — only the last (possibly partial) entry is lost
- *   - Enables future branching, time-travel, and auditing
- *   - Compaction is recorded as an entry type, not a destructive rewrite
+ * Stores sessions as `.session.json` files in `.sessions/` directory.
+ * Each file contains a single JSON object with the full SessionData.
+ * Writes are full overwrites — simple, correct, and produces exactly
+ * one copy of uiMessages regardless of how many saves occur.
  */
 
 import { generateId } from "../../base/utils.js";
 
 import { SESSION_DIR, SESSION_FILE_SUFFIX, SESSION_VERSION } from "./types.js";
 
-import type { SessionData, SessionMeta, SessionEntry, SessionHeaderEntry } from "./types.js";
+import type { SessionData, SessionMeta } from "./types.js";
 import type { SandboxFileSystem } from "../../environment/types.js";
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-/** Legacy file suffix for backward compatibility */
-const LEGACY_FILE_SUFFIX = ".json";
+/** Legacy file suffixes for backward compatibility */
+const LEGACY_SUFFIXES = [".json", ".session.jsonl"];
 
 /** Default empty token usage */
 const EMPTY_USAGE = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
@@ -39,10 +32,15 @@ export class SessionStore {
   private fs: SandboxFileSystem;
 
   /**
-   * In-memory snapshot of the last saved state for each session.
-   * Used for efficient diffing — only changed fields get written as entries.
+   * Hash of the last saved JSON string per session.
+   * Used to skip writes when nothing changed.
    */
-  private lastSavedState: Map<string, SessionData> = new Map();
+  private lastSavedHash: Map<string, string> = new Map();
+
+  /**
+   * Per-session write lock to prevent concurrent saves from racing.
+   */
+  private saveLocks: Map<string, Promise<void>> = new Map();
 
   constructor(filesystem: SandboxFileSystem) {
     this.fs = filesystem;
@@ -54,13 +52,13 @@ export class SessionStore {
 
   /**
    * Create a new empty session and return its SessionData.
-   * Does NOT write to disk — the first call to save() writes the header + entries.
+   * Does NOT write to disk — the first call to save() writes the file.
    */
   create(options: { provider: string; model: string; name?: string }): SessionData {
     const id = generateId("ses");
     const now = Date.now();
 
-    const session: SessionData = {
+    return {
       id,
       name: options.name || "New Session",
       version: SESSION_VERSION,
@@ -74,200 +72,55 @@ export class SessionStore {
       createdAt: now,
       updatedAt: now,
     };
-
-    return session;
   }
 
   /**
-   * Save a session persistantly using append-only JSONL entries.
-   *
-   * Only writes entries for fields that have changed since the last save,
-   * making writes O(1) for typical single-field updates.
+   * Save a session to disk as a single JSON file (full overwrite).
+   * Skips the write if the content hasn't changed since the last save.
+   * Serializes concurrent saves per session to prevent race conditions.
    */
   async save(session: SessionData): Promise<void> {
-    await this.ensureDir();
-
-    session.updatedAt = Date.now();
-    const filePath = this.getFilePath(session.id);
-    const lastState = this.lastSavedState.get(session.id);
-
-    // Collect entries to append
-    const entries: string[] = [];
-
-    if (!lastState) {
-      // First save for this session — write header + all initial fields
-      const header = this.buildHeader(session);
-      entries.push(this.serializeEntry(header));
-      entries.push(
-        this.serializeEntry({
-          type: "ui_messages" as const,
-          id: generateId("ent"),
-          timestamp: session.updatedAt,
-          uiMessages: session.uiMessages,
-        })
-      );
-      if (session.summaryMessage || session.compactIndex > 0) {
-        entries.push(
-          this.serializeEntry({
-            type: "summary_message" as const,
-            id: generateId("ent"),
-            timestamp: session.updatedAt,
-            summaryMessage: session.summaryMessage,
-            compactIndex: session.compactIndex,
-          })
-        );
-      }
-      if (session.usage.inputTokens > 0 || session.usage.outputTokens > 0) {
-        entries.push(
-          this.serializeEntry({
-            type: "usage" as const,
-            id: generateId("ent"),
-            timestamp: session.updatedAt,
-            usage: session.usage,
-          })
-        );
-      }
-      if (session.todos.length > 0) {
-        entries.push(
-          this.serializeEntry({
-            type: "todos" as const,
-            id: generateId("ent"),
-            timestamp: session.updatedAt,
-            todos: session.todos,
-          })
-        );
-      }
-      if (session.name !== "New Session") {
-        entries.push(
-          this.serializeEntry({
-            type: "name" as const,
-            id: generateId("ent"),
-            timestamp: session.updatedAt,
-            name: session.name,
-          })
-        );
-      }
-    } else {
-      // Subsequent save — write entries for changed fields only
-      // Use JSON.stringify for deep content comparison (reference equality is unreliable
-      // after JSON round-trip cloning in lastSavedState)
-      if (JSON.stringify(session.uiMessages) !== JSON.stringify(lastState.uiMessages)) {
-        entries.push(
-          this.serializeEntry({
-            type: "ui_messages" as const,
-            id: generateId("ent"),
-            timestamp: session.updatedAt,
-            uiMessages: session.uiMessages,
-          })
-        );
-      }
-      if (
-        JSON.stringify(session.summaryMessage) !== JSON.stringify(lastState.summaryMessage) ||
-        session.compactIndex !== lastState.compactIndex
-      ) {
-        entries.push(
-          this.serializeEntry({
-            type: "summary_message" as const,
-            id: generateId("ent"),
-            timestamp: session.updatedAt,
-            summaryMessage: session.summaryMessage,
-            compactIndex: session.compactIndex,
-          })
-        );
-      }
-      if (JSON.stringify(session.usage) !== JSON.stringify(lastState.usage)) {
-        entries.push(
-          this.serializeEntry({
-            type: "usage" as const,
-            id: generateId("ent"),
-            timestamp: session.updatedAt,
-            usage: session.usage,
-          })
-        );
-      }
-      if (JSON.stringify(session.todos) !== JSON.stringify(lastState.todos)) {
-        entries.push(
-          this.serializeEntry({
-            type: "todos" as const,
-            id: generateId("ent"),
-            timestamp: session.updatedAt,
-            todos: session.todos,
-          })
-        );
-      }
-      if (session.name !== lastState.name) {
-        entries.push(
-          this.serializeEntry({
-            type: "name" as const,
-            id: generateId("ent"),
-            timestamp: session.updatedAt,
-            name: session.name,
-          })
-        );
-      }
-    }
-
-    // If nothing changed, skip the write
-    if (entries.length === 0) return;
-
-    // Append all entries to the file
-    const content = entries.join("\n") + "\n";
-
-    if (this.fs.appendFile) {
-      await this.fs.appendFile(filePath, content);
-    } else {
-      // Fallback for environments without native append support
-      const existing = (await this.fs.exists(filePath)) ? await this.fs.readFile(filePath) : "";
-      await this.fs.writeFile(filePath, existing + content);
-    }
-
-    // Update last saved state
-    this.lastSavedState.set(session.id, JSON.parse(JSON.stringify(session)));
+    const prev = this.saveLocks.get(session.id) ?? Promise.resolve();
+    const current = prev.then(() => this.doSave(session)).catch(() => {});
+    this.saveLocks.set(session.id, current);
+    return current;
   }
 
   /**
    * Load a full session by ID from disk.
-   * Replays all JSONL entries to reconstruct the in-memory SessionData.
-   * Falls back to legacy `.json` format if `.session.jsonl` doesn't exist.
+   * Tries the current format first, then falls back to legacy formats.
    */
   async load(id: string): Promise<SessionData | null> {
-    // Try new format first
-    const filePath = this.getFilePath(id);
-    const exists = await this.fs.exists(filePath);
+    // Try current format
+    const session = await this.tryLoadJson(this.getFilePath(id));
+    if (session) {
+      if (session.id !== id && id.startsWith("ses_")) {
+        session.id = id;
+      }
+      return session;
+    }
 
-    if (exists) {
-      try {
-        const content = await this.fs.readFile(filePath);
-        const session = this.replayEntries(content.trim().split("\n"));
-        if (session) {
-          this.lastSavedState.set(id, JSON.parse(JSON.stringify(session)));
+    // Try legacy formats
+    for (const suffix of LEGACY_SUFFIXES) {
+      const legacyPath = `${SESSION_DIR}/${id}${suffix}`;
+      const legacySession = suffix.endsWith(".jsonl")
+        ? await this.tryLoadJsonl(legacyPath)
+        : await this.tryLoadJson(legacyPath);
+
+      if (legacySession) {
+        legacySession.version = SESSION_VERSION;
+        if (legacySession.id !== id && id.startsWith("ses_")) {
+          legacySession.id = id;
         }
-        return session;
-      } catch {
-        // Fall through to legacy format
+        return legacySession;
       }
     }
 
-    // Try legacy format
-    const legacyPath = this.getLegacyFilePath(id);
-    const legacyExists = await this.fs.exists(legacyPath);
-    if (!legacyExists) return null;
-
-    try {
-      const content = await this.fs.readFile(legacyPath);
-      const session = JSON.parse(content) as SessionData;
-      // Upgrade to v2 on load
-      session.version = SESSION_VERSION;
-      this.lastSavedState.set(id, JSON.parse(JSON.stringify(session)));
-      return session;
-    } catch {
-      return null;
-    }
+    return null;
   }
 
   /**
    * List all sessions (metadata only, sorted by updatedAt descending).
-   * Reads only the first line (header) of each session file for efficiency.
    */
   async list(): Promise<SessionMeta[]> {
     const dirExists = await this.fs.exists(SESSION_DIR);
@@ -275,32 +128,33 @@ export class SessionStore {
 
     const entries = await this.fs.readdir(SESSION_DIR);
     const sessions: SessionMeta[] = [];
+    const seenIds = new Set<string>();
 
-    // Collect all session file names (new and legacy format)
-    const sessionFiles: Array<{ name: string; isLegacy: boolean }> = [];
-    for (const entry of entries) {
-      if (entry.type !== "file") continue;
-      if (entry.name.endsWith(SESSION_FILE_SUFFIX)) {
-        sessionFiles.push({ name: entry.name, isLegacy: false });
-      } else if (entry.name.endsWith(LEGACY_FILE_SUFFIX)) {
-        // Only include legacy files that aren't already a .session.jsonl file
-        const base = entry.name.slice(0, -LEGACY_FILE_SUFFIX.length);
-        if (!sessionFiles.some((f) => f.name.startsWith(base))) {
-          sessionFiles.push({ name: entry.name, isLegacy: true });
-        }
-      }
-    }
+    // Prioritize current format, then legacy
+    const allSuffixes = [SESSION_FILE_SUFFIX, ...LEGACY_SUFFIXES];
 
-    for (const { name, isLegacy } of sessionFiles) {
-      try {
-        const filePath = `${SESSION_DIR}/${name}`;
+    for (const suffix of allSuffixes) {
+      for (const entry of entries) {
+        if (entry.type !== "file" || !entry.name.endsWith(suffix)) continue;
 
-        if (isLegacy) {
-          // Legacy format — read the whole file
-          const content = await this.fs.readFile(filePath);
-          const data = JSON.parse(content) as SessionData;
+        const id = entry.name.slice(0, -suffix.length);
+        if (seenIds.has(id)) continue;
+
+        try {
+          const filePath = `${SESSION_DIR}/${entry.name}`;
+          let data: SessionData | null = null;
+
+          if (suffix.endsWith(".jsonl")) {
+            data = await this.tryLoadJsonl(filePath);
+          } else {
+            data = await this.tryLoadJson(filePath);
+          }
+
+          if (!data) continue;
+
+          seenIds.add(id);
           sessions.push({
-            id: data.id,
+            id: data.id || id,
             name: data.name,
             version: data.version,
             provider: data.provider,
@@ -308,25 +162,9 @@ export class SessionStore {
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
           });
-        } else {
-          // New format — read only the first line (header)
-          const content = await this.fs.readFile(filePath);
-          const firstNewline = content.indexOf("\n");
-          const headerLine = firstNewline === -1 ? content : content.slice(0, firstNewline);
-          const header = JSON.parse(headerLine) as SessionHeaderEntry;
-          if (header.type !== "session") continue;
-          sessions.push({
-            id: header.id || idFromFileName(name),
-            name: header.name,
-            version: header.version,
-            provider: header.provider,
-            model: header.model,
-            createdAt: header.createdAt,
-            updatedAt: header.timestamp, // last entry timestamp approximates updatedAt
-          });
+        } catch {
+          // Skip corrupted files
         }
-      } catch {
-        // Skip corrupted files
       }
     }
 
@@ -355,22 +193,15 @@ export class SessionStore {
    * Delete a session by ID.
    */
   async delete(id: string): Promise<boolean> {
-    const filePath = this.getFilePath(id);
-    const exists = await this.fs.exists(filePath);
+    const allSuffixes = [SESSION_FILE_SUFFIX, ...LEGACY_SUFFIXES];
 
-    if (exists) {
-      await this.fs.remove(filePath);
-      this.lastSavedState.delete(id);
-      return true;
-    }
-
-    // Try legacy format
-    const legacyPath = this.getLegacyFilePath(id);
-    const legacyExists = await this.fs.exists(legacyPath);
-    if (legacyExists) {
-      await this.fs.remove(legacyPath);
-      this.lastSavedState.delete(id);
-      return true;
+    for (const suffix of allSuffixes) {
+      const filePath = `${SESSION_DIR}/${id}${suffix}`;
+      if (await this.fs.exists(filePath)) {
+        await this.fs.remove(filePath);
+        this.lastSavedHash.delete(id);
+        return true;
+      }
     }
 
     return false;
@@ -387,163 +218,132 @@ export class SessionStore {
   }
 
   /**
-   * Clear in-memory last saved state for a session.
-   * Used when discarding cached state (e.g., after manual file edits).
+   * Clear in-memory cache for a session.
    */
   clearCache(id: string): void {
-    this.lastSavedState.delete(id);
+    this.lastSavedHash.delete(id);
   }
 
   // ==========================================================================
-  // Private: JSONL Entry Operations
+  // Private
   // ==========================================================================
 
-  /**
-   * Build the header entry for a new session file.
-   */
-  private buildHeader(session: SessionData): SessionHeaderEntry {
-    return {
-      type: "session",
-      id: generateId("ent"),
-      version: SESSION_VERSION,
-      name: session.name,
-      provider: session.provider,
-      model: session.model,
-      createdAt: session.createdAt,
-      timestamp: session.createdAt,
-    };
+  private async doSave(session: SessionData): Promise<void> {
+    await this.ensureDir();
+
+    session.updatedAt = Date.now();
+
+    const json = JSON.stringify(session);
+
+    // Skip write if content is identical to last save
+    const lastHash = this.lastSavedHash.get(session.id);
+    if (lastHash === json) return;
+
+    const filePath = this.getFilePath(session.id);
+    await this.fs.writeFile(filePath, json);
+    this.lastSavedHash.set(session.id, json);
   }
 
   /**
-   * Serialize a session entry to a JSON line string.
+   * Try loading a session from a plain JSON file.
    */
-  private serializeEntry(entry: SessionEntry): string {
-    return JSON.stringify(entry);
-  }
-
-  /**
-   * Replay an array of JSON lines to reconstruct SessionData.
-   */
-  private replayEntries(lines: string[]): SessionData | null {
-    if (lines.length === 0) return null;
-
-    // Initialise with defaults
-    const session: SessionData = {
-      id: "",
-      name: "New Session",
-      version: SESSION_VERSION,
-      provider: "",
-      model: "",
-      uiMessages: [],
-      summaryMessage: null,
-      compactIndex: 0,
-      usage: { ...EMPTY_USAGE },
-      todos: [],
-      createdAt: 0,
-      updatedAt: 0,
-    };
-
-    let headerParsed = false;
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-
-      try {
-        const entry = JSON.parse(trimmed);
-
-        if (!entry.type) continue;
-
-        switch (entry.type) {
-          case "session": {
-            const h = entry as SessionHeaderEntry;
-            session.id = h.id || session.id;
-            session.version = h.version ?? SESSION_VERSION;
-            session.name = h.name ?? session.name;
-            session.provider = h.provider ?? session.provider;
-            session.model = h.model ?? session.model;
-            session.createdAt = h.createdAt ?? session.createdAt;
-            session.updatedAt = h.timestamp ?? session.updatedAt;
-            headerParsed = true;
-            break;
-          }
-          case "ui_messages": {
-            session.uiMessages = entry.uiMessages ?? session.uiMessages;
-            session.updatedAt = entry.timestamp ?? session.updatedAt;
-            break;
-          }
-          case "summary_message": {
-            session.summaryMessage = entry.summaryMessage ?? session.summaryMessage;
-            session.compactIndex = entry.compactIndex ?? session.compactIndex;
-            session.updatedAt = entry.timestamp ?? session.updatedAt;
-            break;
-          }
-          case "usage": {
-            session.usage = entry.usage ?? session.usage;
-            session.updatedAt = entry.timestamp ?? session.updatedAt;
-            break;
-          }
-          case "todos": {
-            session.todos = entry.todos ?? session.todos;
-            session.updatedAt = entry.timestamp ?? session.updatedAt;
-            break;
-          }
-          case "name": {
-            session.name = entry.name ?? session.name;
-            session.updatedAt = entry.timestamp ?? session.updatedAt;
-            break;
-          }
-          case "compaction": {
-            // Compaction records are informational; no state changes needed
-            // They can be used for recovery or auditing in the future
-            session.updatedAt = entry.timestamp ?? session.updatedAt;
-            break;
-          }
-        }
-      } catch {
-        // Skip malformed lines — this is the resilience benefit of JSONL
-        continue;
-      }
+  private async tryLoadJson(filePath: string): Promise<SessionData | null> {
+    if (!(await this.fs.exists(filePath))) return null;
+    try {
+      const content = await this.fs.readFile(filePath);
+      return JSON.parse(content) as SessionData;
+    } catch {
+      return null;
     }
-
-    if (!headerParsed || !session.id) return null;
-
-    return session;
   }
 
-  // ==========================================================================
-  // Private: File Paths
-  // ==========================================================================
+  /**
+   * Try loading a session from a legacy JSONL file by replaying entries.
+   */
+  private async tryLoadJsonl(filePath: string): Promise<SessionData | null> {
+    if (!(await this.fs.exists(filePath))) return null;
+    try {
+      const content = await this.fs.readFile(filePath);
+      const lines = content.trim().split("\n");
+      if (lines.length === 0) return null;
+
+      const session: SessionData = {
+        id: "",
+        name: "New Session",
+        version: SESSION_VERSION,
+        provider: "",
+        model: "",
+        uiMessages: [],
+        summaryMessage: null,
+        compactIndex: 0,
+        usage: { ...EMPTY_USAGE },
+        todos: [],
+        createdAt: 0,
+        updatedAt: 0,
+      };
+
+      let headerParsed = false;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        try {
+          const entry = JSON.parse(trimmed);
+          if (!entry.type) continue;
+
+          switch (entry.type) {
+            case "session":
+              session.id = entry.sessionId || entry.id || session.id;
+              session.version = entry.version ?? SESSION_VERSION;
+              session.name = entry.name ?? session.name;
+              session.provider = entry.provider ?? session.provider;
+              session.model = entry.model ?? session.model;
+              session.createdAt = entry.createdAt ?? session.createdAt;
+              session.updatedAt = entry.timestamp ?? session.updatedAt;
+              headerParsed = true;
+              break;
+            case "ui_messages":
+              session.uiMessages = entry.uiMessages ?? session.uiMessages;
+              session.updatedAt = entry.timestamp ?? session.updatedAt;
+              break;
+            case "summary_message":
+              session.summaryMessage = entry.summaryMessage ?? session.summaryMessage;
+              session.compactIndex = entry.compactIndex ?? session.compactIndex;
+              session.updatedAt = entry.timestamp ?? session.updatedAt;
+              break;
+            case "usage":
+              session.usage = entry.usage ?? session.usage;
+              session.updatedAt = entry.timestamp ?? session.updatedAt;
+              break;
+            case "todos":
+              session.todos = entry.todos ?? session.todos;
+              session.updatedAt = entry.timestamp ?? session.updatedAt;
+              break;
+            case "name":
+              session.name = entry.name ?? session.name;
+              session.updatedAt = entry.timestamp ?? session.updatedAt;
+              break;
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      if (!headerParsed || !session.id) return null;
+      return session;
+    } catch {
+      return null;
+    }
+  }
 
   private getFilePath(id: string): string {
     return `${SESSION_DIR}/${id}${SESSION_FILE_SUFFIX}`;
   }
 
-  private getLegacyFilePath(id: string): string {
-    return `${SESSION_DIR}/${id}${LEGACY_FILE_SUFFIX}`;
-  }
-
   private async ensureDir(): Promise<void> {
-    const exists = await this.fs.exists(SESSION_DIR);
-    if (!exists) {
+    if (!(await this.fs.exists(SESSION_DIR))) {
       await this.fs.mkdir(SESSION_DIR);
     }
   }
-}
-
-// ============================================================================
-// Utility
-// ============================================================================
-
-/**
- * Extract session ID from a file name.
- * E.g., "ses_abc123.session.jsonl" -> "ses_abc123"
- */
-function idFromFileName(fileName: string): string {
-  const base = fileName.endsWith(SESSION_FILE_SUFFIX)
-    ? fileName.slice(0, -SESSION_FILE_SUFFIX.length)
-    : fileName.endsWith(LEGACY_FILE_SUFFIX)
-      ? fileName.slice(0, -LEGACY_FILE_SUFFIX.length)
-      : fileName;
-  return base;
 }

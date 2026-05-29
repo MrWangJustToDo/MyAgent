@@ -3,11 +3,10 @@ import mime from "mime-types";
 import * as nodePath from "path";
 import { z } from "zod";
 
-import { getRemainingTokenBudget } from "../active-agent.js";
-
 import { getFile, withDuration } from "./helpers.js";
 
 import type { Sandbox, FileStat } from "../../environment";
+import type { AgentContext } from "../agent-context/agent-context.js";
 
 // ============================================================================
 // Constants
@@ -235,7 +234,15 @@ export type ReadFileOutput = z.infer<typeof readFileOutputSchema>;
  * - PDFs: Returns base64 encoded data for document analysis
  * - Binary files: Returns error (cannot read binary files)
  */
-export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
+export const createReadFileTool = ({ sandbox, context }: { sandbox: Sandbox; context?: AgentContext }) => {
+  const getRemainingTokenBudget = (): number => {
+    if (!context) return Infinity;
+    const limit = context.getTokenLimit();
+    if (limit <= 0) return Infinity;
+    const used = context.getUsage().inputTokens;
+    return Math.max(0, Math.floor((limit - used) * 0.8));
+  };
+
   return tool({
     description: `Read the contents of a file or directory.
 

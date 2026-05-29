@@ -33,6 +33,7 @@ export const runCommandOutputSchema = z.object({
   durationMs: z.number().describe("Execution duration in milliseconds."),
   success: z.boolean().describe("Whether the command succeeded (exit code 0)."),
   message: z.string().describe("Human-readable summary of the operation."),
+  cachedOutputPath: z.string().nullable().optional().describe("Path to cached full output. Use read_file to read it."),
 });
 
 // Note: readFileOutputSchema is now defined in read-file-tool.ts
@@ -87,6 +88,7 @@ export const grepOutputSchema = z.object({
   contentTruncated: z.boolean().describe("Whether some match content was truncated."),
   message: z.string().describe("Human-readable summary of the operation."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
+  cachedOutputPath: z.string().nullable().optional().describe("Path to cached full output. Use read_file to read it."),
 });
 
 export const todoOutputSchema = z.object({

@@ -53,3 +53,7 @@ export { microCompact } from "./micro-compact.js";
 
 // Auto compaction (Layer 2)
 export { shouldAutoCompact, summarizeConversation, autoCompact, createCompactedMessages } from "./auto-compact.js";
+
+// Reactive compaction (Emergency)
+export { isPromptTooLongError, reactiveCompact, getMaxReactiveRetries } from "./reactive-compact.js";
+export type { ReactiveCompactConfig } from "./reactive-compact.js";

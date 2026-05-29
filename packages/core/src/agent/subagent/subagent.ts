@@ -43,6 +43,7 @@ import { createRunCommandTool } from "../tools/run-command-tool.js";
 import { createTreeTool } from "../tools/tree-tool.js";
 
 import type { Sandbox } from "../../environment";
+import type { AgentContext } from "../agent-context/agent-context.js";
 import type { ModelMessage, ToolSet } from "ai";
 
 // ============================================================================
@@ -155,9 +156,9 @@ export type SubagentResultLegacy = SubagentResult & { summary: string };
  * Creates the restricted read-only tool set for exploration subagents.
  * These tools allow exploration but not modification.
  */
-export const createSubagentTools = (sandbox: Sandbox): ToolSet => {
+export const createSubagentTools = (sandbox: Sandbox, context?: AgentContext): ToolSet => {
   return {
-    read_file: createReadFileTool({ sandbox }),
+    read_file: createReadFileTool({ sandbox, context }),
     glob: createGlobTool({ sandbox }),
     grep: createGrepTool({ sandbox }),
     run_command: createRunCommandTool({ sandbox }),
@@ -287,7 +288,8 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
   // Set tools - use custom tools if provided, otherwise use read-only exploration tools.
   // When custom tools are explicitly provided (e.g., {} for compaction), also clear
   // customTools that were added by createManagedAgent (todo, webfetch, websearch).
-  const subagentTools = customTools !== undefined ? customTools : createSubagentTools(sandbox);
+  const subagentContext = subagent.getContext() ?? undefined;
+  const subagentTools = customTools !== undefined ? customTools : createSubagentTools(sandbox, subagentContext);
   subagent.setTools(subagentTools);
   if (customTools !== undefined) {
     subagent.customTools = {};

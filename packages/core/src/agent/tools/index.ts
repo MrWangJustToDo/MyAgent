@@ -21,6 +21,7 @@ import type { createTodoTool } from "./todo-tool.js";
 // import type { createWebfetchTool } from "./webfetch-tool.js";
 // import type { createWebsearchTool } from "./websearch-tool.js";
 import type { Sandbox } from "../../environment";
+import type { AgentContext } from "../agent-context/agent-context.js";
 
 export * from "./copy-file-tool.js";
 export * from "./delete-file-tool.js";
@@ -35,6 +36,7 @@ export * from "./read-file-tool.js";
 export * from "./run-command-tool.js";
 export * from "./search-replace-tool.js";
 export * from "./todo-tool.js";
+export * from "./tool-output-cache.js";
 export * from "./tree-tool.js";
 export * from "./types.js";
 export * from "./webfetch-tool.js";
@@ -71,9 +73,11 @@ export type Tools = {
 
 export const createTools = async ({
   sandbox,
+  context,
   processTools,
 }: {
   sandbox: Sandbox;
+  context?: AgentContext;
   processTools?: (t: Tools) => Promise<void>;
 }): Promise<Tools> => {
   const res: Tools = {
@@ -82,7 +86,7 @@ export const createTools = async ({
     edit_file: createEditFileTool({ sandbox }),
     list_file: createListFileTool({ sandbox }),
     move_file: createMoveFileTool({ sandbox }),
-    read_file: createReadFileTool({ sandbox }),
+    read_file: createReadFileTool({ sandbox, context }),
     write_file: createWriteFileTool({ sandbox }),
     glob: createGlobTool({ sandbox }),
     grep: createGrepTool({ sandbox }),

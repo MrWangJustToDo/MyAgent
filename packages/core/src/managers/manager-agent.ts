@@ -12,14 +12,13 @@ import { McpManager } from "../agent/mcp/manager.js";
 import { SessionStore } from "../agent/session/session-store.js";
 import { SkillRegistry } from "../agent/skills/skill-registry.js";
 import { TodoManager } from "../agent/todo-manager";
-import { createWebfetchTool, createWebsearchTool } from "../agent/tools";
+import { createTools, createWebfetchTool, createWebsearchTool } from "../agent/tools";
 import { createCompactTool } from "../agent/tools/compact-tool.js";
 import { createListSkillsTool } from "../agent/tools/list-skills-tool.js";
 import { createLoadSkillTool } from "../agent/tools/load-skill-tool.js";
 import { createTaskTool } from "../agent/tools/task-tool.js";
 
 import { sandboxManager } from "./manager-sandbox.js";
-import { toolsManager } from "./manager-tools.js";
 
 import type { CompactionConfigInput } from "../agent/compaction/types.js";
 import type { AgentConfig, ToolSet } from "../agent/loop/Agent.js";
@@ -253,9 +252,9 @@ export class AgentManager {
 
     const sandbox = await sandboxManager.getSandbox(rootPath);
 
-    const tools = await toolsManager.getTools(rootPath);
-
     const context = new AgentContext({ setUp: setUp as ManagedAgentConfig<AgentContext>["setUp"] });
+
+    const tools = await createTools({ sandbox, context });
 
     const log = new AgentLog();
 
@@ -297,7 +296,7 @@ export class AgentManager {
     agent.setTodoManager(todoManager);
 
     agent.addTools({
-      webfetch: createWebfetchTool({ agentId: agent.id }),
+      webfetch: createWebfetchTool({ agentId: agent.id, sandbox }),
       websearch: createWebsearchTool({ agentId: agent.id }),
     });
 

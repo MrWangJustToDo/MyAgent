@@ -21,9 +21,6 @@ export type {
   TodoOutput,
 } from "./tools";
 
-// Active agent exports
-export { setActiveContext, getActiveContext, getRemainingTokenBudget } from "./active-agent.js";
-
 // Context exports
 export { AgentContext, generateContextId, type TokenUsage } from "./agent-context";
 

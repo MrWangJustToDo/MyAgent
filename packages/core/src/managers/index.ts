@@ -1,12 +1,12 @@
 /**
  * Managers module - class-based state management
  *
- * This module provides manager classes for handling agent, sandbox, and tools lifecycle.
+ * This module provides manager classes for handling agent and sandbox lifecycle.
  * These are pure TypeScript classes without any reactivity dependencies.
  *
  * @example
  * ```typescript
- * import { agentManager, sandboxManager, toolsManager } from '@my-agent/core';
+ * import { agentManager, sandboxManager } from '@my-agent/core';
  *
  * // Create and manage agents
  * const agent = agentManager.createAgent({
@@ -15,18 +15,12 @@
  *   systemPrompt: "You are helpful.",
  * });
  *
- * // Use sandbox and tools
+ * // Use sandbox
  * const sandbox = await sandboxManager.getSandbox("/path/to/project");
- * const tools = await toolsManager.getTools("/path/to/project");
- *
- * // Set shared resources
- * agentManager.setSandbox(sandbox);
- * agentManager.setTools(tools);
  * ```
  */
 
 export { SandboxManager, sandboxManager, configureSandboxEnv } from "./manager-sandbox.js";
-export { ToolsManager, toolsManager } from "./manager-tools.js";
 export {
   AgentManager,
   agentManager,

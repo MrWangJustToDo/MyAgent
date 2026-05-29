@@ -2,6 +2,7 @@ import { generateText } from "ai";
 
 import { autoCompact, createCompactedMessages } from "../compaction/auto-compact.js";
 import { microCompact } from "../compaction/micro-compact.js";
+import { isPromptTooLongError, reactiveCompact } from "../compaction/reactive-compact.js";
 import { estimateTokens } from "../compaction/token-estimator.js";
 import { createTodoTool } from "../tools";
 
@@ -65,6 +66,10 @@ export class Base {
 
   // Model (Vercel AI SDK LanguageModel)
   model: LanguageModel | null = null;
+
+  // Reactive compact retry counter (reset per run)
+  private reactiveCompactRetries = 0;
+  private static readonly MAX_REACTIVE_RETRIES = 1;
 
   // Abort controller for current run
   currentAbortController: AbortController | null = null;
@@ -606,7 +611,8 @@ export class Base {
 
   /**
    * Persist the current session state to disk (server-side data only).
-   * UIMessages are stored separately when pushed from the client.
+   * UIMessages are NOT saved here — they are pushed separately by the client
+   * via updateSessionUIMessages() to avoid writing the full conversation on every step.
    */
   private saveSession(): void {
     if (!this.sessionStore || !this.context) return;
@@ -654,6 +660,70 @@ export class Base {
   }
 
   /**
+   * Handle prompt_too_long errors by running emergency reactive compaction.
+   *
+   * When the API rejects our request because the context is too large,
+   * this aggressively compacts messages and updates the context so a
+   * retry with the same prepareStep flow will use the compacted messages.
+   *
+   * Returns true if compaction succeeded and caller should retry.
+   * Returns false if this isn't a prompt_too_long error or max retries exceeded.
+   */
+  async handleReactiveCompact(error: unknown): Promise<boolean> {
+    if (!isPromptTooLongError(error)) return false;
+    if (this.reactiveCompactRetries >= Base.MAX_REACTIVE_RETRIES) {
+      this.log?.error("agent", "Reactive compact: max retries exceeded, giving up");
+      return false;
+    }
+    if (!this.context) return false;
+
+    this.reactiveCompactRetries++;
+    this.log?.info("agent", "Reactive compact triggered", {
+      retry: this.reactiveCompactRetries,
+      maxRetries: Base.MAX_REACTIVE_RETRIES,
+    });
+
+    try {
+      this.status = "compacting";
+
+      const llmMessages = this.context.getMessagesForLLM();
+      const compactedMessages = await reactiveCompact(llmMessages, this.agentId);
+
+      // The first message is the summary, rest are tail messages.
+      // Update context: set summary as first message, reset compact index to
+      // cover all original messages, and replace with compacted result.
+      const summaryMsg = compactedMessages[0];
+      if (summaryMsg) {
+        this.context.setSummaryMessage(summaryMsg);
+        this.context.setCompactIndex(this.context.getMessages().length);
+        // Append tail messages (everything after summary) as new messages
+        const tailMessages = compactedMessages.slice(1);
+        if (tailMessages.length > 0) {
+          const allMessages = [...this.context.getMessages(), ...tailMessages];
+          this.context.setMessages(allMessages);
+          // Adjust compact index so tail messages are visible
+          this.context.setCompactIndex(allMessages.length - tailMessages.length);
+        }
+      }
+      this.context.resetUsage();
+      this.context.clearTools();
+
+      this.log?.info("agent", "Reactive compact completed", {
+        originalMessages: llmMessages.length,
+        compactedMessages: compactedMessages.length,
+      });
+
+      return true;
+    } catch (err) {
+      const compactError = err instanceof Error ? err : new Error(String(err));
+      this.log?.error("agent", "Reactive compact failed", compactError);
+      return false;
+    } finally {
+      this.status = "running";
+    }
+  }
+
+  /**
    * Check if an error is an abort error
    */
   isAbortError(err: unknown): boolean {
@@ -684,6 +754,13 @@ export class Base {
   }
 
   /**
+   * Reset the reactive compact retry counter. Called at the start of each run.
+   */
+  resetReactiveCompactRetries(): void {
+    this.reactiveCompactRetries = 0;
+  }
+
+  /**
    * Reset agent state
    */
   reset(): void {
@@ -695,6 +772,7 @@ export class Base {
     this.abort("Reset");
     this.status = "idle";
     this.error = "";
+    this.reactiveCompactRetries = 0;
     this.log?.clear();
     this.context?.reset();
     this.todoManager?.reset();

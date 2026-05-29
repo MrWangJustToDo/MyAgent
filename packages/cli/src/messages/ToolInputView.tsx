@@ -38,7 +38,7 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
   }
 
   if (toolName === "edit_file") {
-    const content = part.input as { oldString?: string; path?: string; newString?: string };
+    const content = part.input as { oldString?: string; path?: string; newString?: string; startLine?: number };
     if (!content || part.state === "input-streaming") return null;
 
     return (
@@ -50,6 +50,7 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
           oldFile={content.oldString || ""}
           newPath={content.path || ""}
           newFile={content.newString || ""}
+          startLine={content.startLine}
         />
       </Box>
     );
@@ -58,7 +59,10 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
   if (toolName === "search_replace") {
     if (part.state === "input-streaming") return null;
 
-    const content = part.input as { replacements: Array<{ oldString: string; newString: string }>; path: string };
+    const content = part.input as {
+      replacements: Array<{ oldString: string; newString: string; startLine?: number }>;
+      path: string;
+    };
 
     return (
       <Box flexDirection="column" paddingLeft={2}>
@@ -83,6 +87,7 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
               oldFile={item.oldString || ""}
               newPath={content.path || ""}
               newFile={item.newString || ""}
+              startLine={item.startLine}
             />
           ))}
         </SplitNode>

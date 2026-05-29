@@ -28,6 +28,12 @@ export const createEditFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
         ),
       oldString: z.string().describe("The exact string to search for and replace in the file."),
       newString: z.string().describe("The string to replace oldString with."),
+      startLine: z
+        .number()
+        .int()
+        .min(1)
+        .optional()
+        .describe("The 1-indexed line number where oldString starts in the file. Used for UI display."),
       replaceAll: z
         .boolean()
         .optional()

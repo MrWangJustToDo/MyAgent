@@ -33,6 +33,7 @@ web-ext.config.ts
 .claude
 .mcp.json
 .agents
+.agent-cache
 skills-lock.json
 
 tsconfig.tsbuildinfo

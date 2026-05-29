@@ -6,6 +6,12 @@ import { useDiffFileCache } from "../hooks/use-diff-file-cache";
 
 const { getDiffFile, setDiffFile } = useDiffFileCache.getActions();
 
+/** Prepend (startLine - 1) empty lines so the diff engine generates correct line numbers */
+function padContent(content: string, startLine?: number): string {
+  if (!startLine || startLine <= 1) return content;
+  return "\n".repeat(startLine - 1) + content;
+}
+
 export const EditDiff = memo(
   ({
     id,
@@ -14,6 +20,7 @@ export const EditDiff = memo(
     newFile,
     oldPath,
     newPath,
+    startLine,
   }: {
     id: string;
     width: number;
@@ -21,8 +28,12 @@ export const EditDiff = memo(
     newFile: string;
     oldPath: string;
     newPath: string;
+    startLine?: number;
   }) => {
-    const diffFile = getDiffFile(id) || generateDiffFile(oldPath, oldFile, newPath, newFile, "", "");
+    const paddedOld = padContent(oldFile, startLine);
+    const paddedNew = padContent(newFile, startLine);
+
+    const diffFile = getDiffFile(id) || generateDiffFile(oldPath, paddedOld, newPath, paddedNew, "", "");
 
     setDiffFile(id, diffFile);
 
