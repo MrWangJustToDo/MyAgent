@@ -341,24 +341,6 @@ export class Base {
       }
     }
 
-    // Inject nag reminder following Claude Code's pattern:
-    // - If last message is a tool message, append reminder into its content array
-    //   (same-turn delivery, keeps history immutable, doesn't break tool flow)
-    // - Otherwise, add as a standalone user message
-    if (this.todoManager?.shouldNag()) {
-      const reminder = this.todoManager.getNagReminder();
-      this.log?.todo("Injecting nag reminder", {
-        roundsSinceUpdate: this.todoManager.getRoundsSinceUpdate(),
-      });
-
-      const lastMsg = finalMessages[finalMessages.length - 1];
-      if (lastMsg?.role === "tool" && Array.isArray(lastMsg.content)) {
-        lastMsg.content.push({ type: "text", text: reminder } as never);
-      } else if (lastMsg?.role !== "tool") {
-        finalMessages.push({ role: "user" as const, content: [{ type: "text", text: reminder }] });
-      }
-    }
-
     return finalMessages;
   }
 

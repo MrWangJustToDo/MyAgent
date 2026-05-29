@@ -47,10 +47,11 @@
  */
 
 // Export types
-// Import for getEnvironment
-import { localEnvironment, nativeEnvironment } from "./local";
-import { remoteEnvironment } from "./remote";
-import { isEnvironmentInstance, type Environment, type EnvironmentType } from "./types";
+import { localEnvironment, nativeEnvironment } from "./local.js";
+import { remoteEnvironment } from "./remote.js";
+import { type Environment, type EnvironmentType, isEnvironmentInstance } from "./types.js";
+
+export { isEnvironmentInstance, FileError, ExecutionError } from "./types.js";
 
 export type {
   Environment,
@@ -62,15 +63,23 @@ export type {
   FileStat,
   CommandResult,
   RunCommandOptions,
-} from "./types";
+} from "./types.js";
 
-export { isEnvironmentInstance } from "./types";
+// Export shell utilities
+export {
+  getShellConfig,
+  spawnCommand,
+  killProcessTree,
+  waitForChildProcess,
+  trackDetachedChildPid,
+  untrackDetachedChildPid,
+} from "./shell.js";
 
 // Export local environment
-export { localEnvironment, nativeEnvironment, createLocalEnvironment, type LocalEnvironmentConfig } from "./local";
+export { localEnvironment, nativeEnvironment, createLocalEnvironment, type LocalEnvironmentConfig } from "./local.js";
 
 // Export remote environment (uses computesdk)
-export { remoteEnvironment, createRemoteEnvironment, type RemoteEnvironmentConfig } from "./remote";
+export { remoteEnvironment, createRemoteEnvironment, type RemoteEnvironmentConfig } from "./remote.js";
 
 /**
  * Default environment (local)

@@ -28,58 +28,108 @@ import type { ModelMessage } from "ai";
 // Helper Functions
 // ============================================================================
 
+/** Maximum characters for a single tool result in serialized output */
+const TOOL_RESULT_MAX_CHARS = 2000;
+
 /**
- * Strip media (images, files) from messages for summarization.
- * This reduces token usage and avoids issues with vision models.
+ * Serialize ModelMessage[] to plain text for summarization.
+ *
+ * This is the key technique (from PI's compaction) to prevent the summarization
+ * LLM from generating tool calls: instead of passing messages as ModelMessage[]
+ * (which the LLM might try to continue with tool calls), we convert them to a
+ * plain text transcript wrapped in tags.
+ *
+ * Format:
+ *   [User]: ...
+ *   [Assistant]: ...
+ *   [Assistant tool calls]: name(args); ...
+ *   [Tool result]: ...
  */
-function stripMediaFromMessages(messages: ModelMessage[]): ModelMessage[] {
-  return messages.map((message) => {
-    if (typeof message.content === "string") {
-      return message;
-    }
+function serializeConversation(messages: ModelMessage[]): string {
+  const parts: string[] = [];
 
-    if (!Array.isArray(message.content)) {
-      return message;
-    }
+  for (const msg of messages) {
+    if (msg.role === "user") {
+      const text = extractTextFromContent(msg.content);
+      if (text) parts.push(`[User]: ${text}`);
+    } else if (msg.role === "assistant") {
+      if (typeof msg.content === "string") {
+        if (msg.content) parts.push(`[Assistant]: ${msg.content}`);
+        continue;
+      }
+      if (!Array.isArray(msg.content)) continue;
 
-    // Replace media parts with descriptive placeholders, keep text and tool parts
-    const filteredContent = message.content
-      .map((part) => {
+      const textParts: string[] = [];
+      const toolCalls: string[] = [];
+
+      for (const part of msg.content) {
         const p = part as Record<string, unknown>;
-        const type = p.type as string | undefined;
-
-        // Replace image/file attachments with descriptive placeholders
-        if (type === "image") {
-          const mediaType = (p.mediaType as string) || "image";
-          return {
-            type: "text",
-            text: `[Image was attached here (${mediaType}). The image content was already seen and discussed in this conversation.]`,
-          };
-        }
-
-        if (type === "file") {
-          const mediaType = (p.mediaType as string) || "unknown";
-          const filename = (p.filename as string) || "";
-          const label = filename ? `${filename} (${mediaType})` : mediaType;
-          if (mediaType.startsWith("image/")) {
-            return {
-              type: "text",
-              text: `[Image file was attached: ${label}. The image content was already seen and discussed in this conversation.]`,
-            };
+        if (p.type === "text" && typeof p.text === "string") {
+          textParts.push(p.text);
+        } else if (p.type === "tool-call") {
+          const name = (p.toolName as string) || "unknown";
+          let argsStr = "";
+          try {
+            const raw = typeof p.args === "string" ? p.args : JSON.stringify(p.args);
+            argsStr = raw.length > 200 ? raw.slice(0, 200) + "..." : raw;
+          } catch {
+            argsStr = "(args)";
           }
-          return { type: "text", text: `[File was attached: ${label}]` };
+          toolCalls.push(`${name}(${argsStr})`);
         }
+      }
 
-        // Keep everything else
-        return part;
-      })
-      .filter(Boolean);
+      if (textParts.length > 0) parts.push(`[Assistant]: ${textParts.join("\n")}`);
+      if (toolCalls.length > 0) parts.push(`[Assistant tool calls]: ${toolCalls.join("; ")}`);
+    } else if (msg.role === "tool") {
+      if (!Array.isArray(msg.content)) continue;
 
-    return {
-      ...message,
-      content: filteredContent.length > 0 ? filteredContent : [{ type: "text", text: "[Empty message]" }],
-    } as ModelMessage;
-  });
+      for (const part of msg.content) {
+        const p = part as Record<string, unknown>;
+        if (p.type === "tool-result") {
+          const name = (p.toolName as string) || "tool";
+          let resultText = "";
+          try {
+            const raw = typeof p.result === "string" ? p.result : JSON.stringify(p.result);
+            resultText =
+              raw.length > TOOL_RESULT_MAX_CHARS
+                ? raw.slice(0, TOOL_RESULT_MAX_CHARS) + `\n[... ${raw.length - TOOL_RESULT_MAX_CHARS} chars truncated]`
+                : raw;
+          } catch {
+            resultText = "(result)";
+          }
+          parts.push(`[Tool result from ${name}]: ${resultText}`);
+        }
+      }
+    }
+  }
+
+  return parts.join("\n\n");
+}
+
+/**
+ * Extract text content from a message's content field.
+ * Handles string content, text parts, and replaces media with placeholders.
+ */
+function extractTextFromContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+
+  const parts: string[] = [];
+  for (const part of content) {
+    const p = part as Record<string, unknown>;
+    const type = p.type as string | undefined;
+
+    if (type === "text" && typeof p.text === "string") {
+      parts.push(p.text);
+    } else if (type === "image") {
+      parts.push("[Image was attached]");
+    } else if (type === "file") {
+      const filename = (p.filename as string) || "";
+      parts.push(filename ? `[File attached: ${filename}]` : "[File was attached]");
+    }
+  }
+  return parts.join("\n");
 }
 
 /**
@@ -409,26 +459,22 @@ export async function summarizeConversation(
   // If not found: first-time compaction, summarize everything normally.
   const { existingSummary, cleanMessages } = extractExistingSummary(messages);
 
-  // Build prompt — uses UPDATE_COMPACTION_PROMPT if existingSummary is provided,
-  // wraps it in <previous-summary> tags for explicit context preservation.
-  const summarizationPrompt = buildCompactionPrompt({
-    focus,
-    todos,
-    existingSummary,
-  });
+  // Serialize the conversation to plain text. This is the key technique to prevent
+  // the summarization LLM from generating tool calls — it sees a text transcript
+  // instead of structured ModelMessage[] with tool-call/tool-result parts.
+  const conversationText = serializeConversation(cleanMessages);
 
-  // Strip media from the CLEAN messages (without the old summary message).
-  // For update mode: initialMessages only contains messages since last compaction.
-  const strippedMessages = stripMediaFromMessages(cleanMessages);
+  // Build the final prompt: conversation text wrapped in tags + compaction instructions.
+  const instructionPrompt = buildCompactionPrompt({ focus, todos, existingSummary });
+  const fullPrompt = `<conversation>\n${conversationText}\n</conversation>\n\n${instructionPrompt}`;
 
   // Run subagent for summarization
   // - systemPrompt: tells the LLM it's a summarizer (not a conversational agent)
-  // - initialMessages: the conversation history to summarize (NEW messages only in update mode)
-  // - prompt: the instruction template (includes <previous-summary> tags in update mode)
+  // - prompt: contains the serialized conversation + instructions (no initialMessages needed)
+  // - tools: {} — no tools available, pure text generation
   // - retryOnEmpty: true - use subagent's built-in retry logic
   const result = await runSubagent({
-    prompt: summarizationPrompt,
-    initialMessages: strippedMessages, // Pass conversation as context
+    prompt: fullPrompt,
     parentAgentId,
     systemPrompt: COMPACTION_SYSTEM_PROMPT, // Tell LLM its role is to summarize
     tools: {}, // No tools - pure summarization

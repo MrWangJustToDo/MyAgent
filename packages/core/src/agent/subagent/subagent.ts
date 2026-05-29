@@ -284,9 +284,14 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
     maxIterations,
   });
 
-  // Set tools - use custom tools if provided, otherwise use read-only exploration tools
+  // Set tools - use custom tools if provided, otherwise use read-only exploration tools.
+  // When custom tools are explicitly provided (e.g., {} for compaction), also clear
+  // customTools that were added by createManagedAgent (todo, webfetch, websearch).
   const subagentTools = customTools !== undefined ? customTools : createSubagentTools(sandbox);
   subagent.setTools(subagentTools);
+  if (customTools !== undefined) {
+    subagent.customTools = {};
+  }
 
   // Emit subagent:created event
   agentManager.emit({

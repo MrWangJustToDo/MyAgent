@@ -136,6 +136,16 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       parts.push(skillSection);
     }
 
+    // 4. Nag reminder for todo updates (injected in system prompt to avoid
+    // breaking ModelMessage type constraints — ToolContent doesn't accept TextPart)
+    if (this.todoManager?.shouldNag()) {
+      const reminder = this.todoManager.getNagReminder();
+      this.log?.todo("Injecting nag reminder into system prompt", {
+        roundsSinceUpdate: this.todoManager.getRoundsSinceUpdate(),
+      });
+      parts.push(reminder);
+    }
+
     if (parts.length === 0) return undefined;
 
     const str = parts.join("\n\n");

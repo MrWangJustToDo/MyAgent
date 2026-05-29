@@ -5,6 +5,92 @@
  * Environments can be local (just-bash), remote (compute gateway), or custom implementations.
  */
 
+// ============================================================================
+// Typed Errors
+// ============================================================================
+
+/**
+ * Stable, backend-independent file error codes returned by filesystem operations.
+ */
+export type FileErrorCode =
+  | "not_found"
+  | "permission_denied"
+  | "not_directory"
+  | "is_directory"
+  | "invalid"
+  | "not_supported"
+  | "aborted"
+  | "unknown";
+
+/**
+ * Typed error for filesystem operation failures.
+ * Unlike plain Errors, these carry a structured error code for programmatic handling.
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await sandbox.filesystem.readFile('/path');
+ * } catch (err) {
+ *   if (err instanceof FileError && err.code === 'not_found') {
+ *     // Handle missing file gracefully
+ *   }
+ * }
+ * ```
+ */
+export class FileError extends Error {
+  /** Backend-independent error code */
+  public code: FileErrorCode;
+  /** Absolute addressed path associated with the failure, when available */
+  public path?: string;
+
+  constructor(code: FileErrorCode, message: string, path?: string, cause?: Error) {
+    super(message, cause === undefined ? undefined : { cause });
+    this.name = "FileError";
+    this.code = code;
+    this.path = path;
+  }
+}
+
+/**
+ * Stable, backend-independent execution error codes.
+ */
+export type ExecutionErrorCode =
+  | "aborted"
+  | "timeout"
+  | "shell_unavailable"
+  | "spawn_error"
+  | "callback_error"
+  | "unknown";
+
+/**
+ * Typed error for command execution failures.
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   const result = await sandbox.runCommand('npm install', { timeout: 30000 });
+ * } catch (err) {
+ *   if (err instanceof ExecutionError && err.code === 'timeout') {
+ *     // Handle timeout
+ *   }
+ * }
+ * ```
+ */
+export class ExecutionError extends Error {
+  /** Backend-independent error code */
+  public code: ExecutionErrorCode;
+
+  constructor(code: ExecutionErrorCode, message: string, cause?: Error) {
+    super(message, cause === undefined ? undefined : { cause });
+    this.name = "ExecutionError";
+    this.code = code;
+  }
+}
+
+// ============================================================================
+// File System Types
+// ============================================================================
+
 /**
  * File entry returned by filesystem operations
  */
@@ -15,30 +101,6 @@ export interface FileEntry {
   size?: number;
   /** Last modification date (optional, may not be available in all environments) */
   modified?: Date;
-}
-
-/**
- * Options for running commands
- */
-export interface RunCommandOptions {
-  /** Working directory for the command */
-  cwd?: string;
-  /** Environment variables */
-  env?: Record<string, string>;
-  /** Timeout in milliseconds */
-  timeout?: number;
-  /** Run in background */
-  background?: boolean;
-}
-
-/**
- * Result of command execution
- */
-export interface CommandResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-  durationMs: number;
 }
 
 /**
@@ -55,8 +117,47 @@ export interface FileStat {
   mtime: Date;
 }
 
+// ============================================================================
+// Command Execution Types
+// ============================================================================
+
 /**
- * Filesystem interface that all environments must implement
+ * Options for running commands, with streaming support.
+ */
+export interface RunCommandOptions {
+  /** Working directory for the command */
+  cwd?: string;
+  /** Environment variables */
+  env?: Record<string, string>;
+  /** Timeout in milliseconds */
+  timeout?: number;
+  /** Run in background */
+  background?: boolean;
+  /** Called with stdout chunks as they are produced (streaming). */
+  onStdout?: (chunk: string) => void;
+  /** Called with stderr chunks as they are produced (streaming). */
+  onStderr?: (chunk: string) => void;
+}
+
+/**
+ * Result of command execution
+ */
+export interface CommandResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  durationMs: number;
+}
+
+// ============================================================================
+// Sandbox & Filesystem Interfaces
+// ============================================================================
+
+/**
+ * Filesystem interface that all environments must implement.
+ *
+ * Operations may throw {@link FileError} with typed error codes
+ * for structured error handling.
  */
 export interface SandboxFileSystem {
   /** Read file as UTF-8 text */
@@ -65,11 +166,26 @@ export interface SandboxFileSystem {
   readFileBuffer?(path: string): Promise<Buffer>;
   /** Get file/directory stats */
   stat?(path: string): Promise<FileStat>;
+  /** Create or overwrite a file, creating parent directories when supported */
   writeFile(path: string, content: string): Promise<void>;
+  /** List direct children of a directory */
   readdir(path: string): Promise<FileEntry[]>;
+  /** Create a directory (recursive by default) */
   mkdir(path: string): Promise<void>;
+  /** Return whether a path exists */
   exists(path: string): Promise<boolean>;
+  /** Remove a file or directory */
   remove(path: string): Promise<void>;
+  /**
+   * Append content to a file.
+   * Creates the file if it doesn't exist, appends if it does.
+   */
+  appendFile?(path: string, content: string): Promise<void>;
+  /**
+   * Copy a file from source to destination.
+   * Throws if the target already exists.
+   */
+  copy?(sourcePath: string, targetPath: string): Promise<void>;
 }
 
 /**
@@ -83,11 +199,21 @@ export interface Sandbox {
   readonly provider: string;
   /** Filesystem operations */
   readonly filesystem: SandboxFileSystem;
-  /** Execute a shell command */
+  /**
+   * Execute a shell command.
+   *
+   * Throws {@link ExecutionError} on failures like abort, timeout,
+   * or shell unavailability. Normal non-zero exit codes are returned
+   * in {@link CommandResult} without throwing.
+   */
   runCommand(command: string, options?: RunCommandOptions): Promise<CommandResult>;
   /** Destroy and cleanup the sandbox */
   destroy(): Promise<void>;
 }
+
+// ============================================================================
+// Environment Factory
+// ============================================================================
 
 /**
  * Configuration for creating a sandbox
@@ -120,6 +246,10 @@ export interface Environment {
    */
   getSandboxById?(sandboxId: string): Promise<Sandbox | undefined>;
 }
+
+// ============================================================================
+// Environment Type Resolution
+// ============================================================================
 
 /**
  * Environment type identifier for easy switching

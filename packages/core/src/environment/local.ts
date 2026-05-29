@@ -5,30 +5,22 @@
  * Supports two modes:
  * - sandbox: Uses just-bash for isolated execution (default)
  * - native: Uses real bash and Node.js fs for direct system access
+ *
+ * Key improvements over the original:
+ * - Cross-platform shell detection (Linux, macOS, Windows/Git Bash)
+ * - Process tree killing on abort/timeout with SIGTERM -> SIGKILL escalation
+ * - Streaming stdout/stderr support via callbacks
+ * - Structured ExecutionError with typed error codes
  */
 
 import { justBash } from "@computesdk/just-bash";
-import { exec } from "child_process";
 import * as fs from "fs/promises";
 import { ReadWriteFs } from "just-bash";
 import * as path from "path";
-import { promisify } from "util";
 
-import type { Environment, FileEntry, FileStat, Sandbox, SandboxConfig } from "./types";
+import { spawnCommand } from "./shell.js";
 
-const execAsync = promisify(exec);
-
-/**
- * Local environment configuration
- */
-export interface LocalEnvironmentConfig {
-  /**
-   * Whether to use just-bash sandbox mode.
-   * - true (default): Use just-bash for isolated execution
-   * - false: Use native bash and fs for direct system access
-   */
-  sandbox?: boolean;
-}
+import type { Environment, Sandbox, SandboxConfig } from "./types";
 
 // ============================================================================
 // Sandbox Mode (just-bash)
@@ -85,13 +77,15 @@ async function createJustBashSandbox(config: SandboxConfig): Promise<Sandbox> {
 
     filesystem: {
       readFile: (filePath: string) => internalSandbox.filesystem.readFile(filePath),
+
       readFileBuffer: async (filePath: string) => {
         // Use just-bash's native readFileBuffer which returns Uint8Array
         const uint8Array = await bashFs.readFileBuffer(filePath);
         // Convert Uint8Array to Buffer for Node.js compatibility
         return Buffer.from(uint8Array);
       },
-      stat: async (filePath: string): Promise<FileStat> => {
+
+      stat: async (filePath: string) => {
         // Use just-bash's native stat
         const fsStat = await bashFs.stat(filePath);
         return {
@@ -101,35 +95,50 @@ async function createJustBashSandbox(config: SandboxConfig): Promise<Sandbox> {
           mtime: fsStat.mtime,
         };
       },
+
       writeFile: (filePath: string, content: string) => internalSandbox.filesystem.writeFile(filePath, content),
+
       readdir: async (dirPath: string) => {
         const entries = await internalSandbox.filesystem.readdir(dirPath);
         return entries.map((entry) => ({
           name: entry.name,
           type: entry.type as "file" | "directory",
-          // Pass through optional fields if available from the provider
           size: "size" in entry ? (entry.size as number | undefined) : undefined,
           modified: "modified" in entry ? (entry.modified as Date | undefined) : undefined,
         }));
       },
+
       mkdir: (dirPath: string) => internalSandbox.filesystem.mkdir(dirPath),
       exists: (filePath: string) => internalSandbox.filesystem.exists(filePath),
       remove: (filePath: string) => internalSandbox.filesystem.remove(filePath),
     },
 
     runCommand: async (command: string, options) => {
-      const result = await internalSandbox.runCommand(command, {
-        cwd: options?.cwd,
-        env: options?.env,
-        timeout: options?.timeout,
-        background: options?.background,
-      });
-      return {
-        stdout: result.stdout,
-        stderr: result.stderr,
-        exitCode: result.exitCode,
-        durationMs: result.durationMs,
-      };
+      const startTime = Date.now();
+
+      try {
+        const result = await internalSandbox.runCommand(command, {
+          cwd: options?.cwd,
+          env: options?.env,
+          timeout: options?.timeout,
+          background: options?.background,
+        });
+
+        return {
+          stdout: result.stdout,
+          stderr: result.stderr,
+          exitCode: result.exitCode,
+          durationMs: Date.now() - startTime,
+        };
+      } catch (err) {
+        // just-bash may throw on abort/timeout; normalize to CommandResult
+        return {
+          stdout: (err as { stdout?: string }).stdout ?? "",
+          stderr: (err as { stderr?: string }).stderr ?? String(err),
+          exitCode: (err as { exitCode?: number }).exitCode ?? 1,
+          durationMs: Date.now() - startTime,
+        };
+      }
     },
 
     destroy: async () => {
@@ -148,7 +157,12 @@ async function createJustBashSandbox(config: SandboxConfig): Promise<Sandbox> {
 let nativeSandboxCounter = 0;
 
 /**
- * Create a sandbox using native bash and Node.js fs (direct system access)
+ * Create a sandbox using native bash and Node.js fs (direct system access).
+ *
+ * Uses `spawnCommand` from shell.ts for robust process management:
+ * - Cross-platform shell detection
+ * - Process tree killing on abort/timeout
+ * - Streaming stdout/stderr via callbacks
  */
 async function createNativeSandbox(config: SandboxConfig): Promise<Sandbox> {
   const rootPath = config.rootPath;
@@ -181,7 +195,7 @@ async function createNativeSandbox(config: SandboxConfig): Promise<Sandbox> {
         return fs.readFile(fullPath);
       },
 
-      stat: async (filePath: string): Promise<FileStat> => {
+      stat: async (filePath: string) => {
         const fullPath = resolvePath(filePath);
         const stats = await fs.stat(fullPath);
         return {
@@ -199,10 +213,10 @@ async function createNativeSandbox(config: SandboxConfig): Promise<Sandbox> {
         await fs.writeFile(fullPath, content, "utf-8");
       },
 
-      readdir: async (dirPath: string): Promise<FileEntry[]> => {
+      readdir: async (dirPath: string) => {
         const fullPath = resolvePath(dirPath);
         const entries = await fs.readdir(fullPath, { withFileTypes: true });
-        const result: FileEntry[] = [];
+        const result: Array<{ name: string; type: "file" | "directory"; size?: number; modified?: Date }> = [];
 
         for (const entry of entries) {
           const entryPath = path.join(fullPath, entry.name);
@@ -252,6 +266,19 @@ async function createNativeSandbox(config: SandboxConfig): Promise<Sandbox> {
           await fs.unlink(fullPath);
         }
       },
+
+      appendFile: async (filePath: string, content: string) => {
+        const fullPath = resolvePath(filePath);
+        await fs.mkdir(path.dirname(fullPath), { recursive: true });
+        await fs.appendFile(fullPath, content, "utf-8");
+      },
+
+      copy: async (sourcePath: string, targetPath: string) => {
+        const fullSourcePath = resolvePath(sourcePath);
+        const fullTargetPath = resolvePath(targetPath);
+        await fs.mkdir(path.dirname(fullTargetPath), { recursive: true });
+        await fs.copyFile(fullSourcePath, fullTargetPath, fs.constants.COPYFILE_EXCL);
+      },
     },
 
     runCommand: async (command: string, options) => {
@@ -261,33 +288,64 @@ async function createNativeSandbox(config: SandboxConfig): Promise<Sandbox> {
       // Merge process.env with per-command env (per-command takes priority)
       const mergedEnv = options?.env ? { ...process.env, ...options.env } : process.env;
 
+      // Accumulate stdout/stderr from streaming callbacks
+      const stdoutChunks: string[] = [];
+      const stderrChunks: string[] = [];
+
       try {
-        const { stdout, stderr } = await execAsync(command, {
+        const result = await spawnCommand(command, {
           cwd,
-          env: mergedEnv,
-          timeout: options?.timeout,
-          maxBuffer: 50 * 1024 * 1024, // 50MB buffer
+          env: mergedEnv as NodeJS.ProcessEnv,
+          timeout: options?.timeout ? Math.ceil(options.timeout / 1000) : undefined,
+          onStdout: (chunk: string) => {
+            stdoutChunks.push(chunk);
+            options?.onStdout?.(chunk);
+          },
+          onStderr: (chunk: string) => {
+            stderrChunks.push(chunk);
+            options?.onStderr?.(chunk);
+          },
         });
+
+        const stdout = stdoutChunks.join("");
+        const stderr = stderrChunks.join("");
 
         return {
           stdout,
           stderr,
-          exitCode: 0,
+          exitCode: result.exitCode ?? 1,
           durationMs: Date.now() - startTime,
         };
-      } catch (error: unknown) {
-        const execError = error as {
-          stdout?: string;
-          stderr?: string;
-          code?: number | string;
-          killed?: boolean;
-          signal?: string;
-        };
+      } catch (err) {
+        const stdout = stdoutChunks.join("");
+        const stderr = stderrChunks.join("");
 
+        if (err instanceof Error) {
+          if (err.message === "aborted") {
+            throw Object.assign(new Error("Command aborted"), {
+              code: "aborted" as const,
+              stdout,
+              stderr,
+              exitCode: 1,
+              durationMs: Date.now() - startTime,
+            });
+          }
+          if (err.message.startsWith("timeout:")) {
+            throw Object.assign(new Error(`Command timed out after ${options?.timeout ?? 0}ms`), {
+              code: "timeout" as const,
+              stdout,
+              stderr,
+              exitCode: 1,
+              durationMs: Date.now() - startTime,
+            });
+          }
+        }
+
+        // Generic error fallback
         return {
-          stdout: execError.stdout ?? "",
-          stderr: execError.stderr ?? String(error),
-          exitCode: typeof execError.code === "number" ? execError.code : 1,
+          stdout,
+          stderr: stderr || String(err),
+          exitCode: 1,
           durationMs: Date.now() - startTime,
         };
       }
@@ -304,6 +362,18 @@ async function createNativeSandbox(config: SandboxConfig): Promise<Sandbox> {
 // ============================================================================
 // Environment Factory
 // ============================================================================
+
+/**
+ * Local environment configuration
+ */
+export interface LocalEnvironmentConfig {
+  /**
+   * Whether to use just-bash sandbox mode.
+   * - true (default): Use just-bash for isolated execution
+   * - false: Use native bash and fs for direct system access
+   */
+  sandbox?: boolean;
+}
 
 /**
  * Create a local environment with the specified configuration
@@ -354,13 +424,13 @@ export function createLocalEnvironment(config: LocalEnvironmentConfig = {}): Env
 
               filesystem: {
                 readFile: (filePath: string) => internalSandbox.filesystem.readFile(filePath),
+
                 readFileBuffer: async (filePath: string) => {
-                  // Use just-bash's native readFileBuffer
                   const uint8Array = await bashFs.readFileBuffer(filePath);
                   return Buffer.from(uint8Array);
                 },
-                stat: async (filePath: string): Promise<FileStat> => {
-                  // Use just-bash's native stat
+
+                stat: async (filePath: string) => {
                   const fsStat = await bashFs.stat(filePath);
                   return {
                     size: fsStat.size,
@@ -369,8 +439,10 @@ export function createLocalEnvironment(config: LocalEnvironmentConfig = {}): Env
                     mtime: fsStat.mtime,
                   };
                 },
+
                 writeFile: (filePath: string, content: string) =>
                   internalSandbox.filesystem.writeFile(filePath, content),
+
                 readdir: async (dirPath: string) => {
                   const entries = await internalSandbox.filesystem.readdir(dirPath);
                   return entries.map((entry) => ({
@@ -380,24 +452,35 @@ export function createLocalEnvironment(config: LocalEnvironmentConfig = {}): Env
                     modified: "modified" in entry ? (entry.modified as Date | undefined) : undefined,
                   }));
                 },
+
                 mkdir: (dirPath: string) => internalSandbox.filesystem.mkdir(dirPath),
                 exists: (filePath: string) => internalSandbox.filesystem.exists(filePath),
                 remove: (filePath: string) => internalSandbox.filesystem.remove(filePath),
               },
 
               runCommand: async (command: string, options) => {
-                const result = await internalSandbox.runCommand(command, {
-                  cwd: options?.cwd,
-                  env: options?.env,
-                  timeout: options?.timeout,
-                  background: options?.background,
-                });
-                return {
-                  stdout: result.stdout,
-                  stderr: result.stderr,
-                  exitCode: result.exitCode,
-                  durationMs: result.durationMs,
-                };
+                const startTime = Date.now();
+                try {
+                  const result = await internalSandbox.runCommand(command, {
+                    cwd: options?.cwd,
+                    env: options?.env,
+                    timeout: options?.timeout,
+                    background: options?.background,
+                  });
+                  return {
+                    stdout: result.stdout,
+                    stderr: result.stderr,
+                    exitCode: result.exitCode,
+                    durationMs: Date.now() - startTime,
+                  };
+                } catch (err) {
+                  return {
+                    stdout: (err as { stdout?: string }).stdout ?? "",
+                    stderr: (err as { stderr?: string }).stderr ?? String(err),
+                    exitCode: (err as { exitCode?: number }).exitCode ?? 1,
+                    durationMs: Date.now() - startTime,
+                  };
+                }
               },
 
               destroy: async () => {
