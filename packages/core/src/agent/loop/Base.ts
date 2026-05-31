@@ -4,7 +4,7 @@ import { autoCompact, createCompactedMessages } from "../compaction/auto-compact
 import { microCompact } from "../compaction/micro-compact.js";
 import { isPromptTooLongError, reactiveCompact } from "../compaction/reactive-compact.js";
 import { estimateTokens } from "../compaction/token-estimator.js";
-import { createTodoTool } from "../tools";
+import { cleanupOrphanedToolCache, createTodoTool } from "../tools";
 
 import type { Sandbox } from "../../environment";
 import type { AgentContext } from "../agent-context";
@@ -506,6 +506,14 @@ export class Base {
 
             this.context.clearTools();
 
+            // Clean up cached tool output files for orphaned messages
+            if (this.sandbox) {
+              const allMessages = this.context.getMessages();
+              cleanupOrphanedToolCache(this.sandbox, allMessages, absoluteCut).catch((err) => {
+                this.log?.warn("agent", "Failed to cleanup tool cache", err);
+              });
+            }
+
             llmMessages = this.context.getMessagesForLLM();
           }
 
@@ -695,7 +703,17 @@ export class Base {
       const summaryMsg = compactedMessages[0];
       if (summaryMsg) {
         this.context.setSummaryMessage(summaryMsg);
-        this.context.setCompactIndex(this.context.getMessages().length);
+        const oldCompactIndex = this.context.getCompactIndex();
+        const newCompactIndex = this.context.getMessages().length;
+        this.context.setCompactIndex(newCompactIndex);
+
+        // Clean up cached tool output files for orphaned messages
+        if (this.sandbox && newCompactIndex > oldCompactIndex) {
+          const allMessages = this.context.getMessages();
+          cleanupOrphanedToolCache(this.sandbox, allMessages, newCompactIndex).catch((err) => {
+            this.log?.warn("agent", "Failed to cleanup tool cache after reactive compact", err);
+          });
+        }
         // Append tail messages (everything after summary) as new messages
         const tailMessages = compactedMessages.slice(1);
         if (tailMessages.length > 0) {
