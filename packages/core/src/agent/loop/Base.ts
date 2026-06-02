@@ -4,6 +4,7 @@ import { autoCompact, createCompactedMessages } from "../compaction/auto-compact
 import { microCompact } from "../compaction/micro-compact.js";
 import { isPromptTooLongError, reactiveCompact } from "../compaction/reactive-compact.js";
 import { estimateTokens } from "../compaction/token-estimator.js";
+import { extractMemories, consolidateMemories } from "../memory/memory-extractor.js";
 import { cleanupOrphanedToolCache, createTodoTool } from "../tools";
 
 import type { Sandbox } from "../../environment";
@@ -11,10 +12,12 @@ import type { AgentContext } from "../agent-context";
 import type { AgentLog } from "../agent-log";
 import type { CompactionConfig } from "../compaction/types.js";
 import type { McpManager } from "../mcp/manager.js";
+import type { MemoryManager } from "../memory/memory-manager.js";
 import type { SessionStore } from "../session/session-store.js";
 import type { SessionData } from "../session/types.js";
 import type { SkillRegistry } from "../skills";
 import type { TodoManager } from "../todo-manager";
+import type { AgentNotification, AgentNotificationListener, AgentStatus, NotificationLevel } from "./types.js";
 import type {
   ToolSet,
   LanguageModel,
@@ -27,19 +30,13 @@ import type {
   PrepareStepFunction,
 } from "ai";
 
-export type AgentStatus = "idle" | "running" | "completed" | "error" | "aborted" | "waiting" | "compacting";
-
-/** Run options */
-export interface AgentRunOptions {
-  /** User prompt (creates a user message) */
-  prompt?: string;
-  /** Messages array */
-  messages?: ModelMessage[];
-  /** Abort signal */
-  abortSignal?: AbortSignal;
-  /** Override model for this run */
-  model?: LanguageModel;
-}
+export type {
+  AgentStatus,
+  AgentRunOptions,
+  NotificationLevel,
+  AgentNotification,
+  AgentNotificationListener,
+} from "./types.js";
 
 export class Base {
   // Identity - subclasses should set this
@@ -48,6 +45,10 @@ export class Base {
   // State
   status: AgentStatus = "idle";
   error = "";
+
+  // Notification system
+  private notificationListeners: Set<AgentNotificationListener> = new Set();
+  private lastNotification: AgentNotification | null = null;
 
   // Resources
   systemPrompt = "";
@@ -194,10 +195,7 @@ export class Base {
   agentDocContent: string = "";
   agentDocSource: string = "";
 
-  /**
-   * Set agent documentation content (loaded from AGENTS.md / CLAUDE.md).
-   * This content is injected into the system prompt automatically.
-   */
+  /** Set agent documentation content (loaded from AGENTS.md / CLAUDE.md). */
   setAgentDocContent(content: string, source?: string): void {
     this.agentDocContent = content;
     this.agentDocSource = source ?? "";
@@ -218,6 +216,55 @@ export class Base {
     return this.agentDocSource;
   }
 
+  // ============================================================================
+  // Notification API
+  // ============================================================================
+
+  /**
+   * Emit a notification for the UI.
+   * Notifications are transient events (unlike status which is persistent state).
+   */
+  notify(category: string, level: NotificationLevel, message: string, data?: Record<string, unknown>): void {
+    const notification: AgentNotification = {
+      category,
+      level,
+      message,
+      data,
+      timestamp: Date.now(),
+    };
+    this.lastNotification = notification;
+
+    for (const listener of this.notificationListeners) {
+      try {
+        listener(notification);
+      } catch {
+        // Ignore listener errors
+      }
+    }
+  }
+
+  /**
+   * Subscribe to notifications. Returns an unsubscribe function.
+   */
+  onNotification(listener: AgentNotificationListener): () => void {
+    this.notificationListeners.add(listener);
+    return () => this.notificationListeners.delete(listener);
+  }
+
+  /**
+   * Get the most recent notification (for polling-based UI).
+   */
+  getLastNotification(): AgentNotification | null {
+    return this.lastNotification;
+  }
+
+  /**
+   * Clear the last notification.
+   */
+  clearLastNotification(): void {
+    this.lastNotification = null;
+  }
+
   setSkillRegister(t: SkillRegistry) {
     if (this.skillRegister) return;
 
@@ -226,6 +273,32 @@ export class Base {
 
   getSkillRegister() {
     return this.skillRegister;
+  }
+
+  // Memory system
+  memoryManager: MemoryManager | null = null;
+  memoryContent: string = "";
+
+  setMemoryManager(m: MemoryManager): void {
+    this.memoryManager = m;
+  }
+
+  getMemoryManager(): MemoryManager | null {
+    return this.memoryManager;
+  }
+
+  /**
+   * Set cached memory index content (for synchronous access in buildSystemPrompt).
+   */
+  setMemoryContent(content: string): void {
+    this.memoryContent = content;
+  }
+
+  /**
+   * Get cached memory index content.
+   */
+  getMemoryContent(): string {
+    return this.memoryContent;
   }
 
   setMcpManager(m: McpManager) {
@@ -255,9 +328,7 @@ export class Base {
     return this.sessionData;
   }
 
-  /**
-   * Lazily create a session on first use (when user sends first message).
-   */
+  /** Lazily create a session on first use. */
   private ensureSession(): void {
     if (this.sessionData || !this.sessionStore || !this.sessionConfig) return;
     const session = this.sessionStore.create({
@@ -267,9 +338,7 @@ export class Base {
     this.sessionData = session;
   }
 
-  /**
-   * Generate a concise session title from the first user message using LLM.
-   */
+  /** Generate a concise session title from the first user message using LLM. */
   private async generateSessionTitle(userMessage: string): Promise<string> {
     if (!this.model) return userMessage.slice(0, 50);
     try {
@@ -286,10 +355,7 @@ export class Base {
     }
   }
 
-  /**
-   * Update stored UIMessages from the client.
-   * Called by CLI/extension after each interaction to persist the authoritative UI state.
-   */
+  /** Update stored UIMessages from the client. */
   updateSessionUIMessages(uiMessages: UIMessage[]): void {
     if (!this.sessionStore) return;
     if (!this.sessionData) {
@@ -323,12 +389,7 @@ export class Base {
   }
 
   /**
-   * Prepare messages from AgentCallParameters format.
-   * Handles both `prompt` (string or ModelMessage[]) and `messages` parameters.
-   * Also applies micro compaction and injects nag reminder if needed.
-   *
-   * NOTE: This is a synchronous method. For auto-compaction (Layer 2),
-   * call prepareMessagesAsync() instead which can run the LLM summarization.
+   * Prepare messages from prompt/messages parameters.
    */
   prepareMessages(options: { prompt?: string | ModelMessage[]; messages?: ModelMessage[] }): ModelMessage[] {
     const { prompt, messages } = options;
@@ -351,15 +412,7 @@ export class Base {
 
   /**
    * Check if auto compaction should be triggered.
-   *
-   * Uses actual token usage from AgentContext if available (more accurate),
-   * otherwise falls back to character-based estimation.
-   *
-   * Note: Compaction now includes incomplete todos in the summary, so the agent
-   * can restore them after compaction. No longer blocks on incomplete todos.
-   *
-   * @param messages - Optional messages to estimate if context not available
-   * @returns True if tokens exceed the configured threshold
+   * Uses actual token usage from AgentContext if available, falls back to estimation.
    */
   shouldAutoCompact(messages?: ModelMessage[]): boolean {
     const tokenThreshold = this.compactionConfig?.tokenThreshold ?? 100000;
@@ -383,22 +436,12 @@ export class Base {
     return false;
   }
 
-  /**
-   * Check if there are incomplete todos.
-   * Note: This no longer blocks compaction - todos are included in the summary.
-   */
+  /** Check if there are incomplete todos. */
   hasIncompleteTodos(): boolean {
     return this.todoManager?.hasIncompleteTodos() ?? false;
   }
 
-  /**
-   * Get current token usage.
-   *
-   * Returns actual usage from context if available, otherwise estimates from messages.
-   *
-   * @param messages - Optional messages to estimate if context not available
-   * @returns Token count (actual or estimated)
-   */
+  /** Get current token usage (actual from context, or estimated from messages). */
   getCurrentTokens(messages?: ModelMessage[]): number {
     // Prefer actual usage from context
     if (this.context) {
@@ -416,16 +459,12 @@ export class Base {
     return 0;
   }
 
-  /**
-   * Get estimated token count for messages (character-based approximation).
-   */
+  /** Get estimated token count for messages. */
   getEstimatedTokens(messages: ModelMessage[]): number {
     return estimateTokens(messages);
   }
 
-  /**
-   * Set up abort controller and forward external abort signal.
-   */
+  /** Set up abort controller and forward external abort signal. */
   setupAbortController(abortSignal?: AbortSignal): void {
     this.cancelAbortController();
 
@@ -481,6 +520,7 @@ export class Base {
       if (this.shouldAutoCompact(llmMessages) && this.model && this.sandbox && this.context) {
         try {
           this.status = "compacting";
+          this.notify("compaction", "info", "Auto-compacting context...");
 
           const incompleteTodos = this.todoManager?.getIncompleteTodos() ?? [];
           const todos = incompleteTodos.map((t) => ({
@@ -526,9 +566,17 @@ export class Base {
             beforeMessageCount: beforeLength,
             messageCount: llmMessages.length,
           });
+
+          if (result.compacted) {
+            this.notify("compaction", "success", "Context compacted", {
+              tokensBefore: result.tokensBefore,
+              tokensAfter: result.tokensAfter,
+            });
+          }
         } catch (err) {
           const error = err instanceof Error ? err : new Error(String(err));
           this.log?.error("agent", "Auto-compaction failed, continuing with original messages", error);
+          this.notify("compaction", "warning", `Compaction failed: ${error.message}`);
         } finally {
           this.status = "running";
         }
@@ -546,10 +594,7 @@ export class Base {
     this.pendingAbortControllers = this.pendingAbortControllers.filter((ac) => ac !== abortController);
   }
 
-  /**
-   * Create onStepFinish callback that logs and updates context usage.
-   * Also handles todo tracking for nag reminders.
-   */
+  /** Create onStepFinish callback that logs and updates context usage. */
   createOnStepFinish(
     userCallback?: StreamTextOnStepFinishCallback<ToolSet> | GenerateTextOnStepFinishCallback<NoInfer<ToolSet>>
   ): StreamTextOnStepFinishCallback<ToolSet> | GenerateTextOnStepFinishCallback<NoInfer<ToolSet>> {
@@ -613,15 +658,14 @@ export class Base {
       // Auto-save session after each interaction
       this.saveSession();
 
+      // Background memory extraction (fire-and-forget)
+      this.runMemoryExtraction();
+
       userCallback?.(event);
     };
   }
 
-  /**
-   * Persist the current session state to disk (server-side data only).
-   * UIMessages are NOT saved here — they are pushed separately by the client
-   * via updateSessionUIMessages() to avoid writing the full conversation on every step.
-   */
+  /** Persist the current session state to disk (server-side data only). */
   private saveSession(): void {
     if (!this.sessionStore || !this.context) return;
     if (!this.sessionData) {
@@ -668,14 +712,55 @@ export class Base {
   }
 
   /**
+   * Run background memory extraction after each turn.
+   * Fire-and-forget: errors are logged but never block the agent.
+   */
+  private runMemoryExtraction(): void {
+    if (!this.memoryManager || !this.context) return;
+
+    const messages = this.context.getMessages();
+    if (messages.length < 15) return;
+
+    const manager = this.memoryManager;
+    const agentId = this.agentId;
+    const log = this.log;
+
+    this.notify("memory", "info", "Extracting memories...");
+
+    (async () => {
+      try {
+        const count = await extractMemories(messages, manager, agentId);
+        if (count > 0) {
+          log?.info("memory", `Extracted ${count} new memories`);
+          this.memoryContent = manager.getIndexContent();
+          this.notify("memory", "success", `Extracted ${count} new memories`, { count });
+        }
+
+        // Check if consolidation is needed
+        const memoryCount = await manager.getMemoryCount();
+        if (memoryCount >= manager.getConsolidateThreshold()) {
+          this.notify("memory", "info", "Consolidating memories...");
+          const after = await consolidateMemories(manager, agentId);
+          if (after > 0) {
+            log?.info("memory", `Consolidated memories: ${memoryCount} → ${after}`);
+            this.memoryContent = manager.getIndexContent();
+            this.notify("memory", "success", `Consolidated memories: ${memoryCount} → ${after}`, {
+              before: memoryCount,
+              after,
+            });
+          }
+        }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        log?.warn("memory", "Memory extraction failed", { error: errorMsg });
+        this.notify("memory", "warning", `Memory extraction failed: ${errorMsg}`);
+      }
+    })();
+  }
+
+  /**
    * Handle prompt_too_long errors by running emergency reactive compaction.
-   *
-   * When the API rejects our request because the context is too large,
-   * this aggressively compacts messages and updates the context so a
-   * retry with the same prepareStep flow will use the compacted messages.
-   *
    * Returns true if compaction succeeded and caller should retry.
-   * Returns false if this isn't a prompt_too_long error or max retries exceeded.
    */
   async handleReactiveCompact(error: unknown): Promise<boolean> {
     if (!isPromptTooLongError(error)) return false;
@@ -771,9 +856,7 @@ export class Base {
     return tool ? tool.needsApproval === true : false;
   }
 
-  /**
-   * Reset the reactive compact retry counter. Called at the start of each run.
-   */
+  /** Reset the reactive compact retry counter. */
   resetReactiveCompactRetries(): void {
     this.reactiveCompactRetries = 0;
   }

@@ -6,6 +6,9 @@ export {
   type AgentConfig,
   type AgentRunOptions,
   type ToolSet,
+  type NotificationLevel,
+  type AgentNotification,
+  type AgentNotificationListener,
 } from "./loop";
 
 export type {
@@ -180,3 +183,23 @@ export {
   type AgentDocLoaderConfig,
   type AgentDocLoadResult,
 } from "./agent-doc-loader.js";
+
+// Memory exports (persistent cross-session knowledge)
+export {
+  MemoryManager,
+  extractMemories,
+  consolidateMemories,
+  MEMORY_TYPES,
+  DEFAULT_MEMORY_DIR,
+  MEMORY_INDEX_FILENAME,
+  DEFAULT_CONSOLIDATE_THRESHOLD,
+  DEFAULT_MAX_INDEX_LINES,
+  DEFAULT_MAX_INDEX_BYTES,
+  memoryTypeSchema,
+  memoryMetadataSchema,
+  memorySchema,
+  type MemoryType,
+  type MemoryMetadata,
+  type Memory,
+  type MemoryManagerConfig,
+} from "./memory";

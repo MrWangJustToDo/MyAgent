@@ -20,6 +20,7 @@ export type LogCategory =
   | "middleware" // Middleware processing
   | "todo" // Todo tracking
   | "skill" // skill load
+  | "memory" // Memory system
   | "error" // Errors
   | "system" // System/initialization events
   | "custom"; // Custom logs
@@ -469,7 +470,10 @@ const logCategories = [
   "stream",
   "middleware",
   "todo",
+  "skill",
+  "memory",
   "error",
+  "system",
   "custom",
 ] as const;
 export const logCategorySchema = z.enum(logCategories);

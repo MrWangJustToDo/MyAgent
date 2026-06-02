@@ -137,6 +137,9 @@ export class SessionStore {
       for (const entry of entries) {
         if (entry.type !== "file" || !entry.name.endsWith(suffix)) continue;
 
+        // Avoid false matches: `.json` suffix must not match `.session.json` files
+        if (suffix !== SESSION_FILE_SUFFIX && entry.name.endsWith(SESSION_FILE_SUFFIX)) continue;
+
         const id = entry.name.slice(0, -suffix.length);
         if (seenIds.has(id)) continue;
 

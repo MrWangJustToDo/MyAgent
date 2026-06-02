@@ -107,6 +107,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
    * Build the final system prompt by appending dynamic sections:
    * 1. Agent documentation (AGENTS.md / CLAUDE.md)
    * 2. Available skills (two-layer injection pattern)
+   * 3. Memory index (persistent cross-session knowledge)
    *
    * The agent documentation is loaded from the project root on startup
    * and follows the cross-tool AGENTS.md standard.
@@ -135,7 +136,19 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       parts.push(skillSection);
     }
 
-    // 4. Nag reminder for todo updates (injected in system prompt to avoid
+    // 4. Memory index (persistent cross-session knowledge)
+    if (this.memoryContent) {
+      const memorySection = [
+        "## Memories",
+        "These are memories from previous sessions. Respect user preferences from memory.",
+        "When the user says 'remember' or expresses a clear preference, it will be automatically extracted.",
+        "",
+        this.memoryContent,
+      ].join("\n");
+      parts.push(memorySection);
+    }
+
+    // 5. Nag reminder for todo updates (injected in system prompt to avoid
     // breaking ModelMessage type constraints — ToolContent doesn't accept TextPart)
     if (this.todoManager?.shouldNag()) {
       const reminder = this.todoManager.getNagReminder();
@@ -395,4 +408,4 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
 
 export { vercelTool as tool };
 
-export type { AgentStatus, AgentRunOptions } from "./Base.js";
+export type { AgentStatus, AgentRunOptions } from "./types.js";

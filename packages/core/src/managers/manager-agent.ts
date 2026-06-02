@@ -9,6 +9,7 @@ import { createCompactionConfig } from "../agent/compaction/types.js";
 import { Agent } from "../agent/loop/Agent.js";
 import { loadMcpConfig } from "../agent/mcp/config.js";
 import { McpManager } from "../agent/mcp/manager.js";
+import { MemoryManager } from "../agent/memory/memory-manager.js";
 import { SessionStore } from "../agent/session/session-store.js";
 import { SkillRegistry } from "../agent/skills/skill-registry.js";
 import { TodoManager } from "../agent/todo-manager";
@@ -351,6 +352,12 @@ export class AgentManager {
           agent.addTools(mcpTools);
         }
       }
+
+      // Memory system: persistent cross-session knowledge (root agents only)
+      const memoryManager = new MemoryManager(sandbox, { rootPath }, log);
+      await memoryManager.initialize();
+      agent.setMemoryManager(memoryManager);
+      agent.setMemoryContent(memoryManager.getIndexContent());
     }
 
     // Session persistence (root agents only)

@@ -34,6 +34,7 @@ web-ext.config.ts
 .mcp.json
 .agents
 .agent-cache
+.agent-memory
 skills-lock.json
 
 tsconfig.tsbuildinfo

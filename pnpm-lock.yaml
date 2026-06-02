@@ -90,8 +90,8 @@ importers:
         specifier: ^6.2.0
         version: 6.2.0(@my-react/react-terminal@0.0.26(@my-react/react@0.3.27(@my-react/react@0.3.27)))(@my-react/react@0.3.27)
       ink-stream-markdown:
-        specifier: ^0.0.2
-        version: 0.0.2(@my-react/react-terminal@0.0.26(@my-react/react@0.3.27(@my-react/react@0.3.27)))(@my-react/react@0.3.27)
+        specifier: ^0.0.3
+        version: 0.0.3(@my-react/react-terminal@0.0.26(@my-react/react@0.3.27(@my-react/react@0.3.27)))(@my-react/react@0.3.27)
       ink-tab:
         specifier: ^5.2.0
         version: 5.2.0(@my-react/react-terminal@0.0.26(@my-react/react@0.3.27(@my-react/react@0.3.27)))(@my-react/react@0.3.27)(@types/react@19.2.14)
@@ -4788,8 +4788,8 @@ packages:
       ink: '>=5.0.0'
       react: '>=18.0.0'
 
-  ink-stream-markdown@0.0.2:
-    resolution: {integrity: sha512-RREz+AXM75HTMNo4DuyM06Eq8CgApFAn8sdCa07H4M4bIgPjTsstws/7H/hnmwOP9643cLIxBA+g7EUYm2Mb/w==}
+  ink-stream-markdown@0.0.3:
+    resolution: {integrity: sha512-pgN7UUOZnKUhdAiMCjHryIyxug3/ZJDSipXNobZ5bJbhrgeh2afl2O4chO8as9ColhnLYSuDWy3VoTqtufNkMg==}
     engines: {node: '>=18'}
     peerDependencies:
       ink: '>=5.0.0'
@@ -12588,7 +12588,7 @@ snapshots:
       react: '@my-react/react@0.3.27(@my-react/react@0.3.27)'
       to-rotated: 1.0.0
 
-  ink-stream-markdown@0.0.2(@my-react/react-terminal@0.0.26(@my-react/react@0.3.27(@my-react/react@0.3.27)))(@my-react/react@0.3.27):
+  ink-stream-markdown@0.0.3(@my-react/react-terminal@0.0.26(@my-react/react@0.3.27(@my-react/react@0.3.27)))(@my-react/react@0.3.27):
     dependencies:
       chalk: 5.6.2
       cli-table3: 0.6.5

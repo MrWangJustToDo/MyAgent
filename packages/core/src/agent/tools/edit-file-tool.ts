@@ -32,8 +32,7 @@ export const createEditFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
         .number()
         .int()
         .min(1)
-        .optional()
-        .describe("The 1-indexed line number where oldString starts in the file. Used for UI display."),
+        .describe("The 1-indexed line number where oldString starts in the file. Required for diff display."),
       replaceAll: z
         .boolean()
         .optional()
