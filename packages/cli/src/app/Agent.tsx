@@ -129,9 +129,16 @@ export const Agent = () => {
     if (key && key !== prevPendingQuestionRef.current) {
       prevPendingQuestionRef.current = key;
       askUserStartTimeRef.current = Date.now();
-      const opts = (pendingAskUser.options ?? []).map((o) => ({ label: o, value: o }));
-      opts.push({ label: "Your answer...", value: "__freeform__" });
-      selectActions.open(opts, pendingAskUser.multiSelect ?? false, true);
+      const hasOptions = pendingAskUser.options && pendingAskUser.options.length > 0;
+      if (hasOptions) {
+        const opts = pendingAskUser.options!.map((o) => ({ label: o, value: o }));
+        opts.push({ label: "Your answer...", value: "__freeform__" });
+        selectActions.open(opts, pendingAskUser.multiSelect ?? false, true);
+      } else {
+        inputActions.clear();
+        inputActions.setLoading(false);
+        modeActions.setDenyMode(true, "ask_user");
+      }
     } else if (!key && prevPendingQuestionRef.current) {
       prevPendingQuestionRef.current = undefined;
       selectActions.close();
