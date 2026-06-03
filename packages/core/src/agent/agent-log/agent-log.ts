@@ -74,37 +74,46 @@ export interface LogFilter {
 export const generateLogId = createSequentialIdGenerator("log");
 
 // ============================================================================
+// Notification Types
+// ============================================================================
+
+/** Notification severity levels */
+export type NotificationLevel = "info" | "success" | "warning" | "error";
+
+/**
+ * A transient notification for UI display.
+ * Created via `AgentLog.notify()`. Multiple notifications can be active
+ * simultaneously; use `notifyIndex` to track which one the UI is showing.
+ */
+export interface AgentNotification {
+  /** Unique ID (same format as log entry IDs) */
+  id: string;
+  /** Category (e.g., "memory", "compaction", "session") */
+  category: LogCategory;
+  /** Severity level */
+  level: NotificationLevel;
+  /** Human-readable message */
+  message: string;
+  /** Optional structured data */
+  data?: Record<string, unknown>;
+  /** Timestamp (ms since epoch) */
+  timestamp: number;
+}
+
+export type AgentNotificationListener = (notification: AgentNotification) => void;
+
+// ============================================================================
 // AgentLog Class
 // ============================================================================
 
 /**
- * AgentLog - Debug logging for agent operations.
+ * AgentLog - Debug logging and notification system for agent operations.
  *
  * Features:
  * 1. **Structured logs** - LogEntry with level, category, data
- * 2. **Filtering** - Filter by level, category, tags, time range
- * 3. **Real-time** - Subscribe to log events
- * 4. **Serializable** - Export/import logs for analysis
- *
- * @example
- * ```typescript
- * const log = new AgentLog();
- *
- * // Log messages
- * log.debug("agent", "Starting agent...");
- * log.info("tool", "Tool called", { name: "read-file", args: { path: "test.txt" } });
- * log.warn("approval", "Tool needs approval", { toolCallId: "123" });
- * log.error("error", "Failed to execute", { error: err });
- *
- * // Subscribe to logs
- * log.onLog((entry) => {
- *   console.log(`[${entry.level}] ${entry.category}: ${entry.message}`);
- * });
- *
- * // Filter logs
- * const errors = log.filter({ levels: ["error", "warn"] });
- * const toolLogs = log.filter({ categories: ["tool"] });
- * ```
+ * 2. **Notifications** - Active notification set with index for UI cycling
+ * 3. **Filtering** - Filter by level, category, tags, time range
+ * 4. **Real-time** - Subscribe to log and notification events
  */
 export class AgentLog {
   /** Log entries */
@@ -112,6 +121,15 @@ export class AgentLog {
 
   /** Log listeners */
   private listeners: Set<(entry: LogEntry) => void> = new Set();
+
+  /** Active notifications (ordered by insertion) */
+  private notifications: AgentNotification[] = [];
+
+  /** Current notification index for UI display */
+  private notifyIndex = 0;
+
+  /** Notification listeners */
+  private notifyListeners: Set<AgentNotificationListener> = new Set();
 
   /** Whether logging is enabled */
   private enabled = true;
@@ -287,6 +305,103 @@ export class AgentLog {
   }
 
   // ============================================================================
+  // Notifications
+  // ============================================================================
+
+  /**
+   * Add a notification to the active set and also log it.
+   * Returns the notification ID so it can be dismissed later.
+   */
+  notify(category: LogCategory, level: NotificationLevel, message: string, data?: Record<string, unknown>): string {
+    const notification: AgentNotification = {
+      id: generateLogId(),
+      category,
+      level,
+      message,
+      data,
+      timestamp: Date.now(),
+    };
+
+    this.notifications.push(notification);
+
+    // Also log it
+    const logLevel = level === "success" ? "info" : level === "warning" ? "warn" : level;
+    this.log(logLevel, category, message, { data });
+
+    // Notify listeners
+    for (const listener of this.notifyListeners) {
+      try {
+        listener(notification);
+      } catch {
+        // Ignore listener errors
+      }
+    }
+
+    return notification.id;
+  }
+
+  /**
+   * Dismiss (remove) a notification by ID.
+   * Adjusts notifyIndex if needed to stay in bounds.
+   */
+  dismissNotification(id: string): void {
+    const idx = this.notifications.findIndex((n) => n.id === id);
+    if (idx === -1) return;
+    this.notifications.splice(idx, 1);
+    if (this.notifyIndex >= this.notifications.length) {
+      this.notifyIndex = Math.max(0, this.notifications.length - 1);
+    }
+  }
+
+  /** Clear all active notifications. */
+  clearNotifications(): void {
+    this.notifications = [];
+    this.notifyIndex = 0;
+  }
+
+  /** Get all active notifications. */
+  getNotifications(): AgentNotification[] {
+    return this.notifications;
+  }
+
+  /** Get the currently indexed notification (for UI display). */
+  getCurrentNotification(): AgentNotification | null {
+    return this.notifications[this.notifyIndex] ?? null;
+  }
+
+  /** Get current notification index. */
+  getNotifyIndex(): number {
+    return this.notifyIndex;
+  }
+
+  /** Set notification index (e.g., to cycle through active notifications). */
+  setNotifyIndex(index: number): void {
+    if (this.notifications.length === 0) {
+      this.notifyIndex = 0;
+      return;
+    }
+    this.notifyIndex = Math.max(0, Math.min(index, this.notifications.length - 1));
+  }
+
+  /** Advance to the next notification (wraps around). */
+  nextNotification(): AgentNotification | null {
+    if (this.notifications.length === 0) return null;
+    this.notifyIndex = (this.notifyIndex + 1) % this.notifications.length;
+    return this.notifications[this.notifyIndex];
+  }
+
+  /** Get the number of active notifications. */
+  getNotificationCount(): number {
+    return this.notifications.length;
+  }
+
+  /** Subscribe to notification events. Returns an unsubscribe function. */
+  onNotification(listener: AgentNotificationListener): () => void {
+    this.notifyListeners.add(listener);
+    return () => this.notifyListeners.delete(listener);
+  }
+
+  // ============================================================================
   // Querying
   // ============================================================================
 
@@ -410,9 +525,11 @@ export class AgentLog {
   // Clear / Trim
   // ============================================================================
 
-  /** Clear all entries */
+  /** Clear all entries and notifications */
   clear(): void {
     this.entries = [];
+    this.notifications = [];
+    this.notifyIndex = 0;
   }
 
   /** Trim entries to max limit */

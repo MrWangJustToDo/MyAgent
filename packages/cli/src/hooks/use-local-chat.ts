@@ -13,6 +13,7 @@ import {
   isToolUIPart,
   DirectChatTransport,
   lastAssistantMessageIsCompleteWithApprovalResponses,
+  lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
 import ansiEscapes from "ansi-escapes";
 import { useEffect, useCallback, useState, useRef, useMemo } from "react";
@@ -101,6 +102,16 @@ export interface UseLocalChatReturn {
     toolName: string;
     toolCallId: string;
   }>;
+
+  allPendingAskUser: Array<{
+    toolCallId: string;
+    question: string;
+    options?: string[];
+    multiSelect?: boolean;
+  }>;
+
+  /** Add tool output for client-side tools (e.g. ask_user) */
+  addToolOutput: (options: { tool: string; toolCallId: string; output: Record<string, unknown> }) => void;
 }
 
 // ============================================================================
@@ -203,7 +214,10 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
           transport: transport,
           messages: initialMessages ?? [],
           sendAutomaticallyWhen(options) {
-            return lastAssistantMessageIsCompleteWithApprovalResponses(options);
+            return (
+              lastAssistantMessageIsCompleteWithApprovalResponses(options) ||
+              lastAssistantMessageIsCompleteWithToolCalls(options)
+            );
           },
         });
 
@@ -351,7 +365,6 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
 
   const allPendingApproval = useMemo(() => {
     const all: UseLocalChatReturn["allPendingApproval"] = [];
-    // Look through messages for tool calls awaiting approval
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i] as UIMessage;
       if (msg.role === "assistant") {
@@ -369,14 +382,51 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
         }
       }
     }
-
     return all;
   }, [messages]);
+
+  const allPendingAskUser = useMemo(() => {
+    const all: UseLocalChatReturn["allPendingAskUser"] = [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i] as UIMessage;
+      if (msg.role === "assistant") {
+        for (const part of msg.parts) {
+          if (isToolUIPart(part) && getToolName(part) === "ask_user" && part.state === "input-available") {
+            const input = part.input as { question?: string; options?: string[]; multiSelect?: boolean } | undefined;
+            all.push({
+              toolCallId: part.toolCallId,
+              question: input?.question ?? "",
+              options: input?.options,
+              multiSelect: input?.multiSelect,
+            });
+          }
+        }
+      }
+    }
+    return all;
+  }, [messages]);
+
+  useEffect(() => {
+    useLocalChatStatus.getActions().setPendingAskUserCount(allPendingAskUser.length);
+  }, [allPendingAskUser]);
+
+  const addToolOutput = useCallback(
+    (options: { tool: string; toolCallId: string; output: Record<string, unknown> }) => {
+      chatHelpers.addToolOutput({
+        tool: options.tool as never,
+        toolCallId: options.toolCallId,
+        output: options.output as never,
+      });
+    },
+    [chatHelpers]
+  );
 
   return {
     messages,
     sendMessage,
     allPendingApproval,
+    allPendingAskUser,
+    addToolOutput,
     status,
     isLoading: status === "streaming" || status === "submitted",
     isReady: agent !== null && !initLoading && chatRef.current !== null,

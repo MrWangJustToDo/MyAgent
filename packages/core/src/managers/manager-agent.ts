@@ -14,6 +14,7 @@ import { SessionStore } from "../agent/session/session-store.js";
 import { SkillRegistry } from "../agent/skills/skill-registry.js";
 import { TodoManager } from "../agent/todo-manager";
 import { createTools, createWebfetchTool, createWebsearchTool } from "../agent/tools";
+import { createAskUserTool } from "../agent/tools/ask-user-tool.js";
 import { createCompactTool } from "../agent/tools/compact-tool.js";
 import { createListSkillsTool } from "../agent/tools/list-skills-tool.js";
 import { createLoadSkillTool } from "../agent/tools/load-skill-tool.js";
@@ -300,6 +301,12 @@ export class AgentManager {
       webfetch: createWebfetchTool({ agentId: agent.id, sandbox }),
       websearch: createWebsearchTool({ agentId: agent.id }),
     });
+
+    // Ask-user tool (root agents only — subagents don't interact with users)
+    // Client-side tool: no execute function, handled by the CLI via addToolOutput
+    if (!parentId) {
+      agent.addTools({ ask_user: createAskUserTool() });
+    }
 
     // Load skills and add skill tools (only for root agents, not subagents)
     if (!parentId) {

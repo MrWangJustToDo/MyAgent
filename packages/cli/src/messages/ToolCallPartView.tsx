@@ -60,6 +60,8 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
     if (part.input === undefined || part.input === null) return null;
     // For run_command, only show in header for static (history) messages; live input is shown by ToolInputView
     if (toolName === "run_command" && !staticMessage) return null;
+    // For ask_user, only show in header for static (history) messages; live input is shown by ToolInputView
+    if (toolName === "ask_user" && !staticMessage) return null;
     const formatted = formatToolInput(part.input, toolName);
     return formatted || null;
   };
@@ -95,6 +97,15 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
       {/* Tool input (diffs, command text) */}
       <ToolInputView part={part} />
 
+      {/* Approval prompt */}
+      {needsApproval && (
+        <Box paddingLeft={2}>
+          <Text color="yellow">
+            Approval required: Press <Text bold>y</Text> to approve, <Text bold>n</Text> to deny
+          </Text>
+        </Box>
+      )}
+
       {/* Detailed output for run_command/task */}
       {hasOutput && <ToolOutputView part={part} />}
 
@@ -110,15 +121,6 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
         <Box paddingLeft={2}>
           <Text color="gray" dimColor wrap="truncate-end">
             {compactOutput}
-          </Text>
-        </Box>
-      )}
-
-      {/* Approval prompt */}
-      {needsApproval && (
-        <Box paddingLeft={2}>
-          <Text color="yellow" bold>
-            Approval required. Press Y to approve, N to deny.
           </Text>
         </Box>
       )}

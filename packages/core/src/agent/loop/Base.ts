@@ -17,7 +17,7 @@ import type { SessionStore } from "../session/session-store.js";
 import type { SessionData } from "../session/types.js";
 import type { SkillRegistry } from "../skills";
 import type { TodoManager } from "../todo-manager";
-import type { AgentNotification, AgentNotificationListener, AgentStatus, NotificationLevel } from "./types.js";
+import type { AgentStatus } from "./types.js";
 import type {
   ToolSet,
   LanguageModel,
@@ -30,13 +30,7 @@ import type {
   PrepareStepFunction,
 } from "ai";
 
-export type {
-  AgentStatus,
-  AgentRunOptions,
-  NotificationLevel,
-  AgentNotification,
-  AgentNotificationListener,
-} from "./types.js";
+export type { AgentStatus, AgentRunOptions } from "./types.js";
 
 export class Base {
   // Identity - subclasses should set this
@@ -45,10 +39,6 @@ export class Base {
   // State
   status: AgentStatus = "idle";
   error = "";
-
-  // Notification system
-  private notificationListeners: Set<AgentNotificationListener> = new Set();
-  private lastNotification: AgentNotification | null = null;
 
   // Resources
   systemPrompt = "";
@@ -61,7 +51,7 @@ export class Base {
   compactionConfig: CompactionConfig | null = null;
   sessionStore: SessionStore | null = null;
   sessionData: SessionData | null = null;
-  private sessionConfig: { provider: string; model: string } | null = null;
+  sessionConfig: { provider: string; model: string } | null = null;
   customTools: ToolSet = {};
   builtInTools: ToolSet = {};
 
@@ -214,55 +204,6 @@ export class Base {
    */
   getAgentDocSource(): string {
     return this.agentDocSource;
-  }
-
-  // ============================================================================
-  // Notification API
-  // ============================================================================
-
-  /**
-   * Emit a notification for the UI.
-   * Notifications are transient events (unlike status which is persistent state).
-   */
-  notify(category: string, level: NotificationLevel, message: string, data?: Record<string, unknown>): void {
-    const notification: AgentNotification = {
-      category,
-      level,
-      message,
-      data,
-      timestamp: Date.now(),
-    };
-    this.lastNotification = notification;
-
-    for (const listener of this.notificationListeners) {
-      try {
-        listener(notification);
-      } catch {
-        // Ignore listener errors
-      }
-    }
-  }
-
-  /**
-   * Subscribe to notifications. Returns an unsubscribe function.
-   */
-  onNotification(listener: AgentNotificationListener): () => void {
-    this.notificationListeners.add(listener);
-    return () => this.notificationListeners.delete(listener);
-  }
-
-  /**
-   * Get the most recent notification (for polling-based UI).
-   */
-  getLastNotification(): AgentNotification | null {
-    return this.lastNotification;
-  }
-
-  /**
-   * Clear the last notification.
-   */
-  clearLastNotification(): void {
-    this.lastNotification = null;
   }
 
   setSkillRegister(t: SkillRegistry) {
@@ -520,7 +461,7 @@ export class Base {
       if (this.shouldAutoCompact(llmMessages) && this.model && this.sandbox && this.context) {
         try {
           this.status = "compacting";
-          this.notify("compaction", "info", "Auto-compacting context...");
+          this.log?.notify("system", "info", "Auto-compacting context...");
 
           const incompleteTodos = this.todoManager?.getIncompleteTodos() ?? [];
           const todos = incompleteTodos.map((t) => ({
@@ -568,7 +509,7 @@ export class Base {
           });
 
           if (result.compacted) {
-            this.notify("compaction", "success", "Context compacted", {
+            this.log?.notify("system", "success", "Context compacted", {
               tokensBefore: result.tokensBefore,
               tokensAfter: result.tokensAfter,
             });
@@ -576,7 +517,7 @@ export class Base {
         } catch (err) {
           const error = err instanceof Error ? err : new Error(String(err));
           this.log?.error("agent", "Auto-compaction failed, continuing with original messages", error);
-          this.notify("compaction", "warning", `Compaction failed: ${error.message}`);
+          this.log?.notify("system", "warning", `Compaction failed: ${error.message}`);
         } finally {
           this.status = "running";
         }
@@ -725,7 +666,7 @@ export class Base {
     const agentId = this.agentId;
     const log = this.log;
 
-    this.notify("memory", "info", "Extracting memories...");
+    this.log?.notify("memory", "info", "Extracting memories...");
 
     (async () => {
       try {
@@ -733,18 +674,18 @@ export class Base {
         if (count > 0) {
           log?.info("memory", `Extracted ${count} new memories`);
           this.memoryContent = manager.getIndexContent();
-          this.notify("memory", "success", `Extracted ${count} new memories`, { count });
+          this.log?.notify("memory", "success", `Extracted ${count} new memories`, { count });
         }
 
         // Check if consolidation is needed
         const memoryCount = await manager.getMemoryCount();
         if (memoryCount >= manager.getConsolidateThreshold()) {
-          this.notify("memory", "info", "Consolidating memories...");
+          this.log?.notify("memory", "info", "Consolidating memories...");
           const after = await consolidateMemories(manager, agentId);
           if (after > 0) {
             log?.info("memory", `Consolidated memories: ${memoryCount} → ${after}`);
             this.memoryContent = manager.getIndexContent();
-            this.notify("memory", "success", `Consolidated memories: ${memoryCount} → ${after}`, {
+            this.log?.notify("memory", "success", `Consolidated memories: ${memoryCount} → ${after}`, {
               before: memoryCount,
               after,
             });
@@ -753,7 +694,7 @@ export class Base {
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         log?.warn("memory", "Memory extraction failed", { error: errorMsg });
-        this.notify("memory", "warning", `Memory extraction failed: ${errorMsg}`);
+        this.log?.notify("memory", "warning", `Memory extraction failed: ${errorMsg}`);
       }
     })();
   }

@@ -10,21 +10,21 @@ const TICK_MS = 60;
 /**
  * Format a number into compact human-readable form.
  * - 0–999 → raw (e.g. "342")
- * - 1,000–999,999 → "1k", "342k" (no decimal)
- * - 1,000,000+ → "1.2M", "3.5M" (one decimal)
+ * - 1,000–999,999 → "1.50k", "342.00k" (two decimal places)
+ * - 1,000,000+ → "1.20M", "3.55M" (two decimal places)
  */
 const formatCompact = (n: number): string => {
   if (n < 1000) return String(n);
   if (n < 1_000_000) {
-    // Round to nearest thousand, show without decimal
-    const thousands = Math.round(n / 1000);
-    return `${thousands}k`;
+    // Thousands — show two decimal places
+    const thousands = n / 1000;
+    const rounded = Math.round(thousands * 100) / 100;
+    return `${rounded.toFixed(2)}k`;
   }
-  // Millions — show one decimal place
+  // Millions — show two decimal places
   const millions = n / 1_000_000;
-  // Round to 1 decimal place
-  const rounded = Math.round(millions * 10) / 10;
-  return `${rounded}M`;
+  const rounded = Math.round(millions * 100) / 100;
+  return `${rounded.toFixed(2)}M`;
 };
 
 /**

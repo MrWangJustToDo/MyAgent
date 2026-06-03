@@ -6,14 +6,12 @@ export {
   type AgentConfig,
   type AgentRunOptions,
   type ToolSet,
-  type NotificationLevel,
-  type AgentNotification,
-  type AgentNotificationListener,
 } from "./loop";
 
 export type {
   Tools,
   // Tool output types
+  AskUserOutput,
   ListFileOutput,
   RunCommandOutput,
   ReadFileOutput,
@@ -41,6 +39,9 @@ export {
   type LogCategory,
   type LogEntry,
   type LogFilter,
+  type NotificationLevel,
+  type AgentNotification,
+  type AgentNotificationListener,
 } from "./agent-log";
 
 // TodoManager exports

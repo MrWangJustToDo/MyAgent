@@ -10,7 +10,9 @@ import { Spinner } from "../components/Spinner.js";
 import { useAgent } from "../hooks/use-agent.js";
 import { useArgs } from "../hooks/use-args.js";
 import { useAutocomplete } from "../hooks/use-autocomplete.js";
+import { useInputMode } from "../hooks/use-input-mode.js";
 import { useLocalChat } from "../hooks/use-local-chat.js";
+import { useSelect } from "../hooks/use-select.js";
 import { useSize } from "../hooks/use-size.js";
 import { useStatic } from "../hooks/use-static.js";
 import { useUserInput } from "../hooks/use-user-input.js";
@@ -31,27 +33,23 @@ import type { UIMessage } from "ai";
 export const Agent = () => {
   const { exit } = useApp();
 
-  const { useInitTerminalSize } = useSize.getActions();
+  const { columns } = useSize.getActions().useInitTerminalSize();
 
-  const { columns } = useInitTerminalSize();
+  useStatic.getActions().useInitStdout();
 
-  const { useInitStdout } = useStatic.getActions();
-
-  useInitStdout();
-
-  // Get config from useArgs hook
   const config = useArgs((s) => s.config);
 
-  // Use local chat with our config
   const {
     messages,
     sendMessage,
     isLoading,
     stop,
     addToolApprovalResponse,
+    addToolOutput,
     initError,
     initLoading,
     allPendingApproval,
+    allPendingAskUser,
     setMessages,
   } = useLocalChat({
     model: config.model,
@@ -73,21 +71,72 @@ export const Agent = () => {
     toolCallId?: string;
     toolName?: string;
   } | null>(null);
+  const askUserStartTimeRef = useRef<number>(0);
 
   const isReady = !initLoading;
-
-  // Input state
   const inputActions = useUserInput.getActions();
-
-  // Autocomplete state
   const autocompleteActions = useAutocomplete.getActions();
   const isAutocompleteVisible = useAutocomplete((s) => s.visible);
+  const selectActions = useSelect.getActions();
+  const isSelectVisible = useSelect((s) => s.visible);
 
-  // current pending
+  const { mode, denyMode } = useInputMode((s) => ({ mode: s.mode, denyMode: s.denyMode }));
+  const modeActions = useInputMode.getActions();
+
   const pendingApproval = allPendingApproval[0];
-
-  // current is last pending
   const currentPendingIsLast = allPendingApproval.length === 1;
+  const pendingAskUser = allPendingAskUser[0];
+
+  // Keep mode in sync with UI state
+  useEffect(() => {
+    if (denyMode) {
+      modeActions.setMode("freeform");
+    } else if (isSelectVisible) {
+      modeActions.setMode("select");
+    } else if (pendingApproval) {
+      modeActions.setMode("approval");
+    } else {
+      modeActions.setMode("normal");
+    }
+  }, [denyMode, isSelectVisible, pendingApproval]);
+
+  // Submit answer to a pending ask_user tool call via addToolOutput
+  const submitAskUserAnswer = (answer: string) => {
+    if (!pendingAskUser) return;
+    const durationMs = askUserStartTimeRef.current ? Date.now() - askUserStartTimeRef.current : 0;
+    addToolOutput({
+      tool: "ask_user",
+      toolCallId: pendingAskUser.toolCallId,
+      output: {
+        question: pendingAskUser.question,
+        answer,
+        hasOptions: !!pendingAskUser.options?.length,
+        message: `User responded: ${answer}`,
+        durationMs,
+      },
+    });
+    askUserStartTimeRef.current = 0;
+  };
+
+  // ============================================================================
+  // Effects
+  // ============================================================================
+
+  // Open select list when the current ask_user question changes
+  const prevPendingQuestionRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const key = pendingAskUser?.toolCallId;
+    if (key && key !== prevPendingQuestionRef.current) {
+      prevPendingQuestionRef.current = key;
+      askUserStartTimeRef.current = Date.now();
+      const opts = (pendingAskUser.options ?? []).map((o) => ({ label: o, value: o }));
+      opts.push({ label: "Your answer...", value: "__freeform__" });
+      selectActions.open(opts, pendingAskUser.multiSelect ?? false, true);
+    } else if (!key && prevPendingQuestionRef.current) {
+      prevPendingQuestionRef.current = undefined;
+      selectActions.close();
+    }
+  }, [pendingAskUser]);
 
   useEffect(() => {
     if (isReady && config.initialPrompt && !hasInitRef.current) {
@@ -96,25 +145,39 @@ export const Agent = () => {
     }
   }, [config.initialPrompt, sendMessage]);
 
-  // Command context for the command system
+  useEffect(() => {
+    inputActions.setLoading(initLoading || isLoading);
+  }, [isLoading, initLoading]);
+
+  // ============================================================================
+  // Shared Helpers
+  // ============================================================================
+
   const commandCtx: CommandContext = {
     inputActions,
     getInputState: () => useUserInput.getReadonlyState(),
-    // will trigger update, change to use `getReactiveState`
     getAgent: () => useAgent.getReactiveState().agent as CoreAgent,
     setMessages: setMessages as (messages: UIMessage[]) => void,
   };
 
-  // Handle submit
-  const handleSubmit = async () => {
+  const getAgent = () => toRaw(useAgent.getReactiveState().agent) as CoreAgent | null;
+
+  const acceptAutocomplete = (triggerSubmit: boolean): boolean => {
+    if (!isAutocompleteVisible) return false;
+    const result = autocompleteActions.accept();
+    if (!result) return false;
+    inputActions.setValue(result.value);
+    if (triggerSubmit && result.type === "execute") {
+      setTimeout(() => handleNormalSubmit(), 0);
+    }
+    return true;
+  };
+
+  const handleNormalSubmit = async () => {
     const { text: prompt, attachments } = inputActions.submit();
 
-    // Dispatch slash commands via the command registry
     if (prompt.startsWith("/")) {
-      if (await dispatchCommand(prompt, commandCtx)) {
-        return;
-      }
-      // Unknown slash command
+      if (await dispatchCommand(prompt, commandCtx)) return;
       inputActions.setInputError(`Unknown command: ${prompt.split(" ")[0]}`);
       return;
     }
@@ -130,37 +193,31 @@ export const Agent = () => {
     }
   };
 
-  // Handle keyboard input
+  // ============================================================================
+  // Global Shortcuts (always active)
+  // ============================================================================
+
   useInput((inputChar, inputKey) => {
     inputActions.addEvent(inputChar, inputKey);
 
-    // Exit on Ctrl+C
     if (inputKey.ctrl && inputChar === "c") {
       const agent = useAgent.getReadonlyState().agent;
-      if (agent) {
-        agentManager.destroyAgent(agent.id);
-      }
+      if (agent) agentManager.destroyAgent(agent.id);
       exit();
-      // Force exit after ink cleanup — MCP event loop handles may linger
       setTimeout(() => process.exit(0), 200);
       return;
     }
 
-    // clear on Ctrl+U
     if (inputKey.ctrl && inputChar === "u") {
       inputActions.setValue("");
       return;
     }
 
-    // Ctrl+A: select all
     if (inputKey.ctrl && inputChar === "a") {
-      if (!isLoading && !pendingApproval) {
-        inputActions.setSelectAll(true);
-      }
+      if (!isLoading && !pendingApproval) inputActions.setSelectAll(true);
       return;
     }
 
-    // Ctrl+V: paste image from clipboard
     if (inputKey.ctrl && inputChar === "v") {
       if (!isLoading && !pendingApproval) {
         readImageFromClipboard().then((attachment) => {
@@ -175,49 +232,55 @@ export const Agent = () => {
       return;
     }
 
-    // Escape: abort if running
-    if (inputKey.escape) {
+    // Escape: abort agent or dismiss autocomplete (only outside freeform/select modes)
+    if (inputKey.escape && mode !== "freeform" && mode !== "select") {
       if (isLoading) {
         stop();
         return;
       }
-      // Dismiss autocomplete if visible
       if (isAutocompleteVisible) {
         autocompleteActions.dismiss();
-        return;
       }
     }
+  });
 
-    // Handle deny-reason input mode: user is typing a reason after pressing 'n'
-    if (denyingRef.current) {
-      if (inputKey.escape) {
-        denyingRef.current = null;
-        inputActions.clear();
-        inputActions.setDenyMode(false);
+  // ============================================================================
+  // Mode: Normal Input
+  //   Multi-line editing, cursor movement, history, autocomplete, submit
+  // ============================================================================
+
+  useInput(
+    (inputChar, inputKey) => {
+      if (isLoading) return;
+
+      if (inputKey.tab) {
+        acceptAutocomplete(true);
         return;
       }
+
       if (inputKey.return) {
-        const { text: reason } = inputActions.submit();
-
-        const info = denyingRef.current;
-        denyingRef.current = null;
-        inputActions.setDenyMode(false);
-        const agentLog = toRaw(useAgent.getReactiveState().agent?.getLog()) as AgentLog | null;
-        agentLog?.approval(`user denying ${info.id}: ${reason || "(no reason)"}`);
-        addToolApprovalResponse({
-          id: info.id,
-          approved: false,
-          reason: reason || "User denied this tool execution. Do not assume the action was performed.",
-          isLast: info.isLast,
-          toolCallId: info.toolCallId,
-          toolName: info.toolName,
-        });
+        const currentValue = useUserInput.getReadonlyState().value;
+        if (currentValue.endsWith("\\")) {
+          inputActions.backspace();
+          inputActions.insertNewline();
+          return;
+        }
+        if (acceptAutocomplete(true)) return;
+        handleNormalSubmit();
         return;
       }
+
+      if (inputChar === "\n") {
+        inputActions.insertNewline();
+        return;
+      }
+
       if (inputKey.delete) {
         inputActions.backspace();
+        autocompleteActions.update(useUserInput.getReadonlyState().value);
         return;
       }
+
       if (inputKey.leftArrow) {
         inputActions.moveCursorLeft();
         return;
@@ -226,49 +289,62 @@ export const Agent = () => {
         inputActions.moveCursorRight();
         return;
       }
+
+      if (inputKey.upArrow) {
+        if (isAutocompleteVisible) autocompleteActions.selectPrev();
+        else if (!inputActions.moveCursorUp(columns)) inputActions.historyPrev();
+        return;
+      }
+      if (inputKey.downArrow) {
+        if (isAutocompleteVisible) autocompleteActions.selectNext();
+        else if (!inputActions.moveCursorDown(columns)) inputActions.historyNext();
+        return;
+      }
+
       if (inputChar && !inputKey.ctrl && !inputKey.meta) {
         inputActions.append(inputChar);
+        autocompleteActions.update(useUserInput.getReadonlyState().value);
       }
-      return;
-    }
+    },
+    { isActive: mode === "normal" }
+  );
 
-    // Handle approval responses when there's a pending approval
-    if (pendingApproval) {
+  // ============================================================================
+  // Mode: Tool Approval
+  //   Empty input: y → approve, n → enter deny-reason (freeform) mode
+  //   Non-empty input: slash commands with autocomplete
+  // ============================================================================
+
+  useInput(
+    (inputChar, inputKey) => {
       const currentValue = useUserInput.getReadonlyState().value;
 
-      // y/n only when input is empty — avoids conflict with typing
       if (!currentValue) {
         const char = inputChar?.toLowerCase();
         if (char === "y") {
-          const agentLog = toRaw(useAgent.getReactiveState().agent?.getLog()) as AgentLog | null;
-          agentLog?.approval(`user approve ${pendingApproval.id}`);
-          addToolApprovalResponse({ id: pendingApproval.id, approved: true });
+          const agentLog = toRaw(getAgent()?.getLog()) as AgentLog | null;
+          agentLog?.approval(`user approve ${pendingApproval!.id}`);
+          addToolApprovalResponse({ id: pendingApproval!.id, approved: true });
           return;
         }
         if (char === "n") {
           denyingRef.current = {
-            id: pendingApproval.id,
+            id: pendingApproval!.id,
             isLast: currentPendingIsLast,
-            toolCallId: pendingApproval.toolCallId,
-            toolName: pendingApproval.toolName,
+            toolCallId: pendingApproval!.toolCallId,
+            toolName: pendingApproval!.toolName,
           };
           inputActions.clear();
           inputActions.setLoading(false);
-          inputActions.setDenyMode(true);
+          modeActions.setDenyMode(true, "deny");
           return;
         }
       }
 
-      // Tab: accept autocomplete suggestion
       if (inputKey.tab && isAutocompleteVisible) {
-        const result = autocompleteActions.accept();
-        if (result) {
-          inputActions.setValue(result.value);
-        }
+        acceptAutocomplete(false);
         return;
       }
-
-      // Up/Down: navigate autocomplete
       if (inputKey.upArrow && isAutocompleteVisible) {
         autocompleteActions.selectPrev();
         return;
@@ -278,31 +354,20 @@ export const Agent = () => {
         return;
       }
 
-      // Enter: accept autocomplete or dispatch slash command
       if (inputKey.return) {
-        if (isAutocompleteVisible) {
-          const result = autocompleteActions.accept();
-          if (result) {
-            inputActions.setValue(result.value);
-          }
-          return;
-        }
+        if (acceptAutocomplete(false)) return;
         const { text: input } = inputActions.submit();
         if (input.startsWith("/")) {
           dispatchCommand(input, commandCtx).then((handled) => {
-            if (!handled) {
-              inputActions.setInputError(`Unknown command: ${input.split(" ")[0]}`);
-            }
+            if (!handled) inputActions.setInputError(`Unknown command: ${input.split(" ")[0]}`);
           });
         }
         return;
       }
 
-      // Allow typing during approval
       if (inputKey.delete) {
         inputActions.backspace();
-        const newValue = useUserInput.getReadonlyState().value;
-        autocompleteActions.update(newValue);
+        autocompleteActions.update(useUserInput.getReadonlyState().value);
         return;
       }
       if (inputKey.leftArrow) {
@@ -315,128 +380,129 @@ export const Agent = () => {
       }
       if (inputChar && !inputKey.ctrl && !inputKey.meta) {
         inputActions.append(inputChar);
-        const newValue = useUserInput.getReadonlyState().value;
-        autocompleteActions.update(newValue);
+        autocompleteActions.update(useUserInput.getReadonlyState().value);
       }
-      return;
-    }
+    },
+    { isActive: mode === "approval" }
+  );
 
-    // Don't handle regular input while loading
-    if (isLoading) return;
+  // ============================================================================
+  // Mode: Ask User Select
+  //   Arrow keys navigate, Space toggles (multi-select), Enter submits
+  //   "Your answer..." switches to freeform mode
+  // ============================================================================
 
-    // Tab: accept autocomplete suggestion
-    if (inputKey.tab) {
-      if (isAutocompleteVisible) {
-        const result = autocompleteActions.accept();
-        if (result) {
-          if (result.type === "execute") {
-            inputActions.setValue(result.value);
-            // Trigger submit for immediate commands
-            setTimeout(() => handleSubmit(), 0);
-          } else {
-            inputActions.setValue(result.value);
-          }
-        }
-      }
-      return;
-    }
-
-    // Enter key handling
-    if (inputKey.return) {
-      // Backslash continuation: if input ends with \, replace it with newline
-      const currentValue = useUserInput.getReadonlyState().value;
-      if (currentValue.endsWith("\\")) {
-        inputActions.backspace(); // remove the trailing \
-        inputActions.insertNewline();
+  useInput(
+    (inputChar, inputKey) => {
+      if (inputKey.upArrow) {
+        selectActions.selectPrev();
         return;
       }
-
-      if (isAutocompleteVisible) {
-        const result = autocompleteActions.accept();
-        if (result) {
-          if (result.type === "execute") {
-            inputActions.setValue(result.value);
-            // Trigger submit for immediate commands
-            setTimeout(() => handleSubmit(), 0);
-          } else {
-            inputActions.setValue(result.value);
-          }
+      if (inputKey.downArrow) {
+        selectActions.selectNext();
+        return;
+      }
+      if (inputChar === " ") {
+        selectActions.toggle();
+        return;
+      }
+      if (inputKey.return) {
+        if (!pendingAskUser) return;
+        if (selectActions.isFreeformSelected()) {
+          selectActions.close();
+          inputActions.clear();
+          inputActions.setLoading(false);
+          modeActions.setDenyMode(true, "ask_user");
+        } else {
+          const result = selectActions.getResult();
+          selectActions.close();
+          submitAskUserAnswer(result);
         }
         return;
       }
-      handleSubmit();
-      return;
-    }
-
-    // \n from terminal (iTerm2/Ghostty/WezTerm Shift+Enter) → insert newline
-    if (inputChar === "\n") {
-      inputActions.insertNewline();
-      return;
-    }
-
-    // Backspace: delete character before cursor (handles both text and image placeholders)
-    if (inputKey.delete) {
-      inputActions.backspace();
-      const newValue = useUserInput.getReadonlyState().value;
-      autocompleteActions.update(newValue);
-      return;
-    }
-
-    // Left/Right arrows: cursor movement within text
-    if (inputKey.leftArrow) {
-      inputActions.moveCursorLeft();
-      return;
-    }
-    if (inputKey.rightArrow) {
-      inputActions.moveCursorRight();
-      return;
-    }
-
-    // Arrow Up: multi-line cursor > autocomplete > history
-    if (inputKey.upArrow) {
-      if (isAutocompleteVisible) {
-        autocompleteActions.selectPrev();
-      } else if (inputActions.moveCursorUp(columns)) {
-        // Cursor moved up within multi-line text
-      } else {
-        inputActions.historyPrev();
+      if (inputKey.escape) {
+        selectActions.close();
       }
-      return;
-    }
+    },
+    { isActive: mode === "select" }
+  );
 
-    // Arrow Down: multi-line cursor > autocomplete > history
-    if (inputKey.downArrow) {
-      if (isAutocompleteVisible) {
-        autocompleteActions.selectNext();
-      } else if (inputActions.moveCursorDown(columns)) {
-        // Cursor moved down within multi-line text
-      } else {
-        inputActions.historyNext();
+  // ============================================================================
+  // Mode: Freeform Text
+  //   Simple text input for deny reason or ask_user "Your answer..."
+  //   Escape goes back (to select for ask_user, or cancels deny)
+  // ============================================================================
+
+  useInput(
+    (inputChar, inputKey) => {
+      if (inputKey.escape) {
+        inputActions.clear();
+        modeActions.setDenyMode(false);
+        if (denyingRef.current) {
+          denyingRef.current = null;
+        }
+        if (pendingAskUser) {
+          const opts = (pendingAskUser.options ?? []).map((o) => ({ label: o, value: o }));
+          opts.push({ label: "Your answer...", value: "__freeform__" });
+          selectActions.open(opts, pendingAskUser.multiSelect ?? false, true);
+        }
+        return;
       }
-      return;
-    }
 
-    // Regular character input
-    if (inputChar && !inputKey.ctrl && !inputKey.meta) {
-      inputActions.append(inputChar);
-      const newValue = useUserInput.getReadonlyState().value;
-      autocompleteActions.update(newValue);
-    }
-  });
+      if (inputKey.return) {
+        const { text } = inputActions.submit();
 
-  useEffect(() => {
-    if (initLoading || isLoading) {
-      inputActions.setLoading(true);
-    } else {
-      inputActions.setLoading(false);
-    }
-  }, [isLoading, initLoading]);
+        // Ask_user freeform answer
+        if (pendingAskUser) {
+          if (!text) return;
+          selectActions.close();
+          modeActions.setDenyMode(false);
+          submitAskUserAnswer(text);
+          return;
+        }
+
+        // Tool approval deny reason
+        if (denyingRef.current) {
+          const info = denyingRef.current;
+          denyingRef.current = null;
+          modeActions.setDenyMode(false);
+          const agentLog = toRaw(getAgent()?.getLog()) as AgentLog | null;
+          agentLog?.approval(`user denying ${info.id}: ${text || "(no reason)"}`);
+          addToolApprovalResponse({
+            id: info.id,
+            approved: false,
+            reason: text || "User denied this tool execution. Do not assume the action was performed.",
+            isLast: info.isLast,
+            toolCallId: info.toolCallId,
+            toolName: info.toolName,
+          });
+        }
+        return;
+      }
+
+      if (inputKey.delete) {
+        inputActions.backspace();
+        return;
+      }
+      if (inputKey.leftArrow) {
+        inputActions.moveCursorLeft();
+        return;
+      }
+      if (inputKey.rightArrow) {
+        inputActions.moveCursorRight();
+        return;
+      }
+      if (inputChar && !inputKey.ctrl && !inputKey.meta) {
+        inputActions.append(inputChar);
+      }
+    },
+    { isActive: mode === "freeform" }
+  );
 
   // ============================================================================
   // Render
   // ============================================================================
 
-  // Show init error
   if (initError) {
     return (
       <Box flexDirection="column" padding={1}>
@@ -448,7 +514,6 @@ export const Agent = () => {
     );
   }
 
-  // Show loading while initializing
   if (initLoading) {
     return (
       <Box flexDirection="column" padding={1}>
@@ -459,15 +524,9 @@ export const Agent = () => {
 
   return (
     <FullBox flexDirection="column">
-      {/* Header */}
       <Header />
-
-      {/* Messages */}
       <MessageList messages={messages} />
-
       <Content />
-
-      {/* Input */}
       <Footer />
     </FullBox>
   );

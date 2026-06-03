@@ -145,6 +145,11 @@ function formatGenericInput(input: unknown): string {
   return entries.length > 2 ? `(${formatted}, ...)` : `(${formatted})`;
 }
 
+function formatAskUserInput(input: Record<string, unknown>): string {
+  const question = input.question as string | undefined;
+  return question ?? "";
+}
+
 /** Format tool input for display based on tool name */
 export function formatToolInput(input: unknown, toolName?: string): string {
   if (input === undefined || input === null) return "";
@@ -185,6 +190,9 @@ export function formatToolInput(input: unknown, toolName?: string): string {
         return formatLoadSkillInput(obj);
       case "man_command":
         return formatManCommandInput(obj);
+      case "ask_user": {
+        return formatAskUserInput(obj);
+      }
       case "list_skills":
       case "list_command":
         return "";

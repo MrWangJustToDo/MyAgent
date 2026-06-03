@@ -13,6 +13,7 @@ import { createSearchReplaceTool } from "./search-replace-tool.js";
 import { createTreeTool } from "./tree-tool.js";
 import { createWriteFileTool } from "./write-file-tool.js";
 
+import type { createAskUserTool } from "./ask-user-tool.js";
 import type { createCompactTool } from "./compact-tool.js";
 import type { createListSkillsTool } from "./list-skills-tool.js";
 import type { createLoadSkillTool } from "./load-skill-tool.js";
@@ -46,6 +47,7 @@ export * from "./task-tool.js";
 export * from "./list-skills-tool.js";
 export * from "./load-skill-tool.js";
 export * from "./compact-tool.js";
+export * from "./ask-user-tool.js";
 
 export type Tools = {
   copy_file: ReturnType<typeof createCopyFileTool>;
@@ -69,6 +71,7 @@ export type Tools = {
   list_skills?: ReturnType<typeof createListSkillsTool>;
   load_skill?: ReturnType<typeof createLoadSkillTool>;
   compact?: ReturnType<typeof createCompactTool>;
+  ask_user?: ReturnType<typeof createAskUserTool>;
 };
 
 export const createTools = async ({

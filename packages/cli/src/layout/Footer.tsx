@@ -5,12 +5,14 @@ import { ErrorDetail } from "../components/ErrorDetail.js";
 import { FullBox } from "../components/FullBox.js";
 import { InputError } from "../components/InputError.js";
 import { LLMUsage } from "../components/LLMUsage.js";
+import { SelectList } from "../components/SelectList.js";
 import { Spinner } from "../components/Spinner.js";
 import { TodoStats } from "../components/TodoStats.js";
 import { UserInput } from "../components/UserInput.js";
 import { useAgent } from "../hooks/use-agent.js";
+import { useInputMode } from "../hooks/use-input-mode.js";
 import { useLocalChatStatus } from "../hooks/use-local-chat-status.js";
-import { useUserInput } from "../hooks/use-user-input.js";
+import { useSelect } from "../hooks/use-select.js";
 
 import type { AgentStatus } from "@my-agent/core";
 
@@ -25,20 +27,35 @@ export const Footer = () => {
 
   let status = _status as AgentStatus;
 
-  const chatStatus = useLocalChatStatus((s) => s.state);
+  const { chatStatus, hasPendingAskUser } = useLocalChatStatus((s) => ({
+    chatStatus: s.state,
+    hasPendingAskUser: s.pendingAskUserCount > 0,
+  }));
 
   if (chatStatus === "error") {
     status = "error";
   }
 
-  const denyMode = useUserInput((s) => s.denyMode);
+  const { mode, denyMode, freeformContext } = useInputMode((s) => ({
+    mode: s.mode,
+    denyMode: s.denyMode,
+    freeformContext: s.freeformContext,
+  }));
+
+  const isMultiSelect = useSelect((s) => s.multiSelect);
+
+  const isPendingApproval = mode === "approval";
+  const showFreeformInput = denyMode;
+  const showSelectList = mode === "select";
+  const freeformLabel = freeformContext === "deny" ? "Deny reason > " : "Answer > ";
   const isInputEnabled =
-    denyMode ||
-    status === "idle" ||
-    status === "completed" ||
-    status === "error" ||
-    status === "aborted" ||
-    status === "waiting";
+    mode === "normal"
+      ? status === "idle" ||
+        status === "completed" ||
+        status === "error" ||
+        status === "aborted" ||
+        status === "waiting"
+      : true;
 
   return (
     <FullBox flexDirection="column" flexGrow={1} flexShrink={0} paddingY={1}>
@@ -56,7 +73,12 @@ export const Footer = () => {
       >
         {/* Status indicator */}
         <Box flexShrink={0}>
-          {status === "running" && <Spinner text="Running..." />}
+          {status === "running" && !hasPendingAskUser && <Spinner text="Running..." />}
+          {status === "running" && hasPendingAskUser && (
+            <Text color="cyan" bold>
+              Waiting for your response
+            </Text>
+          )}
           {status === "compacting" && <Spinner text="Compacting..." />}
           {status === "completed" && <Text color="green">Completed</Text>}
           {status === "aborted" && (
@@ -87,22 +109,29 @@ export const Footer = () => {
       {/* Input error (e.g. "No image in clipboard") */}
       {isInputEnabled && <InputError />}
 
-      {/* Autocomplete suggestions */}
-      {isInputEnabled && <AutocompleteList />}
+      {/* Select list (ask_user options) */}
+      {showSelectList && <SelectList />}
+
+      {/* Autocomplete suggestions (idle typing) */}
+      {!showSelectList && isInputEnabled && <AutocompleteList />}
 
       {/* Input */}
       <Box opaque>
-        {denyMode ? (
-          <Text color="red" bold>
-            {"Deny reason > "}{" "}
+        {showFreeformInput ? (
+          <Text color="yellow" bold>
+            {freeformLabel}{" "}
           </Text>
         ) : (
           <Text color={isInputEnabled ? "green" : "gray"} bold>
             {">"}{" "}
           </Text>
         )}
-        {isInputEnabled ? (
-          <UserInput prefixWidth={denyMode ? 15 : 2} />
+        {isInputEnabled && !showSelectList ? (
+          <UserInput prefixWidth={showFreeformInput ? freeformLabel.length + 1 : 2} />
+        ) : isInputEnabled && showSelectList ? (
+          <Text color="gray" dimColor>
+            Use arrows to select
+          </Text>
         ) : (
           <Text color="gray" dimColor>
             Processing...
@@ -125,14 +154,24 @@ export const Footer = () => {
           <Text color="gray" dimColor wrap="truncate">
             Exit: Ctrl + C
           </Text>
-          {status === "running" && (
+          {status === "running" && mode === "normal" && !hasPendingAskUser && (
             <Text color="yellow" dimColor wrap="truncate">
               Abort: Esc
             </Text>
           )}
-          {denyMode && (
+          {isPendingApproval && !showFreeformInput && (
+            <Text color="yellow" dimColor wrap="truncate">
+              y: approve | n: deny
+            </Text>
+          )}
+          {showFreeformInput && (
             <Text color="yellow" dimColor wrap="truncate">
               Submit: Enter | Cancel: Esc
+            </Text>
+          )}
+          {showSelectList && (
+            <Text color="cyan" dimColor wrap="truncate">
+              {isMultiSelect ? "Up/Down | Space: toggle | Enter: submit" : "Up/Down | Enter: select"}
             </Text>
           )}
         </Box>

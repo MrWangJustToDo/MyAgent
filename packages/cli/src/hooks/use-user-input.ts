@@ -174,8 +174,6 @@ export interface UserInputState {
   inputFeedback: { text: string; type: "success" | "info" | "error" } | null;
   /** Next image index to use for placeholder */
   nextImageIndex: number;
-  /** Whether user is typing a deny reason for tool approval */
-  denyMode: boolean;
 
   // debug only
   event: any[];
@@ -199,7 +197,6 @@ const initialState: UserInputState = {
   inputError: null,
   inputFeedback: null,
   nextImageIndex: 0,
-  denyMode: false,
 };
 
 // ============================================================================
@@ -556,10 +553,6 @@ export const useUserInput = createState(() => ({ ...initialState }), {
 
     setLoading: (l?: boolean) => {
       state.loading = !!l;
-    },
-
-    setDenyMode: (mode: boolean) => {
-      state.denyMode = mode;
     },
 
     /**

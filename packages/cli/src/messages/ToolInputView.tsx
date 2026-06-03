@@ -95,6 +95,26 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
     );
   }
 
+  if (toolName === "ask_user") {
+    if (part.state === "input-streaming") return null;
+
+    const content = part.input as { question?: string; options?: string[] };
+
+    if (!content?.question) return null;
+
+    const { staticMessage } = useStaticContext();
+
+    if (staticMessage) return null;
+
+    return (
+      <Box flexDirection="column" paddingLeft={2}>
+        <Text color="cyan" bold>
+          {content.question}
+        </Text>
+      </Box>
+    );
+  }
+
   if (toolName === "run_command") {
     if (part.state === "input-streaming") return null;
 
