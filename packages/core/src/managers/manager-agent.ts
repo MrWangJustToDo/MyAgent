@@ -254,6 +254,10 @@ export class AgentManager {
 
     const sandbox = await sandboxManager.getSandbox(rootPath);
 
+    // In sandbox mode, the real rootPath is mounted at virtual "/".
+    // All filesystem operations via sandbox must use "/" as root.
+    const fsRootPath = sandbox.provider === "local-sandbox" ? "/" : rootPath;
+
     const context = new AgentContext({ setUp: setUp as ManagedAgentConfig<AgentContext>["setUp"] });
 
     const tools = await createTools({ sandbox, context });
@@ -281,7 +285,7 @@ export class AgentManager {
     if (!parentId) {
       const docResult = await loadAgentDoc({
         filesystem: sandbox.filesystem,
-        rootPath,
+        rootPath: fsRootPath,
         filenames: config.agentDocFilenames,
         loadOverride: config.agentDocLoadOverride !== false, // Default: true
         logger: log,
@@ -312,7 +316,7 @@ export class AgentManager {
     if (!parentId) {
       const skillRegistry = new SkillRegistry({
         sandbox,
-        rootPath,
+        rootPath: fsRootPath,
         logger: log,
       });
 
@@ -361,7 +365,7 @@ export class AgentManager {
       }
 
       // Memory system: persistent cross-session knowledge (root agents only)
-      const memoryManager = new MemoryManager(sandbox, { rootPath }, log);
+      const memoryManager = new MemoryManager(sandbox, { rootPath: fsRootPath }, log);
       await memoryManager.initialize();
       agent.setMemoryManager(memoryManager);
       agent.setMemoryContent(memoryManager.getIndexContent());

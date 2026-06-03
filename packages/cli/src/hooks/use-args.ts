@@ -249,12 +249,14 @@ export const useArgs = createState(
         const isSandboxEnv = process.env.SANDBOX_ENV !== "native";
 
         // CLI args take priority over env vars, which take priority over defaults
+        // rootPath is always the real disk path (used for sandbox mounting, memory, etc.)
+        // The sandbox maps it to virtual "/" internally.
         state.config.model = getFlagString(parsed, envModel || DEFAULT_MODEL, "model", "m");
         state.config.url = getFlagString(parsed, envUrl || DEFAULT_OLLAMA_URL, "url", "u");
         state.config.rootPath = getFlagString(parsed, process.cwd(), "path", "p");
         state.config.systemPrompt = getFlagString(
           parsed,
-          buildDefaultSystemPrompt(!isSandboxEnv ? state.config.rootPath : "/"),
+          buildDefaultSystemPrompt(isSandboxEnv ? "/" : state.config.rootPath),
           "system",
           "s"
         );
