@@ -2,7 +2,7 @@
  * Environment abstraction types
  *
  * This module defines the unified interface for different execution environments.
- * Environments can be local (just-bash), remote (compute gateway), or custom implementations.
+ * Environments can be local (OS-sandboxed bash), remote (compute gateway), or custom implementations.
  */
 
 // ============================================================================
@@ -195,8 +195,14 @@ export interface SandboxFileSystem {
 export interface Sandbox {
   /** Unique identifier for this sandbox instance */
   readonly sandboxId: string;
-  /** Provider name (e.g., 'local', 'remote', 'just-bash') */
+  /** Provider name (e.g., 'local-os', 'local-native', 'remote') */
   readonly provider: string;
+  /**
+   * Workspace root for agent file operations and default command cwd.
+   * - Local: same as project root on disk
+   * - Remote: path inside the remote VM (e.g. `/` or `/workspace`), not the local cwd
+   */
+  readonly workspacePath: string;
   /** Filesystem operations */
   readonly filesystem: SandboxFileSystem;
   /**
@@ -219,8 +225,16 @@ export interface Sandbox {
  * Configuration for creating a sandbox
  */
 export interface SandboxConfig {
-  /** Root path for the sandbox (maps to filesystem root) */
+  /**
+   * Local project root (used as SandboxManager cache key and for path rewriting on remote).
+   * For remote sandboxes this is the machine-local cwd, not the path inside the VM.
+   */
   rootPath: string;
+  /**
+   * Workspace root inside the sandbox (remote only; defaults to `/` or `REMOTE_WORKSPACE_PATH`).
+   * Ignored for local environments — workspacePath is derived from rootPath.
+   */
+  workspacePath?: string;
   /** Current working directory within the sandbox */
   cwd?: string;
   /** Environment variables */
@@ -253,9 +267,9 @@ export interface Environment {
 
 /**
  * Environment type identifier for easy switching
- * - "local": Uses just-bash for isolated sandbox execution (default)
- * - "native": Uses real bash and Node.js fs for direct system access
- * - "remote": Uses remote compute gateway for cloud execution
+ * - "local": Real bash + OS sandbox via sandbox-runtime (default)
+ * - "native": Real bash without OS sandbox
+ * - "remote": Remote compute gateway for cloud execution
  */
 export type EnvironmentType = "local" | "native" | "remote" | Environment;
 

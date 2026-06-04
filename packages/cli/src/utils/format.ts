@@ -110,19 +110,9 @@ function formatMoveOrCopyInput(input: Record<string, unknown>): string {
   return `${source} → ${target}`;
 }
 
-function formatCompactInput(input: Record<string, unknown>): string {
-  const focus = input.focus as string | undefined;
-  return focus ? `focus=${focus}` : "";
-}
-
 function formatLoadSkillInput(input: Record<string, unknown>): string {
   const name = input.name as string | undefined;
   return name ?? "";
-}
-
-function formatManCommandInput(input: Record<string, unknown>): string {
-  const command = input.command as string | undefined;
-  return command ?? "";
 }
 
 function formatGenericInput(input: unknown): string {
@@ -184,17 +174,12 @@ export function formatToolInput(input: unknown, toolName?: string): string {
       case "move_file":
       case "copy_file":
         return formatMoveOrCopyInput(obj);
-      case "compact":
-        return formatCompactInput(obj);
       case "load_skill":
         return formatLoadSkillInput(obj);
-      case "man_command":
-        return formatManCommandInput(obj);
       case "ask_user": {
         return formatAskUserInput(obj);
       }
       case "list_skills":
-      case "list_command":
         return "";
       default:
         return formatGenericInput(input);

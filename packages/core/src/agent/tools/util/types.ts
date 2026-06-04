@@ -59,25 +59,34 @@ export const editFileOutputSchema = z.object({
 export const globOutputSchema = z.object({
   pattern: z.string().describe("The glob pattern that was searched."),
   path: z.string().describe("The directory that was searched."),
+  type: z.string().describe("The file type filter used: 'file', 'directory', or 'all'."),
   files: z.array(z.string()).describe("Array of matching file paths."),
   count: z.number().describe("Number of files returned in this page."),
   offset: z.number().describe("The offset used for this query (0-indexed)."),
   hasMore: z.boolean().describe("Whether there are more results available."),
   nextOffset: z.number().nullable().describe("The offset to use for the next page, or null if no more results."),
+  contentTruncated: z.boolean().describe("Whether some results were truncated."),
   message: z.string().describe("Human-readable summary of the operation."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
+  cachedOutputPath: z.string().nullable().optional().describe("Path to cached full output. Use read_file to read it."),
 });
 
 export const grepOutputSchema = z.object({
   pattern: z.string().describe("The regex pattern that was searched."),
   path: z.string().describe("The directory that was searched."),
   include: z.string().describe("The file filter pattern used."),
+  outputMode: z.string().describe('Output mode used: "content", "files_with_matches", or "count".'),
+  context: z.number().nullable().describe("Number of context lines shown around each match (null = not used)."),
   matches: z
     .array(
       z.object({
         file: z.string().describe("File path containing the match."),
-        lineNumber: z.number().describe("Line number of the match (1-indexed)."),
-        content: z.string().describe("Content of the matching line."),
+        lineNumber: z
+          .number()
+          .int()
+          .nonnegative()
+          .describe("Line number of the match (1-indexed). 0 when not applicable (e.g. files_with_matches)."),
+        content: z.string().describe("Content of the matching line (empty in files_with_matches mode)."),
       })
     )
     .describe("Array of matches found."),

@@ -1100,6 +1100,7 @@
         String: true,
         Number: true,
         Boolean: true,
+        BigInt: true,
         Date: true,
         Null: true,
         Undefined: true,
@@ -1199,6 +1200,15 @@
           value !== "WeakMap" &&
           value !== "WeakSet"
         );
+      };
+      var readPromiseState = function (promise) {
+        var _a, _b, _c;
+        var status = (_a = promise.status) !== null && _a !== void 0 ? _a : "pending";
+        return {
+          status: status,
+          value: (_b = promise.value) !== null && _b !== void 0 ? _b : promise._value,
+          reason: (_c = promise.reason) !== null && _c !== void 0 ? _c : promise._reason,
+        };
       };
       // serialized any obj to devtool protocol obj
       var getTargetNode = function (value, type, deep) {
@@ -1344,6 +1354,7 @@
         }
         try {
           var type = getType(value);
+          var promise = type === "Promise" ? value : null;
           var expandable = isObject(type);
           if (type === "Promise" && (value.status === "fulfilled" || value.status === "rejected")) {
             expandable = true;
@@ -1375,6 +1386,47 @@
                 _t: wrapperType,
                 v: value.message,
                 e: expandable,
+              };
+            }
+            if (type === "BigInt") {
+              return {
+                $$s: nodeValueSymbol,
+                i: currentId,
+                t: type,
+                _t: wrapperType,
+                v: "".concat(value.toString(), "n"),
+                e: false,
+              };
+            }
+            if (type === "Date") {
+              return {
+                $$s: nodeValueSymbol,
+                i: currentId,
+                t: type,
+                _t: wrapperType,
+                v: value.toISOString(),
+                e: false,
+              };
+            }
+            if (type === "WeakMap" || type === "WeakSet") {
+              return {
+                $$s: nodeValueSymbol,
+                i: currentId,
+                t: type,
+                _t: wrapperType,
+                v: "".concat(type, " { [entries not enumerable] }"),
+                e: false,
+              };
+            }
+            if (type === "Promise") {
+              var status_1 = promise ? readPromiseState(promise).status : "pending";
+              return {
+                $$s: nodeValueSymbol,
+                i: currentId,
+                t: type,
+                _t: wrapperType,
+                v: "Promise { <".concat(status_1, "> }"),
+                e: false,
               };
             }
             if (typeof value === "object" && value !== null) {
@@ -1454,6 +1506,8 @@
             return v;
           case "Number":
             return Number(v);
+          case "BigInt":
+            return BigInt(String(v).replace(/n$/, "") || "0");
           case "Boolean":
             return v === "true" || v === true;
           case "Date":

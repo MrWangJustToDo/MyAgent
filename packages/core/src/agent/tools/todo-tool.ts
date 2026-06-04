@@ -2,8 +2,8 @@ import { tool } from "ai";
 
 import { todoToolInputSchema } from "../todo-manager/types.js";
 
-import { withDuration } from "./helpers.js";
-import { todoOutputSchema } from "./types.js";
+import { withDuration } from "./util/helpers.js";
+import { todoOutputSchema } from "./util/types.js";
 
 import type { TodoManager } from "../todo-manager";
 

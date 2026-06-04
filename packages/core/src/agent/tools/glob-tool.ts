@@ -1,30 +1,131 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { OUTPUT_LIMITS, withDuration } from "./helpers.js";
-import { globOutputSchema } from "./types.js";
+import { OUTPUT_LIMITS, withDuration } from "./util/helpers.js";
+import { DEFAULT_EXCLUDE_DIRS, SEARCH_COMMAND_TIMEOUT } from "./util/search-command.js";
+import { maybeCacheOutput, CACHE_THRESHOLD } from "./util/tool-output-cache.js";
+import { globOutputSchema } from "./util/types.js";
 
 import type { Sandbox } from "../../environment";
 
 /** Default number of files to return per page */
 const DEFAULT_LIMIT = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
 
-/**
- * Creates a glob tool using Vercel AI SDK.
- *
- * This tool finds files matching a glob pattern using the find command.
- * Supports pagination with offset/limit parameters.
- */
+function buildFdCommand(
+  binary: "fd" | "fdfind",
+  pattern: string,
+  searchPath: string,
+  options: {
+    type: string;
+    exclude: string | undefined;
+    fetchCount: number;
+  }
+): string {
+  const args: string[] = ["--color=never"];
+
+  if (options.type === "directory") {
+    args.push("--type", "directory");
+  } else if (options.type === "file") {
+    args.push("--type", "file");
+  }
+
+  args.push("--glob", `"${pattern}"`);
+
+  for (const dir of DEFAULT_EXCLUDE_DIRS) {
+    args.push("--exclude", `"${dir}"`);
+  }
+
+  if (options.exclude) {
+    args.push("--exclude", `"${options.exclude}"`);
+  }
+
+  return `${binary} ${args.join(" ")} "${searchPath}" 2>/dev/null | head -n ${options.fetchCount}`;
+}
+
+function buildFindCommand(
+  pattern: string,
+  searchPath: string,
+  options: {
+    type: string;
+    exclude: string | undefined;
+    fetchCount: number;
+  }
+): string {
+  let typeFlag: string;
+  if (options.type === "directory") {
+    typeFlag = "-type d";
+  } else if (options.type === "file") {
+    typeFlag = "-type f";
+  } else {
+    typeFlag = "";
+  }
+
+  const namePattern = pattern.includes("**") ? pattern.replace(/\*\*\//g, "") : pattern;
+  const hasPathSeparator = pattern.includes("/");
+
+  let command: string;
+  if (hasPathSeparator) {
+    const findPath = pattern.replace(/\*\*/g, "*");
+    command = `find ${searchPath} ${typeFlag} -path "${findPath}" 2>/dev/null`;
+  } else {
+    command = `find ${searchPath} ${typeFlag} -name "${namePattern}" 2>/dev/null`;
+  }
+
+  for (const dir of DEFAULT_EXCLUDE_DIRS) {
+    command += ` -not -path "*/${dir}/*" -not -path "*/${dir}"`;
+  }
+
+  if (options.exclude) {
+    command += ` -not -path "*/${options.exclude}/*" -not -path "*/${options.exclude}"`;
+  }
+
+  return `${command} | head -n ${options.fetchCount} || true`;
+}
+
+async function runGlobSearch(
+  sandbox: Sandbox,
+  pattern: string,
+  searchPath: string,
+  options: {
+    type: string;
+    exclude: string | undefined;
+    fetchCount: number;
+  }
+): Promise<string> {
+  const timeout = SEARCH_COMMAND_TIMEOUT;
+  const fdCommand = buildFdCommand("fd", pattern, searchPath, options);
+  const fdResult = await sandbox.runCommand(fdCommand, { timeout });
+  if (fdResult.exitCode !== 127) {
+    return fdResult.stdout;
+  }
+
+  const fdfindCommand = buildFdCommand("fdfind", pattern, searchPath, options);
+  const fdfindResult = await sandbox.runCommand(fdfindCommand, { timeout });
+  if (fdfindResult.exitCode !== 127) {
+    return fdfindResult.stdout;
+  }
+
+  const findResult = await sandbox.runCommand(buildFindCommand(pattern, searchPath, options), { timeout });
+  return findResult.stdout;
+}
+
 export const createGlobTool = ({ sandbox }: { sandbox: Sandbox }) => {
   return tool({
     description:
-      "Finds files matching a glob pattern. Supports patterns like '**/*.js', 'src/**/*.ts', '*.json', etc. Uses the `find` command internally. Supports pagination with offset/limit.",
+      "Finds files matching a glob pattern. Supports patterns like '**/*.js', 'src/**/*.ts', '*.json', etc. " +
+      "Uses `fd` when available (respects .gitignore), falls back to `find`. " +
+      "Supports pagination with offset/limit, type filtering (file/directory), " +
+      "and automatic exclusion of common non-source directories (node_modules, .git, etc.).",
     inputSchema: z.object({
       pattern: z.string().describe("The glob pattern to match files against (e.g., '**/*.js', 'src/**/*.ts')."),
       path: z
         .string()
         .optional()
         .describe("The directory to search in, relative to the project directory. Defaults to current directory."),
+      type: z
+        .enum(["file", "directory", "all"])
+        .optional()
+        .describe("Type of entries to find: 'file' (default), 'directory', or 'all' for both."),
       offset: z
         .number()
         .int()
@@ -38,61 +139,88 @@ export const createGlobTool = ({ sandbox }: { sandbox: Sandbox }) => {
         .max(DEFAULT_LIMIT)
         .optional()
         .describe(`Maximum number of files to return. Defaults to ${DEFAULT_LIMIT}.`),
+      exclude: z
+        .string()
+        .optional()
+        .describe("Additional directory or file pattern to exclude (e.g., 'vendor', '*.log')."),
     }),
     outputSchema: globOutputSchema,
-    execute: async ({ pattern, path, offset, limit }) => {
+    execute: async ({ pattern, path, type, offset, limit, exclude }, { toolCallId }) => {
       return withDuration(async () => {
         const searchPath = path ?? ".";
         const skip = offset ?? 0;
         const take = limit ?? DEFAULT_LIMIT;
-
-        // Convert glob pattern to find command
-        // We fetch more than needed to know if there are more results
+        const fileType = type ?? "file";
         const fetchCount = skip + take + 1;
-        let findCommand: string;
 
-        if (pattern.includes("**")) {
-          // Recursive pattern like **/*.js
-          const namePattern = pattern.replace(/\*\*\//g, "");
-          findCommand = `find ${searchPath} -type f -name "${namePattern}" 2>/dev/null | head -${fetchCount}`;
-        } else if (pattern.includes("*")) {
-          // Simple wildcard pattern like *.js
-          findCommand = `find ${searchPath} -type f -name "${pattern}" 2>/dev/null | head -${fetchCount}`;
-        } else {
-          // Exact name match
-          findCommand = `find ${searchPath} -type f -name "${pattern}" 2>/dev/null | head -${fetchCount}`;
-        }
+        const searchOptions = {
+          type: fileType,
+          exclude,
+          fetchCount,
+        };
 
-        const result = await sandbox.runCommand(findCommand);
+        const rawOutput = await runGlobSearch(sandbox, pattern, searchPath, searchOptions);
 
-        const allFiles = result.stdout
+        const allFiles = rawOutput
           .split("\n")
           .map((line) => line.trim())
           .filter((line) => line.length > 0);
 
-        // Apply pagination
+        if (allFiles.length === 0) {
+          return {
+            pattern,
+            path: searchPath,
+            type: fileType,
+            files: [] as string[],
+            count: 0,
+            offset: skip,
+            hasMore: false,
+            nextOffset: null,
+            contentTruncated: false,
+            message: `No files found matching pattern: ${pattern}`,
+            cachedOutputPath: null,
+          };
+        }
+
         const paginatedFiles = allFiles.slice(skip, skip + take);
         const hasMore = allFiles.length > skip + take;
 
-        // Build message with pagination info
+        let cachedOutputPath: string | null = null;
+        let contentTruncated = false;
+        const fullOutputText = paginatedFiles.join("\n");
+        if (fullOutputText.length > CACHE_THRESHOLD) {
+          const cached = await maybeCacheOutput(sandbox, fullOutputText, `${toolCallId}-glob`);
+          cachedOutputPath = cached.cachedOutputPath;
+          if (cachedOutputPath) {
+            contentTruncated = true;
+          }
+        }
+
         let message = `Found ${paginatedFiles.length} files matching pattern: ${pattern}`;
         if (skip > 0) {
           message += ` (offset: ${skip})`;
         }
         if (hasMore) {
-          const nextOffset = skip + take;
-          message += `. Use offset=${nextOffset} to see more.`;
+          message += `. Use offset=${skip + take} to see more.`;
+        }
+        if (cachedOutputPath) {
+          message += ` (full output cached to ${cachedOutputPath})`;
+        } else if (contentTruncated) {
+          message += " (some results truncated)";
         }
 
         return {
           pattern,
           path: searchPath,
+          type: fileType,
           files: paginatedFiles,
           count: paginatedFiles.length,
           offset: skip,
           hasMore,
           nextOffset: hasMore ? skip + take : null,
+          contentTruncated,
           message,
+          cachedOutputPath,
         };
       });
     },

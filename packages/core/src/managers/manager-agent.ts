@@ -15,7 +15,6 @@ import { SkillRegistry } from "../agent/skills/skill-registry.js";
 import { TodoManager } from "../agent/todo-manager";
 import { createTools, createWebfetchTool, createWebsearchTool } from "../agent/tools";
 import { createAskUserTool } from "../agent/tools/ask-user-tool.js";
-import { createCompactTool } from "../agent/tools/compact-tool.js";
 import { createListSkillsTool } from "../agent/tools/list-skills-tool.js";
 import { createLoadSkillTool } from "../agent/tools/load-skill-tool.js";
 import { createTaskTool } from "../agent/tools/task-tool.js";
@@ -254,9 +253,8 @@ export class AgentManager {
 
     const sandbox = await sandboxManager.getSandbox(rootPath);
 
-    // In sandbox mode, the real rootPath is mounted at virtual "/".
-    // All filesystem operations via sandbox must use "/" as root.
-    const fsRootPath = sandbox.provider === "local-sandbox" ? "/" : rootPath;
+    // workspacePath is the root for agent file ops (local disk path or remote VM path).
+    const fsRootPath = sandbox.workspacePath;
 
     const context = new AgentContext({ setUp: setUp as ManagedAgentConfig<AgentContext>["setUp"] });
 
@@ -336,22 +334,9 @@ export class AgentManager {
       const taskTool = createTaskTool({ parentAgentId: agent.id });
       agent.addTools({ task: taskTool });
 
-      // Set up compaction config and tool
+      // Set up compaction config (auto-compact runs in prepareStep; manual: CLI /compact)
       const compactionConfig = createCompactionConfig(compaction);
       agent.setCompactionConfig(compactionConfig);
-
-      const compactTool = createCompactTool({
-        getMessages: () => context.getMessagesForLLM(),
-        context,
-        sandbox,
-        agent,
-        config: compactionConfig,
-        todoManager,
-        onCompact: () => {
-          log.info("agent", "Compaction completed via compact tool");
-        },
-      });
-      agent.addTools({ compact: compactTool });
 
       // MCP Integration: connect to configured MCP servers and register their tools (root agents only)
       const mcpManager = new McpManager();

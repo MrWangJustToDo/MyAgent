@@ -118,9 +118,9 @@ pnpm dev:mcp-server        # MCP server
 | Category | Tools |
 |----------|-------|
 | **File** | `read_file`, `write_file`, `edit_file`, `search_replace`, `copy_file`, `move_file`, `delete_file`, `glob`, `grep`, `tree`, `list_file` |
-| **System** | `run_command`, `list_command`, `man_command` |
+| **System** | `run_command` |
 | **Web** | `websearch` (DuckDuckGo), `webfetch` (page fetch) |
-| **Agent** | `task` (subagents), `ask_user` (questions with multi-select), `todo` (task lists), `compact` (compress context), `list_skills`, `load_skill` |
+| **Agent** | `task` (subagents), `ask_user` (questions with multi-select), `todo` (task lists), `list_skills`, `load_skill` |
 
 ---
 

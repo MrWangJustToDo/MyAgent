@@ -1,9 +1,8 @@
-import type { Sandbox } from "../../environment";
+import type { Sandbox } from "../../../environment";
 
 /**
  * Get file content and a modification identifier.
- * For just-bash, we use the content hash as the modification identifier
- * since just-bash doesn't track file modification times.
+ * Uses a content hash as the modification identifier when mtime is unavailable.
  */
 export async function getFile(
   sandbox: Sandbox,

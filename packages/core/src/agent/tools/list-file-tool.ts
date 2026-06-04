@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { OUTPUT_LIMITS, withDuration } from "./helpers.js";
-import { listFileOutputSchema } from "./types.js";
+import { OUTPUT_LIMITS, withDuration } from "./util/helpers.js";
+import { listFileOutputSchema } from "./util/types.js";
 
 import type { Sandbox } from "../../environment";
 

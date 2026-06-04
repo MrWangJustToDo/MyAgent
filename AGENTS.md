@@ -198,7 +198,7 @@ Use section separators in large files:
 - **shiki** - Syntax highlighting
 - **stream-markdown-parser** - Markdown parsing and streaming
 - **@git-diff-view** - Git diff visualization
-- **computesdk** / **just-bash** - Remote compute and bash execution
+- **computesdk** - Remote compute execution
 
 ### Extension
 - **WXT** - Browser extension framework
@@ -380,15 +380,16 @@ Skills are loaded from `.opencode/skills/` by default:
 
 ## Context Compaction System
 
-The project implements a **three-layer context compaction system** for infinite agent sessions. This prevents context window overflow by strategically compressing conversation history.
+The project implements a **two-layer context compaction system** for infinite agent sessions. This prevents context window overflow by strategically compressing conversation history.
 
-### Three-Layer Architecture
+### Two-Layer Architecture
 
 | Layer | Name | Trigger | Action |
 |-------|------|---------|--------|
 | Layer 1 | `micro_compact` | Every LLM call | Replace old tool results with placeholders |
 | Layer 2 | `auto_compact` | Token threshold exceeded | LLM summarization |
-| Layer 3 | `compact` tool | Manual agent trigger | Same as auto_compact |
+
+**Manual compaction:** CLI `/compact [focus]` (same engine as auto_compact; not an agent tool).
 
 ### Layer 1: Micro Compaction
 
@@ -441,20 +442,6 @@ if (this.shouldAutoCompact(finalMessages)) {
 ```
 
 **Note:** Compaction includes incomplete todos in the summary, so the agent can restore them after compaction. No longer blocks on incomplete todos.
-
-### Layer 3: Compact Tool
-
-Manual trigger via the `compact` tool:
-
-```typescript
-// Agent can call this tool when context is getting large
-{
-  tool: "compact",
-  input: {
-    focus: "preserve the API design decisions"  // Optional
-  }
-}
-```
 
 ### Todo Preservation in Compaction
 
@@ -525,8 +512,6 @@ packages/core/src/agent/
 │   ├── micro-compact.ts    # microCompact() - Layer 1
 │   ├── auto-compact.ts     # autoCompact(), shouldAutoCompact(), findCutPoint() - Layer 2
 │   └── index.ts            # Exports
-├── tools/
-│   └── compact-tool.ts     # compact tool - Layer 3
 ├── loop/
 │   └── base.ts             # createPrepareStep() integration
 ```
@@ -541,7 +526,7 @@ packages/core/src/agent/
    - Runs `autoCompact()` (Layer 2) when token threshold exceeded
    - Updates context messages via `setCompactMessages()`
 2. **shouldAutoCompact()** - Check if token threshold exceeded (uses actual context.usage.inputTokens when available)
-3. **compact tool** - Manual trigger by agent (Layer 3)
+3. **CLI `/compact`** - Optional manual trigger (packages/cli/src/commands/compact.ts)
 
 ## Sandbox Environment Configuration
 
@@ -551,9 +536,9 @@ The sandbox environment can be configured via the `SANDBOX_ENV` environment vari
 
 | Value | Description |
 |-------|-------------|
-| `local` | (default) Uses just-bash for isolated sandbox execution |
-| `native` | Direct system access via real bash and Node.js fs |
-| `remote` | Cloud execution via computesdk |
+| `local` | (default) Real bash + OS sandbox via `@anthropic-ai/sandbox-runtime` |
+| `native` | Real bash and Node.js fs, no OS sandbox |
+| `remote` | Cloud execution via computesdk (requires `SANDBOX_URL`, `SANDBOX_ID`) |
 
 ### Configuration
 
@@ -561,7 +546,11 @@ Add to your `.env` file:
 
 ```bash
 # Sandbox environment type
-SANDBOX_ENV=local    # or 'native' or 'remote'
+SANDBOX_ENV=local    # or 'native', 'remote'
+SANDBOX_URL=https://sandbox-xxx.sandbox.computesdk.com  # remote only
+SANDBOX_ID=sandbox-xxx
+SANDBOX_TOKEN=...                                      # remote only (optional)
+REMOTE_WORKSPACE_PATH=/                                # path inside remote VM (default: /)
 ```
 
 ### Programmatic Configuration
@@ -638,7 +627,7 @@ packages/
 │   │   ├── subagent/       # Subagent for delegated tasks (read-only, context-isolated)
 │   │   ├── skills/         # Skill loading system (two-layer injection)
 │   │   ├── compaction/     # Context compaction system (three-layer compression)
-│   │   ├── tools/          # AI tools (read, write, grep, glob, bash, task, skills, compact, etc.)
+│   │   ├── tools/          # AI tools (read, write, grep, glob, bash, task, skills, etc.)
 │   │   ├── agentContext/   # AgentContext - conversation state management
 │   │   ├── agentLog/       # AgentLog - structured logging system
 │   │   ├── mcp/            # MCP (Model Context Protocol) integration

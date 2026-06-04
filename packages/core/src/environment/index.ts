@@ -2,8 +2,8 @@
  * Environment module - unified abstraction for execution environments
  *
  * This module provides a consistent interface for different execution backends:
- * - local (sandbox): Uses just-bash for isolated local execution (default)
- * - local (native): Uses real bash and Node.js fs for direct system access
+ * - local: Real bash with OS sandbox via @anthropic-ai/sandbox-runtime (default)
+ * - native: Real bash without OS sandbox
  * - remote: Uses computesdk for remote execution on compute gateway
  *
  * @example
@@ -15,19 +15,15 @@
  *   createRemoteEnvironment,
  * } from '@my-agent/core';
  *
- * // Use the default local environment (just-bash sandbox mode)
+ * // Default: OS-sandboxed real bash
  * const sandbox = await localEnvironment.createSandbox({
  *   rootPath: '/path/to/project',
  * });
  *
- * // Use native mode (direct system access, no sandbox)
+ * // Direct system access (no OS sandbox)
  * const native = await nativeEnvironment.createSandbox({
  *   rootPath: '/path/to/project',
  * });
- *
- * // Or create with explicit configuration
- * const sandboxEnv = createLocalEnvironment({ sandbox: true });  // just-bash
- * const nativeEnv = createLocalEnvironment({ sandbox: false });  // real bash
  *
  * // Use remote environment with computesdk
  * const remoteEnv = createRemoteEnvironment({
@@ -48,6 +44,7 @@
 
 // Export types
 import { localEnvironment, nativeEnvironment } from "./local.js";
+import { getConfiguredRemoteEnvironment } from "./remote-config.js";
 import { remoteEnvironment } from "./remote.js";
 import { type Environment, type EnvironmentType, isEnvironmentInstance } from "./types.js";
 
@@ -76,10 +73,22 @@ export {
 } from "./shell.js";
 
 // Export local environment
-export { localEnvironment, nativeEnvironment, createLocalEnvironment, type LocalEnvironmentConfig } from "./local.js";
+export {
+  localEnvironment,
+  nativeEnvironment,
+  createLocalEnvironment,
+  type LocalEnvironmentConfig,
+  type LocalEnvironmentMode,
+} from "./local.js";
 
 // Export remote environment (uses computesdk)
-export { remoteEnvironment, createRemoteEnvironment, type RemoteEnvironmentConfig } from "./remote.js";
+export {
+  remoteEnvironment,
+  createRemoteEnvironment,
+  DEFAULT_REMOTE_WORKSPACE_PATH,
+  type RemoteEnvironmentConfig,
+} from "./remote.js";
+export { getConfiguredRemoteEnvironment, getRemoteEnvironmentConfigFromEnv } from "./remote-config.js";
 
 /**
  * Default environment (local)
@@ -95,8 +104,8 @@ export const defaultEnvironment: Environment = localEnvironment;
  * @example
  * ```typescript
  * // Get by type
- * const localEnv = getEnvironment('local');     // just-bash sandbox (isolated)
- * const nativeEnv = getEnvironment('native');   // direct system access
+ * const localEnv = getEnvironment('local');              // OS-sandboxed real bash
+ * const nativeEnv = getEnvironment('native');            // no OS sandbox
  * const remoteEnv = getEnvironment('remote');   // cloud execution
  *
  * // Pass through custom environment
@@ -114,8 +123,13 @@ export function getEnvironment(env: EnvironmentType): Environment {
       return localEnvironment;
     case "native":
       return nativeEnvironment;
-    case "remote":
+    case "remote": {
+      const configured = getConfiguredRemoteEnvironment();
+      if (configured) {
+        return configured;
+      }
       return remoteEnvironment;
+    }
     default: {
       const _exhaustive: never = env;
       throw new Error(`Unknown environment type: ${_exhaustive}`);

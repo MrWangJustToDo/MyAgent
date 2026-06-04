@@ -125,7 +125,7 @@ const buildDefaultSystemPrompt = (rootPath: string): string => {
 
 4. **Research & Discovery**:
    - Use task tool to spawn subagents for exploring the codebase or researching specific topics
-   - Use man_command and list_command to discover available commands and their options
+   - Use run_command for command discovery and help (e.g. \`which rg\`, \`git --help\`, \`man git\`)
    - Use webfetch to retrieve external documentation or web resources (returns markdown by default)
 
 5. **Skills System**:
@@ -154,7 +154,7 @@ const buildDefaultSystemPrompt = (rootPath: string): string => {
 **Error Handling**:
 
 - If a command fails, analyze the error output carefully
-- Use man_command to look up command documentation if unsure
+- Use run_command to look up command documentation if unsure (e.g. \`command --help\`)
 - Retry with corrected parameters or seek alternative approaches
 - Report failures clearly to the user with context
 
@@ -246,20 +246,17 @@ export const useArgs = createState(
 
         state.parsed = parsed;
 
-        const isSandboxEnv = process.env.SANDBOX_ENV !== "native";
+        const sandboxEnv = process.env.SANDBOX_ENV || "local";
+        const isRemote = sandboxEnv === "remote";
+        const remoteWorkspacePath = process.env.REMOTE_WORKSPACE_PATH?.trim() || "/";
 
         // CLI args take priority over env vars, which take priority over defaults
-        // rootPath is always the real disk path (used for sandbox mounting, memory, etc.)
-        // The sandbox maps it to virtual "/" internally.
+        // rootPath: local project directory (SandboxManager key; remote path rewriting)
         state.config.model = getFlagString(parsed, envModel || DEFAULT_MODEL, "model", "m");
         state.config.url = getFlagString(parsed, envUrl || DEFAULT_OLLAMA_URL, "url", "u");
         state.config.rootPath = getFlagString(parsed, process.cwd(), "path", "p");
-        state.config.systemPrompt = getFlagString(
-          parsed,
-          buildDefaultSystemPrompt(isSandboxEnv ? "/" : state.config.rootPath),
-          "system",
-          "s"
-        );
+        const defaultPromptPath = isRemote ? remoteWorkspacePath : state.config.rootPath;
+        state.config.systemPrompt = getFlagString(parsed, buildDefaultSystemPrompt(defaultPromptPath), "system", "s");
         state.config.initialPrompt = parsed.positional.join(" ");
 
         // Parse max iterations from env or CLI

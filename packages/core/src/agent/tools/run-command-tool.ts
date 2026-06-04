@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { maybeCacheOutput } from "./tool-output-cache.js";
-import { runCommandOutputSchema } from "./types.js";
+import { maybeCacheOutput } from "./util/tool-output-cache.js";
+import { runCommandOutputSchema } from "./util/types.js";
 
 import type { Sandbox } from "../../environment";
 

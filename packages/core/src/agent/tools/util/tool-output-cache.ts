@@ -13,7 +13,7 @@
  * to delete those files. Failure to delete a file is non-fatal (logged as warning).
  */
 
-import type { Sandbox } from "../../environment";
+import type { Sandbox } from "../../../environment";
 import type { ModelMessage } from "ai";
 
 // ============================================================================

@@ -20,7 +20,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { withDuration } from "./helpers.js";
+import { withDuration } from "./util/helpers.js";
 
 import type { SkillRegistry } from "../skills/skill-registry.js";
 

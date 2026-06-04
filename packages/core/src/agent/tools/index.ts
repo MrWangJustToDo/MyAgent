@@ -3,9 +3,7 @@ import { createDeleteFileTool } from "./delete-file-tool.js";
 import { createEditFileTool } from "./edit-file-tool.js";
 import { createGlobTool } from "./glob-tool.js";
 import { createGrepTool } from "./grep-tool.js";
-import { createListCommandTool } from "./list-command-tool.js";
 import { createListFileTool } from "./list-file-tool.js";
-import { createManCommandTool } from "./man-command-tool.js";
 import { createMoveFileTool } from "./move-file-tool.js";
 import { createReadFileTool } from "./read-file-tool.js";
 import { createRunCommandTool } from "./run-command-tool.js";
@@ -14,7 +12,6 @@ import { createTreeTool } from "./tree-tool.js";
 import { createWriteFileTool } from "./write-file-tool.js";
 
 import type { createAskUserTool } from "./ask-user-tool.js";
-import type { createCompactTool } from "./compact-tool.js";
 import type { createListSkillsTool } from "./list-skills-tool.js";
 import type { createLoadSkillTool } from "./load-skill-tool.js";
 import type { createTaskTool } from "./task-tool.js";
@@ -29,24 +26,20 @@ export * from "./delete-file-tool.js";
 export * from "./edit-file-tool.js";
 export * from "./glob-tool.js";
 export * from "./grep-tool.js";
-export * from "./list-command-tool.js";
 export * from "./list-file-tool.js";
-export * from "./man-command-tool.js";
 export * from "./move-file-tool.js";
 export * from "./read-file-tool.js";
 export * from "./run-command-tool.js";
 export * from "./search-replace-tool.js";
 export * from "./todo-tool.js";
-export * from "./tool-output-cache.js";
+export * from "./util";
 export * from "./tree-tool.js";
-export * from "./types.js";
 export * from "./webfetch-tool.js";
 export * from "./websearch-tool.js";
 export * from "./write-file-tool.js";
 export * from "./task-tool.js";
 export * from "./list-skills-tool.js";
 export * from "./load-skill-tool.js";
-export * from "./compact-tool.js";
 export * from "./ask-user-tool.js";
 
 export type Tools = {
@@ -62,15 +55,12 @@ export type Tools = {
   glob: ReturnType<typeof createGlobTool>;
   grep: ReturnType<typeof createGrepTool>;
   tree: ReturnType<typeof createTreeTool>;
-  list_command: ReturnType<typeof createListCommandTool>;
-  man_command: ReturnType<typeof createManCommandTool>;
   run_command: ReturnType<typeof createRunCommandTool>;
   search_replace: ReturnType<typeof createSearchReplaceTool>;
   todo?: ReturnType<typeof createTodoTool>;
   task?: ReturnType<typeof createTaskTool>;
   list_skills?: ReturnType<typeof createListSkillsTool>;
   load_skill?: ReturnType<typeof createLoadSkillTool>;
-  compact?: ReturnType<typeof createCompactTool>;
   ask_user?: ReturnType<typeof createAskUserTool>;
 };
 
@@ -94,8 +84,6 @@ export const createTools = async ({
     glob: createGlobTool({ sandbox }),
     grep: createGrepTool({ sandbox }),
     tree: createTreeTool({ sandbox }),
-    list_command: createListCommandTool({ sandbox }),
-    man_command: createManCommandTool({ sandbox }),
     run_command: createRunCommandTool({ sandbox }),
     search_replace: createSearchReplaceTool({ sandbox }),
   };

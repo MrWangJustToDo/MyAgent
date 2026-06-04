@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 
-import { autoCompact, createCompactedMessages } from "../compaction/auto-compact.js";
+import { applyCompactionResult, autoCompact } from "../compaction";
 import { microCompact } from "../compaction/micro-compact.js";
 import { isPromptTooLongError, reactiveCompact } from "../compaction/reactive-compact.js";
 import { estimateTokens } from "../compaction/token-estimator.js";
@@ -478,23 +478,13 @@ export class Base {
 
           const beforeLength = llmMessages.length;
 
-          if (result.compacted && result.summary && result.cutIndex != null) {
-            const summaryMsg = createCompactedMessages(result.summary)[0];
-            this.context.setSummaryMessage(summaryMsg);
-            const absoluteCut = this.context.getCompactIndex() + result.cutIndex;
-            this.context.setCompactIndex(absoluteCut);
-            this.context.resetUsage();
-
-            this.context.clearTools();
-
-            // Clean up cached tool output files for orphaned messages
-            if (this.sandbox) {
-              const allMessages = this.context.getMessages();
-              cleanupOrphanedToolCache(this.sandbox, allMessages, absoluteCut).catch((err) => {
-                this.log?.warn("agent", "Failed to cleanup tool cache", err);
-              });
-            }
-
+          if (
+            applyCompactionResult(this.context, this.sandbox, result, {
+              onCacheCleanupError: (err) => {
+                this.log?.warn("agent", "Failed to cleanup tool cache", { error: err.message });
+              },
+            })
+          ) {
             llmMessages = this.context.getMessagesForLLM();
           }
 
@@ -737,7 +727,8 @@ export class Base {
         if (this.sandbox && newCompactIndex > oldCompactIndex) {
           const allMessages = this.context.getMessages();
           cleanupOrphanedToolCache(this.sandbox, allMessages, newCompactIndex).catch((err) => {
-            this.log?.warn("agent", "Failed to cleanup tool cache after reactive compact", err);
+            const error = err instanceof Error ? err : new Error(String(err));
+            this.log?.warn("agent", "Failed to cleanup tool cache after reactive compact", { error: error.message });
           });
         }
         // Append tail messages (everything after summary) as new messages

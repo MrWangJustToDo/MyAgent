@@ -3,7 +3,7 @@ import mime from "mime-types";
 import * as nodePath from "path";
 import { z } from "zod";
 
-import { getFile, withDuration } from "./helpers.js";
+import { getFile, withDuration } from "./util/helpers.js";
 
 import type { Sandbox, FileStat } from "../../environment";
 import type { AgentContext } from "../agent-context/agent-context.js";

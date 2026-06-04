@@ -52,7 +52,7 @@ export class SandboxManager {
 
   /**
    * Create a SandboxManager with an optional environment.
-   * @param env - Environment type ('local', 'remote') or Environment instance. Defaults to 'local' (just-bash sandbox).
+   * @param env - Environment type ('local', 'remote', etc.) or Environment instance. Defaults to 'local' (OS-sandboxed bash).
    */
   constructor(env?: EnvironmentType) {
     this.environment = env ? getEnvironment(env) : defaultEnvironment;
@@ -103,7 +103,6 @@ export class SandboxManager {
     // Create a new sandbox
     const newSandbox = await this.environment.createSandbox({
       rootPath,
-      cwd: "/",
     });
 
     this.sandboxes.set(rootPath, newSandbox);
@@ -162,7 +161,7 @@ export const sandboxManager = new SandboxManager();
  *
  * Call this before creating any agents to set the execution environment.
  *
- * @param env - Environment type: 'local' (just-bash sandbox), 'native' (direct system), 'remote' (cloud), or a custom Environment instance
+ * @param env - Environment type: 'local' (OS sandbox), 'native', 'remote', or a custom Environment instance
  *
  * @example
  * ```typescript

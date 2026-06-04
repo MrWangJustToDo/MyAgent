@@ -1,4 +1,4 @@
-import { autoCompact, createCompactedMessages, estimateTokens } from "@my-agent/core";
+import { applyCompactionResult, autoCompact, estimateTokens } from "@my-agent/core";
 
 import { registerCommand } from "./registry.js";
 
@@ -23,8 +23,6 @@ registerCommand({
       return { ok: false, error: "No messages to compact" };
     }
 
-    const tokensBefore = estimateTokens(messages);
-
     const sandbox = agent.getSandbox();
     if (!sandbox) {
       return { ok: false, error: "Sandbox not available" };
@@ -40,22 +38,37 @@ registerCommand({
       priority: t.priority as "high" | "medium" | "low",
     }));
 
+    const previousStatus = agent.status;
+    const tokensBeforeEstimate = estimateTokens(messages);
+    const actualTokens = context.getUsage().inputTokens ?? 0;
+
     agent.status = "compacting";
 
     try {
       const result = await autoCompact(messages, agent.compactionConfig || {}, agent.id, sandbox, {
         focus,
         todos: todos.length > 0 ? todos : undefined,
+        actualTokens: actualTokens || undefined,
       });
 
-      if (result.compacted && result.summary && result.cutIndex != null) {
-        const summaryMsg = createCompactedMessages(result.summary)[0];
-        context.setSummaryMessage(summaryMsg);
-        const absoluteCut = context.getCompactIndex() + result.cutIndex;
-        context.setCompactIndex(absoluteCut);
-        context.resetUsage();
+      const applied = applyCompactionResult(context, sandbox, result, {
+        onCacheCleanupError: (err) => {
+          agent.getLog()?.warn("agent", "Failed to cleanup tool cache after /compact", { error: err.message });
+        },
+      });
+
+      if (!applied) {
+        if (result.error) {
+          return { ok: false, error: result.error };
+        }
+        return {
+          ok: true,
+          message:
+            "Nothing to compact — not enough older conversation to summarize (increase keepRecentFlows or add more history).",
+        };
       }
 
+      const tokensBefore = result.tokensBefore ?? tokensBeforeEstimate;
       const compressionRatio = tokensBefore > 0 ? Math.round((1 - result.tokensAfter / tokensBefore) * 100) : 0;
       const todoNote = incompleteTodos.length > 0 ? ` (${incompleteTodos.length} todos preserved)` : "";
 
@@ -67,7 +80,7 @@ registerCommand({
       const err = error instanceof Error ? error : new Error(String(error));
       return { ok: false, error: `Compaction failed: ${err.message}` };
     } finally {
-      agent.status = "completed";
+      agent.status = previousStatus;
     }
   },
 });

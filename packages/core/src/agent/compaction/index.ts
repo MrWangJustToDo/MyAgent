@@ -1,10 +1,10 @@
 /**
  * Compaction Module - Context compression for infinite agent sessions.
  *
- * Implements three-layer context compaction:
+ * Implements two-layer context compaction:
  * - Layer 1 (micro_compact): Replace old tool results with placeholders
  * - Layer 2 (auto_compact): Subagent-based summarization when threshold exceeded
- * - Layer 3 (compact tool): Manual trigger for conversation compression
+ * Manual: CLI `/compact` command (optional)
  *
  * @example
  * ```typescript
@@ -53,6 +53,7 @@ export { microCompact } from "./micro-compact.js";
 
 // Auto compaction (Layer 2)
 export { shouldAutoCompact, summarizeConversation, autoCompact, createCompactedMessages } from "./auto-compact.js";
+export { applyCompactionResult, type ApplyCompactionResultOptions } from "./apply-compaction-result.js";
 
 // Reactive compaction (Emergency)
 export { isPromptTooLongError, reactiveCompact, getMaxReactiveRetries } from "./reactive-compact.js";

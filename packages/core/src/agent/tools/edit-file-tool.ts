@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { getFile, getFileModifiedTime, withDuration } from "./helpers.js";
-import { editFileOutputSchema } from "./types.js";
+import { getFile, getFileModifiedTime, withDuration } from "./util/helpers.js";
+import { editFileOutputSchema } from "./util/types.js";
 
 import type { Sandbox } from "../../environment";
 

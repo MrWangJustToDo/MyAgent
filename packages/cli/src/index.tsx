@@ -14,7 +14,7 @@ loadEnv();
 configureEnv({ allowNonBrowserUpdates: true });
 
 // Configure sandbox environment from SANDBOX_ENV
-// Options: 'local' (just-bash sandbox, default), 'native' (direct system), 'remote' (cloud)
+// Options: 'local' (OS-sandboxed bash, default), 'native', 'remote'
 const sandboxEnv = (process.env.SANDBOX_ENV || "local") as "local" | "native" | "remote";
 configureSandboxEnv(sandboxEnv);
 

@@ -141,15 +141,9 @@ export {
   summarizeConversation,
   autoCompact,
   createCompactedMessages,
+  applyCompactionResult,
+  type ApplyCompactionResultOptions,
 } from "./compaction";
-
-// Compact tool export
-export {
-  createCompactTool,
-  compactOutputSchema,
-  type CompactToolConfig,
-  type CompactOutput,
-} from "./tools/compact-tool.js";
 
 // Session exports
 export {

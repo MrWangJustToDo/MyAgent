@@ -195,6 +195,11 @@ export interface SpawnResult {
   timedOut: boolean;
 }
 
+export interface SpawnShellStringOptions extends SpawnOptions {
+  /** When true, `command` is passed to the shell as a single string (for pre-wrapped sandbox commands). */
+  useShellString?: boolean;
+}
+
 /**
  * Spawn a command in the platform shell with proper process tree management.
  *
@@ -205,8 +210,7 @@ export interface SpawnResult {
  * - Timeout with SIGTERM → SIGKILL escalation
  * - Streaming stdout/stderr via callbacks
  */
-export async function spawnCommand(command: string, options: SpawnOptions): Promise<SpawnResult> {
-  const { shell, args } = await getShellConfig(options.shellPath);
+export async function spawnCommand(command: string, options: SpawnShellStringOptions): Promise<SpawnResult> {
   const isWindows = platform() === "win32";
 
   // Verify working directory exists
@@ -221,13 +225,26 @@ export async function spawnCommand(command: string, options: SpawnOptions): Prom
     throw new Error("aborted");
   }
 
-  const child = spawn(shell, [...args, command], {
-    cwd: options.cwd,
-    detached: !isWindows,
-    env: options.env ?? getShellEnv(),
-    stdio: ["ignore", "pipe", "pipe"],
-    windowsHide: true,
-  });
+  let child: ChildProcess;
+  if (options.useShellString) {
+    child = spawn(command, {
+      shell: true,
+      cwd: options.cwd,
+      detached: !isWindows,
+      env: options.env ?? getShellEnv(),
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+  } else {
+    const { shell, args } = await getShellConfig(options.shellPath);
+    child = spawn(shell, [...args, command], {
+      cwd: options.cwd,
+      detached: !isWindows,
+      env: options.env ?? getShellEnv(),
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+  }
 
   // Track the child PID
   if (child.pid) {

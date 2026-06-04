@@ -24,7 +24,7 @@ import { generateId } from "../../base/utils.js";
 import { agentManager } from "../../managers/manager-agent.js";
 import { runSubagent } from "../subagent/subagent.js";
 
-import { withDuration } from "./helpers.js";
+import { withDuration } from "./util/helpers.js";
 
 // ============================================================================
 // Types

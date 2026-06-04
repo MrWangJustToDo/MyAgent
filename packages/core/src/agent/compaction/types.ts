@@ -1,10 +1,10 @@
 /**
  * Compaction Types - Type definitions for the context compaction system.
  *
- * The compaction system implements three-layer context compression:
+ * The compaction system implements two-layer context compression:
  * - Layer 1 (micro_compact): Replace old tool results with placeholders
  * - Layer 2 (auto_compact): LLM-based summarization when threshold exceeded
- * - Layer 3 (compact tool): Manual trigger for conversation compression
+ * Manual compaction: CLI `/compact` (same engine as auto_compact)
  */
 
 import { z } from "zod";
