@@ -231,6 +231,14 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
           this.context?.emit(chunk);
           if (chunk.type === "tool-call" && this.isToolNeedsApproval(chunk.toolName)) {
             this.status = "waiting";
+            return;
+          }
+          if (chunk.type === "reasoning-delta") {
+            this.status = "thinking";
+            return;
+          }
+          if (this.status === "running" || this.status === "thinking") {
+            this.status = "responding";
           }
         },
         onAbort: () => {

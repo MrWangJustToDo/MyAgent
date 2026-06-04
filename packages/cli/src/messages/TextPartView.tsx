@@ -17,7 +17,7 @@ export const TextPartView = ({ part, role }: TextPartViewProps) => {
   return (
     <Box flexDirection="row">
       <Box flexShrink={0}>{role === "user" ? <Text>{"> "}</Text> : <Text>{"- "}</Text>}</Box>
-      <StreamMarkdown theme={{ width: width - 2 }}>{part.text}</StreamMarkdown>
+      <StreamMarkdown theme={{ width: width - 2 }}>{part.text.trimEnd()}</StreamMarkdown>
     </Box>
   );
 };

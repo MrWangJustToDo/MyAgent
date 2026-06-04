@@ -4,7 +4,16 @@ import type { LanguageModel, ModelMessage } from "ai";
 // Agent Status
 // ============================================================================
 
-export type AgentStatus = "idle" | "running" | "completed" | "error" | "aborted" | "waiting" | "compacting";
+export type AgentStatus =
+  | "idle"
+  | "running"
+  | "completed"
+  | "error"
+  | "aborted"
+  | "waiting"
+  | "compacting"
+  | "thinking"
+  | "responding";
 
 /** Run options */
 export interface AgentRunOptions {

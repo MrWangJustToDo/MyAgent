@@ -74,6 +74,8 @@ export const Footer = () => {
         {/* Status indicator */}
         <Box flexShrink={0}>
           {status === "running" && !hasPendingAskUser && <Spinner text="Running..." />}
+          {status === "thinking" && <Spinner text="Thinking..." />}
+          {status === "responding" && <Spinner text="Responding..." />}
           {status === "running" && hasPendingAskUser && (
             <Text color="cyan" bold>
               Waiting for your response

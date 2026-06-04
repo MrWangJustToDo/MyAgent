@@ -4,10 +4,10 @@ import { memo, useMemo } from "react";
 
 import { FilePartView } from "./FilePartView.js";
 import { TextPartView } from "./TextPartView.js";
-import { ThinkingPartView } from "./ThinkingPartView.js";
+// import { ThinkingPartView } from "./ThinkingPartView.js";
 import { ToolCallPartView } from "./ToolCallPartView.js";
 
-import type { FileUIPart, ReasoningUIPart, TextUIPart, ToolUIPart, UIMessage } from "ai";
+import type { FileUIPart, TextUIPart, ToolUIPart, UIMessage } from "ai";
 
 export interface MessageViewProps {
   message: UIMessage;
@@ -34,12 +34,14 @@ export const MessageView = memo(({ message }: MessageViewProps) => {
     return map;
   }, [validParts]);
 
+  const validPartsWithoutThinking = useMemo(() => validParts.filter((part) => part.type !== "reasoning"), [validParts]);
+
   return (
     <>
-      {validParts.map((part, index) => (
+      {validPartsWithoutThinking.map((part, index) => (
         <Box key={`${part.type}-${index}`} width="100%">
           {part.type === "text" && <TextPartView part={part as TextUIPart} role={message.role} />}
-          {part.type === "reasoning" && <ThinkingPartView part={part as ReasoningUIPart} />}
+          {/* {part.type === "reasoning" && <ThinkingPartView part={part as ReasoningUIPart} />} */}
           {isFileUIPart(part) && <FilePartView part={part as FileUIPart} index={fileIndexMap.get(index)} />}
           {isToolUIPart(part) && <ToolCallPartView part={part as ToolUIPart} />}
         </Box>
