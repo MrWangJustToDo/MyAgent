@@ -4,6 +4,14 @@ import type { UIMessage } from "ai";
 
 const { setMessage, getMessage } = useMessageCache.getActions();
 
+const filterValidMessage = (message: UIMessage) => {
+  if (message.role === "assistant") {
+    if (message.parts.length === 1 && (message.parts[0].type === "step-start" || message.parts[0].type === "reasoning"))
+      return false;
+  }
+  return true;
+};
+
 /**
  * Split messages into static (completed) and dynamic (streaming) portions.
  *
@@ -67,7 +75,7 @@ export const getMessages = (messages: UIMessage[]) => {
   }
 
   return {
-    staticMessages,
-    dynamicMessages,
+    staticMessages: staticMessages.filter(filterValidMessage),
+    dynamicMessages: dynamicMessages.filter(filterValidMessage),
   };
 };

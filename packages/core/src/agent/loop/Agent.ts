@@ -262,6 +262,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
         },
         experimental_onToolCallStart: (event) => {
           const { toolCall } = event;
+          this.status = "running";
           this.log?.tool("tool-call-start", {
             toolName: toolCall.toolName,
             toolCallId: toolCall.toolCallId,
