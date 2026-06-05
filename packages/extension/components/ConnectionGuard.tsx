@@ -19,6 +19,8 @@ export const ConnectionGuard = ({ children }: { children: React.ReactNode }) => 
       actions.setConnected(true);
       actions.setModel(health.model ?? "");
       actions.setProvider(health.provider ?? "");
+      actions.setSandboxEnv(health.sandboxEnv ?? "");
+      actions.setAgentStatus(health.agentStatus ?? "");
       setWasConnected(true);
     } else {
       actions.setConnected(false);

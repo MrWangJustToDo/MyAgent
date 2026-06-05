@@ -10,9 +10,10 @@ interface ChatInputProps {
   onSend: (text: string, files?: FileUIPart[]) => void;
   isLoading: boolean;
   onStop: () => void;
+  onCompact?: (focus?: string) => void;
 }
 
-export const ChatInput = ({ onSend, isLoading, onStop }: ChatInputProps) => {
+export const ChatInput = ({ onSend, isLoading, onStop, onCompact }: ChatInputProps) => {
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<FileUIPart[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -26,13 +27,25 @@ export const ChatInput = ({ onSend, isLoading, onStop }: ChatInputProps) => {
   const handleSubmit = useCallback(() => {
     const text = value.trim();
     if ((!text && attachments.length === 0) || isLoading) return;
+
+    if (text.startsWith("/compact") && onCompact) {
+      const focus = text.slice("/compact".length).trim() || undefined;
+      onCompact(focus);
+      setValue("");
+      setAttachments([]);
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+      return;
+    }
+
     onSend(text, attachments.length > 0 ? attachments : undefined);
     setValue("");
     setAttachments([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [value, attachments, isLoading, onSend]);
+  }, [value, attachments, isLoading, onSend, onCompact]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -133,7 +146,7 @@ export const ChatInput = ({ onSend, isLoading, onStop }: ChatInputProps) => {
           onChange={handleInput}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder="Send a message... (Ctrl+V to paste image)"
+          placeholder="Send a message... (/compact, Ctrl+V paste image)"
           rows={1}
           className="border-default-200 bg-default-50 placeholder:text-default-400 focus:border-primary min-h-[36px] flex-1 resize-none rounded-lg border px-3 py-2 text-sm transition-colors outline-none"
           style={{ maxHeight: "120px" }}

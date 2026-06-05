@@ -4,12 +4,13 @@ import {
   isToolUIPart,
   getToolName,
   lastAssistantMessageIsCompleteWithApprovalResponses,
+  lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useServerConfig } from "./useServerConfig";
 
-import type { FileUIPart, UIMessage } from "ai";
+import type { FileUIPart, UIDataTypes, UIMessage, UIMessagePart, UITools } from "ai";
 
 export interface UseAgentChatReturn {
   messages: UIMessage[];
@@ -21,6 +22,13 @@ export interface UseAgentChatReturn {
   setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) => void;
   addToolApprovalResponse: (options: { id: string; approved: boolean; reason?: string }) => void;
   allPendingApproval: Array<{ id: string; toolName: string; toolCallId: string }>;
+  allPendingAskUser: Array<{
+    toolCallId: string;
+    question: string;
+    options?: string[];
+    multiSelect?: boolean;
+  }>;
+  addToolOutput: (options: { tool: string; toolCallId: string; output: Record<string, unknown> }) => void;
 }
 
 export function useAgentChat(): UseAgentChatReturn {
@@ -34,7 +42,10 @@ export function useAgentChat(): UseAgentChatReturn {
       transport,
       messages: [],
       sendAutomaticallyWhen(options) {
-        return lastAssistantMessageIsCompleteWithApprovalResponses(options);
+        return (
+          lastAssistantMessageIsCompleteWithApprovalResponses(options) ||
+          lastAssistantMessageIsCompleteWithToolCalls(options)
+        );
       },
     });
   }
@@ -43,7 +54,8 @@ export function useAgentChat(): UseAgentChatReturn {
     chatRef.current
       ? {
           chat: chatRef.current,
-          experimental_throttle: 80,
+          // Lower throttle so streamed tokens render more frequently in the UI.
+          experimental_throttle: 50,
         }
       : {}
   );
@@ -67,7 +79,27 @@ export function useAgentChat(): UseAgentChatReturn {
     return all;
   }, [chatHelpers.messages]);
 
-  // Persist UIMessages to server after each completed interaction
+  const allPendingAskUser = useMemo(() => {
+    const all: UseAgentChatReturn["allPendingAskUser"] = [];
+    for (let i = chatHelpers.messages.length - 1; i >= 0; i--) {
+      const msg = chatHelpers.messages[i] as UIMessage;
+      if (msg.role === "assistant") {
+        for (const part of msg.parts) {
+          if (isToolUIPart(part) && getToolName(part) === "ask_user" && part.state === "input-available") {
+            const input = part.input as { question?: string; options?: string[]; multiSelect?: boolean } | undefined;
+            all.push({
+              toolCallId: part.toolCallId,
+              question: input?.question ?? "",
+              options: input?.options,
+              multiSelect: input?.multiSelect,
+            });
+          }
+        }
+      }
+    }
+    return all;
+  }, [chatHelpers.messages]);
+
   const prevStatusRef = useRef(chatHelpers.status);
   const messagesRef = useRef(chatHelpers.messages);
   messagesRef.current = chatHelpers.messages;
@@ -94,13 +126,52 @@ export function useAgentChat(): UseAgentChatReturn {
     }
   };
 
-  const addToolApprovalResponse = (options: { id: string; approved: boolean; reason?: string }) => {
-    chatRef.current?.addToolApprovalResponse({
-      id: options.id,
-      approved: options.approved,
-      reason: options.reason,
-    });
-  };
+  const addToolApprovalResponse = useCallback(
+    (options: { id: string; approved: boolean; reason?: string }) => {
+      if (options.approved) {
+        chatHelpers.addToolApprovalResponse({
+          id: options.id,
+          approved: true,
+          reason: options.reason,
+        });
+        return;
+      }
+
+      const errorText = options.reason ?? "Tool execution denied by user.";
+      const updatePart = (part: UIMessagePart<UIDataTypes, UITools>): UIMessagePart<UIDataTypes, UITools> =>
+        isToolUIPart(part) && part.state === "approval-requested" && part.approval?.id === options.id
+          ? {
+              ...part,
+              state: "output-denied",
+              approval: { id: options.id, approved: false, reason: errorText },
+            }
+          : part;
+
+      chatHelpers.setMessages((message) =>
+        message.map((i) =>
+          i.role === "assistant"
+            ? {
+                ...i,
+                parts: i.parts.map(updatePart),
+              }
+            : i
+        )
+      );
+      chatHelpers.sendMessage();
+    },
+    [chatHelpers]
+  );
+
+  const addToolOutput = useCallback(
+    (options: { tool: string; toolCallId: string; output: Record<string, unknown> }) => {
+      chatHelpers.addToolOutput({
+        tool: options.tool as never,
+        toolCallId: options.toolCallId,
+        output: options.output as never,
+      });
+    },
+    [chatHelpers]
+  );
 
   return {
     messages: chatHelpers.messages,
@@ -112,5 +183,7 @@ export function useAgentChat(): UseAgentChatReturn {
     setMessages: chatHelpers.setMessages,
     addToolApprovalResponse,
     allPendingApproval,
+    allPendingAskUser,
+    addToolOutput,
   };
 }

@@ -15,6 +15,7 @@
     "postinstall": "wxt prepare && node init.mjs"
   },
   "dependencies": {
+    "@my-agent/core": "workspace:*",
     "@ai-sdk/react": "^3.0.193",
     "@heroui/react": "2.8.9",
     "@my-react/react": "^0.3.27",
@@ -25,8 +26,7 @@
     "markstream-react": "^0.0.47",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "reactivity-store": "^0.4.0",
-    "stream-markdown-parser": "^0.0.15"
+    "reactivity-store": "^0.4.0"
   },
   "devDependencies": {
     "@my-react/react-refresh": "^0.3.27",

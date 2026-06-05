@@ -9,6 +9,8 @@ export const useServerConfig = createState(
     connecting: false,
     model: "",
     provider: "",
+    sandboxEnv: "",
+    agentStatus: "",
   }),
   {
     withActions: (s) => ({
@@ -27,11 +29,19 @@ export const useServerConfig = createState(
       setProvider: (provider: string) => {
         s.provider = provider;
       },
+      setSandboxEnv: (sandboxEnv: string) => {
+        s.sandboxEnv = sandboxEnv;
+      },
+      setAgentStatus: (agentStatus: string) => {
+        s.agentStatus = agentStatus;
+      },
       reset: () => {
         s.connected = false;
         s.connecting = false;
         s.model = "";
         s.provider = "";
+        s.sandboxEnv = "";
+        s.agentStatus = "";
       },
     }),
     withDeepSelector: false,
@@ -42,9 +52,13 @@ export const useServerConfig = createState(
 );
 
 export interface HealthResponse {
-  status: "ready" | "initializing";
+  status: "ready" | "initializing" | "error";
   model?: string;
   provider?: string;
+  sandboxEnv?: string;
+  rootPath?: string;
+  agentStatus?: string;
+  error?: string;
 }
 
 export async function checkServerHealth(url: string): Promise<HealthResponse | null> {

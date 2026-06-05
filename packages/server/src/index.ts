@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 
 import { serve } from "@hono/node-server";
-import { agentManager } from "@my-agent/core";
-import { createAgentUIStreamResponse } from "ai";
+import { RESPONSE_ALREADY_SENT } from "@hono/node-server/utils/response";
+import { agentManager, configureSandboxEnv } from "@my-agent/core";
+import { pipeAgentUIStreamToResponse } from "ai";
 import "dotenv/config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
 import { createServerAgent } from "./agent.js";
+import { runCompact } from "./compact.js";
 
+import type { HttpBindings } from "@hono/node-server";
 import type { Agent } from "@my-agent/core";
 
 // ============================================================================
@@ -23,12 +26,15 @@ const API_KEY = process.env.API_KEY || "";
 const ROOT_PATH = process.env.ROOT_PATH || process.cwd();
 const MAX_ITERATIONS = parseInt(process.env.MAX_ITERATIONS || "50", 10);
 const MCP_CONFIG_PATH = process.env.MCP_CONFIG_PATH || "";
+const SANDBOX_ENV = (process.env.SANDBOX_ENV || "local") as "local" | "native" | "remote";
+
+configureSandboxEnv(SANDBOX_ENV);
 
 // ============================================================================
 // App Setup
 // ============================================================================
 
-const app = new Hono();
+const app = new Hono<{ Bindings: HttpBindings }>();
 
 app.use(
   "*",
@@ -78,7 +84,14 @@ async function initAgent() {
 
 app.get("/api/health", (c) => {
   if (agent) {
-    return c.json({ status: "ready", model: MODEL, provider: PROVIDER });
+    return c.json({
+      status: "ready",
+      model: MODEL,
+      provider: PROVIDER,
+      sandboxEnv: SANDBOX_ENV,
+      rootPath: ROOT_PATH,
+      agentStatus: agent.status,
+    });
   }
   if (initError) {
     return c.json({ status: "error", error: initError.message }, 503);
@@ -102,7 +115,8 @@ app.post("/api/chat", async (c) => {
   c.req.raw.signal.addEventListener("abort", onDisconnect);
 
   try {
-    return createAgentUIStreamResponse({
+    await pipeAgentUIStreamToResponse({
+      response: c.env.outgoing,
       agent,
       uiMessages: messages,
       abortSignal: currentAbortController.signal,
@@ -110,6 +124,7 @@ app.post("/api/chat", async (c) => {
         currentAbortController = null;
       },
     });
+    return RESPONSE_ALREADY_SENT;
   } catch (err) {
     currentAbortController = null;
     const error = err instanceof Error ? err : new Error(String(err));
@@ -169,6 +184,17 @@ app.post("/api/sessions/:id/resume", async (c) => {
     const error = err instanceof Error ? err : new Error(String(err));
     return c.json({ error: error.message }, 400);
   }
+});
+
+app.post("/api/compact", async (c) => {
+  if (!agent) return c.json({ error: "Agent not ready" }, 503);
+  const body = await c.req.json().catch(() => ({}));
+  const focus = typeof body.focus === "string" ? body.focus.trim() || undefined : undefined;
+  const result = await runCompact(agent, focus);
+  if (!result.ok) {
+    return c.json(result, 400);
+  }
+  return c.json(result);
 });
 
 app.post("/api/sessions/messages", async (c) => {

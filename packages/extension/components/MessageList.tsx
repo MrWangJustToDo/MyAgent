@@ -1,7 +1,8 @@
-import { isFileUIPart, isToolUIPart } from "ai";
+import { isFileUIPart, isTextUIPart, isToolUIPart, getToolName } from "ai";
 import { UserIcon, BotIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 
+import { AskUserView } from "./AskUserView";
 import { MarkdownView } from "./MarkdownView";
 import { ReasoningView } from "./ReasoningView";
 import { StreamingIndicator } from "./StreamingIndicator";
@@ -15,10 +16,24 @@ interface MessageListProps {
   messages: UIMessage[];
   isLoading: boolean;
   allPendingApproval: Array<{ id: string; toolName: string; toolCallId: string }>;
+  allPendingAskUser: Array<{
+    toolCallId: string;
+    question: string;
+    options?: string[];
+    multiSelect?: boolean;
+  }>;
   addToolApprovalResponse: (options: { id: string; approved: boolean; reason?: string }) => void;
+  submitAskUserAnswer: (toolCallId: string, answer: string) => void;
 }
 
-export const MessageList = ({ messages, isLoading, allPendingApproval, addToolApprovalResponse }: MessageListProps) => {
+export const MessageList = ({
+  messages,
+  isLoading,
+  allPendingApproval,
+  allPendingAskUser,
+  addToolApprovalResponse,
+  submitAskUserAnswer,
+}: MessageListProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,6 +46,7 @@ export const MessageList = ({ messages, isLoading, allPendingApproval, addToolAp
         <div className="text-default-400 text-center">
           <BotIcon className="mx-auto mb-2 h-10 w-10" />
           <p className="text-sm">Start a conversation with your agent.</p>
+          <p className="text-default-400 mt-1 text-xs">Try /compact to compress context.</p>
         </div>
       </div>
     );
@@ -43,7 +59,9 @@ export const MessageList = ({ messages, isLoading, allPendingApproval, addToolAp
           key={message.id}
           message={message}
           allPendingApproval={allPendingApproval}
+          allPendingAskUser={allPendingAskUser}
           addToolApprovalResponse={addToolApprovalResponse}
+          submitAskUserAnswer={submitAskUserAnswer}
         />
       ))}
       {isLoading && <StreamingIndicator />}
@@ -55,11 +73,20 @@ export const MessageList = ({ messages, isLoading, allPendingApproval, addToolAp
 const MessageView = ({
   message,
   allPendingApproval,
+  allPendingAskUser,
   addToolApprovalResponse,
+  submitAskUserAnswer,
 }: {
   message: UIMessage;
   allPendingApproval: Array<{ id: string; toolName: string; toolCallId: string }>;
+  allPendingAskUser: Array<{
+    toolCallId: string;
+    question: string;
+    options?: string[];
+    multiSelect?: boolean;
+  }>;
   addToolApprovalResponse: (options: { id: string; approved: boolean; reason?: string }) => void;
+  submitAskUserAnswer: (toolCallId: string, answer: string) => void;
 }) => {
   const isUser = message.role === "user";
 
@@ -76,14 +103,15 @@ const MessageView = ({
       </div>
       <div className={`min-w-0 ${isUser ? "max-w-[85%] text-right" : "flex-1"}`}>
         {message.parts.map((part, i) => {
-          if (part.type === "text") {
+          if (isTextUIPart(part)) {
             if (!part.text) return null;
+            const isStreaming = part.state === "streaming";
             return isUser ? (
               <div key={i} className="bg-primary/10 inline-block rounded-lg px-3 py-2 text-sm">
                 {part.text}
               </div>
             ) : (
-              <MarkdownView key={i} content={part.text} />
+              <MarkdownView key={i} content={part.text} isStreaming={isStreaming} />
             );
           }
           if (isFileUIPart(part)) {
@@ -106,21 +134,35 @@ const MessageView = ({
             );
           }
           if (isToolUIPart(part)) {
-            const pending = allPendingApproval.find((p) => p.toolCallId === part.toolCallId);
-            if (pending) {
+            const pendingApproval = allPendingApproval.find((p) => p.toolCallId === part.toolCallId);
+            if (pendingApproval) {
               return (
                 <ToolApprovalView
                   key={i}
                   part={part as ToolUIPart}
-                  onApprove={() => addToolApprovalResponse({ id: pending.id, approved: true })}
-                  onDeny={() => addToolApprovalResponse({ id: pending.id, approved: false })}
+                  onApprove={() => addToolApprovalResponse({ id: pendingApproval.id, approved: true })}
+                  onDeny={(reason) => addToolApprovalResponse({ id: pendingApproval.id, approved: false, reason })}
                 />
               );
             }
+
+            const pendingAsk = allPendingAskUser.find((p) => p.toolCallId === part.toolCallId);
+            if (pendingAsk && getToolName(part) === "ask_user") {
+              return (
+                <AskUserView
+                  key={i}
+                  question={pendingAsk.question}
+                  options={pendingAsk.options}
+                  multiSelect={pendingAsk.multiSelect}
+                  onSubmit={(answer) => submitAskUserAnswer(pendingAsk.toolCallId, answer)}
+                />
+              );
+            }
+
             return <ToolCallView key={i} part={part as ToolUIPart} />;
           }
           if (part.type === "reasoning") {
-            return <ReasoningView key={i} text={part.text} />;
+            return <ReasoningView key={i} text={part.text} isStreaming={part.state === "streaming"} />;
           }
           return null;
         })}

@@ -7,6 +7,8 @@ import {
   getOllamaBuildInTools,
 } from "@my-agent/core";
 
+import { buildDefaultSystemPrompt } from "./prompt.js";
+
 import type { Agent, LanguageModel } from "@my-agent/core";
 import type { ToolSet } from "ai";
 
@@ -46,9 +48,7 @@ export async function createServerAgent(config: ServerAgentConfig): Promise<Agen
     model,
     rootPath,
     name: "server-agent",
-    systemPrompt:
-      systemPrompt ||
-      "You are a helpful coding assistant. You can read, write, and modify files, run commands in bash, and help with programming tasks.",
+    systemPrompt: systemPrompt || buildDefaultSystemPrompt(rootPath),
     maxIterations,
     mcpConfigPath: mcpConfigPath || undefined,
   });
