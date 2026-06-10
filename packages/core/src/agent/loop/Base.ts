@@ -5,9 +5,11 @@ import { microCompact } from "../compaction/micro-compact.js";
 import { isPromptTooLongError, reactiveCompact } from "../compaction/reactive-compact.js";
 import { estimateTokens } from "../compaction/token-estimator.js";
 import { extractMemories, consolidateMemories } from "../memory/memory-extractor.js";
+import { findRelevantMemories, formatRelevantMemories } from "../memory/memory-retrieval.js";
 import { cleanupOrphanedToolCache, createTodoTool } from "../tools";
 
 import type { Sandbox } from "../../environment";
+import type { ModelInfo } from "../../models/types.js";
 import type { AgentContext } from "../agent-context";
 import type { AgentLog } from "../agent-log";
 import type { CompactionConfig } from "../compaction/types.js";
@@ -58,6 +60,9 @@ export class Base {
   // Model (Vercel AI SDK LanguageModel)
   model: LanguageModel | null = null;
 
+  // Model metadata from the registry (context window, pricing, capabilities, etc.)
+  modelInfo: ModelInfo | null = null;
+
   // Reactive compact retry counter (reset per run)
   private reactiveCompactRetries = 0;
   private static readonly MAX_REACTIVE_RETRIES = 1;
@@ -88,6 +93,26 @@ export class Base {
    */
   getModel(): LanguageModel | null {
     return this.model;
+  }
+
+  /**
+   * Set model metadata from the registry.
+   * Used for context-window-aware compaction, default maxTokens, cost tracking, etc.
+   */
+  setModelInfo(info: ModelInfo): void {
+    this.log?.debug("agent", "Setting model info", {
+      id: info.id,
+      provider: info.provider,
+      contextWindow: info.contextWindow,
+    });
+    this.modelInfo = info;
+  }
+
+  /**
+   * Get the current model metadata
+   */
+  getModelInfo(): ModelInfo | null {
+    return this.modelInfo;
   }
 
   /**
@@ -219,6 +244,8 @@ export class Base {
   // Memory system
   memoryManager: MemoryManager | null = null;
   memoryContent: string = "";
+  relevantMemoryContent: string = "";
+  private alreadySurfaced: Set<string> = new Set();
 
   setMemoryManager(m: MemoryManager): void {
     this.memoryManager = m;
@@ -240,6 +267,38 @@ export class Base {
    */
   getMemoryContent(): string {
     return this.memoryContent;
+  }
+
+  /**
+   * Get the set of memory filenames already surfaced this session.
+   * Used by findRelevantMemories to avoid wasting selection slots on repeats.
+   */
+  getAlreadySurfaced(): ReadonlySet<string> {
+    return this.alreadySurfaced;
+  }
+
+  /**
+   * Mark memory filenames as surfaced (adds to the session-scoped set).
+   */
+  markMemoriesSurfaced(filenames: string[]): void {
+    for (const f of filenames) {
+      this.alreadySurfaced.add(f);
+    }
+  }
+
+  /**
+   * Set the formatted relevant memory content for the current turn.
+   * Cleared after each turn in createOnFinish.
+   */
+  setRelevantMemoryContent(content: string): void {
+    this.relevantMemoryContent = content;
+  }
+
+  /**
+   * Get the formatted relevant memory content for the current turn.
+   */
+  getRelevantMemoryContent(): string {
+    return this.relevantMemoryContent;
   }
 
   setMcpManager(m: McpManager) {
@@ -589,6 +648,9 @@ export class Base {
       // Auto-save session after each interaction
       this.saveSession();
 
+      // Clear per-turn relevant memory content (will be re-fetched next turn)
+      this.relevantMemoryContent = "";
+
       // Background memory extraction (fire-and-forget)
       this.runMemoryExtraction();
 
@@ -654,7 +716,6 @@ export class Base {
 
     const manager = this.memoryManager;
     const agentId = this.agentId;
-    const log = this.log;
 
     this.log?.notify("memory", "info", "Extracting memories...");
 
@@ -662,7 +723,6 @@ export class Base {
       try {
         const count = await extractMemories(messages, manager, agentId);
         if (count > 0) {
-          log?.info("memory", `Extracted ${count} new memories`);
           this.memoryContent = manager.getIndexContent();
           this.log?.notify("memory", "success", `Extracted ${count} new memories`, { count });
         }
@@ -673,7 +733,6 @@ export class Base {
           this.log?.notify("memory", "info", "Consolidating memories...");
           const after = await consolidateMemories(manager, agentId);
           if (after > 0) {
-            log?.info("memory", `Consolidated memories: ${memoryCount} → ${after}`);
             this.memoryContent = manager.getIndexContent();
             this.log?.notify("memory", "success", `Consolidated memories: ${memoryCount} → ${after}`, {
               before: memoryCount,
@@ -683,10 +742,61 @@ export class Base {
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        log?.warn("memory", "Memory extraction failed", { error: errorMsg });
         this.log?.notify("memory", "warning", `Memory extraction failed: ${errorMsg}`);
       }
     })();
+  }
+
+  /**
+   * Prefetch relevant memories for the current turn.
+   * Runs a lightweight LLM side-query (with keyword fallback) to select
+   * memories whose full content should be injected into the system prompt.
+   *
+   * Fire-and-forget safe: errors are logged and the turn proceeds without
+   * relevant memories (the MEMORY.md index in the system prompt still works).
+   */
+  async prefetchRelevantMemories(messages: ModelMessage[]): Promise<void> {
+    if (!this.memoryManager) return;
+
+    // Extract the last user message as the query for memory selection
+    let query = "";
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === "user") {
+        if (typeof msg.content === "string") {
+          query = msg.content;
+        } else if (Array.isArray(msg.content)) {
+          const textPart = msg.content.find((p) => p.type === "text");
+          if (textPart && "text" in textPart) {
+            query = textPart.text as string;
+          }
+        }
+        break;
+      }
+    }
+
+    if (!query.trim()) {
+      this.relevantMemoryContent = "";
+      return;
+    }
+
+    try {
+      const relevant = await findRelevantMemories(query, this.memoryManager, this.model, this.alreadySurfaced);
+
+      if (relevant.length > 0) {
+        this.markMemoriesSurfaced(relevant.map((r) => r.filename));
+        this.relevantMemoryContent = formatRelevantMemories(relevant);
+        this.log?.info("memory", `Loaded ${relevant.length} relevant memories`, {
+          filenames: relevant.map((r) => r.filename),
+        });
+      } else {
+        this.relevantMemoryContent = "";
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      this.log?.warn("memory", `Relevant memory prefetch failed: ${errorMsg}`);
+      this.relevantMemoryContent = "";
+    }
   }
 
   /**
@@ -806,6 +916,8 @@ export class Base {
     this.status = "idle";
     this.error = "";
     this.reactiveCompactRetries = 0;
+    this.relevantMemoryContent = "";
+    this.alreadySurfaced.clear();
     this.log?.clear();
     this.context?.reset();
     this.todoManager?.reset();

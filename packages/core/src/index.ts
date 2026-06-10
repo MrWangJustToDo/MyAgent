@@ -10,6 +10,9 @@ export * from "./environment";
 // Managers (class-based state management)
 export * from "./managers";
 
+// Model registry and config
+export * from "./models";
+
 // Provider utilities
 export * from "./provider.js";
 

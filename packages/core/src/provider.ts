@@ -5,8 +5,10 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { extractReasoningMiddleware, wrapLanguageModel } from "ai";
 import { createOllama, ollama } from "ai-sdk-ollama";
 
+import { getModel } from "./models/registry.js";
 import { DEFAULT_OLLAMA_URL } from "./types.js";
 
+import type { ModelId, ModelInfo } from "./models/types.js";
 import type { LanguageModel, ToolSet } from "ai";
 
 // ============================================================================
@@ -212,4 +214,84 @@ export const createModel = (config: ProviderConfig): LanguageModel => {
     default:
       throw new Error(`Unknown provider type: ${config.type}`);
   }
+};
+
+// ============================================================================
+// Registry-Aware Model Creation
+// ============================================================================
+
+export interface CreateModelFromIdOptions {
+  apiKey?: string;
+  baseURL?: string;
+}
+
+export interface CreateModelFromIdResult {
+  model: LanguageModel;
+  info: ModelInfo;
+}
+
+/**
+ * Map ModelProvider (registry) to ProviderType (factory).
+ * Models not in this map (e.g. ollama) need special handling.
+ */
+const providerTypeMap: Record<string, ProviderType> = {
+  openai: "openai",
+  deepseek: "deepseek",
+  "open-router": "open-router",
+  anthropic: "open-router",
+  google: "open-router",
+  xai: "open-router",
+};
+
+/**
+ * Cloud providers that have their own default API endpoints.
+ * baseURL should NOT be forwarded to these unless explicitly intended.
+ */
+const cloudProviders = new Set<ProviderType>(["openai", "deepseek", "open-router"]);
+
+/**
+ * Create a LanguageModel from a registry model ID.
+ * Looks up ModelInfo from the registry, maps provider to the correct factory,
+ * and returns both the LanguageModel instance and its metadata.
+ *
+ * For providers without a native SDK (anthropic, google, xai), falls back
+ * to OpenRouter which supports them as upstream providers.
+ *
+ * @example
+ * ```typescript
+ * const { model, info } = createModelFromId("claude-sonnet-4.6", {
+ *   apiKey: "sk-or-...",
+ * });
+ * agent.setModel(model);
+ * agent.setModelInfo(info);
+ * ```
+ */
+export const createModelFromId = (
+  modelId: ModelId,
+  options: CreateModelFromIdOptions = {}
+): CreateModelFromIdResult => {
+  const info = getModel(modelId);
+  if (!info) {
+    throw new Error(`Model "${modelId}" not found in registry. Use createModel() for unregistered models.`);
+  }
+
+  const { apiKey, baseURL } = options;
+  const providerType = providerTypeMap[info.provider];
+
+  if (!providerType) {
+    throw new Error(`No factory mapping for provider "${info.provider}"`);
+  }
+
+  // Only forward baseURL to providers that don't have their own default endpoints
+  // (e.g. don't send the Ollama default URL to DeepSeek or OpenAI)
+  const effectiveBaseURL = baseURL && cloudProviders.has(providerType) ? undefined : baseURL;
+
+  const model = createModel({
+    type: providerType,
+    model: info.apiModel,
+    apiKey,
+    baseURL: effectiveBaseURL,
+  });
+
+  return { model, info };
 };

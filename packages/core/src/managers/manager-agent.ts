@@ -18,6 +18,7 @@ import { createAskUserTool } from "../agent/tools/ask-user-tool.js";
 import { createListSkillsTool } from "../agent/tools/list-skills-tool.js";
 import { createLoadSkillTool } from "../agent/tools/load-skill-tool.js";
 import { createTaskTool } from "../agent/tools/task-tool.js";
+import { getModel } from "../models/registry.js";
 
 import { sandboxManager } from "./manager-sandbox.js";
 
@@ -25,6 +26,7 @@ import type { CompactionConfigInput } from "../agent/compaction/types.js";
 import type { AgentConfig, ToolSet } from "../agent/loop/Agent.js";
 import type { ResumeResult, SessionData } from "../agent/session/types.js";
 import type { Sandbox } from "../environment";
+import type { ModelInfo } from "../models/types.js";
 
 // ============================================================================
 // Types & Schemas
@@ -73,6 +75,8 @@ export type ManagedAgentConfig<T = Agent | AgentContext> = AgentConfig & {
   rootPath: string;
   /** Vercel AI SDK LanguageModel instance */
   languageModel: LanguageModel;
+  /** Model metadata from the registry (auto-resolved from config.model if not provided) */
+  modelInfo?: ModelInfo;
   setUp?: (instance: T) => T;
   /** Skill directories to load (relative to rootPath or absolute). Defaults to [".opencode/skills"] */
   skillDirs?: string[];
@@ -244,12 +248,16 @@ export class AgentManager {
       rootPath,
       setUp,
       languageModel,
+      modelInfo: explicitModelInfo,
       name,
       skillDirs,
       compaction,
       mcpConfigPath,
       ...restConfig
     } = config;
+
+    // Resolve ModelInfo: explicit > registry lookup by model string > null
+    const resolvedModelInfo = explicitModelInfo ?? getModel(restConfig.model) ?? null;
 
     const sandbox = await sandboxManager.getSandbox(rootPath);
 
@@ -268,6 +276,15 @@ export class AgentManager {
 
     // Set the Vercel AI SDK model
     agent.setModel(languageModel);
+
+    // Set model metadata (for context-aware compaction, default maxTokens, cost tracking)
+    if (resolvedModelInfo) {
+      agent.setModelInfo(resolvedModelInfo);
+      if (resolvedModelInfo.pricing) {
+        context.setPricing(resolvedModelInfo.pricing);
+      }
+      context.setCapabilities(resolvedModelInfo.capabilities);
+    }
 
     // Set tools - convert from Tools record to ToolSet
     agent.setTools(tools);
@@ -335,7 +352,13 @@ export class AgentManager {
       agent.addTools({ task: taskTool });
 
       // Set up compaction config (auto-compact runs in prepareStep; manual: CLI /compact)
-      const compactionConfig = createCompactionConfig(compaction);
+      // Derive tokenThreshold from model's contextWindow if not explicitly set
+      const compactionInput = { ...compaction };
+      if (!compactionInput?.tokenThreshold && resolvedModelInfo) {
+        const MAX_THRESHOLD = 200_000;
+        compactionInput.tokenThreshold = Math.min(resolvedModelInfo.contextWindow, MAX_THRESHOLD);
+      }
+      const compactionConfig = createCompactionConfig(compactionInput);
       agent.setCompactionConfig(compactionConfig);
 
       // MCP Integration: connect to configured MCP servers and register their tools (root agents only)

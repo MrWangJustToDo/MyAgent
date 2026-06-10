@@ -23,6 +23,18 @@ export const DEFAULT_MAX_INDEX_LINES = 200;
 
 export const DEFAULT_MAX_INDEX_BYTES = 25 * 1024; // 25 KB
 
+/** Max relevant memories to inject per turn */
+export const DEFAULT_MAX_RELEVANT_MEMORIES = 5;
+
+/** Max lines per memory file when injecting full content */
+export const DEFAULT_MAX_MEMORY_LINES_PER_FILE = 200;
+
+/** Max bytes per memory file when injecting full content */
+export const DEFAULT_MAX_MEMORY_BYTES_PER_FILE = 4096;
+
+/** Max total bytes of injected memory content per session */
+export const DEFAULT_MAX_SESSION_MEMORY_BYTES = 60 * 1024; // 60 KB
+
 // ============================================================================
 // Zod Schemas
 // ============================================================================

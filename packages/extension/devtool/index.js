@@ -3166,8 +3166,14 @@
       var snapshotBeforeChange = function (list) {
         var snapshot = new Map();
         var visited = new WeakSet();
+        var tempFiberSet = new Set();
+        list.listToFoot(function (fiber) {
+          tempFiberSet.add(fiber);
+        });
         var roots = [];
         list.listToFoot(function (fiber) {
+          // only snapshot the shared parent fiber
+          if (tempFiberSet.has(fiber.parent)) return;
           var loopFiber = fiber.parent || fiber;
           if (visited.has(loopFiber)) return;
           visited.add(loopFiber);
@@ -3176,6 +3182,7 @@
             roots.push({ node: existing, parentId: parentIdMap.get(existing.i) || null });
           }
         });
+        tempFiberSet.clear();
         var stack = roots;
         while (stack.length) {
           var _a = stack.pop(),
@@ -3301,6 +3308,7 @@
         TreeOpType[(TreeOpType["ADD"] = 1)] = "ADD";
         TreeOpType[(TreeOpType["REMOVE"] = 2)] = "REMOVE";
         TreeOpType[(TreeOpType["UPDATE_META"] = 3)] = "UPDATE_META";
+        TreeOpType[(TreeOpType["MOVE"] = 4)] = "MOVE";
       })(exports$1.TreeOpType || (exports$1.TreeOpType = {}));
 
       /**
@@ -3340,19 +3348,23 @@
               if (old.m !== node.m) metaOp.m = node.m;
               ops.push(metaOp);
             }
-            // Detect removed children
             var newChildren = node.c
               ? node.c.map(function (c) {
                   return c.i;
                 })
               : [];
             var newChildSet = new Set(newChildren);
+            // Detect removed children
             for (var i = 0; i < old._ci.length; i++) {
               if (!newChildSet.has(old._ci[i])) {
                 if (!plainStore.has(old._ci[i])) {
                   ops.push({ op: exports$1.TreeOpType.REMOVE, id: old._ci[i] });
                 }
               }
+            }
+            // Detect keyed child reorder (same children, different order)
+            if (!parentChanged) {
+              emitChildReorders(node.i, old._ci, newChildren, ops);
             }
           }
           // Push children onto stack (reverse order for correct processing order)
@@ -3363,6 +3375,22 @@
           }
         }
         return ops;
+      }
+      function emitChildReorders(parentId, oldCi, newCi, ops) {
+        if (oldCi.length !== newCi.length) return;
+        var oldSet = new Set(oldCi);
+        for (var i = 0; i < newCi.length; i++) {
+          if (!oldSet.has(newCi[i])) return;
+        }
+        for (var i = 0; i < newCi.length; i++) {
+          if (oldCi[i] === newCi[i]) continue;
+          ops.push({
+            op: exports$1.TreeOpType.MOVE,
+            id: newCi[i],
+            parentId: parentId,
+            afterId: i > 0 ? newCi[i - 1] : null,
+          });
+        }
       }
       function emitAdd(node, plainStore, parentIdMap, ops) {
         var parentId = parentIdMap.get(node.i) || null;
@@ -3605,6 +3633,7 @@
       exports$1.MessageDetectorType = void 0;
       (function (MessageDetectorType) {
         MessageDetectorType["init"] = "detector-init";
+        MessageDetectorType["unload"] = "detector-unload";
       })(exports$1.MessageDetectorType || (exports$1.MessageDetectorType = {}));
       exports$1.MessageProxyType = void 0;
       (function (MessageProxyType) {
@@ -5555,6 +5584,7 @@
       exports$1.MessageDetectorType = void 0;
       (function (MessageDetectorType) {
         MessageDetectorType["init"] = "detector-init";
+        MessageDetectorType["unload"] = "detector-unload";
       })(exports$1.MessageDetectorType || (exports$1.MessageDetectorType = {}));
       exports$1.MessageProxyType = void 0;
       (function (MessageProxyType) {

@@ -5,6 +5,7 @@ import { ErrorDetail } from "../components/ErrorDetail.js";
 import { FullBox } from "../components/FullBox.js";
 import { InputError } from "../components/InputError.js";
 import { LLMUsage } from "../components/LLMUsage.js";
+import { Notification } from "../components/Notification.js";
 import { SelectList } from "../components/SelectList.js";
 import { Spinner } from "../components/Spinner.js";
 import { TodoStats } from "../components/TodoStats.js";
@@ -101,6 +102,7 @@ export const Footer = () => {
           {status === "error" && <Text color="red">Error</Text>}
         </Box>
         <TodoStats />
+        <Notification />
       </Box>
 
       {/* Error message */}

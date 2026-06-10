@@ -1,6 +1,7 @@
 import {
   agentManager,
   createDeepSeekModel,
+  createModelFromId,
   createOllamaModel,
   createOpenRouterModel,
   createOpenAICompatibleModel,
@@ -15,7 +16,7 @@ import { useAgentLog } from "../hooks/use-agent-log";
 import { useAgentSandbox } from "../hooks/use-agent-sandbox";
 
 import type { CliAgentConfig } from "../hooks";
-import type { Agent, AgentContext, LanguageModel, ResumeResult } from "@my-agent/core";
+import type { Agent, AgentContext, LanguageModel, ModelInfo, ResumeResult } from "@my-agent/core";
 import type { ToolSet, UIMessage } from "ai";
 
 export interface CreateAgentResult {
@@ -47,26 +48,38 @@ export const createAgent = async ({
   resumeSession?: string;
 }): Promise<CreateAgentResult> => {
   let languageModel: LanguageModel | null = null;
+  let modelInfo: ModelInfo | undefined;
 
   let extendTools: ToolSet = {};
 
-  if (provider === "ollama") {
-    languageModel = createOllamaModel(model, url, { reasoning: true });
+  // Try registry-based creation first (covers known models with full metadata)
+  try {
+    const result = createModelFromId(model, { apiKey, baseURL: url });
+    languageModel = result.model;
+    modelInfo = result.info;
+  } catch {
+    // Fall back to provider-specific factories for unregistered models (e.g. Ollama local)
+    if (provider === "ollama") {
+      languageModel = createOllamaModel(model, url, { reasoning: true });
+    } else if (provider === "openaiCompatible") {
+      languageModel = createOpenAICompatibleModel(model, url);
+    } else if (provider === "deepseek") {
+      languageModel = createDeepSeekModel(model, apiKey);
+    } else {
+      languageModel = createOpenRouterModel(model, apiKey);
+    }
+  }
 
+  if (provider === "ollama") {
     extendTools = getOllamaBuildInTools((p) => ({
       ["ollama-web-fetch"]: p.tools.webFetch(),
       ["ollama-web-search"]: p.tools.webSearch(),
     }));
-  } else if (provider === "openaiCompatible") {
-    languageModel = createOpenAICompatibleModel(model, url);
-  } else if (provider === "deepseek") {
-    languageModel = createDeepSeekModel(model, apiKey);
-  } else {
-    languageModel = createOpenRouterModel(model, apiKey);
   }
 
   const agent = await agentManager.createManagedAgent({
     languageModel,
+    modelInfo,
     model,
     rootPath,
     name: "local-chat",

@@ -180,6 +180,8 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
   // Chat instance ref - created once when connection is ready
   const chatRef = useRef<Chat<UIMessage> | null>(null);
 
+  const pendingApprovalLengthRef = useRef(0);
+
   // Initialize connection and create Chat instance
   useEffect(() => {
     const init = async () => {
@@ -339,7 +341,9 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
           });
         });
 
-        chatHelpers.sendMessage();
+        if (pendingApprovalLengthRef.current === 1) {
+          chatHelpers.sendMessage();
+        }
 
         // avoid call the original method
         // 默认拒绝方法只会将state修改为 approval-responded . SEE https://github.com/vercel/ai/blob/50c29b0dc2d23dff959bde8eea21594ba61c46c6/packages/ai/src/ui/chat.ts#L496C23-L496C41
@@ -405,6 +409,8 @@ export function useLocalChat(config: UseLocalChatConfig): UseLocalChatReturn {
     }
     return all;
   }, [messages]);
+
+  pendingApprovalLengthRef.current = allPendingApproval.length;
 
   useEffect(() => {
     useLocalChatStatus.getActions().setPendingAskUserCount(allPendingAskUser.length);

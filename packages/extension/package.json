@@ -16,11 +16,11 @@
   },
   "dependencies": {
     "@my-agent/core": "workspace:*",
-    "@ai-sdk/react": "^3.0.193",
+    "@ai-sdk/react": "^3.0.201",
     "@heroui/react": "2.8.9",
     "@my-react/react": "^0.3.27",
     "@my-react/react-dom": "^0.3.27",
-    "ai": "^6.0.191",
+    "ai": "^6.0.199",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.576.0",
     "markstream-react": "^0.0.47",

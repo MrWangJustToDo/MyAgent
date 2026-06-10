@@ -4,6 +4,7 @@
 
 import { generateId } from "../../base/utils.js";
 
+import type { ModelCapability, ModelPricing } from "../../models/types.js";
 import type { StreamPart, ToolSet } from "../loop/Agent.js";
 import type { ModelMessage, OnFinishEvent, TypedToolCall } from "ai";
 
@@ -11,6 +12,14 @@ export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+}
+
+/**
+ * Calculate the cost of a token usage entry given pricing info.
+ * Returns cost in USD.
+ */
+export function calculateCost(usage: TokenUsage, pricing: ModelPricing): number {
+  return (usage.inputTokens * pricing.inputPerM + usage.outputTokens * pricing.outputPerM) / 1_000_000;
 }
 
 // ============================================================================
@@ -53,6 +62,15 @@ export class AgentContext {
 
   /** Lifetime token usage (never resets, survives compaction) */
   private totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+
+  /** Model pricing (set from ModelInfo, null if unknown) */
+  private pricing: ModelPricing | null = null;
+
+  /** Model capabilities (set from ModelInfo) */
+  private capabilities: ModelCapability[] = [];
+
+  /** Session cost in USD (lifetime, never resets) */
+  private totalCost = 0;
 
   /** Token limit (from compaction config threshold) */
   private tokenLimit = 0;
@@ -143,6 +161,11 @@ export class AgentContext {
     };
 
     this.totalUsage.totalTokens = this.totalUsage.inputTokens + this.totalUsage.outputTokens;
+
+    // Accumulate cost if pricing is available
+    if (this.pricing) {
+      this.totalCost += calculateCost(t, this.pricing);
+    }
   }
 
   addTotalUsage(t: TokenUsage) {
@@ -164,6 +187,43 @@ export class AgentContext {
   /** Lifetime usage across all compaction cycles */
   getTotalUsage(): TokenUsage {
     return this.totalUsage;
+  }
+
+  /**
+   * Set model pricing for cost tracking.
+   */
+  setPricing(pricing: ModelPricing): void {
+    this.pricing = pricing;
+  }
+
+  /**
+   * Get the current model pricing.
+   */
+  getPricing(): ModelPricing | null {
+    return this.pricing;
+  }
+
+  /**
+   * Get lifetime session cost in USD.
+   */
+  getTotalCost(): number {
+    return this.totalCost;
+  }
+
+  /**
+   * Set model capabilities (from ModelInfo.capabilities).
+   */
+  setCapabilities(caps: ModelCapability[]): void {
+    this.capabilities = caps;
+  }
+
+  /**
+   * Check if the model has a specific capability.
+   * Returns true if capabilities haven't been set (optimistic default).
+   */
+  hasCapability(cap: ModelCapability): boolean {
+    if (this.capabilities.length === 0) return true;
+    return this.capabilities.includes(cap);
   }
 
   setTokenLimit(limit: number): void {
@@ -275,6 +335,7 @@ export class AgentContext {
     this.compactIndex = 0;
     this.usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
     this.totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    this.totalCost = 0;
     this.finishInfo = null;
     this.isStreaming = false;
     this.touch();

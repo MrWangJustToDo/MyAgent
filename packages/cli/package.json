@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/react": "^3.0.193",
+    "@ai-sdk/react": "^3.0.201",
     "@crosscopy/clipboard": "^0.3.6",
     "@git-diff-view/cli": "^0.1.5",
     "@git-diff-view/core": "^0.1.5",
@@ -25,7 +25,7 @@
     "@my-agent/core": "workspace:*",
     "@my-react/react": "^0.3.27",
     "@my-react/react-terminal": "^0.0.26",
-    "ai": "^6.0.191",
+    "ai": "^6.0.199",
     "ansi-escapes": "^7.3.0",
     "chalk": "^5.6.2",
     "dotenv": "^17.3.1",

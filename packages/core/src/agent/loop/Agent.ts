@@ -99,6 +99,13 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
     this.config = AgentConfigSchema.parse({ ...this.config, ...updates });
   }
 
+  /**
+   * Resolve the effective maxOutputTokens: explicit config > modelInfo default > undefined (SDK default).
+   */
+  private resolveMaxOutputTokens(): number | undefined {
+    return this.config.maxTokens ?? this.modelInfo?.defaultMaxTokens ?? undefined;
+  }
+
   // ============================================================================
   // System Prompt
   // ============================================================================
@@ -148,7 +155,12 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       parts.push(memorySection);
     }
 
-    // 5. Nag reminder for todo updates (injected in system prompt to avoid
+    // 5. Relevant memory content (full body of memories selected for this turn)
+    if (this.relevantMemoryContent) {
+      parts.push(this.relevantMemoryContent);
+    }
+
+    // 6. Nag reminder for todo updates (injected in system prompt to avoid
     // breaking ModelMessage type constraints — ToolContent doesn't accept TextPart)
     if (this.todoManager?.shouldNag()) {
       const reminder = this.todoManager.getNagReminder();
@@ -204,6 +216,9 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
     this.status = "running";
     this.error = "";
 
+    // Prefetch relevant memories before building system prompt
+    await this.prefetchRelevantMemories(finalMessages);
+
     const tools = this.getTools();
 
     const systemPrompt = this.buildSystemPrompt();
@@ -220,7 +235,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
         messages: msgs,
         tools,
         system: systemPrompt,
-        maxOutputTokens: this.config.maxTokens,
+        maxOutputTokens: this.resolveMaxOutputTokens(),
         temperature: this.config.temperature,
         abortSignal: this.currentAbortController!.signal,
         stopWhen: stepCountIs(this.config.maxIterations ?? 10),
@@ -323,6 +338,9 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
     this.status = "running";
     this.error = "";
 
+    // Prefetch relevant memories before building system prompt
+    await this.prefetchRelevantMemories(finalMessages);
+
     const tools = this.getTools();
 
     const systemPrompt = this.buildSystemPrompt();
@@ -339,7 +357,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
         messages: msgs,
         tools,
         system: systemPrompt,
-        maxOutputTokens: this.config.maxTokens,
+        maxOutputTokens: this.resolveMaxOutputTokens(),
         temperature: this.config.temperature,
         abortSignal: this.currentAbortController!.signal,
         stopWhen: stepCountIs(this.config.maxIterations ?? 10),

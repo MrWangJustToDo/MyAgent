@@ -365,6 +365,16 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
 
         // Handle images
         if (fileTypeInfo.type === "image") {
+          // Skip image data if model doesn't support vision
+          if (context && !context.hasCapability("vision")) {
+            return {
+              type: "error" as const,
+              path: filePath,
+              error: `Cannot analyze image: ${filePath} (${fileTypeInfo.mimeType}). The current model does not support vision — image content cannot be read.`,
+              message: `Image file detected but model lacks vision capability: ${filePath}`,
+            };
+          }
+
           if (!fsys.readFileBuffer) {
             return {
               type: "error" as const,

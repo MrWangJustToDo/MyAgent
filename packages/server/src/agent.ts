@@ -1,6 +1,7 @@
 import {
   agentManager,
   createDeepSeekModel,
+  createModelFromId,
   createOllamaModel,
   createOpenRouterModel,
   createOpenAICompatibleModel,
@@ -9,7 +10,7 @@ import {
 
 import { buildDefaultSystemPrompt } from "./prompt.js";
 
-import type { Agent, LanguageModel } from "@my-agent/core";
+import type { Agent, LanguageModel, ModelInfo } from "@my-agent/core";
 import type { ToolSet } from "ai";
 
 export interface ServerAgentConfig {
@@ -27,24 +28,36 @@ export async function createServerAgent(config: ServerAgentConfig): Promise<Agen
   const { model, provider, url, apiKey, rootPath, maxIterations = 50, systemPrompt, mcpConfigPath } = config;
 
   let languageModel: LanguageModel | null = null;
+  let modelInfo: ModelInfo | undefined;
   let extendTools: ToolSet = {};
 
+  // Try registry-based creation first
+  try {
+    const result = createModelFromId(model, { apiKey, baseURL: url });
+    languageModel = result.model;
+    modelInfo = result.info;
+  } catch {
+    if (provider === "ollama") {
+      languageModel = createOllamaModel(model, url, { reasoning: true });
+    } else if (provider === "openaiCompatible") {
+      languageModel = createOpenAICompatibleModel(model, url);
+    } else if (provider === "deepseek") {
+      languageModel = createDeepSeekModel(model, apiKey, url !== "http://localhost:11434" ? url : undefined);
+    } else {
+      languageModel = createOpenRouterModel(model, apiKey);
+    }
+  }
+
   if (provider === "ollama") {
-    languageModel = createOllamaModel(model, url, { reasoning: true });
     extendTools = getOllamaBuildInTools((p) => ({
       ["ollama-web-fetch"]: p.tools.webFetch(),
       ["ollama-web-search"]: p.tools.webSearch(),
     }));
-  } else if (provider === "openaiCompatible") {
-    languageModel = createOpenAICompatibleModel(model, url);
-  } else if (provider === "deepseek") {
-    languageModel = createDeepSeekModel(model, apiKey, url !== "http://localhost:11434" ? url : undefined);
-  } else {
-    languageModel = createOpenRouterModel(model, apiKey);
   }
 
   const agent = await agentManager.createManagedAgent({
     languageModel,
+    modelInfo,
     model,
     rootPath,
     name: "server-agent",
