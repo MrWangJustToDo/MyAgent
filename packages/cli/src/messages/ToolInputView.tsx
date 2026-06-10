@@ -1,11 +1,10 @@
 import { getToolName, type ToolUIPart } from "ai";
-import { Box, Text } from "ink";
+import { Box } from "ink";
 
 import { EditDiff } from "../components/EditDiff";
 import { SplitNode } from "../components/SplitNode";
 import { useSize } from "../hooks";
 
-import { useStaticContext } from "./StaticContext";
 import { TaskToolInputView } from "./TaskToolInputView";
 
 export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
@@ -91,71 +90,6 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
             />
           ))}
         </SplitNode>
-      </Box>
-    );
-  }
-
-  if (toolName === "ask_user") {
-    if (part.state === "input-streaming") return null;
-
-    const content = part.input as { question?: string; options?: string[] };
-
-    if (!content?.question) return null;
-
-    const { staticMessage } = useStaticContext();
-
-    if (staticMessage) return null;
-
-    return (
-      <Box flexDirection="column" paddingLeft={2}>
-        <Text color="cyan" bold>
-          {content.question}
-        </Text>
-      </Box>
-    );
-  }
-
-  if (toolName === "run_command") {
-    if (part.state === "input-streaming") return null;
-
-    const content = part.input as {
-      command: string;
-      cwd?: string;
-      timeout?: number;
-      background?: boolean;
-    };
-
-    if (!content?.command) return null;
-
-    const { staticMessage } = useStaticContext();
-
-    if (staticMessage) return null;
-
-    return (
-      <Box flexDirection="column" paddingLeft={2}>
-        <Box>
-          <Box flexShrink={0}>
-            <Text color="green">$ </Text>
-          </Box>
-          <Text dimColor>
-            {content.command}
-            {content.cwd && (
-              <Text color="gray" dimColor>
-                (cwd: {content.cwd})
-              </Text>
-            )}
-            {content.timeout && (
-              <Text color="gray" dimColor>
-                (timeout: {content.timeout}ms)
-              </Text>
-            )}
-            {content.background && (
-              <Text color="gray" dimColor>
-                (background: true)
-              </Text>
-            )}
-          </Text>
-        </Box>
       </Box>
     );
   }

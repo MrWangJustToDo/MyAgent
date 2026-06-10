@@ -39,7 +39,6 @@ import { createGlobTool } from "../tools/glob-tool.js";
 import { createGrepTool } from "../tools/grep-tool.js";
 import { createListFileTool } from "../tools/list-file-tool.js";
 import { createReadFileTool } from "../tools/read-file-tool.js";
-import { createRunCommandTool } from "../tools/run-command-tool.js";
 import { createTreeTool } from "../tools/tree-tool.js";
 
 import type { Sandbox } from "../../environment";
@@ -62,25 +61,30 @@ export const SUBAGENT_MAX_RETRIES = 2;
 /** @deprecated Use SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH instead */
 export const SUBAGENT_MAX_SUMMARY_LENGTH = SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH;
 
-/** Default system prompt for task exploration subagents */
-export const SUBAGENT_EXPLORE_SYSTEM_PROMPT = `You are a subagent with READ-ONLY access to the codebase.
+/** Build the default system prompt for task exploration subagents. */
+export function buildExploreSystemPrompt(maxIterations: number = SUBAGENT_DEFAULT_MAX_ITERATIONS): string {
+  return `You are a subagent with READ-ONLY access to the codebase.
 
 Your role:
 - Complete the delegated task thoroughly
 - Use available tools to explore and gather information
 
 Constraints:
-- You have read-only tools only (read_file, glob, grep, run_command, list_file, tree)
+- You have read-only tools only (read_file, glob, grep, list_file, tree)
 - You cannot modify files or create new files
 - You cannot spawn additional subagents
 - Focus on answering the specific question or completing the specific task
-- Do not run more than 40 steps — complete the task efficiently without excessive tool calls
+- Do not run more than ${maxIterations} steps — complete the task efficiently without excessive tool calls
 
 IMPORTANT: Only your final text response is returned to the parent agent as the task result.
 You MUST end with a comprehensive text summary — never end on a tool call.
 Your last message must be a complete, standalone answer to the task.`;
+}
 
-/** @deprecated Use SUBAGENT_EXPLORE_SYSTEM_PROMPT instead */
+/** Default system prompt (with default max iterations). */
+export const SUBAGENT_EXPLORE_SYSTEM_PROMPT = buildExploreSystemPrompt();
+
+/** @deprecated Use buildExploreSystemPrompt() instead */
 export const SUBAGENT_SYSTEM_PROMPT = SUBAGENT_EXPLORE_SYSTEM_PROMPT;
 
 // ============================================================================
@@ -161,7 +165,6 @@ export const createSubagentTools = (sandbox: Sandbox, context?: AgentContext): T
     read_file: createReadFileTool({ sandbox, context }),
     glob: createGlobTool({ sandbox }),
     grep: createGrepTool({ sandbox }),
-    run_command: createRunCommandTool({ sandbox }),
     list_file: createListFileTool({ sandbox }),
     tree: createTreeTool({ sandbox }),
   };
@@ -241,7 +244,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
     prompt,
     description = "subtask",
     parentAgentId,
-    systemPrompt = SUBAGENT_EXPLORE_SYSTEM_PROMPT,
+    systemPrompt: customSystemPrompt,
     tools: customTools,
     maxIterations = SUBAGENT_DEFAULT_MAX_ITERATIONS,
     maxRetried = SUBAGENT_MAX_RETRIES,
@@ -252,6 +255,9 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
     aggregateUsageToParent = true,
     initialMessages,
   } = config;
+
+  // Build system prompt: use custom if provided, otherwise generate with actual maxIterations
+  const systemPrompt = customSystemPrompt ?? buildExploreSystemPrompt(maxIterations);
 
   // Generate or use custom subagent ID
   const subagentId = customId ?? generateId("subagent");

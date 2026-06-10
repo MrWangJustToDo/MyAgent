@@ -273,18 +273,26 @@ export async function findRelevantMemories(
 
 /**
  * Format relevant memories into injectable text for the system prompt.
+ *
+ * Uses XML tags (`<relevant_memories>`, `<memory>`) to provide unambiguous
+ * boundaries so markdown content inside memories (headings, code fences,
+ * `---` separators) doesn't bleed into the surrounding system prompt structure.
+ *
  * Returns empty string if no memories are provided.
  */
 export function formatRelevantMemories(memories: RelevantMemory[]): string {
   if (memories.length === 0) return "";
 
-  const parts = memories.map((m) => `### ${m.name} (${m.type})\n> ${m.description}\n\n${m.content}`);
+  const parts = memories.map(
+    (m) => `<memory name="${m.name}" type="${m.type}">\n${m.description}\n\n${m.content}\n</memory>`
+  );
 
   return [
-    "## Relevant Memories",
+    "<relevant_memories>",
     "The following memories were selected as relevant to the current conversation.",
     "Apply any user preferences, project facts, or conventions described below.",
     "",
-    parts.join("\n\n---\n\n"),
+    parts.join("\n\n"),
+    "</relevant_memories>",
   ].join("\n");
 }

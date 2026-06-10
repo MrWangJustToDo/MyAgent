@@ -111,48 +111,62 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
   // ============================================================================
 
   /**
-   * Build the final system prompt by appending dynamic sections:
-   * 1. Agent documentation (AGENTS.md / CLAUDE.md)
-   * 2. Available skills (two-layer injection pattern)
-   * 3. Memory index (persistent cross-session knowledge)
+   * Build the final system prompt by appending dynamic sections.
    *
-   * The agent documentation is loaded from the project root on startup
-   * and follows the cross-tool AGENTS.md standard.
+   * Each section is wrapped in XML tags (`<project_instructions>`, `<skills>`,
+   * `<memory_index>`, `<relevant_memories>`, `<reminder>`) to provide
+   * unambiguous structural boundaries. The markdown content inside each section
+   * (which may contain its own `##` headings, `---` separators, code fences,
+   * etc.) is preserved as-is — the XML envelope prevents the LLM from
+   * confusing inter-section structure with intra-section markdown.
    */
   private buildSystemPrompt(): string | undefined {
     const parts: string[] = [];
 
-    // 1. Base system prompt (from config or default)
+    // 1. Base system prompt (from config or default) — no wrapper needed
     if (this.config.systemPrompt) {
       parts.push(this.config.systemPrompt);
     }
 
     // 2. Agent documentation (AGENTS.md / CLAUDE.md content)
-    // This is loaded during agent creation via agent-doc-loader.ts
     if (this.agentDocContent) {
-      parts.push(`\n## Project Instructions\n\n${this.agentDocContent}`);
+      parts.push(
+        [
+          "<project_instructions>",
+          "Below are the project-specific instructions loaded from the repository.",
+          "Follow these conventions, rules, and guidelines when working in this codebase.",
+          "",
+          this.agentDocContent,
+          "</project_instructions>",
+        ].join("\n")
+      );
     }
 
     // 3. Available skills (two-layer injection)
     if (this.skillRegister && this.skillRegister.size > 0) {
-      const skillSection = [
-        "## Available Skills",
-        "Use `load_skill` to load any of these skills when relevant to the user's task:",
-        this.skillRegister.getDescriptions(),
-      ].join("\n");
-      parts.push(skillSection);
+      parts.push(
+        [
+          "<skills>",
+          "Use `load_skill` to load any of these skills when relevant to the user's task:",
+          "",
+          this.skillRegister.getDescriptions(),
+          "</skills>",
+        ].join("\n")
+      );
     }
 
     // 4. Memory index (persistent cross-session knowledge)
     if (this.memoryContent) {
-      const memorySection = [
-        "## Memories",
-        "These are memories from previous sessions. Respect user preferences from memory.",
-        "When the user says 'remember' or expresses a clear preference, it will be automatically extracted.",
-        "",
-        this.memoryContent,
-      ].join("\n");
-      parts.push(memorySection);
+      parts.push(
+        [
+          "<memory_index>",
+          "These are memories from previous sessions. Respect user preferences from memory.",
+          "When the user says 'remember' or expresses a clear preference, it will be automatically extracted.",
+          "",
+          this.memoryContent,
+          "</memory_index>",
+        ].join("\n")
+      );
     }
 
     // 5. Relevant memory content (full body of memories selected for this turn)
@@ -160,8 +174,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       parts.push(this.relevantMemoryContent);
     }
 
-    // 6. Nag reminder for todo updates (injected in system prompt to avoid
-    // breaking ModelMessage type constraints — ToolContent doesn't accept TextPart)
+    // 6. Nag reminder for todo updates
     if (this.todoManager?.shouldNag()) {
       const reminder = this.todoManager.getNagReminder();
       this.log?.todo("Injecting nag reminder into system prompt", {

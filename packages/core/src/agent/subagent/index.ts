@@ -11,6 +11,7 @@ export {
   SUBAGENT_DEFAULT_MAX_ITERATIONS,
   SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH,
   SUBAGENT_MAX_RETRIES,
+  buildExploreSystemPrompt,
   SUBAGENT_EXPLORE_SYSTEM_PROMPT,
   // Deprecated aliases for backward compatibility
   SUBAGENT_MAX_SUMMARY_LENGTH,
