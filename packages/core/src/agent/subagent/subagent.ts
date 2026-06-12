@@ -40,6 +40,7 @@ import { createGrepTool } from "../tools/grep-tool.js";
 import { createListFileTool } from "../tools/list-file-tool.js";
 import { createReadFileTool } from "../tools/read-file-tool.js";
 import { createTreeTool } from "../tools/tree-tool.js";
+import { maybeCacheOutput } from "../tools/util/tool-output-cache.js";
 
 import type { Sandbox } from "../../environment";
 import type { AgentContext } from "../agent-context/agent-context.js";
@@ -131,7 +132,7 @@ export interface SubagentConfig {
 export interface SubagentResult {
   /** Subagent ID - use to get instance via agentManager.getAgent(subagentId) */
   subagentId: string;
-  /** Final output text */
+  /** Final output text (may be truncated; full output at cachedOutputPath) */
   output: string;
   /** Whether the output was truncated */
   truncated: boolean;
@@ -147,6 +148,8 @@ export interface SubagentResult {
   reachedLimit: boolean;
   /** Number of retries attempted */
   retries: number;
+  /** Path to cached full output on disk (null if output wasn't large enough to cache) */
+  cachedOutputPath: string | null;
 }
 
 /** @deprecated Use SubagentResult.output instead of summary */
@@ -292,14 +295,12 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
   });
 
   // Set tools - use custom tools if provided, otherwise use read-only exploration tools.
-  // When custom tools are explicitly provided (e.g., {} for compaction), also clear
-  // customTools that were added by createManagedAgent (todo, webfetch, websearch).
+  // Always clear customTools added by createManagedAgent (todo, webfetch, websearch)
+  // since subagents should only have their explicitly configured tool set.
   const subagentContext = subagent.getContext() ?? undefined;
   const subagentTools = customTools !== undefined ? customTools : createSubagentTools(sandbox, subagentContext);
   subagent.setTools(subagentTools);
-  if (customTools !== undefined) {
-    subagent.customTools = {};
-  }
+  subagent.customTools = {};
 
   // Emit subagent:created event
   agentManager.emit({
@@ -393,8 +394,26 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           continue;
         }
 
-        // Truncate if needed
-        const { summary: output, truncated } = truncateSummary(rawOutput, maxOutputLength);
+        // Cache full output to disk when it's large, so the parent agent
+        // can read_file the complete result via the cached path.
+        // If cached, use the preview (head+tail with read_file hint) as output.
+        // Otherwise fall back to truncateSummary for moderate-length output.
+        let output: string;
+        let truncated: boolean;
+        let cachedOutputPath: string | null = null;
+
+        if (sandbox) {
+          const cached = await maybeCacheOutput(sandbox, rawOutput, `${subagentId}-task`);
+          cachedOutputPath = cached.cachedOutputPath;
+          if (cachedOutputPath) {
+            output = cached.content;
+            truncated = true;
+          } else {
+            ({ summary: output, truncated } = truncateSummary(rawOutput, maxOutputLength));
+          }
+        } else {
+          ({ summary: output, truncated } = truncateSummary(rawOutput, maxOutputLength));
+        }
 
         parentLog?.info("agent", "Subagent completed", {
           subagentId,
@@ -402,6 +421,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           reachedLimit,
           outputLength: output.length,
           truncated,
+          cachedOutputPath,
           usage,
           output,
         });
@@ -423,6 +443,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           usage,
           reachedLimit,
           retries,
+          cachedOutputPath,
         };
       } catch (error) {
         parentLog?.error("agent", "Subagent error", error as Error);
@@ -444,6 +465,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
           reachedLimit: false,
           retries: retries,
+          cachedOutputPath: null,
         };
       }
     }

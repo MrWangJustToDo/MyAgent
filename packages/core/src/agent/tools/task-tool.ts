@@ -60,6 +60,8 @@ export const taskOutputSchema = z.object({
     .describe("Token usage for this subtask"),
   /** Execution duration in milliseconds */
   durationMs: z.number().describe("Execution duration in milliseconds"),
+  /** Path to cached full output on disk. Use read_file to access. */
+  cachedOutputPath: z.string().nullable().optional().describe("Path to cached full output. Use read_file to read it."),
 });
 
 export type TaskOutput = z.infer<typeof taskOutputSchema>;
@@ -141,6 +143,7 @@ Example use cases:
           reachedLimit: result.reachedLimit,
           retries: result.retries,
           usage: result.usage,
+          cachedOutputPath: result.cachedOutputPath,
         };
       });
     },

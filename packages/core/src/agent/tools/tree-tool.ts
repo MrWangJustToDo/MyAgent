@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { OUTPUT_LIMITS, truncateString, withDuration } from "./util/helpers.js";
+import { maybeCacheOutput } from "./util/tool-output-cache.js";
 
 import type { Sandbox } from "../../environment";
 
@@ -40,8 +41,13 @@ export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
       truncated: z.boolean().describe("Whether the tree output was truncated."),
       message: z.string().describe("Human-readable summary of the operation."),
       durationMs: z.number().describe("Execution duration in milliseconds."),
+      cachedOutputPath: z
+        .string()
+        .nullable()
+        .optional()
+        .describe("Path to cached full output. Use read_file to read it."),
     }),
-    execute: async ({ path, maxDepth, showHidden, dirsOnly, pattern, ignore }) => {
+    execute: async ({ path, maxDepth, showHidden, dirsOnly, pattern, ignore }, { toolCallId }) => {
       return withDuration(async () => {
         const rootPath = path ?? ".";
         const depth = maxDepth ?? 3;
@@ -104,11 +110,17 @@ export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
 
           // Convert find output to tree-like format
           const paths = result.stdout.split("\n").filter((p) => p.trim());
-          let tree = formatAsTree(paths, rootPath);
+          const rawTree = formatAsTree(paths, rootPath);
 
-          // Truncate tree output if too long
-          const { text: truncatedTree, truncated } = truncateString(tree, MAX_TREE_CHARS);
-          tree = truncatedTree;
+          const cached = await maybeCacheOutput(sandbox, rawTree, `${toolCallId}-tree`);
+          let tree: string;
+          let truncated: boolean;
+          if (cached.cachedOutputPath) {
+            tree = cached.content;
+            truncated = true;
+          } else {
+            ({ text: tree, truncated } = truncateString(rawTree, MAX_TREE_CHARS));
+          }
 
           const truncationNote = truncated ? " (output truncated)" : "";
 
@@ -119,13 +131,21 @@ export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
             totalEntries: paths.length,
             truncated,
             message: `Directory tree for: ${rootPath} (depth: ${depth})${truncationNote}`,
+            cachedOutputPath: cached.cachedOutputPath,
           };
         }
 
         const lines = result.stdout.split("\n").filter((l) => l.trim());
 
-        // Truncate tree output if too long
-        const { text: truncatedTree, truncated } = truncateString(result.stdout, MAX_TREE_CHARS);
+        const cached = await maybeCacheOutput(sandbox, result.stdout, `${toolCallId}-tree`);
+        let truncatedTree: string;
+        let truncated: boolean;
+        if (cached.cachedOutputPath) {
+          truncatedTree = cached.content;
+          truncated = true;
+        } else {
+          ({ text: truncatedTree, truncated } = truncateString(result.stdout, MAX_TREE_CHARS));
+        }
 
         const truncationNote = truncated ? " (output truncated)" : "";
 
@@ -136,6 +156,7 @@ export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
           totalEntries: lines.length,
           truncated,
           message: `Directory tree for: ${rootPath} (depth: ${depth})${truncationNote}`,
+          cachedOutputPath: cached.cachedOutputPath,
         };
       });
     },

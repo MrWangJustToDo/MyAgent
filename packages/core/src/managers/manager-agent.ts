@@ -115,7 +115,7 @@ export interface ManagedAgent {
   context: AgentContext;
   tools: ToolSet;
   sandbox: Sandbox;
-  todoManager: TodoManager;
+  todoManager: TodoManager | null;
   status: Agent["status"];
   error?: string;
   parentId?: string; // For subagent support
@@ -270,7 +270,7 @@ export class AgentManager {
 
     const log = new AgentLog();
 
-    const todoManager = new TodoManager();
+    const todoManager = parentId ? null : new TodoManager();
 
     const agent = new Agent(restConfig, { id: customId, setUp: setUp as ManagedAgentConfig<Agent>["setUp"] });
 
@@ -314,12 +314,17 @@ export class AgentManager {
       }
     }
 
-    agent.setTodoManager(todoManager);
+    // Todo, webfetch, websearch are only for root agents.
+    // Subagents get their tools overridden in runSubagent() anyway,
+    // but skipping here avoids a useless TodoManager and nag reminders.
+    if (!parentId && todoManager) {
+      agent.setTodoManager(todoManager);
 
-    agent.addTools({
-      webfetch: createWebfetchTool({ agentId: agent.id, sandbox }),
-      websearch: createWebsearchTool({ agentId: agent.id }),
-    });
+      agent.addTools({
+        webfetch: createWebfetchTool({ agentId: agent.id, sandbox }),
+        websearch: createWebsearchTool({ agentId: agent.id }),
+      });
+    }
 
     // Ask-user tool (root agents only — subagents don't interact with users)
     // Client-side tool: no execute function, handled by the CLI via addToolOutput
@@ -522,10 +527,12 @@ export class AgentManager {
     }
 
     // Restore todos
-    if (session.todos?.length && todoManager) {
-      todoManager.restoreTodos(session.todos);
-    } else {
-      todoManager.reset();
+    if (todoManager) {
+      if (session.todos?.length) {
+        todoManager.restoreTodos(session.todos);
+      } else {
+        todoManager.reset();
+      }
     }
 
     // Update agent's session reference
