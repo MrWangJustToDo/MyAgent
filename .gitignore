@@ -39,3 +39,6 @@ skills-lock.json
 
 tsconfig.tsbuildinfo
 .devtools
+
+# MyReact Devtool auto-generated bundle
+packages/extension/devtool/index.js

@@ -1,4 +1,5 @@
 import { Box, Text } from "ink";
+import { useMemo } from "react";
 
 import { useAutocomplete } from "../hooks/use-autocomplete.js";
 
@@ -9,16 +10,21 @@ export const AutocompleteList = () => {
   const suggestions = useAutocomplete((s) => s.suggestions);
   const selectedIndex = useAutocomplete((s) => s.selectedIndex);
 
-  if (!visible || suggestions.length === 0) return null;
+  const { startIndex, endIndex, visibleSuggestions, maxLabelWidth } = useMemo(() => {
+    if (!visible || suggestions.length === 0) {
+      return { startIndex: 0, endIndex: 0, visibleSuggestions: [], maxLabelWidth: 0 };
+    }
+    let start = 0;
+    if (suggestions.length > MAX_VISIBLE) {
+      start = Math.max(0, Math.min(selectedIndex - 2, suggestions.length - MAX_VISIBLE));
+    }
+    const end = Math.min(start + MAX_VISIBLE, suggestions.length);
+    const items = suggestions.slice(start, end);
+    const labelWidth = Math.max(...items.map((s) => s.label.length), 8);
+    return { startIndex: start, endIndex: end, visibleSuggestions: items, maxLabelWidth: labelWidth };
+  }, [visible, suggestions, selectedIndex]);
 
-  // Calculate visible window around selected index
-  let startIndex = 0;
-  if (suggestions.length > MAX_VISIBLE) {
-    // Keep selected item visible with some context
-    startIndex = Math.max(0, Math.min(selectedIndex - 2, suggestions.length - MAX_VISIBLE));
-  }
-  const endIndex = Math.min(startIndex + MAX_VISIBLE, suggestions.length);
-  const visibleSuggestions = suggestions.slice(startIndex, endIndex);
+  if (!visible || suggestions.length === 0) return null;
 
   const hasMoreAbove = startIndex > 0;
   const hasMoreBelow = endIndex < suggestions.length;
@@ -27,27 +33,42 @@ export const AutocompleteList = () => {
     <Box flexDirection="column" paddingLeft={2}>
       {hasMoreAbove && (
         <Text color="gray" dimColor>
-          ↑ more above
+          ▲
         </Text>
       )}
       {visibleSuggestions.map((suggestion, i) => {
         const actualIndex = startIndex + i;
         const isSelected = actualIndex === selectedIndex;
+        const label = suggestion.label.padEnd(maxLabelWidth + 2);
+
         return (
-          <Box key={`${suggestion.label}-${i}`} gap={2}>
-            <Text color={isSelected ? "yellow" : "gray"} bold={isSelected}>
-              {isSelected ? "→" : " "} {suggestion.usage}
+          <Box key={`${suggestion.label}-${i}`} flexDirection="row">
+            <Box width="30%" flexShrink={0} flexGrow={0}>
+              <Text
+                backgroundColor={isSelected ? "green" : undefined}
+                color={isSelected ? "black" : "cyan"}
+                bold={isSelected}
+                wrap="truncate"
+              >
+                {label}
+              </Text>
+            </Box>
+            <Text color={isSelected ? "white" : "gray"} dimColor={!isSelected} wrap="truncate">
+              {suggestion.description}
             </Text>
-            {isSelected && suggestion.description && <Text color="gray">{suggestion.description}</Text>}
           </Box>
         );
       })}
       {hasMoreBelow && (
         <Text color="gray" dimColor>
-          ↓ more below
+          ▼
         </Text>
       )}
-      <Box height={1} flexGrow={1} flexShrink={0} />
+      {suggestions.length > MAX_VISIBLE && (
+        <Text color="gray" dimColor>
+          ({selectedIndex + 1}/{suggestions.length})
+        </Text>
+      )}
     </Box>
   );
 };

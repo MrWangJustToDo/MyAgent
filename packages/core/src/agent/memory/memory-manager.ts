@@ -51,6 +51,9 @@ export class MemoryManager {
   /** Cached index content for synchronous access in buildSystemPrompt() */
   private cachedIndex: string = "";
 
+  /** Debounce timeout for index refresh */
+  private refreshTimeout?: ReturnType<typeof setTimeout>;
+
   constructor(sandbox: Sandbox, config: MemoryManagerConfig, logger?: AgentLog) {
     this.sandbox = sandbox;
     this.rootPath = config.rootPath;
@@ -74,7 +77,7 @@ export class MemoryManager {
     }
 
     // Load existing index into cache
-    await this.refreshIndex();
+    this.scheduleRefreshIndex();
   }
 
   // ============================================================================
@@ -211,7 +214,7 @@ export class MemoryManager {
     await this.sandbox.filesystem.writeFile(filePath, content);
     this.logger?.info("memory", `Wrote memory: ${filename}`);
 
-    await this.refreshIndex();
+    this.scheduleRefreshIndex();
     return filename;
   }
 
@@ -226,7 +229,7 @@ export class MemoryManager {
     } catch {
       this.logger?.warn("memory", `Failed to delete memory: ${filename}`);
     }
-    await this.refreshIndex();
+    this.scheduleRefreshIndex();
   }
 
   /**
@@ -249,6 +252,24 @@ export class MemoryManager {
   // ============================================================================
   // Index Management
   // ============================================================================
+
+  /**
+   * Schedule an index refresh with debounce (100ms).
+   * When multiple writes/deletes happen in rapid succession (e.g., during
+   * consolidation), only the final refresh actually runs, avoiding N+1
+   * redundant `listMemories()` calls and file writes.
+   */
+  private scheduleRefreshIndex(): void {
+    if (this.refreshTimeout) {
+      clearTimeout(this.refreshTimeout);
+    }
+    this.refreshTimeout = setTimeout(() => {
+      this.refreshTimeout = undefined;
+      this.refreshIndex().catch((err) => {
+        this.logger?.warn("memory", "Failed to refresh index", err);
+      });
+    }, 100);
+  }
 
   /**
    * Rebuild the MEMORY.md index from all memory files, then update the cache.

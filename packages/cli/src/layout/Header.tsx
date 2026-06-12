@@ -4,8 +4,6 @@ import Gradient from "ink-gradient";
 import { useEffect } from "react";
 
 import { FullBox } from "../components/FullBox";
-import { useArgs } from "../hooks";
-import { useAgentSandbox } from "../hooks/use-agent-sandbox";
 import { useStatic } from "../hooks/use-static";
 
 // ============================================================================
@@ -23,12 +21,10 @@ const LOGO_FONT = "simple";
 const Logo = () => {
   return (
     <Box flexDirection="column" alignItems="center" width="100%">
-      {/* Gradient big text logo */}
       <Gradient colors={GRADIENT_COLORS}>
         <BigText text="MyAgent" font={LOGO_FONT} letterSpacing={2} space={false} />
       </Gradient>
 
-      {/* Tagline */}
       <Box marginTop={-1}>
         <Text color="#6366F1" italic>
           AI-Powered Coding Agent
@@ -39,87 +35,41 @@ const Logo = () => {
 };
 
 // ============================================================================
-// Status Dot
+// Tips
 // ============================================================================
 
-const StatusDot = ({ color }: { color: string }) => (
-  <Text color={color} bold>
-    ●
-  </Text>
-);
+const TIPS = [
+  { key: "/", desc: "for commands" },
+  { key: "Ctrl+V", desc: "paste image" },
+  { key: "Esc", desc: "to abort" },
+];
 
 // ============================================================================
 // Header Component
 // ============================================================================
 
 export const Header = () => {
-  const { model, path } = useArgs((s) => ({ model: s.config.model, path: s.config.rootPath }));
-
-  const name = useAgentSandbox((s) => s.sandbox?.provider);
-
   useEffect(() => {
-    if (!model || !path || !name) return;
-
     useStatic.getActions().setStaticHeader(
-      <FullBox
-        flexDirection="column"
-        key="header"
-        marginBottom={1}
-        // borderStyle="round"
-        // borderColor="#334155"
-        paddingX={3}
-        paddingY={1}
-      >
-        {/* Logo */}
+      <FullBox flexDirection="column" key="header" marginBottom={1} paddingX={3} paddingY={1}>
         <Logo />
 
-        {/* Divider */}
-        {/* <Box marginY={1}>
-          <Text color="#334155">{"─".repeat(48)}</Text>
-        </Box> */}
         <Box height={1} />
 
-        {/* Info bar */}
+        {/* Tips bar */}
         <Box gap={3} justifyContent="center" width="100%">
-          <Box>
-            <StatusDot color="#00D4FF" />
-            <Text> </Text>
-            <Text color="#A1A1AA" dimColor>
-              Model
-            </Text>
-            <Text> </Text>
-            <Text color="#E4E4E7" bold wrap="truncate-end">
-              {model}
-            </Text>
-          </Box>
-
-          <Box>
-            <StatusDot color="#7B61FF" />
-            <Text> </Text>
-            <Text color="#A1A1AA" dimColor>
-              Sandbox
-            </Text>
-            <Text> </Text>
-            <Text color="#E4E4E7" wrap="truncate-end">
-              {name}
-            </Text>
-          </Box>
-
-          <Box>
-            <StatusDot color="#22D3EE" />
-            <Text> </Text>
-            <Text color="#A1A1AA" dimColor>
-              Path
-            </Text>
-            <Text> </Text>
-            <Text color="#E4E4E7" wrap="truncate-end">
-              {path}
-            </Text>
-          </Box>
+          {TIPS.map((tip, i) => (
+            <Box key={i} gap={1}>
+              <Text color="gray">{tip.key}</Text>
+              <Text color="gray" dimColor>
+                {tip.desc}
+              </Text>
+            </Box>
+          ))}
         </Box>
       </FullBox>
     );
-  }, [model, path, name]);
+  }, []);
 
   return null;
 };

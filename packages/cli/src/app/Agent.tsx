@@ -33,7 +33,7 @@ import type { UIMessage } from "ai";
 export const Agent = () => {
   const { exit } = useApp();
 
-  const { columns } = useSize.getActions().useInitTerminalSize();
+  useSize.getActions().useInitTerminalSize();
 
   useStatic.getActions().useInitStdout();
 
@@ -266,19 +266,8 @@ export const Agent = () => {
       }
 
       if (inputKey.return) {
-        const currentValue = useUserInput.getReadonlyState().value;
-        if (currentValue.endsWith("\\")) {
-          inputActions.backspace();
-          inputActions.insertNewline();
-          return;
-        }
         if (acceptAutocomplete(true)) return;
         handleNormalSubmit();
-        return;
-      }
-
-      if (inputChar === "\n") {
-        inputActions.insertNewline();
         return;
       }
 
@@ -299,12 +288,12 @@ export const Agent = () => {
 
       if (inputKey.upArrow) {
         if (isAutocompleteVisible) autocompleteActions.selectPrev();
-        else if (!inputActions.moveCursorUp(columns)) inputActions.historyPrev();
+        else inputActions.historyPrev();
         return;
       }
       if (inputKey.downArrow) {
         if (isAutocompleteVisible) autocompleteActions.selectNext();
-        else if (!inputActions.moveCursorDown(columns)) inputActions.historyNext();
+        else inputActions.historyNext();
         return;
       }
 

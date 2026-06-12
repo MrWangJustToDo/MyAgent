@@ -10,7 +10,7 @@ import { TaskToolInputView } from "./TaskToolInputView";
 export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
   const toolName = getToolName(part);
   const width = useSize((s) => s.state.screenWidth);
-  const bodyWidth = width - 4;
+  const bodyWidth = width - 8;
 
   if (toolName === "task") {
     const content = part.input as { prompt?: string; description?: string };
@@ -24,33 +24,37 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
 
     return (
       <Box paddingLeft={2}>
-        <EditDiff
-          id={part.toolCallId}
-          width={bodyWidth}
-          oldPath=""
-          oldFile=""
-          newPath={content.path || ""}
-          newFile={content.content || ""}
-        />
+        <Box borderColor="#555555" borderStyle="single">
+          <EditDiff
+            id={part.toolCallId}
+            width={bodyWidth}
+            oldPath=""
+            oldFile=""
+            newPath={content.path || ""}
+            newFile={content.content || ""}
+          />
+        </Box>
       </Box>
     );
   }
 
   if (toolName === "edit_file") {
     const content = part.input as { oldString?: string; path?: string; newString?: string; startLine?: number };
-    if (!content || part.state === "input-streaming") return null;
+    if (!content || !content.oldString || !content.newString || part.state === "input-streaming") return null;
 
     return (
       <Box paddingLeft={2}>
-        <EditDiff
-          id={part.toolCallId}
-          width={bodyWidth}
-          oldPath={content.path || ""}
-          oldFile={content.oldString || ""}
-          newPath={content.path || ""}
-          newFile={content.newString || ""}
-          startLine={content.startLine}
-        />
+        <Box borderColor="#555555" borderStyle="single">
+          <EditDiff
+            id={part.toolCallId}
+            width={bodyWidth}
+            oldPath={content.path || ""}
+            oldFile={content.oldString || ""}
+            newPath={content.path || ""}
+            newFile={content.newString || ""}
+            startLine={content.startLine}
+          />
+        </Box>
       </Box>
     );
   }
@@ -63,33 +67,37 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
       path: string;
     };
 
+    if (!content?.replacements?.length || !content.path) return null;
+
     return (
       <Box flexDirection="column" paddingLeft={2}>
-        <SplitNode
-          split={
-            <Box
-              borderTop
-              borderLeft={false}
-              borderRight={false}
-              borderBottom={false}
-              borderTopColor="gray"
-              borderStyle="single"
-              borderTopDimColor
-            />
-          }
-        >
-          {content?.replacements?.map((item, index) => (
-            <EditDiff
-              width={bodyWidth}
-              id={part.toolCallId + "-" + index}
-              oldPath={content.path || ""}
-              oldFile={item.oldString || ""}
-              newPath={content.path || ""}
-              newFile={item.newString || ""}
-              startLine={item.startLine}
-            />
-          ))}
-        </SplitNode>
+        <Box borderColor="#555555" borderStyle="single">
+          <SplitNode
+            split={
+              <Box
+                borderTop
+                borderLeft={false}
+                borderRight={false}
+                borderBottom={false}
+                borderTopColor="gray"
+                borderStyle="single"
+                borderTopDimColor
+              />
+            }
+          >
+            {content?.replacements?.map((item, index) => (
+              <EditDiff
+                width={bodyWidth}
+                id={part.toolCallId + "-" + index}
+                oldPath={content.path || ""}
+                oldFile={item.oldString || ""}
+                newPath={content.path || ""}
+                newFile={item.newString || ""}
+                startLine={item.startLine}
+              />
+            ))}
+          </SplitNode>
+        </Box>
       </Box>
     );
   }

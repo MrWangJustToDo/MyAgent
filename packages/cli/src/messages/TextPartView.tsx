@@ -3,20 +3,22 @@ import { StreamMarkdown } from "ink-stream-markdown";
 
 import { useSize } from "../hooks";
 
-import type { TextUIPart, UIMessage } from "ai";
+import type { TextUIPart } from "ai";
 
 export interface TextPartViewProps {
   part: TextUIPart;
-  role: UIMessage["role"];
+  role: string;
 }
 
-/** Render a text part */
-export const TextPartView = ({ part, role }: TextPartViewProps) => {
+/** Render a text part for assistant messages (user messages are handled by UserMessageView) */
+export const TextPartView = ({ part }: TextPartViewProps) => {
   const width = useSize((s) => s.state.screenWidth);
 
   return (
     <Box flexDirection="row">
-      <Box flexShrink={0}>{role === "user" ? <Text>{"> "}</Text> : <Text>{"- "}</Text>}</Box>
+      <Box flexShrink={0}>
+        <Text>{"✦ "}</Text>
+      </Box>
       <StreamMarkdown theme={{ width: width - 2 }}>{part.text.trimEnd()}</StreamMarkdown>
     </Box>
   );

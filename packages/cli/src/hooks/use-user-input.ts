@@ -1,5 +1,7 @@
 import { createState } from "reactivity-store";
 
+import { useNotification } from "./use-notification.js";
+
 import type { Attachment } from "../types/attachment.js";
 import type { Key } from "ink";
 
@@ -32,120 +34,6 @@ export function createImagePlaceholder(index: number): string {
 }
 
 // ============================================================================
-// Visual Line Helpers
-// ============================================================================
-
-/** Build a map from image index to display number (1, 2, 3... in order of appearance) */
-function buildImageDisplayNumbers(value: string): Map<number, number> {
-  const displayNumbers = new Map<number, number>();
-  let displayNum = 1;
-
-  for (const char of value) {
-    const code = char.charCodeAt(0);
-    if (code >= IMAGE_PLACEHOLDER_START && code <= IMAGE_PLACEHOLDER_END) {
-      displayNumbers.set(code - IMAGE_PLACEHOLDER_START, displayNum++);
-    }
-  }
-
-  return displayNumbers;
-}
-
-/** Get the visual display width of a character (image placeholders are wider) */
-function getCharVisualWidth(char: string, displayNumbers: Map<number, number>): number {
-  const code = char.charCodeAt(0);
-  if (code >= IMAGE_PLACEHOLDER_START && code <= IMAGE_PLACEHOLDER_END) {
-    const displayNum = displayNumbers.get(code - IMAGE_PLACEHOLDER_START) ?? 0;
-    return `[Image #${displayNum}]`.length;
-  }
-  return 1;
-}
-
-/**
- * Compute visual line boundaries (start and end character indices) for width-based wrapping.
- * Respects explicit \n characters and wraps long lines at the given width.
- */
-function computeVisualLineBoundaries(
-  value: string,
-  maxWidth: number,
-  displayNumbers: Map<number, number>
-): { start: number; end: number }[] {
-  const boundaries: { start: number; end: number }[] = [];
-  let lineStart = 0;
-  let currentWidth = 0;
-
-  for (let i = 0; i < value.length; i++) {
-    const char = value[i]!;
-
-    if (char === "\n") {
-      boundaries.push({ start: lineStart, end: i + 1 });
-      lineStart = i + 1;
-      currentWidth = 0;
-      continue;
-    }
-
-    const w = getCharVisualWidth(char, displayNumbers);
-
-    if (currentWidth + w > maxWidth && currentWidth > 0) {
-      boundaries.push({ start: lineStart, end: i });
-      lineStart = i;
-      currentWidth = w;
-    } else {
-      currentWidth += w;
-    }
-  }
-
-  // Add final line (or first line if value is empty)
-  if (lineStart < value.length || boundaries.length === 0) {
-    boundaries.push({ start: lineStart, end: value.length });
-  }
-
-  return boundaries;
-}
-
-/** Compute the visual column (display width) at a given raw position within a line */
-function getVisualColumn(value: string, lineStart: number, pos: number, displayNumbers: Map<number, number>): number {
-  let col = 0;
-
-  for (let i = lineStart; i < pos; i++) {
-    const char = value[i]!;
-    if (char === "\n") {
-      col = 0;
-    } else {
-      col += getCharVisualWidth(char, displayNumbers);
-    }
-  }
-
-  return col;
-}
-
-/**
- * Find the raw character position at a target visual column on a given line.
- * Returns the closest position that matches or exceeds the target column.
- */
-function getRawPositionAtVisualColumn(
-  value: string,
-  lineStart: number,
-  lineEnd: number,
-  targetCol: number,
-  displayNumbers: Map<number, number>
-): number {
-  let col = 0;
-
-  for (let i = lineStart; i < lineEnd; i++) {
-    const char = value[i]!;
-    const w = getCharVisualWidth(char, displayNumbers);
-
-    if (col + w > targetCol) {
-      return i;
-    }
-
-    col += w;
-  }
-
-  return lineEnd;
-}
-
-// ============================================================================
 // Types
 // ============================================================================
 
@@ -168,10 +56,6 @@ export interface UserInputState {
   attachments: Attachment[];
   /** Currently selected attachment index (-1 means none selected) */
   selectedAttachment: number;
-  /** Error message to display (e.g. file validation failure) */
-  inputError: string | null;
-  /** Feedback message from commands (success/info/error) */
-  inputFeedback: { text: string; type: "success" | "info" | "error" } | null;
   /** Next image index to use for placeholder */
   nextImageIndex: number;
 
@@ -194,8 +78,6 @@ const initialState: UserInputState = {
   loading: false,
   attachments: [],
   selectedAttachment: -1,
-  inputError: null,
-  inputFeedback: null,
   nextImageIndex: 0,
 };
 
@@ -320,17 +202,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
     },
 
     /**
-     * Insert a newline at cursor position (Shift+Enter)
-     */
-    insertNewline: () => {
-      const pos = state.cursorPosition;
-      state.value = state.value.slice(0, pos) + "\n" + state.value.slice(pos);
-      state.cursorPosition = pos + 1;
-      state.historyIndex = -1;
-    },
-
-    /**
-     * Move cursor left. Wraps to end of previous line.
+     * Move cursor left.
      */
     moveCursorLeft: () => {
       state.selectAll = false;
@@ -340,121 +212,13 @@ export const useUserInput = createState(() => ({ ...initialState }), {
     },
 
     /**
-     * Move cursor right. Wraps to start of next line.
+     * Move cursor right.
      */
     moveCursorRight: () => {
       state.selectAll = false;
       if (state.cursorPosition < state.value.length) {
         state.cursorPosition += 1;
       }
-    },
-
-    /**
-     * Move cursor up one visual line. Returns false if already on first visual line
-     * (triggers history navigation in the caller).
-     *
-     * @param maxWidth - Optional max width for visual line wrapping. If provided, wraps
-     *   text at this width (handles image placeholders). If omitted, uses \n-based lines only.
-     */
-    moveCursorUp: (maxWidth?: number): boolean => {
-      state.selectAll = false;
-      const val = state.value;
-      const pos = state.cursorPosition;
-
-      if (!maxWidth) {
-        // Legacy behavior: \n-based lines only
-        const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
-        if (lineStart === 0) return false; // already on first line
-        const col = pos - lineStart;
-        const prevLineStart = val.lastIndexOf("\n", lineStart - 2) + 1;
-        const prevLineLen = lineStart - 1 - prevLineStart;
-        state.cursorPosition = prevLineStart + Math.min(col, prevLineLen);
-        return true;
-      }
-
-      // Visual wrapping behavior
-      const displayNumbers = buildImageDisplayNumbers(val);
-      const boundaries = computeVisualLineBoundaries(val, maxWidth, displayNumbers);
-
-      // Find the visual line containing the cursor
-      let currentIdx = -1;
-      for (let i = 0; i < boundaries.length; i++) {
-        if (pos >= boundaries[i]!.start && pos < boundaries[i]!.end) {
-          currentIdx = i;
-          break;
-        }
-      }
-      if (currentIdx === -1 && boundaries.length > 0) {
-        // Cursor at end of value, assign to last line
-        currentIdx = boundaries.length - 1;
-      }
-
-      if (currentIdx === -1 || currentIdx === 0) return false; // already on first visual line
-
-      const currentLine = boundaries[currentIdx]!;
-      const prevLine = boundaries[currentIdx - 1]!;
-
-      // Calculate visual column of cursor on current line
-      const visualCol = getVisualColumn(val, currentLine.start, pos, displayNumbers);
-
-      // Find raw position on previous line at target visual column
-      state.cursorPosition = getRawPositionAtVisualColumn(val, prevLine.start, prevLine.end, visualCol, displayNumbers);
-      return true;
-    },
-
-    /**
-     * Move cursor down one visual line. Returns false if already on last visual line
-     * (triggers history navigation in the caller).
-     *
-     * @param maxWidth - Optional max width for visual line wrapping. If provided, wraps
-     *   text at this width (handles image placeholders). If omitted, uses \n-based lines only.
-     */
-    moveCursorDown: (maxWidth?: number): boolean => {
-      state.selectAll = false;
-      const val = state.value;
-      const pos = state.cursorPosition;
-
-      if (!maxWidth) {
-        // Legacy behavior: \n-based lines only
-        const lineEnd = val.indexOf("\n", pos);
-        if (lineEnd === -1) return false; // already on last line
-        const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
-        const col = pos - lineStart;
-        const nextLineStart = lineEnd + 1;
-        const nextLineEnd = val.indexOf("\n", nextLineStart);
-        const nextLineLen = (nextLineEnd === -1 ? val.length : nextLineEnd) - nextLineStart;
-        state.cursorPosition = nextLineStart + Math.min(col, nextLineLen);
-        return true;
-      }
-
-      // Visual wrapping behavior
-      const displayNumbers = buildImageDisplayNumbers(val);
-      const boundaries = computeVisualLineBoundaries(val, maxWidth, displayNumbers);
-
-      // Find the visual line containing the cursor
-      let currentIdx = -1;
-      for (let i = 0; i < boundaries.length; i++) {
-        if (pos >= boundaries[i]!.start && pos < boundaries[i]!.end) {
-          currentIdx = i;
-          break;
-        }
-      }
-      if (currentIdx === -1 && boundaries.length > 0) {
-        // Cursor at end of value, assign to last line
-        currentIdx = boundaries.length - 1;
-      }
-
-      if (currentIdx === -1 || currentIdx >= boundaries.length - 1) return false; // already on last visual line
-
-      const currentLine = boundaries[currentIdx]!;
-      const nextLine = boundaries[currentIdx + 1]!;
-
-      // Calculate visual column of cursor on current line
-      const visualCol = getVisualColumn(val, currentLine.start, pos, displayNumbers);
-
-      // Find raw position on next line at target visual column
-      state.cursorPosition = getRawPositionAtVisualColumn(val, nextLine.start, nextLine.end, visualCol, displayNumbers);
-      return true;
     },
 
     /**
@@ -505,7 +269,6 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.historyIndex = -1;
       state.attachments = [];
       state.selectedAttachment = -1;
-      state.inputError = null;
       state.nextImageIndex = 0;
       return { text, attachments: orderedAttachments };
     },
@@ -574,7 +337,6 @@ export const useUserInput = createState(() => ({ ...initialState }), {
 
       state.nextImageIndex = imageIndex + 1;
       state.selectedAttachment = -1;
-      state.inputError = null;
     },
 
     /**
@@ -590,22 +352,33 @@ export const useUserInput = createState(() => ({ ...initialState }), {
     },
 
     /**
-     * Set an error message
+     * Show an error notification.
      */
     setInputError: (error: string | null) => {
-      state.inputError = error;
-
-      setTimeout(() => (state.inputError = null), 2000);
+      if (error) {
+        useNotification.getActions().setNotification({
+          id: `input-error-${Date.now()}`,
+          category: "system",
+          level: "error",
+          message: error,
+          timestamp: Date.now(),
+        });
+      }
     },
 
     /**
-     * Set a feedback message (success/info/error) from commands
+     * Show a feedback notification (success/info/error).
      */
     setInputFeedback: (text: string | null, type: "success" | "info" | "error" = "info") => {
-      state.inputFeedback = text ? { text, type } : null;
-
       if (text) {
-        setTimeout(() => (state.inputFeedback = null), 3000);
+        const levelMap = { success: "success", info: "info", error: "error" } as const;
+        useNotification.getActions().setNotification({
+          id: `input-feedback-${Date.now()}`,
+          category: "system",
+          level: levelMap[type],
+          message: text,
+          timestamp: Date.now(),
+        });
       }
     },
 
@@ -622,7 +395,6 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.loading = false;
       state.attachments = [];
       state.selectedAttachment = -1;
-      state.inputError = null;
       state.nextImageIndex = 0;
     },
   }),

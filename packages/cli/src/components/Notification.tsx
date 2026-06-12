@@ -5,6 +5,13 @@ import { useNotification } from "../hooks/use-notification";
 
 import type { AgentNotification } from "@my-agent/core";
 
+const LEVEL_COLORS: Record<string, string> = {
+  info: "cyan",
+  success: "green",
+  warning: "yellow",
+  error: "red",
+};
+
 export const Notification = () => {
   const [notification, setNotification] = useState<AgentNotification>();
 
@@ -30,10 +37,16 @@ export const Notification = () => {
     startLoop();
   }, [notifications.length]);
 
-  return notification ? (
+  if (!notification) return null;
+
+  const color = LEVEL_COLORS[notification.level] || "gray";
+
+  return (
     <Box gap={2} flexShrink={0}>
       <Text dimColor>|</Text>
-      <Text dimColor>{notification.message}</Text>
+      <Text color={color} dimColor={notification.level === "info"}>
+        {notification.message}
+      </Text>
     </Box>
-  ) : null;
+  );
 };
