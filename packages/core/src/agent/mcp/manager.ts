@@ -8,6 +8,33 @@ import type { ToolSet } from "ai";
 import type { ChildProcess } from "child_process";
 
 // ============================================================================
+// McpServerStatus — public data for display in CLI /mcp command
+// ============================================================================
+
+export interface McpServerStatus {
+  /** Server name from config key */
+  name: string;
+  /** Transport type */
+  transport: string;
+  /** Number of tools registered from this server */
+  toolCount: number;
+  /** Whether the connection succeeded or failed */
+  status: "connected" | "failed";
+  /** Error message if connection failed */
+  error?: string;
+  /** Stdio command (for stdio transport) */
+  command?: string;
+  /** Stdio command args (for stdio transport) */
+  args?: string[];
+  /** SSE/HTTP URL (for sse/http transport) */
+  url?: string;
+  /** MCP server name reported during handshake */
+  serverName?: string;
+  /** MCP server version reported during handshake */
+  serverVersion?: string;
+}
+
+// ============================================================================
 // Transport Factory
 // ============================================================================
 
@@ -42,6 +69,9 @@ export class McpManager {
   private clients: Map<string, MCPClient> = new Map();
   private stdioTransports: Experimental_StdioMCPTransport[] = [];
 
+  /** Per-server status metadata for display (populated during initialize) */
+  private serverStatuses: Map<string, McpServerStatus> = new Map();
+
   /**
    * Connect to all configured MCP servers and return their tools as a merged ToolSet.
    * Failed connections are logged but do not block other servers.
@@ -73,12 +103,39 @@ export class McpManager {
         }
 
         this.clients.set(name, client);
+
+        // Record status for display
+        this.serverStatuses.set(name, {
+          name,
+          transport: serverConfig.transport,
+          toolCount: Object.keys(tools).length,
+          status: "connected",
+          command: serverConfig.transport === "stdio" ? serverConfig.command : undefined,
+          args: serverConfig.transport === "stdio" ? serverConfig.args : undefined,
+          url: serverConfig.transport !== "stdio" ? serverConfig.url : undefined,
+          serverName: client.serverInfo?.name,
+          serverVersion: client.serverInfo?.version,
+        });
+
         logger?.info("agent", `MCP server connected: ${name}`, {
           toolCount: Object.keys(tools).length,
           transport: serverConfig.transport,
         });
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
+
+        // Record failure status
+        this.serverStatuses.set(name, {
+          name,
+          transport: serverConfig.transport,
+          toolCount: 0,
+          status: "failed",
+          error: error.message,
+          command: serverConfig.transport === "stdio" ? serverConfig.command : undefined,
+          args: serverConfig.transport === "stdio" ? serverConfig.args : undefined,
+          url: serverConfig.transport !== "stdio" ? serverConfig.url : undefined,
+        });
+
         logger?.error("agent", `MCP server failed: ${name}`, error, {
           transport: serverConfig.transport,
         });
@@ -86,6 +143,13 @@ export class McpManager {
     }
 
     return allTools;
+  }
+
+  /**
+   * Get detailed status for all configured MCP servers.
+   */
+  getServerStatuses(): McpServerStatus[] {
+    return Array.from(this.serverStatuses.values());
   }
 
   /**
@@ -107,6 +171,7 @@ export class McpManager {
     }
     this.stdioTransports = [];
     this.clients.clear();
+    this.serverStatuses.clear();
   }
 
   /**
@@ -122,6 +187,7 @@ export class McpManager {
     }
     this.clients.clear();
     this.stdioTransports = [];
+    this.serverStatuses.clear();
   }
 
   /**

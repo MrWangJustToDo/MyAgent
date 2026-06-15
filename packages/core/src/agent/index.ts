@@ -167,6 +167,7 @@ export {
   type McpServerConfig,
   type McpServerConfigStdio,
   type McpServerConfigHttp,
+  type McpServerStatus,
 } from "./mcp";
 
 // Agent documentation loader exports (AGENTS.md / CLAUDE.md)

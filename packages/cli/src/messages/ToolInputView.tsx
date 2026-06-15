@@ -22,9 +22,13 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
     const content = part.input as { content?: string; path?: string };
     if (!content || part.state === "input-streaming") return null;
 
+    const approved = part.approval?.approved;
+
+    const borderColor = typeof approved === "boolean" ? (approved ? "greenBright" : "redBright") : "#555555";
+
     return (
       <Box paddingLeft={2}>
-        <Box borderColor="#555555" borderStyle="single">
+        <Box borderColor={borderColor} borderStyle="single">
           <EditDiff
             id={part.toolCallId}
             width={bodyWidth}
@@ -40,11 +44,16 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
 
   if (toolName === "edit_file") {
     const content = part.input as { oldString?: string; path?: string; newString?: string; startLine?: number };
+
     if (!content || !content.oldString || !content.newString || part.state === "input-streaming") return null;
+
+    const approved = part.approval?.approved;
+
+    const borderColor = typeof approved === "boolean" ? (approved ? "greenBright" : "redBright") : "#555555";
 
     return (
       <Box paddingLeft={2}>
-        <Box borderColor="#555555" borderStyle="single">
+        <Box borderColor={borderColor} borderStyle="single">
           <EditDiff
             id={part.toolCallId}
             width={bodyWidth}
@@ -69,9 +78,13 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
 
     if (!content?.replacements?.length || !content.path) return null;
 
+    const approved = part.approval?.approved;
+
+    const borderColor = typeof approved === "boolean" ? (approved ? "greenBright" : "redBright") : "#555555";
+
     return (
       <Box paddingLeft={2}>
-        <Box flexDirection="column" borderColor="#555555" borderStyle="single">
+        <Box flexDirection="column" borderColor={borderColor} borderStyle="single">
           <SplitNode
             split={
               <Box

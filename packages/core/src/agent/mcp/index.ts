@@ -1,4 +1,4 @@
-export { McpManager } from "./manager.js";
+export { McpManager, type McpServerStatus } from "./manager.js";
 export { loadMcpConfig, DEFAULT_MCP_CONFIG_PATH } from "./config.js";
 export {
   mcpConfigSchema,
