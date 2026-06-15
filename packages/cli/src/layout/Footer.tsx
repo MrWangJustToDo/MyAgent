@@ -2,7 +2,6 @@ import { Box, Text } from "ink";
 
 import { AutocompleteList } from "../components/AutocompleteList.js";
 import { CommandOutput } from "../components/CommandOutput.js";
-import { ErrorDetail } from "../components/ErrorDetail.js";
 import { FullBox } from "../components/FullBox.js";
 import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
 import { LLMUsage } from "../components/LLMUsage.js";
@@ -75,8 +74,6 @@ export const Footer = () => {
         borderTopDimColor
         width="full"
       />
-      {/* Error message */}
-      <ErrorDetail />
 
       {/* Context info bar — above input, no border */}
       <ContextBar
@@ -150,6 +147,14 @@ const ContextBar = ({
   showSelectList: boolean;
   isMultiSelect: boolean;
 }) => {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  const _error = useAgent((s) => (s.agent as Agent)?.error || "");
+
+  const chatError = useLocalChatStatus((s) => s.error);
+
+  const error = _error || chatError?.name;
+
   return (
     <Box paddingX={1} gap={2}>
       <Box gap={2} flexShrink={0}>
@@ -179,7 +184,7 @@ const ContextBar = ({
             Ready
           </Text>
         )}
-        {status === "error" && <Text color="red">Error</Text>}
+        {status === "error" && <Text color="red">{error}</Text>}
 
         {/* Contextual shortcuts */}
         {isPendingApproval && !showFreeformInput && (
