@@ -1,3 +1,5 @@
+import { useCommandOutput } from "../hooks/use-command-output.js";
+
 import type { Command, CommandContext, CommandResult } from "./types.js";
 
 const commands: Command[] = [];
@@ -14,10 +16,17 @@ export function getAllCommands(): readonly Command[] {
   return commands;
 }
 
-function handleResult(result: CommandResult, ctx: CommandContext): void {
+function handleResult(result: CommandResult, ctx: CommandContext, commandName: string): void {
   if (!result.ok) {
     ctx.inputActions.setInputFeedback(result.error, "error");
-  } else if (result.message) {
+    return;
+  }
+
+  if (!result.message) return;
+
+  if (result.message.includes("\n")) {
+    useCommandOutput.getActions().show(`/${commandName}`, result.message);
+  } else {
     ctx.inputActions.setInputFeedback(result.message, "success");
   }
 }
@@ -37,7 +46,7 @@ export async function dispatchCommand(input: string, ctx: CommandContext): Promi
   if (!command) return false;
 
   const result = await command.execute(args, ctx);
-  handleResult(result, ctx);
+  handleResult(result, ctx, name);
 
   return true;
 }

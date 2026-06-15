@@ -10,6 +10,7 @@ import { Spinner } from "../components/Spinner.js";
 import { useAgent } from "../hooks/use-agent.js";
 import { useArgs } from "../hooks/use-args.js";
 import { useAutocomplete } from "../hooks/use-autocomplete.js";
+import { useCommandOutput } from "../hooks/use-command-output.js";
 import { useInputMode } from "../hooks/use-input-mode.js";
 import { useLocalChat } from "../hooks/use-local-chat.js";
 import { useSelect } from "../hooks/use-select.js";
@@ -165,6 +166,12 @@ export const Agent = () => {
     getInputState: () => useUserInput.getReadonlyState(),
     getAgent: () => useAgent.getReactiveState().agent as CoreAgent,
     setMessages: setMessages as (messages: UIMessage[]) => void,
+    exit: () => {
+      const agent = useAgent.getReadonlyState().agent;
+      if (agent) agentManager.destroyAgent(agent.id);
+      exit();
+      setTimeout(() => process.exit(0), 200);
+    },
   };
 
   const getAgent = () => toRaw(useAgent.getReactiveState().agent) as CoreAgent | null;
@@ -181,6 +188,7 @@ export const Agent = () => {
   };
 
   const handleNormalSubmit = async () => {
+    useCommandOutput.getActions().dismiss();
     const { text: prompt, attachments } = inputActions.submit();
 
     if (prompt.startsWith("/")) {
@@ -248,6 +256,7 @@ export const Agent = () => {
       if (isAutocompleteVisible) {
         autocompleteActions.dismiss();
       }
+      useCommandOutput.getActions().dismiss();
     }
   });
 
@@ -298,6 +307,7 @@ export const Agent = () => {
       }
 
       if (inputChar && !inputKey.ctrl && !inputKey.meta) {
+        useCommandOutput.getActions().dismiss();
         inputActions.append(inputChar);
         autocompleteActions.update(useUserInput.getReadonlyState().value);
       }

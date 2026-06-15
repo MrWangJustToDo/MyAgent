@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 
 import { AutocompleteList } from "../components/AutocompleteList.js";
+import { CommandOutput } from "../components/CommandOutput.js";
 import { ErrorDetail } from "../components/ErrorDetail.js";
 import { FullBox } from "../components/FullBox.js";
 import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
@@ -115,6 +116,9 @@ export const Footer = () => {
           )}
         </Box>
       </HalfLinePaddedBox>
+
+      {/* Command output panel (e.g. /help, /mcp) */}
+      <CommandOutput />
 
       {/* Select list (ask_user options) */}
       {showSelectList && <SelectList />}
