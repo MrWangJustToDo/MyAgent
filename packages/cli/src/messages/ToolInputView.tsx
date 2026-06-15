@@ -70,8 +70,8 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
     if (!content?.replacements?.length || !content.path) return null;
 
     return (
-      <Box flexDirection="column" paddingLeft={2}>
-        <Box borderColor="#555555" borderStyle="single">
+      <Box paddingLeft={2}>
+        <Box flexDirection="column" borderColor="#555555" borderStyle="single">
           <SplitNode
             split={
               <Box
