@@ -1,5 +1,6 @@
 import { generateText } from "ai";
 
+import { extractTokenUsage } from "../agent-context/agent-context.js";
 import { applyCompactionResult, autoCompact } from "../compaction";
 import { microCompact } from "../compaction/micro-compact.js";
 import { isPromptTooLongError, reactiveCompact } from "../compaction/reactive-compact.js";
@@ -342,14 +343,19 @@ export class Base {
   private async generateSessionTitle(userMessage: string): Promise<string> {
     if (!this.model) return userMessage.slice(0, 50);
     try {
-      const { text } = await generateText({
+      const result = await generateText({
         model: this.model,
         maxOutputTokens: 30,
         system:
           "Generate a concise title (3-8 words) for a conversation that starts with the following message. Return ONLY the title, no quotes or punctuation.",
         prompt: userMessage.slice(0, 500),
       });
-      return text.trim().slice(0, 80) || userMessage.slice(0, 50);
+
+      if (this.context && result.usage) {
+        this.context.addTotalUsage(extractTokenUsage(result.usage));
+      }
+
+      return result.text.trim().slice(0, 80) || userMessage.slice(0, 50);
     } catch {
       return userMessage.slice(0, 50);
     }
@@ -598,11 +604,7 @@ export class Base {
       });
 
       if (usage && this.context) {
-        this.context.updateUsage({
-          inputTokens: usage.inputTokens ?? 0,
-          outputTokens: usage.outputTokens ?? 0,
-          totalTokens: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
-        });
+        this.context.updateUsage(extractTokenUsage(usage));
       }
 
       // Track todo tool usage for nag reminder
@@ -671,7 +673,8 @@ export class Base {
 
     this.sessionData.summaryMessage = this.context.getSummaryMessage();
     this.sessionData.compactIndex = this.context.getCompactIndex();
-    this.sessionData.usage = this.context.getUsage();
+    this.sessionData.usage = this.context.getTotalUsage();
+    this.sessionData.cost = this.context.getTotalCost();
 
     if (this.todoManager) {
       this.sessionData.todos = this.todoManager.getItems();
@@ -781,7 +784,14 @@ export class Base {
     }
 
     try {
-      const relevant = await findRelevantMemories(query, this.memoryManager, this.model, this.alreadySurfaced);
+      const relevant = await findRelevantMemories(
+        query,
+        this.memoryManager,
+        this.model,
+        this.alreadySurfaced,
+        {},
+        this.context
+      );
 
       if (relevant.length > 0) {
         this.markMemoriesSurfaced(relevant.map((r) => r.filename));

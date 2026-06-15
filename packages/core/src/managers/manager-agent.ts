@@ -515,15 +515,21 @@ export class AgentManager {
     const session = await store.load(sessionId);
     if (!session) throw new Error(`Session not found: ${sessionId}`);
 
+    // Reset context before restoring — clears old session's usage, cost, messages
+    context.reset();
+
     // Restore messages and compaction state
     const messages = await convertToModelMessages(session.uiMessages);
     context.setMessages(messages);
     context.setSummaryMessage(session.summaryMessage ?? null);
     context.setCompactIndex(session.compactIndex ?? 0);
 
-    // Restore usage
+    // Restore usage and cost
     if (session.usage) {
       context.updateUsage(session.usage);
+    }
+    if (session.cost != null) {
+      context.setTotalCost(session.cost);
     }
 
     // Restore todos

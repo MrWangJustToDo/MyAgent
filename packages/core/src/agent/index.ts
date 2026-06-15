@@ -23,7 +23,7 @@ export type {
 } from "./tools";
 
 // Context exports
-export { AgentContext, generateContextId, type TokenUsage } from "./agent-context";
+export { AgentContext, generateContextId, extractTokenUsage, type TokenUsage } from "./agent-context";
 
 // Log exports
 export {

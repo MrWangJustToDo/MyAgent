@@ -54,6 +54,8 @@ export interface SessionData {
   compactIndex: number;
   /** Token usage statistics */
   usage: TokenUsage;
+  /** Session cost in USD */
+  cost?: number;
   /** Active todos */
   todos: TodoItem[];
   /** Timestamp when session was created */

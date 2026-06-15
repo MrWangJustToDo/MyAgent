@@ -283,7 +283,14 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
   let iterations = 0;
   let reachedLimit = false;
   let retries = 0;
-  const usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  const usage = {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    reasoningTokens: 0,
+  };
 
   // Spawn subagent via AgentManager (creates parent/child relationship)
   // Inherits model, languageModel, rootPath from parent config
@@ -311,15 +318,25 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
   });
 
   // Helper to track step progress
-  const onStepFinish = (event: { usage?: { inputTokens?: number; outputTokens?: number }; finishReason?: string }) => {
+  const onStepFinish = (event: {
+    usage?: {
+      inputTokens?: number;
+      outputTokens?: number;
+      inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number };
+      outputTokenDetails?: { reasoningTokens?: number };
+    };
+    finishReason?: string;
+  }) => {
     iterations++;
     const { usage: stepUsage, finishReason } = event;
 
-    // Accumulate usage
     if (stepUsage) {
       usage.inputTokens += stepUsage.inputTokens ?? 0;
       usage.outputTokens += stepUsage.outputTokens ?? 0;
       usage.totalTokens += (stepUsage.inputTokens ?? 0) + (stepUsage.outputTokens ?? 0);
+      usage.cacheReadTokens += stepUsage.inputTokenDetails?.cacheReadTokens ?? 0;
+      usage.cacheWriteTokens += stepUsage.inputTokenDetails?.cacheWriteTokens ?? 0;
+      usage.reasoningTokens += stepUsage.outputTokenDetails?.reasoningTokens ?? 0;
     }
 
     parentLog?.debug("agent", `Subagent step ${iterations}`, { subagentId, finishReason });
@@ -378,11 +395,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
 
         // Aggregate usage to parent's context
         if (aggregateUsageToParent && parentContext) {
-          parentContext.addTotalUsage({
-            inputTokens: usage.inputTokens,
-            outputTokens: usage.outputTokens,
-            totalTokens: usage.totalTokens,
-          });
+          parentContext.addTotalUsage(usage);
         }
 
         if (retryOnEmpty && (!rawOutput || rawOutput === "(no summary)")) {

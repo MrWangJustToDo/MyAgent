@@ -1,7 +1,6 @@
+import { extractTokenUsage } from "@my-agent/core";
 import { generateText } from "ai";
 import { toRaw } from "reactivity-store";
-
-import { useAgent } from "../hooks/use-agent.js";
 
 import { registerCommand } from "./registry.js";
 
@@ -34,12 +33,12 @@ registerCommand({
     }
 
     // Auto-generate title using LLM
-    const model = agent.getModel();
+    const model = toRaw(agent.getModel());
     if (!model) {
       return { ok: false, error: "No model available for title generation" };
     }
 
-    const context = agent.getContext();
+    const context = toRaw(agent.getContext());
     if (!context) {
       return { ok: false, error: "No context available" };
     }
@@ -66,11 +65,11 @@ registerCommand({
     ctx.inputActions.setInputFeedback("Generating title...", "info");
 
     try {
-      const agentLog = toRaw(useAgent.getReactiveState().agent?.getLog()) as AgentLog | null;
+      const agentLog = toRaw(agent.getLog()) as AgentLog | null;
 
       agentLog?.info("chat", "Generating title...", { recentText, model });
 
-      const { text } = await generateText({
+      const result = await generateText({
         model,
         maxOutputTokens: 60,
         system:
@@ -79,6 +78,11 @@ registerCommand({
         temperature: 0.3,
       });
 
+      if (context && result.usage) {
+        context.addTotalUsage(extractTokenUsage(result.usage));
+      }
+
+      const { text } = result;
       agentLog?.info("chat", "Title generated", { text });
 
       const generated = text.trim().slice(0, 80);

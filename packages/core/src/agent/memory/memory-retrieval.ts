@@ -22,6 +22,8 @@
 
 import { generateText } from "ai";
 
+import { extractTokenUsage } from "../agent-context/agent-context.js";
+
 import {
   DEFAULT_MAX_MEMORY_BYTES_PER_FILE,
   DEFAULT_MAX_MEMORY_LINES_PER_FILE,
@@ -31,6 +33,7 @@ import {
 
 import type { MemoryManager } from "./memory-manager.js";
 import type { Memory } from "./types.js";
+import type { AgentContext } from "../agent-context/agent-context.js";
 import type { LanguageModel } from "ai";
 
 // ============================================================================
@@ -129,13 +132,22 @@ function truncateBody(
 /**
  * Use a lightweight LLM call to select relevant memories from the manifest.
  */
-async function selectWithLLM(query: string, manifest: string, model: LanguageModel): Promise<string[]> {
+async function selectWithLLM(
+  query: string,
+  manifest: string,
+  model: LanguageModel,
+  context?: AgentContext | null
+): Promise<string[]> {
   const result = await generateText({
     model,
     system: SELECT_MEMORIES_SYSTEM_PROMPT,
     prompt: `Query: ${query}\n\nAvailable memories:\n${manifest}`,
     maxOutputTokens: 256,
   });
+
+  if (context && result.usage) {
+    context.addTotalUsage(extractTokenUsage(result.usage));
+  }
 
   const match = /\{[\s\S]*?\}/.exec(result.text);
   if (!match) return [];
@@ -208,7 +220,8 @@ export async function findRelevantMemories(
   memoryManager: MemoryManager,
   model: LanguageModel | null,
   alreadySurfaced: ReadonlySet<string> = new Set(),
-  options: FindRelevantMemoriesOptions = {}
+  options: FindRelevantMemoriesOptions = {},
+  context?: AgentContext | null
 ): Promise<RelevantMemory[]> {
   const {
     maxItems = DEFAULT_MAX_RELEVANT_MEMORIES,
@@ -229,7 +242,7 @@ export async function findRelevantMemories(
   let selectedFilenames: string[];
   if (model) {
     try {
-      selectedFilenames = await selectWithLLM(query, manifest, model);
+      selectedFilenames = await selectWithLLM(query, manifest, model, context);
     } catch {
       selectedFilenames = selectWithKeywords(query, candidates, maxItems);
     }

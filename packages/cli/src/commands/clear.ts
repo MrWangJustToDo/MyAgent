@@ -25,7 +25,8 @@ registerCommand({
     if (currentSession) {
       currentSession.summaryMessage = context.getSummaryMessage();
       currentSession.compactIndex = context.getCompactIndex();
-      currentSession.usage = context.getUsage();
+      currentSession.usage = context.getTotalUsage();
+      currentSession.cost = context.getTotalCost();
       await store.save(currentSession);
     }
 

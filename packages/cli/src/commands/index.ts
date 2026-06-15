@@ -7,6 +7,7 @@ import "./paste.js";
 import "./quit.js";
 import "./rename.js";
 import "./resume.js";
+import "./usage.js";
 
 export { dispatchCommand, getAllCommands, getCommand } from "./registry.js";
 

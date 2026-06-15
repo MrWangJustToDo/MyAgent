@@ -12,14 +12,50 @@ export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
 }
 
 /**
  * Calculate the cost of a token usage entry given pricing info.
+ * Accounts for cache read/write tokens billed at their own rates.
  * Returns cost in USD.
  */
 export function calculateCost(usage: TokenUsage, pricing: ModelPricing): number {
-  return (usage.inputTokens * pricing.inputPerM + usage.outputTokens * pricing.outputPerM) / 1_000_000;
+  const cacheRead = usage.cacheReadTokens ?? 0;
+  const cacheWrite = usage.cacheWriteTokens ?? 0;
+  const normalInput = Math.max(0, usage.inputTokens - cacheRead - cacheWrite);
+
+  const inputCost = normalInput * pricing.inputPerM;
+  const cacheReadCost = cacheRead * (pricing.cacheReadPerM ?? pricing.inputPerM);
+  const cacheWriteCost = cacheWrite * (pricing.cacheWritePerM ?? pricing.inputPerM);
+  const outputCost = usage.outputTokens * pricing.outputPerM;
+
+  return (inputCost + cacheReadCost + cacheWriteCost + outputCost) / 1_000_000;
+}
+
+/**
+ * Extract TokenUsage from a Vercel AI SDK LanguageModelUsage object.
+ * Works with the `usage` field from generateText/streamText results and onStepFinish.
+ */
+export function extractTokenUsage(sdkUsage: {
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  totalTokens?: number | null;
+  inputTokenDetails?: { cacheReadTokens?: number | null; cacheWriteTokens?: number | null };
+  outputTokenDetails?: { reasoningTokens?: number | null };
+}): TokenUsage {
+  const input = sdkUsage.inputTokens ?? 0;
+  const output = sdkUsage.outputTokens ?? 0;
+  return {
+    inputTokens: input,
+    outputTokens: output,
+    totalTokens: sdkUsage.totalTokens ?? input + output,
+    cacheReadTokens: sdkUsage.inputTokenDetails?.cacheReadTokens ?? 0,
+    cacheWriteTokens: sdkUsage.inputTokenDetails?.cacheWriteTokens ?? 0,
+    reasoningTokens: sdkUsage.outputTokenDetails?.reasoningTokens ?? 0,
+  };
 }
 
 // ============================================================================
@@ -144,25 +180,40 @@ export class AgentContext {
   updateUsage(t: TokenUsage) {
     const prev = this.usage;
 
-    const prevTotalInputToken = this.totalUsage.inputTokens - prev.inputTokens;
-
+    // inputTokens is REPLACED (not accumulated) — each step sends the full
+    // context so the latest value represents current context window fill.
+    // cacheRead/Write are detail breakdowns of inputTokens, so they follow
+    // the same replacement pattern.
+    // outputTokens is ACCUMULATED — each step generates new output.
+    // reasoningTokens is a subset of output, so it accumulates too.
     this.usage = {
       inputTokens: t.inputTokens,
       outputTokens: prev.outputTokens + t.outputTokens,
-      totalTokens: prev.totalTokens,
+      totalTokens: 0,
+      cacheReadTokens: t.cacheReadTokens ?? 0,
+      cacheWriteTokens: t.cacheWriteTokens ?? 0,
+      reasoningTokens: (prev.reasoningTokens ?? 0) + (t.reasoningTokens ?? 0),
     };
 
     this.usage.totalTokens = this.usage.inputTokens + this.usage.outputTokens;
 
+    // totalUsage: inputTokens uses replacement-with-carry (survives compaction
+    // resets). Cache details follow the same pattern. Output fields accumulate.
+    const prevTotalInput = this.totalUsage.inputTokens - prev.inputTokens;
+    const prevTotalCacheRead = (this.totalUsage.cacheReadTokens ?? 0) - (prev.cacheReadTokens ?? 0);
+    const prevTotalCacheWrite = (this.totalUsage.cacheWriteTokens ?? 0) - (prev.cacheWriteTokens ?? 0);
+
     this.totalUsage = {
-      inputTokens: prevTotalInputToken + t.inputTokens,
+      inputTokens: prevTotalInput + t.inputTokens,
       outputTokens: this.totalUsage.outputTokens + t.outputTokens,
-      totalTokens: this.totalUsage.totalTokens,
+      totalTokens: 0,
+      cacheReadTokens: prevTotalCacheRead + (t.cacheReadTokens ?? 0),
+      cacheWriteTokens: prevTotalCacheWrite + (t.cacheWriteTokens ?? 0),
+      reasoningTokens: (this.totalUsage.reasoningTokens ?? 0) + (t.reasoningTokens ?? 0),
     };
 
     this.totalUsage.totalTokens = this.totalUsage.inputTokens + this.totalUsage.outputTokens;
 
-    // Accumulate cost if pricing is available
     if (this.pricing) {
       this.totalCost += calculateCost(t, this.pricing);
     }
@@ -173,6 +224,9 @@ export class AgentContext {
       inputTokens: this.totalUsage.inputTokens + t.inputTokens,
       outputTokens: this.totalUsage.outputTokens + t.outputTokens,
       totalTokens: this.totalUsage.totalTokens + t.totalTokens,
+      cacheReadTokens: (this.totalUsage.cacheReadTokens ?? 0) + (t.cacheReadTokens ?? 0),
+      cacheWriteTokens: (this.totalUsage.cacheWriteTokens ?? 0) + (t.cacheWriteTokens ?? 0),
+      reasoningTokens: (this.totalUsage.reasoningTokens ?? 0) + (t.reasoningTokens ?? 0),
     };
   }
 
@@ -208,6 +262,13 @@ export class AgentContext {
    */
   getTotalCost(): number {
     return this.totalCost;
+  }
+
+  /**
+   * Set lifetime session cost (for restoring from saved sessions).
+   */
+  setTotalCost(cost: number): void {
+    this.totalCost = cost;
   }
 
   /**
@@ -300,7 +361,14 @@ export class AgentContext {
    * Reset token usage counters (e.g., after compaction)
    */
   resetUsage(): void {
-    this.usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    this.usage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      reasoningTokens: 0,
+    };
     this.touch();
   }
 
@@ -333,8 +401,22 @@ export class AgentContext {
     this.messages = [];
     this.summaryMessage = null;
     this.compactIndex = 0;
-    this.usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-    this.totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    this.usage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      reasoningTokens: 0,
+    };
+    this.totalUsage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      reasoningTokens: 0,
+    };
     this.totalCost = 0;
     this.finishInfo = null;
     this.isStreaming = false;

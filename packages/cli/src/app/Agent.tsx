@@ -164,7 +164,7 @@ export const Agent = () => {
   const commandCtx: CommandContext = {
     inputActions,
     getInputState: () => useUserInput.getReadonlyState(),
-    getAgent: () => useAgent.getReactiveState().agent as CoreAgent,
+    getAgent: () => toRaw(useAgent.getReactiveState().agent) as CoreAgent,
     setMessages: setMessages as (messages: UIMessage[]) => void,
     exit: () => {
       const agent = useAgent.getReadonlyState().agent;
