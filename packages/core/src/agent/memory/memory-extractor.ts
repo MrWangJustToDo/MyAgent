@@ -19,7 +19,7 @@
  * ```
  */
 
-import { runSubagent } from "../subagent/subagent.js";
+import { runSubagent } from "../subagent/runner.js";
 
 import { MEMORY_TYPES } from "./types.js";
 

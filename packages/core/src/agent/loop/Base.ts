@@ -1,31 +1,27 @@
-import { generateText } from "ai";
-
-import { extractTokenUsage } from "../agent-context/agent-context.js";
+import { extractTokenUsage } from "../agent-context/types.js";
 import { applyCompactionResult, autoCompact } from "../compaction";
 import { microCompact } from "../compaction/micro-compact.js";
 import { isPromptTooLongError, reactiveCompact } from "../compaction/reactive-compact.js";
 import { estimateTokens } from "../compaction/token-estimator.js";
-import { extractMemories, consolidateMemories } from "../memory/memory-extractor.js";
-import { findRelevantMemories, formatRelevantMemories } from "../memory/memory-retrieval.js";
+import { emitHook } from "../hooks/hook-runner.js";
 import { cleanupOrphanedToolCache, createTodoTool } from "../tools";
+
+import { SessionHandler } from "./session-handler.js";
 
 import type { Sandbox } from "../../environment";
 import type { ModelInfo } from "../../models/types.js";
 import type { AgentContext } from "../agent-context";
 import type { AgentLog } from "../agent-log";
 import type { CompactionConfig } from "../compaction/types.js";
+import type { HookRegistry } from "../hooks/hook-registry.js";
 import type { McpManager } from "../mcp/manager.js";
-import type { MemoryManager } from "../memory/memory-manager.js";
-import type { SessionStore } from "../session/session-store.js";
-import type { SessionData } from "../session/types.js";
 import type { SkillRegistry } from "../skills";
 import type { TodoManager } from "../todo-manager";
 import type { AgentStatus } from "./types.js";
 import type {
-  ToolSet,
   LanguageModel,
+  ToolSet,
   ModelMessage,
-  UIMessage,
   StreamTextOnStepFinishCallback,
   GenerateTextOnStepFinishCallback,
   StreamTextOnFinishCallback,
@@ -33,33 +29,26 @@ import type {
   PrepareStepFunction,
 } from "ai";
 
-export type { AgentStatus, AgentRunOptions } from "./types.js";
+// ============================================================================
+// Base Class
+// ============================================================================
 
-export class Base {
-  // Identity - subclasses should set this
-  protected agentId: string = "";
-
+export class Base extends SessionHandler {
   // State
   status: AgentStatus = "idle";
   error = "";
 
   // Resources
   systemPrompt = "";
-  log: AgentLog | null = null;
-  context: AgentContext | null = null;
   sandbox: Sandbox | null = null;
-  todoManager: TodoManager | null = null;
   mcpManager: McpManager | null = null;
   skillRegister: SkillRegistry | null = null;
   compactionConfig: CompactionConfig | null = null;
-  sessionStore: SessionStore | null = null;
-  sessionData: SessionData | null = null;
-  sessionConfig: { provider: string; model: string } | null = null;
   customTools: ToolSet = {};
   builtInTools: ToolSet = {};
 
-  // Model (Vercel AI SDK LanguageModel)
-  model: LanguageModel | null = null;
+  // Hook system
+  hookRegistry: HookRegistry | null = null;
 
   // Model metadata from the registry (context window, pricing, capabilities, etc.)
   modelInfo: ModelInfo | null = null;
@@ -70,28 +59,20 @@ export class Base {
 
   // Abort controller for current run
   currentAbortController: AbortController | null = null;
-
   cancelAbortController: () => void = () => {};
-
   pendingAbortControllers: AbortController[] = [];
 
   // ============================================================================
   // Resource Management
   // ============================================================================
 
-  /**
-   * Set the Vercel AI SDK LanguageModel
-   */
+  /** Set the Vercel AI SDK LanguageModel */
   setModel(model: LanguageModel): void {
-    this.log?.debug("agent", "Setting model", {
-      hadPreviousModel: !!this.model,
-    });
+    this.log?.debug("agent", "Setting model", { hadPreviousModel: !!this.model });
     this.model = model;
   }
 
-  /**
-   * Get the current model
-   */
+  /** Get the current model */
   getModel(): LanguageModel | null {
     return this.model;
   }
@@ -109,16 +90,11 @@ export class Base {
     this.modelInfo = info;
   }
 
-  /**
-   * Get the current model metadata
-   */
   getModelInfo(): ModelInfo | null {
     return this.modelInfo;
   }
 
-  /**
-   * Set sandbox for tool execution
-   */
+  /** Set sandbox for tool execution */
   setSandbox(sandbox: Sandbox): void {
     this.log?.debug("agent", "Setting sandbox", {
       sandboxId: sandbox.sandboxId,
@@ -127,54 +103,30 @@ export class Base {
     this.sandbox = sandbox;
   }
 
-  /**
-   * Get sandbox
-   */
   getSandbox(): Sandbox | null {
     return this.sandbox;
   }
 
-  /**
-   * Set built-in tools (from createTools)
-   */
   setTools(tools: ToolSet): void {
     this.builtInTools = tools;
   }
 
-  /**
-   * Add custom tools
-   */
   addTools(tools: ToolSet): void {
     this.customTools = { ...this.customTools, ...tools };
   }
 
-  /**
-   * Get all tools as Record for Vercel AI SDK
-   */
   getTools(): ToolSet {
-    return {
-      ...this.builtInTools,
-      ...this.customTools,
-    };
+    return { ...this.builtInTools, ...this.customTools };
   }
 
-  /**
-   * Set logger
-   */
   setLog(c: AgentLog): void {
     this.log = c;
   }
 
-  /**
-   * Get logger
-   */
   getLog(): AgentLog | null {
     return this.log;
   }
 
-  /**
-   * Set context
-   */
   setContext(c: AgentContext): void {
     this.context = c;
     if (this.compactionConfig) {
@@ -182,27 +134,16 @@ export class Base {
     }
   }
 
-  /**
-   * Get context
-   */
   getContext(): AgentContext | null {
     return this.context;
   }
 
-  /**
-   * Set todo manager for task tracking
-   */
   setTodoManager(t: TodoManager): void {
     if (this.todoManager) return;
-
     this.todoManager = t;
-
     this.addTools({ todo: createTodoTool({ todoManager: t }) });
   }
 
-  /**
-   * Get todo manager
-   */
   getTodoManager(): TodoManager | null {
     return this.todoManager;
   }
@@ -211,30 +152,22 @@ export class Base {
   agentDocContent: string = "";
   agentDocSource: string = "";
 
-  /** Set agent documentation content (loaded from AGENTS.md / CLAUDE.md). */
   setAgentDocContent(content: string, source?: string): void {
     this.agentDocContent = content;
     this.agentDocSource = source ?? "";
     this.log?.info("system", `Agent doc content set`, { source: source ?? "(none)", length: content.length });
   }
 
-  /**
-   * Get agent documentation content
-   */
   getAgentDocContent(): string {
     return this.agentDocContent;
   }
 
-  /**
-   * Get agent documentation source filename
-   */
   getAgentDocSource(): string {
     return this.agentDocSource;
   }
 
   setSkillRegister(t: SkillRegistry) {
     if (this.skillRegister) return;
-
     this.skillRegister = t;
   }
 
@@ -242,69 +175,8 @@ export class Base {
     return this.skillRegister;
   }
 
-  // Memory system
-  memoryManager: MemoryManager | null = null;
-  memoryContent: string = "";
-  relevantMemoryContent: string = "";
-  private alreadySurfaced: Set<string> = new Set();
-
-  setMemoryManager(m: MemoryManager): void {
-    this.memoryManager = m;
-  }
-
-  getMemoryManager(): MemoryManager | null {
-    return this.memoryManager;
-  }
-
-  /**
-   * Set cached memory index content (for synchronous access in buildSystemPrompt).
-   */
-  setMemoryContent(content: string): void {
-    this.memoryContent = content;
-  }
-
-  /**
-   * Get cached memory index content.
-   */
-  getMemoryContent(): string {
-    return this.memoryContent;
-  }
-
-  /**
-   * Get the set of memory filenames already surfaced this session.
-   * Used by findRelevantMemories to avoid wasting selection slots on repeats.
-   */
-  getAlreadySurfaced(): ReadonlySet<string> {
-    return this.alreadySurfaced;
-  }
-
-  /**
-   * Mark memory filenames as surfaced (adds to the session-scoped set).
-   */
-  markMemoriesSurfaced(filenames: string[]): void {
-    for (const f of filenames) {
-      this.alreadySurfaced.add(f);
-    }
-  }
-
-  /**
-   * Set the formatted relevant memory content for the current turn.
-   * Cleared after each turn in createOnFinish.
-   */
-  setRelevantMemoryContent(content: string): void {
-    this.relevantMemoryContent = content;
-  }
-
-  /**
-   * Get the formatted relevant memory content for the current turn.
-   */
-  getRelevantMemoryContent(): string {
-    return this.relevantMemoryContent;
-  }
-
   setMcpManager(m: McpManager) {
     if (this.mcpManager) return;
-
     this.mcpManager = m;
   }
 
@@ -312,72 +184,6 @@ export class Base {
     return this.mcpManager;
   }
 
-  setSessionStore(store: SessionStore, config: { provider: string; model: string }): void {
-    this.sessionStore = store;
-    this.sessionConfig = config;
-  }
-
-  getSessionStore(): SessionStore | null {
-    return this.sessionStore;
-  }
-
-  setSessionData(data: SessionData): void {
-    this.sessionData = data;
-  }
-
-  getSessionData(): SessionData | null {
-    return this.sessionData;
-  }
-
-  /** Lazily create a session on first use. */
-  private ensureSession(): void {
-    if (this.sessionData || !this.sessionStore || !this.sessionConfig) return;
-    const session = this.sessionStore.create({
-      provider: this.sessionConfig.provider,
-      model: this.sessionConfig.model,
-    });
-    this.sessionData = session;
-  }
-
-  /** Generate a concise session title from the first user message using LLM. */
-  private async generateSessionTitle(userMessage: string): Promise<string> {
-    if (!this.model) return userMessage.slice(0, 50);
-    try {
-      const result = await generateText({
-        model: this.model,
-        maxOutputTokens: 30,
-        system:
-          "Generate a concise title (3-8 words) for a conversation that starts with the following message. Return ONLY the title, no quotes or punctuation.",
-        prompt: userMessage.slice(0, 500),
-      });
-
-      if (this.context && result.usage) {
-        this.context.addTotalUsage(extractTokenUsage(result.usage));
-      }
-
-      return result.text.trim().slice(0, 80) || userMessage.slice(0, 50);
-    } catch {
-      return userMessage.slice(0, 50);
-    }
-  }
-
-  /** Update stored UIMessages from the client. */
-  updateSessionUIMessages(uiMessages: UIMessage[]): void {
-    if (!this.sessionStore) return;
-    if (!this.sessionData) {
-      this.ensureSession();
-      this.updateSessionUIMessages(uiMessages);
-      return;
-    }
-    this.sessionData.uiMessages = uiMessages;
-    this.sessionStore.save(this.sessionData).catch((err) => {
-      this.log?.warn("agent", "Failed to save session UIMessages", err);
-    });
-  }
-
-  /**
-   * Set compaction configuration
-   */
   setCompactionConfig(config: CompactionConfig): void {
     this.log?.debug("agent", "Setting compaction config", {
       tokenThreshold: config.tokenThreshold,
@@ -387,24 +193,18 @@ export class Base {
     this.context?.setTokenLimit(config.tokenThreshold);
   }
 
-  /**
-   * Get compaction configuration
-   */
   getCompactionConfig(): CompactionConfig | null {
     return this.compactionConfig;
   }
 
-  /**
-   * Prepare messages from prompt/messages parameters.
-   */
+  // ============================================================================
+  // Message Preparation & Token Helpers
+  // ============================================================================
+
   prepareMessages(options: { prompt?: string | ModelMessage[]; messages?: ModelMessage[] }): ModelMessage[] {
     const { prompt, messages } = options;
     const finalMessages: ModelMessage[] = [];
-
-    if (messages) {
-      finalMessages.push(...messages);
-    }
-
+    if (messages) finalMessages.push(...messages);
     if (prompt) {
       if (typeof prompt === "string") {
         finalMessages.push({ role: "user" as const, content: prompt });
@@ -412,78 +212,52 @@ export class Base {
         finalMessages.push(...prompt);
       }
     }
-
     return finalMessages;
   }
 
-  /**
-   * Check if auto compaction should be triggered.
-   * Uses actual token usage from AgentContext if available, falls back to estimation.
-   */
   shouldAutoCompact(messages?: ModelMessage[]): boolean {
     const tokenThreshold = this.compactionConfig?.tokenThreshold ?? 100000;
     const compactAtPercent = this.compactionConfig?.compactAtPercent ?? 85;
     const triggerAt = Math.floor(tokenThreshold * (compactAtPercent / 100));
 
-    // Prefer actual usage from context (accumulated inputTokens)
     if (this.context) {
       const usage = this.context.getUsage();
-      if (usage.inputTokens > 0) {
-        return usage.inputTokens >= triggerAt;
-      }
+      if (usage.inputTokens > 0) return usage.inputTokens >= triggerAt;
     }
-
-    // Fall back to estimation if no context or no usage recorded yet
-    if (messages) {
-      const estimated = estimateTokens(messages);
-      return estimated >= triggerAt;
-    }
-
+    if (messages) return estimateTokens(messages) >= triggerAt;
     return false;
   }
 
-  /** Check if there are incomplete todos. */
   hasIncompleteTodos(): boolean {
     return this.todoManager?.hasIncompleteTodos() ?? false;
   }
 
-  /** Get current token usage (actual from context, or estimated from messages). */
   getCurrentTokens(messages?: ModelMessage[]): number {
-    // Prefer actual usage from context
     if (this.context) {
       const usage = this.context.getUsage();
-      if (usage.inputTokens > 0) {
-        return usage.inputTokens;
-      }
+      if (usage.inputTokens > 0) return usage.inputTokens;
     }
-
-    // Fall back to estimation
-    if (messages) {
-      return estimateTokens(messages);
-    }
-
+    if (messages) return estimateTokens(messages);
     return 0;
   }
 
-  /** Get estimated token count for messages. */
   getEstimatedTokens(messages: ModelMessage[]): number {
     return estimateTokens(messages);
   }
 
-  /** Set up abort controller and forward external abort signal. */
+  // ============================================================================
+  // Abort Handling
+  // ============================================================================
+
   setupAbortController(abortSignal?: AbortSignal): void {
     this.cancelAbortController();
-
     this.currentAbortController = new AbortController();
 
     const abortListener = (reason: Event) => {
       this.status = "aborted";
       this.log?.agent("current flow is aborted", { reason });
     };
-
-    // sync status to agent instance
     this.currentAbortController.signal.addEventListener("abort", abortListener, { once: true });
-
     this.cancelAbortController = () => this.currentAbortController?.signal.removeEventListener("abort", abortListener);
 
     if (abortSignal) {
@@ -495,7 +269,7 @@ export class Base {
         }
         setTimeout(() => this.currentAbortController?.abort(abortSignal.reason));
       } else {
-        const abortListener = (reason: Event) => {
+        const listener = (reason: Event) => {
           let item = this.pendingAbortControllers.pop();
           while (item) {
             item.abort(reason);
@@ -503,26 +277,121 @@ export class Base {
           }
           setTimeout(() => this.currentAbortController?.abort(reason));
         };
-        abortSignal.addEventListener("abort", abortListener);
+        abortSignal.addEventListener("abort", listener);
       }
     }
   }
 
+  addPendingAbortController(abortController: AbortController): void {
+    this.pendingAbortControllers.push(abortController);
+  }
+
+  removePendingAbortController(abortController: AbortController): void {
+    this.pendingAbortControllers = this.pendingAbortControllers.filter((ac) => ac !== abortController);
+  }
+
+  abort(reason?: string): void {
+    this.log?.info("agent", "Aborting agent", { reason: reason ?? "(no reason)" });
+    if (this.currentAbortController) this.currentAbortController.abort(reason);
+  }
+
+  isAbortError(err: unknown): boolean {
+    if (err instanceof Error) return err.name === "AbortError" || err.message.includes("aborted");
+    return false;
+  }
+
+  isToolNeedsApproval(toolName: string): boolean {
+    const tools = this.getTools();
+    const tool = tools[toolName];
+    return tool ? tool.needsApproval === true : false;
+  }
+
+  resetReactiveCompactRetries(): void {
+    this.reactiveCompactRetries = 0;
+  }
+
+  // ============================================================================
+  // Lifecycle Callbacks
+  // ============================================================================
+
+  createOnStepFinish(
+    userCallback?: StreamTextOnStepFinishCallback<ToolSet> | GenerateTextOnStepFinishCallback<NoInfer<ToolSet>>
+  ): StreamTextOnStepFinishCallback<ToolSet> | GenerateTextOnStepFinishCallback<NoInfer<ToolSet>> {
+    return (event) => {
+      const { stepNumber, toolCalls, toolResults, finishReason, usage } = event;
+
+      this.log?.agent(`Step ${stepNumber} finished`, {
+        finishReason,
+        toolCallCount: toolCalls?.length ?? 0,
+        toolResultCount: toolResults?.length ?? 0,
+      });
+
+      if (usage && this.context) {
+        this.context.updateUsage(extractTokenUsage(usage));
+      }
+
+      if (this.todoManager) {
+        const usedTodo = toolCalls?.some((tc) => tc.toolName === "todo") ?? false;
+        if (usedTodo) {
+          this.todoManager.resetRoundCounter();
+          this.log?.todo("Todo tool used, reset round counter");
+        } else {
+          this.todoManager.incrementRound();
+          this.log?.todo(`Todo not used, round ${this.todoManager.getRoundsSinceUpdate()}`);
+        }
+      }
+
+      userCallback?.(event);
+    };
+  }
+
+  createOnFinish(
+    userCallback?: StreamTextOnFinishCallback<ToolSet> | GenerateTextOnFinishCallback<NoInfer<ToolSet>>
+  ): StreamTextOnFinishCallback<ToolSet> | GenerateTextOnFinishCallback<NoInfer<ToolSet>> {
+    return (event) => {
+      if (this.status !== "waiting") this.status = "completed";
+      if (this.error) this.status = "error";
+
+      this.log?.agent("Agent response finished", {
+        finishReason: event.finishReason,
+        totalSteps: event.steps?.length ?? 0,
+        usage: event.usage,
+      });
+
+      this.context?.updateFinal?.(event);
+      this.context?.clearEvents();
+      this.saveSession();
+      this.relevantMemoryContent = "";
+
+      emitHook(
+        this.hookRegistry,
+        "Stop",
+        {
+          hook_event_name: "Stop",
+          session_id: this.sessionData?.id ?? "",
+          reason: event.finishReason ?? "unknown",
+        },
+        { logger: this.log ?? undefined }
+      );
+
+      this.runMemoryExtraction();
+      userCallback?.(event);
+    };
+  }
+
+  // ============================================================================
+  // Compaction Orchestration
+  // ============================================================================
+
   createPrepareStep(userCallback?: PrepareStepFunction) {
     return (async (options) => {
       const res = userCallback ? await userCallback(options) : options;
-
       const finalMessages = res?.messages || [];
 
-      // Apply micro compaction (Layer 1) — mutates in place
       microCompact(finalMessages, this.compactionConfig || {});
-
       this.context?.setMessages(finalMessages);
-
       let llmMessages = this.context?.getMessagesForLLM() || [];
 
-      // Auto-compaction: when threshold is exceeded, run compaction directly
-      // and update summaryMessage + compactIndex
       if (this.shouldAutoCompact(llmMessages) && this.model && this.sandbox && this.context) {
         try {
           this.status = "compacting";
@@ -536,7 +405,7 @@ export class Base {
           }));
 
           const actualTokens = this.context.getUsage().inputTokens ?? 0;
-          const result = await autoCompact(llmMessages, this.compactionConfig ?? {}, this.agentId, this.sandbox, {
+          const result = await autoCompact(llmMessages, this.compactionConfig ?? {}, this.agentId, {
             todos: todos.length > 0 ? todos : undefined,
             actualTokens: actualTokens || undefined,
           });
@@ -582,237 +451,10 @@ export class Base {
     }) as PrepareStepFunction;
   }
 
-  addPendingAbortController(abortController: AbortController): void {
-    this.pendingAbortControllers.push(abortController);
-  }
+  // ============================================================================
+  // Reactive Compaction
+  // ============================================================================
 
-  removePendingAbortController(abortController: AbortController): void {
-    this.pendingAbortControllers = this.pendingAbortControllers.filter((ac) => ac !== abortController);
-  }
-
-  /** Create onStepFinish callback that logs and updates context usage. */
-  createOnStepFinish(
-    userCallback?: StreamTextOnStepFinishCallback<ToolSet> | GenerateTextOnStepFinishCallback<NoInfer<ToolSet>>
-  ): StreamTextOnStepFinishCallback<ToolSet> | GenerateTextOnStepFinishCallback<NoInfer<ToolSet>> {
-    return (event) => {
-      const { stepNumber, toolCalls, toolResults, finishReason, usage } = event;
-
-      this.log?.agent(`Step ${stepNumber} finished`, {
-        finishReason,
-        toolCallCount: toolCalls?.length ?? 0,
-        toolResultCount: toolResults?.length ?? 0,
-      });
-
-      if (usage && this.context) {
-        this.context.updateUsage(extractTokenUsage(usage));
-      }
-
-      // Track todo tool usage for nag reminder
-      if (this.todoManager) {
-        const usedTodo = toolCalls?.some((tc) => tc.toolName === "todo") ?? false;
-        if (usedTodo) {
-          this.todoManager.resetRoundCounter();
-          this.log?.todo("Todo tool used, reset round counter");
-        } else {
-          this.todoManager.incrementRound();
-          this.log?.todo(`Todo not used, round ${this.todoManager.getRoundsSinceUpdate()}`);
-        }
-      }
-
-      userCallback?.(event);
-    };
-  }
-
-  createOnFinish(
-    userCallback?: StreamTextOnFinishCallback<ToolSet> | GenerateTextOnFinishCallback<NoInfer<ToolSet>>
-  ): StreamTextOnFinishCallback<ToolSet> | GenerateTextOnFinishCallback<NoInfer<ToolSet>> {
-    return (event) => {
-      if (this.status !== "waiting") {
-        this.status = "completed";
-      }
-
-      if (this.error) {
-        this.status = "error";
-      }
-
-      // Log summary of finish event (not the full event which can be huge)
-      this.log?.agent("Agent response finished", {
-        finishReason: event.finishReason,
-        totalSteps: event.steps?.length ?? 0,
-        usage: event.usage,
-      });
-
-      this.context?.updateFinal?.(event);
-
-      // Release stream events accumulated during this turn (consumed in real-time by listeners)
-      this.context?.clearEvents();
-
-      // Auto-save session after each interaction
-      this.saveSession();
-
-      // Clear per-turn relevant memory content (will be re-fetched next turn)
-      this.relevantMemoryContent = "";
-
-      // Background memory extraction (fire-and-forget)
-      this.runMemoryExtraction();
-
-      userCallback?.(event);
-    };
-  }
-
-  /** Persist the current session state to disk (server-side data only). */
-  private saveSession(): void {
-    if (!this.sessionStore || !this.context) return;
-    if (!this.sessionData) {
-      this.ensureSession();
-      this.saveSession();
-      return;
-    }
-
-    const messages = this.context.getMessages();
-
-    this.sessionData.summaryMessage = this.context.getSummaryMessage();
-    this.sessionData.compactIndex = this.context.getCompactIndex();
-    this.sessionData.usage = this.context.getTotalUsage();
-    this.sessionData.cost = this.context.getTotalCost();
-
-    if (this.todoManager) {
-      this.sessionData.todos = this.todoManager.getItems();
-    }
-
-    // Auto-generate session title from first user message
-    if (this.sessionData.name === "New Session") {
-      const firstUser = messages.find((m) => m.role === "user");
-      if (firstUser) {
-        const text =
-          typeof firstUser.content === "string"
-            ? firstUser.content
-            : Array.isArray(firstUser.content)
-              ? firstUser.content.find((p) => p.type === "text")?.text || ""
-              : "";
-        if (typeof text === "string" && text.length > 0) {
-          this.generateSessionTitle(text as string).then((title) => {
-            if (this.sessionData && this.sessionStore) {
-              this.sessionData.name = title;
-              this.sessionStore.save(this.sessionData).catch(() => {});
-            }
-          });
-        }
-      }
-    }
-
-    // Fire and forget — don't block the agent on session save
-    this.sessionStore.save(this.sessionData).catch((err) => {
-      this.log?.warn("agent", "Failed to save session", err);
-    });
-  }
-
-  /**
-   * Run background memory extraction after each turn.
-   * Fire-and-forget: errors are logged but never block the agent.
-   */
-  private runMemoryExtraction(): void {
-    if (!this.memoryManager || !this.context) return;
-
-    const messages = this.context.getMessages();
-    if (messages.length < 15) return;
-
-    const manager = this.memoryManager;
-    const agentId = this.agentId;
-
-    this.log?.notify("memory", "info", "Extracting memories...");
-
-    (async () => {
-      try {
-        const count = await extractMemories(messages, manager, agentId);
-        if (count > 0) {
-          this.memoryContent = manager.getIndexContent();
-          this.log?.notify("memory", "success", `Extracted ${count} new memories`, { count });
-        }
-
-        // Check if consolidation is needed
-        const memoryCount = await manager.getMemoryCount();
-        if (memoryCount >= manager.getConsolidateThreshold()) {
-          this.log?.notify("memory", "info", "Consolidating memories...");
-          const after = await consolidateMemories(manager, agentId);
-          if (after > 0) {
-            this.memoryContent = manager.getIndexContent();
-            this.log?.notify("memory", "success", `Consolidated memories: ${memoryCount} → ${after}`, {
-              before: memoryCount,
-              after,
-            });
-          }
-        }
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        this.log?.notify("memory", "warning", `Memory extraction failed: ${errorMsg}`);
-      }
-    })();
-  }
-
-  /**
-   * Prefetch relevant memories for the current turn.
-   * Runs a lightweight LLM side-query (with keyword fallback) to select
-   * memories whose full content should be injected into the system prompt.
-   *
-   * Fire-and-forget safe: errors are logged and the turn proceeds without
-   * relevant memories (the MEMORY.md index in the system prompt still works).
-   */
-  async prefetchRelevantMemories(messages: ModelMessage[]): Promise<void> {
-    if (!this.memoryManager) return;
-
-    // Extract the last user message as the query for memory selection
-    let query = "";
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg.role === "user") {
-        if (typeof msg.content === "string") {
-          query = msg.content;
-        } else if (Array.isArray(msg.content)) {
-          const textPart = msg.content.find((p) => p.type === "text");
-          if (textPart && "text" in textPart) {
-            query = textPart.text as string;
-          }
-        }
-        break;
-      }
-    }
-
-    if (!query.trim()) {
-      this.relevantMemoryContent = "";
-      return;
-    }
-
-    try {
-      const relevant = await findRelevantMemories(
-        query,
-        this.memoryManager,
-        this.model,
-        this.alreadySurfaced,
-        {},
-        this.context
-      );
-
-      if (relevant.length > 0) {
-        this.markMemoriesSurfaced(relevant.map((r) => r.filename));
-        this.relevantMemoryContent = formatRelevantMemories(relevant);
-        this.log?.info("memory", `Loaded ${relevant.length} relevant memories`, {
-          filenames: relevant.map((r) => r.filename),
-        });
-      } else {
-        this.relevantMemoryContent = "";
-      }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      this.log?.warn("memory", `Relevant memory prefetch failed: ${errorMsg}`);
-      this.relevantMemoryContent = "";
-    }
-  }
-
-  /**
-   * Handle prompt_too_long errors by running emergency reactive compaction.
-   * Returns true if compaction succeeded and caller should retry.
-   */
   async handleReactiveCompact(error: unknown): Promise<boolean> {
     if (!isPromptTooLongError(error)) return false;
     if (this.reactiveCompactRetries >= Base.MAX_REACTIVE_RETRIES) {
@@ -829,13 +471,9 @@ export class Base {
 
     try {
       this.status = "compacting";
-
       const llmMessages = this.context.getMessagesForLLM();
       const compactedMessages = await reactiveCompact(llmMessages, this.agentId);
 
-      // The first message is the summary, rest are tail messages.
-      // Update context: set summary as first message, reset compact index to
-      // cover all original messages, and replace with compacted result.
       const summaryMsg = compactedMessages[0];
       if (summaryMsg) {
         this.context.setSummaryMessage(summaryMsg);
@@ -843,20 +481,18 @@ export class Base {
         const newCompactIndex = this.context.getMessages().length;
         this.context.setCompactIndex(newCompactIndex);
 
-        // Clean up cached tool output files for orphaned messages
         if (this.sandbox && newCompactIndex > oldCompactIndex) {
           const allMessages = this.context.getMessages();
           cleanupOrphanedToolCache(this.sandbox, allMessages, newCompactIndex).catch((err) => {
-            const error = err instanceof Error ? err : new Error(String(err));
-            this.log?.warn("agent", "Failed to cleanup tool cache after reactive compact", { error: error.message });
+            const e = err instanceof Error ? err : new Error(String(err));
+            this.log?.warn("agent", "Failed to cleanup tool cache after reactive compact", { error: e.message });
           });
         }
-        // Append tail messages (everything after summary) as new messages
+
         const tailMessages = compactedMessages.slice(1);
         if (tailMessages.length > 0) {
           const allMessages = [...this.context.getMessages(), ...tailMessages];
           this.context.setMessages(allMessages);
-          // Adjust compact index so tail messages are visible
           this.context.setCompactIndex(allMessages.length - tailMessages.length);
         }
       }
@@ -878,44 +514,10 @@ export class Base {
     }
   }
 
-  /**
-   * Check if an error is an abort error
-   */
-  isAbortError(err: unknown): boolean {
-    if (err instanceof Error) {
-      return err.name === "AbortError" || err.message.includes("aborted");
-    }
-    return false;
-  }
+  // ============================================================================
+  // Reset
+  // ============================================================================
 
-  /**
-   * Abort the current run
-   */
-  abort(reason?: string): void {
-    this.log?.info("agent", "Aborting agent", { reason: reason ?? "(no reason)" });
-    if (this.currentAbortController) {
-      this.currentAbortController.abort(reason);
-    }
-  }
-
-  /**
-   * Check if a tool needs approval
-   */
-  isToolNeedsApproval(toolName: string): boolean {
-    const tools = this.getTools();
-    const tool = tools[toolName];
-
-    return tool ? tool.needsApproval === true : false;
-  }
-
-  /** Reset the reactive compact retry counter. */
-  resetReactiveCompactRetries(): void {
-    this.reactiveCompactRetries = 0;
-  }
-
-  /**
-   * Reset agent state
-   */
   reset(): void {
     const prevStatus = this.status;
     this.log?.info("agent", "Resetting agent", {
@@ -926,8 +528,7 @@ export class Base {
     this.status = "idle";
     this.error = "";
     this.reactiveCompactRetries = 0;
-    this.relevantMemoryContent = "";
-    this.alreadySurfaced.clear();
+    this.resetMemoryState();
     this.log?.clear();
     this.context?.reset();
     this.todoManager?.reset();

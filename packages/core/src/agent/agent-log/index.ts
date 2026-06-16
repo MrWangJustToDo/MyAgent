@@ -1,6 +1,3 @@
-// AgentLog class
-export { AgentLog, generateLogId } from "./agent-log.js";
-
 // Types
 export type {
   LogLevel,
@@ -10,7 +7,10 @@ export type {
   NotificationLevel,
   AgentNotification,
   AgentNotificationListener,
-} from "./agent-log.js";
+} from "./types.js";
 
 // Schemas
-export { logLevelSchema, logCategorySchema, logEntrySchema, logFilterSchema } from "./agent-log.js";
+export { logLevelSchema, logCategorySchema, logEntrySchema, logFilterSchema } from "./schemas.js";
+
+// AgentLog class
+export { AgentLog, generateLogId } from "./agent-log.js";

@@ -18,21 +18,18 @@
  *
  * // Check if auto compaction needed
  * if (shouldAutoCompact(compactedMessages, config)) {
- *   const result = await autoCompact(compactedMessages, config, agentId, sandbox);
+ *   const result = await autoCompact(compactedMessages, config, agentId);
  * }
  * ```
  */
 
 // Types and schemas
 export {
-  // Schemas
   compactionConfigSchema,
   compactionResultSchema,
-  // Types
   type CompactionConfig,
   type CompactionConfigInput,
   type CompactionResult,
-  // Defaults
   DEFAULT_COMPACTION_CONFIG,
   createCompactionConfig,
 } from "./types.js";
@@ -46,13 +43,20 @@ export {
   UPDATE_COMPACTION_PROMPT,
   COMPACTION_SYSTEM_PROMPT,
   buildCompactionPrompt,
+  type CompactionTodoItem,
 } from "./compaction-prompt.js";
 
 // Micro compaction (Layer 1)
 export { microCompact } from "./micro-compact.js";
 
 // Auto compaction (Layer 2)
-export { shouldAutoCompact, summarizeConversation, autoCompact, createCompactedMessages } from "./auto-compact.js";
+export {
+  shouldAutoCompact,
+  summarizeConversation,
+  autoCompact,
+  createCompactedMessages,
+  type SummarizeOptions,
+} from "./auto-compact.js";
 export { applyCompactionResult, type ApplyCompactionResultOptions } from "./apply-compaction-result.js";
 
 // Reactive compaction (Emergency)

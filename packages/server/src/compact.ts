@@ -39,7 +39,7 @@ export async function runCompact(agent: Agent, focus?: string): Promise<CompactR
   agent.status = "compacting";
 
   try {
-    const result = await autoCompact(messages, agent.compactionConfig || {}, agent.id, sandbox, {
+    const result = await autoCompact(messages, agent.compactionConfig || {}, agent.id, {
       focus,
       todos: todos.length > 0 ? todos : undefined,
       actualTokens: actualTokens || undefined,

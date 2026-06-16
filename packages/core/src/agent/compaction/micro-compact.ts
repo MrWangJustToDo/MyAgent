@@ -12,6 +12,8 @@
  * Uses Vercel AI SDK's ModelMessage type directly.
  */
 
+import { isToolCallPart, isToolResultPart } from "./message-utils.js";
+
 import type { CompactionConfig } from "./types.js";
 import type { ModelMessage } from "ai";
 
@@ -85,24 +87,6 @@ function getToolResultSize(part: Record<string, unknown>): number {
  */
 function createPlaceholder(toolName: string): string {
   return `[Previous: used ${toolName}]`;
-}
-
-/**
- * Check if a part is a tool call.
- */
-function isToolCallPart(part: unknown): boolean {
-  if (!part || typeof part !== "object") return false;
-  const p = part as Record<string, unknown>;
-  return p.type === "tool-call";
-}
-
-/**
- * Check if a part is a tool result.
- */
-function isToolResultPart(part: unknown): boolean {
-  if (!part || typeof part !== "object") return false;
-  const p = part as Record<string, unknown>;
-  return p.type === "tool-result";
 }
 
 /**

@@ -22,7 +22,7 @@
 
 import { generateText } from "ai";
 
-import { extractTokenUsage } from "../agent-context/agent-context.js";
+import { extractTokenUsage } from "../agent-context/types.js";
 
 import {
   DEFAULT_MAX_MEMORY_BYTES_PER_FILE,

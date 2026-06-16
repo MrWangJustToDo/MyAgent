@@ -1,8 +1,5 @@
-// Context class
-export { AgentContext, generateContextId, calculateCost, extractTokenUsage } from "./agent-context.js";
+// Types and helpers
+export { calculateCost, extractTokenUsage, type TokenUsage } from "./types.js";
 
-// Types
-export type {
-  // Token usage
-  TokenUsage,
-} from "./agent-context.js";
+// Context class
+export { AgentContext, generateContextId } from "./agent-context.js";

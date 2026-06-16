@@ -170,6 +170,24 @@ export {
   type McpServerStatus,
 } from "./mcp";
 
+// Hook system exports
+export {
+  HookRegistry,
+  runHooks,
+  emitHook,
+  HOOK_EVENTS,
+  HOOKS_DIR,
+  HOOKS_CONFIG_FILE,
+  hookConfigSchema,
+  type HookEventType,
+  type HookEntry,
+  type HookMatcher,
+  type HookConfig,
+  type HookResult,
+  type HookEventInput,
+  type HookLogger,
+} from "./hooks";
+
 // Agent documentation loader exports (AGENTS.md / CLAUDE.md)
 export {
   loadAgentDoc,

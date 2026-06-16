@@ -1,45 +1,14 @@
 import { streamText, generateText, tool as vercelTool, stepCountIs } from "ai";
-import { z } from "zod";
 
 import { generateId } from "../../base/utils.js";
+import { emitHook } from "../hooks/hook-runner.js";
 
 import { Base } from "./Base.js";
+import { AgentConfigSchema } from "./types.js";
 
-import type {
-  TextStreamPart,
-  ToolSet as VercelToolSet,
-  Agent as VercelAgent,
-  StreamTextResult,
-  GenerateTextResult,
-  GenerateTextOnStepFinishCallback,
-} from "ai";
-
-// ============================================================================
-// Types & Schemas
-// ============================================================================
-
-export const AgentConfigSchema = z.object({
-  model: z.string().min(1).describe("Model name to use"),
-  baseURL: z.string().optional().describe("Base URL for the model API"),
-  systemPrompt: z.string().optional().describe("System prompt for the agent"),
-  maxIterations: z.number().int().min(1).max(100).optional().default(10).describe("Maximum agentic loop iterations"),
-  maxTokens: z.number().int().min(1).optional().describe("Maximum tokens per response"),
-  temperature: z.number().min(0).max(2).optional().describe("Sampling temperature"),
-});
-
-export type AgentConfig = z.infer<typeof AgentConfigSchema>;
-
-/** Tool set type - Record of Vercel AI tools */
-export type ToolSet = VercelToolSet;
-
-/** Stream part type from Vercel AI SDK */
-export type StreamPart = TextStreamPart<ToolSet>;
-
-/** Vercel AI SDK usage type (used by context.updateUsage) */
-export interface UsageInfo {
-  inputTokens?: number;
-  outputTokens?: number;
-}
+import type { AgentConfig, ToolSet } from "./types.js";
+import type { PostToolUseInput, PostToolUseFailureInput } from "../hooks/types.js";
+import type { Agent as VercelAgent, StreamTextResult, GenerateTextResult, GenerateTextOnStepFinishCallback } from "ai";
 
 type StreamParams = Omit<Parameters<typeof streamText>[0], "model">;
 
@@ -106,6 +75,10 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
     return this.config.maxTokens ?? this.modelInfo?.defaultMaxTokens ?? undefined;
   }
 
+  private getHookSessionId(): string {
+    return this.sessionData?.id ?? this.id;
+  }
+
   // ============================================================================
   // System Prompt
   // ============================================================================
@@ -120,6 +93,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
    * etc.) is preserved as-is — the XML envelope prevents the LLM from
    * confusing inter-section structure with intra-section markdown.
    */
+
   private buildSystemPrompt(): string | undefined {
     const parts: string[] = [];
 
@@ -242,6 +216,17 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       toolCount: Object.keys(tools).length,
     });
 
+    emitHook(
+      this.hookRegistry,
+      "UserPromptSubmit",
+      {
+        hook_event_name: "UserPromptSubmit",
+        session_id: this.getHookSessionId(),
+        prompt: typeof prompt === "string" ? prompt : "(structured)",
+      },
+      { logger: this.log ?? undefined }
+    );
+
     const runStream = (msgs: typeof finalMessages): StreamTextResult<ToolSet, never> => {
       return streamText({
         model: this.model!,
@@ -259,6 +244,16 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
           this.context?.emit(chunk);
           if (chunk.type === "tool-call" && this.isToolNeedsApproval(chunk.toolName)) {
             this.status = "waiting";
+            emitHook(
+              this.hookRegistry,
+              "Notification",
+              {
+                hook_event_name: "Notification",
+                session_id: this.getHookSessionId(),
+                message: `Tool ${chunk.toolName} requires approval`,
+              },
+              { logger: this.log ?? undefined }
+            );
             return;
           }
           if (chunk.type === "reasoning-delta") {
@@ -311,6 +306,36 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
             error: error instanceof Error ? error.message : error,
             durationMs,
           });
+
+          if (error) {
+            emitHook(
+              this.hookRegistry,
+              "PostToolUseFailure",
+              {
+                hook_event_name: "PostToolUseFailure",
+                session_id: this.getHookSessionId(),
+                tool_name: toolCall.toolName,
+                tool_input: toolCall.input,
+                error: error instanceof Error ? error.message : String(error),
+              } satisfies PostToolUseFailureInput,
+              { matchValue: toolCall.toolName, logger: this.log ?? undefined }
+            );
+          } else {
+            emitHook(
+              this.hookRegistry,
+              "PostToolUse",
+              {
+                hook_event_name: "PostToolUse",
+                session_id: this.getHookSessionId(),
+                tool_name: toolCall.toolName,
+                tool_input: toolCall.input,
+                tool_output: output,
+                duration_ms: durationMs ?? 0,
+              } satisfies PostToolUseInput,
+              { matchValue: toolCall.toolName, logger: this.log ?? undefined }
+            );
+          }
+
           experimental_onToolCallFinish?.(event);
         },
         ...rest,
@@ -364,6 +389,17 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       toolCount: Object.keys(tools).length,
     });
 
+    emitHook(
+      this.hookRegistry,
+      "UserPromptSubmit",
+      {
+        hook_event_name: "UserPromptSubmit",
+        session_id: this.getHookSessionId(),
+        prompt: typeof prompt === "string" ? prompt : "(structured)",
+      },
+      { logger: this.log ?? undefined }
+    );
+
     const runGenerate = async (msgs: typeof finalMessages): Promise<GenerateTextResult<ToolSet, never>> => {
       return generateText({
         model: this.model!,
@@ -399,6 +435,36 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
             error: error instanceof Error ? error.message : error,
             durationMs,
           });
+
+          if (error) {
+            emitHook(
+              this.hookRegistry,
+              "PostToolUseFailure",
+              {
+                hook_event_name: "PostToolUseFailure",
+                session_id: this.getHookSessionId(),
+                tool_name: toolCall.toolName,
+                tool_input: toolCall.input,
+                error: error instanceof Error ? error.message : String(error),
+              } satisfies PostToolUseFailureInput,
+              { matchValue: toolCall.toolName, logger: this.log ?? undefined }
+            );
+          } else {
+            emitHook(
+              this.hookRegistry,
+              "PostToolUse",
+              {
+                hook_event_name: "PostToolUse",
+                session_id: this.getHookSessionId(),
+                tool_name: toolCall.toolName,
+                tool_input: toolCall.input,
+                tool_output: output,
+                duration_ms: durationMs ?? 0,
+              } satisfies PostToolUseInput,
+              { matchValue: toolCall.toolName, logger: this.log ?? undefined }
+            );
+          }
+
           experimental_onToolCallFinish?.(event);
         },
         ...rest,

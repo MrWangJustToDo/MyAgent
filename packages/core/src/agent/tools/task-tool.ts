@@ -22,7 +22,7 @@ import { z } from "zod";
 
 import { generateId } from "../../base/utils.js";
 import { agentManager } from "../../managers/manager-agent.js";
-import { runSubagent } from "../subagent/subagent.js";
+import { runSubagent } from "../subagent/runner.js";
 
 import { withDuration } from "./util/helpers.js";
 

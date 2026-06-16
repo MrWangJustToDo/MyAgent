@@ -15,138 +15,21 @@
  * - No retry on empty (the prompt is explicit about output format)
  */
 
-import { runSubagent } from "../subagent/subagent.js";
+import { runSubagent } from "../subagent/runner.js";
 
-import { buildCompactionPrompt, COMPACTION_SYSTEM_PROMPT, type CompactionTodoItem } from "./compaction-prompt.js";
+import { buildCompactionPrompt, COMPACTION_SYSTEM_PROMPT } from "./compaction-prompt.js";
+import { extractFileOpsFromMessages, formatFileOperations } from "./file-ops-tracker.js";
+import { getFirstTextPartContent } from "./message-utils.js";
+import { serializeConversation } from "./serialize-conversation.js";
 import { estimateTokens } from "./token-estimator.js";
 
+import type { CompactionTodoItem } from "./compaction-prompt.js";
 import type { CompactionConfig, CompactionResult } from "./types.js";
-import type { Sandbox } from "../../environment/types.js";
 import type { ModelMessage } from "ai";
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-/** Maximum characters for a single tool result in serialized output */
-const TOOL_RESULT_MAX_CHARS = 2000;
-
-/**
- * Serialize ModelMessage[] to plain text for summarization.
- *
- * This is the key technique (from PI's compaction) to prevent the summarization
- * LLM from generating tool calls: instead of passing messages as ModelMessage[]
- * (which the LLM might try to continue with tool calls), we convert them to a
- * plain text transcript wrapped in tags.
- *
- * Format:
- *   [User]: ...
- *   [Assistant]: ...
- *   [Assistant tool calls]: name(args); ...
- *   [Tool result]: ...
- */
-function serializeConversation(messages: ModelMessage[]): string {
-  const parts: string[] = [];
-
-  for (const msg of messages) {
-    if (msg.role === "user") {
-      const text = extractTextFromContent(msg.content);
-      if (text) parts.push(`[User]: ${text}`);
-    } else if (msg.role === "assistant") {
-      if (typeof msg.content === "string") {
-        if (msg.content) parts.push(`[Assistant]: ${msg.content}`);
-        continue;
-      }
-      if (!Array.isArray(msg.content)) continue;
-
-      const textParts: string[] = [];
-      const toolCalls: string[] = [];
-
-      for (const part of msg.content) {
-        const p = part as Record<string, unknown>;
-        if (p.type === "text" && typeof p.text === "string") {
-          textParts.push(p.text);
-        } else if (p.type === "tool-call") {
-          const name = (p.toolName as string) || "unknown";
-          let argsStr = "";
-          try {
-            const raw = typeof p.args === "string" ? p.args : JSON.stringify(p.args);
-            argsStr = raw.length > 200 ? raw.slice(0, 200) + "..." : raw;
-          } catch {
-            argsStr = "(args)";
-          }
-          toolCalls.push(`${name}(${argsStr})`);
-        }
-      }
-
-      if (textParts.length > 0) parts.push(`[Assistant]: ${textParts.join("\n")}`);
-      if (toolCalls.length > 0) parts.push(`[Assistant tool calls]: ${toolCalls.join("; ")}`);
-    } else if (msg.role === "tool") {
-      if (!Array.isArray(msg.content)) continue;
-
-      for (const part of msg.content) {
-        const p = part as Record<string, unknown>;
-        if (p.type === "tool-result") {
-          const name = (p.toolName as string) || "tool";
-          let resultText = "";
-          try {
-            const raw = typeof p.result === "string" ? p.result : JSON.stringify(p.result);
-            resultText =
-              raw.length > TOOL_RESULT_MAX_CHARS
-                ? raw.slice(0, TOOL_RESULT_MAX_CHARS) + `\n[... ${raw.length - TOOL_RESULT_MAX_CHARS} chars truncated]`
-                : raw;
-          } catch {
-            resultText = "(result)";
-          }
-          parts.push(`[Tool result from ${name}]: ${resultText}`);
-        }
-      }
-    }
-  }
-
-  return parts.join("\n\n");
-}
-
-/**
- * Extract text content from a message's content field.
- * Handles string content, text parts, and replaces media with placeholders.
- */
-function extractTextFromContent(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-
-  const parts: string[] = [];
-  for (const part of content) {
-    const p = part as Record<string, unknown>;
-    const type = p.type as string | undefined;
-
-    if (type === "text" && typeof p.text === "string") {
-      parts.push(p.text);
-    } else if (type === "image") {
-      parts.push("[Image was attached]");
-    } else if (type === "file") {
-      const filename = (p.filename as string) || "";
-      parts.push(filename ? `[File attached: ${filename}]` : "[File was attached]");
-    }
-  }
-  return parts.join("\n");
-}
-
-/**
- * Get text content from the first text part of a content array.
- * Needed because strict SDK types prevent casting to Record for find().
- */
-function getFirstTextPartContent(content: Array<unknown>): string {
-  for (const part of content) {
-    if (part && typeof part === "object") {
-      const p = part as Record<string, unknown>;
-      if (p.type === "text" && typeof p.text === "string") {
-        return p.text;
-      }
-    }
-  }
-  return "";
-}
 
 /**
  * Detect and extract existing conversation summary from the first message.
@@ -176,8 +59,6 @@ function extractExistingSummary(messages: ModelMessage[]): { existingSummary?: s
         ? getFirstTextPartContent(first.content)
         : "";
 
-  // Detect [CONVERSATION SUMMARY] ... [END SUMMARY] at the start of the message.
-  // Uses startsWith/endsWith instead of regex for robustness against spacing variations.
   const START_MARKER = "[CONVERSATION SUMMARY]";
   const END_MARKER = "[END SUMMARY]";
 
@@ -238,140 +119,6 @@ function findCutPoint(messages: ModelMessage[], keepRecentFlows: number): number
 }
 
 // ============================================================================
-// File Operation Tracking
-// ============================================================================
-
-/**
- * Tracked file operations from tool calls.
- * Used to append an accurate file list to the compaction summary,
- * so the LLM doesn't have to rely on memory to list which files were involved.
- *
- * To add new tools, update READ_TOOLS or WRITE_TOOLS below.
- * For tools with non-standard arg field names (e.g., copy_file uses sourcePath/targetPath
- * instead of path), add special handling in extractFileOpsFromMessages().
- */
-interface FileOps {
-  /** Files that were read (read_file, list_file, tree, glob, grep, etc.) */
-  readFiles: Set<string>;
-  /** Files that were created or modified (write_file, edit_file, search_replace, copy_file, move_file, delete_file, etc.) */
-  modifiedFiles: Set<string>;
-}
-
-/** Tools that read file content or structure */
-const READ_TOOLS = new Set(["read_file", "list_file", "tree"]);
-
-/** Tools that create or modify files */
-const WRITE_TOOLS = new Set(["write_file", "edit_file", "search_replace", "copy_file", "move_file", "delete_file"]);
-
-/**
- * Extract a string path field from a tool-call's args.
- * Handles both object args and JSON-string args.
- */
-function extractPathFromArgs(args: unknown, field: string): string | undefined {
-  if (typeof args === "string") {
-    try {
-      const parsed = JSON.parse(args);
-      const val = parsed[field];
-      return typeof val === "string" && val.length > 0 ? val : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-  if (args && typeof args === "object") {
-    const val = (args as Record<string, unknown>)[field];
-    return typeof val === "string" && val.length > 0 ? val : undefined;
-  }
-  return undefined;
-}
-
-/**
- * Extract file operations from assistant tool-call messages.
- *
- * Scans all assistant messages for tool-call parts and tracks:
- * - Files read: read_file, list_file, tree calls
- * - Files modified: write_file, edit_file, search_replace, copy_file, move_file, delete_file
- *
- * @param messages - Messages to scan for tool calls
- * @returns Deduplicated sets of read and modified file paths
- *
- * @example
- * ```typescript
- * const ops = extractFileOpsFromMessages(messages);
- * console.log(ops.readFiles);   // Set {"src/index.ts", "package.json"}
- * console.log(ops.modifiedFiles); // Set {"src/new-file.ts"}
- * ```
- */
-function extractFileOpsFromMessages(messages: ModelMessage[]): FileOps {
-  const ops: FileOps = { readFiles: new Set(), modifiedFiles: new Set() };
-
-  for (const message of messages) {
-    if (message.role !== "assistant") continue;
-
-    const content = message.content;
-    if (!Array.isArray(content)) continue;
-
-    for (const part of content) {
-      const p = part as Record<string, unknown>;
-      if (p.type !== "tool-call") continue;
-
-      const toolName = p.toolName as string | undefined;
-      if (!toolName) continue;
-
-      const args = p.args;
-
-      if (READ_TOOLS.has(toolName)) {
-        const path = extractPathFromArgs(args, "path");
-        if (path && path !== "." && path !== "./") {
-          ops.readFiles.add(path);
-        }
-      } else if (WRITE_TOOLS.has(toolName)) {
-        if (toolName === "copy_file" || toolName === "move_file") {
-          // Both source and target are relevant for these operations
-          const sourcePath = extractPathFromArgs(args, "sourcePath");
-          const targetPath = extractPathFromArgs(args, "targetPath");
-          if (targetPath) ops.modifiedFiles.add(targetPath);
-          if (toolName === "move_file" && sourcePath) ops.modifiedFiles.add(sourcePath);
-          if (toolName === "copy_file" && sourcePath) ops.readFiles.add(sourcePath);
-        } else {
-          const path = extractPathFromArgs(args, "path");
-          if (path) ops.modifiedFiles.add(path);
-        }
-      }
-    }
-  }
-
-  return ops;
-}
-
-/**
- * Format file operations into markdown sections for appending to a summary.
- *
- * Returns empty string if no operations were tracked.
- *
- * @param ops - File operations to format
- * @returns Markdown string with "Files Read" and/or "Files Modified" sections
- */
-function formatFileOperations(ops: FileOps): string {
-  const parts: string[] = [];
-
-  if (ops.readFiles.size > 0) {
-    parts.push("## Files Read");
-    for (const f of [...ops.readFiles].sort()) {
-      parts.push(`- \`${f}\``);
-    }
-  }
-
-  if (ops.modifiedFiles.size > 0) {
-    parts.push("## Files Modified");
-    for (const f of [...ops.modifiedFiles].sort()) {
-      parts.push(`- \`${f}\``);
-    }
-  }
-
-  return parts.length > 0 ? "\n\n" + parts.join("\n") : "";
-}
-
-// ============================================================================
 // Public API
 // ============================================================================
 
@@ -381,20 +128,6 @@ function formatFileOperations(ops: FileOps): string {
  * @param tokensOrMessages - Either actual token count (number) or messages array for estimation
  * @param config - Compaction configuration
  * @returns True if tokens exceed threshold
- *
- * @example
- * ```typescript
- * // Using actual token count from context
- * const usage = context.getUsage();
- * if (shouldAutoCompact(usage.inputTokens, config)) {
- *   const result = await autoCompact(messages, config, model, sandbox);
- * }
- *
- * // Using message estimation (fallback)
- * if (shouldAutoCompact(messages, config)) {
- *   const result = await autoCompact(messages, config, model, sandbox);
- * }
- * ```
  */
 export function shouldAutoCompact(
   tokensOrMessages: number | ModelMessage[],
@@ -402,19 +135,15 @@ export function shouldAutoCompact(
 ): boolean {
   const { tokenThreshold = 100000 } = config;
 
-  // If a number is passed, use it directly as the token count
   if (typeof tokensOrMessages === "number") {
     return tokensOrMessages >= tokenThreshold;
   }
 
-  // Otherwise estimate from messages
   const estimatedTokens = estimateTokens(tokensOrMessages);
   return estimatedTokens >= tokenThreshold;
 }
 
-/**
- * Options for summarizing a conversation
- */
+/** Options for summarizing a conversation */
 export interface SummarizeOptions {
   /** Optional focus guidance for the summary */
   focus?: string;
@@ -435,16 +164,6 @@ export interface SummarizeOptions {
  * @param parentAgentId - Parent agent ID for spawning subagent
  * @param options - Optional summarization options (focus, todos)
  * @returns Summary text
- *
- * @example
- * ```typescript
- * const summary = await summarizeConversation(messages, "agent-123", { focus: "API decisions" });
- *
- * // With todos
- * const summary = await summarizeConversation(messages, "agent-123", {
- *   todos: [{ content: "Add tests", status: "pending", priority: "high" }]
- * });
- * ```
  */
 export async function summarizeConversation(
   messages: ModelMessage[],
@@ -453,36 +172,25 @@ export async function summarizeConversation(
 ): Promise<string> {
   const { focus, todos } = options ?? {};
 
-  // Detect existing summary from the first message (incremental update).
-  // If found: the old summary is passed via <previous-summary> tags in the prompt,
-  // and cleanMessages excludes it so the subagent only sees NEW messages.
-  // If not found: first-time compaction, summarize everything normally.
+  // Detect existing summary (incremental update).
   const { existingSummary, cleanMessages } = extractExistingSummary(messages);
 
-  // Serialize the conversation to plain text. This is the key technique to prevent
-  // the summarization LLM from generating tool calls — it sees a text transcript
-  // instead of structured ModelMessage[] with tool-call/tool-result parts.
+  // Serialize conversation to plain text to prevent LLM from generating tool calls.
   const conversationText = serializeConversation(cleanMessages);
 
-  // Build the final prompt: conversation text wrapped in tags + compaction instructions.
   const instructionPrompt = buildCompactionPrompt({ focus, todos, existingSummary });
   const fullPrompt = `<conversation>\n${conversationText}\n</conversation>\n\n${instructionPrompt}`;
 
-  // Run subagent for summarization
-  // - systemPrompt: tells the LLM it's a summarizer (not a conversational agent)
-  // - prompt: contains the serialized conversation + instructions (no initialMessages needed)
-  // - tools: {} — no tools available, pure text generation
-  // - retryOnEmpty: true - use subagent's built-in retry logic
   const result = await runSubagent({
     prompt: fullPrompt,
     parentAgentId,
-    systemPrompt: COMPACTION_SYSTEM_PROMPT, // Tell LLM its role is to summarize
-    tools: {}, // No tools - pure summarization
-    maxIterations: 1, // Single pass
-    maxOutputLength: 10000, // Allow longer summaries for compaction
-    retryOnEmpty: true, // Use subagent's built-in retry logic
-    autoDestroy: true, // Clean up after
-    aggregateUsageToParent: true, // Track usage
+    systemPrompt: COMPACTION_SYSTEM_PROMPT,
+    tools: {},
+    maxIterations: 1,
+    maxOutputLength: 10000,
+    retryOnEmpty: true,
+    autoDestroy: true,
+    aggregateUsageToParent: true,
     description: "compaction",
   });
 
@@ -496,8 +204,6 @@ export async function summarizeConversation(
  * @returns Array with just the summary as a user message
  */
 export function createCompactedMessages(summary: string): ModelMessage[] {
-  // Only include the summary as context - no fake assistant response needed.
-  // The agent will naturally continue from whatever the user sends next.
   return [
     {
       role: "user" as const,
@@ -521,25 +227,13 @@ Continue if you have next steps, or stop and ask for clarification if you are un
  * @param messages - Current LLM-visible messages
  * @param config - Compaction configuration (uses keepRecentFlows for splitting)
  * @param parentAgentId - Parent agent ID for spawning summarization subagent
- * @param sandbox - Sandbox (kept for API compatibility)
  * @param options - Optional summarization options (focus, todos)
  * @returns Compaction result with summary and cutIndex
- *
- * @example
- * ```typescript
- * const result = await autoCompact(llmMessages, config, "agent-123", sandbox);
- * if (result.compacted) {
- *   context.setSummaryMessage(createCompactedMessages(result.summary)[0]);
- *   // cutIndex is relative to the input messages; caller must translate to absolute index
- *   context.setCompactIndex(absoluteOffset + result.cutIndex);
- * }
- * ```
  */
 export async function autoCompact(
   messages: ModelMessage[],
   config: Partial<CompactionConfig>,
   parentAgentId: string,
-  sandbox: Sandbox,
   options?: SummarizeOptions & { actualTokens?: number }
 ): Promise<CompactionResult> {
   const { keepRecentFlows = 4 } = config;
@@ -547,23 +241,13 @@ export async function autoCompact(
   const tokensBefore = options?.actualTokens ?? estimated;
 
   if (messages.length === 0) {
-    return {
-      compacted: false,
-      tokensBefore,
-      tokensAfter: tokensBefore,
-      type: "auto",
-    };
+    return { compacted: false, tokensBefore, tokensAfter: tokensBefore, type: "auto" };
   }
 
   const cutIndex = findCutPoint(messages, keepRecentFlows);
 
   if (cutIndex === 0) {
-    return {
-      compacted: false,
-      tokensBefore,
-      tokensAfter: tokensBefore,
-      type: "auto",
-    };
+    return { compacted: false, tokensBefore, tokensAfter: tokensBefore, type: "auto" };
   }
 
   const summaryMessages = messages.slice(0, cutIndex);

@@ -6,6 +6,7 @@ import { AgentLog } from "../agent";
 import { AgentContext } from "../agent/agent-context";
 import { loadAgentDoc, formatAgentDocResult } from "../agent/agent-doc-loader.js";
 import { createCompactionConfig } from "../agent/compaction/types.js";
+import { HookRegistry } from "../agent/hooks/hook-registry.js";
 import { Agent } from "../agent/loop/Agent.js";
 import { loadMcpConfig } from "../agent/mcp/config.js";
 import { McpManager } from "../agent/mcp/manager.js";
@@ -23,7 +24,7 @@ import { getModel } from "../models/registry.js";
 import { sandboxManager } from "./manager-sandbox.js";
 
 import type { CompactionConfigInput } from "../agent/compaction/types.js";
-import type { AgentConfig, ToolSet } from "../agent/loop/Agent.js";
+import type { AgentConfig, ToolSet } from "../agent/loop/types.js";
 import type { ResumeResult, SessionData } from "../agent/session/types.js";
 import type { Sandbox } from "../environment";
 import type { ModelInfo } from "../models/types.js";
@@ -384,6 +385,20 @@ export class AgentManager {
       agent.setMemoryContent(memoryManager.getIndexContent());
     }
 
+    // Hook system (root agents only)
+    if (!parentId) {
+      const hookRegistry = new HookRegistry(fsRootPath);
+      try {
+        await hookRegistry.load();
+        agent.hookRegistry = hookRegistry;
+        if (hookRegistry.hasHooks()) {
+          log.info("system", "Hooks loaded from .agent-hooks/hooks.json");
+        }
+      } catch (err) {
+        log.warn("system", `Failed to load hooks: ${err}`);
+      }
+    }
+
     // Session persistence (root agents only)
     if (!parentId) {
       const sessionStore = new SessionStore(sandbox.filesystem);
@@ -423,6 +438,21 @@ export class AgentManager {
         parent.childIds.push(id);
         parent.updatedAt = Date.now();
       }
+    }
+
+    // Emit SessionStart hook for root agents
+    if (!parentId && agent.hookRegistry) {
+      const { emitHook } = await import("../agent/hooks/hook-runner.js");
+      emitHook(
+        agent.hookRegistry,
+        "SessionStart",
+        {
+          hook_event_name: "SessionStart",
+          session_id: agent.getSessionData()?.id ?? id,
+          cwd: fsRootPath,
+        },
+        { logger: log }
+      );
     }
 
     return agent;
