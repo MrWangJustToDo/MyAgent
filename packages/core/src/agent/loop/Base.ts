@@ -217,7 +217,7 @@ export class Base extends SessionHandler {
 
   shouldAutoCompact(messages?: ModelMessage[]): boolean {
     const tokenThreshold = this.compactionConfig?.tokenThreshold ?? 100000;
-    const compactAtPercent = this.compactionConfig?.compactAtPercent ?? 85;
+    const compactAtPercent = this.compactionConfig?.compactAtPercent ?? 80;
     const triggerAt = Math.floor(tokenThreshold * (compactAtPercent / 100));
 
     if (this.context) {

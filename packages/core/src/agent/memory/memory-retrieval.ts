@@ -34,6 +34,7 @@ import {
 import type { MemoryManager } from "./memory-manager.js";
 import type { Memory } from "./types.js";
 import type { AgentContext } from "../agent-context/agent-context.js";
+import type { AgentLog } from "../agent-log/agent-log.js";
 import type { LanguageModel } from "ai";
 
 // ============================================================================
@@ -136,8 +137,14 @@ async function selectWithLLM(
   query: string,
   manifest: string,
   model: LanguageModel,
-  context?: AgentContext | null
+  context?: AgentContext | null,
+  logger?: AgentLog
 ): Promise<string[]> {
+  logger?.debug("memory", "LLM memory selection start", {
+    queryLength: query.length,
+    manifestLines: manifest.split("\n").length,
+  });
+
   const result = await generateText({
     model,
     system: SELECT_MEMORIES_SYSTEM_PROMPT,
@@ -149,16 +156,28 @@ async function selectWithLLM(
     context.addTotalUsage(extractTokenUsage(result.usage));
   }
 
+  logger?.debug("memory", "LLM selection raw response", {
+    raw: result.text,
+    finishReason: result.finishReason,
+  });
+
   const match = /\{[\s\S]*?\}/.exec(result.text);
-  if (!match) return [];
+  if (!match) {
+    logger?.warn("memory", "LLM selection returned no JSON object in response", { raw: result.text });
+    return [];
+  }
 
   try {
     const parsed = JSON.parse(match[0]) as { selected_memories?: unknown };
     if (Array.isArray(parsed.selected_memories)) {
-      return parsed.selected_memories.filter((f: unknown): f is string => typeof f === "string");
+      const filenames = parsed.selected_memories.filter((f: unknown): f is string => typeof f === "string");
+      logger?.debug("memory", "LLM selected memories", { count: filenames.length, filenames });
+      return filenames;
     }
-  } catch {
-    // JSON parse failed — fall through to empty
+    logger?.warn("memory", "LLM selection response missing selected_memories array", { parsed });
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    logger?.warn("memory", `LLM selection JSON parse failed: ${errorMsg}`, { raw: match[0] });
   }
 
   return [];
@@ -213,6 +232,8 @@ function selectWithKeywords(query: string, memories: Memory[], maxItems: number)
  * @param model - LanguageModel for the selection side-query (null = keyword only)
  * @param alreadySurfaced - Set of filenames already shown this session
  * @param options - Budget and limit overrides
+ * @param context - AgentContext for token usage aggregation
+ * @param logger - AgentLog for debug logging
  * @returns Array of relevant memories with truncated full content
  */
 export async function findRelevantMemories(
@@ -221,7 +242,8 @@ export async function findRelevantMemories(
   model: LanguageModel | null,
   alreadySurfaced: ReadonlySet<string> = new Set(),
   options: FindRelevantMemoriesOptions = {},
-  context?: AgentContext | null
+  context?: AgentContext | null,
+  logger?: AgentLog
 ): Promise<RelevantMemory[]> {
   const {
     maxItems = DEFAULT_MAX_RELEVANT_MEMORIES,
@@ -231,26 +253,47 @@ export async function findRelevantMemories(
   } = options;
 
   const allMemories = await memoryManager.listMemories();
+  logger?.debug("memory", `Found ${allMemories.length} total memories`);
 
   // Pre-filter already-surfaced before LLM call (don't waste slots on repeats)
   const candidates = allMemories.filter((m) => !alreadySurfaced.has(m.filename));
-  if (candidates.length === 0) return [];
+  logger?.debug(
+    "memory",
+    `After filtering already-surfaced (${alreadySurfaced.size}): ${candidates.length} candidates`
+  );
+  if (candidates.length === 0) {
+    logger?.debug("memory", "No candidate memories available, skipping selection");
+    return [];
+  }
 
   const manifest = formatManifest(candidates);
 
   // Select relevant filenames — LLM with keyword fallback
   let selectedFilenames: string[];
+  let selectionMethod: "llm" | "keyword" | "keyword-fallback" = "keyword";
   if (model) {
     try {
-      selectedFilenames = await selectWithLLM(query, manifest, model, context);
-    } catch {
+      selectedFilenames = await selectWithLLM(query, manifest, model, context, logger);
+      selectionMethod = "llm";
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      logger?.warn("memory", `LLM memory selection threw, falling back to keyword: ${errorMsg}`);
       selectedFilenames = selectWithKeywords(query, candidates, maxItems);
+      selectionMethod = "keyword-fallback";
     }
   } else {
     selectedFilenames = selectWithKeywords(query, candidates, maxItems);
+    logger?.debug("memory", "No LLM model provided, using keyword selection");
   }
 
-  if (selectedFilenames.length === 0) return [];
+  logger?.debug("memory", `Selection method: ${selectionMethod}, selected ${selectedFilenames.length} memories`, {
+    selectedFilenames,
+  });
+
+  if (selectedFilenames.length === 0) {
+    logger?.debug("memory", "No memories selected by selection process");
+    return [];
+  }
 
   // Resolve filenames → Memory objects, load content with budget enforcement
   const candidateMap = new Map(candidates.map((m) => [m.filename, m]));
@@ -259,13 +302,22 @@ export async function findRelevantMemories(
 
   for (const filename of selectedFilenames.slice(0, maxItems)) {
     const mem = candidateMap.get(filename);
-    if (!mem) continue;
+    if (!mem) {
+      logger?.warn("memory", `Selected filename "${filename}" not found in candidate map`);
+      continue;
+    }
 
     const content = truncateBody(mem.body, maxLinesPerFile, maxBytesPerFile);
     const contentBytes = Buffer.byteLength(content, "utf-8");
 
     // Enforce session-level budget
-    if (totalBytes + contentBytes > maxSessionBytes) break;
+    if (totalBytes + contentBytes > maxSessionBytes) {
+      logger?.debug(
+        "memory",
+        `Budget limit reached after ${results.length} memories (${totalBytes}/${maxSessionBytes} bytes)`
+      );
+      break;
+    }
     totalBytes += contentBytes;
 
     results.push({
@@ -276,6 +328,15 @@ export async function findRelevantMemories(
       content,
     });
   }
+
+  logger?.info(
+    "memory",
+    `Loaded ${results.length} relevant memories (${totalBytes} bytes, method: ${selectionMethod})`,
+    {
+      filenames: results.map((r) => r.filename),
+      totalBytes,
+    }
+  );
 
   return results;
 }

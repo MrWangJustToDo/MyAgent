@@ -75,7 +75,10 @@ export class MemoryHandler {
    * memories whose full content should be injected into the system prompt.
    */
   async prefetchRelevantMemories(messages: ModelMessage[]): Promise<void> {
-    if (!this.memoryManager) return;
+    if (!this.memoryManager) {
+      this.log?.debug("memory", "No memory manager available, skipping prefetch");
+      return;
+    }
 
     let query = "";
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -94,9 +97,12 @@ export class MemoryHandler {
     }
 
     if (!query.trim()) {
+      this.log?.debug("memory", "No user query found in messages, skipping memory prefetch");
       this.relevantMemoryContent = "";
       return;
     }
+
+    this.log?.debug("memory", "Prefetching relevant memories", { query: query.slice(0, 200) });
 
     try {
       const relevant = await findRelevantMemories(
@@ -105,17 +111,20 @@ export class MemoryHandler {
         this.model,
         this.alreadySurfaced,
         {},
-        this.context
+        this.context,
+        this.log ?? undefined
       );
 
       if (relevant.length > 0) {
         this.markMemoriesSurfaced(relevant.map((r) => r.filename));
         this.relevantMemoryContent = formatRelevantMemories(relevant);
-        this.log?.info("memory", `Loaded ${relevant.length} relevant memories`, {
+        this.log?.info("memory", `Injected ${relevant.length} relevant memories into context`, {
           filenames: relevant.map((r) => r.filename),
+          byteSize: Buffer.byteLength(this.relevantMemoryContent, "utf-8"),
         });
       } else {
         this.relevantMemoryContent = "";
+        this.log?.debug("memory", "No relevant memories found for this query");
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
