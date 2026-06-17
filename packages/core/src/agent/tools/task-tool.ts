@@ -20,9 +20,9 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { generateId } from "../../base/utils.js";
 import { agentManager } from "../../managers/manager-agent.js";
 import { runSubagent } from "../subagent/runner.js";
+import { generateId } from "../utils.js";
 
 import { withDuration } from "./util/helpers.js";
 

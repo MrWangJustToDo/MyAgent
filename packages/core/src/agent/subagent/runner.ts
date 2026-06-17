@@ -24,10 +24,10 @@
  * ```
  */
 
-import { generateId } from "../../base/utils.js";
 import { agentManager, type AgentManager } from "../../managers/manager-agent.js";
 import { emitHook } from "../hooks/hook-runner.js";
 import { maybeCacheOutput } from "../tools/util/tool-output-cache.js";
+import { generateId } from "../utils.js";
 
 import { extractSummary, truncateSummary } from "./output.js";
 import { buildExploreSystemPrompt } from "./prompt.js";

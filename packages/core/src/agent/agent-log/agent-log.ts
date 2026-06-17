@@ -1,4 +1,4 @@
-import { createSequentialIdGenerator } from "../../base/utils.js";
+import { createSequentialIdGenerator } from "../utils.js";
 
 import type {
   AgentNotification,

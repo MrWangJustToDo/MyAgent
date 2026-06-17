@@ -1,7 +1,7 @@
 import { streamText, generateText, tool as vercelTool, stepCountIs } from "ai";
 
-import { generateId } from "../../base/utils.js";
 import { emitHook } from "../hooks/hook-runner.js";
+import { generateId } from "../utils.js";
 
 import { Base } from "./Base.js";
 import { AgentConfigSchema } from "./types.js";

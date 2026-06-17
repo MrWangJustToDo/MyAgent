@@ -1,4 +1,4 @@
-import { generateId, generateShortId } from "../../base/utils.js";
+import { generateId, generateShortId } from "../utils.js";
 
 import {
   DEFAULT_MAX_TODOS,

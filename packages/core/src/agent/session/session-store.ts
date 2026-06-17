@@ -7,7 +7,7 @@
  * one copy of uiMessages regardless of how many saves occur.
  */
 
-import { generateId } from "../../base/utils.js";
+import { generateId } from "../utils.js";
 
 import { SESSION_DIR, SESSION_FILE_SUFFIX, SESSION_VERSION } from "./types.js";
 

@@ -1,4 +1,4 @@
-import { generateId } from "../../base/utils.js";
+import { generateId } from "../utils.js";
 
 import { calculateCost } from "./types.js";
 
