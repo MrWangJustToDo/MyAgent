@@ -56,6 +56,8 @@ export interface SessionData {
   usage: TokenUsage;
   /** Session cost in USD */
   cost?: number;
+  /** Last SDK-reported input tokens (actual context window fill for percentage display) */
+  contextTokens?: number;
   /** Active todos */
   todos: TodoItem[];
   /** Timestamp when session was created */

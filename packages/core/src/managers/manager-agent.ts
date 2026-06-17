@@ -554,9 +554,18 @@ export class AgentManager {
     context.setSummaryMessage(session.summaryMessage ?? null);
     context.setCompactIndex(session.compactIndex ?? 0);
 
-    // Restore usage and cost
+    // Restore accumulated usage to totalUsage (not per-step usage).
+    // Per-step `usage` tracks the current context window fill and gets set
+    // naturally by the next LLM call — pre-filling it with totals would
+    // make getTokenLimitPercent() report an incorrect 100%.
     if (session.usage) {
-      context.updateUsage(session.usage);
+      context.addTotalUsage(session.usage);
+    }
+
+    // Restore the last SDK-reported context window fill so
+    // getTokenLimitPercent() shows the correct percentage before the first LLM call.
+    if (session.contextTokens) {
+      context.updateUsage({ inputTokens: session.contextTokens, outputTokens: 0, totalTokens: session.contextTokens });
     }
     if (session.cost != null) {
       context.setTotalCost(session.cost);

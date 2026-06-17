@@ -91,6 +91,7 @@ export class SessionHandler extends MemoryHandler {
     this.sessionData.compactIndex = this.context.getCompactIndex();
     this.sessionData.usage = this.context.getTotalUsage();
     this.sessionData.cost = this.context.getTotalCost();
+    this.sessionData.contextTokens = this.context.getUsage().inputTokens;
 
     if (this.todoManager) {
       this.sessionData.todos = this.todoManager.getItems();

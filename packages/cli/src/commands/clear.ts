@@ -27,6 +27,7 @@ registerCommand({
       currentSession.compactIndex = context.getCompactIndex();
       currentSession.usage = context.getTotalUsage();
       currentSession.cost = context.getTotalCost();
+      currentSession.contextTokens = context.getUsage().inputTokens;
       await store.save(currentSession);
     }
 

@@ -247,24 +247,31 @@ export async function consolidateMemories(memoryManager: MemoryManager, parentAg
   const items = parseJsonArray(result.output);
   if (!items || items.length === 0) return memories.length;
 
+  // Validate all items first — only delete if at least one can be written back
+  const validated = items
+    .map((item) => {
+      const mem = item as Partial<ExtractedMemory>;
+      return {
+        name: typeof mem.name === "string" ? mem.name.trim() : "",
+        type: isValidMemoryType(mem.type) ? mem.type : "user",
+        description: typeof mem.description === "string" ? mem.description.trim() : "",
+        body: typeof mem.body === "string" ? mem.body.trim() : "",
+      };
+    })
+    .filter((v) => v.name && v.description && v.body);
+
+  if (validated.length === 0) {
+    return memories.length; // Nothing valid to write — keep existing memories
+  }
+
   // Delete all existing memories, then write consolidated ones
   await memoryManager.deleteAllMemories();
 
-  let count = 0;
-  for (const item of items) {
-    const mem = item as Partial<ExtractedMemory>;
-    const name = typeof mem.name === "string" ? mem.name : "";
-    const type = isValidMemoryType(mem.type) ? mem.type : "user";
-    const description = typeof mem.description === "string" ? mem.description : "";
-    const body = typeof mem.body === "string" ? mem.body : "";
-
-    if (name && description && body) {
-      await memoryManager.writeMemory(name, type, description, body);
-      count++;
-    }
+  for (const { name, type, description, body } of validated) {
+    await memoryManager.writeMemory(name, type, description, body);
   }
 
-  return count;
+  return validated.length;
 }
 
 // ============================================================================
