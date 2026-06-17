@@ -359,19 +359,20 @@ export class Base extends SessionHandler {
       if (this.status !== "waiting") this.status = "completed";
       if (this.error) this.status = "error";
 
-      if (isStream) {
-        this.lastStreamDurationMs = Date.now() - this.streamStartedAt;
-        this.streamStartedAt = 0;
-      } else {
-        this.lastGenerateDurationMs = Date.now() - this.generateStartedAt;
-        this.generateStartedAt = 0;
+      if (this.status === "completed") {
+        if (isStream) {
+          this.lastStreamDurationMs = Date.now() - this.streamStartedAt;
+          this.streamStartedAt = 0;
+        } else {
+          this.lastGenerateDurationMs = Date.now() - this.generateStartedAt;
+          this.generateStartedAt = 0;
+        }
       }
 
       this.log?.agent("Agent response finished", {
         finishReason: event.finishReason,
         totalSteps: event.steps?.length ?? 0,
         usage: event.usage,
-        durationMs: isStream ? this.lastStreamDurationMs : this.lastGenerateDurationMs,
       });
 
       this.context?.updateFinal?.(event);
