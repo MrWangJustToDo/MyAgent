@@ -17,7 +17,7 @@ export const TodoStats = () => {
     <Box gap={2} flexShrink={0}>
       <Text>|</Text>
       <Text color="cyan" bold>
-        Tasks:
+        To-Dos:
       </Text>
       <Text color="green">{stats.completed}</Text>
       <Text color="gray">/</Text>
