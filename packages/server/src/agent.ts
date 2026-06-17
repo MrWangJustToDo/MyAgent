@@ -1,5 +1,6 @@
 import {
   agentManager,
+  buildDefaultSystemPrompt,
   createDeepSeekModel,
   createModelFromId,
   createOllamaModel,
@@ -7,8 +8,6 @@ import {
   createOpenAICompatibleModel,
   getOllamaBuildInTools,
 } from "@my-agent/core";
-
-import { buildDefaultSystemPrompt } from "./prompt.js";
 
 import type { Agent, LanguageModel, ModelInfo } from "@my-agent/core";
 import type { ToolSet } from "ai";

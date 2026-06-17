@@ -1,5 +1,6 @@
 import {
   agentManager,
+  buildDefaultSystemPrompt,
   createDeepSeekModel,
   createModelFromId,
   createOllamaModel,
@@ -83,9 +84,7 @@ export const createAgent = async ({
     model,
     rootPath,
     name: "local-chat",
-    systemPrompt:
-      systemPrompt ||
-      "You are a helpful coding assistant. You can read, write, and modify files, run commands in bash, and help with programming tasks.",
+    systemPrompt: systemPrompt || buildDefaultSystemPrompt(rootPath),
     maxIterations,
     mcpConfigPath: mcpConfigPath || undefined,
     setUp: (instance: (Agent | AgentContext) & { ["$$symbol"]?: symbol }) => {

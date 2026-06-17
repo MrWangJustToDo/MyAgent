@@ -188,6 +188,9 @@ export {
   type HookLogger,
 } from "./hooks";
 
+// Default system prompt (shared by CLI and server)
+export { buildDefaultSystemPrompt } from "./default-prompt";
+
 // Agent documentation loader exports (AGENTS.md / CLAUDE.md)
 export {
   loadAgentDoc,
