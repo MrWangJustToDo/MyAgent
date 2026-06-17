@@ -38,7 +38,7 @@ export class Base extends SessionHandler {
   status: AgentStatus = "idle";
   error = "";
 
-  // Run timing
+  // Run timing (separate for stream/generate since they can run concurrently)
   streamStartedAt = 0;
   generateStartedAt = 0;
   lastStreamDurationMs = 0;

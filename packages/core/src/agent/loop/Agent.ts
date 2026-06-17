@@ -201,7 +201,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
     this.resetReactiveCompactRetries();
 
     this.status = "running";
-    this.streamStartedAt = Date.now();
+    if (this.streamStartedAt === 0) this.streamStartedAt = Date.now();
     this.error = "";
 
     // Prefetch relevant memories before building system prompt
@@ -375,7 +375,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
     this.resetReactiveCompactRetries();
 
     this.status = "running";
-    this.generateStartedAt = Date.now();
+    if (this.generateStartedAt === 0) this.generateStartedAt = Date.now();
     this.error = "";
 
     // Prefetch relevant memories before building system prompt
