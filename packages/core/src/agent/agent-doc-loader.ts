@@ -148,7 +148,6 @@ export async function loadAgentDoc(config: AgentDocLoaderConfig): Promise<AgentD
     try {
       const exists = await filesystem.exists(filePath);
       if (exists) {
-        logger?.info("system", `Found agent documentation: ${filename}`);
         const rawContent = await filesystem.readFile(filePath);
 
         // Truncate if exceeding max bytes
@@ -157,7 +156,7 @@ export async function loadAgentDoc(config: AgentDocLoaderConfig): Promise<AgentD
 
         // 2. If loadOverride is enabled, look for .override.md variant
         if (loadOverride) {
-          const overrideResult = await loadOverrideFile(filesystem, rootPath, filename, logger);
+          const overrideResult = await loadOverrideFile(filesystem, rootPath, filename);
           if (overrideResult) {
             result = { ...result, ...overrideResult };
           }
@@ -188,8 +187,7 @@ export async function loadAgentDoc(config: AgentDocLoaderConfig): Promise<AgentD
 async function loadOverrideFile(
   filesystem: SandboxFileSystem,
   rootPath: string,
-  primaryFilename: string,
-  logger?: AgentLog
+  primaryFilename: string
 ): Promise<{ overrideContent: string; overrideSource: string } | null> {
   // Derive override filename from primary filename
   // AGENTS.md → AGENTS.override.md, CLAUDE.md → no standard override pattern
@@ -204,7 +202,6 @@ async function loadOverrideFile(
   try {
     const exists = await filesystem.exists(overridePath);
     if (exists) {
-      logger?.info("system", `Found agent documentation override: ${overrideFilename}`);
       const rawContent = await filesystem.readFile(overridePath);
       const overrideContent = truncateContent(rawContent, DEFAULT_AGENT_DOC_MAX_BYTES, overrideFilename);
       return { overrideContent, overrideSource: overridePath };

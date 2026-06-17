@@ -102,8 +102,6 @@ export class MemoryHandler {
       return;
     }
 
-    this.log?.debug("memory", "Prefetching relevant memories", { query: query.slice(0, 200) });
-
     try {
       const relevant = await findRelevantMemories(
         query,

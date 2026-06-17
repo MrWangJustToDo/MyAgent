@@ -21,8 +21,6 @@ export const DEFAULT_MCP_CONFIG_PATH = ".opencode/mcp.json";
 export async function loadMcpConfig(sandbox: Sandbox, log: AgentLog, configPath?: string): Promise<McpConfig | null> {
   const path = configPath ?? DEFAULT_MCP_CONFIG_PATH;
 
-  log.agent(`Load mcp config from path ${path}`);
-
   try {
     const exists = await sandbox.filesystem.exists(path);
     if (!exists) return null;

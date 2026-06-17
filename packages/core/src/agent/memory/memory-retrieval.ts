@@ -140,11 +140,6 @@ async function selectWithLLM(
   context?: AgentContext | null,
   logger?: AgentLog
 ): Promise<string[]> {
-  logger?.debug("memory", "LLM memory selection start", {
-    queryLength: query.length,
-    manifestLines: manifest.split("\n").length,
-  });
-
   const result = await generateText({
     model,
     system: SELECT_MEMORIES_SYSTEM_PROMPT,
@@ -155,11 +150,6 @@ async function selectWithLLM(
   if (context && result.usage) {
     context.addTotalUsage(extractTokenUsage(result.usage));
   }
-
-  logger?.debug("memory", "LLM selection raw response", {
-    raw: result.text,
-    finishReason: result.finishReason,
-  });
 
   const match = /\{[\s\S]*?\}/.exec(result.text);
   if (!match) {

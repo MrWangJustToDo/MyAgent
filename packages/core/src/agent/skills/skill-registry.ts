@@ -76,8 +76,6 @@ export class SkillRegistry {
       // Normalize: remove leading ./ if present
       const normalizedPath = dir.startsWith("./") ? dir.slice(2) : dir;
 
-      this.logger?.skill(`Loading skills from: ${normalizedPath}`);
-
       const dirSkills = await this.loader.loadFromDirectory(normalizedPath);
 
       // Add skills to registry, first loaded wins

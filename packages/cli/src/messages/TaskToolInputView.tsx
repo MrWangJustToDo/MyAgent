@@ -14,6 +14,8 @@ export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
     allTools,
     length: total,
     finish,
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
   } = useSubagent.useDeepStableSelector((s) => ({
     allTools: s.state?.getTools(),
     finish: !s.state || !!s.state.finishInfo,
@@ -29,8 +31,10 @@ export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
   if (finish) return null;
 
   return (
-    <Box>
-      <Text color="gray">↳ </Text>
+    <Box flexDirection="row">
+      <Box flexShrink={0} flexGrow={0}>
+        <Text color="gray">↳ </Text>
+      </Box>
       {currentTool ? (
         <>
           <Text color="gray" italic>
