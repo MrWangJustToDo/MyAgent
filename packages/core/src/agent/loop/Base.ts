@@ -38,6 +38,10 @@ export class Base extends SessionHandler {
   status: AgentStatus = "idle";
   error = "";
 
+  // Run timing
+  runStartedAt = 0;
+  lastRunDurationMs = 0;
+
   // Resources
   systemPrompt = "";
   sandbox: Sandbox | null = null;
@@ -352,10 +356,16 @@ export class Base extends SessionHandler {
       if (this.status !== "waiting") this.status = "completed";
       if (this.error) this.status = "error";
 
+      if (this.runStartedAt > 0) {
+        this.lastRunDurationMs = Date.now() - this.runStartedAt;
+        this.runStartedAt = 0;
+      }
+
       this.log?.agent("Agent response finished", {
         finishReason: event.finishReason,
         totalSteps: event.steps?.length ?? 0,
         usage: event.usage,
+        durationMs: this.lastRunDurationMs,
       });
 
       this.context?.updateFinal?.(event);
@@ -445,6 +455,18 @@ export class Base extends SessionHandler {
         } finally {
           this.status = "running";
         }
+      }
+
+      // Rebuild system prompt if todo nag state changed since initial prompt.
+      // The system prompt is built once at stream()/generate() start, but the
+      // nag reminder needs to be injected mid-run when rounds exceed threshold.
+      const needsSystemUpdate = this.todoManager?.shouldNag() && !this.systemPrompt.includes("<reminder>");
+      if (needsSystemUpdate) {
+        const reminder = this.todoManager!.getNagReminder();
+        this.log?.todo("Injecting nag reminder via prepareStep", {
+          roundsSinceUpdate: this.todoManager!.getRoundsSinceUpdate(),
+        });
+        return { ...res, messages: llmMessages, system: this.systemPrompt + "\n\n" + reminder };
       }
 
       return { ...res, messages: llmMessages };

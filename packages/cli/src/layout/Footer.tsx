@@ -17,9 +17,18 @@ import { useInputMode } from "../hooks/use-input-mode.js";
 import { useLocalChatStatus } from "../hooks/use-local-chat-status.js";
 import { useSelect } from "../hooks/use-select.js";
 
-import type { AgentStatus } from "@my-agent/core";
+import type { Agent, AgentStatus } from "@my-agent/core";
 
 const INPUT_BG = "#333333";
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(1)}s`;
+  const m = Math.floor(s / 60);
+  const rem = Math.round(s % 60);
+  return rem > 0 ? `${m}m ${rem}s` : `${m}m`;
+}
 
 export const Footer = () => {
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -150,6 +159,9 @@ const ContextBar = ({
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
   const _error = useAgent((s) => (s.agent as Agent)?.error || "");
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  const lastRunDurationMs = useAgent((s) => (s.agent as Agent)?.lastRunDurationMs || 0);
 
   const chatError = useLocalChatStatus((s) => s.error);
 
@@ -168,7 +180,11 @@ const ContextBar = ({
           </Text>
         )}
         {status === "compacting" && <Spinner text="Compacting..." />}
-        {status === "completed" && <Text color="green">Completed</Text>}
+        {status === "completed" && (
+          <Text color="green">
+            {`Completed${lastRunDurationMs > 0 ? ` in ${formatDuration(lastRunDurationMs)}` : ""}`}
+          </Text>
+        )}
         {status === "aborted" && (
           <Text color="green" dimColor>
             Aborted

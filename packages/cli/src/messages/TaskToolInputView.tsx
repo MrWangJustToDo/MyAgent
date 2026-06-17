@@ -31,7 +31,7 @@ export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
   if (finish) return null;
 
   return (
-    <Box flexDirection="row" width={1}>
+    <Box flexDirection="row" height={1}>
       <Box flexShrink={0} flexGrow={0}>
         <Text color="gray">↳ </Text>
       </Box>
