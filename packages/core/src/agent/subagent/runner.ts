@@ -26,7 +26,6 @@
 
 import { agentManager, type AgentManager } from "../../managers/manager-agent.js";
 import { emitHook } from "../hooks/hook-runner.js";
-import { maybeCacheOutput } from "../tools/util/tool-output-cache.js";
 import { generateId } from "../utils.js";
 
 import { extractSummary, truncateSummary } from "./output.js";
@@ -224,26 +223,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           continue;
         }
 
-        // Cache full output to disk when it's large, so the parent agent
-        // can read_file the complete result via the cached path.
-        // If cached, use the preview (head+tail with read_file hint) as output.
-        // Otherwise fall back to truncateSummary for moderate-length output.
-        let output: string;
-        let truncated: boolean;
-        let cachedOutputPath: string | null = null;
-
-        if (sandbox) {
-          const cached = await maybeCacheOutput(sandbox, rawOutput, `${subagentId}-task`);
-          cachedOutputPath = cached.cachedOutputPath;
-          if (cachedOutputPath) {
-            output = cached.content;
-            truncated = true;
-          } else {
-            ({ summary: output, truncated } = truncateSummary(rawOutput, maxOutputLength));
-          }
-        } else {
-          ({ summary: output, truncated } = truncateSummary(rawOutput, maxOutputLength));
-        }
+        const { summary: output, truncated } = truncateSummary(rawOutput, maxOutputLength);
 
         parentLog?.info("agent", "Subagent completed", {
           subagentId,
@@ -251,7 +231,6 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           reachedLimit,
           outputLength: output.length,
           truncated,
-          cachedOutputPath,
           usage,
           output,
         });
@@ -285,7 +264,6 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           usage,
           reachedLimit,
           retries,
-          cachedOutputPath,
         };
       } catch (error) {
         parentLog?.error("agent", "Subagent error", error as Error);
@@ -307,7 +285,6 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
           reachedLimit: false,
           retries: retries,
-          cachedOutputPath: null,
         };
       }
     }

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { OUTPUT_LIMITS, withDuration } from "./util/helpers.js";
 import { DEFAULT_EXCLUDE_DIRS, runSearchCommand } from "./util/search-command.js";
-import { maybeCacheOutput, CACHE_THRESHOLD } from "./util/tool-output-cache.js";
+import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { grepOutputSchema } from "./util/types.js";
 
 import type { Sandbox } from "../../environment";
@@ -313,34 +313,26 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
         const paginatedMatches = validMatches.slice(skip, skip + take);
         const hasMore = validMatches.length > skip + take;
 
-        let cachedOutputPath: string | null = null;
         const fullMatchText = paginatedMatches.map((m) => `${m.file}:${m.lineNumber}:${m.content}`).join("\n");
-        if (fullMatchText.length > CACHE_THRESHOLD) {
-          const cached = await maybeCacheOutput(sandbox, fullMatchText, `${toolCallId}-grep`);
-          cachedOutputPath = cached.cachedOutputPath;
-          if (cachedOutputPath) {
-            contentTruncated = true;
-          }
-        }
+        const cached = await maybeCacheOutput(sandbox, fullMatchText, `${toolCallId}-grep`);
+        const { cachedOutputPath } = cached;
+        if (cachedOutputPath) contentTruncated = true;
 
         let message: string;
-        if (mode === "files_with_matches") {
-          message = `Found ${paginatedMatches.length} matching files for pattern: ${pattern}`;
-        } else if (mode === "count") {
-          message = `Found ${paginatedMatches.length} files with matches for pattern: ${pattern}`;
-        } else {
-          message = `Found ${paginatedMatches.length} matches for pattern: ${pattern}`;
-        }
-        if (skip > 0) {
-          message += ` (offset: ${skip})`;
-        }
-        if (hasMore) {
-          message += `. Use offset=${skip + take} to see more.`;
-        }
         if (cachedOutputPath) {
-          message += ` (full output cached to ${cachedOutputPath})`;
-        } else if (contentTruncated) {
-          message += " (some content truncated)";
+          // Use the preview from maybeCacheOutput (head+tail with read_file hint)
+          message = cached.content;
+        } else {
+          if (mode === "files_with_matches") {
+            message = `Found ${paginatedMatches.length} matching files for pattern: ${pattern}`;
+          } else if (mode === "count") {
+            message = `Found ${paginatedMatches.length} files with matches for pattern: ${pattern}`;
+          } else {
+            message = `Found ${paginatedMatches.length} matches for pattern: ${pattern}`;
+          }
+          if (skip > 0) message += ` (offset: ${skip})`;
+          if (hasMore) message += `. Use offset=${skip + take} to see more.`;
+          if (contentTruncated) message += " (some content truncated)";
         }
 
         return {
@@ -349,7 +341,7 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
           include: include ?? "*",
           outputMode: mode,
           context: contextLines > 0 ? contextLines : null,
-          matches: paginatedMatches,
+          matches: cachedOutputPath ? [] : paginatedMatches,
           count: paginatedMatches.length,
           offset: skip,
           hasMore,

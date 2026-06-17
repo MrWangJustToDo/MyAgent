@@ -78,8 +78,6 @@ export interface SubagentResult {
   reachedLimit: boolean;
   /** Number of retries attempted */
   retries: number;
-  /** Path to cached full output on disk (null if output wasn't large enough to cache) */
-  cachedOutputPath: string | null;
 }
 
 /** @deprecated Use SubagentResult.output instead of summary */

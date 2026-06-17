@@ -25,6 +25,7 @@ import { runSubagent } from "../subagent/runner.js";
 import { generateId } from "../utils.js";
 
 import { withDuration } from "./util/helpers.js";
+import { maybeCacheOutput } from "./util/tool-output-cache.js";
 
 // ============================================================================
 // Types
@@ -117,11 +118,12 @@ Example use cases:
 
     outputSchema: taskOutputSchema,
 
-    execute: async ({ id, prompt, description }) => {
+    execute: async ({ id, prompt, description }, { toolCallId }) => {
       return withDuration(async () => {
         const abortController = new AbortController();
+        const managed = agentManager.getAgent(parentAgentId);
 
-        agentManager.getAgent(parentAgentId)?.agent?.addPendingAbortController(abortController);
+        managed?.agent?.addPendingAbortController(abortController);
 
         const result = await runSubagent({
           subagentId: id,
@@ -129,21 +131,37 @@ Example use cases:
           description,
           parentAgentId,
           abortSignal: abortController.signal,
-          // Auto-destroy since task tool manages the lifecycle
           autoDestroy: false,
+          maxOutputLength: Infinity,
         });
 
-        agentManager.getAgent(parentAgentId)?.agent?.removePendingAbortController(abortController);
+        managed?.agent?.removePendingAbortController(abortController);
+
+        // Cache large output at the tool level so the LLM gets
+        // a preview with a read_file hint instead of the full text.
+        const sandbox = managed?.sandbox;
+        let summary = result.output;
+        let truncated = result.truncated;
+        let cachedOutputPath: string | null = null;
+
+        if (sandbox) {
+          const cached = await maybeCacheOutput(sandbox, result.output, `${toolCallId}-task`);
+          cachedOutputPath = cached.cachedOutputPath;
+          if (cachedOutputPath) {
+            summary = cached.content;
+            truncated = true;
+          }
+        }
 
         return {
           subagentId: result.subagentId,
-          summary: result.output,
-          truncated: result.truncated,
+          summary,
+          truncated,
           iterations: result.iterations,
           reachedLimit: result.reachedLimit,
           retries: result.retries,
           usage: result.usage,
-          cachedOutputPath: result.cachedOutputPath,
+          cachedOutputPath,
         };
       });
     },

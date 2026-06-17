@@ -39,8 +39,10 @@ export class Base extends SessionHandler {
   error = "";
 
   // Run timing
-  runStartedAt = 0;
-  lastRunDurationMs = 0;
+  streamStartedAt = 0;
+  generateStartedAt = 0;
+  lastStreamDurationMs = 0;
+  lastGenerateDurationMs = 0;
 
   // Resources
   systemPrompt = "";
@@ -350,22 +352,26 @@ export class Base extends SessionHandler {
   }
 
   createOnFinish(
+    isStream: boolean,
     userCallback?: StreamTextOnFinishCallback<ToolSet> | GenerateTextOnFinishCallback<NoInfer<ToolSet>>
   ): StreamTextOnFinishCallback<ToolSet> | GenerateTextOnFinishCallback<NoInfer<ToolSet>> {
     return (event) => {
       if (this.status !== "waiting") this.status = "completed";
       if (this.error) this.status = "error";
 
-      if (this.runStartedAt > 0) {
-        this.lastRunDurationMs = Date.now() - this.runStartedAt;
-        this.runStartedAt = 0;
+      if (isStream) {
+        this.lastStreamDurationMs = Date.now() - this.streamStartedAt;
+        this.streamStartedAt = 0;
+      } else {
+        this.lastGenerateDurationMs = Date.now() - this.generateStartedAt;
+        this.generateStartedAt = 0;
       }
 
       this.log?.agent("Agent response finished", {
         finishReason: event.finishReason,
         totalSteps: event.steps?.length ?? 0,
         usage: event.usage,
-        durationMs: this.lastRunDurationMs,
+        durationMs: isStream ? this.lastStreamDurationMs : this.lastGenerateDurationMs,
       });
 
       this.context?.updateFinal?.(event);

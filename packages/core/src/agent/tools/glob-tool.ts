@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { OUTPUT_LIMITS, withDuration } from "./util/helpers.js";
 import { DEFAULT_EXCLUDE_DIRS, SEARCH_COMMAND_TIMEOUT } from "./util/search-command.js";
-import { maybeCacheOutput, CACHE_THRESHOLD } from "./util/tool-output-cache.js";
+import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { globOutputSchema } from "./util/types.js";
 
 import type { Sandbox } from "../../environment";
@@ -185,35 +185,27 @@ export const createGlobTool = ({ sandbox }: { sandbox: Sandbox }) => {
         const paginatedFiles = allFiles.slice(skip, skip + take);
         const hasMore = allFiles.length > skip + take;
 
-        let cachedOutputPath: string | null = null;
         let contentTruncated = false;
         const fullOutputText = paginatedFiles.join("\n");
-        if (fullOutputText.length > CACHE_THRESHOLD) {
-          const cached = await maybeCacheOutput(sandbox, fullOutputText, `${toolCallId}-glob`);
-          cachedOutputPath = cached.cachedOutputPath;
-          if (cachedOutputPath) {
-            contentTruncated = true;
-          }
-        }
+        const cached = await maybeCacheOutput(sandbox, fullOutputText, `${toolCallId}-glob`);
+        const { cachedOutputPath } = cached;
+        if (cachedOutputPath) contentTruncated = true;
 
-        let message = `Found ${paginatedFiles.length} files matching pattern: ${pattern}`;
-        if (skip > 0) {
-          message += ` (offset: ${skip})`;
-        }
-        if (hasMore) {
-          message += `. Use offset=${skip + take} to see more.`;
-        }
+        let message: string;
         if (cachedOutputPath) {
-          message += ` (full output cached to ${cachedOutputPath})`;
-        } else if (contentTruncated) {
-          message += " (some results truncated)";
+          message = cached.content;
+        } else {
+          message = `Found ${paginatedFiles.length} files matching pattern: ${pattern}`;
+          if (skip > 0) message += ` (offset: ${skip})`;
+          if (hasMore) message += `. Use offset=${skip + take} to see more.`;
+          if (contentTruncated) message += " (some results truncated)";
         }
 
         return {
           pattern,
           path: searchPath,
           type: fileType,
-          files: paginatedFiles,
+          files: cachedOutputPath ? [] : paginatedFiles,
           count: paginatedFiles.length,
           offset: skip,
           hasMore,

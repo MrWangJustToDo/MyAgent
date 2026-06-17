@@ -161,7 +161,7 @@ const ContextBar = ({
   const _error = useAgent((s) => (s.agent as Agent)?.error || "");
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  const lastRunDurationMs = useAgent((s) => (s.agent as Agent)?.lastRunDurationMs || 0);
+  const lastRunDurationMs = useAgent((s) => (s.agent as Agent)?.lastStreamDurationMs || 0);
 
   const chatError = useLocalChatStatus((s) => s.error);
 

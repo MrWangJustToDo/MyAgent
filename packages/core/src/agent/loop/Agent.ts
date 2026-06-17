@@ -201,7 +201,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
     this.resetReactiveCompactRetries();
 
     this.status = "running";
-    this.runStartedAt = Date.now();
+    this.streamStartedAt = Date.now();
     this.error = "";
 
     // Prefetch relevant memories before building system prompt
@@ -240,7 +240,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
         stopWhen: stepCountIs(this.config.maxIterations ?? 10),
         onStepFinish: this.createOnStepFinish(onStepFinish),
         prepareStep: this.createPrepareStep(prepareStep),
-        onFinish: this.createOnFinish(onFinish),
+        onFinish: this.createOnFinish(true, onFinish),
         onChunk: ({ chunk }) => {
           this.context?.emit(chunk);
           if (chunk.type === "tool-call" && this.isToolNeedsApproval(chunk.toolName)) {
@@ -375,7 +375,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
     this.resetReactiveCompactRetries();
 
     this.status = "running";
-    this.runStartedAt = Date.now();
+    this.generateStartedAt = Date.now();
     this.error = "";
 
     // Prefetch relevant memories before building system prompt
@@ -414,7 +414,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
         stopWhen: stepCountIs(this.config.maxIterations ?? 10),
         onStepFinish: this.createOnStepFinish(onStepFinish) as GenerateTextOnStepFinishCallback<NoInfer<ToolSet>>,
         prepareStep: this.createPrepareStep(prepareStep),
-        onFinish: this.createOnFinish(onFinish),
+        onFinish: this.createOnFinish(false, onFinish),
         experimental_onToolCallStart: (event) => {
           const { toolCall } = event;
           this.log?.tool("tool-call-start", {
