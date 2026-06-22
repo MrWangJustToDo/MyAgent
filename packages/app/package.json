@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.210",
-    "@git-diff-view/cli": "^0.1.7",
+    "@git-diff-view/cli": "^0.1.8",
     "@git-diff-view/core": "^0.1.6",
     "@git-diff-view/file": "^0.1.6",
     "@my-react/react": "^0.3.28",

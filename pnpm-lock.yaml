@@ -51,8 +51,8 @@ importers:
         specifier: ^3.0.210
         version: 3.0.210(@my-react/react@0.3.28)(zod@4.4.3)
       '@git-diff-view/cli':
-        specifier: ^0.1.7
-        version: 0.1.7(@my-react/react-terminal@0.0.27(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.28)
+        specifier: ^0.1.8
+        version: 0.1.8(@my-react/react-terminal@0.0.27(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.28)
       '@git-diff-view/core':
         specifier: ^0.1.6
         version: 0.1.6
@@ -966,8 +966,8 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@git-diff-view/cli@0.1.7':
-    resolution: {integrity: sha512-LEcDLqq44cRbYvoUY1cX24PKFjQj7OAbom8lxVTWTC2qJsILcXe7Qs8L+TWe/PpSA0aE2CClMkL2eP43uYhsNw==}
+  '@git-diff-view/cli@0.1.8':
+    resolution: {integrity: sha512-p0dS6w5TI/6LcTMOiAaguARAFhyXQWsmSwfdrBv3ebGhDL8b45/lLLXBmRH9EGjsi5sbv99KxWJpOTO4KstYpA==}
     peerDependencies:
       ink: ^6.1.0
       react: ^19.2.0
@@ -6274,7 +6274,7 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@git-diff-view/cli@0.1.7(@my-react/react-terminal@0.0.27(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.28)':
+  '@git-diff-view/cli@0.1.8(@my-react/react-terminal@0.0.27(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.28)':
     dependencies:
       '@git-diff-view/core': 0.1.6
       '@types/hast': 3.0.4

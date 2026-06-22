@@ -25,7 +25,7 @@ minimumReleaseAgeExclude:
   - "@git-diff-view/core@0.1.6"
   - "@git-diff-view/file@0.1.6"
   - "@git-diff-view/lowlight@0.1.6"
-  - "@git-diff-view/cli@0.1.7"
+  - '@git-diff-view/cli@0.1.8'
 
 publicHoistPattern:
   - "*eslint-*"
