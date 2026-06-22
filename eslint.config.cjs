@@ -10,7 +10,7 @@ module.exports = [
     settings: {
       "import/resolver": {
         typescript: {
-          project: ["./tsconfig.json"],
+          project: ["./tsconfig.json", "./packages/extension/tsconfig.json"],
         },
       },
     },
@@ -22,7 +22,7 @@ module.exports = [
   },
   // React config for ui/* and site/graphql
   {
-    files: ["cli/src/**/*.{ts,tsx}", "extension/**/*.{ts,tsx}"],
+    files: ["cli/src/**/*.{ts,tsx}", "app/src/**/*.{ts,tsx}", "extension/**/*.{ts,tsx}"],
     ...reactLint.reduce((acc, config) => {
       return {
         ...acc,

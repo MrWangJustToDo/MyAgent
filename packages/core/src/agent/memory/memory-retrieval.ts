@@ -22,6 +22,7 @@
 
 import { generateText } from "ai";
 
+import { getEnv } from "../../env.js";
 import { extractTokenUsage } from "../agent-context/types.js";
 
 import {
@@ -107,14 +108,14 @@ function truncateBody(
     result = lines.slice(0, maxLines).join("\n") + "\n[truncated: exceeded line limit]";
   }
 
-  const bytes = Buffer.byteLength(result, "utf-8");
+  const env = getEnv();
+  const bytes = env.byteLength(result, "utf-8");
   if (bytes > maxBytes) {
-    // Binary-search for the right cut point that fits
     let lo = 0;
     let hi = result.length;
     while (lo < hi) {
       const mid = (lo + hi + 1) >> 1;
-      if (Buffer.byteLength(result.slice(0, mid), "utf-8") <= maxBytes - 30) {
+      if (env.byteLength(result.slice(0, mid), "utf-8") <= maxBytes - 30) {
         lo = mid;
       } else {
         hi = mid - 1;
@@ -298,7 +299,7 @@ export async function findRelevantMemories(
     }
 
     const content = truncateBody(mem.body, maxLinesPerFile, maxBytesPerFile);
-    const contentBytes = Buffer.byteLength(content, "utf-8");
+    const contentBytes = getEnv().byteLength(content, "utf-8");
 
     // Enforce session-level budget
     if (totalBytes + contentBytes > maxSessionBytes) {

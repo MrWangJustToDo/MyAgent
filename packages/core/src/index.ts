@@ -1,20 +1,37 @@
+// Core Environment API (must be registered before using any core functionality)
+export {
+  registerCoreEnv,
+  getEnv,
+  hasCoreEnv,
+  defaultPath,
+  defaultByteLength,
+  defaultBase64Encode,
+  defaultBase64Decode,
+  type CoreEnv,
+  type ResolvedCoreEnv,
+  type CoreEnvPath,
+  type CoreEnvFs,
+  type CoreEnvFsStat,
+  type CoreEnvExecOptions,
+  type CoreEnvExecResult,
+  type McpStdioTransportConfig,
+  type McpProcessHandle,
+} from "./env.js";
+
 // Agent (main export)
 export * from "./agent";
 
 // Base utilities
 export { generateId, generateShortId, createSequentialIdGenerator } from "./agent/utils.js";
 
-// Environment abstraction
+// Environment abstraction (types only — implementations provided externally via CoreEnv)
 export * from "./environment";
 
 // Managers (class-based state management)
 export * from "./managers";
 
-// Model registry and config
+// Model registry, config, and factory
 export * from "./models";
-
-// Provider utilities
-export * from "./provider.js";
 
 // Types and schemas
 export * from "./types.js";

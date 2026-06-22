@@ -1,5 +1,3 @@
-import { Button, Input, Spinner } from "@heroui/react";
-import { WifiOffIcon, RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { checkServerHealth, useServerConfig } from "@/hooks/useServerConfig";
@@ -9,18 +7,16 @@ export const ConnectionGuard = ({ children }: { children: React.ReactNode }) => 
   const connecting = useServerConfig((s) => s.connecting);
   const url = useServerConfig((s) => s.url);
   const actions = useServerConfig.getActions();
-  const retryRef = useRef<ReturnType<typeof setTimeout>>(null);
   const [wasConnected, setWasConnected] = useState(false);
+  const retryRef = useRef<ReturnType<typeof setTimeout>>(null);
 
   const checkConnection = useCallback(async () => {
     actions.setConnecting(true);
     const health = await checkServerHealth(url);
-    if (health && health.status === "ready") {
+    if (health && health.status === "ok") {
       actions.setConnected(true);
-      actions.setModel(health.model ?? "");
-      actions.setProvider(health.provider ?? "");
+      actions.setRootPath(health.rootPath ?? "");
       actions.setSandboxEnv(health.sandboxEnv ?? "");
-      actions.setAgentStatus(health.agentStatus ?? "");
       setWasConnected(true);
     } else {
       actions.setConnected(false);
@@ -42,44 +38,94 @@ export const ConnectionGuard = ({ children }: { children: React.ReactNode }) => 
 
   if (wasConnected && !connected) {
     return (
-      <div className="flex h-full flex-col">
-        <div className="bg-warning-50 text-warning-700 flex items-center justify-center gap-2 px-3 py-2 text-xs">
-          <Spinner size="sm" />
-          <span>Reconnecting to server...</span>
-          <Button size="sm" variant="light" onPress={checkConnection} className="h-5 min-w-0 text-xs">
-            Retry now
-          </Button>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 12,
+          padding: 24,
+          height: "100%",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "8px 16px",
+            background: "#fff3cd",
+            color: "#856404",
+            fontSize: 13,
+            borderRadius: 4,
+          }}
+        >
+          <span>Connection to server lost</span>
         </div>
-        {children}
+        <p style={{ color: "#888", textAlign: "center", fontSize: 12 }}>
+          The agent is paused until the server is back online.
+        </p>
+        <button
+          onClick={checkConnection}
+          disabled={connecting}
+          style={{
+            padding: "6px 16px",
+            background: connecting ? "#ccc" : "#0070f3",
+            color: "#fff",
+            border: "none",
+            borderRadius: 4,
+            cursor: connecting ? "not-allowed" : "pointer",
+            fontSize: 12,
+          }}
+        >
+          {connecting ? "Reconnecting..." : "Retry now"}
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
-      <WifiOffIcon className="text-default-400 h-12 w-12" />
-      <h2 className="text-lg font-semibold">Not Connected</h2>
-      <p className="text-default-500 text-center text-sm">
-        Cannot reach the agent server. Make sure it&apos;s running.
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 16,
+        padding: 24,
+        height: "100%",
+      }}
+    >
+      <h2 style={{ fontSize: 18, fontWeight: 600 }}>Not Connected</h2>
+      <p style={{ color: "#888", textAlign: "center", fontSize: 14 }}>
+        Cannot reach the CoreEnv server. Make sure it&apos;s running.
       </p>
-      <Input
-        label="Server URL"
-        size="sm"
-        value={url}
-        onChange={(e) => actions.setUrl(e.target.value)}
-        className="max-w-xs"
-      />
-      <Button
-        size="sm"
-        color="primary"
-        startContent={connecting ? <Spinner size="sm" /> : <RefreshCwIcon className="h-4 w-4" />}
-        onPress={checkConnection}
-        isDisabled={connecting}
+      <div>
+        <label style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Server URL</label>
+        <input
+          value={url}
+          onChange={(e) => actions.setUrl(e.target.value)}
+          style={{ padding: "4px 8px", border: "1px solid #ccc", borderRadius: 4, width: 240 }}
+        />
+      </div>
+      <button
+        onClick={checkConnection}
+        disabled={connecting}
+        style={{
+          padding: "6px 16px",
+          background: connecting ? "#ccc" : "#0070f3",
+          color: "#fff",
+          border: "none",
+          borderRadius: 4,
+          cursor: connecting ? "not-allowed" : "pointer",
+        }}
       >
         {connecting ? "Connecting..." : "Retry"}
-      </Button>
-      <p className="text-default-400 text-xs">
-        Start the server with: <code className="bg-default-100 rounded px-1">pnpm start:server</code>
+      </button>
+      <p style={{ color: "#aaa", fontSize: 11 }}>
+        Start the server with:{" "}
+        <code style={{ background: "#f0f0f0", padding: "1px 4px", borderRadius: 2 }}>pnpm start:server</code>
       </p>
     </div>
   );

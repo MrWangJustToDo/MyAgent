@@ -1,7 +1,7 @@
 {
   "name": "@my-agent/server",
   "version": "0.0.1",
-  "description": "HTTP server exposing core Agent for browser extension and web clients",
+  "description": "CoreEnv-compatible HTTP server backed by @my-agent/node, with type-safe RPC client",
   "type": "module",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
+    },
+    "./client": {
+      "types": "./dist/client.d.mts",
+      "import": "./dist/client.mjs"
     }
   },
   "bin": {
@@ -25,11 +29,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hono/node-server": "^1.14.3",
+    "@hono/node-server": "^1.19.14",
+    "@hono/zod-validator": "^0.8.0",
     "@my-agent/core": "workspace:*",
-    "ai": "^6.0.199",
+    "@my-agent/node": "workspace:*",
     "dotenv": "^16.5.0",
-    "hono": "^4.7.11"
+    "hono": "^4.12.26",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.19.15",

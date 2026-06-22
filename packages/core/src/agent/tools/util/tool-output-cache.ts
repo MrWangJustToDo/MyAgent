@@ -13,7 +13,8 @@
  * to delete those files. Failure to delete a file is non-fatal (logged as warning).
  */
 
-import type { Sandbox } from "../../../environment";
+import { getEnv } from "../../../env.js";
+
 import type { ModelMessage } from "ai";
 
 // ============================================================================
@@ -38,9 +39,9 @@ const DEFAULT_TAIL_LINES = 50;
 /**
  * Write full tool output to disk and return the cache file path.
  */
-export async function cacheToolOutput(sandbox: Sandbox, content: string, id: string): Promise<string> {
+export async function cacheToolOutput(content: string, id: string): Promise<string> {
   const filePath = `${CACHE_DIR}/${id}.txt`;
-  await sandbox.filesystem.writeFile(filePath, content);
+  await getEnv().fs.writeFile(filePath, content);
   return filePath;
 }
 
@@ -90,7 +91,6 @@ export function shouldCache(content: string): boolean {
  * content or a preview with cache path. Also returns the cache path if cached.
  */
 export async function maybeCacheOutput(
-  sandbox: Sandbox,
   content: string,
   id: string,
   opts?: { headLines?: number; tailLines?: number }
@@ -99,17 +99,13 @@ export async function maybeCacheOutput(
     return { content, cachedOutputPath: null };
   }
 
-  const cachedPath = await cacheToolOutput(sandbox, content, id);
+  const cachedPath = await cacheToolOutput(content, id);
   const preview = buildCachedPreview(content, cachedPath, opts);
   return { content: preview, cachedOutputPath: cachedPath };
 }
 
 /**
  * Extract `cachedOutputPath` from a message part, if present.
- *
- * Tool result parts from the Vercel AI SDK carry the result as a structured
- * object. Tools that cache output (run_command, grep, webfetch) include a
- * `cachedOutputPath` field in their result.
  */
 function extractCachedPathFromPart(part: unknown): string | null {
   if (!part || typeof part !== "object") return null;
@@ -123,21 +119,9 @@ function extractCachedPathFromPart(part: unknown): string | null {
 
 /**
  * Scan orphaned messages (those before compactIndex) for cached tool output
- * file paths and delete them from disk. This prevents stale cache files from
- * accumulating when the conversation is compacted.
- *
- * Failure to delete any individual file is non-fatal; the error is logged to
- * the sandbox stderr but does not throw.
- *
- * @param sandbox - Sandbox for file system operations
- * @param messages - All messages in the conversation
- * @param compactIndex - Index before which messages are considered orphaned
+ * file paths and delete them from disk.
  */
-export async function cleanupOrphanedToolCache(
-  sandbox: Sandbox,
-  messages: ModelMessage[],
-  compactIndex: number
-): Promise<void> {
+export async function cleanupOrphanedToolCache(messages: ModelMessage[], compactIndex: number): Promise<void> {
   if (compactIndex <= 0 || messages.length === 0) return;
 
   const pathsToDelete = new Set<string>();
@@ -157,15 +141,15 @@ export async function cleanupOrphanedToolCache(
 
   if (pathsToDelete.size === 0) return;
 
+  const fs = getEnv().fs;
   const deletions = Array.from(pathsToDelete).map(async (filePath) => {
     try {
-      // Check existence first to avoid errors on already-deleted files
-      const exists = await sandbox.filesystem.exists(filePath);
+      const exists = await fs.exists(filePath);
       if (exists) {
-        await sandbox.filesystem.remove(filePath);
+        await fs.remove(filePath);
       }
     } catch {
-      // Non-fatal — stale cache files are harmless, just noisy
+      // Non-fatal — stale cache files are harmless
     }
   });
 

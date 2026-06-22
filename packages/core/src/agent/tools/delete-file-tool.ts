@@ -1,23 +1,23 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { getFileModifiedTime, withDuration } from "./util/helpers.js";
+import { getEnv } from "../../env.js";
 
-import type { Sandbox } from "../../environment";
+import { getFileModifiedTime, withDuration } from "./util/helpers.js";
 
 /**
  * Creates a delete-file tool using Vercel AI SDK.
  *
- * This tool deletes a file or directory from the sandbox filesystem.
+ * This tool deletes a file or directory.
  * Requires the modifiedTime from a previous read operation to ensure
  * the file hasn't been modified since it was read.
  *
  * Requires user approval before execution.
  */
-export const createDeleteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
+export const createDeleteFileTool = () => {
   return tool({
     description:
-      "Deletes a file or directory from the sandbox filesystem. Requires the modifiedTime from a previous read operation to ensure the file hasn't been modified since it was read.",
+      "Deletes a file or directory. Requires the modifiedTime from a previous read operation to ensure the file hasn't been modified since it was read.",
     inputSchema: z.object({
       path: z.string().describe("The path to the file or directory to delete, relative to the project directory."),
       modifiedTime: z
@@ -34,15 +34,14 @@ export const createDeleteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
     needsApproval: true,
     execute: async ({ path, modifiedTime }) => {
       return withDuration(async () => {
-        // Validate modification time
-        const currentModifiedTime = await getFileModifiedTime(sandbox, path);
+        const currentModifiedTime = await getFileModifiedTime(path);
         if (currentModifiedTime !== modifiedTime) {
           throw new Error(
             `File has been modified since it was read. Expected modifiedTime: ${modifiedTime}, current: ${currentModifiedTime}. Please read the file again before deleting.`
           );
         }
 
-        await sandbox.filesystem.remove(path);
+        await getEnv().fs.remove(path);
 
         return {
           path,

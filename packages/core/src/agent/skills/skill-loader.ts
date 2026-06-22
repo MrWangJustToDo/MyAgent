@@ -4,13 +4,9 @@
  * Scans directories for SKILL.md files, extracts YAML frontmatter metadata,
  * and provides the skill body content.
  *
- * Supports both:
- * - Absolute paths (e.g., ~/.agents/skills) - uses Node.js fs directly
- * - Relative paths (e.g., .agents/skills) - uses sandbox filesystem
- *
  * @example
  * ```typescript
- * const loader = new SkillLoader({ sandbox, rootPath: "/project" });
+ * const loader = new SkillLoader({ rootPath: "/project" });
  * const skills = await loader.loadFromDirectory("/path/to/skills");
  *
  * // skills is a Map<string, Skill> keyed by skill name
@@ -18,14 +14,13 @@
  * ```
  */
 
-import * as fs from "fs/promises";
-import * as nodePath from "path";
 import { parse as parseYaml } from "yaml";
+
+import { getEnv } from "../../env.js";
 
 import { skillMetadataSchema } from "./types.js";
 
 import type { Skill, SkillMetadata } from "./types.js";
-import type { Sandbox } from "../../environment";
 import type { AgentLog } from "../agent-log/agent-log.js";
 
 // ============================================================================
@@ -33,8 +28,6 @@ import type { AgentLog } from "../agent-log/agent-log.js";
 // ============================================================================
 
 export interface SkillLoaderConfig {
-  /** Sandbox for file system operations (used for relative paths) */
-  sandbox: Sandbox;
   /** Root path for resolving relative paths */
   rootPath: string;
   /** Optional logger for warnings */
@@ -58,59 +51,46 @@ export interface ParsedFrontmatter {
  * Loads and parses SKILL.md files from directories.
  */
 export class SkillLoader {
-  private sandbox: Sandbox;
   private rootPath: string;
   private logger?: AgentLog;
 
   constructor(config: SkillLoaderConfig) {
-    this.sandbox = config.sandbox;
     this.rootPath = config.rootPath;
     this.logger = config.logger;
   }
 
   /**
-   * Check if a path is absolute.
-   */
-  private isAbsolutePath(dirPath: string): boolean {
-    return nodePath.isAbsolute(dirPath);
-  }
-
-  /**
-   * Check if directory exists using appropriate method based on path type.
+   * Check if directory exists.
    */
   private async directoryExists(dirPath: string): Promise<boolean> {
-    if (this.isAbsolutePath(dirPath)) {
-      try {
-        const stat = await fs.stat(dirPath);
-        return stat.isDirectory();
-      } catch {
-        return false;
-      }
+    const env = getEnv();
+    try {
+      const stat = await env.fs.stat(dirPath);
+      return stat.isDirectory;
+    } catch {
+      return false;
     }
-    return this.sandbox.filesystem.exists(dirPath);
   }
 
   /**
-   * Read file content using appropriate method based on path type.
+   * Read file content.
    */
   private async readFileContent(filePath: string): Promise<string> {
-    if (this.isAbsolutePath(filePath)) {
-      return fs.readFile(filePath, "utf-8");
-    }
-    return this.sandbox.filesystem.readFile(filePath);
+    return getEnv().fs.readFile(filePath);
   }
 
   /**
    * Find SKILL.md files in a directory.
    */
   private async findSkillFiles(dirPath: string): Promise<string[]> {
-    if (this.isAbsolutePath(dirPath)) {
+    const env = getEnv();
+
+    if (env.path.isAbsolute(dirPath)) {
       return this.findSkillFilesRecursive(dirPath);
     }
 
-    // For relative paths, resolve to absolute and use sandbox runCommand
-    const resolvedPath = nodePath.join(this.rootPath, dirPath);
-    const findResult = await this.sandbox.runCommand(`find "${resolvedPath}" -name "SKILL.md" -type f 2>/dev/null`);
+    const resolvedPath = env.path.join(this.rootPath, dirPath);
+    const findResult = await env.runCommand(`find "${resolvedPath}" -name "SKILL.md" -type f 2>/dev/null`);
 
     return findResult.stdout
       .split("\n")
@@ -119,21 +99,22 @@ export class SkillLoader {
   }
 
   /**
-   * Recursively find SKILL.md files using Node.js fs.
+   * Recursively find SKILL.md files using env.fs.
    */
   private async findSkillFilesRecursive(dirPath: string): Promise<string[]> {
+    const env = getEnv();
     const files: string[] = [];
 
     try {
-      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      const entries = await env.fs.readdir(dirPath);
 
       for (const entry of entries) {
-        const fullPath = nodePath.join(dirPath, entry.name);
+        const fullPath = env.path.join(dirPath, entry.name);
 
-        if (entry.isDirectory()) {
+        if (entry.type === "directory") {
           const subFiles = await this.findSkillFilesRecursive(fullPath);
           files.push(...subFiles);
-        } else if (entry.isFile() && entry.name === "SKILL.md") {
+        } else if (entry.type === "file" && entry.name === "SKILL.md") {
           files.push(fullPath);
         }
       }
@@ -153,30 +134,24 @@ export class SkillLoader {
    * @returns Parsed frontmatter and body
    */
   parseFrontmatter(text: string): ParsedFrontmatter {
-    // Check for frontmatter delimiters
     if (!text.startsWith("---")) {
-      // No frontmatter - treat entire content as body
       return {
         metadata: null,
         body: text.trim(),
       };
     }
 
-    // Find the closing delimiter
     const endIndex = text.indexOf("\n---", 3);
     if (endIndex === -1) {
-      // No closing delimiter - treat as body only
       return {
         metadata: null,
         body: text.trim(),
       };
     }
 
-    // Extract frontmatter YAML
     const yamlContent = text.slice(4, endIndex).trim();
     const body = text.slice(endIndex + 4).trim();
 
-    // Parse YAML using the yaml package
     try {
       const metadata = parseYaml(yamlContent);
       const validated = skillMetadataSchema.safeParse(metadata);
@@ -208,23 +183,18 @@ export class SkillLoader {
    * Scans recursively for SKILL.md files. Each skill is identified by its
    * parent directory name.
    *
-   * Supports both absolute paths (e.g., /home/user/.agents/skills) and
-   * relative paths (e.g., .agents/skills).
-   *
    * @param dirPath - Directory path to scan (absolute or relative to rootPath)
    * @returns Map of skill name to Skill object
    */
   async loadFromDirectory(dirPath: string): Promise<Map<string, Skill>> {
     const skills = new Map<string, Skill>();
 
-    // Check if directory exists
     const dirExists = await this.directoryExists(dirPath);
     if (!dirExists) {
       this.logger?.skill(`Skill directory does not exist: ${dirPath}`);
       return skills;
     }
 
-    // Find all SKILL.md files
     const files = await this.findSkillFiles(dirPath);
 
     for (const filePath of files) {
@@ -237,11 +207,9 @@ export class SkillLoader {
           continue;
         }
 
-        // Derive skill ID from parent directory name
         const pathParts = filePath.split("/");
         const skillDir = pathParts[pathParts.length - 2] || "unknown";
 
-        // Use name from frontmatter or directory name
         const name = metadata?.name || skillDir;
         const description = metadata?.description || "";
 

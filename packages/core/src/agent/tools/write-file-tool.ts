@@ -1,10 +1,10 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { getEnv } from "../../env.js";
+
 import { getFileModifiedTime, withDuration } from "./util/helpers.js";
 import { writeFileOutputSchema } from "./util/types.js";
-
-import type { Sandbox } from "../../environment";
 
 /**
  * Creates a write-file tool using Vercel AI SDK.
@@ -15,7 +15,7 @@ import type { Sandbox } from "../../environment";
  *
  * Requires user approval before execution.
  */
-export const createWriteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
+export const createWriteFileTool = () => {
   return tool({
     description:
       "Writes content to a file. If the file exists, requires the modifiedTime from a previous read operation to ensure the file hasn't been modified. If creating a new file, modifiedTime should be omitted. Parent directories will be created if they don't exist.",
@@ -37,9 +37,9 @@ export const createWriteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
     needsApproval: true,
     execute: async ({ path, content, modifiedTime, createDirectories }) => {
       return withDuration(async () => {
-        const fileExisted = await sandbox.filesystem.exists(path);
+        const fs = getEnv().fs;
+        const fileExisted = await fs.exists(path);
 
-        // If file exists, validate modification time
         if (fileExisted) {
           if (!modifiedTime) {
             throw new Error(
@@ -47,7 +47,7 @@ export const createWriteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
             );
           }
 
-          const currentModifiedTime = await getFileModifiedTime(sandbox, path);
+          const currentModifiedTime = await getFileModifiedTime(path);
           if (currentModifiedTime !== modifiedTime) {
             throw new Error(
               `File has been modified since it was read. Expected modifiedTime: ${modifiedTime}, current: ${currentModifiedTime}. Please read the file again before writing.`
@@ -55,20 +55,18 @@ export const createWriteFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
           }
         }
 
-        // Extract directory path from file path
         const lastSlashIndex = path.lastIndexOf("/");
         if (lastSlashIndex > 0 && (createDirectories ?? true)) {
           const dirPath = path.substring(0, lastSlashIndex);
-          const dirExists = await sandbox.filesystem.exists(dirPath);
+          const dirExists = await fs.exists(dirPath);
           if (!dirExists) {
-            await sandbox.filesystem.mkdir(dirPath);
+            await fs.mkdir(dirPath);
           }
         }
 
-        await sandbox.filesystem.writeFile(path, content);
+        await fs.writeFile(path, content);
 
-        // Get new modification time after write
-        const newModifiedTime = await getFileModifiedTime(sandbox, path);
+        const newModifiedTime = await getFileModifiedTime(path);
 
         return {
           path,

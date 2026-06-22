@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * const registry = new SkillRegistry({ sandbox, logger });
+ * const registry = new SkillRegistry({ rootPath: "/project", logger });
  * await registry.loadFromDirectories([".opencode/skills"], "/project/root");
  *
  * // List available skills
@@ -20,7 +20,6 @@
 import { SkillLoader } from "./skill-loader.js";
 
 import type { Skill, SkillSummary } from "./types.js";
-import type { Sandbox } from "../../environment";
 import type { AgentLog } from "../agent-log/agent-log.js";
 
 // ============================================================================
@@ -28,8 +27,6 @@ import type { AgentLog } from "../agent-log/agent-log.js";
 // ============================================================================
 
 export interface SkillRegistryConfig {
-  /** Sandbox for file system operations */
-  sandbox: Sandbox;
   /** Root path for resolving relative paths */
   rootPath: string;
   /** Optional logger for warnings and debug info */
@@ -44,18 +41,15 @@ export interface SkillRegistryConfig {
  * Central registry for managing loaded skills.
  */
 export class SkillRegistry {
-  private sandbox: Sandbox;
   private rootPath: string;
   private logger?: AgentLog;
   private skills: Map<string, Skill> = new Map();
   private loader: SkillLoader;
 
   constructor(config: SkillRegistryConfig) {
-    this.sandbox = config.sandbox;
     this.rootPath = config.rootPath;
     this.logger = config.logger;
     this.loader = new SkillLoader({
-      sandbox: config.sandbox,
       rootPath: config.rootPath,
       logger: config.logger,
     });
@@ -64,15 +58,13 @@ export class SkillRegistry {
   /**
    * Load skills from multiple directories.
    *
-   * Paths are relative to the sandbox root (which is already set to rootPath).
-   * The sandbox treats rootPath as `/`, so we use paths directly.
+   * Paths are relative to rootPath or absolute.
    * First loaded skill wins in case of name conflicts.
    *
-   * @param dirs - Array of directory paths (relative to sandbox root)
+   * @param dirs - Array of directory paths (relative to rootPath or absolute)
    */
   async loadFromDirectories(dirs: string[]): Promise<void> {
     for (const dir of dirs) {
-      // Use path directly - sandbox root is already the project root
       // Normalize: remove leading ./ if present
       const normalizedPath = dir.startsWith("./") ? dir.slice(2) : dir;
 

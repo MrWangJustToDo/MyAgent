@@ -8,7 +8,6 @@ import { cleanupOrphanedToolCache, createTodoTool } from "../tools";
 
 import { SessionHandler } from "./session-handler.js";
 
-import type { Sandbox } from "../../environment";
 import type { ModelInfo } from "../../models/types.js";
 import type { AgentContext } from "../agent-context";
 import type { AgentLog } from "../agent-log";
@@ -46,7 +45,6 @@ export class Base extends SessionHandler {
 
   // Resources
   systemPrompt = "";
-  sandbox: Sandbox | null = null;
   mcpManager: McpManager | null = null;
   skillRegister: SkillRegistry | null = null;
   compactionConfig: CompactionConfig | null = null;
@@ -98,19 +96,6 @@ export class Base extends SessionHandler {
 
   getModelInfo(): ModelInfo | null {
     return this.modelInfo;
-  }
-
-  /** Set sandbox for tool execution */
-  setSandbox(sandbox: Sandbox): void {
-    this.log?.debug("agent", "Setting sandbox", {
-      sandboxId: sandbox.sandboxId,
-      provider: sandbox.provider,
-    });
-    this.sandbox = sandbox;
-  }
-
-  getSandbox(): Sandbox | null {
-    return this.sandbox;
   }
 
   setTools(tools: ToolSet): void {
@@ -409,7 +394,7 @@ export class Base extends SessionHandler {
       this.context?.setMessages(finalMessages);
       let llmMessages = this.context?.getMessagesForLLM() || [];
 
-      if (this.shouldAutoCompact(llmMessages) && this.model && this.sandbox && this.context) {
+      if (this.shouldAutoCompact(llmMessages) && this.model && this.context) {
         try {
           this.status = "compacting";
           this.log?.notify("system", "info", "Auto-compacting context...");
@@ -430,7 +415,7 @@ export class Base extends SessionHandler {
           const beforeLength = llmMessages.length;
 
           if (
-            applyCompactionResult(this.context, this.sandbox, result, {
+            applyCompactionResult(this.context, result, {
               onCacheCleanupError: (err) => {
                 this.log?.warn("agent", "Failed to cleanup tool cache", { error: err.message });
               },
@@ -510,9 +495,9 @@ export class Base extends SessionHandler {
         const newCompactIndex = this.context.getMessages().length;
         this.context.setCompactIndex(newCompactIndex);
 
-        if (this.sandbox && newCompactIndex > oldCompactIndex) {
+        if (newCompactIndex > oldCompactIndex) {
           const allMessages = this.context.getMessages();
-          cleanupOrphanedToolCache(this.sandbox, allMessages, newCompactIndex).catch((err) => {
+          cleanupOrphanedToolCache(allMessages, newCompactIndex).catch((err) => {
             const e = err instanceof Error ? err : new Error(String(err));
             this.log?.warn("agent", "Failed to cleanup tool cache after reactive compact", { error: e.message });
           });

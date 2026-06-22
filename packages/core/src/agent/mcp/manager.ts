@@ -1,11 +1,12 @@
 import { createMCPClient } from "@ai-sdk/mcp";
-import { Experimental_StdioMCPTransport } from "@ai-sdk/mcp/mcp-stdio";
 
-import type { McpConfig, McpServerConfig } from "./types.js";
+import { getEnv } from "../../env.js";
+
+import type { McpProcessHandle } from "../../env.js";
 import type { AgentLog } from "../agent-log";
+import type { McpConfig, McpServerConfig } from "./types.js";
 import type { MCPClient, MCPClientConfig } from "@ai-sdk/mcp";
 import type { ToolSet } from "ai";
-import type { ChildProcess } from "child_process";
 
 // ============================================================================
 // McpServerStatus — public data for display in CLI /mcp command
@@ -40,11 +41,18 @@ export interface McpServerStatus {
 
 function createTransport(config: McpServerConfig): MCPClientConfig["transport"] {
   if (config.transport === "stdio") {
-    return new Experimental_StdioMCPTransport({
+    const env = getEnv();
+    if (!env.createMCPStdioTransport) {
+      throw new Error(
+        "Stdio MCP transport is not available in this environment. " +
+          "Use SSE or HTTP transport, or provide createMCPStdioTransport in CoreEnv."
+      );
+    }
+    return env.createMCPStdioTransport({
       command: config.command,
       args: config.args,
       env: config.env,
-    });
+    }) as MCPClientConfig["transport"];
   }
   return {
     type: config.transport,
@@ -53,21 +61,13 @@ function createTransport(config: McpServerConfig): MCPClientConfig["transport"] 
   };
 }
 
-/**
- * Extract the child process from a stdio transport instance.
- * The transport stores it as a public `process` property internally.
- */
-function getTransportProcess(transport: Experimental_StdioMCPTransport): ChildProcess | undefined {
-  return (transport as unknown as { process?: ChildProcess }).process;
-}
-
 // ============================================================================
 // McpManager
 // ============================================================================
 
 export class McpManager {
   private clients: Map<string, MCPClient> = new Map();
-  private stdioTransports: Experimental_StdioMCPTransport[] = [];
+  private stdioTransports: unknown[] = [];
 
   /** Per-server status metadata for display (populated during initialize) */
   private serverStatuses: Map<string, McpServerStatus> = new Map();
@@ -84,8 +84,7 @@ export class McpManager {
       try {
         const transport = createTransport(serverConfig);
 
-        // Track stdio transports for synchronous force-kill on exit
-        if (transport instanceof Experimental_StdioMCPTransport) {
+        if (serverConfig.transport === "stdio") {
           this.stdioTransports.push(transport);
         }
 
@@ -96,7 +95,6 @@ export class McpManager {
 
         const tools = await client.tools();
 
-        // Prefix tool names to avoid collisions with built-in tools and between servers
         for (const [toolName, toolDef] of Object.entries(tools)) {
           const prefixed = `mcp__${name}__${toolName}`;
           allTools[prefixed] = toolDef as ToolSet[string];
@@ -104,7 +102,6 @@ export class McpManager {
 
         this.clients.set(name, client);
 
-        // Record status for display
         this.serverStatuses.set(name, {
           name,
           transport: serverConfig.transport,
@@ -124,7 +121,6 @@ export class McpManager {
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
 
-        // Record failure status
         this.serverStatuses.set(name, {
           name,
           transport: serverConfig.transport,
@@ -154,17 +150,22 @@ export class McpManager {
 
   /**
    * Synchronously force-kill all MCP child processes.
-   * Directly sends SIGKILL to each stdio child process to guarantee termination.
+   * Uses the env's getMCPTransportProcess helper to access child processes.
    */
   forceKill(): void {
+    const env = getEnv();
     for (const transport of this.stdioTransports) {
       try {
-        // Directly kill the child process with SIGKILL (cannot be caught/ignored)
-        const child = getTransportProcess(transport);
+        let child: McpProcessHandle | undefined;
+        if (env.getMCPTransportProcess) {
+          child = env.getMCPTransportProcess(transport);
+        }
         if (child && !child.killed) {
           child.kill("SIGKILL");
         }
-        transport.close();
+        if (transport && typeof transport === "object" && "close" in transport) {
+          (transport as { close(): void }).close();
+        }
       } catch {
         // Ignore errors during force kill
       }

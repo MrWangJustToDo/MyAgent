@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { getEnv } from "../../env.js";
+import { FileError } from "../../environment/types.js";
 
 import { hookConfigSchema, HOOKS_CONFIG_FILE, HOOKS_DIR } from "./types.js";
 
@@ -19,14 +19,18 @@ export class HookRegistry {
   }
 
   async load(): Promise<void> {
-    const configPath = join(this.rootPath, HOOKS_DIR, HOOKS_CONFIG_FILE);
+    const env = getEnv();
+    const configPath = env.path.join(this.rootPath, HOOKS_DIR, HOOKS_CONFIG_FILE);
     try {
-      const raw = await readFile(configPath, "utf-8");
+      const raw = await env.fs.readFile(configPath, "utf-8");
       const parsed = JSON.parse(raw);
       this.config = hookConfigSchema.parse(parsed);
       this.loaded = true;
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      const isNotFound =
+        (err instanceof FileError && err.code === "not_found") ||
+        (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "ENOENT");
+      if (isNotFound) {
         this.config = {};
         this.loaded = true;
         return;

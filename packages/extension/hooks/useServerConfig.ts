@@ -7,10 +7,12 @@ export const useServerConfig = createState(
     url: DEFAULT_SERVER_URL,
     connected: false,
     connecting: false,
-    model: "",
-    provider: "",
+    rootPath: "",
     sandboxEnv: "",
-    agentStatus: "",
+    // Agent config (user-configurable)
+    model: "qwen2.5-coder:7b",
+    provider: "ollama" as "ollama" | "openRouter" | "openaiCompatible" | "deepseek",
+    apiKey: "",
   }),
   {
     withActions: (s) => ({
@@ -23,25 +25,26 @@ export const useServerConfig = createState(
       setConnecting: (connecting: boolean) => {
         s.connecting = connecting;
       },
-      setModel: (model: string) => {
-        s.model = model;
-      },
-      setProvider: (provider: string) => {
-        s.provider = provider;
+      setRootPath: (rootPath: string) => {
+        s.rootPath = rootPath;
       },
       setSandboxEnv: (sandboxEnv: string) => {
         s.sandboxEnv = sandboxEnv;
       },
-      setAgentStatus: (agentStatus: string) => {
-        s.agentStatus = agentStatus;
+      setModel: (model: string) => {
+        s.model = model;
+      },
+      setProvider: (provider: "ollama" | "openRouter" | "openaiCompatible" | "deepseek") => {
+        s.provider = provider;
+      },
+      setApiKey: (apiKey: string) => {
+        s.apiKey = apiKey;
       },
       reset: () => {
         s.connected = false;
         s.connecting = false;
-        s.model = "";
-        s.provider = "";
+        s.rootPath = "";
         s.sandboxEnv = "";
-        s.agentStatus = "";
       },
     }),
     withDeepSelector: false,
@@ -52,18 +55,15 @@ export const useServerConfig = createState(
 );
 
 export interface HealthResponse {
-  status: "ready" | "initializing" | "error";
-  model?: string;
-  provider?: string;
-  sandboxEnv?: string;
+  status: "ok" | "error";
   rootPath?: string;
-  agentStatus?: string;
+  sandboxEnv?: string;
   error?: string;
 }
 
 export async function checkServerHealth(url: string): Promise<HealthResponse | null> {
   try {
-    const res = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(5000) });
     if (res.ok) {
       return (await res.json()) as HealthResponse;
     }

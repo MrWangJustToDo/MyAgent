@@ -137,20 +137,15 @@ Example use cases:
 
         managed?.agent?.removePendingAbortController(abortController);
 
-        // Cache large output at the tool level so the LLM gets
-        // a preview with a read_file hint instead of the full text.
-        const sandbox = managed?.sandbox;
         let summary = result.output;
         let truncated = result.truncated;
         let cachedOutputPath: string | null = null;
 
-        if (sandbox) {
-          const cached = await maybeCacheOutput(sandbox, result.output, `${toolCallId}-task`);
-          cachedOutputPath = cached.cachedOutputPath;
-          if (cachedOutputPath) {
-            summary = cached.content;
-            truncated = true;
-          }
+        const cached = await maybeCacheOutput(result.output, `${toolCallId}-task`);
+        cachedOutputPath = cached.cachedOutputPath;
+        if (cachedOutputPath) {
+          summary = cached.content;
+          truncated = true;
         }
 
         return {

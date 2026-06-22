@@ -1,10 +1,10 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { getEnv } from "../../env.js";
+
 import { getFile, getFileModifiedTime, withDuration } from "./util/helpers.js";
 import { editFileOutputSchema } from "./util/types.js";
-
-import type { Sandbox } from "../../environment";
 
 /**
  * Creates an edit-file tool using Vercel AI SDK.
@@ -15,7 +15,7 @@ import type { Sandbox } from "../../environment";
  *
  * Requires user approval before execution.
  */
-export const createEditFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
+export const createEditFileTool = () => {
   return tool({
     description:
       "Edits a file by replacing occurrences of oldString with newString. Requires the modifiedTime from a previous read operation to ensure the file hasn't been modified since it was read. The oldString must match exactly (including whitespace and indentation).",
@@ -42,8 +42,7 @@ export const createEditFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
     needsApproval: true,
     execute: async ({ path, modifiedTime, oldString, newString, replaceAll }) => {
       return withDuration(async () => {
-        // Validate modification time and get current content
-        const fileRes = await getFile(sandbox, path);
+        const fileRes = await getFile(path);
         const currentModifiedTime = fileRes.modifiedTime;
 
         if (currentModifiedTime !== modifiedTime) {
@@ -70,10 +69,9 @@ export const createEditFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
         const newContent =
           (replaceAll ?? false) ? content.replaceAll(oldString, newString) : content.replace(oldString, newString);
 
-        await sandbox.filesystem.writeFile(path, newContent);
+        await getEnv().fs.writeFile(path, newContent);
 
-        // Get new modification time after edit
-        const newModifiedTime = await getFileModifiedTime(sandbox, path);
+        const newModifiedTime = await getFileModifiedTime(path);
 
         return {
           path,

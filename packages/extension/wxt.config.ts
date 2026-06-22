@@ -5,12 +5,20 @@ import { defineConfig } from "wxt";
 export default defineConfig({
   vite: () => ({
     plugins: [react()],
+    resolve: {
+      alias: {
+        // Map terminal ink → web renderer for browser extension
+        ink: "@my-react/react-terminal/web",
+        "ink-stream-markdown": "ink-stream-markdown/web",
+      },
+    },
   }),
   webExt: {
     disabled: true,
   },
   manifest: {
-    permissions: ["storage", "sidePanel"],
+    permissions: ["storage", "sidePanel", "clipboardRead"],
+    host_permissions: ["http://localhost/*", "http://127.0.0.1/*", "https://*/*"],
     side_panel: {
       default_path: "sidepanel.html",
     },

@@ -5,6 +5,7 @@
   ],
   "compilerOptions": {
     "jsx": "react-jsx",
+    "types": ["chrome"],
     "esModuleInterop": true,
     "composite": true,
     "paths": {

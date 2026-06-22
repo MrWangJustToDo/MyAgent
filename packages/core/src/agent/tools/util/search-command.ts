@@ -1,4 +1,4 @@
-import type { Sandbox } from "../../../environment";
+import { getEnv } from "../../../env.js";
 
 /** Default command timeout in ms */
 export const SEARCH_COMMAND_TIMEOUT = 30_000;
@@ -13,14 +13,14 @@ const COMMAND_NOT_FOUND = 127;
  * Run the primary search command; fall back when the binary is missing (exit 127).
  */
 export async function runSearchCommand(
-  sandbox: Sandbox,
   primary: string,
   fallback: string,
   timeout = SEARCH_COMMAND_TIMEOUT
 ): Promise<string> {
-  const primaryResult = await sandbox.runCommand(primary, { timeout });
+  const env = getEnv();
+  const primaryResult = await env.runCommand(primary, { timeout });
   if (primaryResult.exitCode === COMMAND_NOT_FOUND) {
-    const fallbackResult = await sandbox.runCommand(fallback, { timeout });
+    const fallbackResult = await env.runCommand(fallback, { timeout });
     return fallbackResult.stdout;
   }
   return primaryResult.stdout;

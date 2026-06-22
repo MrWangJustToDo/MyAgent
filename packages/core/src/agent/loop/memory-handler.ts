@@ -7,6 +7,7 @@
  * Used as the bottom of the mixin chain: MemoryHandler <- SessionHandler <- Base.
  */
 
+import { getEnv } from "../../env.js";
 import { extractMemories, consolidateMemories } from "../memory/memory-extractor.js";
 import { findRelevantMemories, formatRelevantMemories } from "../memory/memory-retrieval.js";
 
@@ -118,7 +119,7 @@ export class MemoryHandler {
         this.relevantMemoryContent = formatRelevantMemories(relevant);
         this.log?.info("memory", `Injected ${relevant.length} relevant memories into context`, {
           filenames: relevant.map((r) => r.filename),
-          byteSize: Buffer.byteLength(this.relevantMemoryContent, "utf-8"),
+          byteSize: getEnv().byteLength(this.relevantMemoryContent, "utf-8"),
         });
       } else {
         this.relevantMemoryContent = "";

@@ -1,8 +1,8 @@
 /**
- * Environment abstraction types
+ * Environment types — error classes, file/command result types.
  *
- * This module defines the unified interface for different execution environments.
- * Environments can be local (OS-sandboxed bash), remote (compute gateway), or custom implementations.
+ * These are runtime-agnostic data types used by {@link CoreEnv} and tools.
+ * The actual environment implementation is provided via {@link registerCoreEnv}.
  */
 
 // ============================================================================
@@ -29,7 +29,7 @@ export type FileErrorCode =
  * @example
  * ```typescript
  * try {
- *   await sandbox.filesystem.readFile('/path');
+ *   await getEnv().fs.readFile('/path');
  * } catch (err) {
  *   if (err instanceof FileError && err.code === 'not_found') {
  *     // Handle missing file gracefully
@@ -68,7 +68,7 @@ export type ExecutionErrorCode =
  * @example
  * ```typescript
  * try {
- *   const result = await sandbox.runCommand('npm install', { timeout: 30000 });
+ *   const result = await getEnv().runCommand('npm install', { timeout: 30000 });
  * } catch (err) {
  *   if (err instanceof ExecutionError && err.code === 'timeout') {
  *     // Handle timeout
@@ -131,8 +131,6 @@ export interface RunCommandOptions {
   env?: Record<string, string>;
   /** Timeout in milliseconds */
   timeout?: number;
-  /** Run in background */
-  background?: boolean;
   /** Called with stdout chunks as they are produced (streaming). */
   onStdout?: (chunk: string) => void;
   /** Called with stderr chunks as they are produced (streaming). */
@@ -147,135 +145,4 @@ export interface CommandResult {
   stderr: string;
   exitCode: number;
   durationMs: number;
-}
-
-// ============================================================================
-// Sandbox & Filesystem Interfaces
-// ============================================================================
-
-/**
- * Filesystem interface that all environments must implement.
- *
- * Operations may throw {@link FileError} with typed error codes
- * for structured error handling.
- */
-export interface SandboxFileSystem {
-  /** Read file as UTF-8 text */
-  readFile(path: string): Promise<string>;
-  /** Read file as binary buffer (for images, PDFs, etc.) */
-  readFileBuffer?(path: string): Promise<Buffer>;
-  /** Get file/directory stats */
-  stat?(path: string): Promise<FileStat>;
-  /** Create or overwrite a file, creating parent directories when supported */
-  writeFile(path: string, content: string): Promise<void>;
-  /** List direct children of a directory */
-  readdir(path: string): Promise<FileEntry[]>;
-  /** Create a directory (recursive by default) */
-  mkdir(path: string): Promise<void>;
-  /** Return whether a path exists */
-  exists(path: string): Promise<boolean>;
-  /** Remove a file or directory */
-  remove(path: string): Promise<void>;
-  /**
-   * Append content to a file.
-   * Creates the file if it doesn't exist, appends if it does.
-   */
-  appendFile?(path: string, content: string): Promise<void>;
-  /**
-   * Copy a file from source to destination.
-   * Throws if the target already exists.
-   */
-  copy?(sourcePath: string, targetPath: string): Promise<void>;
-}
-
-/**
- * Unified sandbox interface that all environments must implement.
- * This is the minimal API surface that tools use.
- */
-export interface Sandbox {
-  /** Unique identifier for this sandbox instance */
-  readonly sandboxId: string;
-  /** Provider name (e.g., 'local-os', 'local-native', 'remote') */
-  readonly provider: string;
-  /**
-   * Workspace root for agent file operations and default command cwd.
-   * - Local: same as project root on disk
-   * - Remote: path inside the remote VM (e.g. `/` or `/workspace`), not the local cwd
-   */
-  readonly workspacePath: string;
-  /** Filesystem operations */
-  readonly filesystem: SandboxFileSystem;
-  /**
-   * Execute a shell command.
-   *
-   * Throws {@link ExecutionError} on failures like abort, timeout,
-   * or shell unavailability. Normal non-zero exit codes are returned
-   * in {@link CommandResult} without throwing.
-   */
-  runCommand(command: string, options?: RunCommandOptions): Promise<CommandResult>;
-  /** Destroy and cleanup the sandbox */
-  destroy(): Promise<void>;
-}
-
-// ============================================================================
-// Environment Factory
-// ============================================================================
-
-/**
- * Configuration for creating a sandbox
- */
-export interface SandboxConfig {
-  /**
-   * Local project root (used as SandboxManager cache key and for path rewriting on remote).
-   * For remote sandboxes this is the machine-local cwd, not the path inside the VM.
-   */
-  rootPath: string;
-  /**
-   * Workspace root inside the sandbox (remote only; defaults to `/` or `REMOTE_WORKSPACE_PATH`).
-   * Ignored for local environments — workspacePath is derived from rootPath.
-   */
-  workspacePath?: string;
-  /** Current working directory within the sandbox */
-  cwd?: string;
-  /** Environment variables */
-  env?: Record<string, string>;
-}
-
-/**
- * Environment interface - factory for creating sandboxes.
- * Implement this interface to support different execution backends.
- */
-export interface Environment {
-  /** Environment name for identification */
-  readonly name: string;
-
-  /**
-   * Create a new sandbox instance
-   */
-  createSandbox(config: SandboxConfig): Promise<Sandbox>;
-
-  /**
-   * Get an existing sandbox by ID (if supported)
-   * Returns undefined if not found or not supported
-   */
-  getSandboxById?(sandboxId: string): Promise<Sandbox | undefined>;
-}
-
-// ============================================================================
-// Environment Type Resolution
-// ============================================================================
-
-/**
- * Environment type identifier for easy switching
- * - "local": Real bash + OS sandbox via sandbox-runtime (default)
- * - "native": Real bash without OS sandbox
- * - "remote": Remote compute gateway for cloud execution
- */
-export type EnvironmentType = "local" | "native" | "remote" | Environment;
-
-/**
- * Resolve environment type to an Environment instance
- */
-export function isEnvironmentInstance(env: EnvironmentType): env is Environment {
-  return typeof env === "object" && "name" in env && "createSandbox" in env;
 }

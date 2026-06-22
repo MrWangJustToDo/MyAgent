@@ -1,6 +1,4 @@
 import { convertToModelMessages, type LanguageModel, type UIMessage } from "ai";
-import * as os from "os";
-import * as path from "path";
 
 import { AgentLog } from "../agent";
 import { AgentContext } from "../agent/agent-context";
@@ -19,14 +17,12 @@ import { createAskUserTool } from "../agent/tools/ask-user-tool.js";
 import { createListSkillsTool } from "../agent/tools/list-skills-tool.js";
 import { createLoadSkillTool } from "../agent/tools/load-skill-tool.js";
 import { createTaskTool } from "../agent/tools/task-tool.js";
+import { getEnv } from "../env.js";
 import { getModel } from "../models/registry.js";
-
-import { sandboxManager } from "./manager-sandbox.js";
 
 import type { CompactionConfigInput } from "../agent/compaction/types.js";
 import type { AgentConfig, ToolSet } from "../agent/loop/types.js";
 import type { ResumeResult, SessionData } from "../agent/session/types.js";
-import type { Sandbox } from "../environment";
 import type { ModelInfo } from "../models/types.js";
 
 // ============================================================================
@@ -46,11 +42,13 @@ export const SKILL_DIRS_ENV_VAR = "AGENT_SKILL_DIRS";
  *
  * @returns Array of skill directory paths (absolute or relative)
  */
-export function getDefaultSkillDirs(): string[] {
+export async function getDefaultSkillDirs(): Promise<string[]> {
+  const env = getEnv();
   const dirs: string[] = [];
 
-  // 1. Environment variable paths (highest priority)
-  const envDirs = process.env[SKILL_DIRS_ENV_VAR];
+  const runEnv = await env.getEnv();
+
+  const envDirs = runEnv[SKILL_DIRS_ENV_VAR];
   if (envDirs) {
     const parsedDirs = envDirs
       .split(",")
@@ -59,11 +57,10 @@ export function getDefaultSkillDirs(): string[] {
     dirs.push(...parsedDirs);
   }
 
-  // 2. User home directory (global skills)
-  const userSkillDir = path.join(os.homedir(), ".agents", "skills");
+  const userSkillDir = env.path.join(await env.homedir(), ".agents", "skills");
+
   dirs.push(userSkillDir);
 
-  // 3. Current project directory (project-specific skills, lowest priority)
   dirs.push(".agents/skills");
 
   return dirs;
@@ -73,17 +70,16 @@ export type ManagedAgentConfig<T = Agent | AgentContext> = AgentConfig & {
   /** Optional custom ID for the agent (auto-generated if not provided) */
   id?: string;
   name: string;
-  rootPath: string;
   /** Vercel AI SDK LanguageModel instance */
   languageModel: LanguageModel;
   /** Model metadata from the registry (auto-resolved from config.model if not provided) */
   modelInfo?: ModelInfo;
   setUp?: (instance: T) => T;
-  /** Skill directories to load (relative to rootPath or absolute). Defaults to [".opencode/skills"] */
+  /** Skill directories to load (relative to CoreEnv rootPath or absolute). Defaults to [".agents/skills"] */
   skillDirs?: string[];
   /** Compaction configuration for context management */
   compaction?: CompactionConfigInput;
-  /** Path to MCP config file (relative to rootPath). Defaults to ".opencode/mcp.json" */
+  /** Path to MCP config file (relative to CoreEnv rootPath). Defaults to ".opencode/mcp.json" */
   mcpConfigPath?: string;
   /**
    * Agent documentation filenames to search for, in priority order.
@@ -115,7 +111,6 @@ export interface ManagedAgent {
   /** Convenience accessor for agent.context */
   context: AgentContext;
   tools: ToolSet;
-  sandbox: Sandbox;
   todoManager: TodoManager | null;
   status: Agent["status"];
   error?: string;
@@ -246,7 +241,6 @@ export class AgentManager {
   async createManagedAgent(config: ManagedAgentConfig, parentId?: string): Promise<Agent> {
     const {
       id: customId,
-      rootPath,
       setUp,
       languageModel,
       modelInfo: explicitModelInfo,
@@ -260,14 +254,11 @@ export class AgentManager {
     // Resolve ModelInfo: explicit > registry lookup by model string > null
     const resolvedModelInfo = explicitModelInfo ?? getModel(restConfig.model) ?? null;
 
-    const sandbox = await sandboxManager.getSandbox(rootPath);
-
-    // workspacePath is the root for agent file ops (local disk path or remote VM path).
-    const fsRootPath = sandbox.workspacePath;
+    const fsRootPath = getEnv().rootPath;
 
     const context = new AgentContext({ setUp: setUp as ManagedAgentConfig<AgentContext>["setUp"] });
 
-    const tools = await createTools({ sandbox, context });
+    const tools = await createTools({ context });
 
     const log = new AgentLog();
 
@@ -290,8 +281,6 @@ export class AgentManager {
     // Set tools - convert from Tools record to ToolSet
     agent.setTools(tools);
 
-    agent.setSandbox(sandbox);
-
     agent.setContext(context);
 
     agent.setLog(log);
@@ -300,7 +289,6 @@ export class AgentManager {
     // This happens early so the content is available for buildSystemPrompt() on the first call
     if (!parentId) {
       const docResult = await loadAgentDoc({
-        filesystem: sandbox.filesystem,
         rootPath: fsRootPath,
         filenames: config.agentDocFilenames,
         loadOverride: config.agentDocLoadOverride !== false, // Default: true
@@ -322,7 +310,7 @@ export class AgentManager {
       agent.setTodoManager(todoManager);
 
       agent.addTools({
-        webfetch: createWebfetchTool({ agentId: agent.id, sandbox }),
+        webfetch: createWebfetchTool({ agentId: agent.id }),
         websearch: createWebsearchTool({ agentId: agent.id }),
       });
     }
@@ -336,7 +324,6 @@ export class AgentManager {
     // Load skills and add skill tools (only for root agents, not subagents)
     if (!parentId) {
       const skillRegistry = new SkillRegistry({
-        sandbox,
         rootPath: fsRootPath,
         logger: log,
       });
@@ -345,7 +332,7 @@ export class AgentManager {
 
       // Load skills from configured directories (or default)
       // Default order: env var paths -> user home ~/.agents/skills -> project .agents/skills
-      const dirsToLoad = skillDirs ?? getDefaultSkillDirs();
+      const dirsToLoad = skillDirs ?? (await getDefaultSkillDirs());
       await skillRegistry.loadFromDirectories(dirsToLoad);
 
       // Add skill tools
@@ -370,7 +357,7 @@ export class AgentManager {
       // MCP Integration: connect to configured MCP servers and register their tools (root agents only)
       const mcpManager = new McpManager();
       agent.setMcpManager(mcpManager);
-      const mcpConfig = await loadMcpConfig(sandbox, log, mcpConfigPath);
+      const mcpConfig = await loadMcpConfig(log, mcpConfigPath);
       if (mcpConfig && Object.keys(mcpConfig.mcpServers).length > 0) {
         const mcpTools = await mcpManager.initialize(mcpConfig, log);
         if (Object.keys(mcpTools).length > 0) {
@@ -379,7 +366,7 @@ export class AgentManager {
       }
 
       // Memory system: persistent cross-session knowledge (root agents only)
-      const memoryManager = new MemoryManager(sandbox, { rootPath: fsRootPath }, log);
+      const memoryManager = new MemoryManager({ rootPath: fsRootPath }, log);
       await memoryManager.initialize();
       agent.setMemoryManager(memoryManager);
       agent.setMemoryContent(memoryManager.getIndexContent());
@@ -401,7 +388,7 @@ export class AgentManager {
 
     // Session persistence (root agents only)
     if (!parentId) {
-      const sessionStore = new SessionStore(sandbox.filesystem);
+      const sessionStore = new SessionStore();
       agent.setSessionStore(sessionStore, {
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-ignore
@@ -418,7 +405,6 @@ export class AgentManager {
       config,
       agent,
       context,
-      sandbox,
       tools: tools as ToolSet,
       log,
       todoManager,

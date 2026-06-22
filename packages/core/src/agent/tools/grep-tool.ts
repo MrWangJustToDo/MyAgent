@@ -6,8 +6,6 @@ import { DEFAULT_EXCLUDE_DIRS, runSearchCommand } from "./util/search-command.js
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { grepOutputSchema } from "./util/types.js";
 
-import type { Sandbox } from "../../environment";
-
 /** Maximum characters per matching line content (to prevent context overflow) */
 const MAX_CONTENT_LENGTH = 500;
 
@@ -179,7 +177,7 @@ function parseCountLine(line: string): { file: string; lineNumber: number; conte
   };
 }
 
-export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
+export const createGrepTool = () => {
   return tool({
     description:
       "Searches file contents using regular expressions. Returns file paths and line numbers with matching content. " +
@@ -248,7 +246,6 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
         };
 
         const rawOutput = await runSearchCommand(
-          sandbox,
           buildRgCommand(pattern, searchPath, searchOptions),
           buildGrepCommand(pattern, searchPath, searchOptions)
         );
@@ -314,7 +311,7 @@ export const createGrepTool = ({ sandbox }: { sandbox: Sandbox }) => {
         const hasMore = validMatches.length > skip + take;
 
         const fullMatchText = paginatedMatches.map((m) => `${m.file}:${m.lineNumber}:${m.content}`).join("\n");
-        const cached = await maybeCacheOutput(sandbox, fullMatchText, `${toolCallId}-grep`);
+        const cached = await maybeCacheOutput(fullMatchText, `${toolCallId}-grep`);
         const { cachedOutputPath } = cached;
         if (cachedOutputPath) contentTruncated = true;
 
