@@ -33,11 +33,11 @@ function App() {
       actions.setRootPath("");
     }
     setChecking(false);
-  }, [url]);
+  }, [url, actions]);
 
   useEffect(() => {
     handleCheck();
-  }, []);
+  }, [handleCheck]);
 
   const openSidePanel = async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -66,9 +66,12 @@ function App() {
 
       {/* Server URL */}
       <div style={{ marginBottom: 8 }}>
-        <label style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Server URL</label>
+        <label htmlFor="server-url" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+          Server URL
+        </label>
         <div style={{ display: "flex", gap: 4 }}>
           <input
+            id="server-url"
             value={url}
             onChange={(e: ChangeEvent<HTMLInputElement>) => actions.setUrl(e.target.value)}
             style={{ flex: 1, padding: "4px 8px", border: "1px solid #ccc", borderRadius: 4, fontSize: 13 }}
@@ -81,8 +84,11 @@ function App() {
 
       {/* Model config */}
       <div style={{ marginBottom: 8 }}>
-        <label style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Provider</label>
+        <label htmlFor="provider-select" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+          Provider
+        </label>
         <select
+          id="provider-select"
           value={provider}
           onChange={(e: ChangeEvent<HTMLSelectElement>) =>
             actions.setProvider(e.target.value as (typeof PROVIDERS)[number]["value"])
@@ -98,8 +104,11 @@ function App() {
       </div>
 
       <div style={{ marginBottom: 8 }}>
-        <label style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Model</label>
+        <label htmlFor="model-input" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+          Model
+        </label>
         <input
+          id="model-input"
           value={model}
           onChange={(e: ChangeEvent<HTMLInputElement>) => actions.setModel(e.target.value)}
           placeholder="e.g. qwen2.5-coder:7b"
@@ -109,8 +118,11 @@ function App() {
 
       {provider !== "ollama" && (
         <div style={{ marginBottom: 8 }}>
-          <label style={{ fontSize: 12, display: "block", marginBottom: 4 }}>API Key</label>
+          <label htmlFor="apikey-input" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+            API Key
+          </label>
           <input
+            id="apikey-input"
             type="password"
             value={apiKey}
             onChange={(e: ChangeEvent<HTMLInputElement>) => actions.setApiKey(e.target.value)}

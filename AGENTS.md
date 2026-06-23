@@ -4,22 +4,130 @@ This file provides guidelines for AI coding agents working in this repository.
 
 ## Project Overview
 
-A pnpm monorepo with three packages:
-- `@my-agent/core` - Core AI agent, tools, environment abstraction, and Vercel AI SDK integration
-- `@my-agent/cli` - Terminal CLI using @my-react/react-terminal (React for terminal)
-- `@my-agent/extension` - Browser extension using WXT framework
+A pnpm monorepo with seven packages organized in a layered architecture:
+
+| Package | Role |
+|---------|------|
+| `@my-agent/core` | Runtime-agnostic core: agent loop, tools, LLM model factory, CoreEnv interface |
+| `@my-agent/app` | Shared UI layer: React components, hooks, commands, AgentAdapter interface |
+| `@my-agent/cli` | Terminal host — thin shell that registers CoreEnv and renders `@my-agent/app` |
+| `@my-agent/node` | Node.js CoreEnv implementation: native filesystem, shell, OS sandbox |
+| `@my-agent/server` | CoreEnv HTTP server (Hono RPC) + remote client factory |
+| `@my-agent/extension` | Chrome extension host using WXT framework |
+| `@my-agent/mcp-server` | MCP server for external tool integration |
 
 ## Architecture
+
+### Layered Design
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Runtime Hosts                                          │
+│  ┌──────────────────┐  ┌────────────────────────────┐   │
+│  │  @my-agent/cli   │  │  @my-agent/extension       │   │
+│  │  (Ink terminal)  │  │  (WXT Chrome extension)    │   │
+│  └────────┬─────────┘  └─────────────┬──────────────┘   │
+│           │     AgentAdapter          │                  │
+│  ┌────────┴───────────────────────────┴──────────────┐   │
+│  │  @my-agent/app  (shared UI, hooks, commands)      │   │
+│  └────────────────────────┬──────────────────────────┘   │
+│                           │  AgentManager / Tools        │
+│  ┌────────────────────────┴──────────────────────────┐   │
+│  │  @my-agent/core  (agent loop, tools, CoreEnv)     │   │
+│  └────────────────────────┬──────────────────────────┘   │
+│                           │  CoreEnv interface           │
+│  ┌────────────────────────┴──────────────────────────┐   │
+│  │  CoreEnv Adapter Layer                            │   │
+│  │  ┌──────────────────┐  ┌────────────────────────┐ │   │
+│  │  │ @my-agent/node   │  │ @my-agent/server       │ │   │
+│  │  │ (local Node.js)  │  │ (remote HTTP client)   │ │   │
+│  │  └──────────────────┘  └───────────┬────────────┘ │   │
+│  └────────────────────────────────────┼──────────────┘   │
+│                                       │ Hono RPC         │
+│  ┌────────────────────────────────────┴──────────────┐   │
+│  │  @my-agent/server (HTTP server, uses @my-agent/node)  │
+│  └───────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### CoreEnv — Runtime Abstraction
+
+`CoreEnv` is the central abstraction that decouples `@my-agent/core` from any specific runtime. All filesystem, shell, fetch, and platform APIs go through this interface.
+
+```typescript
+interface CoreEnv {
+  rootPath: string;                // Workspace root
+  path?: CoreEnvPath;              // Synchronous path utilities (defaults to pathe/POSIX)
+  getPlatform(): Promise<string>;  // Async — may query remote server
+  getArch(): Promise<string>;
+  getEnv(): Promise<Record<string, string | undefined>>;
+  homedir(): Promise<string>;
+  fs: CoreEnvFs;                   // Filesystem operations
+  runCommand(cmd, opts?): Promise<CommandResult>;
+  exec(cmd, opts?): Promise<CoreEnvExecResult>;
+  fetch(input, init?): Promise<Response>;
+  destroy?(): Promise<void>;       // Lifecycle cleanup
+  // Optional: byteLength, base64Encode/Decode, getMimeType, createMCPStdioTransport
+}
+```
+
+**Registry pattern:**
+```typescript
+import { registerCoreEnv, getEnv, clearCoreEnv, hasCoreEnv } from "@my-agent/core";
+
+registerCoreEnv(env);   // Set the global CoreEnv (must be called before any core usage)
+getEnv();               // Get resolved env with defaults applied
+clearCoreEnv();         // Clear the registry (call on disconnect/destroy)
+hasCoreEnv();           // Check if registered
+```
+
+**Implementations:**
+- `createNodeEnv()` from `@my-agent/node` — local Node.js APIs, optional OS sandbox
+- `createRemoteCoreEnv(url)` from `@my-agent/server/client` — HTTP RPC proxy to a remote server
+
+### AgentAdapter — Host Abstraction
+
+Each host (CLI, extension) provides an `AgentAdapter` implementation:
+
+```typescript
+interface AgentAdapter {
+  initialize(config: AppConfig): Promise<InitResult>;
+  createTransport(): ChatTransport<UIMessage>;
+  destroy(): Promise<void>;
+  exit(): void;
+  readClipboardImage?(): Promise<ClipboardImageResult | null>;
+}
+```
+
+Shared initialization logic is in `createAgentFromConfig()` (`@my-agent/app/adapter/create-agent.ts`). Both `LocalAgentAdapter` (CLI) and `ExtensionAgentAdapter` delegate to this helper.
+
+### Bootstrap Sequences
+
+**CLI (local):**
+```
+loadEnv → parseCliArgs (sync) → registerCoreEnv(createNodeEnv) → initConfig → render(App)
+```
+
+**CLI (remote):**
+```
+loadEnv → parseCliArgs (sync) → createRemoteCoreEnv(url) → registerCoreEnv → initConfig → render(App)
+```
+
+**Extension:**
+```
+ConnectionGuard(/health) → createRemoteCoreEnv(url) → registerCoreEnv → initConfig → render(App)
+```
 
 ### Vercel AI SDK Integration
 
 This project uses **Vercel AI SDK** (`ai`, `@ai-sdk/openai`, `@ai-sdk/react`) for AI interactions.
 
 Key integration points:
-- `provider.ts` - LLM provider adapters (OpenAI, Ollama via `ai-sdk-ollama`)
-- `agent/loop/` - Main Agent class that handles tool execution, approval flows, and streaming
-- `agent/agentContext/` - Manages conversation state, tool calls, and context
-- `agent/mcp/` - MCP (Model Context Protocol) integration
+- `core/src/models/factory.ts` — LLM provider adapters (OpenAI, Ollama, OpenRouter, DeepSeek)
+- `core/src/agent/loop/` — Main Agent class: tool execution, approval flows, streaming
+- `core/src/agent/agent-context/` — Conversation state, tool calls, context management
+- `core/src/agent/mcp/` — MCP (Model Context Protocol) integration
+- `app/src/hooks/use-agent-chat.ts` — React hook bridging AI SDK `Chat` with the adapter
 
 ## Build, Lint, Test Commands
 
@@ -30,9 +138,11 @@ pnpm install          # Install dependencies
 
 ### Build Commands
 ```bash
-pnpm build            # Build all packages (core first, then others)
+pnpm build            # Build all packages (core → app → rest)
 pnpm build:core       # Build core package only
+pnpm build:app        # Build app package only
 pnpm build:cli        # Build CLI package only
+pnpm build:server     # Build server package only
 pnpm build:extension  # Build extension only
 ```
 
@@ -40,9 +150,12 @@ pnpm build:extension  # Build extension only
 ```bash
 pnpm dev              # Run all packages in watch mode (parallel)
 pnpm dev:core         # Watch core package
+pnpm dev:app          # Watch app package
 pnpm dev:cli          # Watch CLI package
+pnpm dev:server       # Watch server package
 pnpm dev:extension    # Run extension dev server
 pnpm start:cli        # Run CLI after build
+pnpm start:server     # Run CoreEnv HTTP server
 ```
 
 ### Type Checking & Linting
@@ -55,6 +168,7 @@ pnpm format           # Format with Prettier
 ### Per-Package Commands
 ```bash
 cd packages/core && pnpm tsc --noEmit   # Type check core only
+cd packages/app && pnpm tsc --noEmit    # Type check app only
 cd packages/cli && pnpm tsc --noEmit    # Type check CLI only
 ```
 
@@ -83,8 +197,9 @@ import { z } from "zod";
 import { createModel } from "./provider.js";
 import { DEFAULT_OLLAMA_URL } from "./types.js";
 
-// 3. Type-only imports (use `type` keyword)
-import type { Sandbox } from "./environment/types.js";
+// 3. Type-only imports (local first, then external, alphabetical within each group)
+import type { AppConfig } from "./adapter/types.js";
+import type { Agent } from "@my-agent/core";
 import type { LanguageModel, ToolSet } from "ai";
 ```
 
@@ -92,11 +207,11 @@ import type { LanguageModel, ToolSet } from "ai";
 
 | Type | Convention | Example |
 |------|------------|---------|
-| Files (general) | camelCase | `useSandbox.ts`, `readFileTool.ts` |
+| Files (general) | kebab-case | `use-agent.ts`, `read-file-tool.ts` |
 | Files (React) | PascalCase | `App.tsx`, `Header.tsx` |
 | Functions | camelCase | `createTools`, `getFile` |
 | Factory functions | `create*` prefix | `createAgent`, `createModel` |
-| Hooks | `use*` prefix | `useAgent`, `useTools` |
+| Hooks | `use*` prefix | `useAgent`, `useConfig` |
 | Types/Interfaces | PascalCase | `AgentConfig`, `ToolCallInfo` |
 | Zod schemas | camelCase + Schema | `agentConfigSchema` |
 | Constants | SCREAMING_SNAKE_CASE | `DEFAULT_OLLAMA_URL` |
@@ -111,6 +226,20 @@ try {
   onError?.(err);
   throw err;
 }
+```
+
+**Typed errors:** Use `FileError` and `ExecutionError` (from `@my-agent/core`) for structured error handling across local/remote boundaries. These serialize/deserialize correctly over HTTP.
+
+```typescript
+import { FileError, ExecutionError } from "@my-agent/core";
+
+// Filesystem errors
+throw new FileError("not_found", "File not found", "/path/to/file");
+throw new FileError("permission_denied", "Path traversal blocked", inputPath);
+
+// Execution errors
+throw new ExecutionError("timeout", "Command timed out after 30s");
+throw new ExecutionError("aborted", "Command was aborted");
 ```
 
 ### State Management (reactivity-store)
@@ -131,7 +260,7 @@ const { setStatus } = useAgent.getActions();        // Non-reactive actions
 
 ### Tool Definition Pattern
 ```typescript
-export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
+export const createReadFileTool = () => {
   return tool({
     title: "read-file-tool",
     description: "Read file contents",
@@ -143,7 +272,9 @@ export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
       content: z.string(),
     }),
     execute: async ({ path }, { abortSignal }) => {
-      // Implementation
+      const env = getEnv();
+      const content = await env.fs.readFile(path);
+      return { content };
     },
   });
 };
@@ -152,7 +283,7 @@ export const createReadFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
 ### React Components
 ```typescript
 export const MyComponent = () => {
-  const config = useArgs((s) => s.config);
+  const config = useConfig((s) => s.config);
 
   return (
     <Box flexDirection="column">
@@ -170,13 +301,12 @@ Use JSDoc with examples for public APIs:
  *
  * @example
  * ```typescript
- * const agent = await createAgent({
- *   model: "gpt-4",
- *   rootPath: "/path/to/project",
+ * const agent = await agentManager.createManagedAgent({
+ *   name: "main",
+ *   languageModel: model,
  * });
  * ```
  */
-export async function createAgent(config: AgentConfig): Promise<Agent> {
 ```
 
 Use section separators in large files:
@@ -188,37 +318,69 @@ Use section separators in large files:
 
 ## Key Technologies
 
-### Core & CLI
-- **Vercel AI SDK** (`ai`, `@ai-sdk/openai`, `@ai-sdk/react`) - AI SDK for LLM interactions
-- **ai-sdk-ollama** - Ollama provider for Vercel AI SDK
-- **Zod** (v4.x) - Schema validation
-- **@my-react/react-terminal** - React for terminal UIs (CLI package)
-- **reactivity-store** - State management (Zustand-like API)
-- **tsdown** - TypeScript build tool
-- **shiki** - Syntax highlighting
-- **stream-markdown-parser** - Markdown parsing and streaming
-- **@git-diff-view** - Git diff visualization
-- **computesdk** - Remote compute execution
+### Core & App
+- **Vercel AI SDK** (`ai`, `@ai-sdk/openai`, `@ai-sdk/react`) — LLM interactions
+- **Zod** (v4.x) — Schema validation
+- **pathe** — Cross-runtime POSIX path utilities
+- **reactivity-store** — State management (Zustand-like API)
+- **tsdown** — TypeScript build tool
+- **shiki** / **ink-stream-markdown** — Syntax highlighting and markdown rendering
+- **@git-diff-view** — Git diff visualization
+
+### CLI
+- **@my-react/react-terminal** — React for terminal UIs
+- **ink** — Terminal rendering (aliased from @my-react/react-terminal)
+
+### Node
+- **@anthropic-ai/sandbox-runtime** — OS-level sandbox for command execution
+- **mime-types** — MIME type detection
+- **@ai-sdk/mcp** — MCP stdio transport
+
+### Server
+- **Hono** — HTTP framework
+- **@hono/zod-validator** — Request validation
+- **hono/client** (RPC) — Type-safe client generation
 
 ### Extension
-- **WXT** - Browser extension framework
-- **@heroui/react** - UI component library
-- **@floating-ui/react** - Floating UI positioning
-- **framer-motion** - Animation library
-- **lucide-react** - Icon library
-- **swr** - Data fetching and caching
-- **tailwindcss** (v4.x) - CSS framework
+- **WXT** — Browser extension framework
+- **@heroui/react** — UI component library
+- **tailwindcss** (v4.x) — CSS framework
+
+## CoreEnv Server (Remote Mode)
+
+The `@my-agent/server` package exposes CoreEnv APIs over HTTP using Hono RPC for end-to-end type safety.
+
+### Server Routes
+
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/health` | GET | Health check, returns rootPath and sandbox mode |
+| `/api/env/info` | GET | Platform info: rootPath, platform, arch, homedir, sep |
+| `/api/env/vars` | GET | Environment variables (sensitive vars filtered) |
+| `/api/env/destroy` | POST | Lifecycle cleanup |
+| `/api/fs/*` | POST | Filesystem operations (readFile, stat, writeFile, etc.) |
+| `/api/command/run` | POST | Run a shell command |
+| `/api/command/exec` | POST | Execute a simple command |
+| `/api/fetch/proxy` | POST | HTTP fetch proxy (handles binary via base64) |
+
+### Client Usage
+
+```typescript
+import { registerCoreEnv } from "@my-agent/core";
+import { createRemoteCoreEnv } from "@my-agent/server/client";
+
+const env = await createRemoteCoreEnv("http://localhost:3100");
+registerCoreEnv(env);
+```
+
+### Known Limitations
+- `runCommand` streaming is lost over HTTP — stdout/stderr only available in final result
+- MCP stdio transport not available remotely — use SSE/HTTP MCP transport instead
+- Binary fetch responses are base64-encoded over the wire
 
 ## Subagent System
 
-The project supports **subagents** - context-isolated agents that can be spawned to handle delegated tasks without polluting the parent's context.
-
-### When to Use Subagents
-
-Use subagents when you need to:
-- Explore the codebase to find specific information
-- Research a question that requires reading multiple files
-- Perform complex multi-step exploration
+The project supports **subagents** — context-isolated agents spawned to handle delegated tasks.
 
 ### Subagent Characteristics
 
@@ -232,37 +394,14 @@ Use subagents when you need to:
 
 ### Using the Task Tool
 
-The parent agent uses the `task` tool to spawn subagents:
-
 ```typescript
-// Agent invokes the task tool with a prompt
 {
   tool: "task",
   input: {
     prompt: "Find what testing framework this project uses",
-    description: "find-test-framework"  // Optional, for UI display
+    description: "find-test-framework"
   }
 }
-```
-
-### Programmatic Subagent Usage
-
-```typescript
-import { runSubagent } from "@my-agent/core";
-
-// Spawn a subagent
-const result = await runSubagent({
-  prompt: "Find all API endpoints in the codebase",
-  parentAgentId: agent.id,
-  agentManager: manager,
-});
-
-// Result contains:
-// - summary: string (findings from the subagent)
-// - iterations: number (how many steps it took)
-// - usage: { inputTokens, outputTokens, totalTokens }
-// - truncated: boolean (if summary was truncated)
-// - reachedLimit: boolean (if hit 30 iteration limit)
 ```
 
 ### Architecture
@@ -270,337 +409,108 @@ const result = await runSubagent({
 ```
 packages/core/src/agent/
 ├── subagent/
-│   ├── subagent.ts    # runSubagent(), SubagentConfig, SubagentResult
-│   └── index.ts       # Exports
+│   ├── runner.ts     # runSubagent(), SubagentConfig, SubagentResult
+│   ├── tools.ts      # Read-only tool set for subagents
+│   └── index.ts
 ├── tools/
-│   └── task-tool.ts   # createTaskTool() for parent agents
+│   └── task-tool.ts  # createTaskTool() for parent agents
 ```
-
-### Events
-
-The AgentManager emits these subagent events:
-- `subagent:created` - Subagent spawned
-- `subagent:started` - Subagent began executing
-- `subagent:step` - Each iteration
-- `subagent:completed` - Task finished
-- `subagent:error` - Error occurred
-- `subagent:destroyed` - Subagent cleaned up
 
 ## Skill System
 
-The project supports **skills** - on-demand domain knowledge loaded via tools. This implements a two-layer injection pattern to avoid bloating the system prompt.
-
-### Two-Layer Pattern
+Skills provide on-demand domain knowledge via a two-layer injection pattern.
 
 | Layer | Purpose | Tokens |
 |-------|---------|--------|
 | Layer 1 | `list_skills` tool for discovery | ~100/skill |
 | Layer 2 | `load_skill` tool for full content | ~2000+/skill |
 
-### Skill File Format
-
-Skills are defined in `SKILL.md` files with YAML frontmatter:
-
-```markdown
----
-name: git-workflow
-description: Git workflow helpers and conventions
-license: MIT
-metadata:
-  author: your-name
-  version: "1.0"
----
-
-[Full skill content as markdown...]
-```
-
-### Using Skills
-
-Agents discover and load skills on-demand:
-
-```typescript
-// 1. Discover available skills
-{
-  tool: "list_skills",
-  input: {}
-}
-// Returns: Available skills:
-//   - git-workflow: Git workflow helpers...
-//   - code-review: Code review checklist...
-
-// 2. Load a specific skill
-{
-  tool: "load_skill",
-  input: { name: "git-workflow" }
-}
-// Returns: <skill name="git-workflow">...</skill>
-```
-
-### Configuration
-
-Configure skill directories in agent config:
-
-```typescript
-const agent = await agentManager.createManagedAgent({
-  name: "my-agent",
-  rootPath: "/project",
-  languageModel: model,
-  skillDirs: [".opencode/skills", "./custom-skills"],  // Optional, default: [".opencode/skills"]
-});
-```
-
-### Architecture
+Skills are defined in `SKILL.md` files with YAML frontmatter and loaded from `.opencode/skills/` by default.
 
 ```
-packages/core/src/agent/
-├── skills/
-│   ├── types.ts          # Skill, SkillMetadata types
-│   ├── skill-loader.ts   # Parse SKILL.md files
-│   ├── skill-registry.ts # Manage loaded skills
-│   └── index.ts          # Exports
-├── tools/
-│   ├── list-skills-tool.ts  # list_skills tool
-│   └── load-skill-tool.ts   # load_skill tool
-```
-
-### Default Skill Location
-
-Skills are loaded from `.opencode/skills/` by default:
-
-```
-.opencode/
-└── skills/
-    ├── git-workflow/
-    │   └── SKILL.md
-    ├── code-review/
-    │   └── SKILL.md
-    └── testing-patterns/
-        └── SKILL.md
+packages/core/src/agent/skills/
+├── skill-loader.ts     # Parse SKILL.md files
+├── skill-registry.ts   # Manage loaded skills
+└── index.ts
 ```
 
 ## Context Compaction System
 
-The project implements a **two-layer context compaction system** for infinite agent sessions. This prevents context window overflow by strategically compressing conversation history.
-
-### Two-Layer Architecture
+Two-layer context compaction for infinite agent sessions:
 
 | Layer | Name | Trigger | Action |
 |-------|------|---------|--------|
 | Layer 1 | `micro_compact` | Every LLM call | Replace old tool results with placeholders |
 | Layer 2 | `auto_compact` | Token threshold exceeded | LLM summarization |
 
-**Manual compaction:** CLI `/compact [focus]` (same engine as auto_compact; not an agent tool).
-
-### Layer 1: Micro Compaction
-
-Runs automatically in `createPrepareStep()` before each LLM call:
-- Replaces old tool_result content with `[Previous: used {tool_name}]`
-- Preserves the N most recent tool results (default: 3)
-- Skips small results (< 100 chars)
-
-```typescript
-// Automatic - applied in createPrepareStep() callback
-// Configured via compaction.keepRecentToolResults
-finalMessages = microCompact(finalMessages, this.compactionConfig || {});
-```
-
-### Layer 2: Auto Compaction
-
-Triggers in `createPrepareStep()` when estimated tokens exceed threshold:
-1. Logs compaction trigger with token count and threshold
-2. Sets agent status to "compacting"
-3. Gets incomplete todos from TodoManager
-4. Uses LLM to generate structured summary **including incomplete todos**
-5. Replaces all messages with summary + acknowledgment
-6. Resets context usage counters
-7. Returns updated messages to continue the conversation
-
-```typescript
-// Inside createPrepareStep() callback
-if (this.shouldAutoCompact(finalMessages)) {
-  this.status = "compacting";
-  
-  // Get incomplete todos to preserve in summary
-  const incompleteTodos = this.todoManager?.getIncompleteTodos() ?? [];
-  const todos = incompleteTodos.map((t) => ({
-    content: t.content,
-    status: t.status,
-    priority: t.priority,
-  }));
-  
-  // Run auto-compaction with todos
-  const result = await autoCompact(finalMessages, config, agentId, sandbox, {
-    todos: todos.length > 0 ? todos : undefined,
-  });
-  
-  // Apply compacted messages and reset usage
-  this.context?.setCompactMessages(result.messages);
-  this.context?.resetUsage();
-  
-  return { ...res, messages: this.context?.getCompactMessages() };
-}
-```
-
-**Note:** Compaction includes incomplete todos in the summary, so the agent can restore them after compaction. No longer blocks on incomplete todos.
-
-### Todo Preservation in Compaction
-
-When compaction occurs with incomplete todos:
-1. Todos are formatted and included in the LLM summarization prompt
-2. The summary includes an "Active Todo List" section with status icons
-3. After compaction, the agent sees the todos in the summary
-4. The agent should use the `todo` tool to re-create the tasks
-
-Example summary section:
-```
-## IMPORTANT: Active Todo List
-
-- 🔄 [HIGH] Implement user auth (in_progress)
-- ⏳ Add tests (pending)
-
-These todos represent the current work state and should be restored immediately.
-```
-
-### Configuration
-
-Configure compaction in agent config:
-
+**Configuration:**
 ```typescript
 const agent = await agentManager.createManagedAgent({
   name: "my-agent",
-  rootPath: "/project",
   languageModel: model,
   compaction: {
-    tokenThreshold: 100000,      // Default: 100000 (~100k tokens)
-    keepRecentToolResults: 3,    // Default: 3
-    minToolResultSize: 100,      // Default: 100 chars
-    keepRecentFlows: 4,          // Default: 4 (assistant-tool flows to keep)
+    tokenThreshold: 100000,
+    keepRecentToolResults: 3,
+    minToolResultSize: 100,
+    keepRecentFlows: 4,
   },
 });
 ```
 
-### Token Counting
-
-The compaction system uses **actual token usage** from AgentContext when available (more accurate), falling back to character-based estimation when needed.
-
-```typescript
-// Actual usage from context (preferred)
-const usage = agent.getContext().getUsage();
-console.log(`Actual tokens used: ${usage.inputTokens}`);
-
-// Check if compaction needed using actual usage
-if (agent.shouldAutoCompact()) {
-  // Triggers based on context.inputTokens >= threshold
-}
-
-// Character-based estimation (fallback)
-import { estimateTokens } from "@my-agent/core";
-const estimated = estimateTokens(messages);
-console.log(`Estimated tokens: ${estimated}`);
-```
-
-Token estimation uses: `tokens ≈ characters / 4`
-
-### Architecture
+**Auto-compact cut-point strategy:** `findCutPoint()` counts assistant-tool "flows" from the end and keeps the latest N (default: 4). Everything before is summarized.
 
 ```
-packages/core/src/agent/
-├── compaction/
-│   ├── types.ts            # CompactionConfig, CompactionResult types
-│   ├── token-estimator.ts  # estimateTokens(), estimateMessageTokens()
-│   ├── compaction-prompt.ts # COMPACTION_PROMPT, buildCompactionPrompt()
-│   ├── micro-compact.ts    # microCompact() - Layer 1
-│   ├── auto-compact.ts     # autoCompact(), shouldAutoCompact(), findCutPoint() - Layer 2
-│   └── index.ts            # Exports
-├── loop/
-│   └── base.ts             # createPrepareStep() integration
+packages/core/src/agent/compaction/
+├── micro-compact.ts       # Layer 1
+├── auto-compact.ts        # Layer 2
+├── apply-compaction-result.ts
+├── token-estimator.ts
+├── compaction-prompt.ts
+└── index.ts
 ```
-
-**Auto-compact cut-point strategy:** Instead of token-budget estimation, `findCutPoint()` counts assistant-tool "flows" from the end and keeps the latest N (default: 4). Everything before the Nth flow is summarized. This is simpler and more predictable than token estimation.
-
-### Integration Points
-
-1. **createPrepareStep()** in `Base.ts` - Main integration point that:
-   - Applies micro_compact (Layer 1) on every LLM call
-   - Checks if auto-compaction is needed via `shouldAutoCompact()`
-   - Runs `autoCompact()` (Layer 2) when token threshold exceeded
-   - Updates context messages via `setCompactMessages()`
-2. **shouldAutoCompact()** - Check if token threshold exceeded (uses actual context.usage.inputTokens when available)
-3. **CLI `/compact`** - Optional manual trigger (packages/cli/src/commands/compact.ts)
 
 ## Sandbox Environment Configuration
 
-The sandbox environment can be configured via the `SANDBOX_ENV` environment variable in your `.env` file.
-
-### Environment Types
+Configure via `SANDBOX_ENV` environment variable or programmatically.
 
 | Value | Description |
 |-------|-------------|
 | `local` | (default) Real bash + OS sandbox via `@anthropic-ai/sandbox-runtime` |
 | `native` | Real bash and Node.js fs, no OS sandbox |
-| `remote` | Cloud execution via computesdk (requires `SANDBOX_URL`, `SANDBOX_ID`) |
-
-### Configuration
-
-Add to your `.env` file:
 
 ```bash
-# Sandbox environment type
-SANDBOX_ENV=local    # or 'native', 'remote'
-SANDBOX_URL=https://sandbox-xxx.sandbox.computesdk.com  # remote only
-SANDBOX_ID=sandbox-xxx
-SANDBOX_TOKEN=...                                      # remote only (optional)
-REMOTE_WORKSPACE_PATH=/                                # path inside remote VM (default: /)
+# .env
+SANDBOX_ENV=local   # or 'native'
 ```
 
-### Programmatic Configuration
-
 ```typescript
-import { configureSandboxEnv } from '@my-agent/core';
+import { createNodeEnv } from "@my-agent/node";
 
-// Set sandbox environment before creating agents
-configureSandboxEnv('native');
-
-// Then create agents as normal
-const agent = await agentManager.createManagedAgent({ ... });
+createNodeEnv({ rootPath: "/path", mode: "os" });      // OS sandbox
+createNodeEnv({ rootPath: "/path", mode: "native" });   // No sandbox
 ```
 
 ## Tool Output Truncation
 
-Tools that can return large outputs have built-in truncation to prevent context window overflow:
-
 ### grep Tool
 - Max 500 chars per matching line content
 - Max 50KB total content across all matches
-- Adds `[truncated]` markers when content is cut
 
 ### read_file Tool
 
-The read_file tool supports multiple file types:
-
 | Type | Extensions | Behavior |
 |------|------------|----------|
-| Text | `.ts`, `.js`, `.py`, `.md`, etc. | Returns content with line numbers (1-indexed), supports offset/limit pagination |
-| Directory | (path to directory) | Returns list of entries with `/` suffix for subdirectories |
-| Image | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg` | Returns base64 encoded data for LLM vision |
-| PDF | `.pdf` | Returns base64 encoded data for document analysis |
-| Binary | `.mp3`, `.zip`, `.exe`, etc. | Returns error (cannot read) |
+| Text | `.ts`, `.js`, `.py`, `.md`, etc. | Line-numbered content, offset/limit pagination |
+| Directory | (path to directory) | List of entries |
+| Image | `.png`, `.jpg`, `.gif`, `.webp`, `.svg` | Base64 for LLM vision |
+| PDF | `.pdf` | Base64 for document analysis |
+| Binary | `.mp3`, `.zip`, `.exe`, etc. | Error (cannot read) |
 
-**Text file limits:**
-- Default line limit: 2000 lines (when not specified)
-- Max 100KB content per read (~25k tokens)
-- Max 2000 chars per line (truncated with notice)
-- Lines prefixed with 1-indexed line numbers
-- Suggests using `offset` parameter for pagination
-
-**Binary file limits:**
-- Max 10MB for images and PDFs
-- Auto-detects binary content by sampling first 4KB
+**Text limits:** 2000 lines default, max 100KB, max 2000 chars/line.
 
 ### run_command Tool
 - Max 50KB for stdout and stderr each
-- Keeps the **end** of output (usually more relevant for errors)
-- Adds truncation notice to message
+- Keeps the **end** of output (most relevant for errors)
 
 ## CLI Keyboard Shortcuts
 
@@ -612,51 +522,101 @@ The read_file tool supports multiple file types:
 | `Ctrl+A` | - | Select all | - |
 | `Ctrl+V` | - | Paste image | - |
 | `y` | - | - | Approve (when input empty) |
-| `n` | - | - | Enter deny-reason mode (when input empty) |
-| `↑/↓` | - | Navigate input history / autocomplete | Navigate autocomplete |
-| `Enter` | - | Submit input | Submit deny reason / slash command |
-| `/...` | - | Slash commands | Slash commands (during approval) |
+| `n` | - | - | Enter deny-reason mode |
+| `↑/↓` | - | Navigate history / autocomplete | Navigate autocomplete |
+| `Enter` | - | Submit input | Submit deny reason |
+| `/...` | - | Slash commands | Slash commands |
 
 ## File Structure
 
 ```
 packages/
-├── core/src/
+├── core/src/                          # @my-agent/core — runtime-agnostic core
+│   ├── env.ts                         # CoreEnv interface, registry (registerCoreEnv/getEnv/clearCoreEnv)
 │   ├── agent/
-│   │   ├── loop/           # Main Agent class
-│   │   ├── subagent/       # Subagent for delegated tasks (read-only, context-isolated)
-│   │   ├── skills/         # Skill loading system (two-layer injection)
-│   │   ├── compaction/     # Context compaction system (three-layer compression)
-│   │   ├── tools/          # AI tools (read, write, grep, glob, bash, task, skills, etc.)
-│   │   ├── agentContext/   # AgentContext - conversation state management
-│   │   ├── agentLog/       # AgentLog - structured logging system
-│   │   ├── mcp/            # MCP (Model Context Protocol) integration
-│   │   └── index.ts        # Agent exports
-│   ├── base/               # Base utilities and shared code
-│   ├── environment/        # Sandbox abstraction (local/remote)
-│   ├── managers/           # Manager classes (AgentManager, SandboxManager)
-│   ├── translate/          # Translation utilities
-│   ├── provider.ts         # LLM provider adapters (OpenAI, Ollama, etc.)
-│   ├── schemas.ts          # Shared Zod schemas
-│   ├── index.ts            # Main exports
-│   └── types.ts            # Type definitions
-├── cli/src/
-│   ├── app/                # Main app components (App, Agent)
-│   ├── components/         # React terminal components
-│   ├── hooks/              # CLI hooks (useAgent, useLocalChat, etc.)
-│   ├── layout/             # Layout components (Header, Footer)
-│   ├── markdown/           # Markdown rendering utilities
-│   ├── messages/           # Message rendering components
-│   ├── utils/              # Utility functions
-│   └── index.tsx           # Entry point
-└── extension/
-    ├── entrypoints/        # WXT entry points (background, content, popup)
-    ├── components/         # React components
-    ├── devtool/            # DevTools panel components
-    ├── hooks/              # Extension-specific hooks
-    ├── service/            # Background service utilities
-    └── assets/             # Static assets
+│   │   ├── loop/                      # Main Agent class (Base.ts, Agent.ts)
+│   │   ├── agent-context/             # AgentContext — conversation state
+│   │   ├── agent-log/                 # AgentLog — structured logging
+│   │   ├── compaction/                # Context compaction (micro + auto)
+│   │   ├── hooks/                     # Hook system (pre/post tool execution)
+│   │   ├── memory/                    # Memory management
+│   │   ├── session/                   # Session persistence (SessionStore)
+│   │   ├── skills/                    # Skill loading (two-layer injection)
+│   │   ├── subagent/                  # Subagent spawning
+│   │   ├── todo-manager/             # Todo tracking for agent tasks
+│   │   ├── tools/                     # AI tools (fs, bash, grep, glob, etc.)
+│   │   ├── mcp/                       # MCP integration
+│   │   ├── default-prompt.ts          # System prompt builder
+│   │   └── agent-doc-loader.ts        # Agent documentation loader
+│   ├── environment/                   # Error types (FileError, ExecutionError), data types
+│   ├── managers/                      # AgentManager — lifecycle management
+│   ├── models/                        # LLM model factory and registry
+│   ├── types.ts                       # Shared type definitions
+│   └── index.ts                       # Public API exports
+│
+├── app/src/                           # @my-agent/app — shared UI layer
+│   ├── adapter/
+│   │   ├── types.ts                   # AgentAdapter, AppConfig, InitResult interfaces
+│   │   └── create-agent.ts            # Shared createAgentFromConfig() helper
+│   ├── app/                           # Main app components (App.tsx, Agent.tsx)
+│   ├── commands/                      # Slash commands (/help, /compact, /clear, etc.)
+│   ├── components/                    # React components (UserInput, EditDiff, Help, etc.)
+│   ├── context/                       # React contexts (AdapterProvider)
+│   ├── hooks/                         # Shared hooks (useAgentChat, useConfig, useAgent, etc.)
+│   ├── layout/                        # Layout components (Header, Footer, Content)
+│   ├── messages/                      # Message rendering (ToolCallPartView, TextPartView, etc.)
+│   ├── types/                         # Attachment types
+│   ├── utils/                         # Format utilities, clipboard, file attachment
+│   └── index.ts                       # Public API exports
+│
+├── cli/src/                           # @my-agent/cli — terminal host (thin shell)
+│   ├── index.tsx                      # Entry point: arg parsing, CoreEnv registration, render
+│   ├── args.ts                        # CLI argument parser (sync, no CoreEnv dependency)
+│   └── local-adapter.ts              # LocalAgentAdapter (delegates to createAgentFromConfig)
+│
+├── node/src/                          # @my-agent/node — Node.js CoreEnv implementation
+│   ├── index.ts                       # createNodeEnv() factory
+│   └── environment/
+│       ├── local.ts                   # LocalEnvironmentConfig, mode resolution
+│       ├── native-fs.ts              # Workspace-scoped filesystem (path traversal protection)
+│       ├── native-run.ts             # Command execution with streaming
+│       ├── os-sandbox.ts             # OS sandbox via @anthropic-ai/sandbox-runtime
+│       └── shell.ts                   # Shell/PTY management
+│
+├── server/src/                        # @my-agent/server — CoreEnv HTTP server + client
+│   ├── index.ts                       # Hono server entry point
+│   ├── client.ts                      # createRemoteCoreEnv() — RPC client factory
+│   └── routes/
+│       ├── env.ts                     # /api/env/* (info, vars, destroy)
+│       ├── fs.ts                      # /api/fs/* (readFile, stat, writeFile, etc.)
+│       ├── command.ts                 # /api/command/* (run, exec)
+│       └── fetch.ts                   # /api/fetch/proxy (HTTP proxy with binary support)
+│
+├── extension/                         # @my-agent/extension — Chrome extension host
+│   ├── adapters/
+│   │   └── extension-adapter.ts      # ExtensionAgentAdapter
+│   ├── entrypoints/
+│   │   ├── sidepanel/                # Main UI (AgentBootstrap → App)
+│   │   ├── popup/                    # Settings popup (model, provider, API key)
+│   │   └── background.ts            # Service worker
+│   ├── components/
+│   │   ├── ConnectionGuard.tsx       # Server health check, reconnect logic
+│   │   └── ErrorBoundary.tsx
+│   └── hooks/
+│       └── useServerConfig.ts        # Persistent config via chrome.storage
+│
+└── mcp-server/src/                    # @my-agent/mcp-server — MCP tool server
+    └── index.ts
 ```
+
+## Runtime Combinations
+
+| Combination | CoreEnv | App Host | Status |
+|------------|---------|----------|--------|
+| Local CoreEnv + CLI | `createNodeEnv` | Ink terminal | Fully working |
+| Remote CoreEnv + CLI | `createRemoteCoreEnv` | Ink terminal | Working (no command streaming) |
+| Remote CoreEnv + Extension | `createRemoteCoreEnv` | WXT Chrome extension | Working (no command streaming, no stdio MCP) |
+| Local CoreEnv + Extension | N/A | N/A | Not supported (extension requires a server) |
 
 ## Task Completion Checklist
 
@@ -679,8 +639,10 @@ This ensures code quality and prevents accumulation of lint/type errors.
 
 ## Important Notes
 
-1. **ESM Only** - All packages use ESM. Use `.js` extensions in imports.
-2. **Workspace Dependencies** - Use `workspace:*` for cross-package deps.
-3. **Build Order** - Core must build before CLI/extension (`pnpm build` handles this).
-4. **Type Exports** - Use `export type` for type-only exports.
-5. **No Test Framework** - Currently no tests configured. Use TypeScript compiler for validation.
+1. **ESM Only** — All packages use ESM. Use `.js` extensions in imports.
+2. **Workspace Dependencies** — Use `workspace:*` for cross-package deps.
+3. **Build Order** — Core → App → rest (`pnpm build` handles this).
+4. **Type Exports** — Use `export type` for type-only exports.
+5. **CoreEnv is the single source of truth** — `rootPath` comes only from `getEnv().rootPath`, never from config objects. Tools access all platform APIs via `getEnv()`.
+6. **No Test Framework** — Currently no tests configured. Use TypeScript compiler for validation.
+7. **Adapter pattern** — Both hosts (CLI, extension) implement `AgentAdapter` and delegate shared init logic to `createAgentFromConfig()` in `@my-agent/app`.

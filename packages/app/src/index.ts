@@ -1,5 +1,11 @@
 // Adapter
 export * from "./adapter/types.js";
+export {
+  createAgentFromConfig,
+  clearAdapterHooks,
+  type AdapterHooks,
+  type CreateAgentOptions,
+} from "./adapter/create-agent.js";
 
 // Context
 export { AdapterProvider, useAdapter } from "./context/adapter-context.js";

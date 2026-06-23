@@ -260,6 +260,14 @@ export function registerCoreEnv(env: CoreEnv): void {
 }
 
 /**
+ * Clear the registered CoreEnv, preventing stale references after disconnect.
+ * After calling this, {@link getEnv} will throw until a new env is registered.
+ */
+export function clearCoreEnv(): void {
+  _env = null;
+}
+
+/**
  * Get the registered runtime environment with defaults applied.
  *
  * @throws if {@link registerCoreEnv} has not been called yet.

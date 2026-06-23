@@ -160,9 +160,9 @@ export const Help = () => {
           EXAMPLES
         </Text>
         <Box flexDirection="column" paddingLeft={2}>
-          <Text color="gray">$ my-agent "Create a hello world function"</Text>
-          <Text color="gray">$ my-agent --provider openRouter -m anthropic/claude-3.5-sonnet "Review code"</Text>
-          <Text color="gray">$ my-agent --remote http://localhost:3100 "Fix the bug"</Text>
+          <Text color="gray">{'$ my-agent "Create a hello world function"'}</Text>
+          <Text color="gray">{'$ my-agent --provider openRouter -m anthropic/claude-3.5-sonnet "Review code"'}</Text>
+          <Text color="gray">{'$ my-agent --remote http://localhost:3100 "Fix the bug"'}</Text>
         </Box>
       </Box>
 

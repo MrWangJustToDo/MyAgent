@@ -9,7 +9,7 @@ import {
   useAgentLog,
   useTodoManager,
 } from "@my-agent/app";
-import { DEFAULT_OLLAMA_URL, registerCoreEnv } from "@my-agent/core";
+import { DEFAULT_OLLAMA_URL, clearCoreEnv, registerCoreEnv } from "@my-agent/core";
 import { createRemoteCoreEnv } from "@my-agent/server/client";
 import { InkTerminalBox } from "@my-react/react-terminal/web";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -85,12 +85,13 @@ const AgentBootstrap = () => {
   }, [url, model, provider, apiKey]);
 
   useEffect(() => {
-    runBootstrap();
+    void runBootstrap();
     return () => {
       if (adapterRef.current) {
         void adapterRef.current.destroy();
         adapterRef.current = null;
       }
+      clearCoreEnv();
     };
   }, [runBootstrap]);
 

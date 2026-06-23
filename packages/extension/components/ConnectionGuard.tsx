@@ -22,11 +22,11 @@ export const ConnectionGuard = ({ children }: { children: React.ReactNode }) => 
       actions.setConnected(false);
     }
     actions.setConnecting(false);
-  }, [url]);
+  }, [url, actions]);
 
   useEffect(() => {
-    checkConnection();
-    retryRef.current = setInterval(checkConnection, 10000);
+    void checkConnection();
+    retryRef.current = setInterval(() => void checkConnection(), 10000);
     return () => {
       if (retryRef.current) clearInterval(retryRef.current);
     };
@@ -67,7 +67,7 @@ export const ConnectionGuard = ({ children }: { children: React.ReactNode }) => 
           The agent is paused until the server is back online.
         </p>
         <button
-          onClick={checkConnection}
+          onClick={() => void checkConnection()}
           disabled={connecting}
           style={{
             padding: "6px 16px",
@@ -102,15 +102,18 @@ export const ConnectionGuard = ({ children }: { children: React.ReactNode }) => 
         Cannot reach the CoreEnv server. Make sure it&apos;s running.
       </p>
       <div>
-        <label style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Server URL</label>
+        <label htmlFor="guard-server-url" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+          Server URL
+        </label>
         <input
+          id="guard-server-url"
           value={url}
           onChange={(e) => actions.setUrl(e.target.value)}
           style={{ padding: "4px 8px", border: "1px solid #ccc", borderRadius: 4, width: 240 }}
         />
       </div>
       <button
-        onClick={checkConnection}
+        onClick={() => void checkConnection()}
         disabled={connecting}
         style={{
           padding: "6px 16px",

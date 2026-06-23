@@ -12,46 +12,44 @@ function padContent(content: string, startLine?: number): string {
   return "\n".repeat(startLine - 1) + content;
 }
 
-export const EditDiff = memo(
-  ({
-    id,
-    width,
-    oldFile,
-    newFile,
-    oldPath,
-    newPath,
-    startLine,
-  }: {
-    id: string;
-    width: number;
-    oldFile: string;
-    newFile: string;
-    oldPath: string;
-    newPath: string;
-    startLine?: number;
-  }) => {
-    const paddedOld = padContent(oldFile, startLine);
-    const paddedNew = padContent(newFile, startLine);
+export const EditDiff = memo(function EditDiff({
+  id,
+  width,
+  oldFile,
+  newFile,
+  oldPath,
+  newPath,
+  startLine,
+}: {
+  id: string;
+  width: number;
+  oldFile: string;
+  newFile: string;
+  oldPath: string;
+  newPath: string;
+  startLine?: number;
+}) {
+  const paddedOld = padContent(oldFile, startLine);
+  const paddedNew = padContent(newFile, startLine);
 
-    const diffFile = getDiffFile(id) || generateDiffFile(oldPath, paddedOld, newPath, paddedNew, "", "");
+  const diffFile = getDiffFile(id) || generateDiffFile(oldPath, paddedOld, newPath, paddedNew, "", "");
 
-    setDiffFile(id, diffFile);
+  setDiffFile(id, diffFile);
 
-    diffFile.initTheme("dark");
+  diffFile.initTheme("dark");
 
-    diffFile.init();
+  diffFile.init();
 
-    const finalWidth = width;
+  const finalWidth = width;
 
-    return (
-      <DiffView
-        width={finalWidth}
-        diffViewMode={finalWidth > 20 && oldFile ? DiffModeEnum.Split : DiffModeEnum.Unified}
-        diffFile={diffFile}
-        diffViewHideOperator
-        diffViewHighlight
-        diffViewTheme="dark"
-      />
-    );
-  }
-);
+  return (
+    <DiffView
+      width={finalWidth}
+      diffViewMode={finalWidth > 20 && oldFile ? DiffModeEnum.Split : DiffModeEnum.Unified}
+      diffFile={diffFile}
+      diffViewHideOperator
+      diffViewHighlight
+      diffViewTheme="dark"
+    />
+  );
+});

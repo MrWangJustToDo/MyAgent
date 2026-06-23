@@ -1,6 +1,7 @@
 // Core Environment API (must be registered before using any core functionality)
 export {
   registerCoreEnv,
+  clearCoreEnv,
   getEnv,
   hasCoreEnv,
   defaultPath,

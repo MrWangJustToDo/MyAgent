@@ -2,6 +2,7 @@
  * Native Node.js filesystem scoped to a workspace root.
  */
 
+import { FileError } from "@my-agent/core";
 import * as fs from "fs/promises";
 import * as path from "path";
 
@@ -22,7 +23,11 @@ export function createNativeFilesystem(rootPath: string): NativeFilesystemHandle
   const resolvePath = (inputPath: string): string => {
     const resolved = path.isAbsolute(inputPath) ? path.resolve(inputPath) : path.resolve(resolvedRoot, inputPath);
     if (!resolved.startsWith(resolvedRoot + path.sep) && resolved !== resolvedRoot) {
-      throw new Error(`Path traversal blocked: "${inputPath}" resolves outside workspace root`);
+      throw new FileError(
+        "permission_denied",
+        `Path traversal blocked: "${inputPath}" resolves outside workspace root`,
+        inputPath
+      );
     }
     return resolved;
   };

@@ -100,6 +100,7 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
           >
             {content?.replacements?.map((item, index) => (
               <EditDiff
+                key={part.toolCallId + "-" + index}
                 width={bodyWidth}
                 id={part.toolCallId + "-" + index}
                 oldPath={content.path || ""}

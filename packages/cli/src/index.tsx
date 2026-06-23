@@ -33,10 +33,17 @@ if (isHelpRequested(process.argv.slice(2))) {
 // Switch between local and remote CoreEnv based on --remote flag / REMOTE env
 const remote = appConfig.remote;
 if (remote) {
-  const { createRemoteCoreEnv } = await import("@my-agent/server/client");
-  const remoteEnv = await createRemoteCoreEnv(remote);
-  registerCoreEnv(remoteEnv);
-  console.log(`[cli] Connected to remote CoreEnv: ${remote} (rootPath=${remoteEnv.rootPath})`);
+  try {
+    const { createRemoteCoreEnv } = await import("@my-agent/server/client");
+    const remoteEnv = await createRemoteCoreEnv(remote);
+    registerCoreEnv(remoteEnv);
+    console.log(`[cli] Connected to remote CoreEnv: ${remote} (rootPath=${remoteEnv.rootPath})`);
+  } catch (err) {
+    console.error(`[cli] Failed to connect to remote CoreEnv at ${remote}`);
+    console.error(`  ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`  Make sure the server is running: pnpm start:server`);
+    process.exit(1);
+  }
 } else {
   const useOsSandbox = (process.env.SANDBOX_ENV || "local") !== "native";
   registerCoreEnv(createNodeEnv({ rootPath: process.cwd(), sandbox: useOsSandbox }));
@@ -71,11 +78,16 @@ const adapter = new LocalAgentAdapter({
   hooks: { useAgent, useAgentLog, useAgentContext, useTodoManager },
 });
 
-initHighlighter().then(() => {
-  render(
-    <AdapterProvider value={adapter}>
-      <App />
-    </AdapterProvider>,
-    { incrementalRendering: true, maxFps: 30, exitOnCtrlC: false, renderProcess: true }
-  );
-});
+initHighlighter()
+  .then(() => {
+    render(
+      <AdapterProvider value={adapter}>
+        <App />
+      </AdapterProvider>,
+      { incrementalRendering: true, maxFps: 30, exitOnCtrlC: false, renderProcess: true }
+    );
+  })
+  .catch((err) => {
+    console.error("[cli] Failed to initialize syntax highlighter:", err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });

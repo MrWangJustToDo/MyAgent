@@ -14,12 +14,8 @@ export const useStatic = createState(
     withActions(s) {
       return {
         useInitStdout: () => {
-          try {
-            const { stdout } = useStdout();
-            s.stdoutRef.current = stdout;
-          } catch {
-            // In web environments where useStdout may not be available
-          }
+          const result = useStdout();
+          s.stdoutRef.current = result.stdout;
         },
         setStaticHeader: (item: JSX.Element) => ((s.header = item), s.headerSet++),
         setStaticList: (items: JSX.Element[]) => ((s.list = items), s.listSet++),

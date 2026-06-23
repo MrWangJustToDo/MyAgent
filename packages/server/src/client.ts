@@ -13,7 +13,7 @@
  * ```
  */
 
-import { ExecutionError, FileError } from "@my-agent/core";
+import { ExecutionError, FileError, defaultPath } from "@my-agent/core";
 import { hc } from "hono/client";
 
 import type { AppType } from ".";
@@ -23,6 +23,7 @@ import type {
   CoreEnvExecResult,
   CoreEnvFs,
   CoreEnvFsStat,
+  CoreEnvPath,
   FileEntry,
   RunCommandOptions,
 } from "@my-agent/core";
@@ -160,10 +161,24 @@ export async function createRemoteCoreEnv(serverUrl: string): Promise<CoreEnv> {
   const client = hc<AppType>(`${baseUrl}/api`);
 
   const infoRes = await client.env.info.$get();
-  const info = await unwrap<{ rootPath: string; platform: string; arch: string; homedir: string }>(infoRes);
+  const info = await unwrap<{ rootPath: string; platform: string; arch: string; homedir: string; sep?: string }>(
+    infoRes
+  );
+
+  const serverSep = info.sep || "/";
+  const path: CoreEnvPath =
+    serverSep === "/"
+      ? defaultPath
+      : {
+          ...defaultPath,
+          getSep: () => serverSep,
+          isAbsolute: (p) => p.startsWith(serverSep) || defaultPath.isAbsolute(p),
+        };
 
   return {
     rootPath: info.rootPath,
+
+    path,
 
     getPlatform: async () => info.platform,
     getArch: async () => info.arch,
@@ -235,6 +250,15 @@ export async function createRemoteCoreEnv(serverUrl: string): Promise<CoreEnv> {
       const res = await client.fs.mimeType.$post({ json: { path: filePath } });
       const data = await unwrap<{ mimeType: string | false }>(res);
       return data.mimeType;
+    },
+
+    destroy: async () => {
+      try {
+        const res = await client.env.destroy.$post();
+        await unwrap<{ ok: boolean }>(res);
+      } catch {
+        // Server may already be gone
+      }
     },
 
     createMCPStdioTransport: () => {

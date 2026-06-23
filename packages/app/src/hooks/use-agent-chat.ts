@@ -132,7 +132,17 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     return () => {
       void adapter.destroy();
     };
-  }, [config.model, config.url, config.systemPrompt, config.maxIterations, config.provider, config.apiKey]);
+  }, [
+    config.model,
+    config.url,
+    config.systemPrompt,
+    config.maxIterations,
+    config.provider,
+    config.apiKey,
+    config.mcpConfigPath,
+    adapter,
+    config,
+  ]);
 
   const chatHelpers = useAiSdkChat<UIMessage>(
     chatRef.current
