@@ -1,11 +1,11 @@
 import { tool } from "ai";
-import mime from "mime-types";
-import * as nodePath from "path";
 import { z } from "zod";
+
+import { getEnv } from "../../env.js";
 
 import { getFile, withDuration } from "./util/helpers.js";
 
-import type { Sandbox, FileStat } from "../../environment";
+import type { FileStat } from "../../environment";
 import type { AgentContext } from "../agent-context/agent-context.js";
 
 // ============================================================================
@@ -89,7 +89,7 @@ const BINARY_EXTENSIONS = new Set([
  * Check if a file has a known binary extension
  */
 function isBinaryExtension(filePath: string): boolean {
-  const ext = nodePath.extname(filePath).toLowerCase();
+  const ext = getEnv().path.extname(filePath).toLowerCase();
   return BINARY_EXTENSIONS.has(ext);
 }
 
@@ -101,14 +101,14 @@ function isBinaryExtension(filePath: string): boolean {
  * 2. Use extension list to detect known binary files
  * 3. Everything else is assumed to be text (with binary content check later)
  */
-function detectFileType(filePath: string, stat?: FileStat): FileTypeInfo {
+async function detectFileType(filePath: string, stat?: FileStat): Promise<FileTypeInfo> {
   // Check if it's a directory
   if (stat?.isDirectory) {
     return { type: "directory" };
   }
 
-  // Get MIME type from extension
-  const mimeType = mime.lookup(filePath) || undefined;
+  const getMimeType = getEnv().getMimeType;
+  const mimeType = (getMimeType ? await getMimeType(filePath) : false) || undefined;
 
   // Check for images (supported for LLM vision)
   // Exclude SVG (XML-based, can be read as text) and vnd.fastbidsheet
@@ -139,7 +139,7 @@ function detectFileType(filePath: string, stat?: FileStat): FileTypeInfo {
 /**
  * Check if file content appears to be binary by sampling the first bytes
  */
-async function isBinaryContent(buffer: Buffer): Promise<boolean> {
+async function isBinaryContent(buffer: Uint8Array): Promise<boolean> {
   if (buffer.length === 0) return false;
 
   const sampleSize = Math.min(4096, buffer.length);
@@ -234,7 +234,7 @@ export type ReadFileOutput = z.infer<typeof readFileOutputSchema>;
  * - PDFs: Returns base64 encoded data for document analysis
  * - Binary files: Returns error (cannot read binary files)
  */
-export const createReadFileTool = ({ sandbox, context }: { sandbox: Sandbox; context?: AgentContext }) => {
+export const createReadFileTool = ({ context }: { context?: AgentContext } = {}) => {
   const getRemainingTokenBudget = (): number => {
     if (!context) return Infinity;
     const limit = context.getTokenLimit();
@@ -280,14 +280,15 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
 
     execute: async ({ path: filePath, offset, limit }) => {
       return withDuration(async () => {
-        const fsys = sandbox.filesystem;
+        const fsys = getEnv().fs;
 
         // Check if file/directory exists
         const exists = await fsys.exists(filePath);
         if (!exists) {
           // Try to find similar files for suggestion
-          const dir = nodePath.dirname(filePath);
-          const base = nodePath.basename(filePath).toLowerCase();
+          const envPath = getEnv().path;
+          const dir = envPath.dirname(filePath);
+          const base = envPath.basename(filePath).toLowerCase();
           let suggestion = "";
 
           try {
@@ -297,7 +298,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
               const similar = entries
                 .filter((e) => e.name.toLowerCase().includes(base) || base.includes(e.name.toLowerCase().split(".")[0]))
                 .slice(0, 3)
-                .map((e) => nodePath.join(dir, e.name));
+                .map((e) => envPath.join(dir, e.name));
 
               if (similar.length > 0) {
                 suggestion = `\n\nDid you mean one of these?\n${similar.join("\n")}`;
@@ -326,7 +327,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
         }
 
         // Detect file type
-        const fileTypeInfo = detectFileType(filePath, stat);
+        const fileTypeInfo = await detectFileType(filePath, stat);
 
         // Handle directory
         if (fileTypeInfo.type === "directory") {
@@ -399,7 +400,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
             };
           }
 
-          const base64 = buffer.toString("base64");
+          const base64 = getEnv().base64Encode(buffer);
 
           return {
             type: "image" as const,
@@ -436,7 +437,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
           return {
             type: "pdf" as const,
             path: filePath,
-            base64: buffer.toString("base64"),
+            base64: getEnv().base64Encode(buffer),
             size: buffer.length,
             message: `PDF read successfully: ${filePath} (${Math.round(buffer.length / 1024)}KB)`,
           };
@@ -461,7 +462,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
         }
 
         // Read text file
-        const fileRes = await getFile(sandbox, filePath);
+        const fileRes = await getFile(filePath);
         const modifiedTime = fileRes.modifiedTime;
         const content = fileRes.content;
 

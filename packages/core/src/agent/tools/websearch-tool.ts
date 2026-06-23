@@ -12,6 +12,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { getEnv } from "../../env.js";
 import { agentManager } from "../../managers/manager-agent.js";
 
 import { withDuration } from "./util/helpers.js";
@@ -224,7 +225,7 @@ async function searchDuckDuckGo(
   const timeoutId = setTimeout(() => abortController?.abort(), timeoutMs);
 
   try {
-    const response = await fetch(searchUrl, {
+    const response = await getEnv().fetch(searchUrl, {
       signal: abortController?.signal,
       headers: {
         "User-Agent":

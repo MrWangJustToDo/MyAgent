@@ -1,9 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { getFile, getFileModifiedTime, withDuration } from "./util/helpers.js";
+import { getEnv } from "../../env.js";
 
-import type { Sandbox } from "../../environment";
+import { getFile, getFileModifiedTime, withDuration } from "./util/helpers.js";
 
 const searchReplaceBlockSchema = z.object({
   oldString: z.string().describe("The exact string to search for and replace."),
@@ -23,7 +23,7 @@ const searchReplaceBlockSchema = z.object({
  *
  * Requires user approval before execution.
  */
-export const createSearchReplaceTool = ({ sandbox }: { sandbox: Sandbox }) => {
+export const createSearchReplaceTool = () => {
   return tool({
     description:
       "Performs multiple search and replace operations on a single file in one atomic operation. Requires the modifiedTime from a previous read operation. All replacements are applied sequentially, so later replacements can match text created by earlier ones.",
@@ -58,8 +58,7 @@ export const createSearchReplaceTool = ({ sandbox }: { sandbox: Sandbox }) => {
     needsApproval: true,
     execute: async ({ path, modifiedTime, replacements }) => {
       return withDuration(async () => {
-        // Validate modification time and get current content
-        const fileRes = await getFile(sandbox, path);
+        const fileRes = await getFile(path);
         const currentModifiedTime = fileRes.modifiedTime;
 
         if (currentModifiedTime !== modifiedTime) {
@@ -101,10 +100,9 @@ export const createSearchReplaceTool = ({ sandbox }: { sandbox: Sandbox }) => {
           throw new Error(`Some search strings were not found in the file: ${failedStrings}. No changes were made.`);
         }
 
-        await sandbox.filesystem.writeFile(path, content);
+        await getEnv().fs.writeFile(path, content);
 
-        // Get new modification time after edit
-        const newModifiedTime = await getFileModifiedTime(sandbox, path);
+        const newModifiedTime = await getFileModifiedTime(path);
 
         return {
           path,

@@ -14,12 +14,11 @@ import { tool } from "ai";
 import TurndownService from "turndown";
 import { z } from "zod";
 
+import { getEnv } from "../../env.js";
 import { agentManager } from "../../managers/manager-agent.js";
 
 import { withDuration } from "./util/helpers.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
-
-import type { Sandbox } from "../../environment";
 
 // ============================================================================
 // Constants
@@ -148,7 +147,7 @@ export type WebfetchOutput = z.infer<typeof webfetchOutputSchema>;
  * const webfetchTool = createWebfetchTool();
  * ```
  */
-export const createWebfetchTool = ({ agentId, sandbox }: { agentId: string; sandbox?: Sandbox }) => {
+export const createWebfetchTool = ({ agentId }: { agentId: string }) => {
   return tool({
     description: `Fetches content from a URL and returns it in the specified format.
 
@@ -221,7 +220,9 @@ Usage notes:
             "Accept-Language": "en-US,en;q=0.9",
           };
 
-          let response = await fetch(url, {
+          const envFetch = getEnv().fetch;
+
+          let response = await envFetch(url, {
             signal: controller.signal,
             headers,
             redirect: "follow",
@@ -229,7 +230,7 @@ Usage notes:
 
           // Retry with honest UA if blocked by Cloudflare bot detection
           if (response.status === 403 && response.headers.get("cf-mitigated") === "challenge") {
-            response = await fetch(url, {
+            response = await envFetch(url, {
               signal: controller.signal,
               headers: { ...headers, "User-Agent": "my-agent-webfetch" },
               redirect: "follow",
@@ -257,7 +258,7 @@ Usage notes:
           // Handle images
           const isImage = mime.startsWith("image/") && mime !== "image/svg+xml";
           if (isImage) {
-            const base64Content = Buffer.from(arrayBuffer).toString("base64");
+            const base64Content = getEnv().base64Encode(new Uint8Array(arrayBuffer));
             return {
               url,
               contentType,
@@ -303,14 +304,11 @@ Usage notes:
           let cachedOutputPath: string | null = null;
           let truncated = false;
 
-          if (sandbox && content.length > MAX_CONTENT_CHARS) {
-            const cached = await maybeCacheOutput(sandbox, content, `${toolCallId}-webfetch`);
+          if (content.length > MAX_CONTENT_CHARS) {
+            const cached = await maybeCacheOutput(content, `${toolCallId}-webfetch`);
             content = cached.content;
             cachedOutputPath = cached.cachedOutputPath;
             truncated = cachedOutputPath !== null;
-          } else if (content.length > MAX_CONTENT_CHARS) {
-            content = content.slice(0, MAX_CONTENT_CHARS) + "\n\n[...content truncated...]";
-            truncated = true;
           }
 
           const truncationNote = cachedOutputPath

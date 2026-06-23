@@ -10,22 +10,22 @@ allowBuilds:
   unrs-resolver: false
 
 minimumReleaseAgeExclude:
-  - "@git-diff-view/cli@0.1.5"
-  - "@git-diff-view/core@0.1.5"
-  - "@git-diff-view/file@0.1.5"
-  - "@git-diff-view/lowlight@0.1.5"
-  - "@my-react/react-dom@0.3.27"
-  - "@my-react/react-jsx@0.3.27"
-  - "@my-react/react-refresh@0.3.27"
-  - "@my-react/react-terminal@0.0.26"
-  - "@my-react/react-vite@0.0.33"
-  - "@my-react/react@0.3.27"
-  - ink-stream-markdown@0.0.4
+  - "@my-react/react-dom@0.3.28"
+  - "@my-react/react-jsx@0.3.28"
+  - "@my-react/react-refresh@0.3.28"
+  - "@my-react/react-terminal@0.0.27"
+  - "@my-react/react-vite@0.0.34"
+  - "@my-react/react@0.3.28"
+  - ink-stream-markdown@0.0.8
   - "@ai-sdk/mcp@1.0.44"
   - "@ai-sdk/gateway@3.0.127"
   - "@ai-sdk/openai@3.0.69"
   - "@ai-sdk/react@3.0.201"
   - ai@6.0.199
+  - "@git-diff-view/core@0.1.6"
+  - "@git-diff-view/file@0.1.6"
+  - "@git-diff-view/lowlight@0.1.6"
+  - "@git-diff-view/cli@0.1.8"
 
 publicHoistPattern:
   - "*eslint-*"

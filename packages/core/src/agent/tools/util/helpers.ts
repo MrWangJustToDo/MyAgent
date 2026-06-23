@@ -1,19 +1,14 @@
-import type { Sandbox } from "../../../environment";
+import { getEnv } from "../../../env.js";
 
 /**
  * Get file content and a modification identifier.
  * Uses a content hash as the modification identifier when mtime is unavailable.
  */
-export async function getFile(
-  sandbox: Sandbox,
-  path: string
-): Promise<{
+export async function getFile(path: string): Promise<{
   content: string;
   modifiedTime: string;
 }> {
-  const content = await sandbox.filesystem.readFile(path);
-  // Use a simple hash of content as the "modification time" identifier
-  // This ensures we can detect if the file changed between operations
+  const content = await getEnv().fs.readFile(path);
   const modifiedTime = hashContent(content);
   return { content, modifiedTime };
 }
@@ -21,8 +16,8 @@ export async function getFile(
 /**
  * Get just the modification identifier for a file.
  */
-export async function getFileModifiedTime(sandbox: Sandbox, path: string): Promise<string> {
-  const content = await sandbox.filesystem.readFile(path);
+export async function getFileModifiedTime(path: string): Promise<string> {
+  const content = await getEnv().fs.readFile(path);
   return hashContent(content);
 }
 
@@ -31,12 +26,10 @@ export async function getFileModifiedTime(sandbox: Sandbox, path: string): Promi
  * Uses a fast non-cryptographic hash.
  */
 function hashContent(content: string): string {
-  // Simple djb2 hash for quick content fingerprinting
   let hash = 5381;
   for (let i = 0; i < content.length; i++) {
     hash = ((hash << 5) + hash) ^ content.charCodeAt(i);
   }
-  // Convert to positive hex string
   return (hash >>> 0).toString(16);
 }
 
@@ -76,13 +69,11 @@ export function truncateString(str: string, maxLength: number, fromEnd = false):
   }
 
   if (fromEnd) {
-    // Keep the end (useful for error messages, logs)
     return {
       text: `[...truncated ${str.length - maxLength} chars from start...]\n${str.slice(-maxLength)}`,
       truncated: true,
     };
   } else {
-    // Keep the start (default)
     return {
       text: `${str.slice(0, maxLength)}\n[...truncated ${str.length - maxLength} chars...]`,
       truncated: true,

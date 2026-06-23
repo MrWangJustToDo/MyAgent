@@ -75,7 +75,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
     throw new Error(`Parent agent not found: ${parentAgentId}`);
   }
 
-  const { agent: parentAgent, sandbox } = parentManagedAgent;
+  const { agent: parentAgent } = parentManagedAgent;
 
   // Get resources from parent agent
   const parentContext = parentAgent.getContext();
@@ -109,7 +109,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
   // Always clear customTools added by createManagedAgent (todo, webfetch, websearch)
   // since subagents should only have their explicitly configured tool set.
   const subagentContext = subagent.getContext() ?? undefined;
-  const subagentTools = customTools !== undefined ? customTools : createSubagentTools(sandbox, subagentContext);
+  const subagentTools = customTools !== undefined ? customTools : createSubagentTools(subagentContext);
   subagent.setTools(subagentTools);
   subagent.customTools = {};
 

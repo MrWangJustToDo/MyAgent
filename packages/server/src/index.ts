@@ -1,40 +1,44 @@
 #!/usr/bin/env node
 
 import { serve } from "@hono/node-server";
-import { RESPONSE_ALREADY_SENT } from "@hono/node-server/utils/response";
-import { agentManager, configureSandboxEnv } from "@my-agent/core";
-import { pipeAgentUIStreamToResponse } from "ai";
+import { registerCoreEnv } from "@my-agent/core";
+import { createNodeEnv } from "@my-agent/node";
 import "dotenv/config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
-import { createServerAgent } from "./agent.js";
-import { runCompact } from "./compact.js";
-
-import type { HttpBindings } from "@hono/node-server";
-import type { Agent } from "@my-agent/core";
+import { commandRoutes } from "./routes/command.js";
+import { envRoutes } from "./routes/env.js";
+import { fetchRoutes } from "./routes/fetch.js";
+import { fsRoutes } from "./routes/fs.js";
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
 const PORT = parseInt(process.env.SERVER_PORT || "3100", 10);
-const MODEL = process.env.MODEL || "qwen3:8b";
-const PROVIDER = (process.env.PROVIDER || "ollama") as "ollama" | "openRouter" | "openaiCompatible" | "deepseek";
-const API_URL = process.env.API_URL || "http://localhost:11434";
-const API_KEY = process.env.API_KEY || "";
 const ROOT_PATH = process.env.ROOT_PATH || process.cwd();
-const MAX_ITERATIONS = parseInt(process.env.MAX_ITERATIONS || "50", 10);
-const MCP_CONFIG_PATH = process.env.MCP_CONFIG_PATH || "";
-const SANDBOX_ENV = (process.env.SANDBOX_ENV || "local") as "local" | "native" | "remote";
+const SANDBOX_ENV = process.env.SANDBOX_ENV || "local";
 
-configureSandboxEnv(SANDBOX_ENV);
+registerCoreEnv(createNodeEnv({ rootPath: ROOT_PATH, mode: SANDBOX_ENV === "native" ? "native" : "os" }));
+
+// ============================================================================
+// RPC Routes (chained for AppType inference)
+// ============================================================================
+
+const api = new Hono()
+  .route("/env", envRoutes)
+  .route("/fs", fsRoutes)
+  .route("/command", commandRoutes)
+  .route("/fetch", fetchRoutes);
+
+export type AppType = typeof api;
 
 // ============================================================================
 // App Setup
 // ============================================================================
 
-const app = new Hono<{ Bindings: HttpBindings }>();
+const app = new Hono();
 
 app.use(
   "*",
@@ -47,172 +51,20 @@ app.use(
     },
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type"],
-    exposeHeaders: ["X-Request-Id"],
   })
 );
 
-// ============================================================================
-// Agent Lifecycle
-// ============================================================================
-
-let agent: Agent | null = null;
-let initError: Error | null = null;
-let currentAbortController: AbortController | null = null;
-
-async function initAgent() {
-  try {
-    console.log(`[server] Initializing agent: model=${MODEL}, provider=${PROVIDER}, rootPath=${ROOT_PATH}`);
-    agent = await createServerAgent({
-      model: MODEL,
-      provider: PROVIDER,
-      url: API_URL,
-      apiKey: API_KEY,
-      rootPath: ROOT_PATH,
-      maxIterations: MAX_ITERATIONS,
-      mcpConfigPath: MCP_CONFIG_PATH || undefined,
-    });
-    console.log("[server] Agent initialized successfully");
-  } catch (err) {
-    initError = err instanceof Error ? err : new Error(String(err));
-    console.error("[server] Agent initialization failed:", initError.message);
-  }
-}
-
-// ============================================================================
-// Routes
-// ============================================================================
-
-app.get("/api/health", (c) => {
-  if (agent) {
-    return c.json({
-      status: "ready",
-      model: MODEL,
-      provider: PROVIDER,
-      sandboxEnv: SANDBOX_ENV,
-      rootPath: ROOT_PATH,
-      agentStatus: agent.status,
-    });
-  }
-  if (initError) {
-    return c.json({ status: "error", error: initError.message }, 503);
-  }
-  return c.json({ status: "initializing" });
+app.get("/health", (c) => {
+  return c.json({ status: "ok", rootPath: ROOT_PATH, sandboxEnv: SANDBOX_ENV });
 });
 
-app.post("/api/chat", async (c) => {
-  if (!agent) {
-    return c.json({ error: "Agent not ready" }, 503);
-  }
-
-  const body = await c.req.json();
-  const { messages } = body;
-
-  currentAbortController = new AbortController();
-
-  const onDisconnect = () => {
-    currentAbortController?.abort();
-  };
-  c.req.raw.signal.addEventListener("abort", onDisconnect);
-
-  try {
-    await pipeAgentUIStreamToResponse({
-      response: c.env.outgoing,
-      agent,
-      uiMessages: messages,
-      abortSignal: currentAbortController.signal,
-      onFinish: () => {
-        currentAbortController = null;
-      },
-    });
-    return RESPONSE_ALREADY_SENT;
-  } catch (err) {
-    currentAbortController = null;
-    const error = err instanceof Error ? err : new Error(String(err));
-    return c.json({ error: error.message }, 500);
-  }
-});
-
-app.get("/api/usage", (c) => {
-  if (!agent) {
-    return c.json({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
-  }
-  const context = agent.getContext();
-  if (!context) {
-    return c.json({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
-  }
-  const usage = context.getTotalUsage();
-  const percent = context.getTokenLimitPercent();
-  return c.json({ ...usage, percent });
-});
-
-app.post("/api/chat/stop", (c) => {
-  if (currentAbortController) {
-    currentAbortController.abort();
-    currentAbortController = null;
-    return c.json({ stopped: true });
-  }
-  return c.json({ stopped: false });
-});
-
-// ============================================================================
-// Session Endpoints
-// ============================================================================
-
-app.get("/api/sessions", async (c) => {
-  if (!agent) return c.json({ error: "Agent not ready" }, 503);
-  const store = agent.getSessionStore();
-  if (!store) return c.json([]);
-  const sessions = await store.list();
-  return c.json(sessions);
-});
-
-app.get("/api/sessions/:id", async (c) => {
-  if (!agent) return c.json({ error: "Agent not ready" }, 503);
-  const store = agent.getSessionStore();
-  if (!store) return c.json({ error: "Session store not available" }, 500);
-  const session = await store.load(c.req.param("id"));
-  if (!session) return c.json({ error: "Session not found" }, 404);
-  return c.json(session);
-});
-
-app.post("/api/sessions/:id/resume", async (c) => {
-  if (!agent) return c.json({ error: "Agent not ready" }, 503);
-  try {
-    const result = await agentManager.resumeSession(agent.id, c.req.param("id"));
-    return c.json(result);
-  } catch (err) {
-    const error = err instanceof Error ? err : new Error(String(err));
-    return c.json({ error: error.message }, 400);
-  }
-});
-
-app.post("/api/compact", async (c) => {
-  if (!agent) return c.json({ error: "Agent not ready" }, 503);
-  const body = await c.req.json().catch(() => ({}));
-  const focus = typeof body.focus === "string" ? body.focus.trim() || undefined : undefined;
-  const result = await runCompact(agent, focus);
-  if (!result.ok) {
-    return c.json(result, 400);
-  }
-  return c.json(result);
-});
-
-app.post("/api/sessions/messages", async (c) => {
-  if (!agent) return c.json({ error: "Agent not ready" }, 503);
-  const body = await c.req.json();
-  const { messages } = body;
-  if (messages) {
-    agent.updateSessionUIMessages(messages);
-  }
-  return c.json({ ok: true });
-});
+app.route("/api", api);
 
 // ============================================================================
 // Start
 // ============================================================================
 
-await initAgent();
-
 serve({ fetch: app.fetch, port: PORT }, (info) => {
-  console.log(`[server] Listening on http://localhost:${info.port}`);
+  console.log(`[server] CoreEnv HTTP server listening on http://localhost:${info.port}`);
+  console.log(`[server] rootPath=${ROOT_PATH}, sandbox=${SANDBOX_ENV}`);
 });

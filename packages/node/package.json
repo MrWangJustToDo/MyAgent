@@ -1,0 +1,36 @@
+{
+  "name": "@my-agent/node",
+  "version": "0.0.1",
+  "description": "Node.js runtime environment for @my-agent/core",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@my-agent/core": "workspace:*",
+    "@ai-sdk/mcp": "^1.0.52",
+    "@anthropic-ai/sandbox-runtime": "^0.0.52",
+    "mime-types": "^3.0.2"
+  },
+  "devDependencies": {
+    "@types/mime-types": "^3.0.1",
+    "@types/node": "^22.19.15",
+    "tsdown": "^0.21.10",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,9 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { getFile, getFileModifiedTime, withDuration } from "./util/helpers.js";
+import { getEnv } from "../../env.js";
 
-import type { Sandbox } from "../../environment";
+import { getFile, getFileModifiedTime, withDuration } from "./util/helpers.js";
 
 /**
  * Creates a move-file tool using Vercel AI SDK.
@@ -14,7 +14,7 @@ import type { Sandbox } from "../../environment";
  *
  * Requires user approval before execution.
  */
-export const createMoveFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
+export const createMoveFileTool = () => {
   return tool({
     description:
       "Moves or renames a file from a source path to a destination path. Requires the modifiedTime from a previous read operation to ensure the file hasn't been modified since it was read. The source file will be removed after successful copy to destination.",
@@ -41,8 +41,7 @@ export const createMoveFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
     needsApproval: true,
     execute: async ({ sourcePath, modifiedTime, targetPath }) => {
       return withDuration(async () => {
-        // Validate modification time and get content
-        const fileRes = await getFile(sandbox, sourcePath);
+        const fileRes = await getFile(sourcePath);
         const currentModifiedTime = fileRes.modifiedTime;
 
         if (currentModifiedTime !== modifiedTime) {
@@ -51,7 +50,8 @@ export const createMoveFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
           );
         }
 
-        const targetExists = await sandbox.filesystem.exists(targetPath);
+        const fs = getEnv().fs;
+        const targetExists = await fs.exists(targetPath);
 
         if (targetExists) {
           throw new Error(`Target file already exists: ${targetPath}`);
@@ -59,14 +59,10 @@ export const createMoveFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
 
         const content = fileRes.content;
 
-        // Write to target location
-        await sandbox.filesystem.writeFile(targetPath, content);
+        await fs.writeFile(targetPath, content);
+        await fs.remove(sourcePath);
 
-        // Remove source file
-        await sandbox.filesystem.remove(sourcePath);
-
-        // Get new modification time of target file
-        const newModifiedTime = await getFileModifiedTime(sandbox, targetPath);
+        const newModifiedTime = await getFileModifiedTime(targetPath);
 
         return {
           sourcePath,

@@ -7,12 +7,12 @@
  * one copy of uiMessages regardless of how many saves occur.
  */
 
+import { getEnv } from "../../env.js";
 import { generateId } from "../utils.js";
 
 import { SESSION_DIR, SESSION_FILE_SUFFIX, SESSION_VERSION } from "./types.js";
 
 import type { SessionData, SessionMeta } from "./types.js";
-import type { SandboxFileSystem } from "../../environment/types.js";
 
 // ============================================================================
 // Constants
@@ -29,8 +29,6 @@ const EMPTY_USAGE = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 // ============================================================================
 
 export class SessionStore {
-  private fs: SandboxFileSystem;
-
   /**
    * Hash of the last saved JSON string per session.
    * Used to skip writes when nothing changed.
@@ -42,8 +40,8 @@ export class SessionStore {
    */
   private saveLocks: Map<string, Promise<void>> = new Map();
 
-  constructor(filesystem: SandboxFileSystem) {
-    this.fs = filesystem;
+  private get fs() {
+    return getEnv().fs;
   }
 
   // ==========================================================================

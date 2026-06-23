@@ -8,7 +8,6 @@ import { cleanupOrphanedToolCache } from "../tools/util/tool-output-cache.js";
 import { createCompactedMessages } from "./auto-compact.js";
 
 import type { CompactionResult } from "./types.js";
-import type { Sandbox } from "../../environment/types.js";
 import type { AgentContext } from "../agent-context/agent-context.js";
 
 export interface ApplyCompactionResultOptions {
@@ -23,7 +22,6 @@ export interface ApplyCompactionResultOptions {
  */
 export function applyCompactionResult(
   context: AgentContext,
-  sandbox: Sandbox,
   result: CompactionResult,
   options?: ApplyCompactionResultOptions
 ): boolean {
@@ -39,7 +37,7 @@ export function applyCompactionResult(
   context.clearTools();
 
   const allMessages = context.getMessages();
-  cleanupOrphanedToolCache(sandbox, allMessages, absoluteCut).catch((err) => {
+  cleanupOrphanedToolCache(allMessages, absoluteCut).catch((err) => {
     const error = err instanceof Error ? err : new Error(String(err));
     options?.onCacheCleanupError?.(error);
   });

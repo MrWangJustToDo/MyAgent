@@ -4,12 +4,11 @@
  * Stores memories as markdown files with YAML frontmatter in `.agent-memory/`.
  * Auto-generates a `MEMORY.md` index that is injected into the system prompt.
  *
- * Uses the sandbox filesystem for all I/O, ensuring compatibility with
- * local/native/remote sandboxes.
+ * Uses getEnv().fs for all I/O.
  *
  * @example
  * ```typescript
- * const manager = new MemoryManager({ sandbox, rootPath: "/project", logger });
+ * const manager = new MemoryManager({ rootPath: "/project" }, logger);
  * await manager.initialize();
  *
  * await manager.writeMemory("user-prefers-tabs", "user", "Prefers tabs", "Details...");
@@ -17,8 +16,9 @@
  * ```
  */
 
-import * as nodePath from "path";
 import { parse as parseYaml } from "yaml";
+
+import { getEnv } from "../../env.js";
 
 import {
   DEFAULT_CONSOLIDATE_THRESHOLD,
@@ -30,7 +30,6 @@ import {
 } from "./types.js";
 
 import type { Memory, MemoryManagerConfig, MemoryMetadata, MemoryType } from "./types.js";
-import type { Sandbox } from "../../environment/types.js";
 import type { AgentLog } from "../agent-log/agent-log.js";
 
 // ============================================================================
@@ -38,7 +37,6 @@ import type { AgentLog } from "../agent-log/agent-log.js";
 // ============================================================================
 
 export class MemoryManager {
-  private sandbox: Sandbox;
   private rootPath: string;
   private memoryDir: string;
   private memoryPath: string;
@@ -54,12 +52,12 @@ export class MemoryManager {
   /** Debounce timeout for index refresh */
   private refreshTimeout?: ReturnType<typeof setTimeout>;
 
-  constructor(sandbox: Sandbox, config: MemoryManagerConfig, logger?: AgentLog) {
-    this.sandbox = sandbox;
+  constructor(config: MemoryManagerConfig, logger?: AgentLog) {
     this.rootPath = config.rootPath;
     this.memoryDir = config.memoryDir ?? DEFAULT_MEMORY_DIR;
-    this.memoryPath = nodePath.join(this.rootPath, this.memoryDir);
-    this.indexPath = nodePath.join(this.memoryPath, MEMORY_INDEX_FILENAME);
+    // placeholder
+    this.memoryPath = this.memoryDir;
+    this.indexPath = MEMORY_INDEX_FILENAME;
     this.logger = logger;
     this.consolidateThreshold = config.consolidateThreshold ?? DEFAULT_CONSOLIDATE_THRESHOLD;
     this.maxIndexLines = config.maxIndexLines ?? DEFAULT_MAX_INDEX_LINES;
@@ -70,9 +68,12 @@ export class MemoryManager {
    * Ensure the memory directory exists and load the initial index.
    */
   async initialize(): Promise<void> {
-    const exists = await this.sandbox.filesystem.exists(this.memoryPath);
+    const { path } = getEnv();
+    this.memoryPath = await path.join(this.rootPath, this.memoryDir);
+    this.indexPath = await path.join(this.memoryPath, MEMORY_INDEX_FILENAME);
+    const exists = await getEnv().fs.exists(this.memoryPath);
     if (!exists) {
-      await this.sandbox.filesystem.mkdir(this.memoryPath);
+      await getEnv().fs.mkdir(this.memoryPath);
       this.logger?.info("memory", `Created memory directory: ${this.memoryDir}`);
     }
 
@@ -96,11 +97,11 @@ export class MemoryManager {
    * Read the full content of a specific memory file.
    */
   async readMemory(filename: string): Promise<string | null> {
-    const filePath = nodePath.join(this.memoryPath, filename);
+    const filePath = getEnv().path.join(this.memoryPath, filename);
     try {
-      const exists = await this.sandbox.filesystem.exists(filePath);
+      const exists = await getEnv().fs.exists(filePath);
       if (!exists) return null;
-      return await this.sandbox.filesystem.readFile(filePath);
+      return await getEnv().fs.readFile(filePath);
     } catch {
       return null;
     }
@@ -113,15 +114,15 @@ export class MemoryManager {
     const result: Memory[] = [];
 
     try {
-      const entries = await this.sandbox.filesystem.readdir(this.memoryPath);
+      const entries = await getEnv().fs.readdir(this.memoryPath);
       const mdFiles = entries
         .filter((e) => e.type === "file" && e.name.endsWith(".md") && e.name !== MEMORY_INDEX_FILENAME)
         .sort((a, b) => a.name.localeCompare(b.name));
 
       for (const entry of mdFiles) {
         try {
-          const filePath = nodePath.join(this.memoryPath, entry.name);
-          const content = await this.sandbox.filesystem.readFile(filePath);
+          const filePath = getEnv().path.join(this.memoryPath, entry.name);
+          const content = await getEnv().fs.readFile(filePath);
           const { metadata, body } = this.parseFrontmatter(content);
 
           result.push({
@@ -151,7 +152,7 @@ export class MemoryManager {
    */
   async getMemoryCount(): Promise<number> {
     try {
-      const entries = await this.sandbox.filesystem.readdir(this.memoryPath);
+      const entries = await getEnv().fs.readdir(this.memoryPath);
       return entries.filter((e) => e.type === "file" && e.name.endsWith(".md") && e.name !== MEMORY_INDEX_FILENAME)
         .length;
     } catch {
@@ -179,16 +180,16 @@ export class MemoryManager {
       .replace(/\s+/g, "-")
       .replace(/[^a-z0-9-]/g, "");
     const filename = `${slug}.md`;
-    const filePath = nodePath.join(this.memoryPath, filename);
+    const filePath = getEnv().path.join(this.memoryPath, filename);
 
     const now = new Date().toISOString();
 
     // Check if file already exists to preserve createdAt
     let createdAt = now;
     try {
-      const existing = await this.sandbox.filesystem.exists(filePath);
+      const existing = await getEnv().fs.exists(filePath);
       if (existing) {
-        const existingContent = await this.sandbox.filesystem.readFile(filePath);
+        const existingContent = await getEnv().fs.readFile(filePath);
         const { metadata } = this.parseFrontmatter(existingContent);
         if (metadata?.createdAt) {
           createdAt = metadata.createdAt;
@@ -211,7 +212,7 @@ export class MemoryManager {
       "",
     ].join("\n");
 
-    await this.sandbox.filesystem.writeFile(filePath, content);
+    await getEnv().fs.writeFile(filePath, content);
     this.logger?.info("memory", `Wrote memory: ${filename}`);
 
     this.scheduleRefreshIndex();
@@ -222,9 +223,9 @@ export class MemoryManager {
    * Delete a memory file, then rebuild the index.
    */
   async deleteMemory(filename: string): Promise<void> {
-    const filePath = nodePath.join(this.memoryPath, filename);
+    const filePath = getEnv().path.join(this.memoryPath, filename);
     try {
-      await this.sandbox.filesystem.remove(filePath);
+      await getEnv().fs.remove(filePath);
       this.logger?.info("memory", `Deleted memory: ${filename}`);
     } catch {
       this.logger?.warn("memory", `Failed to delete memory: ${filename}`);
@@ -237,11 +238,11 @@ export class MemoryManager {
    */
   async deleteAllMemories(): Promise<void> {
     try {
-      const entries = await this.sandbox.filesystem.readdir(this.memoryPath);
+      const entries = await getEnv().fs.readdir(this.memoryPath);
       for (const entry of entries) {
         if (entry.type === "file" && entry.name.endsWith(".md") && entry.name !== MEMORY_INDEX_FILENAME) {
-          const filePath = nodePath.join(this.memoryPath, entry.name);
-          await this.sandbox.filesystem.remove(filePath);
+          const filePath = getEnv().path.join(this.memoryPath, entry.name);
+          await getEnv().fs.remove(filePath);
         }
       }
     } catch {
@@ -285,8 +286,7 @@ export class MemoryManager {
 
     const indexContent = lines.length > 0 ? lines.join("\n") + "\n" : "";
 
-    // Apply size limit
-    const bytes = Buffer.byteLength(indexContent, "utf-8");
+    const bytes = getEnv().byteLength(indexContent, "utf-8");
     if (bytes > this.maxIndexBytes) {
       const truncated = indexContent.slice(0, this.maxIndexBytes);
       const lastNewline = truncated.lastIndexOf("\n");
@@ -297,7 +297,7 @@ export class MemoryManager {
 
     // Write the index file
     try {
-      await this.sandbox.filesystem.writeFile(this.indexPath, this.cachedIndex);
+      await getEnv().fs.writeFile(this.indexPath, this.cachedIndex);
     } catch {
       this.logger?.warn("memory", "Failed to write MEMORY.md index");
     }

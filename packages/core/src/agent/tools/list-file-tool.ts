@@ -1,10 +1,10 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { getEnv } from "../../env.js";
+
 import { OUTPUT_LIMITS, withDuration } from "./util/helpers.js";
 import { listFileOutputSchema } from "./util/types.js";
-
-import type { Sandbox } from "../../environment";
 
 /** Default number of entries to return per page */
 const DEFAULT_LIMIT = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
@@ -16,7 +16,7 @@ const DEFAULT_LIMIT = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
  * Returns the name, type (file or directory), size, and modification date.
  * Supports pagination with offset/limit parameters.
  */
-export const createListFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
+export const createListFileTool = () => {
   return tool({
     description:
       "Lists files and directories in the specified directory. Returns the name, type (file or directory), size, and modification date for each entry. Supports pagination with offset/limit.",
@@ -48,13 +48,14 @@ export const createListFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
         const skip = offset ?? 0;
         const take = limit ?? DEFAULT_LIMIT;
 
-        const exists = await sandbox.filesystem.exists(path);
+        const fs = getEnv().fs;
+        const exists = await fs.exists(path);
 
         if (!exists) {
           throw new Error(`Directory does not exist: ${path}`);
         }
 
-        const allEntries = await sandbox.filesystem.readdir(path);
+        const allEntries = await fs.readdir(path);
 
         // Apply pagination
         const paginatedEntries = allEntries.slice(skip, skip + take);

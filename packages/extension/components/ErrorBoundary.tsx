@@ -1,5 +1,3 @@
-import { Button } from "@heroui/react";
-import { AlertTriangleIcon } from "lucide-react";
 import { Component } from "react";
 
 import type { ErrorInfo, ReactNode } from "react";
@@ -30,20 +28,35 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
-          <AlertTriangleIcon className="text-danger h-10 w-10" />
-          <h2 className="text-sm font-semibold">Something went wrong</h2>
-          <p className="text-default-500 max-w-xs text-center text-xs">
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 12,
+            padding: 24,
+            height: "100%",
+          }}
+        >
+          <h2 style={{ fontSize: 14, fontWeight: 600 }}>Something went wrong</h2>
+          <p style={{ color: "#888", maxWidth: 300, textAlign: "center", fontSize: 12 }}>
             {this.state.error?.message || "An unexpected error occurred."}
           </p>
-          <Button
-            size="sm"
-            color="primary"
-            variant="flat"
-            onPress={() => this.setState({ hasError: false, error: null })}
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{
+              padding: "6px 16px",
+              background: "#0070f3",
+              color: "#fff",
+              border: "none",
+              borderRadius: 4,
+              cursor: "pointer",
+              fontSize: 12,
+            }}
           >
             Try Again
-          </Button>
+          </button>
         </div>
       );
     }

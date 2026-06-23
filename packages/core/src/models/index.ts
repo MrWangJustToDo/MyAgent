@@ -30,3 +30,20 @@ export {
   registerModel,
   registerModels,
 } from "./registry.js";
+
+// Model factory (create LanguageModel instances from config or registry ID)
+export {
+  createModel,
+  createModelFromId,
+  createOllamaModel,
+  createOpenAIModel,
+  createOpenAICompatibleModel,
+  createOpenRouterModel,
+  createDeepSeekModel,
+  getOllamaBuildInTools,
+  type ProviderType,
+  type ProviderConfig,
+  type OllamaModelOptions,
+  type CreateModelFromIdOptions,
+  type CreateModelFromIdResult,
+} from "./factory.js";

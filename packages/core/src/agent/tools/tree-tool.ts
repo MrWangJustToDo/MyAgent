@@ -1,10 +1,10 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { getEnv } from "../../env.js";
+
 import { OUTPUT_LIMITS, truncateString, withDuration } from "./util/helpers.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
-
-import type { Sandbox } from "../../environment";
 
 /** Maximum characters for tree output */
 const MAX_TREE_CHARS = OUTPUT_LIMITS.MAX_CONTENT_CHARS;
@@ -18,7 +18,7 @@ const MAX_TREE_ENTRIES = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
  * This tool displays the directory tree structure in a hierarchical format.
  * Useful for understanding project structure.
  */
-export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
+export const createTreeTool = () => {
   return tool({
     description:
       "Displays the directory tree structure. Shows files and directories in a hierarchical format. Useful for understanding project structure.",
@@ -75,7 +75,8 @@ export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
         // Add file count summary
         treeCommand += " --noreport";
 
-        let result = await sandbox.runCommand(treeCommand + " 2>/dev/null");
+        const env = getEnv();
+        let result = await env.runCommand(treeCommand + " 2>/dev/null");
 
         // If tree command not available, use find-based fallback
         if (result.exitCode !== 0 || result.stdout.trim() === "") {
@@ -102,7 +103,7 @@ export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
 
           findCommand += ` | sort | head -${MAX_TREE_ENTRIES}`;
 
-          result = await sandbox.runCommand(findCommand);
+          result = await env.runCommand(findCommand);
 
           if (result.exitCode !== 0) {
             throw new Error(`Failed to list directory tree: ${result.stderr}`);
@@ -112,7 +113,7 @@ export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
           const paths = result.stdout.split("\n").filter((p) => p.trim());
           const rawTree = formatAsTree(paths, rootPath);
 
-          const cached = await maybeCacheOutput(sandbox, rawTree, `${toolCallId}-tree`);
+          const cached = await maybeCacheOutput(rawTree, `${toolCallId}-tree`);
           let tree: string;
           let truncated: boolean;
           if (cached.cachedOutputPath) {
@@ -137,7 +138,7 @@ export const createTreeTool = ({ sandbox }: { sandbox: Sandbox }) => {
 
         const lines = result.stdout.split("\n").filter((l) => l.trim());
 
-        const cached = await maybeCacheOutput(sandbox, result.stdout, `${toolCallId}-tree`);
+        const cached = await maybeCacheOutput(result.stdout, `${toolCallId}-tree`);
         let truncatedTree: string;
         let truncated: boolean;
         if (cached.cachedOutputPath) {

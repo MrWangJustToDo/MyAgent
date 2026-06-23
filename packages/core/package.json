@@ -10,10 +10,6 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
-    },
-    "./ext": {
-      "types": "./dist/ext.d.mts",
-      "import": "./dist/ext.mjs"
     }
   },
   "files": [
@@ -26,23 +22,19 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/deepseek": "^2.0.35",
+    "@ai-sdk/deepseek": "^2.0.39",
     "@ai-sdk/devtools": "^0.0.17",
-    "@ai-sdk/mcp": "^1.0.46",
-    "@ai-sdk/openai": "^3.0.69",
-    "@anthropic-ai/sandbox-runtime": "^0.0.52",
-    "@openrouter/ai-sdk-provider": "^2.9.0",
-    "ai": "^6.0.199",
-    "ai-sdk-ollama": "^3.8.6",
-    "computesdk": "^2.6.0",
-    "mime-types": "^3.0.2",
+    "@ai-sdk/mcp": "^1.0.52",
+    "@ai-sdk/openai": "^3.0.73",
+    "@openrouter/ai-sdk-provider": "^2.9.1",
+    "ai": "^6.0.208",
+    "ai-sdk-ollama": "^3.8.8",
+    "pathe": "^2.0.3",
     "turndown": "^7.2.4",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/mime-types": "^3.0.1",
-    "@types/node": "^22.19.15",
     "@types/turndown": "^5.0.6",
     "tsdown": "^0.21.10",
     "typescript": "^5.6.3"

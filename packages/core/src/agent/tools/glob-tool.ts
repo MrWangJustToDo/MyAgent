@@ -1,12 +1,12 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { getEnv } from "../../env.js";
+
 import { OUTPUT_LIMITS, withDuration } from "./util/helpers.js";
 import { DEFAULT_EXCLUDE_DIRS, SEARCH_COMMAND_TIMEOUT } from "./util/search-command.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { globOutputSchema } from "./util/types.js";
-
-import type { Sandbox } from "../../environment";
 
 /** Default number of files to return per page */
 const DEFAULT_LIMIT = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
@@ -83,7 +83,6 @@ function buildFindCommand(
 }
 
 async function runGlobSearch(
-  sandbox: Sandbox,
   pattern: string,
   searchPath: string,
   options: {
@@ -92,24 +91,25 @@ async function runGlobSearch(
     fetchCount: number;
   }
 ): Promise<string> {
+  const env = getEnv();
   const timeout = SEARCH_COMMAND_TIMEOUT;
   const fdCommand = buildFdCommand("fd", pattern, searchPath, options);
-  const fdResult = await sandbox.runCommand(fdCommand, { timeout });
+  const fdResult = await env.runCommand(fdCommand, { timeout });
   if (fdResult.exitCode !== 127) {
     return fdResult.stdout;
   }
 
   const fdfindCommand = buildFdCommand("fdfind", pattern, searchPath, options);
-  const fdfindResult = await sandbox.runCommand(fdfindCommand, { timeout });
+  const fdfindResult = await env.runCommand(fdfindCommand, { timeout });
   if (fdfindResult.exitCode !== 127) {
     return fdfindResult.stdout;
   }
 
-  const findResult = await sandbox.runCommand(buildFindCommand(pattern, searchPath, options), { timeout });
+  const findResult = await env.runCommand(buildFindCommand(pattern, searchPath, options), { timeout });
   return findResult.stdout;
 }
 
-export const createGlobTool = ({ sandbox }: { sandbox: Sandbox }) => {
+export const createGlobTool = () => {
   return tool({
     description:
       "Finds files matching a glob pattern. Supports patterns like '**/*.js', 'src/**/*.ts', '*.json', etc. " +
@@ -159,7 +159,7 @@ export const createGlobTool = ({ sandbox }: { sandbox: Sandbox }) => {
           fetchCount,
         };
 
-        const rawOutput = await runGlobSearch(sandbox, pattern, searchPath, searchOptions);
+        const rawOutput = await runGlobSearch(pattern, searchPath, searchOptions);
 
         const allFiles = rawOutput
           .split("\n")
@@ -187,7 +187,7 @@ export const createGlobTool = ({ sandbox }: { sandbox: Sandbox }) => {
 
         let contentTruncated = false;
         const fullOutputText = paginatedFiles.join("\n");
-        const cached = await maybeCacheOutput(sandbox, fullOutputText, `${toolCallId}-glob`);
+        const cached = await maybeCacheOutput(fullOutputText, `${toolCallId}-glob`);
         const { cachedOutputPath } = cached;
         if (cachedOutputPath) contentTruncated = true;
 

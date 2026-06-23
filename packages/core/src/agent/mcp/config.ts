@@ -1,7 +1,8 @@
+import { getEnv } from "../../env.js";
+
 import { mcpConfigSchema } from "./types.js";
 
 import type { McpConfig } from "./types.js";
-import type { Sandbox } from "../../environment";
 import type { AgentLog } from "../agent-log/agent-log.js";
 
 // ============================================================================
@@ -18,14 +19,15 @@ export const DEFAULT_MCP_CONFIG_PATH = ".opencode/mcp.json";
  * Load MCP configuration from a JSON file on disk.
  * Returns null if the file does not exist or is invalid (MCP disabled).
  */
-export async function loadMcpConfig(sandbox: Sandbox, log: AgentLog, configPath?: string): Promise<McpConfig | null> {
+export async function loadMcpConfig(log: AgentLog, configPath?: string): Promise<McpConfig | null> {
   const path = configPath ?? DEFAULT_MCP_CONFIG_PATH;
 
   try {
-    const exists = await sandbox.filesystem.exists(path);
+    const fs = getEnv().fs;
+    const exists = await fs.exists(path);
     if (!exists) return null;
 
-    const content = await sandbox.filesystem.readFile(path);
+    const content = await fs.readFile(path);
     const parsed = JSON.parse(content);
     return mcpConfigSchema.parse(parsed);
   } catch (e) {

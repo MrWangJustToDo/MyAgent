@@ -1,6 +1,3 @@
-// Note: Environment types (Sandbox, SandboxFileSystem, etc.) are exported from './environment'
-// Import from there to avoid duplicate exports
-
 // Constants
 export const DEFAULT_OLLAMA_URL = "http://localhost:11434";
 

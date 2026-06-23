@@ -17,6 +17,8 @@
   "files": [],
   "references": [
     { "path": "./packages/core" },
+    { "path": "./packages/node" },
+    { "path": "./packages/app" },
     { "path": "./packages/cli" },
     { "path": "./packages/extension" },
     { "path": "./packages/server" }

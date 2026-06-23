@@ -1,35 +1,43 @@
-import { Button, Card, CardBody, CardHeader, Chip, Divider, Input, Spinner } from "@heroui/react";
-import { BotIcon, ExternalLinkIcon, RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { checkServerHealth, useServerConfig } from "@/hooks/useServerConfig";
+
+import type { ChangeEvent } from "react";
+
+const PROVIDERS = [
+  { value: "ollama", label: "Ollama" },
+  { value: "openRouter", label: "OpenRouter" },
+  { value: "openaiCompatible", label: "OpenAI Compatible" },
+  { value: "deepseek", label: "DeepSeek" },
+] as const;
 
 function App() {
   const url = useServerConfig((s) => s.url);
   const connected = useServerConfig((s) => s.connected);
   const model = useServerConfig((s) => s.model);
   const provider = useServerConfig((s) => s.provider);
+  const apiKey = useServerConfig((s) => s.apiKey);
+  const rootPath = useServerConfig((s) => s.rootPath);
   const actions = useServerConfig.getActions();
   const [checking, setChecking] = useState(false);
 
   const handleCheck = useCallback(async () => {
     setChecking(true);
     const health = await checkServerHealth(url);
-    if (health && health.status === "ready") {
+    if (health && health.status === "ok") {
       actions.setConnected(true);
-      actions.setModel(health.model ?? "");
-      actions.setProvider(health.provider ?? "");
+      actions.setRootPath(health.rootPath ?? "");
+      actions.setSandboxEnv(health.sandboxEnv ?? "");
     } else {
       actions.setConnected(false);
-      actions.setModel("");
-      actions.setProvider("");
+      actions.setRootPath("");
     }
     setChecking(false);
-  }, [url]);
+  }, [url, actions]);
 
   useEffect(() => {
     handleCheck();
-  }, []);
+  }, [handleCheck]);
 
   const openSidePanel = async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -40,55 +48,113 @@ function App() {
   };
 
   return (
-    <div className="p-2">
-      <Card className="min-w-[300px]" radius="sm">
-        <CardHeader className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BotIcon className="text-primary h-5 w-5" />
-            <span className="font-semibold">My Agent</span>
-          </div>
-          <Chip size="sm" variant="dot" color={connected ? "success" : "danger"}>
-            {connected ? "Connected" : "Disconnected"}
-          </Chip>
-        </CardHeader>
-        <Divider />
-        <CardBody className="gap-3">
-          <Input
-            label="Server URL"
-            size="sm"
+    <div style={{ padding: 8, minWidth: 320 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <span style={{ fontWeight: 600 }}>My Agent</span>
+        <span
+          style={{
+            fontSize: 12,
+            padding: "2px 8px",
+            borderRadius: 12,
+            background: connected ? "#d4edda" : "#f8d7da",
+            color: connected ? "#155724" : "#721c24",
+          }}
+        >
+          {connected ? "Connected" : "Disconnected"}
+        </span>
+      </div>
+
+      {/* Server URL */}
+      <div style={{ marginBottom: 8 }}>
+        <label htmlFor="server-url" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+          Server URL
+        </label>
+        <div style={{ display: "flex", gap: 4 }}>
+          <input
+            id="server-url"
             value={url}
-            onChange={(e) => actions.setUrl(e.target.value)}
-            endContent={
-              <button onClick={handleCheck} className="text-default-400 hover:text-default-600">
-                {checking ? <Spinner size="sm" /> : <RefreshCwIcon className="h-4 w-4" />}
-              </button>
-            }
+            onChange={(e: ChangeEvent<HTMLInputElement>) => actions.setUrl(e.target.value)}
+            style={{ flex: 1, padding: "4px 8px", border: "1px solid #ccc", borderRadius: 4, fontSize: 13 }}
           />
-          {connected && (
-            <div className="text-default-500 flex flex-col gap-1 text-xs">
-              {model && (
-                <span>
-                  Model: <strong>{model}</strong>
-                </span>
-              )}
-              {provider && (
-                <span>
-                  Provider: <strong>{provider}</strong>
-                </span>
-              )}
-            </div>
-          )}
-          <Button
-            color="primary"
-            size="sm"
-            startContent={<ExternalLinkIcon className="h-4 w-4" />}
-            onPress={openSidePanel}
-            isDisabled={!connected}
-          >
-            Open Chat
-          </Button>
-        </CardBody>
-      </Card>
+          <button onClick={handleCheck} disabled={checking} style={{ padding: "4px 8px", fontSize: 12 }}>
+            {checking ? "..." : "Check"}
+          </button>
+        </div>
+      </div>
+
+      {/* Model config */}
+      <div style={{ marginBottom: 8 }}>
+        <label htmlFor="provider-select" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+          Provider
+        </label>
+        <select
+          id="provider-select"
+          value={provider}
+          onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+            actions.setProvider(e.target.value as (typeof PROVIDERS)[number]["value"])
+          }
+          style={{ width: "100%", padding: "4px 8px", border: "1px solid #ccc", borderRadius: 4, fontSize: 13 }}
+        >
+          {PROVIDERS.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ marginBottom: 8 }}>
+        <label htmlFor="model-input" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+          Model
+        </label>
+        <input
+          id="model-input"
+          value={model}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => actions.setModel(e.target.value)}
+          placeholder="e.g. qwen2.5-coder:7b"
+          style={{ width: "100%", padding: "4px 8px", border: "1px solid #ccc", borderRadius: 4, fontSize: 13 }}
+        />
+      </div>
+
+      {provider !== "ollama" && (
+        <div style={{ marginBottom: 8 }}>
+          <label htmlFor="apikey-input" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+            API Key
+          </label>
+          <input
+            id="apikey-input"
+            type="password"
+            value={apiKey}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => actions.setApiKey(e.target.value)}
+            style={{ width: "100%", padding: "4px 8px", border: "1px solid #ccc", borderRadius: 4, fontSize: 13 }}
+          />
+        </div>
+      )}
+
+      {connected && rootPath && (
+        <div style={{ fontSize: 12, color: "#666", marginBottom: 12 }}>
+          <div>
+            Root: <strong>{rootPath}</strong>
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={openSidePanel}
+        disabled={!connected}
+        style={{
+          width: "100%",
+          padding: "8px 16px",
+          background: connected ? "#0070f3" : "#ccc",
+          color: "#fff",
+          border: "none",
+          borderRadius: 4,
+          cursor: connected ? "pointer" : "not-allowed",
+          fontSize: 13,
+        }}
+      >
+        Open Chat
+      </button>
     </div>
   );
 }

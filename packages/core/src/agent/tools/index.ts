@@ -16,9 +16,6 @@ import type { createListSkillsTool } from "./list-skills-tool.js";
 import type { createLoadSkillTool } from "./load-skill-tool.js";
 import type { createTaskTool } from "./task-tool.js";
 import type { createTodoTool } from "./todo-tool.js";
-// import type { createWebfetchTool } from "./webfetch-tool.js";
-// import type { createWebsearchTool } from "./websearch-tool.js";
-import type { Sandbox } from "../../environment";
 import type { AgentContext } from "../agent-context/agent-context.js";
 
 export * from "./copy-file-tool.js";
@@ -50,8 +47,6 @@ export type Tools = {
   move_file: ReturnType<typeof createMoveFileTool>;
   read_file: ReturnType<typeof createReadFileTool>;
   write_file: ReturnType<typeof createWriteFileTool>;
-  // webfetch?: ReturnType<typeof createWebfetchTool>;
-  // websearch?: ReturnType<typeof createWebsearchTool>;
   glob: ReturnType<typeof createGlobTool>;
   grep: ReturnType<typeof createGrepTool>;
   tree: ReturnType<typeof createTreeTool>;
@@ -65,27 +60,25 @@ export type Tools = {
 };
 
 export const createTools = async ({
-  sandbox,
   context,
   processTools,
 }: {
-  sandbox: Sandbox;
   context?: AgentContext;
   processTools?: (t: Tools) => Promise<void>;
-}): Promise<Tools> => {
+} = {}): Promise<Tools> => {
   const res: Tools = {
-    copy_file: createCopyFileTool({ sandbox }),
-    delete_file: createDeleteFileTool({ sandbox }),
-    edit_file: createEditFileTool({ sandbox }),
-    list_file: createListFileTool({ sandbox }),
-    move_file: createMoveFileTool({ sandbox }),
-    read_file: createReadFileTool({ sandbox, context }),
-    write_file: createWriteFileTool({ sandbox }),
-    glob: createGlobTool({ sandbox }),
-    grep: createGrepTool({ sandbox }),
-    tree: createTreeTool({ sandbox }),
-    run_command: createRunCommandTool({ sandbox }),
-    search_replace: createSearchReplaceTool({ sandbox }),
+    copy_file: createCopyFileTool(),
+    delete_file: createDeleteFileTool(),
+    edit_file: createEditFileTool(),
+    list_file: createListFileTool(),
+    move_file: createMoveFileTool(),
+    read_file: createReadFileTool({ context }),
+    write_file: createWriteFileTool(),
+    glob: createGlobTool(),
+    grep: createGrepTool(),
+    tree: createTreeTool(),
+    run_command: createRunCommandTool(),
+    search_replace: createSearchReplaceTool(),
   };
 
   await processTools?.(res);

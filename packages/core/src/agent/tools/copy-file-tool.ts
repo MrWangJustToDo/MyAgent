@@ -1,16 +1,16 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { getFile, getFileModifiedTime, withDuration } from "./util/helpers.js";
+import { getEnv } from "../../env.js";
 
-import type { Sandbox } from "../../environment";
+import { getFile, getFileModifiedTime, withDuration } from "./util/helpers.js";
 
 /**
  * Creates a copy-file tool using Vercel AI SDK.
  *
  * Requires user approval before execution.
  */
-export const createCopyFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
+export const createCopyFileTool = () => {
   return tool({
     description:
       "Copies a file from a source path to a destination path. Requires the modifiedTime from a previous read operation to ensure the source file hasn't been modified since it was read.",
@@ -37,8 +37,7 @@ export const createCopyFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
     needsApproval: true,
     execute: async ({ sourcePath, modifiedTime, targetPath }) => {
       return withDuration(async () => {
-        // Validate modification time and get content
-        const fileRes = await getFile(sandbox, sourcePath);
+        const fileRes = await getFile(sourcePath);
         const currentModifiedTime = fileRes.modifiedTime;
 
         if (currentModifiedTime !== modifiedTime) {
@@ -47,7 +46,8 @@ export const createCopyFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
           );
         }
 
-        const targetExists = await sandbox.filesystem.exists(targetPath);
+        const fs = getEnv().fs;
+        const targetExists = await fs.exists(targetPath);
 
         if (targetExists) {
           throw new Error(`Target file already exists: ${targetPath}`);
@@ -55,10 +55,9 @@ export const createCopyFileTool = ({ sandbox }: { sandbox: Sandbox }) => {
 
         const content = fileRes.content;
 
-        await sandbox.filesystem.writeFile(targetPath, content);
+        await fs.writeFile(targetPath, content);
 
-        // Get modification time of new file
-        const newModifiedTime = await getFileModifiedTime(sandbox, targetPath);
+        const newModifiedTime = await getFileModifiedTime(targetPath);
 
         return {
           sourcePath,

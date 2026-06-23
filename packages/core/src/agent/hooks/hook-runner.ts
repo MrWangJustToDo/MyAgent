@@ -1,5 +1,4 @@
-import { exec } from "node:child_process";
-import { resolve } from "node:path";
+import { getEnv } from "../../env.js";
 
 import { DEFAULT_HOOK_TIMEOUT_MS } from "./types.js";
 
@@ -71,45 +70,50 @@ async function executeHook(entry: HookEntry, input: HookEventInput, rootPath: st
  * Execute a shell command hook.
  * JSON context is piped via stdin. Optional JSON response parsed from stdout.
  */
-function executeCommandHook(
+async function executeCommandHook(
   command: string,
   input: HookEventInput,
   cwd: string,
   timeout?: number
 ): Promise<HookResult> {
+  const env = getEnv();
   const timeoutMs = timeout ?? DEFAULT_HOOK_TIMEOUT_MS;
   const inputJson = JSON.stringify(input);
 
-  return new Promise((resolvePromise, reject) => {
-    const child = exec(
-      command,
-      { cwd, timeout: timeoutMs, env: { ...process.env, AGENT_HOOKS: "1" } },
-      (err, stdout, stderr) => {
-        if (err) {
-          // Exit code 2 = deny (Claude Code convention)
-          if (err.code === 2) {
-            const reason = parseStdoutReason(stdout) || stderr.trim() || "Denied by hook";
-            resolvePromise({ decision: "deny", reason });
-            return;
-          }
-          reject(new Error(`Hook command failed (exit ${err.code}): ${stderr.trim() || err.message}`));
-          return;
-        }
+  const fullCommand = `echo '${inputJson.replace(/'/g, "'\\''")}' | ${command}`;
 
-        resolvePromise(parseStdoutResult(stdout));
-      }
-    );
+  const runEnv = await env.getEnv();
 
-    if (child.stdin) {
-      child.stdin.write(inputJson);
-      child.stdin.end();
+  try {
+    const result = await env.exec(fullCommand, {
+      cwd,
+      timeout: timeoutMs,
+      env: { ...runEnv, AGENT_HOOKS: "1" } as Record<string, string>,
+    });
+
+    if (result.code === 2) {
+      const reason = parseStdoutReason(result.stdout) || result.stderr.trim() || "Denied by hook";
+      return { decision: "deny", reason };
     }
-  });
+
+    if (result.code !== 0 && result.code !== null) {
+      throw new Error(`Hook command failed (exit ${result.code}): ${result.stderr.trim()}`);
+    }
+
+    return parseStdoutResult(result.stdout);
+  } catch (err) {
+    throw err instanceof Error ? err : new Error(String(err));
+  }
 }
 
 /**
- * Execute a JS/TS code hook via dynamic import.
+ * Execute a JS/TS code hook via subprocess.
  * The module must export a default function: `(input, output) => void | Promise<void>`
+ *
+ * Runs the hook in a Node.js subprocess so that:
+ * - No `dynamicImport` API is needed on CoreEnv
+ * - Works identically in local and remote (HTTP) environments
+ * - Consistent with how command hooks are executed
  */
 async function executeCodeHook(
   hookPath: string,
@@ -117,24 +121,33 @@ async function executeCodeHook(
   rootPath: string,
   timeout?: number
 ): Promise<HookResult> {
+  const env = getEnv();
   const timeoutMs = timeout ?? DEFAULT_HOOK_TIMEOUT_MS;
-  const fullPath = resolve(rootPath, hookPath);
+  const fullPath = env.path.resolve(rootPath, hookPath);
+  const inputJson = JSON.stringify(input);
 
-  const mod = await import(fullPath);
-  const fn = mod.default ?? mod;
-  if (typeof fn !== "function") {
-    throw new Error(`Hook at ${hookPath} does not export a function`);
+  const script = [
+    `import(${JSON.stringify(fullPath)}).then(m => {`,
+    `  const fn = m.default ?? m;`,
+    `  if (typeof fn !== 'function') { process.stderr.write('Hook does not export a function'); process.exit(1); }`,
+    `  const output = {};`,
+    `  return Promise.resolve(fn(JSON.parse(process.argv[1]), output)).then(() => {`,
+    `    process.stdout.write(JSON.stringify(output));`,
+    `  });`,
+    `}).catch(e => { process.stderr.write(e.message || String(e)); process.exit(1); });`,
+  ].join(" ");
+
+  const escapedInput = inputJson.replace(/'/g, "'\\''");
+  const result = await env.exec(`node --input-type=module -e '${script}' '${escapedInput}'`, {
+    cwd: rootPath,
+    timeout: timeoutMs,
+  });
+
+  if (result.code !== 0 && result.code !== null) {
+    throw new Error(`Code hook failed (${hookPath}): ${result.stderr.trim()}`);
   }
 
-  const output: HookResult = {};
-
-  const result = Promise.resolve(fn(input, output));
-  const timer = new Promise<never>((_, rej) =>
-    setTimeout(() => rej(new Error(`Hook timed out after ${timeoutMs}ms`)), timeoutMs)
-  );
-
-  await Promise.race([result, timer]);
-  return output;
+  return parseStdoutResult(result.stdout);
 }
 
 // ============================================================================

@@ -6,19 +6,21 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm -r --parallel dev",
-    "build": "pnpm run build:core && pnpm -r build",
+    "build": "pnpm run build:core && pnpm run build:app && pnpm -r build",
     "build:core": "pnpm --filter @my-agent/core build",
+    "build:app": "pnpm --filter @my-agent/app build",
     "build:cli": "pnpm --filter @my-agent/cli build",
     "build:extension": "pnpm --filter @my-agent/extension build",
     "build:server": "pnpm --filter @my-agent/server build",
     "build:mcp-server": "pnpm --filter @my-agent/mcp-server build",
     "dev:core": "pnpm --filter @my-agent/core dev",
+    "dev:app": "pnpm --filter @my-agent/app dev",
     "dev:cli": "pnpm --filter @my-agent/cli dev",
     "dev:extension": "pnpm --filter @my-agent/extension dev",
     "dev:server": "pnpm --filter @my-agent/server dev",
     "dev:mcp-server": "pnpm --filter @my-agent/mcp-server dev",
     "start:cli": "DEV=true NODE_ENV=production node --inspect ./main.mjs",
-    "start:server": "node ./server.mjs",
+    "start:server": "NODE_ENV=production node ./server.mjs",
     "start:mcp-server": "cd packages/mcp-server && node ./dist/index.mjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
@@ -28,6 +30,7 @@
   },
   "devDependencies": {
     "@my-agent/core": "workspace:*",
+    "@my-agent/app": "workspace:*",
     "@my-agent/cli": "workspace:*",
     "@my-agent/server": "workspace:*",
     "@my-agent/mcp-server": "workspace:*",
@@ -36,6 +39,7 @@
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.7.4",
     "project-tool": "https://github.com/MrWangJustToDo/project-tool.git",
+    "react": "^19",
     "typescript": "^5.6.3"
   }
 }

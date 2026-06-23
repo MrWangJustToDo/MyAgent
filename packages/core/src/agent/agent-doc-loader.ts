@@ -13,9 +13,8 @@
  * @see https://agents.md/
  */
 
-import * as path from "path";
+import { getEnv } from "../env.js";
 
-import type { SandboxFileSystem } from "../environment";
 import type { AgentLog } from "./agent-log";
 
 // ============================================================================
@@ -44,8 +43,6 @@ export const DEFAULT_AGENT_DOC_MAX_BYTES = 65536;
 
 /** Configuration for the agent documentation loader */
 export interface AgentDocLoaderConfig {
-  /** The sandbox filesystem to use for reading files */
-  filesystem: SandboxFileSystem;
   /** Root path of the project */
   rootPath: string;
   /**
@@ -86,18 +83,18 @@ export interface AgentDocLoadResult {
  * Returns a formatted string like "Loaded instructions from AGENTS.md (2.1 KB)"
  */
 export function formatAgentDocResult(result: AgentDocLoadResult): string {
+  const env = getEnv();
   const parts: string[] = [];
 
   if (result.source) {
     const size = result.content.length;
     const sizeKB = (size / 1024).toFixed(1);
-    parts.push(`Loaded instructions from ${path.basename(result.source)} (${sizeKB} KB)`);
+    parts.push(`Loaded instructions from ${env.path.basename(result.source)} (${sizeKB} KB)`);
   }
 
-  if (result.overrideSource) {
-    const size = result.overrideContent?.length ?? 0;
-    const sizeKB = (size / 1024).toFixed(1);
-    parts.push(`Loaded override from ${path.basename(result.overrideSource)} (${sizeKB} KB)`);
+  if (result.overrideSource && result.overrideContent != null) {
+    const sizeKB = (result.overrideContent.length / 1024).toFixed(1);
+    parts.push(`Loaded override from ${env.path.basename(result.overrideSource)} (${sizeKB} KB)`);
   }
 
   return parts.join("; ") || "No agent documentation files found";
@@ -123,7 +120,7 @@ export function formatAgentDocResult(result: AgentDocLoadResult): string {
  * @example
  * ```typescript
  * const result = await loadAgentDoc({
- *   filesystem: sandbox.filesystem,
+ *   rootPath: "/project",
  *   rootPath: "/project",
  *   logger: log,
  * });
@@ -131,8 +128,8 @@ export function formatAgentDocResult(result: AgentDocLoadResult): string {
  * ```
  */
 export async function loadAgentDoc(config: AgentDocLoaderConfig): Promise<AgentDocLoadResult> {
+  const env = getEnv();
   const {
-    filesystem,
     rootPath,
     filenames = DEFAULT_AGENT_DOC_FILENAMES,
     maxBytes = DEFAULT_AGENT_DOC_MAX_BYTES,
@@ -142,30 +139,26 @@ export async function loadAgentDoc(config: AgentDocLoaderConfig): Promise<AgentD
 
   let result: AgentDocLoadResult = { content: "" };
 
-  // 1. Search for primary doc file (try each filename in order)
   for (const filename of filenames) {
-    const filePath = path.join(rootPath, filename);
+    const filePath = env.path.join(rootPath, filename);
     try {
-      const exists = await filesystem.exists(filePath);
+      const exists = await env.fs.exists(filePath);
       if (exists) {
-        const rawContent = await filesystem.readFile(filePath);
+        const rawContent = await env.fs.readFile(filePath);
 
-        // Truncate if exceeding max bytes
         const content = truncateContent(rawContent, maxBytes, filename);
         result = { ...result, content, source: filePath };
 
-        // 2. If loadOverride is enabled, look for .override.md variant
         if (loadOverride) {
-          const overrideResult = await loadOverrideFile(filesystem, rootPath, filename);
+          const overrideResult = await loadOverrideFile(rootPath, filename);
           if (overrideResult) {
             result = { ...result, ...overrideResult };
           }
         }
 
-        break; // Stop at the first found file
+        break;
       }
     } catch (err) {
-      // If exists() or readFile() throws, just log and try the next filename
       logger?.debug("system", `Error checking file ${filename}`, { error: String(err) });
       continue;
     }
@@ -185,24 +178,21 @@ export async function loadAgentDoc(config: AgentDocLoaderConfig): Promise<AgentD
  * Override files are meant to be gitignored (personal/local overrides).
  */
 async function loadOverrideFile(
-  filesystem: SandboxFileSystem,
   rootPath: string,
   primaryFilename: string
 ): Promise<{ overrideContent: string; overrideSource: string } | null> {
-  // Derive override filename from primary filename
-  // AGENTS.md → AGENTS.override.md, CLAUDE.md → no standard override pattern
-  const parsed = path.parse(primaryFilename);
+  const env = getEnv();
+  const parsed = env.path.parse(primaryFilename);
   const overrideFilename = `${parsed.name}.override${parsed.ext}`;
 
-  // Only support override for AGENTS.md (the standard convention)
   if (overrideFilename === primaryFilename) return null;
 
-  const overridePath = path.join(rootPath, overrideFilename);
+  const overridePath = env.path.join(rootPath, overrideFilename);
 
   try {
-    const exists = await filesystem.exists(overridePath);
+    const exists = await env.fs.exists(overridePath);
     if (exists) {
-      const rawContent = await filesystem.readFile(overridePath);
+      const rawContent = await env.fs.readFile(overridePath);
       const overrideContent = truncateContent(rawContent, DEFAULT_AGENT_DOC_MAX_BYTES, overrideFilename);
       return { overrideContent, overrideSource: overridePath };
     }
@@ -222,10 +212,9 @@ async function loadOverrideFile(
  * Returns the original content if within limits.
  */
 function truncateContent(content: string, maxBytes: number, filename: string): string {
-  const contentBytes = Buffer.byteLength(content, "utf-8");
+  const contentBytes = getEnv().byteLength(content, "utf-8");
   if (contentBytes <= maxBytes) return content;
 
-  // Find a safe truncation point (cut at a line boundary)
   const truncateAt = Math.min(maxBytes, content.length);
   const lineBreak = content.lastIndexOf("\n", truncateAt);
   const cutPoint = lineBreak > 0 ? lineBreak : truncateAt;

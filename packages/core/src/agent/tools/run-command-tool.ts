@@ -1,24 +1,20 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { getEnv } from "../../env.js";
+
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { runCommandOutputSchema } from "./util/types.js";
-
-import type { Sandbox } from "../../environment";
 
 /**
  * Creates a run-command tool using Vercel AI SDK.
  *
- * This tool executes a shell command in the sandbox environment.
- * Returns stdout, stderr, exit code, and execution duration.
- * Large outputs are cached to disk with a preview returned inline.
- *
  * Requires user approval before execution.
  */
-export const createRunCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
+export const createRunCommandTool = () => {
   return tool({
     description:
-      "Executes a shell command in the sandbox environment. Returns stdout, stderr, exit code, and execution duration. Use this for running build commands, tests, scripts, or any shell operations. Large outputs are saved to disk — use read_file with the cachedOutputPath to read specific sections.",
+      "Executes a shell command in the workspace environment. Returns stdout, stderr, exit code, and execution duration. Use this for running build commands, tests, scripts, or any shell operations. Large outputs are saved to disk — use read_file with the cachedOutputPath to read specific sections.",
     inputSchema: z.object({
       command: z.string().describe("The shell command to execute."),
       cwd: z
@@ -35,24 +31,18 @@ export const createRunCommandTool = ({ sandbox }: { sandbox: Sandbox }) => {
         .min(1000)
         .optional()
         .describe("Timeout in milliseconds. If the command takes longer, it will be terminated."),
-      background: z
-        .boolean()
-        .optional()
-        .describe("If true, run the command in the background and return immediately. Defaults to false."),
     }),
     outputSchema: runCommandOutputSchema,
     needsApproval: true,
-    execute: async ({ command, cwd, env, timeout, background }, { toolCallId }) => {
-      const result = await sandbox.runCommand(command, {
+    execute: async ({ command, cwd, env, timeout }, { toolCallId }) => {
+      const result = await getEnv().runCommand(command, {
         cwd,
         env,
         timeout,
-        background: background ?? false,
       });
 
-      // Combine stdout+stderr for caching, cache each stream independently
-      const stdoutResult = await maybeCacheOutput(sandbox, result.stdout, `${toolCallId}-stdout`);
-      const stderrResult = await maybeCacheOutput(sandbox, result.stderr, `${toolCallId}-stderr`);
+      const stdoutResult = await maybeCacheOutput(result.stdout, `${toolCallId}-stdout`);
+      const stderrResult = await maybeCacheOutput(result.stderr, `${toolCallId}-stderr`);
 
       const cachedOutputPath = stdoutResult.cachedOutputPath ?? stderrResult.cachedOutputPath ?? null;
 

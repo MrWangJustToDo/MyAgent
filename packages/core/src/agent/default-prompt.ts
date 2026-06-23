@@ -5,12 +5,19 @@
  * Project-specific workflows (build, test, lint commands, code style)
  * belong in AGENTS.md / CLAUDE.md, not here.
  */
-export function buildDefaultSystemPrompt(rootPath: string, platform = `${process.platform} (${process.arch})`): string {
+
+import { getEnv } from "../env.js";
+
+export async function buildDefaultSystemPrompt(platform?: string): Promise<string> {
+  const env = getEnv();
+  const rootPath = env.rootPath;
+  const platformStr = platform ?? `${await env.getPlatform()} (${await env.getArch()})`;
+
   return `You are an AI coding assistant with access to a full development environment.
 
 **Environment Context**:
 - Working Directory: ${rootPath}
-- Platform: ${platform}
+- Platform: ${platformStr}
 
 **Available Tools**:
 
