@@ -59,22 +59,57 @@ export function buildCachedPreview(
   const lines = content.split("\n");
   const totalLines = lines.length;
 
-  if (totalLines <= headLines + tailLines) {
+  // Not large enough to benefit from truncation
+  if (content.length <= CACHE_THRESHOLD) {
     return content;
   }
 
-  const head = lines.slice(0, headLines).join("\n");
-  const tail = lines.slice(-tailLines).join("\n");
-  const omitted = totalLines - headLines - tailLines;
+  // Line-based truncation — show first N and last N lines
+  if (totalLines > headLines + tailLines) {
+    const head = lines.slice(0, headLines).join("\n");
+    const tail = lines.slice(-tailLines).join("\n");
+    const omitted = totalLines - headLines - tailLines;
 
+    return [
+      head,
+      "",
+      `... (${omitted} lines omitted) ...`,
+      "",
+      tail,
+      "",
+      `Full output saved to: ${cachedPath} (${totalLines} lines, ${content.length} chars)`,
+      `Use read_file with path="${cachedPath}" and offset/limit to read specific sections.`,
+    ].join("\n");
+  }
+
+  // Char-based truncation — for content with few lines but very long lines
+  // (e.g., a single 50000-char JSON line). Show head + tail by char count.
+  const mid = Math.floor(content.length / 2);
+  const tailStart = Math.max(mid, content.length - 5000);
+  const omitted = tailStart - mid;
+
+  const head = content.slice(0, mid);
+  const tail = content.slice(tailStart);
+  const note = `Full output saved to: ${cachedPath} (${totalLines} lines, ${content.length} chars)`;
+
+  if (omitted > 0) {
+    return [
+      head,
+      "",
+      `... (${omitted} chars omitted) ...`,
+      "",
+      tail,
+      "",
+      note,
+      `Use read_file with path="${cachedPath}" and offset/limit to read specific sections.`,
+    ].join("\n");
+  }
+
+  // Content fits in head+tail with no omission — still show cache hint
   return [
-    head,
+    content,
     "",
-    `... (${omitted} lines omitted) ...`,
-    "",
-    tail,
-    "",
-    `Full output saved to: ${cachedPath} (${totalLines} lines, ${content.length} chars)`,
+    note,
     `Use read_file with path="${cachedPath}" and offset/limit to read specific sections.`,
   ].join("\n");
 }
