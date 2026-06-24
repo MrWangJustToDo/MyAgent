@@ -129,12 +129,9 @@ export class AgentContext {
   updateUsage(t: TokenUsage) {
     const prev = this.usage;
 
-    // inputTokens is REPLACED (not accumulated) — each step sends the full
-    // context so the latest value represents current context window fill.
-    // cacheRead/Write are detail breakdowns of inputTokens, so they follow
-    // the same replacement pattern.
-    // outputTokens is ACCUMULATED — each step generates new output.
-    // reasoningTokens is a subset of output, so it accumulates too.
+    // usage (current step): inputTokens/cacheRead/cacheWrite are REPLACED
+    // (latest step value shows current context window fill).
+    // outputTokens/reasoningTokens are ACCUMULATED across steps in a turn.
     this.usage = {
       inputTokens: t.inputTokens,
       outputTokens: prev.outputTokens + t.outputTokens,
@@ -146,18 +143,15 @@ export class AgentContext {
 
     this.usage.totalTokens = this.usage.inputTokens + this.usage.outputTokens;
 
-    // totalUsage: inputTokens uses replacement-with-carry (survives compaction
-    // resets). Cache details follow the same pattern. Output fields accumulate.
-    const prevTotalInput = this.totalUsage.inputTokens - prev.inputTokens;
-    const prevTotalCacheRead = (this.totalUsage.cacheReadTokens ?? 0) - (prev.cacheReadTokens ?? 0);
-    const prevTotalCacheWrite = (this.totalUsage.cacheWriteTokens ?? 0) - (prev.cacheWriteTokens ?? 0);
-
+    // totalUsage: ALL fields are ACCUMULATED across the entire session
+    // (survives compaction). This gives the true lifetime token consumption
+    // for accurate cost calculation and reporting.
     this.totalUsage = {
-      inputTokens: prevTotalInput + t.inputTokens,
+      inputTokens: this.totalUsage.inputTokens + t.inputTokens,
       outputTokens: this.totalUsage.outputTokens + t.outputTokens,
       totalTokens: 0,
-      cacheReadTokens: prevTotalCacheRead + (t.cacheReadTokens ?? 0),
-      cacheWriteTokens: prevTotalCacheWrite + (t.cacheWriteTokens ?? 0),
+      cacheReadTokens: (this.totalUsage.cacheReadTokens ?? 0) + (t.cacheReadTokens ?? 0),
+      cacheWriteTokens: (this.totalUsage.cacheWriteTokens ?? 0) + (t.cacheWriteTokens ?? 0),
       reasoningTokens: (this.totalUsage.reasoningTokens ?? 0) + (t.reasoningTokens ?? 0),
     };
 

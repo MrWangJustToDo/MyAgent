@@ -34,8 +34,11 @@ registerCommand({
       return { ok: false, error: "Agent context not available" };
     }
 
-    const usage = context.getTotalUsage();
+    const totalUsage = context.getTotalUsage();
+    // usage.inputTokens is the latest step's input (current context window size)
+    const currentUsage = context.getUsage();
     const cost = context.getTotalCost();
+    const tokenLimit = context.getTokenLimit();
     const session = agent.getSessionData();
     const modelInfo = agent.getModelInfo();
     const pricing = context.getPricing();
@@ -49,34 +52,52 @@ registerCommand({
       lines.push(`  Model:        ${modelInfo.name}`);
     }
 
+    // --- Lifetime (cumulative) usage ---
     lines.push("");
-    lines.push(`  Input:        ${fmt(usage.inputTokens)} tokens`);
+    lines.push(`  ── Session Lifetime ──`);
+    lines.push(`  Input:        ${fmt(totalUsage.inputTokens)} tokens (cumulative)`);
 
-    const cacheRead = usage.cacheReadTokens ?? 0;
-    const cacheWrite = usage.cacheWriteTokens ?? 0;
-    if (cacheRead > 0) {
-      lines.push(`    Cache read:   ${fmt(cacheRead)}${pct(cacheRead, usage.inputTokens)}`);
+    const totalCacheRead = totalUsage.cacheReadTokens ?? 0;
+    const totalCacheWrite = totalUsage.cacheWriteTokens ?? 0;
+    if (totalCacheRead > 0) {
+      lines.push(`    Cache read:   ${fmt(totalCacheRead)}${pct(totalCacheRead, totalUsage.inputTokens)}`);
     }
-    if (cacheWrite > 0) {
-      lines.push(`    Cache write:  ${fmt(cacheWrite)}`);
+    if (totalCacheWrite > 0) {
+      lines.push(`    Cache write:  ${fmt(totalCacheWrite)}${pct(totalCacheWrite, totalUsage.inputTokens)}`);
     }
 
-    lines.push(`  Output:       ${fmt(usage.outputTokens)} tokens`);
+    lines.push(`  Output:       ${fmt(totalUsage.outputTokens)} tokens`);
 
-    const reasoning = usage.reasoningTokens ?? 0;
-    if (reasoning > 0) {
-      const text = usage.outputTokens - reasoning;
-      lines.push(`    Reasoning:    ${fmt(reasoning)}${pct(reasoning, usage.outputTokens)}`);
+    const totalReasoning = totalUsage.reasoningTokens ?? 0;
+    if (totalReasoning > 0) {
+      const text = totalUsage.outputTokens - totalReasoning;
+      lines.push(`    Reasoning:    ${fmt(totalReasoning)}${pct(totalReasoning, totalUsage.outputTokens)}`);
       lines.push(`    Text:         ${fmt(text)}`);
     }
 
-    lines.push(`  Total:        ${fmt(usage.totalTokens)} tokens`);
+    lines.push(`  Total:        ${fmt(totalUsage.totalTokens)} tokens`);
+
+    // --- Current context status ---
+    const contextInput = currentUsage.inputTokens;
+    if (contextInput > 0) {
+      const contextCacheRead = currentUsage.cacheReadTokens ?? 0;
+      const pctText =
+        tokenLimit > 0
+          ? ` (${Math.min(100, (contextInput / tokenLimit) * 100).toFixed(0)}% of ${fmt(tokenLimit)})`
+          : "";
+      lines.push("");
+      lines.push(`  ── Current Context ──`);
+      lines.push(`  Context:      ${fmt(contextInput)} tokens${pctText}`);
+      if (contextCacheRead > 0 && totalCacheRead > 0) {
+        lines.push(`    Cache read:   ${fmt(contextCacheRead)}${pct(contextCacheRead, contextInput)}`);
+      }
+    }
 
     if (pricing) {
       lines.push("");
       lines.push(
-        `  Pricing:      $${pricing.inputPerM}/M in, $${pricing.outputPerM}/M out` +
-          (pricing.cacheReadPerM ? `, $${pricing.cacheReadPerM}/M cache` : "")
+        `  Pricing:      ${pricing.inputPerM}/M in, ${pricing.outputPerM}/M out` +
+          (pricing.cacheReadPerM ? `, ${pricing.cacheReadPerM}/M cache` : "")
       );
     }
 
