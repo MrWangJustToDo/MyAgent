@@ -4,7 +4,12 @@ import { COMMAND_OUTPUT_MAX_VISIBLE, useCommandOutput } from "../hooks/use-comma
 
 import { ScrollableList } from "./ScrollableList.js";
 
-const renderLine = (line: string) => <Text color="gray">{line}</Text>;
+/**
+ * Render a single content line. Empty strings are replaced with a space to
+ * ensure they still occupy one line of terminal height -- otherwise Ink
+ * collapses them to zero height, causing visible height changes on scroll.
+ */
+const renderLine = (line: string) => <Text color="gray">{line || " "}</Text>;
 
 export const CommandOutput = () => {
   const lines = useCommandOutput((s) => s.lines);
