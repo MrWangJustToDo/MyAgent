@@ -23,7 +23,7 @@
     "@my-agent/node": "workspace:*",
     "@my-agent/server": "workspace:*",
     "@my-react/react": "^0.3.28",
-    "@my-react/react-terminal": "^0.0.27",
+    "@my-react/react-terminal": "^0.0.28",
     "ai": "^6.0.208",
     "dotenv": "^17.3.1",
     "reactivity-store": "^0.4.0"
@@ -31,7 +31,7 @@
   "devDependencies": {
     "@types/node": "^22.15.33",
     "@types/react": "^19.2.14",
-    "ink": "npm:@my-react/react-terminal@0.0.27",
+    "ink": "npm:@my-react/react-terminal@0.0.28",
     "react": "npm:@my-react/react@0.3.28",
     "tsdown": "^0.21.10",
     "typescript": "^5.6.3"

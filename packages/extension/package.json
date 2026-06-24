@@ -21,7 +21,7 @@
     "@my-agent/server": "workspace:*",
     "@my-react/react": "^0.3.28",
     "@my-react/react-dom": "^0.3.28",
-    "@my-react/react-terminal": "^0.0.27",
+    "@my-react/react-terminal": "^0.0.28",
     "ai": "^6.0.208",
     "ink-stream-markdown": "^0.0.8",
     "reactivity-store": "^0.4.0"
