@@ -24,25 +24,26 @@ export function ScrollableList<T>({ items, maxVisible, scrollOffset, renderItem,
 
   const hasMoreAbove = start > 0;
   const hasMoreBelow = end < items.length;
+  const countText =
+    showCount && items.length > maxVisible
+      ? `(${Math.min(scrollOffset + 1, items.length - maxVisible + 1)}/${items.length - maxVisible + 1})`
+      : "";
 
   return (
     <>
-      {hasMoreAbove && (
-        <Text color="gray" dimColor>
-          ▲ ({start} more)
-        </Text>
-      )}
+      {/* Always render indicator lines to prevent layout shift on scroll */}
+      <Text color="gray" dimColor>
+        {hasMoreAbove ? `\u25b2 (${start} more)` : "\u2500"}
+      </Text>
       {visibleItems.map((item, i) => (
         <Box key={start + i}>{renderItem(item, start + i)}</Box>
       ))}
-      {hasMoreBelow && (
+      <Text color="gray" dimColor>
+        {hasMoreBelow ? `\u25bc (${items.length - end} more)` : "\u2500"}
+      </Text>
+      {showCount && (
         <Text color="gray" dimColor>
-          ▼ ({items.length - end} more)
-        </Text>
-      )}
-      {showCount && items.length > maxVisible && (
-        <Text color="gray" dimColor>
-          ({Math.min(scrollOffset + 1, items.length - maxVisible + 1)}/{items.length - maxVisible + 1})
+          {countText}
         </Text>
       )}
     </>
