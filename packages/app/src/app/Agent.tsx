@@ -69,6 +69,7 @@ export const Agent = () => {
   const isAutocompleteVisible = useAutocomplete((s) => s.visible);
   const selectActions = useSelect.getActions();
   const isSelectVisible = useSelect((s) => s.visible);
+  const commandOutputActions = useCommandOutput.getActions();
 
   const { mode, denyMode } = useInputMode((s) => ({ mode: s.mode, denyMode: s.denyMode }));
   const modeActions = useInputMode.getActions();
@@ -77,17 +78,19 @@ export const Agent = () => {
   const currentPendingIsLast = allPendingApproval.length === 1;
   const pendingAskUser = allPendingAskUser[0];
 
+  const setMode = modeActions.setMode;
+
   useEffect(() => {
     if (denyMode) {
-      modeActions.setMode("freeform");
+      setMode("freeform");
     } else if (isSelectVisible) {
-      modeActions.setMode("select");
+      setMode("select");
     } else if (pendingApproval) {
-      modeActions.setMode("approval");
+      setMode("approval");
     } else {
-      modeActions.setMode("normal");
+      setMode("normal");
     }
-  }, [denyMode, isSelectVisible, pendingApproval]);
+  }, [denyMode, isSelectVisible, setMode, pendingApproval]);
 
   const submitAskUserAnswer = (answer: string) => {
     if (!pendingAskUser) return;
@@ -139,9 +142,11 @@ export const Agent = () => {
     }
   }, [isReady, config.initialPrompt, sendMessage]);
 
+  const setLoading = inputActions.setLoading;
+
   useEffect(() => {
-    inputActions.setLoading(initLoading || isLoading);
-  }, [isLoading, initLoading]);
+    setLoading(initLoading || isLoading);
+  }, [isLoading, initLoading, setLoading]);
 
   // ============================================================================
   // Shared Helpers
@@ -174,7 +179,7 @@ export const Agent = () => {
   };
 
   const handleNormalSubmit = async () => {
-    useCommandOutput.getActions().dismiss();
+    commandOutputActions.dismiss();
     const { text: prompt, attachments } = inputActions.submit();
 
     if (prompt.startsWith("/")) {
@@ -247,7 +252,7 @@ export const Agent = () => {
       if (isAutocompleteVisible) {
         autocompleteActions.dismiss();
       }
-      useCommandOutput.getActions().dismiss();
+      commandOutputActions.dismiss();
     }
   });
 
@@ -292,17 +297,19 @@ export const Agent = () => {
 
       if (inputKey.upArrow) {
         if (isAutocompleteVisible) autocompleteActions.selectPrev();
+        else if (commandOutputActions.hasScroll()) commandOutputActions.scrollPrev();
         else inputActions.historyPrev();
         return;
       }
       if (inputKey.downArrow) {
         if (isAutocompleteVisible) autocompleteActions.selectNext();
+        else if (commandOutputActions.hasScroll()) commandOutputActions.scrollNext();
         else inputActions.historyNext();
         return;
       }
 
       if (inputChar && !inputKey.ctrl && !inputKey.meta) {
-        useCommandOutput.getActions().dismiss();
+        commandOutputActions.dismiss();
         inputActions.append(inputChar);
         autocompleteActions.update(useUserInput.getReadonlyState().value);
       }
