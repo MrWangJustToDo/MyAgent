@@ -35,6 +35,7 @@ web-ext.config.ts
 .agents
 .agent-cache
 .agent-memory
+tmp/
 skills-lock.json
 
 tsconfig.tsbuildinfo

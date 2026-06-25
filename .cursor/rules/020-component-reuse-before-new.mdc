@@ -1,0 +1,14 @@
+---
+description: Prefer reusing or extending existing components before adding new ones
+alwaysApply: true
+---
+
+# Component Reuse Before New Components
+
+When new logic needs a component, first check whether an existing component already fits the use case or can be extended cleanly.
+
+- Search the relevant package for existing components, hooks, and composition patterns before creating a new component.
+- Prefer extending an existing component when the new behavior is compatible with its responsibility and API.
+- Keep extensions small and cohesive; do not add broad boolean-prop combinations or unrelated behavior to force reuse.
+- Create a new component when reuse would make the existing component harder to understand, less focused, or incompatible with current callers.
+- Match the existing component style, naming, and import conventions in the package being edited.

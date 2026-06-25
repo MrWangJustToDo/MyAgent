@@ -1,0 +1,14 @@
+---
+description: Update referenced docs when runtime behavior or exports change
+alwaysApply: true
+---
+
+# Docs For Runtime And Exports
+
+When a change affects runtime behavior or exported APIs, update the referenced documentation in the same task.
+
+- Treat behavior in agent loops, tools, adapters, CoreEnv implementations, CLI commands, server routes, and extension flows as runtime logic.
+- Treat public exports, package entrypoints, shared types, command names, environment variables, and configuration options as documentation-sensitive contracts.
+- Check nearby docs such as package READMEs, `AGENTS.md`, `CLAUDE.md`, OpenSpec artifacts, and command/help docs for references that need updating.
+- Keep documentation changes scoped to the behavior or export that changed.
+- If no referenced docs need updates, mention that documentation was checked in the final response.

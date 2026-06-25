@@ -25,9 +25,8 @@ export const useSubAgents = ({ subId }: { subId: string }) => {
         withActions: (s) => ({
           setContext: (context: AgentContext) => (s.state = context),
         }),
-        withNamespace: "useSubagentContext",
       }),
-    []
+    [subId]
   );
 
   useEffect(() => {
@@ -50,7 +49,7 @@ export const useSubAgents = ({ subId }: { subId: string }) => {
     });
 
     return cb;
-  }, [subId]);
+  }, [subId, useSubagentContext]);
 
   return useSubagentContext;
 };

@@ -1,0 +1,14 @@
+---
+description: Prefer building only packages affected by the current change
+alwaysApply: true
+---
+
+# Affected Package Builds
+
+By default, validate code changes by building only the package or packages affected by the edit.
+
+- Use package-level scripts such as `pnpm build:core`, `pnpm build:app`, `pnpm build:cli`, `pnpm build:server`, `pnpm build:extension`, or `pnpm build:mcp-server` when the touched files map cleanly to one package.
+- If a package has no root script, use `pnpm --filter <workspace-package-name> build`.
+- Build dependencies first when the affected package depends on another changed workspace package.
+- Run full `pnpm build` only when the change affects shared contracts, workspace dependencies, root build configuration, lockfiles, or multiple packages where the impact is unclear.
+- In final responses, state which package-level build was run, or explain why a full build was necessary.

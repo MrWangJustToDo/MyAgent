@@ -1,0 +1,14 @@
+---
+description: Use standardized numeric prefixes for Cursor rule filenames
+alwaysApply: true
+---
+
+# Rule File Naming
+
+When creating or renaming Cursor rules, use a consistent numeric prefix so rules sort predictably.
+
+- Store rules in `.cursor/rules/` as `.mdc` files.
+- Name rule files with a three-digit numeric prefix followed by a short kebab-case topic: `010-topic-name.mdc`.
+- Reserve gaps by incrementing prefixes by `010` by default, for example `010-*`, `020-*`, `030-*`.
+- Choose the next available prefix unless the user asks for a specific ordering.
+- Keep filenames stable after creation unless renaming improves consistency or fixes an ordering problem.

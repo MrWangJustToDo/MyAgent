@@ -1,37 +1,26 @@
 import { createState } from "reactivity-store";
 
 import { useNotification } from "./use-notification.js";
+import {
+  appendHistoryEntry,
+  createImagePlaceholder,
+  extractSubmittedInput,
+  getImageIndex,
+  hasImagePlaceholder,
+  isImagePlaceholder,
+  removeAttachmentAtIndex,
+} from "./user-input-helpers.js";
 
 import type { Attachment } from "../types/attachment.js";
 import type { Key } from "ink";
 
-// ============================================================================
-// Constants
-// ============================================================================
-
-/**
- * Unicode Private Use Area characters for image placeholders.
- * Each image gets a unique character: \uE000, \uE001, \uE002, etc.
- * This allows images to be treated as single characters in the input string.
- */
-export const IMAGE_PLACEHOLDER_START = 0xe000;
-export const IMAGE_PLACEHOLDER_END = 0xe0ff;
-
-/** Check if a character is an image placeholder */
-export function isImagePlaceholder(char: string): boolean {
-  const code = char.charCodeAt(0);
-  return code >= IMAGE_PLACEHOLDER_START && code <= IMAGE_PLACEHOLDER_END;
-}
-
-/** Get the image index from a placeholder character */
-export function getImageIndex(char: string): number {
-  return char.charCodeAt(0) - IMAGE_PLACEHOLDER_START;
-}
-
-/** Create a placeholder character for an image index */
-export function createImagePlaceholder(index: number): string {
-  return String.fromCharCode(IMAGE_PLACEHOLDER_START + index);
-}
+export {
+  IMAGE_PLACEHOLDER_END,
+  IMAGE_PLACEHOLDER_START,
+  createImagePlaceholder,
+  getImageIndex,
+  isImagePlaceholder,
+} from "./user-input-helpers.js";
 
 // ============================================================================
 // Types
@@ -167,11 +156,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
 
         // Check if we're deleting an image placeholder
         if (charToDelete && isImagePlaceholder(charToDelete)) {
-          const imageIdx = getImageIndex(charToDelete);
-          // Remove the attachment
-          state.attachments = state.attachments
-            .map((a, i) => (i === imageIdx ? null : a))
-            .filter(Boolean) as Attachment[];
+          state.attachments = removeAttachmentAtIndex(state.attachments, getImageIndex(charToDelete));
         }
 
         state.value = state.value.slice(0, pos - 1) + state.value.slice(pos);
@@ -190,11 +175,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
 
         // Check if we're deleting an image placeholder
         if (charToDelete && isImagePlaceholder(charToDelete)) {
-          const imageIdx = getImageIndex(charToDelete);
-          // Remove the attachment
-          state.attachments = state.attachments
-            .map((a, i) => (i === imageIdx ? null : a))
-            .filter(Boolean) as Attachment[];
+          state.attachments = removeAttachmentAtIndex(state.attachments, getImageIndex(charToDelete));
         }
 
         state.value = state.value.slice(0, pos) + state.value.slice(pos + 1);
@@ -237,32 +218,8 @@ export const useUserInput = createState(() => ({ ...initialState }), {
      * Returns the submitted text (with placeholders removed) and any attachments in order
      */
     submit: (): { text: string; attachments: Attachment[] } => {
-      const rawValue = state.value;
-
-      // Extract text without image placeholders and collect attachments in order
-      let text = "";
-      const orderedAttachments: Attachment[] = [];
-
-      for (const char of rawValue) {
-        if (isImagePlaceholder(char)) {
-          const idx = getImageIndex(char);
-          const attachment = state.attachments[idx];
-          if (attachment) {
-            orderedAttachments.push(attachment);
-          }
-        } else {
-          text += char;
-        }
-      }
-
-      text = text.trim();
-
-      if (text) {
-        // Add to history (avoid duplicates) - store without placeholders
-        if (state.history[state.history.length - 1] !== text) {
-          state.history = [...state.history, text];
-        }
-      }
+      const { text, attachments } = extractSubmittedInput(state.value, state.attachments);
+      state.history = appendHistoryEntry(state.history, text);
 
       state.value = "";
       state.cursorPosition = 0;
@@ -270,7 +227,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.attachments = [];
       state.selectedAttachment = -1;
       state.nextImageIndex = 0;
-      return { text, attachments: orderedAttachments };
+      return { text, attachments };
     },
 
     /**
@@ -343,12 +300,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
      * Check if there are any image attachments in the current value
      */
     hasAttachments: (): boolean => {
-      for (const char of state.value) {
-        if (isImagePlaceholder(char)) {
-          return true;
-        }
-      }
-      return false;
+      return hasImagePlaceholder(state.value);
     },
 
     /**

@@ -1,0 +1,14 @@
+---
+description: Keep source files under 400 lines by splitting or composing logic
+alwaysApply: true
+---
+
+# File Size Limit
+
+Keep individual source files reasonably small and focused. A file should be at most 400 lines by default.
+
+- Before adding logic to a file near 400 lines, consider extracting cohesive logic into a new helper, hook, component, module, or type file.
+- When a file exceeds 400 lines, look for natural boundaries and split by responsibility instead of making arbitrary line-count cuts.
+- Prefer composition and small focused modules over large files that mix unrelated concerns.
+- Do not split files just to satisfy the limit when it would make the code harder to follow; explain the trade-off if keeping a larger file is the better choice.
+- Preserve existing public APIs unless the task explicitly includes a refactor or the current file is still unshipped work on the active branch.

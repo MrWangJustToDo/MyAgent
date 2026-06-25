@@ -17,6 +17,7 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
+    "test": "pnpm run build && node --test test/*.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,0 +1,14 @@
+---
+description: Add matching test or validation scripts for new shared utility functions
+alwaysApply: true
+---
+
+# Utility Test Scripts
+
+When creating a new reusable utility function, add a corresponding test or validation script at the same time.
+
+- Treat shared helpers, formatters, parsers, path utilities, adapters, and other cross-call-site functions as reusable utilities.
+- Prefer the package's existing test pattern when one exists.
+- If no test framework is configured, add a small focused validation script or documented manual check that can exercise the utility's important cases.
+- Cover normal behavior, important edge cases, and failure paths relevant to the utility's contract.
+- Keep utility tests close to the package or module they validate, and mention how to run them in the final response.
