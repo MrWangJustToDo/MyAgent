@@ -124,7 +124,9 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
       if (currentInitId !== initIdRef.current) return;
       setTimeout(() => {
-        process?.stdout?.write?.(ansiEscapes.clearScreen + ansiEscapes.cursorTo(0, 0));
+        if (typeof process === "object") {
+          process?.stdout?.write?.(ansiEscapes.clearScreen + ansiEscapes.cursorTo(0, 0));
+        }
         setInitLoading(false);
       }, 500);
     };

@@ -11,6 +11,7 @@ import { commandRoutes } from "./routes/command.js";
 import { envRoutes } from "./routes/env.js";
 import { fetchRoutes } from "./routes/fetch.js";
 import { fsRoutes } from "./routes/fs.js";
+import { mcpRoutes } from "./routes/mcp.js";
 
 // ============================================================================
 // Configuration
@@ -30,7 +31,8 @@ const api = new Hono()
   .route("/env", envRoutes)
   .route("/fs", fsRoutes)
   .route("/command", commandRoutes)
-  .route("/fetch", fetchRoutes);
+  .route("/fetch", fetchRoutes)
+  .route("/mcp", mcpRoutes);
 
 export type AppType = typeof api;
 

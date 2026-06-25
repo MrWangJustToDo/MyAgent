@@ -25,6 +25,8 @@ import type {
   CoreEnvFsStat,
   CoreEnvPath,
   FileEntry,
+  McpProcessHandle,
+  McpStdioTransportConfig,
   RunCommandOptions,
 } from "@my-agent/core";
 
@@ -175,6 +177,10 @@ export async function createRemoteCoreEnv(serverUrl: string): Promise<CoreEnv> {
           isAbsolute: (p) => p.startsWith(serverSep) || defaultPath.isAbsolute(p),
         };
 
+  // Track MCP stdio sessions created by this env, so getMCPTransportProcess
+  // can issue a remote kill when the process manager cleans up.
+  const transportSessions = new WeakMap<object, string>();
+
   return {
     rootPath: info.rootPath,
 
@@ -261,11 +267,100 @@ export async function createRemoteCoreEnv(serverUrl: string): Promise<CoreEnv> {
       }
     },
 
-    createMCPStdioTransport: () => {
-      throw new Error(
-        "Stdio MCP transport is not available over a remote CoreEnv connection. " +
-          "Configure MCP servers with SSE or HTTP transport instead."
-      );
+    // =============================================================================
+    // MCP Stdio Transport (proxy via HTTP to the remote server)
+    // =============================================================================
+    // We track transports in a WeakMap so getMCPTransportProcess can look up
+    // the session ID and issue a remote cleanup.
+    createMCPStdioTransport: (config: McpStdioTransportConfig) => {
+      const apiUrl = `${baseUrl}/api/mcp`;
+
+      // sessionId is stored in closure (not on the transport object) to keep
+      // the transport shape compatible with @ai-sdk/mcp MCPTransport interface.
+      let sessionId: string | null = null;
+
+      // Helper: performs HTTP POST and dispatches responses via onmessage
+      const performSend = async (sid: string, msg: unknown): Promise<void> => {
+        const res = await fetch(`${apiUrl}/${sid}/message`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: msg }),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`MCP message failed: ${res.status} ${text}`);
+        }
+        const data = await res.json();
+        if (!data.responses) return;
+        for (const response of data.responses as unknown[]) {
+          transport.onmessage?.(response);
+        }
+      };
+
+      const transport: {
+        start(): Promise<void>;
+        send(message: unknown): Promise<void>;
+        close(): Promise<void>;
+        onclose?: () => void;
+        onerror?: (error: Error) => void;
+        onmessage?: (message: unknown) => void;
+      } = {
+        async start() {
+          const res = await fetch(`${apiUrl}/init`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(config),
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`MCP init failed: ${res.status} ${text}`);
+          }
+          const data = await res.json();
+          sessionId = data.id;
+          transportSessions.set(transport, data.id);
+        },
+
+        send(message: unknown): Promise<void> {
+          // Send the message via HTTP. The returned promise:
+          // - Resolves once the HTTP request completes (responses dispatched via onmessage)
+          // - Rejects if the HTTP request fails (propagated to request() promise)
+          // Errors are also forwarded to onerror for uncaught error handling.
+          const sid = sessionId;
+          if (!sid) throw new Error("MCP transport not started");
+          const promise = performSend(sid, message);
+          promise.catch((err: unknown) => {
+            transport.onerror?.(err instanceof Error ? err : new Error(String(err)));
+          });
+          return promise;
+        },
+
+        async close() {
+          const sid = sessionId;
+          if (sid) {
+            try {
+              await fetch(`${apiUrl}/${sid}`, { method: "DELETE" });
+            } catch {
+              // Server may already be gone
+            }
+            sessionId = null;
+          }
+          transport.onclose?.();
+        },
+      };
+
+      return transport;
+    },
+
+    getMCPTransportProcess: (transport: unknown): McpProcessHandle | undefined => {
+      const sid = transportSessions.get(transport as object);
+      if (!sid) return undefined;
+      return {
+        killed: false,
+        kill: () => {
+          fetch(`${baseUrl}/api/mcp/${sid}`, { method: "DELETE" }).catch(() => {});
+          return true;
+        },
+      };
     },
   };
 }
