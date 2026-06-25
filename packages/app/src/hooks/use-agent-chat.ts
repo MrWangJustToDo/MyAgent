@@ -7,6 +7,7 @@ import {
   lastAssistantMessageIsCompleteWithApprovalResponses,
   lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
+import ansiEscapes from "ansi-escapes";
 import { useEffect, useCallback, useState, useRef, useMemo } from "react";
 
 import { useAdapter } from "../context/adapter-context.js";
@@ -123,6 +124,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
       if (currentInitId !== initIdRef.current) return;
       setTimeout(() => {
+        process?.stdout?.write?.(ansiEscapes.clearScreen + ansiEscapes.cursorTo(0, 0));
         setInitLoading(false);
       }, 500);
     };
@@ -210,7 +212,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
           reason: options.reason,
         });
       } else {
-        const errorText = options.reason ?? "Tool execution denied by user.";
+        const errorText = "<error> Tool execution denied by user. </error>" + (options.reason ?? "");
 
         const updatePart = (part: UIMessagePart<UIDataTypes, UITools>): UIMessagePart<UIDataTypes, UITools> =>
           isToolUIPart(part) && part.state === "approval-requested" && part.approval.id === options.id
@@ -237,6 +239,15 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         if (pendingApprovalLengthRef.current === 1) {
           chatHelpers.sendMessage();
         }
+
+        // avoid call the original method
+        // 默认拒绝方法只会将state修改为 approval-responded . SEE https://github.com/vercel/ai/blob/50c29b0dc2d23dff959bde8eea21594ba61c46c6/packages/ai/src/ui/chat.ts#L496C23-L496C41
+        // 而在cover转换中，需要 output- 才会生成结果传给llm . SEE https://github.com/vercel/ai/blob/50c29b0dc2d23dff959bde8eea21594ba61c46c6/packages/ai/src/ui/convert-to-model-messages.ts#L310
+        // chatHelpers.addToolApprovalResponse({
+        //   id: options.id,
+        //   approved: false,
+        //   reason: errorText,
+        // });
       }
     },
     [chatHelpers]

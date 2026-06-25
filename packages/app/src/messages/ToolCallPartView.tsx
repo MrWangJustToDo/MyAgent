@@ -18,6 +18,21 @@ import { ToolStatusIcon } from "./ToolStatusIcon.js";
 
 import type { ToolUIPart } from "ai";
 
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/** Strip the <error>...</error> wrapper meant for LLM consumption, keeping only the user-provided reason. */
+function extractDeniedReason(reason: string | undefined | null): string | null {
+  if (!reason) return null;
+  const cleaned = reason.replace(/<error>.*?<\/error>\s*/g, "").trim();
+  return cleaned || null;
+}
+
+// ============================================================================
+// Component
+// ============================================================================
+
 export interface ToolCallPartViewProps {
   part: ToolUIPart;
 }
@@ -42,7 +57,7 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
   const hasError = part.state === "output-error" || part.state === "output-denied";
   const errorText =
     hasError && part.state === "output-denied"
-      ? (part.approval?.reason ?? "Tool execution denied.")
+      ? extractDeniedReason(part.approval?.reason)
       : hasError
         ? part.errorText
         : null;

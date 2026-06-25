@@ -3,6 +3,7 @@ import { useEffect, useMemo } from "react";
 
 import { FullBox } from "../components/FullBox";
 import { useStatic } from "../hooks/use-static";
+import { GRADIENT_STOPS, interpolateColor } from "../utils/gradient.js";
 
 // ============================================================================
 // ASCII Logo
@@ -14,40 +15,19 @@ const LOGO_LINES = [
   " █ ▀ █ ▀▄▀   █▀█ █▄█ ██▄ █ ▀█  █ ",
 ];
 
-const GRADIENT_STOPS = ["#00D4FF", "#7B61FF", "#FF6B9D"];
-
-// ============================================================================
-// Gradient Utilities
-// ============================================================================
-
-function hexToRgb(hex: string): [number, number, number] {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-function rgbToHex(r: number, g: number, b: number): string {
-  return "#" + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
-}
-
-function interpolateColor(stops: string[], t: number): string {
-  const clamped = Math.max(0, Math.min(1, t));
-  const segments = stops.length - 1;
-  const segment = Math.min(Math.floor(clamped * segments), segments - 1);
-  const local = clamped * segments - segment;
-  const [r1, g1, b1] = hexToRgb(stops[segment]);
-  const [r2, g2, b2] = hexToRgb(stops[segment + 1]);
-  return rgbToHex(
-    Math.round(r1 + (r2 - r1) * local),
-    Math.round(g1 + (g2 - g1) * local),
-    Math.round(b1 + (b2 - b1) * local)
-  );
-}
-
 // ============================================================================
 // GradientText — per-character horizontal gradient using only <Text>
 // ============================================================================
 
-const GradientLine = ({ text, stops, rowOffset }: { text: string; stops: string[]; rowOffset: number }) => {
+const GradientLine = ({
+  text,
+  stops,
+  rowOffset,
+}: {
+  text: string;
+  stops: string[] | readonly string[];
+  rowOffset: number;
+}) => {
   const chars = useMemo(() => {
     const totalLen = LOGO_LINES[0].length;
     return [...text].map((ch, i) => ({

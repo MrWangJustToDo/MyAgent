@@ -12,7 +12,7 @@ import { useStatic } from "../hooks/use-static";
 import { MessageView, StaticContext } from "../messages";
 import { getMessages } from "../utils/get-messages";
 
-import { Spinner } from "./Spinner";
+import { CursorFlush } from "./CursorFlush";
 
 import type { UIMessage } from "ai";
 import type { JSX } from "react";
@@ -60,7 +60,7 @@ export const MessageList = ({ messages }: MessageListProps) => {
   ) : (
     <Box paddingX={1} marginTop={1}>
       <Text color="gray" dimColor>
-        {staticMessages.length ? <Spinner text="Loading..." /> : "No messages yet. Type a message to start."}
+        {staticMessages.length ? <CursorFlush /> : "No messages yet. Type a message to start."}
       </Text>
     </Box>
   );
