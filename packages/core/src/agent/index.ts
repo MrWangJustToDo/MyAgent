@@ -215,6 +215,7 @@ export {
   memoryTypeSchema,
   memoryMetadataSchema,
   memorySchema,
+  type ConsolidationResult,
   type MemoryType,
   type MemoryMetadata,
   type Memory,

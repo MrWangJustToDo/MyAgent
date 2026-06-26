@@ -186,7 +186,7 @@ function selectWithKeywords(query: string, memories: Memory[], maxItems: number)
   const words = query
     .toLowerCase()
     .split(/\s+/)
-    .filter((w) => w.length > 3);
+    .filter((w) => w.length > 2);
 
   if (words.length === 0) return [];
 
@@ -259,13 +259,20 @@ export async function findRelevantMemories(
 
   const manifest = formatManifest(candidates);
 
-  // Select relevant filenames — LLM with keyword fallback
+  // Select relevant filenames — LLM with keyword fallback on throw or empty result
   let selectedFilenames: string[];
   let selectionMethod: "llm" | "keyword" | "keyword-fallback" = "keyword";
   if (model) {
     try {
       selectedFilenames = await selectWithLLM(query, manifest, model, context, logger);
       selectionMethod = "llm";
+      if (selectedFilenames.length === 0) {
+        selectedFilenames = selectWithKeywords(query, candidates, maxItems);
+        if (selectedFilenames.length > 0) {
+          selectionMethod = "keyword-fallback";
+          logger?.debug("memory", "LLM returned empty selection, keyword fallback found matches");
+        }
+      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       logger?.warn("memory", `LLM memory selection threw, falling back to keyword: ${errorMsg}`);
@@ -349,7 +356,8 @@ export function formatRelevantMemories(memories: RelevantMemory[]): string {
   if (memories.length === 0) return "";
 
   const parts = memories.map(
-    (m) => `<memory name="${m.name}" type="${m.type}">\n${m.description}\n\n${m.content}\n</memory>`
+    (m) =>
+      `<memory name="${m.name.replace(/"/g, "&quot;")}" type="${m.type}">\n${m.description}\n\n${m.content}\n</memory>`
   );
 
   return [

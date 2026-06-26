@@ -1,3 +1,4 @@
+import { useAgentContext } from "../hooks/use-agent-context.js";
 import { useDynamic } from "../hooks/use-dynamic.js";
 
 import { registerCommand } from "./registry.js";
@@ -33,6 +34,7 @@ registerCommand({
 
     // Reset agent context (messages, usage, events)
     context.reset();
+    useAgentContext.getActions().bump();
 
     // Create and set a new session
     const newSession = store.create({

@@ -61,6 +61,10 @@ export class Base extends SessionHandler {
   private reactiveCompactRetries = 0;
   private static readonly MAX_REACTIVE_RETRIES = 1;
 
+  // Session-level cache hit tracking (accumulated across all API calls)
+  private sessionCacheHitTokens = 0;
+  private sessionCacheMissTokens = 0;
+
   // Abort controller for current run
   currentAbortController: AbortController | null = null;
   cancelAbortController: () => void = () => {};
@@ -138,6 +142,12 @@ export class Base extends SessionHandler {
   getTodoManager(): TodoManager | null {
     return this.todoManager;
   }
+
+  /**
+   * Override point for subclasses to provide dynamic per-turn context.
+   * Injected into messages (not system prompt) to preserve cache stability.
+   */
+  getDynamicTurnContext?(): string | undefined;
 
   // Agent documentation content (loaded from AGENTS.md / CLAUDE.md)
   agentDocContent: string = "";
@@ -317,8 +327,15 @@ export class Base extends SessionHandler {
         toolResultCount: toolResults?.length ?? 0,
       });
 
+      // After first step succeeds, confirm surfaced memories so they won't be re-selected
+      if (stepNumber === 1) {
+        this.commitSurfacedMemories();
+      }
+
       if (usage && this.context) {
-        this.context.updateUsage(extractTokenUsage(usage));
+        const tokenUsage = extractTokenUsage(usage);
+        this.context.updateUsage(tokenUsage);
+        this.emitCacheHitNotification(tokenUsage);
       }
 
       if (this.todoManager) {
@@ -382,6 +399,96 @@ export class Base extends SessionHandler {
   }
 
   // ============================================================================
+  // Prefix Cache Optimization — Reasoning Content Stripping
+  // ============================================================================
+
+  /**
+   * Strip reasoning parts from historical assistant messages to reduce prompt
+   * token count and improve prefix cache efficiency.
+   *
+   * DeepSeek bills reasoning_content as prompt tokens when replayed in history.
+   * We keep reasoning only on assistant turns that carry tool calls (DeepSeek API
+   * requires reasoning + tool_calls to be sent together), and strip it from all
+   * other historical turns.
+   *
+   * Only applies when the current model is identified as a DeepSeek model.
+   */
+  private stripReasoningFromHistory(messages: ModelMessage[]): void {
+    if (!this.modelInfo || this.modelInfo.provider !== "deepseek") return;
+
+    for (const msg of messages) {
+      if (msg.role !== "assistant") continue;
+      const content = msg.content;
+      if (!Array.isArray(content)) continue;
+
+      const hasToolCall = content.some(
+        (p) => p && typeof p === "object" && (p as Record<string, unknown>).type === "tool-call"
+      );
+
+      // Keep reasoning on turns with tool calls (DeepSeek requires it)
+      if (hasToolCall) continue;
+
+      // Strip reasoning parts from pure-text assistant turns
+      const filtered = content.filter(
+        (p) => !(p && typeof p === "object" && (p as Record<string, unknown>).type === "reasoning")
+      );
+
+      if (filtered.length < content.length) {
+        msg.content = filtered;
+      }
+    }
+  }
+
+  // ============================================================================
+  // Prefix Cache Monitoring
+  // ============================================================================
+
+  /**
+   * Emit a notification with cache hit statistics after each LLM step.
+   * Tracks cumulative session-level cache hit ratio for observability.
+   */
+  private emitCacheHitNotification(tokenUsage: { inputTokens: number; cacheReadTokens?: number }): void {
+    const cacheRead = tokenUsage.cacheReadTokens ?? 0;
+    const inputTokens = tokenUsage.inputTokens;
+
+    if (inputTokens <= 0) return;
+
+    // Accumulate session-level stats
+    this.sessionCacheHitTokens += cacheRead;
+    this.sessionCacheMissTokens += inputTokens - cacheRead;
+
+    const stepHitRatio = cacheRead / inputTokens;
+    const sessionTotal = this.sessionCacheHitTokens + this.sessionCacheMissTokens;
+    const sessionHitRatio = sessionTotal > 0 ? this.sessionCacheHitTokens / sessionTotal : 0;
+
+    // Only notify when cache data is meaningful (provider actually reports it)
+    if (cacheRead > 0 || this.sessionCacheHitTokens > 0) {
+      this.log?.notify(
+        "system",
+        "info",
+        `Cache hit: ${(stepHitRatio * 100).toFixed(0)}% (session: ${(sessionHitRatio * 100).toFixed(0)}%)`,
+        {
+          stepCacheRead: cacheRead,
+          stepInputTokens: inputTokens,
+          stepHitRatio,
+          sessionCacheHitTokens: this.sessionCacheHitTokens,
+          sessionCacheMissTokens: this.sessionCacheMissTokens,
+          sessionHitRatio,
+        }
+      );
+    }
+  }
+
+  /**
+   * Get the session-level cache hit ratio (0-1).
+   * Returns 0 if no cache data has been reported.
+   */
+  getCacheHitRatio(): number {
+    const total = this.sessionCacheHitTokens + this.sessionCacheMissTokens;
+    return total > 0 ? this.sessionCacheHitTokens / total : 0;
+  }
+
+  // ============================================================================
   // Compaction Orchestration
   // ============================================================================
 
@@ -391,6 +498,7 @@ export class Base extends SessionHandler {
       const finalMessages = res?.messages || [];
 
       microCompact(finalMessages, this.compactionConfig || {});
+      this.stripReasoningFromHistory(finalMessages);
       this.context?.setMessages(finalMessages);
       let llmMessages = this.context?.getMessagesForLLM() || [];
 
@@ -449,16 +557,16 @@ export class Base extends SessionHandler {
         }
       }
 
-      // Rebuild system prompt if todo nag state changed since initial prompt.
-      // The system prompt is built once at stream()/generate() start, but the
-      // nag reminder needs to be injected mid-run when rounds exceed threshold.
-      const needsSystemUpdate = this.todoManager?.shouldNag() && !this.systemPrompt.includes("<reminder>");
-      if (needsSystemUpdate) {
-        const reminder = this.todoManager!.getNagReminder();
-        this.log?.todo("Injecting nag reminder via prepareStep", {
-          roundsSinceUpdate: this.todoManager!.getRoundsSinceUpdate(),
-        });
-        return { ...res, messages: llmMessages, system: this.systemPrompt + "\n\n" + reminder };
+      // Inject dynamic per-turn context (relevant memories, todo nag) as a
+      // leading message pair instead of modifying the system prompt. This keeps
+      // the system prompt byte-stable across turns for prefix cache stability.
+      const dynamicContext = this.getDynamicTurnContext?.();
+      if (dynamicContext) {
+        llmMessages = [
+          { role: "user" as const, content: `<turn_context>\n${dynamicContext}\n</turn_context>` },
+          { role: "assistant" as const, content: "Understood. I'll keep this context in mind." },
+          ...llmMessages,
+        ];
       }
 
       return { ...res, messages: llmMessages };
@@ -542,6 +650,8 @@ export class Base extends SessionHandler {
     this.status = "idle";
     this.error = "";
     this.reactiveCompactRetries = 0;
+    this.sessionCacheHitTokens = 0;
+    this.sessionCacheMissTokens = 0;
     this.resetMemoryState();
     this.log?.clear();
     this.context?.reset();

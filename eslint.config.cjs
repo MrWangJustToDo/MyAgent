@@ -4,7 +4,7 @@ const reactLint = require("project-tool/reactLint");
 module.exports = [
   ...baseLint,
   {
-    ignores: ["dist", "dev", "scripts", "node_modules", ".output", ".wxt", "**/.wxt", "eslint.config.cjs"],
+    ignores: ["dist", "dev", "scripts", "node_modules", ".output", ".wxt", "**/.wxt", "eslint.config.cjs", "tmp"],
   },
   {
     settings: {

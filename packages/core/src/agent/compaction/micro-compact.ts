@@ -83,10 +83,33 @@ function getToolResultSize(part: Record<string, unknown>): number {
 }
 
 /**
+ * Placeholder prefix used to detect already-compacted results.
+ * Checking this avoids re-writing the same bytes and breaking prefix cache stability.
+ */
+const PLACEHOLDER_PREFIX = "[Previous: used ";
+
+/**
  * Create a placeholder for a compacted tool result.
  */
 function createPlaceholder(toolName: string): string {
-  return `[Previous: used ${toolName}]`;
+  return `${PLACEHOLDER_PREFIX}${toolName}]`;
+}
+
+/**
+ * Check whether a tool result has already been compacted (idempotency guard).
+ */
+function isAlreadyCompacted(part: Record<string, unknown>): boolean {
+  const result = part.result;
+  if (typeof result === "string" && result.startsWith(PLACEHOLDER_PREFIX)) return true;
+
+  const content = part.content;
+  if (Array.isArray(content) && content.length === 1) {
+    const first = content[0] as Record<string, unknown> | undefined;
+    if (first && first.type === "text" && typeof first.text === "string" && first.text.startsWith(PLACEHOLDER_PREFIX)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -201,12 +224,16 @@ export function microCompact(messages: ModelMessage[], config: Partial<Compactio
     return messages;
   }
 
-  // Mutate in place — the caller passes a working copy, no need to deep-clone
+  // Mutate in place — the caller passes a working copy, no need to deep-clone.
+  // Idempotency: skip results that are already compacted so we never modify
+  // bytes that haven't changed, preserving prefix cache stability.
   for (const target of compactTargets) {
     const message = messages[target.messageIndex];
     const content = message.content;
     if (Array.isArray(content)) {
       const part = content[target.partIndex] as Record<string, unknown>;
+
+      if (isAlreadyCompacted(part)) continue;
 
       const toolName = toolCallMap.get(target.toolCallId) || (part.toolName as string) || "tool";
 

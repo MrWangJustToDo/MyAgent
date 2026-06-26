@@ -213,9 +213,10 @@ export function useAgentKeybindings({
         return;
       }
       if (inputKey.return) {
-        if (acceptAutocomplete(false)) return;
+        acceptAutocomplete(false);
         const { text: input } = inputActions.submit();
         if (input.startsWith("/")) {
+          commandOutputActions.dismiss();
           dispatchCommand(input, commandCtx).then((handled) => {
             if (!handled) inputActions.setInputError(`Unknown command: ${input.split(" ")[0]}`);
           });
@@ -240,7 +241,10 @@ export function useAgentKeybindings({
         inputActions.moveCursorRight();
         return;
       }
+      // Only allow `/` as the first character (to start a command); block arbitrary text
       if (inputChar && !inputKey.ctrl && !inputKey.meta) {
+        if (!currentValue && inputChar !== "/") return;
+        if (currentValue && !currentValue.startsWith("/")) return;
         inputActions.append(inputChar);
         autocompleteActions.update(useUserInput.getReadonlyState().value);
       }

@@ -34,7 +34,7 @@ export const AutocompleteList = () => {
 
     return (
       <Box flexDirection="row" width="100%">
-        <Box width="30%" flexShrink={0} flexGrow={0}>
+        <Box width="60%" flexShrink={0} flexGrow={0}>
           <Text
             backgroundColor={isSelected ? "green" : undefined}
             color={isSelected ? "black" : "cyan"}

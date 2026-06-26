@@ -33,6 +33,36 @@ import type { Memory, MemoryManagerConfig, MemoryMetadata, MemoryType } from "./
 import type { AgentLog } from "../agent-log/agent-log.js";
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Unicode-safe slugify: keeps CJK characters, latin alphanumerics, and hyphens.
+ * Falls back to a timestamp-based slug if the result would be empty.
+ */
+function slugify(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^\p{L}\p{N}-]/gu, "")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-|-$/g, "");
+
+  if (!slug) {
+    return `memory-${Date.now().toString(36)}`;
+  }
+  return slug;
+}
+
+/** Quote a YAML scalar value to prevent injection from colons, newlines, etc. */
+function yamlQuote(value: string): string {
+  if (/[\n\r:#"'{}[\],&*!|>%@`]/.test(value) || value.startsWith(" ") || value.endsWith(" ")) {
+    return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
+  }
+  return value;
+}
+
+// ============================================================================
 // MemoryManager Class
 // ============================================================================
 
@@ -66,19 +96,19 @@ export class MemoryManager {
 
   /**
    * Ensure the memory directory exists and load the initial index.
+   * Awaits the first index refresh so `getIndexContent()` is usable immediately after.
    */
   async initialize(): Promise<void> {
     const { path } = getEnv();
-    this.memoryPath = await path.join(this.rootPath, this.memoryDir);
-    this.indexPath = await path.join(this.memoryPath, MEMORY_INDEX_FILENAME);
+    this.memoryPath = path.join(this.rootPath, this.memoryDir);
+    this.indexPath = path.join(this.memoryPath, MEMORY_INDEX_FILENAME);
     const exists = await getEnv().fs.exists(this.memoryPath);
     if (!exists) {
       await getEnv().fs.mkdir(this.memoryPath);
       this.logger?.info("memory", `Created memory directory: ${this.memoryDir}`);
     }
 
-    // Load existing index into cache
-    this.scheduleRefreshIndex();
+    await this.refreshIndex();
   }
 
   // ============================================================================
@@ -175,10 +205,7 @@ export class MemoryManager {
    * Write a memory file with YAML frontmatter, then rebuild the index.
    */
   async writeMemory(name: string, type: MemoryType, description: string, body: string): Promise<string> {
-    const slug = name
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9-]/g, "");
+    const slug = slugify(name);
     const filename = `${slug}.md`;
     const filePath = getEnv().path.join(this.memoryPath, filename);
 
@@ -201,11 +228,11 @@ export class MemoryManager {
 
     const content = [
       "---",
-      `name: ${name}`,
+      `name: ${yamlQuote(name)}`,
       `type: ${type}`,
-      `description: ${description}`,
-      `createdAt: ${createdAt}`,
-      `updatedAt: ${now}`,
+      `description: ${yamlQuote(description)}`,
+      `createdAt: "${createdAt}"`,
+      `updatedAt: "${now}"`,
       "---",
       "",
       body,
@@ -253,6 +280,19 @@ export class MemoryManager {
   // ============================================================================
   // Index Management
   // ============================================================================
+
+  /**
+   * Immediately refresh the index, cancelling any pending debounced refresh.
+   * Use after batch operations (extraction, consolidation) to ensure
+   * `getIndexContent()` reflects the latest state before reading.
+   */
+  async flushIndex(): Promise<void> {
+    if (this.refreshTimeout) {
+      clearTimeout(this.refreshTimeout);
+      this.refreshTimeout = undefined;
+    }
+    await this.refreshIndex();
+  }
 
   /**
    * Schedule an index refresh with debounce (100ms).

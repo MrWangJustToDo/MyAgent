@@ -11,6 +11,7 @@ import { SelectList } from "../components/SelectList.js";
 import { Spinner } from "../components/Spinner.js";
 import { TodoStats } from "../components/TodoStats.js";
 import { UserInput } from "../components/UserInput.js";
+import { useAgentContext } from "../hooks/use-agent-context.js";
 import { useAgent } from "../hooks/use-agent.js";
 import { useChatStatus } from "../hooks/use-chat-status.js";
 import { useConfig } from "../hooks/use-config.js";
@@ -236,6 +237,10 @@ const StatusBar = ({ mcpCount }: { mcpCount: number }) => {
   const rootPath = getEnv().rootPath;
   const shortPath = rootPath ? (rootPath.length > 30 ? `...${rootPath.slice(-27)}` : rootPath) : "";
 
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  const version = useAgentContext((s) => s.version);
+
   return (
     <Box justifyContent="space-between" paddingX={1}>
       <Box gap={2} flexShrink={1}>
@@ -254,7 +259,7 @@ const StatusBar = ({ mcpCount }: { mcpCount: number }) => {
       </Box>
 
       <Box gap={2} flexShrink={0}>
-        <LLMUsage />
+        <LLMUsage key={version} />
         {model && (
           <Text color="gray" dimColor wrap="truncate">
             /{model}

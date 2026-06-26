@@ -17,12 +17,13 @@ function formatCost(cost: number): string {
 export const LLMUsage = () => {
   // @ts-ignore
   const sessionId = useAgent((s) => s.agent?.sessionData?.id);
+  // version included in selectors to force re-evaluation after context.reset() + bump()
   // @ts-ignore
-  const usage = useAgentContext((s) => s.context?.getTotalUsage() as TokenUsage);
+  const usage = useAgentContext((s) => (s.version, s.context?.getTotalUsage() as TokenUsage));
   // @ts-ignore
-  const percent = useAgentContext((s) => s.context?.getTokenLimitPercent() ?? 0);
+  const percent = useAgentContext((s) => (s.version, s.context?.getTokenLimitPercent() ?? 0));
   // @ts-ignore
-  const cost = useAgentContext((s) => s.context?.getTotalCost() ?? 0);
+  const cost = useAgentContext((s) => (s.version, s.context?.getTotalCost() ?? 0));
 
   return usage ? (
     <Box key={sessionId} gap={1}>

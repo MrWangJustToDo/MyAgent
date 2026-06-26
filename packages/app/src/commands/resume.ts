@@ -1,5 +1,6 @@
 import { agentManager } from "@my-agent/core";
 
+import { useAgentContext } from "../hooks/use-agent-context.js";
 import { useDynamic } from "../hooks/use-dynamic.js";
 
 import { registerCommand } from "./registry.js";
@@ -60,6 +61,7 @@ registerCommand({
 
       if (ctx.setMessages && result.uiMessages) {
         ctx.setMessages(result.uiMessages);
+        useAgentContext.getActions().bump();
         setTimeout(() => {
           useDynamic.getActions().setDynamicKey(Date.now());
         }, 200);

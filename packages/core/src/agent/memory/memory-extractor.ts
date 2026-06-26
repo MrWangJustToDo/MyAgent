@@ -202,19 +202,34 @@ export async function extractMemories(
 // Memory Consolidation
 // ============================================================================
 
+export interface ConsolidationResult {
+  /** Whether the consolidation actually modified anything */
+  changed: boolean;
+  /** Number of memories after consolidation */
+  count: number;
+}
+
 /**
  * Consolidate memories when the count exceeds the threshold.
  *
  * Uses a subagent to merge duplicates, remove outdated entries,
  * and keep the total under a reasonable limit.
  *
+ * Consolidation is pseudo-atomic: new files are written first, then old files
+ * are removed. If writing fails mid-way, existing memories remain intact.
+ *
  * @param memoryManager - MemoryManager instance
  * @param parentAgentId - Parent agent ID for spawning subagent
- * @returns Number of memories after consolidation (0 if not triggered)
+ * @returns Consolidation result with changed flag and final count
  */
-export async function consolidateMemories(memoryManager: MemoryManager, parentAgentId: string): Promise<number> {
+export async function consolidateMemories(
+  memoryManager: MemoryManager,
+  parentAgentId: string
+): Promise<ConsolidationResult> {
   const memories = await memoryManager.listMemories();
-  if (memories.length < memoryManager.getConsolidateThreshold()) return 0;
+  if (memories.length < memoryManager.getConsolidateThreshold()) {
+    return { changed: false, count: memories.length };
+  }
 
   const catalog = memories
     .map((m) => `## ${m.filename}\nname: ${m.name}\ntype: ${m.type}\ndescription: ${m.description}\n${m.body}`)
@@ -245,9 +260,10 @@ export async function consolidateMemories(memoryManager: MemoryManager, parentAg
   });
 
   const items = parseJsonArray(result.output);
-  if (!items || items.length === 0) return memories.length;
+  if (!items || items.length === 0) {
+    return { changed: false, count: memories.length };
+  }
 
-  // Validate all items first — only delete if at least one can be written back
   const validated = items
     .map((item) => {
       const mem = item as Partial<ExtractedMemory>;
@@ -261,17 +277,24 @@ export async function consolidateMemories(memoryManager: MemoryManager, parentAg
     .filter((v) => v.name && v.description && v.body);
 
   if (validated.length === 0) {
-    return memories.length; // Nothing valid to write — keep existing memories
+    return { changed: false, count: memories.length };
   }
 
-  // Delete all existing memories, then write consolidated ones
-  await memoryManager.deleteAllMemories();
-
+  // Write new consolidated memories first (safe: new slug names won't collide with old ones in most cases)
+  const writtenFilenames: string[] = [];
   for (const { name, type, description, body } of validated) {
-    await memoryManager.writeMemory(name, type, description, body);
+    const filename = await memoryManager.writeMemory(name, type, description, body);
+    writtenFilenames.push(filename);
   }
 
-  return validated.length;
+  // Remove old files that are NOT in the newly written set
+  const writtenSet = new Set(writtenFilenames);
+  const oldFilenames = memories.map((m) => m.filename).filter((f) => !writtenSet.has(f));
+  for (const filename of oldFilenames) {
+    await memoryManager.deleteMemory(filename);
+  }
+
+  return { changed: true, count: validated.length };
 }
 
 // ============================================================================

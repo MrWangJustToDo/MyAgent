@@ -80,21 +80,33 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
   }
 
   // ============================================================================
-  // System Prompt
+  // System Prompt (Cache-Stable)
   // ============================================================================
 
   /**
-   * Build the final system prompt by appending dynamic sections.
-   *
-   * Each section is wrapped in XML tags (`<project_instructions>`, `<skills>`,
-   * `<memory_index>`, `<relevant_memories>`, `<reminder>`) to provide
-   * unambiguous structural boundaries. The markdown content inside each section
-   * (which may contain its own `##` headings, `---` separators, code fences,
-   * etc.) is preserved as-is — the XML envelope prevents the LLM from
-   * confusing inter-section structure with intra-section markdown.
+   * Frozen system prompt — built once per session from static sections only.
+   * Dynamic content (relevant memories, todo nag) is injected via prepareStep
+   * messages to preserve prefix cache stability across turns.
    */
+  private frozenSystemPrompt: string | undefined = undefined;
+  private systemPromptFrozen = false;
 
+  /**
+   * Build the cache-stable system prompt from session-static sections only.
+   *
+   * Sections included (byte-stable within a session):
+   * 1. Base system prompt (from config)
+   * 2. Agent documentation (AGENTS.md / CLAUDE.md)
+   * 3. Available skills index (names + descriptions)
+   * 4. Memory index (persistent cross-session knowledge)
+   *
+   * Dynamic per-turn content (relevant memories, todo nag reminders) is NOT
+   * included here — it rides the message tail via prepareStep to keep the
+   * system prompt prefix stable for DeepSeek's automatic prefix cache.
+   */
   private buildSystemPrompt(): string | undefined {
+    if (this.systemPromptFrozen) return this.frozenSystemPrompt;
+
     const parts: string[] = [];
 
     // 1. Base system prompt (from config or default) — no wrapper needed
@@ -143,27 +155,38 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       );
     }
 
-    // 5. Relevant memory content (full body of memories selected for this turn)
+    if (parts.length === 0) {
+      this.frozenSystemPrompt = undefined;
+    } else {
+      this.frozenSystemPrompt = parts.join("\n\n");
+    }
+
+    this.systemPromptFrozen = true;
+    this.systemPrompt = this.frozenSystemPrompt ?? "";
+
+    return this.frozenSystemPrompt;
+  }
+
+  /**
+   * Build per-turn dynamic context to inject into messages (not system prompt).
+   * Returns undefined if no dynamic context needs injection.
+   */
+  getDynamicTurnContext(): string | undefined {
+    const parts: string[] = [];
+
     if (this.relevantMemoryContent) {
       parts.push(this.relevantMemoryContent);
     }
 
-    // 6. Nag reminder for todo updates
     if (this.todoManager?.shouldNag()) {
       const reminder = this.todoManager.getNagReminder();
-      this.log?.todo("Injecting nag reminder into system prompt", {
+      this.log?.todo("Injecting nag reminder via turn context", {
         roundsSinceUpdate: this.todoManager.getRoundsSinceUpdate(),
       });
       parts.push(reminder);
     }
 
-    if (parts.length === 0) return undefined;
-
-    const str = parts.join("\n\n");
-
-    this.systemPrompt = str;
-
-    return str;
+    return parts.length > 0 ? parts.join("\n\n") : undefined;
   }
 
   // ============================================================================
@@ -507,6 +530,15 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
     } finally {
       this.currentAbortController = null;
     }
+  }
+
+  /**
+   * Reset agent state including frozen system prompt cache.
+   */
+  override reset(): void {
+    this.systemPromptFrozen = false;
+    this.frozenSystemPrompt = undefined;
+    super.reset();
   }
 }
 

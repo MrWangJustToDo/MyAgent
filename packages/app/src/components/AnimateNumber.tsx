@@ -39,11 +39,14 @@ export const AnimateNumber = ({ number }: { number: number }) => {
   const [current, setCurrent] = useState(number);
 
   useEffect(() => {
-    if (current >= number) return;
+    if (current === number) return;
+    // When target decreased (e.g. after reset), snap immediately
+    if (current > number) {
+      setCurrent(number);
+      return;
+    }
     const id = setTimeout(() => {
       const gap = number - current;
-      // When the gap is large, take bigger steps so the animation
-      // finishes in roughly the same number of ticks regardless of distance.
       const step = Math.max(1, Math.ceil(gap / TICK_COUNT));
       setCurrent(Math.min(current + step, number));
     }, TICK_MS);

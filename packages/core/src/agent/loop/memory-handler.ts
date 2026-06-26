@@ -28,6 +28,8 @@ export class MemoryHandler {
   memoryContent: string = "";
   relevantMemoryContent: string = "";
   private alreadySurfaced: Set<string> = new Set();
+  private extractionInProgress = false;
+  private pendingSurfacedFilenames: string[] = [];
 
   setMemoryManager(m: MemoryManager): void {
     this.memoryManager = m;
@@ -58,6 +60,17 @@ export class MemoryHandler {
   markMemoriesSurfaced(filenames: string[]): void {
     for (const f of filenames) {
       this.alreadySurfaced.add(f);
+    }
+  }
+
+  /**
+   * Commit pending surfaced filenames into the alreadySurfaced set.
+   * Call this after a successful LLM step to confirm injection was used.
+   */
+  commitSurfacedMemories(): void {
+    if (this.pendingSurfacedFilenames.length > 0) {
+      this.markMemoriesSurfaced(this.pendingSurfacedFilenames);
+      this.pendingSurfacedFilenames = [];
     }
   }
 
@@ -115,29 +128,36 @@ export class MemoryHandler {
       );
 
       if (relevant.length > 0) {
-        this.markMemoriesSurfaced(relevant.map((r) => r.filename));
         this.relevantMemoryContent = formatRelevantMemories(relevant);
+        this.pendingSurfacedFilenames = relevant.map((r) => r.filename);
         this.log?.info("memory", `Injected ${relevant.length} relevant memories into context`, {
-          filenames: relevant.map((r) => r.filename),
+          filenames: this.pendingSurfacedFilenames,
           byteSize: getEnv().byteLength(this.relevantMemoryContent, "utf-8"),
         });
       } else {
         this.relevantMemoryContent = "";
+        this.pendingSurfacedFilenames = [];
         this.log?.debug("memory", "No relevant memories found for this query");
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       this.log?.warn("memory", `Relevant memory prefetch failed: ${errorMsg}`);
       this.relevantMemoryContent = "";
+      this.pendingSurfacedFilenames = [];
     }
   }
 
   /**
    * Run background memory extraction after each turn.
    * Fire-and-forget: errors are logged but never block the agent.
+   * Uses a single-flight lock to prevent concurrent extraction/consolidation.
    */
   protected runMemoryExtraction(): void {
     if (!this.memoryManager || !this.context) return;
+    if (this.extractionInProgress) {
+      this.log?.debug("memory", "Extraction already in progress, skipping");
+      return;
+    }
 
     const messages = this.context.getMessages();
     if (messages.length < 15) return;
@@ -145,12 +165,14 @@ export class MemoryHandler {
     const manager = this.memoryManager;
     const agentId = this.agentId;
 
+    this.extractionInProgress = true;
     this.log?.notify("memory", "info", "Extracting memories...");
 
     (async () => {
       try {
         const count = await extractMemories(messages, manager, agentId);
         if (count > 0) {
+          await manager.flushIndex();
           this.memoryContent = manager.getIndexContent();
           this.log?.notify("memory", "success", `Extracted ${count} new memories`, { count });
         }
@@ -158,18 +180,21 @@ export class MemoryHandler {
         const memoryCount = await manager.getMemoryCount();
         if (memoryCount >= manager.getConsolidateThreshold()) {
           this.log?.notify("memory", "info", "Consolidating memories...");
-          const after = await consolidateMemories(manager, agentId);
-          if (after > 0) {
+          const result = await consolidateMemories(manager, agentId);
+          if (result.changed) {
+            await manager.flushIndex();
             this.memoryContent = manager.getIndexContent();
-            this.log?.notify("memory", "success", `Consolidated memories: ${memoryCount} → ${after}`, {
+            this.log?.notify("memory", "success", `Consolidated memories: ${memoryCount} → ${result.count}`, {
               before: memoryCount,
-              after,
+              after: result.count,
             });
           }
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         this.log?.notify("memory", "warning", `Memory extraction failed: ${errorMsg}`);
+      } finally {
+        this.extractionInProgress = false;
       }
     })();
   }
@@ -177,6 +202,7 @@ export class MemoryHandler {
   /** Reset memory-related state. */
   protected resetMemoryState(): void {
     this.relevantMemoryContent = "";
+    this.pendingSurfacedFilenames = [];
     this.alreadySurfaced.clear();
   }
 }
