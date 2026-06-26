@@ -1,13 +1,11 @@
 import { streamText, generateText, tool as vercelTool, stepCountIs } from "ai";
 
-import { emitHook } from "../hooks/hook-runner.js";
 import { generateId } from "../utils.js";
 
 import { Base } from "./Base.js";
 import { AgentConfigSchema } from "./types.js";
 
 import type { AgentConfig, ToolSet } from "./types.js";
-import type { PostToolUseInput, PostToolUseFailureInput } from "../hooks/types.js";
 import type { Agent as VercelAgent, StreamTextResult, GenerateTextResult, GenerateTextOnStepFinishCallback } from "ai";
 
 type StreamParams = Omit<Parameters<typeof streamText>[0], "model">;
@@ -240,16 +238,11 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       toolCount: Object.keys(tools).length,
     });
 
-    emitHook(
-      this.hookRegistry,
-      "UserPromptSubmit",
-      {
-        hook_event_name: "UserPromptSubmit",
-        session_id: this.getHookSessionId(),
-        prompt: typeof prompt === "string" ? prompt : "(structured)",
-      },
-      { logger: this.log ?? undefined }
-    );
+    this.dispatchEvent?.({
+      type: "prompt:submit",
+      agentId: this.id,
+      data: { session_id: this.getHookSessionId(), prompt: typeof prompt === "string" ? prompt : "(structured)" },
+    });
 
     const runStream = (msgs: typeof finalMessages): StreamTextResult<ToolSet, never> => {
       return streamText({
@@ -268,16 +261,11 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
           this.context?.emit(chunk);
           if (chunk.type === "tool-call" && this.isToolNeedsApproval(chunk.toolName)) {
             this.status = "waiting";
-            emitHook(
-              this.hookRegistry,
-              "Notification",
-              {
-                hook_event_name: "Notification",
-                session_id: this.getHookSessionId(),
-                message: `Tool ${chunk.toolName} requires approval`,
-              },
-              { logger: this.log ?? undefined }
-            );
+            this.dispatchEvent?.({
+              type: "notification",
+              agentId: this.id,
+              data: { session_id: this.getHookSessionId(), message: `Tool ${chunk.toolName} requires approval` },
+            });
             return;
           }
           if (chunk.type === "reasoning-delta") {
@@ -294,7 +282,6 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
         },
         onError: async (event) => {
           const err = event.error;
-          // Attempt reactive compaction on prompt_too_long errors
           const compacted = await this.handleReactiveCompact(err);
           if (compacted) {
             this.log?.info(
@@ -332,32 +319,28 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
           });
 
           if (error) {
-            emitHook(
-              this.hookRegistry,
-              "PostToolUseFailure",
-              {
-                hook_event_name: "PostToolUseFailure",
+            this.dispatchEvent?.({
+              type: "tool:error",
+              agentId: this.id,
+              data: {
                 session_id: this.getHookSessionId(),
                 tool_name: toolCall.toolName,
                 tool_input: toolCall.input,
                 error: error instanceof Error ? error.message : String(error),
-              } satisfies PostToolUseFailureInput,
-              { matchValue: toolCall.toolName, logger: this.log ?? undefined }
-            );
+              },
+            });
           } else {
-            emitHook(
-              this.hookRegistry,
-              "PostToolUse",
-              {
-                hook_event_name: "PostToolUse",
+            this.dispatchEvent?.({
+              type: "tool:post",
+              agentId: this.id,
+              data: {
                 session_id: this.getHookSessionId(),
                 tool_name: toolCall.toolName,
                 tool_input: toolCall.input,
                 tool_output: output,
                 duration_ms: durationMs ?? 0,
-              } satisfies PostToolUseInput,
-              { matchValue: toolCall.toolName, logger: this.log ?? undefined }
-            );
+              },
+            });
           }
 
           experimental_onToolCallFinish?.(event);
@@ -414,16 +397,11 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       toolCount: Object.keys(tools).length,
     });
 
-    emitHook(
-      this.hookRegistry,
-      "UserPromptSubmit",
-      {
-        hook_event_name: "UserPromptSubmit",
-        session_id: this.getHookSessionId(),
-        prompt: typeof prompt === "string" ? prompt : "(structured)",
-      },
-      { logger: this.log ?? undefined }
-    );
+    this.dispatchEvent?.({
+      type: "prompt:submit",
+      agentId: this.id,
+      data: { session_id: this.getHookSessionId(), prompt: typeof prompt === "string" ? prompt : "(structured)" },
+    });
 
     const runGenerate = async (msgs: typeof finalMessages): Promise<GenerateTextResult<ToolSet, never>> => {
       return generateText({
@@ -462,32 +440,28 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
           });
 
           if (error) {
-            emitHook(
-              this.hookRegistry,
-              "PostToolUseFailure",
-              {
-                hook_event_name: "PostToolUseFailure",
+            this.dispatchEvent?.({
+              type: "tool:error",
+              agentId: this.id,
+              data: {
                 session_id: this.getHookSessionId(),
                 tool_name: toolCall.toolName,
                 tool_input: toolCall.input,
                 error: error instanceof Error ? error.message : String(error),
-              } satisfies PostToolUseFailureInput,
-              { matchValue: toolCall.toolName, logger: this.log ?? undefined }
-            );
+              },
+            });
           } else {
-            emitHook(
-              this.hookRegistry,
-              "PostToolUse",
-              {
-                hook_event_name: "PostToolUse",
+            this.dispatchEvent?.({
+              type: "tool:post",
+              agentId: this.id,
+              data: {
                 session_id: this.getHookSessionId(),
                 tool_name: toolCall.toolName,
                 tool_input: toolCall.input,
                 tool_output: output,
                 duration_ms: durationMs ?? 0,
-              } satisfies PostToolUseInput,
-              { matchValue: toolCall.toolName, logger: this.log ?? undefined }
-            );
+              },
+            });
           }
 
           experimental_onToolCallFinish?.(event);

@@ -3,11 +3,11 @@ import { applyCompactionResult, autoCompact } from "../compaction";
 import { microCompact } from "../compaction/micro-compact.js";
 import { isPromptTooLongError, reactiveCompact } from "../compaction/reactive-compact.js";
 import { estimateTokens } from "../compaction/token-estimator.js";
-import { emitHook } from "../hooks/hook-runner.js";
 import { cleanupOrphanedToolCache, createTodoTool } from "../tools";
 
 import { SessionHandler } from "./session-handler.js";
 
+import type { AgentEvent } from "../../managers/agent-event-bus.js";
 import type { ModelInfo } from "../../models/types.js";
 import type { AgentContext } from "../agent-context";
 import type { AgentLog } from "../agent-log";
@@ -53,6 +53,9 @@ export class Base extends SessionHandler {
 
   // Hook system
   hookRegistry: HookRegistry | null = null;
+
+  /** Unified event dispatch callback — set by AgentManager to route events to listeners + hooks */
+  dispatchEvent?: (event: AgentEvent) => void;
 
   // Model metadata from the registry (context window, pricing, capabilities, etc.)
   modelInfo: ModelInfo | null = null;
@@ -382,18 +385,14 @@ export class Base extends SessionHandler {
       this.saveSession();
       this.relevantMemoryContent = "";
 
-      emitHook(
-        this.hookRegistry,
-        "Stop",
-        {
-          hook_event_name: "Stop",
-          session_id: this.sessionData?.id ?? "",
-          reason: event.finishReason ?? "unknown",
-        },
-        { logger: this.log ?? undefined }
-      );
+      this.dispatchEvent?.({
+        type: "agent:stop",
+        agentId: this.agentId,
+        data: { session_id: this.sessionData?.id ?? "", reason: event.finishReason ?? "unknown" },
+      });
 
       this.runMemoryExtraction();
+
       userCallback?.(event);
     };
   }

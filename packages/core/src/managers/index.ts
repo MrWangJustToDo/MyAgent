@@ -19,7 +19,6 @@ export {
   SKILL_DIRS_ENV_VAR,
   type ManagedAgentConfig,
   type ManagedAgent,
-  type SubagentEventType,
-  type SubagentEvent,
-  type SubagentEventListener,
 } from "./manager-agent.js";
+
+export { AgentEventBus, type AgentEventType, type AgentEvent, type AgentEventListener } from "./agent-event-bus.js";

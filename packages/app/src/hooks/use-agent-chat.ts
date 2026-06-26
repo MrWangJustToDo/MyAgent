@@ -190,7 +190,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       }
       forceUpdate();
     },
-    [chatHelpers]
+    [chatHelpers, forceUpdate]
   );
 
   const clearMessages = useCallback(() => {

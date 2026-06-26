@@ -20,10 +20,15 @@ import { createTaskTool } from "../agent/tools/task-tool.js";
 import { getEnv } from "../env.js";
 import { getModel } from "../models/registry.js";
 
+import { AgentEventBus } from "./agent-event-bus.js";
+
+import type { AgentEvent, AgentEventListener, AgentEventType } from "./agent-event-bus.js";
 import type { CompactionConfigInput } from "../agent/compaction/types.js";
 import type { AgentConfig, ToolSet } from "../agent/loop/types.js";
 import type { ResumeResult, SessionData } from "../agent/session/types.js";
 import type { ModelInfo } from "../models/types.js";
+
+export type { AgentEvent, AgentEventListener, AgentEventType } from "./agent-event-bus.js";
 
 // ============================================================================
 // Types & Schemas
@@ -121,39 +126,6 @@ export interface ManagedAgent {
 }
 
 // ============================================================================
-// Event Types
-// ============================================================================
-
-/** Subagent lifecycle events */
-export type SubagentEventType =
-  | "subagent:created"
-  | "subagent:started"
-  | "subagent:step"
-  | "subagent:completed"
-  | "subagent:error"
-  | "subagent:destroyed";
-
-export interface SubagentEvent {
-  type: SubagentEventType;
-  subagentId: string;
-  parentId: string;
-  agent: Agent;
-  /** Additional data depending on event type */
-  data?: {
-    /** For step events */
-    step?: number;
-    finishReason?: string;
-    /** For completed events */
-    summary?: string;
-    iterations?: number;
-    /** For error events */
-    error?: Error;
-  };
-}
-
-export type SubagentEventListener = (event: SubagentEvent) => void;
-
-// ============================================================================
 // AgentManager Class
 // ============================================================================
 
@@ -161,15 +133,17 @@ export class AgentManager {
   /** Managed agents by ID */
   private agents: Map<string, ManagedAgent> = new Map();
 
-  /** Event listeners for subagent lifecycle */
-  private eventListeners: Map<SubagentEventType | "*", Set<SubagentEventListener>> = new Map();
+  /** Unified event bus for in-process listeners and hook scripts */
+  private eventBus = new AgentEventBus(
+    (event) => this.agents.get(event.agentId) ?? (event.parentId ? this.agents.get(event.parentId) : undefined)
+  );
 
   // ============================================================================
   // Event Emitter
   // ============================================================================
 
   /**
-   * Subscribe to subagent events.
+   * Subscribe to agent events.
    *
    * @param type - Event type or "*" for all events
    * @param listener - Callback function
@@ -179,7 +153,7 @@ export class AgentManager {
    * ```typescript
    * // Listen to specific event
    * const unsubscribe = agentManager.on("subagent:created", (event) => {
-   *   console.log(`Subagent ${event.subagentId} created`);
+   *   console.log(`Subagent ${event.data?.subagentId} created`);
    * });
    *
    * // Listen to all events
@@ -191,44 +165,15 @@ export class AgentManager {
    * unsubscribe();
    * ```
    */
-  on(type: SubagentEventType | "*", listener: SubagentEventListener): () => void {
-    if (!this.eventListeners.has(type)) {
-      this.eventListeners.set(type, new Set());
-    }
-    this.eventListeners.get(type)!.add(listener);
-
-    return () => {
-      this.eventListeners.get(type)?.delete(listener);
-    };
+  on(type: AgentEventType | "*", listener: AgentEventListener): () => void {
+    return this.eventBus.on(type, listener);
   }
 
   /**
-   * Emit a subagent event.
+   * Emit an agent event. Dispatches to both in-process listeners and hook scripts.
    */
-  emit(event: SubagentEvent): void {
-    // Notify specific listeners
-    const listeners = this.eventListeners.get(event.type);
-    if (listeners) {
-      for (const listener of listeners) {
-        try {
-          listener(event);
-        } catch {
-          // Ignore listener errors
-        }
-      }
-    }
-
-    // Notify wildcard listeners
-    const wildcardListeners = this.eventListeners.get("*");
-    if (wildcardListeners) {
-      for (const listener of wildcardListeners) {
-        try {
-          listener(event);
-        } catch {
-          // Ignore listener errors
-        }
-      }
-    }
+  emit(event: AgentEvent): void {
+    this.eventBus.emit(event);
   }
 
   // ============================================================================
@@ -386,6 +331,9 @@ export class AgentManager {
       }
     }
 
+    // Wire unified event dispatch (routes to both listeners and hooks)
+    agent.dispatchEvent = (event) => this.emit(event);
+
     // Session persistence (root agents only)
     if (!parentId) {
       const sessionStore = new SessionStore();
@@ -426,19 +374,13 @@ export class AgentManager {
       }
     }
 
-    // Emit SessionStart hook for root agents
-    if (!parentId && agent.hookRegistry) {
-      const { emitHook } = await import("../agent/hooks/hook-runner.js");
-      emitHook(
-        agent.hookRegistry,
-        "SessionStart",
-        {
-          hook_event_name: "SessionStart",
-          session_id: agent.getSessionData()?.id ?? id,
-          cwd: fsRootPath,
-        },
-        { logger: log }
-      );
+    // Emit session:start event (dispatches to both listeners and hooks)
+    if (!parentId) {
+      this.emit({
+        type: "session:start",
+        agentId: id,
+        data: { session_id: agent.getSessionData()?.id ?? id, cwd: fsRootPath },
+      });
     }
 
     return agent;

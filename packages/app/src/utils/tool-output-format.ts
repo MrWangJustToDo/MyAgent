@@ -10,6 +10,31 @@ import type {
   WriteFileOutput,
 } from "@my-agent/core";
 
+// ============================================================================
+// Helpers
+// ============================================================================
+
+const CACHE_HINT_PATTERNS = [
+  /^Full output saved to:\s*.agent-cache\//,
+  /^Use read_file with path=".agent-cache\//,
+  /^\.\.\.\s*\(\d+\s+lines?\s+omitted\)\s*\.\.\.$/,
+  /^\.\.\.\s*\(\d+\s+chars?\s+omitted\)\s*\.\.\.$/,
+];
+
+/** Strip LLM-directed cache hint lines from tool output for user display. */
+function stripCacheHintLines(lines: string[]): string[] {
+  return lines.filter((line) => !CACHE_HINT_PATTERNS.some((pattern) => pattern.test(line)));
+}
+
+/** Strip "(large output/content cached to disk)" note from message text. */
+export function stripCacheNote(message: string): string {
+  return message.replace(/\s*\(large (?:output|content) cached to disk\)/, "");
+}
+
+// ============================================================================
+// Formatters
+// ============================================================================
+
 function formatListFileOutput(output: ListFileOutput): string {
   const { entries, count } = output;
   if (count === 0) return "Empty directory";
@@ -37,7 +62,7 @@ function formatRunCommandOutput(output: RunCommandOutput): string {
   }
 
   if (stderr && stderr.trim()) {
-    const stderrLines = stderr.trim().split("\n");
+    const stderrLines = stripCacheHintLines(stderr.trim().split("\n"));
     const tail = stderrLines.slice(-3);
     if (stderrLines.length > 3) {
       lines.push(`stderr: ... (${stderrLines.length - 3} more lines)`);
@@ -46,7 +71,7 @@ function formatRunCommandOutput(output: RunCommandOutput): string {
   }
 
   if (stdout && stdout.trim()) {
-    const stdoutLines = stdout.trim().split("\n");
+    const stdoutLines = stripCacheHintLines(stdout.trim().split("\n"));
     const tail = stdoutLines.slice(-3);
     if (stdoutLines.length > 3) {
       lines.push(`... (${stdoutLines.length - 3} more lines)`);
@@ -124,7 +149,7 @@ function formatTaskOutput(output: TaskOutput): string {
   if (reachedLimit) statusParts.push("limit reached");
   lines.push(`[${statusParts.join(", ")}]`);
 
-  const summaryLines = summary.trim().split("\n");
+  const summaryLines = stripCacheHintLines(summary.trim().split("\n"));
   const maxSummaryLines = 10;
   if (summaryLines.length <= maxSummaryLines) {
     lines.push(...summaryLines);

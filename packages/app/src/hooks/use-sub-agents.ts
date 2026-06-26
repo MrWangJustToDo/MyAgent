@@ -21,7 +21,7 @@ const getManagerSubagent = (subId: string) => {
 export const useSubAgents = ({ subId }: { subId: string }) => {
   const useSubagentContext = useMemo(
     () =>
-      createState(() => ({ state: toRaw(getManagerSubagent(subId)?.context) as null | AgentContext }), {
+      createState(() => ({ state: getManagerSubagent(subId)?.context as null | AgentContext }), {
         withActions: (s) => ({
           setContext: (context: AgentContext) => (s.state = context),
         }),
@@ -35,16 +35,17 @@ export const useSubAgents = ({ subId }: { subId: string }) => {
     const exist = useSubagentContext.getReadonlyState().state;
 
     if (managerAgent && toRaw(exist) !== toRaw(managerAgent.context)) {
-      useSubagentContext.getActions().setContext(toRaw(managerAgent.context));
+      useSubagentContext.getActions().setContext(managerAgent.context);
 
       return;
     }
 
-    const cb = agentManager.on("subagent:created", ({ subagentId }) => {
+    const cb = agentManager.on("subagent:created", (event) => {
+      const subagentId = event.agentId;
       const managerAgent = agentManager.getAgent(subagentId);
       const exist = useSubagentContext.getReadonlyState().state;
       if (managerAgent?.id === subId && toRaw(exist) !== toRaw(managerAgent.context)) {
-        useSubagentContext.getActions().setContext(toRaw(managerAgent.context));
+        useSubagentContext.getActions().setContext(managerAgent.context);
       }
     });
 

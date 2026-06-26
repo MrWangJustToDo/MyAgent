@@ -25,7 +25,6 @@
  */
 
 import { agentManager, type AgentManager } from "../../managers/manager-agent.js";
-import { emitHook } from "../hooks/hook-runner.js";
 import { generateId } from "../utils.js";
 
 import { extractSummary, truncateSummary } from "./output.js";
@@ -113,12 +112,11 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
   subagent.setTools(subagentTools);
   subagent.customTools = {};
 
-  // Emit subagent:created event
   agentManager.emit({
     type: "subagent:created",
-    subagentId,
+    agentId: subagentId,
     parentId: parentAgentId,
-    agent: subagent,
+    data: { subagentId },
   });
 
   // Helper to track step progress
@@ -145,16 +143,13 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
 
     parentLog?.debug("agent", `Subagent step ${iterations}`, { subagentId, finishReason });
 
-    // Emit subagent:step event
     agentManager.emit({
       type: "subagent:step",
-      subagentId,
+      agentId: subagentId,
       parentId: parentAgentId,
-      agent: subagent,
-      data: { step: iterations, finishReason },
+      data: { subagentId, step: iterations, finishReason },
     });
 
-    // Check if we hit the limit
     if (iterations >= maxIterations) {
       reachedLimit = true;
     }
@@ -170,25 +165,16 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
       subagent.context?.reset();
       subagent.context?.resetUsage();
 
-      // Emit subagent:started event
       agentManager.emit({
         type: "subagent:started",
-        subagentId,
+        agentId: subagentId,
         parentId: parentAgentId,
-        agent: subagent,
-      });
-
-      emitHook(
-        parentAgent.hookRegistry,
-        "SubagentStart",
-        {
-          hook_event_name: "SubagentStart",
-          session_id: parentAgent.getSessionData()?.id ?? parentAgentId,
+        data: {
           subagent_id: subagentId,
+          session_id: parentAgent.getSessionData()?.id ?? parentAgentId,
           description,
         },
-        { logger: parentLog ?? undefined }
-      );
+      });
 
       retries++;
 
@@ -235,26 +221,17 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           output,
         });
 
-        // Emit subagent:completed event
         agentManager.emit({
           type: "subagent:completed",
-          subagentId,
+          agentId: subagentId,
           parentId: parentAgentId,
-          agent: subagent,
-          data: { summary: output, iterations },
-        });
-
-        emitHook(
-          parentAgent.hookRegistry,
-          "SubagentStop",
-          {
-            hook_event_name: "SubagentStop",
-            session_id: parentAgent.getSessionData()?.id ?? parentAgentId,
+          data: {
             subagent_id: subagentId,
+            session_id: parentAgent.getSessionData()?.id ?? parentAgentId,
             summary: output,
+            iterations,
           },
-          { logger: parentLog ?? undefined }
-        );
+        });
 
         return {
           subagentId,
@@ -268,13 +245,11 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
       } catch (error) {
         parentLog?.error("agent", "Subagent error", error as Error);
 
-        // Emit subagent:error event
         agentManager.emit({
           type: "subagent:error",
-          subagentId,
+          agentId: subagentId,
           parentId: parentAgentId,
-          agent: subagent,
-          data: { error: error instanceof Error ? error : new Error(String(error)) },
+          data: { subagentId, error: error instanceof Error ? error.message : String(error) },
         });
 
         return {
@@ -289,13 +264,12 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
       }
     }
   } finally {
-    // Emit subagent:destroyed event before cleanup
     if (autoDestroy) {
       agentManager.emit({
         type: "subagent:destroyed",
-        subagentId,
+        agentId: subagentId,
         parentId: parentAgentId,
-        agent: subagent,
+        data: { subagentId },
       });
       agentManager.destroyAgent(subagentId);
     }

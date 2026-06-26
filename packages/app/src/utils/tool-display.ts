@@ -1,5 +1,7 @@
 import chalk from "chalk";
 
+import { stripCacheNote } from "./tool-output-format.js";
+
 import type { ToolUIPart } from "ai";
 
 /** Get status color for tool invocation state. */
@@ -106,7 +108,7 @@ export function getCompactOutput(part: ToolUIPart, toolName: string): string | n
   if (!SHOW_COMPACT_OUTPUT.has(toolName)) return null;
   const output = part.output as Record<string, unknown> | undefined;
   if (!output) return null;
-  if (typeof output.message === "string") return output.message;
+  if (typeof output.message === "string") return stripCacheNote(output.message);
   return null;
 }
 
