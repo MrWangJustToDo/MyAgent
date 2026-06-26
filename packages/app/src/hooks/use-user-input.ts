@@ -117,6 +117,9 @@ export const useUserInput = createState(() => ({ ...initialState }), {
      * If selectAll is true, replaces everything with the new chars.
      */
     append: (chars: string) => {
+      // Convert \r\n and \r to \n for proper newline handling
+      chars = chars.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
       // If all selected, replace everything
       if (state.selectAll) {
         state.value = chars;

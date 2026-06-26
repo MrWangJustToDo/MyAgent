@@ -29,18 +29,50 @@ function buildImageDisplayNumbers(value: string): Map<number, number> {
   return displayNumbers;
 }
 
-function getCharDisplay(char: string, imageDisplayNumbers: Map<number, number>): string {
+function getCharDisplay(char: string, imageDisplayNumbers: Map<number, number>): { text: string; isImage: boolean } {
   const code = char.charCodeAt(0);
   if (isImagePlaceholderCode(code)) {
     const displayNum = imageDisplayNumbers.get(code - IMAGE_PLACEHOLDER_START) ?? "?";
-    return `[Image #${displayNum}]`;
+    return { text: `[Image #${displayNum}]`, isImage: true };
   }
-  return char;
+  return { text: char, isImage: false };
 }
 
 /**
- * Simple input component — renders text with a chalk.inverse cursor
- * and lets Ink's native `wrap="wrap"` handle line wrapping.
+ * Build styled string for a single line segment.
+ */
+function buildStyledString(
+  segment: string,
+  segmentOffset: number,
+  imageDisplayNumbers: Map<number, number>,
+  selectAll: boolean,
+  showCursor: boolean,
+  cursorPosition: number
+): string {
+  let rendered = "";
+  for (let i = 0; i < segment.length; i++) {
+    const char = segment[i]!;
+    const { text: display, isImage } = getCharDisplay(char, imageDisplayNumbers);
+    const globalIndex = segmentOffset + i;
+
+    if (selectAll) {
+      rendered += chalk.bgCyan.black(display);
+    } else if (showCursor && globalIndex === cursorPosition) {
+      rendered += chalk.inverse(display[0] || " ") + display.slice(1);
+    } else if (isImage) {
+      // Subtle highlight for image placeholders
+      rendered += chalk.dim.cyan(display);
+    } else {
+      rendered += display;
+    }
+  }
+
+  return rendered;
+}
+
+/**
+ * Simple input component — renders text with a chalk.inverse cursor.
+ * Handles newline characters by splitting into separate Text elements.
  */
 export const MultiLineInput = ({
   value,
@@ -62,28 +94,54 @@ export const MultiLineInput = ({
   }
 
   const imageDisplayNumbers = buildImageDisplayNumbers(value);
+  const lines = value.split(/\r?\n/);
 
-  // Build a single styled string: expand image placeholders,
-  // apply chalk.inverse at cursor position, chalk.bgCyan for select-all.
-  let rendered = "";
-
-  for (let i = 0; i < value.length; i++) {
-    const char = value[i]!;
-    const display = getCharDisplay(char, imageDisplayNumbers);
-
-    if (selectAll) {
-      rendered += chalk.bgCyan.black(display);
-    } else if (showCursor && i === cursorPosition) {
-      rendered += chalk.inverse(display[0] || " ") + display.slice(1);
-    } else {
-      rendered += display;
+  // Build array of line start offsets in the original value
+  const lineOffsets: number[] = [];
+  let searchStart = 0;
+  for (let i = 0; i < lines.length; i++) {
+    lineOffsets.push(searchStart);
+    searchStart += lines[i]!.length;
+    // Skip \r\n or \n
+    if (searchStart < value.length && value[searchStart] === "\r") {
+      searchStart += 2;
+    } else if (searchStart < value.length && value[searchStart] === "\n") {
+      searchStart += 1;
     }
   }
 
-  // Cursor at end of value
-  if (showCursor && !selectAll && cursorPosition >= value.length) {
-    rendered += chalk.inverse(" ");
-  }
+  return (
+    <>
+      {lines.map((line, lineIndex) => {
+        const lineOffset = lineOffsets[lineIndex]!;
+        const styledContent = buildStyledString(
+          line,
+          lineOffset,
+          imageDisplayNumbers,
+          selectAll,
+          showCursor,
+          cursorPosition
+        );
 
-  return <Text wrap="wrap">{rendered}</Text>;
+        // Show cursor at end of line if cursor is positioned exactly at line end
+        const lineEndPos = lineOffset + line.length;
+        const showCursorAtLineEnd = showCursor && !selectAll && cursorPosition === lineEndPos;
+
+        if (showCursorAtLineEnd) {
+          return (
+            <Text key={lineIndex} wrap="wrap">
+              {styledContent}
+              {chalk.inverse(" ")}
+            </Text>
+          );
+        }
+
+        return (
+          <Text key={lineIndex} wrap="wrap">
+            {styledContent}
+          </Text>
+        );
+      })}
+    </>
+  );
 };
