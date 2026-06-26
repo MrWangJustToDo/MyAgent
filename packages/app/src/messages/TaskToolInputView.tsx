@@ -2,25 +2,13 @@ import { type ToolUIPart } from "ai";
 import { Box, Text } from "ink";
 
 import { Spinner } from "../components/Spinner";
-import { useSubAgents } from "../hooks/use-sub-agents";
+import { useTask } from "../hooks/use-task";
 import { formatToolInput } from "../utils/format";
 
 export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
   const content = part.input as { prompt?: string; description?: string; id: string };
 
-  const useSubagent = useSubAgents({ subId: content.id });
-
-  const {
-    allTools,
-    length: total,
-    finish,
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-  } = useSubagent.useDeepStableSelector((s) => ({
-    allTools: s.state?.getTools(),
-    finish: !s.state || !!s.state.finishInfo,
-    length: s.state?.getTools().length || 0,
-  }));
+  const { allTools, finish, total } = useTask({ id: content.id });
 
   const currentTool = allTools?.at(-1);
 
@@ -39,7 +27,7 @@ export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
         <>
           <Text color="gray" italic>
             {toolName}
-            {total > 1 ? ` (+${total}) ` : " "}
+            {total && total > 1 ? ` (+${total}) ` : " "}
           </Text>
           <Text color="gray" italic dimColor wrap="truncate">
             {toolInput}

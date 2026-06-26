@@ -1,20 +1,21 @@
+import { getToolName, type ToolUIPart } from "ai";
 import { Text } from "ink";
 
 import { Spinner } from "../components/Spinner.js";
 
-import type { ToolUIPart } from "ai";
-
 export interface ToolStatusIconProps {
+  part: ToolUIPart;
   state: ToolUIPart["state"];
 }
 
 /** Get status icon for tool invocation */
-export const ToolStatusIcon = ({ state }: ToolStatusIconProps) => {
+export const ToolStatusIcon = ({ state, part }: ToolStatusIconProps) => {
+  const toolName = getToolName(part);
   switch (state) {
     case "input-streaming":
     case "input-available":
     case "approval-responded":
-      return <Spinner text="" />;
+      return toolName === "ask_user" ? <Text color="yellow">?</Text> : <Spinner text="" />;
     case "output-available":
       return <Text color="green">✓</Text>;
     case "output-error":

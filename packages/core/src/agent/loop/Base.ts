@@ -37,11 +37,9 @@ export class Base extends SessionHandler {
   status: AgentStatus = "idle";
   error = "";
 
-  // Run timing (separate for stream/generate since they can run concurrently)
+  // Run timing (all execution goes through stream())
   streamStartedAt = 0;
-  generateStartedAt = 0;
   lastStreamDurationMs = 0;
-  lastGenerateDurationMs = 0;
 
   // Resources
   systemPrompt = "";
@@ -357,7 +355,6 @@ export class Base extends SessionHandler {
   }
 
   createOnFinish(
-    isStream: boolean,
     userCallback?: StreamTextOnFinishCallback<ToolSet> | GenerateTextOnFinishCallback<NoInfer<ToolSet>>
   ): StreamTextOnFinishCallback<ToolSet> | GenerateTextOnFinishCallback<NoInfer<ToolSet>> {
     return (event) => {
@@ -365,13 +362,8 @@ export class Base extends SessionHandler {
       if (this.error) this.status = "error";
 
       if (this.status === "completed") {
-        if (isStream) {
-          this.lastStreamDurationMs = Date.now() - this.streamStartedAt;
-          this.streamStartedAt = 0;
-        } else {
-          this.lastGenerateDurationMs = Date.now() - this.generateStartedAt;
-          this.generateStartedAt = 0;
-        }
+        this.lastStreamDurationMs = Date.now() - this.streamStartedAt;
+        this.streamStartedAt = 0;
       }
 
       this.log?.agent("Agent response finished", {

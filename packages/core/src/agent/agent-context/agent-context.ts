@@ -63,6 +63,8 @@ export class AgentContext {
   /** Event listeners */
   private eventListeners: Set<(event: StreamPart) => void> = new Set();
 
+  private toolListeners: Set<(event: TypedToolCall<ToolSet>) => void> = new Set();
+
   finishInfo: OnFinishEvent<ToolSet> | null = null;
 
   /** Streaming state */
@@ -89,7 +91,7 @@ export class AgentContext {
   /**
    * Emit a stream event
    */
-  emit(event: StreamPart): void {
+  emitStream(event: StreamPart): void {
     this.events.push(event);
 
     // Update streaming state
@@ -114,7 +116,7 @@ export class AgentContext {
   /**
    * Subscribe to stream events
    */
-  onEvent(listener: (event: StreamPart) => void): () => void {
+  onStream(listener: (event: StreamPart) => void): () => void {
     this.eventListeners.add(listener);
     return () => this.eventListeners.delete(listener);
   }
@@ -248,8 +250,20 @@ export class AgentContext {
     return Math.min(100, (this.usage.inputTokens / this.tokenLimit) * 100);
   }
 
-  addTool(tool: TypedToolCall<NoInfer<ToolSet>>) {
+  emitTool(tool: TypedToolCall<NoInfer<ToolSet>>) {
     this.tools.push(tool);
+    for (const listener of this.toolListeners) {
+      try {
+        listener(tool);
+      } catch {
+        // Ignore listener errors
+      }
+    }
+  }
+
+  onTool(listener: (event: TypedToolCall<ToolSet>) => void) {
+    this.toolListeners.add(listener);
+    return () => this.toolListeners.delete(listener);
   }
 
   getTools() {

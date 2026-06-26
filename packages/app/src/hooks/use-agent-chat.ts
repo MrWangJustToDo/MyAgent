@@ -7,7 +7,6 @@ import {
   lastAssistantMessageIsCompleteWithApprovalResponses,
   lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
-import ansiEscapes from "ansi-escapes";
 import { useEffect, useCallback, useState, useRef, useMemo } from "react";
 
 import { useAdapter } from "../context/adapter-context.js";
@@ -125,7 +124,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       if (currentInitId !== initIdRef.current) return;
       setTimeout(() => {
         if (typeof process === "object") {
-          process?.stdout?.write?.(ansiEscapes.clearScreen + ansiEscapes.cursorTo(0, 0));
+          import("ansi-escapes").then((pkg) => process?.stdout?.write?.(pkg.clearScreen + pkg.cursorTo(0, 0)));
         }
         setInitLoading(false);
       }, 500);

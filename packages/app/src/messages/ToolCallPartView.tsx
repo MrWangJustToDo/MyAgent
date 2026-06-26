@@ -80,7 +80,7 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
       {/* Header: [icon] toolName args (summary, duration) */}
       <Box flexDirection="row">
         <Box flexShrink={0} width={2}>
-          <ToolStatusIcon state={part.state} />
+          <ToolStatusIcon part={part} state={part.state} />
         </Box>
         <Text wrap="wrap">{headerText}</Text>
       </Box>

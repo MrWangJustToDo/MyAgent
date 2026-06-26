@@ -15,7 +15,7 @@ export const ToolOutputView = ({ part }: { part: ToolUIPart }) => {
 
   return (
     <Box paddingLeft={2}>
-      <Text color="gray" dimColor>
+      <Text color="gray" dimColor wrap="truncate-end">
         {formatToolOutput(part.output, toolName)}
       </Text>
     </Box>

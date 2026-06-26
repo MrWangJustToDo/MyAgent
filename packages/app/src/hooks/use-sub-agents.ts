@@ -1,10 +1,9 @@
 import { agentManager } from "@my-agent/core";
-import { useEffect, useMemo } from "react";
-import { createState, toRaw } from "reactivity-store";
+import { useEffect, useState } from "react";
 
 import { useAgent } from "./use-agent.js";
 
-import type { AgentContext } from "@my-agent/core";
+import type { Agent } from "@my-agent/core";
 
 const getManagerSubagent = (subId: string) => {
   const id = useAgent.getReadonlyState().agent?.id;
@@ -19,38 +18,25 @@ const getManagerSubagent = (subId: string) => {
 };
 
 export const useSubAgents = ({ subId }: { subId: string }) => {
-  const useSubagentContext = useMemo(
-    () =>
-      createState(() => ({ state: getManagerSubagent(subId)?.context as null | AgentContext }), {
-        withActions: (s) => ({
-          setContext: (context: AgentContext) => (s.state = context),
-        }),
-      }),
-    [subId]
-  );
+  const [agent, setAgent] = useState<Agent | undefined>(() => getManagerSubagent(subId)?.agent as undefined | Agent);
 
   useEffect(() => {
-    const managerAgent = getManagerSubagent(subId);
+    const agent = getManagerSubagent(subId)?.agent;
 
-    const exist = useSubagentContext.getReadonlyState().state;
+    if (agent) {
+      setAgent(agent);
+    } else {
+      const cb = agentManager.on("subagent:created", (event) => {
+        const subagentId = event.agentId;
+        const managerAgent = agentManager.getAgent(subagentId);
+        if (managerAgent?.id === subId) {
+          setAgent(managerAgent.agent);
+        }
+      });
 
-    if (managerAgent && toRaw(exist) !== toRaw(managerAgent.context)) {
-      useSubagentContext.getActions().setContext(managerAgent.context);
-
-      return;
+      return cb;
     }
+  }, [subId]);
 
-    const cb = agentManager.on("subagent:created", (event) => {
-      const subagentId = event.agentId;
-      const managerAgent = agentManager.getAgent(subagentId);
-      const exist = useSubagentContext.getReadonlyState().state;
-      if (managerAgent?.id === subId && toRaw(exist) !== toRaw(managerAgent.context)) {
-        useSubagentContext.getActions().setContext(managerAgent.context);
-      }
-    });
-
-    return cb;
-  }, [subId, useSubagentContext]);
-
-  return useSubagentContext;
+  return agent;
 };

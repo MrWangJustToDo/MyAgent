@@ -53,6 +53,16 @@ function formatListFileOutput(output: ListFileOutput): string {
   return `${count} entries:\n${lines.join("\n")}`;
 }
 
+/** Max width for individual output lines before truncation. */
+const MAX_LINE_WIDTH = 400;
+
+function truncateLine(line: string, maxWidth: number = MAX_LINE_WIDTH): string {
+  if (line.length > maxWidth) {
+    return line.slice(0, maxWidth - 3) + "...";
+  }
+  return line;
+}
+
 function formatRunCommandOutput(output: RunCommandOutput): string {
   const { stdout, stderr, exitCode, success } = output;
   const lines: string[] = [];
@@ -67,7 +77,7 @@ function formatRunCommandOutput(output: RunCommandOutput): string {
     if (stderrLines.length > 3) {
       lines.push(`stderr: ... (${stderrLines.length - 3} more lines)`);
     }
-    lines.push(...tail.map((line) => `stderr: ${line}`));
+    lines.push(...tail.map((line) => `stderr: ${truncateLine(line)}`));
   }
 
   if (stdout && stdout.trim()) {
@@ -76,7 +86,7 @@ function formatRunCommandOutput(output: RunCommandOutput): string {
     if (stdoutLines.length > 3) {
       lines.push(`... (${stdoutLines.length - 3} more lines)`);
     }
-    lines.push(...tail);
+    lines.push(...tail.map(truncateLine));
   }
 
   if (lines.length === 0) {
@@ -151,10 +161,9 @@ function formatTaskOutput(output: TaskOutput): string {
 
   const summaryLines = stripCacheHintLines(summary.trim().split("\n"));
   const maxSummaryLines = 10;
-  if (summaryLines.length <= maxSummaryLines) {
-    lines.push(...summaryLines);
-  } else {
-    lines.push(...summaryLines.slice(0, maxSummaryLines));
+  const shown = summaryLines.length <= maxSummaryLines ? summaryLines : summaryLines.slice(0, maxSummaryLines);
+  lines.push(...shown.map(truncateLine));
+  if (summaryLines.length > maxSummaryLines) {
     lines.push(`... (${summaryLines.length - maxSummaryLines} more lines)`);
   }
 

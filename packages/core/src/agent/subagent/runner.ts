@@ -27,7 +27,7 @@
 import { agentManager, type AgentManager } from "../../managers/manager-agent.js";
 import { generateId } from "../utils.js";
 
-import { extractSummary, truncateSummary } from "./output.js";
+import { truncateSummary } from "./output.js";
 import { buildExploreSystemPrompt } from "./prompt.js";
 import { createSubagentTools } from "./tools.js";
 import { SUBAGENT_DEFAULT_MAX_ITERATIONS, SUBAGENT_MAX_RETRIES } from "./types.js";
@@ -43,6 +43,9 @@ import type { SubagentConfig, SubagentResult } from "./types.js";
  * 3. Configurable tools (default: read-only exploration tools)
  * 4. Configurable system prompt (default: exploration prompt)
  * 5. Accessible via agentManager.getAgent(subagentId)
+ *
+ * Internally uses subagent.stream() for execution, which enables real-time
+ * streaming behavior (onChunk → context.emitStream, status changes).
  */
 export async function runSubagent(config: SubagentConfig): Promise<SubagentResult> {
   const {
@@ -181,19 +184,22 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
       // reset step
       iterations = 0;
 
-      // Run subagent - context was pre-seeded with initialMessages if provided
-      // The prompt becomes the final user message
-      // break the type, but current flow is ok, we will compact the message in prepareMessagesAsync function
+      // Run subagent via stream() - enables real-time streaming behavior:
+      // - onChunk → context.emitStream for UI streaming
+      // - onStepFinish → tracks iteration count and usage
+      // - onFinish → finalizes session
+      // streamResult.text drives stream consumption internally.
       try {
-        const result = await subagent.generate({
+        const streamResult = await subagent.stream({
           prompt,
           messages: initialMessages || [],
           abortSignal,
           onStepFinish,
         });
 
-        // Extract output from result
-        const rawOutput = extractSummary(result);
+        // streamResult.text drives stream consumption internally.
+        // All callbacks (onChunk, onStepFinish, onFinish) fire during consumption.
+        const rawOutput = (await streamResult.text)?.trim() || "(no summary)";
 
         // Aggregate usage to parent's context
         if (aggregateUsageToParent && parentContext) {

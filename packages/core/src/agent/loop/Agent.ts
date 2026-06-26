@@ -1,4 +1,4 @@
-import { streamText, generateText, tool as vercelTool, stepCountIs } from "ai";
+import { streamText, tool as vercelTool, stepCountIs } from "ai";
 
 import { generateId } from "../utils.js";
 
@@ -6,7 +6,7 @@ import { Base } from "./Base.js";
 import { AgentConfigSchema } from "./types.js";
 
 import type { AgentConfig, ToolSet } from "./types.js";
-import type { Agent as VercelAgent, StreamTextResult, GenerateTextResult, GenerateTextOnStepFinishCallback } from "ai";
+import type { Agent as VercelAgent, StreamTextResult, GenerateTextResult, generateText } from "ai";
 
 type StreamParams = Omit<Parameters<typeof streamText>[0], "model">;
 
@@ -256,9 +256,9 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
         stopWhen: stepCountIs(this.config.maxIterations ?? 10),
         onStepFinish: this.createOnStepFinish(onStepFinish),
         prepareStep: this.createPrepareStep(prepareStep),
-        onFinish: this.createOnFinish(true, onFinish),
+        onFinish: this.createOnFinish(onFinish),
         onChunk: ({ chunk }) => {
-          this.context?.emit(chunk);
+          this.context?.emitStream(chunk);
           if (chunk.type === "tool-call" && this.isToolNeedsApproval(chunk.toolName)) {
             this.status = "waiting";
             this.dispatchEvent?.({
@@ -302,7 +302,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
             toolCallId: toolCall.toolCallId,
             input: toolCall.input,
           });
-          this.context?.addTool(toolCall);
+          this.context?.emitTool(toolCall);
           experimental_onToolCallStart?.(event);
         },
         experimental_onToolCallFinish: (event) => {
@@ -355,124 +355,48 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
   /**
    * Generates output from the agent (non-streaming, Vercel AI SDK Agent interface).
    *
-   * Uses generateText internally and waits for completion.
+   * Delegates to stream() internally for consistent streaming behavior
+   * (onChunk → context.emitStream, status changes, tool approval).
+   * StreamTextResult is thenable — awaiting gives GenerateTextResult.
    */
   async generate(options: TextParams): Promise<GenerateTextResult<ToolSet, never>> {
     if (!this.model) {
       throw new Error("Model not set. Call setModel() first.");
     }
 
-    const {
-      prompt,
-      messages,
-      abortSignal,
-      onStepFinish,
-      onFinish,
-      prepareStep,
-      experimental_onToolCallStart,
-      experimental_onToolCallFinish,
-      ...rest
-    } = options;
+    // stream() handles timing via streamStartedAt / lastStreamDurationMs
 
-    // Use async preparation with auto-compaction support
-    let finalMessages = this.prepareMessages({ prompt, messages });
-
-    this.setupAbortController(abortSignal);
-    this.resetReactiveCompactRetries();
-
-    this.status = "running";
-    if (this.generateStartedAt === 0) this.generateStartedAt = Date.now();
-    this.error = "";
-
-    // Prefetch relevant memories before building system prompt
-    await this.prefetchRelevantMemories(finalMessages);
-
-    const tools = this.getTools();
-
-    const systemPrompt = this.buildSystemPrompt();
-
-    this.log?.agent("Starting generate (Agent interface)", {
-      systemPrompt,
-      finalMessages,
-      toolCount: Object.keys(tools).length,
-    });
-
-    this.dispatchEvent?.({
-      type: "prompt:submit",
-      agentId: this.id,
-      data: { session_id: this.getHookSessionId(), prompt: typeof prompt === "string" ? prompt : "(structured)" },
-    });
-
-    const runGenerate = async (msgs: typeof finalMessages): Promise<GenerateTextResult<ToolSet, never>> => {
-      return generateText({
-        model: this.model!,
-        messages: msgs,
-        tools,
-        system: systemPrompt,
-        maxOutputTokens: this.resolveMaxOutputTokens(),
-        temperature: this.config.temperature,
-        abortSignal: this.currentAbortController!.signal,
-        stopWhen: stepCountIs(this.config.maxIterations ?? 10),
-        onStepFinish: this.createOnStepFinish(onStepFinish) as GenerateTextOnStepFinishCallback<NoInfer<ToolSet>>,
-        prepareStep: this.createPrepareStep(prepareStep),
-        onFinish: this.createOnFinish(false, onFinish),
-        experimental_onToolCallStart: (event) => {
-          const { toolCall } = event;
-          this.log?.tool("tool-call-start", {
-            toolName: toolCall.toolName,
-            toolCallId: toolCall.toolCallId,
-            input: toolCall.input,
-          });
-          this.context?.addTool(toolCall);
-          experimental_onToolCallStart?.(event);
-        },
-        experimental_onToolCallFinish: (event) => {
-          const { toolCall, durationMs } = event;
-          const output = "output" in event ? event.output : undefined;
-          const error = "error" in event ? event.error : undefined;
-
-          this.log?.tool("tool-call-end", {
-            toolName: toolCall.toolName,
-            toolCallId: toolCall.toolCallId,
-            output,
-            error: error instanceof Error ? error.message : error,
-            durationMs,
-          });
-
-          if (error) {
-            this.dispatchEvent?.({
-              type: "tool:error",
-              agentId: this.id,
-              data: {
-                session_id: this.getHookSessionId(),
-                tool_name: toolCall.toolName,
-                tool_input: toolCall.input,
-                error: error instanceof Error ? error.message : String(error),
-              },
-            });
-          } else {
-            this.dispatchEvent?.({
-              type: "tool:post",
-              agentId: this.id,
-              data: {
-                session_id: this.getHookSessionId(),
-                tool_name: toolCall.toolName,
-                tool_input: toolCall.input,
-                tool_output: output,
-                duration_ms: durationMs ?? 0,
-              },
-            });
-          }
-
-          experimental_onToolCallFinish?.(event);
-        },
-        ...rest,
-      });
+    const runGenerate = async (): Promise<GenerateTextResult<ToolSet, never>> => {
+      const streamResult = await this.stream(options);
+      return {
+        text: await streamResult.text,
+        content: await streamResult.content,
+        reasoning: await streamResult.reasoning,
+        reasoningText: await streamResult.reasoningText,
+        files: await streamResult.files,
+        sources: await streamResult.sources,
+        toolCalls: await streamResult.toolCalls,
+        staticToolCalls: await streamResult.staticToolCalls,
+        dynamicToolCalls: await streamResult.dynamicToolCalls,
+        toolResults: await streamResult.toolResults,
+        staticToolResults: await streamResult.staticToolResults,
+        dynamicToolResults: await streamResult.dynamicToolResults,
+        finishReason: await streamResult.finishReason,
+        rawFinishReason: await streamResult.rawFinishReason,
+        usage: await streamResult.usage,
+        totalUsage: await streamResult.totalUsage,
+        warnings: await streamResult.warnings,
+        request: await streamResult.request,
+        response: await streamResult.response,
+        output: await streamResult.output,
+        providerMetadata: await streamResult.providerMetadata,
+        steps: await streamResult.steps,
+        experimental_output: await streamResult.output,
+      };
     };
 
     try {
-      const result = await runGenerate(finalMessages);
-      return result;
+      return await runGenerate();
     } catch (err) {
       if (this.isAbortError(err)) {
         this.status = "aborted";
@@ -480,13 +404,15 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
         throw err;
       }
 
-      // Attempt reactive compaction on prompt_too_long errors
+      // Attempt reactive compaction on prompt_too_long errors.
+      // stream()'s onError already calls handleReactiveCompact for context updates.
+      // Reset counter here to allow one more attempt, then retry.
+      this.resetReactiveCompactRetries();
       const compacted = await this.handleReactiveCompact(err);
       if (compacted) {
-        this.log?.info("agent", "Reactive compact succeeded, retrying generate");
+        this.log?.info("agent", "Reactive compact succeeded, retrying generate via stream()");
         try {
-          finalMessages = this.context?.getMessagesForLLM() ?? finalMessages;
-          return await runGenerate(finalMessages);
+          return await runGenerate();
         } catch (retryErr) {
           const retryError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
           this.error = retryError.message;
