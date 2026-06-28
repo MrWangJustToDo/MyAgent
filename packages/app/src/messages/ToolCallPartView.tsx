@@ -1,6 +1,7 @@
 import { getToolName } from "ai";
 import { Box, Text } from "ink";
 
+import { StreamingOutputView } from "../components/StreamingOutputView.js";
 import {
   buildToolHeader,
   DURATION_THRESHOLD_MS,
@@ -41,6 +42,11 @@ export interface ToolCallPartViewProps {
 export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
   const needsApproval = part.state === "approval-requested" && part.approval;
   const toolName = getToolName(part);
+
+  // Check if this is a run_command tool that's currently executing
+  const isRunCommand = toolName === "run_command";
+  const isExecuting =
+    part.state === "input-available" || part.state === "input-streaming" || part.state === "approval-responded";
 
   const getDisplayInput = (): string | null => {
     if (part.input === undefined || part.input === null) return null;
@@ -87,6 +93,11 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
 
       {/* Tool input (diffs, command text) */}
       <ToolInputView part={part} />
+
+      {/* Streaming output for run_command */}
+      {isRunCommand && isExecuting && (
+        <StreamingOutputView toolCallId={part.toolCallId} enabled={isRunCommand && isExecuting} />
+      )}
 
       {/* Approval prompt */}
       {needsApproval && (

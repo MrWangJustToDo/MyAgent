@@ -26,7 +26,7 @@ const searchReplaceBlockSchema = z.object({
 export const createSearchReplaceTool = () => {
   return tool({
     description:
-      "Performs multiple search and replace operations on a single file in one atomic operation. Requires the modifiedTime from a previous read operation. All replacements are applied sequentially, so later replacements can match text created by earlier ones.",
+      "Performs multiple search and replace operations on a single file in one atomic operation. Requires the modifiedTime from a previous read operation. All replacements are applied sequentially, so later replacements can match text created by earlier ones. IMPORTANT: Use actual newline characters (not escaped \\\\n) in oldString and newString. The strings must contain real line breaks.",
     inputSchema: z.object({
       path: z.string().describe("The path to the file to edit, relative to the project directory."),
       modifiedTime: z

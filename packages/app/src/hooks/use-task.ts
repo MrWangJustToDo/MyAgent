@@ -34,5 +34,5 @@ export const useTask = ({ id }: { id: string }) => {
     };
   }, [agent]);
 
-  return info;
+  return { ...info, agent };
 };

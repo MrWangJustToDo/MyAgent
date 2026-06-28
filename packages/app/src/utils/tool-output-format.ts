@@ -86,7 +86,7 @@ function formatRunCommandOutput(output: RunCommandOutput): string {
     if (stdoutLines.length > 3) {
       lines.push(`... (${stdoutLines.length - 3} more lines)`);
     }
-    lines.push(...tail.map(truncateLine));
+    lines.push(...tail.map((i) => truncateLine(i)));
   }
 
   if (lines.length === 0) {
@@ -162,7 +162,7 @@ function formatTaskOutput(output: TaskOutput): string {
   const summaryLines = stripCacheHintLines(summary.trim().split("\n"));
   const maxSummaryLines = 10;
   const shown = summaryLines.length <= maxSummaryLines ? summaryLines : summaryLines.slice(0, maxSummaryLines);
-  lines.push(...shown.map(truncateLine));
+  lines.push(...shown.map((i) => truncateLine(i)));
   if (summaryLines.length > maxSummaryLines) {
     lines.push(`... (${summaryLines.length - maxSummaryLines} more lines)`);
   }

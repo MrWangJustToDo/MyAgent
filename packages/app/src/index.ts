@@ -14,6 +14,9 @@ export { AdapterProvider, useAdapter } from "./context/adapter-context.js";
 export { App } from "./app/App.js";
 export { Agent } from "./app/Agent.js";
 
+// Components
+export { StreamingOutputView } from "./components/StreamingOutputView.js";
+
 // Hooks
 export * from "./hooks";
 

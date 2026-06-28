@@ -13,11 +13,16 @@ export const ToolOutputView = ({ part }: { part: ToolUIPart }) => {
 
   if (!DETAILED_OUTPUT_TOOLS.has(toolName)) return null;
 
+  const output = formatToolOutput(part.output, toolName);
+  const lines = output.split("\n");
+
   return (
-    <Box paddingLeft={2}>
-      <Text color="gray" dimColor wrap="truncate-end">
-        {formatToolOutput(part.output, toolName)}
-      </Text>
+    <Box flexDirection="column" paddingLeft={2}>
+      {lines.map((line, i) => (
+        <Text key={i} color="gray" dimColor>
+          {line}
+        </Text>
+      ))}
     </Box>
   );
 };

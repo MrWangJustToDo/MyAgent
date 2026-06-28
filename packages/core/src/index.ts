@@ -25,6 +25,15 @@ export * from "./agent";
 // Base utilities
 export { generateId, generateShortId, createSequentialIdGenerator } from "./agent/utils.js";
 
+// Streaming callback for real-time tool output
+export {
+  setStreamingCallback,
+  getStreamingCallback,
+  emitStreamingChunk,
+  type StreamingChunk,
+  type StreamingCallback,
+} from "./agent/tools/util/streaming-callback.js";
+
 // Environment abstraction (types only — implementations provided externally via CoreEnv)
 export * from "./environment";
 

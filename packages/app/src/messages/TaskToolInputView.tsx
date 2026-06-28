@@ -8,7 +8,7 @@ import { formatToolInput } from "../utils/format";
 export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
   const content = part.input as { prompt?: string; description?: string; id: string };
 
-  const { allTools, finish, total } = useTask({ id: content.id });
+  const { allTools, finish, total, agent } = useTask({ id: content.id });
 
   const currentTool = allTools?.at(-1);
 
@@ -16,7 +16,7 @@ export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
 
   const toolInput = formatToolInput(currentTool?.input || {}, toolName || undefined);
 
-  if (finish) return null;
+  if (finish || !agent) return null;
 
   return (
     <Box flexDirection="row" height={1}>

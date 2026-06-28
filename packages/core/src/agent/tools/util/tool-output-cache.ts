@@ -124,17 +124,27 @@ export function shouldCache(content: string): boolean {
 /**
  * Cache content if it exceeds the threshold, returning either the original
  * content or a preview with cache path. Also returns the cache path if cached.
+ *
+ * @param existingFilePath - Optional path to an existing file (e.g., from OutputAccumulator)
+ *                           that already contains the content. If provided, this file path
+ *                           is returned directly instead of creating a new cache file.
  */
 export async function maybeCacheOutput(
   content: string,
   id: string,
+  existingFilePath?: string | null,
   opts?: { headLines?: number; tailLines?: number }
 ): Promise<{ content: string; cachedOutputPath: string | null }> {
   if (!shouldCache(content)) {
+    // Even if content is small, if we have an existing file path, we should return it
+    if (existingFilePath) {
+      return { content, cachedOutputPath: existingFilePath };
+    }
     return { content, cachedOutputPath: null };
   }
 
-  const cachedPath = await cacheToolOutput(content, id);
+  // If an existing file path is provided, use it directly
+  const cachedPath = existingFilePath ?? (await cacheToolOutput(content, id));
   const preview = buildCachedPreview(content, cachedPath, opts);
   return { content: preview, cachedOutputPath: cachedPath };
 }

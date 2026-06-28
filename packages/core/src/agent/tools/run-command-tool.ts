@@ -3,6 +3,8 @@ import { z } from "zod";
 
 import { getEnv } from "../../env.js";
 
+import { OutputAccumulator } from "./util/output-accumulator.js";
+import { emitStreamingChunk } from "./util/streaming-callback.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { runCommandOutputSchema } from "./util/types.js";
 
@@ -35,14 +37,41 @@ export const createRunCommandTool = () => {
     outputSchema: runCommandOutputSchema,
     needsApproval: true,
     execute: async ({ command, cwd, env, timeout }, { toolCallId }) => {
+      const stdoutAccumulator = new OutputAccumulator({
+        tempFilePrefix: `${toolCallId}-stdout`,
+      });
+      const stderrAccumulator = new OutputAccumulator({
+        tempFilePrefix: `${toolCallId}-stderr`,
+      });
+
+      const encoder = new TextEncoder();
+
       const result = await getEnv().runCommand(command, {
         cwd,
         env,
         timeout,
+        onStdout: (chunk) => {
+          stdoutAccumulator.append(encoder.encode(chunk));
+          // Emit streaming chunk for UI updates
+          emitStreamingChunk(toolCallId, "stdout", chunk);
+        },
+        onStderr: (chunk) => {
+          stderrAccumulator.append(encoder.encode(chunk));
+          // Emit streaming chunk for UI updates
+          emitStreamingChunk(toolCallId, "stderr", chunk);
+        },
       });
 
-      const stdoutResult = await maybeCacheOutput(result.stdout, `${toolCallId}-stdout`);
-      const stderrResult = await maybeCacheOutput(result.stderr, `${toolCallId}-stderr`);
+      stdoutAccumulator.finish();
+      stderrAccumulator.finish();
+
+      const stdoutSnapshot = stdoutAccumulator.snapshot();
+      const stderrSnapshot = stderrAccumulator.snapshot();
+
+      // Use the accumulated content (which may be truncated for display)
+      // The maybeCacheOutput function will handle caching if needed
+      const stdoutResult = await maybeCacheOutput(stdoutSnapshot.content, `${toolCallId}-stdout`);
+      const stderrResult = await maybeCacheOutput(stderrSnapshot.content, `${toolCallId}-stderr`);
 
       const cachedOutputPath = stdoutResult.cachedOutputPath ?? stderrResult.cachedOutputPath ?? null;
 
