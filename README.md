@@ -180,7 +180,7 @@ pnpm start:cli -- --model gpt-4o --provider openai --api-key sk-xxx
 
 | Category | Tools |
 |----------|-------|
-| **File** | `read_file`, `write_file`, `edit_file`, `search_replace`, `copy_file`, `move_file`, `delete_file`, `glob`, `grep`, `tree`, `list_file` |
+| **File** | `read_file`, `write_file`, `edit_file`, `copy_file`, `move_file`, `delete_file`, `glob`, `grep`, `tree`, `list_file` |
 | **System** | `run_command` |
 | **Web** | `websearch` (DuckDuckGo), `webfetch` (page fetch) |
 | **Agent** | `task` (subagents), `ask_user` (questions with multi-select), `todo` (task lists), `list_skills`, `load_skill` |

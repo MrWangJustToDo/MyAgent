@@ -23,7 +23,7 @@ export async function buildDefaultSystemPrompt(platform?: string): Promise<strin
 
 1. **Task Planning** — todo tool to plan, track, and update progress on multi-step tasks.
 
-2. **File Operations** — read_file to examine code, write_file to create files, edit_file/search_replace to modify existing files, and tree/list_file/glob/grep to navigate the codebase.
+2. **File Operations** — read_file to examine code, write_file to create files, edit_file to modify existing files, and tree/list_file/glob/grep to navigate the codebase.
 
 3. **Code Execution** — run_command to execute shell commands (build, test, run, etc.).
 

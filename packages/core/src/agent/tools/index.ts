@@ -7,7 +7,6 @@ import { createListFileTool } from "./list-file-tool.js";
 import { createMoveFileTool } from "./move-file-tool.js";
 import { createReadFileTool } from "./read-file-tool.js";
 import { createRunCommandTool } from "./run-command-tool.js";
-import { createSearchReplaceTool } from "./search-replace-tool.js";
 import { createTreeTool } from "./tree-tool.js";
 import { createWriteFileTool } from "./write-file-tool.js";
 
@@ -27,7 +26,7 @@ export * from "./list-file-tool.js";
 export * from "./move-file-tool.js";
 export * from "./read-file-tool.js";
 export * from "./run-command-tool.js";
-export * from "./search-replace-tool.js";
+
 export * from "./todo-tool.js";
 export * from "./util";
 export * from "./tree-tool.js";
@@ -51,7 +50,7 @@ export type Tools = {
   grep: ReturnType<typeof createGrepTool>;
   tree: ReturnType<typeof createTreeTool>;
   run_command: ReturnType<typeof createRunCommandTool>;
-  search_replace: ReturnType<typeof createSearchReplaceTool>;
+
   todo?: ReturnType<typeof createTodoTool>;
   task?: ReturnType<typeof createTaskTool>;
   list_skills?: ReturnType<typeof createListSkillsTool>;
@@ -78,7 +77,6 @@ export const createTools = async ({
     grep: createGrepTool(),
     tree: createTreeTool(),
     run_command: createRunCommandTool(),
-    search_replace: createSearchReplaceTool(),
   };
 
   await processTools?.(res);

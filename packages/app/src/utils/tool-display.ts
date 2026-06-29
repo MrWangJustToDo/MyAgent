@@ -72,8 +72,7 @@ export function getInlineSummary(part: ToolUIPart, toolName: string): string | n
     }
     case "write_file":
       return output.created ? "created" : "updated";
-    case "edit_file":
-    case "search_replace": {
+    case "edit_file": {
       const replacements = output.replacements as number | undefined;
       if (replacements !== undefined) return `${replacements} replacement${replacements !== 1 ? "s" : ""}`;
       return "applied";

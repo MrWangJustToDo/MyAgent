@@ -138,7 +138,6 @@ export function formatToolInput(input: unknown, toolName?: string): string {
       case "list_file":
       case "write_file":
       case "edit_file":
-      case "search_replace":
       case "delete_file":
         return formatFilePathInput(obj);
       case "run_command":

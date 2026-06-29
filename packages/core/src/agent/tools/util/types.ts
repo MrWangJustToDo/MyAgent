@@ -52,6 +52,19 @@ export const editFileOutputSchema = z.object({
   path: z.string().describe("The file path that was edited."),
   replacements: z.number().describe("Number of replacements made."),
   modifiedTime: z.string().describe("The new modification timestamp after editing."),
+  results: z
+    .array(
+      z.object({
+        oldString: z.string().describe("The search string (truncated if long)."),
+        newString: z.string().describe("The replacement string."),
+        found: z.boolean().describe("Whether the string was found in the file."),
+        replaced: z.boolean().describe("Whether the replacement was made."),
+        count: z.number().describe("Number of occurrences replaced."),
+        startLine: z.number().optional().describe("Expected start line (1-indexed)."),
+        actualLine: z.number().optional().describe("Actual line where match was found (1-indexed)."),
+      })
+    )
+    .describe("Details of each edit operation."),
   message: z.string().describe("Human-readable summary of the operation."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
 });

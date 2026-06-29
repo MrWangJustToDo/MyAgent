@@ -31,7 +31,7 @@ export interface FileOps {
 const READ_TOOLS = new Set(["read_file", "list_file", "tree"]);
 
 /** Tools that create or modify files */
-const WRITE_TOOLS = new Set(["write_file", "edit_file", "search_replace", "copy_file", "move_file", "delete_file"]);
+const WRITE_TOOLS = new Set(["write_file", "edit_file", "copy_file", "move_file", "delete_file"]);
 
 // ============================================================================
 // Internal Helpers
@@ -67,7 +67,7 @@ function extractPathFromArgs(args: unknown, field: string): string | undefined {
  *
  * Scans all assistant messages for tool-call parts and tracks:
  * - Files read: read_file, list_file, tree calls
- * - Files modified: write_file, edit_file, search_replace, copy_file, move_file, delete_file
+ * - Files modified: write_file, edit_file, copy_file, move_file, delete_file
  *
  * @param messages - Messages to scan for tool calls
  * @returns Deduplicated sets of read and modified file paths

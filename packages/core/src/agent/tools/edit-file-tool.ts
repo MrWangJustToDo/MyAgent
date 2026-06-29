@@ -18,12 +18,9 @@ interface EditOperation {
   startLine?: number;
 }
 
-interface EditResult {
-  replacements: number;
+interface EditValidationError {
   oldString: string;
-  newString: string;
-  startLine?: number;
-  actualLine?: number;
+  reason: string;
 }
 
 // ============================================================================
@@ -47,6 +44,7 @@ function findLineNumber(content: string, substring: string): number {
 /**
  * Validate that a match is near the expected start line.
  * Allows a tolerance of 5 lines for fuzzy matching differences.
+ * Returns the actual line number, or -1 if not found.
  */
 function validateStartLine(content: string, oldString: string, expectedLine: number, tolerance = 5): number {
   const actualLine = findLineNumber(content, oldString);
@@ -76,6 +74,9 @@ function validateStartLine(content: string, oldString: string, expectedLine: num
  * Requires the modifiedTime from a previous read operation to ensure
  * the file hasn't been modified since it was read.
  *
+ * All edits are validated before any are applied (atomic all-or-nothing).
+ * Returns detailed per-edit results including found/replaced status.
+ *
  * Requires user approval before execution.
  */
 export const createEditFileTool = () => {
@@ -84,7 +85,7 @@ export const createEditFileTool = () => {
 
 **Key Rules:**
 - Requires modifiedTime from a previous read_file call to prevent concurrent modifications.
-- IMPORTANT: Use actual newline characters (not escaped \\\\n) in oldString and newString.
+- IMPORTANT: Use actual newline characters (not escaped \\\\\\n) in oldString and newString.
 - For multiple independent edits, use the \`edits\` array (more efficient, fewer round-trips).
 - Each edit must have a unique oldString that appears exactly once in the file (unless replaceAll is true).
 - Edits are applied sequentially in the order provided.
@@ -131,7 +132,10 @@ export const createEditFileTool = () => {
     needsApproval: true,
     execute: async ({ path, modifiedTime, oldString, newString, startLine, replaceAll, edits }) => {
       return withDuration(async () => {
-        // Build the list of edits to apply
+        // ====================================================================
+        // Phase 1: Build the list of edit operations
+        // ====================================================================
+
         const editOperations: EditOperation[] = [];
 
         // Legacy single-edit mode
@@ -165,7 +169,10 @@ export const createEditFileTool = () => {
           throw new Error("No edits provided. Use either oldString/newString or the edits array.");
         }
 
-        // Read file and check modification time
+        // ====================================================================
+        // Phase 2: Read file and check modification time
+        // ====================================================================
+
         const fileRes = await getFile(path);
         const currentModifiedTime = fileRes.modifiedTime;
 
@@ -175,56 +182,109 @@ export const createEditFileTool = () => {
           );
         }
 
-        let content = fileRes.content;
-        const results: EditResult[] = [];
+        // ====================================================================
+        // Phase 3: Validate all edits before applying any (find errors early)
+        // ====================================================================
 
-        // Apply edits sequentially with fuzzy matching
+        const validationErrors: EditValidationError[] = [];
         for (const edit of editOperations) {
-          // Try exact match first, then fall back to fuzzy match
-          const hasExactMatch = content.includes(edit.oldString);
-          const hasFuzzyMatch = fuzzyIncludes(content, edit.oldString);
+          // Check if string exists (try exact match first, then fall back to fuzzy)
+          const hasExactMatch = fileRes.content.includes(edit.oldString);
+          const hasFuzzyMatch = fuzzyIncludes(fileRes.content, edit.oldString);
 
           if (!hasExactMatch && !hasFuzzyMatch) {
-            throw new Error(`oldString not found in file content: "${edit.oldString.substring(0, 100)}..."`);
+            validationErrors.push({
+              oldString: edit.oldString.substring(0, 100),
+              reason: "not found in file content",
+            });
+            continue;
           }
 
           // Validate startLine if provided
-          let actualLine: number | undefined;
           if (edit.startLine !== undefined) {
-            actualLine = validateStartLine(content, edit.oldString, edit.startLine);
-            if (actualLine === -1) {
-              throw new Error(`oldString not found in file content: "${edit.oldString.substring(0, 100)}..."`);
+            try {
+              validateStartLine(fileRes.content, edit.oldString, edit.startLine);
+            } catch (e) {
+              validationErrors.push({
+                oldString: edit.oldString.substring(0, 100),
+                reason: e instanceof Error ? e.message : "startLine validation failed",
+              });
+              continue;
             }
           }
 
-          // Count occurrences (prefer exact, fall back to fuzzy)
+          // Check for multiple occurrences (unless replaceAll is set)
+          if (!edit.replaceAll) {
+            const occurrences = hasExactMatch
+              ? fileRes.content.split(edit.oldString).length - 1
+              : fuzzyCount(fileRes.content, edit.oldString);
+
+            if (occurrences > 1) {
+              validationErrors.push({
+                oldString: edit.oldString.substring(0, 50),
+                reason: `found ${occurrences} matches; set replaceAll to replace all, or provide more context to make it unique`,
+              });
+              continue;
+            }
+          }
+        }
+
+        // If any validation errors, throw with all of them listed
+        if (validationErrors.length > 0) {
+          const details = validationErrors.map((e) => `  - "${e.oldString}": ${e.reason}`).join("\n");
+          throw new Error(`${validationErrors.length} edit(s) failed validation, no changes were made:\n${details}`);
+        }
+
+        // ====================================================================
+        // Phase 4: Apply all edits (all validated, so this should succeed)
+        // ====================================================================
+
+        let content = fileRes.content;
+        const results: Array<{
+          oldString: string;
+          newString: string;
+          found: boolean;
+          replaced: boolean;
+          count: number;
+          startLine?: number;
+          actualLine?: number;
+        }> = [];
+
+        for (const edit of editOperations) {
+          // Try exact match first, then fall back to fuzzy match
+          const hasExactMatch = content.includes(edit.oldString);
+
+          // Count occurrences
           const occurrences = hasExactMatch
             ? content.split(edit.oldString).length - 1
             : fuzzyCount(content, edit.oldString);
 
-          if (occurrences > 1 && !edit.replaceAll) {
-            throw new Error(
-              `Found ${occurrences} matches for oldString: "${edit.oldString.substring(0, 50)}...". Set replaceAll to true to replace all occurrences, or provide more context to make it unique.`
-            );
+          // Find actual line for result
+          let actualLine: number | undefined;
+          if (edit.startLine !== undefined) {
+            actualLine = findLineNumber(content, edit.oldString);
           }
 
-          // Apply the edit (prefer exact, fall back to fuzzy)
+          // Apply the edit
           let newContent: string;
           if (hasExactMatch) {
             newContent = edit.replaceAll
               ? content.replaceAll(edit.oldString, edit.newString)
               : content.replace(edit.oldString, edit.newString);
           } else {
-            // Use fuzzy replacement
             newContent = edit.replaceAll
               ? fuzzyReplaceAll(content, edit.oldString, edit.newString)
               : fuzzyReplace(content, edit.oldString, edit.newString);
           }
 
+          const replacementCount = edit.replaceAll ? occurrences : 1;
+
           results.push({
-            replacements: edit.replaceAll ? occurrences : 1,
-            oldString: edit.oldString,
-            newString: edit.newString,
+            oldString: edit.oldString.substring(0, 50) + (edit.oldString.length > 50 ? "..." : ""),
+            newString: edit.newString.substring(0, 50) + (edit.newString.length > 50 ? "..." : ""),
+            found: true,
+            replaced: true,
+            count: replacementCount,
             startLine: edit.startLine,
             actualLine,
           });
@@ -232,17 +292,21 @@ export const createEditFileTool = () => {
           content = newContent;
         }
 
-        // Write the final content
+        // ====================================================================
+        // Phase 5: Write the final content
+        // ====================================================================
+
         await getEnv().fs.writeFile(path, content);
 
         const newModifiedTime = await getFileModifiedTime(path);
 
-        const totalReplacements = results.reduce((sum, r) => sum + r.replacements, 0);
+        const totalReplacements = results.reduce((sum, r) => sum + r.count, 0);
 
         return {
           path,
           replacements: totalReplacements,
           modifiedTime: newModifiedTime,
+          results,
           message: `Successfully edited file: ${path} (${results.length} edit(s), ${totalReplacements} replacement(s))`,
         };
       });
