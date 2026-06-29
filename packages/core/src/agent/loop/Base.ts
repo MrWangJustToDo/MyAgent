@@ -542,16 +542,26 @@ export class Base extends SessionHandler {
         }
       }
 
-      // Inject dynamic per-turn context (relevant memories, todo nag) as a
-      // leading message pair instead of modifying the system prompt. This keeps
-      // the system prompt byte-stable across turns for prefix cache stability.
+      // Inject dynamic per-turn context (relevant memories, todo nag) right
+      // before the last user message so the conversation prefix stays
+      // byte-stable for provider prefix cache.
       const dynamicContext = this.getDynamicTurnContext?.();
       if (dynamicContext) {
-        llmMessages = [
+        const contextMessages = [
           { role: "user" as const, content: `<turn_context>\n${dynamicContext}\n</turn_context>` },
           { role: "assistant" as const, content: "Understood. I'll keep this context in mind." },
-          ...llmMessages,
         ];
+        const lastUserIdx = (() => {
+          for (let i = llmMessages.length - 1; i >= 0; i--) {
+            if (llmMessages[i].role === "user") return i;
+          }
+          return -1;
+        })();
+        if (lastUserIdx >= 0) {
+          llmMessages = [...llmMessages.slice(0, lastUserIdx), ...contextMessages, ...llmMessages.slice(lastUserIdx)];
+        } else {
+          llmMessages = [...contextMessages, ...llmMessages];
+        }
       }
 
       return { ...res, messages: llmMessages };
