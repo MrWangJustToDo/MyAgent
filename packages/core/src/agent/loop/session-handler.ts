@@ -61,7 +61,7 @@ export class SessionHandler extends MemoryHandler {
       const result = await generateText({
         model: this.model,
         maxOutputTokens: 30,
-        system:
+        instructions:
           "Generate a concise title (3-8 words) for a conversation that starts with the following message. Return ONLY the title, no quotes or punctuation.",
         prompt: userMessage.slice(0, 500),
       });

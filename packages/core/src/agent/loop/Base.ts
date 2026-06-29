@@ -21,10 +21,8 @@ import type {
   LanguageModel,
   ToolSet,
   ModelMessage,
-  StreamTextOnStepFinishCallback,
-  GenerateTextOnStepFinishCallback,
-  StreamTextOnFinishCallback,
-  GenerateTextOnFinishCallback,
+  GenerateTextOnStepEndCallback,
+  GenerateTextOnEndCallback,
   PrepareStepFunction,
 } from "ai";
 
@@ -316,9 +314,7 @@ export class Base extends SessionHandler {
   // Lifecycle Callbacks
   // ============================================================================
 
-  createOnStepFinish(
-    userCallback?: StreamTextOnStepFinishCallback<ToolSet> | GenerateTextOnStepFinishCallback<NoInfer<ToolSet>>
-  ): StreamTextOnStepFinishCallback<ToolSet> | GenerateTextOnStepFinishCallback<NoInfer<ToolSet>> {
+  createOnStepFinish(userCallback?: GenerateTextOnStepEndCallback<ToolSet>): GenerateTextOnStepEndCallback<ToolSet> {
     return (event) => {
       const { stepNumber, toolCalls, toolResults, finishReason, usage } = event;
 
@@ -354,9 +350,7 @@ export class Base extends SessionHandler {
     };
   }
 
-  createOnFinish(
-    userCallback?: StreamTextOnFinishCallback<ToolSet> | GenerateTextOnFinishCallback<NoInfer<ToolSet>>
-  ): StreamTextOnFinishCallback<ToolSet> | GenerateTextOnFinishCallback<NoInfer<ToolSet>> {
+  createOnFinish(userCallback?: GenerateTextOnEndCallback<ToolSet>): GenerateTextOnEndCallback<ToolSet> {
     return (event) => {
       if (this.status !== "waiting") this.status = "completed";
       if (this.error) this.status = "error";
@@ -483,7 +477,7 @@ export class Base extends SessionHandler {
   // Compaction Orchestration
   // ============================================================================
 
-  createPrepareStep(userCallback?: PrepareStepFunction) {
+  createPrepareStep(userCallback?: PrepareStepFunction<ToolSet>) {
     return (async (options) => {
       const res = userCallback ? await userCallback(options) : options;
       const finalMessages = res?.messages || [];
@@ -561,7 +555,7 @@ export class Base extends SessionHandler {
       }
 
       return { ...res, messages: llmMessages };
-    }) as PrepareStepFunction;
+    }) as PrepareStepFunction<ToolSet>;
   }
 
   // ============================================================================

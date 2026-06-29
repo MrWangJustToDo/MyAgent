@@ -191,10 +191,9 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
       // streamResult.text drives stream consumption internally.
       try {
         const streamResult = await subagent.stream({
-          prompt,
-          messages: initialMessages || [],
+          messages: [...(initialMessages || []), { role: "user" as const, content: prompt }],
           abortSignal,
-          onStepFinish,
+          onStepEnd: onStepFinish,
         });
 
         // streamResult.text drives stream consumption internally.

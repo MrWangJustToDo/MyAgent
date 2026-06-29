@@ -1,4 +1,4 @@
-import { streamText, tool as vercelTool, stepCountIs } from "ai";
+import { streamText, tool as vercelTool, isStepCount } from "ai";
 
 import { generateId } from "../utils.js";
 
@@ -6,17 +6,27 @@ import { Base } from "./Base.js";
 import { AgentConfigSchema } from "./types.js";
 
 import type { AgentConfig, ToolSet } from "./types.js";
-import type { Agent as VercelAgent, StreamTextResult, GenerateTextResult, generateText } from "ai";
+import type { Context } from "@ai-sdk/provider-utils";
+import type {
+  Agent as VercelAgent,
+  AgentStreamParameters,
+  AgentCallParameters,
+  StreamTextResult,
+  GenerateTextResult,
+  PrepareStepFunction,
+} from "ai";
 
-type StreamParams = Omit<Parameters<typeof streamText>[0], "model">;
+type StreamParams = AgentStreamParameters<never, ToolSet, Context> & {
+  prepareStep?: PrepareStepFunction<ToolSet, Context>;
+};
 
-type TextParams = Omit<Parameters<typeof generateText>[0], "model">;
+type TextParams = AgentCallParameters<never, ToolSet, Context>;
 
 // ============================================================================
 // Agent Class
 // ============================================================================
 
-export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
+export class Agent extends Base implements VercelAgent<never, ToolSet, Context, never> {
   /**
    * Agent interface version for Vercel AI SDK compatibility
    */
@@ -198,7 +208,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
    * Returns the StreamTextResult directly, allowing the caller to use
    * `result.fullStream`, `result.toUIMessageStream()`, etc.
    */
-  async stream(options: StreamParams): Promise<StreamTextResult<ToolSet, never>> {
+  async stream(options: StreamParams): Promise<StreamTextResult<ToolSet, Context, never>> {
     if (!this.model) {
       throw new Error("Model not set. Call setModel() first.");
     }
@@ -207,11 +217,11 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       prompt,
       messages,
       abortSignal,
-      onStepFinish,
-      onFinish,
+      onStepEnd,
+      onEnd,
       prepareStep,
-      experimental_onToolCallStart,
-      experimental_onToolCallFinish,
+      onToolExecutionStart,
+      onToolExecutionEnd,
       ...rest
     } = options;
 
@@ -244,19 +254,19 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
       data: { session_id: this.getHookSessionId(), prompt: typeof prompt === "string" ? prompt : "(structured)" },
     });
 
-    const runStream = (msgs: typeof finalMessages): StreamTextResult<ToolSet, never> => {
+    const runStream = (msgs: typeof finalMessages): StreamTextResult<ToolSet, Context, never> => {
       return streamText({
         model: this.model!,
         messages: msgs,
         tools,
-        system: systemPrompt,
+        instructions: systemPrompt,
         maxOutputTokens: this.resolveMaxOutputTokens(),
         temperature: this.config.temperature,
         abortSignal: this.currentAbortController!.signal,
-        stopWhen: stepCountIs(this.config.maxIterations ?? 10),
-        onStepFinish: this.createOnStepFinish(onStepFinish),
+        stopWhen: isStepCount(this.config.maxIterations ?? 10),
+        onStepEnd: this.createOnStepFinish(onStepEnd),
         prepareStep: this.createPrepareStep(prepareStep),
-        onFinish: this.createOnFinish(onFinish),
+        onEnd: this.createOnFinish(onEnd),
         onChunk: ({ chunk }) => {
           this.context?.emitStream(chunk);
           if (chunk.type === "tool-call" && this.isToolNeedsApproval(chunk.toolName)) {
@@ -294,7 +304,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
           this.error = (err as Error)?.message;
           this.log?.error("agent", "Stream error", err as Error);
         },
-        experimental_onToolCallStart: (event) => {
+        onToolExecutionStart: (event) => {
           const { toolCall } = event;
           this.status = "running";
           this.log?.tool("tool-call-start", {
@@ -303,10 +313,10 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
             input: toolCall.input,
           });
           this.context?.emitTool(toolCall);
-          experimental_onToolCallStart?.(event);
+          onToolExecutionStart?.(event);
         },
-        experimental_onToolCallFinish: (event) => {
-          const { toolCall, durationMs } = event;
+        onToolExecutionEnd: (event) => {
+          const { toolCall, toolExecutionMs } = event;
           const output = "output" in event ? event.output : undefined;
           const error = "error" in event ? event.error : undefined;
 
@@ -315,7 +325,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
             toolCallId: toolCall.toolCallId,
             output,
             error: error instanceof Error ? error.message : error,
-            durationMs,
+            durationMs: toolExecutionMs,
           });
 
           if (error) {
@@ -338,12 +348,12 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
                 tool_name: toolCall.toolName,
                 tool_input: toolCall.input,
                 tool_output: output,
-                duration_ms: durationMs ?? 0,
+                duration_ms: toolExecutionMs ?? 0,
               },
             });
           }
 
-          experimental_onToolCallFinish?.(event);
+          onToolExecutionEnd?.(event);
         },
         ...rest,
       });
@@ -359,14 +369,14 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
    * (onChunk → context.emitStream, status changes, tool approval).
    * StreamTextResult is thenable — awaiting gives GenerateTextResult.
    */
-  async generate(options: TextParams): Promise<GenerateTextResult<ToolSet, never>> {
+  async generate(options: TextParams): Promise<GenerateTextResult<ToolSet, Context, never>> {
     if (!this.model) {
       throw new Error("Model not set. Call setModel() first.");
     }
 
     // stream() handles timing via streamStartedAt / lastStreamDurationMs
 
-    const runGenerate = async (): Promise<GenerateTextResult<ToolSet, never>> => {
+    const runGenerate = async (): Promise<GenerateTextResult<ToolSet, Context, never>> => {
       const streamResult = await this.stream(options);
       return {
         text: await streamResult.text,
@@ -388,10 +398,11 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, never> {
         warnings: await streamResult.warnings,
         request: await streamResult.request,
         response: await streamResult.response,
+        responseMessages: await streamResult.responseMessages,
         output: await streamResult.output,
         providerMetadata: await streamResult.providerMetadata,
         steps: await streamResult.steps,
-        experimental_output: await streamResult.output,
+        finalStep: await streamResult.finalStep,
       };
     };
 

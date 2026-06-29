@@ -160,7 +160,8 @@ export class OutputAccumulator {
    */
   append(data: Uint8Array): void {
     if (this.finished) {
-      throw new Error("Cannot append to a finished output accumulator");
+      return;
+      // throw new Error("Cannot append to a finished output accumulator");
     }
 
     this.totalDecodedBytes += data.byteLength;

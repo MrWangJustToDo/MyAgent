@@ -143,7 +143,7 @@ async function selectWithLLM(
 ): Promise<string[]> {
   const result = await generateText({
     model,
-    system: SELECT_MEMORIES_SYSTEM_PROMPT,
+    instructions: SELECT_MEMORIES_SYSTEM_PROMPT,
     prompt: `Query: ${query}\n\nAvailable memories:\n${manifest}`,
     maxOutputTokens: 256,
   });

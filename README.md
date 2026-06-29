@@ -1,9 +1,9 @@
 # MyAgent
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/Node-18%2B-339933?logo=node.js)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/Node-22%2B-339933?logo=node.js)](https://nodejs.org)
 [![pnpm](https://img.shields.io/badge/pnpm-9%2B-F69220?logo=pnpm)](https://pnpm.io)
-[![Vercel AI SDK](https://img.shields.io/badge/Vercel%20AI%20SDK-6.0-000000?logo=vercel)](https://sdk.vercel.ai/docs)
+[![Vercel AI SDK](https://img.shields.io/badge/Vercel%20AI%20SDK-7.0-000000?logo=vercel)](https://sdk.vercel.ai/docs)
 
 An open-source AI coding agent built on [Vercel AI SDK](https://sdk.vercel.ai/docs) with a React-powered terminal UI and Chrome extension.
 
@@ -120,7 +120,7 @@ Built with [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools
 ## Quick Start
 
 ### Prerequisites
-- Node.js 18+, pnpm 9+
+- Node.js 22+, pnpm 9+
 
 ```bash
 git clone https://github.com/MrWangJustToDo/MyAgent.git

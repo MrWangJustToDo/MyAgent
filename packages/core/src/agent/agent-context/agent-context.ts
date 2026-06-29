@@ -173,6 +173,10 @@ export class AgentContext {
       cacheWriteTokens: (this.totalUsage.cacheWriteTokens ?? 0) + (t.cacheWriteTokens ?? 0),
       reasoningTokens: (this.totalUsage.reasoningTokens ?? 0) + (t.reasoningTokens ?? 0),
     };
+
+    if (this.pricing) {
+      this.totalCost += calculateCost(t, this.pricing);
+    }
   }
 
   updateFinal(t: OnFinishEvent<ToolSet>) {

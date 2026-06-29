@@ -72,7 +72,7 @@ registerCommand({
       const result = await generateText({
         model,
         maxOutputTokens: 60,
-        system:
+        instructions:
           "Generate a concise title (3-8 words) for the following conversation. Return ONLY the title, no quotes or punctuation.",
         prompt: recentText,
         temperature: 0.3,
