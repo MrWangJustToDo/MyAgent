@@ -43,6 +43,12 @@ registerCommand({
     const modelInfo = agent.getModelInfo();
     const pricing = context.getPricing();
 
+    // Cache hit ratio from lifetime usage (persisted, survives resume).
+    // Falls back to agent's in-memory ratio when no usage has been tracked yet.
+    const cacheHitRatio =
+      totalUsage.inputTokens > 0
+        ? (totalUsage.cacheReadTokens ?? 0) / totalUsage.inputTokens
+        : agent.getCacheHitRatio();
     const lines: string[] = [];
 
     if (session) {
@@ -50,6 +56,12 @@ registerCommand({
     }
     if (modelInfo) {
       lines.push(`  Model:        ${modelInfo.name}`);
+    }
+
+    // --- Cache hit ratio banner (when meaningful data exists) ---
+    if (cacheHitRatio > 0) {
+      lines.push("");
+      lines.push(`  Cache hit:    ${(cacheHitRatio * 100).toFixed(1)}%`);
     }
 
     // --- Lifetime (cumulative) usage ---
