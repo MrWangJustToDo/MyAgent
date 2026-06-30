@@ -77,45 +77,39 @@ function extractExistingSummary(messages: ModelMessage[]): { existingSummary?: s
 }
 
 /**
- * Find the cut point by keeping the latest N assistant-tool flows.
+ * Find the cut point by keeping the latest N user messages (inclusive).
  *
- * A "flow" is an assistant message followed by its tool result messages.
- * We walk backward counting flows, and cut before the Nth flow from the end.
- * Everything before the cut point gets summarized.
+ * Walks backward counting user messages. The Nth user message from the end
+ * (inclusive) becomes the cut point — everything before it gets summarized,
+ * the user message itself and everything after is kept.
+ *
+ * The optional `summaryMessageIndex` (0 if a summary message is present at
+ * the head of `messages`) is excluded from counting so the previous
+ * compaction summary is never treated as a "user turn".
+ *
+ * @returns cutIndex (messages[0..cutIndex) = to summarize,
+ *          messages[cutIndex..] = to keep). Returns 0 if not enough user turns.
  */
-function findCutPoint(messages: ModelMessage[], keepRecentFlows: number): number {
+function findCutPoint(messages: ModelMessage[], keepRecentUserTurns: number, summaryMessageIndex = -1): number {
   if (messages.length === 0) return 0;
 
-  let flowCount = 0;
-  let cutIndex = messages.length;
+  let userCount = 0;
 
   for (let i = messages.length - 1; i >= 0; i--) {
-    const role = messages[i].role;
+    // Skip the previous compaction summary message — it's not a real user turn.
+    if (i === summaryMessageIndex) continue;
 
-    if (role === "assistant" || role === "user") {
-      flowCount++;
-      if (flowCount > keepRecentFlows) {
-        cutIndex = i;
-        break;
+    if (messages[i].role === "user") {
+      userCount++;
+      if (userCount === keepRecentUserTurns) {
+        // Cut AT this user message (inclusive) — it stays in the kept portion.
+        return i;
       }
     }
   }
 
-  if (flowCount <= keepRecentFlows) {
-    return 0;
-  }
-
-  if (cutIndex > 0 && messages[cutIndex].role === "user") {
-    return cutIndex;
-  }
-
-  for (let i = cutIndex + 1; i < messages.length; i++) {
-    if (messages[i].role === "user") {
-      return i;
-    }
-  }
-
-  return cutIndex;
+  // Not enough user turns to warrant compaction.
+  return 0;
 }
 
 // ============================================================================
@@ -149,6 +143,8 @@ export interface SummarizeOptions {
   focus?: string;
   /** Optional todos to include in the summary */
   todos?: CompactionTodoItem[];
+  /** Optional previous summary for incremental update (skips auto-detection) */
+  existingSummary?: string;
 }
 
 /**
@@ -170,10 +166,19 @@ export async function summarizeConversation(
   parentAgentId: string,
   options?: SummarizeOptions
 ): Promise<string> {
-  const { focus, todos } = options ?? {};
+  const { focus, todos, existingSummary: explicitSummary } = options ?? {};
 
-  // Detect existing summary (incremental update).
-  const { existingSummary, cleanMessages } = extractExistingSummary(messages);
+  // Use explicitly-provided previous summary if present; otherwise auto-detect
+  // from the first message (for backward compatibility / direct callers).
+  let existingSummary: string | undefined;
+  let cleanMessages = messages;
+  if (explicitSummary) {
+    existingSummary = explicitSummary;
+  } else {
+    const detected = extractExistingSummary(messages);
+    existingSummary = detected.existingSummary;
+    cleanMessages = detected.cleanMessages;
+  }
 
   // Serialize conversation to plain text to prevent LLM from generating tool calls.
   const conversationText = serializeConversation(cleanMessages);
@@ -221,14 +226,24 @@ Continue if you have next steps, or stop and ask for clarification if you are un
 /**
  * Perform auto compaction on messages.
  *
- * Splits messages using keepRecentFlows: summarizes older messages, keeps recent ones.
- * Returns the summary and cutIndex so the caller can set summaryMessage and compactIndex.
+ * The `messages` array is what `getMessagesForLLM()` returns:
+ *   - First compaction:  `[m0, m1, ..., user_N, assistant, tool, ...]` (raw messages)
+ *   - Later compactions: `[summaryMessage, m_k, ..., user_M, assistant, tool, ...]`
  *
- * @param messages - Current LLM-visible messages
- * @param config - Compaction configuration (uses keepRecentFlows for splitting)
+ * Algorithm:
+ * 1. Detect & strip the previous summary message (if present at index 0).
+ * 2. Find the cut point = the Nth user message from the end (inclusive).
+ * 3. Summarize everything before the cut point (excluding the stripped summary,
+ *    which is fed to the summarizer as `existingSummary` for incremental updates).
+ * 4. Return `cutIndex` relative to the *input* `messages` array (i.e. including
+ *    the summary message offset). The caller converts it to an absolute index
+ *    into the raw `context.messages` store.
+ *
+ * @param messages - Current LLM-visible messages (output of getMessagesForLLM)
+ * @param config - Compaction configuration (uses keepRecentFlows as keepRecentUserTurns)
  * @param parentAgentId - Parent agent ID for spawning summarization subagent
  * @param options - Optional summarization options (focus, todos)
- * @returns Compaction result with summary and cutIndex
+ * @returns Compaction result with summary and cutIndex (relative to input messages)
  */
 export async function autoCompact(
   messages: ModelMessage[],
@@ -236,7 +251,7 @@ export async function autoCompact(
   parentAgentId: string,
   options?: SummarizeOptions & { actualTokens?: number }
 ): Promise<CompactionResult> {
-  const { keepRecentFlows = 4 } = config;
+  const { keepRecentFlows = 2 } = config;
   const estimated = estimateTokens(messages);
   const tokensBefore = options?.actualTokens ?? estimated;
 
@@ -244,19 +259,41 @@ export async function autoCompact(
     return { compacted: false, tokensBefore, tokensAfter: tokensBefore, type: "auto" };
   }
 
-  const cutIndex = findCutPoint(messages, keepRecentFlows);
+  // Detect previous summary message at index 0 (if any). It is excluded from
+  // user-turn counting and from the slice sent to the summarizer — instead it
+  // is passed via `existingSummary` for incremental update.
+  const hasPrevSummary = messages[0].role === "user" && extractExistingSummary([messages[0]]).existingSummary;
+  const summaryOffset = hasPrevSummary ? 1 : 0;
 
-  if (cutIndex === 0) {
+  // Find cut point relative to the input `messages` array.
+  // Pass summaryMessageIndex so findCutPoint skips it when counting user turns.
+  const llmCutIndex = findCutPoint(messages, keepRecentFlows, hasPrevSummary ? 0 : -1);
+
+  if (llmCutIndex === 0) {
     return { compacted: false, tokensBefore, tokensAfter: tokensBefore, type: "auto" };
   }
 
-  const summaryMessages = messages.slice(0, cutIndex);
-  const keptMessages = messages.slice(cutIndex);
+  // Slice to summarize: everything before llmCutIndex, excluding the previous
+  // summary message (it's passed as existingSummary instead).
+  const toSummarize = messages.slice(summaryOffset, llmCutIndex);
+  const keptMessages = messages.slice(llmCutIndex);
+
+  // Convert cutIndex from "relative to llmMessages" to "relative to raw
+  // context.messages" by subtracting the summary message offset. This makes
+  // applyCompactionResult's `absoluteCut = oldCompactIndex + cutIndex` correct.
+  const cutIndex = llmCutIndex - summaryOffset;
 
   try {
-    const summary = await summarizeConversation(summaryMessages, parentAgentId, options);
+    // If there's a previous summary, pass it for incremental update.
+    const prevSummary = hasPrevSummary ? extractExistingSummary([messages[0]]).existingSummary : undefined;
 
-    const fileOps = extractFileOpsFromMessages(summaryMessages);
+    const summary = await summarizeConversation(
+      toSummarize,
+      parentAgentId,
+      prevSummary ? { ...options, existingSummary: prevSummary } : options
+    );
+
+    const fileOps = extractFileOpsFromMessages(toSummarize);
     const summaryWithFileOps = summary + formatFileOperations(fileOps);
 
     const keptTokens = estimateTokens(keptMessages);

@@ -284,15 +284,20 @@ export class AgentContext {
 
   /**
    * Get messages to send to the LLM.
-   * Returns [summaryMessage, ...messages.slice(compactIndex)] if compacted,
-   * or all messages if no compaction has occurred.
+   *
+   * - No compaction yet (summaryMessage === null): returns all messages.
+   * - After compaction: returns [summaryMessage, ...messages.slice(compactIndex)].
+   *
+   * `compactIndex` is an absolute index into `messages` marking where the
+   * summarized content ends. Everything from `compactIndex` onward is the
+   * live, unsummarized tail. We slice directly at compactIndex without
+   * any adjustment — the cut point is always a user message boundary.
+   *
+   * Dynamic per-turn context (memories, todo nag) is injected by the caller
+   * AFTER this method returns, so it never participates in compaction.
    */
   getMessagesForLLM(): ModelMessage[] {
     if (this.summaryMessage) {
-      // Walk compactIndex back to ensure we start on an assistant message
-      while (this.compactIndex > 0 && this.messages[this.compactIndex]?.role !== "assistant") {
-        this.compactIndex--;
-      }
       const list = this.messages.slice(this.compactIndex);
       const finalList = [this.summaryMessage, ...list];
       this.messagesForLLM = finalList;

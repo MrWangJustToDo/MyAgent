@@ -1,0 +1,280 @@
+// ============================================================================
+// Model Metadata from Environment Variables
+// ============================================================================
+
+import { z } from "zod";
+
+import type { ModelCapability, ModelInfo, ModelProvider, ModelPricing, ReasoningConfig } from "./types.js";
+
+/**
+ * Zod schema for a single capability string.
+ * Allows arbitrary strings for forward compatibility but constrains known ones.
+ */
+const capabilitySchema = z.string().transform((val, ctx): ModelCapability => {
+  const known: readonly ModelCapability[] = [
+    "reasoning",
+    "vision",
+    "tool_calling",
+    "prompt_caching",
+    "streaming",
+    "json_output",
+    "computer_use",
+  ];
+  if (!known.includes(val as ModelCapability)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Unknown capability "${val}". Known: ${known.join(", ")}`,
+    });
+    return z.NEVER;
+  }
+  return val as ModelCapability;
+});
+
+/**
+ * Zod schema for pricing configuration (USD per 1M tokens).
+ */
+const pricingSchema = z.object({
+  inputPerM: z.number().nonnegative(),
+  outputPerM: z.number().nonnegative(),
+  cacheWritePerM: z.number().nonnegative().optional(),
+  cacheReadPerM: z.number().nonnegative().optional(),
+});
+
+/**
+ * Zod schema for the full env-driven ModelInfo override.
+ * All fields are optional except where the registry cannot supply a default.
+ */
+export const ModelEnvConfigSchema = z.object({
+  /** Display name shown in the UI. Falls back to the model id. */
+  name: z.string().min(1).optional(),
+  /** Registry provider id. Used when registering into the registry. */
+  provider: z.string().optional(),
+  /** Model string sent to the API (defaults to MODEL env value). */
+  apiModel: z.string().optional(),
+  /** Max input context window in tokens. */
+  contextWindow: z.number().int().positive().optional(),
+  /** Default max output tokens. */
+  defaultMaxTokens: z.number().int().positive().optional(),
+  /** Whether the model supports vision / multimodal input. Convenience flag. */
+  multimodal: z.boolean().optional(),
+  /** Pricing in USD per 1M tokens. */
+  pricing: pricingSchema.optional(),
+  /** Additional capability flags (multimodal adds "vision" automatically). */
+  capabilities: z.array(capabilitySchema).optional(),
+  /** Tag name used to extract reasoning (e.g. "think"). */
+  reasoningTagName: z.string().optional(),
+  /** Default reasoning effort. */
+  reasoningEffort: z.enum(["low", "medium", "high"]).optional(),
+  /** Max thinking budget in tokens. */
+  reasoningMaxBudget: z.number().int().positive().optional(),
+  /** Whether this should be the default model for its provider. */
+  isDefault: z.boolean().optional(),
+});
+export type ModelEnvConfig = z.infer<typeof ModelEnvConfigSchema>;
+
+/**
+ * Set of MODEL_* environment variable names consumed by {@link parseModelInfoFromEnv}.
+ * Centralized so hosts (CLI, server, extension) can document or validate them.
+ */
+export const MODEL_ENV_KEYS = [
+  "MODEL_NAME",
+  "MODEL_PROVIDER",
+  "MODEL_API_NAME",
+  "MODEL_CONTEXT_WINDOW",
+  "MODEL_MAX_OUTPUT",
+  "MODEL_MULTIMODAL",
+  "MODEL_PRICE_INPUT",
+  "MODEL_PRICE_OUTPUT",
+  "MODEL_PRICE_CACHE_WRITE",
+  "MODEL_PRICE_CACHE_READ",
+  "MODEL_CAPABILITIES",
+  "MODEL_REASONING_TAG",
+  "MODEL_REASONING_EFFORT",
+  "MODEL_REASONING_BUDGET",
+  "MODEL_IS_DEFAULT",
+] as const;
+
+/**
+ * Parse a comma-separated capability list like "reasoning,tool_calling,vision".
+ */
+function parseCapabilitiesList(raw: string): ModelCapability[] {
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean) as ModelCapability[];
+}
+
+/**
+ * Parse a single env value into a number, returning undefined on failure.
+ * Accepts both "1048576" and "1_048_576" (underscores stripped).
+ */
+function parseNumber(raw: string | undefined): number | undefined {
+  if (raw === undefined || raw === "") return undefined;
+  const cleaned = raw.replace(/_/g, "").trim();
+  if (!/^\d+(\.\d+)?$/.test(cleaned)) return undefined;
+  const num = Number(cleaned);
+  return Number.isFinite(num) ? num : undefined;
+}
+
+function parseBoolean(raw: string | undefined): boolean | undefined {
+  if (raw === undefined || raw === "") return undefined;
+  const v = raw.trim().toLowerCase();
+  if (v === "true" || v === "1" || v === "yes" || v === "on") return true;
+  if (v === "false" || v === "0" || v === "no" || v === "off") return false;
+  return undefined;
+}
+
+/**
+ * Build a {@link ModelEnvConfig} from a raw env record.
+ *
+ * Reads the {@link MODEL_ENV_KEYS} set. Unknown keys are ignored, so hosts
+ * can pass the full `process.env` (or a remote env map) directly.
+ *
+ * @example
+ * ```typescript
+ * const cfg = parseModelEnvConfig(process.env);
+ * if (cfg) console.log(cfg.contextWindow);
+ * ```
+ */
+export function parseModelEnvConfig(env: Record<string, string | undefined>): ModelEnvConfig | undefined {
+  const hasAny = MODEL_ENV_KEYS.some((k) => env[k] !== undefined && env[k] !== "");
+  if (!hasAny) return undefined;
+
+  const capabilitiesRaw = env.MODEL_CAPABILITIES;
+  const capabilities = capabilitiesRaw ? parseCapabilitiesList(capabilitiesRaw) : undefined;
+
+  // Build pricing only if any price field is present
+  const inputPerM = parseNumber(env.MODEL_PRICE_INPUT);
+  const outputPerM = parseNumber(env.MODEL_PRICE_OUTPUT);
+  let pricing: z.infer<typeof pricingSchema> | undefined;
+  if (inputPerM !== undefined || outputPerM !== undefined) {
+    pricing = {
+      inputPerM: inputPerM ?? 0,
+      outputPerM: outputPerM ?? 0,
+      ...(parseNumber(env.MODEL_PRICE_CACHE_WRITE) !== undefined
+        ? { cacheWritePerM: parseNumber(env.MODEL_PRICE_CACHE_WRITE) }
+        : {}),
+      ...(parseNumber(env.MODEL_PRICE_CACHE_READ) !== undefined
+        ? { cacheReadPerM: parseNumber(env.MODEL_PRICE_CACHE_READ) }
+        : {}),
+    };
+  }
+
+  const raw = {
+    ...(env.MODEL_NAME ? { name: env.MODEL_NAME } : {}),
+    ...(env.MODEL_PROVIDER ? { provider: env.MODEL_PROVIDER } : {}),
+    ...(env.MODEL_API_NAME ? { apiModel: env.MODEL_API_NAME } : {}),
+    ...(parseNumber(env.MODEL_CONTEXT_WINDOW) !== undefined
+      ? { contextWindow: parseNumber(env.MODEL_CONTEXT_WINDOW) }
+      : {}),
+    ...(parseNumber(env.MODEL_MAX_OUTPUT) !== undefined ? { defaultMaxTokens: parseNumber(env.MODEL_MAX_OUTPUT) } : {}),
+    ...(parseBoolean(env.MODEL_MULTIMODAL) !== undefined ? { multimodal: parseBoolean(env.MODEL_MULTIMODAL) } : {}),
+    ...(pricing ? { pricing } : {}),
+    ...(capabilities ? { capabilities } : {}),
+    ...(env.MODEL_REASONING_TAG ? { reasoningTagName: env.MODEL_REASONING_TAG } : {}),
+    ...(env.MODEL_REASONING_EFFORT ? { reasoningEffort: env.MODEL_REASONING_EFFORT as "low" | "medium" | "high" } : {}),
+    ...(parseNumber(env.MODEL_REASONING_BUDGET) !== undefined
+      ? { reasoningMaxBudget: parseNumber(env.MODEL_REASONING_BUDGET) }
+      : {}),
+    ...(parseBoolean(env.MODEL_IS_DEFAULT) !== undefined ? { isDefault: parseBoolean(env.MODEL_IS_DEFAULT) } : {}),
+  };
+
+  const parsed = ModelEnvConfigSchema.safeParse(raw);
+  if (!parsed.success) {
+    // Aggregate issues into a single readable message and throw.
+    const msg = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+    throw new Error(`Invalid MODEL_* env config: ${msg}`);
+  }
+  return parsed.data;
+}
+
+/**
+ * Resolve a complete {@link ModelInfo} from env config + the active model id.
+ *
+ * - If `envConfig` is undefined, returns undefined (no override).
+ * - `modelId` is the active MODEL value (used as id / apiModel / name fallbacks).
+ * - `fallbackProvider` is used when neither env nor registry can supply a provider
+ *   (e.g. for openai-compatible custom endpoints). May be omitted.
+ *
+ * The `multimodal: true` flag automatically adds the "vision" capability unless
+ * `capabilities` is explicitly provided without "vision".
+ *
+ * @example
+ * ```typescript
+ * const envCfg = parseModelEnvConfig(process.env);
+ * const info = resolveModelInfoFromEnv(envCfg, process.env.MODEL);
+ * if (info) registerModel(info);
+ * ```
+ */
+export function resolveModelInfoFromEnv(
+  envConfig: ModelEnvConfig | undefined,
+  modelId: string,
+  fallbackProvider?: ModelProvider
+): ModelInfo | undefined {
+  if (!envConfig) return undefined;
+
+  const provider = (envConfig.provider as ModelProvider) ?? fallbackProvider ?? "openai";
+
+  // Merge capabilities: explicit list > [multimodal ? vision : nothing].
+  let capabilities: ModelCapability[];
+  if (envConfig.capabilities) {
+    // multimodal=true also implies vision, even if not listed explicitly
+    capabilities =
+      envConfig.multimodal && !envConfig.capabilities.includes("vision")
+        ? [...envConfig.capabilities, "vision"]
+        : [...envConfig.capabilities];
+  } else if (envConfig.multimodal) {
+    capabilities = ["vision"];
+  } else {
+    capabilities = [];
+  }
+
+  let reasoningConfig: ReasoningConfig | undefined;
+  if (envConfig.reasoningTagName || envConfig.reasoningEffort || envConfig.reasoningMaxBudget !== undefined) {
+    reasoningConfig = {
+      ...(envConfig.reasoningTagName ? { tagName: envConfig.reasoningTagName } : {}),
+      ...(envConfig.reasoningEffort ? { defaultEffort: envConfig.reasoningEffort } : {}),
+      ...(envConfig.reasoningMaxBudget !== undefined ? { maxBudget: envConfig.reasoningMaxBudget } : {}),
+    };
+  }
+
+  let pricing: ModelPricing | undefined;
+  if (envConfig.pricing) {
+    pricing = {
+      inputPerM: envConfig.pricing.inputPerM,
+      outputPerM: envConfig.pricing.outputPerM,
+      ...(envConfig.pricing.cacheWritePerM !== undefined ? { cacheWritePerM: envConfig.pricing.cacheWritePerM } : {}),
+      ...(envConfig.pricing.cacheReadPerM !== undefined ? { cacheReadPerM: envConfig.pricing.cacheReadPerM } : {}),
+    };
+  }
+
+  return {
+    id: modelId,
+    name: envConfig.name ?? modelId,
+    provider,
+    apiModel: envConfig.apiModel ?? modelId,
+    contextWindow: envConfig.contextWindow ?? 128_000,
+    defaultMaxTokens: envConfig.defaultMaxTokens ?? 4096,
+    ...(pricing ? { pricing } : {}),
+    capabilities,
+    ...(reasoningConfig ? { reasoningConfig } : {}),
+    ...(envConfig.isDefault !== undefined ? { isDefault: envConfig.isDefault } : {}),
+  };
+}
+
+/**
+ * Convenience: read env → config → ModelInfo in one call.
+ *
+ * @example
+ * ```typescript
+ * const info = parseModelInfoFromEnv(process.env, "qwen2.5-coder:7b");
+ * ```
+ */
+export function parseModelInfoFromEnv(
+  env: Record<string, string | undefined>,
+  modelId: string,
+  fallbackProvider?: ModelProvider
+): ModelInfo | undefined {
+  const cfg = parseModelEnvConfig(env);
+  return resolveModelInfoFromEnv(cfg, modelId, fallbackProvider);
+}

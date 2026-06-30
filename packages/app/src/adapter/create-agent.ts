@@ -63,17 +63,22 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
   try {
     const result = await createModelFromId(config.model, { apiKey: config.apiKey, baseURL: config.url });
     languageModel = result.model;
-    modelInfo = result.info;
+    // Env-provided modelInfo takes priority over the registry entry:
+    // it lets users override contextWindow / pricing / capabilities for known
+    // models, and supply them entirely for unregistered custom models.
+    modelInfo = config.modelInfo ?? result.info;
   } catch {
     if (config.provider === "ollama") {
       languageModel = createOllamaModel(config.model, config.url, { reasoning: true });
     } else if (config.provider === "openaiCompatible") {
-      languageModel = createOpenAICompatibleModel(config.model, config.url);
+      languageModel = createOpenAICompatibleModel(config.model, config.url, config.apiKey);
     } else if (config.provider === "deepseek") {
       languageModel = await createDeepSeekModel(config.model, config.apiKey);
     } else {
       languageModel = await createOpenRouterModel(config.model, config.apiKey);
     }
+    // Fall back to env-provided metadata for unregistered custom models.
+    modelInfo = config.modelInfo;
   }
 
   if (config.provider === "ollama") {

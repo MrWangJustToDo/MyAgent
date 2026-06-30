@@ -1,6 +1,7 @@
-import { DEFAULT_OLLAMA_URL } from "@my-agent/core";
+import { DEFAULT_OLLAMA_URL, parseModelInfoFromEnv } from "@my-agent/core";
 
 import type { AppConfig, Provider } from "@my-agent/app";
+import type { ModelProvider } from "@my-agent/core";
 
 // ============================================================================
 // Argument Parsing
@@ -133,8 +134,22 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
   const remoteFlag = getFlag(parsed, "remote", "R");
   const remote = typeof remoteFlag === "string" ? remoteFlag : envRemote || undefined;
 
+  // Resolve model metadata from MODEL_* env vars (context window, pricing,
+  // capabilities, multimodal flag, reasoning config, etc).
+  // The active MODEL value is the id; provider maps to a registry ModelProvider
+  // so resolveModelInfoFromEnv can fill in a sensible default when MODEL_PROVIDER
+  // is not set explicitly.
+  const providerToModelProvider: Record<Provider, ModelProvider> = {
+    ollama: "ollama",
+    openRouter: "open-router",
+    openaiCompatible: "openai",
+    deepseek: "deepseek",
+  };
+  const envModelId = getFlagString(parsed, envModel || "qwen2.5-coder:7b", "model", "m");
+  const modelInfo = parseModelInfoFromEnv(process.env, envModelId, providerToModelProvider[provider]);
+
   return {
-    model: getFlagString(parsed, envModel || "qwen2.5-coder:7b", "model", "m"),
+    model: envModelId,
     url: getFlagString(parsed, envUrl || DEFAULT_OLLAMA_URL, "url", "u"),
     systemPrompt: getFlagString(parsed, "", "system", "s"),
     initialPrompt: parsed.positional.join(" "),
@@ -146,6 +161,7 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
     continueSession: getFlagBoolean(parsed, "continue", "c"),
     resumeSession,
     remote,
+    ...(modelInfo ? { modelInfo } : {}),
   };
 }
 

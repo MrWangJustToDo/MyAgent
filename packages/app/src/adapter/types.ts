@@ -1,4 +1,4 @@
-import type { Agent } from "@my-agent/core";
+import type { Agent, ModelInfo } from "@my-agent/core";
 import type { ChatTransport, UIMessage } from "ai";
 
 // ============================================================================
@@ -19,6 +19,14 @@ export interface AppConfig {
   mcpConfigPath: string;
   continueSession: boolean;
   resumeSession: string;
+  /**
+   * Optional model metadata override (context window, pricing, capabilities, etc).
+   * When provided, this takes priority over the registry lookup and is applied to
+   * the agent even if the model id is not registered.
+   *
+   * Typically derived from MODEL_* environment variables by the host (CLI, etc).
+   */
+  modelInfo?: ModelInfo;
 }
 
 // ============================================================================

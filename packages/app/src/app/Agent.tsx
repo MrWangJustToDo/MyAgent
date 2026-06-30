@@ -13,6 +13,8 @@ import { Content } from "../layout/Content.js";
 import { Footer } from "../layout/Footer.js";
 import { Header } from "../layout/Header.js";
 
+import type { AppConfig } from "../adapter/types.js";
+
 // ============================================================================
 // Main Agent Component
 // ============================================================================
@@ -24,7 +26,10 @@ export const Agent = () => {
 
   useStatic.getActions().useInitStdout();
 
-  const config = useConfig((s) => s.config);
+  // The config store wraps state as DeepReadonly; downstream consumers
+  // (useAgentChat → adapter.initialize → createAgentFromConfig) treat it as a
+  // mutable AppConfig. The store is the single owner, so a cast is safe here.
+  const config = useConfig((s) => s.config) as AppConfig;
 
   const {
     messages,

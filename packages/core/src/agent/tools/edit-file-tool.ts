@@ -89,6 +89,7 @@ export const createEditFileTool = () => {
 - For multiple independent edits, use the \`edits\` array (more efficient, fewer round-trips).
 - Each edit must have a unique oldString that appears exactly once in the file (unless replaceAll is true).
 - Edits are applied sequentially in the order provided.
+- **startLine**: Provide the 1-indexed line number where oldString starts (from the read_file output). Used for diff display and to validate the match location. Required for both single edits and each entry in the \`edits\` array.
 - **Fuzzy Matching**: Handles common Unicode issues like smart quotes, dashes, and special spaces that LLMs sometimes produce.`,
     inputSchema: z.object({
       path: z.string().describe("The path to the file to edit, relative to the project directory."),
@@ -121,6 +122,14 @@ export const createEditFileTool = () => {
             oldString: z.string().describe("The exact string to search for and replace."),
             newString: z.string().describe("The string to replace oldString with."),
             replaceAll: z.boolean().optional().describe("If true, replace all occurrences of this string."),
+            startLine: z
+              .number()
+              .int()
+              .min(1)
+              .optional()
+              .describe(
+                "The 1-indexed line number where oldString starts in the file. Used for diff display and validation."
+              ),
           })
         )
         .optional()
@@ -161,6 +170,7 @@ export const createEditFileTool = () => {
               oldString: edit.oldString,
               newString: edit.newString,
               replaceAll: edit.replaceAll,
+              startLine: edit.startLine,
             });
           }
         }

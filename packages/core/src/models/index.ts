@@ -47,3 +47,13 @@ export {
   type CreateModelFromIdOptions,
   type CreateModelFromIdResult,
 } from "./factory.js";
+
+// Env-driven model metadata (MODEL_* env vars → ModelInfo override)
+export {
+  MODEL_ENV_KEYS,
+  ModelEnvConfigSchema,
+  parseModelEnvConfig,
+  parseModelInfoFromEnv,
+  resolveModelInfoFromEnv,
+  type ModelEnvConfig,
+} from "./model-env.js";

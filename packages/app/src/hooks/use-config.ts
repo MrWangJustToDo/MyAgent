@@ -48,6 +48,7 @@ export const useConfig = createState(
         state.config.mcpConfigPath = config.mcpConfigPath || "";
         state.config.continueSession = config.continueSession ?? false;
         state.config.resumeSession = config.resumeSession || "";
+        state.config.modelInfo = config.modelInfo;
         state.initialized = true;
 
         const { model, url, systemPrompt, provider } = state.config;
