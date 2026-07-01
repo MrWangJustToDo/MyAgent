@@ -1,6 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { toolOutputBaseSchema } from "./util/types.js";
+
 // ============================================================================
 // Schemas
 // ============================================================================
@@ -9,8 +11,8 @@ export const askUserOutputSchema = z.object({
   question: z.string().describe("The question that was asked."),
   answer: z.string().describe("The user's response."),
   hasOptions: z.boolean().describe("Whether predefined options were provided."),
-  message: z.string().describe("Human-readable summary."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
+  ...toolOutputBaseSchema.shape,
 });
 
 export type AskUserOutput = z.infer<typeof askUserOutputSchema>;
@@ -54,5 +56,14 @@ Do NOT use this tool for:
     }),
 
     outputSchema: askUserOutputSchema,
+
+    // Only send the answer to the LLM — question is echoed in the input,
+    // hasOptions/durationMs are metadata.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: AskUserOutput }) {
+      return {
+        type: "content" as const,
+        value: [{ type: "text" as const, text: output.answer }],
+      };
+    },
   });
 };

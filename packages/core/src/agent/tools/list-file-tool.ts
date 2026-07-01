@@ -6,6 +6,8 @@ import { getEnv } from "../../env.js";
 import { OUTPUT_LIMITS, withDuration } from "./util/helpers.js";
 import { listFileOutputSchema } from "./util/types.js";
 
+import type { ListFileOutput } from "./util/types.js";
+
 /** Default number of entries to return per page */
 const DEFAULT_LIMIT = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
 
@@ -59,35 +61,38 @@ export const createListFileTool = () => {
 
         // Apply pagination
         const paginatedEntries = allEntries.slice(skip, skip + take);
-        const hasMore = allEntries.length > skip + take;
         const totalEntries = allEntries.length;
 
-        // Build message with pagination info
-        let message = `Listed ${paginatedEntries.length} entries in: ${path}`;
-        if (skip > 0) {
-          message += ` (offset: ${skip})`;
-        }
-        if (hasMore) {
-          const nextOffset = skip + take;
-          message += `. Use offset=${nextOffset} to see more (${totalEntries - skip - take} remaining).`;
-        }
-
         return {
-          path,
           entries: paginatedEntries.map((entry) => ({
             name: entry.name,
             type: entry.type,
             size: entry.size,
             modified: entry.modified?.toISOString(),
           })),
+          offset: skip,
+          limit: take,
           count: paginatedEntries.length,
           totalEntries,
-          offset: skip,
-          hasMore,
-          nextOffset: hasMore ? skip + take : null,
-          message,
         };
       });
+    },
+
+    // Only send entries to the LLM — path is echoed in the input,
+    // pagination metadata is for the UI only.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: ListFileOutput }) {
+      const lines = output.entries.map((e) => `${e.name}${e.type === "directory" ? "/" : ""}`);
+      return {
+        type: "content" as const,
+        value: [
+          {
+            type: "text" as const,
+            text:
+              `<params> offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit} </params>` +
+              lines.join("\n"),
+          },
+        ],
+      };
     },
   });
 };

@@ -6,6 +6,7 @@ import { withDuration } from "./util/helpers.js";
 import { todoOutputSchema } from "./util/types.js";
 
 import type { TodoManager } from "../todo-manager";
+import type { TodoOutput } from "./util/types.js";
 
 /**
  * Creates a todo tool using Vercel AI SDK.
@@ -50,18 +51,31 @@ IMPORTANT RULES:
     outputSchema: todoOutputSchema,
     execute: async ({ todos, title }) => {
       return withDuration(async () => {
-        // Update the todo manager
-        const todoList = todoManager.update(todos, title);
+        // Update the todo manager (return value is a rendered string, no longer needed
+        // — the LLM consumes the structured `items` array instead).
+        todoManager.update(todos, title);
         const stats = todoManager.getStats();
+        const items = todoManager.getItems();
 
         return {
-          success: true,
           title,
-          todoList,
+          items,
           stats,
-          message: `Updated ${stats.total} todos: ${stats.completed} completed, ${stats.inProgress} in progress, ${stats.pending} pending`,
         };
       });
+    },
+
+    // Only send items to the LLM — it needs the todo list to plan. title is
+    // echoed in the input, stats can be derived from items, durationMs is metadata.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: TodoOutput }) {
+      const lines = output.items.map((item) => {
+        const icon = item.status === "completed" ? "[x]" : item.status === "in_progress" ? "[>]" : "[ ]";
+        return `${icon} ${item.content}`;
+      });
+      return {
+        type: "content" as const,
+        value: [{ type: "text" as const, text: `${output.title}\n${lines.join("\n")}` }],
+      };
     },
   });
 };

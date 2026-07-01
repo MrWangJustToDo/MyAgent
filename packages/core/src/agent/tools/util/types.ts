@@ -1,11 +1,35 @@
 import { z } from "zod";
 
+import { TODO_PRIORITIES, TODO_STATUSES } from "../../todo-manager/types.js";
+
+// ============================================================================
+// Tool Output Base Schema (common fields shared by all tool outputs)
+// ============================================================================
+
+/**
+ * Common fields every tool output inherits.
+ *
+ * - `cachedOutputPath`: path to a disk-cached copy of large output, or `null`
+ *   when no caching occurred. Standardized across all tools so the UI and LLM
+ *   can rely on it being present.
+ *
+ * Errors are NOT represented in the output schema — tools throw on failure,
+ * and the AI SDK surfaces the error via the `output-error` tool state
+ * (`part.errorText` on the UI side). This keeps the success output clean and
+ * avoids a redundant `error: null` field on every successful result.
+ */
+export const toolOutputBaseSchema = z.object({
+  cachedOutputPath: z
+    .string()
+    .nullable()
+    .describe("Path to cached full output on disk, or null when no caching occurred."),
+});
+
 // ============================================================================
 // Tool Output Schemas
 // ============================================================================
 
 export const listFileOutputSchema = z.object({
-  path: z.string().describe("The directory path that was listed."),
   entries: z
     .array(
       z.object({
@@ -16,13 +40,12 @@ export const listFileOutputSchema = z.object({
       })
     )
     .describe("Array of directory entries."),
+  offset: z.number().describe("The offset used for pagination (0-indexed)."),
+  limit: z.number().describe("The limit used for pagination."),
   count: z.number().describe("Number of entries returned in this page."),
   totalEntries: z.number().describe("Total number of entries in the directory."),
-  offset: z.number().describe("The offset used for this query (0-indexed)."),
-  hasMore: z.boolean().describe("Whether there are more entries available."),
-  nextOffset: z.number().nullable().describe("The offset to use for the next page, or null if no more entries."),
-  message: z.string().describe("Human-readable summary of the operation."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
+  ...toolOutputBaseSchema.shape,
 });
 
 export const runCommandOutputSchema = z.object({
@@ -32,8 +55,7 @@ export const runCommandOutputSchema = z.object({
   exitCode: z.number().describe("Exit code of the command (0 = success)."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
   success: z.boolean().describe("Whether the command succeeded (exit code 0)."),
-  message: z.string().describe("Human-readable summary of the operation."),
-  cachedOutputPath: z.string().nullable().optional().describe("Path to cached full output. Use read_file to read it."),
+  ...toolOutputBaseSchema.shape,
 });
 
 // Note: readFileOutputSchema is now defined in read-file-tool.ts
@@ -44,14 +66,16 @@ export const writeFileOutputSchema = z.object({
   bytesWritten: z.number().describe("Number of bytes written."),
   created: z.boolean().describe("Whether a new file was created (vs overwritten)."),
   modifiedTime: z.string().describe("ISO timestamp of the new modification time."),
-  message: z.string().describe("Human-readable summary of the operation."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
+  ...toolOutputBaseSchema.shape,
 });
 
 export const editFileOutputSchema = z.object({
   path: z.string().describe("The file path that was edited."),
   replacements: z.number().describe("Number of replacements made."),
   modifiedTime: z.string().describe("The new modification timestamp after editing."),
+  oldFile: z.string().describe("The original file content before any edits were applied."),
+  newFile: z.string().describe("The full file content after all edits have been applied."),
   results: z
     .array(
       z.object({
@@ -65,31 +89,20 @@ export const editFileOutputSchema = z.object({
       })
     )
     .describe("Details of each edit operation."),
-  message: z.string().describe("Human-readable summary of the operation."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
+  ...toolOutputBaseSchema.shape,
 });
 
 export const globOutputSchema = z.object({
-  pattern: z.string().describe("The glob pattern that was searched."),
-  path: z.string().describe("The directory that was searched."),
-  type: z.string().describe("The file type filter used: 'file', 'directory', or 'all'."),
   files: z.array(z.string()).describe("Array of matching file paths."),
-  count: z.number().describe("Number of files returned in this page."),
-  offset: z.number().describe("The offset used for this query (0-indexed)."),
-  hasMore: z.boolean().describe("Whether there are more results available."),
-  nextOffset: z.number().nullable().describe("The offset to use for the next page, or null if no more results."),
-  contentTruncated: z.boolean().describe("Whether some results were truncated."),
-  message: z.string().describe("Human-readable summary of the operation."),
+  offset: z.number().describe("The offset used for pagination (0-indexed)."),
+  limit: z.number().describe("The limit used for pagination."),
+  content: z.string().describe("The full glob output as a string (for caching)."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
-  cachedOutputPath: z.string().nullable().optional().describe("Path to cached full output. Use read_file to read it."),
+  ...toolOutputBaseSchema.shape,
 });
 
 export const grepOutputSchema = z.object({
-  pattern: z.string().describe("The regex pattern that was searched."),
-  path: z.string().describe("The directory that was searched."),
-  include: z.string().describe("The file filter pattern used."),
-  outputMode: z.string().describe('Output mode used: "content", "files_with_matches", or "count".'),
-  context: z.number().nullable().describe("Number of context lines shown around each match (null = not used)."),
   matches: z
     .array(
       z.object({
@@ -103,20 +116,26 @@ export const grepOutputSchema = z.object({
       })
     )
     .describe("Array of matches found."),
-  count: z.number().describe("Number of matches returned in this page."),
-  offset: z.number().describe("The offset used for this query (0-indexed)."),
-  hasMore: z.boolean().describe("Whether there are more matches available."),
-  nextOffset: z.number().nullable().describe("The offset to use for the next page, or null if no more matches."),
-  contentTruncated: z.boolean().describe("Whether some match content was truncated."),
-  message: z.string().describe("Human-readable summary of the operation."),
+  offset: z.number().describe("The offset used for pagination (0-indexed)."),
+  limit: z.number().describe("The limit used for pagination."),
+  content: z.string().describe("The full grep output as a string (for caching)."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
-  cachedOutputPath: z.string().nullable().optional().describe("Path to cached full output. Use read_file to read it."),
+  ...toolOutputBaseSchema.shape,
+});
+
+export const todoOutputItemSchema = z.object({
+  id: z.string().describe("Unique identifier for the todo."),
+  content: z.string().describe("Description of the task."),
+  status: z.enum(TODO_STATUSES).describe("Current status: pending | in_progress | completed."),
+  priority: z.enum(TODO_PRIORITIES).describe("Priority level: high | medium | low."),
+  createdAt: z.number().describe("Timestamp when created (ms epoch)."),
+  updatedAt: z.number().describe("Timestamp when last updated (ms epoch)."),
 });
 
 export const todoOutputSchema = z.object({
-  success: z.boolean().describe("Whether the update was successful."),
   title: z.string().describe("Title for the current todo set."),
-  todoList: z.string().describe("Rendered todo list for display."),
+  /** Structured todo items for rich UI rendering. Mirrors the internal TodoItem list. */
+  items: z.array(todoOutputItemSchema).describe("Structured todo items for UI rendering."),
   stats: z
     .object({
       total: z.number().describe("Total number of todos."),
@@ -125,8 +144,8 @@ export const todoOutputSchema = z.object({
       pending: z.number().describe("Number of pending todos."),
     })
     .describe("Todo completion statistics."),
-  message: z.string().describe("Human-readable summary of the operation."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
+  ...toolOutputBaseSchema.shape,
 });
 
 // ============================================================================

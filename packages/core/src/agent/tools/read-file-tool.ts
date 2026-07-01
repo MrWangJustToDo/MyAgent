@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getEnv } from "../../env.js";
 
 import { getFile, withDuration } from "./util/helpers.js";
+import { toolOutputBaseSchema } from "./util/types.js";
 
 import type { FileStat } from "../../environment";
 import type { AgentContext } from "../agent-context/agent-context.js";
@@ -173,10 +174,9 @@ export const readFileOutputSchema = z.discriminatedUnion("type", [
     totalLines: z.number().describe("Total number of lines in the file."),
     startLine: z.number().describe("Starting line number (1-indexed)."),
     endLine: z.number().describe("Ending line number (inclusive)."),
-    linesReturned: z.number().describe("Number of lines returned."),
     truncated: z.boolean().describe("Whether content was truncated."),
-    message: z.string().describe("Human-readable summary of the operation."),
     durationMs: z.number().describe("Execution duration in milliseconds."),
+    ...toolOutputBaseSchema.shape,
   }),
   // Directory output
   z.object({
@@ -184,10 +184,9 @@ export const readFileOutputSchema = z.discriminatedUnion("type", [
     path: z.string().describe("The directory path that was read."),
     entries: z.array(z.string()).describe("List of entries (files and directories)."),
     totalEntries: z.number().describe("Total number of entries."),
-    entriesReturned: z.number().describe("Number of entries returned."),
     truncated: z.boolean().describe("Whether entries were truncated."),
-    message: z.string().describe("Human-readable summary of the operation."),
     durationMs: z.number().describe("Execution duration in milliseconds."),
+    ...toolOutputBaseSchema.shape,
   }),
   // Image output
   z.object({
@@ -196,8 +195,8 @@ export const readFileOutputSchema = z.discriminatedUnion("type", [
     mimeType: z.string().describe("MIME type of the image."),
     base64: z.string().describe("Base64 encoded image data."),
     size: z.number().describe("File size in bytes."),
-    message: z.string().describe("Human-readable summary of the operation."),
     durationMs: z.number().describe("Execution duration in milliseconds."),
+    ...toolOutputBaseSchema.shape,
   }),
   // PDF output
   z.object({
@@ -205,16 +204,8 @@ export const readFileOutputSchema = z.discriminatedUnion("type", [
     path: z.string().describe("The PDF file path."),
     base64: z.string().describe("Base64 encoded PDF data."),
     size: z.number().describe("File size in bytes."),
-    message: z.string().describe("Human-readable summary of the operation."),
     durationMs: z.number().describe("Execution duration in milliseconds."),
-  }),
-  // Error output
-  z.object({
-    type: z.literal("error"),
-    path: z.string().describe("The file path that caused the error."),
-    error: z.string().describe("Error message."),
-    message: z.string().describe("Human-readable summary of the error."),
-    durationMs: z.number().describe("Execution duration in milliseconds."),
+    ...toolOutputBaseSchema.shape,
   }),
 ]);
 
@@ -308,12 +299,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
             // Ignore errors when looking for suggestions
           }
 
-          return {
-            type: "error" as const,
-            path: filePath,
-            error: `File not found: ${filePath}${suggestion}`,
-            message: `File not found: ${filePath}`,
-          };
+          throw new Error(`File not found: ${filePath}${suggestion}`);
         }
 
         // Get file stats if available
@@ -346,43 +332,28 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
             path: filePath,
             entries: slicedEntries,
             totalEntries: sortedEntries.length,
-            entriesReturned: slicedEntries.length,
             truncated,
-            message: truncated
-              ? `Directory ${filePath}: showing ${slicedEntries.length} of ${sortedEntries.length} entries. Use offset=${startIdx + slicedEntries.length + 1} to see more.`
-              : `Directory ${filePath}: ${sortedEntries.length} entries`,
           };
         }
 
         // Handle binary files (error)
         if (fileTypeInfo.type === "binary") {
-          return {
-            type: "error" as const,
-            path: filePath,
-            error: `Cannot read binary file: ${filePath}. This tool cannot read binary files like audio, video, archives, or executables.`,
-            message: `Cannot read binary file: ${filePath}`,
-          };
+          throw new Error(
+            `Cannot read binary file: ${filePath}. This tool cannot read binary files like audio, video, archives, or executables.`
+          );
         }
 
         // Handle images
         if (fileTypeInfo.type === "image") {
           // Skip image data if model doesn't support vision
           if (context && !context.hasCapability("vision")) {
-            return {
-              type: "error" as const,
-              path: filePath,
-              error: `Cannot analyze image: ${filePath} (${fileTypeInfo.mimeType}). The current model does not support vision — image content cannot be read.`,
-              message: `Image file detected but model lacks vision capability: ${filePath}`,
-            };
+            throw new Error(
+              `Cannot analyze image: ${filePath} (${fileTypeInfo.mimeType}). The current model does not support vision — image content cannot be read.`
+            );
           }
 
           if (!fsys.readFileBuffer) {
-            return {
-              type: "error" as const,
-              path: filePath,
-              error: "Image reading not supported in this environment",
-              message: "Image reading not supported",
-            };
+            throw new Error("Image reading not supported in this environment");
           }
 
           const buffer = await fsys.readFileBuffer(filePath);
@@ -392,12 +363,9 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
           const remainingTokens = getRemainingTokenBudget();
           const remainingChars = remainingTokens * CHARS_PER_TOKEN;
           if (base64Chars > remainingChars) {
-            return {
-              type: "error" as const,
-              path: filePath,
-              error: `Skipping image to avoid context overflow: ${Math.round(buffer.length / 1024)}KB image would use ~${Math.ceil(base64Chars / CHARS_PER_TOKEN)} tokens, but only ~${remainingTokens} tokens remain in budget. Try reading fewer images per turn.`,
-              message: `Context budget exceeded, skipping: ${filePath} (${Math.round(buffer.length / 1024)}KB)`,
-            };
+            throw new Error(
+              `Skipping image to avoid context overflow: ${Math.round(buffer.length / 1024)}KB image would use ~${Math.ceil(base64Chars / CHARS_PER_TOKEN)} tokens, but only ~${remainingTokens} tokens remain in budget. Try reading fewer images per turn.`
+            );
           }
 
           const base64 = getEnv().base64Encode(buffer);
@@ -408,30 +376,21 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
             mimeType: fileTypeInfo.mimeType || "image/png",
             base64,
             size: buffer.length,
-            message: `Image read successfully: ${filePath} (${Math.round(buffer.length / 1024)}KB)`,
           };
         }
 
         // Handle PDFs
         if (fileTypeInfo.type === "pdf") {
           if (!fsys.readFileBuffer) {
-            return {
-              type: "error" as const,
-              path: filePath,
-              error: "PDF reading not supported in this environment",
-              message: "PDF reading not supported",
-            };
+            throw new Error("PDF reading not supported in this environment");
           }
 
           const buffer = await fsys.readFileBuffer(filePath);
 
           if (buffer.length > MAX_BINARY_SIZE) {
-            return {
-              type: "error" as const,
-              path: filePath,
-              error: `PDF file too large: ${Math.round(buffer.length / 1024 / 1024)}MB (max ${MAX_BINARY_SIZE / 1024 / 1024}MB)`,
-              message: `PDF file too large`,
-            };
+            throw new Error(
+              `PDF file too large: ${Math.round(buffer.length / 1024 / 1024)}MB (max ${MAX_BINARY_SIZE / 1024 / 1024}MB)`
+            );
           }
 
           return {
@@ -439,7 +398,6 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
             path: filePath,
             base64: getEnv().base64Encode(buffer),
             size: buffer.length,
-            message: `PDF read successfully: ${filePath} (${Math.round(buffer.length / 1024)}KB)`,
           };
         }
 
@@ -449,12 +407,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
           try {
             const buffer = await fsys.readFileBuffer(filePath);
             if (await isBinaryContent(buffer)) {
-              return {
-                type: "error" as const,
-                path: filePath,
-                error: `File appears to be binary: ${filePath}. Cannot read binary file content.`,
-                message: `Cannot read binary file: ${filePath}`,
-              };
+              throw new Error(`File appears to be binary: ${filePath}. Cannot read binary file content.`);
             }
           } catch {
             // If buffer read fails, try text read anyway
@@ -475,12 +428,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
 
         // Validate offset
         if (startIdx >= totalLines && totalLines > 0) {
-          return {
-            type: "error" as const,
-            path: filePath,
-            error: `Offset ${startLine} is out of range for this file (${totalLines} lines)`,
-            message: `Offset out of range`,
-          };
+          throw new Error(`Offset ${startLine} is out of range for this file (${totalLines} lines)`);
         }
 
         // Apply line limit
@@ -512,12 +460,9 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
         const remainingTokens = getRemainingTokenBudget();
         const remainingChars = remainingTokens * CHARS_PER_TOKEN;
         if (remainingChars <= 0) {
-          return {
-            type: "error" as const,
-            path: filePath,
-            error: `Context budget exhausted. Cannot read more files this turn. The file has ${totalLines} lines — try reading it in a subsequent turn or use offset/limit for a smaller range.`,
-            message: `Context budget exhausted, skipping: ${filePath}`,
-          };
+          throw new Error(
+            `Context budget exhausted. Cannot read more files this turn. The file has ${totalLines} lines — try reading it in a subsequent turn or use offset/limit for a smaller range.`
+          );
         }
         if (selectedContent.length > remainingChars) {
           selectedContent =
@@ -528,14 +473,6 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
         const hasMore = endIdx < totalLines;
         const endLine = startIdx + selectedLines.length;
 
-        let message = `Read ${selectedLines.length} lines from ${filePath} (lines ${startLine}-${endLine} of ${totalLines})`;
-        if (contentTruncated || truncatedByLength) {
-          message += " (some content truncated)";
-        }
-        if (hasMore) {
-          message += `. Use offset=${endLine + 1} to read more.`;
-        }
-
         return {
           type: "text" as const,
           path: filePath,
@@ -544,9 +481,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
           totalLines,
           startLine,
           endLine,
-          linesReturned: selectedLines.length,
           truncated: contentTruncated || truncatedByLength || hasMore,
-          message,
         };
       });
     },
@@ -559,7 +494,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
         return {
           type: "content" as const,
           value: [
-            { type: "text" as const, text: output.message },
+            { type: "text" as const, text: `Image read: ${output.path} (${Math.round(output.size / 1024)}KB)` },
             {
               type: "image-data" as const,
               data: output.base64,
@@ -574,7 +509,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
         return {
           type: "content" as const,
           value: [
-            { type: "text" as const, text: output.message },
+            { type: "text" as const, text: `PDF read: ${output.path} (${Math.round(output.size / 1024)}KB)` },
             {
               type: "file-data" as const,
               data: output.base64,

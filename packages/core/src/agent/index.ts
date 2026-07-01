@@ -102,6 +102,9 @@ export {
 // Task tool export (for subagent delegation)
 export { createTaskTool, taskOutputSchema, type TaskToolConfig, type TaskOutput } from "./tools/task-tool.js";
 
+// Edit preview helper (used by the UI to show a full-file diff before applying edits)
+export { previewEdit, type PreviewEditInput, type PreviewEditResult } from "./tools/util/preview-edit.js";
+
 // Skill tools export
 export {
   createListSkillsTool,

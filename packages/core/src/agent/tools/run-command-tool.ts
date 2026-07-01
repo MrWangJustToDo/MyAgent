@@ -8,6 +8,8 @@ import { emitStreamingChunk } from "./util/streaming-callback.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { runCommandOutputSchema } from "./util/types.js";
 
+import type { RunCommandOutput } from "./util/types.js";
+
 /**
  * Creates a run-command tool using Vercel AI SDK.
  *
@@ -75,8 +77,6 @@ export const createRunCommandTool = () => {
 
       const cachedOutputPath = stdoutResult.cachedOutputPath ?? stderrResult.cachedOutputPath ?? null;
 
-      const truncationNote = cachedOutputPath ? " (large output cached to disk)" : "";
-
       return {
         command,
         stdout: stdoutResult.content,
@@ -84,11 +84,20 @@ export const createRunCommandTool = () => {
         exitCode: result.exitCode,
         durationMs: result.durationMs,
         success: result.exitCode === 0,
-        message:
-          result.exitCode === 0
-            ? `Command executed successfully in ${result.durationMs}ms${truncationNote}`
-            : `Command failed with exit code ${result.exitCode}${truncationNote}`,
         cachedOutputPath,
+      };
+    },
+
+    // Only send command output to the LLM — duration/success/cachedOutputPath
+    // are execution metadata with no value for the model.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: RunCommandOutput }) {
+      return {
+        type: "content" as const,
+        value: [
+          { type: "text" as const, text: `Exit code: ${output.exitCode}` },
+          ...(output.stderr.trim() ? [{ type: "text" as const, text: `stderr:\n${output.stderr}` }] : []),
+          { type: "text" as const, text: output.stdout },
+        ],
       };
     },
   });

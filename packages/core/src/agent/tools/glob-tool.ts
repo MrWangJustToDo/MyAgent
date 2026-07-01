@@ -8,6 +8,8 @@ import { DEFAULT_EXCLUDE_DIRS, SEARCH_COMMAND_TIMEOUT } from "./util/search-comm
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { globOutputSchema } from "./util/types.js";
 
+import type { GlobOutput } from "./util/types.js";
+
 /** Default number of files to return per page */
 const DEFAULT_LIMIT = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
 
@@ -39,7 +41,7 @@ function buildFdCommand(
     args.push("--exclude", `"${options.exclude}"`);
   }
 
-  return `${binary} ${args.join(" ")} "${searchPath}" 2>/dev/null | head -n ${options.fetchCount}`;
+  return `set -o pipefail; ${binary} ${args.join(" ")} "${searchPath}" 2>/dev/null | head -n ${options.fetchCount}`;
 }
 
 function buildFindCommand(
@@ -79,7 +81,7 @@ function buildFindCommand(
     command += ` -not -path "*/${options.exclude}/*" -not -path "*/${options.exclude}"`;
   }
 
-  return `${command} | head -n ${options.fetchCount} || true`;
+  return `set -o pipefail; ${command} | head -n ${options.fetchCount}`;
 }
 
 async function runGlobSearch(
@@ -156,6 +158,8 @@ export const createGlobTool = () => {
         const searchOptions = {
           type: fileType,
           exclude,
+          offset: skip,
+          limit: take,
           fetchCount,
         };
 
@@ -168,53 +172,44 @@ export const createGlobTool = () => {
 
         if (allFiles.length === 0) {
           return {
-            pattern,
-            path: searchPath,
-            type: fileType,
             files: [] as string[],
-            count: 0,
+            content: "",
             offset: skip,
-            hasMore: false,
-            nextOffset: null,
-            contentTruncated: false,
-            message: `No files found matching pattern: ${pattern}`,
+            limit: take,
             cachedOutputPath: null,
           };
         }
 
         const paginatedFiles = allFiles.slice(skip, skip + take);
-        const hasMore = allFiles.length > skip + take;
 
-        let contentTruncated = false;
         const fullOutputText = paginatedFiles.join("\n");
         const cached = await maybeCacheOutput(fullOutputText, `${toolCallId}-glob`);
         const { cachedOutputPath } = cached;
-        if (cachedOutputPath) contentTruncated = true;
-
-        let message: string;
-        if (cachedOutputPath) {
-          message = cached.content;
-        } else {
-          message = `Found ${paginatedFiles.length} files matching pattern: ${pattern}`;
-          if (skip > 0) message += ` (offset: ${skip})`;
-          if (hasMore) message += `. Use offset=${skip + take} to see more.`;
-          if (contentTruncated) message += " (some results truncated)";
-        }
 
         return {
-          pattern,
-          path: searchPath,
-          type: fileType,
           files: cachedOutputPath ? [] : paginatedFiles,
-          count: paginatedFiles.length,
+          content: cached.content,
           offset: skip,
-          hasMore,
-          nextOffset: hasMore ? skip + take : null,
-          contentTruncated,
-          message,
+          limit: take,
           cachedOutputPath,
         };
       });
+    },
+
+    // Only send the file list to the LLM — pattern/path are echoed in the
+    // input, pagination/truncation/cache metadata is for the UI only.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: GlobOutput }) {
+      return {
+        type: "content" as const,
+        value: [
+          {
+            type: "text" as const,
+            text:
+              `<params> offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit} </params>` +
+              (output.content || output.files.join("\n")),
+          },
+        ],
+      };
     },
   });
 };

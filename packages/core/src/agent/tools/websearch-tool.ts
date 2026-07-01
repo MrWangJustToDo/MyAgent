@@ -16,6 +16,7 @@ import { getEnv } from "../../env.js";
 import { agentManager } from "../../managers/manager-agent.js";
 
 import { withDuration } from "./util/helpers.js";
+import { toolOutputBaseSchema } from "./util/types.js";
 
 // ============================================================================
 // Constants
@@ -294,12 +295,9 @@ export const websearchOutputSchema = z.object({
       })
     )
     .describe("Array of search results"),
-  /** Number of results returned */
-  resultCount: z.number().describe("Number of results returned"),
-  /** Human-readable message */
-  message: z.string().describe("Human-readable result message"),
   /** Execution duration in milliseconds */
   durationMs: z.number().describe("Execution duration in milliseconds"),
+  ...toolOutputBaseSchema.shape,
 });
 
 export type WebsearchOutput = z.infer<typeof websearchOutputSchema>;
@@ -418,22 +416,21 @@ Example response format:
         // Limit results
         const results = filteredResults.slice(0, limit);
 
-        // Format message
-        let message = `Found ${results.length} result${results.length === 1 ? "" : "s"} for "${query}"`;
-        if (allowedDomains?.length) {
-          message += ` (filtered to: ${allowedDomains.join(", ")})`;
-        }
-        if (blockedDomains?.length) {
-          message += ` (excluding: ${blockedDomains.join(", ")})`;
-        }
-
         return {
           query,
           results,
-          resultCount: results.length,
-          message,
         };
       });
+    },
+
+    // Only send query + results to the LLM — durationMs/cachedOutputPath are
+    // UI metadata.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: z.infer<typeof websearchOutputSchema> }) {
+      const lines = output.results.map((r) => `${r.title}\n${r.url}\n${r.snippet}`);
+      return {
+        type: "content" as const,
+        value: [{ type: "text" as const, text: `Search: ${output.query}\n\n${lines.join("\n\n")}` }],
+      };
     },
   });
 };

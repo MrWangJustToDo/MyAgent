@@ -6,6 +6,8 @@ import { getEnv } from "../../env.js";
 import { getFileModifiedTime, withDuration } from "./util/helpers.js";
 import { writeFileOutputSchema } from "./util/types.js";
 
+import type { WriteFileOutput } from "./util/types.js";
+
 /**
  * Creates a write-file tool using Vercel AI SDK.
  *
@@ -73,9 +75,23 @@ export const createWriteFileTool = () => {
           bytesWritten: content.length,
           created: !fileExisted,
           modifiedTime: newModifiedTime,
-          message: fileExisted ? `Successfully overwrote file: ${path}` : `Successfully created file: ${path}`,
         };
       });
+    },
+
+    // Only confirm success to the LLM — bytesWritten/modifiedTime/durationMs
+    // are execution metadata. modifiedTime is for edit_file conflict detection,
+    // not for the model.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: WriteFileOutput }) {
+      return {
+        type: "content" as const,
+        value: [
+          {
+            type: "text" as const,
+            text: `${output.created ? "Created" : "Overwrote"} file: ${output.path}，modifiedTime：${output.modifiedTime}`,
+          },
+        ],
+      };
     },
   });
 };

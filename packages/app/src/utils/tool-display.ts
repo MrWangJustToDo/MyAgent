@@ -1,7 +1,5 @@
 import chalk from "chalk";
 
-import { stripCacheNote } from "./tool-output-format.js";
-
 import type { ToolUIPart } from "ai";
 
 /** Get status color for tool invocation state. */
@@ -52,7 +50,10 @@ export function getInlineSummary(part: ToolUIPart, toolName: string): string | n
     case "read_file": {
       const totalLines = output.totalLines as number | undefined;
       if (totalLines !== undefined) return `${totalLines} lines`;
-      if (output.type === "directory") return `${output.count ?? 0} entries`;
+      if (output.type === "directory") {
+        const totalEntries = output.totalEntries as number | undefined;
+        return totalEntries !== undefined ? `${totalEntries} entries` : null;
+      }
       if (output.type === "image" || output.type === "pdf") return output.type as string;
       return null;
     }
@@ -61,14 +62,14 @@ export function getInlineSummary(part: ToolUIPart, toolName: string): string | n
       return count !== undefined ? `${count} entries` : null;
     }
     case "grep": {
-      const count = output.count as number | undefined;
-      if (count === undefined) return null;
-      return count === 0 ? "no matches" : `${count} match${count !== 1 ? "es" : ""}`;
+      const matches = output.matches as unknown[] | undefined;
+      if (!matches) return null;
+      return matches.length === 0 ? "no matches" : `${matches.length} match${matches.length !== 1 ? "es" : ""}`;
     }
     case "glob": {
-      const count = output.count as number | undefined;
-      if (count === undefined) return null;
-      return count === 0 ? "no files" : `${count} file${count !== 1 ? "s" : ""}`;
+      const files = output.files as string[] | undefined;
+      if (!files) return null;
+      return files.length === 0 ? "no files" : `${files.length} file${files.length !== 1 ? "s" : ""}`;
     }
     case "write_file":
       return output.created ? "created" : "updated";
@@ -88,11 +89,8 @@ export function getInlineSummary(part: ToolUIPart, toolName: string): string | n
       return null;
     }
     case "tree": {
-      const message = output.message as string | undefined;
-      if (message) {
-        const match = /(\d+)\s*(?:files?|items?|entries)/i.exec(message);
-        if (match) return match[0];
-      }
+      const totalEntries = output.totalEntries as number | undefined;
+      if (totalEntries !== undefined) return `${totalEntries} entries`;
       return null;
     }
     default:
@@ -100,14 +98,22 @@ export function getInlineSummary(part: ToolUIPart, toolName: string): string | n
   }
 }
 
-const SHOW_COMPACT_OUTPUT = new Set(["run_command", "task"]);
+const SHOW_COMPACT_OUTPUT = new Set(["run_command"]);
 
 /** Get a compact multi-line output summary only for tools where it adds value. */
 export function getCompactOutput(part: ToolUIPart, toolName: string): string | null {
   if (!SHOW_COMPACT_OUTPUT.has(toolName)) return null;
   const output = part.output as Record<string, unknown> | undefined;
   if (!output) return null;
-  if (typeof output.message === "string") return stripCacheNote(output.message);
+  // run_command: derive a compact summary from exit code / success.
+  // Previously this read output.message; now we generate it from structured fields.
+  if (toolName === "run_command") {
+    const success = output.success as boolean | undefined;
+    const exitCode = output.exitCode as number | undefined;
+    const durationMs = output.durationMs as number | undefined;
+    const dur = typeof durationMs === "number" ? ` in ${durationMs}ms` : "";
+    return success ? `Command executed successfully${dur}` : `Command failed with exit code ${exitCode ?? "?"}${dur}`;
+  }
   return null;
 }
 

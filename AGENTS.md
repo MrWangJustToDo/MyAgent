@@ -362,6 +362,9 @@ The `@my-agent/server` package exposes CoreEnv APIs over HTTP using Hono RPC for
 | `/api/command/run` | POST | Run a shell command |
 | `/api/command/exec` | POST | Execute a simple command |
 | `/api/fetch/proxy` | POST | HTTP fetch proxy (handles binary via base64) |
+| `/api/mcp/init` | POST | Create a new MCP stdio process session |
+| `/api/mcp/:id/message` | POST | Send a JSON-RPC message to an MCP session |
+| `/api/mcp/:id` | DELETE | Clean up an MCP stdio process session |
 
 ### Client Usage
 
@@ -375,7 +378,6 @@ registerCoreEnv(env);
 
 ### Known Limitations
 - `runCommand` streaming is lost over HTTP — stdout/stderr only available in final result
-- MCP stdio transport not available remotely — use SSE/HTTP MCP transport instead
 - Binary fetch responses are base64-encoded over the wire
 
 ## Subagent System
@@ -387,7 +389,7 @@ The project supports **subagents** — context-isolated agents spawned to handle
 | Feature | Behavior |
 |---------|----------|
 | Context | Fresh (starts with empty messages) |
-| Tools | Read-only: `read_file`, `glob`, `grep`, `run_command`, `list_file`, `tree` |
+| Tools | Read-only: `read_file`, `glob`, `grep`, `list_file`, `tree` (no `run_command`) |
 | Return | Summary only (full history discarded) |
 | Iteration Limit | 30 steps max |
 | Summary Limit | 5000 characters max |
@@ -436,12 +438,14 @@ packages/core/src/agent/skills/
 
 ## Context Compaction System
 
-Two-layer context compaction for infinite agent sessions:
+Three-layer context compaction (plus reactive compaction) for infinite agent sessions:
 
 | Layer | Name | Trigger | Action |
 |-------|------|---------|--------|
 | Layer 1 | `micro_compact` | Every LLM call | Replace old tool results with placeholders |
-| Layer 2 | `auto_compact` | Token threshold exceeded | LLM summarization |
+| Layer 2 | `reasoning_stripping` | Every LLM call (DeepSeek models) | Strip reasoning content from history to optimize prefix cache |
+| Layer 3 | `auto_compact` | Token threshold exceeded | LLM summarization |
+| Reactive | `reactive_compact` | `prompt_too_long` API error | Emergency compaction, then retry |
 
 **Configuration:**
 ```typescript
@@ -461,13 +465,20 @@ const agent = await agentManager.createManagedAgent({
 
 ```
 packages/core/src/agent/compaction/
-├── micro-compact.ts       # Layer 1
-├── auto-compact.ts        # Layer 2
+├── micro-compact.ts       # Layer 1 — replace old tool results with placeholders
+├── auto-compact.ts        # Layer 3 — LLM summarization when token threshold exceeded
+├── reactive-compact.ts    # Reactive — emergency compaction on prompt_too_long errors
 ├── apply-compaction-result.ts
-├── token-estimator.ts
 ├── compaction-prompt.ts
+├── file-ops-tracker.ts    # Track file operation tool calls for compaction decisions
+├── message-utils.ts       # Shared message manipulation helpers
+├── serialize-conversation.ts  # Serialize conversation for compaction input
+├── token-estimator.ts
+├── types.ts
 └── index.ts
 ```
+
+**Reasoning stripping (Layer 2)** is implemented inline in `Base.ts`'s `prepareStep` callback (`stripReasoningFromHistory`) rather than as a separate file — it strips reasoning content from history messages for DeepSeek models to optimize prefix cache hits.
 
 ## Sandbox Environment Configuration
 
@@ -590,7 +601,8 @@ packages/
 │       ├── env.ts                     # /api/env/* (info, vars, destroy)
 │       ├── fs.ts                      # /api/fs/* (readFile, stat, writeFile, etc.)
 │       ├── command.ts                 # /api/command/* (run, exec)
-│       └── fetch.ts                   # /api/fetch/proxy (HTTP proxy with binary support)
+│       ├── fetch.ts                   # /api/fetch/proxy (HTTP proxy with binary support)
+│       └── mcp.ts                     # /api/mcp/* (stdio process init, message, delete)
 │
 ├── extension/                         # @my-agent/extension — Chrome extension host
 │   ├── adapters/

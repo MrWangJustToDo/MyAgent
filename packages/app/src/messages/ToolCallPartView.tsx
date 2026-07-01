@@ -61,6 +61,10 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
   const showDuration = durationMs !== null && durationMs >= DURATION_THRESHOLD_MS;
 
   const hasError = part.state === "output-error" || part.state === "output-denied";
+  // Error text resolution:
+  // 1. output-denied → user's deny reason
+  // 2. output-error  → AI SDK's errorText (from thrown exceptions)
+  // Tools throw on failure; the AI SDK surfaces the error via output-error state.
   const errorText =
     hasError && part.state === "output-denied"
       ? extractDeniedReason(part.approval?.reason)
@@ -68,9 +72,11 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
         ? part.errorText
         : null;
 
-  const inlineSummary = getInlineSummary(part, toolName);
+  // Suppress inline summary when an error is present so the header doesn't
+  // show a misleading success summary alongside the error text.
+  const inlineSummary = errorText ? null : getInlineSummary(part, toolName);
   const compactOutput = hasOutput ? getCompactOutput(part, toolName) : null;
-  const stateColor = getToolCallColor(part.state);
+  const stateColor = errorText ? "red" : getToolCallColor(part.state);
 
   // Build parenthetical: "(summary, duration)"
   const parenParts: string[] = [];

@@ -2,9 +2,9 @@ import { getToolName, type ToolUIPart } from "ai";
 import { Box } from "ink";
 
 import { EditDiff } from "../components/EditDiff";
-import { SplitNode } from "../components/SplitNode";
 import { useSize } from "../hooks";
 
+import { EditFilePreview } from "./EditFilePreview";
 import { TaskToolInputView } from "./TaskToolInputView";
 
 export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
@@ -44,73 +44,27 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
 
   if (toolName === "edit_file") {
     const content = part.input as {
-      oldString?: string;
       path?: string;
-      newString?: string;
-      startLine?: number;
-      edits?: Array<{ oldString: string; newString: string; startLine?: number }>;
+      edits?: Array<{ oldString: string; newString: string; startLine?: number; replaceAll?: boolean }>;
     };
 
     if (!content || part.state === "input-streaming") return null;
 
-    // Multi-edit mode: edits array
+    // Unified edit mode: edits array (single edit = array with one element)
     if (content.edits?.length && content.path) {
-      const approved = part.approval?.approved;
-      const borderColor = typeof approved === "boolean" ? (approved ? "greenBright" : "redBright") : "#555555";
-
       return (
-        <Box paddingLeft={2}>
-          <Box flexDirection="column" borderColor={borderColor} borderStyle="single">
-            <SplitNode
-              split={
-                <Box
-                  borderTop
-                  borderLeft={false}
-                  borderRight={false}
-                  borderBottom={false}
-                  borderTopColor="gray"
-                  borderStyle="single"
-                  borderTopDimColor
-                />
-              }
-            >
-              {content.edits.map((item, index) => (
-                <EditDiff
-                  key={part.toolCallId + "-" + index}
-                  width={bodyWidth}
-                  id={part.toolCallId + "-" + index}
-                  oldPath={content.path || ""}
-                  oldFile={item.oldString || ""}
-                  newPath={content.path || ""}
-                  newFile={item.newString || ""}
-                  startLine={item.startLine}
-                />
-              ))}
-            </SplitNode>
-          </Box>
-        </Box>
-      );
-    }
-
-    // Single-edit mode: oldString/newString
-    if (content.oldString && content.newString) {
-      const approved = part.approval?.approved;
-      const borderColor = typeof approved === "boolean" ? (approved ? "greenBright" : "redBright") : "#555555";
-
-      return (
-        <Box paddingLeft={2}>
-          <Box borderColor={borderColor} borderStyle="single">
-            <EditDiff
-              id={part.toolCallId}
-              width={bodyWidth}
-              oldPath={content.path || ""}
-              oldFile={content.oldString}
-              newPath={content.path || ""}
-              newFile={content.newString}
-              startLine={content.startLine}
-            />
-          </Box>
-        </Box>
+        <EditFilePreview
+          toolCallId={part.toolCallId}
+          path={content.path}
+          edits={content.edits}
+          approved={part.approval?.approved}
+          bodyWidth={bodyWidth}
+          output={
+            part.state === "output-available"
+              ? (part.output as { oldFile?: string; newFile?: string } | undefined)
+              : undefined
+          }
+        />
       );
     }
 

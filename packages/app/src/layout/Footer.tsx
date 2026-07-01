@@ -9,7 +9,6 @@ import { LLMUsage } from "../components/LLMUsage.js";
 import { Notification } from "../components/Notification.js";
 import { SelectList } from "../components/SelectList.js";
 import { Spinner } from "../components/Spinner.js";
-import { TodoStats } from "../components/TodoStats.js";
 import { UserInput } from "../components/UserInput.js";
 import { useAgentContext } from "../hooks/use-agent-context.js";
 import { useAgent } from "../hooks/use-agent.js";
@@ -222,7 +221,6 @@ const ContextBar = ({
       </Box>
 
       <Box gap={2} flexShrink={0}>
-        <TodoStats />
         <Notification />
       </Box>
     </Box>

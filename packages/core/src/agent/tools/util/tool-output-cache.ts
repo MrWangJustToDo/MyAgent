@@ -32,6 +32,12 @@ const DEFAULT_HEAD_LINES = 200;
 /** Number of lines to show from the end of the output */
 const DEFAULT_TAIL_LINES = 50;
 
+/** Number of chars to show from the start when content has few (but very long) lines */
+const DEFAULT_HEAD_CHARS = 5000;
+
+/** Number of chars to show from the end when content has few (but very long) lines */
+const DEFAULT_TAIL_CHARS = 2000;
+
 // ============================================================================
 // Public API
 // ============================================================================
@@ -83,13 +89,14 @@ export function buildCachedPreview(
   }
 
   // Char-based truncation — for content with few lines but very long lines
-  // (e.g., a single 50000-char JSON line). Show head + tail by char count.
-  const mid = Math.floor(content.length / 2);
-  const tailStart = Math.max(mid, content.length - 5000);
-  const omitted = tailStart - mid;
-
-  const head = content.slice(0, mid);
-  const tail = content.slice(tailStart);
+  // (e.g., a single 2MB minified JSON line). Show a FIXED-SIZE head + tail by
+  // char count. Previously this took content.length / 2 as the head, which for
+  // multi-MB single-line content produced a multi-hundred-KB "preview" that
+  // defeated the purpose of caching. A fixed small preview keeps the tool
+  // result compact regardless of the original size.
+  const head = content.slice(0, DEFAULT_HEAD_CHARS);
+  const tail = content.slice(Math.max(DEFAULT_HEAD_CHARS, content.length - DEFAULT_TAIL_CHARS));
+  const omitted = content.length - DEFAULT_HEAD_CHARS - DEFAULT_TAIL_CHARS;
   const note = `Full output saved to: ${cachedPath} (${totalLines} lines, ${content.length} chars)`;
 
   if (omitted > 0) {

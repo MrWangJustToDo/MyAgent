@@ -21,7 +21,7 @@ An open-source AI coding agent built on [Vercel AI SDK](https://sdk.vercel.ai/do
 | **Ask User** | Agent asks questions with selectable options or freeform answers |
 | **Subagents** | Context-isolated tasks with read-only tools and 30-step limit |
 | **Skills** | On-demand domain knowledge injection (list → load) |
-| **Context Compaction** | 2-layer compression for infinite conversations |
+| **Context Compaction** | 3-layer compression (micro-compaction, reasoning stripping, auto-compaction) + reactive compaction on errors for infinite conversations |
 | **Session Persistence** | Save/resume conversations to disk |
 | **Sandbox** | Isolated command execution with OS-level sandboxing |
 | **Web** | DuckDuckGo search + page fetch |
@@ -67,7 +67,7 @@ An open-source AI coding agent built on [Vercel AI SDK](https://sdk.vercel.ai/do
 
 | Package | Description |
 |---------|-------------|
-| `@my-agent/core` | Runtime-agnostic core: agent loop, 22 tools, LLM model factory, sessions, MCP, skills, memory |
+| `@my-agent/core` | Runtime-agnostic core: agent loop, 18 tools, LLM model factory, sessions, MCP, skills, memory |
 | `@my-agent/app` | Shared UI layer: React components, hooks, commands, AgentAdapter interface |
 | `@my-agent/cli` | Terminal host using [@my-react/react-terminal](https://github.com/MrWangJustToDo/MyReact) |
 | `@my-agent/node` | Node.js CoreEnv: native filesystem, shell execution, OS sandbox |
@@ -134,7 +134,7 @@ pnpm build
 Create `.env` in the root:
 
 ```bash
-PROVIDER=ollama            # ollama | openai | deepseek | openRouter | openaiCompatible
+PROVIDER=ollama            # ollama | openai-compatible | deepseek | openRouter
 MODEL=qwen3:8b
 API_URL=http://localhost:11434
 API_KEY=sk-xxx             # Required for non-Ollama providers

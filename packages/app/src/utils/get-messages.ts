@@ -9,6 +9,10 @@ const filterValidMessage = (message: UIMessage) => {
     if (message.parts.length === 1 && (message.parts[0].type === "step-start" || message.parts[0].type === "reasoning"))
       return false;
   }
+  if (message.role === "user" || message.role === "assistant") {
+    if (message.parts.length === 1 && message.parts[0].type === "text" && message.parts[0].text?.trim().length === 0)
+      return false;
+  }
   return true;
 };
 
@@ -43,7 +47,8 @@ export const getMessages = (messages: UIMessage[]) => {
       // Last message - split into static (completed steps) and dynamic (current step)
       if (message.role === "user") {
         for (let idx = 0; idx < message.parts.length; idx++) {
-          dynamicMessages.push({ ...message, id: message.id + "-" + idx, parts: [message.parts[idx]] });
+          const part = message.parts[idx];
+          dynamicMessages.push({ ...message, id: message.id + "-" + idx, parts: [part] });
         }
       } else {
         // For assistant messages, find the last step-start boundary.

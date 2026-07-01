@@ -15,17 +15,24 @@ export async function getFile(path: string): Promise<{
 
 /**
  * Get just the modification identifier for a file.
+ *
+ * When the caller already has the content in memory (e.g. edit-file tool
+ * after applying edits), pass it via `knownContent` to avoid a redundant
+ * re-read of the file from disk.
  */
-export async function getFileModifiedTime(path: string): Promise<string> {
-  const content = await getEnv().fs.readFile(path);
+export async function getFileModifiedTime(path: string, knownContent?: string): Promise<string> {
+  const content = knownContent ?? (await getEnv().fs.readFile(path));
   return hashContent(content);
 }
 
 /**
  * Simple hash function for content-based modification detection.
  * Uses a fast non-cryptographic hash.
+ *
+ * Exported so callers that already hold the content in memory can compute the
+ * modification identifier without re-reading the file.
  */
-function hashContent(content: string): string {
+export function hashContent(content: string): string {
   let hash = 5381;
   for (let i = 0; i < content.length; i++) {
     hash = ((hash << 5) + hash) ^ content.charCodeAt(i);
@@ -36,12 +43,25 @@ function hashContent(content: string): string {
 /**
  * Wraps an async function and measures its execution duration.
  * Returns the result along with durationMs.
+ *
+ * Also injects the `cachedOutputPath` base field with a null default when the
+ * tool's execute result doesn't provide it. Tools that produce large output
+ * override `cachedOutputPath` via `maybeCacheOutput`.
+ *
+ * Errors are NOT caught here — tools throw on failure and the AI SDK surfaces
+ * the error via the `output-error` tool state.
  */
-export async function withDuration<T>(fn: () => Promise<T>): Promise<T & { durationMs: number }> {
+export async function withDuration<T extends Record<string, unknown>>(
+  fn: () => Promise<T>
+): Promise<T & { durationMs: number; cachedOutputPath: string | null }> {
   const startTime = performance.now();
   const result = await fn();
   const durationMs = Math.round(performance.now() - startTime);
-  return { ...result, durationMs };
+  return {
+    ...result,
+    durationMs,
+    cachedOutputPath: (result.cachedOutputPath as string | null | undefined) ?? null,
+  };
 }
 
 // ============================================================================

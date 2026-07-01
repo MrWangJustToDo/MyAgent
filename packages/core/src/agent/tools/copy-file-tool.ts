@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getEnv } from "../../env.js";
 
 import { getFile, getFileModifiedTime, withDuration } from "./util/helpers.js";
+import { toolOutputBaseSchema } from "./util/types.js";
 
 /**
  * Creates a copy-file tool using Vercel AI SDK.
@@ -31,8 +32,8 @@ export const createCopyFileTool = () => {
       sourcePath: z.string().describe("The source path of the file that was copied."),
       targetPath: z.string().describe("The destination path where the file was copied to."),
       modifiedTime: z.string().describe("The modification timestamp of the new file."),
-      message: z.string().describe("Human-readable summary of the operation."),
       durationMs: z.number().describe("Execution duration in milliseconds."),
+      ...toolOutputBaseSchema.shape,
     }),
     needsApproval: true,
     execute: async ({ sourcePath, modifiedTime, targetPath }) => {
@@ -63,9 +64,28 @@ export const createCopyFileTool = () => {
           sourcePath,
           targetPath,
           modifiedTime: newModifiedTime,
-          message: `Successfully copied file from ${sourcePath} to ${targetPath}`,
         };
       });
+    },
+
+    // Only confirm success to the LLM — sourcePath/targetPath are echoed in
+    // the input, modifiedTime is for conflict detection, durationMs is metadata.
+    toModelOutput({
+      output,
+    }: {
+      toolCallId: string;
+      input: unknown;
+      output: { sourcePath: string; targetPath: string; modifiedTime: string };
+    }) {
+      return {
+        type: "content" as const,
+        value: [
+          {
+            type: "text" as const,
+            text: `Copied ${output.sourcePath} → ${output.targetPath}，modifiedTime：${output.modifiedTime}`,
+          },
+        ],
+      };
     },
   });
 };

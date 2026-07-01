@@ -18,6 +18,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { withDuration } from "./util/helpers.js";
+import { toolOutputBaseSchema } from "./util/types.js";
 
 import type { SkillRegistry } from "../skills/skill-registry.js";
 
@@ -44,10 +45,9 @@ export const listSkillsOutputSchema = z.object({
   ),
   /** Total number of skills */
   count: z.number().describe("Number of available skills"),
-  /** Formatted output message */
-  message: z.string().describe("Formatted list for display"),
   /** Execution duration in milliseconds */
   durationMs: z.number().describe("Execution duration in milliseconds"),
+  ...toolOutputBaseSchema.shape,
 });
 
 export type ListSkillsOutput = z.infer<typeof listSkillsOutputSchema>;
@@ -83,23 +83,23 @@ After discovering skills, use load_skill to load the full content of a specific 
           return {
             skills: [],
             count: 0,
-            message: "No skills available.",
           };
         }
-
-        // Format output message
-        const lines = ["Available skills:"];
-        for (const skill of skills) {
-          lines.push(`  - ${skill.name}: ${skill.description}`);
-        }
-        const message = lines.join("\n");
 
         return {
           skills,
           count: skills.length,
-          message,
         };
       });
+    },
+
+    // Only send skills to the LLM — count is skills.length, durationMs is metadata.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: z.infer<typeof listSkillsOutputSchema> }) {
+      const lines = output.skills.map((s) => `- ${s.name}: ${s.description}`);
+      return {
+        type: "content" as const,
+        value: [{ type: "text" as const, text: `Available skills:\n${lines.join("\n")}` }],
+      };
     },
   });
 };

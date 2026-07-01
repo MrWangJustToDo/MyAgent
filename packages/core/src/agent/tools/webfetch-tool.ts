@@ -19,6 +19,7 @@ import { agentManager } from "../../managers/manager-agent.js";
 
 import { withDuration } from "./util/helpers.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
+import { toolOutputBaseSchema } from "./util/types.js";
 
 // ============================================================================
 // Constants
@@ -119,12 +120,9 @@ export const webfetchOutputSchema = z.object({
   isImage: z.boolean().describe("Whether the content is an image"),
   /** Whether the content was truncated due to size limits */
   truncated: z.boolean().describe("Whether content was truncated due to size limits"),
-  /** Human-readable message */
-  message: z.string().describe("Human-readable result message"),
   /** Execution duration in milliseconds */
   durationMs: z.number().describe("Execution duration in milliseconds"),
-  /** Path to cached full output */
-  cachedOutputPath: z.string().nullable().optional().describe("Path to cached full output. Use read_file to read it."),
+  ...toolOutputBaseSchema.shape,
 });
 
 export type WebfetchOutput = z.infer<typeof webfetchOutputSchema>;
@@ -266,7 +264,6 @@ Usage notes:
               contentLength: base64Content.length,
               isImage: true,
               truncated: false,
-              message: `Fetched image (${mime}, ${arrayBuffer.byteLength} bytes)`,
               cachedOutputPath: null,
             };
           }
@@ -311,12 +308,6 @@ Usage notes:
             truncated = cachedOutputPath !== null;
           }
 
-          const truncationNote = cachedOutputPath
-            ? " (large content cached to disk)"
-            : truncated
-              ? ` (truncated from ${originalLength} chars)`
-              : "";
-
           return {
             url,
             contentType,
@@ -324,7 +315,6 @@ Usage notes:
             contentLength: originalLength,
             isImage: false,
             truncated,
-            message: `Fetched ${url} (${contentType}, ${originalLength} chars)${truncationNote}`,
             cachedOutputPath,
           };
         } finally {
@@ -334,6 +324,15 @@ Usage notes:
           clearTimeout(timeoutId);
         }
       });
+    },
+
+    // Only send url + content to the LLM — contentType/contentLength/isImage/
+    // truncated/cachedOutputPath are UI metadata.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: z.infer<typeof webfetchOutputSchema> }) {
+      return {
+        type: "content" as const,
+        value: [{ type: "text" as const, text: output.content }],
+      };
     },
   });
 };

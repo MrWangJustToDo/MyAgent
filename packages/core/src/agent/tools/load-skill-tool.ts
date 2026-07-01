@@ -21,6 +21,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { withDuration } from "./util/helpers.js";
+import { toolOutputBaseSchema } from "./util/types.js";
 
 import type { SkillRegistry } from "../skills/skill-registry.js";
 
@@ -38,14 +39,13 @@ export interface LoadSkillToolConfig {
 // ============================================================================
 
 export const loadSkillOutputSchema = z.object({
-  /** Whether the skill was found */
-  found: z.boolean().describe("Whether the skill was found"),
   /** Skill name */
   name: z.string().describe("Skill name"),
-  /** Full skill content wrapped in <skill> tags, or error message */
-  content: z.string().describe("Skill content or error message"),
+  /** Full skill content wrapped in <skill> tags */
+  content: z.string().describe("Skill content wrapped in <skill> tags"),
   /** Execution duration in milliseconds */
   durationMs: z.number().describe("Execution duration in milliseconds"),
+  ...toolOutputBaseSchema.shape,
 });
 
 export type LoadSkillOutput = z.infer<typeof loadSkillOutputSchema>;
@@ -84,23 +84,26 @@ that help you complete specific types of tasks.`,
           const available = skillRegistry.names();
           const availableList =
             available.length > 0 ? `Available skills: ${available.join(", ")}` : "No skills are currently loaded.";
-
-          return {
-            found: false,
-            name,
-            content: `Error: Unknown skill '${name}'. ${availableList}`,
-          };
+          throw new Error(`Unknown skill '${name}'. ${availableList}`);
         }
 
         // Wrap content in <skill> tags for clear context boundary
         const content = `<skill name="${name}">\n${skill.body}\n</skill>`;
 
         return {
-          found: true,
           name,
           content,
         };
       });
+    },
+
+    // Only send content to the LLM — name is echoed in the input,
+    // durationMs is metadata.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: z.infer<typeof loadSkillOutputSchema> }) {
+      return {
+        type: "content" as const,
+        value: [{ type: "text" as const, text: output.content }],
+      };
     },
   });
 };

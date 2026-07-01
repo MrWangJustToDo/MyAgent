@@ -26,6 +26,7 @@ import { generateId } from "../utils.js";
 
 import { withDuration } from "./util/helpers.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
+import { toolOutputBaseSchema } from "./util/types.js";
 
 // ============================================================================
 // Types
@@ -61,8 +62,7 @@ export const taskOutputSchema = z.object({
     .describe("Token usage for this subtask"),
   /** Execution duration in milliseconds */
   durationMs: z.number().describe("Execution duration in milliseconds"),
-  /** Path to cached full output on disk. Use read_file to access. */
-  cachedOutputPath: z.string().nullable().optional().describe("Path to cached full output. Use read_file to read it."),
+  ...toolOutputBaseSchema.shape,
 });
 
 export type TaskOutput = z.infer<typeof taskOutputSchema>;
@@ -154,11 +154,19 @@ Example use cases:
           truncated,
           iterations: result.iterations,
           reachedLimit: result.reachedLimit,
-          retries: result.retries,
           usage: result.usage,
           cachedOutputPath,
         };
       });
+    },
+
+    // Only send the summary to the LLM — execution metadata (iterations, usage,
+    // reachedLimit) is for the UI only and has no value for the model.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: TaskOutput }) {
+      return {
+        type: "content" as const,
+        value: [{ type: "text" as const, text: output.summary }],
+      };
     },
   });
 };

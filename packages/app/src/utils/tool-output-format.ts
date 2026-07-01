@@ -97,35 +97,48 @@ function formatRunCommandOutput(output: RunCommandOutput): string {
 }
 
 function formatReadFileOutput(output: ReadFileOutput): string {
-  return output.message;
+  // Derive a summary from structured fields instead of the removed `message`.
+  if (output.type === "text") {
+    return `Read ${output.path} (lines ${output.startLine}-${output.endLine} of ${output.totalLines})`;
+  }
+  if (output.type === "directory") {
+    return `Listed ${output.path} (${output.entries.length}/${output.totalEntries} entries)`;
+  }
+  if (output.type === "image") {
+    return `Image: ${output.path} (${Math.round(output.size / 1024)}KB)`;
+  }
+  if (output.type === "pdf") {
+    return `PDF: ${output.path} (${Math.round(output.size / 1024)}KB)`;
+  }
+  return "";
 }
 
 function formatWriteFileOutput(output: WriteFileOutput): string {
-  return output.message;
+  return output.created ? `Created file: ${output.path}` : `Overwrote file: ${output.path}`;
 }
 
 function formatEditFileOutput(output: EditFileOutput): string {
-  return output.message;
+  return `Edited ${output.path} (${output.replacements} replacement${output.replacements !== 1 ? "s" : ""})`;
 }
 
 function formatGlobOutput(output: GlobOutput): string {
-  const { files, count } = output;
-  if (count === 0) return "No files found";
+  const { files } = output;
+  if (files.length === 0) return "No files found";
 
   const maxShow = 5;
   const shown = files.slice(0, maxShow);
   const lines = shown.map((file) => `  ${file}`);
 
-  if (count > maxShow) {
-    lines.push(`  ... and ${count - maxShow} more`);
+  if (files.length > maxShow) {
+    lines.push(`  ... and ${files.length - maxShow} more`);
   }
 
-  return `${count} files found:\n${lines.join("\n")}`;
+  return `${files.length} files found:\n${lines.join("\n")}`;
 }
 
 function formatGrepOutput(output: GrepOutput): string {
-  const { matches, count, contentTruncated } = output;
-  if (count === 0) return "No matches found";
+  const { matches } = output;
+  if (matches.length === 0) return "No matches found";
 
   const maxShow = 5;
   const shown = matches.slice(0, maxShow);
@@ -134,18 +147,27 @@ function formatGrepOutput(output: GrepOutput): string {
     return `  ${match.file}:${line}`;
   });
 
-  if (count > maxShow || contentTruncated) {
-    const remaining = count - maxShow;
-    if (remaining > 0) {
-      lines.push(`  ... and ${remaining} more matches`);
-    }
+  if (matches.length > maxShow) {
+    lines.push(`  ... and ${matches.length - maxShow} more matches`);
   }
 
-  return `${count} matches:\n${lines.join("\n")}`;
+  return `${matches.length} matches:\n${lines.join("\n")}`;
 }
 
 function formatTodoOutput(output: TodoOutput): string {
-  return output.message;
+  const { stats } = output;
+  return `Updated ${stats.total} todos: ${stats.completed} completed, ${stats.inProgress} in progress, ${stats.pending} pending`;
+}
+
+function formatAskUserOutput(output: { question?: string; answer?: string; hasOptions?: boolean }): string {
+  const { answer, hasOptions } = output;
+  if (!answer) return "";
+
+  const lines: string[] = [];
+  // Label distinguishes a picked option from a free-form typed answer,
+  // mirroring how the question itself is shown in the tool header.
+  lines.push(hasOptions ? `Selected: ${truncateLine(answer)}` : `Answer: ${truncateLine(answer)}`);
+  return lines.join("\n");
 }
 
 function formatTaskOutput(output: TaskOutput): string {
@@ -196,10 +218,14 @@ export function formatToolOutput(output: unknown, toolName?: string): string {
         return formatTodoOutput(out as unknown as TodoOutput);
       case "task":
         return formatTaskOutput(out as unknown as TaskOutput);
+      case "ask_user":
+        return formatAskUserOutput(
+          out as unknown as { question?: string; answer?: string; hasOptions?: boolean; message?: string }
+        );
       default:
-        if ("message" in out && typeof out.message === "string") {
-          return out.message;
-        }
+        // No generic fallback to output.message (removed in phase 2).
+        // Unknown tools get an empty string; they should add a dedicated case.
+        return "";
     }
   }
 

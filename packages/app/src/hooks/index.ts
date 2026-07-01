@@ -25,6 +25,7 @@ export { useInputMode, type InputMode, type FreeformContext } from "./use-input-
 export { useChatStatus } from "./use-chat-status.js";
 export { useMessageCache } from "./use-message-cache.js";
 export { useNotification } from "./use-notification.js";
+export { usePreviewEdit } from "./use-preview-edit.js";
 export { useSelect } from "./use-select.js";
 export { useStatic } from "./use-static.js";
 export { useSubAgents } from "./use-sub-agents.js";

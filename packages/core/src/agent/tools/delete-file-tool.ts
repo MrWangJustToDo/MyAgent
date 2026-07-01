@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getEnv } from "../../env.js";
 
 import { getFileModifiedTime, withDuration } from "./util/helpers.js";
+import { toolOutputBaseSchema } from "./util/types.js";
 
 /**
  * Creates a delete-file tool using Vercel AI SDK.
@@ -28,8 +29,8 @@ export const createDeleteFileTool = () => {
     }),
     outputSchema: z.object({
       path: z.string().describe("The path of the file or directory that was deleted."),
-      message: z.string().describe("Human-readable summary of the operation."),
       durationMs: z.number().describe("Execution duration in milliseconds."),
+      ...toolOutputBaseSchema.shape,
     }),
     needsApproval: true,
     execute: async ({ path, modifiedTime }) => {
@@ -45,9 +46,17 @@ export const createDeleteFileTool = () => {
 
         return {
           path,
-          message: `Successfully deleted: ${path}`,
         };
       });
+    },
+
+    // Only confirm success to the LLM — path is echoed in the input,
+    // durationMs is execution metadata.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: { path: string } }) {
+      return {
+        type: "content" as const,
+        value: [{ type: "text" as const, text: `Deleted: ${output.path}` }],
+      };
     },
   });
 };

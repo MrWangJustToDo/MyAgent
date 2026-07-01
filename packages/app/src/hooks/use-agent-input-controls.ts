@@ -91,8 +91,8 @@ export function useAgentInputControls({
         question: pendingAskUser.question,
         answer,
         hasOptions: !!pendingAskUser.options?.length,
-        message: `User responded: ${answer}`,
         durationMs,
+        cachedOutputPath: null,
       },
     });
     askUserStartTimeRef.current = 0;

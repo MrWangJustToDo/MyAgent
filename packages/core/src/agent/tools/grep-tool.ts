@@ -6,6 +6,8 @@ import { DEFAULT_EXCLUDE_DIRS, runSearchCommand } from "./util/search-command.js
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { grepOutputSchema } from "./util/types.js";
 
+import type { GrepOutput } from "./util/types.js";
+
 /** Maximum characters per matching line content (to prevent context overflow) */
 const MAX_CONTENT_LENGTH = 500;
 
@@ -61,7 +63,7 @@ function buildRgCommand(
   const escapedPattern = pattern.replace(/"/g, '\\"');
   args.push("--", `"${escapedPattern}"`, searchPath);
 
-  return `rg ${args.join(" ")} 2>/dev/null | head -n ${options.fetchCount}`;
+  return `set -o pipefail; rg ${args.join(" ")} 2>/dev/null | head -n ${options.fetchCount}`;
 }
 
 function buildGrepCommand(
@@ -107,7 +109,7 @@ function buildGrepCommand(
   const escapedPattern = pattern.replace(/"/g, '\\"');
   command += ` -E "${escapedPattern}" ${searchPath}`;
 
-  return `${command} 2>/dev/null | head -n ${options.fetchCount} || true`;
+  return `set -o pipefail; ${command} 2>/dev/null | head -n ${options.fetchCount}`;
 }
 
 /**
@@ -257,25 +259,16 @@ export const createGrepTool = () => {
 
         if (lines.length === 0) {
           return {
-            pattern,
-            path: searchPath,
-            include: include ?? "*",
-            outputMode: mode,
-            context: contextLines > 0 ? contextLines : null,
             matches: [] as { file: string; lineNumber: number; content: string }[],
-            count: 0,
+            content: "",
             offset: skip,
-            hasMore: false,
-            nextOffset: null,
-            contentTruncated: false,
-            message: `No matches found for pattern: ${pattern}`,
+            limit: take,
             cachedOutputPath: null,
           };
         }
 
         let allMatches: { file: string; lineNumber: number; content: string }[] = [];
         let totalContentLength = 0;
-        let contentTruncated = false;
 
         if (mode === "files_with_matches") {
           allMatches = lines.map((file) => ({
@@ -292,13 +285,11 @@ export const createGrepTool = () => {
 
             if (parsed.content.length > MAX_CONTENT_LENGTH) {
               parsed.content = truncateContent(parsed.content, MAX_CONTENT_LENGTH);
-              contentTruncated = true;
             }
 
             totalContentLength += parsed.content.length;
             if (totalContentLength > MAX_TOTAL_CONTENT) {
               parsed.content = "[content omitted - total size limit reached]";
-              contentTruncated = true;
             }
 
             allMatches.push(parsed);
@@ -308,46 +299,36 @@ export const createGrepTool = () => {
         // Drop any match with an invalid line number (NaN serializes to null in JSON).
         const validMatches = allMatches.filter((m) => Number.isFinite(m.lineNumber));
         const paginatedMatches = validMatches.slice(skip, skip + take);
-        const hasMore = validMatches.length > skip + take;
 
         const fullMatchText = paginatedMatches.map((m) => `${m.file}:${m.lineNumber}:${m.content}`).join("\n");
         const cached = await maybeCacheOutput(fullMatchText, `${toolCallId}-grep`);
         const { cachedOutputPath } = cached;
-        if (cachedOutputPath) contentTruncated = true;
-
-        let message: string;
-        if (cachedOutputPath) {
-          // Use the preview from maybeCacheOutput (head+tail with read_file hint)
-          message = cached.content;
-        } else {
-          if (mode === "files_with_matches") {
-            message = `Found ${paginatedMatches.length} matching files for pattern: ${pattern}`;
-          } else if (mode === "count") {
-            message = `Found ${paginatedMatches.length} files with matches for pattern: ${pattern}`;
-          } else {
-            message = `Found ${paginatedMatches.length} matches for pattern: ${pattern}`;
-          }
-          if (skip > 0) message += ` (offset: ${skip})`;
-          if (hasMore) message += `. Use offset=${skip + take} to see more.`;
-          if (contentTruncated) message += " (some content truncated)";
-        }
 
         return {
-          pattern,
-          path: searchPath,
-          include: include ?? "*",
-          outputMode: mode,
-          context: contextLines > 0 ? contextLines : null,
           matches: cachedOutputPath ? [] : paginatedMatches,
-          count: paginatedMatches.length,
+          content: cached.content,
           offset: skip,
-          hasMore,
-          nextOffset: hasMore ? skip + take : null,
-          contentTruncated,
-          message,
+          limit: take,
           cachedOutputPath,
         };
       });
+    },
+
+    // Only send matches to the LLM — search params are echoed in the input,
+    // pagination/truncation/cache metadata is for the UI only.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: GrepOutput }) {
+      const lines = output.matches.map((m) => `${m.file}:${m.lineNumber}: ${m.content}`);
+      return {
+        type: "content" as const,
+        value: [
+          {
+            type: "text" as const,
+            text:
+              `<params> offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit} </params>` +
+              (output.content || `${output.matches.length} matches:\n${lines.join("\n")}`),
+          },
+        ],
+      };
     },
   });
 };

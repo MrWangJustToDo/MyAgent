@@ -5,6 +5,7 @@ import { getEnv } from "../../env.js";
 
 import { OUTPUT_LIMITS, truncateString, withDuration } from "./util/helpers.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
+import { toolOutputBaseSchema } from "./util/types.js";
 
 /** Maximum characters for tree output */
 const MAX_TREE_CHARS = OUTPUT_LIMITS.MAX_CONTENT_CHARS;
@@ -39,13 +40,8 @@ export const createTreeTool = () => {
       tree: z.string().describe("The tree structure as a formatted string."),
       totalEntries: z.number().describe("Total number of entries (files and directories) shown."),
       truncated: z.boolean().describe("Whether the tree output was truncated."),
-      message: z.string().describe("Human-readable summary of the operation."),
       durationMs: z.number().describe("Execution duration in milliseconds."),
-      cachedOutputPath: z
-        .string()
-        .nullable()
-        .optional()
-        .describe("Path to cached full output. Use read_file to read it."),
+      ...toolOutputBaseSchema.shape,
     }),
     execute: async ({ path, maxDepth, showHidden, dirsOnly, pattern, ignore }, { toolCallId }) => {
       return withDuration(async () => {
@@ -123,15 +119,12 @@ export const createTreeTool = () => {
             ({ text: tree, truncated } = truncateString(rawTree, MAX_TREE_CHARS));
           }
 
-          const truncationNote = truncated ? " (output truncated)" : "";
-
           return {
             path: rootPath,
             maxDepth: depth,
             tree,
             totalEntries: paths.length,
             truncated,
-            message: `Directory tree for: ${rootPath} (depth: ${depth})${truncationNote}`,
             cachedOutputPath: cached.cachedOutputPath,
           };
         }
@@ -148,18 +141,24 @@ export const createTreeTool = () => {
           ({ text: truncatedTree, truncated } = truncateString(result.stdout, MAX_TREE_CHARS));
         }
 
-        const truncationNote = truncated ? " (output truncated)" : "";
-
         return {
           path: rootPath,
           maxDepth: depth,
           tree: truncatedTree,
           totalEntries: lines.length,
           truncated,
-          message: `Directory tree for: ${rootPath} (depth: ${depth})${truncationNote}`,
           cachedOutputPath: cached.cachedOutputPath,
         };
       });
+    },
+
+    // Only send the tree text to the LLM — path/maxDepth are echoed in the
+    // input, totalEntries/truncated/cachedOutputPath are UI metadata.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: { tree: string } }) {
+      return {
+        type: "content" as const,
+        value: [{ type: "text" as const, text: output.tree }],
+      };
     },
   });
 };

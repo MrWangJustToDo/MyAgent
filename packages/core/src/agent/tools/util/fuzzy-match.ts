@@ -88,6 +88,11 @@ const NORMALIZATION_MAP: Record<string, string> = {
  * @returns The normalized text with ASCII equivalents
  */
 export function normalizeForFuzzyMatch(text: string): string {
+  // Fast path: if no normalizable character is present, return as-is.
+  // This avoids allocating a new string for the common case (pure ASCII code).
+  if (!needsNormalization(text)) {
+    return text;
+  }
   let result = "";
   for (const char of text) {
     const normalized = NORMALIZATION_MAP[char];
@@ -98,6 +103,21 @@ export function normalizeForFuzzyMatch(text: string): string {
     }
   }
   return result;
+}
+
+/**
+ * Quick check whether a string contains any character that would be changed
+ * by normalization. Used to skip the per-character loop for pure-ASCII text.
+ */
+function needsNormalization(text: string): boolean {
+  // All normalizable chars are outside the ASCII range (>= 0x80).
+  // Scan with charCodeAt (faster than for...of for ASCII-heavy text).
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) >= 0x80) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -127,29 +147,45 @@ export function fuzzyIndexOf(haystack: string, needle: string): number {
 /**
  * Check if a string contains a fuzzy match.
  *
+ * Accepts an optional pre-normalized haystack to avoid re-normalizing the
+ * (potentially large) file content on every call.
+ *
  * @param haystack - The string to search in
  * @param needle - The string to search for
+ * @param normalizedHaystack - Optional pre-normalized haystack for reuse
  * @returns true if the haystack contains the needle (fuzzy)
  */
-export function fuzzyIncludes(haystack: string, needle: string): boolean {
-  return fuzzyIndexOf(haystack, needle) !== -1;
+export function fuzzyIncludes(haystack: string, needle: string, normalizedHaystack?: string): boolean {
+  const nh = normalizedHaystack ?? normalizeForFuzzyMatch(haystack);
+  const nn = normalizeForFuzzyMatch(needle);
+  return nh.indexOf(nn) !== -1;
 }
 
 /**
  * Replace the first fuzzy match in a string.
  *
+ * Accepts an optional pre-normalized haystack to avoid re-normalizing the
+ * (potentially large) file content on every call.
+ *
  * @param haystack - The string to search in
  * @param needle - The string to replace
  * @param replacement - The replacement string
+ * @param normalizedHaystack - Optional pre-normalized haystack for reuse
  * @returns The string with the first fuzzy match replaced
  */
-export function fuzzyReplace(haystack: string, needle: string, replacement: string): string {
-  const index = fuzzyIndexOf(haystack, needle);
+export function fuzzyReplace(
+  haystack: string,
+  needle: string,
+  replacement: string,
+  normalizedHaystack?: string
+): string {
+  const nh = normalizedHaystack ?? normalizeForFuzzyMatch(haystack);
+  const normalizedNeedle = normalizeForFuzzyMatch(needle);
+  const index = nh.indexOf(normalizedNeedle);
   if (index === -1) {
     return haystack;
   }
 
-  const normalizedNeedle = normalizeForFuzzyMatch(needle);
   const needleLength = normalizedNeedle.length;
 
   // Find the actual end position in the original string
@@ -172,32 +208,81 @@ export function fuzzyReplace(haystack: string, needle: string, replacement: stri
 /**
  * Replace all fuzzy matches in a string.
  *
+ * Single-pass scan: collect all match spans in the normalized haystack, then
+ * build the result by slicing the original haystack around the spans. This is
+ * O(M) instead of the previous O(k×M) which re-normalized the whole result
+ * after every single replacement.
+ *
  * @param haystack - The string to search in
  * @param needle - The string to replace
  * @param replacement - The replacement string
+ * @param normalizedHaystack - Optional pre-normalized haystack for reuse
  * @returns The string with all fuzzy matches replaced
  */
-export function fuzzyReplaceAll(haystack: string, needle: string, replacement: string): string {
-  let result = haystack;
-  while (true) {
-    const newResult = fuzzyReplace(result, needle, replacement);
-    if (newResult === result) {
-      break;
-    }
-    result = newResult;
+export function fuzzyReplaceAll(
+  haystack: string,
+  needle: string,
+  replacement: string,
+  normalizedHaystack?: string
+): string {
+  const nh = normalizedHaystack ?? normalizeForFuzzyMatch(haystack);
+  const normalizedNeedle = normalizeForFuzzyMatch(needle);
+
+  if (normalizedNeedle.length === 0) {
+    return haystack;
   }
+
+  // Collect [start, end) spans (in original-string coordinates) for every
+  // match in the normalized haystack.
+  const spans: Array<{ start: number; end: number }> = [];
+  let pos = 0;
+  while ((pos = nh.indexOf(normalizedNeedle, pos)) !== -1) {
+    // Map the normalized match back to the original string's char range.
+    let endPos = pos;
+    let normalizedCount = 0;
+    while (endPos < haystack.length && normalizedCount < normalizedNeedle.length) {
+      const char = haystack[endPos];
+      const normalized = NORMALIZATION_MAP[char];
+      if (normalized !== undefined) {
+        normalizedCount += normalized.length;
+      } else {
+        normalizedCount += 1;
+      }
+      endPos++;
+    }
+    spans.push({ start: pos, end: endPos });
+    pos = endPos;
+  }
+
+  if (spans.length === 0) {
+    return haystack;
+  }
+
+  // Build the result by interleaving untouched segments with replacements.
+  let result = "";
+  let cursor = 0;
+  for (const span of spans) {
+    result += haystack.substring(cursor, span.start);
+    result += replacement;
+    cursor = span.end;
+  }
+  result += haystack.substring(cursor);
   return result;
 }
 
 /**
  * Count fuzzy matches in a string.
  *
+ * Accepts an optional pre-normalized haystack to avoid re-normalizing the
+ * (potentially large) file content on every call.
+ *
  * @param haystack - The string to search in
  * @param needle - The string to count
+ * @param normalizedHaystack - Optional pre-normalized haystack for reuse
  * @returns The number of fuzzy matches
  */
-export function fuzzyCount(haystack: string, needle: string): number {
-  const normalizedHaystack = normalizeForFuzzyMatch(haystack);
+export function fuzzyCount(haystack: string, needle: string, normalizedHaystack?: string): number {
+  const nh = normalizedHaystack ?? normalizeForFuzzyMatch(haystack);
   const normalizedNeedle = normalizeForFuzzyMatch(needle);
 
   if (normalizedNeedle.length === 0) {
@@ -206,7 +291,7 @@ export function fuzzyCount(haystack: string, needle: string): number {
 
   let count = 0;
   let pos = 0;
-  while ((pos = normalizedHaystack.indexOf(normalizedNeedle, pos)) !== -1) {
+  while ((pos = nh.indexOf(normalizedNeedle, pos)) !== -1) {
     count++;
     pos += normalizedNeedle.length;
   }
