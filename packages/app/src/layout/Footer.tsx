@@ -257,7 +257,7 @@ const StatusBar = ({ mcpCount }: { mcpCount: number }) => {
     <Box justifyContent="space-between" paddingX={1}>
       <Box gap={2} flexShrink={1}>
         {shortPath && (
-          <Box maxWidth="90%">
+          <Box>
             <Text color={COLORS.muted} dimColor wrap="truncate-start">
               {shortPath}
             </Text>

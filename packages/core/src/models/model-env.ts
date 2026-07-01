@@ -253,8 +253,11 @@ export function resolveModelInfoFromEnv(
     name: envConfig.name ?? modelId,
     provider,
     apiModel: envConfig.apiModel ?? modelId,
-    contextWindow: envConfig.contextWindow ?? 128_000,
-    defaultMaxTokens: envConfig.defaultMaxTokens ?? 4096,
+    // No default fallbacks — if env doesn't provide these, the caller should
+    // fetch from models.dev or fail with a clear error. Assuming wrong values
+    // (e.g. 128k context for a 1M model) causes silent compaction bugs.
+    ...(envConfig.contextWindow !== undefined ? { contextWindow: envConfig.contextWindow } : {}),
+    ...(envConfig.defaultMaxTokens !== undefined ? { defaultMaxTokens: envConfig.defaultMaxTokens } : {}),
     ...(pricing ? { pricing } : {}),
     capabilities,
     ...(reasoningConfig ? { reasoningConfig } : {}),

@@ -8,7 +8,7 @@ import { createOllama, ollama } from "ai-sdk-ollama";
 import { getEnv } from "../env.js";
 import { DEFAULT_OLLAMA_URL } from "../types.js";
 
-import { getModel } from "./registry.js";
+import { lookupModelFromModelsDev } from "./models-dev.js";
 
 import type { ModelId, ModelInfo } from "./types.js";
 import type { LanguageModel, ToolSet } from "ai";
@@ -260,16 +260,21 @@ const providerTypeMap: Record<string, ProviderType> = {
 const cloudProviders = new Set<ProviderType>(["openai", "deepseek", "open-router"]);
 
 /**
- * Create a LanguageModel from a registry model ID.
- * Looks up ModelInfo from the registry, maps provider to the correct factory,
- * and returns both the LanguageModel instance and its metadata.
+ * Create a LanguageModel from a model ID.
  *
- * For providers without a native SDK (anthropic, google, xai), falls back
- * to OpenRouter which supports them as upstream providers.
+ * Looks up model metadata from the models.dev API (https://models.dev),
+ * maps the provider to the correct factory, and returns both the
+ * LanguageModel instance and its metadata.
+ *
+ * For providers without a native SDK installed (anthropic, google, xai),
+ * falls back to OpenRouter which supports them as upstream providers.
+ *
+ * If the model is not found on models.dev, an error is thrown prompting
+ * the user to configure model metadata via MODEL_* env vars.
  *
  * @example
  * ```typescript
- * const { model, info } = createModelFromId("claude-sonnet-4.6", {
+ * const { model, info } = createModelFromId("claude-opus-4-8", {
  *   apiKey: "sk-or-...",
  * });
  * agent.setModel(model);
@@ -280,9 +285,14 @@ export const createModelFromId = async (
   modelId: ModelId,
   options: CreateModelFromIdOptions = {}
 ): Promise<CreateModelFromIdResult> => {
-  const info = getModel(modelId);
+  const info = await lookupModelFromModelsDev(modelId);
   if (!info) {
-    throw new Error(`Model "${modelId}" not found in registry. Use createModel() for unregistered models.`);
+    throw new Error(
+      `Model "${modelId}" not found on models.dev. ` +
+        `Please configure model metadata via MODEL_* env vars ` +
+        `(see https://models.dev for available models), ` +
+        `or use createModel() directly for custom endpoints.`
+    );
   }
 
   const { apiKey, baseURL } = options;

@@ -1,26 +1,18 @@
-import { anthropicModels } from "./providers/anthropic.js";
-import { deepseekModels } from "./providers/deepseek.js";
-import { googleModels } from "./providers/google.js";
-import { openaiModels } from "./providers/openai.js";
-import { xaiModels } from "./providers/xai.js";
-
 import type { ModelCapability, ModelId, ModelInfo, ModelOption, ModelProvider } from "./types.js";
 
 // ============================================================================
-// Global Registry
+// Global Registry (runtime-populated)
 // ============================================================================
 
 /**
- * All supported models merged into a single registry.
- * Per-provider maps are merged at module load time.
+ * Runtime model registry. Starts empty — models are registered at runtime
+ * via {@link registerModel} / {@link registerModels}, or resolved on-demand
+ * from the models.dev API (see `models-dev.ts`).
+ *
+ * Hardcoded provider files were removed in favor of fetching up-to-date
+ * metadata from https://models.dev/api.json.
  */
-export const modelRegistry: Record<ModelId, ModelInfo> = {
-  ...anthropicModels,
-  ...openaiModels,
-  ...deepseekModels,
-  ...googleModels,
-  ...xaiModels,
-};
+export const modelRegistry: Record<ModelId, ModelInfo> = {};
 
 /**
  * Provider display order for UI model pickers (lower = higher priority).
@@ -40,7 +32,10 @@ export const providerPriority: Record<ModelProvider, number> = {
 // ============================================================================
 
 /**
- * Get a model by its ID. Returns undefined if not found.
+ * Get a model by its ID from the runtime registry.
+ *
+ * Note: This only checks the runtime registry. For full model resolution
+ * (including models.dev lookup), use `createModelFromId` from `factory.ts`.
  */
 export function getModel(id: ModelId): ModelInfo | undefined {
   return modelRegistry[id];

@@ -7,7 +7,7 @@ import type { AppConfig, Provider } from "../adapter/types.js";
 // Default Values
 // ============================================================================
 
-const DEFAULT_MODEL = "qwen2.5-coder:7b";
+// No default model — must be supplied via env (MODEL) or CLI (--model).
 const DEFAULT_PROVIDER: Provider = "ollama";
 const DEFAULT_MAX_ITERATIONS = 50;
 
@@ -18,7 +18,7 @@ const DEFAULT_MAX_ITERATIONS = 50;
 export const useConfig = createState(
   () => ({
     config: {
-      model: DEFAULT_MODEL,
+      model: "",
       url: DEFAULT_OLLAMA_URL,
       systemPrompt: "",
       initialPrompt: "",
@@ -37,7 +37,7 @@ export const useConfig = createState(
   {
     withActions: (state) => ({
       init: async (config: Partial<AppConfig>) => {
-        state.config.model = config.model || DEFAULT_MODEL;
+        state.config.model = config.model || "";
         state.config.url = config.url || DEFAULT_OLLAMA_URL;
         state.config.systemPrompt = config.systemPrompt || (await buildDefaultSystemPrompt());
         state.config.initialPrompt = config.initialPrompt || "";
@@ -68,7 +68,7 @@ export const useConfig = createState(
       },
 
       reset: () => {
-        state.config.model = DEFAULT_MODEL;
+        state.config.model = "";
         state.config.url = DEFAULT_OLLAMA_URL;
         state.config.systemPrompt = "";
         state.config.initialPrompt = "";

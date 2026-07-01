@@ -63,10 +63,10 @@ export interface ModelInfo {
   provider: ModelProvider;
   /** Actual model string sent to the API (may differ from id) */
   apiModel: string;
-  /** Max input context window in tokens */
-  contextWindow: number;
-  /** Default max output tokens */
-  defaultMaxTokens: number;
+  /** Max input context window in tokens. May be undefined if not yet resolved from models.dev. */
+  contextWindow?: number;
+  /** Default max output tokens. May be undefined if not yet resolved from models.dev. */
+  defaultMaxTokens?: number;
   /** Pricing in USD per 1M tokens */
   pricing?: ModelPricing;
   /** Capability flags */
@@ -84,6 +84,6 @@ export interface ModelOption {
   id: ModelId;
   name: string;
   provider: ModelProvider;
-  contextWindow: number;
+  contextWindow?: number;
   capabilities: ModelCapability[];
 }

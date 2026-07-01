@@ -9,8 +9,9 @@ export const useServerConfig = createState(
     connecting: false,
     rootPath: "",
     sandboxEnv: "",
-    // Agent config (user-configurable)
-    model: "qwen2.5-coder:7b",
+    // Agent config (user-configurable). No default model — the user must
+    // set one via the popup before connecting.
+    model: "",
     provider: "ollama" as "ollama" | "openRouter" | "openaiCompatible" | "deepseek",
     apiKey: "",
   }),

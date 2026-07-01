@@ -296,7 +296,7 @@ export class AgentManager {
       // Set up compaction config (auto-compact runs in prepareStep; manual: CLI /compact)
       // Derive tokenThreshold from model's contextWindow if not explicitly set
       const compactionInput = { ...compaction };
-      if (!compactionInput?.tokenThreshold && resolvedModelInfo) {
+      if (!compactionInput?.tokenThreshold && resolvedModelInfo?.contextWindow) {
         const MAX_THRESHOLD = 200_000;
         compactionInput.tokenThreshold = Math.min(resolvedModelInfo.contextWindow, MAX_THRESHOLD);
       }

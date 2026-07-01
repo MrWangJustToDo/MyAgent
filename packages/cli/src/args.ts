@@ -145,7 +145,9 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
     openaiCompatible: "openai",
     deepseek: "deepseek",
   };
-  const envModelId = getFlagString(parsed, envModel || "qwen2.5-coder:7b", "model", "m");
+  // No default model — the user must configure MODEL (env) or --model (flag).
+  // An empty model will surface as a clear error in createAgentFromConfig.
+  const envModelId = getFlagString(parsed, envModel, "model", "m");
   const modelInfo = parseModelInfoFromEnv(process.env, envModelId, providerToModelProvider[provider]);
 
   return {

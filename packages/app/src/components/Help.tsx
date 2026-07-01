@@ -38,7 +38,7 @@ export const Help = () => {
             <Box width={24}>
               <Text color={COLORS.success}>-m, --model</Text>
             </Box>
-            <Text>Model name (default: qwen2.5-coder:7b)</Text>
+            <Text>Model name (required — set via MODEL env or --model)</Text>
           </Box>
           <Box>
             <Box width={24}>

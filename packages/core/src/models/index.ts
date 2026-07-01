@@ -9,14 +9,15 @@ export type {
   ReasoningConfig,
 } from "./types.js";
 
-// Per-provider model maps
-export { anthropicModels } from "./providers/anthropic.js";
-export { deepseekModels } from "./providers/deepseek.js";
-export { googleModels } from "./providers/google.js";
-export { openaiModels } from "./providers/openai.js";
-export { xaiModels } from "./providers/xai.js";
+// models.dev API — fetches up-to-date model metadata from https://models.dev
+export {
+  fetchModelsDev,
+  getModelsByProviderFromModelsDev,
+  lookupModelFromModelsDev,
+  MODELS_DEV_URL,
+} from "./models-dev.js";
 
-// Global registry and helpers
+// Global registry and helpers (runtime-populated)
 export {
   getAvailableProviders,
   getDefaultModel,
