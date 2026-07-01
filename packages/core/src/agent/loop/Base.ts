@@ -352,8 +352,15 @@ export class Base extends SessionHandler {
 
   createOnFinish(userCallback?: GenerateTextOnEndCallback<ToolSet>): GenerateTextOnEndCallback<ToolSet> {
     return (event) => {
-      if (this.status !== "waiting") this.status = "completed";
-      if (this.error) this.status = "error";
+      // Preserve terminal states (aborted / error / waiting) instead of
+      // briefly flashing "completed" before overwriting with "error".
+      if (this.status === "aborted" || this.status === "error" || this.status === "waiting") {
+        // keep current terminal status
+      } else if (this.error) {
+        this.status = "error";
+      } else {
+        this.status = "completed";
+      }
 
       if (this.status === "completed") {
         this.lastStreamDurationMs = Date.now() - this.streamStartedAt;
@@ -621,13 +628,17 @@ export class Base extends SessionHandler {
         compactedMessages: compactedMessages.length,
       });
 
+      // Compaction succeeded — the caller (onError / generate retry) is
+      // expected to retry, so restore "running" to reflect that intent.
+      this.status = "running";
       return true;
     } catch (err) {
       const compactError = err instanceof Error ? err : new Error(String(err));
       this.log?.error("agent", "Reactive compact failed", compactError);
+      // Do NOT clobber the caller's status here. The caller (onError) will
+      // set "error" after we return false; setting "running" in finally
+      // would briefly mask the error and mislead the UI.
       return false;
-    } finally {
-      this.status = "running";
     }
   }
 

@@ -274,13 +274,18 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, Context, 
         onEnd: this.createOnFinish(onEnd),
         onChunk: ({ chunk }) => {
           this.context?.emitStream(chunk);
-          if (chunk.type === "tool-call" && this.isToolNeedsApproval(chunk.toolName)) {
-            this.status = "waiting";
-            this.dispatchEvent?.({
-              type: "notification",
-              agentId: this.id,
-              data: { session_id: this.getHookSessionId(), message: `Tool ${chunk.toolName} requires approval` },
-            });
+          // Tool calls (both approval and normal) belong to the "running" phase.
+          if (chunk.type === "tool-call") {
+            if (this.isToolNeedsApproval(chunk.toolName)) {
+              this.status = "waiting";
+              this.dispatchEvent?.({
+                type: "notification",
+                agentId: this.id,
+                data: { session_id: this.getHookSessionId(), message: `Tool ${chunk.toolName} requires approval` },
+              });
+            } else {
+              this.status = "running";
+            }
             return;
           }
           if (chunk.type === "reasoning-delta") {
@@ -297,6 +302,14 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, Context, 
         },
         onError: async (event) => {
           const err = event.error;
+
+          // Abort errors must keep the "aborted" status, not "error".
+          if (this.isAbortError(err)) {
+            this.status = "aborted";
+            this.log?.agent("Stream aborted via error", { error: (err as Error)?.message });
+            return;
+          }
+
           const compacted = await this.handleReactiveCompact(err);
           if (compacted) {
             this.log?.info(

@@ -20,7 +20,6 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { agentManager } from "../../managers/manager-agent.js";
 import { runSubagent } from "../subagent/runner.js";
 import { generateId } from "../utils.js";
 
@@ -52,6 +51,8 @@ export const taskOutputSchema = z.object({
   iterations: z.number().describe("Number of iterations used"),
   /** Whether the subagent hit the iteration limit */
   reachedLimit: z.boolean().describe("Whether iteration limit was reached"),
+  /** Whether the subagent was cancelled (aborted) before completing */
+  aborted: z.boolean().describe("Whether the subagent was cancelled before completing"),
   /** Token usage */
   usage: z
     .object({
@@ -120,22 +121,23 @@ Example use cases:
 
     execute: async ({ id, prompt, description }, { toolCallId }) => {
       return withDuration(async () => {
-        const abortController = new AbortController();
-        const managed = agentManager.getAgent(parentAgentId);
-
-        managed?.agent?.addPendingAbortController(abortController);
-
+        // Subagent manages its own currentAbortController internally.
+        // We do NOT register it on the parent's pendingAbortControllers,
+        // because cancelling the parent must not cascade to the subagent
+        // (and vice versa). The app layer cancels a subagent directly via
+        // agentManager -> subagent.abort(), leaving the parent untouched.
+        //
+        // We also pass no abortSignal to runSubagent so the subagent's
+        // currentAbortController is the single source of truth for its
+        // cancellation.
         const result = await runSubagent({
           subagentId: id,
           prompt,
           description,
           parentAgentId,
-          abortSignal: abortController.signal,
           autoDestroy: false,
           maxOutputLength: Infinity,
         });
-
-        managed?.agent?.removePendingAbortController(abortController);
 
         let summary = result.output;
         let truncated = result.truncated;
@@ -154,6 +156,7 @@ Example use cases:
           truncated,
           iterations: result.iterations,
           reachedLimit: result.reachedLimit,
+          aborted: result.aborted,
           usage: result.usage,
           cachedOutputPath,
         };

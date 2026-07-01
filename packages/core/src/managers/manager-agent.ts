@@ -117,7 +117,11 @@ export interface ManagedAgent {
   context: AgentContext;
   tools: ToolSet;
   todoManager: TodoManager | null;
-  status: Agent["status"];
+  /**
+   * Current agent status. Dynamically reflects `agent.status` so it stays
+   * in sync with the live agent (running / thinking / aborted / ...).
+   */
+  readonly status: Agent["status"];
   error?: string;
   parentId?: string; // For subagent support
   childIds: string[]; // For agent team support
@@ -356,7 +360,9 @@ export class AgentManager {
       tools: tools as ToolSet,
       log,
       todoManager,
-      status: "idle",
+      get status() {
+        return agent.status;
+      },
       parentId,
       childIds: [],
       createdAt: Date.now(),
@@ -426,6 +432,44 @@ export class AgentManager {
     const parent = this.agents.get(parentId);
     if (!parent) return [];
     return parent.childIds.map((id) => this.agents.get(id)).filter((a): a is ManagedAgent => a !== undefined);
+  }
+
+  /**
+   * Recursively collect all *active* subagents under the given root agent.
+   *
+   * "Active" means the subagent's status indicates it is currently doing work
+   * (running / thinking / responding / waiting / compacting). Subagents that
+   * have already terminated (idle / completed / aborted / error) are skipped.
+   *
+   * Results are ordered deepest-first so that the most recently spawned
+   * subagent is cancelled first (LIFO), matching the natural call stack.
+   *
+   * This is used by the app layer to implement layered cancellation:
+   * when subagents are active, cancelling targets only the subagents
+   * (one by one) and leaves the root agent's abort signal untouched.
+   *
+   * @param rootAgentId The root agent to search under
+   * @returns Active subagents, deepest-first
+   */
+  getActiveSubagents(rootAgentId: string): ManagedAgent[] {
+    const activeStatuses = new Set<Agent["status"]>(["running", "thinking", "responding", "waiting", "compacting"]);
+    const result: ManagedAgent[] = [];
+
+    const walk = (agentId: string) => {
+      const managed = this.agents.get(agentId);
+      if (!managed) return;
+      // Recurse into children first (deepest-first ordering)
+      for (const childId of [...managed.childIds].reverse()) {
+        walk(childId);
+      }
+      // Include this node if it is a subagent (has parent) and currently active
+      if (managed.parentId && activeStatuses.has(managed.status)) {
+        result.push(managed);
+      }
+    };
+
+    walk(rootAgentId);
+    return result;
   }
 
   /**

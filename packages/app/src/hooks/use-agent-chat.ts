@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 import { Chat, useChat as useAiSdkChat } from "@ai-sdk/react";
-import { generateId } from "@my-agent/core";
+import { agentManager, generateId } from "@my-agent/core";
 import {
   getToolName,
   isToolUIPart,
@@ -172,6 +172,23 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   }, [chatHelpers.status, chatHelpers.messages, agent]);
 
   const stop = () => {
+    // Layered cancellation:
+    //  - If there are active subagents, cancel only them (one by one, deepest
+    //    first) by calling each subagent's own abort(). This leaves the root
+    //    agent's abort signal (and therefore the chat hook) untouched, so the
+    //    parent loop can continue after the subagent returns its result.
+    //  - If no subagent is active, fall back to the normal chat stop, which
+    //    aborts the root agent's stream via the hook's abort signal.
+    if (agent) {
+      const activeSubagents = agentManager.getActiveSubagents(agent.id);
+      if (activeSubagents.length > 0) {
+        for (const sub of activeSubagents) {
+          sub.agent.abort("user-cancelled");
+        }
+        forceUpdate();
+        return;
+      }
+    }
     chatHelpers.stop();
     forceUpdate();
   };

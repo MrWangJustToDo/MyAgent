@@ -85,6 +85,8 @@ export interface SubagentResult {
   reachedLimit: boolean;
   /** Number of retries attempted */
   retries: number;
+  /** Whether the subagent was cancelled (aborted) before completing */
+  aborted: boolean;
 }
 
 /** @deprecated Use SubagentResult.output instead of summary */

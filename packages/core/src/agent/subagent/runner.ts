@@ -200,6 +200,33 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
         // All callbacks (onChunk, onStepFinish, onFinish) fire during consumption.
         const rawOutput = (await streamResult.text)?.trim() || "(no summary)";
 
+        // streamText does NOT throw on abort — it resolves normally with
+        // whatever partial text was generated. The abort is signalled via
+        // the subagent's status ("aborted", set by onAbort). Check it here
+        // so we don't mistake a cancelled run for a successful (possibly
+        // empty) completion and either retry or return partial results.
+        if (subagent.status === "aborted") {
+          parentLog?.warn("agent", "Subagent aborted", { subagentId, iterations, usage });
+
+          agentManager.emit({
+            type: "subagent:error",
+            agentId: subagentId,
+            parentId: parentAgentId,
+            data: { subagentId, error: "Subagent aborted" },
+          });
+
+          return {
+            subagentId,
+            output: `(subagent cancelled by user after ${iterations} iteration${iterations === 1 ? "" : "s"}; no results available)`,
+            truncated: false,
+            iterations,
+            usage,
+            reachedLimit: false,
+            retries: retries,
+            aborted: true,
+          };
+        }
+
         // Aggregate usage to parent's context
         if (aggregateUsageToParent && parentContext) {
           parentContext.addTotalUsage(usage);
@@ -246,9 +273,16 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           usage,
           reachedLimit,
           retries,
+          aborted: false,
         };
       } catch (error) {
-        parentLog?.error("agent", "Subagent error", error as Error);
+        const isAborted = error instanceof Error && (error.name === "AbortError" || error.message.includes("aborted"));
+
+        if (isAborted) {
+          parentLog?.warn("agent", "Subagent aborted", { subagentId, iterations, usage });
+        } else {
+          parentLog?.error("agent", "Subagent error", error as Error);
+        }
 
         agentManager.emit({
           type: "subagent:error",
@@ -257,14 +291,21 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           data: { subagentId, error: error instanceof Error ? error.message : String(error) },
         });
 
+        // Preserve the real iterations/usage accumulated before the error
+        // (onStepFinish fires per step, so these reflect actual progress).
+        // For aborts, give a clear cancellation message instead of the raw
+        // AbortError text so the parent LLM understands the task was cancelled.
         return {
           subagentId,
-          output: (error as Error)?.message || "Unknown error",
+          output: isAborted
+            ? `(subagent cancelled by user after ${iterations} iteration${iterations === 1 ? "" : "s"}; no results available)`
+            : (error as Error)?.message || "Unknown error",
           truncated: false,
-          iterations: 0,
-          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+          iterations,
+          usage,
           reachedLimit: false,
           retries: retries,
+          aborted: isAborted,
         };
       }
     }

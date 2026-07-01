@@ -5,7 +5,7 @@ import { calculateCost } from "./types.js";
 import type { TokenUsage } from "./types.js";
 import type { ModelCapability, ModelPricing } from "../../models/types.js";
 import type { StreamPart, ToolSet } from "../loop/types.js";
-import type { ModelMessage, OnFinishEvent, TypedToolCall } from "ai";
+import type { GenerateTextEndEvent, ModelMessage, TypedToolCall } from "ai";
 
 // ============================================================================
 // AgentContext ID Generator
@@ -65,7 +65,7 @@ export class AgentContext {
 
   private toolListeners: Set<(event: TypedToolCall<ToolSet>) => void> = new Set();
 
-  finishInfo: OnFinishEvent<ToolSet> | null = null;
+  finishInfo: GenerateTextEndEvent<ToolSet> | null = null;
 
   /** Streaming state */
   isStreaming = false;
@@ -179,7 +179,7 @@ export class AgentContext {
     }
   }
 
-  updateFinal(t: OnFinishEvent<ToolSet>) {
+  updateFinal(t: GenerateTextEndEvent<ToolSet>) {
     this.finishInfo = t;
   }
 
