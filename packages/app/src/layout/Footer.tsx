@@ -16,10 +16,9 @@ import { useChatStatus } from "../hooks/use-chat-status.js";
 import { useConfig } from "../hooks/use-config.js";
 import { useInputMode } from "../hooks/use-input-mode.js";
 import { useSelect } from "../hooks/use-select.js";
+import { BG, COLORS } from "../theme/colors.js";
 
 import type { Agent, AgentStatus } from "@my-agent/core";
-
-const INPUT_BG = "#333333";
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -84,7 +83,7 @@ export const Footer = () => {
         borderRight={false}
         borderBottom={false}
         borderTop
-        borderTopColor="gray"
+        borderTopColor={BG.border}
         borderStyle="single"
         borderTopDimColor
         width="full"
@@ -102,16 +101,16 @@ export const Footer = () => {
       />
 
       {/* Input */}
-      <HalfLinePaddedBox backgroundColor={INPUT_BG}>
+      <HalfLinePaddedBox backgroundColor={BG.input}>
         <Box flexDirection="row">
           <Box flexShrink={0}>
             {showFreeformInput ? (
-              <Text color="yellow" bold>
+              <Text color={COLORS.warning} bold>
                 {" "}
                 {freeformLabel}
               </Text>
             ) : (
-              <Text color={isInputEnabled ? "green" : "gray"} bold>
+              <Text color={isInputEnabled ? COLORS.accent : COLORS.muted} bold>
                 {" > "}
               </Text>
             )}
@@ -119,11 +118,11 @@ export const Footer = () => {
           {isInputEnabled && !showSelectList ? (
             <UserInput />
           ) : isInputEnabled && showSelectList ? (
-            <Text color="gray" dimColor>
+            <Text color={COLORS.muted} dimColor>
               Use arrows to select
             </Text>
           ) : (
-            <Text color="gray" dimColor>
+            <Text color={COLORS.muted} dimColor>
               Processing...
             </Text>
           )}
@@ -184,46 +183,46 @@ const ContextBar = ({
         {status === "thinking" && <Spinner text="Thinking..." />}
         {status === "responding" && <Spinner text="Responding..." />}
         {status === "running" && hasPendingAskUser && (
-          <Text color="cyan" bold>
+          <Text color={COLORS.primary} bold>
             Waiting for your response
           </Text>
         )}
         {status === "compacting" && <Spinner text="Compacting..." />}
         {status === "completed" && (
-          <Text color="green">
+          <Text color={COLORS.success}>
             {`Completed${lastRunDurationMs > 0 ? ` in ${formatDuration(lastRunDurationMs)}` : ""}`}
           </Text>
         )}
         {status === "aborted" && (
-          <Text color="green" dimColor>
+          <Text color={COLORS.muted} dimColor>
             Aborted
           </Text>
         )}
         {status === "waiting" && (
-          <Text color="yellow" bold>
+          <Text color={COLORS.warning} bold>
             Waiting for approval
           </Text>
         )}
         {status === "idle" && (
-          <Text color="gray" dimColor>
+          <Text color={COLORS.muted} dimColor>
             Ready
           </Text>
         )}
-        {status === "error" && <Text color="red">{error}</Text>}
+        {status === "error" && <Text color={COLORS.danger}>{error}</Text>}
 
         {/* Contextual shortcuts */}
         {isPendingApproval && !showFreeformInput && (
-          <Text color="yellow" dimColor>
+          <Text color={COLORS.warning} dimColor>
             y: approve | n: deny
           </Text>
         )}
         {showFreeformInput && (
-          <Text color="yellow" dimColor>
+          <Text color={COLORS.warning} dimColor>
             Submit: Enter | Cancel: Esc
           </Text>
         )}
         {showSelectList && (
-          <Text color="cyan" dimColor>
+          <Text color={COLORS.primary} dimColor>
             {isMultiSelect
               ? cursorOnFreeform
                 ? "Up/Down | Space: toggle | →: edit answer | Enter: submit"
@@ -258,14 +257,14 @@ const StatusBar = ({ mcpCount }: { mcpCount: number }) => {
     <Box justifyContent="space-between" paddingX={1}>
       <Box gap={2} flexShrink={1}>
         {shortPath && (
-          <Box maxWidth="30%">
-            <Text color="gray" dimColor wrap="truncate-start">
+          <Box maxWidth="90%">
+            <Text color={COLORS.muted} dimColor wrap="truncate-start">
               {shortPath}
             </Text>
           </Box>
         )}
         {mcpCount > 0 && (
-          <Text color="blue" dimColor wrap="truncate">
+          <Text color={COLORS.accent} dimColor wrap="truncate">
             MCP: {mcpCount}
           </Text>
         )}
@@ -274,8 +273,8 @@ const StatusBar = ({ mcpCount }: { mcpCount: number }) => {
       <Box gap={2} flexShrink={0}>
         <LLMUsage key={version} />
         {model && (
-          <Text color="gray" dimColor wrap="truncate">
-            /{model}
+          <Text color={COLORS.muted} dimColor wrap="truncate">
+            {model}
           </Text>
         )}
       </Box>

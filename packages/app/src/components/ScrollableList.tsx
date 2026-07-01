@@ -1,5 +1,7 @@
 import { Box, Text } from "ink";
 
+import { COLORS } from "../theme/colors.js";
+
 import type { ReactNode } from "react";
 
 export function calcScrollOffset(focusIndex: number, total: number, maxVisible: number, padding = 2): number {
@@ -32,17 +34,17 @@ export function ScrollableList<T>({ items, maxVisible, scrollOffset, renderItem,
   return (
     <>
       {/* Always render indicator lines to prevent layout shift on scroll */}
-      <Text color="gray" dimColor>
+      <Text color={COLORS.muted} dimColor>
         {hasMoreAbove ? `\u25b2 (${start} more)` : "\u2500"}
       </Text>
       {visibleItems.map((item, i) => (
         <Box key={start + i}>{renderItem(item, start + i)}</Box>
       ))}
-      <Text color="gray" dimColor>
+      <Text color={COLORS.muted} dimColor>
         {hasMoreBelow ? `\u25bc (${items.length - end} more)` : "\u2500"}
       </Text>
       {showCount && (
-        <Text color="gray" dimColor>
+        <Text color={COLORS.muted} dimColor>
           {countText}
         </Text>
       )}

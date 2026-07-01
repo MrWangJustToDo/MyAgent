@@ -5,12 +5,14 @@
  * Uses the same color stops as the logo for visual consistency.
  */
 
+import { GRADIENT } from "../theme/colors.js";
+
 // ============================================================================
 // Constants
 // ============================================================================
 
-/** Gradient color stops matching the logo (cyan → purple → pink) */
-export const GRADIENT_STOPS = ["#00D4FF", "#7B61FF", "#FF6B9D"] as const;
+/** Gradient color stops — derived from the active theme's GRADIENT object */
+export const GRADIENT_STOPS = [GRADIENT.cyan, GRADIENT.purple, GRADIENT.pink] as const;
 
 // ============================================================================
 // Color Utilities

@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import { useMemo } from "react";
 
 import { useAutocomplete } from "../hooks/use-autocomplete.js";
+import { COLORS } from "../theme/colors.js";
 
 import { calcScrollOffset, ScrollableList } from "./ScrollableList.js";
 
@@ -36,15 +37,15 @@ export const AutocompleteList = () => {
       <Box flexDirection="row" width="100%">
         <Box width="60%" flexShrink={0} flexGrow={0}>
           <Text
-            backgroundColor={isSelected ? "green" : undefined}
-            color={isSelected ? "black" : "cyan"}
+            backgroundColor={isSelected ? COLORS.success : undefined}
+            color={isSelected ? "black" : COLORS.primary}
             bold={isSelected}
             wrap="truncate"
           >
             {label}
           </Text>
         </Box>
-        <Text color={isSelected ? "white" : "gray"} dimColor={!isSelected} wrap="truncate">
+        <Text color={isSelected ? "white" : COLORS.muted} dimColor={!isSelected} wrap="truncate">
           {suggestion.description}
         </Text>
       </Box>

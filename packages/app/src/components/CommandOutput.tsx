@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 
 import { COMMAND_OUTPUT_MAX_VISIBLE, useCommandOutput } from "../hooks/use-command-output.js";
+import { COLORS } from "../theme/colors.js";
 
 import { ScrollableList } from "./ScrollableList.js";
 
@@ -9,7 +10,7 @@ import { ScrollableList } from "./ScrollableList.js";
  * ensure they still occupy one line of terminal height -- otherwise Ink
  * collapses them to zero height, causing visible height changes on scroll.
  */
-const renderLine = (line: string) => <Text color="gray">{line || " "}</Text>;
+const renderLine = (line: string) => <Text color={COLORS.muted}>{line || " "}</Text>;
 
 export const CommandOutput = () => {
   const lines = useCommandOutput((s) => s.lines);
@@ -21,7 +22,7 @@ export const CommandOutput = () => {
   return (
     <Box flexDirection="column" paddingLeft={2}>
       {title && (
-        <Text color="cyan" bold>
+        <Text color={COLORS.primary} bold>
           {title}
         </Text>
       )}

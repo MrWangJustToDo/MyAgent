@@ -3,6 +3,7 @@ import { useEffect, useMemo } from "react";
 
 import { FullBox } from "../components/FullBox";
 import { useStatic } from "../hooks/use-static";
+import { COLORS } from "../theme/colors.js";
 import { GRADIENT_STOPS, interpolateColor } from "../utils/gradient.js";
 
 // ============================================================================
@@ -61,7 +62,7 @@ const Logo = () => {
       </Box>
 
       <Box marginTop={1}>
-        <Text color="#6366F1" italic>
+        <Text color={COLORS.accent} italic>
           AI-Powered Coding Agent
         </Text>
       </Box>
@@ -95,8 +96,8 @@ export const Header = () => {
         <Box gap={3} justifyContent="center" width="100%">
           {TIPS.map((tip, i) => (
             <Box key={i} gap={1}>
-              <Text color="gray">{tip.key}</Text>
-              <Text color="gray" dimColor>
+              <Text color={COLORS.muted}>{tip.key}</Text>
+              <Text color={COLORS.muted} dimColor>
                 {tip.desc}
               </Text>
             </Box>

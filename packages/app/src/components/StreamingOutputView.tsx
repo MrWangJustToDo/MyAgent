@@ -7,6 +7,7 @@
 import { Box, Text } from "ink";
 
 import { useStreamingOutput } from "../hooks/use-streaming-output.js";
+import { COLORS } from "../theme/colors.js";
 
 // ============================================================================
 // Types
@@ -49,7 +50,7 @@ export const StreamingOutputView = ({
   if (!output || (!output.stdout && !output.stderr)) {
     return (
       <Box paddingLeft={2}>
-        <Text color="gray" dimColor>
+        <Text color={COLORS.muted} dimColor>
           {emptyMessage}
         </Text>
       </Box>
@@ -70,12 +71,12 @@ export const StreamingOutputView = ({
       {displayStdout.length > 0 && (
         <Box flexDirection="column">
           {hiddenStdoutLines > 0 && (
-            <Text color="gray" dimColor>
+            <Text color={COLORS.muted} dimColor>
               ... ({hiddenStdoutLines} more lines)
             </Text>
           )}
           {displayStdout.map((line, i) => (
-            <Text key={`stdout-${i}`} color="gray" dimColor>
+            <Text key={`stdout-${i}`} color={COLORS.muted} dimColor>
               {line}
             </Text>
           ))}
@@ -84,12 +85,12 @@ export const StreamingOutputView = ({
       {displayStderr.length > 0 && (
         <Box flexDirection="column">
           {hiddenStderrLines > 0 && (
-            <Text color="red" dimColor>
+            <Text color={COLORS.danger} dimColor>
               ... ({hiddenStderrLines} more lines)
             </Text>
           )}
           {displayStderr.map((line, i) => (
-            <Text key={`stderr-${i}`} color="red" dimColor>
+            <Text key={`stderr-${i}`} color={COLORS.danger} dimColor>
               {line}
             </Text>
           ))}

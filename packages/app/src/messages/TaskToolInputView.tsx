@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 
 import { Spinner } from "../components/Spinner";
 import { useTask } from "../hooks/use-task";
+import { COLORS } from "../theme/colors.js";
 import { formatToolInput } from "../utils/format";
 
 export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
@@ -21,15 +22,15 @@ export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
   return (
     <Box flexDirection="row" height={1}>
       <Box flexShrink={0} flexGrow={0}>
-        <Text color="gray">↳ </Text>
+        <Text color={COLORS.muted}>↳ </Text>
       </Box>
       {currentTool ? (
         <>
-          <Text color="gray" italic>
+          <Text color={COLORS.muted} italic>
             {toolName}
             {total && total > 1 ? ` (+${total}) ` : " "}
           </Text>
-          <Text color="gray" italic dimColor wrap="truncate">
+          <Text color={COLORS.muted} italic dimColor wrap="truncate">
             {toolInput}
           </Text>
         </>

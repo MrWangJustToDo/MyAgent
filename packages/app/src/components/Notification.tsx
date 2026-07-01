@@ -2,14 +2,15 @@ import { Box, Text } from "ink";
 import { useEffect, useRef, useState } from "react";
 
 import { useNotification } from "../hooks/use-notification";
+import { COLORS } from "../theme/colors.js";
 
 import type { AgentNotification } from "@my-agent/core";
 
 const LEVEL_COLORS: Record<string, string> = {
-  info: "cyan",
-  success: "green",
-  warning: "yellow",
-  error: "red",
+  info: COLORS.primary,
+  success: COLORS.success,
+  warning: COLORS.warning,
+  error: COLORS.danger,
 };
 
 export const Notification = () => {
@@ -39,7 +40,7 @@ export const Notification = () => {
 
   if (!notification) return null;
 
-  const color = LEVEL_COLORS[notification.level] || "gray";
+  const color = LEVEL_COLORS[notification.level] || COLORS.muted;
 
   return (
     <Box gap={2} flexShrink={0}>

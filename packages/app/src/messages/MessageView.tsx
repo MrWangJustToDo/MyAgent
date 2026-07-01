@@ -4,14 +4,13 @@ import { memo, useMemo } from "react";
 
 import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
 import { useSize } from "../hooks";
+import { BG, COLORS } from "../theme/colors.js";
 
 import { FilePartView } from "./FilePartView.js";
 import { TextPartView } from "./TextPartView.js";
 import { ToolCallPartView } from "./ToolCallPartView.js";
 
 import type { FileUIPart, TextUIPart, ToolUIPart, UIMessage } from "ai";
-
-const USER_MSG_BG = "#333333";
 
 export interface MessageViewProps {
   message: UIMessage;
@@ -97,16 +96,16 @@ const UserMessageView = memo(
     const prefixWidth = 4;
 
     return (
-      <HalfLinePaddedBox backgroundColor={USER_MSG_BG} width={contentWidth}>
+      <HalfLinePaddedBox backgroundColor={BG.message} width={contentWidth}>
         <Box flexDirection="row" width={contentWidth}>
           <Box width={prefixWidth} flexShrink={0}>
-            <Text bold color="white">
+            <Text bold color={COLORS.accent}>
               {" > "}
             </Text>
           </Box>
           <Box flexDirection="column" width={contentWidth - prefixWidth}>
             {text && (
-              <Text color="white" wrap="wrap">
+              <Text color={COLORS.text} wrap="wrap">
                 {text}
               </Text>
             )}

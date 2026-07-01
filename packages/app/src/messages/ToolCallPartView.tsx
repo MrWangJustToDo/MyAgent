@@ -2,6 +2,7 @@ import { getToolName } from "ai";
 import { Box, Text } from "ink";
 
 import { StreamingOutputView } from "../components/StreamingOutputView.js";
+import { COLORS } from "../theme/colors.js";
 import {
   buildToolHeader,
   DURATION_THRESHOLD_MS,
@@ -76,7 +77,7 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
   // show a misleading success summary alongside the error text.
   const inlineSummary = errorText ? null : getInlineSummary(part, toolName);
   const compactOutput = hasOutput ? getCompactOutput(part, toolName) : null;
-  const stateColor = errorText ? "red" : getToolCallColor(part.state);
+  const stateColor = errorText ? COLORS.danger : getToolCallColor(part.state);
 
   // Build parenthetical: "(summary, duration)"
   const parenParts: string[] = [];
@@ -108,7 +109,7 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
       {/* Approval prompt */}
       {needsApproval && (
         <Box paddingLeft={2}>
-          <Text color="yellow">
+          <Text color={COLORS.warning}>
             Approval required: Press <Text bold>y</Text> to approve, <Text bold>n</Text> to deny
           </Text>
         </Box>
@@ -120,14 +121,14 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
       {/* Compact output or error */}
       {errorText && (
         <Box paddingLeft={2}>
-          <Text color="red" wrap="truncate-end">
+          <Text color={COLORS.danger} wrap="truncate-end">
             {errorText}
           </Text>
         </Box>
       )}
       {compactOutput && !errorText && (
         <Box paddingLeft={2}>
-          <Text color="gray" dimColor wrap="truncate-end">
+          <Text color={COLORS.muted} dimColor wrap="truncate-end">
             {compactOutput}
           </Text>
         </Box>

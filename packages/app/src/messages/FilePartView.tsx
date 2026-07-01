@@ -1,6 +1,8 @@
 import { Box, Text } from "ink";
 import { memo } from "react";
 
+import { COLORS } from "../theme/colors.js";
+
 import type { FileUIPart } from "ai";
 
 export interface FilePartViewProps {
@@ -29,10 +31,10 @@ export const FilePartView = memo(({ part, index }: FilePartViewProps) => {
 
   return (
     <Box gap={1}>
-      <Text color={isImage ? "magenta" : "cyan"}>{label}</Text>
+      <Text color={isImage ? COLORS.accent : COLORS.primary}>{label}</Text>
       {!isImage && <Text>{part.filename || "unnamed"}</Text>}
       {size && (
-        <Text color="gray" dimColor>
+        <Text color={COLORS.muted} dimColor>
           ({size})
         </Text>
       )}

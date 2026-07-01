@@ -12,6 +12,7 @@ import { useStatic } from "../hooks/use-static.js";
 import { Content } from "../layout/Content.js";
 import { Footer } from "../layout/Footer.js";
 import { Header } from "../layout/Header.js";
+import { COLORS } from "../theme/colors.js";
 
 import type { AppConfig } from "../adapter/types.js";
 
@@ -68,10 +69,10 @@ export const Agent = () => {
   if (initError) {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color="red" bold>
+        <Text color={COLORS.danger} bold>
           Initialization Error:
         </Text>
-        <Text color="red">{initError.message}</Text>
+        <Text color={COLORS.danger}>{initError.message}</Text>
       </Box>
     );
   }

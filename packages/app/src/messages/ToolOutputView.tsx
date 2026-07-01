@@ -1,6 +1,7 @@
 import { getToolName, type ToolUIPart } from "ai";
 import { Box, Text } from "ink";
 
+import { COLORS } from "../theme/colors.js";
 import { formatToolOutput } from "../utils/format";
 
 import { TodoToolOutputView } from "./TodoToolOutputView.js";
@@ -31,7 +32,7 @@ export const ToolOutputView = ({ part }: { part: ToolUIPart }) => {
   return (
     <Box flexDirection="column" paddingLeft={2}>
       {lines.map((line, i) => (
-        <Text key={i} color="gray" dimColor>
+        <Text key={i} color={COLORS.muted} dimColor>
           {line}
         </Text>
       ))}

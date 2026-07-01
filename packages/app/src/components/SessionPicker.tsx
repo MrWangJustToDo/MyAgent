@@ -1,6 +1,8 @@
 import { Box, Text, useInput } from "ink";
 import { useState } from "react";
 
+import { COLORS } from "../theme/colors.js";
+
 import type { SessionMeta } from "@my-agent/core";
 
 interface SessionPickerProps {
@@ -27,7 +29,7 @@ export const SessionPicker = ({ sessions, onSelect, onCancel }: SessionPickerPro
   if (sessions.length === 0) {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color="yellow">No sessions found. Starting a new session.</Text>
+        <Text color={COLORS.warning}>No sessions found. Starting a new session.</Text>
       </Box>
     );
   }
@@ -35,7 +37,7 @@ export const SessionPicker = ({ sessions, onSelect, onCancel }: SessionPickerPro
   return (
     <Box flexDirection="column" padding={1}>
       <Box marginBottom={1}>
-        <Text bold color="cyan">
+        <Text bold color={COLORS.primary}>
           Resume Session
         </Text>
         <Text dimColor> (↑↓ navigate, Enter select, Esc cancel)</Text>
@@ -46,7 +48,7 @@ export const SessionPicker = ({ sessions, onSelect, onCancel }: SessionPickerPro
         const date = new Date(session.updatedAt).toLocaleString();
         return (
           <Box key={session.id}>
-            <Text color={isSelected ? "cyan" : undefined} bold={isSelected}>
+            <Text color={isSelected ? COLORS.primary : undefined} bold={isSelected}>
               {isSelected ? "❯ " : "  "}
               {session.name}
             </Text>

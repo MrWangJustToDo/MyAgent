@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 
 import { Spinner } from "../components/Spinner";
+import { COLORS } from "../theme/colors.js";
 
 import type { ReasoningUIPart } from "ai";
 
@@ -12,9 +13,9 @@ export interface ThinkingPartViewProps {
 export const ThinkingPartView = ({ part }: ThinkingPartViewProps) => {
   return (
     <Box paddingLeft={2}>
-      {part.state === "streaming" ? <Spinner /> : <Text color="green">✓</Text>}
+      {part.state === "streaming" ? <Spinner /> : <Text color={COLORS.success}>✓</Text>}
       <Text> </Text>
-      <Text color="gray" dimColor italic>
+      <Text color={COLORS.muted} dimColor italic>
         Thinking...
       </Text>
     </Box>

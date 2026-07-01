@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useDynamic } from "../hooks/use-dynamic";
 import { useStatic } from "../hooks/use-static";
 import { MessageView, StaticContext } from "../messages";
+import { COLORS } from "../theme/colors.js";
 import { getMessages } from "../utils/get-messages";
 
 import { CursorFlush } from "./CursorFlush";
@@ -59,7 +60,7 @@ export const MessageList = ({ messages }: MessageListProps) => {
     ))
   ) : (
     <Box paddingX={1} marginTop={1}>
-      <Text color="gray" dimColor>
+      <Text color={COLORS.muted} dimColor>
         {staticMessages.length ? <CursorFlush /> : "No messages yet. Type a message to start."}
       </Text>
     </Box>

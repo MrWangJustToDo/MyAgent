@@ -1,25 +1,27 @@
 import chalk from "chalk";
 
+import { COLORS } from "../theme/colors.js";
+
 import type { ToolUIPart } from "ai";
 
 /** Get status color for tool invocation state. */
 export function getToolCallColor(state: ToolUIPart["state"] | string): string {
   switch (state) {
     case "input-streaming":
-      return "yellow";
+      return COLORS.warning;
     case "input-available":
-      return "cyan";
+      return COLORS.primary;
     case "output-available":
-      return "green";
+      return COLORS.success;
     case "output-error":
     case "output-denied":
-      return "red";
+      return COLORS.danger;
     case "approval-requested":
-      return "yellow";
+      return COLORS.warning;
     case "approval-responded":
-      return "cyan";
+      return COLORS.primary;
     default:
-      return "gray";
+      return COLORS.muted;
   }
 }
 

@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 
 import { useAgent } from "../hooks/use-agent";
 import { useAgentContext } from "../hooks/use-agent-context";
+import { COLORS } from "../theme/colors.js";
 
 import { AnimateNumber } from "./AnimateNumber";
 
@@ -27,12 +28,12 @@ export const LLMUsage = () => {
 
   return usage ? (
     <Box key={sessionId} gap={1}>
-      <Text color="gray" dimColor wrap="truncate">
-        Tokens: <AnimateNumber number={usage.inputTokens} /> in / <AnimateNumber number={usage.outputTokens} /> out
+      <Text color={COLORS.muted} dimColor wrap="truncate">
+        <AnimateNumber number={usage.inputTokens} /> in / <AnimateNumber number={usage.outputTokens} /> out
         {percent > 0 ? ` (${percent.toFixed(0)}%)` : ""}
       </Text>
       {cost > 0 && (
-        <Text color="yellow" dimColor wrap="truncate">
+        <Text color={COLORS.warning} dimColor wrap="truncate">
           {formatCost(cost)}
         </Text>
       )}

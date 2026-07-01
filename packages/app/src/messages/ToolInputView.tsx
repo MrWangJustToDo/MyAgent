@@ -3,6 +3,7 @@ import { Box } from "ink";
 
 import { EditDiff } from "../components/EditDiff";
 import { useSize } from "../hooks";
+import { BG } from "../theme/colors.js";
 
 import { EditFilePreview } from "./EditFilePreview";
 import { TaskToolInputView } from "./TaskToolInputView";
@@ -24,7 +25,7 @@ export const ToolInputView = ({ part }: { part: ToolUIPart }) => {
 
     const approved = part.approval?.approved;
 
-    const borderColor = typeof approved === "boolean" ? (approved ? "greenBright" : "redBright") : "#555555";
+    const borderColor = typeof approved === "boolean" ? (approved ? BG.borderSuccess : BG.borderDanger) : BG.border;
 
     return (
       <Box paddingLeft={2}>

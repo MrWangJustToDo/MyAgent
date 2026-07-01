@@ -1,5 +1,7 @@
 import { Box, Text } from "ink";
 
+import { COLORS } from "../theme/colors.js";
+
 import type { TodoItem, TodoPriority, TodoStatus } from "@my-agent/core";
 
 // ============================================================================
@@ -7,9 +9,9 @@ import type { TodoItem, TodoPriority, TodoStatus } from "@my-agent/core";
 // ============================================================================
 
 const STATUS_COLORS: Record<TodoStatus, string> = {
-  pending: "gray",
-  in_progress: "yellow",
-  completed: "green",
+  pending: COLORS.muted,
+  in_progress: COLORS.warning,
+  completed: COLORS.success,
 };
 
 const STATUS_ICONS: Record<TodoStatus, string> = {
@@ -51,7 +53,7 @@ const TodoRow = ({ item }: { item: TodoItem }) => {
       </Text>
       {priorityLabel && (
         <Box flexShrink={0}>
-          <Text color={item.priority === "high" ? "red" : "gray"} dimColor>
+          <Text color={item.priority === "high" ? COLORS.danger : COLORS.muted} dimColor>
             [{priorityLabel}]
           </Text>
         </Box>

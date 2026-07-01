@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { Text } from "ink";
 
 import { IMAGE_PLACEHOLDER_START, IMAGE_PLACEHOLDER_END } from "../hooks/use-user-input.js";
+import { COLORS } from "../theme/colors.js";
 
 export interface MultiLineInputProps {
   value: string;
@@ -90,7 +91,7 @@ export const MultiLineInput = ({
   }
 
   if (!value) {
-    return placeholder ? <Text color="gray">{placeholder}</Text> : null;
+    return placeholder ? <Text color={COLORS.muted}>{placeholder}</Text> : null;
   }
 
   const imageDisplayNumbers = buildImageDisplayNumbers(value);

@@ -4,6 +4,7 @@ import { memo } from "react";
 import { EditDiff } from "../components/EditDiff";
 // import { SplitNode } from "../components/SplitNode";
 import { usePreviewEdit, useSize } from "../hooks";
+import { BG } from "../theme/colors.js";
 
 /**
  * Renders the edit_file tool's input as a diff preview.
@@ -35,7 +36,7 @@ export const EditFilePreview = memo(function EditFilePreview({
   output?: { oldFile?: string; newFile?: string };
 }) {
   const width = useSize((s) => s.state.screenWidth) - 8;
-  const borderColor = typeof approved === "boolean" ? (approved ? "greenBright" : "redBright") : "#555555";
+  const borderColor = typeof approved === "boolean" ? (approved ? BG.borderSuccess : BG.borderDanger) : BG.border;
 
   // Authoritative source once the tool has run: prefer output over preview.
   const hasOutput = output && typeof output.oldFile === "string" && typeof output.newFile === "string";

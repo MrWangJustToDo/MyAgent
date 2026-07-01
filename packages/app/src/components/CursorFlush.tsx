@@ -9,6 +9,8 @@
 import { Text } from "ink";
 import { useState, useEffect } from "react";
 
+import { COLORS } from "../theme/colors.js";
+
 const CURSOR_CHARS = ["▌", " "] as const;
 const BLINK_INTERVAL = 530;
 
@@ -23,7 +25,7 @@ export const CursorFlush = () => {
   }, []);
 
   return (
-    <Text color="gray" dimColor>
+    <Text color={COLORS.muted} dimColor>
       {visible ? CURSOR_CHARS[0] : CURSOR_CHARS[1]}
     </Text>
   );

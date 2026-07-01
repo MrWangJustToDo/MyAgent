@@ -7,6 +7,7 @@ import { Help } from "../components/Help.js";
 import { SessionPicker } from "../components/SessionPicker.js";
 import { Spinner } from "../components/Spinner.js";
 import { useConfig } from "../hooks/use-config.js";
+import { COLORS } from "../theme/colors.js";
 
 import { Agent } from "./Agent.js";
 
@@ -52,7 +53,7 @@ export const App = () => {
     if (loadError) {
       return (
         <Box padding={1}>
-          <Text color="red">Error loading sessions: {loadError}</Text>
+          <Text color={COLORS.danger}>Error loading sessions: {loadError}</Text>
         </Box>
       );
     }

@@ -1,6 +1,8 @@
 import { Text } from "ink";
 import { useState, useEffect } from "react";
 
+import { COLORS } from "../theme/colors.js";
+
 const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 export interface SpinnerProps {
@@ -20,7 +22,7 @@ export const Spinner = ({ text }: SpinnerProps) => {
 
   return (
     <Text wrap="truncate-end">
-      <Text color="cyan">{frames[frame]}</Text>
+      <Text color={COLORS.primary}>{frames[frame]}</Text>
       {text && <Text> {text}</Text>}
     </Text>
   );

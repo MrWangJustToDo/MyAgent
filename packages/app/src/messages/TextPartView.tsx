@@ -2,6 +2,8 @@ import { Box, Text } from "ink";
 import { StreamMarkdown } from "ink-stream-markdown";
 
 import { useSize } from "../hooks";
+import { COLORS } from "../theme/colors.js";
+import { markdownTheme } from "../theme/markdown-theme.js";
 
 import type { TextUIPart } from "ai";
 
@@ -17,9 +19,9 @@ export const TextPartView = ({ part }: TextPartViewProps) => {
   return (
     <Box flexDirection="row">
       <Box flexShrink={0}>
-        <Text>{"✦ "}</Text>
+        <Text color={COLORS.accent}>{"✦ "}</Text>
       </Box>
-      <StreamMarkdown theme={{ width: width - 6 }}>{part.text.trimEnd()}</StreamMarkdown>
+      <StreamMarkdown theme={{ ...markdownTheme, width: width - 6 }}>{part.text.trimEnd()}</StreamMarkdown>
     </Box>
   );
 };

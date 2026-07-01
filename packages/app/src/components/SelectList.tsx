@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import { useMemo } from "react";
 
 import { useSelect } from "../hooks/use-select.js";
+import { COLORS } from "../theme/colors.js";
 
 import { calcScrollOffset, ScrollableList } from "./ScrollableList.js";
 
@@ -48,7 +49,7 @@ export const SelectList = () => {
     }
 
     return (
-      <Text color={isCursor ? "cyan" : "gray"} bold={isCursor}>
+      <Text color={isCursor ? COLORS.primary : COLORS.muted} bold={isCursor}>
         {cursor}
         {prefix}
         {label}
