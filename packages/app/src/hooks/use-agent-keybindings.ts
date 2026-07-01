@@ -5,6 +5,7 @@ import { toRaw } from "reactivity-store";
 import { dispatchCommand } from "../commands";
 
 import { useAgent } from "./use-agent.js";
+import { useSelect } from "./use-select.js";
 import { useUserInput } from "./use-user-input.js";
 
 import type { AgentAdapter } from "../adapter/types.js";
@@ -13,7 +14,6 @@ import type { UseAgentChatReturn } from "./use-agent-chat.js";
 import type { useAutocomplete } from "./use-autocomplete.js";
 import type { useCommandOutput } from "./use-command-output.js";
 import type { InputMode, useInputMode } from "./use-input-mode.js";
-import type { useSelect } from "./use-select.js";
 import type { AgentLog, Agent as CoreAgent } from "@my-agent/core";
 import type { MutableRefObject } from "react";
 
@@ -204,12 +204,14 @@ export function useAgentKeybindings({
         acceptAutocomplete(false);
         return;
       }
-      if (inputKey.upArrow && isAutocompleteVisible) {
-        autocompleteActions.selectPrev();
+      if (inputKey.upArrow) {
+        if (isAutocompleteVisible) autocompleteActions.selectPrev();
+        else if (commandOutputActions.hasScroll()) commandOutputActions.scrollPrev();
         return;
       }
-      if (inputKey.downArrow && isAutocompleteVisible) {
-        autocompleteActions.selectNext();
+      if (inputKey.downArrow) {
+        if (isAutocompleteVisible) autocompleteActions.selectNext();
+        else if (commandOutputActions.hasScroll()) commandOutputActions.scrollNext();
         return;
       }
       if (inputKey.return) {
@@ -241,12 +243,15 @@ export function useAgentKeybindings({
         inputActions.moveCursorRight();
         return;
       }
-      // Only allow `/` as the first character (to start a command); block arbitrary text
+      // In approval mode, only `/` is accepted as the first character to enter
+      // command-selection mode. After that, navigation is via arrow keys / Tab
+      // (handled above), so all further character input is blocked.
       if (inputChar && !inputKey.ctrl && !inputKey.meta) {
-        if (!currentValue && inputChar !== "/") return;
-        if (currentValue && !currentValue.startsWith("/")) return;
-        inputActions.append(inputChar);
-        autocompleteActions.update(useUserInput.getReadonlyState().value);
+        if (!currentValue && inputChar === "/") {
+          commandOutputActions.dismiss();
+          inputActions.append(inputChar);
+          autocompleteActions.update(useUserInput.getReadonlyState().value);
+        }
       }
     },
     { isActive: mode === "approval" }
@@ -266,18 +271,31 @@ export function useAgentKeybindings({
         selectActions.toggle();
         return;
       }
+      // Enter ALWAYS submits — it never enters the answer-editing mode. Entering
+      // edit mode is done exclusively via the right arrow (see below), so the two
+      // actions never conflict.
       if (inputKey.return) {
         if (!pendingAskUser) return;
-        if (selectActions.isFreeformSelected()) {
-          selectActions.close();
-          inputActions.clear();
-          inputActions.setLoading(false);
-          modeActions.setDenyMode(true, "ask_user");
-        } else {
-          const result = selectActions.getResult();
-          selectActions.close();
-          submitAskUserAnswer(result);
+        if (selectActions.isFreeformSelected() && !selectActions.getFreeformDraft()) {
+          // Cursor on "Your answer" but the user hasn't typed anything yet.
+          inputActions.setInputError('Please type your answer first (press → to edit "Your answer")');
+          return;
         }
+        const result = selectActions.getResult();
+        selectActions.close();
+        submitAskUserAnswer(result);
+        return;
+      }
+      // Right arrow: enter the answer-editing mode when the cursor is on the
+      // freeform "Your answer" row. We keep the select list open (preserving the
+      // multi-select toggles) and switch to freeform input mode with the existing
+      // draft pre-filled.
+      if (inputKey.rightArrow && selectActions.isFreeformSelected()) {
+        inputActions.clear();
+        const draft = selectActions.getFreeformDraft();
+        if (draft) inputActions.setValue(draft);
+        inputActions.setLoading(false);
+        modeActions.setDenyMode(true, "ask_user");
         return;
       }
       if (inputKey.escape) {
@@ -295,7 +313,11 @@ export function useAgentKeybindings({
         if (denyingRef.current) {
           denyingRef.current = null;
         }
-        if (pendingAskUser) {
+        // ask_user freeform is entered from the select list (via →), which is
+        // still open. Esc returns to the list WITHOUT re-opening it (re-opening
+        // would wipe the user's toggles / draft). Only re-open if the list was
+        // somehow closed (no-options freeform entry path).
+        if (pendingAskUser && !useSelect.getReadonlyState().visible) {
           const opts = (pendingAskUser.options ?? []).map((option) => ({ label: option, value: option }));
           opts.push({ label: "Your answer...", value: "__freeform__" });
           selectActions.open(opts, pendingAskUser.multiSelect ?? false, true);
@@ -304,10 +326,24 @@ export function useAgentKeybindings({
       }
 
       if (inputKey.return) {
-        const { text } = inputActions.submit();
+        // freeform inputs (deny reasons, ask_user answers) are transient —
+        // do not pollute normal input history
+        const { text } = inputActions.submit(false);
 
         if (pendingAskUser) {
           if (!text) return;
+          // ask_user answer editing: Enter STAGES the typed text back into the
+          // select list (shown as the freeform row's label) instead of submitting
+          // immediately. This keeps Enter meaning "submit" in the select list and
+          // "commit draft" in edit mode — the two never collide. Submission still
+          // happens via Enter on the select list.
+          if (useSelect.getReadonlyState().visible) {
+            selectActions.setFreeformDraft(text);
+            inputActions.clear();
+            modeActions.setDenyMode(false);
+            return;
+          }
+          // No live select list (pure freeform ask_user, no options): submit directly.
           selectActions.close();
           modeActions.setDenyMode(false);
           submitAskUserAnswer(text);

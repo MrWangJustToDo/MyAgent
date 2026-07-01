@@ -318,9 +318,14 @@ export const createEditFileTool = () => {
 
         await getEnv().fs.writeFile(path, content);
 
-        // Reuse the in-memory `content` to compute the new modification
-        // identifier instead of re-reading the file from disk.
-        const newModifiedTime = await getFileModifiedTime(path, content);
+        // Re-read the file from disk to compute the modification identifier.
+        // This guarantees the returned modifiedTime matches what read_file_tool
+        // would produce (both hash the on-disk content via getFile/getFileModifiedTime).
+        // Using the in-memory `content` instead would risk a mismatch if the
+        // CoreEnv writeFile/readFile pair isn't perfectly symmetric (e.g. remote
+        // mode, encoding edge cases), which would trigger false conflict
+        // detection on the next edit.
+        const newModifiedTime = await getFileModifiedTime(path);
 
         const totalReplacements = results.reduce((sum, r) => sum + r.count, 0);
 

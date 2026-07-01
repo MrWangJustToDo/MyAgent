@@ -17,7 +17,8 @@ Constraints:
 - You cannot modify files or create new files
 - You cannot spawn additional subagents
 - Focus on answering the specific question or completing the specific task
-- Do not run more than ${maxIterations} steps — complete the task efficiently without excessive tool calls
+- Work efficiently — stop exploring as soon as you have enough information to answer
+- You may use up to ${maxIterations} steps as a safety cap, but you should finish as soon as the task is done
 
 IMPORTANT: Only your final text response is returned to the parent agent as the task result.
 You MUST end with a comprehensive text summary — never end on a tool call.

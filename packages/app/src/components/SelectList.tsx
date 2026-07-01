@@ -10,13 +10,17 @@ import type { SelectOption } from "../hooks/use-select.js";
 const MAX_VISIBLE = 10;
 
 export const SelectList = () => {
-  const { visible, options, selectedIndex, selectedSet, multiSelect } = useSelect((s) => ({
-    visible: s.visible,
-    options: s.options,
-    selectedIndex: s.selectedIndex,
-    selectedSet: s.selectedSet,
-    multiSelect: s.multiSelect,
-  }));
+  const { visible, options, selectedIndex, selectedSet, multiSelect, freeformEnabled, freeformDraft } = useSelect(
+    (s) => ({
+      visible: s.visible,
+      options: s.options,
+      selectedIndex: s.selectedIndex,
+      selectedSet: s.selectedSet,
+      multiSelect: s.multiSelect,
+      freeformEnabled: s.freeformEnabled,
+      freeformDraft: s.freeformDraft,
+    })
+  );
 
   const scrollOffset = useMemo(() => {
     return calcScrollOffset(selectedIndex, options.length, MAX_VISIBLE);
@@ -24,10 +28,17 @@ export const SelectList = () => {
 
   if (!visible || options.length === 0) return null;
 
+  const freeformIdx = freeformEnabled ? options.length - 1 : -1;
+
   const renderItem = (opt: SelectOption, index: number) => {
     const isCursor = index === selectedIndex;
     const isChecked = selectedSet.includes(index);
     const cursor = isCursor ? ">" : " ";
+
+    // For the free-form row, show the staged draft text instead of the placeholder
+    // label once the user has typed something.
+    const isFreeformRow = index === freeformIdx;
+    const label = isFreeformRow && freeformDraft ? freeformDraft : opt.label;
 
     let prefix = "";
     if (multiSelect) {
@@ -40,7 +51,7 @@ export const SelectList = () => {
       <Text color={isCursor ? "cyan" : "gray"} bold={isCursor}>
         {cursor}
         {prefix}
-        {opt.label}
+        {label}
       </Text>
     );
   };

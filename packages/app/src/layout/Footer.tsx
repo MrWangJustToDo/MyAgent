@@ -56,7 +56,13 @@ export const Footer = () => {
     freeformContext: s.freeformContext,
   }));
 
-  const isMultiSelect = useSelect((s) => s.multiSelect);
+  const { isMultiSelect, cursorOnFreeform } = useSelect((s) => {
+    const freeformIdx = s.freeformEnabled ? s.options.length - 1 : -1;
+    return {
+      isMultiSelect: s.multiSelect,
+      cursorOnFreeform: freeformIdx !== -1 && s.selectedIndex === freeformIdx,
+    };
+  });
 
   const isPendingApproval = mode === "approval";
   const showFreeformInput = denyMode;
@@ -92,6 +98,7 @@ export const Footer = () => {
         showFreeformInput={showFreeformInput}
         showSelectList={showSelectList}
         isMultiSelect={isMultiSelect}
+        cursorOnFreeform={cursorOnFreeform}
       />
 
       {/* Input */}
@@ -148,6 +155,7 @@ const ContextBar = ({
   showFreeformInput,
   showSelectList,
   isMultiSelect,
+  cursorOnFreeform,
 }: {
   status: AgentStatus;
   hasPendingAskUser: boolean;
@@ -155,6 +163,7 @@ const ContextBar = ({
   showFreeformInput: boolean;
   showSelectList: boolean;
   isMultiSelect: boolean;
+  cursorOnFreeform: boolean;
 }) => {
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
@@ -215,7 +224,13 @@ const ContextBar = ({
         )}
         {showSelectList && (
           <Text color="cyan" dimColor>
-            {isMultiSelect ? "Up/Down | Space: toggle | Enter: submit" : "Up/Down | Enter: select"}
+            {isMultiSelect
+              ? cursorOnFreeform
+                ? "Up/Down | Space: toggle | →: edit answer | Enter: submit"
+                : "Up/Down | Space: toggle | Enter: submit"
+              : cursorOnFreeform
+                ? "Up/Down | →: edit answer | Enter: submit"
+                : "Up/Down | Enter: select"}
           </Text>
         )}
       </Box>

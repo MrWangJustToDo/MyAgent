@@ -217,12 +217,18 @@ export const useUserInput = createState(() => ({ ...initialState }), {
     },
 
     /**
-     * Submit current input and add to history
+     * Submit current input and optionally add to history
      * Returns the submitted text (with placeholders removed) and any attachments in order
+     *
+     * @param addToHistory - whether to append the submitted text to input history
+     *   (default: true). Set to false for transient inputs like deny reasons or
+     *   ask_user freeform answers that should not pollute normal input history.
      */
-    submit: (): { text: string; attachments: Attachment[] } => {
+    submit: (addToHistory = true): { text: string; attachments: Attachment[] } => {
       const { text, attachments } = extractSubmittedInput(state.value, state.attachments);
-      state.history = appendHistoryEntry(state.history, text);
+      if (addToHistory) {
+        state.history = appendHistoryEntry(state.history, text);
+      }
 
       state.value = "";
       state.cursorPosition = 0;

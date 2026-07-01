@@ -18,6 +18,8 @@ export interface SelectState {
   multiSelect: boolean;
   /** Whether the last option is a free-form "Your answer" entry */
   freeformEnabled: boolean;
+  /** Draft text the user typed for the free-form option (preserved across edits). */
+  freeformDraft: string;
 }
 
 // ============================================================================
@@ -31,6 +33,7 @@ const initialState: SelectState = {
   selectedSet: [],
   multiSelect: false,
   freeformEnabled: false,
+  freeformDraft: "",
 };
 
 export const useSelect = createState(() => ({ ...initialState }), {
@@ -42,6 +45,7 @@ export const useSelect = createState(() => ({ ...initialState }), {
       state.selectedSet = [];
       state.multiSelect = multiSelect;
       state.freeformEnabled = freeformEnabled;
+      state.freeformDraft = "";
     },
 
     close: () => {
@@ -51,6 +55,7 @@ export const useSelect = createState(() => ({ ...initialState }), {
       state.selectedSet = [];
       state.multiSelect = false;
       state.freeformEnabled = false;
+      state.freeformDraft = "";
     },
 
     selectNext: () => {
@@ -67,8 +72,10 @@ export const useSelect = createState(() => ({ ...initialState }), {
     toggle: () => {
       if (!state.multiSelect) return;
       const idx = state.selectedIndex;
-      // Don't toggle the freeform option
-      if (state.freeformEnabled && idx === state.options.length - 1) return;
+      // Allow toggling the freeform option only when it has a draft value
+      if (state.freeformEnabled && idx === state.options.length - 1) {
+        if (!state.freeformDraft) return;
+      }
       const pos = state.selectedSet.indexOf(idx);
       if (pos === -1) {
         state.selectedSet = [...state.selectedSet, idx];
@@ -76,6 +83,19 @@ export const useSelect = createState(() => ({ ...initialState }), {
         state.selectedSet = state.selectedSet.filter((i) => i !== idx);
       }
     },
+
+    /** Store / clear the free-form draft text (preserved across edits). */
+    setFreeformDraft: (text: string) => {
+      state.freeformDraft = text;
+      // In multi-select, if draft becomes empty, drop the freeform option from the
+      // selected set so it doesn't contribute an empty value on submit.
+      if (!text && state.freeformEnabled && state.multiSelect) {
+        const freeformIdx = state.options.length - 1;
+        state.selectedSet = state.selectedSet.filter((i) => i !== freeformIdx);
+      }
+    },
+
+    getFreeformDraft: (): string => state.freeformDraft,
 
     /** Check if cursor is on the freeform "Your answer" option */
     isFreeformSelected: (): boolean => {
@@ -85,12 +105,21 @@ export const useSelect = createState(() => ({ ...initialState }), {
     /** Get the result as a string (single or multi-select) */
     getResult: (): string => {
       if (state.multiSelect) {
+        // If the user typed a free-form draft, always include it (regardless of
+        // whether they toggled the row — having typed it implies intent).
+        const draft = state.freeformEnabled ? state.freeformDraft : "";
         const indices = state.selectedSet.length > 0 ? state.selectedSet : [state.selectedIndex];
-        return indices
+        const labels = indices
           .sort((a, b) => a - b)
+          .filter((i) => !(state.freeformEnabled && i === state.options.length - 1))
           .map((i) => state.options[i]?.label ?? "")
-          .filter(Boolean)
-          .join(", ");
+          .filter(Boolean);
+        if (draft) labels.push(draft);
+        return labels.join(", ");
+      }
+      // Single-select: if the cursor is on the freeform option, use the draft.
+      if (state.freeformEnabled && state.selectedIndex === state.options.length - 1) {
+        return state.freeformDraft;
       }
       return state.options[state.selectedIndex]?.value ?? "";
     },

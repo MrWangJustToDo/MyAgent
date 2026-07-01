@@ -8,8 +8,15 @@ import type { ModelMessage, ToolSet } from "ai";
 // Constants
 // ============================================================================
 
-/** Default maximum iterations for subagent loop */
-export const SUBAGENT_DEFAULT_MAX_ITERATIONS = 30;
+/**
+ * Default maximum iterations for subagent loop.
+ *
+ * Acts as a safety cap only — the loop also stops as soon as the model
+ * produces a final text answer (see `isNaturalEnd`). Set generously so
+ * complex exploration tasks aren't truncated, while still bounding runaway
+ * loops.
+ */
+export const SUBAGENT_DEFAULT_MAX_ITERATIONS = 50;
 
 /** Default maximum characters for output (truncation limit) */
 export const SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH = 5000;
