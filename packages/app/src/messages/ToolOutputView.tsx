@@ -29,10 +29,17 @@ export const ToolOutputView = ({ part }: { part: ToolUIPart }) => {
   const output = formatToolOutput(part.output, toolName);
   const lines = output.split("\n");
 
+  // run_command reports failure via `success: false` while keeping state
+  // `output-available` (not `output-error`). Highlight those lines in danger
+  // so a failed command stays visually distinct instead of blending into
+  // the muted gray used for successful output.
+  const failed = toolName === "run_command" && (part.output as { success?: boolean } | undefined)?.success === false;
+  const lineColor = failed ? COLORS.danger : COLORS.muted;
+
   return (
     <Box flexDirection="column" paddingLeft={2}>
       {lines.map((line, i) => (
-        <Text key={i} color={COLORS.muted} dimColor>
+        <Text key={i} color={lineColor} dimColor={!failed}>
           {line}
         </Text>
       ))}

@@ -77,7 +77,10 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
   // show a misleading success summary alongside the error text.
   const inlineSummary = errorText ? null : getInlineSummary(part, toolName);
   const compactOutput = hasOutput ? getCompactOutput(part, toolName) : null;
-  const stateColor = errorText ? COLORS.danger : getToolCallColor(part.state);
+  // run_command keeps state `output-available` even when `success: false`.
+  // Route those to the danger color so the header matches the failed output.
+  const outputFailed = (part.output as { success?: boolean } | undefined)?.success === false;
+  const stateColor = errorText || outputFailed ? COLORS.danger : getToolCallColor(part.state);
 
   // Build parenthetical: "(summary, duration)"
   const parenParts: string[] = [];
@@ -128,7 +131,11 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
       )}
       {compactOutput && !errorText && (
         <Box paddingLeft={2}>
-          <Text color={COLORS.muted} dimColor wrap="truncate-end">
+          <Text
+            color={(part.output as { success?: boolean } | undefined)?.success === false ? COLORS.danger : COLORS.muted}
+            dimColor={(part.output as { success?: boolean } | undefined)?.success !== false}
+            wrap="truncate-end"
+          >
             {compactOutput}
           </Text>
         </Box>

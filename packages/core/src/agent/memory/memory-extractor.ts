@@ -21,10 +21,10 @@
 
 import { runSubagent } from "../subagent/runner.js";
 
-import { MEMORY_TYPES } from "./types.js";
+import { DEFAULT_HARD_MAX_MEMORIES, MEMORY_TYPES } from "./types.js";
 
 import type { MemoryManager } from "./memory-manager.js";
-import type { MemoryType } from "./types.js";
+import type { Memory, MemoryType } from "./types.js";
 import type { ModelMessage } from "ai";
 
 // ============================================================================
@@ -50,16 +50,33 @@ Rules:
 - Return a JSON array, or [] if nothing new to extract`;
 
 const CONSOLIDATION_SYSTEM_PROMPT = `You are a memory consolidation assistant. Your role is to merge, \
-deduplicate, and clean up a collection of memory files.
+deduplicate, and clean up a collection of memory entries.
+
+You will receive a lightweight catalog of all memories (filename, name, type, description — NO body).
+Your job is to decide which memories to merge, delete, or keep.
 
 Rules:
-1. Merge duplicates into a single, comprehensive memory
-2. Remove outdated or contradicted memories (keep the newer version)
-3. Keep total under 30 memories
-4. Preserve user preferences above all else
-5. Keep descriptions concise (one line)
-6. Use kebab-case for names
-7. Return a JSON array with the consolidated memories`;
+1. Merge memories that cover the same topic into a single entry. Provide the merged description and body.
+2. Delete memories that are outdated, contradicted, or no longer useful.
+3. Keep the total as small as possible — aim for under 30.
+4. Preserve user preferences and feedback above all else.
+5. Keep descriptions concise (one line).
+6. Use kebab-case for names.
+
+Return a JSON object:
+{
+  "merged": [
+    { "name": "...", "type": "user|feedback|project|reference", "description": "...", "body": "...",
+      "replaces": ["filename1.md", "filename2.md"] }
+  ],
+  "deleted": ["filename3.md", "filename4.md"]
+}
+
+- "merged": new memories that replace 2+ source files listed in "replaces".
+  Write the full merged body yourself based on the descriptions.
+- "deleted": files to remove outright (outdated/contradicted).
+- Files not mentioned in either list are kept as-is.
+- If no changes needed, return { "merged": [], "deleted": [] }.`;
 
 /** Number of recent messages to analyze for extraction */
 const EXTRACTION_WINDOW = 10;
@@ -67,8 +84,8 @@ const EXTRACTION_WINDOW = 10;
 /** Maximum characters of dialogue to send for extraction */
 const MAX_EXTRACTION_CHARS = 4000;
 
-/** Maximum characters of catalog to send for consolidation */
-const MAX_CONSOLIDATION_CHARS = 16000;
+/** Maximum characters of the lightweight catalog (frontmatter only) sent for consolidation */
+const MAX_CONSOLIDATION_CATALOG_CHARS = 20000;
 
 // ============================================================================
 // Conversation Serialization
@@ -212,11 +229,14 @@ export interface ConsolidationResult {
 /**
  * Consolidate memories when the count exceeds the threshold.
  *
- * Uses a subagent to merge duplicates, remove outdated entries,
- * and keep the total under a reasonable limit.
- *
- * Consolidation is pseudo-atomic: new files are written first, then old files
- * are removed. If writing fails mid-way, existing memories remain intact.
+ * Two-phase approach:
+ * 1. LLM consolidation — send a lightweight catalog (frontmatter only, no
+ *    bodies) so the LLM can see ALL memories without hitting token limits.
+ *    The LLM returns merge/delete decisions. For merges, it writes the merged
+ *    body from the descriptions.
+ * 2. Hard-cap eviction — if the count still exceeds {@link DEFAULT_HARD_MAX_MEMORIES}
+ *    after LLM consolidation, evict the oldest memories (by updatedAt) until
+ *    under the cap.
  *
  * @param memoryManager - MemoryManager instance
  * @param parentAgentId - Parent agent ID for spawning subagent
@@ -231,19 +251,40 @@ export async function consolidateMemories(
     return { changed: false, count: memories.length };
   }
 
-  const catalog = memories
-    .map((m) => `## ${m.filename}\nname: ${m.name}\ntype: ${m.type}\ndescription: ${m.description}\n${m.body}`)
-    .join("\n\n");
+  // Phase 1: LLM consolidation via lightweight catalog (frontmatter only).
+  // This avoids the token-truncation problem where sending full bodies would
+  // exceed the context and cause the LLM to only see a subset of memories.
+  const llmChanged = await llmConsolidate(memories, memoryManager, parentAgentId);
+
+  // Phase 2: Hard-cap eviction. If LLM consolidation didn't reduce enough,
+  // evict oldest memories by updatedAt to stay under the hard limit.
+  const postLlmMemories = llmChanged ? await memoryManager.listMemories() : memories;
+  const evicted = await evictOldest(postLlmMemories, memoryManager);
+
+  const changed = llmChanged || evicted > 0;
+  const finalCount = postLlmMemories.length - evicted;
+  return { changed, count: changed ? finalCount : memories.length };
+}
+
+/**
+ * Phase 1: LLM-driven consolidation using a lightweight frontmatter-only catalog.
+ *
+ * Returns true if any files were written or deleted.
+ */
+async function llmConsolidate(
+  memories: Memory[],
+  memoryManager: MemoryManager,
+  parentAgentId: string
+): Promise<boolean> {
+  // Build a lightweight catalog: filename + name + type + description (no body).
+  // 59 memories × ~80 chars each ≈ 5KB — well within token limits.
+  const catalog = memories.map((m) => `- ${m.filename} | ${m.type} | ${m.name} | ${m.description}`).join("\n");
 
   const prompt = [
-    "Consolidate the following memory files. Rules:",
-    "1. Merge duplicates into one",
-    "2. Remove outdated/contradicted memories",
-    "3. Keep the total under 30 memories",
-    "4. Preserve important user preferences above all",
-    `Return a JSON array. Each item: {name, type, description, body}.`,
+    "Below is a catalog of all memory files (filename | type | name | description).",
+    "Decide which to merge, delete, or keep.",
     "",
-    catalog.slice(0, MAX_CONSOLIDATION_CHARS),
+    catalog.slice(0, MAX_CONSOLIDATION_CATALOG_CHARS),
   ].join("\n");
 
   const result = await runSubagent({
@@ -252,57 +293,125 @@ export async function consolidateMemories(
     systemPrompt: CONSOLIDATION_SYSTEM_PROMPT,
     tools: {},
     maxIterations: 1,
-    maxOutputLength: 5000,
+    maxOutputLength: 8000,
     retryOnEmpty: false,
     autoDestroy: true,
     aggregateUsageToParent: true,
     description: "memory-consolidate",
   });
 
-  const items = parseJsonArray(result.output);
-  if (!items || items.length === 0) {
-    return { changed: false, count: memories.length };
+  const decisions = parseConsolidationResponse(result.output);
+  if (!decisions) return false;
+
+  let changed = false;
+  const allReplaced = new Set<string>();
+  const allDeleted = new Set<string>();
+
+  // Write merged memories
+  for (const merge of decisions.merged) {
+    if (!merge.name || !merge.description || !merge.body) continue;
+    await memoryManager.writeMemory(merge.name, merge.type, merge.description, merge.body);
+    for (const f of merge.replaces) {
+      allReplaced.add(f);
+    }
+    changed = true;
   }
 
-  const validated = items
-    .map((item) => {
-      const mem = item as Partial<ExtractedMemory>;
-      return {
-        name: typeof mem.name === "string" ? mem.name.trim() : "",
-        type: isValidMemoryType(mem.type) ? mem.type : "user",
-        description: typeof mem.description === "string" ? mem.description.trim() : "",
-        body: typeof mem.body === "string" ? mem.body.trim() : "",
-      };
-    })
-    .filter((v) => v.name && v.description && v.body);
-
-  if (validated.length === 0) {
-    return { changed: false, count: memories.length };
+  // Collect deletions
+  for (const f of decisions.deleted) {
+    allDeleted.add(f);
   }
 
-  // Write new consolidated memories first (safe: new slug names won't collide with old ones in most cases)
-  const writtenFilenames: string[] = [];
-  for (const { name, type, description, body } of validated) {
-    const filename = await memoryManager.writeMemory(name, type, description, body);
-    writtenFilenames.push(filename);
+  // Delete replaced and explicitly-deleted files
+  for (const filename of [...allReplaced, ...allDeleted]) {
+    const exists = memories.some((m) => m.filename === filename);
+    if (exists) {
+      await memoryManager.deleteMemory(filename);
+      changed = true;
+    }
   }
 
-  // Remove old files that are NOT in the newly written set
-  const writtenSet = new Set(writtenFilenames);
-  const oldFilenames = memories.map((m) => m.filename).filter((f) => !writtenSet.has(f));
-  for (const filename of oldFilenames) {
-    await memoryManager.deleteMemory(filename);
-  }
+  return changed;
+}
 
-  return { changed: true, count: validated.length };
+/**
+ * Phase 2: Evict oldest memories (by updatedAt) until under the hard cap.
+ *
+ * Returns the number of evicted files.
+ */
+async function evictOldest(memories: Memory[], memoryManager: MemoryManager): Promise<number> {
+  if (memories.length <= DEFAULT_HARD_MAX_MEMORIES) return 0;
+
+  // Sort by updatedAt (oldest first). Fall back to createdAt, then filename.
+  const sorted = [...memories].sort((a, b) => {
+    const ta = a.updatedAt ?? a.createdAt ?? "";
+    const tb = b.updatedAt ?? b.createdAt ?? "";
+    return ta.localeCompare(tb);
+  });
+
+  const toEvict = sorted.slice(0, sorted.length - DEFAULT_HARD_MAX_MEMORIES);
+  for (const m of toEvict) {
+    await memoryManager.deleteMemory(m.filename);
+  }
+  return toEvict.length;
 }
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
+interface ConsolidationDecisions {
+  merged: Array<{
+    name: string;
+    type: MemoryType;
+    description: string;
+    body: string;
+    replaces: string[];
+  }>;
+  deleted: string[];
+}
+
+/**
+ * Parse the LLM's consolidation response.
+ *
+ * Expected format: { "merged": [...], "deleted": ["f.md", ...] }
+ */
+function parseConsolidationResponse(text: string): ConsolidationDecisions | null {
+  if (!text.trim()) return null;
+
+  const match = /\{[\s\S]*\}/.exec(text);
+  if (!match) return null;
+
+  try {
+    const parsed = JSON.parse(match[0]) as Partial<ConsolidationDecisions>;
+    const merged = Array.isArray(parsed.merged) ? parsed.merged : [];
+    const deleted = Array.isArray(parsed.deleted) ? parsed.deleted : [];
+
+    return {
+      merged: merged
+        .filter((m): m is NonNullable<typeof m> => m != null)
+        .map((m) => ({
+          name: typeof m.name === "string" ? m.name.trim() : "",
+          type: isValidMemoryType(m.type) ? m.type : "user",
+          description: typeof m.description === "string" ? m.description.trim() : "",
+          body: typeof m.body === "string" ? m.body.trim() : "",
+          replaces: Array.isArray(m.replaces) ? m.replaces.filter((f): f is string => typeof f === "string") : [],
+        }))
+        .filter((m) => m.name && m.description && m.body),
+      deleted: deleted.filter((f): f is string => typeof f === "string"),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isValidMemoryType(value: unknown): value is MemoryType {
+  return typeof value === "string" && (MEMORY_TYPES as readonly string[]).includes(value);
+}
+
 /**
  * Parse a JSON array from LLM output. Handles markdown code fences.
+ * Used by extractMemories (not consolidation, which uses parseConsolidationResponse).
  */
 function parseJsonArray(text: string): unknown[] | null {
   if (!text.trim()) return null;
@@ -317,8 +426,4 @@ function parseJsonArray(text: string): unknown[] | null {
   } catch {
     return null;
   }
-}
-
-function isValidMemoryType(value: unknown): value is MemoryType {
-  return typeof value === "string" && (MEMORY_TYPES as readonly string[]).includes(value);
 }

@@ -19,6 +19,11 @@ export const MEMORY_INDEX_FILENAME = "MEMORY.md";
 
 export const DEFAULT_CONSOLIDATE_THRESHOLD = 15;
 
+/** Hard cap on memory count. If consolidation leaves more than this, oldest
+ * memories (by updatedAt) are evicted. Prevents unbounded growth when the LLM
+ * doesn't merge aggressively enough. */
+export const DEFAULT_HARD_MAX_MEMORIES = 50;
+
 export const DEFAULT_MAX_INDEX_LINES = 200;
 
 export const DEFAULT_MAX_INDEX_BYTES = 25 * 1024; // 25 KB
