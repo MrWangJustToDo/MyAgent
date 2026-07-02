@@ -20,7 +20,7 @@
  * ```
  */
 
-import { generateText } from "ai";
+import { streamText } from "ai";
 
 import { getEnv } from "../../env.js";
 import { extractTokenUsage } from "../agent-context/types.js";
@@ -133,6 +133,11 @@ function truncateBody(
 
 /**
  * Use a lightweight LLM call to select relevant memories from the manifest.
+ *
+ * Uses `streamText` instead of `generateText` because some OpenAI-compatible
+ * endpoints always return SSE streaming responses regardless of the `stream`
+ * flag. `generateText` expects a single JSON body and throws "Invalid JSON
+ * response" on such endpoints; `streamText` correctly parses the SSE stream.
  */
 async function selectWithLLM(
   query: string,
@@ -141,20 +146,24 @@ async function selectWithLLM(
   context?: AgentContext | null,
   logger?: AgentLog
 ): Promise<string[]> {
-  const result = await generateText({
+  const stream = streamText({
     model,
     instructions: SELECT_MEMORIES_SYSTEM_PROMPT,
     prompt: `Query: ${query}\n\nAvailable memories:\n${manifest}`,
     maxOutputTokens: 256,
   });
 
-  if (context && result.usage) {
-    context.addTotalUsage(extractTokenUsage(result.usage));
+  // Await the full text — this drives stream consumption internally.
+  const text = await stream.text;
+  const usage = await stream.usage;
+
+  if (context && usage) {
+    context.addTotalUsage(extractTokenUsage(usage));
   }
 
-  const match = /\{[\s\S]*?\}/.exec(result.text);
+  const match = /\{[\s\S]*?\}/.exec(text);
   if (!match) {
-    logger?.warn("memory", "LLM selection returned no JSON object in response", { raw: result.text });
+    logger?.warn("memory", "LLM selection returned no JSON object in response", { raw: text });
     return [];
   }
 

@@ -7,7 +7,7 @@
  * Part of the mixin chain: MemoryHandler <- SessionHandler <- Base.
  */
 
-import { generateText } from "ai";
+import { streamText } from "ai";
 
 import { extractTokenUsage } from "../agent-context/types.js";
 
@@ -54,11 +54,15 @@ export class SessionHandler extends MemoryHandler {
     this.sessionData = session;
   }
 
-  /** Generate a concise session title from the first user message using LLM. */
+  /** Generate a concise session title from the first user message using LLM.
+   *
+   * Uses `streamText` instead of `generateText` because some OpenAI-compatible
+   * endpoints always return SSE streaming responses regardless of the `stream`
+   * flag. See `selectWithLLM` in memory-retrieval.ts for the same pattern. */
   private async generateSessionTitle(userMessage: string): Promise<string> {
     if (!this.model) return userMessage.slice(0, 50);
     try {
-      const result = await generateText({
+      const stream = streamText({
         model: this.model,
         maxOutputTokens: 30,
         instructions:
@@ -66,11 +70,14 @@ export class SessionHandler extends MemoryHandler {
         prompt: userMessage.slice(0, 500),
       });
 
-      if (this.context && result.usage) {
-        this.context.addTotalUsage(extractTokenUsage(result.usage));
+      const text = await stream.text;
+      const usage = await stream.usage;
+
+      if (this.context && usage) {
+        this.context.addTotalUsage(extractTokenUsage(usage));
       }
 
-      return result.text.trim().slice(0, 80) || userMessage.slice(0, 50);
+      return text.trim().slice(0, 80) || userMessage.slice(0, 50);
     } catch {
       return userMessage.slice(0, 50);
     }
