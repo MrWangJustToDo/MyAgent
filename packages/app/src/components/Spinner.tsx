@@ -1,29 +1,34 @@
 import { Text } from "ink";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 
-import { COLORS } from "../theme/colors.js";
-
-const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+import { useGlobalSpinner, frames } from "../hooks/use-global-spinner.js";
+import { mapCharsToGradient, GRADIENT_STOPS } from "../utils/gradient.js";
 
 export interface SpinnerProps {
   text?: string;
 }
 
 export const Spinner = ({ text }: SpinnerProps) => {
-  const [frame, setFrame] = useState(0);
+  const frame = useGlobalSpinner((s) => s.frame);
+  const phase = useGlobalSpinner((s) => s.phase);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setFrame((prev) => (prev + 1) % frames.length);
-    }, 100);
-
-    return () => clearInterval(timer);
+    useGlobalSpinner.getActions().init();
+    return () => {
+      useGlobalSpinner.getActions().dispose();
+    };
   }, []);
+
+  const displayText = text ? `${frames[frame]} ${text}` : frames[frame];
+  const chars = mapCharsToGradient(displayText, GRADIENT_STOPS, 1 - phase);
 
   return (
     <Text wrap="truncate-end">
-      <Text color={COLORS.primary}>{frames[frame]}</Text>
-      {text && <Text> {text}</Text>}
+      {chars.map((c, i) => (
+        <Text key={i} color={c.color}>
+          {c.ch}
+        </Text>
+      ))}
     </Text>
   );
 };
