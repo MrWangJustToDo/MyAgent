@@ -137,9 +137,16 @@ export const MultiLineInput = ({
           );
         }
 
+        // Empty lines (e.g. blank lines between consecutive newlines) would
+        // collapse to zero height in ink's yoga layout and disappear. Render a
+        // single space so the line still occupies a row. Use a regular space
+        // (not \u00A0) so word-wrap measurement stays consistent with non-empty
+        // lines.
+        const content = styledContent || " ";
+
         return (
           <Text key={lineIndex} wrap="wrap">
-            {styledContent}
+            {content}
           </Text>
         );
       })}
