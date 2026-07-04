@@ -131,6 +131,19 @@ export function useAgentKeybindings({
         return;
       }
       if (inputKey.return) {
+        // Shift+Enter (or Alt+Enter) inserts a newline instead of submitting,
+        // allowing multi-line input. Plain Enter still submits as before.
+        //
+        // Why check `meta` instead of `shift`: most terminals encode
+        // Shift+Enter as the 2-byte sequence `\x1b\r` (ESC + CR). The
+        // underlying parseKeypress maps `\x1b\r` to `name=return, meta=true`
+        // and never sets `shift` (only kitty-keyboard-protocol terminals emit
+        // `\x1b[13;2u`, which sets `shift`). Checking both covers both cases.
+        if (inputKey.shift || inputKey.meta) {
+          inputActions.append("\n");
+          autocompleteActions.update(useUserInput.getReadonlyState().value);
+          return;
+        }
         if (acceptAutocomplete(true)) return;
         handleNormalSubmit();
         return;
