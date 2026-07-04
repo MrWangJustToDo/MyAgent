@@ -3,7 +3,7 @@ import { streamText, tool as vercelTool, isStepCount } from "ai";
 import { generateId } from "../utils.js";
 
 import { Base } from "./Base.js";
-import { isNaturalEnd } from "./stop-conditions.js";
+import { isNaturalEnd, isStalled } from "./stop-conditions.js";
 import { AgentConfigSchema } from "./types.js";
 
 import type { AgentConfig, ToolSet } from "./types.js";
@@ -265,10 +265,12 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, Context, 
         temperature: this.config.temperature,
         abortSignal: this.currentAbortController!.signal,
         // Stop as soon as the model naturally finishes (final text answer,
-        // no tool call) OR when the step-count safety cap is hit — whichever
-        // comes first. This lets simple tasks end early instead of running
-        // to the cap, while still bounding runaway loops.
-        stopWhen: [isStepCount(this.config.maxIterations ?? 10), isNaturalEnd()],
+        // no tool call), OR as soon as it stalls (many consecutive tool-only
+        // steps with no textual progress), OR when the step-count safety cap
+        // is hit — whichever comes first. This lets simple tasks end early,
+        // cuts short runaway exploration loops, while still bounding total
+        // steps.
+        stopWhen: [isStepCount(this.config.maxIterations ?? 10), isNaturalEnd(), isStalled()],
         onStepEnd: this.createOnStepFinish(onStepEnd),
         prepareStep: this.createPrepareStep(prepareStep),
         onEnd: this.createOnFinish(onEnd),

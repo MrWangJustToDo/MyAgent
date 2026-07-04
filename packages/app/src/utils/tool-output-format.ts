@@ -171,7 +171,7 @@ function formatAskUserOutput(output: { question?: string; answer?: string; hasOp
 }
 
 function formatTaskOutput(output: TaskOutput): string {
-  const { summary, iterations, truncated, reachedLimit, usage } = output;
+  const { summary, iterations, truncated, reachedLimit, incomplete, usage } = output;
   const lines: string[] = [];
   const statusParts: string[] = [];
 
@@ -179,6 +179,7 @@ function formatTaskOutput(output: TaskOutput): string {
   statusParts.push(`${usage.totalTokens} tokens`);
   if (truncated) statusParts.push("truncated");
   if (reachedLimit) statusParts.push("limit reached");
+  if (incomplete && !reachedLimit) statusParts.push("stalled");
   lines.push(`[${statusParts.join(", ")}]`);
 
   const summaryLines = stripCacheHintLines(summary.trim().split("\n"));

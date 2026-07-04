@@ -51,6 +51,12 @@ export const taskOutputSchema = z.object({
   iterations: z.number().describe("Number of iterations used"),
   /** Whether the subagent hit the iteration limit */
   reachedLimit: z.boolean().describe("Whether iteration limit was reached"),
+  /**
+   * Whether the subagent finished without a natural end — stopped by the
+   * step-count cap or stall detector instead of producing a final answer.
+   * The returned findings may be partial.
+   */
+  incomplete: z.boolean().describe("Whether the subagent was force-stopped before producing a final answer"),
   /** Whether the subagent was cancelled (aborted) before completing */
   aborted: z.boolean().describe("Whether the subagent was cancelled before completing"),
   /** Token usage */
@@ -156,6 +162,7 @@ Example use cases:
           truncated,
           iterations: result.iterations,
           reachedLimit: result.reachedLimit,
+          incomplete: result.incomplete,
           aborted: result.aborted,
           usage: result.usage,
           cachedOutputPath,
@@ -164,7 +171,9 @@ Example use cases:
     },
 
     // Only send the summary to the LLM — execution metadata (iterations, usage,
-    // reachedLimit) is for the UI only and has no value for the model.
+    // reachedLimit, incomplete) is for the UI only and has no value for the model.
+    // The summary text itself already carries an incompleteness notice (appended
+    // by the runner) when the subagent was force-stopped, so the model is aware.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: TaskOutput }) {
       return {
         type: "content" as const,

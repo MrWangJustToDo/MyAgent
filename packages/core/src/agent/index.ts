@@ -2,6 +2,11 @@
 export {
   Agent,
   AgentConfigSchema,
+  isNaturalEnd,
+  isStalled,
+  STALL_DEFAULT_WINDOW,
+  STALL_DEFAULT_MIN_TEXT_LENGTH,
+  toolStreamOnError,
   type AgentStatus,
   type AgentConfig,
   type AgentRunOptions,

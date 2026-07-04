@@ -1,5 +1,5 @@
 import { clearAdapterHooks, createAgentFromConfig } from "@my-agent/app";
-import { agentManager, DirectChatTransport } from "@my-agent/core";
+import { agentManager, DirectChatTransport, toolStreamOnError } from "@my-agent/core";
 
 import type { AdapterHooks, AgentAdapter, AppConfig, ClipboardImageResult, InitResult } from "@my-agent/app";
 import type { Agent } from "@my-agent/core";
@@ -15,7 +15,10 @@ export class ExtensionAgentAdapter implements AgentAdapter {
 
   createTransport(): ChatTransport<UIMessage> {
     if (!this.agent) throw new Error("Agent not initialized");
-    return new DirectChatTransport({ agent: this.agent }) as ChatTransport<UIMessage>;
+    return new DirectChatTransport({
+      agent: this.agent,
+      onError: toolStreamOnError,
+    }) as ChatTransport<UIMessage>;
   }
 
   async initialize(config: AppConfig): Promise<InitResult> {

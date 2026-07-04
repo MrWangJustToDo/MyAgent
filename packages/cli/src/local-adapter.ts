@@ -1,4 +1,4 @@
-import { agentManager, DirectChatTransport } from "@my-agent/core";
+import { agentManager, DirectChatTransport, toolStreamOnError } from "@my-agent/core";
 
 import type { AdapterHooks, AgentAdapter, AppConfig, ClipboardImageResult, InitResult } from "@my-agent/app";
 import type { Agent } from "@my-agent/core";
@@ -22,7 +22,14 @@ export class LocalAgentAdapter implements AgentAdapter {
 
   createTransport(): ChatTransport<UIMessage> {
     if (!this.agent) throw new Error("Agent not initialized");
-    return new DirectChatTransport({ agent: this.agent }) as ChatTransport<UIMessage>;
+    // Surface real tool error messages to the UI and the LLM instead of the
+    // AI SDK's generic "An error occurred.". This lets the model see *why* a
+    // tool call failed (e.g. a missing required schema field) and correct it
+    // on the first retry instead of blindly retrying.
+    return new DirectChatTransport({
+      agent: this.agent,
+      onError: toolStreamOnError,
+    }) as ChatTransport<UIMessage>;
   }
 
   async initialize(config: AppConfig): Promise<InitResult> {

@@ -88,6 +88,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
   // Track iterations and usage
   let iterations = 0;
   let reachedLimit = false;
+  let lastStepNaturalEnd = false; // last step finished with a final text answer (no tool call, finishReason "stop")
   let retries = 0;
   const usage = {
     inputTokens: 0,
@@ -153,6 +154,12 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
       data: { subagentId, step: iterations, finishReason },
     });
 
+    // A natural end is a final text answer with no tool call. Anything else
+    // (tool-calls, length, etc.) means the loop will continue or be force-
+    // stopped by a stop condition (step cap / stall detector). We record this
+    // so the final result can report whether the subagent truly finished.
+    lastStepNaturalEnd = finishReason === "stop";
+
     if (iterations >= maxIterations) {
       reachedLimit = true;
     }
@@ -183,6 +190,8 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
 
       // reset step
       iterations = 0;
+      lastStepNaturalEnd = false;
+      reachedLimit = false;
 
       // Run subagent via stream() - enables real-time streaming behavior:
       // - onChunk → context.emitStream for UI streaming
@@ -222,6 +231,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
             iterations,
             usage,
             reachedLimit: false,
+            incomplete: true,
             retries: retries,
             aborted: true,
           };
@@ -232,7 +242,14 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           parentContext.addTotalUsage(usage);
         }
 
-        if (retryOnEmpty && (!rawOutput || rawOutput === "(no summary)")) {
+        // `incomplete` = the loop was force-stopped (step cap or stall
+        // detector) rather than reaching a natural final answer. Such runs
+        // should NOT be retried on empty output: a stalled/exhausted subagent
+        // will just stall again, wasting tokens. Only retry when the model
+        // reached a natural end but happened to emit no text (rare glitch).
+        const incomplete = !lastStepNaturalEnd;
+
+        if (retryOnEmpty && !incomplete && (!rawOutput || rawOutput === "(no summary)")) {
           parentLog?.warn("agent", "Subagent output empty", {
             subagentId,
             retries,
@@ -241,16 +258,38 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           continue;
         }
 
-        const { summary: output, truncated } = truncateSummary(rawOutput, maxOutputLength);
+        // When the run was force-stopped with no usable output, give the
+        // parent agent an explicit message instead of an empty string, so it
+        // knows the subtask could not be completed.
+        let effectiveOutput = rawOutput;
+        if (incomplete && (!effectiveOutput || effectiveOutput === "(no summary)")) {
+          effectiveOutput = reachedLimit
+            ? `(subagent hit the ${maxIterations}-step iteration limit without finishing; no summary produced)`
+            : `(subagent stalled after ${iterations} step${iterations === 1 ? "" : "s"} of tool calls with no textual progress; no summary produced)`;
+        }
+
+        const { summary: output, truncated } = truncateSummary(effectiveOutput, maxOutputLength);
+
+        // Append an incompleteness notice (after truncation) so the parent
+        // agent is aware the findings may be partial and can decide whether
+        // to re-delegate with a narrower scope or a different strategy.
+        const finalOutput = incomplete
+          ? `${output}${output.endsWith("\n") ? "" : "\n\n"}[${
+              reachedLimit
+                ? `reached the ${maxIterations}-step iteration limit`
+                : `stalled after ${iterations} unproductive step${iterations === 1 ? "" : "s"}`
+            }; findings may be incomplete]`
+          : output;
 
         parentLog?.info("agent", "Subagent completed", {
           subagentId,
           iterations,
           reachedLimit,
-          outputLength: output.length,
+          incomplete,
+          outputLength: finalOutput.length,
           truncated,
           usage,
-          output,
+          output: finalOutput,
         });
 
         agentManager.emit({
@@ -260,18 +299,20 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           data: {
             subagent_id: subagentId,
             session_id: parentAgent.getSessionData()?.id ?? parentAgentId,
-            summary: output,
+            summary: finalOutput,
             iterations,
+            incomplete,
           },
         });
 
         return {
           subagentId,
-          output,
+          output: finalOutput,
           truncated,
           iterations,
           usage,
           reachedLimit,
+          incomplete,
           retries,
           aborted: false,
         };
@@ -304,6 +345,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           iterations,
           usage,
           reachedLimit: false,
+          incomplete: true,
           retries: retries,
           aborted: isAborted,
         };

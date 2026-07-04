@@ -303,7 +303,14 @@ export async function spawnCommand(command: string, options: SpawnShellStringOpt
     }
 
     // Wait for the process to finish (waitForChildProcess handles spawn errors via child.on("error"))
-    const exitCode = await waitForChildProcess(child);
+    // Pass the caller timeout so the internal safety timeout only acts as a
+    // hang guard for the detached-stdio edge case, never racing legitimate
+    // long-running commands (see waitForChildProcess docs).
+    const safetyTimeoutMs =
+      options.timeout !== undefined && options.timeout > 0
+        ? Math.max(MIN_SAFETY_TIMEOUT_MS, options.timeout * 1000 + SAFETY_TIMEOUT_MARGIN_MS)
+        : undefined;
+    const exitCode = await waitForChildProcess(child, safetyTimeoutMs);
 
     // Check if abort happened during execution
     if (options.signal?.aborted) {
@@ -344,13 +351,34 @@ export async function spawnCommand(command: string, options: SpawnShellStringOpt
 }
 
 /**
+ * Minimum safety timeout (ms) used when no caller timeout is provided.
+ *
+ * This is a defense-in-depth hang guard for the edge case where a detached
+ * process exits but keeps inherited stdio handles open, preventing `close`
+ * from firing. It must NOT be reached by legitimate commands; long-running
+ * commands should pass a caller `timeout` so the safety timeout scales with
+ * them instead of racing completion.
+ */
+const MIN_SAFETY_TIMEOUT_MS = 30_000;
+
+/** Extra slack (ms) added on top of the caller timeout for the safety guard. */
+const SAFETY_TIMEOUT_MARGIN_MS = 10_000;
+
+/**
  * Wait for a child process to exit without hanging on inherited stdio
  * handles held open by detached descendants.
  *
  * This handles the case where a detached child process inherits the parent's
  * stdio handles, which can prevent the parent from detecting child exit.
+ *
+ * The `safetyTimeoutMs` parameter (defaults to {@link MIN_SAFETY_TIMEOUT_MS})
+ * is the last-resort hang guard. When a caller timeout is known, pass
+ * `max(MIN_SAFETY_TIMEOUT_MS, callerTimeoutMs + SAFETY_TIMEOUT_MARGIN_MS)`
+ * so the safety guard cannot race a legitimate long-running command. If the
+ * safety guard ever fires, it rejects (rather than silently resolving `null`)
+ * so the caller can surface a real error instead of a bogus exit code.
  */
-export function waitForChildProcess(child: ChildProcess): Promise<number | null> {
+export function waitForChildProcess(child: ChildProcess, safetyTimeoutMs?: number): Promise<number | null> {
   return new Promise((resolve, reject) => {
     // Close stdin immediately since we don't write to it
     child.stdin?.destroy();
@@ -374,15 +402,16 @@ export function waitForChildProcess(child: ChildProcess): Promise<number | null>
     child.on("close", onClose);
     child.on("error", onError);
 
-    // Safety timeout: if neither close nor error fires within 30 seconds,
-    // force resolve to prevent hanging. This can happen with detached
-    // processes that keep stdio handles open.
+    // Safety timeout: if neither close nor error fires in time, force-kill and
+    // reject. Previously this resolved `null`, which downstream code (via
+    // `exitCode ?? 1`) silently turned into a fake "exit code 1" failure for
+    // any command longer than 30s.
     setTimeout(() => {
       if (!resolved) {
         resolved = true;
         child.kill("SIGKILL");
-        resolve(null);
+        reject(new Error("child process did not exit (stdio handles held open by detached descendant)"));
       }
-    }, 30000);
+    }, safetyTimeoutMs ?? MIN_SAFETY_TIMEOUT_MS);
   });
 }
