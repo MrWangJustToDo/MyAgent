@@ -11,6 +11,7 @@ export default defineConfig({
         ink: "@my-react/react-terminal/web",
         "ink-stream-markdown": "ink-stream-markdown/web",
       },
+      dedupe: ["ink", "@my-react/react-terminal", "ink-stream-markdown"],
     },
   }),
   webExt: {
