@@ -3,6 +3,7 @@ import { streamText, tool as vercelTool, isStepCount } from "ai";
 import { generateId } from "../utils.js";
 
 import { Base } from "./Base.js";
+import { RunOrchestrator } from "./run-orchestrator.js";
 import { isNaturalEnd, isStalled } from "./stop-conditions.js";
 import { AgentConfigSchema } from "./types.js";
 
@@ -39,6 +40,8 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, Context, 
 
   // Configuration
   private config: AgentConfig;
+
+  private readonly runOrchestrator = new RunOrchestrator(this);
 
   constructor(config: AgentConfig, { id, setUp }: { id?: string; setUp?: (t: Agent) => Agent } = {}) {
     super();
@@ -82,10 +85,6 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, Context, 
    */
   private resolveMaxOutputTokens(): number | undefined {
     return this.config.maxTokens ?? this.modelInfo?.defaultMaxTokens ?? undefined;
-  }
-
-  private getHookSessionId(): string {
-    return this.sessionData?.id ?? this.id;
   }
 
   // ============================================================================
@@ -226,21 +225,17 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, Context, 
       ...rest
     } = options;
 
-    // Use async preparation with auto-compaction support
     const finalMessages = this.prepareMessages({ prompt, messages });
 
     this.setupAbortController(abortSignal);
     this.resetReactiveCompactRetries();
 
-    this.status = "running";
+    this.runOrchestrator.beginRun();
     if (this.streamStartedAt === 0) this.streamStartedAt = Date.now();
-    this.error = "";
 
-    // Prefetch relevant memories before building system prompt
     await this.prefetchRelevantMemories(finalMessages);
 
     const tools = this.getTools();
-
     const systemPrompt = this.buildSystemPrompt();
 
     this.log?.agent("Starting stream (Agent interface)", {
@@ -249,152 +244,43 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, Context, 
       toolCount: Object.keys(tools).length,
     });
 
-    this.dispatchEvent?.({
-      type: "prompt:submit",
-      agentId: this.id,
-      data: { session_id: this.getHookSessionId(), prompt: typeof prompt === "string" ? prompt : "(structured)" },
+    this.emitEvent("prompt:submit", {
+      prompt: typeof prompt === "string" ? prompt : "(structured)",
     });
 
-    const runStream = (msgs: typeof finalMessages): StreamTextResult<ToolSet, Context, never> => {
-      return streamText({
-        model: this.model!,
-        messages: msgs,
-        tools,
-        instructions: systemPrompt,
-        maxOutputTokens: this.resolveMaxOutputTokens(),
-        temperature: this.config.temperature,
-        abortSignal: this.currentAbortController!.signal,
-        // Stop as soon as the model naturally finishes (final text answer,
-        // no tool call), OR as soon as it stalls (many consecutive tool-only
-        // steps with no textual progress), OR when the step-count safety cap
-        // is hit — whichever comes first. This lets simple tasks end early,
-        // cuts short runaway exploration loops, while still bounding total
-        // steps.
-        stopWhen: [isStepCount(this.config.maxIterations ?? 10), isNaturalEnd(), isStalled()],
-        onStepEnd: this.createOnStepFinish(onStepEnd),
-        prepareStep: this.createPrepareStep(prepareStep),
-        onEnd: this.createOnFinish(onEnd),
-        onChunk: ({ chunk }) => {
-          this.context?.emitStream(chunk);
-          // Tool calls (both approval and normal) belong to the "running" phase.
-          if (chunk.type === "tool-call") {
-            if (this.isToolNeedsApproval(chunk.toolName)) {
-              this.status = "waiting";
-              this.dispatchEvent?.({
-                type: "notification",
-                agentId: this.id,
-                data: { session_id: this.getHookSessionId(), message: `Tool ${chunk.toolName} requires approval` },
-              });
-            } else {
-              this.status = "running";
-            }
-            return;
-          }
-          if (chunk.type === "reasoning-delta") {
-            this.status = "thinking";
-            return;
-          }
-          if (this.status === "running" || this.status === "thinking") {
-            this.status = "responding";
-          }
-        },
-        onAbort: () => {
-          this.status = "aborted";
-          this.log?.agent("stream aborted");
-        },
-        onError: async (event) => {
-          const err = event.error;
+    const streamHandlers = this.runOrchestrator.createStreamHandlers({
+      onToolExecutionStart,
+      onToolExecutionEnd,
+    });
 
-          // Abort errors must keep the "aborted" status, not "error".
-          if (this.isAbortError(err)) {
-            this.status = "aborted";
-            this.log?.agent("Stream aborted via error", { error: (err as Error)?.message });
-            return;
-          }
-
-          const compacted = await this.handleReactiveCompact(err);
-          if (compacted) {
-            this.log?.info(
-              "agent",
-              "Reactive compact succeeded, but stream cannot auto-retry. Next user message will use compacted context."
-            );
-          }
-
-          this.status = "error";
-          this.error = (err as Error)?.message;
-          this.log?.error("agent", "Stream error", err as Error);
-        },
-        onToolExecutionStart: (event) => {
-          const { toolCall } = event;
-          this.status = "running";
-          this.log?.tool("tool-call-start", {
-            toolName: toolCall.toolName,
-            toolCallId: toolCall.toolCallId,
-            input: toolCall.input,
-          });
-          this.context?.emitTool(toolCall);
-          onToolExecutionStart?.(event);
-        },
-        onToolExecutionEnd: (event) => {
-          const { toolCall, toolExecutionMs } = event;
-          const output = "output" in event ? event.output : undefined;
-          const error = "error" in event ? event.error : undefined;
-
-          this.log?.tool("tool-call-end", {
-            toolName: toolCall.toolName,
-            toolCallId: toolCall.toolCallId,
-            output,
-            error: error instanceof Error ? error.message : error,
-            durationMs: toolExecutionMs,
-          });
-
-          if (error) {
-            this.dispatchEvent?.({
-              type: "tool:error",
-              agentId: this.id,
-              data: {
-                session_id: this.getHookSessionId(),
-                tool_name: toolCall.toolName,
-                tool_input: toolCall.input,
-                error: error instanceof Error ? error.message : String(error),
-              },
-            });
-          } else {
-            this.dispatchEvent?.({
-              type: "tool:post",
-              agentId: this.id,
-              data: {
-                session_id: this.getHookSessionId(),
-                tool_name: toolCall.toolName,
-                tool_input: toolCall.input,
-                tool_output: output,
-                duration_ms: toolExecutionMs ?? 0,
-              },
-            });
-          }
-
-          onToolExecutionEnd?.(event);
-        },
-        ...rest,
-      });
-    };
-
-    return runStream(finalMessages);
+    return streamText({
+      model: this.model,
+      messages: finalMessages,
+      tools,
+      instructions: systemPrompt,
+      maxOutputTokens: this.resolveMaxOutputTokens(),
+      temperature: this.config.temperature,
+      abortSignal: this.currentAbortController!.signal,
+      stopWhen: [isStepCount(this.config.maxIterations ?? 10), isNaturalEnd(), isStalled()],
+      onStepEnd: this.createOnStepFinish(onStepEnd),
+      prepareStep: this.createPrepareStep(prepareStep),
+      onEnd: this.createOnFinish(onEnd),
+      ...streamHandlers,
+      ...rest,
+    });
   }
 
   /**
    * Generates output from the agent (non-streaming, Vercel AI SDK Agent interface).
    *
-   * Delegates to stream() internally for consistent streaming behavior
-   * (onChunk → context.emitStream, status changes, tool approval).
+   * Delegates to stream() internally for consistent behavior
+   * (status changes, tool approval, lifecycle events).
    * StreamTextResult is thenable — awaiting gives GenerateTextResult.
    */
   async generate(options: TextParams): Promise<GenerateTextResult<ToolSet, Context, never>> {
     if (!this.model) {
       throw new Error("Model not set. Call setModel() first.");
     }
-
-    // stream() handles timing via streamStartedAt / lastStreamDurationMs
 
     const runGenerate = async (): Promise<GenerateTextResult<ToolSet, Context, never>> => {
       const streamResult = await this.stream(options);
@@ -430,14 +316,11 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, Context, 
       return await runGenerate();
     } catch (err) {
       if (this.isAbortError(err)) {
-        this.status = "aborted";
+        this.setStatus("aborted");
         this.log?.agent("Generate aborted");
         throw err;
       }
 
-      // Attempt reactive compaction on prompt_too_long errors.
-      // stream()'s onError already calls handleReactiveCompact for context updates.
-      // Reset counter here to allow one more attempt, then retry.
       this.resetReactiveCompactRetries();
       const compacted = await this.handleReactiveCompact(err);
       if (compacted) {
@@ -447,7 +330,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, Context, 
         } catch (retryErr) {
           const retryError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
           this.error = retryError.message;
-          this.status = "error";
+          this.setStatus("error");
           this.log?.error("agent", "Generate error after reactive compact retry", retryError);
           throw retryErr;
         }
@@ -455,7 +338,7 @@ export class Agent extends Base implements VercelAgent<never, ToolSet, Context, 
 
       const error = err instanceof Error ? err : new Error(String(err));
       this.error = error.message;
-      this.status = "error";
+      this.setStatus("error");
       this.log?.error("agent", "Generate error", error);
       throw err;
     } finally {

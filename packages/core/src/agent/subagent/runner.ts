@@ -25,6 +25,7 @@
  */
 
 import { agentManager, type AgentManager } from "../../managers/manager-agent.js";
+import { emitAgentEvent } from "../loop/emit-agent-event.js";
 import { generateId } from "../utils.js";
 
 import { truncateSummary } from "./output.js";
@@ -44,8 +45,7 @@ import type { SubagentConfig, SubagentResult } from "./types.js";
  * 4. Configurable system prompt (default: exploration prompt)
  * 5. Accessible via agentManager.getAgent(subagentId)
  *
- * Internally uses subagent.stream() for execution, which enables real-time
- * streaming behavior (onChunk → context.emitStream, status changes).
+ * Internally uses subagent.stream() for execution (status changes, tool lifecycle).
  */
 export async function runSubagent(config: SubagentConfig): Promise<SubagentResult> {
   const {
@@ -116,9 +116,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
   subagent.setTools(subagentTools);
   subagent.customTools = {};
 
-  agentManager.emit({
-    type: "subagent:created",
-    agentId: subagentId,
+  emitAgentEvent(subagent, "subagent:created", {
     parentId: parentAgentId,
     data: { subagentId },
   });
@@ -147,9 +145,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
 
     parentLog?.debug("agent", `Subagent step ${iterations}`, { subagentId, finishReason });
 
-    agentManager.emit({
-      type: "subagent:step",
-      agentId: subagentId,
+    emitAgentEvent(subagent, "subagent:step", {
       parentId: parentAgentId,
       data: { subagentId, step: iterations, finishReason },
     });
@@ -175,9 +171,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
       subagent.context?.reset();
       subagent.context?.resetUsage();
 
-      agentManager.emit({
-        type: "subagent:started",
-        agentId: subagentId,
+      emitAgentEvent(subagent, "subagent:started", {
         parentId: parentAgentId,
         data: {
           subagent_id: subagentId,
@@ -193,11 +187,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
       lastStepNaturalEnd = false;
       reachedLimit = false;
 
-      // Run subagent via stream() - enables real-time streaming behavior:
-      // - onChunk → context.emitStream for UI streaming
-      // - onStepFinish → tracks iteration count and usage
-      // - onFinish → finalizes session
-      // streamResult.text drives stream consumption internally.
+      // Run subagent via stream() — onStepFinish tracks iterations; UI uses UIMessage on the parent.
       try {
         const streamResult = await subagent.stream({
           messages: [...(initialMessages || []), { role: "user" as const, content: prompt }],
@@ -217,9 +207,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
         if (subagent.status === "aborted") {
           parentLog?.warn("agent", "Subagent aborted", { subagentId, iterations, usage });
 
-          agentManager.emit({
-            type: "subagent:error",
-            agentId: subagentId,
+          emitAgentEvent(subagent, "subagent:error", {
             parentId: parentAgentId,
             data: { subagentId, error: "Subagent aborted" },
           });
@@ -292,9 +280,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           output: finalOutput,
         });
 
-        agentManager.emit({
-          type: "subagent:completed",
-          agentId: subagentId,
+        emitAgentEvent(subagent, "subagent:completed", {
           parentId: parentAgentId,
           data: {
             subagent_id: subagentId,
@@ -325,9 +311,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
           parentLog?.error("agent", "Subagent error", error as Error);
         }
 
-        agentManager.emit({
-          type: "subagent:error",
-          agentId: subagentId,
+        emitAgentEvent(subagent, "subagent:error", {
           parentId: parentAgentId,
           data: { subagentId, error: error instanceof Error ? error.message : String(error) },
         });
@@ -353,9 +337,7 @@ export async function runSubagent(config: SubagentConfig): Promise<SubagentResul
     }
   } finally {
     if (autoDestroy) {
-      agentManager.emit({
-        type: "subagent:destroyed",
-        agentId: subagentId,
+      emitAgentEvent(subagent, "subagent:destroyed", {
         parentId: parentAgentId,
         data: { subagentId },
       });

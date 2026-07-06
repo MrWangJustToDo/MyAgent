@@ -5,7 +5,9 @@ import { AgentContext } from "../agent/agent-context";
 import { loadAgentDoc, formatAgentDocResult } from "../agent/agent-doc-loader.js";
 import { createCompactionConfig } from "../agent/compaction/types.js";
 import { HookRegistry } from "../agent/hooks/hook-registry.js";
+import { ACTIVE_STATUSES } from "../agent/loop/agent-status.js";
 import { Agent } from "../agent/loop/Agent.js";
+import { emitAgentEvent } from "../agent/loop/emit-agent-event.js";
 import { loadMcpConfig } from "../agent/mcp/config.js";
 import { McpManager } from "../agent/mcp/manager.js";
 import { MemoryManager } from "../agent/memory/memory-manager.js";
@@ -175,6 +177,7 @@ export class AgentManager {
 
   /**
    * Emit an agent event. Dispatches to both in-process listeners and hook scripts.
+   * @internal Agent code should use `emitAgentEvent()` / `agent.emitEvent()` instead.
    */
   emit(event: AgentEvent): void {
     this.eventBus.emit(event);
@@ -382,11 +385,7 @@ export class AgentManager {
 
     // Emit session:start event (dispatches to both listeners and hooks)
     if (!parentId) {
-      this.emit({
-        type: "session:start",
-        agentId: id,
-        data: { session_id: agent.getSessionData()?.id ?? id, cwd: fsRootPath },
-      });
+      emitAgentEvent(agent, "session:start", { data: { cwd: fsRootPath } });
     }
 
     return agent;
@@ -452,7 +451,6 @@ export class AgentManager {
    * @returns Active subagents, deepest-first
    */
   getActiveSubagents(rootAgentId: string): ManagedAgent[] {
-    const activeStatuses = new Set<Agent["status"]>(["running", "thinking", "responding", "waiting", "compacting"]);
     const result: ManagedAgent[] = [];
 
     const walk = (agentId: string) => {
@@ -463,7 +461,7 @@ export class AgentManager {
         walk(childId);
       }
       // Include this node if it is a subagent (has parent) and currently active
-      if (managed.parentId && activeStatuses.has(managed.status)) {
+      if (managed.parentId && ACTIVE_STATUSES.has(managed.status)) {
         result.push(managed);
       }
     };

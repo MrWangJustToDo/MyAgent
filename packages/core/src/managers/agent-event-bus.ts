@@ -13,6 +13,7 @@ export type AgentEventType =
   // Agent lifecycle
   | "session:start"
   | "prompt:submit"
+  | "tool:start"
   | "tool:post"
   | "tool:error"
   | "agent:stop"
@@ -206,6 +207,15 @@ function mapToHookEvent(event: AgentEvent): { name: HookEventType; input: HookEv
           session_id: (d.session_id as string) ?? event.agentId,
           subagent_id: (d.subagent_id as string) ?? event.agentId,
           summary: (d.summary as string) ?? "",
+        },
+      };
+    case "subagent:error":
+      return {
+        name: "Notification",
+        input: {
+          hook_event_name: "Notification",
+          session_id: (d.session_id as string) ?? event.agentId,
+          message: `Subagent error: ${(d.error as string) ?? "unknown"}`,
         },
       };
     default:

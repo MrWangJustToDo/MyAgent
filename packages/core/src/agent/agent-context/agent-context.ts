@@ -4,7 +4,7 @@ import { calculateCost } from "./types.js";
 
 import type { TokenUsage } from "./types.js";
 import type { ModelCapability, ModelPricing } from "../../models/types.js";
-import type { StreamPart, ToolSet } from "../loop/types.js";
+import type { ToolSet } from "../loop/types.js";
 import type { GenerateTextEndEvent, ModelMessage, TypedToolCall } from "ai";
 
 // ============================================================================
@@ -21,14 +21,6 @@ export class AgentContext {
   readonly id: string;
 
   readonly symbol = Symbol.for("agent-context");
-
-  /** Stream events (for UI rendering) */
-  // current emit the raw vercel type
-  // SEE https://github.com/ag-ui-protocol/ag-ui/blob/main/sdks/typescript/packages/core/src/events.ts ag-ui protocol
-  /**
-   * @internal
-   */
-  private events: StreamPart[] = [];
 
   private messages: ModelMessage[] = [];
 
@@ -60,15 +52,7 @@ export class AgentContext {
   /** Token limit (from compaction config threshold) */
   private tokenLimit = 0;
 
-  /** Event listeners */
-  private eventListeners: Set<(event: StreamPart) => void> = new Set();
-
-  private toolListeners: Set<(event: TypedToolCall<ToolSet>) => void> = new Set();
-
   finishInfo: GenerateTextEndEvent<ToolSet> | null = null;
-
-  /** Streaming state */
-  isStreaming = false;
 
   /** Timestamps */
   createdAt: number;
@@ -85,48 +69,8 @@ export class AgentContext {
   }
 
   // ============================================================================
-  // Stream Event Handling
+  // Token Usage
   // ============================================================================
-
-  /**
-   * Emit a stream event
-   */
-  emitStream(event: StreamPart): void {
-    this.events.push(event);
-
-    // Update streaming state
-    if (event.type === "start") {
-      this.isStreaming = true;
-    } else if (event.type === "finish" || event.type === "error") {
-      this.isStreaming = false;
-    }
-
-    // Notify listeners
-    for (const listener of this.eventListeners) {
-      try {
-        listener(event);
-      } catch {
-        // Ignore listener errors
-      }
-    }
-
-    this.touch();
-  }
-
-  /**
-   * Subscribe to stream events
-   */
-  onStream(listener: (event: StreamPart) => void): () => void {
-    this.eventListeners.add(listener);
-    return () => this.eventListeners.delete(listener);
-  }
-
-  /**
-   * Get all events (for replay/debugging)
-   */
-  getEvents(): StreamPart[] {
-    return [...this.events];
-  }
 
   updateUsage(t: TokenUsage) {
     const prev = this.usage;
@@ -254,23 +198,15 @@ export class AgentContext {
     return Math.min(100, (this.usage.inputTokens / this.tokenLimit) * 100);
   }
 
-  emitTool(tool: TypedToolCall<NoInfer<ToolSet>>) {
+  // ============================================================================
+  // Tool Call History (Task UI reads via getToolCallHistory)
+  // ============================================================================
+
+  recordToolCall(tool: TypedToolCall<NoInfer<ToolSet>>): void {
     this.tools.push(tool);
-    for (const listener of this.toolListeners) {
-      try {
-        listener(tool);
-      } catch {
-        // Ignore listener errors
-      }
-    }
   }
 
-  onTool(listener: (event: TypedToolCall<ToolSet>) => void) {
-    this.toolListeners.add(listener);
-    return () => this.toolListeners.delete(listener);
-  }
-
-  getTools() {
+  getToolCallHistory() {
     return this.tools;
   }
 
@@ -346,14 +282,6 @@ export class AgentContext {
     this.touch();
   }
 
-  /**
-   * Clear events (keep messages)
-   */
-  clearEvents(): void {
-    this.events = [];
-    this.touch();
-  }
-
   // ============================================================================
   // Reset
   // ============================================================================
@@ -363,7 +291,6 @@ export class AgentContext {
    */
   reset(): void {
     this.tools = [];
-    this.events = [];
     this.messages = [];
     this.summaryMessage = null;
     this.compactIndex = 0;
@@ -385,16 +312,6 @@ export class AgentContext {
     };
     this.totalCost = 0;
     this.finishInfo = null;
-    this.isStreaming = false;
-    this.touch();
-  }
-
-  /**
-   * Start a new turn (clear events, keep messages)
-   */
-  startNewTurn(): void {
-    this.events = [];
-    this.isStreaming = false;
     this.touch();
   }
 

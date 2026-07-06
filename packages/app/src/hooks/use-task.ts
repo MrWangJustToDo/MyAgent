@@ -1,3 +1,4 @@
+import { agentManager } from "@my-agent/core";
 import { useEffect, useState } from "react";
 
 import { useSubAgents } from "./use-sub-agents";
@@ -5,13 +6,13 @@ import { useSubAgents } from "./use-sub-agents";
 import type { Agent, AgentContext } from "@my-agent/core";
 
 type TaskInfo = {
-  allTools?: ReturnType<AgentContext["getTools"]>;
+  allTools?: ReturnType<AgentContext["getToolCallHistory"]>;
   total?: number;
   finish?: AgentContext["finishInfo"];
 };
 
 const getTaskInfoFromAgent = (agent?: Agent) => {
-  const allTools = agent?.context?.getTools();
+  const allTools = agent?.context?.getToolCallHistory();
   return {
     allTools,
     total: allTools?.length,
@@ -25,14 +26,17 @@ export const useTask = ({ id }: { id: string }) => {
   const [info, setInfo] = useState<TaskInfo>(() => getTaskInfoFromAgent(agent));
 
   useEffect(() => {
-    const cb = agent?.context?.onTool(() => {
-      setInfo(getTaskInfoFromAgent(agent));
+    if (!agent) return;
+
+    const refresh = () => setInfo(getTaskInfoFromAgent(agent));
+
+    const unsubscribe = agentManager.on("tool:start", (event) => {
+      if (event.agentId !== id) return;
+      refresh();
     });
 
-    return () => {
-      cb?.();
-    };
-  }, [agent]);
+    return unsubscribe;
+  }, [agent, id]);
 
   return { ...info, agent };
 };

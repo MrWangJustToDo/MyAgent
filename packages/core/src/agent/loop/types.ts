@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { LanguageModel, ModelMessage, TextStreamPart, ToolSet as VercelToolSet } from "ai";
+import type { LanguageModel, ModelMessage, ToolSet as VercelToolSet } from "ai";
 
 // ============================================================================
 // Agent Config
@@ -38,9 +38,6 @@ export type AgentStatus =
 
 /** Tool set type - Record of Vercel AI tools */
 export type ToolSet = VercelToolSet;
-
-/** Stream part type from Vercel AI SDK */
-export type StreamPart = TextStreamPart<ToolSet>;
 
 /** Vercel AI SDK usage type (used by context.updateUsage) */
 export interface UsageInfo {

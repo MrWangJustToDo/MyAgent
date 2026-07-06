@@ -7,6 +7,7 @@ import { z } from "zod";
 export const HOOK_EVENTS = [
   "SessionStart",
   "UserPromptSubmit",
+  /** Declared for hook configs; not emitted by the agent runtime yet. */
   "PreToolUse",
   "PostToolUse",
   "PostToolUseFailure",

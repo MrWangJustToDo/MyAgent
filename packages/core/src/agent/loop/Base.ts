@@ -5,22 +5,30 @@ import { isPromptTooLongError, reactiveCompact } from "../compaction/reactive-co
 import { estimateTokens } from "../compaction/token-estimator.js";
 import { cleanupOrphanedToolCache, createTodoTool } from "../tools";
 
-import { SessionHandler } from "./session-handler.js";
+import { resolveFinishStatus } from "./agent-status.js";
+import { emitAgentEvent } from "./emit-agent-event.js";
+import { MemoryService } from "./memory-service.js";
+import { SessionService } from "./session-service.js";
 
-import type { AgentEvent } from "../../managers/agent-event-bus.js";
+import type { AgentEvent, AgentEventType } from "../../managers/agent-event-bus.js";
 import type { ModelInfo } from "../../models/types.js";
 import type { AgentContext } from "../agent-context";
 import type { AgentLog } from "../agent-log";
+import type { AgentLoopHost } from "./agent-loop-host.js";
+import type { AgentStatus } from "./types.js";
 import type { CompactionConfig } from "../compaction/types.js";
 import type { HookRegistry } from "../hooks/hook-registry.js";
 import type { McpManager } from "../mcp/manager.js";
+import type { MemoryManager } from "../memory/memory-manager.js";
+import type { SessionStore } from "../session/session-store.js";
+import type { SessionData } from "../session/types.js";
 import type { SkillRegistry } from "../skills";
 import type { TodoManager } from "../todo-manager";
-import type { AgentStatus } from "./types.js";
 import type {
   LanguageModel,
   ToolSet,
   ModelMessage,
+  UIMessage,
   GenerateTextOnStepEndCallback,
   GenerateTextOnEndCallback,
   PrepareStepFunction,
@@ -30,7 +38,23 @@ import type {
 // Base Class
 // ============================================================================
 
-export class Base extends SessionHandler {
+export class Base implements AgentLoopHost {
+  agentId = "";
+
+  // Composed services (replace MemoryHandler <- SessionHandler inheritance)
+  readonly memory: MemoryService;
+  readonly session: SessionService;
+
+  model: LanguageModel | null = null;
+  log: AgentLog | null = null;
+  context: AgentContext | null = null;
+  todoManager: TodoManager | null = null;
+
+  constructor() {
+    this.memory = new MemoryService(() => this);
+    this.session = new SessionService(() => this);
+  }
+
   // State
   status: AgentStatus = "idle";
   error = "";
@@ -52,6 +76,28 @@ export class Base extends SessionHandler {
 
   /** Unified event dispatch callback — set by AgentManager to route events to listeners + hooks */
   dispatchEvent?: (event: AgentEvent) => void;
+
+  /** Set agent status (single entry point for status transitions). */
+  setStatus(status: AgentStatus): void {
+    this.status = status;
+  }
+
+  /** Emit a lifecycle event via the unified dispatch path. */
+  emitEvent(
+    type: AgentEventType,
+    data?: Record<string, unknown>,
+    options?: { parentId?: string; agentId?: string }
+  ): void {
+    emitAgentEvent(
+      {
+        id: this.agentId,
+        dispatchEvent: this.dispatchEvent,
+        getSessionData: () => this.session.getSessionData(),
+      },
+      type,
+      { data, ...options }
+    );
+  }
 
   // Model metadata from the registry (context window, pricing, capabilities, etc.)
   modelInfo: ModelInfo | null = null;
@@ -140,6 +186,82 @@ export class Base extends SessionHandler {
 
   getTodoManager(): TodoManager | null {
     return this.todoManager;
+  }
+
+  // ============================================================================
+  // Memory (delegates to MemoryService)
+  // ============================================================================
+
+  setMemoryManager(manager: MemoryManager): void {
+    this.memory.setManager(manager);
+  }
+
+  getMemoryManager(): MemoryManager | null {
+    return this.memory.getManager();
+  }
+
+  setMemoryContent(content: string): void {
+    this.memory.setContent(content);
+  }
+
+  getMemoryContent(): string {
+    return this.memory.getContent();
+  }
+
+  get memoryContent(): string {
+    return this.memory.getContent();
+  }
+
+  get relevantMemoryContent(): string {
+    return this.memory.getRelevantContent();
+  }
+
+  protected prefetchRelevantMemories(messages: ModelMessage[]): Promise<void> {
+    return this.memory.prefetchRelevantMemories(messages);
+  }
+
+  protected commitSurfacedMemories(): void {
+    this.memory.commitSurfacedMemories();
+  }
+
+  protected runMemoryExtraction(): void {
+    this.memory.runExtraction();
+  }
+
+  protected resetMemoryState(): void {
+    this.memory.resetState();
+  }
+
+  // ============================================================================
+  // Session (delegates to SessionService)
+  // ============================================================================
+
+  setSessionStore(store: SessionStore, config: { provider: string; model: string }): void {
+    this.session.setStore(store, config);
+  }
+
+  getSessionStore(): SessionStore | null {
+    return this.session.getStore();
+  }
+
+  setSessionData(data: SessionData): void {
+    this.session.setSessionData(data);
+  }
+
+  getSessionData(): SessionData | null {
+    return this.session.getSessionData();
+  }
+
+  get sessionData(): SessionData | null {
+    return this.session.getSessionData();
+  }
+
+  protected saveSession(): void {
+    this.session.saveSession();
+  }
+
+  updateSessionUIMessages(uiMessages: UIMessage[]): void {
+    this.session.updateUIMessages(uiMessages);
   }
 
   /**
@@ -254,7 +376,7 @@ export class Base extends SessionHandler {
     this.currentAbortController = new AbortController();
 
     const abortListener = (reason: Event) => {
-      this.status = "aborted";
+      this.setStatus("aborted");
       this.log?.agent("current flow is aborted", { reason });
     };
     this.currentAbortController.signal.addEventListener("abort", abortListener, { once: true });
@@ -352,15 +474,7 @@ export class Base extends SessionHandler {
 
   createOnFinish(userCallback?: GenerateTextOnEndCallback<ToolSet>): GenerateTextOnEndCallback<ToolSet> {
     return (event) => {
-      // Preserve terminal states (aborted / error / waiting) instead of
-      // briefly flashing "completed" before overwriting with "error".
-      if (this.status === "aborted" || this.status === "error" || this.status === "waiting") {
-        // keep current terminal status
-      } else if (this.error) {
-        this.status = "error";
-      } else {
-        this.status = "completed";
-      }
+      this.setStatus(resolveFinishStatus(this.status, this.error));
 
       if (this.status === "completed") {
         this.lastStreamDurationMs = Date.now() - this.streamStartedAt;
@@ -374,15 +488,10 @@ export class Base extends SessionHandler {
       });
 
       this.context?.updateFinal?.(event);
-      this.context?.clearEvents();
       this.saveSession();
-      this.relevantMemoryContent = "";
+      this.memory.clearTurnContext();
 
-      this.dispatchEvent?.({
-        type: "agent:stop",
-        agentId: this.agentId,
-        data: { session_id: this.sessionData?.id ?? "", reason: event.finishReason ?? "unknown" },
-      });
+      this.emitEvent("agent:stop", { reason: event.finishReason ?? "unknown" });
 
       this.runMemoryExtraction();
 
@@ -496,7 +605,7 @@ export class Base extends SessionHandler {
 
       if (this.shouldAutoCompact(llmMessages) && this.model && this.context) {
         try {
-          this.status = "compacting";
+          this.setStatus("compacting");
           this.log?.notify("system", "info", "Auto-compacting context...");
 
           const incompleteTodos = this.todoManager?.getIncompleteTodos() ?? [];
@@ -545,7 +654,7 @@ export class Base extends SessionHandler {
           this.log?.error("agent", "Auto-compaction failed, continuing with original messages", error);
           this.log?.notify("system", "warning", `Compaction failed: ${error.message}`);
         } finally {
-          this.status = "running";
+          this.setStatus("running");
         }
       }
 
@@ -594,7 +703,7 @@ export class Base extends SessionHandler {
     });
 
     try {
-      this.status = "compacting";
+      this.setStatus("compacting");
       const llmMessages = this.context.getMessagesForLLM();
       const compactedMessages = await reactiveCompact(llmMessages, this.agentId);
 
@@ -630,7 +739,7 @@ export class Base extends SessionHandler {
 
       // Compaction succeeded — the caller (onError / generate retry) is
       // expected to retry, so restore "running" to reflect that intent.
-      this.status = "running";
+      this.setStatus("running");
       return true;
     } catch (err) {
       const compactError = err instanceof Error ? err : new Error(String(err));
@@ -653,7 +762,7 @@ export class Base extends SessionHandler {
       hadTodos: this.todoManager?.hasTodos() ?? false,
     });
     this.abort("Reset");
-    this.status = "idle";
+    this.setStatus("idle");
     this.error = "";
     this.reactiveCompactRetries = 0;
     this.sessionCacheHitTokens = 0;
