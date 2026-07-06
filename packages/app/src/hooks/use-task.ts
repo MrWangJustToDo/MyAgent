@@ -8,7 +8,6 @@ import type { Agent, AgentContext } from "@my-agent/core";
 type TaskInfo = {
   allTools?: ReturnType<AgentContext["getToolCallHistory"]>;
   total?: number;
-  finish?: AgentContext["finishInfo"];
 };
 
 const getTaskInfoFromAgent = (agent?: Agent) => {
@@ -16,7 +15,6 @@ const getTaskInfoFromAgent = (agent?: Agent) => {
   return {
     allTools,
     total: allTools?.length,
-    finish: agent?.context?.finishInfo,
   };
 };
 
@@ -35,7 +33,15 @@ export const useTask = ({ id }: { id: string }) => {
       refresh();
     });
 
-    return unsubscribe;
+    const unsubStarted = agentManager.on("subagent:started", (event) => {
+      if (event.agentId !== id) return;
+      refresh();
+    });
+
+    return () => {
+      unsubscribe();
+      unsubStarted();
+    };
   }, [agent, id]);
 
   return { ...info, agent };

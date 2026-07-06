@@ -76,6 +76,7 @@ const Logo = () => {
 
 const TIPS = [
   { key: "/", desc: "for commands" },
+  { key: "Ctrl+T", desc: "task panel" },
   { key: "Ctrl+V", desc: "paste image" },
   { key: "Esc", desc: "to abort" },
 ];

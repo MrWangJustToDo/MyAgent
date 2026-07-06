@@ -17,11 +17,14 @@ export interface StreamingChunk {
 
 export type StreamingCallback = (data: StreamingChunk) => void;
 
+export type StreamingClearCallback = (toolCallId: string) => void;
+
 // ============================================================================
 // Global State
 // ============================================================================
 
 let streamingCallback: StreamingCallback | null = null;
+let streamingClearCallback: StreamingClearCallback | null = null;
 
 /**
  * Set the global streaming callback.
@@ -29,6 +32,13 @@ let streamingCallback: StreamingCallback | null = null;
  */
 export function setStreamingCallback(callback: StreamingCallback | null): void {
   streamingCallback = callback;
+}
+
+/**
+ * Set the global streaming clear callback (resets UI buffer for a tool call).
+ */
+export function setStreamingClearCallback(callback: StreamingClearCallback | null): void {
+  streamingClearCallback = callback;
 }
 
 /**
@@ -48,4 +58,11 @@ export function emitStreamingChunk(toolCallId: string, type: "stdout" | "stderr"
   if (callback) {
     callback({ toolCallId, type, chunk });
   }
+}
+
+/**
+ * Clear streamed output for a tool call (e.g. before a subagent retry).
+ */
+export function clearStreamingOutput(toolCallId: string): void {
+  streamingClearCallback?.(toolCallId);
 }

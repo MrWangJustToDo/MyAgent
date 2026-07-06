@@ -4,7 +4,7 @@
  * Uses reactivity-store for automatic UI updates.
  */
 
-import { setStreamingCallback } from "@my-agent/core";
+import { setStreamingCallback, setStreamingClearCallback } from "@my-agent/core";
 import { useEffect } from "react";
 
 import { useStreamingStore } from "./use-streaming-store.js";
@@ -48,9 +48,13 @@ export function useStreamingOutput(toolCallId: string | undefined, enabled = tru
         actions.appendStderr(id, chunk);
       }
     });
+    setStreamingClearCallback((toolCallId: string) => {
+      useStreamingStore.getActions().clear(toolCallId);
+    });
 
     return () => {
       setStreamingCallback(null);
+      setStreamingClearCallback(null);
     };
   }, [enabled]);
 

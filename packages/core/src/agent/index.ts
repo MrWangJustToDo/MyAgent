@@ -97,6 +97,12 @@ export {
   type SubagentConfig,
   type SubagentResult,
   type SubagentResultLegacy,
+  subagentPreviewStore,
+  consumeSubagentUIStream,
+  extractAssistantText,
+  getSummaryStreamText,
+  splitStepSegments,
+  SUMMARY_STREAM_MIN_CHARS,
 } from "./subagent";
 
 // Skill exports

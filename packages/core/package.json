@@ -21,7 +21,9 @@
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.typecheck.json",
     "validate:emit-agent-event": "pnpm run build && node scripts/validate-emit-agent-event.mjs",
-    "validate:agent-status": "pnpm run build && node scripts/validate-agent-status.mjs"
+    "validate:agent-status": "pnpm run build && node scripts/validate-agent-status.mjs",
+    "validate:subagent-preview": "pnpm run build && node scripts/validate-subagent-preview.mjs",
+    "validate:extract-assistant-text": "pnpm run build && node scripts/validate-extract-assistant-text.mjs"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "^3.0.1",

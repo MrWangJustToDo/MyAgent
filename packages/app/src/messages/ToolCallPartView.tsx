@@ -2,6 +2,7 @@ import { getToolName } from "ai";
 import { Box, Text } from "ink";
 
 import { StreamingOutputView } from "../components/StreamingOutputView.js";
+import { useStreamingOutput } from "../hooks/use-streaming-output.js";
 import { COLORS } from "../theme/colors.js";
 import {
   buildToolHeader,
@@ -37,17 +38,22 @@ function extractDeniedReason(reason: string | undefined | null): string | null {
 
 export interface ToolCallPartViewProps {
   part: ToolUIPart;
+  /** Suppress approval UI (subagent preview is read-only). */
+  readOnly?: boolean;
 }
 
 /** Render a tool invocation part — unified compact style for all tools */
-export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
-  const needsApproval = part.state === "approval-requested" && part.approval;
+export const ToolCallPartView = ({ part, readOnly = false }: ToolCallPartViewProps) => {
+  const needsApproval = !readOnly && part.state === "approval-requested" && part.approval;
   const toolName = getToolName(part);
 
   // Check if this is a run_command tool that's currently executing
   const isRunCommand = toolName === "run_command";
+  const isTask = toolName === "task";
   const isExecuting =
     part.state === "input-available" || part.state === "input-streaming" || part.state === "approval-responded";
+  const taskStream = useStreamingOutput(isTask && isExecuting ? part.toolCallId : undefined, isTask && isExecuting);
+  const showTaskSummaryStream = isTask && isExecuting && Boolean(taskStream?.stdout);
 
   const getDisplayInput = (): string | null => {
     if (part.input === undefined || part.input === null) return null;
@@ -104,9 +110,12 @@ export const ToolCallPartView = ({ part }: ToolCallPartViewProps) => {
       {/* Tool input (diffs, command text) */}
       <ToolInputView part={part} />
 
-      {/* Streaming output for run_command */}
+      {/* Streaming output for run_command and task summary */}
       {isRunCommand && isExecuting && (
         <StreamingOutputView toolCallId={part.toolCallId} enabled={isRunCommand && isExecuting} />
+      )}
+      {showTaskSummaryStream && (
+        <StreamingOutputView toolCallId={part.toolCallId} enabled={showTaskSummaryStream} emptyMessage="" />
       )}
 
       {/* Approval prompt */}

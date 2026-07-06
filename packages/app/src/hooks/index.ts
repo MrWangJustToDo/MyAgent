@@ -29,6 +29,8 @@ export { usePreviewEdit } from "./use-preview-edit.js";
 export { useSelect } from "./use-select.js";
 export { useStatic } from "./use-static.js";
 export { useSubAgents } from "./use-sub-agents.js";
+export { useSubagentMessages } from "./use-subagent-messages.js";
+export { useSubagentPanel, type SubagentPanelView } from "./use-subagent-panel.js";
 export { useTerminalSize } from "./use-terminal-size.js";
 
 export type { UIMessage, TextPart, ToolCallPart, ToolResultPart, ThinkingPart, MessagePart } from "@my-agent/core";

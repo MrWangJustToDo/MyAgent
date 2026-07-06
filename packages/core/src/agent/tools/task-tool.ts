@@ -141,6 +141,7 @@ Example use cases:
           prompt,
           description,
           parentAgentId,
+          parentTaskToolCallId: toolCallId,
           autoDestroy: false,
           maxOutputLength: Infinity,
         });

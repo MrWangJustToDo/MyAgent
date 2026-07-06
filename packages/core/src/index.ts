@@ -28,10 +28,13 @@ export { generateId, generateShortId, createSequentialIdGenerator } from "./agen
 // Streaming callback for real-time tool output
 export {
   setStreamingCallback,
+  setStreamingClearCallback,
   getStreamingCallback,
   emitStreamingChunk,
+  clearStreamingOutput,
   type StreamingChunk,
   type StreamingCallback,
+  type StreamingClearCallback,
 } from "./agent/tools/util/streaming-callback.js";
 
 // Environment abstraction (types only — implementations provided externally via CoreEnv)

@@ -14,10 +14,12 @@ import type { FileUIPart, TextUIPart, ToolUIPart, UIMessage } from "ai";
 
 export interface MessageViewProps {
   message: UIMessage;
+  /** Read-only mode for nested subagent previews (no approval prompts). */
+  readOnly?: boolean;
 }
 
 /** Render a single message */
-export const MessageView = memo(({ message }: MessageViewProps) => {
+export const MessageView = memo(({ message, readOnly = false }: MessageViewProps) => {
   const validParts = useMemo(() => message.parts.filter((i) => Object.keys(i).length > 1), [message.parts]);
 
   const visibleParts = useMemo(
@@ -65,7 +67,7 @@ export const MessageView = memo(({ message }: MessageViewProps) => {
         <Box key={`${part.type}-${index}`} width="100%">
           {part.type === "text" && <TextPartView part={part as TextUIPart} role={message.role} />}
           {isFileUIPart(part) && <FilePartView part={part as FileUIPart} index={fileIndexMap.get(index)} />}
-          {isToolUIPart(part) && <ToolCallPartView part={part as ToolUIPart} />}
+          {isToolUIPart(part) && <ToolCallPartView part={part as ToolUIPart} readOnly={readOnly} />}
         </Box>
       ))}
     </>

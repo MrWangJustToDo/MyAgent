@@ -6,6 +6,7 @@ import { dispatchCommand } from "../commands";
 
 import { useAgent } from "./use-agent.js";
 import { useSelect } from "./use-select.js";
+import { useSubagentPanel } from "./use-subagent-panel.js";
 import { useUserInput } from "./use-user-input.js";
 
 import type { AgentAdapter } from "../adapter/types.js";
@@ -110,7 +111,15 @@ export function useAgentKeybindings({
       return;
     }
 
+    if (inputKey.ctrl && inputChar === "t") {
+      useSubagentPanel.getActions().openList();
+      return;
+    }
+
     if (inputKey.escape && mode !== "freeform" && mode !== "select") {
+      if (useSubagentPanel.getReadonlyState().view !== "closed") {
+        return;
+      }
       if (isLoading) {
         stop();
         return;

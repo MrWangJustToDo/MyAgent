@@ -40,6 +40,8 @@ export interface SubagentConfig {
   description?: string;
   /** Parent agent ID (to get agent instance from AgentManager) */
   parentAgentId: string;
+  /** Parent task tool call ID for summary streaming in the task tool UI */
+  parentTaskToolCallId?: string;
   /** Custom system prompt (default: SUBAGENT_EXPLORE_SYSTEM_PROMPT) */
   systemPrompt?: string;
   /** Custom tools (default: read-only exploration tools, pass {} for no tools) */

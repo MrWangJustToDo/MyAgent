@@ -20,3 +20,13 @@ export { extractSummary, truncateSummary } from "./output.js";
 
 // Runner
 export { runSubagent, getSubagent, destroySubagent } from "./runner.js";
+
+// Preview bridge (read-only subagent UI)
+export { subagentPreviewStore } from "./subagent-preview-store.js";
+export { consumeSubagentUIStream } from "./consume-subagent-ui-stream.js";
+export {
+  extractAssistantText,
+  getSummaryStreamText,
+  splitStepSegments,
+  SUMMARY_STREAM_MIN_CHARS,
+} from "./extract-assistant-text.js";

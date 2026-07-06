@@ -24,7 +24,8 @@ export type AgentEventType =
   | "subagent:step"
   | "subagent:completed"
   | "subagent:error"
-  | "subagent:destroyed";
+  | "subagent:destroyed"
+  | "subagent:ui-update";
 
 /** Unified agent event */
 export interface AgentEvent {

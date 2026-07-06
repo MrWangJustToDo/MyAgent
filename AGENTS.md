@@ -390,11 +390,18 @@ The project supports **subagents** — context-isolated agents spawned to handle
 |---------|----------|
 | Context | Fresh (starts with empty messages) |
 | Tools | Read-only: `read_file`, `glob`, `grep`, `list_file`, `tree` (no `run_command`) |
-| Return | Summary only (full history discarded) |
+| Return | Summary only to parent LLM context; UI keeps a read-only UIMessage preview |
 | Iteration Limit | 30 steps max |
 | Summary Limit | 5000 characters max |
+| UI Preview | `subagentPreviewStore` + `Ctrl+T` task panel; inline task UI shows tool progress + summary stream |
 
-### Using the Task Tool
+### Subagent UI Preview
+
+`runSubagent()` maintains a read-only `UIMessage[]` in `subagentPreviewStore` for the task panel (`Ctrl+T`).
+The default task tool row shows the current subagent tool (like before); during the final summary step,
+text streams via `emitStreamingChunk` into `StreamingOutputView` (plain last lines, like `run_command`).
+Only the last text-only step is returned to the parent as the task `summary`.
+
 
 ```typescript
 {

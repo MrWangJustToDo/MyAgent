@@ -3,12 +3,14 @@ import { Box, Text } from "ink";
 import { FullBox } from "../components/FullBox.js";
 import { MessageList } from "../components/MessageList.js";
 import { Spinner } from "../components/Spinner.js";
+import { SubagentPanel } from "../components/SubagentPanel.js";
 import { useAdapter } from "../context/adapter-context.js";
 import { useAgentChat } from "../hooks/use-agent-chat.js";
 import { useAgentInputControls } from "../hooks/use-agent-input-controls.js";
 import { useConfig } from "../hooks/use-config.js";
 import { useSize } from "../hooks/use-size.js";
 import { useStatic } from "../hooks/use-static.js";
+import { useSubagentPanel } from "../hooks/use-subagent-panel.js";
 import { Content } from "../layout/Content.js";
 import { Footer } from "../layout/Footer.js";
 import { Header } from "../layout/Header.js";
@@ -47,6 +49,9 @@ export const Agent = () => {
   } = useAgentChat(config);
 
   const isReady = !initLoading;
+  const subagentPanelView = useSubagentPanel((s) => s.view);
+  const subagentPanelOpen = subagentPanelView !== "closed";
+
   useAgentInputControls({
     adapter,
     initialPrompt: config.initialPrompt,
@@ -88,8 +93,14 @@ export const Agent = () => {
   return (
     <FullBox flexDirection="column">
       <Header />
-      <MessageList messages={messages} />
-      <Content />
+      {subagentPanelOpen ? (
+        <SubagentPanel />
+      ) : (
+        <>
+          <MessageList messages={messages} />
+          <Content />
+        </>
+      )}
       <Footer />
     </FullBox>
   );
