@@ -1,5 +1,4 @@
-import { extractTokenUsage } from "@my-agent/core";
-import { generateText } from "ai";
+import { agentManager, runSideTextQuery, resolveTextAdapterForManaged } from "@my-agent/core";
 import { toRaw } from "reactivity-store";
 
 import { registerCommand } from "./registry.js";
@@ -26,21 +25,24 @@ registerCommand({
     const title = args.trim();
 
     if (title) {
-      // Manual rename
       session.name = title;
       await store.save(session);
       return { ok: true, message: `Session renamed: ${title}` };
     }
 
-    // Auto-generate title using LLM
-    const model = toRaw(agent.getModel());
-    if (!model) {
-      return { ok: false, error: "No model available for title generation" };
-    }
-
     const context = toRaw(agent.getContext());
     if (!context) {
       return { ok: false, error: "No context available" };
+    }
+
+    const managed = agentManager.getAgent(agent.id);
+    if (!managed) {
+      return { ok: false, error: "Managed agent not found" };
+    }
+
+    const textAdapter = await resolveTextAdapterForManaged(managed);
+    if (!textAdapter) {
+      return { ok: false, error: "No text adapter available for title generation" };
     }
 
     const messages = context.getMessages();
@@ -51,7 +53,7 @@ registerCommand({
         if (typeof m.content === "string") return m.content;
         if (Array.isArray(m.content)) {
           const part = m.content.find((p) => (p as Record<string, unknown>).type === "text") as Record<string, unknown>;
-          return (part?.text as string) || "";
+          return (part?.text as string) || (part?.content as string) || "";
         }
         return "";
       })
@@ -67,22 +69,19 @@ registerCommand({
     try {
       const agentLog = toRaw(agent.getLog()) as AgentLog | null;
 
-      agentLog?.info("chat", "Generating title...", { recentText, model });
+      agentLog?.info("chat", "Generating title...", { recentText });
 
-      const result = await generateText({
-        model,
-        maxOutputTokens: 60,
-        instructions:
+      const { text, usage } = await runSideTextQuery(textAdapter, {
+        systemPrompt:
           "Generate a concise title (3-8 words) for the following conversation. Return ONLY the title, no quotes or punctuation.",
-        prompt: recentText,
-        temperature: 0.3,
+        userPrompt: recentText,
+        maxOutputTokens: 60,
       });
 
-      if (context && result.usage) {
-        context.addTotalUsage(extractTokenUsage(result.usage));
+      if (usage) {
+        managed.usage.addTotal(usage);
       }
 
-      const { text } = result;
       agentLog?.info("chat", "Title generated", { text });
 
       const generated = text.trim().slice(0, 80);

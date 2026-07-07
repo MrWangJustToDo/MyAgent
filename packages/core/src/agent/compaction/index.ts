@@ -17,7 +17,7 @@
  * const compactedMessages = microCompact(messages, config);
  *
  * // Check if auto compaction needed
- * if (shouldAutoCompact(compactedMessages, config)) {
+ * if (shouldTriggerAutoCompact(config, { messages: compactedMessages })) {
  *   const result = await autoCompact(compactedMessages, config, agentId);
  * }
  * ```
@@ -51,13 +51,17 @@ export { microCompact } from "./micro-compact.js";
 
 // Auto compaction (Layer 2)
 export {
-  shouldAutoCompact,
+  shouldTriggerAutoCompact,
   summarizeConversation,
   autoCompact,
   createCompactedMessages,
   type SummarizeOptions,
 } from "./auto-compact.js";
-export { applyCompactionResult, type ApplyCompactionResultOptions } from "./apply-compaction-result.js";
+export {
+  applyCompactionResult,
+  applyReactiveCompactionResult,
+  type ApplyCompactionResultOptions,
+} from "./apply-compaction-result.js";
 
 // Reactive compaction (Emergency)
 export { isPromptTooLongError, reactiveCompact, getMaxReactiveRetries } from "./reactive-compact.js";

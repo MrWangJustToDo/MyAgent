@@ -15,7 +15,8 @@
 
 import { createCompactedMessages, summarizeConversation } from "./auto-compact.js";
 
-import type { ModelMessage } from "ai";
+import type { AgentManager } from "../../managers/manager-agent.js";
+import type { ModelMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Constants
@@ -80,13 +81,14 @@ export interface ReactiveCompactConfig {
  *
  * @example
  * ```typescript
- * const compacted = await reactiveCompact(messages, "agent-123");
+ * const compacted = await reactiveCompact(messages, "agent-123", manager);
  * // Returns: [summary-message, ...recent-messages]
  * ```
  */
 export async function reactiveCompact(
   messages: ModelMessage[],
   parentAgentId: string,
+  manager: AgentManager,
   config: ReactiveCompactConfig = {}
 ): Promise<ModelMessage[]> {
   const { keepTail = DEFAULT_REACTIVE_KEEP_TAIL } = config;
@@ -102,7 +104,7 @@ export async function reactiveCompact(
 
   try {
     // Generate LLM summary of the older portion
-    summary = await summarizeConversation(summaryMessages, parentAgentId, {
+    summary = await summarizeConversation(summaryMessages, parentAgentId, manager, {
       focus: "Emergency compaction — preserve all critical information for continuing work",
     });
   } catch {

@@ -2,10 +2,11 @@ import chalk from "chalk";
 
 import { COLORS } from "../theme/colors.js";
 
-import type { ToolUIPart } from "ai";
+import type { UiToolState } from "./tool-part.js";
+import type { ToolCallPart } from "@tanstack/ai";
 
 /** Get status color for tool invocation state. */
-export function getToolCallColor(state: ToolUIPart["state"] | string): string {
+export function getToolCallColor(state: UiToolState | string): string {
   switch (state) {
     case "input-streaming":
       return COLORS.warning;
@@ -43,8 +44,8 @@ export function getDurationMs(output: unknown): number | null {
  * Get a brief inline summary for the header line, such as "3 matches" or "12 files".
  * Returns null if the tool has no meaningful inline summary.
  */
-export function getInlineSummary(part: ToolUIPart, toolName: string): string | null {
-  if (part.state !== "output-available") return null;
+export function getInlineSummary(part: ToolCallPart, toolName: string): string | null {
+  if (part.state !== "complete") return null;
   const output = part.output as Record<string, unknown> | undefined;
   if (!output) return null;
 
@@ -103,7 +104,7 @@ export function getInlineSummary(part: ToolUIPart, toolName: string): string | n
 const SHOW_COMPACT_OUTPUT = new Set(["run_command"]);
 
 /** Get a compact multi-line output summary only for tools where it adds value. */
-export function getCompactOutput(part: ToolUIPart, toolName: string): string | null {
+export function getCompactOutput(part: ToolCallPart, toolName: string): string | null {
   if (!SHOW_COMPACT_OUTPUT.has(toolName)) return null;
   const output = part.output as Record<string, unknown> | undefined;
   if (!output) return null;

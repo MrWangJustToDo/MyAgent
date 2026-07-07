@@ -2,22 +2,33 @@
  * Extract final assistant text from subagent UIMessage snapshots.
  */
 
-import { isToolUIPart, type TextUIPart, type UIMessage } from "ai";
+import type { UIMessage } from "@tanstack/ai";
 
 /** Minimum chars before streaming summary text to the parent task tool UI. */
 export const SUMMARY_STREAM_MIN_CHARS = 80;
 
 type MessagePart = UIMessage["parts"][number];
 
-/** Split assistant parts into per-step segments (delimited by step-start). */
-export function splitStepSegments(parts: MessagePart[]): MessagePart[][] {
+function isToolPart(part: MessagePart): boolean {
+  return part.type === "tool-call" || part.type === "tool-result";
+}
+
+function textFromPart(part: MessagePart): string {
+  if (part.type !== "text") return "";
+  return part.content.trim();
+}
+
+function splitByToolBoundaries(parts: MessagePart[]): MessagePart[][] {
   const segments: MessagePart[][] = [];
   let current: MessagePart[] = [];
 
   for (const part of parts) {
-    if (part.type === "step-start") {
-      if (current.length > 0) segments.push(current);
-      current = [];
+    if (isToolPart(part)) {
+      if (current.length > 0) {
+        segments.push(current);
+        current = [];
+      }
+      segments.push([part]);
       continue;
     }
     current.push(part);
@@ -27,16 +38,22 @@ export function splitStepSegments(parts: MessagePart[]): MessagePart[][] {
   return segments;
 }
 
+/** Split assistant parts into per-step segments at tool-call / tool-result boundaries. */
+export function splitStepSegments(parts: MessagePart[]): MessagePart[][] {
+  return splitByToolBoundaries(parts);
+}
+
 function joinTextParts(parts: MessagePart[]): string {
   return parts
-    .filter((part): part is TextUIPart => part.type === "text")
-    .map((part) => part.text)
+    .filter((part) => part.type === "text")
+    .map((part) => textFromPart(part))
+    .filter(Boolean)
     .join("\n")
     .trim();
 }
 
 function segmentHasTool(parts: MessagePart[]): boolean {
-  return parts.some((part) => isToolUIPart(part));
+  return parts.some((part) => isToolPart(part));
 }
 
 /**
@@ -56,7 +73,7 @@ export function extractAssistantText(messages: UIMessage[]): string {
   }
 
   const lastText = [...lastAssistant.parts].reverse().find((part) => part.type === "text");
-  return lastText?.type === "text" ? lastText.text.trim() : "";
+  return lastText ? textFromPart(lastText) : "";
 }
 
 /**

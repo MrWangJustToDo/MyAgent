@@ -9,14 +9,15 @@
  * Based on Kode-Agent's WebSearchTool implementation.
  */
 
-import { tool } from "ai";
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
-import { agentManager } from "../../managers/manager-agent.js";
 
+import { defineServerTool } from "./tanstack/define-tool.js";
 import { withDuration } from "./util/helpers.js";
 import { toolOutputBaseSchema } from "./util/types.js";
+
+import type { ManagedAgent } from "../../managers/managed-agent.js";
 
 // ============================================================================
 // Constants
@@ -320,10 +321,11 @@ export type WebsearchOutput = z.infer<typeof websearchOutputSchema>;
  * const websearchTool = createWebsearchTool();
  * ```
  */
-export const createWebsearchTool = ({ agentId }: { agentId: string }) => {
+export const createWebsearchTool = ({ managed }: { managed: ManagedAgent }) => {
   const today = getTodayISO();
 
-  return tool({
+  return defineServerTool({
+    name: "websearch",
     description: `Search the web using DuckDuckGo and return relevant results.
 
 Use this tool when you need to:
@@ -391,7 +393,7 @@ Example response format:
 
         const controller = new AbortController();
 
-        const managedAgent = agentManager.getAgent(agentId);
+        const managedAgent = managed;
 
         const hasParentAgent = managedAgent?.parentId;
 
@@ -400,14 +402,14 @@ Example response format:
         });
 
         if (!hasParentAgent) {
-          managedAgent?.agent.addPendingAbortController(controller);
+          managedAgent?.addPendingAbortController(controller);
         }
 
         // Perform search
         const rawResults = await searchDuckDuckGo(query, timeoutMs, controller);
 
         if (!hasParentAgent) {
-          managedAgent?.agent.removePendingAbortController(controller);
+          managedAgent?.removePendingAbortController(controller);
         }
 
         // Filter by domains
@@ -421,16 +423,6 @@ Example response format:
           results,
         };
       });
-    },
-
-    // Only send query + results to the LLM — durationMs/cachedOutputPath are
-    // UI metadata.
-    toModelOutput({ output }: { toolCallId: string; input: unknown; output: z.infer<typeof websearchOutputSchema> }) {
-      const lines = output.results.map((r) => `${r.title}\n${r.url}\n${r.snippet}`);
-      return {
-        type: "content" as const,
-        value: [{ type: "text" as const, text: `Search: ${output.query}\n\n${lines.join("\n\n")}` }],
-      };
     },
   });
 };

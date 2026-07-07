@@ -7,9 +7,10 @@
 
 import { z } from "zod";
 
-import type { TokenUsage } from "../agent-context";
+import type { TokenUsage } from "../../managers/usage-tracker-utils.js";
+import type { ModelStyle } from "../../models/types.js";
 import type { TodoItem } from "../todo-manager";
-import type { ModelMessage, UIMessage } from "ai";
+import type { UIMessage, ModelMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Constants
@@ -27,7 +28,7 @@ export const sessionMetaSchema = z.object({
   id: z.string(),
   name: z.string(),
   version: z.number().int().positive(),
-  provider: z.string(),
+  modelStyle: z.enum(["openai", "anthropic"]),
   model: z.string(),
   createdAt: z.number(),
   updatedAt: z.number(),
@@ -42,8 +43,8 @@ export interface SessionData {
   name: string;
   /** Schema version for future migrations */
   version: number;
-  /** LLM provider used (e.g., "ollama", "openRouter", "deepseek") */
-  provider: string;
+  /** API style used for this session */
+  modelStyle: ModelStyle;
   /** Model name used */
   model: string;
   /** Full conversation as UIMessages (for client display on resume) */

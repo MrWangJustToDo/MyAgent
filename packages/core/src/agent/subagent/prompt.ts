@@ -27,6 +27,3 @@ Your last message must be a complete, standalone answer to the task.`;
 
 /** Default system prompt (with default max iterations). */
 export const SUBAGENT_EXPLORE_SYSTEM_PROMPT = buildExploreSystemPrompt();
-
-/** @deprecated Use buildExploreSystemPrompt() instead */
-export const SUBAGENT_SYSTEM_PROMPT = SUBAGENT_EXPLORE_SYSTEM_PROMPT;

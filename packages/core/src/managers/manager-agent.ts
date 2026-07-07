@@ -1,36 +1,20 @@
-import { convertToModelMessages, type LanguageModel, type UIMessage } from "ai";
-
-import { AgentLog } from "../agent";
-import { AgentContext } from "../agent/agent-context";
-import { loadAgentDoc, formatAgentDocResult } from "../agent/agent-doc-loader.js";
-import { createCompactionConfig } from "../agent/compaction/types.js";
-import { HookRegistry } from "../agent/hooks/hook-registry.js";
-import { ACTIVE_STATUSES } from "../agent/loop/agent-status.js";
-import { Agent } from "../agent/loop/Agent.js";
-import { emitAgentEvent } from "../agent/loop/emit-agent-event.js";
-import { loadMcpConfig } from "../agent/mcp/config.js";
-import { McpManager } from "../agent/mcp/manager.js";
-import { MemoryManager } from "../agent/memory/memory-manager.js";
-import { SessionStore } from "../agent/session/session-store.js";
-import { SkillRegistry } from "../agent/skills/skill-registry.js";
-import { TodoManager } from "../agent/todo-manager";
-import { createTools, createWebfetchTool, createWebsearchTool } from "../agent/tools";
-import { createAskUserTool } from "../agent/tools/ask-user-tool.js";
-import { createListSkillsTool } from "../agent/tools/list-skills-tool.js";
-import { createLoadSkillTool } from "../agent/tools/load-skill-tool.js";
-import { createTaskTool } from "../agent/tools/task-tool.js";
 import { getEnv } from "../env.js";
-import { getModel } from "../models/registry.js";
 
 import { AgentEventBus } from "./agent-event-bus.js";
+import { buildManagedAgent } from "./agent-factory.js";
+import { ACTIVE_STATUSES } from "./agent-status.js";
+import { attachEventLogBridge } from "./event-log-bridge.js";
+import { runManagedAgent, runManagedAgentStream, type RunAgentOptions, type RunAgentStreamInput } from "./run-agent.js";
+import { emitSessionBootstrapEvents } from "./session-bootstrap-events.js";
 
 import type { AgentEvent, AgentEventListener, AgentEventType } from "./agent-event-bus.js";
-import type { CompactionConfigInput } from "../agent/compaction/types.js";
-import type { AgentConfig, ToolSet } from "../agent/loop/types.js";
+import type { ManagedAgent, ManagedAgentConfig } from "./managed-agent.js";
 import type { ResumeResult, SessionData } from "../agent/session/types.js";
-import type { ModelInfo } from "../models/types.js";
+import type { StreamChunk } from "@tanstack/ai";
 
 export type { AgentEvent, AgentEventListener, AgentEventType } from "./agent-event-bus.js";
+export type { ManagedAgent, ManagedAgentConfig } from "./managed-agent.js";
+export type { RunAgentOptions, RunAgentStreamInput } from "./run-agent.js";
 
 // ============================================================================
 // Types & Schemas
@@ -73,64 +57,6 @@ export async function getDefaultSkillDirs(): Promise<string[]> {
   return dirs;
 }
 
-export type ManagedAgentConfig<T = Agent | AgentContext> = AgentConfig & {
-  /** Optional custom ID for the agent (auto-generated if not provided) */
-  id?: string;
-  name: string;
-  /** Vercel AI SDK LanguageModel instance */
-  languageModel: LanguageModel;
-  /** Model metadata from the registry (auto-resolved from config.model if not provided) */
-  modelInfo?: ModelInfo;
-  setUp?: (instance: T) => T;
-  /** Skill directories to load (relative to CoreEnv rootPath or absolute). Defaults to [".agents/skills"] */
-  skillDirs?: string[];
-  /** Compaction configuration for context management */
-  compaction?: CompactionConfigInput;
-  /** Path to MCP config file (relative to CoreEnv rootPath). Defaults to ".opencode/mcp.json" */
-  mcpConfigPath?: string;
-  /**
-   * Agent documentation filenames to search for, in priority order.
-   * These files (e.g., AGENTS.md, CLAUDE.md) are loaded and injected into
-   * the system prompt to provide project instructions to the agent.
-   *
-   * Default: ["CLAUDE.md", "AGENTS.md"] (CLAUDE.md has higher priority)
-   * Set to [] to disable auto-loading.
-   *
-   * @see https://agents.md/ for the cross-tool AGENTS.md standard
-   */
-  agentDocFilenames?: string[];
-  /**
-   * Whether to also look for a local override file (e.g., AGENTS.override.md).
-   * Override files are gitignored and contain personal/local overrides.
-   * Default: true
-   */
-  agentDocLoadOverride?: boolean;
-};
-
-/** Agent instance managed by AgentManager */
-export interface ManagedAgent {
-  id: string;
-  name: string;
-  config: ManagedAgentConfig<Agent | AgentContext>;
-  /** The actual Agent instance */
-  agent: Agent;
-  log: AgentLog;
-  /** Convenience accessor for agent.context */
-  context: AgentContext;
-  tools: ToolSet;
-  todoManager: TodoManager | null;
-  /**
-   * Current agent status. Dynamically reflects `agent.status` so it stays
-   * in sync with the live agent (running / thinking / aborted / ...).
-   */
-  readonly status: Agent["status"];
-  error?: string;
-  parentId?: string; // For subagent support
-  childIds: string[]; // For agent team support
-  createdAt: number;
-  updatedAt: number;
-}
-
 // ============================================================================
 // AgentManager Class
 // ============================================================================
@@ -140,9 +66,19 @@ export class AgentManager {
   private agents: Map<string, ManagedAgent> = new Map();
 
   /** Unified event bus for in-process listeners and hook scripts */
-  private eventBus = new AgentEventBus(
-    (event) => this.agents.get(event.agentId) ?? (event.parentId ? this.agents.get(event.parentId) : undefined)
-  );
+  private eventBus = new AgentEventBus((event) => {
+    const managed = this.agents.get(event.agentId) ?? (event.parentId ? this.agents.get(event.parentId) : undefined);
+    return managed ? { hookRegistry: managed.hookRegistry, log: managed.log } : undefined;
+  });
+
+  private readonly _detachEventLogBridge: () => void;
+
+  constructor() {
+    this._detachEventLogBridge = attachEventLogBridge(this.eventBus, (event) => {
+      const managed = this.agents.get(event.agentId) ?? (event.parentId ? this.agents.get(event.parentId) : undefined);
+      return managed?.log ?? null;
+    });
+  }
 
   // ============================================================================
   // Event Emitter
@@ -190,211 +126,36 @@ export class AgentManager {
   /**
    * Create a new agent
    */
-  async createManagedAgent(config: ManagedAgentConfig, parentId?: string): Promise<Agent> {
-    const {
-      id: customId,
-      setUp,
-      languageModel,
-      modelInfo: explicitModelInfo,
-      name,
-      skillDirs,
-      compaction,
-      mcpConfigPath,
-      ...restConfig
-    } = config;
-
-    // Resolve ModelInfo: explicit > registry lookup by model string > null
-    const resolvedModelInfo = explicitModelInfo ?? getModel(restConfig.model) ?? null;
-
-    const fsRootPath = getEnv().rootPath;
-
-    const context = new AgentContext({ setUp: setUp as ManagedAgentConfig<AgentContext>["setUp"] });
-
-    const tools = await createTools({ context });
-
-    const log = new AgentLog();
-
-    const todoManager = parentId ? null : new TodoManager();
-
-    const agent = new Agent(restConfig, { id: customId, setUp: setUp as ManagedAgentConfig<Agent>["setUp"] });
-
-    // Set the Vercel AI SDK model
-    agent.setModel(languageModel);
-
-    // Set model metadata (for context-aware compaction, default maxTokens, cost tracking)
-    if (resolvedModelInfo) {
-      agent.setModelInfo(resolvedModelInfo);
-      if (resolvedModelInfo.pricing) {
-        context.setPricing(resolvedModelInfo.pricing);
-      }
-      context.setCapabilities(resolvedModelInfo.capabilities);
-    }
-
-    // Set tools - convert from Tools record to ToolSet
-    agent.setTools(tools);
-
-    agent.setContext(context);
-
-    agent.setLog(log);
-
-    // Load agent documentation (AGENTS.md / CLAUDE.md) for root agents
-    // This happens early so the content is available for buildSystemPrompt() on the first call
-    if (!parentId) {
-      const docResult = await loadAgentDoc({
-        rootPath: fsRootPath,
-        filenames: config.agentDocFilenames,
-        loadOverride: config.agentDocLoadOverride !== false, // Default: true
-        logger: log,
-      });
-      if (docResult.content) {
-        const instructions = docResult.overrideContent
-          ? `${docResult.content}\n\n## Local Override\n\n${docResult.overrideContent}`
-          : docResult.content;
-        agent.setAgentDocContent(instructions, docResult.source);
-        log.info("system", formatAgentDocResult(docResult));
-      }
-    }
-
-    // Todo, webfetch, websearch are only for root agents.
-    // Subagents get their tools overridden in runSubagent() anyway,
-    // but skipping here avoids a useless TodoManager and nag reminders.
-    if (!parentId && todoManager) {
-      agent.setTodoManager(todoManager);
-
-      agent.addTools({
-        webfetch: createWebfetchTool({ agentId: agent.id }),
-        websearch: createWebsearchTool({ agentId: agent.id }),
-      });
-    }
-
-    // Ask-user tool (root agents only — subagents don't interact with users)
-    // Client-side tool: no execute function, handled by the CLI via addToolOutput
-    if (!parentId) {
-      agent.addTools({ ask_user: createAskUserTool() });
-    }
-
-    // Load skills and add skill tools (only for root agents, not subagents)
-    if (!parentId) {
-      const skillRegistry = new SkillRegistry({
-        rootPath: fsRootPath,
-        logger: log,
-      });
-
-      agent.setSkillRegister(skillRegistry);
-
-      // Load skills from configured directories (or default)
-      // Default order: env var paths -> user home ~/.agents/skills -> project .agents/skills
-      const dirsToLoad = skillDirs ?? (await getDefaultSkillDirs());
-      await skillRegistry.loadFromDirectories(dirsToLoad);
-
-      // Add skill tools
-      const listSkillsTool = createListSkillsTool({ skillRegistry });
-      const loadSkillTool = createLoadSkillTool({ skillRegistry });
-      agent.addTools({ list_skills: listSkillsTool, load_skill: loadSkillTool });
-
-      // Add task tool for subagent delegation
-      const taskTool = createTaskTool({ parentAgentId: agent.id });
-      agent.addTools({ task: taskTool });
-
-      // Set up compaction config (auto-compact runs in prepareStep; manual: CLI /compact)
-      // Derive tokenThreshold from model's contextWindow if not explicitly set
-      const compactionInput = { ...compaction };
-      if (!compactionInput?.tokenThreshold && resolvedModelInfo?.contextWindow) {
-        const MAX_THRESHOLD = 200_000;
-        compactionInput.tokenThreshold = Math.min(resolvedModelInfo.contextWindow, MAX_THRESHOLD);
-      }
-      const compactionConfig = createCompactionConfig(compactionInput);
-      agent.setCompactionConfig(compactionConfig);
-
-      // MCP Integration: connect to configured MCP servers and register their tools (root agents only)
-      const mcpManager = new McpManager();
-      agent.setMcpManager(mcpManager);
-      const mcpConfig = await loadMcpConfig(log, mcpConfigPath);
-      if (mcpConfig && Object.keys(mcpConfig.mcpServers).length > 0) {
-        const mcpTools = await mcpManager.initialize(mcpConfig, log);
-        if (Object.keys(mcpTools).length > 0) {
-          agent.addTools(mcpTools);
-        }
-      }
-
-      // Memory system: persistent cross-session knowledge (root agents only)
-      const memoryManager = new MemoryManager({ rootPath: fsRootPath }, log);
-      await memoryManager.initialize();
-      agent.setMemoryManager(memoryManager);
-      agent.setMemoryContent(memoryManager.getIndexContent());
-    }
-
-    // Hook system (root agents only)
-    if (!parentId) {
-      const hookRegistry = new HookRegistry(fsRootPath);
-      try {
-        await hookRegistry.load();
-        agent.hookRegistry = hookRegistry;
-        if (hookRegistry.hasHooks()) {
-          log.info("system", "Hooks loaded from .agent-hooks/hooks.json");
-        }
-      } catch (err) {
-        log.warn("system", `Failed to load hooks: ${err}`);
-      }
-    }
-
-    // Wire unified event dispatch (routes to both listeners and hooks)
-    agent.dispatchEvent = (event) => this.emit(event);
-
-    // Session persistence (root agents only)
-    if (!parentId) {
-      const sessionStore = new SessionStore();
-      agent.setSessionStore(sessionStore, {
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        provider: languageModel?.provider ?? "unknown",
-        model: restConfig.model,
-      });
-    }
-
-    const id = agent.id;
-
-    const managedAgent: ManagedAgent = {
-      id,
-      name,
+  async createManagedAgent(config: ManagedAgentConfig, parentId?: string): Promise<ManagedAgent> {
+    const { managed, bootstrap } = await buildManagedAgent({
       config,
-      agent,
-      context,
-      tools: tools as ToolSet,
-      log,
-      todoManager,
-      get status() {
-        return agent.status;
-      },
       parentId,
-      childIds: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+      manager: this,
+      emit: (event) => this.emit(event),
+      getDefaultSkillDirs,
+    });
 
-    this.agents.set(id, managedAgent);
+    this.agents.set(managed.id, managed);
 
-    // If this is a subagent, register with parent
+    if (bootstrap) {
+      await emitSessionBootstrapEvents(managed, bootstrap);
+    }
+
     if (parentId) {
       const parent = this.agents.get(parentId);
       if (parent) {
-        parent.childIds.push(id);
+        parent.childIds.push(managed.id);
         parent.updatedAt = Date.now();
       }
     }
 
-    // Emit session:start event (dispatches to both listeners and hooks)
-    if (!parentId) {
-      emitAgentEvent(agent, "session:start", { data: { cwd: fsRootPath } });
-    }
-
-    return agent;
+    return managed;
   }
 
   /**
    * Spawn a subagent from a parent agent
    */
-  async spawnSubagent(parentId: string, config: Partial<ManagedAgentConfig>): Promise<Agent> {
+  async spawnSubagent(parentId: string, config: Partial<ManagedAgentConfig>): Promise<ManagedAgent> {
     const parent = this.agents.get(parentId);
     if (!parent) {
       throw new Error(`Parent agent not found: ${parentId}`);
@@ -478,10 +239,9 @@ export class AgentManager {
     if (!managedAgent) return;
 
     // Force-kill MCP child processes synchronously to prevent orphans on exit
-    managedAgent.agent.mcpManager?.forceKill();
+    managedAgent.mcpManager?.forceKill();
 
-    // Abort the agent if running
-    managedAgent.agent.abort("Agent destroyed");
+    managedAgent.abort("Agent destroyed");
 
     // Destroy all subagents first
     for (const childId of [...managedAgent.childIds]) {
@@ -508,58 +268,15 @@ export class AgentManager {
     const managed = this.agents.get(agentId);
     if (!managed) throw new Error(`Agent not found: ${agentId}`);
 
-    const { agent, context, todoManager } = managed;
-    const store = agent.getSessionStore();
-    if (!store) throw new Error("Session store not available");
-
-    const session = await store.load(sessionId);
-    if (!session) throw new Error(`Session not found: ${sessionId}`);
-
-    // Reset context before restoring — clears old session's usage, cost, messages
-    context.reset();
-
-    // Restore messages and compaction state
-    const messages = await convertToModelMessages(session.uiMessages);
-    context.setMessages(messages);
-    context.setSummaryMessage(session.summaryMessage ?? null);
-    context.setCompactIndex(session.compactIndex ?? 0);
-
-    // Restore accumulated usage to totalUsage (not per-step usage).
-    // Per-step `usage` tracks the current context window fill and gets set
-    // naturally by the next LLM call — pre-filling it with totals would
-    // make getTokenLimitPercent() report an incorrect 100%.
-    if (session.usage) {
-      context.addTotalUsage(session.usage);
-    }
-
-    // Restore the last SDK-reported context window fill so
-    // getTokenLimitPercent() shows the correct percentage before the first LLM call.
-    if (session.contextTokens) {
-      context.updateUsage({ inputTokens: session.contextTokens, outputTokens: 0, totalTokens: session.contextTokens });
-    }
-    if (session.cost != null) {
-      context.setTotalCost(session.cost);
-    }
-
-    // Restore todos
-    if (todoManager) {
-      if (session.todos?.length) {
-        todoManager.restoreTodos(session.todos);
-      } else {
-        todoManager.reset();
-      }
-    }
-
-    // Update agent's session reference
-    agent.setSessionData(session);
+    const session = await managed.restoreSession(sessionId);
 
     return {
-      uiMessages: session.uiMessages as UIMessage[],
+      uiMessages: session.uiMessages,
       session: {
         id: session.id,
         name: session.name,
         version: session.version,
-        provider: session.provider,
+        modelStyle: session.modelStyle,
         model: session.model,
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,
@@ -574,7 +291,7 @@ export class AgentManager {
     const managed = this.agents.get(agentId);
     if (!managed) throw new Error(`Agent not found: ${agentId}`);
 
-    const store = managed.agent.getSessionStore();
+    const store = managed.getSessionStore();
     if (!store) throw new Error("Session store not available");
 
     const latest = await store.getLatest();
@@ -590,10 +307,30 @@ export class AgentManager {
     const managed = this.agents.get(agentId);
     if (!managed) throw new Error(`Agent not found: ${agentId}`);
 
-    const store = managed.agent.getSessionStore();
+    const store = managed.getSessionStore();
     if (!store) return [];
 
     return (await store.list()) as unknown as SessionData[];
+  }
+
+  /**
+   * Run an agent via TanStack `AgentRunner` and yield AG-UI chunks in-process.
+   * Updates {@link ManagedAgent.status} and {@link ManagedAgent.usage} via lifecycle middleware.
+   */
+  runAgentStream(agentId: string, input: RunAgentStreamInput): AsyncIterable<StreamChunk> {
+    return runManagedAgentStream(this, agentId, input);
+  }
+
+  /**
+   * Run an agent via TanStack `AgentRunner`.
+   * Returns AG-UI stream chunks; optionally bridges to UIMessages when `bridgeUI` is set.
+   */
+  runAgent(
+    agentId: string,
+    input: RunAgentStreamInput,
+    options?: RunAgentOptions
+  ): Promise<AsyncIterable<StreamChunk>> {
+    return runManagedAgent(this, agentId, input, options);
   }
 
   /**

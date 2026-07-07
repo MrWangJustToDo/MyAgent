@@ -1,45 +1,34 @@
-import { createMCPClient } from "@ai-sdk/mcp";
+import { createMCPClient } from "@tanstack/ai-mcp";
 
 import { getEnv } from "../../env.js";
 
-import type { McpProcessHandle } from "../../env.js";
-import type { AgentLog } from "../agent-log";
 import type { McpConfig, McpServerConfig } from "./types.js";
-import type { MCPClient, MCPClientConfig } from "@ai-sdk/mcp";
-import type { ToolSet } from "ai";
+import type { McpProcessHandle } from "../../env.js";
+import type { ServerTool } from "@tanstack/ai";
+import type { MCPClient, TransportInput } from "@tanstack/ai-mcp";
 
 // ============================================================================
 // McpServerStatus — public data for display in CLI /mcp command
 // ============================================================================
 
 export interface McpServerStatus {
-  /** Server name from config key */
   name: string;
-  /** Transport type */
   transport: string;
-  /** Number of tools registered from this server */
   toolCount: number;
-  /** Whether the connection succeeded or failed */
   status: "connected" | "failed";
-  /** Error message if connection failed */
   error?: string;
-  /** Stdio command (for stdio transport) */
   command?: string;
-  /** Stdio command args (for stdio transport) */
   args?: string[];
-  /** SSE/HTTP URL (for sse/http transport) */
   url?: string;
-  /** MCP server name reported during handshake */
-  serverName?: string;
-  /** MCP server version reported during handshake */
-  serverVersion?: string;
 }
+
+export type McpToolsRecord = Record<string, ServerTool>;
 
 // ============================================================================
 // Transport Factory
 // ============================================================================
 
-function createTransport(config: McpServerConfig): MCPClientConfig["transport"] {
+function createTransportInput(config: McpServerConfig): TransportInput {
   if (config.transport === "stdio") {
     const env = getEnv();
     if (!env.createMCPStdioTransport) {
@@ -52,7 +41,7 @@ function createTransport(config: McpServerConfig): MCPClientConfig["transport"] 
       command: config.command,
       args: config.args,
       env: config.env,
-    }) as MCPClientConfig["transport"];
+    }) as TransportInput;
   }
   return {
     type: config.transport,
@@ -69,20 +58,19 @@ export class McpManager {
   private clients: Map<string, MCPClient> = new Map();
   private stdioTransports: unknown[] = [];
 
-  /** Per-server status metadata for display (populated during initialize) */
   private serverStatuses: Map<string, McpServerStatus> = new Map();
 
   /**
-   * Connect to all configured MCP servers and return their tools as a merged ToolSet.
+   * Connect to all configured MCP servers and return TanStack {@link ServerTool} records.
    * Failed connections are logged but do not block other servers.
    */
-  async initialize(config: McpConfig, logger?: AgentLog | null): Promise<ToolSet> {
-    const allTools: ToolSet = {};
+  async initialize(config: McpConfig): Promise<McpToolsRecord> {
+    const allTools: McpToolsRecord = {};
     const servers = config.mcpServers;
 
     for (const [name, serverConfig] of Object.entries(servers) as [string, McpServerConfig][]) {
       try {
-        const transport = createTransport(serverConfig);
+        const transport = createTransportInput(serverConfig);
 
         if (serverConfig.transport === "stdio") {
           this.stdioTransports.push(transport);
@@ -91,13 +79,13 @@ export class McpManager {
         const client = await createMCPClient({
           transport,
           name: `my-agent-mcp-${name}`,
+          prefix: `mcp__${name}_`,
         });
 
         const tools = await client.tools();
 
-        for (const [toolName, toolDef] of Object.entries(tools)) {
-          const prefixed = `mcp__${name}__${toolName}`;
-          allTools[prefixed] = toolDef as ToolSet[string];
+        for (const tool of tools) {
+          allTools[tool.name] = tool;
         }
 
         this.clients.set(name, client);
@@ -105,18 +93,11 @@ export class McpManager {
         this.serverStatuses.set(name, {
           name,
           transport: serverConfig.transport,
-          toolCount: Object.keys(tools).length,
+          toolCount: tools.length,
           status: "connected",
           command: serverConfig.transport === "stdio" ? serverConfig.command : undefined,
           args: serverConfig.transport === "stdio" ? serverConfig.args : undefined,
           url: serverConfig.transport !== "stdio" ? serverConfig.url : undefined,
-          serverName: client.serverInfo?.name,
-          serverVersion: client.serverInfo?.version,
-        });
-
-        logger?.info("agent", `MCP server connected: ${name}`, {
-          toolCount: Object.keys(tools).length,
-          transport: serverConfig.transport,
         });
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
@@ -131,27 +112,16 @@ export class McpManager {
           args: serverConfig.transport === "stdio" ? serverConfig.args : undefined,
           url: serverConfig.transport !== "stdio" ? serverConfig.url : undefined,
         });
-
-        logger?.error("agent", `MCP server failed: ${name}`, error, {
-          transport: serverConfig.transport,
-        });
       }
     }
 
     return allTools;
   }
 
-  /**
-   * Get detailed status for all configured MCP servers.
-   */
   getServerStatuses(): McpServerStatus[] {
     return Array.from(this.serverStatuses.values());
   }
 
-  /**
-   * Synchronously force-kill all MCP child processes.
-   * Uses the env's getMCPTransportProcess helper to access child processes.
-   */
   forceKill(): void {
     const env = getEnv();
     for (const transport of this.stdioTransports) {
@@ -175,9 +145,6 @@ export class McpManager {
     this.serverStatuses.clear();
   }
 
-  /**
-   * Disconnect all MCP server connections.
-   */
   async shutdown(): Promise<void> {
     for (const [, client] of this.clients) {
       try {
@@ -191,9 +158,6 @@ export class McpManager {
     this.serverStatuses.clear();
   }
 
-  /**
-   * Get the names of all connected MCP servers.
-   */
   getConnectedServers(): string[] {
     return Array.from(this.clients.keys());
   }

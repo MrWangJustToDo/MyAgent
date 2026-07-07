@@ -1,7 +1,7 @@
 import type { AgentAdapter, CommandResult } from "../adapter/types.js";
 import type { useUserInput } from "../hooks/use-user-input.js";
-import type { Agent } from "@my-agent/core";
-import type { UIMessage } from "ai";
+import type { ManagedAgent } from "@my-agent/core";
+import type { UIMessage } from "@tanstack/ai";
 
 /**
  * Context passed to every command's execute function.
@@ -12,7 +12,7 @@ export interface CommandContext {
   /** Get readonly snapshot of current input state */
   getInputState: () => ReturnType<typeof useUserInput.getReadonlyState>;
   /** Get the current agent instance (may be null if not initialized) */
-  getAgent: () => Agent | null;
+  getAgent: () => ManagedAgent | null;
   /** Set chat messages (for commands that manipulate conversation history) */
   setMessages?: (messages: UIMessage[]) => void;
   /** Exit the application */

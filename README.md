@@ -134,10 +134,10 @@ pnpm build
 Create `.env` in the root:
 
 ```bash
-PROVIDER=ollama            # ollama | openai-compatible | deepseek | openRouter
+MODEL_STYLE=openai         # openai | anthropic
 MODEL=qwen3:8b
-API_URL=http://localhost:11434
-API_KEY=sk-xxx             # Required for non-Ollama providers
+BASE_URL=http://localhost:11434/v1
+API_KEY=sk-xxx             # Required for anthropic; optional for local openai endpoints
 SANDBOX_ENV=local          # local (OS sandbox) | native (no sandbox)
 MAX_ITERATIONS=50
 ```

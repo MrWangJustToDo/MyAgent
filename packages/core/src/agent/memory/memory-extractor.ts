@@ -11,21 +11,22 @@
  *
  * @example
  * ```typescript
- * const count = await extractMemories(messages, memoryManager, "agent-123");
+ * const count = await extractMemories(messages, memoryManager, "agent-123", manager);
  * // Returns number of newly extracted memories
  *
- * await consolidateMemories(memoryManager, "agent-123");
+ * await consolidateMemories(memoryManager, "agent-123", manager);
  * // Merges/deduplicates when threshold exceeded
  * ```
  */
 
-import { runSubagent } from "../subagent/runner.js";
+import { runSubagent } from "../subagent/run-subagent.js";
 
 import { DEFAULT_HARD_MAX_MEMORIES, MEMORY_TYPES } from "./types.js";
 
 import type { MemoryManager } from "./memory-manager.js";
 import type { Memory, MemoryType } from "./types.js";
-import type { ModelMessage } from "ai";
+import type { AgentManager } from "../../managers/manager-agent.js";
+import type { ModelMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Constants
@@ -153,7 +154,8 @@ interface ExtractedMemory {
 export async function extractMemories(
   messages: ModelMessage[],
   memoryManager: MemoryManager,
-  parentAgentId: string
+  parentAgentId: string,
+  manager: AgentManager
 ): Promise<number> {
   // Take only recent messages
   const recentMessages = messages.slice(-EXTRACTION_WINDOW);
@@ -181,18 +183,20 @@ export async function extractMemories(
     `Dialogue:\n${dialogue.slice(0, MAX_EXTRACTION_CHARS)}`,
   ].join("\n");
 
-  const result = await runSubagent({
-    prompt,
-    parentAgentId,
-    systemPrompt: EXTRACTION_SYSTEM_PROMPT,
-    tools: {},
-    maxIterations: 1,
-    maxOutputLength: 2000,
-    retryOnEmpty: false,
-    autoDestroy: true,
-    aggregateUsageToParent: true,
-    description: "memory-extract",
-  });
+  const result = await runSubagent(
+    {
+      prompt,
+      parentAgentId,
+      systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+      tools: {},
+      maxIterations: 1,
+      maxOutputLength: 2000,
+      autoDestroy: true,
+      aggregateUsageToParent: true,
+      description: "memory-extract",
+    },
+    { manager }
+  );
 
   // Parse JSON array from response
   const items = parseJsonArray(result.output);
@@ -244,7 +248,8 @@ export interface ConsolidationResult {
  */
 export async function consolidateMemories(
   memoryManager: MemoryManager,
-  parentAgentId: string
+  parentAgentId: string,
+  manager: AgentManager
 ): Promise<ConsolidationResult> {
   const memories = await memoryManager.listMemories();
   if (memories.length < memoryManager.getConsolidateThreshold()) {
@@ -254,7 +259,7 @@ export async function consolidateMemories(
   // Phase 1: LLM consolidation via lightweight catalog (frontmatter only).
   // This avoids the token-truncation problem where sending full bodies would
   // exceed the context and cause the LLM to only see a subset of memories.
-  const llmChanged = await llmConsolidate(memories, memoryManager, parentAgentId);
+  const llmChanged = await llmConsolidate(memories, memoryManager, parentAgentId, manager);
 
   // Phase 2: Hard-cap eviction. If LLM consolidation didn't reduce enough,
   // evict oldest memories by updatedAt to stay under the hard limit.
@@ -274,7 +279,8 @@ export async function consolidateMemories(
 async function llmConsolidate(
   memories: Memory[],
   memoryManager: MemoryManager,
-  parentAgentId: string
+  parentAgentId: string,
+  manager: AgentManager
 ): Promise<boolean> {
   // Build a lightweight catalog: filename + name + type + description (no body).
   // 59 memories × ~80 chars each ≈ 5KB — well within token limits.
@@ -287,18 +293,20 @@ async function llmConsolidate(
     catalog.slice(0, MAX_CONSOLIDATION_CATALOG_CHARS),
   ].join("\n");
 
-  const result = await runSubagent({
-    prompt,
-    parentAgentId,
-    systemPrompt: CONSOLIDATION_SYSTEM_PROMPT,
-    tools: {},
-    maxIterations: 1,
-    maxOutputLength: 8000,
-    retryOnEmpty: false,
-    autoDestroy: true,
-    aggregateUsageToParent: true,
-    description: "memory-consolidate",
-  });
+  const result = await runSubagent(
+    {
+      prompt,
+      parentAgentId,
+      systemPrompt: CONSOLIDATION_SYSTEM_PROMPT,
+      tools: {},
+      maxIterations: 1,
+      maxOutputLength: 8000,
+      autoDestroy: true,
+      aggregateUsageToParent: true,
+      description: "memory-consolidate",
+    },
+    { manager }
+  );
 
   const decisions = parseConsolidationResponse(result.output);
   if (!decisions) return false;

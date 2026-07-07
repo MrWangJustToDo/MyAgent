@@ -36,7 +36,6 @@ export {
 } from "./utils/format.js";
 
 // Types
-export { attachmentToFileUIPart } from "./types/attachment.js";
 export type { Attachment } from "./types/attachment.js";
 
 export { initHighlighter } from "ink-stream-markdown";

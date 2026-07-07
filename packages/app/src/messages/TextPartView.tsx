@@ -5,10 +5,10 @@ import { useSize } from "../hooks";
 import { COLORS } from "../theme/colors.js";
 import { markdownTheme } from "../theme/markdown-theme.js";
 
-import type { TextUIPart } from "ai";
+import type { TextPart } from "@tanstack/ai";
 
 export interface TextPartViewProps {
-  part: TextUIPart;
+  part: TextPart;
   role: string;
 }
 
@@ -21,7 +21,7 @@ export const TextPartView = ({ part }: TextPartViewProps) => {
       <Box flexShrink={0}>
         <Text color={COLORS.accent}>{"✦ "}</Text>
       </Box>
-      <StreamMarkdown theme={{ ...markdownTheme, width: width - 6 }}>{part.text.trimEnd()}</StreamMarkdown>
+      <StreamMarkdown theme={{ ...markdownTheme, width: width - 6 }}>{part.content.trimEnd()}</StreamMarkdown>
     </Box>
   );
 };

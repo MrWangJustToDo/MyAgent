@@ -1,11 +1,10 @@
-import { agentManager, DirectChatTransport, toolStreamOnError } from "@my-agent/core";
+import { agentManager } from "@my-agent/core";
 
 import type { AdapterHooks, AgentAdapter, AppConfig, ClipboardImageResult, InitResult } from "@my-agent/app";
-import type { Agent } from "@my-agent/core";
-import type { ChatTransport, UIMessage } from "ai";
+import type { ManagedAgent } from "@my-agent/core";
 
 export class LocalAgentAdapter implements AgentAdapter {
-  private agent: Agent | null = null;
+  private agent: ManagedAgent | null = null;
   private _exit: () => void;
   private _readClipboardImage: (() => Promise<ClipboardImageResult | null>) | null;
   private _hooks: AdapterHooks;
@@ -20,22 +19,10 @@ export class LocalAgentAdapter implements AgentAdapter {
     this._hooks = options.hooks;
   }
 
-  createTransport(): ChatTransport<UIMessage> {
-    if (!this.agent) throw new Error("Agent not initialized");
-    // Surface real tool error messages to the UI and the LLM instead of the
-    // AI SDK's generic "An error occurred.". This lets the model see *why* a
-    // tool call failed (e.g. a missing required schema field) and correct it
-    // on the first retry instead of blindly retrying.
-    return new DirectChatTransport({
-      agent: this.agent,
-      onError: toolStreamOnError,
-    }) as ChatTransport<UIMessage>;
-  }
-
   async initialize(config: AppConfig): Promise<InitResult> {
     const { createAgentFromConfig } = await import("@my-agent/app");
     const result = await createAgentFromConfig({ config, name: "local-chat", hooks: this._hooks });
-    this.agent = result.agent as Agent;
+    this.agent = result.agent as ManagedAgent;
     return result;
   }
 

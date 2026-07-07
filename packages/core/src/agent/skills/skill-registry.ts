@@ -82,8 +82,6 @@ export class SkillRegistry {
         this.skills.set(name, skill);
       }
     }
-
-    this.logger?.skill(`Loaded ${this.skills.size} skills total`);
   }
 
   /**

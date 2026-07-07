@@ -15,7 +15,7 @@ import { getMessages } from "../utils/get-messages";
 
 import { CursorFlush } from "./CursorFlush";
 
-import type { UIMessage } from "ai";
+import type { UIMessage } from "@tanstack/ai";
 import type { JSX } from "react";
 
 // ============================================================================

@@ -1,8 +1,8 @@
-import { tool } from "ai";
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
 
+import { defineServerTool } from "./tanstack/define-tool.js";
 import { OUTPUT_LIMITS, truncateString, withDuration } from "./util/helpers.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { toolOutputBaseSchema } from "./util/types.js";
@@ -14,13 +14,14 @@ const MAX_TREE_CHARS = OUTPUT_LIMITS.MAX_CONTENT_CHARS;
 const MAX_TREE_ENTRIES = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
 
 /**
- * Creates a tree tool using Vercel AI SDK.
+ * Creates a tree tool for displaying directory structure.
  *
  * This tool displays the directory tree structure in a hierarchical format.
  * Useful for understanding project structure.
  */
 export const createTreeTool = () => {
-  return tool({
+  return defineServerTool({
+    name: "tree",
     description:
       "Displays the directory tree structure. Shows files and directories in a hierarchical format. Useful for understanding project structure.",
     inputSchema: z.object({
@@ -150,15 +151,6 @@ export const createTreeTool = () => {
           cachedOutputPath: cached.cachedOutputPath,
         };
       });
-    },
-
-    // Only send the tree text to the LLM — path/maxDepth are echoed in the
-    // input, totalEntries/truncated/cachedOutputPath are UI metadata.
-    toModelOutput({ output }: { toolCallId: string; input: unknown; output: { tree: string } }) {
-      return {
-        type: "content" as const,
-        value: [{ type: "text" as const, text: output.tree }],
-      };
     },
   });
 };

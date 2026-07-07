@@ -3,43 +3,25 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:extract-assistant-text
  */
-/* eslint-disable no-undef, import/no-useless-path-segments */
+/* eslint-disable no-undef */
 import assert from "node:assert/strict";
 
-import { extractAssistantText, getSummaryStreamText } from "../dist/index.mjs";
+import { extractAssistantText, getSummaryStreamText } from "../dist/dev.mjs";
 
 const messages = [
-  {
-    id: "user-1",
-    role: "user",
-    parts: [{ type: "text", text: "analyze project" }],
-  },
   {
     id: "assistant-1",
     role: "assistant",
     parts: [
-      { type: "text", text: "I'll start by exploring the project structure." },
-      { type: "step-start" },
-      {
-        type: "tool-read_file",
-        toolCallId: "t1",
-        state: "output-available",
-        input: { path: "README.md" },
-        output: { content: "hi" },
-      },
-      { type: "step-start" },
-      { type: "text", text: "Now let me read package.json files." },
-      {
-        type: "tool-grep",
-        toolCallId: "t2",
-        state: "output-available",
-        input: { pattern: "foo" },
-        output: { matches: [] },
-      },
-      { type: "step-start" },
+      { type: "text", content: "I'll start by exploring the project structure." },
+      { type: "tool-call", id: "tc1", name: "read_file", arguments: "{}", state: "complete", output: "{}" },
+      { type: "tool-result", toolCallId: "tc1", content: "hi", state: "complete" },
+      { type: "text", content: "Now let me read package.json files." },
+      { type: "tool-call", id: "tc2", name: "grep", arguments: "{}", state: "complete", output: "{}" },
+      { type: "tool-result", toolCallId: "tc2", content: "[]", state: "complete" },
       {
         type: "text",
-        text: "## Final Summary\n\nThis is the comprehensive project summary the parent should see.",
+        content: "## Final Summary\n\nThis is the comprehensive project summary the parent should see.",
       },
     ],
   },
@@ -50,10 +32,14 @@ assert.ok(summary.includes("## Final Summary"));
 assert.ok(!summary.includes("I'll start by exploring"));
 assert.ok(!summary.includes("Now let me read"));
 
-const streamText = getSummaryStreamText(messages[1].parts);
+const streamText = getSummaryStreamText(messages[0].parts);
 assert.equal(streamText, summary);
 
-const shortFinal = [{ type: "step-start" }, { type: "text", text: "Short" }];
+const shortFinal = [
+  { type: "tool-call", id: "tc3", name: "glob", arguments: "{}", state: "complete", output: "[]" },
+  { type: "tool-result", toolCallId: "tc3", content: "[]", state: "complete" },
+  { type: "text", content: "Short" },
+];
 assert.equal(getSummaryStreamText(shortFinal), null);
 
 console.log("extract-assistant-text validation passed");

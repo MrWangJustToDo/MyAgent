@@ -1,4 +1,3 @@
-import { type ToolUIPart } from "ai";
 import { Box, Text } from "ink";
 
 import { Spinner } from "../components/Spinner";
@@ -6,16 +5,16 @@ import { useTask } from "../hooks/use-task";
 import { COLORS } from "../theme/colors.js";
 import { formatToolInput } from "../utils/format";
 
-export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
-  const content = part.input as { prompt?: string; description?: string; id: string };
+import type { ToolCallPart } from "@tanstack/ai";
+
+export const TaskToolInputView = ({ toolInput }: { part: ToolCallPart; toolInput: unknown }) => {
+  const content = toolInput as { prompt?: string; description?: string; id: string };
 
   const { allTools, total, agent } = useTask({ id: content.id });
 
   const currentTool = allTools?.at(-1);
-
   const toolName = currentTool ? currentTool.toolName : "";
-
-  const toolInput = formatToolInput(currentTool?.input || {}, toolName || undefined);
+  const currentInput = formatToolInput(currentTool?.input || {}, toolName || undefined);
 
   if (!agent) {
     return (
@@ -37,7 +36,7 @@ export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
             {total && total > 1 ? ` (+${total}) ` : " "}
           </Text>
           <Text color={COLORS.muted} italic dimColor wrap="truncate">
-            {toolInput}
+            {currentInput}
           </Text>
         </>
       ) : (

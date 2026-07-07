@@ -1,3 +1,4 @@
+import { DEFAULT_LOCAL_OPENAI_BASE_URL, type ModelStyle } from "@my-agent/core";
 import { createState } from "reactivity-store";
 
 export const DEFAULT_SERVER_URL = "http://localhost:3100";
@@ -9,10 +10,9 @@ export const useServerConfig = createState(
     connecting: false,
     rootPath: "",
     sandboxEnv: "",
-    // Agent config (user-configurable). No default model — the user must
-    // set one via the popup before connecting.
     model: "",
-    provider: "ollama" as "ollama" | "openRouter" | "openaiCompatible" | "deepseek",
+    style: "openai" as ModelStyle,
+    baseURL: DEFAULT_LOCAL_OPENAI_BASE_URL,
     apiKey: "",
   }),
   {
@@ -35,8 +35,11 @@ export const useServerConfig = createState(
       setModel: (model: string) => {
         s.model = model;
       },
-      setProvider: (provider: "ollama" | "openRouter" | "openaiCompatible" | "deepseek") => {
-        s.provider = provider;
+      setStyle: (style: ModelStyle) => {
+        s.style = style;
+      },
+      setBaseURL: (baseURL: string) => {
+        s.baseURL = baseURL;
       },
       setApiKey: (apiKey: string) => {
         s.apiKey = apiKey;

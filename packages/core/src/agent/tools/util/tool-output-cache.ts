@@ -15,7 +15,7 @@
 
 import { getEnv } from "../../../env.js";
 
-import type { ModelMessage } from "ai";
+import type { ModelMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Constants

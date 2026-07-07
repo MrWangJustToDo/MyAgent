@@ -1,31 +1,25 @@
-import type { Agent, ModelInfo } from "@my-agent/core";
-import type { ChatTransport, UIMessage } from "ai";
+import type { ManagedAgent, ModelInfo, ModelStyle } from "@my-agent/core";
+import type { UIMessage } from "@tanstack/ai";
 
 // ============================================================================
 // App Configuration
 // ============================================================================
 
-export type Provider = "ollama" | "openRouter" | "openaiCompatible" | "deepseek";
-
 export interface AppConfig {
   model: string;
-  url: string;
+  /** API style: OpenAI-compatible or Anthropic Messages */
+  style: ModelStyle;
+  /** API base URL (defaults per style when empty) */
+  baseURL: string;
+  apiKey: string;
   systemPrompt: string;
   initialPrompt: string;
   maxIterations: number;
   debug: boolean;
-  provider: Provider;
-  apiKey: string;
   mcpConfigPath: string;
   continueSession: boolean;
   resumeSession: string;
-  /**
-   * Optional model metadata override (context window, pricing, capabilities, etc).
-   * When provided, this takes priority over the registry lookup and is applied to
-   * the agent even if the model id is not registered.
-   *
-   * Typically derived from MODEL_* environment variables by the host (CLI, etc).
-   */
+  /** Optional model metadata override from MODEL_* env vars */
   modelInfo?: ModelInfo;
 }
 
@@ -40,7 +34,7 @@ export type CommandResult = { ok: true; message?: string } | { ok: false; error:
 // ============================================================================
 
 export interface InitResult {
-  agent: Agent | null;
+  agent: ManagedAgent;
   initialMessages?: UIMessage[];
 }
 
@@ -58,18 +52,8 @@ export interface ClipboardImageResult {
 // ============================================================================
 
 export interface AgentAdapter {
-  /** Create agent with model, tools, and session config */
   initialize(config: AppConfig): Promise<InitResult>;
-
-  /** Create the AI SDK chat transport for the initialized agent */
-  createTransport(): ChatTransport<UIMessage>;
-
-  /** Cleanup agent and resources */
   destroy(): Promise<void>;
-
-  /** Exit the application (platform-specific) */
   exit(): void;
-
-  /** Read image from system clipboard (platform-specific, optional) */
   readClipboardImage?(): Promise<ClipboardImageResult | null>;
 }

@@ -15,7 +15,7 @@ import type { UseAgentChatReturn } from "./use-agent-chat.js";
 import type { useAutocomplete } from "./use-autocomplete.js";
 import type { useCommandOutput } from "./use-command-output.js";
 import type { InputMode, useInputMode } from "./use-input-mode.js";
-import type { AgentLog, Agent as CoreAgent } from "@my-agent/core";
+import type { AgentLog, ManagedAgent } from "@my-agent/core";
 import type { MutableRefObject } from "react";
 
 export interface DenyingToolInfo {
@@ -68,7 +68,7 @@ export function useAgentKeybindings({
   submitAskUserAnswer,
   addToolApprovalResponse,
 }: UseAgentKeybindingsOptions): void {
-  const getAgent = () => toRaw(useAgent.getReactiveState().agent) as CoreAgent | null;
+  const getAgent = () => toRaw(useAgent.getReactiveState().agent) as ManagedAgent | null;
 
   useInput((inputChar, inputKey) => {
     inputActions.addEvent(inputChar, inputKey);

@@ -1,4 +1,7 @@
-// Core Environment API (must be registered before using any core functionality)
+// ============================================================================
+// CoreEnv — register before any core usage
+// ============================================================================
+
 export {
   registerCoreEnv,
   clearCoreEnv,
@@ -19,42 +22,99 @@ export {
   type McpProcessHandle,
 } from "./env.js";
 
-// Agent (main export)
-export * from "./agent";
+// ============================================================================
+// Runtime — agent manager & managed agent
+// ============================================================================
 
-// Base utilities
-export { generateId, generateShortId, createSequentialIdGenerator } from "./agent/utils.js";
+export { agentManager, AgentManager } from "./managers/manager-agent.js";
+export type {
+  AgentEvent,
+  AgentEventListener,
+  AgentEventType,
+  RunAgentOptions,
+  RunAgentStreamInput,
+} from "./managers/manager-agent.js";
+export { ManagedAgent, type ManagedAgentConfig } from "./managers/managed-agent.js";
+export type { AgentStatus } from "./managers/agent-types.js";
+export { localConnect, createLocalConnect, type LocalConnectManager } from "./connect";
 
-// Streaming callback for real-time tool output
+// ============================================================================
+// Agent state (hosts / UI)
+// ============================================================================
+
+export { AgentContext, type TokenUsage } from "./agent/agent-context";
+export { AgentLog, type AgentNotification } from "./agent/agent-log";
+export { TodoManager, type TodoItem, type TodoStatus, type TodoPriority, STATUS_ICONS } from "./agent/todo-manager";
+
+// ============================================================================
+// Session
+// ============================================================================
+
+export { SessionStore, type SessionMeta, type SessionData, type ResumeResult } from "./agent/session";
+
+// ============================================================================
+// Compaction (/compact command)
+// ============================================================================
+
+export { applyCompactionResult, autoCompact, estimateTokens } from "./agent/compaction";
+
+// ============================================================================
+// Models & agent bootstrap helpers
+// ============================================================================
+
+export {
+  DEFAULT_BASE_URLS,
+  DEFAULT_LOCAL_OPENAI_BASE_URL,
+  parseModelStyle,
+  resolveModelConfig,
+  resolveModelConnection,
+  lookupModelFromModelsDev,
+  parseModelInfoFromEnv,
+  runSideTextQuery,
+} from "./models/index.js";
+export type { ModelInfo, ModelStyle, ModelConnection, ResolvedModelConfig } from "./models/index.js";
+export { resolveTextAdapterForManaged } from "./managers/run-agent.js";
+export { buildDefaultSystemPrompt } from "./agent/default-prompt.js";
+export { bridgeExternalToolToServer } from "./agent/tools/tanstack/bridge-external-tool.js";
+
+// ============================================================================
+// UI utilities
+// ============================================================================
+
+export { previewEdit, type PreviewEditResult } from "./agent/tools/util/preview-edit.js";
 export {
   setStreamingCallback,
   setStreamingClearCallback,
-  getStreamingCallback,
-  emitStreamingChunk,
-  clearStreamingOutput,
-  type StreamingChunk,
   type StreamingCallback,
   type StreamingClearCallback,
+  type StreamingChunk,
 } from "./agent/tools/util/streaming-callback.js";
 
-// Environment abstraction (types only — implementations provided externally via CoreEnv)
-export * from "./environment";
+// ============================================================================
+// Tool output types (message formatting)
+// ============================================================================
 
-// Managers (class-based state management)
-export * from "./managers";
+export type {
+  EditFileOutput,
+  GlobOutput,
+  GrepOutput,
+  ListFileOutput,
+  RunCommandOutput,
+  TodoOutput,
+  WriteFileOutput,
+} from "./agent/tools/util/types.js";
+export type { ReadFileOutput } from "./agent/tools/read-file-tool.js";
+export type { TaskOutput } from "./agent/tools/task-tool.js";
 
-// Model registry, config, and factory
-export * from "./models";
+// ============================================================================
+// Environment errors & types (node / server adapters)
+// ============================================================================
 
-// Types and schemas
-export * from "./types.js";
+export { FileError, ExecutionError } from "./environment";
+export type { FileEntry, FileStat, CommandResult, RunCommandOptions } from "./environment";
 
-// Re-export zod for schema definitions
-export { z } from "zod";
+// ============================================================================
+// Shared utilities
+// ============================================================================
 
-// Re-export Vercel AI SDK types and classes
-export type { LanguageModel, Tool, UIMessage as VercelUIMessage, UIMessageChunk } from "ai";
-export { DirectChatTransport, ToolLoopAgent } from "ai";
-
-// waiting issue fix for vercel ai sdk
-// https://github.com/vercel/ai/issues/13591
+export { generateId, generateShortId, createSequentialIdGenerator } from "./agent/utils.js";

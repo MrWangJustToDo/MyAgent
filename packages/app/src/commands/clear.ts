@@ -1,4 +1,4 @@
-import { useAgentContext } from "../hooks/use-agent-context.js";
+import { bumpAgentUsage } from "../hooks/use-agent-usage.js";
 import { useDynamic } from "../hooks/use-dynamic.js";
 
 import { registerCommand } from "./registry.js";
@@ -21,35 +21,33 @@ registerCommand({
       return { ok: false, error: "Agent context or session store not available" };
     }
 
-    // Save current session before clearing
+    const usage = agent.usage;
+
     const currentSession = agent.getSessionData();
     if (currentSession) {
       currentSession.summaryMessage = context.getSummaryMessage();
       currentSession.compactIndex = context.getCompactIndex();
-      currentSession.usage = context.getTotalUsage();
-      currentSession.cost = context.getTotalCost();
-      currentSession.contextTokens = context.getUsage().inputTokens;
+      currentSession.usage = { ...usage.getTotal() };
+      currentSession.cost = usage.getTotalCostUsd();
+      currentSession.contextTokens = usage.getWindowUsage().inputTokens;
       await store.save(currentSession);
     }
 
-    // Reset agent context (messages, usage, events)
     context.reset();
-    useAgentContext.getActions().bump();
+    usage.reset();
+    bumpAgentUsage();
 
-    // Create and set a new session
     const newSession = store.create({
-      provider: currentSession?.provider ?? "unknown",
+      modelStyle: currentSession?.modelStyle ?? "openai",
       model: currentSession?.model ?? "unknown",
     });
     agent.setSessionData(newSession);
 
-    // Reset todo manager if available
     const todoManager = agent.getTodoManager();
     if (todoManager) {
       todoManager.reset();
     }
 
-    // Clear UI messages
     if (ctx.setMessages) {
       ctx.setMessages([]);
       setTimeout(() => {

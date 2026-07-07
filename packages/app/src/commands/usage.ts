@@ -29,22 +29,15 @@ registerCommand({
       return { ok: false, error: "Agent not initialized" };
     }
 
-    const context = agent.getContext();
-    if (!context) {
-      return { ok: false, error: "Agent context not available" };
-    }
-
-    const totalUsage = context.getTotalUsage();
-    // usage.inputTokens is the latest step's input (current context window size)
-    const currentUsage = context.getUsage();
-    const cost = context.getTotalCost();
-    const tokenLimit = context.getTokenLimit();
+    const usageTracker = agent.usage;
+    const totalUsage = usageTracker.getTotal();
+    const currentUsage = usageTracker.getWindowUsage();
+    const cost = usageTracker.getTotalCostUsd();
+    const tokenLimit = usageTracker.getTokenLimit();
     const session = agent.getSessionData();
     const modelInfo = agent.getModelInfo();
-    const pricing = context.getPricing();
+    const pricing = usageTracker.getPricing();
 
-    // Cache hit ratio from lifetime usage (persisted, survives resume).
-    // Falls back to agent's in-memory ratio when no usage has been tracked yet.
     const cacheHitRatio =
       totalUsage.inputTokens > 0
         ? (totalUsage.cacheReadTokens ?? 0) / totalUsage.inputTokens
@@ -58,13 +51,11 @@ registerCommand({
       lines.push(`  Model:        ${modelInfo.name}`);
     }
 
-    // --- Cache hit ratio banner (when meaningful data exists) ---
     if (cacheHitRatio > 0) {
       lines.push("");
       lines.push(`  Cache hit:    ${(cacheHitRatio * 100).toFixed(1)}%`);
     }
 
-    // --- Lifetime (cumulative) usage ---
     lines.push("");
     lines.push(`  ── Session Lifetime ──`);
     lines.push(`  Input:        ${fmt(totalUsage.inputTokens)} tokens (cumulative)`);
@@ -89,7 +80,6 @@ registerCommand({
 
     lines.push(`  Total:        ${fmt(totalUsage.totalTokens)} tokens`);
 
-    // --- Current context status ---
     const contextInput = currentUsage.inputTokens;
     if (contextInput > 0) {
       const contextCacheRead = currentUsage.cacheReadTokens ?? 0;

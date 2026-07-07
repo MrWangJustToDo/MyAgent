@@ -10,7 +10,7 @@ import { Notification } from "../components/Notification.js";
 import { SelectList } from "../components/SelectList.js";
 import { Spinner } from "../components/Spinner.js";
 import { UserInput } from "../components/UserInput.js";
-import { useAgentContext } from "../hooks/use-agent-context.js";
+import { useAgentUsage } from "../hooks/use-agent-usage.js";
 import { useAgent } from "../hooks/use-agent.js";
 import { useChatStatus } from "../hooks/use-chat-status.js";
 import { useConfig } from "../hooks/use-config.js";
@@ -18,7 +18,7 @@ import { useInputMode } from "../hooks/use-input-mode.js";
 import { useSelect } from "../hooks/use-select.js";
 import { BG, COLORS } from "../theme/colors.js";
 
-import type { Agent, AgentStatus } from "@my-agent/core";
+import type { ManagedAgent, AgentStatus } from "@my-agent/core";
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -166,10 +166,10 @@ const ContextBar = ({
 }) => {
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  const _error = useAgent((s) => (s.agent as Agent)?.error || "");
+  const _error = useAgent((s) => (s.agent as ManagedAgent)?.error || "");
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  const lastRunDurationMs = useAgent((s) => (s.agent as Agent)?.lastStreamDurationMs || 0);
+  const lastRunDurationMs = useAgent((s) => (s.agent as ManagedAgent)?.lastStreamDurationMs || 0);
 
   const chatError = useChatStatus((s) => s.error);
 
@@ -249,9 +249,7 @@ const StatusBar = ({ mcpCount }: { mcpCount: number }) => {
   const rootPath = getEnv().rootPath;
   const shortPath = rootPath ? (rootPath.length > 30 ? `...${rootPath.slice(-27)}` : rootPath) : "";
 
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  const version = useAgentContext((s) => s.version);
+  const { version } = useAgentUsage();
 
   return (
     <Box justifyContent="space-between" paddingX={1}>

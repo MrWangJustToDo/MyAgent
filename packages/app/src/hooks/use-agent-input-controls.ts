@@ -3,7 +3,6 @@ import { useEffect, useRef } from "react";
 import { toRaw } from "reactivity-store";
 
 import { dispatchCommand } from "../commands";
-import { attachmentToFileUIPart } from "../types/attachment.js";
 
 import { useAgentKeybindings } from "./use-agent-keybindings.js";
 import { useAgent } from "./use-agent.js";
@@ -17,8 +16,8 @@ import type { AgentAdapter } from "../adapter/types.js";
 import type { CommandContext } from "../commands";
 import type { UseAgentChatReturn } from "./use-agent-chat.js";
 import type { DenyingToolInfo } from "./use-agent-keybindings.js";
-import type { Agent as CoreAgent } from "@my-agent/core";
-import type { UIMessage } from "ai";
+import type { ManagedAgent } from "@my-agent/core";
+import type { UIMessage } from "@tanstack/ai";
 
 interface UseAgentInputControlsOptions {
   adapter: AgentAdapter;
@@ -133,7 +132,7 @@ export function useAgentInputControls({
   const commandCtx: CommandContext = {
     inputActions,
     getInputState: () => useUserInput.getReadonlyState(),
-    getAgent: () => toRaw(useAgent.getReactiveState().agent) as CoreAgent,
+    getAgent: () => toRaw(useAgent.getReactiveState().agent) as ManagedAgent,
     setMessages: setMessages as (messages: UIMessage[]) => void,
     exit: () => {
       const agent = useAgent.getReadonlyState().agent;
@@ -168,8 +167,7 @@ export function useAgentInputControls({
     if (!isReady || isLoading) return;
 
     if (attachments.length > 0) {
-      const files = attachments.map((attachment) => attachmentToFileUIPart(attachment));
-      await sendMessage({ text: prompt, files });
+      await sendMessage({ text: prompt, files: attachments });
     } else {
       await sendMessage(prompt);
     }

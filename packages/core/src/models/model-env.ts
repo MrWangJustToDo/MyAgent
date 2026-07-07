@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 
-import type { ModelCapability, ModelInfo, ModelProvider, ModelPricing, ReasoningConfig } from "./types.js";
+import type { ModelCapability, ModelInfo, ModelPricing, ModelStyle, ReasoningConfig } from "./types.js";
 
 /**
  * Zod schema for a single capability string.
@@ -47,8 +47,8 @@ const pricingSchema = z.object({
 export const ModelEnvConfigSchema = z.object({
   /** Display name shown in the UI. Falls back to the model id. */
   name: z.string().min(1).optional(),
-  /** Registry provider id. Used when registering into the registry. */
-  provider: z.string().optional(),
+  /** API style override for metadata. Falls back to connection style when unset. */
+  style: z.enum(["openai", "anthropic"]).optional(),
   /** Model string sent to the API (defaults to MODEL env value). */
   apiModel: z.string().optional(),
   /** Max input context window in tokens. */
@@ -78,7 +78,7 @@ export type ModelEnvConfig = z.infer<typeof ModelEnvConfigSchema>;
  */
 export const MODEL_ENV_KEYS = [
   "MODEL_NAME",
-  "MODEL_PROVIDER",
+  "MODEL_STYLE",
   "MODEL_API_NAME",
   "MODEL_CONTEXT_WINDOW",
   "MODEL_MAX_OUTPUT",
@@ -162,7 +162,7 @@ export function parseModelEnvConfig(env: Record<string, string | undefined>): Mo
 
   const raw = {
     ...(env.MODEL_NAME ? { name: env.MODEL_NAME } : {}),
-    ...(env.MODEL_PROVIDER ? { provider: env.MODEL_PROVIDER } : {}),
+    ...(env.MODEL_STYLE ? { style: env.MODEL_STYLE as ModelStyle } : {}),
     ...(env.MODEL_API_NAME ? { apiModel: env.MODEL_API_NAME } : {}),
     ...(parseNumber(env.MODEL_CONTEXT_WINDOW) !== undefined
       ? { contextWindow: parseNumber(env.MODEL_CONTEXT_WINDOW) }
@@ -193,8 +193,7 @@ export function parseModelEnvConfig(env: Record<string, string | undefined>): Mo
  *
  * - If `envConfig` is undefined, returns undefined (no override).
  * - `modelId` is the active MODEL value (used as id / apiModel / name fallbacks).
- * - `fallbackProvider` is used when neither env nor registry can supply a provider
- *   (e.g. for openai-compatible custom endpoints). May be omitted.
+ * - `fallbackStyle` is used when neither env nor models.dev can supply a style.
  *
  * The `multimodal: true` flag automatically adds the "vision" capability unless
  * `capabilities` is explicitly provided without "vision".
@@ -209,11 +208,11 @@ export function parseModelEnvConfig(env: Record<string, string | undefined>): Mo
 export function resolveModelInfoFromEnv(
   envConfig: ModelEnvConfig | undefined,
   modelId: string,
-  fallbackProvider?: ModelProvider
+  fallbackStyle?: ModelStyle
 ): ModelInfo | undefined {
   if (!envConfig) return undefined;
 
-  const provider = (envConfig.provider as ModelProvider) ?? fallbackProvider ?? "openai";
+  const style = envConfig.style ?? fallbackStyle ?? "openai";
 
   // Merge capabilities: explicit list > [multimodal ? vision : nothing].
   let capabilities: ModelCapability[];
@@ -251,7 +250,7 @@ export function resolveModelInfoFromEnv(
   return {
     id: modelId,
     name: envConfig.name ?? modelId,
-    provider,
+    style,
     apiModel: envConfig.apiModel ?? modelId,
     // No default fallbacks — if env doesn't provide these, the caller should
     // fetch from models.dev or fail with a clear error. Assuming wrong values
@@ -276,8 +275,8 @@ export function resolveModelInfoFromEnv(
 export function parseModelInfoFromEnv(
   env: Record<string, string | undefined>,
   modelId: string,
-  fallbackProvider?: ModelProvider
+  fallbackStyle?: ModelStyle
 ): ModelInfo | undefined {
   const cfg = parseModelEnvConfig(env);
-  return resolveModelInfoFromEnv(cfg, modelId, fallbackProvider);
+  return resolveModelInfoFromEnv(cfg, modelId, fallbackStyle);
 }

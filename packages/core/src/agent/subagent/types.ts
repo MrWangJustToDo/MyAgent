@@ -2,7 +2,8 @@
  * Subagent types, interfaces, and constants.
  */
 
-import type { ModelMessage, ToolSet } from "ai";
+import type { ToolsRecord } from "../tools/tanstack/tools-record.js";
+import type { ModelMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Constants
@@ -20,12 +21,6 @@ export const SUBAGENT_DEFAULT_MAX_ITERATIONS = 50;
 
 /** Default maximum characters for output (truncation limit) */
 export const SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH = 5000;
-
-/** Maximum retries when output is empty */
-export const SUBAGENT_MAX_RETRIES = 2;
-
-/** @deprecated Use SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH instead */
-export const SUBAGENT_MAX_SUMMARY_LENGTH = SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH;
 
 // ============================================================================
 // Types
@@ -45,20 +40,16 @@ export interface SubagentConfig {
   /** Custom system prompt (default: SUBAGENT_EXPLORE_SYSTEM_PROMPT) */
   systemPrompt?: string;
   /** Custom tools (default: read-only exploration tools, pass {} for no tools) */
-  tools?: ToolSet;
-  /** Maximum iterations (default: 30) */
+  tools?: ToolsRecord;
+  /** Maximum iterations (default: 50) */
   maxIterations?: number;
-  /** Maximum retry (default: 2) */
-  maxRetried?: number;
   /** Maximum output length before truncation (default: 5000) */
   maxOutputLength?: number;
-  /** Whether to retry when output is empty (default: true) */
-  retryOnEmpty?: boolean;
   /** Abort signal */
   abortSignal?: AbortSignal;
   /** Auto-destroy subagent after completion (default: true) */
   autoDestroy?: boolean;
-  /** Whether to aggregate usage to parent context (default: true) */
+  /** Whether to aggregate usage to parent agent (default: true) */
   aggregateUsageToParent?: boolean;
   /**
    * Initial messages to seed the subagent's context.
@@ -91,11 +82,6 @@ export interface SubagentResult {
    * producing a final text answer. The findings returned may be partial.
    */
   incomplete: boolean;
-  /** Number of retries attempted */
-  retries: number;
   /** Whether the subagent was cancelled (aborted) before completing */
   aborted: boolean;
 }
-
-/** @deprecated Use SubagentResult.output instead of summary */
-export type SubagentResultLegacy = SubagentResult & { summary: string };

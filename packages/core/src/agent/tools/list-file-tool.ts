@@ -1,25 +1,16 @@
-import { tool } from "ai";
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
 
+import { defineServerTool } from "./tanstack/define-tool.js";
 import { OUTPUT_LIMITS, withDuration } from "./util/helpers.js";
 import { listFileOutputSchema } from "./util/types.js";
 
-import type { ListFileOutput } from "./util/types.js";
-
-/** Default number of entries to return per page */
 const DEFAULT_LIMIT = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
 
-/**
- * Creates a list-file tool using Vercel AI SDK.
- *
- * This tool lists files and directories in the specified directory.
- * Returns the name, type (file or directory), size, and modification date.
- * Supports pagination with offset/limit parameters.
- */
 export const createListFileTool = () => {
-  return tool({
+  return defineServerTool({
+    name: "list_file",
     description:
       "Lists files and directories in the specified directory. Returns the name, type (file or directory), size, and modification date for each entry. Supports pagination with offset/limit.",
     inputSchema: z.object({
@@ -58,8 +49,6 @@ export const createListFileTool = () => {
         }
 
         const allEntries = await fs.readdir(path);
-
-        // Apply pagination
         const paginatedEntries = allEntries.slice(skip, skip + take);
         const totalEntries = allEntries.length;
 
@@ -76,23 +65,6 @@ export const createListFileTool = () => {
           totalEntries,
         };
       });
-    },
-
-    // Only send entries to the LLM — path is echoed in the input,
-    // pagination metadata is for the UI only.
-    toModelOutput({ output }: { toolCallId: string; input: unknown; output: ListFileOutput }) {
-      const lines = output.entries.map((e) => `${e.name}${e.type === "directory" ? "/" : ""}`);
-      return {
-        type: "content" as const,
-        value: [
-          {
-            type: "text" as const,
-            text:
-              `<params> offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit} </params>` +
-              lines.join("\n"),
-          },
-        ],
-      };
     },
   });
 };

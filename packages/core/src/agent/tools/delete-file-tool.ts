@@ -1,22 +1,14 @@
-import { tool } from "ai";
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
 
+import { defineServerTool } from "./tanstack/define-tool.js";
 import { getFileModifiedTime, withDuration } from "./util/helpers.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 
-/**
- * Creates a delete-file tool using Vercel AI SDK.
- *
- * This tool deletes a file or directory.
- * Requires the modifiedTime from a previous read operation to ensure
- * the file hasn't been modified since it was read.
- *
- * Requires user approval before execution.
- */
 export const createDeleteFileTool = () => {
-  return tool({
+  return defineServerTool({
+    name: "delete_file",
     description:
       "Deletes a file or directory. Requires the modifiedTime from a previous read operation to ensure the file hasn't been modified since it was read.",
     inputSchema: z.object({
@@ -44,19 +36,8 @@ export const createDeleteFileTool = () => {
 
         await getEnv().fs.remove(path);
 
-        return {
-          path,
-        };
+        return { path };
       });
-    },
-
-    // Only confirm success to the LLM — path is echoed in the input,
-    // durationMs is execution metadata.
-    toModelOutput({ output }: { toolCallId: string; input: unknown; output: { path: string } }) {
-      return {
-        type: "content" as const,
-        value: [{ type: "text" as const, text: `Deleted: ${output.path}` }],
-      };
     },
   });
 };

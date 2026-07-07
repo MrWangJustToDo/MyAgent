@@ -9,7 +9,7 @@ import {
   useAgentLog,
   useTodoManager,
 } from "@my-agent/app";
-import { DEFAULT_OLLAMA_URL, clearCoreEnv, registerCoreEnv } from "@my-agent/core";
+import { clearCoreEnv, registerCoreEnv } from "@my-agent/core";
 import { createRemoteCoreEnv } from "@my-agent/server/client";
 import { InkTerminalBox } from "@my-react/react-terminal/web";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -30,7 +30,8 @@ configureEnv({ allowNonBrowserUpdates: true });
 const AgentBootstrap = () => {
   const url = useServerConfig((s) => s.url);
   const model = useServerConfig((s) => s.model);
-  const provider = useServerConfig((s) => s.provider);
+  const style = useServerConfig((s) => s.style);
+  const baseURL = useServerConfig((s) => s.baseURL);
   const apiKey = useServerConfig((s) => s.apiKey);
 
   const [adapter, setAdapter] = useState<AgentAdapter | null>(null);
@@ -58,9 +59,9 @@ const AgentBootstrap = () => {
 
       await initConfig({
         model,
-        provider,
+        style,
+        baseURL,
         apiKey,
-        url: provider === "ollama" ? DEFAULT_OLLAMA_URL : "",
         debug: false,
       });
       if (currentInitId !== initIdRef.current) return;
@@ -82,7 +83,7 @@ const AgentBootstrap = () => {
         setLoading(false);
       }
     }
-  }, [url, model, provider, apiKey]);
+  }, [url, model, style, baseURL, apiKey]);
 
   useEffect(() => {
     void runBootstrap();

@@ -1,0 +1,266 @@
+import {
+  createCompactionMiddleware,
+  createHooksMiddleware,
+  createLifecycleMiddleware,
+  createTurnContextMiddleware,
+} from "../agent/middleware";
+import { AgentRunner } from "../agent/runner/agent-runner.js";
+import { resolveToolsRecord, SUBAGENT_EXCLUDED_TOOL_NAMES } from "../agent/tools/tanstack";
+import { createTextAdapter } from "../models/adapter-factory.js";
+import { DEFAULT_BASE_URLS } from "../models/model-config.js";
+
+import { AgentUIChannel } from "./agent-ui-channel.js";
+import { createEmitFn } from "./emit-agent-event.js";
+import { buildManagedAgentDeps } from "./managed-agent-deps.js";
+import { runStreamWithReactiveCompactRetry } from "./reactive-compact-retry.js";
+
+import type { AgentRunDeps } from "./agent-run-deps.js";
+import type { ManagedAgent } from "./managed-agent.js";
+import type { AgentManager } from "./manager-agent.js";
+import type { TextAdapterConfig } from "../models/adapter-factory.js";
+import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai";
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface RunAgentStreamInput {
+  messages?: Array<UIMessage | ModelMessage>;
+  data?: Record<string, unknown>;
+  forwardedProps?: Record<string, unknown>;
+  prompt?: string;
+  abortSignal?: AbortSignal;
+  threadId?: string;
+  runId?: string;
+  parentRunId?: string;
+}
+
+export interface RunAgentOptions {
+  bridgeUI?: boolean;
+}
+
+// ============================================================================
+// Text adapter resolution
+// ============================================================================
+
+export async function resolveTextAdapterForManaged(managed: ManagedAgent): Promise<TextAdapterConfig> {
+  if (managed.textAdapter) return managed.textAdapter;
+
+  const { config } = managed;
+  const style = config.modelStyle;
+  if (!style) {
+    throw new Error(
+      `Agent "${managed.id}" has no modelStyle configured. Set modelStyle, modelBaseURL, and modelApiKey on createManagedAgent().`
+    );
+  }
+
+  managed.textAdapter = createTextAdapter({
+    style,
+    model: config.model,
+    baseURL: config.modelBaseURL ?? DEFAULT_BASE_URLS[style],
+    apiKey: config.modelApiKey,
+  });
+  return managed.textAdapter;
+}
+
+// ============================================================================
+// TanStack tools
+// ============================================================================
+
+function resolveTanStackTools(managed: ManagedAgent): ReturnType<typeof resolveToolsRecord> {
+  if (managed.parentId) {
+    return resolveToolsRecord(managed.tools, { exclude: SUBAGENT_EXCLUDED_TOOL_NAMES });
+  }
+  return resolveToolsRecord(managed.tools);
+}
+
+function buildRunDeps(managed: ManagedAgent, manager: AgentManager): AgentRunDeps {
+  return buildManagedAgentDeps(managed, manager);
+}
+
+// ============================================================================
+// AgentRunner factory
+// ============================================================================
+
+export function buildAgentRunner(
+  managed: ManagedAgent,
+  textAdapter: TextAdapterConfig,
+  manager: AgentManager
+): AgentRunner {
+  const deps = buildRunDeps(managed, manager);
+  const systemPrompt = managed.getSystemPrompt();
+  const emitEvent = createEmitFn(managed);
+
+  const middleware = [
+    createLifecycleMiddleware({
+      getStatus: () => managed.status,
+      setStatus: (status) => managed.setStatus(status),
+      getError: () => managed.error,
+      setError: (error) => {
+        managed.error = error;
+      },
+      usage: deps.usage,
+      log: deps.log,
+      getPricing: () => deps.usage.getPricing(),
+      emitEvent,
+      onFirstModelOutput: () => deps.memory.commitSurfacedMemories(),
+      onRunComplete: () => managed.completeRun(manager),
+    }),
+    createCompactionMiddleware({
+      agentId: deps.agentId,
+      manager: deps.manager,
+      getCompactionConfig: () => deps.compactionConfig,
+      getContext: () => deps.context,
+      getUsage: () => deps.usage,
+      getTodoManager: () => deps.todoManager,
+      getModelInfo: () => deps.modelInfo,
+      shouldTriggerAutoCompact: deps.shouldTriggerAutoCompact,
+      setStatus: deps.setStatus,
+      log: deps.log,
+      emitEvent,
+    }),
+    createTurnContextMiddleware({
+      getDynamicTurnContext: deps.getDynamicTurnContext,
+    }),
+    createHooksMiddleware({
+      getHookRegistry: () => deps.hookRegistry,
+      getSessionId: () => deps.session.getSessionData()?.id ?? deps.agentId,
+      getTodoManager: () => deps.todoManager,
+      log: deps.log,
+      emitEvent,
+    }),
+  ];
+
+  const maxOutputTokens = managed.getConfig().maxTokens ?? deps.modelInfo?.defaultMaxTokens;
+
+  return new AgentRunner({
+    adapter: textAdapter.adapter,
+    model: textAdapter.model,
+    maxIterations: managed.config.maxIterations ?? 10,
+    systemPrompts: systemPrompt ? [systemPrompt] : undefined,
+    tools: managed.tanstackTools ?? [],
+    middleware,
+    temperature: managed.config.temperature,
+    maxOutputTokens,
+  });
+}
+
+function runnerConfigKey(managed: ManagedAgent): string {
+  return JSON.stringify({
+    tools: Object.keys(managed.tools).sort(),
+    model: managed.config.model,
+    maxIterations: managed.config.maxIterations,
+    temperature: managed.config.temperature,
+    modelStyle: managed.config.modelStyle,
+    modelBaseURL: managed.config.modelBaseURL,
+  });
+}
+
+export async function ensureAgentRunner(_manager: AgentManager, managed: ManagedAgent): Promise<AgentRunner> {
+  managed.tanstackTools = resolveTanStackTools(managed) as ManagedAgent["tanstackTools"];
+
+  const textAdapter = await resolveTextAdapterForManaged(managed);
+  const configKey = runnerConfigKey(managed);
+
+  if (managed.runner && managed.runnerConfigKey === configKey) {
+    return managed.runner;
+  }
+
+  managed.runnerConfigKey = configKey;
+  managed.runner = buildAgentRunner(managed, textAdapter, _manager);
+  return managed.runner;
+}
+
+// ============================================================================
+// runAgentStream / runAgent
+// ============================================================================
+
+async function executeManagedAgentRun(
+  manager: AgentManager,
+  agentId: string,
+  input: RunAgentStreamInput
+): Promise<AsyncIterable<StreamChunk>> {
+  const managed = manager.getAgent(agentId);
+  if (!managed) throw new Error(`Agent not found: ${agentId}`);
+
+  const runner = await ensureAgentRunner(manager, managed);
+
+  let messages = input.messages;
+  if (input.prompt && !messages) {
+    messages = [{ role: "user", content: input.prompt }];
+  }
+
+  const prepared = await managed.prepareForRun({
+    messages: messages as Parameters<typeof managed.prepareForRun>[0]["messages"],
+    prompt: input.prompt,
+    abortSignal: input.abortSignal,
+  });
+
+  const preparedMessages = prepared as unknown as ModelMessage[];
+
+  return runStreamWithReactiveCompactRetry({
+    managed,
+    manager,
+    getMessages: () => managed.getContext()?.getMessagesForLLM() ?? preparedMessages,
+    run: (runMessages) =>
+      runner.run({
+        agentId,
+        messages: runMessages,
+        abortSignal: input.abortSignal,
+        threadId: input.threadId,
+        runId: input.runId,
+      }),
+  });
+}
+
+export function runManagedAgentStream(
+  manager: AgentManager,
+  agentId: string,
+  input: RunAgentStreamInput
+): AsyncIterable<StreamChunk> {
+  return (async function* () {
+    const stream = await executeManagedAgentRun(manager, agentId, input);
+    yield* stream;
+  })();
+}
+
+export async function runManagedAgent(
+  manager: AgentManager,
+  agentId: string,
+  input: RunAgentStreamInput,
+  options: RunAgentOptions = {}
+): Promise<AsyncIterable<StreamChunk>> {
+  const rawStream = await executeManagedAgentRun(manager, agentId, input);
+
+  if (!options.bridgeUI) {
+    return rawStream;
+  }
+
+  const managed = manager.getAgent(agentId);
+  if (!managed) throw new Error(`Agent not found: ${agentId}`);
+
+  return bridgeAgentStream(managed, rawStream);
+}
+
+function ensureUIChannel(managed: ManagedAgent): AgentUIChannel {
+  if (!managed.ui) {
+    managed.ui = new AgentUIChannel();
+  }
+  return managed.ui;
+}
+
+async function* bridgeAgentStream(
+  managed: ManagedAgent,
+  stream: AsyncIterable<StreamChunk>
+): AsyncIterable<StreamChunk> {
+  const channel = ensureUIChannel(managed);
+
+  for await (const chunk of stream) {
+    channel.processChunk(chunk);
+    managed.updateSessionUIMessages(channel.getMessages(), { syncContext: false });
+    yield chunk;
+  }
+
+  channel.finalizeStream();
+  managed.updateSessionUIMessages(channel.getMessages(), { syncContext: true });
+}

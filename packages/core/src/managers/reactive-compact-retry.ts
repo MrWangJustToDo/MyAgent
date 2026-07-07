@@ -1,0 +1,92 @@
+import { isPromptTooLongError } from "../agent/compaction/reactive-compact.js";
+
+import type { ManagedAgent } from "./managed-agent.js";
+import type { AgentManager } from "./manager-agent.js";
+import type { ModelMessage, StreamChunk } from "@tanstack/ai";
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/** Extract a human-readable message from an AG-UI RUN_ERROR chunk. */
+export function extractRunErrorMessage(chunk: StreamChunk): string {
+  if (chunk.type !== "RUN_ERROR") return "";
+  const record = chunk as { message?: string; error?: { message?: string } };
+  return record.message ?? record.error?.message ?? "Unknown error";
+}
+
+function errorFromUnknown(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+async function applyReactiveCompactRetry(managed: ManagedAgent): Promise<boolean> {
+  if (!managed.getContext()) return false;
+  managed.setStatus("running");
+  managed.error = "";
+  return true;
+}
+
+export async function tryReactiveCompactRetry(
+  managed: ManagedAgent,
+  manager: AgentManager,
+  error: unknown
+): Promise<boolean> {
+  if (!isPromptTooLongError(error)) return false;
+
+  const compacted = await managed.handleReactiveCompact(error, manager);
+  if (!compacted) return false;
+
+  return applyReactiveCompactRetry(managed);
+}
+
+// ============================================================================
+// Stream wrapper
+// ============================================================================
+
+export interface ReactiveCompactRetryOptions {
+  managed: ManagedAgent;
+  manager: AgentManager;
+  getMessages: () => ModelMessage[];
+  run: (messages: ModelMessage[]) => AsyncIterable<StreamChunk>;
+}
+
+export async function* runStreamWithReactiveCompactRetry(
+  options: ReactiveCompactRetryOptions
+): AsyncIterable<StreamChunk> {
+  let messages = options.getMessages();
+
+  while (true) {
+    let retry = false;
+    const stream = options.run(messages);
+
+    try {
+      for await (const chunk of stream) {
+        if (chunk.type === "RUN_ERROR") {
+          const handled = await tryReactiveCompactRetry(
+            options.managed,
+            options.manager,
+            errorFromUnknown(extractRunErrorMessage(chunk))
+          );
+          if (handled) {
+            retry = true;
+            messages = options.managed.getContext()?.getMessagesForLLM() ?? messages;
+            break;
+          }
+        }
+        yield chunk;
+      }
+    } catch (error) {
+      if (!retry) {
+        const handled = await tryReactiveCompactRetry(options.managed, options.manager, error);
+        if (handled) {
+          retry = true;
+          messages = options.managed.getContext()?.getMessagesForLLM() ?? messages;
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    if (!retry) return;
+  }
+}

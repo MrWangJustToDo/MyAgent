@@ -1,18 +1,14 @@
-import { tool } from "ai";
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
 
+import { defineServerTool } from "./tanstack/define-tool.js";
 import { getFile, getFileModifiedTime, withDuration } from "./util/helpers.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 
-/**
- * Creates a copy-file tool using Vercel AI SDK.
- *
- * Requires user approval before execution.
- */
 export const createCopyFileTool = () => {
-  return tool({
+  return defineServerTool({
+    name: "copy_file",
     description:
       "Copies a file from a source path to a destination path. Requires the modifiedTime from a previous read operation to ensure the source file hasn't been modified since it was read.",
     inputSchema: z.object({
@@ -54,9 +50,7 @@ export const createCopyFileTool = () => {
           throw new Error(`Target file already exists: ${targetPath}`);
         }
 
-        const content = fileRes.content;
-
-        await fs.writeFile(targetPath, content);
+        await fs.writeFile(targetPath, fileRes.content);
 
         const newModifiedTime = await getFileModifiedTime(targetPath);
 
@@ -67,28 +61,7 @@ export const createCopyFileTool = () => {
         };
       });
     },
-
-    // Only confirm success to the LLM — sourcePath/targetPath are echoed in
-    // the input, modifiedTime is for conflict detection, durationMs is metadata.
-    toModelOutput({
-      output,
-    }: {
-      toolCallId: string;
-      input: unknown;
-      output: { sourcePath: string; targetPath: string; modifiedTime: string };
-    }) {
-      return {
-        type: "content" as const,
-        value: [
-          {
-            type: "text" as const,
-            text: `Copied ${output.sourcePath} → ${output.targetPath}，modifiedTime：${output.modifiedTime}`,
-          },
-        ],
-      };
-    },
   });
 };
 
-// Keep the old name as alias for backward compatibility
 export const createCopyFileTools = createCopyFileTool;

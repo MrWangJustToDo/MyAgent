@@ -1,13 +1,14 @@
-import { tool } from "ai";
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
 
+import { defineServerTool } from "./tanstack/define-tool.js";
+import { formatReadFileToolResult } from "./util/format-read-file-result.js";
 import { getFile, withDuration } from "./util/helpers.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 
 import type { FileStat } from "../../environment";
-import type { AgentContext } from "../agent-context/agent-context.js";
+import type { UsageTracker } from "../../managers/usage-tracker.js";
 
 // ============================================================================
 // Constants
@@ -216,7 +217,7 @@ export type ReadFileOutput = z.infer<typeof readFileOutputSchema>;
 // ============================================================================
 
 /**
- * Creates a read-file tool using Vercel AI SDK.
+ * Creates a read-file tool for reading file and directory contents.
  *
  * This tool reads file contents and supports multiple file types:
  * - Text files: Returns content with line numbers, supports offset/limit pagination
@@ -225,16 +226,17 @@ export type ReadFileOutput = z.infer<typeof readFileOutputSchema>;
  * - PDFs: Returns base64 encoded data for document analysis
  * - Binary files: Returns error (cannot read binary files)
  */
-export const createReadFileTool = ({ context }: { context?: AgentContext } = {}) => {
+export const createReadFileTool = ({ usage }: { usage?: UsageTracker } = {}) => {
   const getRemainingTokenBudget = (): number => {
-    if (!context) return Infinity;
-    const limit = context.getTokenLimit();
+    if (!usage) return Infinity;
+    const limit = usage.getTokenLimit();
     if (limit <= 0) return Infinity;
-    const used = context.getUsage().inputTokens;
+    const used = usage.getWindowUsage().inputTokens;
     return Math.max(0, Math.floor((limit - used) * 0.8));
   };
 
-  return tool({
+  return defineServerTool({
+    name: "read_file",
     description: `Read the contents of a file or directory.
 
 Supports multiple file types:
@@ -267,10 +269,8 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
         ),
     }),
 
-    outputSchema: readFileOutputSchema,
-
     execute: async ({ path: filePath, offset, limit }) => {
-      return withDuration(async () => {
+      const result = await withDuration(async () => {
         const fsys = getEnv().fs;
 
         // Check if file/directory exists
@@ -346,7 +346,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
         // Handle images
         if (fileTypeInfo.type === "image") {
           // Skip image data if model doesn't support vision
-          if (context && !context.hasCapability("vision")) {
+          if (usage && !usage.hasCapability("vision")) {
             throw new Error(
               `Cannot analyze image: ${filePath} (${fileTypeInfo.mimeType}). The current model does not support vision — image content cannot be read.`
             );
@@ -484,46 +484,8 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
           truncated: contentTruncated || truncatedByLength || hasMore,
         };
       });
-    },
 
-    // Convert tool output to model-consumable content parts
-    // This enables multi-modal results (images, PDFs) to be properly displayed by vision models
-    toModelOutput({ output }: { toolCallId: string; input: unknown; output: ReadFileOutput }) {
-      // Handle image output - convert to image-data content part for vision models
-      if (output.type === "image") {
-        return {
-          type: "content" as const,
-          value: [
-            { type: "text" as const, text: `Image read: ${output.path} (${Math.round(output.size / 1024)}KB)` },
-            {
-              type: "image-data" as const,
-              data: output.base64,
-              mediaType: output.mimeType,
-            },
-          ],
-        };
-      }
-
-      // Handle PDF output - convert to file-data content part
-      if (output.type === "pdf") {
-        return {
-          type: "content" as const,
-          value: [
-            { type: "text" as const, text: `PDF read: ${output.path} (${Math.round(output.size / 1024)}KB)` },
-            {
-              type: "file-data" as const,
-              data: output.base64,
-              mediaType: "application/pdf",
-            },
-          ],
-        };
-      }
-
-      // For text, directory, and error outputs, use JSON serialization
-      return {
-        type: "json" as const,
-        value: output,
-      };
+      return formatReadFileToolResult(result);
     },
   });
 };

@@ -1,6 +1,6 @@
 import { createState } from "reactivity-store";
 
-import type { UIMessage } from "ai";
+import type { UIMessage } from "@tanstack/ai";
 
 export const useMessageCache = createState(() => ({ state: {} as Record<string, UIMessage[]> }), {
   withActions: (s) => ({

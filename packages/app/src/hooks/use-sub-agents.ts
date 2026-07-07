@@ -3,39 +3,30 @@ import { useEffect, useState } from "react";
 
 import { useAgent } from "./use-agent.js";
 
-import type { Agent } from "@my-agent/core";
+import type { ManagedAgent } from "@my-agent/core";
 
-const getManagerSubagent = (subId: string) => {
+const getManagerSubagent = (subId: string): ManagedAgent | undefined => {
   const id = useAgent.getReadonlyState().agent?.id;
-
   if (!id) return;
 
-  const allSub = agentManager.getSubagents(id);
-
-  const managerAgent = allSub.find((i) => i.id === subId);
-
-  return managerAgent;
+  return agentManager.getSubagents(id).find((managed) => managed.id === subId);
 };
 
 export const useSubAgents = ({ subId }: { subId: string }) => {
-  const [agent, setAgent] = useState<Agent | undefined>(() => getManagerSubagent(subId)?.agent as undefined | Agent);
+  const [agent, setAgent] = useState<ManagedAgent | undefined>(() => getManagerSubagent(subId));
 
   useEffect(() => {
-    const agent = getManagerSubagent(subId)?.agent;
-
-    if (agent) {
-      setAgent(agent);
-    } else {
-      const cb = agentManager.on("subagent:created", (event) => {
-        const subagentId = event.agentId;
-        const managerAgent = agentManager.getAgent(subagentId);
-        if (managerAgent?.id === subId) {
-          setAgent(managerAgent.agent);
-        }
-      });
-
-      return cb;
+    const existing = getManagerSubagent(subId);
+    if (existing) {
+      setAgent(existing);
+      return;
     }
+
+    return agentManager.on("subagent:created", (event) => {
+      if (event.agentId !== subId) return;
+      const managed = agentManager.getAgent(subId);
+      if (managed) setAgent(managed);
+    });
   }, [subId]);
 
   return agent;

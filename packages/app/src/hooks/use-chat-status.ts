@@ -1,6 +1,6 @@
 import { createState } from "reactivity-store";
 
-import type { ChatStatus } from "ai";
+export type ChatStatus = "ready" | "submitted" | "streaming" | "error";
 
 export const useChatStatus = createState(
   () => ({ state: "ready" as ChatStatus, error: null as Error | null, pendingAskUserCount: 0 }),

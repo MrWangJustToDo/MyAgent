@@ -1,33 +1,30 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
-import { Chat, useChat as useAiSdkChat } from "@ai-sdk/react";
-import { agentManager, generateId } from "@my-agent/core";
-import {
-  getToolName,
-  isToolUIPart,
-  lastAssistantMessageIsCompleteWithApprovalResponses,
-  lastAssistantMessageIsCompleteWithToolCalls,
-} from "ai";
-import { useEffect, useCallback, useState, useRef, useMemo } from "react";
+import { agentManager, localConnect } from "@my-agent/core";
+import { useChat } from "@tanstack/ai-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAdapter } from "../context/adapter-context.js";
+import { isToolCallPart, parseToolInput } from "../utils/tool-part.js";
 
 import { useAgent } from "./use-agent.js";
 import { useChatStatus } from "./use-chat-status.js";
 import { useForceUpdate } from "./use-force-update.js";
 
+import type { ChatStatus } from "./use-chat-status.js";
 import type { AppConfig } from "../adapter/types.js";
-import type { Agent } from "@my-agent/core";
-import type { ChatTransport, FileUIPart, UIDataTypes, UIMessage, UIMessagePart, UITools } from "ai";
+import type { Attachment } from "../types/attachment.js";
+import type { ManagedAgent } from "@my-agent/core";
+import type { ContentPart, UIMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type ChatStatus = "ready" | "submitted" | "streaming" | "error";
+export type { ChatStatus };
 
 export interface SendMessageContent {
   text: string;
-  files?: FileUIPart[];
+  files?: Attachment[];
 }
 
 export interface UseAgentChatReturn {
@@ -38,7 +35,7 @@ export interface UseAgentChatReturn {
   isReady: boolean;
   stop: () => void;
   clearMessages: () => void;
-  setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) => void;
+  setMessages: (messages: UIMessage[]) => void;
   error: Error | null;
   initLoading: boolean;
   initError: Error | null | undefined;
@@ -64,6 +61,27 @@ export interface UseAgentChatReturn {
   addToolOutput: (options: { tool: string; toolCallId: string; output: Record<string, unknown> }) => void;
 }
 
+function attachmentToContentPart(attachment: Attachment): ContentPart {
+  if (attachment.type === "image") {
+    return {
+      type: "image",
+      source: { type: "url", value: attachment.dataUrl },
+      metadata: { mediaType: attachment.mediaType, filename: attachment.filename },
+    };
+  }
+  return {
+    type: "text",
+    content: `[Attached file: ${attachment.filename}]`,
+  };
+}
+
+const noopConnection = {
+  connect: () =>
+    (async function* () {
+      /* empty until agent is ready */
+    })(),
+};
+
 // ============================================================================
 // Hook
 // ============================================================================
@@ -73,16 +91,15 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   const [initLoading, setInitLoading] = useState(true);
   const [initError, setInitError] = useState<Error | null>(null);
-  const [agent, setAgent] = useState<Agent | null>(null);
+  const [agent, setAgent] = useState<ManagedAgent | null>(null);
+  const [agentId, setAgentId] = useState<string | null>(null);
+  const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
 
   // @ts-ignore
-  const agentError = useAgent((s) => (s.agent as Agent)?.error || "");
+  const agentError = useAgent((s) => (s.agent as ManagedAgent)?.error || "");
 
   const forceUpdate = useForceUpdate({ time: 100 });
-
-  const chatRef = useRef<Chat<UIMessage> | null>(null);
   const pendingApprovalLengthRef = useRef(0);
-
   const initIdRef = useRef(0);
 
   useEffect(() => {
@@ -94,28 +111,14 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
       try {
         await adapter.destroy();
-
         if (currentInitId !== initIdRef.current) return;
 
         const result = await adapter.initialize(config);
-
         if (currentInitId !== initIdRef.current) return;
 
-        const transport = adapter.createTransport() as ChatTransport<UIMessage>;
-
-        chatRef.current = new Chat<UIMessage>({
-          id: generateId("chat"),
-          transport,
-          messages: result.initialMessages ?? [],
-          sendAutomaticallyWhen(options) {
-            return (
-              lastAssistantMessageIsCompleteWithApprovalResponses(options) ||
-              lastAssistantMessageIsCompleteWithToolCalls(options)
-            );
-          },
-        });
-
         setAgent(result.agent);
+        setAgentId(result.agent?.id ?? null);
+        setInitialMessages((result.initialMessages as UIMessage[] | undefined) ?? []);
       } catch (e) {
         if (currentInitId !== initIdRef.current) return;
         setInitError(e as Error);
@@ -130,55 +133,46 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       }, 500);
     };
 
-    init();
+    void init();
 
     return () => {
       void adapter.destroy();
     };
   }, [
     config.model,
-    config.url,
+    config.baseURL,
     config.systemPrompt,
     config.maxIterations,
-    config.provider,
+    config.style,
     config.apiKey,
     config.mcpConfigPath,
     adapter,
     config,
   ]);
 
-  const chatHelpers = useAiSdkChat<UIMessage>(
-    chatRef.current
-      ? {
-          chat: chatRef.current,
-          experimental_throttle: 100,
-        }
-      : {}
-  );
+  const connection = useMemo(() => (agentId ? localConnect(agentId) : noopConnection), [agentId]);
+
+  const chat = useChat({
+    connection,
+    initialMessages,
+  });
 
   useEffect(() => {
     forceUpdate();
-  }, [chatHelpers.messages, agentError]);
+  }, [chat.messages, agentError, forceUpdate]);
 
-  const prevStatusRef = useRef(chatHelpers.status);
+  const prevStatusRef = useRef(chat.status);
   useEffect(() => {
     const prev = prevStatusRef.current;
-    prevStatusRef.current = chatHelpers.status;
-    if ((prev === "streaming" || prev === "submitted") && chatHelpers.status === "ready") {
-      if (chatHelpers.messages.length > 0 && agent) {
-        agent.updateSessionUIMessages(chatHelpers.messages as UIMessage[]);
+    prevStatusRef.current = chat.status;
+    if ((prev === "streaming" || prev === "submitted") && chat.status === "ready") {
+      if (chat.messages.length > 0 && agent) {
+        agent.updateSessionUIMessages(chat.messages as never);
       }
     }
-  }, [chatHelpers.status, chatHelpers.messages, agent]);
+  }, [chat.status, chat.messages, agent]);
 
   const stop = () => {
-    // Layered cancellation:
-    //  - If there are active subagents, cancel only them (one by one, deepest
-    //    first) by calling each subagent's own abort(). This leaves the root
-    //    agent's abort signal (and therefore the chat hook) untouched, so the
-    //    parent loop can continue after the subagent returns its result.
-    //  - If no subagent is active, fall back to the normal chat stop, which
-    //    aborts the root agent's stream via the hook's abort signal.
     if (agent) {
       const activeSubagents = agentManager.getActiveSubagents(agent.id);
       if (activeSubagents.length > 0) {
@@ -189,33 +183,36 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         return;
       }
     }
-    chatHelpers.stop();
+    chat.stop();
     forceUpdate();
   };
 
   const sendMessage = useCallback(
     async (content: string | SendMessageContent) => {
-      if (!chatRef.current) return;
+      if (!agentId) return;
 
       if (typeof content === "string") {
-        await chatHelpers.sendMessage({ text: content });
-      } else if (content.files && content.files.length > 0) {
-        await chatHelpers.sendMessage({ text: content.text, files: content.files });
+        await chat.sendMessage(content);
+      } else if (content.files?.length) {
+        const parts: ContentPart[] = [{ type: "text", content: content.text }];
+        for (const file of content.files) {
+          parts.push(attachmentToContentPart(file));
+        }
+        await chat.sendMessage({ content: parts });
       } else {
-        await chatHelpers.sendMessage({ text: content.text });
+        await chat.sendMessage(content.text);
       }
       forceUpdate();
     },
-    [chatHelpers, forceUpdate]
+    [agentId, chat, forceUpdate]
   );
 
   const clearMessages = useCallback(() => {
-    chatHelpers.setMessages([]);
-    chatHelpers.clearError();
-  }, [chatHelpers]);
+    chat.clear();
+  }, [chat]);
 
   const addToolApprovalResponse = useCallback(
-    (options: {
+    async (options: {
       id: string;
       approved: boolean;
       reason?: string;
@@ -223,79 +220,40 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       toolCallId?: string;
       toolName?: string;
     }) => {
-      if (options.approved) {
-        chatHelpers.addToolApprovalResponse({
-          id: options.id,
-          approved: true,
-          reason: options.reason,
-        });
-      } else {
-        const errorText = "<error> Tool execution denied by user. </error>" + (options.reason ?? "");
+      await chat.addToolApprovalResponse({
+        id: options.id,
+        approved: options.approved,
+      });
 
-        const updatePart = (part: UIMessagePart<UIDataTypes, UITools>): UIMessagePart<UIDataTypes, UITools> =>
-          isToolUIPart(part) && part.state === "approval-requested" && part.approval.id === options.id
-            ? {
-                ...part,
-                state: "output-denied",
-                approval: { id: options.id, approved: false, reason: errorText },
-              }
-            : part;
-
-        chatHelpers.setMessages((message) => {
-          return message.map((i) => {
-            if (i.role === "assistant") {
-              return {
-                ...i,
-                parts: i.parts.map(updatePart),
-              };
-            } else {
-              return i;
-            }
-          });
-        });
-
-        if (pendingApprovalLengthRef.current === 1) {
-          chatHelpers.sendMessage();
-        }
-
-        // avoid call the original method
-        // 默认拒绝方法只会将state修改为 approval-responded . SEE https://github.com/vercel/ai/blob/50c29b0dc2d23dff959bde8eea21594ba61c46c6/packages/ai/src/ui/chat.ts#L496C23-L496C41
-        // 而在cover转换中，需要 output- 才会生成结果传给llm . SEE https://github.com/vercel/ai/blob/50c29b0dc2d23dff959bde8eea21594ba61c46c6/packages/ai/src/ui/convert-to-model-messages.ts#L310
-        // chatHelpers.addToolApprovalResponse({
-        //   id: options.id,
-        //   approved: false,
-        //   reason: errorText,
-        // });
+      if (!options.approved && pendingApprovalLengthRef.current === 1) {
+        await chat.sendMessage("");
       }
     },
-    [chatHelpers]
+    [chat]
   );
 
-  const status = chatHelpers.status;
+  const status = chat.status as ChatStatus;
 
   useEffect(() => {
-    useChatStatus.getActions().setStatus(chatHelpers.status);
-    useChatStatus.getActions().setError(chatHelpers.error ?? null);
-  }, [chatHelpers.status, chatHelpers.error]);
+    useChatStatus.getActions().setStatus(status);
+    useChatStatus.getActions().setError(chat.error ?? null);
+  }, [status, chat.error]);
 
-  const messages = chatHelpers.messages;
+  const messages = chat.messages;
 
   const allPendingApproval = useMemo(() => {
     const all: UseAgentChatReturn["allPendingApproval"] = [];
     for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i] as UIMessage;
-      if (msg.role === "assistant") {
-        for (const part of msg.parts) {
-          if (isToolUIPart(part)) {
-            const toolPart = part;
-            if (toolPart.state === "approval-requested" && toolPart.approval) {
-              all.push({
-                id: toolPart.approval.id,
-                toolName: getToolName(toolPart),
-                toolCallId: toolPart.toolCallId,
-              });
-            }
-          }
+      const msg = messages[i];
+      if (msg.role !== "assistant") continue;
+      for (const part of msg.parts) {
+        if (!isToolCallPart(part)) continue;
+        if (part.approval?.needsApproval && part.approval.approved === undefined) {
+          all.push({
+            id: part.approval.id,
+            toolName: part.name,
+            toolCallId: part.id,
+          });
         }
       }
     }
@@ -305,19 +263,21 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   const allPendingAskUser = useMemo(() => {
     const all: UseAgentChatReturn["allPendingAskUser"] = [];
     for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i] as UIMessage;
-      if (msg.role === "assistant") {
-        for (const part of msg.parts) {
-          if (isToolUIPart(part) && getToolName(part) === "ask_user" && part.state === "input-available") {
-            const input = part.input as { question?: string; options?: string[]; multiSelect?: boolean } | undefined;
-            all.push({
-              toolCallId: part.toolCallId,
-              question: input?.question ?? "",
-              options: input?.options,
-              multiSelect: input?.multiSelect,
-            });
-          }
-        }
+      const msg = messages[i];
+      if (msg.role !== "assistant") continue;
+      for (const part of msg.parts) {
+        if (!isToolCallPart(part)) continue;
+        if (part.name !== "ask_user") continue;
+        if (part.state !== "input-complete" || part.output !== undefined) continue;
+        const input = parseToolInput(part) as
+          | { question?: string; options?: string[]; multiSelect?: boolean }
+          | undefined;
+        all.push({
+          toolCallId: part.id,
+          question: input?.question ?? "",
+          options: input?.options,
+          multiSelect: input?.multiSelect,
+        });
       }
     }
     return all;
@@ -330,14 +290,14 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   }, [allPendingAskUser]);
 
   const addToolOutput = useCallback(
-    (options: { tool: string; toolCallId: string; output: Record<string, unknown> }) => {
-      chatHelpers.addToolOutput({
-        tool: options.tool as never,
+    async (options: { tool: string; toolCallId: string; output: Record<string, unknown> }) => {
+      await chat.addToolResult({
+        tool: options.tool,
         toolCallId: options.toolCallId,
-        output: options.output as never,
+        output: options.output,
       });
     },
-    [chatHelpers]
+    [chat]
   );
 
   return {
@@ -347,12 +307,12 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     allPendingAskUser,
     addToolOutput,
     status,
-    isLoading: status === "streaming" || status === "submitted",
-    isReady: !initLoading && chatRef.current !== null,
+    isLoading: chat.isLoading,
+    isReady: !initLoading && agentId !== null,
     stop,
     clearMessages,
-    setMessages: chatHelpers.setMessages,
-    error: chatHelpers.error ?? null,
+    setMessages: chat.setMessages,
+    error: chat.error ?? null,
     initLoading,
     initError,
     addToolApprovalResponse,

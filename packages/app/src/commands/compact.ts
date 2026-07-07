@@ -1,4 +1,4 @@
-import { applyCompactionResult, autoCompact, estimateTokens } from "@my-agent/core";
+import { agentManager, applyCompactionResult, autoCompact, estimateTokens } from "@my-agent/core";
 
 import { registerCommand } from "./registry.js";
 
@@ -35,18 +35,18 @@ registerCommand({
 
     const previousStatus = agent.status;
     const tokensBeforeEstimate = estimateTokens(messages);
-    const actualTokens = context.getUsage().inputTokens ?? 0;
+    const actualTokens = agent.usage.getWindowUsage().inputTokens ?? 0;
 
-    agent.status = "compacting";
+    agent.setStatus("compacting");
 
     try {
-      const result = await autoCompact(messages, agent.compactionConfig || {}, agent.id, {
+      const result = await autoCompact(messages, agent.compactionConfig || {}, agent.id, agentManager, {
         focus,
         todos: todos.length > 0 ? todos : undefined,
         actualTokens: actualTokens || undefined,
       });
 
-      const applied = applyCompactionResult(context, result, {
+      const applied = applyCompactionResult(context, agent.usage, result, {
         onCacheCleanupError: (err) => {
           agent.getLog()?.warn("agent", "Failed to cleanup tool cache after /compact", { error: err.message });
         },
@@ -75,7 +75,7 @@ registerCommand({
       const err = error instanceof Error ? error : new Error(String(error));
       return { ok: false, error: `Compaction failed: ${err.message}` };
     } finally {
-      agent.status = previousStatus;
+      agent.setStatus(previousStatus);
     }
   },
 });
