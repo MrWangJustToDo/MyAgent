@@ -11,7 +11,7 @@ import type { useAgentContext as useAgentContextType } from "../hooks/use-agent-
 import type { useAgentLog as useAgentLogType } from "../hooks/use-agent-log.js";
 import type { useAgent as useAgentType } from "../hooks/use-agent.js";
 import type { useTodoManager as useTodoManagerType } from "../hooks/use-todo-manager.js";
-import type { ManagedAgent, AgentContext } from "@my-agent/core";
+import type { ManagedAgent } from "@my-agent/core";
 import type { UIMessage } from "@tanstack/ai";
 
 export interface AdapterHooks {
@@ -27,19 +27,20 @@ export interface CreateAgentOptions {
   hooks: AdapterHooks;
 }
 
-function patchInstance(instance: (ManagedAgent | AgentContext) & { ["$$symbol"]?: symbol }) {
+function patchInstance(instance: ManagedAgent & { ["$$symbol"]?: symbol }) {
   if (instance["$$symbol"]) return instance;
   instance["$$symbol"] = Symbol.for("patch");
   const pInstance = reactive(instance);
   return new Proxy(pInstance, {
     get(target, p, receiver) {
       const key = p.toString()?.toLowerCase?.() || "";
+      // has zod error
       if (key.includes("tool") || key.includes("config")) {
         return toRaw(Reflect.get(target, p, receiver));
       }
       return Reflect.get(target, p, receiver);
     },
-  }) as ManagedAgent | AgentContext;
+  }) as ManagedAgent;
 }
 
 /**

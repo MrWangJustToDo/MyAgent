@@ -15,6 +15,8 @@ export interface CommandContext {
   getAgent: () => ManagedAgent | null;
   /** Set chat messages (for commands that manipulate conversation history) */
   setMessages?: (messages: UIMessage[]) => void;
+  /** Read current chat messages (full UI history) */
+  getMessages?: () => UIMessage[];
   /** Exit the application */
   exit?: () => void;
   /** Agent adapter for platform-specific operations */

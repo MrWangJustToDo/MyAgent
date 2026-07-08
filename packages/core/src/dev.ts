@@ -3,6 +3,7 @@
  * Not part of the public `@my-agent/core` package API.
  */
 
+export { AgentContext } from "./agent/agent-context/agent-context.js";
 export { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, resolveFinishStatus } from "./managers/agent-status.js";
 export { AgentEventBus } from "./managers/agent-event-bus.js";
 export { attachEventLogBridge } from "./managers/event-log-bridge.js";
@@ -24,4 +25,5 @@ export { microCompact } from "./agent/compaction/micro-compact.js";
 export { serializeConversation } from "./agent/compaction/serialize-conversation.js";
 export { estimateTokens } from "./agent/compaction/token-estimator.js";
 export { createHooksMiddleware } from "./agent/middleware";
+export { assertAsyncIterable, formatAgentStreamError } from "./agent/utils/assert-async-iterable.js";
 export { createTanStackSubagentTools, createTanStackTools, getReadOnlyTanStackToolNames } from "./agent/tools/tanstack";

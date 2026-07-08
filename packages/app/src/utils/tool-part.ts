@@ -38,6 +38,14 @@ export function getUiToolState(part: ToolCallPart): UiToolState {
   if (part.approval?.approved === false) {
     return "output-denied";
   }
+
+  // Output means the tool finished — don't keep showing the executing spinner.
+  if (part.output !== undefined) {
+    if (part.state === "error") return "output-error";
+    const failed = typeof part.output === "object" && part.output !== null && (part.output as { success?: boolean }).success === false;
+    return failed ? "output-error" : "output-available";
+  }
+
   if (part.approval?.approved === true && part.state !== "complete" && part.state !== "error") {
     return "approval-responded";
   }

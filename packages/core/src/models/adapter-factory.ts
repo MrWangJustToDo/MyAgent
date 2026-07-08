@@ -1,5 +1,5 @@
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
-import { createOpenaiChat } from "@tanstack/ai-openai";
+import { createOpenaiChatCompletions } from "@tanstack/ai-openai";
 
 import type { ModelStyle } from "./types.js";
 import type { AnyTextAdapter } from "@tanstack/ai";
@@ -27,9 +27,19 @@ export interface ModelAdapterConfig {
 
 /**
  * Create a TanStack text adapter for OpenAI-compatible or Anthropic APIs.
+ *
+ * OpenAI-compatible providers (DeepSeek, Ollama, OpenRouter, gateways) use the
+ * Chat Completions API (`/chat/completions`), not OpenAI's newer Responses API.
  */
 export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig {
   const { style, model, baseURL, apiKey } = config;
+
+  const trimmedBaseURL = baseURL?.trim();
+  if (!trimmedBaseURL) {
+    throw new Error(
+      `Model baseURL is required for style "${style}". Set BASE_URL (or MODEL_BASE_URL) in .env or pass modelBaseURL when creating the agent.`
+    );
+  }
 
   if (style === "anthropic") {
     if (!apiKey) {
@@ -37,7 +47,7 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
     }
     return {
       adapter: createAnthropicChat(model as Parameters<typeof createAnthropicChat>[0], apiKey, {
-        baseURL,
+        baseURL: trimmedBaseURL,
       }),
       model,
     };
@@ -45,7 +55,9 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
 
   const key = apiKey || "not-needed";
   return {
-    adapter: createOpenaiChat(model as Parameters<typeof createOpenaiChat>[0], key, { baseURL }),
+    adapter: createOpenaiChatCompletions(model as Parameters<typeof createOpenaiChatCompletions>[0], key, {
+      baseURL: trimmedBaseURL,
+    }),
     model,
   };
 }

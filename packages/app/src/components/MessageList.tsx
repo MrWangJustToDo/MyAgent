@@ -5,7 +5,7 @@
  */
 
 import { Box, Text } from "ink";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { useDynamic } from "../hooks/use-dynamic";
 import { useStatic } from "../hooks/use-static";
@@ -31,15 +31,19 @@ export interface MessageListProps {
 // ============================================================================
 
 export const MessageList = ({ messages }: MessageListProps) => {
-  const { staticMessages, dynamicMessages } = useMemo(() => getMessages(messages), [messages]);
+  const { staticMessages, dynamicMessages, toolCallsSignature } = getMessages(messages);
 
-  // Only rebuild static list JSX when its length changes (new items appended).
-  // This avoids re-creating the entire static JSX tree on every streaming tick.
+  // Rebuild static list when length changes or merged tool-call state updates earlier rows.
   const lastStaticLengthRef = useRef(0);
+  const lastToolCallsSignatureRef = useRef("");
   const staticListRef = useRef<JSX.Element[]>([]);
 
-  if (staticMessages.length !== lastStaticLengthRef.current) {
+  if (
+    staticMessages.length !== lastStaticLengthRef.current ||
+    toolCallsSignature !== lastToolCallsSignatureRef.current
+  ) {
     lastStaticLengthRef.current = staticMessages.length;
+    lastToolCallsSignatureRef.current = toolCallsSignature;
     staticListRef.current = staticMessages.map((item) => (
       <Box key={item.id} paddingX={1} marginTop={1}>
         <StaticContext value={{ staticMessage: true }}>
@@ -48,6 +52,10 @@ export const MessageList = ({ messages }: MessageListProps) => {
       </Box>
     ));
   }
+
+  useEffect(() => {
+    useStatic.getActions().setToolCallsSignature(toolCallsSignature);
+  }, [toolCallsSignature]);
 
   // Dynamic list — actively streaming/executing parts that change frequently
   const dynamicList = dynamicMessages.length ? (
@@ -68,7 +76,7 @@ export const MessageList = ({ messages }: MessageListProps) => {
 
   useEffect(() => {
     useStatic.getActions().setStaticList(staticListRef.current);
-  }, [staticMessages.length]);
+  }, [staticMessages.length, toolCallsSignature]);
 
   useEffect(() => {
     useDynamic.getActions().setDynamicList(dynamicList);

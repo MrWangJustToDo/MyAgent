@@ -1,5 +1,3 @@
-import { convertMessagesToModelMessages } from "@tanstack/ai";
-
 import { applyReactiveCompactionResult } from "../agent/compaction/apply-compaction-result.js";
 import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
 import { isPromptTooLongError, reactiveCompact } from "../agent/compaction/reactive-compact.js";
@@ -11,11 +9,11 @@ import { emitAgentEvent } from "./emit-agent-event.js";
 import { buildDynamicTurnContext, buildFrozenSystemPrompt } from "./managed-agent-prompt.js";
 import { MemoryService } from "./memory-service.js";
 import { RunCoordinator } from "./run-coordinator.js";
-import { SessionService } from "./session-service.js";
+import { SessionService, type SessionPersistInput } from "./session-service.js";
 import { UsageTracker } from "./usage-tracker.js";
 
 import type { AgentEvent, AgentEventType } from "./agent-event-bus.js";
-import type { AgentConfig, AgentStatus } from "./agent-types.js";
+import type { AgentConfig, AgentStatus, RunFinalizeReason } from "./agent-types.js";
 import type { AgentUIChannel } from "./agent-ui-channel.js";
 import type { AgentManager } from "./manager-agent.js";
 import type { AgentContext } from "../agent/agent-context";
@@ -39,7 +37,9 @@ import type { ModelMessage, UIMessage as TanStackUIMessage, ServerTool } from "@
 // Config
 // ============================================================================
 
-export type ManagedAgentConfig<T = AgentContext> = AgentConfig & {
+export type { RunFinalizeReason } from "./agent-types.js";
+
+export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
   id?: string;
   name: string;
   modelInfo?: ModelInfo;
@@ -133,6 +133,10 @@ export class ManagedAgent {
       session?: SessionService;
     }
   ) {
+    if (config.setUp) {
+      config.setUp(this);
+    }
+
     this.id = init.id ?? config.id ?? generateId("agent");
     this.name = config.name;
     this.config = config;
@@ -267,7 +271,7 @@ export class ManagedAgent {
    */
   syncContextFromUIMessages(uiMessages: TanStackUIMessage[]): void {
     if (!this.context || uiMessages.length === 0) return;
-    this.context.setMessages(convertMessagesToModelMessages(uiMessages));
+    this.context.setUIMessages(uiMessages);
   }
 
   updateSessionUIMessages(uiMessages: TanStackUIMessage[], options: { syncContext?: boolean } = {}): void {
@@ -275,7 +279,46 @@ export class ManagedAgent {
     if (shouldSync) {
       this.syncContextFromUIMessages(uiMessages);
     }
-    this.session.updateUIMessages(uiMessages, this.log, (type, data) => this.emitEvent(type, data));
+    this.persistSession({ uiMessages });
+  }
+
+  private getSessionPersistInput(uiMessages?: TanStackUIMessage[]): SessionPersistInput {
+    return {
+      context: this.context,
+      usage: this.usage,
+      todoManager: this.todoManager,
+      resolveTextAdapter: this.resolveTextAdapter,
+      emitEvent: (type, data) => this.emitEvent(type, data),
+      uiMessages,
+    };
+  }
+
+  /** Persist model state and optionally UI messages in a single session write. */
+  persistSession(options: { uiMessages?: TanStackUIMessage[] } = {}): void {
+    this.session.persistSession(this.getSessionPersistInput(options.uiMessages));
+  }
+
+  /**
+   * Finalize a run — persist session, clear turn memory, optionally extract memories, emit `agent:stop`.
+   * Memory extraction runs only when `reason === "finished"`.
+   */
+  finalizeRun(
+    manager: AgentManager,
+    reason: RunFinalizeReason,
+    options: { uiMessages?: TanStackUIMessage[] } = {}
+  ): void {
+    this.persistSession(options);
+    this.memory.clearTurnContext();
+    if (reason === "finished") {
+      this.memory.runExtraction({
+        agentId: this.id,
+        context: this.context,
+        log: this.log,
+        manager,
+        emitEvent: (type, data) => this.emitEvent(type, data),
+      });
+    }
+    this.emitEvent("agent:stop", { reason });
   }
 
   setAgentDocContent(content: string, source?: string): void {
@@ -355,10 +398,23 @@ export class ManagedAgent {
 
   async prepareForRun(options: {
     prompt?: string | ModelMessage[];
-    messages?: ModelMessage[];
+    messages?: Array<TanStackUIMessage | ModelMessage>;
     abortSignal?: AbortSignal;
   }): Promise<ModelMessage[]> {
-    const finalMessages = this.run.prepareMessages(options);
+    if (options.messages?.length) {
+      this.syncContextFromUIMessages(options.messages as TanStackUIMessage[]);
+    } else if (options.prompt) {
+      const fromPrompt = this.run.prepareMessages({
+        prompt: options.prompt,
+        messages: options.messages as ModelMessage[] | undefined,
+      });
+      this.context?.setMessages(fromPrompt);
+    }
+
+    const llmMessages =
+      this.context?.getMessagesForLLM() ??
+      this.run.prepareMessages(options as Parameters<typeof this.run.prepareMessages>[0]);
+
     this.run.setupAbortController(options.abortSignal, {
       onAborted: () => {
         this.setStatus("aborted");
@@ -368,7 +424,7 @@ export class ManagedAgent {
     if (this.streamStartedAt === 0) this.streamStartedAt = Date.now();
 
     await this.memory.prefetchRelevantMemories({
-      messages: finalMessages,
+      messages: this.context?.getMessages() ?? llmMessages,
       usage: this.usage,
       log: this.log,
       resolveTextAdapter: this.resolveTextAdapter,
@@ -378,7 +434,7 @@ export class ManagedAgent {
     this.emitEvent("prompt:submit", {
       prompt: typeof options.prompt === "string" ? options.prompt : "(structured)",
     });
-    return finalMessages;
+    return llmMessages;
   }
 
   shouldTriggerAutoCompact(messages?: ModelMessage[]): boolean {
@@ -463,27 +519,6 @@ export class ManagedAgent {
       this.emitEvent("compaction:reactive-error", { error: compactError.message });
       return false;
     }
-  }
-
-  /** Called when a run finishes — coordinates session save and memory extraction. */
-  completeRun(manager: AgentManager): void {
-    this.session.saveSession({
-      context: this.context,
-      usage: this.usage,
-      todoManager: this.todoManager,
-      log: this.log,
-      resolveTextAdapter: this.resolveTextAdapter,
-      emitEvent: (type, data) => this.emitEvent(type, data),
-    });
-    this.memory.clearTurnContext();
-    this.memory.runExtraction({
-      agentId: this.id,
-      context: this.context,
-      log: this.log,
-      manager,
-      emitEvent: (type, data) => this.emitEvent(type, data),
-    });
-    this.emitEvent("agent:stop", { reason: "finished" });
   }
 
   async restoreSession(sessionId: string): Promise<SessionData> {

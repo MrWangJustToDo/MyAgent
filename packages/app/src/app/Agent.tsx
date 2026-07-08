@@ -38,6 +38,7 @@ export const Agent = () => {
     messages,
     sendMessage,
     isLoading,
+    isReady,
     stop,
     addToolApprovalResponse,
     addToolOutput,
@@ -47,8 +48,6 @@ export const Agent = () => {
     allPendingAskUser,
     setMessages,
   } = useAgentChat(config);
-
-  const isReady = !initLoading;
   const subagentPanelView = useSubagentPanel((s) => s.view);
   const subagentPanelOpen = subagentPanelView !== "closed";
 
@@ -58,6 +57,7 @@ export const Agent = () => {
     isReady,
     isLoading,
     initLoading,
+    messages,
     sendMessage,
     stop,
     addToolApprovalResponse,

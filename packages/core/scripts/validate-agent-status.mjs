@@ -24,7 +24,14 @@ assert.equal(resolveFinishStatus("responding", ""), "completed");
 const managed = new ManagedAgent(
   { name: "test", model: "gpt-4" },
   {
-    context: { getMessages: () => [], reset: () => {}, setMessages: () => {}, getMessagesForLLM: () => [] },
+    context: {
+      getMessages: () => [],
+      getUIMessages: () => [],
+      reset: () => {},
+      setMessages: () => {},
+      setUIMessages: () => {},
+      getMessagesForLLM: () => [],
+    },
     log: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, agent: () => {}, clear: () => {} },
     tools: {},
     todoManager: null,

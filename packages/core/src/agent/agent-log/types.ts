@@ -63,32 +63,3 @@ export interface LogFilter {
   /** Limit results */
   limit?: number;
 }
-
-// ============================================================================
-// Notification Types
-// ============================================================================
-
-/** Notification severity levels */
-export type NotificationLevel = "info" | "success" | "warning" | "error";
-
-/**
- * A transient notification for UI display.
- * Created via `AgentLog.notify()`. Multiple notifications can be active
- * simultaneously; use `notifyIndex` to track which one the UI is showing.
- */
-export interface AgentNotification {
-  /** Unique ID (same format as log entry IDs) */
-  id: string;
-  /** Category (e.g., "memory", "compaction", "session") */
-  category: LogCategory;
-  /** Severity level */
-  level: NotificationLevel;
-  /** Human-readable message */
-  message: string;
-  /** Optional structured data */
-  data?: Record<string, unknown>;
-  /** Timestamp (ms since epoch) */
-  timestamp: number;
-}
-
-export type AgentNotificationListener = (notification: AgentNotification) => void;

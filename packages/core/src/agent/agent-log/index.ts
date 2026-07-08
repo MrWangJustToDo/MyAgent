@@ -1,13 +1,5 @@
 // Types
-export type {
-  LogLevel,
-  LogCategory,
-  LogEntry,
-  LogFilter,
-  NotificationLevel,
-  AgentNotification,
-  AgentNotificationListener,
-} from "./types.js";
+export type { LogLevel, LogCategory, LogEntry, LogFilter } from "./types.js";
 
 // Schemas
 export { logLevelSchema, logCategorySchema, logEntrySchema, logFilterSchema } from "./schemas.js";

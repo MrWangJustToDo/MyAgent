@@ -1,6 +1,5 @@
 import { createState } from "reactivity-store";
 
-import { useNotification } from "./use-notification.js";
 import {
   appendHistoryEntry,
   createImagePlaceholder,
@@ -47,6 +46,10 @@ export interface UserInputState {
   selectedAttachment: number;
   /** Next image index to use for placeholder */
   nextImageIndex: number;
+  /** Transient input error message */
+  inputError: string | null;
+  /** Transient input feedback message */
+  inputFeedback: { message: string; level: "success" | "info" | "error" } | null;
 
   // debug only
   event: any[];
@@ -68,6 +71,8 @@ const initialState: UserInputState = {
   attachments: [],
   selectedAttachment: -1,
   nextImageIndex: 0,
+  inputError: null,
+  inputFeedback: null,
 };
 
 // ============================================================================
@@ -316,30 +321,21 @@ export const useUserInput = createState(() => ({ ...initialState }), {
      * Show an error notification.
      */
     setInputError: (error: string | null) => {
+      state.inputError = error;
       if (error) {
-        useNotification.getActions().setNotification({
-          id: `input-error-${Date.now()}`,
-          category: "system",
-          level: "error",
-          message: error,
-          timestamp: Date.now(),
-        });
+        state.inputFeedback = null;
       }
     },
 
     /**
-     * Show a feedback notification (success/info/error).
+     * Show a feedback message (success/info/error) near the input.
      */
     setInputFeedback: (text: string | null, type: "success" | "info" | "error" = "info") => {
       if (text) {
-        const levelMap = { success: "success", info: "info", error: "error" } as const;
-        useNotification.getActions().setNotification({
-          id: `input-feedback-${Date.now()}`,
-          category: "system",
-          level: levelMap[type],
-          message: text,
-          timestamp: Date.now(),
-        });
+        state.inputFeedback = { message: text, level: type };
+        state.inputError = null;
+      } else {
+        state.inputFeedback = null;
       }
     },
 
@@ -357,6 +353,8 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.attachments = [];
       state.selectedAttachment = -1;
       state.nextImageIndex = 0;
+      state.inputError = null;
+      state.inputFeedback = null;
     },
   }),
 

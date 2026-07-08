@@ -36,6 +36,16 @@ assert.equal(fromEnv.style, "openai");
 assert.equal(fromEnv.baseURL, DEFAULT_LOCAL_OPENAI_BASE_URL);
 assert.equal(fromEnv.apiKey, "sk-test");
 
+const fromEnvNoV1 = resolveModelConnection({
+  env: {
+    MODEL_STYLE: "openai",
+    MODEL: "custom",
+    BASE_URL: "https://gateway.example.com/api",
+    API_KEY: "key",
+  },
+});
+assert.equal(fromEnvNoV1.baseURL, "https://gateway.example.com/api");
+
 const explicit = resolveModelConnection({
   style: "openai",
   model: "custom",

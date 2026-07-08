@@ -22,15 +22,11 @@ registerCommand({
     }
 
     const usage = agent.usage;
-
     const currentSession = agent.getSessionData();
+    const uiMessages = ctx.getMessages?.() ?? currentSession?.uiMessages;
+
     if (currentSession) {
-      currentSession.summaryMessage = context.getSummaryMessage();
-      currentSession.compactIndex = context.getCompactIndex();
-      currentSession.usage = { ...usage.getTotal() };
-      currentSession.cost = usage.getTotalCostUsd();
-      currentSession.contextTokens = usage.getWindowUsage().inputTokens;
-      await store.save(currentSession);
+      agent.persistSession({ uiMessages });
     }
 
     context.reset();

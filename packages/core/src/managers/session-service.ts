@@ -3,27 +3,24 @@
  * Cross-subsystem data is passed in via input objects; no back-references to other services.
  */
 
-import { convertMessagesToModelMessages } from "@tanstack/ai";
-
 import { runSideTextQuery } from "../models/side-text-query.js";
 
 import type { EmitAgentEventFn } from "./emit-agent-event.js";
 import type { UsageTracker } from "./usage-tracker.js";
 import type { AgentContext } from "../agent/agent-context";
-import type { AgentLog } from "../agent/agent-log";
 import type { SessionStore } from "../agent/session/session-store.js";
 import type { SessionData } from "../agent/session/types.js";
 import type { TodoManager } from "../agent/todo-manager";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
 import type { UIMessage } from "@tanstack/ai";
 
-export interface SessionSaveInput {
+export interface SessionPersistInput {
   context: AgentContext;
   usage: UsageTracker;
   todoManager: TodoManager | null;
-  log: AgentLog | null;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   emitEvent?: EmitAgentEventFn;
+  uiMessages?: UIMessage[];
 }
 
 export interface SessionRestoreInput {
@@ -64,7 +61,7 @@ export class SessionService {
 
   private async generateSessionTitle(
     userMessage: string,
-    input: Pick<SessionSaveInput, "usage" | "resolveTextAdapter">
+    input: Pick<SessionPersistInput, "usage" | "resolveTextAdapter">
   ): Promise<string> {
     const { usage, resolveTextAdapter } = input;
     const textAdapter = (await resolveTextAdapter?.()) ?? null;
@@ -87,12 +84,15 @@ export class SessionService {
     }
   }
 
-  saveSession(input: SessionSaveInput): void {
-    const { context, usage, todoManager, resolveTextAdapter, emitEvent } = input;
+  /**
+   * Persist session model state and optionally UI messages in a single write.
+   */
+  persistSession(input: SessionPersistInput): void {
+    const { context, usage, todoManager, resolveTextAdapter, emitEvent, uiMessages } = input;
     if (!this.store || !context) return;
     if (!this.data) {
       this.ensureSession();
-      this.saveSession(input);
+      this.persistSession(input);
       return;
     }
 
@@ -106,6 +106,10 @@ export class SessionService {
 
     if (todoManager) {
       this.data.todos = todoManager.getItems();
+    }
+
+    if (uiMessages !== undefined) {
+      this.data.uiMessages = uiMessages;
     }
 
     if (this.data.name === "New Session") {
@@ -128,23 +132,10 @@ export class SessionService {
       }
     }
 
+    const saveTarget = uiMessages !== undefined ? "session+uiMessages" : "session";
     this.store.save(this.data).catch((err) => {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      emitEvent?.("session:save-error", { target: "session", error: errorMsg });
-    });
-  }
-
-  updateUIMessages(uiMessages: UIMessage[], _log: AgentLog | null, emitEvent?: EmitAgentEventFn): void {
-    if (!this.store) return;
-    if (!this.data) {
-      this.ensureSession();
-      this.updateUIMessages(uiMessages, _log, emitEvent);
-      return;
-    }
-    this.data.uiMessages = uiMessages;
-    this.store.save(this.data).catch((err) => {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      emitEvent?.("session:save-error", { target: "uiMessages", error: errorMsg });
+      emitEvent?.("session:save-error", { target: saveTarget, error: errorMsg });
     });
   }
 
@@ -164,8 +155,7 @@ export class SessionService {
     context.reset();
     usage.reset();
 
-    const messages = convertMessagesToModelMessages(session.uiMessages);
-    context.setMessages(messages);
+    context.setUIMessages(session.uiMessages);
     context.setSummaryMessage(session.summaryMessage ?? null);
     context.setCompactIndex(session.compactIndex ?? 0);
 

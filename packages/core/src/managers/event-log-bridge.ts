@@ -1,6 +1,6 @@
 import type { AgentEvent, AgentEventBus, AgentEventType } from "./agent-event-bus.js";
 import type { AgentLog } from "../agent/agent-log/agent-log.js";
-import type { LogCategory, LogLevel, NotificationLevel } from "../agent/agent-log/types.js";
+import type { LogCategory, LogLevel } from "../agent/agent-log/types.js";
 import type { McpServerStatus } from "../agent/mcp/manager.js";
 
 // ============================================================================
@@ -11,8 +11,6 @@ export interface EventLogRule {
   level: LogLevel;
   category: LogCategory;
   formatMessage: (event: AgentEvent) => string;
-  /** When set, uses {@link AgentLog.notify} instead of a plain log entry */
-  notify?: NotificationLevel;
 }
 
 export interface EventLogPolicy {
@@ -161,11 +159,6 @@ function resolveRule(type: AgentEventType, policy?: EventLogPolicy): EventLogRul
 function writeLog(log: AgentLog, rule: EventLogRule, event: AgentEvent, message: string): void {
   const data = event.data ? { ...event.data, eventType: event.type } : { eventType: event.type };
 
-  if (rule.notify) {
-    log.notify(rule.category, rule.notify, message, data);
-    return;
-  }
-
   switch (rule.level) {
     case "debug":
       log.debug(rule.category, message, data);
@@ -242,15 +235,15 @@ function logMemoryExtract(log: AgentLog, event: AgentEvent): void {
       log.debug("memory", "Extraction already in progress, skipping");
       break;
     case "start":
-      log.notify("memory", "info", "Extracting memories...");
+      log.info("memory", "Extracting memories...");
       break;
     case "complete":
-      log.notify("memory", "success", `Extracted ${event.data?.count ?? 0} new memories`, {
+      log.info("memory", `Extracted ${event.data?.count ?? 0} new memories`, {
         count: event.data?.count,
       });
       break;
     case "error":
-      log.notify("memory", "warning", `Memory extraction failed: ${event.data?.error ?? "unknown"}`);
+      log.warn("memory", `Memory extraction failed: ${event.data?.error ?? "unknown"}`);
       break;
   }
 }
@@ -259,15 +252,13 @@ function logMemoryConsolidate(log: AgentLog, event: AgentEvent): void {
   const status = event.data?.status as string | undefined;
   switch (status) {
     case "start":
-      log.notify("memory", "info", "Consolidating memories...");
+      log.info("memory", "Consolidating memories...");
       break;
     case "complete":
-      log.notify(
-        "memory",
-        "success",
-        `Consolidated memories: ${event.data?.before ?? "?"} → ${event.data?.after ?? "?"}`,
-        { before: event.data?.before, after: event.data?.after }
-      );
+      log.info("memory", `Consolidated memories: ${event.data?.before ?? "?"} → ${event.data?.after ?? "?"}`, {
+        before: event.data?.before,
+        after: event.data?.after,
+      });
       break;
     case "skip":
       log.debug("memory", "Memory consolidation produced no changes");
@@ -278,10 +269,10 @@ function logMemoryConsolidate(log: AgentLog, event: AgentEvent): void {
 function logCompactionAuto(log: AgentLog, event: AgentEvent): void {
   switch (event.type) {
     case "compaction:auto-start":
-      log.notify("system", "info", "Auto-compacting context...");
+      log.info("system", "Auto-compacting context...");
       break;
     case "compaction:auto-complete":
-      log.notify("system", "success", "Context compacted", {
+      log.info("system", "Context compacted", {
         tokensBefore: event.data?.tokensBefore,
         tokensAfter: event.data?.tokensAfter,
       });
@@ -294,7 +285,7 @@ function logCompactionAuto(log: AgentLog, event: AgentEvent): void {
         return;
       }
       log.error("agent", "Auto-compaction failed, continuing with original messages", new Error(error));
-      log.notify("system", "warning", `Compaction failed: ${error}`);
+      log.warn("system", `Compaction failed: ${error}`);
       break;
     }
   }

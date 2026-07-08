@@ -26,7 +26,7 @@ export {
 // Runtime — agent manager & managed agent
 // ============================================================================
 
-export { agentManager, AgentManager } from "./managers/manager-agent.js";
+export { agentManager, AgentManager, getDefaultSkillDirs, SKILL_DIRS_ENV_VAR } from "./managers/manager-agent.js";
 export type {
   AgentEvent,
   AgentEventListener,
@@ -34,7 +34,12 @@ export type {
   RunAgentOptions,
   RunAgentStreamInput,
 } from "./managers/manager-agent.js";
-export { ManagedAgent, type ManagedAgentConfig } from "./managers/managed-agent.js";
+export {
+  buildManagedAgent,
+  type BuildManagedAgentOptions,
+  type BuildManagedAgentResult,
+} from "./managers/agent-factory.js";
+export { ManagedAgent, type ManagedAgentConfig, type RunFinalizeReason } from "./managers/managed-agent.js";
 export type { AgentStatus } from "./managers/agent-types.js";
 export { localConnect, createLocalConnect, type LocalConnectManager } from "./connect";
 
@@ -43,7 +48,7 @@ export { localConnect, createLocalConnect, type LocalConnectManager } from "./co
 // ============================================================================
 
 export { AgentContext, type TokenUsage } from "./agent/agent-context";
-export { AgentLog, type AgentNotification } from "./agent/agent-log";
+export { AgentLog } from "./agent/agent-log";
 export { TodoManager, type TodoItem, type TodoStatus, type TodoPriority, STATUS_ICONS } from "./agent/todo-manager";
 
 // ============================================================================
@@ -71,8 +76,8 @@ export {
   lookupModelFromModelsDev,
   parseModelInfoFromEnv,
   runSideTextQuery,
-} from "./models/index.js";
-export type { ModelInfo, ModelStyle, ModelConnection, ResolvedModelConfig } from "./models/index.js";
+} from "./models";
+export type { ModelInfo, ModelStyle, ModelConnection, ResolvedModelConfig } from "./models";
 export { resolveTextAdapterForManaged } from "./managers/run-agent.js";
 export { buildDefaultSystemPrompt } from "./agent/default-prompt.js";
 export { bridgeExternalToolToServer } from "./agent/tools/tanstack/bridge-external-tool.js";
@@ -118,3 +123,4 @@ export type { FileEntry, FileStat, CommandResult, RunCommandOptions } from "./en
 // ============================================================================
 
 export { generateId, generateShortId, createSequentialIdGenerator } from "./agent/utils.js";
+export { formatAgentStreamError } from "./agent/utils/assert-async-iterable.js";

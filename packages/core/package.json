@@ -33,7 +33,9 @@
     "validate:run-coordinator": "pnpm run build && node scripts/validate-run-coordinator.mjs",
     "validate:subagent-run-stats": "pnpm run build && node scripts/validate-subagent-run-stats.mjs",
     "validate:compaction-messages": "pnpm run build && node scripts/validate-compaction-messages.mjs",
-    "validate:model-config": "pnpm run build && node scripts/validate-model-config.mjs"
+    "validate:model-config": "pnpm run build && node scripts/validate-model-config.mjs",
+    "validate:assert-async-iterable": "pnpm run build && node scripts/validate-assert-async-iterable.mjs",
+    "validate:agent-context": "pnpm run build && node scripts/validate-agent-context.mjs"
   },
   "dependencies": {
     "@tanstack/ai": "^0.40.0",

@@ -4,7 +4,9 @@ This file provides guidelines for AI coding agents working in this repository.
 
 ## Project Overview
 
-A pnpm monorepo with seven packages organized in a layered architecture:
+A pnpm monorepo with seven packages organized in a layered architecture.
+
+**Core runtime deep-dive:** [packages/core/ARCHITECTURE.md](packages/core/ARCHITECTURE.md) — startup, initialization, session/memory/compaction/approval flows.
 
 | Package | Role |
 |---------|------|
@@ -140,7 +142,7 @@ Internal modules (tools, middleware, subagent runner, hook registry, etc.) stay 
 
 Key integration points:
 - `core/src/models/model-config.ts` — connection resolution (`openai` | `anthropic` style, baseURL, apiKey, models.dev metadata)
-- `core/src/models/adapter-factory.ts` — TanStack text adapters (`createOpenaiChat`, `createAnthropicChat`)
+- `core/src/models/adapter-factory.ts` — TanStack text adapters (`createOpenaiChatCompletions`, `createAnthropicChat`)
 - `core/src/managers/run-agent.ts` — `AgentRunner` + `chat()` stream, compaction middleware
 - `core/src/agent/agent-context/` — Conversation state, tool calls, context management
 - `core/src/agent/mcp/` — MCP via `@tanstack/ai-mcp`
@@ -529,7 +531,7 @@ packages/core/src/agent/compaction/
 └── index.ts
 ```
 
-**Reasoning stripping (Layer 2)** runs in `compaction-middleware.ts` (`stripReasoningFromHistory`) — it strips reasoning content from history messages for DeepSeek models to optimize prefix cache hits.
+**Reasoning stripping (Layer 2)** runs in `compaction-middleware.ts` (`stripReasoningFromHistory`) — for DeepSeek models without the `reasoning` capability, it strips thinking content from history to optimize prefix cache hits. Reasoning-capable models skip stripping because the API requires `reasoning_content` echo-back.
 
 **Reactive compaction** runs in `run-agent.ts` via `runStreamWithReactiveCompactRetry` — on `prompt_too_long` errors, `ManagedAgent.handleReactiveCompact()` compacts context and retries once.
 

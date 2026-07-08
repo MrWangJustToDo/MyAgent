@@ -34,6 +34,8 @@ export type AgentStatus =
   | "thinking"
   | "responding";
 
+export type RunFinalizeReason = "finished" | "aborted" | "error";
+
 // ============================================================================
 // Run options
 // ============================================================================

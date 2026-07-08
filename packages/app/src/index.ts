@@ -34,6 +34,17 @@ export {
   getDurationMs,
   DURATION_THRESHOLD_MS,
 } from "./utils/format.js";
+export {
+  dedupeToolCallsInMessages,
+  mergeToolCallPart,
+  computeToolCallsRenderSignature,
+} from "./utils/dedupe-tool-calls.js";
+export {
+  getUiToolState,
+  isToolCallPart,
+  isToolExecuting,
+  parseToolInput,
+} from "./utils/tool-part.js";
 
 // Types
 export type { Attachment } from "./types/attachment.js";

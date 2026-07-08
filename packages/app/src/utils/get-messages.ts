@@ -1,4 +1,10 @@
-import { useMessageCache } from "../hooks/use-message-cache";
+import { useMessageCache } from "../hooks/use-message-cache.js";
+
+import {
+  computeToolCallsRenderSignature,
+  dedupeToolCallsInMessages,
+  getMessageToolSignature,
+} from "./dedupe-tool-calls.js";
 
 import type { UIMessage } from "@tanstack/ai";
 
@@ -17,25 +23,38 @@ const filterValidMessage = (message: UIMessage) => {
   return true;
 };
 
+function flattenMessage(message: UIMessage): UIMessage[] {
+  return message.parts.reduce<UIMessage[]>((parts, part, index) => {
+    parts.push({ ...message, id: message.id + "-" + index, parts: [part] });
+    return parts;
+  }, []);
+}
+
+function resolveStaticFlatMessage(message: UIMessage): UIMessage[] {
+  const signature = getMessageToolSignature(message);
+  const cached = getMessage(message.id);
+  if (cached && cached.signature === signature) {
+    return cached.flat;
+  }
+
+  const flatMessage = flattenMessage(message);
+  setMessage(message.id, { signature, flat: flatMessage });
+  return flatMessage;
+}
+
 /**
  * Split messages into static (completed) and dynamic (streaming) portions.
+ * Tool-call parts with the same id are deduped (first wins) with state merged from later replays.
  */
 export const getMessages = (messages: UIMessage[]) => {
+  const dedupedMessages = dedupeToolCallsInMessages(messages);
   const staticMessages: UIMessage[] = [];
   const dynamicMessages: UIMessage[] = [];
 
-  for (let i = 0; i < messages.length; i++) {
-    const message = messages[i];
-    if (i < messages.length - 1) {
-      const flatMessage =
-        getMessage(message.id) ||
-        message.parts.reduce<UIMessage[]>((p, c, index) => {
-          p.push({ ...message, id: message.id + "-" + index, parts: [c] });
-          return p;
-        }, []);
-
-      setMessage(message.id, flatMessage);
-      staticMessages.push(...flatMessage);
+  for (let i = 0; i < dedupedMessages.length; i++) {
+    const message = dedupedMessages[i];
+    if (i < dedupedMessages.length - 1) {
+      staticMessages.push(...resolveStaticFlatMessage(message));
     } else {
       for (let idx = 0; idx < message.parts.length; idx++) {
         const part = message.parts[idx];
@@ -48,5 +67,6 @@ export const getMessages = (messages: UIMessage[]) => {
   return {
     staticMessages: staticMessages.filter(filterValidMessage),
     dynamicMessages: dynamicMessages.filter(filterValidMessage),
+    toolCallsSignature: computeToolCallsRenderSignature(dedupedMessages),
   };
 };

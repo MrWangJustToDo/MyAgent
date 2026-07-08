@@ -1,0 +1,129 @@
+import type { ToolCallPart, UIMessage } from "@tanstack/ai";
+
+const TOOL_STATE_RANK: Record<ToolCallPart["state"], number> = {
+  "awaiting-input": 0,
+  "input-streaming": 1,
+  "input-complete": 2,
+  "approval-requested": 3,
+  "approval-responded": 4,
+  complete: 5,
+  error: 5,
+};
+
+function getToolStateRank(part: ToolCallPart): number {
+  return TOOL_STATE_RANK[part.state] ?? 0;
+}
+
+function isLikelyCompleteJson(value: string): boolean {
+  if (!value) return false;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return typeof parsed === "object" && parsed !== null;
+  } catch {
+    return false;
+  }
+}
+
+function pickArguments(primary: string, duplicate: string): string {
+  const primaryValid = isLikelyCompleteJson(primary);
+  const duplicateValid = isLikelyCompleteJson(duplicate);
+  if (primaryValid && !duplicateValid) return primary;
+  if (duplicateValid && !primaryValid) return duplicate;
+  return primary.length >= duplicate.length ? primary : duplicate;
+}
+
+/** Merge a later duplicate tool-call into the first occurrence (display anchor). */
+export function mergeToolCallPart(primary: ToolCallPart, duplicate: ToolCallPart): ToolCallPart {
+  const winner = getToolStateRank(duplicate) >= getToolStateRank(primary) ? duplicate : primary;
+
+  return {
+    ...primary,
+    state: winner.state,
+    output: winner.output ?? primary.output,
+    arguments: pickArguments(primary.arguments, duplicate.arguments),
+    approval: primary.approval ?? duplicate.approval,
+    metadata: primary.metadata ?? duplicate.metadata,
+  };
+}
+
+type ToolLocation = { messageIdx: number; partIdx: number };
+
+/**
+ * Dedupe assistant tool-call parts by `id` across messages.
+ * The first occurrence is kept for display; later duplicates merge state into it.
+ */
+export function dedupeToolCallsInMessages(messages: UIMessage[]): UIMessage[] {
+  if (messages.length === 0) return messages;
+
+  const seen = new Set<string>();
+  let hasDuplicate = false;
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    for (const part of message.parts) {
+      if (part.type !== "tool-call") continue;
+      const toolPart = part as ToolCallPart;
+      if (seen.has(toolPart.id)) {
+        hasDuplicate = true;
+        break;
+      }
+      seen.add(toolPart.id);
+    }
+    if (hasDuplicate) break;
+  }
+  if (!hasDuplicate) return messages;
+
+  const firstByToolId = new Map<string, ToolLocation>();
+  const result = messages.map((msg) => ({
+    ...msg,
+    parts: [...msg.parts],
+  }));
+
+  for (let messageIdx = 0; messageIdx < result.length; messageIdx++) {
+    const message = result[messageIdx];
+    if (message.role !== "assistant") continue;
+
+    const partsToRemove: number[] = [];
+
+    for (let partIdx = 0; partIdx < message.parts.length; partIdx++) {
+      const part = message.parts[partIdx];
+      if (part.type !== "tool-call") continue;
+
+      const toolPart = part as ToolCallPart;
+      const existing = firstByToolId.get(toolPart.id);
+
+      if (!existing) {
+        firstByToolId.set(toolPart.id, { messageIdx, partIdx });
+        continue;
+      }
+
+      const anchor = result[existing.messageIdx].parts[existing.partIdx] as ToolCallPart;
+      result[existing.messageIdx].parts[existing.partIdx] = mergeToolCallPart(anchor, toolPart);
+      partsToRemove.push(partIdx);
+    }
+
+    if (partsToRemove.length > 0) {
+      message.parts = message.parts.filter((_, idx) => !partsToRemove.includes(idx));
+    }
+  }
+
+  return result.filter((msg) => msg.parts.length > 0);
+}
+
+/** Fingerprint tool-call state for static list invalidation when merges update earlier rows. */
+export function computeToolCallsRenderSignature(messages: UIMessage[]): string {
+  return messages
+    .flatMap((message) => message.parts)
+    .filter((part) => part.type === "tool-call")
+    .map((part) => {
+      const tool = part as ToolCallPart;
+      const hasOutput = tool.output !== undefined ? "1" : "0";
+      const approval =
+        tool.approval?.approved === true ? "a" : tool.approval?.approved === false ? "d" : tool.approval ? "p" : "-";
+      return `${tool.id}:${tool.state}:${hasOutput}:${approval}`;
+    })
+    .join("|");
+}
+
+export function getMessageToolSignature(message: UIMessage): string {
+  return computeToolCallsRenderSignature([message]);
+}

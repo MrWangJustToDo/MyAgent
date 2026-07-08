@@ -25,6 +25,7 @@ interface UseAgentInputControlsOptions {
   isReady: boolean;
   isLoading: boolean;
   initLoading: boolean;
+  messages: UIMessage[];
   sendMessage: UseAgentChatReturn["sendMessage"];
   stop: UseAgentChatReturn["stop"];
   addToolApprovalResponse: UseAgentChatReturn["addToolApprovalResponse"];
@@ -40,6 +41,7 @@ export function useAgentInputControls({
   isReady,
   isLoading,
   initLoading,
+  messages,
   sendMessage,
   stop,
   addToolApprovalResponse,
@@ -133,6 +135,7 @@ export function useAgentInputControls({
     inputActions,
     getInputState: () => useUserInput.getReadonlyState(),
     getAgent: () => toRaw(useAgent.getReactiveState().agent) as ManagedAgent,
+    getMessages: () => messages,
     setMessages: setMessages as (messages: UIMessage[]) => void,
     exit: () => {
       const agent = useAgent.getReadonlyState().agent;

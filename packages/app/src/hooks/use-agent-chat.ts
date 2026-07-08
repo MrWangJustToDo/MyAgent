@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-import { agentManager, localConnect } from "@my-agent/core";
+import { agentManager, formatAgentStreamError, localConnect } from "@my-agent/core";
 import { useChat } from "@tanstack/ai-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -95,11 +94,9 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   const [agentId, setAgentId] = useState<string | null>(null);
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
 
-  // @ts-ignore
   const agentError = useAgent((s) => (s.agent as ManagedAgent)?.error || "");
 
   const forceUpdate = useForceUpdate({ time: 100 });
-  const pendingApprovalLengthRef = useRef(0);
   const initIdRef = useRef(0);
 
   useEffect(() => {
@@ -152,7 +149,10 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   const connection = useMemo(() => (agentId ? localConnect(agentId) : noopConnection), [agentId]);
 
+  // useChat constructs ChatClient once per `id` and does not hot-swap `connection`.
+  // Recreate the client when agentId becomes available so sends use localConnect, not noopConnection.
   const chat = useChat({
+    id: agentId ?? "pending",
     connection,
     initialMessages,
   });
@@ -167,7 +167,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     prevStatusRef.current = chat.status;
     if ((prev === "streaming" || prev === "submitted") && chat.status === "ready") {
       if (chat.messages.length > 0 && agent) {
-        agent.updateSessionUIMessages(chat.messages as never);
+        agent.updateSessionUIMessages(chat.messages);
       }
     }
   }, [chat.status, chat.messages, agent]);
@@ -177,7 +177,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       const activeSubagents = agentManager.getActiveSubagents(agent.id);
       if (activeSubagents.length > 0) {
         for (const sub of activeSubagents) {
-          sub.agent.abort("user-cancelled");
+          sub.abort("user-cancelled");
         }
         forceUpdate();
         return;
@@ -225,19 +225,12 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         approved: options.approved,
       });
 
-      if (!options.approved && pendingApprovalLengthRef.current === 1) {
-        await chat.sendMessage("");
-      }
+      forceUpdate();
     },
-    [chat]
+    [chat, forceUpdate]
   );
 
   const status = chat.status as ChatStatus;
-
-  useEffect(() => {
-    useChatStatus.getActions().setStatus(status);
-    useChatStatus.getActions().setError(chat.error ?? null);
-  }, [status, chat.error]);
 
   const messages = chat.messages;
 
@@ -283,7 +276,11 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     return all;
   }, [messages]);
 
-  pendingApprovalLengthRef.current = allPendingApproval.length;
+  useEffect(() => {
+    useChatStatus.getActions().setStatus(status);
+    useChatStatus.getActions().setError(chat.error ? formatAgentStreamError(chat.error) : null);
+    useChatStatus.getActions().setPendingApprovalCount(allPendingApproval.length);
+  }, [status, chat.error, allPendingApproval.length]);
 
   useEffect(() => {
     useChatStatus.getActions().setPendingAskUserCount(allPendingAskUser.length);

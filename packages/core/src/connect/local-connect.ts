@@ -1,5 +1,6 @@
 import { stream } from "@tanstack/ai-client";
 
+import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
 import { agentManager } from "../managers/manager-agent.js";
 
 import type { RunAgentStreamInput } from "../managers/run-agent.js";
@@ -37,7 +38,11 @@ export function createLocalConnect(agentId: string, manager: LocalConnectManager
  * ```
  */
 export function localConnect(agentId: string): ConnectConnectionAdapter {
-  return stream((messages, data, abortSignal) => agentManager.runAgentStream(agentId, { messages, data, abortSignal }));
+  return stream((messages, data, abortSignal) => {
+    const agentStream = agentManager.runAgentStream(agentId, { messages, data, abortSignal });
+    assertAsyncIterable(agentStream, `runAgentStream(${agentId})`);
+    return agentStream;
+  });
 }
 
 function toRunAgentStreamInput(

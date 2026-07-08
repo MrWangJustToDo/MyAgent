@@ -1,5 +1,7 @@
 import { chat, maxIterations } from "@tanstack/ai";
 
+import { assertAsyncIterable } from "../utils/assert-async-iterable.js";
+
 import { createToolRunContext, type ToolRunContext } from "./run-context.js";
 
 import type {
@@ -66,7 +68,7 @@ export class AgentRunner {
 
     const toolContext = createToolRunContext(input.agentId);
 
-    return chat({
+    const stream = chat({
       adapter: this.config.adapter,
       messages: input.messages,
       systemPrompts: this.config.systemPrompts,
@@ -82,5 +84,8 @@ export class AgentRunner {
         ...(this.config.maxOutputTokens != null ? { maxTokens: this.config.maxOutputTokens } : {}),
       },
     });
+
+    assertAsyncIterable(stream, `chat(model=${this.config.model})`);
+    return stream;
   }
 }

@@ -2,7 +2,7 @@ import { resolveFinishStatus } from "../../managers/agent-status.js";
 import { extractTanStackUsage } from "../../managers/usage-tracker.js";
 
 import type { AgentEventType } from "../../managers/agent-event-bus.js";
-import type { AgentStatus } from "../../managers/agent-types.js";
+import type { AgentStatus, RunFinalizeReason } from "../../managers/agent-types.js";
 import type { UsageTracker } from "../../managers/usage-tracker.js";
 import type { ModelPricing } from "../../models/types.js";
 import type { AgentLog } from "../agent-log";
@@ -24,7 +24,7 @@ export interface LifecycleMiddlewareDeps {
   emitEvent?: (type: AgentEventType, data?: Record<string, unknown>) => void;
   onPromptSubmit?: () => void;
   onFirstModelOutput?: () => void;
-  onRunComplete?: (finishReason: string | null) => void;
+  onRunFinalize?: (reason: RunFinalizeReason, finishReason?: string | null) => void;
 }
 
 function applyChunkStatus(
@@ -58,12 +58,20 @@ function applyChunkStatus(
 export function createLifecycleMiddleware(deps: LifecycleMiddlewareDeps): ChatMiddleware<ToolRunContext> {
   let memoryCommitted = false;
   let thinkingEmitted = false;
+  let runFinalized = false;
+
+  const finalizeOnce = (reason: RunFinalizeReason, finishReason?: string | null): void => {
+    if (runFinalized) return;
+    runFinalized = true;
+    deps.onRunFinalize?.(reason, finishReason);
+  };
 
   return {
     name: "lifecycle",
     onStart: () => {
       memoryCommitted = false;
       thinkingEmitted = false;
+      runFinalized = false;
       deps.setStatus("running");
       deps.setError("");
       deps.onPromptSubmit?.();
@@ -89,17 +97,18 @@ export function createLifecycleMiddleware(deps: LifecycleMiddlewareDeps): ChatMi
     },
     onFinish: (_ctx, info) => {
       deps.setStatus(resolveFinishStatus(deps.getStatus(), deps.getError()));
-      deps.onRunComplete?.(info.finishReason);
+      finalizeOnce("finished", info.finishReason);
     },
     onAbort: () => {
       deps.setStatus("aborted");
-      deps.emitEvent?.("agent:stop", { reason: "aborted" });
+      finalizeOnce("aborted");
     },
     onError: (_ctx, info) => {
       const message = info.error instanceof Error ? info.error.message : String(info.error);
       deps.setError(message);
       deps.setStatus("error");
       deps.emitEvent?.("agent:stream-error", { error: message });
+      finalizeOnce("error");
     },
   };
 }

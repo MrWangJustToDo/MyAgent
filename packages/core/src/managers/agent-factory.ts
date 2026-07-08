@@ -51,7 +51,6 @@ export async function buildManagedAgent({
 }: BuildManagedAgentOptions): Promise<BuildManagedAgentResult> {
   const {
     id: customId,
-    setUp,
     modelInfo: explicitModelInfo,
     name,
     skillDirs,
@@ -65,9 +64,7 @@ export async function buildManagedAgent({
   const log = new AgentLog();
   const todoManager = parentId ? null : new TodoManager();
 
-  const context = new AgentContext({
-    setUp: setUp as ManagedAgentConfig<AgentContext>["setUp"],
-  });
+  const context = new AgentContext();
 
   const managed = new ManagedAgent(
     { ...restConfig, name },

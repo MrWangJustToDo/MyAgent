@@ -6,6 +6,7 @@ import {
 } from "../agent/middleware";
 import { AgentRunner } from "../agent/runner/agent-runner.js";
 import { resolveToolsRecord, SUBAGENT_EXCLUDED_TOOL_NAMES } from "../agent/tools/tanstack";
+import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
 import { createTextAdapter } from "../models/adapter-factory.js";
 import { DEFAULT_BASE_URLS } from "../models/model-config.js";
 
@@ -19,6 +20,22 @@ import type { ManagedAgent } from "./managed-agent.js";
 import type { AgentManager } from "./manager-agent.js";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
 import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai";
+
+// ============================================================================
+// Run message selection
+// ============================================================================
+
+/** Prefer context UI history for chat(); fall back to request input or prepared model messages. */
+function selectRunMessages(
+  managed: ManagedAgent,
+  inputMessages: Array<UIMessage | ModelMessage> | undefined,
+  prepared: ModelMessage[]
+): Array<UIMessage | ModelMessage> {
+  const ui = managed.getContext()?.getUIMessages();
+  if (ui && ui.length > 0) return ui;
+  if (inputMessages?.length) return inputMessages;
+  return prepared;
+}
 
 // ============================================================================
 // Types
@@ -104,7 +121,7 @@ export function buildAgentRunner(
       getPricing: () => deps.usage.getPricing(),
       emitEvent,
       onFirstModelOutput: () => deps.memory.commitSurfacedMemories(),
-      onRunComplete: () => managed.completeRun(manager),
+      onRunFinalize: (reason) => managed.finalizeRun(manager, reason),
     }),
     createCompactionMiddleware({
       agentId: deps.agentId,
@@ -196,12 +213,12 @@ async function executeManagedAgentRun(
     abortSignal: input.abortSignal,
   });
 
-  const preparedMessages = prepared as unknown as ModelMessage[];
+  const preparedMessages = prepared;
 
   return runStreamWithReactiveCompactRetry({
     managed,
     manager,
-    getMessages: () => managed.getContext()?.getMessagesForLLM() ?? preparedMessages,
+    getMessages: () => selectRunMessages(managed, messages, preparedMessages),
     run: (runMessages) =>
       runner.run({
         agentId,
@@ -220,6 +237,7 @@ export function runManagedAgentStream(
 ): AsyncIterable<StreamChunk> {
   return (async function* () {
     const stream = await executeManagedAgentRun(manager, agentId, input);
+    assertAsyncIterable(stream, `executeManagedAgentRun(${agentId})`);
     yield* stream;
   })();
 }

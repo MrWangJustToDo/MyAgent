@@ -6,7 +6,6 @@ import { CommandOutput } from "../components/CommandOutput.js";
 import { FullBox } from "../components/FullBox.js";
 import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
 import { LLMUsage } from "../components/LLMUsage.js";
-import { Notification } from "../components/Notification.js";
 import { SelectList } from "../components/SelectList.js";
 import { Spinner } from "../components/Spinner.js";
 import { UserInput } from "../components/UserInput.js";
@@ -16,6 +15,7 @@ import { useChatStatus } from "../hooks/use-chat-status.js";
 import { useConfig } from "../hooks/use-config.js";
 import { useInputMode } from "../hooks/use-input-mode.js";
 import { useSelect } from "../hooks/use-select.js";
+import { useUserInput } from "../hooks/use-user-input.js";
 import { BG, COLORS } from "../theme/colors.js";
 
 import type { ManagedAgent, AgentStatus } from "@my-agent/core";
@@ -40,12 +40,18 @@ export const Footer = () => {
 
   let status = _status as AgentStatus;
 
-  const { chatStatus, hasPendingAskUser } = useChatStatus((s) => ({
+  const { chatStatus, hasPendingAskUser, pendingApprovalCount } = useChatStatus((s) => ({
     chatStatus: s.state,
     hasPendingAskUser: s.pendingAskUserCount > 0,
+    pendingApprovalCount: s.pendingApprovalCount,
   }));
 
-  if (chatStatus === "error") {
+  // Prefer core agent status; overlay chat transport state when actively streaming.
+  if (chatStatus === "streaming" || chatStatus === "submitted") {
+    if (status === "idle" || status === "completed") {
+      status = "running";
+    }
+  } else if (chatStatus === "error" && status !== "aborted") {
     status = "error";
   }
 
@@ -93,6 +99,7 @@ export const Footer = () => {
       <ContextBar
         status={status}
         hasPendingAskUser={hasPendingAskUser}
+        pendingApprovalCount={pendingApprovalCount}
         isPendingApproval={isPendingApproval}
         showFreeformInput={showFreeformInput}
         showSelectList={showSelectList}
@@ -150,6 +157,7 @@ export const Footer = () => {
 const ContextBar = ({
   status,
   hasPendingAskUser,
+  pendingApprovalCount,
   isPendingApproval,
   showFreeformInput,
   showSelectList,
@@ -158,6 +166,7 @@ const ContextBar = ({
 }: {
   status: AgentStatus;
   hasPendingAskUser: boolean;
+  pendingApprovalCount: number;
   isPendingApproval: boolean;
   showFreeformInput: boolean;
   showSelectList: boolean;
@@ -172,8 +181,10 @@ const ContextBar = ({
   const lastRunDurationMs = useAgent((s) => (s.agent as ManagedAgent)?.lastStreamDurationMs || 0);
 
   const chatError = useChatStatus((s) => s.error);
+  const inputError = useUserInput((s) => s.inputError);
+  const inputFeedback = useUserInput((s) => s.inputFeedback);
 
-  const error = _error || chatError?.name;
+  const error = _error || chatError?.message || inputError;
 
   return (
     <Box paddingX={1} gap={2}>
@@ -200,7 +211,9 @@ const ContextBar = ({
         )}
         {status === "waiting" && (
           <Text color={COLORS.warning} bold>
-            Waiting for approval
+            {pendingApprovalCount > 1
+              ? `Waiting for approval (${pendingApprovalCount} tools — press y for each)`
+              : "Waiting for approval"}
           </Text>
         )}
         {status === "idle" && (
@@ -209,6 +222,21 @@ const ContextBar = ({
           </Text>
         )}
         {status === "error" && <Text color={COLORS.danger}>{error}</Text>}
+
+        {inputFeedback && status !== "error" && (
+          <Text
+            color={
+              inputFeedback.level === "error"
+                ? COLORS.danger
+                : inputFeedback.level === "success"
+                  ? COLORS.success
+                  : COLORS.primary
+            }
+            dimColor={inputFeedback.level === "info"}
+          >
+            {inputFeedback.message}
+          </Text>
+        )}
 
         {/* Contextual shortcuts */}
         {isPendingApproval && !showFreeformInput && (
@@ -232,10 +260,6 @@ const ContextBar = ({
                 : "Up/Down | Enter: select"}
           </Text>
         )}
-      </Box>
-
-      <Box gap={2} flexShrink={0}>
-        <Notification />
       </Box>
     </Box>
   );

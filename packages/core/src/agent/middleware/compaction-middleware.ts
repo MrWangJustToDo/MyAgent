@@ -31,7 +31,10 @@ export interface CompactionMiddlewareDeps {
 function shouldStripReasoningForPrefixCache(modelInfo: ModelInfo | null): boolean {
   if (!modelInfo) return false;
   const haystack = `${modelInfo.id} ${modelInfo.apiModel}`.toLowerCase();
-  return haystack.includes("deepseek");
+  if (!haystack.includes("deepseek")) return false;
+  // DeepSeek thinking models require reasoning_content to be echoed on subsequent turns.
+  if (modelInfo.capabilities.includes("reasoning")) return false;
+  return true;
 }
 
 function stripReasoningFromHistory(messages: ModelMessage[], modelInfo: ModelInfo | null): void {

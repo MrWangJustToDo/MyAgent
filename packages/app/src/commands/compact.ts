@@ -1,5 +1,7 @@
 import { agentManager, applyCompactionResult, autoCompact, estimateTokens } from "@my-agent/core";
 
+import { bumpAgentUsage } from "../hooks/use-agent-usage.js";
+
 import { registerCommand } from "./registry.js";
 
 registerCommand({
@@ -16,6 +18,11 @@ registerCommand({
     const context = agent.getContext();
     if (!context) {
       return { ok: false, error: "Agent context not available" };
+    }
+
+    const uiMessages = ctx.getMessages?.();
+    if (uiMessages?.length) {
+      agent.syncContextFromUIMessages(uiMessages);
     }
 
     const messages = context.getMessagesForLLM();
@@ -62,6 +69,9 @@ registerCommand({
             "Nothing to compact — not enough older conversation to summarize (increase keepRecentFlows or add more history).",
         };
       }
+
+      agent.persistSession({ uiMessages });
+      bumpAgentUsage();
 
       const tokensBefore = result.tokensBefore ?? tokensBeforeEstimate;
       const compressionRatio = tokensBefore > 0 ? Math.round((1 - result.tokensAfter / tokensBefore) * 100) : 0;

@@ -59,16 +59,14 @@ export function parseModelStyle(raw: string | undefined, fallback: ModelStyle = 
   return fallback;
 }
 
-function normalizeOpenAiCompatibleBaseURL(url: string): string {
-  const trimmed = url.replace(/\/+$/, "");
-  if (trimmed.endsWith("/v1")) return trimmed;
-  return `${trimmed}/v1`;
+function trimBaseURL(url: string): string {
+  return url.replace(/\/+$/, "");
 }
 
-function resolveBaseURLFromEnv(style: ModelStyle, env: Record<string, string | undefined>): string | undefined {
+function resolveBaseURLFromEnv(env: Record<string, string | undefined>): string | undefined {
   const direct = env.BASE_URL || env.MODEL_BASE_URL;
   if (!direct) return undefined;
-  return style === "openai" ? normalizeOpenAiCompatibleBaseURL(direct) : direct.replace(/\/+$/, "");
+  return trimBaseURL(direct);
 }
 
 function resolveApiKeyFromEnv(env: Record<string, string | undefined>): string {
@@ -85,7 +83,7 @@ export function resolveModelConnection(input: ResolveModelConfigInput = {}): Mod
   const baseURL =
     input.baseURL ||
     input.modelInfo?.baseURL ||
-    resolveBaseURLFromEnv(style, env) ||
+    resolveBaseURLFromEnv(env) ||
     (style === "openai" ? DEFAULT_BASE_URLS.openai : DEFAULT_BASE_URLS.anthropic);
   const apiKey = input.apiKey ?? resolveApiKeyFromEnv(env);
 
