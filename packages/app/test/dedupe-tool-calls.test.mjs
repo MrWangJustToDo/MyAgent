@@ -2,8 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { URL } from "node:url";
 
-const { dedupeToolCallsInMessages, mergeToolCallPart, computeToolCallsRenderSignature, getUiToolState } =
-  await import(new URL("../dist/index.mjs", import.meta.url).href);
+const {
+  dedupeToolCallsInMessages,
+  mergeToolCallPart,
+  computeToolCallsRenderSignature,
+  getUiToolState,
+  normalizeToolPartsInMessages,
+} = await import(new URL("../dist/index.mjs", import.meta.url).href);
 
 test("mergeToolCallPart keeps first approval and adopts later complete state", () => {
   const primary = {
@@ -126,4 +131,36 @@ test("dedupeToolCallsInMessages fast path returns same reference when no duplica
   ];
 
   assert.equal(dedupeToolCallsInMessages(messages), messages);
+});
+
+test("normalizeToolPartsInMessages folds tool-result into tool-call and removes result row", () => {
+  const messages = [
+    {
+      id: "msg-1",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-call",
+          id: "call-1",
+          name: "webfetch",
+          arguments: '{"url":"https://example.com"}',
+          state: "input-complete",
+        },
+        {
+          type: "tool-result",
+          toolCallId: "call-1",
+          state: "error",
+          content: '{"error":"fetch failed"}',
+        },
+      ],
+    },
+  ];
+
+  const normalized = normalizeToolPartsInMessages(messages);
+  assert.equal(normalized.length, 1);
+  assert.equal(normalized[0].parts.length, 1);
+  const tool = normalized[0].parts[0];
+  assert.equal(tool.type, "tool-call");
+  assert.equal(tool.state, "error");
+  assert.deepEqual(tool.output, { error: "fetch failed" });
 });

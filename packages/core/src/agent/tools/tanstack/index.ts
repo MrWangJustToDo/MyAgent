@@ -5,6 +5,15 @@ export {
 } from "./bridge-external-tool.js";
 
 export {
+  defineClientTool,
+  defineServerTool,
+  toModelOutputRegistry,
+  type ModelToolContent,
+  type ToModelOutputContext,
+  type ToolExecuteCtx,
+} from "./define-tool.js";
+
+export {
   CLIENT_TOOL_NAMES,
   SUBAGENT_EXCLUDED_TOOL_NAMES,
   createTanStackSubagentTools,

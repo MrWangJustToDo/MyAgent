@@ -40,8 +40,10 @@ export {
   type BuildManagedAgentResult,
 } from "./managers/agent-factory.js";
 export { ManagedAgent, type ManagedAgentConfig, type RunFinalizeReason } from "./managers/managed-agent.js";
+export { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, resolveFinishStatus } from "./managers/agent-status.js";
 export type { AgentStatus } from "./managers/agent-types.js";
 export { localConnect, createLocalConnect, type LocalConnectManager } from "./connect";
+export { AgentChatController, formatChatError } from "./managers/agent-chat-controller.js";
 
 // ============================================================================
 // Agent state (hosts / UI)
@@ -88,8 +90,11 @@ export { bridgeExternalToolToServer } from "./agent/tools/tanstack/bridge-extern
 
 export { previewEdit, type PreviewEditResult } from "./agent/tools/util/preview-edit.js";
 export {
-  setStreamingCallback,
-  setStreamingClearCallback,
+  clearStreamingOutput,
+  emitStreamingChunk,
+  getStreamingSubscriberCounts,
+  subscribeStreamingCallback,
+  subscribeStreamingClearCallback,
   type StreamingCallback,
   type StreamingClearCallback,
   type StreamingChunk,
@@ -124,3 +129,10 @@ export type { FileEntry, FileStat, CommandResult, RunCommandOptions } from "./en
 
 export { generateId, generateShortId, createSequentialIdGenerator } from "./agent/utils.js";
 export { formatAgentStreamError } from "./agent/utils/assert-async-iterable.js";
+export {
+  hasDeferredToolExecution,
+  hasPendingAskUser,
+  hasPendingToolApprovals,
+  needsToolPhaseContinue,
+} from "./agent/utils/tool-phase-utils.js";
+export { hasUIMessageParts, selectInitialRunMessages } from "./managers/select-run-messages.js";

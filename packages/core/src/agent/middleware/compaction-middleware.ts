@@ -1,6 +1,4 @@
 import { applyCompactionResult, autoCompact } from "../compaction";
-import { microCompact } from "../compaction/micro-compact.js";
-import { estimateTokens } from "../compaction/token-estimator.js";
 
 import type { AgentEventType } from "../../managers/agent-event-bus.js";
 import type { AgentStatus } from "../../managers/agent-types.js";
@@ -30,9 +28,6 @@ export interface CompactionMiddlewareDeps {
 
 function shouldStripReasoningForPrefixCache(modelInfo: ModelInfo | null): boolean {
   if (!modelInfo) return false;
-  const haystack = `${modelInfo.id} ${modelInfo.apiModel}`.toLowerCase();
-  if (!haystack.includes("deepseek")) return false;
-  // DeepSeek thinking models require reasoning_content to be echoed on subsequent turns.
   if (modelInfo.capabilities.includes("reasoning")) return false;
   return true;
 }
@@ -60,9 +55,8 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
       deps.getTodoManager()?.incrementRound();
     },
     onConfig: async (_ctx, config) => {
-      const messages = config.messages.map((m) => ({ ...m, content: m.content })) as ModelMessage[];
+      const messages = config.messages as ModelMessage[];
 
-      microCompact(messages, deps.getCompactionConfig() || {});
       stripReasoningFromHistory(messages, deps.getModelInfo());
 
       const agentContext = deps.getContext();
@@ -116,7 +110,7 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
         }
       }
 
-      void estimateTokens(llmMessages);
+      // void estimateTokens(llmMessages);
 
       return { messages: llmMessages };
     },

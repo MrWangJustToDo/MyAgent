@@ -23,7 +23,6 @@ export { useDiffFileCache } from "./use-diff-file-cache.js";
 export { useDynamic } from "./use-dynamic.js";
 export { useForceUpdate } from "./use-force-update.js";
 export { useInputMode, type InputMode, type FreeformContext } from "./use-input-mode.js";
-export { useChatStatus, type ChatStatus } from "./use-chat-status.js";
 export { useMessageCache } from "./use-message-cache.js";
 export { usePreviewEdit } from "./use-preview-edit.js";
 export { useSelect } from "./use-select.js";
@@ -32,5 +31,6 @@ export { useSubAgents } from "./use-sub-agents.js";
 export { useSubagentMessages } from "./use-subagent-messages.js";
 export { useSubagentPanel, type SubagentPanelView } from "./use-subagent-panel.js";
 export { useTerminalSize } from "./use-terminal-size.js";
+export { useStreamingOutput, type UseStreamingOutputOptions } from "./use-streaming-output.js";
 
 export type { UIMessage, TextPart, ToolCallPart, ToolResultPart, ThinkingPart, MessagePart } from "@tanstack/ai";

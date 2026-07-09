@@ -21,8 +21,6 @@ export class AgentContext {
 
   private uiMessages: UIMessage[] = [];
   private modelMessages: ModelMessage[] = [];
-  /** When true, {@link getMessages} returns {@link modelMessages} (micro-compact / reactive-compact). */
-  private useModelMessages = false;
 
   private summaryMessage: ModelMessage | null = null;
   private compactIndex = 0;
@@ -39,7 +37,7 @@ export class AgentContext {
   /** Replace UI history from the client; clears compaction middleware model overlay. */
   setUIMessages(messages: UIMessage[]): void {
     this.uiMessages = messages;
-    this.useModelMessages = false;
+    this.modelMessages = convertMessagesToModelMessages(messages);
     this.touch();
   }
 
@@ -50,19 +48,12 @@ export class AgentContext {
   /** Set model messages after compaction middleware mutates the in-run view. */
   setMessages(messages: ModelMessage[]): void {
     this.modelMessages = messages;
-    this.useModelMessages = true;
     this.touch();
   }
 
   /** Model view: derived from UI, or the compaction overlay when set. */
   getMessages(): ModelMessage[] {
-    if (this.useModelMessages) {
-      return this.modelMessages;
-    }
-    if (this.uiMessages.length === 0) {
-      return this.modelMessages;
-    }
-    return convertMessagesToModelMessages(this.uiMessages);
+    return this.modelMessages;
   }
 
   /**
@@ -98,7 +89,6 @@ export class AgentContext {
   reset(): void {
     this.uiMessages = [];
     this.modelMessages = [];
-    this.useModelMessages = false;
     this.summaryMessage = null;
     this.compactIndex = 0;
     this.touch();

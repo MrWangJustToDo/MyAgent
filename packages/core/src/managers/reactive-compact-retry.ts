@@ -32,7 +32,7 @@ function errorFromUnknown(error: unknown): Error {
 async function applyReactiveCompactRetry(managed: ManagedAgent): Promise<boolean> {
   if (!managed.getContext()) return false;
   managed.setStatus("running");
-  managed.error = "";
+  managed.setError("");
   return true;
 }
 

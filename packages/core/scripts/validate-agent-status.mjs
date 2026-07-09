@@ -18,6 +18,7 @@ assert.equal(ACTIVE_STATUSES.has("compacting"), true);
 
 assert.equal(resolveFinishStatus("aborted", ""), "aborted");
 assert.equal(resolveFinishStatus("waiting", "oops"), "waiting");
+assert.equal(resolveFinishStatus("awaiting_user", ""), "awaiting_user");
 assert.equal(resolveFinishStatus("running", "failed"), "error");
 assert.equal(resolveFinishStatus("responding", ""), "completed");
 
@@ -41,5 +42,10 @@ const managed = new ManagedAgent(
 assert.equal(managed.status, "idle");
 managed.setStatus("running");
 assert.equal(managed.status, "running");
+
+managed.setClientToolWaiting(true);
+assert.equal(managed.status, "awaiting_user");
+managed.setClientToolWaiting(false);
+assert.equal(managed.status, "completed");
 
 console.log("agent-status validation passed");

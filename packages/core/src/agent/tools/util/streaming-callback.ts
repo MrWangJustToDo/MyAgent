@@ -1,8 +1,8 @@
 /**
- * Streaming Callback — global callback for streaming tool output.
+ * Streaming Callback — multicast bridge for streaming tool output.
  *
- * The app package sets this callback to receive streaming updates.
- * The core package calls this during tool execution.
+ * Multiple consumers (e.g. run_command + task summary streams) can subscribe
+ * concurrently. The app layer typically installs one bridge into the streaming store.
  */
 
 // ============================================================================
@@ -23,40 +23,37 @@ export type StreamingClearCallback = (toolCallId: string) => void;
 // Global State
 // ============================================================================
 
-let streamingCallback: StreamingCallback | null = null;
-let streamingClearCallback: StreamingClearCallback | null = null;
+const streamingCallbacks = new Set<StreamingCallback>();
+const streamingClearCallbacks = new Set<StreamingClearCallback>();
 
 /**
- * Set the global streaming callback.
- * Called by the app package to register for streaming updates.
+ * Subscribe to streaming chunks. Returns an unsubscribe function.
  */
-export function setStreamingCallback(callback: StreamingCallback | null): void {
-  streamingCallback = callback;
+export function subscribeStreamingCallback(callback: StreamingCallback): () => void {
+  streamingCallbacks.add(callback);
+  return () => {
+    streamingCallbacks.delete(callback);
+  };
 }
 
 /**
- * Set the global streaming clear callback (resets UI buffer for a tool call).
+ * Subscribe to streaming clear events. Returns an unsubscribe function.
  */
-export function setStreamingClearCallback(callback: StreamingClearCallback | null): void {
-  streamingClearCallback = callback;
+export function subscribeStreamingClearCallback(callback: StreamingClearCallback): () => void {
+  streamingClearCallbacks.add(callback);
+  return () => {
+    streamingClearCallbacks.delete(callback);
+  };
 }
 
 /**
- * Get the current streaming callback.
- * Used by tools to emit streaming data.
- */
-export function getStreamingCallback(): StreamingCallback | null {
-  return streamingCallback;
-}
-
-/**
- * Emit a streaming chunk.
+ * Emit a streaming chunk to all subscribers.
  * Called by tools during execution.
  */
 export function emitStreamingChunk(toolCallId: string, type: "stdout" | "stderr", chunk: string): void {
-  const callback = streamingCallback;
-  if (callback) {
-    callback({ toolCallId, type, chunk });
+  const data: StreamingChunk = { toolCallId, type, chunk };
+  for (const callback of streamingCallbacks) {
+    callback(data);
   }
 }
 
@@ -64,5 +61,12 @@ export function emitStreamingChunk(toolCallId: string, type: "stdout" | "stderr"
  * Clear streamed output for a tool call (e.g. before a subagent retry).
  */
 export function clearStreamingOutput(toolCallId: string): void {
-  streamingClearCallback?.(toolCallId);
+  for (const callback of streamingClearCallbacks) {
+    callback(toolCallId);
+  }
+}
+
+/** Exposed for validation scripts. */
+export function getStreamingSubscriberCounts(): { chunk: number; clear: number } {
+  return { chunk: streamingCallbacks.size, clear: streamingClearCallbacks.size };
 }

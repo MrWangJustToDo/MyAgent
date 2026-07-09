@@ -3,8 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { checkServerHealth, useServerConfig } from "@/hooks/useServerConfig";
 
-import type { ChangeEvent } from "react";
 import type { ModelStyle } from "@my-agent/core";
+import type { ChangeEvent } from "react";
 
 const STYLES = [
   { value: "openai", label: "OpenAI-compatible" },

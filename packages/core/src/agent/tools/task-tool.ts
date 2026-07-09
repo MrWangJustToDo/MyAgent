@@ -178,5 +178,13 @@ Example use cases:
         };
       });
     },
+
+    // Only send the summary to the LLM — execution metadata (iterations, usage,
+    // reachedLimit, incomplete) is for the UI only and has no value for the model.
+    // The summary text itself already carries an incompleteness notice (appended
+    // by the runner) when the subagent was force-stopped, so the model is aware.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: TaskOutput }) {
+      return [{ type: "text" as const, content: output.summary }];
+    },
   });
 };

@@ -61,9 +61,11 @@ export function applyReactiveCompactionResult(
   const summaryMsg = compactedMessages[0];
   if (!summaryMsg) return false;
 
+  const tailMessages = compactedMessages.slice(1);
+
   context.setSummaryMessage(summaryMsg);
   const oldCompactIndex = context.getCompactIndex();
-  const newCompactIndex = context.getMessages().length;
+  const newCompactIndex = context.getMessages().length - tailMessages.length;
   context.setCompactIndex(newCompactIndex);
 
   if (newCompactIndex > oldCompactIndex) {
@@ -73,12 +75,12 @@ export function applyReactiveCompactionResult(
     });
   }
 
-  const tailMessages = compactedMessages.slice(1);
-  if (tailMessages.length > 0) {
-    const allMessages = [...context.getMessages(), ...tailMessages];
-    context.setMessages(allMessages);
-    context.setCompactIndex(allMessages.length - tailMessages.length);
-  }
+  // const tailMessages = compactedMessages.slice(1);
+  // if (tailMessages.length > 0) {
+  //   const allMessages = [...context.getMessages(), ...tailMessages];
+  //   context.setMessages(allMessages);
+  //   context.setCompactIndex(allMessages.length - tailMessages.length);
+  // }
 
   usage.resetWindow();
   return true;

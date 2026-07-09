@@ -7,6 +7,8 @@
  * - text parts use the `content` field (not legacy `text`)
  */
 
+import { estimateContentPartChars } from "./token-estimator";
+
 import type { ContentPart, ModelMessage } from "@tanstack/ai";
 
 /** Build toolCallId → tool name from assistant `toolCalls`. */
@@ -106,22 +108,5 @@ function describeContentPart(part: ContentPart): string {
       return "[Document was attached]";
     default:
       return "";
-  }
-}
-
-function estimateContentPartChars(part: ContentPart): number {
-  switch (part.type) {
-    case "text":
-      return part.content.length;
-    case "image":
-    case "audio":
-    case "video":
-    case "document":
-      if (part.source.type === "data") {
-        return part.source.value.length;
-      }
-      return 4000;
-    default:
-      return 0;
   }
 }

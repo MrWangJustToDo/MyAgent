@@ -1,5 +1,71 @@
 import type { ToolCallPart, UIMessage } from "@tanstack/ai";
 
+const SKIPPED_FLATTEN_PART_TYPES = new Set(["thinking", "tool-result"]);
+
+function parseToolResultContent(content: string): unknown {
+  try {
+    return JSON.parse(content) as unknown;
+  } catch {
+    return content;
+  }
+}
+
+/**
+ * Fold standalone `tool-result` parts into their matching `tool-call` and drop the result row.
+ * TanStack often emits both; UI only renders tool-call rows.
+ */
+export function normalizeToolPartsInMessages(messages: UIMessage[]): UIMessage[] {
+  let hasToolResult = false;
+  for (const message of messages) {
+    if (message.parts.some((part) => part.type === "tool-result")) {
+      hasToolResult = true;
+      break;
+    }
+  }
+  if (!hasToolResult) return messages;
+
+  return messages
+    .map((message) => {
+      if (message.role !== "assistant") return message;
+
+      const parts = message.parts.map((part) => ({ ...part }));
+      const callIndexById = new Map<string, number>();
+
+      for (let i = 0; i < parts.length; i++) {
+        if (parts[i].type === "tool-call") {
+          callIndexById.set((parts[i] as ToolCallPart).id, i);
+        }
+      }
+
+      const remove = new Set<number>();
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        if (part.type !== "tool-result") continue;
+
+        const callIdx = callIndexById.get(part.toolCallId);
+        if (callIdx === undefined) continue;
+
+        const callPart = parts[callIdx] as ToolCallPart;
+        if (callPart.output === undefined) {
+          parts[callIdx] = {
+            ...callPart,
+            state: part.state === "error" ? "error" : "complete",
+            output: parseToolResultContent(part.content as any),
+          };
+        }
+        remove.add(i);
+      }
+
+      if (remove.size === 0) return message;
+      return { ...message, parts: parts.filter((_, idx) => !remove.has(idx)) };
+    })
+    .filter((message) => message.parts.length > 0);
+}
+
+export function shouldFlattenPart(part: { type?: string }): boolean {
+  return !SKIPPED_FLATTEN_PART_TYPES.has(part.type ?? "");
+}
+
 const TOOL_STATE_RANK: Record<ToolCallPart["state"], number> = {
   "awaiting-input": 0,
   "input-streaming": 1,

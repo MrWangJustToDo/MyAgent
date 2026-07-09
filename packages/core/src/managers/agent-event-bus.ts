@@ -18,6 +18,7 @@ export type AgentEventType =
   | "prompt:submit"
   | "agent:thinking"
   | "agent:tool-start"
+  | "agent:tool-approval-request"
   | "agent:tool-end"
   | "agent:tool-error"
   | "agent:abort"

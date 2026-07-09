@@ -17,6 +17,8 @@ export interface CommandContext {
   setMessages?: (messages: UIMessage[]) => void;
   /** Read current chat messages (full UI history) */
   getMessages?: () => UIMessage[];
+  /** Persist `useChat` messages to session (single write path for `uiMessages`) */
+  saveSessionFromChat?: () => void;
   /** Exit the application */
   exit?: () => void;
   /** Agent adapter for platform-specific operations */

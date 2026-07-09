@@ -15,7 +15,7 @@ export interface McpConfigLoadResult {
 // Constants
 // ============================================================================
 
-export const DEFAULT_MCP_CONFIG_PATH = ".opencode/mcp.json";
+export const DEFAULT_MCP_CONFIG_PATH = ".agents/mcp.json";
 
 /**
  * Additional default MCP config file paths (checked in order if no explicit path given).

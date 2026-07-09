@@ -24,7 +24,13 @@ import type { ToolCallPart } from "@tanstack/ai";
 function extractErrorText(part: ToolCallPart): string | null {
   const uiState = getUiToolState(part);
   if (uiState === "output-denied") {
+    const approvalReason = (part.approval as { reason?: string } | undefined)?.reason;
+    if (approvalReason) return approvalReason;
+
     const output = part.output;
+    if (output && typeof output === "object" && "message" in output) {
+      return String((output as { message?: unknown }).message ?? "Denied");
+    }
     if (output && typeof output === "object" && "error" in output) {
       return String((output as { error?: unknown }).error ?? "Denied");
     }
@@ -43,10 +49,14 @@ function extractErrorText(part: ToolCallPart): string | null {
 export interface ToolCallPartViewProps {
   part: ToolCallPart;
   readOnly?: boolean;
+  /** Throttle for live `run_command` / `task` stream UI updates (ms). Default: 100 for run_command, 0 for task. */
+  streamingThrottleMs?: number;
 }
 
+const RUN_COMMAND_STREAM_THROTTLE_MS = 100;
+
 /** Render a tool invocation part — unified compact style for all tools */
-export const ToolCallPartView = ({ part, readOnly = false }: ToolCallPartViewProps) => {
+export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }: ToolCallPartViewProps) => {
   const uiState = getUiToolState(part);
   const toolName = part.name;
   const toolCallId = part.id;
@@ -90,10 +100,19 @@ export const ToolCallPartView = ({ part, readOnly = false }: ToolCallPartViewPro
       <ToolInputView part={part} toolInput={toolInput} uiState={uiState} />
 
       {isRunCommand && isExecuting && (
-        <StreamingOutputView toolCallId={toolCallId} enabled={isRunCommand && isExecuting} />
+        <StreamingOutputView
+          toolCallId={toolCallId}
+          enabled={isRunCommand && isExecuting}
+          throttleMs={streamingThrottleMs ?? RUN_COMMAND_STREAM_THROTTLE_MS}
+        />
       )}
       {showTaskSummaryStream && (
-        <StreamingOutputView toolCallId={toolCallId} enabled={showTaskSummaryStream} emptyMessage="" />
+        <StreamingOutputView
+          toolCallId={toolCallId}
+          enabled={showTaskSummaryStream}
+          emptyMessage=""
+          throttleMs={streamingThrottleMs ?? 0}
+        />
       )}
 
       {needsApproval && (

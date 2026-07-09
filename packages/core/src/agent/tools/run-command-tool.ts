@@ -8,6 +8,8 @@ import { emitStreamingChunk } from "./util/streaming-callback.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { runCommandOutputSchema } from "./util/types.js";
 
+import type { RunCommandOutput } from "./util/types.js";
+
 export const createRunCommandTool = () => {
   return defineServerTool({
     name: "run_command",
@@ -80,6 +82,15 @@ export const createRunCommandTool = () => {
         success: result.exitCode === 0,
         cachedOutputPath,
       };
+    },
+    // Only send command output to the LLM — duration/success/cachedOutputPath
+    // are execution metadata with no value for the model.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: RunCommandOutput }) {
+      return [
+        { type: "text" as const, content: `Exit code: ${output.exitCode}` },
+        ...(output.stderr?.trim?.() ? [{ type: "text" as const, content: `stderr:\n${output.stderr}` }] : []),
+        { type: "text" as const, content: output.stdout },
+      ];
     },
   });
 };

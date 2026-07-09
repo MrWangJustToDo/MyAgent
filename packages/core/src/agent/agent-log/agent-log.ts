@@ -140,10 +140,6 @@ export class AgentLog {
     return this.info("agent", message, data);
   }
 
-  connection(message: string, data?: Record<string, unknown>): LogEntry | null {
-    return this.debug("connection", message, data);
-  }
-
   chat(message: string, data?: Record<string, unknown>): LogEntry | null {
     return this.debug("chat", message, data);
   }

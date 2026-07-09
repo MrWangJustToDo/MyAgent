@@ -1,10 +1,17 @@
 import type { AgentStatus } from "./agent-types.js";
 
 /** Statuses that must not be overwritten when a stream finishes normally. */
-export const TERMINAL_STATUSES = new Set<AgentStatus>(["aborted", "error", "waiting"]);
+export const TERMINAL_STATUSES = new Set<AgentStatus>(["aborted", "error", "waiting", "awaiting_user"]);
 
 /** Statuses indicating an agent is actively doing work (used for cancellation ordering). */
-export const ACTIVE_STATUSES = new Set<AgentStatus>(["running", "thinking", "responding", "waiting", "compacting"]);
+export const ACTIVE_STATUSES = new Set<AgentStatus>([
+  "running",
+  "thinking",
+  "responding",
+  "waiting",
+  "awaiting_user",
+  "compacting",
+]);
 
 export function isTerminalStatus(status: AgentStatus): boolean {
   return TERMINAL_STATUSES.has(status);

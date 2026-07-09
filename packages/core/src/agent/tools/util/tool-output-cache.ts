@@ -170,6 +170,21 @@ function extractCachedPathFromPart(part: unknown): string | null {
 }
 
 /**
+ * Delete a cached tool output file (best-effort).
+ */
+export async function deleteToolOutputCacheFile(filePath: string): Promise<void> {
+  try {
+    const fs = getEnv().fs;
+    const exists = await fs.exists(filePath);
+    if (exists) {
+      await fs.remove(filePath);
+    }
+  } catch {
+    // Non-fatal — stale cache files are harmless
+  }
+}
+
+/**
  * Scan orphaned messages (those before compactIndex) for cached tool output
  * file paths and delete them from disk.
  */

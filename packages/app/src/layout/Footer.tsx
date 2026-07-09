@@ -11,7 +11,6 @@ import { Spinner } from "../components/Spinner.js";
 import { UserInput } from "../components/UserInput.js";
 import { useAgentUsage } from "../hooks/use-agent-usage.js";
 import { useAgent } from "../hooks/use-agent.js";
-import { useChatStatus } from "../hooks/use-chat-status.js";
 import { useConfig } from "../hooks/use-config.js";
 import { useInputMode } from "../hooks/use-input-mode.js";
 import { useSelect } from "../hooks/use-select.js";
@@ -30,36 +29,19 @@ function formatDuration(ms: number): string {
 }
 
 export const Footer = () => {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  const _status = useAgent((s) => s.agent?.status || "idle");
+  const status = useAgent((s) => (s.agent as ManagedAgent | null)?.status ?? "idle");
 
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
   const allMcp = useAgent((s) => s.agent?.mcpManager?.getConnectedServers());
-
-  let status = _status as AgentStatus;
-
-  const { chatStatus, hasPendingAskUser, pendingApprovalCount } = useChatStatus((s) => ({
-    chatStatus: s.state,
-    hasPendingAskUser: s.pendingAskUserCount > 0,
-    pendingApprovalCount: s.pendingApprovalCount,
-  }));
-
-  // Prefer core agent status; overlay chat transport state when actively streaming.
-  if (chatStatus === "streaming" || chatStatus === "submitted") {
-    if (status === "idle" || status === "completed") {
-      status = "running";
-    }
-  } else if (chatStatus === "error" && status !== "aborted") {
-    status = "error";
-  }
 
   const { mode, denyMode, freeformContext } = useInputMode((s) => ({
     mode: s.mode,
     denyMode: s.denyMode,
     freeformContext: s.freeformContext,
   }));
+
+  const isPendingApproval = mode === "approval";
+
+  const displayStatus: AgentStatus = status;
 
   const { isMultiSelect, cursorOnFreeform } = useSelect((s) => {
     const freeformIdx = s.freeformEnabled ? s.options.length - 1 : -1;
@@ -69,17 +51,17 @@ export const Footer = () => {
     };
   });
 
-  const isPendingApproval = mode === "approval";
   const showFreeformInput = denyMode;
   const showSelectList = mode === "select";
   const freeformLabel = freeformContext === "deny" ? "Deny reason > " : "Answer > ";
   const isInputEnabled =
     mode === "normal"
-      ? status === "idle" ||
-        status === "completed" ||
-        status === "error" ||
-        status === "aborted" ||
-        status === "waiting"
+      ? displayStatus === "idle" ||
+        displayStatus === "completed" ||
+        displayStatus === "error" ||
+        displayStatus === "aborted" ||
+        displayStatus === "waiting" ||
+        displayStatus === "awaiting_user"
       : true;
 
   return (
@@ -97,9 +79,7 @@ export const Footer = () => {
 
       {/* Context info bar — above input, no border */}
       <ContextBar
-        status={status}
-        hasPendingAskUser={hasPendingAskUser}
-        pendingApprovalCount={pendingApprovalCount}
+        status={displayStatus}
         isPendingApproval={isPendingApproval}
         showFreeformInput={showFreeformInput}
         showSelectList={showSelectList}
@@ -156,8 +136,6 @@ export const Footer = () => {
  */
 const ContextBar = ({
   status,
-  hasPendingAskUser,
-  pendingApprovalCount,
   isPendingApproval,
   showFreeformInput,
   showSelectList,
@@ -165,37 +143,30 @@ const ContextBar = ({
   cursorOnFreeform,
 }: {
   status: AgentStatus;
-  hasPendingAskUser: boolean;
-  pendingApprovalCount: number;
   isPendingApproval: boolean;
   showFreeformInput: boolean;
   showSelectList: boolean;
   isMultiSelect: boolean;
   cursorOnFreeform: boolean;
 }) => {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
   const _error = useAgent((s) => (s.agent as ManagedAgent)?.error || "");
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
   const lastRunDurationMs = useAgent((s) => (s.agent as ManagedAgent)?.lastStreamDurationMs || 0);
 
-  const chatError = useChatStatus((s) => s.error);
   const inputError = useUserInput((s) => s.inputError);
   const inputFeedback = useUserInput((s) => s.inputFeedback);
 
-  const error = _error || chatError?.message || inputError;
+  const error = _error || inputError;
 
   return (
     <Box paddingX={1} gap={2}>
       <Box gap={2} flexShrink={0}>
         {/* Status indicator */}
-        {status === "running" && !hasPendingAskUser && <Spinner text="Running..." />}
+        {status === "running" && <Spinner text="Running..." />}
         {status === "thinking" && <Spinner text="Thinking..." />}
         {status === "responding" && <Spinner text="Responding..." />}
-        {status === "running" && hasPendingAskUser && (
+        {status === "awaiting_user" && (
           <Text color={COLORS.primary} bold>
-            Waiting for your response
+            Waiting
           </Text>
         )}
         {status === "compacting" && <Spinner text="Compacting..." />}
@@ -211,9 +182,7 @@ const ContextBar = ({
         )}
         {status === "waiting" && (
           <Text color={COLORS.warning} bold>
-            {pendingApprovalCount > 1
-              ? `Waiting for approval (${pendingApprovalCount} tools — press y for each)`
-              : "Waiting for approval"}
+            Waiting
           </Text>
         )}
         {status === "idle" && (

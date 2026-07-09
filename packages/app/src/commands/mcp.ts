@@ -34,19 +34,14 @@ registerCommand({
         target = s.url;
       }
 
-      // Build server version info
-      const versionInfo = s.serverVersion ? `  v${s.serverVersion}` : "";
-
-      // Status tag
-      const statusTag = s.status === "connected" ? "connected" : `failed: ${s.error ?? "unknown error"}`;
-
-      // Format:   ✓ server_name        stdio  3 tools  npx command    v1.0.0
+      // Format:   ✓ server_name        stdio  3 tools  npx command
       const line =
-        `  ${icon} ${s.name.padEnd(20)} ${s.transport.padEnd(6)} ${String(s.toolCount).padStart(3)} tools  ${target}${versionInfo}`.trimEnd();
+        `  ${icon} ${s.name.padEnd(20)} ${s.transport.padEnd(6)} ${String(s.toolCount).padStart(3)} tools  ${target}`.trimEnd();
       lines.push(line);
 
       // For failed servers, show the error on the next line, indented
       if (s.status === "failed" && s.error) {
+        const statusTag = `failed: ${s.error}`;
         lines.push(`      └─ ${statusTag}`);
       }
     }

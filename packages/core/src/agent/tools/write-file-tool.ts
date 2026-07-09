@@ -6,6 +6,8 @@ import { defineServerTool } from "./tanstack/define-tool.js";
 import { getFileModifiedTime, withDuration } from "./util/helpers.js";
 import { writeFileOutputSchema } from "./util/types.js";
 
+import type { WriteFileOutput } from "./util/types.js";
+
 export const createWriteFileTool = () => {
   return defineServerTool({
     name: "write_file",
@@ -67,6 +69,17 @@ export const createWriteFileTool = () => {
           modifiedTime: newModifiedTime,
         };
       });
+    },
+    // Only confirm success to the LLM — bytesWritten/modifiedTime/durationMs
+    // are execution metadata. modifiedTime is for edit_file conflict detection,
+    // not for the model.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: WriteFileOutput }) {
+      return [
+        {
+          type: "text" as const,
+          content: `${output.created ? "Created" : "Overwrote"} file: ${output.path}，modifiedTime：${output.modifiedTime}`,
+        },
+      ];
     },
   });
 };

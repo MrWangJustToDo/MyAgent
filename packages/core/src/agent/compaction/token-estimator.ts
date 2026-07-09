@@ -23,10 +23,10 @@ function getStringLength(value: unknown): number {
   }
 }
 
-function estimateContentPartChars(part: ContentPart): number {
+export function estimateContentPartChars(part: ContentPart): number {
   switch (part.type) {
     case "text":
-      return part.content.length;
+      return part.content?.length ?? 0;
     case "image":
     case "audio":
     case "video":

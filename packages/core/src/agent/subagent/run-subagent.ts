@@ -84,10 +84,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
   subagentManaged.runner = undefined;
   subagentManaged.tanstackTools = undefined;
 
-  const messages: ModelMessage[] = [
-    ...(initialMessages as unknown as ModelMessage[]),
-    { role: "user", content: prompt },
-  ];
+  const messages: ModelMessage[] = [...(initialMessages ?? []), { role: "user", content: prompt }];
 
   const userUIMessage: TanStackUIMessage = {
     id: generateId("msg"),
@@ -128,7 +125,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
           data: { subagentId, messageCount: updated.length },
         });
       },
-    })) as unknown as UIMessage[];
+    })) as UIMessage[];
     output = extractAssistantText(previewMessages)?.trim() || "(no summary)";
   } catch (err) {
     const managed = manager.getAgent(subagentId);

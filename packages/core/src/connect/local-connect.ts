@@ -39,6 +39,7 @@ export function createLocalConnect(agentId: string, manager: LocalConnectManager
  */
 export function localConnect(agentId: string): ConnectConnectionAdapter {
   return stream((messages, data, abortSignal) => {
+    agentManager.getAgent(agentId)?.log?.chat("Start stream chart", { messages, data, abortSignal });
     const agentStream = agentManager.runAgentStream(agentId, { messages, data, abortSignal });
     assertAsyncIterable(agentStream, `runAgentStream(${agentId})`);
     return agentStream;

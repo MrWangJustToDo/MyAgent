@@ -6,8 +6,9 @@ import { StreamProcessor } from "@tanstack/ai";
 
 import { getSummaryStreamText } from "../agent/subagent/extract-assistant-text.js";
 import { clearStreamingOutput, emitStreamingChunk } from "../agent/tools/util/streaming-callback.js";
+import { applyToolDenialReason } from "../agent/utils/apply-tool-denial-reason.js";
 
-import type { StreamChunk, StreamProcessorEvents, UIMessage as TanStackUIMessage } from "@tanstack/ai";
+import type { StreamChunk, StreamProcessorEvents, UIMessage as TanStackUIMessage, ContentPart } from "@tanstack/ai";
 
 // ============================================================================
 // Types
@@ -40,7 +41,7 @@ type ApprovalListener = (request: UIApprovalRequest) => void;
 
 /**
  * Converts agent run streams into observable TanStack {@link UIMessage} snapshots.
- * Used for subagent read-only preview; main CLI chat uses `localConnect` + `useChat`.
+ * Main chat uses {@link AgentChatController}; subagent preview uses this directly.
  */
 export class AgentUIChannel {
   private readonly processor: StreamProcessor;
@@ -82,6 +83,29 @@ export class AgentUIChannel {
 
   getMessages(): TanStackUIMessage[] {
     return this.processor.getMessages();
+  }
+
+  setMessages(messages: TanStackUIMessage[]): void {
+    this.processor.setMessages(messages);
+  }
+
+  clearMessages(): void {
+    this.processor.clearMessages();
+  }
+
+  addUserMessage(content: string | ContentPart[], id?: string): TanStackUIMessage {
+    return this.processor.addUserMessage(content, id);
+  }
+
+  addToolApprovalResponse(approvalId: string, approved: boolean, reason?: string): void {
+    this.processor.addToolApprovalResponse(approvalId, approved);
+    if (!approved) {
+      this.processor.setMessages(applyToolDenialReason(this.processor.getMessages(), approvalId, reason));
+    }
+  }
+
+  addToolResult(toolCallId: string, output: unknown, error?: string): void {
+    this.processor.addToolResult(toolCallId, output, error);
   }
 
   subscribe(listener: MessageListener): () => void {

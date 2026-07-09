@@ -42,7 +42,10 @@ export function getUiToolState(part: ToolCallPart): UiToolState {
   // Output means the tool finished — don't keep showing the executing spinner.
   if (part.output !== undefined) {
     if (part.state === "error") return "output-error";
-    const failed = typeof part.output === "object" && part.output !== null && (part.output as { success?: boolean }).success === false;
+    const failed =
+      typeof part.output === "object" &&
+      part.output !== null &&
+      (part.output as { success?: boolean }).success === false;
     return failed ? "output-error" : "output-available";
   }
 
@@ -51,6 +54,10 @@ export function getUiToolState(part: ToolCallPart): UiToolState {
   }
 
   return mapTanStackState(part.state, part.output);
+}
+
+export function isPendingToolApproval(part: ToolCallPart): boolean {
+  return getUiToolState(part) === "approval-requested";
 }
 
 function mapTanStackState(state: ToolCallState, output: unknown): UiToolState {

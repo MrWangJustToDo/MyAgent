@@ -6,6 +6,8 @@ import { DEFAULT_EXCLUDE_DIRS, runSearchCommand } from "./util/search-command.js
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { grepOutputSchema } from "./util/types.js";
 
+import type { GrepOutput } from "./util/types.js";
+
 /** Maximum characters per matching line content (to prevent context overflow) */
 const MAX_CONTENT_LENGTH = 500;
 
@@ -311,6 +313,19 @@ export const createGrepTool = () => {
           cachedOutputPath,
         };
       });
+    },
+    // Only send matches to the LLM — search params are echoed in the input,
+    // pagination/truncation/cache metadata is for the UI only.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: GrepOutput }) {
+      const lines = output.matches.map((m) => `${m.file}:${m.lineNumber}: ${m.content}`);
+      return [
+        {
+          type: "text" as const,
+          content:
+            `<params> offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit} </params>` +
+            (output.content || `${output.matches.length} matches:\n${lines.join("\n")}`),
+        },
+      ];
     },
   });
 };

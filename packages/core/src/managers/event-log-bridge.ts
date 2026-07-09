@@ -68,6 +68,11 @@ const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | false> = {
     category: "tool",
     formatMessage: (event) => `Tool start: ${event.data?.tool_name ?? "unknown"}`,
   },
+  "agent:tool-approval-request": {
+    level: "info",
+    category: "approval",
+    formatMessage: (event) => `Approval requested: ${event.data?.tool_name ?? "unknown"}`,
+  },
   "agent:tool-end": {
     level: "debug",
     category: "tool",

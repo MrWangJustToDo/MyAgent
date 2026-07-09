@@ -8,12 +8,10 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
 /** Log categories for filtering */
 export type LogCategory =
   | "agent" // Agent lifecycle
-  | "connection" // Connection events
   | "chat" // Chat/LLM interactions
   | "tool" // Tool calls and results
   | "approval" // Approval flow
   | "stream" // Stream events
-  | "middleware" // Middleware processing
   | "todo" // Todo tracking
   | "skill" // skill load
   | "memory" // Memory system

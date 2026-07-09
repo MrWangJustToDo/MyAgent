@@ -327,5 +327,10 @@ Usage notes:
         }
       });
     },
+    // Only send url + content to the LLM — contentType/contentLength/isImage/
+    // truncated/cachedOutputPath are UI metadata.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: z.infer<typeof webfetchOutputSchema> }) {
+      return [{ type: "text" as const, content: output.content }];
+    },
   });
 };

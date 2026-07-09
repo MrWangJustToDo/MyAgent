@@ -1,6 +1,9 @@
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import { createOpenaiChatCompletions } from "@tanstack/ai-openai";
 
+import { createReasoningChatCompletions } from "./reasoning-chat-completions-adapter.js";
+import { shouldEchoReasoningContent } from "./reasoning-echo.js";
+
 import type { ModelStyle } from "./types.js";
 import type { AnyTextAdapter } from "@tanstack/ai";
 
@@ -54,10 +57,17 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
   }
 
   const key = apiKey || "not-needed";
+  const openaiConfig = { baseURL: trimmedBaseURL };
+
+  if (shouldEchoReasoningContent(trimmedBaseURL, model)) {
+    return {
+      adapter: createReasoningChatCompletions(model, key, openaiConfig) as AnyTextAdapter,
+      model,
+    };
+  }
+
   return {
-    adapter: createOpenaiChatCompletions(model as Parameters<typeof createOpenaiChatCompletions>[0], key, {
-      baseURL: trimmedBaseURL,
-    }),
+    adapter: createOpenaiChatCompletions(model as Parameters<typeof createOpenaiChatCompletions>[0], key, openaiConfig),
     model,
   };
 }

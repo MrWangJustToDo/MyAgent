@@ -38,13 +38,10 @@ export {
   dedupeToolCallsInMessages,
   mergeToolCallPart,
   computeToolCallsRenderSignature,
+  normalizeToolPartsInMessages,
+  shouldFlattenPart,
 } from "./utils/dedupe-tool-calls.js";
-export {
-  getUiToolState,
-  isToolCallPart,
-  isToolExecuting,
-  parseToolInput,
-} from "./utils/tool-part.js";
+export { getUiToolState, isToolCallPart, isToolExecuting, parseToolInput } from "./utils/tool-part.js";
 
 // Types
 export type { Attachment } from "./types/attachment.js";

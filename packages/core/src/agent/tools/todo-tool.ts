@@ -5,6 +5,7 @@ import { withDuration } from "./util/helpers.js";
 import { todoOutputSchema } from "./util/types.js";
 
 import type { TodoManager } from "../todo-manager";
+import type { TodoOutput } from "./util/types.js";
 
 export const createTodoTool = ({ todoManager }: { todoManager: TodoManager }) => {
   return defineServerTool({
@@ -35,6 +36,15 @@ IMPORTANT RULES:
           stats,
         };
       });
+    },
+    // Only send items to the LLM — it needs the todo list to plan. title is
+    // echoed in the input, stats can be derived from items, durationMs is metadata.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: TodoOutput }) {
+      const lines = output.items.map((item) => {
+        const icon = item.status === "completed" ? "[x]" : item.status === "in_progress" ? "[>]" : "[ ]";
+        return `${icon} ${item.content}`;
+      });
+      return [{ type: "text" as const, content: `${output.title}\n${lines.join("\n")}` }];
     },
   });
 };

@@ -1,25 +1,22 @@
-import { agentManager, formatAgentStreamError, localConnect } from "@my-agent/core";
-import { useChat } from "@tanstack/ai-react";
+import { agentManager, isActiveStatus } from "@my-agent/core";
+import { throttle } from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAdapter } from "../context/adapter-context.js";
-import { isToolCallPart, parseToolInput } from "../utils/tool-part.js";
+import { isToolCallPart, isPendingToolApproval, parseToolInput } from "../utils/tool-part.js";
 
 import { useAgent } from "./use-agent.js";
-import { useChatStatus } from "./use-chat-status.js";
+import { useCallbackRef } from "./use-callback-ref.js";
 import { useForceUpdate } from "./use-force-update.js";
 
-import type { ChatStatus } from "./use-chat-status.js";
 import type { AppConfig } from "../adapter/types.js";
 import type { Attachment } from "../types/attachment.js";
-import type { ManagedAgent } from "@my-agent/core";
+import type { AgentChatController, AgentStatus, ManagedAgent } from "@my-agent/core";
 import type { ContentPart, UIMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Types
 // ============================================================================
-
-export type { ChatStatus };
 
 export interface SendMessageContent {
   text: string;
@@ -29,7 +26,7 @@ export interface SendMessageContent {
 export interface UseAgentChatReturn {
   messages: UIMessage[];
   sendMessage: (content: string | SendMessageContent) => Promise<void>;
-  status: ChatStatus;
+  status: AgentStatus;
   isLoading: boolean;
   isReady: boolean;
   stop: () => void;
@@ -58,6 +55,10 @@ export interface UseAgentChatReturn {
     multiSelect?: boolean;
   }>;
   addToolOutput: (options: { tool: string; toolCallId: string; output: Record<string, unknown> }) => void;
+  /** Pause/resume status while a client tool waits for user input (`ask_user`). */
+  setClientToolWaiting: (active: boolean) => void;
+  /** Flush chat messages to session (single write path for `uiMessages`). */
+  saveSessionFromChat: () => void;
 }
 
 function attachmentToContentPart(attachment: Attachment): ContentPart {
@@ -74,12 +75,9 @@ function attachmentToContentPart(attachment: Attachment): ContentPart {
   };
 }
 
-const noopConnection = {
-  connect: () =>
-    (async function* () {
-      /* empty until agent is ready */
-    })(),
-};
+function isAgentLoading(status: AgentStatus): boolean {
+  return isActiveStatus(status) && status !== "waiting" && status !== "awaiting_user";
+}
 
 // ============================================================================
 // Hook
@@ -91,13 +89,22 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   const [initLoading, setInitLoading] = useState(true);
   const [initError, setInitError] = useState<Error | null>(null);
   const [agent, setAgent] = useState<ManagedAgent | null>(null);
-  const [agentId, setAgentId] = useState<string | null>(null);
-  const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
-
-  const agentError = useAgent((s) => (s.agent as ManagedAgent)?.error || "");
+  const [chat, setChat] = useState<AgentChatController | null>(null);
+  const [messages, setMessages] = useState<UIMessage[]>([]);
 
   const forceUpdate = useForceUpdate({ time: 100 });
   const initIdRef = useRef(0);
+
+  useEffect(() => {
+    if (agent) {
+      useAgent.getActions().setAgent(agent);
+    }
+  }, [agent]);
+
+  useEffect(() => {
+    if (!agent) return;
+    return agent.subscribeState(() => forceUpdate());
+  }, [agent, forceUpdate]);
 
   useEffect(() => {
     const currentInitId = ++initIdRef.current;
@@ -113,9 +120,14 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         const result = await adapter.initialize(config);
         if (currentInitId !== initIdRef.current) return;
 
-        setAgent(result.agent);
-        setAgentId(result.agent?.id ?? null);
-        setInitialMessages((result.initialMessages as UIMessage[] | undefined) ?? []);
+        const managed = result.agent;
+        const controller = managed.initChat(agentManager, (result.initialMessages as UIMessage[] | undefined) ?? []);
+
+        setAgent(managed);
+        setChat(controller);
+        const initial = controller.getMessages();
+        setMessages(initial);
+        managed.syncInteractionStateFromUIMessages(initial);
       } catch (e) {
         if (currentInitId !== initIdRef.current) return;
         setInitError(e as Error);
@@ -147,32 +159,35 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     config,
   ]);
 
-  const connection = useMemo(() => (agentId ? localConnect(agentId) : noopConnection), [agentId]);
+  useEffect(() => {
+    if (!chat) return;
 
-  // useChat constructs ChatClient once per `id` and does not hot-swap `connection`.
-  // Recreate the client when agentId becomes available so sends use localConnect, not noopConnection.
-  const chat = useChat({
-    id: agentId ?? "pending",
-    connection,
-    initialMessages,
+    const updateUi = throttle((next: UIMessage[]) => {
+      setMessages(next);
+    }, 200);
+
+    const unsubMessages = chat.subscribeMessages(updateUi);
+
+    return () => {
+      unsubMessages();
+    };
+  }, [chat, forceUpdate]);
+
+  const status = agent?.status ?? "idle";
+  const error = agent?.error ? new Error(agent.error) : null;
+  const isLoading = agent ? isAgentLoading(agent.status) : false;
+
+  const saveSessionFromChat = useCallbackRef(() => {
+    if (messages.length > 0 && agent) {
+      agent.saveSessionUIMessages(messages);
+    }
   });
 
   useEffect(() => {
-    forceUpdate();
-  }, [chat.messages, agentError, forceUpdate]);
+    saveSessionFromChat();
+  }, [agent, messages, saveSessionFromChat]);
 
-  const prevStatusRef = useRef(chat.status);
-  useEffect(() => {
-    const prev = prevStatusRef.current;
-    prevStatusRef.current = chat.status;
-    if ((prev === "streaming" || prev === "submitted") && chat.status === "ready") {
-      if (chat.messages.length > 0 && agent) {
-        agent.updateSessionUIMessages(chat.messages);
-      }
-    }
-  }, [chat.status, chat.messages, agent]);
-
-  const stop = () => {
+  const stop = useCallback(() => {
     if (agent) {
       const activeSubagents = agentManager.getActiveSubagents(agent.id);
       if (activeSubagents.length > 0) {
@@ -183,13 +198,13 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         return;
       }
     }
-    chat.stop();
+    chat?.stop();
     forceUpdate();
-  };
+  }, [agent, chat, forceUpdate]);
 
   const sendMessage = useCallback(
     async (content: string | SendMessageContent) => {
-      if (!agentId) return;
+      if (!chat) return;
 
       if (typeof content === "string") {
         await chat.sendMessage(content);
@@ -198,17 +213,18 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         for (const file of content.files) {
           parts.push(attachmentToContentPart(file));
         }
-        await chat.sendMessage({ content: parts });
+        await chat.sendMessage(parts);
       } else {
         await chat.sendMessage(content.text);
       }
       forceUpdate();
     },
-    [agentId, chat, forceUpdate]
+    [chat, forceUpdate]
   );
 
   const clearMessages = useCallback(() => {
-    chat.clear();
+    chat?.clearMessages();
+    setMessages([]);
   }, [chat]);
 
   const addToolApprovalResponse = useCallback(
@@ -220,19 +236,11 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       toolCallId?: string;
       toolName?: string;
     }) => {
-      await chat.addToolApprovalResponse({
-        id: options.id,
-        approved: options.approved,
-      });
-
+      await chat?.respondToToolApproval(options.id, options.approved, options.reason);
       forceUpdate();
     },
     [chat, forceUpdate]
   );
-
-  const status = chat.status as ChatStatus;
-
-  const messages = chat.messages;
 
   const allPendingApproval = useMemo(() => {
     const all: UseAgentChatReturn["allPendingApproval"] = [];
@@ -241,13 +249,14 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       if (msg.role !== "assistant") continue;
       for (const part of msg.parts) {
         if (!isToolCallPart(part)) continue;
-        if (part.approval?.needsApproval && part.approval.approved === undefined) {
-          all.push({
-            id: part.approval.id,
-            toolName: part.name,
-            toolCallId: part.id,
-          });
-        }
+        if (!isPendingToolApproval(part)) continue;
+        const approvalId = part.approval?.id;
+        if (!approvalId) continue;
+        all.push({
+          id: approvalId,
+          toolName: part.name,
+          toolCallId: part.id,
+        });
       }
     }
     return all;
@@ -276,25 +285,20 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     return all;
   }, [messages]);
 
-  useEffect(() => {
-    useChatStatus.getActions().setStatus(status);
-    useChatStatus.getActions().setError(chat.error ? formatAgentStreamError(chat.error) : null);
-    useChatStatus.getActions().setPendingApprovalCount(allPendingApproval.length);
-  }, [status, chat.error, allPendingApproval.length]);
-
-  useEffect(() => {
-    useChatStatus.getActions().setPendingAskUserCount(allPendingAskUser.length);
-  }, [allPendingAskUser]);
+  const setClientToolWaiting = useCallback(
+    (active: boolean) => {
+      agent?.setClientToolWaiting(active);
+      forceUpdate();
+    },
+    [agent, forceUpdate]
+  );
 
   const addToolOutput = useCallback(
     async (options: { tool: string; toolCallId: string; output: Record<string, unknown> }) => {
-      await chat.addToolResult({
-        tool: options.tool,
-        toolCallId: options.toolCallId,
-        output: options.output,
-      });
+      await chat?.addToolResult(options.toolCallId, options.output);
+      forceUpdate();
     },
-    [chat]
+    [chat, forceUpdate]
   );
 
   return {
@@ -303,15 +307,21 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     allPendingApproval,
     allPendingAskUser,
     addToolOutput,
+    setClientToolWaiting,
     status,
-    isLoading: chat.isLoading,
-    isReady: !initLoading && agentId !== null,
+    isLoading,
+    isReady: !initLoading && chat !== null,
     stop,
     clearMessages,
-    setMessages: chat.setMessages,
-    error: chat.error ?? null,
+    setMessages: (next) => {
+      chat?.setMessages(next);
+      setMessages(next);
+      agent?.syncInteractionStateFromUIMessages(next);
+    },
+    error,
     initLoading,
     initError,
     addToolApprovalResponse,
+    saveSessionFromChat,
   };
 }

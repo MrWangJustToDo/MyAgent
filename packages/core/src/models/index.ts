@@ -31,6 +31,11 @@ export {
 
 // TanStack text adapter
 export { createTextAdapter, type TextAdapterConfig, type ModelAdapterConfig } from "./adapter-factory.js";
+export {
+  buildReasoningContentFromThinking,
+  extractReasoningContentFromStreamChunk,
+  shouldEchoReasoningContent,
+} from "./reasoning-echo.js";
 
 export { runSideTextQuery, type SideTextQueryOptions, type SideTextQueryResult } from "./side-text-query.js";
 

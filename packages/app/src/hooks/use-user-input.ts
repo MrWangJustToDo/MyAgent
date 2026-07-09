@@ -1,5 +1,7 @@
 import { createState } from "reactivity-store";
 
+import { createFeedbackQueue, INPUT_FEEDBACK_DISPLAY_MS } from "../utils/input-feedback-queue.js";
+
 import {
   appendHistoryEntry,
   createImagePlaceholder,
@@ -55,10 +57,6 @@ export interface UserInputState {
   event: any[];
 }
 
-// ============================================================================
-// Initial State
-// ============================================================================
-
 const initialState: UserInputState = {
   event: [],
   value: "",
@@ -74,6 +72,24 @@ const initialState: UserInputState = {
   inputError: null,
   inputFeedback: null,
 };
+
+let feedbackQueueController: ReturnType<typeof createFeedbackQueue> | null = null;
+
+function getFeedbackQueue(state: UserInputState) {
+  if (!feedbackQueueController) {
+    feedbackQueueController = createFeedbackQueue({
+      displayMs: INPUT_FEEDBACK_DISPLAY_MS,
+      onShow: (item) => {
+        state.inputFeedback = { message: item.message, level: item.level };
+        state.inputError = null;
+      },
+      onClear: () => {
+        state.inputFeedback = null;
+      },
+    });
+  }
+  return feedbackQueueController;
+}
 
 // ============================================================================
 // State Hook
@@ -323,19 +339,19 @@ export const useUserInput = createState(() => ({ ...initialState }), {
     setInputError: (error: string | null) => {
       state.inputError = error;
       if (error) {
-        state.inputFeedback = null;
+        getFeedbackQueue(state).clear();
       }
     },
 
     /**
-     * Show a feedback message (success/info/error) near the input.
+     * Queue a feedback notification near the input. Items display sequentially and auto-dismiss.
      */
     setInputFeedback: (text: string | null, type: "success" | "info" | "error" = "info") => {
+      const queue = getFeedbackQueue(state);
       if (text) {
-        state.inputFeedback = { message: text, level: type };
-        state.inputError = null;
+        queue.enqueue({ message: text, level: type });
       } else {
-        state.inputFeedback = null;
+        queue.clear();
       }
     },
 
@@ -343,6 +359,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
      * Reset to initial state
      */
     reset: () => {
+      getFeedbackQueue(state).clear();
       state.value = "";
       state.history = [];
       state.historyIndex = -1;

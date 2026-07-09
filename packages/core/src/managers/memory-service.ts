@@ -87,7 +87,7 @@ export class MemoryService {
         if (typeof msg.content === "string") {
           query = msg.content;
         } else if (Array.isArray(msg.content)) {
-          const textPart = msg.content.find((p) => p.type === "text");
+          const textPart = msg.content?.find((p) => p.type === "text");
           if (textPart && "text" in textPart) {
             query = textPart.text as string;
           }

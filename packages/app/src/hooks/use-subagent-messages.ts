@@ -1,4 +1,5 @@
 import { agentManager } from "@my-agent/core";
+import { throttle } from "lodash-es";
 import { useEffect, useState } from "react";
 
 import type { UIMessage } from "@tanstack/ai";
@@ -19,7 +20,7 @@ export function useSubagentMessages(subagentId: string | undefined): UIMessage[]
       return;
     }
 
-    const refresh = () => setMessages(readSubagentMessages(subagentId));
+    const refresh = throttle(() => setMessages(readSubagentMessages(subagentId)), 200);
     refresh();
 
     let unsubChannel: (() => void) | undefined;

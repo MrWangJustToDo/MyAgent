@@ -1,9 +1,15 @@
 import { applyReactiveCompactionResult } from "../agent/compaction/apply-compaction-result.js";
 import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
 import { isPromptTooLongError, reactiveCompact } from "../agent/compaction/reactive-compact.js";
+import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
+import {
+  countPendingToolApprovals,
+  hasPendingAskUser,
+  isToolContinuationPrepare,
+} from "../agent/utils/tool-phase-utils.js";
 import { generateId } from "../agent/utils.js";
 
-import { isActiveStatus } from "./agent-status.js";
+import { AgentChatController } from "./agent-chat-controller.js";
 import { AgentConfigSchema } from "./agent-types.js";
 import { emitAgentEvent } from "./emit-agent-event.js";
 import { buildDynamicTurnContext, buildFrozenSystemPrompt } from "./managed-agent-prompt.js";
@@ -77,6 +83,10 @@ export class ManagedAgent {
   /** Lifecycle */
   status: AgentStatus = "idle";
   error = "";
+  /** Tools awaiting user approval in the current run (set by approval middleware). */
+  pendingApprovalCount = 0;
+
+  private readonly stateListeners = new Set<() => void>();
 
   /** Composed services — each owns only its domain state */
   readonly usage: UsageTracker;
@@ -94,6 +104,7 @@ export class ManagedAgent {
   textAdapter?: TextAdapterConfig;
   tanstackTools?: ServerTool[];
   ui?: AgentUIChannel;
+  chatController?: AgentChatController;
   parentId?: string;
   childIds: string[];
   createdAt: number;
@@ -111,6 +122,7 @@ export class ManagedAgent {
   mcpManager: McpManager | null = null;
   skillRegister: SkillRegistry | null = null;
   compactionConfig: CompactionConfig | null = null;
+  readonly toolCompactCache = new ToolCompactCache();
   hookRegistry: HookRegistry | null = null;
   modelInfo: ModelInfo | null = null;
   agentDocContent = "";
@@ -133,10 +145,6 @@ export class ManagedAgent {
       session?: SessionService;
     }
   ) {
-    if (config.setUp) {
-      config.setUp(this);
-    }
-
     this.id = init.id ?? config.id ?? generateId("agent");
     this.name = config.name;
     this.config = config;
@@ -154,6 +162,12 @@ export class ManagedAgent {
     this.createdAt = Date.now();
     this.updatedAt = Date.now();
     this.managedToolsProvider = () => this.tools;
+
+    if (config.setUp) {
+      return config.setUp(this);
+    }
+
+    return this;
   }
 
   // ============================================================================
@@ -162,6 +176,73 @@ export class ManagedAgent {
 
   setStatus(status: AgentStatus): void {
     this.status = status;
+    this.emitStateChange();
+  }
+
+  setError(error: string): void {
+    this.error = error;
+    this.emitStateChange();
+  }
+
+  setPendingApprovalCount(count: number): void {
+    this.pendingApprovalCount = count;
+    this.emitStateChange();
+  }
+
+  /**
+   * App host API — pause agent status while a client tool (e.g. `ask_user`) waits for user input.
+   * Core does not infer this from messages; the UI sets it when opening/closing client-tool flows.
+   */
+  setClientToolWaiting(active: boolean): void {
+    if (active) {
+      if (this.status !== "waiting") {
+        this.setStatus("awaiting_user");
+      }
+      return;
+    }
+    if (this.status === "awaiting_user") {
+      this.setStatus("completed");
+    }
+  }
+
+  /** Sync approval / client-tool pause status from loaded UIMessages (e.g. session resume). */
+  syncInteractionStateFromUIMessages(
+    messages: TanStackUIMessage[],
+    options?: { whenClear?: "idle" | "running" }
+  ): void {
+    const whenClear = options?.whenClear ?? "idle";
+    const pendingCount = countPendingToolApprovals(messages);
+    this.setPendingApprovalCount(pendingCount);
+    if (pendingCount > 0) {
+      this.setStatus("waiting");
+      return;
+    }
+    if (hasPendingAskUser(messages)) {
+      this.setStatus("awaiting_user");
+      return;
+    }
+    if (this.status === "waiting" || this.status === "awaiting_user") {
+      this.setStatus(whenClear);
+    }
+  }
+
+  /** Subscribe to status / error / pending-approval changes (for UI refresh). */
+  subscribeState(listener: () => void): () => void {
+    this.stateListeners.add(listener);
+    listener();
+    return () => {
+      this.stateListeners.delete(listener);
+    };
+  }
+
+  private emitStateChange(): void {
+    for (const listener of this.stateListeners) {
+      try {
+        listener();
+      } catch {
+        // Ignore listener errors
+      }
+    }
   }
 
   emitEvent(
@@ -274,12 +355,14 @@ export class ManagedAgent {
     this.context.setUIMessages(uiMessages);
   }
 
-  updateSessionUIMessages(uiMessages: TanStackUIMessage[], options: { syncContext?: boolean } = {}): void {
-    const shouldSync = options.syncContext ?? !isActiveStatus(this.status);
-    if (shouldSync) {
-      this.syncContextFromUIMessages(uiMessages);
-    }
-    this.persistSession({ uiMessages });
+  /**
+   * Persist session `uiMessages` from the app `useChat` hook (single source of truth).
+   * Also syncs AgentContext and writes model fields in the same session save.
+   */
+  saveSessionUIMessages(uiMessages: TanStackUIMessage[]): void {
+    if (uiMessages.length === 0) return;
+    this.syncContextFromUIMessages(uiMessages);
+    this.session.persistSession(this.getSessionPersistInput(uiMessages));
   }
 
   private getSessionPersistInput(uiMessages?: TanStackUIMessage[]): SessionPersistInput {
@@ -293,21 +376,17 @@ export class ManagedAgent {
     };
   }
 
-  /** Persist model state and optionally UI messages in a single session write. */
-  persistSession(options: { uiMessages?: TanStackUIMessage[] } = {}): void {
-    this.session.persistSession(this.getSessionPersistInput(options.uiMessages));
+  /** Persist model state only (summary, compact index, usage, todos). Does not write `uiMessages`. */
+  persistSession(): void {
+    this.session.persistSession(this.getSessionPersistInput());
   }
 
   /**
    * Finalize a run — persist session, clear turn memory, optionally extract memories, emit `agent:stop`.
    * Memory extraction runs only when `reason === "finished"`.
    */
-  finalizeRun(
-    manager: AgentManager,
-    reason: RunFinalizeReason,
-    options: { uiMessages?: TanStackUIMessage[] } = {}
-  ): void {
-    this.persistSession(options);
+  finalizeRun(manager: AgentManager, reason: RunFinalizeReason): void {
+    this.persistSession();
     this.memory.clearTurnContext();
     if (reason === "finished") {
       this.memory.runExtraction({
@@ -359,6 +438,10 @@ export class ManagedAgent {
 
   getCompactionConfig(): CompactionConfig | null {
     return this.compactionConfig;
+  }
+
+  getToolCompactCache(): ToolCompactCache {
+    return this.toolCompactCache;
   }
 
   getSystemPrompt(): string | undefined {
@@ -423,17 +506,20 @@ export class ManagedAgent {
     this.run.resetReactiveCompactRetries();
     if (this.streamStartedAt === 0) this.streamStartedAt = Date.now();
 
-    await this.memory.prefetchRelevantMemories({
-      messages: this.context?.getMessages() ?? llmMessages,
-      usage: this.usage,
-      log: this.log,
-      resolveTextAdapter: this.resolveTextAdapter,
-      emitEvent: (type, data) => this.emitEvent(type, data),
-    });
+    const isToolContinuation = isToolContinuationPrepare(this.status, options.messages);
+    if (!isToolContinuation) {
+      await this.memory.prefetchRelevantMemories({
+        messages: this.context?.getMessages() ?? llmMessages,
+        usage: this.usage,
+        log: this.log,
+        resolveTextAdapter: this.resolveTextAdapter,
+        emitEvent: (type, data) => this.emitEvent(type, data),
+      });
 
-    this.emitEvent("prompt:submit", {
-      prompt: typeof options.prompt === "string" ? options.prompt : "(structured)",
-    });
+      this.emitEvent("prompt:submit", {
+        prompt: typeof options.prompt === "string" ? options.prompt : "(structured)",
+      });
+    }
     return llmMessages;
   }
 
@@ -522,6 +608,7 @@ export class ManagedAgent {
   }
 
   async restoreSession(sessionId: string): Promise<SessionData> {
+    this.toolCompactCache.clear();
     return this.session.restoreFromStore(sessionId, {
       context: this.context,
       usage: this.usage,
@@ -535,6 +622,16 @@ export class ManagedAgent {
     return tool != null && "needsApproval" in tool && tool.needsApproval === true;
   }
 
+  /** Create or replace the core-owned main chat session (StreamProcessor + run loop). */
+  initChat(manager: AgentManager, initialMessages?: TanStackUIMessage[]): AgentChatController {
+    this.chatController = new AgentChatController(this, manager, initialMessages);
+    return this.chatController;
+  }
+
+  getChatController(): AgentChatController | undefined {
+    return this.chatController;
+  }
+
   reset(): void {
     const prevStatus = this.status;
     this.log?.info("agent", "Resetting agent", {
@@ -543,12 +640,15 @@ export class ManagedAgent {
     });
     this.run.resetRunState();
     this.setStatus("idle");
-    this.error = "";
+    this.setError("");
+    this.pendingApprovalCount = 0;
     this.memory.resetState();
     this.log?.clear();
     this.context?.reset();
     this.usage.reset();
     this.todoManager?.reset();
+    this.chatController = undefined;
+    this.ui = undefined;
     this.systemPromptFrozen = false;
     this.frozenSystemPrompt = undefined;
   }

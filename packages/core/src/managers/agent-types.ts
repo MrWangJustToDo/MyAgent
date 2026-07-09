@@ -30,6 +30,7 @@ export type AgentStatus =
   | "error"
   | "aborted"
   | "waiting"
+  | "awaiting_user"
   | "compacting"
   | "thinking"
   | "responding";

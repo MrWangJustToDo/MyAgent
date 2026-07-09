@@ -13,6 +13,8 @@ import {
 import { getFile, getFileModifiedTime, withDuration } from "./util/helpers.js";
 import { editFileOutputSchema } from "./util/types.js";
 
+import type { EditFileOutput } from "./util/types.js";
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -341,6 +343,16 @@ export const createEditFileTool = () => {
           results,
         };
       });
+    },
+    // Only confirm success to the LLM — modifiedTime is for the next edit's
+    // conflict detection, results/details are for the UI, durationMs is metadata.
+    toModelOutput: ({ output }: { toolCallId: string; input: unknown; output: EditFileOutput }) => {
+      return [
+        {
+          type: "text" as const,
+          content: `Edited ${output.path} (${output.replacements} replacement${output.replacements !== 1 ? "s" : ""})`,
+        },
+      ];
     },
   });
 };

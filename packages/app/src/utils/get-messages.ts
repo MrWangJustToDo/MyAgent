@@ -4,6 +4,8 @@ import {
   computeToolCallsRenderSignature,
   dedupeToolCallsInMessages,
   getMessageToolSignature,
+  normalizeToolPartsInMessages,
+  shouldFlattenPart,
 } from "./dedupe-tool-calls.js";
 
 import type { UIMessage } from "@tanstack/ai";
@@ -12,7 +14,8 @@ const { setMessage, getMessage } = useMessageCache.getActions();
 
 const filterValidMessage = (message: UIMessage) => {
   if (message.role === "assistant") {
-    if (message.parts.length === 1 && message.parts[0].type === "thinking") return false;
+    const onlyPart = message.parts.length === 1 ? message.parts[0] : null;
+    if (onlyPart?.type === "thinking" || onlyPart?.type === "tool-result") return false;
   }
   if (message.role === "user" || message.role === "assistant") {
     if (message.parts.length === 1 && message.parts[0].type === "text") {
@@ -25,6 +28,7 @@ const filterValidMessage = (message: UIMessage) => {
 
 function flattenMessage(message: UIMessage): UIMessage[] {
   return message.parts.reduce<UIMessage[]>((parts, part, index) => {
+    if (!shouldFlattenPart(part)) return parts;
     parts.push({ ...message, id: message.id + "-" + index, parts: [part] });
     return parts;
   }, []);
@@ -47,7 +51,8 @@ function resolveStaticFlatMessage(message: UIMessage): UIMessage[] {
  * Tool-call parts with the same id are deduped (first wins) with state merged from later replays.
  */
 export const getMessages = (messages: UIMessage[]) => {
-  const dedupedMessages = dedupeToolCallsInMessages(messages);
+  const normalizedMessages = normalizeToolPartsInMessages(messages);
+  const dedupedMessages = dedupeToolCallsInMessages(normalizedMessages);
   const staticMessages: UIMessage[] = [];
   const dynamicMessages: UIMessage[] = [];
 
@@ -58,7 +63,7 @@ export const getMessages = (messages: UIMessage[]) => {
     } else {
       for (let idx = 0; idx < message.parts.length; idx++) {
         const part = message.parts[idx];
-        if (part.type === "thinking" || part.type === "tool-result") continue;
+        if (!shouldFlattenPart(part)) continue;
         dynamicMessages.push({ ...message, id: message.id + "-" + idx, parts: [part] });
       }
     }

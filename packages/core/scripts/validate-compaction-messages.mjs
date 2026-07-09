@@ -7,11 +7,12 @@
 import assert from "node:assert/strict";
 
 import {
+  applyToolCompact,
   estimateTokens,
   extractFileOpsFromMessages,
   formatFileOperations,
-  microCompact,
   serializeConversation,
+  ToolCompactCache,
 } from "../dist/dev.mjs";
 
 const messages = [
@@ -81,10 +82,14 @@ assert.match(serialized, /\[Tool result from read_file\]/);
 const beforeTokens = estimateTokens(messages);
 assert.ok(beforeTokens > 100);
 
-const compacted = microCompact(structuredClone(messages), {
-  keepRecentToolResults: 1,
-  minToolResultSize: 100,
+const compacted = structuredClone(messages);
+const cache = new ToolCompactCache();
+await applyToolCompact(compacted, {
+  config: { keepRecentToolResults: 1, minToolResultSize: 100 },
+  registry: { get: () => undefined },
+  cache,
 });
+
 const firstTool = compacted.find((m) => m.role === "tool" && m.toolCallId === "call-1");
 assert.ok(firstTool);
 assert.match(String(firstTool.content), /\[Previous: used read_file\]/);

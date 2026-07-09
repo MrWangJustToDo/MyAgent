@@ -493,7 +493,7 @@ Three-layer context compaction (plus reactive compaction) for infinite agent ses
 
 | Layer | Name | Trigger | Action |
 |-------|------|---------|--------|
-| Layer 1 | `micro_compact` | Every LLM call | Replace old tool results with placeholders |
+| Layer 1 | `tool_compact` | Every LLM call | `toModelOutput` transforms + recent-window placeholders |
 | Layer 2 | `reasoning_stripping` | Every LLM call (DeepSeek models) | Strip reasoning content from history to optimize prefix cache |
 | Layer 3 | `auto_compact` | Token threshold exceeded | LLM summarization |
 | Reactive | `reactive_compact` | `prompt_too_long` API error | Emergency compaction, then retry |
@@ -518,7 +518,7 @@ const agent = await agentManager.createManagedAgent({
 
 ```
 packages/core/src/agent/compaction/
-├── micro-compact.ts       # Layer 1 — replace old tool results with placeholders
+├── tool-compact/          # Layer 1 — toModelOutput + recent-window placeholders
 ├── auto-compact.ts        # Layer 3 — LLM summarization when token threshold exceeded
 ├── reactive-compact.ts    # Reactive — emergency compaction on prompt_too_long errors
 ├── apply-compaction-result.ts
@@ -531,7 +531,7 @@ packages/core/src/agent/compaction/
 └── index.ts
 ```
 
-**Reasoning stripping (Layer 2)** runs in `compaction-middleware.ts` (`stripReasoningFromHistory`) — for DeepSeek models without the `reasoning` capability, it strips thinking content from history to optimize prefix cache hits. Reasoning-capable models skip stripping because the API requires `reasoning_content` echo-back.
+**Reasoning stripping (Layer 2)** is disabled in `compaction-middleware.ts` because DeepSeek thinking mode requires `reasoning_content` echo-back. DeepSeek endpoints use `ReasoningChatCompletionsTextAdapter`, which maps stream `reasoning_content` into `thinking` and writes it back on subsequent requests.
 
 **Reactive compaction** runs in `run-agent.ts` via `runStreamWithReactiveCompactRetry` — on `prompt_too_long` errors, `ManagedAgent.handleReactiveCompact()` compacts context and retries once.
 
@@ -577,6 +577,12 @@ createNodeEnv({ rootPath: "/path", mode: "native" });   // No sandbox
 ### run_command Tool
 - Max 50KB for stdout and stderr each
 - Keeps the **end** of output (most relevant for errors)
+
+### Streaming UI throttle (`@my-agent/app`)
+- Core emits every chunk immediately via `emitStreamingChunk`; throttling is applied in the app layer.
+- `useStreamingOutput(toolCallId, { throttleMs })` and `StreamingOutputView` accept `throttleMs` (default `0` = every chunk).
+- `ToolCallPartView` defaults `run_command` streaming to 100ms; pass `streamingThrottleMs` to override.
+- Multiple subscribers for the same `toolCallId` use the minimum `throttleMs` among active consumers.
 
 ## CLI Keyboard Shortcuts
 

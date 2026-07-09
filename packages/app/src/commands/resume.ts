@@ -61,6 +61,7 @@ registerCommand({
 
       if (ctx.setMessages && result.uiMessages) {
         ctx.setMessages(result.uiMessages);
+        agent.syncInteractionStateFromUIMessages(result.uiMessages);
         bumpAgentUsage();
         setTimeout(() => {
           useDynamic.getActions().setDynamicKey(Date.now());

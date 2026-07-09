@@ -42,11 +42,13 @@ export const Agent = () => {
     stop,
     addToolApprovalResponse,
     addToolOutput,
+    setClientToolWaiting,
     initError,
     initLoading,
     allPendingApproval,
     allPendingAskUser,
     setMessages,
+    saveSessionFromChat,
   } = useAgentChat(config);
   const subagentPanelView = useSubagentPanel((s) => s.view);
   const subagentPanelOpen = subagentPanelView !== "closed";
@@ -62,9 +64,11 @@ export const Agent = () => {
     stop,
     addToolApprovalResponse,
     addToolOutput,
+    setClientToolWaiting,
     allPendingApproval,
     allPendingAskUser,
     setMessages,
+    saveSessionFromChat,
   });
 
   // ============================================================================

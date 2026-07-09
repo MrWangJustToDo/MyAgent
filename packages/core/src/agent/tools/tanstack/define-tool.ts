@@ -1,5 +1,7 @@
 import { toolDefinition, type ClientTool, type InferSchemaType, type SchemaInput, type ServerTool } from "@tanstack/ai";
 
+import { toModelOutputRegistry, type ModelToolContent, type ToModelOutputContext } from "./to-model-output-registry.js";
+
 // ============================================================================
 // Tool execute context (maps TanStack ToolExecutionContext)
 // ============================================================================
@@ -8,6 +10,9 @@ export interface ToolExecuteCtx {
   toolCallId: string;
   abortSignal?: AbortSignal;
 }
+
+export type { ModelToolContent, ToModelOutputContext };
+export { toModelOutputRegistry };
 
 // ============================================================================
 // Factories
@@ -30,7 +35,21 @@ export function defineServerTool<
     args: InferSchemaType<TInput>,
     ctx: ToolExecuteCtx
   ) => Promise<InferSchemaType<TOutput>> | InferSchemaType<TOutput>;
+  toModelOutput?: (
+    ctx: ToModelOutputContext & { input: InferSchemaType<TInput>; output: InferSchemaType<TOutput> }
+  ) => Promise<ModelToolContent> | ModelToolContent;
 }): ServerTool<TInput, TOutput, TName> {
+  if (config.toModelOutput) {
+    const toModel = config.toModelOutput;
+    toModelOutputRegistry.register(config.name, (ctx) =>
+      toModel({
+        toolCallId: ctx.toolCallId,
+        input: ctx.input as InferSchemaType<TInput>,
+        output: ctx.output as InferSchemaType<TOutput>,
+      })
+    );
+  }
+
   return toolDefinition({
     name: config.name,
     description: config.description,

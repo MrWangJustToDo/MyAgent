@@ -8,6 +8,8 @@ import { DEFAULT_EXCLUDE_DIRS, SEARCH_COMMAND_TIMEOUT } from "./util/search-comm
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { globOutputSchema } from "./util/types.js";
 
+import type { GlobOutput } from "./util/types.js";
+
 /** Default number of files to return per page */
 const DEFAULT_LIMIT = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
 
@@ -193,6 +195,18 @@ export const createGlobTool = () => {
           cachedOutputPath,
         };
       });
+    },
+    // Only send the file list to the LLM — pattern/path are echoed in the
+    // input, pagination/truncation/cache metadata is for the UI only.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: GlobOutput }) {
+      return [
+        {
+          type: "text" as const,
+          content:
+            `<params> offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit} </params>` +
+            (output.content || output.files.join("\n")),
+        },
+      ];
     },
   });
 };

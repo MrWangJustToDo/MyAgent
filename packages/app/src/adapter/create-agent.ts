@@ -35,7 +35,19 @@ function patchInstance(instance: ManagedAgent & { ["$$symbol"]?: symbol }) {
     get(target, p, receiver) {
       const key = p.toString()?.toLowerCase?.() || "";
       // has zod error
-      if (key.includes("tool") || key.includes("config")) {
+      if (
+        key.includes("tool") ||
+        key.includes("config") ||
+        key.includes("run") ||
+        key.includes("session") ||
+        key.includes("memory") ||
+        key.includes("todoManager") ||
+        key.includes("managedToolsProvider") ||
+        key.includes("mcp") ||
+        key.includes("skill") ||
+        key.includes("ui") ||
+        key.includes("text")
+      ) {
         return toRaw(Reflect.get(target, p, receiver));
       }
       return Reflect.get(target, p, receiver);

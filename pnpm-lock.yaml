@@ -71,9 +71,6 @@ importers:
       '@tanstack/ai':
         specifier: ^0.40.0
         version: 0.40.0(@opentelemetry/api@1.9.1)
-      '@tanstack/ai-react':
-        specifier: ^0.16.4
-        version: 0.16.4(@my-react/react@0.3.28)(@opentelemetry/api@1.9.1)(@tanstack/ai@0.40.0(@opentelemetry/api@1.9.1))(@types/react@19.2.17)
       ansi-escapes:
         specifier: ^7.3.0
         version: 7.3.0
@@ -196,6 +193,12 @@ importers:
       '@tanstack/ai-openai':
         specifier: ^0.16.0
         version: 0.16.0(@tanstack/ai@0.40.0(@opentelemetry/api@1.9.1))(ws@8.21.0)(zod@4.4.3)
+      '@tanstack/openai-base':
+        specifier: ^0.9.7
+        version: 0.9.7(@tanstack/ai@0.40.0(@opentelemetry/api@1.9.1))(ws@8.21.0)(zod@4.4.3)
+      openai:
+        specifier: ^6.45.0
+        version: 6.45.0(ws@8.21.0)(zod@4.4.3)
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -1899,17 +1902,6 @@ packages:
     peerDependencies:
       '@tanstack/ai': ^0.40.0
       zod: ^4.0.0
-
-  '@tanstack/ai-react@0.16.4':
-    resolution: {integrity: sha512-GTVX0Th8oz5VPKymUJei/9V9p3II2lJfE3sVhGHKY+tG4aRFnGsys0dwTCHCjEsSjZWWLtmm/ryrpdaT7P8tcg==}
-    peerDependencies:
-      '@mcp-ui/client': ^7
-      '@tanstack/ai': ^0.40.0
-      '@types/react': '>=18.0.0'
-      react: '>=18.0.0'
-    peerDependenciesMeta:
-      '@mcp-ui/client':
-        optional: true
 
   '@tanstack/ai-utils@0.3.1':
     resolution: {integrity: sha512-fgbjd5DohL3k5rTWr/KInauLVYMiHVm0cnmTsNrzL3cr4wWhEld5vmFSrjiwUWACAuONjZa+uBXuS+ZSO8fwDQ==}
@@ -7138,15 +7130,6 @@ snapshots:
       - '@smithy/hash-node'
       - '@smithy/signature-v4'
       - ws
-
-  '@tanstack/ai-react@0.16.4(@my-react/react@0.3.28)(@opentelemetry/api@1.9.1)(@tanstack/ai@0.40.0(@opentelemetry/api@1.9.1))(@types/react@19.2.17)':
-    dependencies:
-      '@tanstack/ai': 0.40.0(@opentelemetry/api@1.9.1)
-      '@tanstack/ai-client': 0.20.0(@opentelemetry/api@1.9.1)
-      '@types/react': 19.2.17
-      react: '@my-react/react@0.3.28(@my-react/react@0.3.28)'
-    transitivePeerDependencies:
-      - '@opentelemetry/api'
 
   '@tanstack/ai-utils@0.3.1': {}
 

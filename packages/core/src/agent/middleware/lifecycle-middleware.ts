@@ -33,6 +33,10 @@ function applyChunkStatus(
   chunk: StreamChunk
 ): void {
   const type = chunk.type;
+  const current = getStatus();
+
+  // Preserve user-interaction pauses set by approval middleware or app client-tool API.
+  if (current === "waiting" || current === "awaiting_user") return;
 
   if (type === "TOOL_CALL_START") {
     setStatus("running");
@@ -45,8 +49,7 @@ function applyChunkStatus(
   }
 
   if (type === "TEXT_MESSAGE_CONTENT") {
-    const status = getStatus();
-    if (status === "running" || status === "thinking") {
+    if (current === "running" || current === "thinking") {
       setStatus("responding");
     }
   }
@@ -72,7 +75,9 @@ export function createLifecycleMiddleware(deps: LifecycleMiddlewareDeps): ChatMi
       memoryCommitted = false;
       thinkingEmitted = false;
       runFinalized = false;
-      deps.setStatus("running");
+      if (deps.getStatus() !== "waiting" && deps.getStatus() !== "awaiting_user") {
+        deps.setStatus("running");
+      }
       deps.setError("");
       deps.onPromptSubmit?.();
     },

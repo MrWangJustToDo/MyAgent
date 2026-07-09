@@ -485,7 +485,8 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
         };
       });
 
-      return formatReadFileToolResult(result);
+      return result;
     },
+    toModelOutput: ({ output }) => formatReadFileToolResult(output as ReadFileOutput),
   });
 };

@@ -1,6 +1,6 @@
 /**
- * SessionService — session persistence and UI message sync.
- * Cross-subsystem data is passed in via input objects; no back-references to other services.
+ * SessionService — session persistence.
+ * `uiMessages` are written only when callers pass them (app `useChat` layer).
  */
 
 import { runSideTextQuery } from "../models/side-text-query.js";
@@ -85,7 +85,7 @@ export class SessionService {
   }
 
   /**
-   * Persist session model state and optionally UI messages in a single write.
+   * Persist session model state. Pass `uiMessages` only from the app `useChat` layer.
    */
   persistSession(input: SessionPersistInput): void {
     const { context, usage, todoManager, resolveTextAdapter, emitEvent, uiMessages } = input;

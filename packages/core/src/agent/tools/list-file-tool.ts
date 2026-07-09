@@ -6,6 +6,8 @@ import { defineServerTool } from "./tanstack/define-tool.js";
 import { OUTPUT_LIMITS, withDuration } from "./util/helpers.js";
 import { listFileOutputSchema } from "./util/types.js";
 
+import type { ListFileOutput } from "./util/types.js";
+
 const DEFAULT_LIMIT = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
 
 export const createListFileTool = () => {
@@ -65,6 +67,19 @@ export const createListFileTool = () => {
           totalEntries,
         };
       });
+    },
+    // Only send entries to the LLM — path is echoed in the input,
+    // pagination metadata is for the UI only.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: ListFileOutput }) {
+      const lines = output.entries.map((e) => `${e.name}${e.type === "directory" ? "/" : ""}`);
+      return [
+        {
+          type: "text" as const,
+          content:
+            `<params> offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit} </params>` +
+            lines.join("\n"),
+        },
+      ];
     },
   });
 };

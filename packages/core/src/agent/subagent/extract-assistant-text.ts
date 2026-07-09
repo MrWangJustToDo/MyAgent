@@ -15,7 +15,7 @@ function isToolPart(part: MessagePart): boolean {
 
 function textFromPart(part: MessagePart): string {
   if (part.type !== "text") return "";
-  return part.content.trim();
+  return part.content?.trim();
 }
 
 function splitByToolBoundaries(parts: MessagePart[]): MessagePart[][] {

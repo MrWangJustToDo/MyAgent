@@ -70,7 +70,7 @@ registerCommand({
         };
       }
 
-      agent.persistSession({ uiMessages });
+      agent.persistSession();
       bumpAgentUsage();
 
       const tokensBefore = result.tokensBefore ?? tokensBeforeEstimate;

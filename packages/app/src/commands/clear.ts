@@ -23,10 +23,9 @@ registerCommand({
 
     const usage = agent.usage;
     const currentSession = agent.getSessionData();
-    const uiMessages = ctx.getMessages?.() ?? currentSession?.uiMessages;
 
     if (currentSession) {
-      agent.persistSession({ uiMessages });
+      ctx.saveSessionFromChat?.();
     }
 
     context.reset();

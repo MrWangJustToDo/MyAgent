@@ -4,7 +4,9 @@ import { createState } from "reactivity-store";
 
 import { useAgent } from "./use-agent.js";
 
-import type { ManagedAgent, TokenUsage } from "@my-agent/core";
+import type { TokenUsage } from "@my-agent/core";
+
+type AgentRef = NonNullable<ReturnType<typeof useAgent.getReadonlyState>["agent"]>;
 
 export interface AgentUsageSnapshot {
   total: TokenUsage;
@@ -15,11 +17,11 @@ export interface AgentUsageSnapshot {
 
 export interface AgentUsageView {
   version: number;
-  agent: ManagedAgent | null;
+  agent: AgentRef | null;
   usage: AgentUsageSnapshot | null;
 }
 
-const readUsage = (agent: NonNullable<ReturnType<typeof useAgent.getReadonlyState>["agent"]>): AgentUsageSnapshot => {
+const readUsage = (agent: AgentRef): AgentUsageSnapshot => {
   const tracker = agent.usage;
   return {
     total: { ...tracker.getTotal() },

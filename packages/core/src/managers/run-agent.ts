@@ -1,7 +1,9 @@
 import {
+  createApprovalMiddleware,
   createCompactionMiddleware,
   createHooksMiddleware,
   createLifecycleMiddleware,
+  createToolCompactMiddleware,
   createTurnContextMiddleware,
 } from "../agent/middleware";
 import { AgentRunner } from "../agent/runner/agent-runner.js";
@@ -14,6 +16,7 @@ import { AgentUIChannel } from "./agent-ui-channel.js";
 import { createEmitFn } from "./emit-agent-event.js";
 import { buildManagedAgentDeps } from "./managed-agent-deps.js";
 import { runStreamWithReactiveCompactRetry } from "./reactive-compact-retry.js";
+import { selectInitialRunMessages } from "./select-run-messages.js";
 
 import type { AgentRunDeps } from "./agent-run-deps.js";
 import type { ManagedAgent } from "./managed-agent.js";
@@ -24,18 +27,6 @@ import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai";
 // ============================================================================
 // Run message selection
 // ============================================================================
-
-/** Prefer context UI history for chat(); fall back to request input or prepared model messages. */
-function selectRunMessages(
-  managed: ManagedAgent,
-  inputMessages: Array<UIMessage | ModelMessage> | undefined,
-  prepared: ModelMessage[]
-): Array<UIMessage | ModelMessage> {
-  const ui = managed.getContext()?.getUIMessages();
-  if (ui && ui.length > 0) return ui;
-  if (inputMessages?.length) return inputMessages;
-  return prepared;
-}
 
 // ============================================================================
 // Types
@@ -113,9 +104,7 @@ export function buildAgentRunner(
       getStatus: () => managed.status,
       setStatus: (status) => managed.setStatus(status),
       getError: () => managed.error,
-      setError: (error) => {
-        managed.error = error;
-      },
+      setError: (error) => managed.setError(error),
       usage: deps.usage,
       log: deps.log,
       getPricing: () => deps.usage.getPricing(),
@@ -136,8 +125,20 @@ export function buildAgentRunner(
       log: deps.log,
       emitEvent,
     }),
+    createToolCompactMiddleware({
+      getCompactionConfig: () => deps.compactionConfig,
+      getToolCompactCache: () => managed.getToolCompactCache(),
+      log: deps.log,
+    }),
     createTurnContextMiddleware({
       getDynamicTurnContext: deps.getDynamicTurnContext,
+    }),
+    createApprovalMiddleware({
+      getStatus: () => managed.status,
+      setStatus: (status) => managed.setStatus(status),
+      setPendingApprovalCount: (count) => managed.setPendingApprovalCount(count),
+      log: deps.log,
+      emitEvent,
     }),
     createHooksMiddleware({
       getHookRegistry: () => deps.hookRegistry,
@@ -214,11 +215,12 @@ async function executeManagedAgentRun(
   });
 
   const preparedMessages = prepared;
+  const inputMessages = messages;
 
   return runStreamWithReactiveCompactRetry({
     managed,
     manager,
-    getMessages: () => selectRunMessages(managed, messages, preparedMessages),
+    getMessages: () => selectInitialRunMessages(inputMessages, preparedMessages, managed),
     run: (runMessages) =>
       runner.run({
         agentId,
@@ -275,10 +277,8 @@ async function* bridgeAgentStream(
 
   for await (const chunk of stream) {
     channel.processChunk(chunk);
-    managed.updateSessionUIMessages(channel.getMessages(), { syncContext: false });
     yield chunk;
   }
 
   channel.finalizeStream();
-  managed.updateSessionUIMessages(channel.getMessages(), { syncContext: true });
 }

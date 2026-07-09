@@ -152,6 +152,11 @@ export const createTreeTool = () => {
         };
       });
     },
+    // Only send the tree text to the LLM — path/maxDepth are echoed in the
+    // input, totalEntries/truncated/cachedOutputPath are UI metadata.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: { tree: string } }) {
+      return [{ type: "text" as const, content: output.tree }];
+    },
   });
 };
 

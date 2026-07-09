@@ -52,8 +52,11 @@ registerCommand({
       .map((m) => {
         if (typeof m.content === "string") return m.content;
         if (Array.isArray(m.content)) {
-          const part = m.content.find((p) => (p as Record<string, unknown>).type === "text") as Record<string, unknown>;
-          return (part?.text as string) || (part?.content as string) || "";
+          const part = m.content.find((p) => p.type === "text");
+          if (part?.type === "text") {
+            return part.content;
+          }
+          return "";
         }
         return "";
       })

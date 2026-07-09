@@ -52,5 +52,10 @@ that help you complete specific types of tasks.`,
         };
       });
     },
+    // Only send content to the LLM — name is echoed in the input,
+    // durationMs is metadata.
+    toModelOutput({ output }: { toolCallId: string; input: unknown; output: z.infer<typeof loadSkillOutputSchema> }) {
+      return [{ type: "text" as const, content: output.content }];
+    },
   });
 };

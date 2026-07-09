@@ -18,12 +18,12 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 | Session persistence | **Done** | Unified `persistSession`; `finalizeRun` on finish/abort/error |
 | Compaction (micro / auto / reactive) | **Done** | + manual `/compact` in app |
 | Memory (prefetch / extract / consolidate) | **Done** | Post-run extraction only |
-| Tool approval | **Partial in core** | `needsApproval` on tools; UX in `@my-agent/app` |
+| Tool approval | **Done in core** | `approval` middleware + `needsApproval` on tools; app handles UI/keyboard only |
 | Hooks (`.agent-hooks`) | **Done** | Separate from user approval |
 
 **Known gaps**
 
-1. **Tool approval** — core marks tools; TanStack `useChat` + app keybindings handle UI.
+1. **Tool approval** — core `AgentChatController` owns tool-phase continuation; app handles UI/keyboard only.
 2. **Subagents** — no session store, memory, MCP, or hooks (by design).
 
 ---
@@ -36,7 +36,7 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 │   registerCoreEnv(node|remote)                                  │
 │   @my-agent/app: createAgentFromConfig → useAgentChat           │
 └────────────────────────────┬────────────────────────────────────┘
-                             │ localConnect / createLocalConnect
+                             │ AgentChatController → runAgentStream
 ┌────────────────────────────▼────────────────────────────────────┐
 │ @my-agent/core                                                  │
 │  AgentManager ──► ManagedAgent (composition root)               │
@@ -86,17 +86,10 @@ packages/app/src/adapter/create-agent.ts
 
 | API | File | Use |
 |-----|------|-----|
-| `localConnect(agentId)` | `connect/local-connect.ts` | Default CLI path; wraps TanStack `stream()` |
-| `createLocalConnect(agentId, manager)` | same | Passes `threadId` / `runId` / `parentRunId` |
+| `ManagedAgent.initChat(manager, initialMessages?)` | `managers/agent-chat-controller.ts` | Main CLI chat session |
+| `AgentChatController.sendMessage` / `respondToToolApproval` | same | User turns + tool-phase continuation |
 | `agentManager.runAgentStream(agentId, input)` | `managers/run-agent.ts` | Core streaming entry |
-
-```typescript
-// Simplified CLI path
-useChat({
-  connection: localConnect(agentId),
-  // ...
-});
-```
+| `localConnect`, `createLocalConnect` | `connect/local-connect.ts` | Legacy / tests only |
 
 ### 1.4 Public vs internal APIs
 
@@ -104,7 +97,8 @@ useChat({
 |--------|----------------------------------|
 | `agentManager`, `AgentManager` | Yes |
 | `ManagedAgent`, `ManagedAgentConfig` | Yes |
-| `localConnect`, `createLocalConnect` | Yes |
+| `AgentChatController`, `ManagedAgent.initChat` | Yes |
+| `localConnect`, `createLocalConnect` | Yes (legacy) |
 | `buildManagedAgent`, `getDefaultSkillDirs` | Yes |
 | `attachEventLogBridge` | **No** — wired in `AgentManager` constructor |
 
@@ -184,10 +178,15 @@ run-agent.ts: executeManagedAgentRun
 ```
 RunCoordinator.prepareMessages(input)
 RunCoordinator.setupAbortController(abortSignal)
-memory.prefetchRelevantMemories()     // see §7
-emitEvent("prompt:submit", { prompt })
+if !isToolContinuationPrepare(agent.status, messages):
+  memory.prefetchRelevantMemories()     // see §7
+  emitEvent("prompt:submit", { prompt })
 return finalMessages
 ```
+
+`isToolContinuationPrepare` uses existing state — no extra run-phase field:
+- `status === "waiting"` (approval pause), or
+- last message is not `user` (tool-phase / approval continuation within the same turn).
 
 ### 3.3 Middleware stack (each LLM iteration)
 
@@ -197,7 +196,8 @@ Built in `buildAgentRunner` (`run-agent.ts`), order matters:
 1. lifecycle-middleware     status, usage, thinking events, finalizeRun
 2. compaction-middleware    micro + reasoning strip + auto-compact
 3. turn-context-middleware  inject <turn_context> (memory, todo nag)
-4. hooks-middleware         PreToolUse / PostToolUse scripts + tool events
+4. approval-middleware      `waiting` status + `agent:tool-approval-request`
+5. hooks-middleware         PreToolUse / PostToolUse scripts + tool events
 ```
 
 ### 3.4 Lifecycle status transitions
@@ -208,8 +208,10 @@ Built in `buildAgentRunner` (`run-agent.ts`), order matters:
 | Model reasoning | `thinking` | `REASONING_MESSAGE_*` chunk |
 | Text output | `responding` | `TEXT_MESSAGE_CONTENT` |
 | Tool call | `running` | `TOOL_CALL_START` |
+| Tool approval pending | `waiting` | `approval` middleware `onToolPhaseComplete` → `needsApproval` |
+| Client tool (`ask_user`) | `awaiting_user` | App host calls `ManagedAgent.setClientToolWaiting(true)` |
 | Auto-compact | `compacting` | compaction middleware |
-| Success | `completed` / `idle` | `onFinish` |
+| Success | `completed` / `idle` | `onFinish` (preserves `waiting` / `awaiting_user` if set) |
 | User abort | `aborted` | `onAbort` / `RunCoordinator` |
 | Error | `error` | `onError` |
 
@@ -217,9 +219,16 @@ Built in `buildAgentRunner` (`run-agent.ts`), order matters:
 
 ## 4. Tool approval flow
 
-Core **declares** which tools need approval; **execution blocking** is handled by TanStack AI + `@my-agent/app`.
+Core **declares** which tools need approval and **owns agent status** during the approval pause. **Execution blocking** and resume are still handled by TanStack AI + `@my-agent/app` (`addToolApprovalResponse`).
 
-### 4.1 Core: `needsApproval: true`
+### 4.1 Core: `needsApproval: true` + approval middleware
+
+`createApprovalMiddleware` (`agent/middleware/approval-middleware.ts`):
+
+| Hook | Action |
+|------|--------|
+| `onToolPhaseComplete` | When `info.needsApproval.length > 0`: `setStatus("waiting")`, `setPendingApprovalCount`, emit `agent:tool-approval-request` per tool |
+| `onBeforeToolCall` | When status is `waiting`: clear count, `setStatus("running")` (approved tool executing) |
 
 Tools with approval required (`defineServerTool` in `tanstack/define-tool.ts`):
 
@@ -240,12 +249,29 @@ managed.isToolNeedsApproval(toolName)  // managed-agent.ts
 
 | Step | Location |
 |------|----------|
-| Detect pending approval | `use-agent-chat.ts` — scan `part.approval?.needsApproval && approved === undefined` |
-| UI | `ToolCallPartView.tsx`, `Footer.tsx` (shows count when multiple pending) |
-| Keyboard | `use-agent-keybindings.ts` — `y` approves **one** pending tool per press |
-| Resume | `chat.addToolApprovalResponse({ id, approved })` — TanStack auto-continues when all tool parts are complete |
+| Chat session | **core** `AgentChatController` — `StreamProcessor` + `pumpToolPhases()` |
+| App hook | `use-agent-chat.ts` — subscribes to controller messages + `ManagedAgent.subscribeState()` |
+| Detect pending approval (UI) | `use-agent-chat.ts` — `isPendingToolApproval()` for keyboard / input mode |
+| Agent status | **core** `approval` middleware — not app |
+| UI | `ToolCallPartView.tsx`, `Footer.tsx` |
+| Keyboard | `use-agent-keybindings.ts` — `y` approves **one** pending tool per press; `n` enters freeform deny-reason input |
+| Deny reason | App collects reason in freeform mode; `respondToToolApproval(id, false, reason)` stores it on `part.approval.reason` and adds a `tool-result` part for the LLM |
+| Resume | `respondToToolApproval()` — core re-runs when `needsToolPhaseContinue()` |
 
-**Critical:** `AgentContext` stores **UIMessages** as the source of truth (`setUIMessages`). `runner.run()` reads `context.getUIMessages()` so TanStack `chat()` can extract `part.approval` before conversion. `getMessages()` / `getMessagesForLLM()` derive the model view on read (compaction middleware may overlay via `setMessages` during a run).
+**Mixed tool batches** (e.g. `tree` + `run_command`): TanStack defers non-approval tools while approvals are pending. Core `pumpToolPhases()` loops `runAgentStream()` until `needsToolPhaseContinue()` is false — no `ChatClient.shouldAutoSend()`.
+
+### 4.4 Client tools (`ask_user`)
+
+Client tools pause the run until the host supplies output via `addToolResult`. Core does **not** infer UI status from message parts — the app sets it explicitly:
+
+| API | When |
+|-----|------|
+| `ManagedAgent.setClientToolWaiting(true)` | App detects pending `ask_user` (select list or freeform) |
+| `ManagedAgent.setClientToolWaiting(false)` | User submits answer, before `addToolResult` |
+
+Status becomes `awaiting_user` (distinct from approval `waiting`). Exposed in CLI via `useAgentChat().setClientToolWaiting`.
+
+**Critical:** `runner.run()` receives **UIMessages** (`select-run-messages.ts`) so TanStack `chat()` can extract `part.approval` before conversion.
 
 No manual user text is required; each `y` only approves one tool when several `run_command` calls are pending.
 
@@ -264,21 +290,26 @@ Hook events also emit `agent:tool-start` / `agent:tool-end` / `agent:tool-error`
 
 Three proactive layers run on **every** LLM iteration (via `compaction-middleware.onConfig`), plus reactive retry on API errors.
 
-### 5.1 Layer 1 — Micro compact
+### 5.1 Layer 1 — Tool compact
 
-**File:** `agent/compaction/micro-compact.ts`
+**Files:** `agent/compaction/tool-compact/`, `agent/middleware/tool-compact-middleware.ts`
 
-- Replaces old `role: "tool"` results with `"[Previous: used {tool_name}]"`
-- Keeps N recent tool results (`keepRecentToolResults`, default 3)
-- Skips small results (`minToolResultSize`)
-- Protects `list_skills`, `load_skill`, `todo`, etc.
+Runs **after** context auto-compact in the middleware stack.
+
+- **Recent window** (`keepRecentToolResults`): tools with `toModelOutput` on `defineServerTool` are transformed for the LLM; result cached per `toolCallId` in `ToolCompactCache`
+- **Skips** approval placeholders (`pendingExecution: true`) — tool-compact runs on `onConfig` before execution; transforming those messages would strip the marker and TanStack would skip the real tool run
+- **Outside window**: `role: "tool"` content replaced with `"[Previous: used {tool_name}]"`; clears tool-output cache + compact cache for that call
+- Skips small results (`minToolResultSize`); protects `list_skills`, `load_skill`, `todo`, etc.
+- **UI** `UIMessage` history is unchanged; only the LLM `ModelMessage` path is shaped
+
+Large tool outputs at **execute** time still use `maybeCacheOutput` (`.agent-cache/tool-output/`) as a separate fallback — not part of compaction.
 
 ### 5.2 Layer 2 — Reasoning strip
 
 **File:** `agent/middleware/compaction-middleware.ts` → `stripReasoningFromHistory`
 
-- For DeepSeek models **without** the `reasoning` capability: strips `thinking` from non-tool-call assistant messages
-- Skipped for reasoning-capable models (DeepSeek thinking mode requires `reasoning_content` echo-back)
+- **Disabled** — DeepSeek thinking mode requires `reasoning_content` on assistant messages to be echoed on subsequent API calls (especially after tool calls). Stripping `thinking` caused `400` errors.
+- Reasoning echo is handled by `models/reasoning-chat-completions-adapter.ts` for DeepSeek endpoints.
 
 ### 5.3 Layer 3 — Auto compact
 
@@ -357,7 +388,7 @@ Fields: `uiMessages`, `summaryMessage`, `compactIndex`, `usage`, `cost`, `contex
 | Trigger | Function | What is saved |
 |---------|----------|---------------|
 | **Run finalizes** (finish / abort / error) | `ManagedAgent.finalizeRun` → `SessionService.persistSession` | Model fields: `summaryMessage`, `compactIndex`, `usage`, `cost`, `contextTokens`, `todos`; auto-title if `"New Session"` |
-| **Chat idle (app)** | `useAgentChat` effect → `updateSessionUIMessages` → `persistSession` | Same model fields **plus** `uiMessages` (single write) |
+| **Chat idle (app)** | `useAgentChat` → `saveSessionUIMessages` | Model fields **plus** `uiMessages` (only write path for UI history) |
 
 `SessionStore.save`: content-hash dedup, per-session write lock, full JSON overwrite.
 
@@ -385,7 +416,7 @@ AgentManager.continueLatestSession(agentId)
   → store.getLatest() → resumeSession
 ```
 
-App passes `initialMessages` from resume into `useChat`.
+App passes `initialMessages` from resume into `ManagedAgent.initChat()`.
 
 ### 6.4 Context ↔ UI sync rules
 
@@ -399,10 +430,11 @@ uiMessages (source of truth in AgentContext)
   → LLM (via compaction middleware onConfig)
 ```
 
-- **Each run start** (`prepareForRun`): incoming `uiMessages` from `useChat` → `context.setUIMessages` (summary + `compactIndex` preserved).
-- **After run idle** (`updateSessionUIMessages`): persist full `uiMessages` + model fields to session.
-- **During active runs**: context is not overwritten from UI (unless `syncContext: true`) to avoid clobbering in-flight compaction state.
-- **Manual `/compact`**: syncs UI → context, compacts LLM path only; UI history stays complete; `persistSession` saves both.
+- **Each run start** (`prepareForRun`): incoming `uiMessages` from `AgentChatController` → `context.setUIMessages` (summary + `compactIndex` preserved).
+- **After run idle** (`AgentChatController` after `pumpToolPhases`): `saveSessionUIMessages(messages)` — sole path that writes `uiMessages`.
+- **During runs / core**: `persistSession()` and `finalizeRun` write model fields only; they never pass `uiMessages`.
+- **Manual `/compact`**: syncs UI → context, compacts LLM path only; UI history stays complete; `persistSession()` saves model state only.
+- **Manual `/clear`**: `saveSessionFromChat()` flushes current chat messages before rotating session.
 
 ### 6.5 Session events
 
@@ -483,7 +515,7 @@ managed.emitEvent(type, data)
 |----------|--------|
 | Session bootstrap | `session:doc`, `session:skill`, `session:mcp`, `session:memory`, `session:start` |
 | Run lifecycle | `prompt:submit`, `agent:thinking`, `agent:abort`, `agent:stream-error`, `agent:stop` |
-| Tools | `agent:tool-start`, `agent:tool-end`, `agent:tool-error` |
+| Tools | `agent:tool-start`, `agent:tool-approval-request`, `agent:tool-end`, `agent:tool-error` |
 | Memory | `memory:prefetch`, `memory:extract`, `memory:consolidate` |
 | Compaction | `compaction:auto-*`, `compaction:reactive-*` |
 | Session I/O | `session:save-error` |
@@ -509,24 +541,24 @@ Tool hooks (`PreToolUse`, `PostToolUse`) are invoked directly from `hooks-middle
 ## 9. End-to-end run diagram
 
 ```
-User sends message (useChat)
+User sends message (AgentChatController.sendMessage)
   │
   ▼
-localConnect → agentManager.runAgentStream(agentId, { messages, abortSignal })
+agentManager.runAgentStream(agentId, { messages: UIMessage[], abortSignal })
   │
   ▼
 executeManagedAgentRun
   ├─ ensureAgentRunner (lazy build AgentRunner + middleware)
   ├─ prepareForRun
-  │    ├─ memory.prefetchRelevantMemories
-  │    └─ emit prompt:submit
+  │    ├─ (user-turn only) memory.prefetchRelevantMemories
+  │    └─ (user-turn only) emit prompt:submit
   └─ runStreamWithReactiveCompactRetry
        └─ runner.run → TanStack chat()
             │
             ├─ [each iteration] compaction.onConfig
-            │    ├─ microCompact
             │    ├─ stripReasoningFromHistory (DeepSeek)
             │    └─ autoCompact if threshold exceeded
+            ├─ tool-compact.onConfig → toModelOutput + recent-window placeholders
             ├─ turn-context.onConfig → inject memory/todo
             ├─ hooks.onBeforeToolCall → PreToolUse + agent:tool-start
             ├─ [tool execute or approval pause]
@@ -537,7 +569,8 @@ executeManagedAgentRun
                  └─ emit agent:stop
   │
   ▼
-[app] chat.status === "ready" → updateSessionUIMessages → persistSession (+ uiMessages)
+[app] chat.status === "ready" → saveSessionUIMessages(chat.messages)
+[core] finalizeRun / /compact → persistSession() (model fields only)
 ```
 
 ---
@@ -573,6 +606,8 @@ pnpm --filter @my-agent/core run validate:reactive-compact
 pnpm --filter @my-agent/core run validate:subagent-run-stats
 pnpm --filter @my-agent/core run validate:model-config
 pnpm --filter @my-agent/core run validate:agent-context
+pnpm --filter @my-agent/core run validate:tool-phase-utils
+pnpm --filter @my-agent/core run validate:tool-resume-sentinel
 ```
 
 Full package validation: `pnpm build:core` + `pnpm typecheck` (core tools typecheck clean as of recent fixes).
