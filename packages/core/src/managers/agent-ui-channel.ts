@@ -4,7 +4,13 @@
 
 import { StreamProcessor } from "@tanstack/ai";
 
-import { getSummaryStreamText } from "../agent/subagent/extract-assistant-text.js";
+import { BEGIN_SUMMARY_TOOL_NAME } from "../agent/subagent/begin-summary-tool.js";
+import {
+  getSummaryStreamText,
+  resolveTaskRunPhase,
+  type TaskRunPhase,
+  type TaskSummaryStreamState,
+} from "../agent/subagent/extract-assistant-text.js";
 import { clearStreamingOutput, emitStreamingChunk } from "../agent/tools/util/streaming-callback.js";
 import { applyToolDenialReason } from "../agent/utils/apply-tool-denial-reason.js";
 
@@ -35,6 +41,18 @@ export interface ConsumeRunOptions {
 type MessageListener = (messages: TanStackUIMessage[]) => void;
 type ApprovalListener = (request: UIApprovalRequest) => void;
 
+function readToolCallName(chunk: StreamChunk): string | undefined {
+  if (chunk.type !== "TOOL_CALL_START") return undefined;
+  const record = chunk as { toolName?: string };
+  return typeof record.toolName === "string" ? record.toolName : undefined;
+}
+
+function readTextMessageId(chunk: StreamChunk): string | undefined {
+  if (chunk.type !== "TEXT_MESSAGE_START") return undefined;
+  const record = chunk as { messageId?: string };
+  return typeof record.messageId === "string" && record.messageId.length > 0 ? record.messageId : undefined;
+}
+
 // ============================================================================
 // AgentUIChannel
 // ============================================================================
@@ -51,6 +69,14 @@ export class AgentUIChannel {
   private parentTaskToolCallId?: string;
   private onUpdate?: (messages: TanStackUIMessage[]) => void;
   private streamedSummaryLength = 0;
+  private summaryStreamState: TaskSummaryStreamState = { summaryPhaseUnlocked: false };
+  /** Active agent-loop turn assistant message (per-turn streaming scope). */
+  private currentTurnMessageId?: string;
+
+  /** Current task run phase for parent task tool UI (`tools` vs `summary`). */
+  getTaskRunPhase(): TaskRunPhase {
+    return resolveTaskRunPhase(this.getMessages(), this.summaryStreamState);
+  }
 
   constructor(options: AgentUIChannelOptions = {}) {
     this.processor = new StreamProcessor({
@@ -131,6 +157,7 @@ export class AgentUIChannel {
 
   /** Process a single stream chunk (for incremental bridge during `runAgent`). */
   processChunk(chunk: StreamChunk): void {
+    this.trackSummaryStreamPhase(chunk);
     this.processor.processChunk(chunk);
   }
 
@@ -160,6 +187,8 @@ export class AgentUIChannel {
     this.parentTaskToolCallId = parentTaskToolCallId;
     this.onUpdate = onUpdate;
     this.streamedSummaryLength = 0;
+    this.summaryStreamState = { summaryPhaseUnlocked: false };
+    this.currentTurnMessageId = undefined;
 
     if (parentTaskToolCallId) {
       clearStreamingOutput(parentTaskToolCallId);
@@ -170,6 +199,34 @@ export class AgentUIChannel {
     this.parentTaskToolCallId = undefined;
     this.onUpdate = undefined;
     this.streamedSummaryLength = 0;
+    this.summaryStreamState = { summaryPhaseUnlocked: false };
+    this.currentTurnMessageId = undefined;
+  }
+
+  private trackSummaryStreamPhase(chunk: StreamChunk): void {
+    if (!this.parentTaskToolCallId) return;
+
+    const messageId = readTextMessageId(chunk);
+    if (messageId) {
+      this.currentTurnMessageId = messageId;
+    }
+
+    const toolName = readToolCallName(chunk);
+    if (toolName === BEGIN_SUMMARY_TOOL_NAME) {
+      this.summaryStreamState = { summaryPhaseUnlocked: true };
+      clearStreamingOutput(this.parentTaskToolCallId);
+      this.streamedSummaryLength = 0;
+    }
+  }
+
+  private getCurrentTurnParts(messages: TanStackUIMessage[]) {
+    if (this.currentTurnMessageId) {
+      const current = messages.find((message) => message.id === this.currentTurnMessageId);
+      if (current?.role === "assistant") return current.parts;
+    }
+
+    const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant");
+    return lastAssistant?.parts ?? [];
   }
 
   private handleMessagesChange(messages: TanStackUIMessage[]): void {
@@ -185,10 +242,7 @@ export class AgentUIChannel {
 
     if (!this.parentTaskToolCallId) return;
 
-    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-    if (!lastAssistant) return;
-
-    const summaryText = getSummaryStreamText(lastAssistant.parts);
+    const summaryText = getSummaryStreamText(this.getCurrentTurnParts(messages), this.summaryStreamState);
     if (summaryText) {
       if (summaryText.length < this.streamedSummaryLength) {
         this.streamedSummaryLength = 0;
@@ -198,8 +252,9 @@ export class AgentUIChannel {
         emitStreamingChunk(this.parentTaskToolCallId, "stdout", delta);
         this.streamedSummaryLength = summaryText.length;
       }
-    } else {
+    } else if (this.streamedSummaryLength > 0) {
       this.streamedSummaryLength = 0;
+      clearStreamingOutput(this.parentTaskToolCallId);
     }
   }
 }

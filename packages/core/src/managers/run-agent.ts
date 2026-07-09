@@ -45,6 +45,8 @@ export interface RunAgentStreamInput {
 
 export interface RunAgentOptions {
   bridgeUI?: boolean;
+  parentAgentId?: string;
+  parentTaskToolCallId?: string;
 }
 
 // ============================================================================
@@ -126,6 +128,7 @@ export function buildAgentRunner(
     createToolCompactMiddleware({
       getCompactionConfig: () => deps.compactionConfig,
       getToolCompactCache: () => managed.getToolCompactCache(),
+      getManagedAgent: () => managed,
       log: deps.log,
     }),
     createTurnContextMiddleware({

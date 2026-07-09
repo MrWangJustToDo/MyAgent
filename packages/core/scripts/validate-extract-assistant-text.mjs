@@ -1,12 +1,23 @@
 /**
- * Validates final-step summary extraction from subagent UIMessage snapshots.
+ * Validates subagent summary extraction and begin_summary-gated streaming.
  *
  * Run: pnpm --filter @my-agent/core run validate:extract-assistant-text
  */
 /* eslint-disable no-undef */
 import assert from "node:assert/strict";
 
-import { extractAssistantText, getSummaryStreamText } from "../dist/dev.mjs";
+import {
+  BEGIN_SUMMARY_TOOL_NAME,
+  extractAssistantText,
+  getSummaryStreamText,
+  resolveTaskRunPhase,
+  shouldStreamTaskSummary,
+} from "../dist/dev.mjs";
+
+const unlocked = { summaryPhaseUnlocked: true };
+const locked = { summaryPhaseUnlocked: false };
+
+const summaryText = "## Final Summary\n\nThis is the comprehensive project summary the parent should see.";
 
 const messages = [
   {
@@ -16,13 +27,16 @@ const messages = [
       { type: "text", content: "I'll start by exploring the project structure." },
       { type: "tool-call", id: "tc1", name: "read_file", arguments: "{}", state: "complete", output: "{}" },
       { type: "tool-result", toolCallId: "tc1", content: "hi", state: "complete" },
-      { type: "text", content: "Now let me read package.json files." },
-      { type: "tool-call", id: "tc2", name: "grep", arguments: "{}", state: "complete", output: "{}" },
-      { type: "tool-result", toolCallId: "tc2", content: "[]", state: "complete" },
       {
-        type: "text",
-        content: "## Final Summary\n\nThis is the comprehensive project summary the parent should see.",
+        type: "tool-call",
+        id: "tc-bs",
+        name: BEGIN_SUMMARY_TOOL_NAME,
+        arguments: "{}",
+        state: "complete",
+        output: "{}",
       },
+      { type: "tool-result", toolCallId: "tc-bs", content: "{}", state: "complete" },
+      { type: "text", content: summaryText },
     ],
   },
 ];
@@ -30,17 +44,41 @@ const messages = [
 const summary = extractAssistantText(messages);
 assert.ok(summary.includes("## Final Summary"));
 assert.ok(!summary.includes("I'll start by exploring"));
-assert.ok(!summary.includes("Now let me read"));
 
-const streamText = getSummaryStreamText(messages[0].parts);
-assert.equal(streamText, summary);
+assert.equal(getSummaryStreamText(messages[0].parts, locked), null);
+assert.equal(getSummaryStreamText(messages[0].parts, unlocked), summary);
+assert.equal(resolveTaskRunPhase(messages, unlocked), "summary");
+assert.equal(resolveTaskRunPhase(messages, locked), "tools");
+
+const currentTurnNarration = [
+  {
+    type: "text",
+    content:
+      "We'll explore the monorepo structure first. We'll delve into core files to understand the agent loop and tool system in detail across packages.",
+  },
+];
+
+assert.equal(getSummaryStreamText(currentTurnNarration, locked), null);
+assert.equal(getSummaryStreamText([{ type: "text", content: "Planning next step." }], unlocked), null);
+assert.equal(resolveTaskRunPhase([{ id: "a1", role: "assistant", parts: currentTurnNarration }], locked), "tools");
+assert.equal(resolveTaskRunPhase([{ id: "a1", role: "assistant", parts: currentTurnNarration }], unlocked), "summary");
+
+const currentTurnSummary = [{ type: "text", content: summaryText }];
+
+assert.equal(getSummaryStreamText(currentTurnSummary, locked), null);
+assert.equal(getSummaryStreamText(currentTurnSummary, unlocked), summaryText);
+assert.equal(shouldStreamTaskSummary(currentTurnSummary, unlocked), true);
+
+const toolStillRunning = [{ type: "tool-call", id: "tc3", name: "glob", arguments: "{}", state: "input-complete" }];
+
+assert.equal(getSummaryStreamText(toolStillRunning, unlocked), null);
+assert.equal(resolveTaskRunPhase([{ id: "a2", role: "assistant", parts: toolStillRunning }], unlocked), "tools");
 
 const shortFinal = [
-  { type: "tool-call", id: "tc3", name: "glob", arguments: "{}", state: "complete", output: "[]" },
-  { type: "tool-result", toolCallId: "tc3", content: "[]", state: "complete" },
+  { type: "tool-call", id: "tc4", name: BEGIN_SUMMARY_TOOL_NAME, arguments: "{}", state: "complete", output: "{}" },
   { type: "text", content: "Short" },
 ];
-assert.equal(getSummaryStreamText(shortFinal), null);
+assert.equal(getSummaryStreamText(shortFinal, unlocked), null);
 
 const reasoningThenSummary = [
   {

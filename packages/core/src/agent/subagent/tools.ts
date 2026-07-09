@@ -9,6 +9,8 @@ import { createReadFileTool } from "../tools/read-file-tool.js";
 import { type ToolsRecord } from "../tools/tanstack/tools-record.js";
 import { createTreeTool } from "../tools/tree-tool.js";
 
+import { createBeginSummaryTool } from "./begin-summary-tool.js";
+
 import type { UsageTracker } from "../../managers/usage-tracker.js";
 
 /**
@@ -22,6 +24,7 @@ export const createSubagentTools = (usage?: UsageTracker): ToolsRecord => {
     grep: createGrepTool(),
     list_file: createListFileTool(),
     tree: createTreeTool(),
+    begin_summary: createBeginSummaryTool(),
   };
 };
 

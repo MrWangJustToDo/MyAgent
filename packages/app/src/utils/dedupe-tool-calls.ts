@@ -63,7 +63,7 @@ export function normalizeToolPartsInMessages(messages: UIMessage[]): UIMessage[]
 }
 
 export function shouldFlattenPart(part: { type?: string }): boolean {
-  return !SKIPPED_FLATTEN_PART_TYPES.has(part.type ?? "");
+  return !SKIPPED_FLATTEN_PART_TYPES.has(part?.type ?? "");
 }
 
 const TOOL_STATE_RANK: Record<ToolCallPart["state"], number> = {
@@ -126,7 +126,7 @@ export function dedupeToolCallsInMessages(messages: UIMessage[]): UIMessage[] {
   for (const message of messages) {
     if (message.role !== "assistant") continue;
     for (const part of message.parts) {
-      if (part.type !== "tool-call") continue;
+      if (part?.type !== "tool-call") continue;
       const toolPart = part as ToolCallPart;
       if (seen.has(toolPart.id)) {
         hasDuplicate = true;
@@ -152,7 +152,7 @@ export function dedupeToolCallsInMessages(messages: UIMessage[]): UIMessage[] {
 
     for (let partIdx = 0; partIdx < message.parts.length; partIdx++) {
       const part = message.parts[partIdx];
-      if (part.type !== "tool-call") continue;
+      if (part?.type !== "tool-call") continue;
 
       const toolPart = part as ToolCallPart;
       const existing = firstByToolId.get(toolPart.id);
@@ -179,7 +179,7 @@ export function dedupeToolCallsInMessages(messages: UIMessage[]): UIMessage[] {
 export function computeToolCallsRenderSignature(messages: UIMessage[]): string {
   return messages
     .flatMap((message) => message.parts)
-    .filter((part) => part.type === "tool-call")
+    .filter((part) => part?.type === "tool-call")
     .map((part) => {
       const tool = part as ToolCallPart;
       const hasOutput = tool.output !== undefined ? "1" : "0";

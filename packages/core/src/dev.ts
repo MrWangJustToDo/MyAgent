@@ -25,7 +25,13 @@ export { runSideTextQuery } from "./models/side-text-query.js";
 export { isPromptTooLongError } from "./agent/compaction/reactive-compact.js";
 export { extractRunErrorMessage } from "./managers/reactive-compact-retry.js";
 export { formatReadFileToolResult } from "./agent/tools/util/format-read-file-result.js";
-export { extractAssistantText, getSummaryStreamText } from "./agent/subagent/extract-assistant-text.js";
+export { BEGIN_SUMMARY_TOOL_NAME } from "./agent/subagent/begin-summary-tool.js";
+export {
+  extractAssistantText,
+  getSummaryStreamText,
+  resolveTaskRunPhase,
+  shouldStreamTaskSummary,
+} from "./agent/subagent/extract-assistant-text.js";
 export { countSubagentIterations, deriveSubagentRunStats } from "./agent/subagent/run-stats.js";
 export { resolveSubagentBridgeUI } from "./agent/subagent/types.js";
 export { extractFileOpsFromMessages, formatFileOperations } from "./agent/compaction/file-ops-tracker.js";

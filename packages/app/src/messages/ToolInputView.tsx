@@ -2,7 +2,7 @@ import { Box } from "ink";
 
 import { EditDiff } from "../components/EditDiff";
 import { useSize } from "../hooks";
-import { useStreamingOutput } from "../hooks/use-streaming-output.js";
+import { useTask } from "../hooks/use-task.js";
 import { BG } from "../theme/colors.js";
 import { isToolExecuting } from "../utils/tool-part.js";
 
@@ -26,11 +26,11 @@ export const ToolInputView = ({
   const bodyWidth = width - 8;
   const isExecuting = isToolExecuting(part);
   const isTask = toolName === "task";
-  const stream = useStreamingOutput(isTask && isExecuting ? part.id : undefined, isTask && isExecuting);
+  const taskInput = toolInput as { prompt?: string; description?: string; id?: string };
+  const { phase: taskPhase } = useTask({ id: isTask && taskInput?.id ? taskInput.id : "", taskId: part.id });
 
   if (toolName === "task") {
-    const content = toolInput as { prompt?: string; description?: string; id?: string };
-    if (!content?.prompt || !content.id || !isExecuting || stream?.stdout) return null;
+    if (!taskInput?.prompt || !taskInput.id || !isExecuting || taskPhase === "summary") return null;
     return <TaskToolInputView part={part} toolInput={toolInput} />;
   }
 

@@ -10,6 +10,8 @@ export {
 // System prompt
 export { buildExploreSystemPrompt, SUBAGENT_EXPLORE_SYSTEM_PROMPT } from "./prompt.js";
 
+export { BEGIN_SUMMARY_TOOL_NAME, createBeginSummaryTool } from "./begin-summary-tool.js";
+
 // Tool creation
 export { createSubagentTools, createExploreTools } from "./tools.js";
 
@@ -23,6 +25,11 @@ export { countSubagentIterations, deriveSubagentRunStats } from "./run-stats.js"
 export {
   extractAssistantText,
   getSummaryStreamText,
+  hasIncompleteToolCalls,
+  resolveTaskRunPhase,
+  shouldStreamTaskSummary,
   splitStepSegments,
   SUMMARY_STREAM_MIN_CHARS,
+  type TaskRunPhase,
+  type TaskSummaryStreamState,
 } from "./extract-assistant-text.js";

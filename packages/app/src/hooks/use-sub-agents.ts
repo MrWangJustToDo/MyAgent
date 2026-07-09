@@ -5,18 +5,18 @@ import { useAgent } from "./use-agent.js";
 
 import type { ManagedAgent } from "@my-agent/core";
 
-const getManagerSubagent = (subId: string): ManagedAgent | undefined => {
+const getManagerSubagent = (subId: string, taskId: string): ManagedAgent | undefined => {
   const id = useAgent.getReadonlyState().agent?.id;
   if (!id) return;
 
-  return agentManager.getSubagents(id).find((managed) => managed.id === subId);
+  return agentManager.getSubagents(id).find((managed) => managed.id === subId || managed.parentTaskId === taskId);
 };
 
-export const useSubAgents = ({ subId }: { subId: string }) => {
-  const [agent, setAgent] = useState<ManagedAgent | undefined>(() => getManagerSubagent(subId));
+export const useSubAgents = ({ subId, taskId }: { subId: string; taskId: string }) => {
+  const [agent, setAgent] = useState<ManagedAgent | undefined>(() => getManagerSubagent(subId, taskId));
 
   useEffect(() => {
-    const existing = getManagerSubagent(subId);
+    const existing = getManagerSubagent(subId, taskId);
     if (existing) {
       setAgent(existing);
       return;
@@ -27,7 +27,7 @@ export const useSubAgents = ({ subId }: { subId: string }) => {
       const managed = agentManager.getAgent(subId);
       if (managed) setAgent(managed);
     });
-  }, [subId]);
+  }, [subId, taskId]);
 
   return agent;
 };

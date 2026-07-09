@@ -432,7 +432,7 @@ The project supports **subagents** — context-isolated agents spawned to handle
 | Feature | Behavior |
 |---------|----------|
 | Context | Fresh (starts with empty messages) |
-| Tools | Read-only: `read_file`, `glob`, `grep`, `list_file`, `tree` (no `run_command`) |
+| Tools | Read-only: `read_file`, `glob`, `grep`, `list_file`, `tree`, plus marker `begin_summary` (no `run_command`) |
 | Return | Summary only to parent LLM context; UI keeps a read-only UIMessage preview when `bridgeUI` is enabled |
 | Iteration Limit | 30 steps max |
 | Summary Limit | 5000 characters max |
@@ -443,8 +443,9 @@ The project supports **subagents** — context-isolated agents spawned to handle
 
 `runSubagent({ bridgeUI: true })` attaches an `AgentUIChannel` on `ManagedAgent.ui` for the task panel (`Ctrl+T`).
 Headless runs (`bridgeUI: false`) consume the stream via `StreamProcessor` only and skip UI wiring.
-The default task tool row shows the current subagent tool (like before); during the final summary step,
-text streams via `emitStreamingChunk` into `StreamingOutputView` (plain last lines, like `run_command`).
+The default task tool row shows the current subagent exploration tool during analysis.
+After the subagent calls `begin_summary`, the UI switches to summary phase and streams final text
+via `emitStreamingChunk` into `StreamingOutputView` (current-turn parts only, like Vercel AI SDK).
 Only the last text-only step is returned to the parent as the task `summary`.
 
 

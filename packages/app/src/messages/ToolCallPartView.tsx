@@ -1,7 +1,7 @@
 import { Box, Text } from "ink";
 
 import { StreamingOutputView } from "../components/StreamingOutputView.js";
-import { useStreamingOutput } from "../hooks/use-streaming-output.js";
+import { useTask } from "../hooks/use-task.js";
 import { COLORS } from "../theme/colors.js";
 import {
   buildToolHeader,
@@ -66,8 +66,9 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
   const isRunCommand = toolName === "run_command";
   const isTask = toolName === "task";
   const isExecuting = isToolExecuting(part);
-  const taskStream = useStreamingOutput(isTask && isExecuting ? toolCallId : undefined, isTask && isExecuting);
-  const showTaskSummaryStream = isTask && isExecuting && Boolean(taskStream?.stdout);
+  const taskInput = toolInput as { id?: string } | null;
+  const { phase: taskPhase } = useTask({ id: isTask && taskInput?.id ? taskInput.id : "", taskId: part.id });
+  const showTaskSummaryStream = isTask && isExecuting && taskPhase === "summary";
 
   const displayInput =
     toolInput === undefined || toolInput === null ? null : formatToolInput(toolInput, toolName) || null;

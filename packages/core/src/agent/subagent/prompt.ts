@@ -20,9 +20,14 @@ Constraints:
 - Work efficiently — stop exploring as soon as you have enough information to answer
 - You may use up to ${maxIterations} steps as a safety cap, but you should finish as soon as the task is done
 
-IMPORTANT: Only your final text response is returned to the parent agent as the task result.
-You MUST end with a comprehensive text summary — never end on a tool call.
-Your last message must be a complete, standalone answer to the task.`;
+Workflow:
+1. Exploration phase — use read-only tools to investigate. Do not write your final answer yet.
+2. When analysis is complete, call the \`begin_summary\` tool exactly once.
+3. Summary phase — after \`begin_summary\`, write your complete final answer as plain text.
+   Do not call exploration tools after \`begin_summary\`.
+
+IMPORTANT: Only your final text response (after \`begin_summary\`) is returned to the parent agent.
+Never end on a tool call other than \`begin_summary\` followed by your summary text.`;
 }
 
 /** Default system prompt (with default max iterations). */

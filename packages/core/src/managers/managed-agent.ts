@@ -105,6 +105,7 @@ export class ManagedAgent {
   ui?: AgentUIChannel;
   chatController?: AgentChatController;
   parentId?: string;
+  parentTaskId?: string;
   childIds: string[];
   createdAt: number;
   updatedAt: number;

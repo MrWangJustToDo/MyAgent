@@ -113,6 +113,9 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     maxIterations,
   });
 
+  // link task to agent, for unstable input
+  subagent.parentTaskId = parentTaskToolCallId;
+
   const subagentManaged = manager.getAgent(subagentId);
   if (!subagentManaged) {
     throw new Error(`Subagent not found: ${subagentId}`);
