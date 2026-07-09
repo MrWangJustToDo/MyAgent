@@ -15,7 +15,7 @@ const { setMessage, getMessage } = useMessageCache.getActions();
 const filterValidMessage = (message: UIMessage) => {
   if (message.role === "assistant") {
     const onlyPart = message.parts.length === 1 ? message.parts[0] : null;
-    if (onlyPart?.type === "thinking" || onlyPart?.type === "tool-result") return false;
+    if (onlyPart?.type === "thinking" || onlyPart?.type === "tool-result" || !onlyPart?.type) return false;
   }
   if (message.role === "user" || message.role === "assistant") {
     if (message.parts.length === 1 && message.parts[0].type === "text") {
