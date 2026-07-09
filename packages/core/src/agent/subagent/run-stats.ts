@@ -53,7 +53,7 @@ export function deriveSubagentRunStats(
 ): Pick<SubagentResult, "iterations" | "reachedLimit" | "incomplete"> {
   const iterations = countSubagentIterations(input.messages);
   const finishReasonIndicatesLimit = input.finishReason != null && LIMIT_FINISH_REASONS.has(input.finishReason);
-  const reachedLimit = input.maxIterations > 0 && (iterations >= input.maxIterations || finishReasonIndicatesLimit);
+  const reachedLimit = input.maxIterations > 0 && (iterations > input.maxIterations || finishReasonIndicatesLimit);
 
   const hasSummary = input.output.trim().length > 0 && input.output !== "(no summary)";
   const incomplete = !input.aborted && !hasSummary && (reachedLimit || input.status === "error");

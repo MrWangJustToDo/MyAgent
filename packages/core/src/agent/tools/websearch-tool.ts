@@ -427,8 +427,8 @@ Example response format:
     // Only send query + results to the LLM — durationMs/cachedOutputPath are
     // UI metadata.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: z.infer<typeof websearchOutputSchema> }) {
-      const lines = output.results.map((r) => `${r.title}\n${r.url}\n${r.snippet}`);
-      return [{ type: "text" as const, content: `Search: ${output.query}\n\n${lines.join("\n\n")}` }];
+      const lines = output.results?.map?.((r) => `${r.title}\n${r.url}\n${r.snippet}`);
+      return [{ type: "text" as const, content: `Search: ${output.query}\n\n${lines?.join("\n\n")}` }];
     },
   });
 };

@@ -14,8 +14,32 @@ function isToolPart(part: MessagePart): boolean {
 }
 
 function textFromPart(part: MessagePart): string {
-  if (part.type !== "text") return "";
-  return part.content?.trim();
+  if (part.type === "text") {
+    return part.content?.trim() ?? "";
+  }
+  return "";
+}
+
+function thinkingFromPart(part: MessagePart): string {
+  if (part.type === "thinking") {
+    return part.content?.trim() ?? "";
+  }
+  return "";
+}
+
+function joinSegmentText(parts: MessagePart[]): string {
+  const text = parts
+    .map((part) => textFromPart(part))
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+  if (text) return text;
+
+  return parts
+    .map((part) => thinkingFromPart(part))
+    .filter(Boolean)
+    .join("\n")
+    .trim();
 }
 
 function splitByToolBoundaries(parts: MessagePart[]): MessagePart[][] {
@@ -44,12 +68,7 @@ export function splitStepSegments(parts: MessagePart[]): MessagePart[][] {
 }
 
 function joinTextParts(parts: MessagePart[]): string {
-  return parts
-    .filter((part) => part.type === "text")
-    .map((part) => textFromPart(part))
-    .filter(Boolean)
-    .join("\n")
-    .trim();
+  return joinSegmentText(parts);
 }
 
 function segmentHasTool(parts: MessagePart[]): boolean {
@@ -73,7 +92,10 @@ export function extractAssistantText(messages: UIMessage[]): string {
   }
 
   const lastText = [...lastAssistant.parts].reverse().find((part) => part.type === "text");
-  return lastText ? textFromPart(lastText) : "";
+  if (lastText) return textFromPart(lastText);
+
+  const lastThinking = [...lastAssistant.parts].reverse().find((part) => part.type === "thinking");
+  return lastThinking ? thinkingFromPart(lastThinking) : "";
 }
 
 /**

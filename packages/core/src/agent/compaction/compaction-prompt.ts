@@ -30,6 +30,8 @@ Focus on information that would be helpful for continuing the conversation, incl
 
 Your summary should be comprehensive enough to provide context but concise enough to be quickly understood.
 
+Output only the completed summary using the requested template. Do not include reasoning, planning, or meta-commentary about how you will summarize.
+
 Do not respond to any questions in the conversation, only output the summary.`;
 
 /**

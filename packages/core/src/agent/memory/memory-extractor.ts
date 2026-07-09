@@ -19,6 +19,7 @@
  * ```
  */
 
+import { extractTextFromContent } from "../compaction/message-utils.js";
 import { runSubagent } from "../subagent/run-subagent.js";
 
 import { DEFAULT_HARD_MAX_MEMORIES, MEMORY_TYPES } from "./types.js";
@@ -100,33 +101,12 @@ function serializeForExtraction(messages: ModelMessage[]): string {
   const parts: string[] = [];
 
   for (const msg of messages) {
-    if (msg.role === "user") {
-      const text = extractText(msg.content);
-      if (text) parts.push(`user: ${text}`);
-    } else if (msg.role === "assistant") {
-      const text = extractText(msg.content);
-      if (text) parts.push(`assistant: ${text}`);
-    }
+    if (msg.role !== "user" && msg.role !== "assistant") continue;
+    const text = extractTextFromContent(msg.content);
+    if (text) parts.push(`${msg.role}: ${text}`);
   }
 
   return parts.join("\n\n");
-}
-
-/**
- * Extract text content from a message's content field.
- */
-function extractText(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-
-  const parts: string[] = [];
-  for (const part of content) {
-    const p = part as Record<string, unknown>;
-    if (p.type === "text" && typeof p.text === "string") {
-      parts.push(p.text);
-    }
-  }
-  return parts.join("\n");
 }
 
 // ============================================================================
@@ -194,6 +174,7 @@ export async function extractMemories(
       autoDestroy: true,
       aggregateUsageToParent: true,
       description: "memory-extract",
+      bridgeUI: false,
     },
     { manager }
   );
@@ -304,6 +285,7 @@ async function llmConsolidate(
       autoDestroy: true,
       aggregateUsageToParent: true,
       description: "memory-consolidate",
+      bridgeUI: false,
     },
     { manager }
   );

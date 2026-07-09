@@ -7,16 +7,18 @@ import { emitAgentEvent } from "../../managers/emit-agent-event.js";
 import { clearStreamingOutput } from "../tools/util/streaming-callback.js";
 import { generateId } from "../utils.js";
 
+import { consumeStreamToMessages } from "./consume-stream-to-messages.js";
 import { extractAssistantText } from "./extract-assistant-text.js";
 import { truncateSummary } from "./output.js";
 import { buildExploreSystemPrompt } from "./prompt.js";
 import { captureStreamFinishReason, deriveSubagentRunStats } from "./run-stats.js";
+import { throwOnRunError } from "./stream-errors.js";
 import { createSubagentTools } from "./tools.js";
-import { SUBAGENT_DEFAULT_MAX_ITERATIONS } from "./types.js";
+import { resolveSubagentBridgeUI, SUBAGENT_DEFAULT_MAX_ITERATIONS } from "./types.js";
 
 import type { SubagentConfig, SubagentResult } from "./types.js";
 import type { AgentManager } from "../../managers/manager-agent.js";
-import type { ModelMessage, UIMessage as TanStackUIMessage, UIMessage } from "@tanstack/ai";
+import type { ModelMessage, StreamChunk, UIMessage as TanStackUIMessage, UIMessage } from "@tanstack/ai";
 
 export interface SubagentRunDeps {
   manager: AgentManager;
@@ -43,6 +45,41 @@ export function destroySubagent(manager: AgentManager, subagentId: string) {
   manager.destroyAgent(subagentId);
 }
 
+function resolveBridgeUI(config: SubagentConfig): boolean {
+  return resolveSubagentBridgeUI(config);
+}
+
+async function consumeSubagentStream(options: {
+  stream: AsyncIterable<StreamChunk>;
+  bridgeUI: boolean;
+  parentAgentId: string;
+  subagentId: string;
+  parentTaskToolCallId?: string;
+  subagentManaged: NonNullable<ReturnType<AgentManager["getAgent"]>>;
+  channel?: AgentUIChannel;
+}): Promise<UIMessage[]> {
+  const { stream, bridgeUI, parentAgentId, subagentId, parentTaskToolCallId, subagentManaged, channel } = options;
+
+  if (!bridgeUI) {
+    return consumeStreamToMessages(stream);
+  }
+
+  if (!channel) {
+    throw new Error("AgentUIChannel is required when bridgeUI is enabled");
+  }
+
+  return (await channel.consumeRun({
+    stream,
+    parentTaskToolCallId,
+    onUpdate: (updated) => {
+      emitAgentEvent(subagentManaged, "subagent:ui-update", {
+        parentId: parentAgentId,
+        data: { subagentId, messageCount: updated.length },
+      });
+    },
+  })) as UIMessage[];
+}
+
 async function executeSubagentRun(config: SubagentConfig, manager: AgentManager): Promise<SubagentResult> {
   const {
     subagentId: customId,
@@ -60,6 +97,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     initialMessages,
   } = config;
 
+  const bridgeUI = resolveBridgeUI(config);
   const subagentId = customId ?? generateId("subagent");
   const systemPrompt = customSystemPrompt ?? buildExploreSystemPrompt(maxIterations);
 
@@ -86,19 +124,24 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
 
   const messages: ModelMessage[] = [...(initialMessages ?? []), { role: "user", content: prompt }];
 
-  const userUIMessage: TanStackUIMessage = {
-    id: generateId("msg"),
-    role: "user",
-    parts: [{ type: "text", content: prompt }],
-    createdAt: new Date(),
-  };
+  let channel: AgentUIChannel | undefined;
+  if (bridgeUI) {
+    const userUIMessage: TanStackUIMessage = {
+      id: generateId("msg"),
+      role: "user",
+      parts: [{ type: "text", content: prompt }],
+      createdAt: new Date(),
+    };
 
-  if (parentTaskToolCallId) {
-    clearStreamingOutput(parentTaskToolCallId);
+    if (parentTaskToolCallId) {
+      clearStreamingOutput(parentTaskToolCallId);
+    }
+
+    channel = new AgentUIChannel({ initialMessages: [userUIMessage] });
+    subagentManaged.ui = channel;
+  } else {
+    subagentManaged.ui = undefined;
   }
-
-  const channel = new AgentUIChannel({ initialMessages: [userUIMessage] });
-  subagentManaged.ui = channel;
 
   emitAgentEvent(subagent, "subagent:created", { parentId: parentAgentId, data: { subagentId } });
   emitAgentEvent(subagent, "subagent:started", {
@@ -113,19 +156,20 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
 
   try {
     const rawStream = await manager.runAgent(subagentId, { messages, abortSignal });
-    const stream = captureStreamFinishReason(rawStream, (reason) => {
-      finishReason = reason;
-    });
-    previewMessages = (await channel.consumeRun({
+    const stream = throwOnRunError(
+      captureStreamFinishReason(rawStream, (reason) => {
+        finishReason = reason;
+      })
+    );
+    previewMessages = await consumeSubagentStream({
       stream,
-      parentTaskToolCallId,
-      onUpdate: (updated) => {
-        emitAgentEvent(subagent, "subagent:ui-update", {
-          parentId: parentAgentId,
-          data: { subagentId, messageCount: updated.length },
-        });
-      },
-    })) as UIMessage[];
+      bridgeUI,
+      parentAgentId,
+      subagentId,
+      parentTaskToolCallId: bridgeUI ? parentTaskToolCallId : undefined,
+      subagentManaged,
+      channel,
+    });
     output = extractAssistantText(previewMessages)?.trim() || "(no summary)";
   } catch (err) {
     const managed = manager.getAgent(subagentId);

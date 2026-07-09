@@ -19,8 +19,9 @@ import { runSubagent } from "../subagent/run-subagent.js";
 
 import { buildCompactionPrompt, COMPACTION_SYSTEM_PROMPT } from "./compaction-prompt.js";
 import { extractFileOpsFromMessages, formatFileOperations } from "./file-ops-tracker.js";
-import { getFirstTextPartContent } from "./message-utils.js";
+import { extractTextFromContent } from "./message-utils.js";
 import { serializeConversation } from "./serialize-conversation.js";
+import { resolveSummarizationInputBudget, splitMessagesByTokenBudget } from "./summarization-budget.js";
 import { estimateTokens } from "./token-estimator.js";
 
 import type { CompactionTodoItem } from "./compaction-prompt.js";
@@ -53,12 +54,7 @@ function extractExistingSummary(messages: ModelMessage[]): { existingSummary?: s
   const first = messages[0];
   if (first.role !== "user") return { cleanMessages: messages };
 
-  const text =
-    typeof first.content === "string"
-      ? first.content
-      : Array.isArray(first.content)
-        ? getFirstTextPartContent(first.content)
-        : "";
+  const text = extractTextFromContent(first.content);
 
   const START_MARKER = "[CONVERSATION SUMMARY]";
   const END_MARKER = "[END SUMMARY]";
@@ -166,8 +162,6 @@ export async function summarizeConversation(
 ): Promise<string> {
   const { focus, todos, existingSummary: explicitSummary } = options ?? {};
 
-  // Use explicitly-provided previous summary if present; otherwise auto-detect
-  // from the first message (for backward compatibility / direct callers).
   let existingSummary: string | undefined;
   let cleanMessages = messages;
   if (explicitSummary) {
@@ -178,9 +172,48 @@ export async function summarizeConversation(
     cleanMessages = detected.cleanMessages;
   }
 
-  // Serialize conversation to plain text to prevent LLM from generating tool calls.
-  const conversationText = serializeConversation(cleanMessages);
+  const inputBudget = resolveSummarizationInputBudget(manager, parentAgentId);
+  const batches = splitMessagesByTokenBudget(cleanMessages, inputBudget);
 
+  manager.getAgent(parentAgentId)?.log.agent("batch summary", { batches });
+
+  if (batches.length <= 1) {
+    return summarizeConversationBatch(cleanMessages, parentAgentId, manager, { focus, todos, existingSummary });
+  }
+
+  const partialSummaries: string[] = [];
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i]!;
+    const batchFocus =
+      focus != null
+        ? `${focus} (segment ${i + 1} of ${batches.length})`
+        : `Summarize segment ${i + 1} of ${batches.length} of the conversation`;
+    partialSummaries.push(
+      await summarizeConversationBatch(batch, parentAgentId, manager, {
+        focus: batchFocus,
+        todos: i === batches.length - 1 ? todos : undefined,
+        existingSummary: i === 0 ? existingSummary : undefined,
+      })
+    );
+  }
+
+  const mergedInput = partialSummaries.map((summary, index) => `## Segment ${index + 1}\n\n${summary}`).join("\n\n");
+  return summarizeConversationBatch([{ role: "user", content: mergedInput }], parentAgentId, manager, {
+    focus: focus ?? "Merge the segment summaries into one cohesive continuation prompt for the next agent",
+    todos,
+    existingSummary,
+  });
+}
+
+async function summarizeConversationBatch(
+  messages: ModelMessage[],
+  parentAgentId: string,
+  manager: AgentManager,
+  options?: SummarizeOptions
+): Promise<string> {
+  const { focus, todos, existingSummary } = options ?? {};
+
+  const conversationText = serializeConversation(messages);
   const instructionPrompt = buildCompactionPrompt({ focus, todos, existingSummary });
   const fullPrompt = `<conversation>\n${conversationText}\n</conversation>\n\n${instructionPrompt}`;
 
@@ -191,15 +224,26 @@ export async function summarizeConversation(
       systemPrompt: COMPACTION_SYSTEM_PROMPT,
       tools: {},
       maxIterations: 1,
-      maxOutputLength: 10000,
+      maxOutputLength: 40000,
       autoDestroy: true,
       aggregateUsageToParent: true,
       description: "compaction",
+      bridgeUI: false,
     },
     { manager }
   );
 
-  return result.output;
+  manager.getAgent(parentAgentId)?.log.agent("summary", { fullPrompt, result });
+
+  const output = result.output?.trim() ?? "";
+  if (!output || output === "(no summary)") {
+    throw new Error(
+      `Compaction subagent returned no summary (tokens=${result.usage.totalTokens}, ` +
+        `incomplete=${result.incomplete}, reachedLimit=${result.reachedLimit}, aborted=${result.aborted})`
+    );
+  }
+
+  return output;
 }
 
 /**

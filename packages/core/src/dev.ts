@@ -27,6 +27,7 @@ export { extractRunErrorMessage } from "./managers/reactive-compact-retry.js";
 export { formatReadFileToolResult } from "./agent/tools/util/format-read-file-result.js";
 export { extractAssistantText, getSummaryStreamText } from "./agent/subagent/extract-assistant-text.js";
 export { countSubagentIterations, deriveSubagentRunStats } from "./agent/subagent/run-stats.js";
+export { resolveSubagentBridgeUI } from "./agent/subagent/types.js";
 export { extractFileOpsFromMessages, formatFileOperations } from "./agent/compaction/file-ops-tracker.js";
 export {
   applyToolCompact,
@@ -34,9 +35,16 @@ export {
   ToolCompactCache,
   toModelOutputRegistry,
 } from "./agent/compaction/index.js";
-export { serializeConversation } from "./agent/compaction/serialize-conversation.js";
+export { extractTextFromContent } from "./agent/compaction/message-utils.js";
+export {
+  DEFAULT_SUMMARIZATION_CONTEXT_WINDOW,
+  resolveSummarizationInputBudget,
+  splitMessagesByTokenBudget,
+} from "./agent/compaction/summarization-budget.js";
 export { estimateTokens } from "./agent/compaction/token-estimator.js";
-export { createApprovalMiddleware, createHooksMiddleware } from "./agent/middleware";
+export { createHooksMiddleware, createLifecycleMiddleware } from "./agent/middleware";
+export { createStatusMiddleware } from "./agent/middleware/status-middleware.js";
+export { createAgentStatusController, AgentStatusController } from "./managers/agent-status-controller.js";
 export { assertAsyncIterable, formatAgentStreamError } from "./agent/utils/assert-async-iterable.js";
 export {
   applyToolDenialReason,

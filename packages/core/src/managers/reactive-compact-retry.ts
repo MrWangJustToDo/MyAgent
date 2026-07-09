@@ -1,4 +1,5 @@
 import { isPromptTooLongError } from "../agent/compaction/reactive-compact.js";
+import { extractRunErrorMessage } from "../agent/subagent/stream-errors.js";
 import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
 
 import type { ManagedAgent } from "./managed-agent.js";
@@ -18,12 +19,7 @@ function selectRunMessagesAfterCompact(
 // Helpers
 // ============================================================================
 
-/** Extract a human-readable message from an AG-UI RUN_ERROR chunk. */
-export function extractRunErrorMessage(chunk: StreamChunk): string {
-  if (chunk.type !== "RUN_ERROR") return "";
-  const record = chunk as { message?: string; error?: { message?: string } };
-  return record.message ?? record.error?.message ?? "Unknown error";
-}
+export { extractRunErrorMessage };
 
 function errorFromUnknown(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
@@ -31,7 +27,7 @@ function errorFromUnknown(error: unknown): Error {
 
 async function applyReactiveCompactRetry(managed: ManagedAgent): Promise<boolean> {
   if (!managed.getContext()) return false;
-  managed.setStatus("running");
+  managed.statusController.endCompaction();
   managed.setError("");
   return true;
 }
@@ -41,6 +37,7 @@ export async function tryReactiveCompactRetry(
   manager: AgentManager,
   error: unknown
 ): Promise<boolean> {
+  if (managed.parentId) return false;
   if (!isPromptTooLongError(error)) return false;
 
   const compacted = await managed.handleReactiveCompact(error, manager);

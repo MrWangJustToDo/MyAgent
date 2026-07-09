@@ -2,6 +2,7 @@
 export {
   SUBAGENT_DEFAULT_MAX_ITERATIONS,
   SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH,
+  resolveSubagentBridgeUI,
   type SubagentConfig,
   type SubagentResult,
 } from "./types.js";

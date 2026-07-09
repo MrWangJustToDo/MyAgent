@@ -193,27 +193,31 @@ return finalMessages
 Built in `buildAgentRunner` (`run-agent.ts`), order matters:
 
 ```
-1. lifecycle-middleware     status, usage, thinking events, finalizeRun
-2. compaction-middleware    micro + reasoning strip + auto-compact
-3. turn-context-middleware  inject <turn_context> (memory, todo nag)
-4. approval-middleware      `waiting` status + `agent:tool-approval-request`
-5. hooks-middleware         PreToolUse / PostToolUse scripts + tool events
+1. status-middleware         status transitions only (via AgentStatusController)
+2. lifecycle-middleware      usage tracking, thinking events, memory commit, finalizeRun
+3. compaction-middleware     reasoning strip + auto-compact (status via AgentStatusController)
+4. tool-compact-middleware  per-tool LLM shaping
+5. turn-context-middleware  inject <turn_context> (memory, todo nag)
+6. hooks-middleware         PreToolUse / PostToolUse scripts + tool events
 ```
+
+Status logic is centralized in `AgentStatusController` (`managers/agent-status-controller.ts`). `status-middleware` is the runtime hook for status; `lifecycle-middleware` owns usage and run finalization side-effects. `AgentChatController` calls `prepareRunPhase` / `reconcileAfterRun` for pump boundaries.
 
 ### 3.4 Lifecycle status transitions
 
 | Phase | Status | Trigger |
 |-------|--------|---------|
-| Run starts | `running` | `lifecycle.onStart` |
+| Run starts | `running` | `status.onRunStart` / `prepareRunPhase` |
 | Model reasoning | `thinking` | `REASONING_MESSAGE_*` chunk |
 | Text output | `responding` | `TEXT_MESSAGE_CONTENT` |
 | Tool call | `running` | `TOOL_CALL_START` |
-| Tool approval pending | `waiting` | `approval` middleware `onToolPhaseComplete` → `needsApproval` |
+| Tool approval pending | `waiting` | `status.syncApprovals` on `onToolPhaseComplete` |
 | Client tool (`ask_user`) | `awaiting_user` | App host calls `ManagedAgent.setClientToolWaiting(true)` |
-| Auto-compact | `compacting` | compaction middleware |
-| Success | `completed` / `idle` | `onFinish` (preserves `waiting` / `awaiting_user` if set) |
-| User abort | `aborted` | `onAbort` / `RunCoordinator` |
-| Error | `error` | `onError` |
+| Auto-compact | `compacting` | `status.beginCompaction` |
+| Success | `completed` / `idle` | `onRunFinish` (preserves `waiting` / `awaiting_user` if set) |
+| Stream ended, tools waiting | `completed` / `waiting` | `statusController.reconcileAfterRun` after `pumpToolPhases` |
+| User abort | `aborted` | `onRunAbort` / `onUserCancel` / `RunCoordinator` |
+| Error | `error` | `onRunError` / `onExternalError` |
 
 ---
 
@@ -221,14 +225,14 @@ Built in `buildAgentRunner` (`run-agent.ts`), order matters:
 
 Core **declares** which tools need approval and **owns agent status** during the approval pause. **Execution blocking** and resume are still handled by TanStack AI + `@my-agent/app` (`addToolApprovalResponse`).
 
-### 4.1 Core: `needsApproval: true` + approval middleware
+### 4.1 Core: `needsApproval: true` + status middleware
 
-`createApprovalMiddleware` (`agent/middleware/approval-middleware.ts`):
+`createStatusMiddleware` (`agent/middleware/status-middleware.ts`) delegates approval transitions to `AgentStatusController`:
 
 | Hook | Action |
 |------|--------|
-| `onToolPhaseComplete` | When `info.needsApproval.length > 0`: `setStatus("waiting")`, `setPendingApprovalCount`, emit `agent:tool-approval-request` per tool |
-| `onBeforeToolCall` | When status is `waiting`: clear count, `setStatus("running")` (approved tool executing) |
+| `onToolPhaseComplete` | When `info.needsApproval.length > 0`: `waiting`, `setPendingApprovalCount`, emit `agent:tool-approval-request` per tool |
+| `onBeforeToolCall` | When status is `waiting`: clear count, `running` (approved tool executing) |
 
 Tools with approval required (`defineServerTool` in `tanstack/define-tool.ts`):
 
@@ -489,7 +493,7 @@ injectTurnContext(messages, dynamicContext)
 ```
 Guard: manager exists, ≥15 messages, not already in progress
 extractMemories → runSubagent → write .agent-memory/*.md files
-  → emit memory:extract { status: start | complete | error }
+  → emit memory:extract { status: start | complete | empty | skip-short | error }
 If count >= consolidateThreshold:
   consolidateMemories → merge/delete via subagent
   → emit memory:consolidate

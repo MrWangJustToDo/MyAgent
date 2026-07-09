@@ -19,7 +19,7 @@
     "dev:extension": "pnpm --filter @my-agent/extension dev",
     "dev:server": "pnpm --filter @my-agent/server dev",
     "dev:mcp-server": "pnpm --filter @my-agent/mcp-server dev",
-    "start:cli": "DEV=true NODE_ENV=production DEVTOOL_PATH=10.23.195.101 node --inspect ./main.mjs",
+    "start:cli": "DEV=true NODE_ENV=production DEVTOOL_PATH=192.168.1.101 node --inspect ./main.mjs",
     "start:server": "NODE_ENV=production node ./server.mjs",
     "start:mcp-server": "cd packages/mcp-server && node ./dist/index.mjs",
     "typecheck": "pnpm -r typecheck",

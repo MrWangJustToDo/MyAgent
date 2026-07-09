@@ -63,7 +63,7 @@ export { SessionStore, type SessionMeta, type SessionData, type ResumeResult } f
 // Compaction (/compact command)
 // ============================================================================
 
-export { applyCompactionResult, autoCompact, estimateTokens } from "./agent/compaction";
+export { applyCompactionResult, autoCompact, estimateTokens, extractTextFromContent } from "./agent/compaction";
 
 // ============================================================================
 // Models & agent bootstrap helpers

@@ -48,4 +48,43 @@ assert.equal(managed.status, "awaiting_user");
 managed.setClientToolWaiting(false);
 assert.equal(managed.status, "completed");
 
+managed.setStatus("running");
+managed.syncRunStatusFromUIMessages([
+  {
+    id: "u1",
+    role: "user",
+    parts: [{ type: "text", content: "hi" }],
+  },
+  {
+    id: "a1",
+    role: "assistant",
+    parts: [{ type: "text", content: "hello" }],
+  },
+]);
+assert.equal(managed.status, "completed");
+
+managed.setStatus("running");
+managed.syncRunStatusFromUIMessages([
+  {
+    id: "u1",
+    role: "user",
+    parts: [{ type: "text", content: "run" }],
+  },
+  {
+    id: "a1",
+    role: "assistant",
+    parts: [
+      {
+        type: "tool-call",
+        id: "call_cmd",
+        name: "run_command",
+        arguments: '{"command":"echo hi"}',
+        state: "input-complete",
+        approval: { needsApproval: true, approved: undefined },
+      },
+    ],
+  },
+]);
+assert.equal(managed.status, "waiting");
+
 console.log("agent-status validation passed");

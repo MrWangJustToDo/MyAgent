@@ -6,11 +6,13 @@ import { isToolCallPart, parseToolInput } from "../utils/tool-part.js";
 import { useSubAgents } from "./use-sub-agents";
 
 import type { ManagedAgent } from "@my-agent/core";
+import type { ToolCallState } from "@tanstack/ai";
 
 type TaskToolCall = {
   toolCallId: string;
   toolName: string;
   input: unknown;
+  state: ToolCallState;
 };
 
 const getTaskToolsFromAgent = (agent?: ManagedAgent): TaskToolCall[] => {
@@ -26,6 +28,7 @@ const getTaskToolsFromAgent = (agent?: ManagedAgent): TaskToolCall[] => {
         toolCallId: part.id,
         toolName: part.name,
         input: parseToolInput(part),
+        state: part.state,
       });
     }
   }

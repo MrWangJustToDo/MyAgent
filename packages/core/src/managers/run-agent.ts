@@ -1,8 +1,8 @@
 import {
-  createApprovalMiddleware,
   createCompactionMiddleware,
   createHooksMiddleware,
   createLifecycleMiddleware,
+  createStatusMiddleware,
   createToolCompactMiddleware,
   createTurnContextMiddleware,
 } from "../agent/middleware";
@@ -100,15 +100,13 @@ export function buildAgentRunner(
   const emitEvent = createEmitFn(managed);
 
   const middleware = [
+    createStatusMiddleware({
+      status: managed.statusController,
+    }),
     createLifecycleMiddleware({
-      getStatus: () => managed.status,
-      setStatus: (status) => managed.setStatus(status),
-      getError: () => managed.error,
-      setError: (error) => managed.setError(error),
       usage: deps.usage,
-      log: deps.log,
       getPricing: () => deps.usage.getPricing(),
-      emitEvent,
+      onThinking: () => emitEvent("agent:thinking"),
       onFirstModelOutput: () => deps.memory.commitSurfacedMemories(),
       onRunFinalize: (reason) => managed.finalizeRun(manager, reason),
     }),
@@ -121,7 +119,7 @@ export function buildAgentRunner(
       getTodoManager: () => deps.todoManager,
       getModelInfo: () => deps.modelInfo,
       shouldTriggerAutoCompact: deps.shouldTriggerAutoCompact,
-      setStatus: deps.setStatus,
+      status: managed.statusController,
       log: deps.log,
       emitEvent,
     }),
@@ -132,13 +130,6 @@ export function buildAgentRunner(
     }),
     createTurnContextMiddleware({
       getDynamicTurnContext: deps.getDynamicTurnContext,
-    }),
-    createApprovalMiddleware({
-      getStatus: () => managed.status,
-      setStatus: (status) => managed.setStatus(status),
-      setPendingApprovalCount: (count) => managed.setPendingApprovalCount(count),
-      log: deps.log,
-      emitEvent,
     }),
     createHooksMiddleware({
       getHookRegistry: () => deps.hookRegistry,

@@ -42,4 +42,25 @@ const shortFinal = [
 ];
 assert.equal(getSummaryStreamText(shortFinal), null);
 
+const reasoningThenSummary = [
+  {
+    id: "assistant-2",
+    role: "assistant",
+    parts: [
+      {
+        type: "thinking",
+        content: "我们被要求提供一个总结。我们需要提取目标、指令、发现等信息。",
+      },
+      {
+        type: "text",
+        content: "## Goal\n\nFix SubagentPanel issues.\n\n## Accomplished\n\n- Fixed ESC handling",
+      },
+    ],
+  },
+];
+
+const summaryWithReasoning = extractAssistantText(reasoningThenSummary);
+assert.ok(summaryWithReasoning.startsWith("## Goal"));
+assert.ok(!summaryWithReasoning.includes("我们被要求"));
+
 console.log("extract-assistant-text validation passed");

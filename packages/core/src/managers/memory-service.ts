@@ -3,6 +3,7 @@
  * Cross-subsystem data is passed in via input objects; no back-references to other services.
  */
 
+import { extractTextFromContent } from "../agent/compaction/message-utils.js";
 import { extractMemories, consolidateMemories } from "../agent/memory/memory-extractor.js";
 import { findRelevantMemories, formatRelevantMemories } from "../agent/memory/memory-retrieval.js";
 import { getEnv } from "../env.js";
@@ -84,14 +85,7 @@ export class MemoryService {
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
       if (msg.role === "user") {
-        if (typeof msg.content === "string") {
-          query = msg.content;
-        } else if (Array.isArray(msg.content)) {
-          const textPart = msg.content?.find((p) => p.type === "text");
-          if (textPart && "text" in textPart) {
-            query = textPart.text as string;
-          }
-        }
+        query = extractTextFromContent(msg.content);
         break;
       }
     }
@@ -145,7 +139,10 @@ export class MemoryService {
     }
 
     const messages = context.getMessages();
-    if (messages.length < 15) return;
+    if (messages.length < 15) {
+      emitEvent?.("memory:extract", { status: "skip-short", count: messages.length });
+      return;
+    }
 
     const memoryManager = this.manager;
 
@@ -159,6 +156,8 @@ export class MemoryService {
           await memoryManager.flushIndex();
           this.content = memoryManager.getIndexContent();
           emitEvent?.("memory:extract", { status: "complete", count });
+        } else {
+          emitEvent?.("memory:extract", { status: "empty" });
         }
 
         const memoryCount = await memoryManager.getMemoryCount();

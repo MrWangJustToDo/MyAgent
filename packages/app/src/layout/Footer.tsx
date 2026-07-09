@@ -17,7 +17,7 @@ import { useSelect } from "../hooks/use-select.js";
 import { useUserInput } from "../hooks/use-user-input.js";
 import { BG, COLORS } from "../theme/colors.js";
 
-import type { ManagedAgent, AgentStatus } from "@my-agent/core";
+import type { AgentStatus, ManagedAgent } from "@my-agent/core";
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -28,9 +28,7 @@ function formatDuration(ms: number): string {
   return rem > 0 ? `${m}m ${rem}s` : `${m}m`;
 }
 
-export const Footer = () => {
-  const status = useAgent((s) => (s.agent as ManagedAgent | null)?.status ?? "idle");
-
+export const Footer = ({ status }: { status: AgentStatus }) => {
   const allMcp = useAgent((s) => s.agent?.mcpManager?.getConnectedServers());
 
   const { mode, denyMode, freeformContext } = useInputMode((s) => ({

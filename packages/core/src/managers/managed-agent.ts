@@ -2,19 +2,17 @@ import { applyReactiveCompactionResult } from "../agent/compaction/apply-compact
 import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
 import { isPromptTooLongError, reactiveCompact } from "../agent/compaction/reactive-compact.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
-import {
-  countPendingToolApprovals,
-  hasPendingAskUser,
-  isToolContinuationPrepare,
-} from "../agent/utils/tool-phase-utils.js";
+import { isToolContinuationPrepare } from "../agent/utils/tool-phase-utils.js";
 import { generateId } from "../agent/utils.js";
 
 import { AgentChatController } from "./agent-chat-controller.js";
+import { createAgentStatusController, type AgentStatusController } from "./agent-status-controller.js";
 import { AgentConfigSchema } from "./agent-types.js";
 import { emitAgentEvent } from "./emit-agent-event.js";
 import { buildDynamicTurnContext, buildFrozenSystemPrompt } from "./managed-agent-prompt.js";
 import { MemoryService } from "./memory-service.js";
 import { RunCoordinator } from "./run-coordinator.js";
+import { hasUIMessageParts } from "./select-run-messages.js";
 import { SessionService, type SessionPersistInput } from "./session-service.js";
 import { UsageTracker } from "./usage-tracker.js";
 
@@ -93,6 +91,7 @@ export class ManagedAgent {
   readonly memory: MemoryService;
   readonly session: SessionService;
   readonly run: RunCoordinator;
+  readonly statusController: AgentStatusController;
 
   context: AgentContext;
   tools: ToolsRecord;
@@ -162,6 +161,15 @@ export class ManagedAgent {
     this.createdAt = Date.now();
     this.updatedAt = Date.now();
     this.managedToolsProvider = () => this.tools;
+    this.statusController = createAgentStatusController({
+      getStatus: () => this.status,
+      setStatus: (status) => this.setStatus(status),
+      getError: () => this.error,
+      setError: (error) => this.setError(error),
+      setPendingApprovalCount: (count) => this.setPendingApprovalCount(count),
+      log: this.log,
+      emitEvent: (type, data) => this.emitEvent(type, data),
+    });
 
     if (config.setUp) {
       return config.setUp(this);
@@ -194,36 +202,20 @@ export class ManagedAgent {
    * Core does not infer this from messages; the UI sets it when opening/closing client-tool flows.
    */
   setClientToolWaiting(active: boolean): void {
-    if (active) {
-      if (this.status !== "waiting") {
-        this.setStatus("awaiting_user");
-      }
-      return;
-    }
-    if (this.status === "awaiting_user") {
-      this.setStatus("completed");
-    }
+    this.statusController.setClientToolWaiting(active);
   }
 
   /** Sync approval / client-tool pause status from loaded UIMessages (e.g. session resume). */
   syncInteractionStateFromUIMessages(
     messages: TanStackUIMessage[],
-    options?: { whenClear?: "idle" | "running" }
+    options?: { whenClear?: "idle" | "running" | "completed" }
   ): void {
-    const whenClear = options?.whenClear ?? "idle";
-    const pendingCount = countPendingToolApprovals(messages);
-    this.setPendingApprovalCount(pendingCount);
-    if (pendingCount > 0) {
-      this.setStatus("waiting");
-      return;
-    }
-    if (hasPendingAskUser(messages)) {
-      this.setStatus("awaiting_user");
-      return;
-    }
-    if (this.status === "waiting" || this.status === "awaiting_user") {
-      this.setStatus(whenClear);
-    }
+    this.statusController.reconcileFromUIMessages(messages, options);
+  }
+
+  /** Reconcile status after a chat pump finishes. */
+  syncRunStatusFromUIMessages(messages: TanStackUIMessage[]): void {
+    this.statusController.reconcileAfterRun(messages);
   }
 
   /** Subscribe to status / error / pending-approval changes (for UI refresh). */
@@ -485,7 +477,11 @@ export class ManagedAgent {
     abortSignal?: AbortSignal;
   }): Promise<ModelMessage[]> {
     if (options.messages?.length) {
-      this.syncContextFromUIMessages(options.messages as TanStackUIMessage[]);
+      if (hasUIMessageParts(options.messages)) {
+        this.syncContextFromUIMessages(options.messages as TanStackUIMessage[]);
+      } else {
+        this.context?.setMessages(options.messages as ModelMessage[]);
+      }
     } else if (options.prompt) {
       const fromPrompt = this.run.prepareMessages({
         prompt: options.prompt,
@@ -507,7 +503,7 @@ export class ManagedAgent {
     if (this.streamStartedAt === 0) this.streamStartedAt = Date.now();
 
     const isToolContinuation = isToolContinuationPrepare(this.status, options.messages);
-    if (!isToolContinuation) {
+    if (!isToolContinuation && !this.parentId) {
       await this.memory.prefetchRelevantMemories({
         messages: this.context?.getMessages() ?? llmMessages,
         usage: this.usage,
@@ -567,6 +563,7 @@ export class ManagedAgent {
   }
 
   async handleReactiveCompact(error: unknown, manager: AgentManager): Promise<boolean> {
+    if (this.parentId) return false;
     if (!isPromptTooLongError(error)) return false;
     if (!this.run.canRetryReactiveCompact()) {
       this.emitEvent("compaction:reactive-max-retries");
@@ -580,7 +577,7 @@ export class ManagedAgent {
     });
 
     try {
-      this.setStatus("compacting");
+      this.statusController.beginCompaction();
       const llmMessages = this.context.getMessagesForLLM();
       const compactedMessages = await reactiveCompact(llmMessages, this.id, manager);
 
@@ -598,7 +595,7 @@ export class ManagedAgent {
         compactedMessages: compactedMessages.length,
       });
 
-      this.setStatus("running");
+      this.statusController.endCompaction();
       return true;
     } catch (err) {
       const compactError = err instanceof Error ? err : new Error(String(err));
@@ -639,7 +636,7 @@ export class ManagedAgent {
       hadTodos: this.todoManager?.hasTodos() ?? false,
     });
     this.run.resetRunState();
-    this.setStatus("idle");
+    this.statusController.resetToIdle();
     this.setError("");
     this.pendingApprovalCount = 0;
     this.memory.resetState();

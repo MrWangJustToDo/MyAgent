@@ -247,6 +247,12 @@ function logMemoryExtract(log: AgentLog, event: AgentEvent): void {
         count: event.data?.count,
       });
       break;
+    case "empty":
+      log.info("memory", "Extraction complete: no new memories to save");
+      break;
+    case "skip-short":
+      log.debug("memory", `Skipping extraction: only ${event.data?.count ?? "?"} messages (need 15)`);
+      break;
     case "error":
       log.warn("memory", `Memory extraction failed: ${event.data?.error ?? "unknown"}`);
       break;

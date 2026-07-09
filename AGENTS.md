@@ -433,14 +433,16 @@ The project supports **subagents** — context-isolated agents spawned to handle
 |---------|----------|
 | Context | Fresh (starts with empty messages) |
 | Tools | Read-only: `read_file`, `glob`, `grep`, `list_file`, `tree` (no `run_command`) |
-| Return | Summary only to parent LLM context; UI keeps a read-only UIMessage preview |
+| Return | Summary only to parent LLM context; UI keeps a read-only UIMessage preview when `bridgeUI` is enabled |
 | Iteration Limit | 30 steps max |
 | Summary Limit | 5000 characters max |
-| UI Preview | `ManagedAgent.ui` (`AgentUIChannel`) + `Ctrl+T` task panel; inline task UI shows tool progress + summary stream |
+| UI Preview | `bridgeUI: true` (default when `parentTaskToolCallId` is set): `ManagedAgent.ui` (`AgentUIChannel`) + `Ctrl+T` task panel; inline task UI shows tool progress + summary stream |
+| Headless | `bridgeUI: false` (default otherwise): no `AgentUIChannel`, no `subagent:ui-update`, no task-tool streaming — used by compaction and memory subagents |
 
 ### Subagent UI Preview
 
-`runSubagent()` attaches an `AgentUIChannel` on `ManagedAgent.ui` for the task panel (`Ctrl+T`).
+`runSubagent({ bridgeUI: true })` attaches an `AgentUIChannel` on `ManagedAgent.ui` for the task panel (`Ctrl+T`).
+Headless runs (`bridgeUI: false`) consume the stream via `StreamProcessor` only and skip UI wiring.
 The default task tool row shows the current subagent tool (like before); during the final summary step,
 text streams via `emitStreamingChunk` into `StreamingOutputView` (plain last lines, like `run_command`).
 Only the last text-only step is returned to the parent as the task `summary`.

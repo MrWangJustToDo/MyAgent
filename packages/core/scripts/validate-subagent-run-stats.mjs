@@ -50,6 +50,18 @@ const limited = deriveSubagentRunStats({
 assert.equal(limited.reachedLimit, true);
 assert.equal(limited.incomplete, false);
 
+const singleIteration = deriveSubagentRunStats({
+  messages: [{ id: "assistant-1", role: "assistant", parts: [{ type: "text", content: "Summary." }] }],
+  maxIterations: 1,
+  finishReason: "stop",
+  output: "Summary.",
+  aborted: false,
+  status: "completed",
+});
+
+assert.equal(singleIteration.reachedLimit, false);
+assert.equal(singleIteration.incomplete, false);
+
 const incomplete = deriveSubagentRunStats({
   messages,
   maxIterations: 50,

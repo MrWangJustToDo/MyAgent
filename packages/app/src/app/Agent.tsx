@@ -39,6 +39,7 @@ export const Agent = () => {
     sendMessage,
     isLoading,
     isReady,
+    status,
     stop,
     addToolApprovalResponse,
     addToolOutput,
@@ -105,7 +106,7 @@ export const Agent = () => {
           <Content />
         </>
       )}
-      <Footer />
+      <Footer status={status} />
     </FullBox>
   );
 };

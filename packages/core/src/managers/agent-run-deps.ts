@@ -1,4 +1,3 @@
-import type { AgentStatus } from "./agent-types.js";
 import type { AgentManager } from "./manager-agent.js";
 import type { MemoryService } from "./memory-service.js";
 import type { SessionService } from "./session-service.js";
@@ -24,7 +23,6 @@ export interface AgentRunDeps {
   hookRegistry: HookRegistry | null;
   compactionConfig: CompactionConfig | null;
   modelInfo: ModelInfo | null;
-  setStatus: (status: AgentStatus) => void;
   getDynamicTurnContext: () => string | undefined;
   shouldTriggerAutoCompact: (messages?: ModelMessage[]) => boolean;
 }

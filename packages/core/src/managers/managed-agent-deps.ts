@@ -16,7 +16,6 @@ export function buildManagedAgentDeps(managed: ManagedAgent, manager: AgentManag
     hookRegistry: managed.hookRegistry,
     compactionConfig: managed.getCompactionConfig(),
     modelInfo: managed.getModelInfo(),
-    setStatus: (status) => managed.setStatus(status),
     getDynamicTurnContext: () => managed.getDynamicTurnContext(),
     shouldTriggerAutoCompact: (messages) => managed.shouldTriggerAutoCompact(messages),
   };

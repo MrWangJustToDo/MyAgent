@@ -44,7 +44,7 @@ registerCommand({
     const tokensBeforeEstimate = estimateTokens(messages);
     const actualTokens = agent.usage.getWindowUsage().inputTokens ?? 0;
 
-    agent.setStatus("compacting");
+    agent.statusController.beginCompaction();
 
     try {
       const result = await autoCompact(messages, agent.compactionConfig || {}, agent.id, agentManager, {
@@ -85,7 +85,11 @@ registerCommand({
       const err = error instanceof Error ? error : new Error(String(error));
       return { ok: false, error: `Compaction failed: ${err.message}` };
     } finally {
-      agent.setStatus(previousStatus);
+      if (previousStatus === "compacting") {
+        agent.statusController.endCompaction();
+      } else {
+        agent.setStatus(previousStatus);
+      }
     }
   },
 });

@@ -14,7 +14,10 @@ export const TaskToolInputView = ({ toolInput }: { part: ToolCallPart; toolInput
 
   const currentTool = allTools?.at(-1);
   const toolName = currentTool ? currentTool.toolName : "";
-  const currentInput = formatToolInput(currentTool?.input || {}, toolName || undefined);
+
+  // Only show formatted arguments when fully received (not streaming partial JSON)
+  const isStreaming = currentTool?.state === "input-streaming";
+  const currentInput = currentTool && !isStreaming ? formatToolInput(currentTool.input, toolName) : "";
 
   if (!agent) {
     return (

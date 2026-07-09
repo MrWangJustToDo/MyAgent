@@ -1,5 +1,6 @@
 import { chat, maxIterations } from "@tanstack/ai";
 
+import { agentManager } from "../../managers/manager-agent.js";
 import { assertAsyncIterable } from "../utils/assert-async-iterable.js";
 
 import { createToolRunContext, type ToolRunContext } from "./run-context.js";
@@ -67,6 +68,12 @@ export class AgentRunner {
     }
 
     const toolContext = createToolRunContext(input.agentId);
+
+    agentManager
+      .getAgent(agentManager.getAgent(input.agentId)?.parentId || input.agentId)
+      ?.log.agent(`agent ${input.agentId} start chat`, {
+        prompt: this.config.systemPrompts,
+      });
 
     const stream = chat({
       adapter: this.config.adapter,

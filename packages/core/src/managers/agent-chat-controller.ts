@@ -1,10 +1,5 @@
 import { formatAgentStreamError } from "../agent/utils/assert-async-iterable.js";
-import {
-  countPendingToolApprovals,
-  hasPendingAskUser,
-  hasPendingToolApprovals,
-  needsToolPhaseContinue,
-} from "../agent/utils/tool-phase-utils.js";
+import { hasPendingAskUser, hasPendingToolApprovals, needsToolPhaseContinue } from "../agent/utils/tool-phase-utils.js";
 
 import { AgentUIChannel } from "./agent-ui-channel.js";
 
@@ -16,7 +11,7 @@ const MAX_TOOL_PHASE_ITERATIONS = 20;
 
 /**
  * Core-owned main chat session: StreamProcessor + explicit tool-phase continuation.
- * Status lives only on {@link ManagedAgent}; this class orchestrates runs only.
+ * Status transitions are owned by {@link AgentStatusController} via status middleware.
  */
 export class AgentChatController {
   private readonly channel: AgentUIChannel;
@@ -50,11 +45,11 @@ export class AgentChatController {
 
   clearMessages(): void {
     this.channel.clearMessages();
-    this.managed.setError("");
-    this.managed.setStatus("idle");
+    this.managed.statusController.resetToIdle();
   }
 
   stop(): void {
+    this.managed.statusController.onUserCancel();
     this.managed.abort("user-cancelled");
     this.runGeneration += 1;
   }
@@ -66,7 +61,7 @@ export class AgentChatController {
 
   respondToToolApproval(approvalId: string, approved: boolean, reason?: string): Promise<void> {
     this.channel.addToolApprovalResponse(approvalId, approved, reason);
-    this.syncApprovalPauseFromMessages();
+    this.managed.statusController.reconcileFromUIMessages(this.channel.getMessages(), { whenClear: "running" });
     return this.enqueueRun();
   }
 
@@ -83,18 +78,20 @@ export class AgentChatController {
   private async pumpToolPhases(): Promise<void> {
     const generation = ++this.runGeneration;
     this.managed.setError("");
-    this.markRunStarting();
+
+    const messages = this.channel.getMessages();
+    this.managed.statusController.prepareRunPhase(messages);
 
     for (let iteration = 0; iteration < MAX_TOOL_PHASE_ITERATIONS; iteration++) {
       if (generation !== this.runGeneration) return;
 
-      const messages = this.channel.getMessages();
-      if (hasPendingToolApprovals(messages)) break;
-      if (hasPendingAskUser(messages)) break;
+      const currentMessages = this.channel.getMessages();
+      if (hasPendingToolApprovals(currentMessages)) break;
+      if (hasPendingAskUser(currentMessages)) break;
 
-      if (iteration > 0 && !needsToolPhaseContinue(messages)) break;
+      if (iteration > 0 && !needsToolPhaseContinue(currentMessages)) break;
 
-      await this.executeStream(messages, generation);
+      await this.executeStream(currentMessages, generation);
       if (generation !== this.runGeneration) return;
 
       const after = this.channel.getMessages();
@@ -104,25 +101,8 @@ export class AgentChatController {
     }
 
     if (generation === this.runGeneration) {
-      this.syncApprovalPauseFromMessages();
+      this.managed.statusController.reconcileAfterRun(this.channel.getMessages());
       this.persistMessages();
-    }
-  }
-
-  /** Keep pending-approval UI state aligned with message parts after user responds. */
-  private syncApprovalPauseFromMessages(): void {
-    this.managed.syncInteractionStateFromUIMessages(this.channel.getMessages(), { whenClear: "running" });
-  }
-
-  /** Bridge prepareForRun gap before lifecycle middleware sets `running`. */
-  private markRunStarting(): void {
-    const messages = this.channel.getMessages();
-    if (countPendingToolApprovals(messages) > 0) return;
-
-    const { status } = this.managed;
-    if (status === "awaiting_user" || status === "error" || status === "aborted") return;
-    if (status === "waiting" || status === "idle" || status === "completed") {
-      this.managed.setStatus("running");
     }
   }
 
@@ -133,14 +113,12 @@ export class AgentChatController {
     try {
       const stream = this.manager.runAgentStream(this.managed.id, { messages, abortSignal });
       await this.channel.consumeRun({ stream });
-      this.syncApprovalPauseFromMessages();
+      this.managed.statusController.reconcileFromUIMessages(this.channel.getMessages(), { whenClear: "running" });
     } catch (err) {
       if (generation !== this.runGeneration) return;
       const error = err instanceof Error ? err : new Error(String(err));
-      this.managed.setError(formatAgentStreamError(error).message);
-      if (!this.managed.isAbortError(err)) {
-        this.managed.setStatus("error");
-      }
+      const message = formatAgentStreamError(error).message;
+      this.managed.statusController.onExternalError(message, this.managed.isAbortError(err));
       throw error;
     }
   }

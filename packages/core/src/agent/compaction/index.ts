@@ -24,6 +24,9 @@ export {
 // Token estimation
 export { estimateTokens, estimateMessageTokens } from "./token-estimator.js";
 
+// Message content helpers
+export { extractTextFromContent, getFirstTextPartContent } from "./message-utils.js";
+
 // Compaction prompt
 export {
   COMPACTION_PROMPT,

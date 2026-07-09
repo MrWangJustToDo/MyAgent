@@ -57,6 +57,19 @@ export interface SubagentConfig {
    * Useful for compaction where you want to pass conversation history.
    */
   initialMessages?: ModelMessage[];
+  /**
+   * Bridge the run through {@link AgentUIChannel} for SubagentPanel preview and
+   * task-tool summary streaming via {@link parentTaskToolCallId}.
+   *
+   * Defaults to `true` when `parentTaskToolCallId` is set, otherwise `false`.
+   * Set explicitly to `false` for headless runs (compaction, memory extraction).
+   */
+  bridgeUI?: boolean;
+}
+
+/** Resolve whether a subagent run should bridge through {@link AgentUIChannel}. */
+export function resolveSubagentBridgeUI(config: Pick<SubagentConfig, "bridgeUI" | "parentTaskToolCallId">): boolean {
+  return config.bridgeUI ?? Boolean(config.parentTaskToolCallId);
 }
 
 export interface SubagentResult {

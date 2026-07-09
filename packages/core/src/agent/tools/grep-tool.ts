@@ -317,13 +317,13 @@ export const createGrepTool = () => {
     // Only send matches to the LLM — search params are echoed in the input,
     // pagination/truncation/cache metadata is for the UI only.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: GrepOutput }) {
-      const lines = output.matches.map((m) => `${m.file}:${m.lineNumber}: ${m.content}`);
+      const lines = output.matches?.map?.((m) => `${m.file}:${m.lineNumber}: ${m.content}`);
       return [
         {
           type: "text" as const,
           content:
             `<params> offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit} </params>` +
-            (output.content || `${output.matches.length} matches:\n${lines.join("\n")}`),
+            (output.content || `${output.matches?.length} matches:\n${lines.join("\n")}`),
         },
       ];
     },

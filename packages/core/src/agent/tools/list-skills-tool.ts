@@ -54,8 +54,8 @@ After discovering skills, use load_skill to load the full content of a specific 
     },
     // Only send skills to the LLM — count is skills.length, durationMs is metadata.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: z.infer<typeof listSkillsOutputSchema> }) {
-      const lines = output.skills.map((s) => `- ${s.name}: ${s.description}`);
-      return [{ type: "text" as const, content: `Available skills:\n${lines.join("\n")}` }];
+      const lines = output.skills?.map?.((s) => `- ${s.name}: ${s.description}`);
+      return [{ type: "text" as const, content: `Available skills:\n${lines?.join("\n")}` }];
     },
   });
 };

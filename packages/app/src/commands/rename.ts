@@ -1,4 +1,4 @@
-import { agentManager, runSideTextQuery, resolveTextAdapterForManaged } from "@my-agent/core";
+import { agentManager, extractTextFromContent, runSideTextQuery, resolveTextAdapterForManaged } from "@my-agent/core";
 import { toRaw } from "reactivity-store";
 
 import { registerCommand } from "./registry.js";
@@ -49,17 +49,8 @@ registerCommand({
     const recentText = messages
       .filter((m) => m.role === "user" || m.role === "assistant")
       .slice(-4)
-      .map((m) => {
-        if (typeof m.content === "string") return m.content;
-        if (Array.isArray(m.content)) {
-          const part = m.content.find((p) => p.type === "text");
-          if (part?.type === "text") {
-            return part.content;
-          }
-          return "";
-        }
-        return "";
-      })
+      .map((m) => extractTextFromContent(m.content))
+      .filter(Boolean)
       .join("\n")
       .slice(-1000);
 

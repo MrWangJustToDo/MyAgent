@@ -77,7 +77,7 @@ const TOOL_STATE_RANK: Record<ToolCallPart["state"], number> = {
 };
 
 function getToolStateRank(part: ToolCallPart): number {
-  return TOOL_STATE_RANK[part.state] ?? 0;
+  return TOOL_STATE_RANK[part?.state] ?? 0;
 }
 
 function isLikelyCompleteJson(value: string): boolean {
@@ -104,11 +104,11 @@ export function mergeToolCallPart(primary: ToolCallPart, duplicate: ToolCallPart
 
   return {
     ...primary,
-    state: winner.state,
-    output: winner.output ?? primary.output,
-    arguments: pickArguments(primary.arguments, duplicate.arguments),
-    approval: primary.approval ?? duplicate.approval,
-    metadata: primary.metadata ?? duplicate.metadata,
+    state: winner?.state,
+    output: winner?.output ?? primary?.output,
+    arguments: pickArguments(primary?.arguments, duplicate?.arguments),
+    approval: primary?.approval ?? duplicate?.approval,
+    metadata: primary?.metadata ?? duplicate?.metadata,
   };
 }
 

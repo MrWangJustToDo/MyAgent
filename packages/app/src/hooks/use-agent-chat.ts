@@ -164,7 +164,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
     const updateUi = throttle((next: UIMessage[]) => {
       setMessages(next);
-    }, 200);
+    }, 60);
 
     const unsubMessages = chat.subscribeMessages(updateUi);
 

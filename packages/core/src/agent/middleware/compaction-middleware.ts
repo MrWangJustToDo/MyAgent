@@ -1,7 +1,7 @@
 import { applyCompactionResult, autoCompact } from "../compaction";
 
 import type { AgentEventType } from "../../managers/agent-event-bus.js";
-import type { AgentStatus } from "../../managers/agent-types.js";
+import type { AgentStatusController } from "../../managers/agent-status-controller.js";
 import type { AgentManager } from "../../managers/manager-agent.js";
 import type { UsageTracker } from "../../managers/usage-tracker.js";
 import type { ModelInfo } from "../../models/types.js";
@@ -21,7 +21,7 @@ export interface CompactionMiddlewareDeps {
   getTodoManager: () => TodoManager | null;
   getModelInfo: () => ModelInfo | null;
   shouldTriggerAutoCompact: (messages?: ModelMessage[]) => boolean;
-  setStatus: (status: AgentStatus) => void;
+  status: AgentStatusController;
   log: AgentLog | null;
   emitEvent?: (type: AgentEventType, data?: Record<string, unknown>) => void;
 }
@@ -64,10 +64,12 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
 
       let llmMessages = agentContext?.getMessagesForLLM() ?? messages;
 
-      if (deps.shouldTriggerAutoCompact(messages) && agentContext) {
+      const managed = deps.manager.getAgent(deps.agentId);
+      const isSubagent = Boolean(managed?.parentId);
+
+      if (!isSubagent && deps.shouldTriggerAutoCompact(messages) && agentContext) {
         try {
-          deps.setStatus("compacting");
-          deps.emitEvent?.("compaction:auto-start");
+          deps.status.beginCompaction();
 
           const incompleteTodos = deps.getTodoManager()?.getIncompleteTodos() ?? [];
           const todos = incompleteTodos.map((t) => ({
@@ -96,6 +98,8 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
             llmMessages = agentContext.getMessagesForLLM();
           }
 
+          deps.log?.agent("compact result", { result, messages, llmMessages });
+
           if (result.compacted) {
             deps.emitEvent?.("compaction:auto-complete", {
               tokensBefore: result.tokensBefore,
@@ -106,7 +110,7 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
           const error = err instanceof Error ? err : new Error(String(err));
           deps.emitEvent?.("compaction:auto-error", { error: error.message });
         } finally {
-          deps.setStatus("running");
+          deps.status.endCompaction();
         }
       }
 
