@@ -8,6 +8,7 @@ declare module "screenshot-desktop" {
   interface Display {
     id: number;
     name: string;
+    primary?: boolean;
   }
 
   function screenshot(options?: ScreenshotOptions): Promise<Buffer>;

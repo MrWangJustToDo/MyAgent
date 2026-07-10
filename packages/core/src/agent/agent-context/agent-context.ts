@@ -1,6 +1,6 @@
-import { generateId } from "../utils.js";
-
 import { convertMessagesToModelMessages } from "@tanstack/ai";
+
+import { generateId } from "../utils.js";
 
 import { buildCanonicalModelMessages } from "./build-canonical-model-messages.js";
 
