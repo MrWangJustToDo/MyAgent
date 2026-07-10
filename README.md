@@ -3,9 +3,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-22%2B-339933?logo=node.js)](https://nodejs.org)
 [![pnpm](https://img.shields.io/badge/pnpm-9%2B-F69220?logo=pnpm)](https://pnpm.io)
-[![Vercel AI SDK](https://img.shields.io/badge/Vercel%20AI%20SDK-7.0-000000?logo=vercel)](https://sdk.vercel.ai/docs)
+[![TanStack AI](https://img.shields.io/badge/TanStack%20AI-0.40-000000?logo=vercel)](https://tanstack.com/ai)
 
-An open-source AI coding agent built on [Vercel AI SDK](https://sdk.vercel.ai/docs) with a React-powered terminal UI and Chrome extension.
+An open-source AI coding agent built on [TanStack AI SDK](https://tanstack.com/ai) with a React-powered terminal UI and Chrome extension.
+
+Designed with a runtime-agnostic core that decouples agent logic from execution environment — run tools locally, proxy through an HTTP server, or embed in a browser extension.
 
 ---
 
@@ -13,82 +15,86 @@ An open-source AI coding agent built on [Vercel AI SDK](https://sdk.vercel.ai/do
 
 | Category | Description |
 |----------|-------------|
-| **Multi-Model** | OpenAI, Ollama, DeepSeek, OpenRouter — any LLM provider |
+| **Multi-Model** | OpenAI, Anthropic, DeepSeek, Ollama, OpenRouter — any LLM provider via model adapter |
 | **Terminal UI** | React-powered with Shiki syntax highlighting, diff views, streaming markdown |
-| **Chrome Extension** | Full agent UI running in the browser via remote CoreEnv |
-| **Local / Remote** | Run tools locally or proxy through an HTTP server — seamless switching |
+| **Chrome Extension** | Full agent UI running in the browser via remote CoreEnv (WXT + HeroUI) |
+| **Local / Remote** | Run tools locally or proxy through an HTTP server — seamless switching via `--remote` |
 | **Tool Approval** | Review + approve/deny tool calls with custom deny reasons |
 | **Ask User** | Agent asks questions with selectable options or freeform answers |
-| **Subagents** | Context-isolated tasks with read-only tools and 30-step limit |
-| **Skills** | On-demand domain knowledge injection (list → load) |
-| **Context Compaction** | 3-layer compression (micro-compaction, reasoning stripping, auto-compaction) + reactive compaction on errors for infinite conversations |
-| **Session Persistence** | Save/resume conversations to disk |
-| **Sandbox** | Isolated command execution with OS-level sandboxing |
+| **Subagents** | Context-isolated read-only tasks with 30-step limit for parallel exploration |
+| **Skills** | On-demand domain knowledge injection (list → load workflow) |
+| **Context Compaction** | 3-layer compression (micro, reasoning stripping, auto) + reactive compaction on errors for infinite conversations |
+| **Session Persistence** | Save/resume conversations to disk with auto-save |
+| **Memory** | Automatic cross-session knowledge extraction and consolidation |
+| **Event System** | Full lifecycle event bus with logging bridge |
+| **Hooks System** | Pre-tool-use and post-tool-use script execution (permissions, transformations) |
+| **Sandbox** | Isolated command execution with OS-level sandboxing (`@anthropic-ai/sandbox-runtime`) |
+| **MCP Integration** | Connect to external MCP servers for additional tools |
 | **Web** | DuckDuckGo search + page fetch |
-| **MCP** | Connect to MCP servers for extra tools |
-| **Memory** | Automatic extraction and consolidation |
+| **Devtools** | Built-in [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools) for debugging |
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  Runtime Hosts                                           │
-│  ┌────────────────┐        ┌───────────────────────┐     │
-│  │  @my-agent/cli │        │  @my-agent/extension  │     │
-│  │  (Terminal)     │        │  (Chrome Extension)   │     │
-│  └───────┬────────┘        └──────────┬────────────┘     │
-│          └──────┐  AgentAdapter  ┌────┘                  │
-│          ┌──────┴────────────────┴──────┐                │
-│          │  @my-agent/app (shared UI)   │                │
-│          └──────────────┬───────────────┘                │
-│                         │                                │
-│          ┌──────────────┴───────────────┐                │
-│          │  @my-agent/core              │                │
-│          │  (Agent, Tools, Models, MCP) │                │
-│          └──────────────┬───────────────┘                │
-│                         │ CoreEnv                        │
-│          ┌──────────────┴───────────────┐                │
-│          │  CoreEnv Adapter Layer       │                │
-│          │  ┌───────────┐ ┌───────────┐ │                │
-│          │  │ @my-agent │ │ @my-agent │ │                │
-│          │  │ /node     │ │ /server   │ │                │
-│          │  │ (local)   │ │ (remote)  │ │                │
-│          │  └───────────┘ └─────┬─────┘ │                │
-│          └──────────────────────┼───────┘                │
-│                                 │ Hono RPC               │
-│          ┌──────────────────────┴───────┐                │
-│          │  @my-agent/server (HTTP)     │                │
-│          │  (uses @my-agent/node)       │                │
-│          └──────────────────────────────┘                │
-└──────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  Runtime Hosts                                              │
+│  ┌──────────────────┐    ┌────────────────────────────┐     │
+│  │  @my-agent/cli   │    │  @my-agent/extension       │     │
+│  │  (Ink terminal)  │    │  (WXT Chrome extension)    │     │
+│  └────────┬─────────┘    └─────────────┬──────────────┘     │
+│           │      AgentAdapter           │                    │
+│  ┌────────┴────────────────────────────┴──────────────┐     │
+│  │  @my-agent/app  (shared UI, hooks, commands)       │     │
+│  └────────────────────────┬───────────────────────────┘     │
+│                           │  AgentManager / Tools           │
+│  ┌────────────────────────┴───────────────────────────┐     │
+│  │  @my-agent/core  (agent loop, tools, models, MCP)  │     │
+│  └────────────────────────┬───────────────────────────┘     │
+│                           │  CoreEnv interface               │
+│  ┌────────────────────────┴───────────────────────────┐     │
+│  │  CoreEnv Adapter Layer                              │     │
+│  │  ┌──────────────────┐  ┌────────────────────────┐  │     │
+│  │  │ @my-agent/node   │  │ @my-agent/server       │  │     │
+│  │  │ (local Node.js)  │  │ (remote HTTP client)   │  │     │
+│  │  └──────────────────┘  └───────────┬────────────┘  │     │
+│  └────────────────────────────────────┼───────────────┘     │
+│                                       │ Hono RPC            │
+│  ┌────────────────────────────────────┴───────────────┐     │
+│  │  @my-agent/server (HTTP server, uses node)         │     │
+│  └────────────────────────────────────────────────────┘     │
+└─────────────────────────────────────────────────────────────┘
 ```
-
-| Package | Description |
-|---------|-------------|
-| `@my-agent/core` | Runtime-agnostic core: agent loop, 18 tools, LLM model factory, sessions, MCP, skills, memory |
-| `@my-agent/app` | Shared UI layer: React components, hooks, commands, AgentAdapter interface |
-| `@my-agent/cli` | Terminal host using [@my-react/react-terminal](https://github.com/MrWangJustToDo/MyReact) |
-| `@my-agent/node` | Node.js CoreEnv: native filesystem, shell execution, OS sandbox |
-| `@my-agent/server` | CoreEnv HTTP server (Hono RPC) + type-safe remote client |
-| `@my-agent/extension` | Chrome extension host (WXT + HeroUI) |
-| `@my-agent/mcp-server` | MCP server with screenshot tool |
 
 ### CoreEnv — Runtime Abstraction
 
-`CoreEnv` is the central interface that decouples the agent from any specific runtime. All filesystem, shell, fetch, and platform APIs go through it.
+`CoreEnv` is the central interface that decouples `@my-agent/core` from any specific runtime. All filesystem, shell, fetch, and platform APIs go through it — making the core truly runtime-agnostic.
 
-- **Local mode** — `@my-agent/node` provides a `CoreEnv` backed by Node.js APIs with optional OS sandbox
-- **Remote mode** — `@my-agent/server` runs an HTTP server exposing CoreEnv via Hono RPC; the client (`createRemoteCoreEnv`) proxies all calls over HTTP
-
-The CLI can switch between modes with `--remote <url>`. The extension always uses remote mode.
+| Implementation | Package | Use Case |
+|:--------------|:--------|:---------|
+| `createNodeEnv()` | `@my-agent/node` | Local mode — backed by Node.js APIs with optional OS sandbox |
+| `createRemoteCoreEnv(url)` | `@my-agent/server` (client) | Remote mode — proxies all calls over Hono RPC to a server |
 
 | Combination | CoreEnv | Host | Status |
 |------------|---------|------|--------|
 | Local + CLI | `createNodeEnv` | Terminal | Fully working |
 | Remote + CLI | `createRemoteCoreEnv` | Terminal | Working |
 | Remote + Extension | `createRemoteCoreEnv` | Chrome | Working |
+
+### Package Overview
+
+| Package | Description |
+|---------|-------------|
+| `@my-agent/core` | Runtime-agnostic core: `ManagedAgent` runtime, 18 tools, LLM model factory, sessions, MCP, skills, memory, compaction, event bus |
+| `@my-agent/app` | Shared UI layer: React components, hooks, commands, `AgentAdapter` interface, theming |
+| `@my-agent/cli` | Terminal host using [@my-react/react-terminal](https://github.com/MrWangJustToDo/MyReact) |
+| `@my-agent/node` | Node.js CoreEnv implementation: native filesystem, shell execution, OS sandbox |
+| `@my-agent/server` | CoreEnv HTTP server (Hono RPC) + type-safe remote client factory |
+| `@my-agent/extension` | Chrome extension host using WXT framework |
+| `@my-agent/mcp-server` | Standalone MCP server for external tool integration |
+
+> **Deep dive:** See [AGENTS.md](AGENTS.md) for full architecture, code conventions, and detailed guidelines. See [packages/core/ARCHITECTURE.md](packages/core/ARCHITECTURE.md) for the core runtime startup, initialization, session, memory, compaction, and approval flows.
 
 ---
 
@@ -134,12 +140,17 @@ pnpm build
 Create `.env` in the root:
 
 ```bash
-MODEL_STYLE=openai         # openai | anthropic
-MODEL=qwen3:8b
-BASE_URL=http://localhost:11434/v1
-API_KEY=sk-xxx             # Required for anthropic; optional for local openai endpoints
-SANDBOX_ENV=local          # local (OS sandbox) | native (no sandbox)
-MAX_ITERATIONS=50
+# Provider: openai | anthropic
+MODEL_STYLE=openai
+BASE_URL=https://api.deepseek.com
+API_KEY=sk-your-key-here
+MODEL=deepseek-v4-flash
+
+# Sandbox: native (no sandbox) | local (OS sandbox)
+SANDBOX_ENV=native
+
+# Server port (for remote mode)
+SERVER_PORT=3200
 ```
 
 ### Running
@@ -148,8 +159,14 @@ MAX_ITERATIONS=50
 # Terminal CLI (local mode)
 pnpm start:cli
 
+# Start with a prompt
+pnpm start:cli -- "Explain this codebase"
+
 # Terminal CLI (remote mode — connect to a running server)
-pnpm start:cli -- --remote http://localhost:3100
+pnpm start:cli -- --remote http://localhost:3200
+
+# Continue last session
+pnpm start:cli -- --continue
 
 # CoreEnv HTTP server (required for extension and remote CLI)
 pnpm start:server
@@ -159,19 +176,6 @@ pnpm dev:extension
 
 # MCP server
 pnpm start:mcp-server
-```
-
-### CLI Usage
-
-```bash
-# Start with a prompt
-pnpm start:cli -- "Explain this codebase"
-
-# Continue last session
-pnpm start:cli -- --continue
-
-# Use a specific model
-pnpm start:cli -- --model gpt-4o --provider openai --api-key sk-xxx
 ```
 
 ---
@@ -217,9 +221,28 @@ pnpm build        # Production build (core → app → rest)
 pnpm clean        # Remove build artifacts
 ```
 
+> **Note:** No test framework is configured. Use `pnpm typecheck` and `pnpm build` for validation.
+
 ### Build Order
 
-`@my-agent/core` must build before `@my-agent/app`, which must build before `cli`, `server`, and `extension`. The root `pnpm build` script handles this automatically.
+`@my-agent/core` → `@my-agent/app` → `cli` / `server` / `extension`. Handled automatically by `pnpm build`.
+
+### Code Style
+
+- **ESM only** — all packages use `"type": "module"`. Use `.js` extensions in local imports.
+- **Double quotes**, semicolons required, 2-space indent, 120 char line width
+- **Zod v4** for all schemas
+- **Workspace deps** use `workspace:*`
+
+---
+
+## Reference Documentation
+
+| Document | Description |
+|----------|-------------|
+| [CLAUDE.md](CLAUDE.md) | Quick reference for AI coding agents working in this repo |
+| [AGENTS.md](AGENTS.md) | Full architecture, code conventions, and detailed guidelines |
+| [packages/core/ARCHITECTURE.md](packages/core/ARCHITECTURE.md) | Core runtime deep-dive: startup, initialization, session, memory, compaction, approval |
 
 ---
 
@@ -227,4 +250,4 @@ pnpm clean        # Remove build artifacts
 
 MIT © [MrWangJustToDo](https://github.com/MrWangJustToDo)
 
-Built with [@my-react framework](https://github.com/MrWangJustToDo/MyReact), [Vercel AI SDK](https://sdk.vercel.ai/docs), and [Ollama](https://ollama.ai)
+Built with [@my-react framework](https://github.com/MrWangJustToDo/MyReact), [TanStack AI SDK](https://tanstack.com/ai), and [Ollama](https://ollama.ai)
