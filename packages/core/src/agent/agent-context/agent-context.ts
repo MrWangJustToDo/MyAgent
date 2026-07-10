@@ -1,8 +1,12 @@
-import { convertMessagesToModelMessages } from "@tanstack/ai";
-
 import { generateId } from "../utils.js";
 
+import { convertMessagesToModelMessages } from "@tanstack/ai";
+
+import { buildCanonicalModelMessages } from "./build-canonical-model-messages.js";
+
 import type { ModelMessage, UIMessage } from "@tanstack/ai";
+
+export { buildCanonicalModelMessages } from "./build-canonical-model-messages.js";
 
 export const generateContextId = (): string => generateId("ctx");
 
@@ -10,8 +14,8 @@ export const generateContextId = (): string => generateId("ctx");
  * Conversation state for an agent.
  *
  * - {@link UIMessage} history is the client-facing source of truth (approvals, tool parts).
- * - {@link ModelMessage} view is derived on read, or set directly by compaction middleware.
- * - Compaction summary + {@link compactIndex} apply to the model view in {@link getMessagesForLLM}.
+ * - Canonical model messages are rebuilt from UI + in-run engine delta on each compaction pass.
+ * - Compaction summary + {@link compactIndex} apply to the canonical view in {@link getMessagesForLLM}.
  *
  * Token usage and pricing live on {@link UsageTracker} via {@link ManagedAgent.usage}.
  */
@@ -20,7 +24,7 @@ export class AgentContext {
   readonly symbol = Symbol.for("agent-context");
 
   private uiMessages: UIMessage[] = [];
-  private modelMessages: ModelMessage[] = [];
+  private runBaselineCount = 0;
 
   private summaryMessage: ModelMessage | null = null;
   private compactIndex = 0;
@@ -34,10 +38,9 @@ export class AgentContext {
     this.updatedAt = Date.now();
   }
 
-  /** Replace UI history from the client; clears compaction middleware model overlay. */
+  /** Replace UI history from the client. Compaction summary + compactIndex are preserved. */
   setUIMessages(messages: UIMessage[]): void {
     this.uiMessages = messages;
-    this.modelMessages = convertMessagesToModelMessages(messages);
     this.touch();
   }
 
@@ -45,27 +48,46 @@ export class AgentContext {
     return this.uiMessages;
   }
 
-  /** Set model messages after compaction middleware mutates the in-run view. */
-  setMessages(messages: ModelMessage[]): void {
-    this.modelMessages = messages;
+  /** Model message count at the start of the current `chat()` invocation. */
+  setRunBaselineCount(count: number): void {
+    this.runBaselineCount = Math.max(0, count);
     this.touch();
   }
 
-  /** Model view: derived from UI, or the compaction overlay when set. */
-  getMessages(): ModelMessage[] {
-    return this.modelMessages;
+  getRunBaselineCount(): number {
+    return this.runBaselineCount;
+  }
+
+  /**
+   * Full model history: converted UI messages plus in-run engine appendices.
+   * Pass TanStack engine messages from `onConfig` when available.
+   */
+  getCanonicalModelMessages(engineMessages: ModelMessage[] = []): ModelMessage[] {
+    return buildCanonicalModelMessages(this.uiMessages, engineMessages, {
+      runBaselineCount: this.runBaselineCount,
+      summaryMessage: this.summaryMessage,
+      compactIndex: this.compactIndex,
+    });
   }
 
   /**
    * Messages sent to the LLM after compaction summary is applied.
-   * Dynamic per-turn context is injected by the caller after this returns.
+   * Always slice the canonical history — never TanStack's possibly truncated engine state.
    */
-  getMessagesForLLM(): ModelMessage[] {
-    const base = this.getMessages();
-    if (this.summaryMessage) {
-      return [this.summaryMessage, ...base.slice(this.compactIndex)];
+  getMessagesForLLM(canon?: ModelMessage[]): ModelMessage[] {
+    const base = canon ?? this.getCanonicalModelMessages();
+
+    if (!this.summaryMessage) {
+      return base;
     }
-    return base;
+
+    return [this.summaryMessage, ...base.slice(this.compactIndex)];
+  }
+
+  /** Canonical model messages converted from the current UI history only. */
+  getCanonicalFromUI(): ModelMessage[] {
+    if (this.uiMessages.length === 0) return [];
+    return convertMessagesToModelMessages(this.uiMessages);
   }
 
   setSummaryMessage(m: ModelMessage | null): void {
@@ -88,7 +110,7 @@ export class AgentContext {
 
   reset(): void {
     this.uiMessages = [];
-    this.modelMessages = [];
+    this.runBaselineCount = 0;
     this.summaryMessage = null;
     this.compactIndex = 0;
     this.touch();

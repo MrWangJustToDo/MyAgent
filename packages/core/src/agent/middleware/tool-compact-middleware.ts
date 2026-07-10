@@ -28,7 +28,7 @@ export function createToolCompactMiddleware(deps: ToolCompactMiddlewareDeps): Ch
 
       const parentId = deps.getManagedAgent().parentId;
 
-      if (parentId) {
+      if (!parentId) {
         await applyToolCompact(messages, {
           config: deps.getCompactionConfig() ?? undefined,
           registry,

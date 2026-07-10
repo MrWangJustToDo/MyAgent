@@ -1,5 +1,13 @@
+import {
+  type ModelMessage,
+  type UIMessage as TanStackUIMessage,
+  type ServerTool,
+  convertMessagesToModelMessages,
+} from "@tanstack/ai";
+
 import { applyReactiveCompactionResult } from "../agent/compaction/apply-compaction-result.js";
 import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
+import { getLatestUserMessage } from "../agent/compaction/message-utils.js";
 import { isPromptTooLongError, reactiveCompact } from "../agent/compaction/reactive-compact.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
 import { isToolContinuationPrepare } from "../agent/utils/tool-phase-utils.js";
@@ -12,7 +20,6 @@ import { emitAgentEvent } from "./emit-agent-event.js";
 import { buildDynamicTurnContext, buildFrozenSystemPrompt } from "./managed-agent-prompt.js";
 import { MemoryService } from "./memory-service.js";
 import { RunCoordinator } from "./run-coordinator.js";
-import { hasUIMessageParts } from "./select-run-messages.js";
 import { SessionService, type SessionPersistInput } from "./session-service.js";
 import { UsageTracker } from "./usage-tracker.js";
 
@@ -35,7 +42,6 @@ import type { ToolsRecord } from "../agent/tools/tanstack/tools-record.js";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
 import type { ModelStyle } from "../models/model-config.js";
 import type { ModelInfo } from "../models/types.js";
-import type { ModelMessage, UIMessage as TanStackUIMessage, ServerTool } from "@tanstack/ai";
 
 // ============================================================================
 // Config
@@ -473,27 +479,17 @@ export class ManagedAgent {
   }
 
   async prepareForRun(options: {
-    prompt?: string | ModelMessage[];
+    prompt?: string;
     messages?: Array<TanStackUIMessage | ModelMessage>;
     abortSignal?: AbortSignal;
-  }): Promise<ModelMessage[]> {
+  }) {
     if (options.messages?.length) {
-      if (hasUIMessageParts(options.messages)) {
-        this.syncContextFromUIMessages(options.messages as TanStackUIMessage[]);
-      } else {
-        this.context?.setMessages(options.messages as ModelMessage[]);
-      }
-    } else if (options.prompt) {
-      const fromPrompt = this.run.prepareMessages({
-        prompt: options.prompt,
-        messages: options.messages as ModelMessage[] | undefined,
-      });
-      this.context?.setMessages(fromPrompt);
+      this.syncContextFromUIMessages(options.messages as TanStackUIMessage[]);
+      const baseline = convertMessagesToModelMessages(options.messages as TanStackUIMessage[]).length;
+      this.context?.setRunBaselineCount(baseline);
     }
 
-    const llmMessages =
-      this.context?.getMessagesForLLM() ??
-      this.run.prepareMessages(options as Parameters<typeof this.run.prepareMessages>[0]);
+    const inputMessages = options.messages || [];
 
     this.run.setupAbortController(options.abortSignal, {
       onAborted: () => {
@@ -506,7 +502,8 @@ export class ManagedAgent {
     const isToolContinuation = isToolContinuationPrepare(this.status, options.messages);
     if (!isToolContinuation && !this.parentId) {
       await this.memory.prefetchRelevantMemories({
-        messages: this.context?.getMessages() ?? llmMessages,
+        messages:
+          getLatestUserMessage(options.prompt ? [{ role: "user", content: options.prompt }] : inputMessages) || [],
         usage: this.usage,
         log: this.log,
         resolveTextAdapter: this.resolveTextAdapter,
@@ -517,7 +514,6 @@ export class ManagedAgent {
         prompt: typeof options.prompt === "string" ? options.prompt : "(structured)",
       });
     }
-    return llmMessages;
   }
 
   shouldTriggerAutoCompact(messages?: ModelMessage[]): boolean {
@@ -579,10 +575,11 @@ export class ManagedAgent {
 
     try {
       this.statusController.beginCompaction();
-      const llmMessages = this.context.getMessagesForLLM();
+      const canon = this.context.getCanonicalFromUI();
+      const llmMessages = this.context.getMessagesForLLM(canon);
       const compactedMessages = await reactiveCompact(llmMessages, this.id, manager);
 
-      applyReactiveCompactionResult(this.context, this.usage, compactedMessages, {
+      applyReactiveCompactionResult(canon, this.context, this.usage, compactedMessages, {
         onCacheCleanupError: (err) => {
           this.emitEvent("compaction:reactive-error", {
             phase: "cache-cleanup",

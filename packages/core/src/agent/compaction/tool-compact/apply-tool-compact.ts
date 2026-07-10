@@ -75,18 +75,66 @@ async function cleanupToolCachesForMessage(
   }
 }
 
+/**
+ * Count tool results eligible for toModelOutput or placeholder replacement.
+ * Skips messages that are already placeholders or pending execution.
+ */
+function countNonPlaceholderToolResults(toolResults: ToolResultRef[], messages: ModelMessage[]): number {
+  let count = 0;
+  for (const target of toolResults) {
+    const message = messages[target.messageIndex];
+    if (!message || message.role !== "tool") continue;
+    if (isToolPlaceholder(message.content)) continue;
+    count++;
+  }
+  return count;
+}
+
+/**
+ * Deterministic check: is this tool result compressible into a placeholder?
+ * (non-protected, not pending, above minimum size)
+ */
+function isToolCompressible(
+  target: ToolResultRef,
+  message: ModelMessage,
+  toolName: string,
+  minToolResultSize: number
+): boolean {
+  if (isToolPlaceholder(message.content)) return false;
+  if (PROTECTED_TOOLS.has(toolName)) return false;
+  if (target.size < minToolResultSize) return false;
+
+  const rawOutput = parseToolMessageOutput(message.content);
+  if (isPendingToolExecutionResult(rawOutput)) return false;
+
+  return true;
+}
+
 // ============================================================================
 // Public API
 // ============================================================================
 
 /**
  * Transform tool results for the LLM path:
- * - Outside the recent window → placeholder + cache cleanup
- * - Inside the window with `toModelOutput` → cached transformed content
- * - Inside the window without handler → pass through unchanged
+ *
+ * Two-layer approach:
+ * 1. **Placeholder replacement** (threshold-triggered):
+ *    When non-placeholder tool results exceed `keepRecentToolResults`,
+ *    compress the oldest eligible results into short `[Previous: used toolName]`
+ *    placeholders. Once compressed, they stay compressed — no re-expansion.
+ *
+ * 2. **toModelOutput formatting** (always applied):
+ *    Every non-placeholder tool result passes through its registered
+ *    `toModelOutput` function for LLM-friendly formatting. Results are
+ *    cached per `toolCallId` so the transformation runs only once.
+ *
+ * Compared to the old sliding-window approach, this design guarantees a
+ * stable message prefix across iterations (after the initial threshold
+ * trigger), enabling AI service prompt caching to hit.
  */
 export async function applyToolCompact(messages: ModelMessage[], options: ApplyToolCompactOptions): Promise<void> {
   const { keepRecentToolResults = 60, minToolResultSize = 100 } = options.config ?? {};
+  const cache = options.cache;
   const toolResults = findToolResultMessages(messages);
 
   if (toolResults.length === 0) {
@@ -95,10 +143,35 @@ export async function applyToolCompact(messages: ModelMessage[], options: ApplyT
 
   const toolCallMap = buildToolCallNameMap(messages);
   const toolInputMap = buildToolCallInputMap(messages);
-  const recentIds = new Set(
-    toolResults.slice(Math.max(0, toolResults.length - keepRecentToolResults)).map((ref) => ref.toolCallId)
-  );
 
+  // ── Phase 1: Threshold-triggered placeholder compression ──
+  // If non-placeholder tool results exceed the configured limit, compress
+  // the oldest eligible results into placeholders in one shot.
+  const nonPlaceholderCount = countNonPlaceholderToolResults(toolResults, messages);
+  const compressTarget = nonPlaceholderCount - keepRecentToolResults;
+
+  if (compressTarget > 0) {
+    let compressed = 0;
+
+    for (const target of toolResults) {
+      if (compressed >= compressTarget) break;
+
+      const message = messages[target.messageIndex];
+      if (!message || message.role !== "tool") continue;
+
+      const toolName = toolCallMap.get(target.toolCallId) ?? "tool";
+      if (!isToolCompressible(target, message, toolName, minToolResultSize)) continue;
+
+      await cleanupToolCachesForMessage(message, target.toolCallId, cache);
+      applyToolPlaceholder(message, createToolPlaceholder(toolName));
+      compressed++;
+    }
+  }
+
+  // ── Phase 2: toModelOutput formatting (always applied, cached) ──
+  // Every tool result that is NOT a placeholder gets its registered
+  // toModelOutput transformation applied. Results are cached per toolCallId
+  // so each transformation runs only once across all iterations.
   for (const target of toolResults) {
     const message = messages[target.messageIndex];
     if (!message || message.role !== "tool") continue;
@@ -106,31 +179,19 @@ export async function applyToolCompact(messages: ModelMessage[], options: ApplyT
 
     const toolName = toolCallMap.get(target.toolCallId) ?? "tool";
     const rawOutput = parseToolMessageOutput(message.content);
-
-    // Approved-but-not-yet-executed placeholder from uiMessageToModelMessages — leave intact.
     if (isPendingToolExecutionResult(rawOutput)) continue;
-
-    if (!recentIds.has(target.toolCallId)) {
-      if (target.size < minToolResultSize) continue;
-      if (PROTECTED_TOOLS.has(toolName)) continue;
-
-      await cleanupToolCachesForMessage(message, target.toolCallId, options.cache);
-      applyToolPlaceholder(message, createToolPlaceholder(toolName));
-      continue;
-    }
 
     const toModelOutput = options.registry.get(toolName);
     if (!toModelOutput) continue;
 
-    const cached = options.cache.get(target.toolCallId);
+    const cached = cache.get(target.toolCallId);
     if (cached !== undefined) {
       applyModelToolContent(message, cached);
       continue;
     }
 
-    // denied tool result, skip compacting
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
+    // @ts-ignore – approved check on raw output
     if (rawOutput?.approved === false) continue;
     const input = toolInputMap.get(target.toolCallId);
     const transformed = await toModelOutput({
@@ -140,7 +201,7 @@ export async function applyToolCompact(messages: ModelMessage[], options: ApplyT
     });
 
     const normalized = normalizeModelToolContent(transformed);
-    options.cache.set(target.toolCallId, normalized);
+    cache.set(target.toolCallId, normalized);
     message.content = normalized;
   }
 }

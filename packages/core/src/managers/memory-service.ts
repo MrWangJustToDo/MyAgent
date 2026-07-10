@@ -138,7 +138,8 @@ export class MemoryService {
       return;
     }
 
-    const messages = context.getMessages();
+    const canon = context.getCanonicalFromUI();
+    const messages = context.getMessagesForLLM(canon);
     if (messages.length < 15) {
       emitEvent?.("memory:extract", { status: "skip-short", count: messages.length });
       return;

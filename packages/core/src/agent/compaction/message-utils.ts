@@ -7,9 +7,9 @@
  * - text parts use the `content` field (not legacy `text`)
  */
 
-import { estimateContentPartChars } from "./token-estimator";
+import { convertMessagesToModelMessages, type ContentPart, type ModelMessage, type UIMessage } from "@tanstack/ai";
 
-import type { ContentPart, ModelMessage } from "@tanstack/ai";
+import { estimateContentPartChars } from "./token-estimator";
 
 /** Build toolCallId → tool name from assistant `toolCalls`. */
 export function buildToolCallNameMap(messages: ModelMessage[]): Map<string, string> {
@@ -110,3 +110,65 @@ function describeContentPart(part: ContentPart): string {
       return "";
   }
 }
+
+export const getLatestUserMessage = (messages: Array<UIMessage | ModelMessage>) => {
+  let item: ModelMessage | UIMessage | null = null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.role === "user") {
+      item = message;
+      break;
+    }
+  }
+  if (!item) return null;
+  return convertMessagesToModelMessages([item]);
+};
+
+export const gatLatestUserInput = (messages: Array<UIMessage | ModelMessage>) => {
+  let item: ModelMessage | UIMessage | null = null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.role === "user") {
+      item = message;
+      break;
+    }
+  }
+  if (!item) return "";
+  const typedItem = item as UIMessage;
+  if (typedItem.parts) {
+    return typedItem.parts.map((i) => (i.type === "text" ? i.content : "")).join("\n");
+  } else {
+    return extractTextFromContent((item as ModelMessage)["content"]);
+  }
+};
+
+export const getFirstUserMessage = (messages: Array<UIMessage | ModelMessage>) => {
+  let item: ModelMessage | UIMessage | null = null;
+  for (let i = 0; i < messages.length; i++) {
+    const message = messages[i];
+    if (message.role === "user") {
+      item = message;
+      break;
+    }
+  }
+  if (!item) return null;
+  return convertMessagesToModelMessages([item]);
+};
+
+export const getFirstUserInput = (messages: Array<UIMessage | ModelMessage>) => {
+  let item: ModelMessage | UIMessage | null = null;
+  for (let i = 0; i < messages.length; i++) {
+    const message = messages[i];
+    if (message.role === "user") {
+      item = message;
+      break;
+    }
+  }
+  if (!item) return "";
+  const typedItem = item as UIMessage;
+  if (typedItem.parts) {
+    return typedItem.parts.map((i) => (i.type === "text" ? i.content : "")).join("\n");
+  } else {
+    return extractTextFromContent((item as ModelMessage)["content"]);
+  }
+};

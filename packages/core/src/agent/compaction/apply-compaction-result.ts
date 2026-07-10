@@ -23,6 +23,7 @@ export interface ApplyCompactionResultOptions {
  * @returns true if result was applied; false if nothing to apply (not compacted or missing cut)
  */
 export function applyCompactionResult(
+  messages: ModelMessage[],
   context: AgentContext,
   usage: UsageTracker,
   result: CompactionResult,
@@ -38,7 +39,7 @@ export function applyCompactionResult(
   context.setCompactIndex(absoluteCut);
   usage.resetWindow();
 
-  const allMessages = context.getMessages();
+  const allMessages = messages;
   cleanupOrphanedToolCache(allMessages, absoluteCut).catch((err) => {
     const error = err instanceof Error ? err : new Error(String(err));
     options?.onCacheCleanupError?.(error);
@@ -51,6 +52,7 @@ export function applyCompactionResult(
  * Apply reactive compaction output (summary + tail messages) to context.
  */
 export function applyReactiveCompactionResult(
+  messages: ModelMessage[],
   context: AgentContext,
   usage: UsageTracker,
   compactedMessages: ModelMessage[],
@@ -65,22 +67,15 @@ export function applyReactiveCompactionResult(
 
   context.setSummaryMessage(summaryMsg);
   const oldCompactIndex = context.getCompactIndex();
-  const newCompactIndex = context.getMessages().length - tailMessages.length;
+  const newCompactIndex = messages.length - tailMessages.length;
   context.setCompactIndex(newCompactIndex);
 
   if (newCompactIndex > oldCompactIndex) {
-    cleanupOrphanedToolCache(context.getMessages(), newCompactIndex).catch((err) => {
+    cleanupOrphanedToolCache(messages, newCompactIndex).catch((err) => {
       const error = err instanceof Error ? err : new Error(String(err));
       options?.onCacheCleanupError?.(error);
     });
   }
-
-  // const tailMessages = compactedMessages.slice(1);
-  // if (tailMessages.length > 0) {
-  //   const allMessages = [...context.getMessages(), ...tailMessages];
-  //   context.setMessages(allMessages);
-  //   context.setCompactIndex(allMessages.length - tailMessages.length);
-  // }
 
   usage.resetWindow();
   return true;

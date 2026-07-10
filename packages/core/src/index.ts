@@ -49,7 +49,7 @@ export { AgentChatController, formatChatError } from "./managers/agent-chat-cont
 // Agent state (hosts / UI)
 // ============================================================================
 
-export { AgentContext, type TokenUsage } from "./agent/agent-context";
+export { AgentContext, buildCanonicalModelMessages, type TokenUsage } from "./agent/agent-context";
 export { AgentLog } from "./agent/agent-log";
 export { TodoManager, type TodoItem, type TodoStatus, type TodoPriority, STATUS_ICONS } from "./agent/todo-manager";
 
@@ -135,4 +135,3 @@ export {
   hasPendingToolApprovals,
   needsToolPhaseContinue,
 } from "./agent/utils/tool-phase-utils.js";
-export { hasUIMessageParts, selectInitialRunMessages } from "./managers/select-run-messages.js";

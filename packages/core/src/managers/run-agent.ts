@@ -16,7 +16,6 @@ import { AgentUIChannel } from "./agent-ui-channel.js";
 import { createEmitFn } from "./emit-agent-event.js";
 import { buildManagedAgentDeps } from "./managed-agent-deps.js";
 import { runStreamWithReactiveCompactRetry } from "./reactive-compact-retry.js";
-import { selectInitialRunMessages } from "./select-run-messages.js";
 
 import type { AgentRunDeps } from "./agent-run-deps.js";
 import type { ManagedAgent } from "./managed-agent.js";
@@ -202,19 +201,18 @@ async function executeManagedAgentRun(
     messages = [{ role: "user", content: input.prompt }];
   }
 
-  const prepared = await managed.prepareForRun({
+  await managed.prepareForRun({
     messages: messages as Parameters<typeof managed.prepareForRun>[0]["messages"],
     prompt: input.prompt,
     abortSignal: input.abortSignal,
   });
 
-  const preparedMessages = prepared;
-  const inputMessages = messages;
+  const inputMessages = messages || [];
 
   return runStreamWithReactiveCompactRetry({
     managed,
     manager,
-    getMessages: () => selectInitialRunMessages(inputMessages, preparedMessages, managed),
+    getMessages: () => inputMessages,
     run: (runMessages) =>
       runner.run({
         agentId,

@@ -25,7 +25,9 @@ registerCommand({
       agent.syncContextFromUIMessages(uiMessages);
     }
 
-    const messages = context.getMessagesForLLM();
+    const allModelMessages = context.getCanonicalFromUI();
+
+    const messages = context.getMessagesForLLM(allModelMessages);
     if (messages.length === 0) {
       return { ok: false, error: "No messages to compact" };
     }
@@ -53,7 +55,7 @@ registerCommand({
         actualTokens: actualTokens || undefined,
       });
 
-      const applied = applyCompactionResult(context, agent.usage, result, {
+      const applied = applyCompactionResult(allModelMessages, context, agent.usage, result, {
         onCacheCleanupError: (err) => {
           agent.getLog()?.warn("agent", "Failed to cleanup tool cache after /compact", { error: err.message });
         },

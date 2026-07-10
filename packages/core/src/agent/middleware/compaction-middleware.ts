@@ -55,19 +55,22 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
       deps.getTodoManager()?.incrementRound();
     },
     onConfig: async (_ctx, config) => {
-      const messages = config.messages as ModelMessage[];
-
-      stripReasoningFromHistory(messages, deps.getModelInfo());
-
+      const engineMessages = config.messages as ModelMessage[];
       const agentContext = deps.getContext();
-      agentContext?.setMessages(messages);
 
-      let llmMessages = agentContext?.getMessagesForLLM() ?? messages;
+      if (!agentContext) {
+        return { messages: engineMessages };
+      }
+
+      const canon = agentContext.getCanonicalModelMessages(engineMessages);
+      let llmMessages = agentContext.getMessagesForLLM(canon);
+
+      stripReasoningFromHistory(llmMessages, deps.getModelInfo());
 
       const managed = deps.manager.getAgent(deps.agentId);
       const isSubagent = Boolean(managed?.parentId);
 
-      if (!isSubagent && deps.shouldTriggerAutoCompact(messages) && agentContext) {
+      if (!isSubagent && deps.shouldTriggerAutoCompact(llmMessages) && agentContext) {
         try {
           deps.status.beginCompaction();
 
@@ -80,13 +83,13 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
 
           const usage = deps.getUsage();
           const actualTokens = usage.getWindowUsage().inputTokens ?? 0;
-          const result = await autoCompact(messages, deps.getCompactionConfig() ?? {}, deps.agentId, deps.manager, {
+          const result = await autoCompact(llmMessages, deps.getCompactionConfig() ?? {}, deps.agentId, deps.manager, {
             todos: todos.length > 0 ? todos : undefined,
             actualTokens: actualTokens || undefined,
           });
 
           if (
-            applyCompactionResult(agentContext, usage, result, {
+            applyCompactionResult(canon, agentContext, usage, result, {
               onCacheCleanupError: (err) => {
                 deps.emitEvent?.("compaction:auto-error", {
                   phase: "cache-cleanup",
@@ -95,10 +98,10 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
               },
             })
           ) {
-            llmMessages = agentContext.getMessagesForLLM();
+            llmMessages = agentContext.getMessagesForLLM(canon);
           }
 
-          deps.log?.agent("compact result", { result, messages, llmMessages });
+          deps.log?.agent("compact result", { result, canon, llmMessages });
 
           if (result.compacted) {
             deps.emitEvent?.("compaction:auto-complete", {
@@ -113,8 +116,6 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
           deps.status.endCompaction();
         }
       }
-
-      // void estimateTokens(llmMessages);
 
       return { messages: llmMessages };
     },

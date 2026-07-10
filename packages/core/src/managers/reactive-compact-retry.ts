@@ -6,15 +6,6 @@ import type { ManagedAgent } from "./managed-agent.js";
 import type { AgentManager } from "./manager-agent.js";
 import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai";
 
-function selectRunMessagesAfterCompact(
-  managed: ManagedAgent,
-  fallback: Array<UIMessage | ModelMessage>
-): Array<UIMessage | ModelMessage> {
-  const ui = managed.getContext()?.getUIMessages();
-  if (ui && ui.length > 0) return ui;
-  return managed.getContext()?.getMessagesForLLM() ?? fallback;
-}
-
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -77,7 +68,7 @@ export async function* runStreamWithReactiveCompactRetry(
           );
           if (handled) {
             retry = true;
-            messages = selectRunMessagesAfterCompact(options.managed, messages);
+            messages = options.getMessages();
             break;
           }
         }
@@ -88,7 +79,7 @@ export async function* runStreamWithReactiveCompactRetry(
         const handled = await tryReactiveCompactRetry(options.managed, options.manager, error);
         if (handled) {
           retry = true;
-          messages = selectRunMessagesAfterCompact(options.managed, messages);
+          messages = options.getMessages();
         } else {
           throw error;
         }

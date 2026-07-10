@@ -275,7 +275,7 @@ Client tools pause the run until the host supplies output via `addToolResult`. C
 
 Status becomes `awaiting_user` (distinct from approval `waiting`). Exposed in CLI via `useAgentChat().setClientToolWaiting`.
 
-**Critical:** `runner.run()` receives **UIMessages** (`select-run-messages.ts`) so TanStack `chat()` can extract `part.approval` before conversion.
+**Critical:** `runner.run()` receives **UIMessages** from `AgentChatController` so TanStack `chat()` can extract `part.approval` before conversion.
 
 No manual user text is required; each `y` only approves one tool when several `run_command` calls are pending.
 
@@ -333,11 +333,14 @@ emit compaction:auto-complete | compaction:auto-error
 setStatus("running")
 ```
 
-`AgentContext.getMessagesForLLM()` returns:
+`AgentContext.getMessagesForLLM(canon)` returns:
 
 ```
-[summaryMessage, ...messages.slice(compactIndex)]
+[summaryMessage, ...canon.slice(compactIndex)]
 ```
+
+`canon` is rebuilt each `onConfig` via `getCanonicalModelMessages(engine)`:
+`convert(uiMessages) + engine.slice(runBaselineCount)`.
 
 ### 5.4 Reactive compact (emergency)
 
@@ -428,10 +431,9 @@ App passes `initialMessages` from resume into `ManagedAgent.initChat()`.
 
 ```
 uiMessages (source of truth in AgentContext)
-  → context.getUIMessages() → runner.run() / TanStack chat()
-  → context.getMessages() → convert on read (or compaction overlay via setMessages)
-  → context.getMessagesForLLM() → [summaryMessage, ...messages.slice(compactIndex)]
-  → LLM (via compaction middleware onConfig)
+  → getCanonicalModelMessages(engine) on each onConfig
+  → getMessagesForLLM(canon) → LLM view returned to TanStack
+  → TanStack engine state may be truncated; canonical rebuild avoids double-slice
 ```
 
 - **Each run start** (`prepareForRun`): incoming `uiMessages` from `AgentChatController` → `context.setUIMessages` (summary + `compactIndex` preserved).

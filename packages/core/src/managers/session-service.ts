@@ -3,7 +3,7 @@
  * `uiMessages` are written only when callers pass them (app `useChat` layer).
  */
 
-import { extractTextFromContent } from "../agent/compaction/message-utils.js";
+import { getFirstUserInput } from "../agent/compaction/message-utils.js";
 import { runSideTextQuery } from "../models/side-text-query.js";
 
 import type { EmitAgentEventFn } from "./emit-agent-event.js";
@@ -97,7 +97,7 @@ export class SessionService {
       return;
     }
 
-    const messages = context.getMessages();
+    // const messages = context.getMessages();
 
     this.data.summaryMessage = context.getSummaryMessage();
     this.data.compactIndex = context.getCompactIndex();
@@ -114,18 +114,13 @@ export class SessionService {
     }
 
     if (this.data.name === "New Session") {
-      const firstUser = messages.find((m) => m.role === "user");
-      if (firstUser) {
-        const text = extractTextFromContent(firstUser.content);
-        if (text.length > 0) {
-          this.generateSessionTitle(text, { usage, resolveTextAdapter }).then((title) => {
-            if (this.data && this.store) {
-              this.data.name = title;
-              this.store.save(this.data).catch(() => {});
-            }
-          });
+      const firstUserText = getFirstUserInput(uiMessages || []);
+      this.generateSessionTitle(firstUserText, { usage, resolveTextAdapter }).then((title) => {
+        if (this.data && this.store) {
+          this.data.name = title;
+          this.store.save(this.data).catch(() => {});
         }
-      }
+      });
     }
 
     const saveTarget = uiMessages !== undefined ? "session+uiMessages" : "session";

@@ -3,7 +3,7 @@
  * Not part of the public `@my-agent/core` package API.
  */
 
-export { AgentContext } from "./agent/agent-context/agent-context.js";
+export { AgentContext, buildCanonicalModelMessages } from "./agent/agent-context/agent-context.js";
 export { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, resolveFinishStatus } from "./managers/agent-status.js";
 export { AgentEventBus } from "./managers/agent-event-bus.js";
 export { attachEventLogBridge } from "./managers/event-log-bridge.js";
@@ -13,7 +13,6 @@ export { AgentUIChannel } from "./managers/agent-ui-channel.js";
 export { AgentChatController } from "./managers/agent-chat-controller.js";
 export { ManagedAgent } from "./managers/managed-agent.js";
 export { RunCoordinator } from "./managers/run-coordinator.js";
-export { hasUIMessageParts, selectInitialRunMessages } from "./managers/select-run-messages.js";
 export { createLocalConnect } from "./connect/local-connect.js";
 export { createTextAdapter } from "./models/adapter-factory.js";
 export {
