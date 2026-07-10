@@ -13,7 +13,7 @@
  * ```
  */
 
-import { Experimental_StdioMCPTransport } from "@ai-sdk/mcp/mcp-stdio";
+import { stdioTransport } from "@tanstack/ai-mcp/stdio";
 import mime from "mime-types";
 import { exec } from "node:child_process";
 import * as os from "node:os";
@@ -126,7 +126,7 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
     getMimeType: async (filePath: string) => mime.lookup(filePath),
 
     createMCPStdioTransport: (config) => {
-      return new Experimental_StdioMCPTransport({
+      return stdioTransport({
         command: config.command,
         args: config.args,
         env: config.env,
@@ -134,7 +134,9 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
     },
 
     getMCPTransportProcess: (transport) => {
-      const child = (transport as unknown as { process?: ChildProcess }).process;
+      const child =
+        (transport as unknown as { _process?: ChildProcess; process?: ChildProcess })._process ??
+        (transport as unknown as { process?: ChildProcess }).process;
       if (!child) return undefined;
       return {
         killed: child.killed,

@@ -1,6 +1,6 @@
-import { tool } from "ai";
 import { z } from "zod";
 
+import { defineServerTool } from "./tanstack/define-tool.js";
 import { OUTPUT_LIMITS, withDuration } from "./util/helpers.js";
 import { DEFAULT_EXCLUDE_DIRS, runSearchCommand } from "./util/search-command.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
@@ -180,7 +180,8 @@ function parseCountLine(line: string): { file: string; lineNumber: number; conte
 }
 
 export const createGrepTool = () => {
-  return tool({
+  return defineServerTool({
+    name: "grep",
     description:
       "Searches file contents using regular expressions. Returns file paths and line numbers with matching content. " +
       "Uses ripgrep (rg) when available, falls back to grep. " +
@@ -313,22 +314,18 @@ export const createGrepTool = () => {
         };
       });
     },
-
     // Only send matches to the LLM — search params are echoed in the input,
     // pagination/truncation/cache metadata is for the UI only.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: GrepOutput }) {
-      const lines = output.matches.map((m) => `${m.file}:${m.lineNumber}: ${m.content}`);
-      return {
-        type: "content" as const,
-        value: [
-          {
-            type: "text" as const,
-            text:
-              `<params> offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit} </params>` +
-              (output.content || `${output.matches.length} matches:\n${lines.join("\n")}`),
-          },
-        ],
-      };
+      const lines = output.matches?.map?.((m) => `${m.file}:${m.lineNumber}: ${m.content}`);
+      return [
+        {
+          type: "text" as const,
+          content:
+            `<params> offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit} </params>` +
+            (output.content || `${output.matches?.length} matches:\n${lines.join("\n")}`),
+        },
+      ];
     },
   });
 };

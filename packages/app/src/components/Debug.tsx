@@ -6,11 +6,11 @@ import { useAgentLog } from "../hooks/use-agent-log";
 import { useAgentManager } from "../hooks/use-agent-manager";
 import { useStatic } from "../hooks/use-static";
 
-import type { Agent, AgentContext, AgentLog } from "@my-agent/core";
+import type { ManagedAgent, AgentContext, AgentLog } from "@my-agent/core";
 
 export const Debug = () => {
   // @ts-ignore
-  useAgent((s) => s.agent as Agent) as Agent;
+  useAgent((s) => s.agent as ManagedAgent) as ManagedAgent;
 
   // @ts-ignore
   useAgentLog((s) => s.log as AgentLog);

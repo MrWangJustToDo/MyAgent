@@ -1,44 +1,37 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-import { Chat, useChat as useAiSdkChat } from "@ai-sdk/react";
-import { agentManager, generateId } from "@my-agent/core";
-import {
-  getToolName,
-  isToolUIPart,
-  lastAssistantMessageIsCompleteWithApprovalResponses,
-  lastAssistantMessageIsCompleteWithToolCalls,
-} from "ai";
-import { useEffect, useCallback, useState, useRef, useMemo } from "react";
+import { agentManager, isActiveStatus } from "@my-agent/core";
+import { throttle } from "lodash-es";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAdapter } from "../context/adapter-context.js";
+import { isToolCallPart, isPendingToolApproval, parseToolInput } from "../utils/tool-part.js";
 
 import { useAgent } from "./use-agent.js";
-import { useChatStatus } from "./use-chat-status.js";
+import { useCallbackRef } from "./use-callback-ref.js";
 import { useForceUpdate } from "./use-force-update.js";
 
 import type { AppConfig } from "../adapter/types.js";
-import type { Agent } from "@my-agent/core";
-import type { ChatTransport, FileUIPart, UIDataTypes, UIMessage, UIMessagePart, UITools } from "ai";
+import type { Attachment } from "../types/attachment.js";
+import type { AgentChatController, AgentStatus, ManagedAgent } from "@my-agent/core";
+import type { ContentPart, UIMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type ChatStatus = "ready" | "submitted" | "streaming" | "error";
-
 export interface SendMessageContent {
   text: string;
-  files?: FileUIPart[];
+  files?: Attachment[];
 }
 
 export interface UseAgentChatReturn {
   messages: UIMessage[];
   sendMessage: (content: string | SendMessageContent) => Promise<void>;
-  status: ChatStatus;
+  status: AgentStatus;
   isLoading: boolean;
   isReady: boolean;
   stop: () => void;
   clearMessages: () => void;
-  setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) => void;
+  setMessages: (messages: UIMessage[]) => void;
   error: Error | null;
   initLoading: boolean;
   initError: Error | null | undefined;
@@ -62,6 +55,28 @@ export interface UseAgentChatReturn {
     multiSelect?: boolean;
   }>;
   addToolOutput: (options: { tool: string; toolCallId: string; output: Record<string, unknown> }) => void;
+  /** Pause/resume status while a client tool waits for user input (`ask_user`). */
+  setClientToolWaiting: (active: boolean) => void;
+  /** Flush chat messages to session (single write path for `uiMessages`). */
+  saveSessionFromChat: () => void;
+}
+
+function attachmentToContentPart(attachment: Attachment): ContentPart {
+  if (attachment.type === "image") {
+    return {
+      type: "image",
+      source: { type: "url", value: attachment.dataUrl },
+      metadata: { mediaType: attachment.mediaType, filename: attachment.filename },
+    };
+  }
+  return {
+    type: "text",
+    content: `[Attached file: ${attachment.filename}]`,
+  };
+}
+
+function isAgentLoading(status: AgentStatus): boolean {
+  return isActiveStatus(status) && status !== "waiting" && status !== "awaiting_user";
 }
 
 // ============================================================================
@@ -73,17 +88,23 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   const [initLoading, setInitLoading] = useState(true);
   const [initError, setInitError] = useState<Error | null>(null);
-  const [agent, setAgent] = useState<Agent | null>(null);
-
-  // @ts-ignore
-  const agentError = useAgent((s) => (s.agent as Agent)?.error || "");
+  const [agent, setAgent] = useState<ManagedAgent | null>(null);
+  const [chat, setChat] = useState<AgentChatController | null>(null);
+  const [messages, setMessages] = useState<UIMessage[]>([]);
 
   const forceUpdate = useForceUpdate({ time: 100 });
-
-  const chatRef = useRef<Chat<UIMessage> | null>(null);
-  const pendingApprovalLengthRef = useRef(0);
-
   const initIdRef = useRef(0);
+
+  useEffect(() => {
+    if (agent) {
+      useAgent.getActions().setAgent(agent);
+    }
+  }, [agent]);
+
+  useEffect(() => {
+    if (!agent) return;
+    return agent.subscribeState(() => forceUpdate());
+  }, [agent, forceUpdate]);
 
   useEffect(() => {
     const currentInitId = ++initIdRef.current;
@@ -94,28 +115,19 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
       try {
         await adapter.destroy();
-
         if (currentInitId !== initIdRef.current) return;
 
         const result = await adapter.initialize(config);
-
         if (currentInitId !== initIdRef.current) return;
 
-        const transport = adapter.createTransport() as ChatTransport<UIMessage>;
+        const managed = result.agent;
+        const controller = managed.initChat(agentManager, (result.initialMessages as UIMessage[] | undefined) ?? []);
 
-        chatRef.current = new Chat<UIMessage>({
-          id: generateId("chat"),
-          transport,
-          messages: result.initialMessages ?? [],
-          sendAutomaticallyWhen(options) {
-            return (
-              lastAssistantMessageIsCompleteWithApprovalResponses(options) ||
-              lastAssistantMessageIsCompleteWithToolCalls(options)
-            );
-          },
-        });
-
-        setAgent(result.agent);
+        setAgent(managed);
+        setChat(controller);
+        const initial = controller.getMessages();
+        setMessages(initial);
+        managed.syncInteractionStateFromUIMessages(initial);
       } catch (e) {
         if (currentInitId !== initIdRef.current) return;
         setInitError(e as Error);
@@ -130,92 +142,93 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       }, 500);
     };
 
-    init();
+    void init();
 
     return () => {
       void adapter.destroy();
     };
   }, [
     config.model,
-    config.url,
+    config.baseURL,
     config.systemPrompt,
     config.maxIterations,
-    config.provider,
+    config.style,
     config.apiKey,
     config.mcpConfigPath,
     adapter,
     config,
   ]);
 
-  const chatHelpers = useAiSdkChat<UIMessage>(
-    chatRef.current
-      ? {
-          chat: chatRef.current,
-          experimental_throttle: 100,
-        }
-      : {}
-  );
-
   useEffect(() => {
-    forceUpdate();
-  }, [chatHelpers.messages, agentError]);
+    if (!chat) return;
 
-  const prevStatusRef = useRef(chatHelpers.status);
-  useEffect(() => {
-    const prev = prevStatusRef.current;
-    prevStatusRef.current = chatHelpers.status;
-    if ((prev === "streaming" || prev === "submitted") && chatHelpers.status === "ready") {
-      if (chatHelpers.messages.length > 0 && agent) {
-        agent.updateSessionUIMessages(chatHelpers.messages as UIMessage[]);
-      }
+    const updateUi = throttle((next: UIMessage[]) => {
+      setMessages(next);
+    }, 60);
+
+    const unsubMessages = chat.subscribeMessages(updateUi);
+
+    return () => {
+      unsubMessages();
+    };
+  }, [chat, forceUpdate]);
+
+  const status = agent?.status ?? "idle";
+  const error = agent?.error ? new Error(agent.error) : null;
+  const isLoading = agent ? isAgentLoading(agent.status) : false;
+
+  const saveSessionFromChat = useCallbackRef(() => {
+    if (messages.length > 0 && agent) {
+      agent.saveSessionUIMessages(messages);
     }
-  }, [chatHelpers.status, chatHelpers.messages, agent]);
+  });
 
-  const stop = () => {
-    // Layered cancellation:
-    //  - If there are active subagents, cancel only them (one by one, deepest
-    //    first) by calling each subagent's own abort(). This leaves the root
-    //    agent's abort signal (and therefore the chat hook) untouched, so the
-    //    parent loop can continue after the subagent returns its result.
-    //  - If no subagent is active, fall back to the normal chat stop, which
-    //    aborts the root agent's stream via the hook's abort signal.
+  useEffect(() => {
+    saveSessionFromChat();
+  }, [agent, messages, saveSessionFromChat]);
+
+  const stop = useCallback(() => {
     if (agent) {
       const activeSubagents = agentManager.getActiveSubagents(agent.id);
       if (activeSubagents.length > 0) {
         for (const sub of activeSubagents) {
-          sub.agent.abort("user-cancelled");
+          sub.abort("user-cancelled");
         }
         forceUpdate();
         return;
       }
     }
-    chatHelpers.stop();
+    chat?.stop();
     forceUpdate();
-  };
+  }, [agent, chat, forceUpdate]);
 
   const sendMessage = useCallback(
     async (content: string | SendMessageContent) => {
-      if (!chatRef.current) return;
+      if (!chat) return;
 
       if (typeof content === "string") {
-        await chatHelpers.sendMessage({ text: content });
-      } else if (content.files && content.files.length > 0) {
-        await chatHelpers.sendMessage({ text: content.text, files: content.files });
+        await chat.sendMessage(content);
+      } else if (content.files?.length) {
+        const parts: ContentPart[] = [{ type: "text", content: content.text }];
+        for (const file of content.files) {
+          parts.push(attachmentToContentPart(file));
+        }
+        await chat.sendMessage(parts);
       } else {
-        await chatHelpers.sendMessage({ text: content.text });
+        await chat.sendMessage(content.text);
       }
       forceUpdate();
     },
-    [chatHelpers, forceUpdate]
+    [chat, forceUpdate]
   );
 
   const clearMessages = useCallback(() => {
-    chatHelpers.setMessages([]);
-    chatHelpers.clearError();
-  }, [chatHelpers]);
+    chat?.clearMessages();
+    setMessages([]);
+  }, [chat]);
 
   const addToolApprovalResponse = useCallback(
-    (options: {
+    async (options: {
       id: string;
       approved: boolean;
       reason?: string;
@@ -223,80 +236,27 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       toolCallId?: string;
       toolName?: string;
     }) => {
-      if (options.approved) {
-        chatHelpers.addToolApprovalResponse({
-          id: options.id,
-          approved: true,
-          reason: options.reason,
-        });
-      } else {
-        const errorText = "<error> Tool execution denied by user. </error>" + (options.reason ?? "");
-
-        const updatePart = (part: UIMessagePart<UIDataTypes, UITools>): UIMessagePart<UIDataTypes, UITools> =>
-          isToolUIPart(part) && part.state === "approval-requested" && part.approval.id === options.id
-            ? {
-                ...part,
-                state: "output-denied",
-                approval: { id: options.id, approved: false, reason: errorText },
-              }
-            : part;
-
-        chatHelpers.setMessages((message) => {
-          return message.map((i) => {
-            if (i.role === "assistant") {
-              return {
-                ...i,
-                parts: i.parts.map(updatePart),
-              };
-            } else {
-              return i;
-            }
-          });
-        });
-
-        if (pendingApprovalLengthRef.current === 1) {
-          chatHelpers.sendMessage();
-        }
-
-        // avoid call the original method
-        // 默认拒绝方法只会将state修改为 approval-responded . SEE https://github.com/vercel/ai/blob/50c29b0dc2d23dff959bde8eea21594ba61c46c6/packages/ai/src/ui/chat.ts#L496C23-L496C41
-        // 而在cover转换中，需要 output- 才会生成结果传给llm . SEE https://github.com/vercel/ai/blob/50c29b0dc2d23dff959bde8eea21594ba61c46c6/packages/ai/src/ui/convert-to-model-messages.ts#L310
-        // chatHelpers.addToolApprovalResponse({
-        //   id: options.id,
-        //   approved: false,
-        //   reason: errorText,
-        // });
-      }
+      await chat?.respondToToolApproval(options.id, options.approved, options.reason);
+      forceUpdate();
     },
-    [chatHelpers]
+    [chat, forceUpdate]
   );
-
-  const status = chatHelpers.status;
-
-  useEffect(() => {
-    useChatStatus.getActions().setStatus(chatHelpers.status);
-    useChatStatus.getActions().setError(chatHelpers.error ?? null);
-  }, [chatHelpers.status, chatHelpers.error]);
-
-  const messages = chatHelpers.messages;
 
   const allPendingApproval = useMemo(() => {
     const all: UseAgentChatReturn["allPendingApproval"] = [];
     for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i] as UIMessage;
-      if (msg.role === "assistant") {
-        for (const part of msg.parts) {
-          if (isToolUIPart(part)) {
-            const toolPart = part;
-            if (toolPart.state === "approval-requested" && toolPart.approval) {
-              all.push({
-                id: toolPart.approval.id,
-                toolName: getToolName(toolPart),
-                toolCallId: toolPart.toolCallId,
-              });
-            }
-          }
-        }
+      const msg = messages[i];
+      if (msg.role !== "assistant") continue;
+      for (const part of msg.parts) {
+        if (!isToolCallPart(part)) continue;
+        if (!isPendingToolApproval(part)) continue;
+        const approvalId = part.approval?.id;
+        if (!approvalId) continue;
+        all.push({
+          id: approvalId,
+          toolName: part.name,
+          toolCallId: part.id,
+        });
       }
     }
     return all;
@@ -305,39 +265,40 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   const allPendingAskUser = useMemo(() => {
     const all: UseAgentChatReturn["allPendingAskUser"] = [];
     for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i] as UIMessage;
-      if (msg.role === "assistant") {
-        for (const part of msg.parts) {
-          if (isToolUIPart(part) && getToolName(part) === "ask_user" && part.state === "input-available") {
-            const input = part.input as { question?: string; options?: string[]; multiSelect?: boolean } | undefined;
-            all.push({
-              toolCallId: part.toolCallId,
-              question: input?.question ?? "",
-              options: input?.options,
-              multiSelect: input?.multiSelect,
-            });
-          }
-        }
+      const msg = messages[i];
+      if (msg.role !== "assistant") continue;
+      for (const part of msg.parts) {
+        if (!isToolCallPart(part)) continue;
+        if (part.name !== "ask_user") continue;
+        if (part.state !== "input-complete" || part.output !== undefined) continue;
+        const input = parseToolInput(part) as
+          | { question?: string; options?: string[]; multiSelect?: boolean }
+          | undefined;
+        all.push({
+          toolCallId: part.id,
+          question: input?.question ?? "",
+          options: input?.options,
+          multiSelect: input?.multiSelect,
+        });
       }
     }
     return all;
   }, [messages]);
 
-  pendingApprovalLengthRef.current = allPendingApproval.length;
-
-  useEffect(() => {
-    useChatStatus.getActions().setPendingAskUserCount(allPendingAskUser.length);
-  }, [allPendingAskUser]);
+  const setClientToolWaiting = useCallback(
+    (active: boolean) => {
+      agent?.setClientToolWaiting(active);
+      forceUpdate();
+    },
+    [agent, forceUpdate]
+  );
 
   const addToolOutput = useCallback(
-    (options: { tool: string; toolCallId: string; output: Record<string, unknown> }) => {
-      chatHelpers.addToolOutput({
-        tool: options.tool as never,
-        toolCallId: options.toolCallId,
-        output: options.output as never,
-      });
+    async (options: { tool: string; toolCallId: string; output: Record<string, unknown> }) => {
+      await chat?.addToolResult(options.toolCallId, options.output);
+      forceUpdate();
     },
-    [chatHelpers]
+    [chat, forceUpdate]
   );
 
   return {
@@ -346,15 +307,21 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     allPendingApproval,
     allPendingAskUser,
     addToolOutput,
+    setClientToolWaiting,
     status,
-    isLoading: status === "streaming" || status === "submitted",
-    isReady: !initLoading && chatRef.current !== null,
+    isLoading,
+    isReady: !initLoading && chat !== null,
     stop,
     clearMessages,
-    setMessages: chatHelpers.setMessages,
-    error: chatHelpers.error ?? null,
+    setMessages: (next) => {
+      chat?.setMessages(next);
+      setMessages(next);
+      agent?.syncInteractionStateFromUIMessages(next);
+    },
+    error,
     initLoading,
     initError,
     addToolApprovalResponse,
+    saveSessionFromChat,
   };
 }

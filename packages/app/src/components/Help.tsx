@@ -1,4 +1,4 @@
-import { getEnv } from "@my-agent/core";
+import { DEFAULT_BASE_URLS, DEFAULT_LOCAL_OPENAI_BASE_URL, getEnv } from "@my-agent/core";
 import { Box, Text } from "ink";
 
 import { useConfig } from "../hooks/use-config.js";
@@ -42,21 +42,27 @@ export const Help = () => {
           </Box>
           <Box>
             <Box width={24}>
-              <Text color={COLORS.success}>-u, --url</Text>
+              <Text color={COLORS.success}>--style</Text>
             </Box>
-            <Text>Ollama server URL (default: http://localhost:11434)</Text>
+            <Text>API style: openai | anthropic (default: openai)</Text>
           </Box>
           <Box>
             <Box width={24}>
-              <Text color={COLORS.success}>--provider</Text>
+              <Text color={COLORS.success}>-u, --url</Text>
             </Box>
-            <Text>LLM provider: ollama | openRouter | openaiCompatible | deepseek</Text>
+            <Text>Base URL alias for --base-url (OpenAI-compatible default: {DEFAULT_LOCAL_OPENAI_BASE_URL})</Text>
+          </Box>
+          <Box>
+            <Box width={24}>
+              <Text color={COLORS.success}>--base-url</Text>
+            </Box>
+            <Text>API base URL (defaults per style when unset)</Text>
           </Box>
           <Box>
             <Box width={24}>
               <Text color={COLORS.success}>-k, --api-key</Text>
             </Box>
-            <Text>API key for the provider</Text>
+            <Text>API key (required for anthropic style)</Text>
           </Box>
           <Box>
             <Box width={24}>
@@ -93,9 +99,10 @@ export const Help = () => {
         <Box flexDirection="column" paddingLeft={2}>
           <Text color={COLORS.muted}>Create a .env file in your project root:</Text>
           <Box flexDirection="column" paddingLeft={2} marginTop={1}>
-            <Text color={COLORS.primary}>provider=openRouter</Text>
-            <Text color={COLORS.primary}>model=anthropic/claude-3.5-sonnet</Text>
-            <Text color={COLORS.primary}>apiKey=sk-or-v1-xxx</Text>
+            <Text color={COLORS.primary}>MODEL_STYLE=openai</Text>
+            <Text color={COLORS.primary}>MODEL=anthropic/claude-3.5-sonnet</Text>
+            <Text color={COLORS.primary}>BASE_URL=https://openrouter.ai/api/v1</Text>
+            <Text color={COLORS.primary}>API_KEY=sk-or-v1-xxx</Text>
             <Text color={COLORS.primary}>maxIterations=30</Text>
           </Box>
           <Box marginTop={1}>
@@ -114,9 +121,9 @@ export const Help = () => {
         <Box flexDirection="column" paddingLeft={2}>
           <Box>
             <Box width={14}>
-              <Text color={COLORS.primary}>provider:</Text>
+              <Text color={COLORS.primary}>style:</Text>
             </Box>
-            <Text>{config.provider}</Text>
+            <Text>{config.style}</Text>
           </Box>
           <Box>
             <Box width={14}>
@@ -124,20 +131,18 @@ export const Help = () => {
             </Box>
             <Text>{config.model}</Text>
           </Box>
-          {config.provider === "ollama" && (
-            <Box>
-              <Box width={14}>
-                <Text color={COLORS.primary}>url:</Text>
-              </Box>
-              <Text>{config.url}</Text>
+          <Box>
+            <Box width={14}>
+              <Text color={COLORS.primary}>baseURL:</Text>
             </Box>
-          )}
-          {config.provider === "openRouter" && (
+            <Text>{config.baseURL || DEFAULT_BASE_URLS[config.style]}</Text>
+          </Box>
+          {config.apiKey && (
             <Box>
               <Box width={14}>
                 <Text color={COLORS.primary}>apiKey:</Text>
               </Box>
-              <Text>{config.apiKey ? `${config.apiKey.slice(0, 12)}...` : "(not set)"}</Text>
+              <Text>{`${config.apiKey.slice(0, 12)}...`}</Text>
             </Box>
           )}
           <Box>
@@ -163,7 +168,9 @@ export const Help = () => {
         <Box flexDirection="column" paddingLeft={2}>
           <Text color={COLORS.muted}>{'$ my-agent "Create a hello world function"'}</Text>
           <Text color={COLORS.muted}>
-            {'$ my-agent --provider openRouter -m anthropic/claude-3.5-sonnet "Review code"'}
+            {
+              '$ my-agent --style openai --base-url https://openrouter.ai/api/v1 -m anthropic/claude-3.5-sonnet -k sk-or-... "Review code"'
+            }
           </Text>
           <Text color={COLORS.muted}>{'$ my-agent --remote http://localhost:3100 "Fix the bug"'}</Text>
         </Box>

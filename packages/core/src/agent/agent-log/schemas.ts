@@ -9,12 +9,10 @@ export const logLevelSchema = z.enum(logLevels);
 
 const logCategories = [
   "agent",
-  "connection",
   "chat",
   "tool",
   "approval",
   "stream",
-  "middleware",
   "todo",
   "skill",
   "memory",

@@ -6,7 +6,7 @@ import { dispatchCommand } from "../commands";
 
 import { useAgent } from "./use-agent.js";
 import { useSelect } from "./use-select.js";
-import { useSubagentPanel } from "./use-subagent-panel.js";
+import { useSubagentPanel, CLOSE_DEBOUNCE_MS } from "./use-subagent-panel.js";
 import { useUserInput } from "./use-user-input.js";
 
 import type { AgentAdapter } from "../adapter/types.js";
@@ -15,7 +15,7 @@ import type { UseAgentChatReturn } from "./use-agent-chat.js";
 import type { useAutocomplete } from "./use-autocomplete.js";
 import type { useCommandOutput } from "./use-command-output.js";
 import type { InputMode, useInputMode } from "./use-input-mode.js";
-import type { AgentLog, Agent as CoreAgent } from "@my-agent/core";
+import type { AgentLog, ManagedAgent } from "@my-agent/core";
 import type { MutableRefObject } from "react";
 
 export interface DenyingToolInfo {
@@ -68,7 +68,7 @@ export function useAgentKeybindings({
   submitAskUserAnswer,
   addToolApprovalResponse,
 }: UseAgentKeybindingsOptions): void {
-  const getAgent = () => toRaw(useAgent.getReactiveState().agent) as CoreAgent | null;
+  const getAgent = () => toRaw(useAgent.getReactiveState().agent) as ManagedAgent | null;
 
   useInput((inputChar, inputKey) => {
     inputActions.addEvent(inputChar, inputKey);
@@ -117,7 +117,12 @@ export function useAgentKeybindings({
     }
 
     if (inputKey.escape && mode !== "freeform" && mode !== "select") {
-      if (useSubagentPanel.getReadonlyState().view !== "closed") {
+      const panel = useSubagentPanel.getReadonlyState();
+      if (panel.view !== "closed") {
+        return;
+      }
+      // Debounce: prevent ESC from calling stop() right after panel closes.
+      if (Date.now() - panel.lastClosedAt < CLOSE_DEBOUNCE_MS) {
         return;
       }
       if (isLoading) {

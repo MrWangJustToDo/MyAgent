@@ -3,16 +3,16 @@
 // ============================================================================
 
 /**
+ * API protocol style — determines which TanStack text adapter to use.
+ */
+export type ModelStyle = "openai" | "anthropic";
+
+/**
  * Internal model identifier used as registry key.
- * Format: provider-scoped (e.g. "claude-4-sonnet", "gpt-4.1", "deepseek-chat")
+ * Format: vendor-scoped (e.g. "claude-4-sonnet", "gpt-4.1", "deepseek-chat")
  * or prefixed for gateways (e.g. "openrouter/claude-4-sonnet").
  */
 export type ModelId = string;
-
-/**
- * Provider identifier — determines which API client to use.
- */
-export type ModelProvider = "anthropic" | "openai" | "deepseek" | "google" | "ollama" | "open-router" | "xai";
 
 /**
  * Model capability flags.
@@ -52,15 +52,15 @@ export interface ModelPricing {
 }
 
 /**
- * Complete model metadata entry in the registry.
+ * Complete model metadata entry.
  */
 export interface ModelInfo {
   /** Internal identifier (registry key) */
   id: ModelId;
   /** Human-readable display name */
   name: string;
-  /** Provider that serves this model */
-  provider: ModelProvider;
+  /** API style this model uses (openai-compatible vs anthropic) */
+  style: ModelStyle;
   /** Actual model string sent to the API (may differ from id) */
   apiModel: string;
   /** Max input context window in tokens. May be undefined if not yet resolved from models.dev. */
@@ -73,8 +73,10 @@ export interface ModelInfo {
   capabilities: ModelCapability[];
   /** Reasoning-specific config (only if "reasoning" capability is present) */
   reasoningConfig?: ReasoningConfig;
-  /** Whether this is a recommended/default model for its provider */
+  /** Whether this is a recommended/default model for its style */
   isDefault?: boolean;
+  /** Optional API base URL override (merged into connection resolution) */
+  baseURL?: string;
 }
 
 /**
@@ -83,7 +85,7 @@ export interface ModelInfo {
 export interface ModelOption {
   id: ModelId;
   name: string;
-  provider: ModelProvider;
+  style: ModelStyle;
   contextWindow?: number;
   capabilities: ModelCapability[];
 }

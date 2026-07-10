@@ -2,15 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { URL } from "node:url";
 
-const {
-  attachmentToFileUIPart,
-  formatDuration,
-  formatToolArgs,
-  formatToolInput,
-  formatToolOutput,
-  getDurationMs,
-  getToolCallColor,
-} = await import(new URL("../dist/index.mjs", import.meta.url).href);
+const { formatDuration, formatToolArgs, formatToolInput, formatToolOutput, getDurationMs, getToolCallColor } =
+  await import(new URL("../dist/index.mjs", import.meta.url).href);
 
 test("formatDuration formats millisecond, second, and minute durations", () => {
   assert.equal(formatDuration(250), "250ms");
@@ -40,23 +33,4 @@ test("tool display helpers handle duration and state colors", () => {
   assert.equal(getDurationMs({ durationMs: "1200" }), null);
   assert.equal(getToolCallColor("output-available"), "green");
   assert.equal(getToolCallColor("unknown"), "gray");
-});
-
-test("attachmentToFileUIPart maps attachment fields to AI SDK file parts", () => {
-  assert.deepEqual(
-    attachmentToFileUIPart({
-      path: "clipboard",
-      filename: "clipboard.png",
-      mediaType: "image/png",
-      type: "image",
-      size: 12,
-      dataUrl: "data:image/png;base64,abc",
-    }),
-    {
-      type: "file",
-      mediaType: "image/png",
-      filename: "clipboard.png",
-      url: "data:image/png;base64,abc",
-    }
-  );
 });

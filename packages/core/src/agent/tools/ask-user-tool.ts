@@ -1,6 +1,6 @@
-import { tool } from "ai";
 import { z } from "zod";
 
+import { defineClientTool } from "./tanstack/define-tool.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 
 // ============================================================================
@@ -21,13 +21,10 @@ export type AskUserOutput = z.infer<typeof askUserOutputSchema>;
 // Tool Factory
 // ============================================================================
 
-/**
- * Client-side tool: no execute function.
- * The AI SDK streams the tool call to the client, which renders a select list
- * and calls addToolOutput() with the user's answer.
- */
+/** Client-side tool — UI supplies output via addToolResult. */
 export const createAskUserTool = () => {
-  return tool({
+  return defineClientTool({
+    name: "ask_user",
     description: `Ask the user a question and wait for their response. Use this tool when you need clarification or input from the user to proceed.
 
 When to use:
@@ -56,14 +53,5 @@ Do NOT use this tool for:
     }),
 
     outputSchema: askUserOutputSchema,
-
-    // Only send the answer to the LLM — question is echoed in the input,
-    // hasOptions/durationMs are metadata.
-    toModelOutput({ output }: { toolCallId: string; input: unknown; output: AskUserOutput }) {
-      return {
-        type: "content" as const,
-        value: [{ type: "text" as const, text: output.answer }],
-      };
-    },
   });
 };

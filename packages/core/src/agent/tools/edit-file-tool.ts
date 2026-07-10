@@ -1,8 +1,8 @@
-import { tool } from "ai";
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
 
+import { defineServerTool } from "./tanstack/define-tool.js";
 import {
   fuzzyIncludes,
   fuzzyCount,
@@ -107,7 +107,7 @@ function validateStartLine(content: string, oldString: string, expectedLine: num
 // ============================================================================
 
 /**
- * Creates an edit-file tool using Vercel AI SDK.
+ * Creates an edit-file tool for replacing text in files.
  *
  * This tool edits a file by replacing occurrences of oldString with newString.
  * Supports multiple edits in a single call via the `edits` array.
@@ -120,7 +120,8 @@ function validateStartLine(content: string, oldString: string, expectedLine: num
  * Requires user approval before execution.
  */
 export const createEditFileTool = () => {
-  return tool({
+  return defineServerTool({
+    name: "edit_file",
     description: `Edits a file by replacing occurrences of oldString with newString. Supports one or more edits in a single call via the \`edits\` array.
 
 **Key Rules:**
@@ -343,19 +344,15 @@ export const createEditFileTool = () => {
         };
       });
     },
-
     // Only confirm success to the LLM — modifiedTime is for the next edit's
     // conflict detection, results/details are for the UI, durationMs is metadata.
-    toModelOutput({ output }: { toolCallId: string; input: unknown; output: EditFileOutput }) {
-      return {
-        type: "content" as const,
-        value: [
-          {
-            type: "text" as const,
-            text: `Edited ${output.path} (${output.replacements} replacement${output.replacements !== 1 ? "s" : ""})`,
-          },
-        ],
-      };
+    toModelOutput: ({ output }: { toolCallId: string; input: unknown; output: EditFileOutput }) => {
+      return [
+        {
+          type: "text" as const,
+          content: `Edited ${output.path} (${output.replacements} replacement${output.replacements !== 1 ? "s" : ""})`,
+        },
+      ];
     },
   });
 };

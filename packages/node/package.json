@@ -22,9 +22,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/mcp": "^2.0.3",
     "@anthropic-ai/sandbox-runtime": "^0.0.52",
     "@my-agent/core": "workspace:*",
+    "@tanstack/ai-mcp": "^0.2.3",
     "mime-types": "^3.0.2"
   },
   "devDependencies": {

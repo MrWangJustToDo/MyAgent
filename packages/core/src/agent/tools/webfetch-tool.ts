@@ -10,16 +10,17 @@
  * Based on OpenCode's webfetch implementation.
  */
 
-import { tool } from "ai";
 import TurndownService from "turndown";
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
-import { agentManager } from "../../managers/manager-agent.js";
 
+import { defineServerTool } from "./tanstack/define-tool.js";
 import { withDuration } from "./util/helpers.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { toolOutputBaseSchema } from "./util/types.js";
+
+import type { ManagedAgent } from "../../managers/managed-agent.js";
 
 // ============================================================================
 // Constants
@@ -145,8 +146,9 @@ export type WebfetchOutput = z.infer<typeof webfetchOutputSchema>;
  * const webfetchTool = createWebfetchTool();
  * ```
  */
-export const createWebfetchTool = ({ agentId }: { agentId: string }) => {
-  return tool({
+export const createWebfetchTool = ({ managed }: { managed: ManagedAgent }) => {
+  return defineServerTool({
+    name: "webfetch",
     description: `Fetches content from a URL and returns it in the specified format.
 
 Use this tool when you need to:
@@ -198,7 +200,7 @@ Usage notes:
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-        const managedAgent = agentManager.getAgent(agentId);
+        const managedAgent = managed;
 
         const hasParentAgent = managedAgent?.parentId;
 
@@ -208,13 +210,13 @@ Usage notes:
 
         try {
           if (!hasParentAgent) {
-            managedAgent?.agent?.addPendingAbortController(controller);
+            managedAgent?.addPendingAbortController(controller);
           }
 
           const headers = {
             "User-Agent":
               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-            Accept: buildAcceptHeader(format),
+            Accept: buildAcceptHeader(format ?? "markdown"),
             "Accept-Language": "en-US,en;q=0.9",
           };
 
@@ -319,20 +321,16 @@ Usage notes:
           };
         } finally {
           if (!hasParentAgent) {
-            managedAgent?.agent?.removePendingAbortController(controller);
+            managedAgent?.removePendingAbortController(controller);
           }
           clearTimeout(timeoutId);
         }
       });
     },
-
     // Only send url + content to the LLM — contentType/contentLength/isImage/
     // truncated/cachedOutputPath are UI metadata.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: z.infer<typeof webfetchOutputSchema> }) {
-      return {
-        type: "content" as const,
-        value: [{ type: "text" as const, text: output.content }],
-      };
+      return [{ type: "text" as const, content: output.content }];
     },
   });
 };

@@ -15,7 +15,7 @@
 
 import { getEnv } from "../../../env.js";
 
-import type { ModelMessage } from "ai";
+import type { ModelMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Constants
@@ -167,6 +167,21 @@ function extractCachedPathFromPart(part: unknown): string | null {
   if (!result || typeof result !== "object") return null;
   const path = (result as Record<string, unknown>).cachedOutputPath;
   return typeof path === "string" && path.length > 0 ? path : null;
+}
+
+/**
+ * Delete a cached tool output file (best-effort).
+ */
+export async function deleteToolOutputCacheFile(filePath: string): Promise<void> {
+  try {
+    const fs = getEnv().fs;
+    const exists = await fs.exists(filePath);
+    if (exists) {
+      await fs.remove(filePath);
+    }
+  } catch {
+    // Non-fatal — stale cache files are harmless
+  }
 }
 
 /**

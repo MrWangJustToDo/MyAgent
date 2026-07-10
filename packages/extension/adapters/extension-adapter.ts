@@ -1,29 +1,20 @@
 import { clearAdapterHooks, createAgentFromConfig } from "@my-agent/app";
-import { agentManager, DirectChatTransport, toolStreamOnError } from "@my-agent/core";
+import { agentManager } from "@my-agent/core";
 
 import type { AdapterHooks, AgentAdapter, AppConfig, ClipboardImageResult, InitResult } from "@my-agent/app";
-import type { Agent } from "@my-agent/core";
-import type { ChatTransport, UIMessage } from "ai";
+import type { ManagedAgent } from "@my-agent/core";
 
 export class ExtensionAgentAdapter implements AgentAdapter {
-  private agent: Agent | null = null;
+  private agent: ManagedAgent | null = null;
   private _hooks: AdapterHooks;
 
   constructor(options: { hooks: AdapterHooks }) {
     this._hooks = options.hooks;
   }
 
-  createTransport(): ChatTransport<UIMessage> {
-    if (!this.agent) throw new Error("Agent not initialized");
-    return new DirectChatTransport({
-      agent: this.agent,
-      onError: toolStreamOnError,
-    }) as ChatTransport<UIMessage>;
-  }
-
   async initialize(config: AppConfig): Promise<InitResult> {
     const result = await createAgentFromConfig({ config, name: "extension-chat", hooks: this._hooks });
-    this.agent = result.agent as Agent;
+    this.agent = result.agent as ManagedAgent;
     return result;
   }
 

@@ -18,6 +18,8 @@ export interface StreamingOutputViewProps {
   toolCallId: string | undefined;
   /** Whether to enable streaming */
   enabled?: boolean;
+  /** Min ms between UI store updates (default: 0 = every chunk). */
+  throttleMs?: number;
   /** Max lines to show from stdout (default: 5) */
   maxStdoutLines?: number;
   /** Max lines to show from stderr (default: 3) */
@@ -41,11 +43,12 @@ export interface StreamingOutputViewProps {
 export const StreamingOutputView = ({
   toolCallId,
   enabled = true,
+  throttleMs = 0,
   maxStdoutLines = 5,
   maxStderrLines = 3,
   emptyMessage = "Waiting for output...",
 }: StreamingOutputViewProps) => {
-  const output = useStreamingOutput(toolCallId, enabled);
+  const output = useStreamingOutput(toolCallId, { enabled, throttleMs });
 
   if (!output || (!output.stdout && !output.stderr)) {
     return (

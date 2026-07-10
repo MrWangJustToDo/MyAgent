@@ -1,4 +1,3 @@
-import { type ToolUIPart } from "ai";
 import { Box, Text } from "ink";
 
 import { Spinner } from "../components/Spinner";
@@ -6,16 +5,19 @@ import { useTask } from "../hooks/use-task";
 import { COLORS } from "../theme/colors.js";
 import { formatToolInput } from "../utils/format";
 
-export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
-  const content = part.input as { prompt?: string; description?: string; id: string };
+import type { ToolCallPart } from "@tanstack/ai";
 
-  const { allTools, total, agent } = useTask({ id: content.id });
+export const TaskToolInputView = ({ part, toolInput }: { part: ToolCallPart; toolInput: unknown }) => {
+  const content = toolInput as { prompt?: string; description?: string; id: string };
+
+  const { allTools, total, agent } = useTask({ id: content.id, taskId: part.id });
 
   const currentTool = allTools?.at(-1);
-
   const toolName = currentTool ? currentTool.toolName : "";
 
-  const toolInput = formatToolInput(currentTool?.input || {}, toolName || undefined);
+  // Only show formatted arguments when fully received (not streaming partial JSON)
+  const isStreaming = currentTool?.state === "input-streaming";
+  const currentInput = currentTool && !isStreaming ? formatToolInput(currentTool.input, toolName) : "...";
 
   if (!agent) {
     return (
@@ -26,18 +28,20 @@ export const TaskToolInputView = ({ part }: { part: ToolUIPart }) => {
   }
 
   return (
-    <Box flexDirection="row" height={1} paddingLeft={2}>
+    <Box flexDirection="row" height={1} paddingLeft={2} flexWrap="nowrap">
       <Box flexShrink={0} flexGrow={0}>
         <Text color={COLORS.muted}>↳ </Text>
       </Box>
       {currentTool ? (
         <>
-          <Text color={COLORS.muted} italic>
-            {toolName}
-            {total && total > 1 ? ` (+${total}) ` : " "}
-          </Text>
+          <Box flexShrink={0} flexGrow={0}>
+            <Text color={COLORS.muted} italic>
+              {toolName}
+              {total && total > 1 ? ` (+${total}) ` : " "}
+            </Text>
+          </Box>
           <Text color={COLORS.muted} italic dimColor wrap="truncate">
-            {toolInput}
+            {currentInput}
           </Text>
         </>
       ) : (

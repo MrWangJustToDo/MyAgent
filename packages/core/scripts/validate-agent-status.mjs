@@ -1,12 +1,12 @@
 /**
- * Validates agent status helpers.
+ * Validates agent status helpers and ManagedAgent lifecycle ownership.
  *
  * Run: pnpm --filter @my-agent/core run validate:agent-status
  */
-/* eslint-disable no-undef, import/no-useless-path-segments */
+/* eslint-disable no-undef */
 import assert from "node:assert/strict";
 
-import { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, resolveFinishStatus } from "../dist/index.mjs";
+import { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, ManagedAgent, resolveFinishStatus } from "../dist/dev.mjs";
 
 assert.equal(isTerminalStatus("aborted"), true);
 assert.equal(isTerminalStatus("waiting"), true);
@@ -18,7 +18,73 @@ assert.equal(ACTIVE_STATUSES.has("compacting"), true);
 
 assert.equal(resolveFinishStatus("aborted", ""), "aborted");
 assert.equal(resolveFinishStatus("waiting", "oops"), "waiting");
+assert.equal(resolveFinishStatus("awaiting_user", ""), "awaiting_user");
 assert.equal(resolveFinishStatus("running", "failed"), "error");
 assert.equal(resolveFinishStatus("responding", ""), "completed");
+
+const managed = new ManagedAgent(
+  { name: "test", model: "gpt-4" },
+  {
+    context: {
+      getMessages: () => [],
+      getUIMessages: () => [],
+      reset: () => {},
+      setMessages: () => {},
+      setUIMessages: () => {},
+      getMessagesForLLM: () => [],
+    },
+    log: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, agent: () => {}, clear: () => {} },
+    tools: {},
+    todoManager: null,
+  }
+);
+
+assert.equal(managed.status, "idle");
+managed.setStatus("running");
+assert.equal(managed.status, "running");
+
+managed.setClientToolWaiting(true);
+assert.equal(managed.status, "awaiting_user");
+managed.setClientToolWaiting(false);
+assert.equal(managed.status, "completed");
+
+managed.setStatus("running");
+managed.syncRunStatusFromUIMessages([
+  {
+    id: "u1",
+    role: "user",
+    parts: [{ type: "text", content: "hi" }],
+  },
+  {
+    id: "a1",
+    role: "assistant",
+    parts: [{ type: "text", content: "hello" }],
+  },
+]);
+assert.equal(managed.status, "completed");
+
+managed.setStatus("running");
+managed.syncRunStatusFromUIMessages([
+  {
+    id: "u1",
+    role: "user",
+    parts: [{ type: "text", content: "run" }],
+  },
+  {
+    id: "a1",
+    role: "assistant",
+    parts: [
+      {
+        type: "tool-call",
+        id: "call_cmd",
+        name: "run_command",
+        arguments: '{"command":"echo hi"}',
+        state: "input-complete",
+        approval: { needsApproval: true, approved: undefined },
+      },
+    ],
+  },
+]);
+assert.equal(managed.status, "waiting");
 
 console.log("agent-status validation passed");

@@ -13,7 +13,7 @@
 
 import { getEnv } from "../env.js";
 
-import type { ModelCapability, ModelInfo, ModelProvider } from "./types.js";
+import type { ModelCapability, ModelInfo, ModelStyle } from "./types.js";
 
 // ============================================================================
 // Constants
@@ -24,19 +24,9 @@ export const MODELS_DEV_URL = "https://models.dev/api.json";
 /** Disk cache TTL in milliseconds (24 hours). */
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-/**
- * Map models.dev provider IDs to our internal {@link ModelProvider}.
- * Providers not listed here fall back to "openai" (OpenAI-compatible).
- */
-const PROVIDER_MAP: Record<string, ModelProvider> = {
-  anthropic: "anthropic",
-  openai: "openai",
-  google: "google",
-  deepseek: "deepseek",
-  xai: "xai",
-  openrouter: "open-router",
-  "open-router": "open-router",
-};
+function resolveStyleFromModelsDevVendor(vendorId: string): ModelStyle {
+  return vendorId === "anthropic" ? "anthropic" : "openai";
+}
 
 // ============================================================================
 // Types (minimal — only the fields we consume)
@@ -172,8 +162,8 @@ export async function fetchModelsDev(): Promise<ModelsDevData> {
 /**
  * Convert a models.dev model entry into our {@link ModelInfo}.
  */
-function parseModelsDevModel(providerId: string, modelId: string, data: ModelsDevModel): ModelInfo {
-  const provider = PROVIDER_MAP[providerId] ?? "openai";
+function parseModelsDevModel(vendorId: string, modelId: string, data: ModelsDevModel): ModelInfo {
+  const style = resolveStyleFromModelsDevVendor(vendorId);
 
   const capabilities: ModelCapability[] = ["streaming"];
   if (data.reasoning) capabilities.push("reasoning");
@@ -208,7 +198,7 @@ function parseModelsDevModel(providerId: string, modelId: string, data: ModelsDe
   return {
     id: modelId,
     name: data.name ?? modelId,
-    provider,
+    style,
     apiModel: data.id ?? modelId,
     contextWindow: data.limit?.context ?? 0,
     defaultMaxTokens: data.limit?.output ?? 0,
@@ -228,16 +218,17 @@ function parseModelsDevModel(providerId: string, modelId: string, data: ModelsDe
  * Lookup strategies (first match wins):
  * 1. Prefixed: `"anthropic/claude-opus-4-8"` → search provider `anthropic`
  *    for model `claude-opus-4-8`.
- * 2. Hint-based: if `providerHint` is given, search that provider only.
- * 3. Bare: search all providers by the bare model id (prefix stripped).
- *    This catches cases where the user's provider prefix differs from
- *    models.dev, e.g. `"zhipu/glm-5.2"` matches `zai/glm-5.2`.
+ * 2. Hint-based: if `styleHint` is `"anthropic"`, search the anthropic vendor only.
+ * 3. Bare: search all vendors by the bare model id (prefix stripped).
  *
  * @param modelId The model identifier to look up (may be prefixed).
- * @param providerHint Optional internal {@link ModelProvider} to narrow the search.
+ * @param styleHint Optional {@link ModelStyle} to narrow the search.
  * @returns The resolved {@link ModelInfo}, or `undefined` if not found.
  */
-export async function lookupModelFromModelsDev(modelId: string, providerHint?: string): Promise<ModelInfo | undefined> {
+export async function lookupModelFromModelsDev(
+  modelId: string,
+  styleHint?: ModelStyle
+): Promise<ModelInfo | undefined> {
   const data = await fetchModelsDev();
 
   // Split "provider/model" once so all strategies can reuse the bare id.
@@ -255,15 +246,12 @@ export async function lookupModelFromModelsDev(modelId: string, providerHint?: s
     }
   }
 
-  // 2. Hint-based lookup — narrow to a known provider.
-  if (providerHint) {
-    const mappedProvider = Object.entries(PROVIDER_MAP).find(([, v]) => v === providerHint)?.[0];
-    if (mappedProvider) {
-      const provData = data[mappedProvider];
-      const modelData = provData?.models?.[bareId] ?? provData?.models?.[modelId];
-      if (modelData) {
-        return parseModelsDevModel(mappedProvider, bareId, modelData);
-      }
+  // 2. Hint-based lookup — anthropic style maps to the anthropic vendor on models.dev.
+  if (styleHint === "anthropic") {
+    const provData = data.anthropic;
+    const modelData = provData?.models?.[bareId] ?? provData?.models?.[modelId];
+    if (modelData) {
+      return parseModelsDevModel("anthropic", bareId, modelData);
     }
   }
 
@@ -325,17 +313,14 @@ function scoreModelEntry(data: ModelsDevModel): number {
 }
 
 /**
- * Get all models for a specific provider from models.dev.
+ * Get all models for a models.dev vendor id (e.g. "anthropic", "openai", "deepseek").
  */
-export async function getModelsByProviderFromModelsDev(providerId: string): Promise<ModelInfo[]> {
+export async function getModelsByProviderFromModelsDev(vendorId: string): Promise<ModelInfo[]> {
   const data = await fetchModelsDev();
-  const mappedProvider = Object.entries(PROVIDER_MAP).find(([, v]) => v === providerId)?.[0];
-  if (!mappedProvider) return [];
-
-  const provData = data[mappedProvider];
+  const provData = data[vendorId];
   if (!provData?.models) return [];
 
   return Object.entries(provData.models).map(([modelId, modelData]) =>
-    parseModelsDevModel(mappedProvider, modelId, modelData)
+    parseModelsDevModel(vendorId, modelId, modelData)
   );
 }

@@ -6,11 +6,16 @@ import type { McpConfig } from "./types.js";
 import type { CoreEnvFs } from "../../env.js";
 import type { AgentLog } from "../agent-log/agent-log.js";
 
+export interface McpConfigLoadResult {
+  config: McpConfig;
+  sourcePath: string;
+}
+
 // ============================================================================
 // Constants
 // ============================================================================
 
-export const DEFAULT_MCP_CONFIG_PATH = ".opencode/mcp.json";
+export const DEFAULT_MCP_CONFIG_PATH = ".agents/mcp.json";
 
 /**
  * Additional default MCP config file paths (checked in order if no explicit path given).
@@ -31,7 +36,7 @@ const FALLBACK_MCP_CONFIG_PATHS = [".mcp.json"];
  *
  * Returns null if no config file is found or all are invalid (MCP disabled).
  */
-export async function loadMcpConfig(log: AgentLog, configPath?: string): Promise<McpConfig | null> {
+export async function loadMcpConfig(log: AgentLog, configPath?: string): Promise<McpConfigLoadResult | null> {
   const fs = getEnv().fs;
 
   // If an explicit path is given, only check that one
@@ -49,8 +54,7 @@ export async function loadMcpConfig(log: AgentLog, configPath?: string): Promise
       const content = await fs.readFile(path);
       const parsed = JSON.parse(content);
       const result = mcpConfigSchema.parse(parsed);
-      log.info("agent", `MCP config loaded from ${path}`);
-      return result;
+      return { config: result, sourcePath: path };
     } catch (e) {
       log.error("agent", `Load mcp config failed: ${path}`, e as Error);
       // Continue to next fallback
@@ -63,7 +67,7 @@ export async function loadMcpConfig(log: AgentLog, configPath?: string): Promise
 /**
  * Try loading MCP config from a single path.
  */
-async function loadSingleConfig(log: AgentLog, fs: CoreEnvFs, path: string): Promise<McpConfig | null> {
+async function loadSingleConfig(log: AgentLog, fs: CoreEnvFs, path: string): Promise<McpConfigLoadResult | null> {
   try {
     const exists = await fs.exists(path);
     if (!exists) {
@@ -73,7 +77,7 @@ async function loadSingleConfig(log: AgentLog, fs: CoreEnvFs, path: string): Pro
 
     const content = await fs.readFile(path);
     const parsed = JSON.parse(content);
-    return mcpConfigSchema.parse(parsed);
+    return { config: mcpConfigSchema.parse(parsed), sourcePath: path };
   } catch (e) {
     log.error("agent", `Load mcp config failed: ${path}`, e as Error);
     return null;

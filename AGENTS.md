@@ -4,7 +4,9 @@ This file provides guidelines for AI coding agents working in this repository.
 
 ## Project Overview
 
-A pnpm monorepo with seven packages organized in a layered architecture:
+A pnpm monorepo with seven packages organized in a layered architecture.
+
+**Core runtime deep-dive:** [packages/core/ARCHITECTURE.md](packages/core/ARCHITECTURE.md) — startup, initialization, session/memory/compaction/approval flows.
 
 | Package | Role |
 |---------|------|
@@ -118,16 +120,33 @@ loadEnv → parseCliArgs (sync) → createRemoteCoreEnv(url) → registerCoreEnv
 ConnectionGuard(/health) → createRemoteCoreEnv(url) → registerCoreEnv → initConfig → render(App)
 ```
 
-### Vercel AI SDK Integration
+### @my-agent/core Public API
 
-This project uses **Vercel AI SDK** (`ai`, `@ai-sdk/openai`, `@ai-sdk/react`) for AI interactions.
+`packages/core/src/index.ts` exports a **curated** surface for hosts and adapters — not a barrel of every internal module:
+
+| Category | Examples |
+|----------|----------|
+| CoreEnv | `registerCoreEnv`, `getEnv`, `CoreEnv` types |
+| Runtime | `agentManager`, `AgentManager`, `ManagedAgent`, `localConnect` |
+| UI / state | `AgentContext`, `AgentLog`, `TodoManager`, `SessionStore` |
+| Compaction | `applyCompactionResult`, `autoCompact`, `estimateTokens` |
+| Bootstrap | `buildDefaultSystemPrompt`, `parseModelInfoFromEnv`, `bridgeExternalToolToServer` |
+| UI helpers | `previewEdit`, streaming callbacks, tool output types |
+| Adapters | `FileError`, `ExecutionError`, `generateId` |
+
+Internal modules (tools, middleware, subagent runner, hook registry, etc.) stay package-private. Core validation scripts import from `dist/dev.mjs` (`src/dev.ts`), which is not part of the published package export map.
+
+### TanStack AI Integration
+
+`@my-agent/core` uses **TanStack AI** (`@tanstack/ai`, provider adapters) for agent execution.
 
 Key integration points:
-- `core/src/models/factory.ts` — LLM provider adapters (OpenAI, Ollama, OpenRouter, DeepSeek)
-- `core/src/agent/loop/` — Main Agent class: tool execution, approval flows, streaming
+- `core/src/models/model-config.ts` — connection resolution (`openai` | `anthropic` style, baseURL, apiKey, models.dev metadata)
+- `core/src/models/adapter-factory.ts` — TanStack text adapters (`createOpenaiChatCompletions`, `createAnthropicChat`)
+- `core/src/managers/run-agent.ts` — `AgentRunner` + `chat()` stream, compaction middleware
 - `core/src/agent/agent-context/` — Conversation state, tool calls, context management
-- `core/src/agent/mcp/` — MCP (Model Context Protocol) integration
-- `app/src/hooks/use-agent-chat.ts` — React hook bridging AI SDK `Chat` with the adapter
+- `core/src/agent/mcp/` — MCP via `@tanstack/ai-mcp`
+- `app/src/hooks/use-agent-chat.ts` — React hook via TanStack `useChat` + `localConnect`
 
 ## Build, Lint, Test Commands
 
@@ -194,12 +213,12 @@ import { tool } from "ai";
 import { z } from "zod";
 
 // 2. Local files (with .js extension)
-import { createModel } from "./provider.js";
-import { DEFAULT_OLLAMA_URL } from "./types.js";
+import { resolveModelConfig } from "./models/model-config.js";
+import { DEFAULT_LOCAL_OPENAI_BASE_URL } from "./types.js";
 
 // 3. Type-only imports (local first, then external, alphabetical within each group)
 import type { AppConfig } from "./adapter/types.js";
-import type { Agent } from "@my-agent/core";
+import type { ManagedAgent } from "@my-agent/core";
 import type { LanguageModel, ToolSet } from "ai";
 ```
 
@@ -214,7 +233,7 @@ import type { LanguageModel, ToolSet } from "ai";
 | Hooks | `use*` prefix | `useAgent`, `useConfig` |
 | Types/Interfaces | PascalCase | `AgentConfig`, `ToolCallInfo` |
 | Zod schemas | camelCase + Schema | `agentConfigSchema` |
-| Constants | SCREAMING_SNAKE_CASE | `DEFAULT_OLLAMA_URL` |
+| Constants | SCREAMING_SNAKE_CASE | `DEFAULT_LOCAL_OPENAI_BASE_URL` |
 
 ### Error Handling
 ```typescript
@@ -303,7 +322,9 @@ Use JSDoc with examples for public APIs:
  * ```typescript
  * const agent = await agentManager.createManagedAgent({
  *   name: "main",
- *   languageModel: model,
+ *   model: "gpt-4o",
+ *   modelStyle: "openai",
+ *   modelBaseURL: "https://api.openai.com/v1",
  * });
  * ```
  */
@@ -319,7 +340,8 @@ Use section separators in large files:
 ## Key Technologies
 
 ### Core & App
-- **Vercel AI SDK** (`ai`, `@ai-sdk/openai`, `@ai-sdk/react`) — LLM interactions
+- **TanStack AI** (`@tanstack/ai`, `@tanstack/ai-client`, provider adapters) — LLM agent loop and streaming
+- **@tanstack/ai-client** — `useChat` + `localConnect` in the app layer
 - **Zod** (v4.x) — Schema validation
 - **pathe** — Cross-runtime POSIX path utilities
 - **reactivity-store** — State management (Zustand-like API)
@@ -380,6 +402,27 @@ registerCoreEnv(env);
 - `runCommand` streaming is lost over HTTP — stdout/stderr only available in final result
 - Binary fetch responses are base64-encoded over the wire
 
+## Agent Event System
+
+`AgentManager` owns an `AgentEventBus` for lifecycle events. Emit via `emitAgentEvent()` / `ManagedAgent.emitEvent()`; subscribe with `agentManager.on(type, listener)`.
+
+| Event | When emitted |
+|-------|----------------|
+| `session:doc` / `session:skill` / `session:mcp` / `session:memory` | After agent registration during bootstrap |
+| `session:start` | Bootstrap complete |
+| `prompt:submit` | Run prepared |
+| `agent:thinking` | Model reasoning stream starts |
+| `agent:tool-start` / `agent:tool-end` / `agent:tool-error` | Tool lifecycle (hooks middleware) |
+| `agent:abort` / `agent:stream-error` | User abort / stream failure |
+| `agent:stop` | Run finished or aborted |
+| `memory:prefetch` | Relevant memory injection before run |
+| `memory:extract` / `memory:consolidate` | Post-run memory extraction |
+| `compaction:auto-*` / `compaction:reactive-*` | Auto / reactive context compaction |
+| `session:save-error` | Session persistence failure |
+| `subagent:*` | Subagent lifecycle |
+
+**Event → Log bridge:** `attachEventLogBridge()` in `AgentManager` maps events to `AgentLog` entries. Policy lives in `event-log-bridge.ts` (`DEFAULT_EVENT_LOG_RULES`); override per event type with `EventLogPolicy`. Emit sites should not duplicate lifecycle logs covered by events.
+
 ## Subagent System
 
 The project supports **subagents** — context-isolated agents spawned to handle delegated tasks.
@@ -389,17 +432,20 @@ The project supports **subagents** — context-isolated agents spawned to handle
 | Feature | Behavior |
 |---------|----------|
 | Context | Fresh (starts with empty messages) |
-| Tools | Read-only: `read_file`, `glob`, `grep`, `list_file`, `tree` (no `run_command`) |
-| Return | Summary only to parent LLM context; UI keeps a read-only UIMessage preview |
+| Tools | Read-only: `read_file`, `glob`, `grep`, `list_file`, `tree`, plus marker `begin_summary` (no `run_command`) |
+| Return | Summary only to parent LLM context; UI keeps a read-only UIMessage preview when `bridgeUI` is enabled |
 | Iteration Limit | 30 steps max |
 | Summary Limit | 5000 characters max |
-| UI Preview | `subagentPreviewStore` + `Ctrl+T` task panel; inline task UI shows tool progress + summary stream |
+| UI Preview | `bridgeUI: true` (default when `parentTaskToolCallId` is set): `ManagedAgent.ui` (`AgentUIChannel`) + `Ctrl+T` task panel; inline task UI shows tool progress + summary stream |
+| Headless | `bridgeUI: false` (default otherwise): no `AgentUIChannel`, no `subagent:ui-update`, no task-tool streaming — used by compaction and memory subagents |
 
 ### Subagent UI Preview
 
-`runSubagent()` maintains a read-only `UIMessage[]` in `subagentPreviewStore` for the task panel (`Ctrl+T`).
-The default task tool row shows the current subagent tool (like before); during the final summary step,
-text streams via `emitStreamingChunk` into `StreamingOutputView` (plain last lines, like `run_command`).
+`runSubagent({ bridgeUI: true })` attaches an `AgentUIChannel` on `ManagedAgent.ui` for the task panel (`Ctrl+T`).
+Headless runs (`bridgeUI: false`) consume the stream via `StreamProcessor` only and skip UI wiring.
+The default task tool row shows the current subagent exploration tool during analysis.
+After the subagent calls `begin_summary`, the UI switches to summary phase and streams final text
+via `emitStreamingChunk` into `StreamingOutputView` (current-turn parts only, like Vercel AI SDK).
 Only the last text-only step is returned to the parent as the task `summary`.
 
 
@@ -418,7 +464,8 @@ Only the last text-only step is returned to the parent as the task `summary`.
 ```
 packages/core/src/agent/
 ├── subagent/
-│   ├── runner.ts     # runSubagent(), SubagentConfig, SubagentResult
+│   ├── run-subagent.ts # runSubagent(), getSubagent(), destroySubagent()
+│   ├── run-stats.ts    # Iteration/limit stats from UI messages + stream
 │   ├── tools.ts      # Read-only tool set for subagents
 │   └── index.ts
 ├── tools/
@@ -449,7 +496,7 @@ Three-layer context compaction (plus reactive compaction) for infinite agent ses
 
 | Layer | Name | Trigger | Action |
 |-------|------|---------|--------|
-| Layer 1 | `micro_compact` | Every LLM call | Replace old tool results with placeholders |
+| Layer 1 | `tool_compact` | Every LLM call | `toModelOutput` transforms + recent-window placeholders |
 | Layer 2 | `reasoning_stripping` | Every LLM call (DeepSeek models) | Strip reasoning content from history to optimize prefix cache |
 | Layer 3 | `auto_compact` | Token threshold exceeded | LLM summarization |
 | Reactive | `reactive_compact` | `prompt_too_long` API error | Emergency compaction, then retry |
@@ -458,7 +505,9 @@ Three-layer context compaction (plus reactive compaction) for infinite agent ses
 ```typescript
 const agent = await agentManager.createManagedAgent({
   name: "my-agent",
-  languageModel: model,
+  model: "gpt-4o",
+  modelStyle: "openai",
+  modelBaseURL: "https://api.openai.com/v1",
   compaction: {
     tokenThreshold: 100000,
     keepRecentToolResults: 3,
@@ -472,7 +521,7 @@ const agent = await agentManager.createManagedAgent({
 
 ```
 packages/core/src/agent/compaction/
-├── micro-compact.ts       # Layer 1 — replace old tool results with placeholders
+├── tool-compact/          # Layer 1 — toModelOutput + recent-window placeholders
 ├── auto-compact.ts        # Layer 3 — LLM summarization when token threshold exceeded
 ├── reactive-compact.ts    # Reactive — emergency compaction on prompt_too_long errors
 ├── apply-compaction-result.ts
@@ -485,7 +534,9 @@ packages/core/src/agent/compaction/
 └── index.ts
 ```
 
-**Reasoning stripping (Layer 2)** is implemented inline in `Base.ts`'s `prepareStep` callback (`stripReasoningFromHistory`) rather than as a separate file — it strips reasoning content from history messages for DeepSeek models to optimize prefix cache hits.
+**Reasoning stripping (Layer 2)** is disabled in `compaction-middleware.ts` because DeepSeek thinking mode requires `reasoning_content` echo-back. DeepSeek endpoints use `ReasoningChatCompletionsTextAdapter`, which maps stream `reasoning_content` into `thinking` and writes it back on subsequent requests.
+
+**Reactive compaction** runs in `run-agent.ts` via `runStreamWithReactiveCompactRetry` — on `prompt_too_long` errors, `ManagedAgent.handleReactiveCompact()` compacts context and retries once.
 
 ## Sandbox Environment Configuration
 
@@ -530,6 +581,12 @@ createNodeEnv({ rootPath: "/path", mode: "native" });   // No sandbox
 - Max 50KB for stdout and stderr each
 - Keeps the **end** of output (most relevant for errors)
 
+### Streaming UI throttle (`@my-agent/app`)
+- Core emits every chunk immediately via `emitStreamingChunk`; throttling is applied in the app layer.
+- `useStreamingOutput(toolCallId, { throttleMs })` and `StreamingOutputView` accept `throttleMs` (default `0` = every chunk).
+- `ToolCallPartView` defaults `run_command` streaming to 100ms; pass `streamingThrottleMs` to override.
+- Multiple subscribers for the same `toolCallId` use the minimum `throttleMs` among active consumers.
+
 ## CLI Keyboard Shortcuts
 
 | Key | When Running | When Idle | When Approval Pending |
@@ -552,8 +609,7 @@ packages/
 ├── core/src/                          # @my-agent/core — runtime-agnostic core
 │   ├── env.ts                         # CoreEnv interface, registry (registerCoreEnv/getEnv/clearCoreEnv)
 │   ├── agent/
-│   │   ├── loop/                      # Main Agent class (Base.ts, Agent.ts)
-│   │   ├── agent-context/             # AgentContext — conversation state
+│   │   ├── agent-context/             # AgentContext — messages + compaction only
 │   │   ├── agent-log/                 # AgentLog — structured logging
 │   │   ├── compaction/                # Context compaction (micro + auto)
 │   │   ├── hooks/                     # Hook system (pre/post tool execution)
@@ -567,10 +623,11 @@ packages/
 │   │   ├── default-prompt.ts          # System prompt builder
 │   │   └── agent-doc-loader.ts        # Agent documentation loader
 │   ├── environment/                   # Error types (FileError, ExecutionError), data types
-│   ├── managers/                      # AgentManager — lifecycle management
-│   ├── models/                        # LLM model factory and registry
+│   ├── managers/                      # AgentManager, ManagedAgent (hub), services, run pipeline
+│   ├── models/                        # Model config (model-config.ts), adapters, models.dev lookup
 │   ├── types.ts                       # Shared type definitions
-│   └── index.ts                       # Public API exports
+│   ├── index.ts                       # Curated public API exports (hosts / adapters)
+│   └── dev.ts                         # Internal-only re-exports for `pnpm validate:*` scripts
 │
 ├── app/src/                           # @my-agent/app — shared UI layer
 │   ├── adapter/

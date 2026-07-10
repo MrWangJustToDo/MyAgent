@@ -1,6 +1,7 @@
 import { createState } from "reactivity-store";
 
-import { useNotification } from "./use-notification.js";
+import { createFeedbackQueue, INPUT_FEEDBACK_DISPLAY_MS } from "../utils/input-feedback-queue.js";
+
 import {
   appendHistoryEntry,
   createImagePlaceholder,
@@ -47,14 +48,14 @@ export interface UserInputState {
   selectedAttachment: number;
   /** Next image index to use for placeholder */
   nextImageIndex: number;
+  /** Transient input error message */
+  inputError: string | null;
+  /** Transient input feedback message */
+  inputFeedback: { message: string; level: "success" | "info" | "error" } | null;
 
   // debug only
   event: any[];
 }
-
-// ============================================================================
-// Initial State
-// ============================================================================
 
 const initialState: UserInputState = {
   event: [],
@@ -68,7 +69,27 @@ const initialState: UserInputState = {
   attachments: [],
   selectedAttachment: -1,
   nextImageIndex: 0,
+  inputError: null,
+  inputFeedback: null,
 };
+
+let feedbackQueueController: ReturnType<typeof createFeedbackQueue> | null = null;
+
+function getFeedbackQueue(state: UserInputState) {
+  if (!feedbackQueueController) {
+    feedbackQueueController = createFeedbackQueue({
+      displayMs: INPUT_FEEDBACK_DISPLAY_MS,
+      onShow: (item) => {
+        state.inputFeedback = { message: item.message, level: item.level };
+        state.inputError = null;
+      },
+      onClear: () => {
+        state.inputFeedback = null;
+      },
+    });
+  }
+  return feedbackQueueController;
+}
 
 // ============================================================================
 // State Hook
@@ -316,30 +337,21 @@ export const useUserInput = createState(() => ({ ...initialState }), {
      * Show an error notification.
      */
     setInputError: (error: string | null) => {
+      state.inputError = error;
       if (error) {
-        useNotification.getActions().setNotification({
-          id: `input-error-${Date.now()}`,
-          category: "system",
-          level: "error",
-          message: error,
-          timestamp: Date.now(),
-        });
+        getFeedbackQueue(state).clear();
       }
     },
 
     /**
-     * Show a feedback notification (success/info/error).
+     * Queue a feedback notification near the input. Items display sequentially and auto-dismiss.
      */
     setInputFeedback: (text: string | null, type: "success" | "info" | "error" = "info") => {
+      const queue = getFeedbackQueue(state);
       if (text) {
-        const levelMap = { success: "success", info: "info", error: "error" } as const;
-        useNotification.getActions().setNotification({
-          id: `input-feedback-${Date.now()}`,
-          category: "system",
-          level: levelMap[type],
-          message: text,
-          timestamp: Date.now(),
-        });
+        queue.enqueue({ message: text, level: type });
+      } else {
+        queue.clear();
       }
     },
 
@@ -347,6 +359,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
      * Reset to initial state
      */
     reset: () => {
+      getFeedbackQueue(state).clear();
       state.value = "";
       state.history = [];
       state.historyIndex = -1;
@@ -357,6 +370,8 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.attachments = [];
       state.selectedAttachment = -1;
       state.nextImageIndex = 0;
+      state.inputError = null;
+      state.inputFeedback = null;
     },
   }),
 

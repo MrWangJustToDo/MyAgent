@@ -1,26 +1,13 @@
 /**
  * Compaction Module - Context compression for infinite agent sessions.
  *
- * Implements two-layer context compaction:
- * - Layer 1 (micro_compact): Replace old tool results with placeholders
- * - Layer 2 (auto_compact): Subagent-based summarization when threshold exceeded
+ * Implements context compaction layers:
+ * - Layer 1 (tool_compact): `toModelOutput` transforms + recent-window placeholders
+ * - Layer 2 (auto_compact): LLM summarization when threshold exceeded
+ * - Reactive: emergency compaction on prompt_too_long errors
  * Manual: CLI `/compact` command (optional)
  *
- * @example
- * ```typescript
- * import { microCompact, autoCompact, estimateTokens } from "./compaction";
- *
- * // Estimate tokens before LLM call
- * const tokens = estimateTokens(messages);
- *
- * // Apply micro compaction (always)
- * const compactedMessages = microCompact(messages, config);
- *
- * // Check if auto compaction needed
- * if (shouldAutoCompact(compactedMessages, config)) {
- *   const result = await autoCompact(compactedMessages, config, agentId);
- * }
- * ```
+ * Large tool outputs at execute time use `maybeCacheOutput` (tool-output-cache) — separate from compaction.
  */
 
 // Types and schemas
@@ -37,6 +24,9 @@ export {
 // Token estimation
 export { estimateTokens, estimateMessageTokens } from "./token-estimator.js";
 
+// Message content helpers
+export { extractTextFromContent, getFirstTextPartContent } from "./message-utils.js";
+
 // Compaction prompt
 export {
   COMPACTION_PROMPT,
@@ -46,18 +36,24 @@ export {
   type CompactionTodoItem,
 } from "./compaction-prompt.js";
 
-// Micro compaction (Layer 1)
-export { microCompact } from "./micro-compact.js";
+// Tool compaction (Layer 1 — placeholders + toModelOutput)
+export { applyToolCompact, createToolPlaceholder, type ApplyToolCompactOptions } from "./tool-compact";
+export { ToolCompactCache } from "./tool-compact/tool-compact-cache.js";
+export { toModelOutputRegistry } from "../tools/tanstack/to-model-output-registry.js";
 
 // Auto compaction (Layer 2)
 export {
-  shouldAutoCompact,
+  shouldTriggerAutoCompact,
   summarizeConversation,
   autoCompact,
   createCompactedMessages,
   type SummarizeOptions,
 } from "./auto-compact.js";
-export { applyCompactionResult, type ApplyCompactionResultOptions } from "./apply-compaction-result.js";
+export {
+  applyCompactionResult,
+  applyReactiveCompactionResult,
+  type ApplyCompactionResultOptions,
+} from "./apply-compaction-result.js";
 
 // Reactive compaction (Emergency)
 export { isPromptTooLongError, reactiveCompact, getMaxReactiveRetries } from "./reactive-compact.js";

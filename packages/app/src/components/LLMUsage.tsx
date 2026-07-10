@@ -1,13 +1,9 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
 import { Box, Text } from "ink";
 
-import { useAgent } from "../hooks/use-agent";
-import { useAgentContext } from "../hooks/use-agent-context";
+import { useAgentUsage } from "../hooks/use-agent-usage";
 import { COLORS } from "../theme/colors.js";
 
 import { AnimateNumber } from "./AnimateNumber";
-
-import type { TokenUsage } from "@my-agent/core";
 
 function formatCost(cost: number): string {
   if (cost < 0.01) return `$${cost.toFixed(4)}`;
@@ -16,27 +12,21 @@ function formatCost(cost: number): string {
 }
 
 export const LLMUsage = () => {
-  // @ts-ignore
-  const sessionId = useAgent((s) => s.agent?.sessionData?.id);
-  // version included in selectors to force re-evaluation after context.reset() + bump()
-  // @ts-ignore
-  const usage = useAgentContext((s) => (s.version, s.context?.getTotalUsage() as TokenUsage));
-  // @ts-ignore
-  const percent = useAgentContext((s) => (s.version, s.context?.getTokenLimitPercent() ?? 0));
-  // @ts-ignore
-  const cost = useAgentContext((s) => (s.version, s.context?.getTotalCost() ?? 0));
+  const { usage } = useAgentUsage();
 
-  return usage ? (
-    <Box key={sessionId} gap={1}>
+  if (!usage) return null;
+
+  return (
+    <Box gap={1}>
       <Text color={COLORS.muted} dimColor wrap="truncate">
-        <AnimateNumber number={usage.inputTokens} /> in / <AnimateNumber number={usage.outputTokens} /> out
-        {percent > 0 ? ` (${percent.toFixed(0)}%)` : ""}
+        <AnimateNumber number={usage.total.inputTokens} /> in / <AnimateNumber number={usage.total.outputTokens} /> out
+        {usage.percent > 0 ? ` (${usage.percent.toFixed(0)}%)` : ""}
       </Text>
-      {cost > 0 && (
+      {usage.cost > 0 && (
         <Text color={COLORS.warning} dimColor wrap="truncate">
-          {formatCost(cost)}
+          {formatCost(usage.cost)}
         </Text>
       )}
     </Box>
-  ) : null;
+  );
 };

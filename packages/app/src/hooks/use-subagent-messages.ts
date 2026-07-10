@@ -1,15 +1,18 @@
-import { agentManager, subagentPreviewStore } from "@my-agent/core";
+import { agentManager } from "@my-agent/core";
+import { throttle } from "lodash-es";
 import { useEffect, useState } from "react";
 
-import type { UIMessage } from "ai";
+import type { UIMessage } from "@tanstack/ai";
+
+function readSubagentMessages(subagentId: string): UIMessage[] {
+  return (agentManager.getAgent(subagentId)?.ui?.getMessages() ?? []) as UIMessage[];
+}
 
 /**
  * Subscribe to live UIMessage snapshots for a subagent preview.
  */
 export function useSubagentMessages(subagentId: string | undefined): UIMessage[] {
-  const [messages, setMessages] = useState<UIMessage[]>(() =>
-    subagentId ? (subagentPreviewStore.get(subagentId) ?? []) : []
-  );
+  const [messages, setMessages] = useState<UIMessage[]>(() => (subagentId ? readSubagentMessages(subagentId) : []));
 
   useEffect(() => {
     if (!subagentId) {
@@ -17,18 +20,35 @@ export function useSubagentMessages(subagentId: string | undefined): UIMessage[]
       return;
     }
 
-    const refresh = () => setMessages(subagentPreviewStore.get(subagentId) ?? []);
+    const refresh = throttle(() => setMessages(readSubagentMessages(subagentId)), 200);
     refresh();
 
-    const unsubStore = subagentPreviewStore.subscribe(subagentId, refresh);
-    const unsubEvent = agentManager.on("subagent:ui-update", (event) => {
-      if (event.agentId !== subagentId) return;
+    let unsubChannel: (() => void) | undefined;
+    const attachChannel = () => {
+      unsubChannel?.();
+      unsubChannel = undefined;
+      const ui = agentManager.getAgent(subagentId)?.ui;
+      if (!ui) return;
+      unsubChannel = ui.subscribe(refresh);
       refresh();
-    });
+    };
+
+    attachChannel();
+
+    const unsubs = [
+      agentManager.on("subagent:started", (event) => {
+        if (event.agentId !== subagentId) return;
+        attachChannel();
+      }),
+      agentManager.on("subagent:ui-update", (event) => {
+        if (event.agentId !== subagentId) return;
+        refresh();
+      }),
+    ];
 
     return () => {
-      unsubStore();
-      unsubEvent();
+      unsubChannel?.();
+      unsubs.forEach((unsub) => unsub());
     };
   }, [subagentId]);
 

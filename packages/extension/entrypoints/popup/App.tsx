@@ -1,21 +1,22 @@
+import { DEFAULT_BASE_URLS, DEFAULT_LOCAL_OPENAI_BASE_URL } from "@my-agent/core";
 import { useCallback, useEffect, useState } from "react";
 
 import { checkServerHealth, useServerConfig } from "@/hooks/useServerConfig";
 
+import type { ModelStyle } from "@my-agent/core";
 import type { ChangeEvent } from "react";
 
-const PROVIDERS = [
-  { value: "ollama", label: "Ollama" },
-  { value: "openRouter", label: "OpenRouter" },
-  { value: "openaiCompatible", label: "OpenAI Compatible" },
-  { value: "deepseek", label: "DeepSeek" },
+const STYLES = [
+  { value: "openai", label: "OpenAI-compatible" },
+  { value: "anthropic", label: "Anthropic" },
 ] as const;
 
 function App() {
   const url = useServerConfig((s) => s.url);
   const connected = useServerConfig((s) => s.connected);
   const model = useServerConfig((s) => s.model);
-  const provider = useServerConfig((s) => s.provider);
+  const style = useServerConfig((s) => s.style);
+  const baseURL = useServerConfig((s) => s.baseURL);
   const apiKey = useServerConfig((s) => s.apiKey);
   const rootPath = useServerConfig((s) => s.rootPath);
   const actions = useServerConfig.getActions();
@@ -64,7 +65,6 @@ function App() {
         </span>
       </div>
 
-      {/* Server URL */}
       <div style={{ marginBottom: 8 }}>
         <label htmlFor="server-url" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
           Server URL
@@ -82,25 +82,35 @@ function App() {
         </div>
       </div>
 
-      {/* Model config */}
       <div style={{ marginBottom: 8 }}>
-        <label htmlFor="provider-select" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
-          Provider
+        <label htmlFor="style-select" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+          API Style
         </label>
         <select
-          id="provider-select"
-          value={provider}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-            actions.setProvider(e.target.value as (typeof PROVIDERS)[number]["value"])
-          }
+          id="style-select"
+          value={style}
+          onChange={(e: ChangeEvent<HTMLSelectElement>) => actions.setStyle(e.target.value as ModelStyle)}
           style={{ width: "100%", padding: "4px 8px", border: "1px solid #ccc", borderRadius: 4, fontSize: 13 }}
         >
-          {PROVIDERS.map((p) => (
-            <option key={p.value} value={p.value}>
-              {p.label}
+          {STYLES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
             </option>
           ))}
         </select>
+      </div>
+
+      <div style={{ marginBottom: 8 }}>
+        <label htmlFor="base-url-input" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+          Base URL
+        </label>
+        <input
+          id="base-url-input"
+          value={baseURL}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => actions.setBaseURL(e.target.value)}
+          placeholder={style === "openai" ? DEFAULT_LOCAL_OPENAI_BASE_URL : DEFAULT_BASE_URLS.anthropic}
+          style={{ width: "100%", padding: "4px 8px", border: "1px solid #ccc", borderRadius: 4, fontSize: 13 }}
+        />
       </div>
 
       <div style={{ marginBottom: 8 }}>
@@ -116,20 +126,18 @@ function App() {
         />
       </div>
 
-      {provider !== "ollama" && (
-        <div style={{ marginBottom: 8 }}>
-          <label htmlFor="apikey-input" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
-            API Key
-          </label>
-          <input
-            id="apikey-input"
-            type="password"
-            value={apiKey}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => actions.setApiKey(e.target.value)}
-            style={{ width: "100%", padding: "4px 8px", border: "1px solid #ccc", borderRadius: 4, fontSize: 13 }}
-          />
-        </div>
-      )}
+      <div style={{ marginBottom: 8 }}>
+        <label htmlFor="apikey-input" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+          API Key {style === "anthropic" ? "(required)" : "(optional for local)"}
+        </label>
+        <input
+          id="apikey-input"
+          type="password"
+          value={apiKey}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => actions.setApiKey(e.target.value)}
+          style={{ width: "100%", padding: "4px 8px", border: "1px solid #ccc", borderRadius: 4, fontSize: 13 }}
+        />
+      </div>
 
       {connected && rootPath && (
         <div style={{ fontSize: 12, color: "#666", marginBottom: 12 }}>

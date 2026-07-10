@@ -1,83 +1,65 @@
 /**
  * Conversation serialization for compaction summarization.
  *
- * Converts ModelMessage[] to a plain text transcript. This is the key technique
- * (from PI's compaction) to prevent the summarization LLM from generating tool
- * calls: instead of passing messages as ModelMessage[], we convert them to a
- * plain text transcript wrapped in tags.
+ * Converts TanStack ModelMessage[] to a plain text transcript. This prevents
+ * the summarization LLM from generating tool calls.
  *
  * Format:
  *   [User]: ...
  *   [Assistant]: ...
  *   [Assistant tool calls]: name(args); ...
- *   [Tool result]: ...
+ *   [Tool result from name]: ...
  */
 
-import { extractTextFromContent } from "./message-utils.js";
+import { buildToolCallNameMap, extractTextFromContent, serializeToolMessageContent } from "./message-utils.js";
 
-import type { ModelMessage } from "ai";
+import type { ModelMessage } from "@tanstack/ai";
 
 /** Maximum characters for a single tool result in serialized output */
 const TOOL_RESULT_MAX_CHARS = 2000;
+
+function truncateToolArgs(args: string): string {
+  return args.length > 200 ? args.slice(0, 200) + "..." : args;
+}
+
+function truncateToolResult(text: string): string {
+  if (text.length <= TOOL_RESULT_MAX_CHARS) return text;
+  return text.slice(0, TOOL_RESULT_MAX_CHARS) + `\n[... ${text.length - TOOL_RESULT_MAX_CHARS} chars truncated]`;
+}
 
 /**
  * Serialize ModelMessage[] to plain text for summarization.
  */
 export function serializeConversation(messages: ModelMessage[]): string {
   const parts: string[] = [];
+  const toolCallMap = buildToolCallNameMap(messages);
 
   for (const msg of messages) {
     if (msg.role === "user") {
       const text = extractTextFromContent(msg.content);
       if (text) parts.push(`[User]: ${text}`);
-    } else if (msg.role === "assistant") {
-      if (typeof msg.content === "string") {
-        if (msg.content) parts.push(`[Assistant]: ${msg.content}`);
-        continue;
+      continue;
+    }
+
+    if (msg.role === "assistant") {
+      const text = extractTextFromContent(msg.content);
+      if (text) parts.push(`[Assistant]: ${text}`);
+
+      if (msg.toolCalls && msg.toolCalls.length > 0) {
+        const toolCalls = msg.toolCalls.map((tc) => {
+          const args = truncateToolArgs(tc.function.arguments);
+          return `${tc.function.name}(${args})`;
+        });
+        parts.push(`[Assistant tool calls]: ${toolCalls.join("; ")}`);
       }
-      if (!Array.isArray(msg.content)) continue;
+      continue;
+    }
 
-      const textParts: string[] = [];
-      const toolCalls: string[] = [];
-
-      for (const part of msg.content) {
-        const p = part as Record<string, unknown>;
-        if (p.type === "text" && typeof p.text === "string") {
-          textParts.push(p.text);
-        } else if (p.type === "tool-call") {
-          const name = (p.toolName as string) || "unknown";
-          let argsStr = "";
-          try {
-            const raw = typeof p.args === "string" ? p.args : JSON.stringify(p.args);
-            argsStr = raw.length > 200 ? raw.slice(0, 200) + "..." : raw;
-          } catch {
-            argsStr = "(args)";
-          }
-          toolCalls.push(`${name}(${argsStr})`);
-        }
-      }
-
-      if (textParts.length > 0) parts.push(`[Assistant]: ${textParts.join("\n")}`);
-      if (toolCalls.length > 0) parts.push(`[Assistant tool calls]: ${toolCalls.join("; ")}`);
-    } else if (msg.role === "tool") {
-      if (!Array.isArray(msg.content)) continue;
-
-      for (const part of msg.content) {
-        const p = part as Record<string, unknown>;
-        if (p.type === "tool-result") {
-          const name = (p.toolName as string) || "tool";
-          let resultText = "";
-          try {
-            const raw = typeof p.result === "string" ? p.result : JSON.stringify(p.result);
-            resultText =
-              raw.length > TOOL_RESULT_MAX_CHARS
-                ? raw.slice(0, TOOL_RESULT_MAX_CHARS) + `\n[... ${raw.length - TOOL_RESULT_MAX_CHARS} chars truncated]`
-                : raw;
-          } catch {
-            resultText = "(result)";
-          }
-          parts.push(`[Tool result from ${name}]: ${resultText}`);
-        }
+    if (msg.role === "tool") {
+      const toolName = (msg.toolCallId && toolCallMap.get(msg.toolCallId)) || "tool";
+      const resultText = truncateToolResult(serializeToolMessageContent(msg.content));
+      if (resultText) {
+        parts.push(`[Tool result from ${toolName}]: ${resultText}`);
       }
     }
   }

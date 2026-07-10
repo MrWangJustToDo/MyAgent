@@ -20,10 +20,8 @@
  * ```
  */
 
-import { streamText } from "ai";
-
 import { getEnv } from "../../env.js";
-import { extractTokenUsage } from "../agent-context/types.js";
+import { runSideTextQuery } from "../../models/side-text-query.js";
 
 import {
   DEFAULT_MAX_MEMORY_BYTES_PER_FILE,
@@ -34,9 +32,9 @@ import {
 
 import type { MemoryManager } from "./memory-manager.js";
 import type { Memory } from "./types.js";
-import type { AgentContext } from "../agent-context/agent-context.js";
+import type { UsageTracker } from "../../managers/usage-tracker.js";
+import type { TextAdapterConfig } from "../../models/adapter-factory.js";
 import type { AgentLog } from "../agent-log/agent-log.js";
-import type { LanguageModel } from "ai";
 
 // ============================================================================
 // Types
@@ -134,31 +132,23 @@ function truncateBody(
 /**
  * Use a lightweight LLM call to select relevant memories from the manifest.
  *
- * Uses `streamText` instead of `generateText` because some OpenAI-compatible
- * endpoints always return SSE streaming responses regardless of the `stream`
- * flag. `generateText` expects a single JSON body and throws "Invalid JSON
- * response" on such endpoints; `streamText` correctly parses the SSE stream.
+ * Uses {@link runSideTextQuery} for a lightweight one-shot LLM selection call.
  */
 async function selectWithLLM(
   query: string,
   manifest: string,
-  model: LanguageModel,
-  context?: AgentContext | null,
+  textAdapter: TextAdapterConfig,
+  usage?: UsageTracker | null,
   logger?: AgentLog
 ): Promise<string[]> {
-  const stream = streamText({
-    model,
-    instructions: SELECT_MEMORIES_SYSTEM_PROMPT,
-    prompt: `Query: ${query}\n\nAvailable memories:\n${manifest}`,
+  const { text, usage: queryUsage } = await runSideTextQuery(textAdapter, {
+    systemPrompt: SELECT_MEMORIES_SYSTEM_PROMPT,
+    userPrompt: `Query: ${query}\n\nAvailable memories:\n${manifest}`,
     maxOutputTokens: 256,
   });
 
-  // Await the full text — this drives stream consumption internally.
-  const text = await stream.text;
-  const usage = await stream.usage;
-
-  if (context && usage) {
-    context.addTotalUsage(extractTokenUsage(usage));
+  if (usage && queryUsage) {
+    usage.addTotal(queryUsage);
   }
 
   const match = /\{[\s\S]*?\}/.exec(text);
@@ -229,20 +219,20 @@ function selectWithKeywords(query: string, memories: Memory[], maxItems: number)
  *
  * @param query - The user's current query/message
  * @param memoryManager - MemoryManager instance for listing/reading
- * @param model - LanguageModel for the selection side-query (null = keyword only)
+ * @param textAdapter - TanStack text adapter for the selection side-query (null = keyword only)
  * @param alreadySurfaced - Set of filenames already shown this session
  * @param options - Budget and limit overrides
- * @param context - AgentContext for token usage aggregation
+ * @param usage - Usage tracker for token usage aggregation
  * @param logger - AgentLog for debug logging
  * @returns Array of relevant memories with truncated full content
  */
 export async function findRelevantMemories(
   query: string,
   memoryManager: MemoryManager,
-  model: LanguageModel | null,
+  textAdapter: TextAdapterConfig | null,
   alreadySurfaced: ReadonlySet<string> = new Set(),
   options: FindRelevantMemoriesOptions = {},
-  context?: AgentContext | null,
+  usage?: UsageTracker | null,
   logger?: AgentLog
 ): Promise<RelevantMemory[]> {
   const {
@@ -271,9 +261,9 @@ export async function findRelevantMemories(
   // Select relevant filenames — LLM with keyword fallback on throw or empty result
   let selectedFilenames: string[];
   let selectionMethod: "llm" | "keyword" | "keyword-fallback" = "keyword";
-  if (model) {
+  if (textAdapter) {
     try {
-      selectedFilenames = await selectWithLLM(query, manifest, model, context, logger);
+      selectedFilenames = await selectWithLLM(query, manifest, textAdapter, usage, logger);
       selectionMethod = "llm";
       if (selectedFilenames.length === 0) {
         selectedFilenames = selectWithKeywords(query, candidates, maxItems);
@@ -290,7 +280,7 @@ export async function findRelevantMemories(
     }
   } else {
     selectedFilenames = selectWithKeywords(query, candidates, maxItems);
-    logger?.debug("memory", "No LLM model provided, using keyword selection");
+    logger?.debug("memory", "No text adapter available, using keyword selection");
   }
 
   logger?.debug("memory", `Selection method: ${selectionMethod}, selected ${selectedFilenames.length} memories`, {

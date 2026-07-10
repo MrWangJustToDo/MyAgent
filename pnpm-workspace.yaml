@@ -3,6 +3,7 @@ packages:
 allowBuilds:
   "@heroui/shared-utils": true
   "@mongodb-js/zstd": true
+  "@openrouter/sdk": true
   esbuild: false
   node-liblzma: false
   sharp: true
@@ -17,15 +18,19 @@ minimumReleaseAgeExclude:
   - "@my-react/react-vite@0.0.34"
   - "@my-react/react@0.3.28"
   - ink-stream-markdown@0.0.8
-  - "@ai-sdk/mcp@1.0.44"
-  - "@ai-sdk/gateway@3.0.127"
-  - "@ai-sdk/openai@3.0.69"
-  - "@ai-sdk/react@3.0.201"
-  - ai@6.0.199
   - "@git-diff-view/core@0.1.6"
   - "@git-diff-view/file@0.1.6"
   - "@git-diff-view/lowlight@0.1.6"
   - "@git-diff-view/cli@0.1.8"
+  - "@tanstack/ai-client@0.20.0"
+  - "@tanstack/ai-ollama@0.8.14"
+  - "@tanstack/ai-openai@0.16.0"
+  - "@tanstack/ai-openrouter@0.15.8"
+  - "@tanstack/ai@0.40.0"
+  - "@tanstack/openai-base@0.9.7"
+  - "@tanstack/ai-react@0.16.4"
+  - "@tanstack/ai-mcp@0.2.3"
+  - "@tanstack/ai-anthropic@0.16.1"
 
 publicHoistPattern:
   - "*eslint-*"

@@ -3,16 +3,21 @@ import { memo } from "react";
 
 import { COLORS } from "../theme/colors.js";
 
-import type { FileUIPart } from "ai";
+import type { ImagePart } from "@tanstack/ai";
 
 export interface FilePartViewProps {
-  part: FileUIPart;
+  part: ImagePart;
   /** 1-based index for display (e.g., "Image #1") */
   index?: number;
 }
 
+function getImageUrl(part: ImagePart): string {
+  if (part.source.type === "url") return part.source.value;
+  if (part.source.type === "data") return part.source.value;
+  return "";
+}
+
 function formatFileSize(dataUrl: string): string {
-  // Estimate size from base64 data URL
   const base64Match = dataUrl.match(/;base64,(.+)/);
   if (!base64Match) return "";
   const bytes = Math.ceil((base64Match[1].length * 3) / 4);
@@ -21,18 +26,19 @@ function formatFileSize(dataUrl: string): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-/** Render a file attachment part in a message */
+/** Render an image attachment part in a message */
 export const FilePartView = memo(({ part, index }: FilePartViewProps) => {
-  const isImage = part.mediaType?.startsWith("image/");
-  const size = formatFileSize(part.url);
-
-  // Use [Image #N] format for images, [FILE] for others
+  const url = getImageUrl(part);
+  const mediaType = (part.metadata as { mediaType?: string } | undefined)?.mediaType ?? "image/*";
+  const filename = (part.metadata as { filename?: string } | undefined)?.filename;
+  const isImage = mediaType.startsWith("image/");
+  const size = formatFileSize(url);
   const label = isImage && index !== undefined ? `[Image #${index}]` : isImage ? "[IMG]" : "[FILE]";
 
   return (
     <Box gap={1}>
       <Text color={isImage ? COLORS.accent : COLORS.primary}>{label}</Text>
-      {!isImage && <Text>{part.filename || "unnamed"}</Text>}
+      {!isImage && <Text>{filename || "unnamed"}</Text>}
       {size && (
         <Text color={COLORS.muted} dimColor>
           ({size})

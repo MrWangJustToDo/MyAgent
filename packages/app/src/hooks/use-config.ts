@@ -1,14 +1,13 @@
-import { DEFAULT_OLLAMA_URL, buildDefaultSystemPrompt } from "@my-agent/core";
+import { DEFAULT_LOCAL_OPENAI_BASE_URL, buildDefaultSystemPrompt, type ModelStyle } from "@my-agent/core";
 import { createState } from "reactivity-store";
 
-import type { AppConfig, Provider } from "../adapter/types.js";
+import type { AppConfig } from "../adapter/types.js";
 
 // ============================================================================
 // Default Values
 // ============================================================================
 
-// No default model — must be supplied via env (MODEL) or CLI (--model).
-const DEFAULT_PROVIDER: Provider = "ollama";
+const DEFAULT_STYLE: ModelStyle = "openai";
 const DEFAULT_MAX_ITERATIONS = 50;
 
 // ============================================================================
@@ -19,12 +18,12 @@ export const useConfig = createState(
   () => ({
     config: {
       model: "",
-      url: DEFAULT_OLLAMA_URL,
+      style: DEFAULT_STYLE,
+      baseURL: DEFAULT_LOCAL_OPENAI_BASE_URL,
       systemPrompt: "",
       initialPrompt: "",
       maxIterations: DEFAULT_MAX_ITERATIONS,
       debug: false,
-      provider: DEFAULT_PROVIDER,
       apiKey: "",
       mcpConfigPath: "",
       continueSession: false,
@@ -38,12 +37,12 @@ export const useConfig = createState(
     withActions: (state) => ({
       init: async (config: Partial<AppConfig>) => {
         state.config.model = config.model || "";
-        state.config.url = config.url || DEFAULT_OLLAMA_URL;
+        state.config.style = config.style || DEFAULT_STYLE;
+        state.config.baseURL = config.baseURL || DEFAULT_LOCAL_OPENAI_BASE_URL;
         state.config.systemPrompt = config.systemPrompt || (await buildDefaultSystemPrompt());
         state.config.initialPrompt = config.initialPrompt || "";
         state.config.maxIterations = config.maxIterations ?? DEFAULT_MAX_ITERATIONS;
         state.config.debug = config.debug ?? false;
-        state.config.provider = config.provider || DEFAULT_PROVIDER;
         state.config.apiKey = config.apiKey || "";
         state.config.mcpConfigPath = config.mcpConfigPath || "";
         state.config.continueSession = config.continueSession ?? false;
@@ -51,8 +50,8 @@ export const useConfig = createState(
         state.config.modelInfo = config.modelInfo;
         state.initialized = true;
 
-        const { model, url, systemPrompt, provider } = state.config;
-        state.key = `::${provider}::${model}::${url}::${systemPrompt}`;
+        const { model, baseURL, systemPrompt, style } = state.config;
+        state.key = `::${style}::${model}::${baseURL}::${systemPrompt}`;
       },
 
       setHelpRequested: (help: boolean) => {
@@ -69,12 +68,12 @@ export const useConfig = createState(
 
       reset: () => {
         state.config.model = "";
-        state.config.url = DEFAULT_OLLAMA_URL;
+        state.config.style = DEFAULT_STYLE;
+        state.config.baseURL = DEFAULT_LOCAL_OPENAI_BASE_URL;
         state.config.systemPrompt = "";
         state.config.initialPrompt = "";
         state.config.maxIterations = DEFAULT_MAX_ITERATIONS;
         state.config.debug = false;
-        state.config.provider = DEFAULT_PROVIDER;
         state.config.apiKey = "";
         state.config.mcpConfigPath = "";
         state.config.continueSession = false;

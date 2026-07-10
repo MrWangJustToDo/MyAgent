@@ -1,24 +1,16 @@
-import { tool } from "ai";
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
 
+import { defineServerTool } from "./tanstack/define-tool.js";
 import { getFileModifiedTime, withDuration } from "./util/helpers.js";
 import { writeFileOutputSchema } from "./util/types.js";
 
 import type { WriteFileOutput } from "./util/types.js";
 
-/**
- * Creates a write-file tool using Vercel AI SDK.
- *
- * This tool writes content to a file. If the file exists, requires the
- * modifiedTime from a previous read operation to ensure the file hasn't
- * been modified. Parent directories will be created if they don't exist.
- *
- * Requires user approval before execution.
- */
 export const createWriteFileTool = () => {
-  return tool({
+  return defineServerTool({
+    name: "write_file",
     description:
       "Writes content to a file. If the file exists, requires the modifiedTime from a previous read operation to ensure the file hasn't been modified. If creating a new file, modifiedTime should be omitted. Parent directories will be created if they don't exist.",
     inputSchema: z.object({
@@ -78,20 +70,16 @@ export const createWriteFileTool = () => {
         };
       });
     },
-
     // Only confirm success to the LLM — bytesWritten/modifiedTime/durationMs
     // are execution metadata. modifiedTime is for edit_file conflict detection,
     // not for the model.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: WriteFileOutput }) {
-      return {
-        type: "content" as const,
-        value: [
-          {
-            type: "text" as const,
-            text: `${output.created ? "Created" : "Overwrote"} file: ${output.path}，modifiedTime：${output.modifiedTime}`,
-          },
-        ],
-      };
+      return [
+        {
+          type: "text" as const,
+          content: `${output.created ? "Created" : "Overwrote"} file: ${output.path}，modifiedTime：${output.modifiedTime}`,
+        },
+      ];
     },
   });
 };

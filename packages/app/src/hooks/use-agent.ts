@@ -1,10 +1,10 @@
 import { createState } from "reactivity-store";
 
-import type { Agent } from "@my-agent/core";
+import type { ManagedAgent } from "@my-agent/core";
 
-export const useAgent = createState(() => ({ agent: null as Agent | null }), {
+export const useAgent = createState(() => ({ agent: null as ManagedAgent | null }), {
   withActions: (s) => ({
-    setAgent: (c: Agent | null) => {
+    setAgent: (c: ManagedAgent | null) => {
       s.agent = c;
     },
   }),

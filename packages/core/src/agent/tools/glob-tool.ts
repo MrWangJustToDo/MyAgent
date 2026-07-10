@@ -1,8 +1,8 @@
-import { tool } from "ai";
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
 
+import { defineServerTool } from "./tanstack/define-tool.js";
 import { OUTPUT_LIMITS, withDuration } from "./util/helpers.js";
 import { DEFAULT_EXCLUDE_DIRS, SEARCH_COMMAND_TIMEOUT } from "./util/search-command.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
@@ -112,7 +112,8 @@ async function runGlobSearch(
 }
 
 export const createGlobTool = () => {
-  return tool({
+  return defineServerTool({
+    name: "glob",
     description:
       "Finds files matching a glob pattern. Supports patterns like '**/*.js', 'src/**/*.ts', '*.json', etc. " +
       "Uses `fd` when available (respects .gitignore), falls back to `find`. " +
@@ -195,21 +196,17 @@ export const createGlobTool = () => {
         };
       });
     },
-
     // Only send the file list to the LLM — pattern/path are echoed in the
     // input, pagination/truncation/cache metadata is for the UI only.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: GlobOutput }) {
-      return {
-        type: "content" as const,
-        value: [
-          {
-            type: "text" as const,
-            text:
-              `<params> offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit} </params>` +
-              (output.content || output.files.join("\n")),
-          },
-        ],
-      };
+      return [
+        {
+          type: "text" as const,
+          content:
+            `<params> offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit} </params>` +
+            (output.content || output.files?.join("\n")),
+        },
+      ];
     },
   });
 };

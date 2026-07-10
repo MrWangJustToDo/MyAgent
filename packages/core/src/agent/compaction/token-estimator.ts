@@ -1,45 +1,21 @@
 /**
  * Token Estimator - Estimate token counts for messages.
  *
- * Uses character-based approximation (characters / 4) for simplicity.
- * This is sufficient for threshold detection without requiring model-specific tokenizers.
- *
- * Uses Vercel AI SDK's ModelMessage type directly.
+ * Uses character-based approximation (characters / 4) for threshold detection.
+ * Handles TanStack {@link ModelMessage} shape including `toolCalls` and tool messages.
  */
 
-import type { ModelMessage } from "ai";
+import { getToolMessageContentSize } from "./message-utils.js";
 
-// ============================================================================
-// Constants
-// ============================================================================
+import type { ContentPart, ModelMessage } from "@tanstack/ai";
 
-/**
- * Approximate characters per token.
- * Based on typical tokenizer behavior (GPT-4, Claude, etc.)
- */
 const CHARS_PER_TOKEN = 4;
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Get string length of a value, handling various types.
- */
 function getStringLength(value: unknown): number {
-  if (value === null || value === undefined) {
-    return 0;
-  }
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "string") return value.length;
+  if (typeof value === "number" || typeof value === "boolean") return String(value).length;
 
-  if (typeof value === "string") {
-    return value.length;
-  }
-
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value).length;
-  }
-
-  // For objects and arrays, stringify
   try {
     return JSON.stringify(value).length;
   } catch {
@@ -47,87 +23,31 @@ function getStringLength(value: unknown): number {
   }
 }
 
-/**
- * Estimate characters in a content part.
- * Handles various part types from AI SDK.
- */
-function estimatePartChars(part: unknown): number {
-  if (!part || typeof part !== "object") {
-    return getStringLength(part);
-  }
-
-  const p = part as Record<string, unknown>;
-  const type = p.type as string | undefined;
-
-  switch (type) {
+export function estimateContentPartChars(part: ContentPart): number {
+  switch (part.type) {
     case "text":
-      return getStringLength(p.text);
-
-    case "reasoning":
-      return getStringLength(p.text);
-
-    case "tool-call":
-      // Tool name + args
-      return getStringLength(p.toolName) + getStringLength(p.args);
-
-    case "tool-result":
-      // Tool name + result
-      return getStringLength(p.toolName) + getStringLength(p.result);
-
+      return part.content?.length ?? 0;
     case "image":
-      // Images sent as base64 in tool results consume tokens proportional to their data size.
-      // For user-provided images (URL-based), providers may use fixed budgets,
-      // but for inline base64 data, use actual data length for accurate estimation.
-      if (typeof p.data === "string" && p.data.length > 100) {
-        return p.data.length;
-      }
-      if (typeof p.image === "string" && p.image.length > 100) {
-        return p.image.length;
+    case "audio":
+    case "video":
+    case "document":
+      if (part.source.type === "data") {
+        return part.source.value.length;
       }
       return 1000 * CHARS_PER_TOKEN;
-
-    case "image-data":
-      // image-data parts in tool results contain full base64 data
-      if (typeof p.data === "string") {
-        return p.data.length;
-      }
-      return 1000 * CHARS_PER_TOKEN;
-
-    case "file": {
-      const mediaType =
-        typeof p.mediaType === "string" ? p.mediaType : typeof p.mimeType === "string" ? p.mimeType : "";
-      if (mediaType.startsWith("image/")) {
-        // Image files contain base64 data that counts toward context
-        const dataLen = typeof p.data === "string" ? p.data.length : 0;
-        return dataLen > 100 ? dataLen : 1000 * CHARS_PER_TOKEN;
-      }
-      // Text files: estimate based on content length
-      const dataLen = getStringLength(p.data);
-      return Math.min(dataLen, 20000) + 50;
-    }
-
-    case "tool-approval-request":
-    case "tool-approval-response":
-      return getStringLength(p.toolName) + getStringLength(p.args) + 50;
-
     default:
-      // For unknown types, stringify the whole part
       return getStringLength(part);
   }
 }
 
-/**
- * Estimate characters for message content.
- */
 function estimateContentChars(content: ModelMessage["content"]): number {
-  if (typeof content === "string") {
-    return content.length;
-  }
+  if (typeof content === "string") return content.length;
+  if (content === null) return 0;
 
   if (Array.isArray(content)) {
     let total = 0;
     for (const part of content) {
-      total += estimatePartChars(part);
+      total += estimateContentPartChars(part);
     }
     return total;
   }
@@ -135,65 +55,54 @@ function estimateContentChars(content: ModelMessage["content"]): number {
   return getStringLength(content);
 }
 
-// ============================================================================
-// Public API
-// ============================================================================
+function estimateToolCallsChars(toolCalls: ModelMessage["toolCalls"]): number {
+  if (!toolCalls || toolCalls.length === 0) return 0;
+
+  let total = 0;
+  for (const toolCall of toolCalls) {
+    total += getStringLength(toolCall.function.name);
+    total += getStringLength(toolCall.function.arguments);
+    total += 20;
+  }
+  return total;
+}
+
+function estimateThinkingChars(thinking: ModelMessage["thinking"]): number {
+  if (!thinking || thinking.length === 0) return 0;
+  return thinking.reduce((sum, entry) => sum + getStringLength(entry.content), 0);
+}
 
 /**
- * Estimate token count for a single message.
- *
- * @param message - The message to estimate (Vercel AI SDK ModelMessage)
- * @returns Estimated token count
- *
- * @example
- * ```typescript
- * const tokens = estimateMessageTokens({
- *   role: "user",
- *   content: "Hello, world!"
- * });
- * // Returns ~4 tokens (13 chars / 4)
- * ```
+ * Estimate token count for a single TanStack ModelMessage.
  */
 export function estimateMessageTokens(message: ModelMessage): number {
-  let chars = 0;
+  let chars = message.role.length + 10;
 
-  // Role overhead (system/user/assistant/tool)
-  chars += message.role.length + 10; // Add some overhead for role markers
-
-  // Content
-  chars += estimateContentChars(message.content);
+  if (message.role === "tool") {
+    chars += getToolMessageContentSize(message.content);
+    chars += getStringLength(message.toolCallId);
+  } else {
+    chars += estimateContentChars(message.content);
+    if (message.role === "assistant") {
+      chars += estimateToolCallsChars(message.toolCalls);
+      chars += estimateThinkingChars(message.thinking);
+    }
+  }
 
   return Math.ceil(chars / CHARS_PER_TOKEN);
 }
 
 /**
  * Estimate total token count for an array of messages.
- *
- * @param messages - Array of messages to estimate (Vercel AI SDK ModelMessage[])
- * @returns Total estimated token count
- *
- * @example
- * ```typescript
- * const tokens = estimateTokens([
- *   { role: "system", content: "You are a helpful assistant." },
- *   { role: "user", content: "Hello!" },
- *   { role: "assistant", content: "Hi there! How can I help?" },
- * ]);
- * // Returns estimated total tokens
- * ```
  */
 export function estimateTokens(messages: ModelMessage[]): number {
-  if (!messages || messages.length === 0) {
-    return 0;
-  }
+  if (!messages || messages.length === 0) return 0;
 
   let total = 0;
   for (const message of messages) {
     total += estimateMessageTokens(message);
   }
 
-  // Add overhead for message separators and structure
   total += messages.length * 3;
-
   return total;
 }

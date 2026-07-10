@@ -18,9 +18,6 @@ import type { SessionData, SessionMeta } from "./types.js";
 // Constants
 // ============================================================================
 
-/** Legacy file suffixes for backward compatibility */
-const LEGACY_SUFFIXES = [".json", ".session.jsonl"];
-
 /** Default empty token usage */
 const EMPTY_USAGE = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 
@@ -52,7 +49,7 @@ export class SessionStore {
    * Create a new empty session and return its SessionData.
    * Does NOT write to disk — the first call to save() writes the file.
    */
-  create(options: { provider: string; model: string; name?: string }): SessionData {
+  create(options: { modelStyle: string; model: string; name?: string }): SessionData {
     const id = generateId("ses");
     const now = Date.now();
 
@@ -60,7 +57,7 @@ export class SessionStore {
       id,
       name: options.name || "New Session",
       version: SESSION_VERSION,
-      provider: options.provider,
+      modelStyle: options.modelStyle === "anthropic" ? "anthropic" : "openai",
       model: options.model,
       uiMessages: [],
       summaryMessage: null,
@@ -86,35 +83,15 @@ export class SessionStore {
 
   /**
    * Load a full session by ID from disk.
-   * Tries the current format first, then falls back to legacy formats.
    */
   async load(id: string): Promise<SessionData | null> {
-    // Try current format
     const session = await this.tryLoadJson(this.getFilePath(id));
-    if (session) {
-      if (session.id !== id && id.startsWith("ses_")) {
-        session.id = id;
-      }
-      return session;
+    if (!session) return null;
+
+    if (session.id !== id && id.startsWith("ses_")) {
+      session.id = id;
     }
-
-    // Try legacy formats
-    for (const suffix of LEGACY_SUFFIXES) {
-      const legacyPath = `${SESSION_DIR}/${id}${suffix}`;
-      const legacySession = suffix.endsWith(".jsonl")
-        ? await this.tryLoadJsonl(legacyPath)
-        : await this.tryLoadJson(legacyPath);
-
-      if (legacySession) {
-        legacySession.version = SESSION_VERSION;
-        if (legacySession.id !== id && id.startsWith("ses_")) {
-          legacySession.id = id;
-        }
-        return legacySession;
-      }
-    }
-
-    return null;
+    return session;
   }
 
   /**
@@ -126,46 +103,27 @@ export class SessionStore {
 
     const entries = await this.fs.readdir(SESSION_DIR);
     const sessions: SessionMeta[] = [];
-    const seenIds = new Set<string>();
 
-    // Prioritize current format, then legacy
-    const allSuffixes = [SESSION_FILE_SUFFIX, ...LEGACY_SUFFIXES];
+    for (const entry of entries) {
+      if (entry.type !== "file" || !entry.name.endsWith(SESSION_FILE_SUFFIX)) continue;
 
-    for (const suffix of allSuffixes) {
-      for (const entry of entries) {
-        if (entry.type !== "file" || !entry.name.endsWith(suffix)) continue;
+      const id = entry.name.slice(0, -SESSION_FILE_SUFFIX.length);
 
-        // Avoid false matches: `.json` suffix must not match `.session.json` files
-        if (suffix !== SESSION_FILE_SUFFIX && entry.name.endsWith(SESSION_FILE_SUFFIX)) continue;
+      try {
+        const data = await this.tryLoadJson(`${SESSION_DIR}/${entry.name}`);
+        if (!data) continue;
 
-        const id = entry.name.slice(0, -suffix.length);
-        if (seenIds.has(id)) continue;
-
-        try {
-          const filePath = `${SESSION_DIR}/${entry.name}`;
-          let data: SessionData | null = null;
-
-          if (suffix.endsWith(".jsonl")) {
-            data = await this.tryLoadJsonl(filePath);
-          } else {
-            data = await this.tryLoadJson(filePath);
-          }
-
-          if (!data) continue;
-
-          seenIds.add(id);
-          sessions.push({
-            id: data.id || id,
-            name: data.name,
-            version: data.version,
-            provider: data.provider,
-            model: data.model,
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-          });
-        } catch {
-          // Skip corrupted files
-        }
+        sessions.push({
+          id: data.id || id,
+          name: data.name,
+          version: data.version,
+          modelStyle: data.modelStyle,
+          model: data.model,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+        });
+      } catch {
+        // Skip corrupted files
       }
     }
 
@@ -194,17 +152,12 @@ export class SessionStore {
    * Delete a session by ID.
    */
   async delete(id: string): Promise<boolean> {
-    const allSuffixes = [SESSION_FILE_SUFFIX, ...LEGACY_SUFFIXES];
-
-    for (const suffix of allSuffixes) {
-      const filePath = `${SESSION_DIR}/${id}${suffix}`;
-      if (await this.fs.exists(filePath)) {
-        await this.fs.remove(filePath);
-        this.lastSavedHash.delete(id);
-        return true;
-      }
+    const filePath = this.getFilePath(id);
+    if (await this.fs.exists(filePath)) {
+      await this.fs.remove(filePath);
+      this.lastSavedHash.delete(id);
+      return true;
     }
-
     return false;
   }
 
@@ -245,94 +198,11 @@ export class SessionStore {
     this.lastSavedHash.set(session.id, json);
   }
 
-  /**
-   * Try loading a session from a plain JSON file.
-   */
   private async tryLoadJson(filePath: string): Promise<SessionData | null> {
     if (!(await this.fs.exists(filePath))) return null;
     try {
       const content = await this.fs.readFile(filePath);
       return JSON.parse(content) as SessionData;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Try loading a session from a legacy JSONL file by replaying entries.
-   */
-  private async tryLoadJsonl(filePath: string): Promise<SessionData | null> {
-    if (!(await this.fs.exists(filePath))) return null;
-    try {
-      const content = await this.fs.readFile(filePath);
-      const lines = content.trim().split("\n");
-      if (lines.length === 0) return null;
-
-      const session: SessionData = {
-        id: "",
-        name: "New Session",
-        version: SESSION_VERSION,
-        provider: "",
-        model: "",
-        uiMessages: [],
-        summaryMessage: null,
-        compactIndex: 0,
-        usage: { ...EMPTY_USAGE },
-        todos: [],
-        createdAt: 0,
-        updatedAt: 0,
-      };
-
-      let headerParsed = false;
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-
-        try {
-          const entry = JSON.parse(trimmed);
-          if (!entry.type) continue;
-
-          switch (entry.type) {
-            case "session":
-              session.id = entry.sessionId || entry.id || session.id;
-              session.version = entry.version ?? SESSION_VERSION;
-              session.name = entry.name ?? session.name;
-              session.provider = entry.provider ?? session.provider;
-              session.model = entry.model ?? session.model;
-              session.createdAt = entry.createdAt ?? session.createdAt;
-              session.updatedAt = entry.timestamp ?? session.updatedAt;
-              headerParsed = true;
-              break;
-            case "ui_messages":
-              session.uiMessages = entry.uiMessages ?? session.uiMessages;
-              session.updatedAt = entry.timestamp ?? session.updatedAt;
-              break;
-            case "summary_message":
-              session.summaryMessage = entry.summaryMessage ?? session.summaryMessage;
-              session.compactIndex = entry.compactIndex ?? session.compactIndex;
-              session.updatedAt = entry.timestamp ?? session.updatedAt;
-              break;
-            case "usage":
-              session.usage = entry.usage ?? session.usage;
-              session.updatedAt = entry.timestamp ?? session.updatedAt;
-              break;
-            case "todos":
-              session.todos = entry.todos ?? session.todos;
-              session.updatedAt = entry.timestamp ?? session.updatedAt;
-              break;
-            case "name":
-              session.name = entry.name ?? session.name;
-              session.updatedAt = entry.timestamp ?? session.updatedAt;
-              break;
-          }
-        } catch {
-          continue;
-        }
-      }
-
-      if (!headerParsed || !session.id) return null;
-      return session;
     } catch {
       return null;
     }

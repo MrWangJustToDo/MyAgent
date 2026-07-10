@@ -1,21 +1,25 @@
-import { isFileUIPart, isToolUIPart } from "ai";
 import { Box, Text } from "ink";
 import { memo, useMemo } from "react";
 
 import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
 import { useSize } from "../hooks";
 import { BG, COLORS } from "../theme/colors.js";
+import { isImagePart, isToolCallPart } from "../utils/tool-part.js";
 
 import { FilePartView } from "./FilePartView.js";
 import { TextPartView } from "./TextPartView.js";
 import { ToolCallPartView } from "./ToolCallPartView.js";
 
-import type { FileUIPart, TextUIPart, ToolUIPart, UIMessage } from "ai";
+import type { ImagePart, TextPart, UIMessage } from "@tanstack/ai";
 
 export interface MessageViewProps {
   message: UIMessage;
   /** Read-only mode for nested subagent previews (no approval prompts). */
   readOnly?: boolean;
+}
+
+function getTextContent(part: TextPart): string {
+  return part.content?.trim() ?? "";
 }
 
 /** Render a single message */
@@ -25,31 +29,23 @@ export const MessageView = memo(({ message, readOnly = false }: MessageViewProps
   const visibleParts = useMemo(
     () =>
       validParts.filter((part) => {
-        // Hide reasoning parts (handled separately) and empty text parts.
-        // LLMs occasionally emit empty text blocks (text === "", state "done"),
-        // which would otherwise render as blank lines with a stray "✦" marker.
-        if (part.type === "reasoning") return false;
+        if (part.type === "thinking") return false;
+        if (part.type === "tool-result") return false;
         if (part.type === "text") {
-          const text = (part as TextUIPart).text ?? "";
-          return text.trim().length > 0;
+          return getTextContent(part as TextPart).length > 0;
         }
         return true;
       }),
     [validParts]
   );
 
-  // Image index map is built from `visibleParts` so indices match what both
-  // UserMessageView and the assistant rendering loop use when calling .get(index).
   const fileIndexMap = useMemo(() => {
     const map = new Map<number, number>();
     let imageCount = 0;
     visibleParts.forEach((part, idx) => {
-      if (isFileUIPart(part)) {
-        const filePart = part as FileUIPart;
-        if (filePart.mediaType?.startsWith("image/")) {
-          imageCount++;
-          map.set(idx, imageCount);
-        }
+      if (isImagePart(part)) {
+        imageCount++;
+        map.set(idx, imageCount);
       }
     });
     return map;
@@ -65,9 +61,9 @@ export const MessageView = memo(({ message, readOnly = false }: MessageViewProps
     <>
       {visibleParts.map((part, index) => (
         <Box key={`${part.type}-${index}`} width="100%">
-          {part.type === "text" && <TextPartView part={part as TextUIPart} role={message.role} />}
-          {isFileUIPart(part) && <FilePartView part={part as FileUIPart} index={fileIndexMap.get(index)} />}
-          {isToolUIPart(part) && <ToolCallPartView part={part as ToolUIPart} readOnly={readOnly} />}
+          {part.type === "text" && <TextPartView part={part as TextPart} role={message.role} />}
+          {isImagePart(part) && <FilePartView part={part as ImagePart} index={fileIndexMap.get(index)} />}
+          {isToolCallPart(part) && <ToolCallPartView part={part} readOnly={readOnly} />}
         </Box>
       ))}
     </>
@@ -76,9 +72,6 @@ export const MessageView = memo(({ message, readOnly = false }: MessageViewProps
 
 MessageView.displayName = "MessageView";
 
-/**
- * User message — all parts inside a HalfLinePaddedBox for visual separation.
- */
 const UserMessageView = memo(
   ({
     parts,
@@ -89,12 +82,12 @@ const UserMessageView = memo(
   }) => {
     const screenWidth = useSize((s) => s.state.screenWidth);
     const contentWidth = screenWidth - 2;
-    const textParts = parts.filter((p) => p.type === "text") as TextUIPart[];
+    const textParts = parts.filter((p) => p.type === "text") as TextPart[];
     const fileParts = parts
-      .map((p, i) => (isFileUIPart(p) ? { part: p as FileUIPart, index: i } : null))
-      .filter(Boolean) as { part: FileUIPart; index: number }[];
+      .map((p, i) => (isImagePart(p) ? { part: p as ImagePart, index: i } : null))
+      .filter(Boolean) as { part: ImagePart; index: number }[];
 
-    const text = textParts.map((p) => p.text.trimEnd()).join("\n");
+    const text = textParts.map((p) => getTextContent(p)).join("\n");
     const prefixWidth = 4;
 
     return (
@@ -114,8 +107,6 @@ const UserMessageView = memo(
             {fileParts.length > 0 && (
               <Box gap={1}>
                 {fileParts.map(({ part, index }) => (
-                  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                  // @ts-ignore
                   <FilePartView key={index} part={part} index={fileIndexMap.get(index)} />
                 ))}
               </Box>

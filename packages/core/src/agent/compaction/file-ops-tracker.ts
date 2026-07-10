@@ -1,12 +1,12 @@
 /**
  * File operation tracking for compaction summaries.
  *
- * Scans tool-call messages to build an accurate list of files read and modified.
+ * Scans assistant `toolCalls` to build an accurate list of files read and modified.
  * This metadata is appended to the compaction summary so the LLM doesn't have to
  * rely on memory to list which files were involved.
  */
 
-import type { ModelMessage } from "ai";
+import type { ModelMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Types & Constants
@@ -39,7 +39,7 @@ const WRITE_TOOLS = new Set(["write_file", "edit_file", "copy_file", "move_file"
 
 /**
  * Extract a string path field from a tool-call's args.
- * Handles both object args and JSON-string args.
+ * Handles JSON-string args from TanStack `function.arguments`.
  */
 function extractPathFromArgs(args: unknown, field: string): string | undefined {
   if (typeof args === "string") {
@@ -58,62 +58,48 @@ function extractPathFromArgs(args: unknown, field: string): string | undefined {
   return undefined;
 }
 
+function trackFileOp(ops: FileOps, toolName: string, args: unknown): void {
+  if (READ_TOOLS.has(toolName)) {
+    const path = extractPathFromArgs(args, "path");
+    if (path && path !== "." && path !== "./") {
+      ops.readFiles.add(path);
+    }
+    return;
+  }
+
+  if (!WRITE_TOOLS.has(toolName)) return;
+
+  if (toolName === "copy_file" || toolName === "move_file") {
+    const sourcePath = extractPathFromArgs(args, "sourcePath");
+    const targetPath = extractPathFromArgs(args, "targetPath");
+    if (targetPath) ops.modifiedFiles.add(targetPath);
+    if (toolName === "move_file" && sourcePath) ops.modifiedFiles.add(sourcePath);
+    if (toolName === "copy_file" && sourcePath) ops.readFiles.add(sourcePath);
+    return;
+  }
+
+  const path = extractPathFromArgs(args, "path");
+  if (path) ops.modifiedFiles.add(path);
+}
+
 // ============================================================================
 // Public API
 // ============================================================================
 
 /**
- * Extract file operations from assistant tool-call messages.
+ * Extract file operations from assistant tool calls.
  *
- * Scans all assistant messages for tool-call parts and tracks:
- * - Files read: read_file, list_file, tree calls
- * - Files modified: write_file, edit_file, copy_file, move_file, delete_file
- *
- * @param messages - Messages to scan for tool calls
+ * @param messages - TanStack ModelMessage[] to scan
  * @returns Deduplicated sets of read and modified file paths
- *
- * @example
- * ```typescript
- * const ops = extractFileOpsFromMessages(messages);
- * console.log(ops.readFiles);     // Set {"src/index.ts", "package.json"}
- * console.log(ops.modifiedFiles); // Set {"src/new-file.ts"}
- * ```
  */
 export function extractFileOpsFromMessages(messages: ModelMessage[]): FileOps {
   const ops: FileOps = { readFiles: new Set(), modifiedFiles: new Set() };
 
   for (const message of messages) {
-    if (message.role !== "assistant") continue;
+    if (message.role !== "assistant" || !message.toolCalls) continue;
 
-    const content = message.content;
-    if (!Array.isArray(content)) continue;
-
-    for (const part of content) {
-      const p = part as Record<string, unknown>;
-      if (p.type !== "tool-call") continue;
-
-      const toolName = p.toolName as string | undefined;
-      if (!toolName) continue;
-
-      const args = p.args;
-
-      if (READ_TOOLS.has(toolName)) {
-        const path = extractPathFromArgs(args, "path");
-        if (path && path !== "." && path !== "./") {
-          ops.readFiles.add(path);
-        }
-      } else if (WRITE_TOOLS.has(toolName)) {
-        if (toolName === "copy_file" || toolName === "move_file") {
-          const sourcePath = extractPathFromArgs(args, "sourcePath");
-          const targetPath = extractPathFromArgs(args, "targetPath");
-          if (targetPath) ops.modifiedFiles.add(targetPath);
-          if (toolName === "move_file" && sourcePath) ops.modifiedFiles.add(sourcePath);
-          if (toolName === "copy_file" && sourcePath) ops.readFiles.add(sourcePath);
-        } else {
-          const path = extractPathFromArgs(args, "path");
-          if (path) ops.modifiedFiles.add(path);
-        }
-      }
+    for (const toolCall of message.toolCalls) {
+      trackFileOp(ops, toolCall.function.name, toolCall.function.arguments);
     }
   }
 

@@ -1,7 +1,7 @@
-import { DEFAULT_OLLAMA_URL, parseModelInfoFromEnv } from "@my-agent/core";
+import { parseModelInfoFromEnv, parseModelStyle, resolveModelConnection } from "@my-agent/core";
 
-import type { AppConfig, Provider } from "@my-agent/app";
-import type { ModelProvider } from "@my-agent/core";
+import type { AppConfig } from "@my-agent/app";
+import type { ModelStyle } from "@my-agent/core";
 
 // ============================================================================
 // Argument Parsing
@@ -71,20 +71,16 @@ function getFlagBoolean(args: ParsedArgs, ...keys: string[]): boolean {
   return value === true || value === "true";
 }
 
+function parseCliStyle(raw: string | undefined): ModelStyle | undefined {
+  if (!raw) return undefined;
+  return parseModelStyle(raw);
+}
+
 // ============================================================================
 // Environment Helpers
 // ============================================================================
 
 const getEnv = (key: string, fallback: string = ""): string => process.env[key] ?? fallback;
-
-const getEnvProvider = (key: string, fallback: Provider = "ollama"): Provider => {
-  const value = process.env[key]?.toLowerCase();
-  if (value === "ollama") return "ollama";
-  if (value === "openrouter") return "openRouter";
-  if (value === "openai-compatible" || value === "openaicompatible") return "openaiCompatible";
-  if (value === "deepseek") return "deepseek";
-  return fallback;
-};
 
 // ============================================================================
 // Main Export
@@ -98,27 +94,25 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
   const parsed = parseArgs(argv);
 
   const envModel = getEnv("MODEL") || getEnv("model");
-  const envUrl = getEnv("URL") || getEnv("OLLAMA_URL") || getEnv("OPENAI_COMPATIBLE_URL") || getEnv("url");
-  const envProvider = getEnvProvider("PROVIDER") || getEnvProvider("provider");
-  const envApiKey = getEnv("API_KEY") || getEnv("OPENROUTER_API_KEY") || getEnv("DEEPSEEK_API_KEY") || getEnv("apiKey");
   const envMaxIterations = getEnv("MAX_ITERATIONS") || getEnv("maxIterations");
-
   const envMaxIter = envMaxIterations ? parseInt(envMaxIterations, 10) : 50;
 
-  let provider: Provider = envProvider;
-  const cliProvider = getFlagString(parsed, "", "provider");
-  if (
-    cliProvider === "ollama" ||
-    cliProvider === "openRouter" ||
-    cliProvider === "openrouter" ||
-    cliProvider === "openai-compatible" ||
-    cliProvider === "openaicompatible" ||
-    cliProvider === "deepseek"
-  ) {
-    if (cliProvider === "openrouter") provider = "openRouter";
-    else if (cliProvider === "openai-compatible" || cliProvider === "openaicompatible") provider = "openaiCompatible";
-    else provider = cliProvider as Provider;
-  }
+  const cliStyle = parseCliStyle(getFlagString(parsed, "", "style"));
+  const cliBaseURL = getFlagString(parsed, "", "base-url", "baseURL", "url", "u");
+  const cliApiKey = getFlagString(parsed, "", "api-key", "k");
+
+  const envModelId = getFlagString(parsed, envModel, "model", "m");
+  const connection = resolveModelConnection({
+    model: envModelId,
+    style: cliStyle,
+    baseURL: cliBaseURL || undefined,
+    apiKey: cliApiKey || undefined,
+    env: process.env,
+  });
+
+  const modelInfo = connection.model
+    ? parseModelInfoFromEnv(process.env, connection.model, connection.style === "anthropic" ? "anthropic" : "openai")
+    : undefined;
 
   let resumeSession = "";
   const resumeFlag = getFlag(parsed, "resume", "r");
@@ -130,35 +124,18 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
 
   const envMcpConfig = getEnv("MCP_CONFIG_PATH");
   const envRemote = getEnv("REMOTE") || getEnv("REMOTE_URL");
-
   const remoteFlag = getFlag(parsed, "remote", "R");
   const remote = typeof remoteFlag === "string" ? remoteFlag : envRemote || undefined;
 
-  // Resolve model metadata from MODEL_* env vars (context window, pricing,
-  // capabilities, multimodal flag, reasoning config, etc).
-  // The active MODEL value is the id; provider maps to a registry ModelProvider
-  // so resolveModelInfoFromEnv can fill in a sensible default when MODEL_PROVIDER
-  // is not set explicitly.
-  const providerToModelProvider: Record<Provider, ModelProvider> = {
-    ollama: "ollama",
-    openRouter: "open-router",
-    openaiCompatible: "openai",
-    deepseek: "deepseek",
-  };
-  // No default model — the user must configure MODEL (env) or --model (flag).
-  // An empty model will surface as a clear error in createAgentFromConfig.
-  const envModelId = getFlagString(parsed, envModel, "model", "m");
-  const modelInfo = parseModelInfoFromEnv(process.env, envModelId, providerToModelProvider[provider]);
-
   return {
-    model: envModelId,
-    url: getFlagString(parsed, envUrl || DEFAULT_OLLAMA_URL, "url", "u"),
+    model: connection.model,
+    style: connection.style,
+    baseURL: connection.baseURL,
+    apiKey: connection.apiKey,
     systemPrompt: getFlagString(parsed, "", "system", "s"),
     initialPrompt: parsed.positional.join(" "),
     maxIterations: getFlagNumber(parsed, isNaN(envMaxIter) ? 50 : envMaxIter, "max-iterations"),
     debug: getFlagBoolean(parsed, "debug", "d"),
-    provider,
-    apiKey: getFlagString(parsed, envApiKey, "api-key", "k"),
     mcpConfigPath: getFlagString(parsed, envMcpConfig, "mcp-config"),
     continueSession: getFlagBoolean(parsed, "continue", "c"),
     resumeSession,

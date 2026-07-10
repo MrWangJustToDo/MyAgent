@@ -3,7 +3,6 @@ import { useEffect, useRef } from "react";
 import { toRaw } from "reactivity-store";
 
 import { dispatchCommand } from "../commands";
-import { attachmentToFileUIPart } from "../types/attachment.js";
 
 import { useAgentKeybindings } from "./use-agent-keybindings.js";
 import { useAgent } from "./use-agent.js";
@@ -17,8 +16,8 @@ import type { AgentAdapter } from "../adapter/types.js";
 import type { CommandContext } from "../commands";
 import type { UseAgentChatReturn } from "./use-agent-chat.js";
 import type { DenyingToolInfo } from "./use-agent-keybindings.js";
-import type { Agent as CoreAgent } from "@my-agent/core";
-import type { UIMessage } from "ai";
+import type { ManagedAgent } from "@my-agent/core";
+import type { UIMessage } from "@tanstack/ai";
 
 interface UseAgentInputControlsOptions {
   adapter: AgentAdapter;
@@ -26,13 +25,16 @@ interface UseAgentInputControlsOptions {
   isReady: boolean;
   isLoading: boolean;
   initLoading: boolean;
+  messages: UIMessage[];
   sendMessage: UseAgentChatReturn["sendMessage"];
   stop: UseAgentChatReturn["stop"];
   addToolApprovalResponse: UseAgentChatReturn["addToolApprovalResponse"];
   addToolOutput: UseAgentChatReturn["addToolOutput"];
+  setClientToolWaiting: UseAgentChatReturn["setClientToolWaiting"];
   allPendingApproval: UseAgentChatReturn["allPendingApproval"];
   allPendingAskUser: UseAgentChatReturn["allPendingAskUser"];
   setMessages: UseAgentChatReturn["setMessages"];
+  saveSessionFromChat: UseAgentChatReturn["saveSessionFromChat"];
 }
 
 export function useAgentInputControls({
@@ -41,13 +43,16 @@ export function useAgentInputControls({
   isReady,
   isLoading,
   initLoading,
+  messages,
   sendMessage,
   stop,
   addToolApprovalResponse,
   addToolOutput,
+  setClientToolWaiting,
   allPendingApproval,
   allPendingAskUser,
   setMessages,
+  saveSessionFromChat,
 }: UseAgentInputControlsOptions): void {
   const hasInitRef = useRef(false);
   const denyingRef = useRef<DenyingToolInfo | null>(null);
@@ -81,8 +86,13 @@ export function useAgentInputControls({
     }
   }, [denyMode, isSelectVisible, pendingApproval, setMode]);
 
+  useEffect(() => {
+    setClientToolWaiting(!!pendingAskUser);
+  }, [pendingAskUser, setClientToolWaiting]);
+
   const submitAskUserAnswer = (answer: string) => {
     if (!pendingAskUser) return;
+    // setClientToolWaiting(false);
     const durationMs = askUserStartTimeRef.current ? Date.now() - askUserStartTimeRef.current : 0;
     addToolOutput({
       tool: "ask_user",
@@ -133,7 +143,9 @@ export function useAgentInputControls({
   const commandCtx: CommandContext = {
     inputActions,
     getInputState: () => useUserInput.getReadonlyState(),
-    getAgent: () => toRaw(useAgent.getReactiveState().agent) as CoreAgent,
+    getAgent: () => toRaw(useAgent.getReactiveState().agent) as ManagedAgent,
+    getMessages: () => messages,
+    saveSessionFromChat,
     setMessages: setMessages as (messages: UIMessage[]) => void,
     exit: () => {
       const agent = useAgent.getReadonlyState().agent;
@@ -168,8 +180,7 @@ export function useAgentInputControls({
     if (!isReady || isLoading) return;
 
     if (attachments.length > 0) {
-      const files = attachments.map((attachment) => attachmentToFileUIPart(attachment));
-      await sendMessage({ text: prompt, files });
+      await sendMessage({ text: prompt, files: attachments });
     } else {
       await sendMessage(prompt);
     }

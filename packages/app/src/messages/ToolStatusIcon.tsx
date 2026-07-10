@@ -1,17 +1,17 @@
-import { getToolName, type ToolUIPart } from "ai";
 import { Text } from "ink";
 
 import { Spinner } from "../components/Spinner.js";
 import { COLORS } from "../theme/colors.js";
 
+import type { UiToolState } from "../utils/tool-part.js";
+
 export interface ToolStatusIconProps {
-  part: ToolUIPart;
-  state: ToolUIPart["state"];
+  state: UiToolState;
+  toolName: string;
 }
 
 /** Get status icon for tool invocation */
-export const ToolStatusIcon = ({ state, part }: ToolStatusIconProps) => {
-  const toolName = getToolName(part);
+export const ToolStatusIcon = ({ state, toolName }: ToolStatusIconProps) => {
   switch (state) {
     case "input-streaming":
     case "input-available":

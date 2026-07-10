@@ -117,8 +117,16 @@ export const SubagentPanel = () => {
   const rootAgentId = useAgent((s) => (s.agent as { id?: string } | null)?.id);
   const [listRevision, setListRevision] = useState(0);
 
+  // Clear terminal so parent-agent static renderings don't leak into the panel overlay
   useEffect(() => {
+    if (typeof process === "object") {
+      import("ansi-escapes").then((pkg) => {
+        process?.stdout?.write?.(pkg.clearScreen + pkg.cursorTo(0, 0));
+      });
+    }
+
     if (view === "closed") return;
+
     const refresh = () => setListRevision((n) => n + 1);
     const unsubs = [
       agentManager.on("subagent:created", refresh),

@@ -1,80 +1,70 @@
-import { useMessageCache } from "../hooks/use-message-cache";
+import { useMessageCache } from "../hooks/use-message-cache.js";
 
-import type { UIMessage } from "ai";
+import {
+  computeToolCallsRenderSignature,
+  dedupeToolCallsInMessages,
+  getMessageToolSignature,
+  normalizeToolPartsInMessages,
+  shouldFlattenPart,
+} from "./dedupe-tool-calls.js";
+
+import type { UIMessage } from "@tanstack/ai";
 
 const { setMessage, getMessage } = useMessageCache.getActions();
 
 const filterValidMessage = (message: UIMessage) => {
   if (message.role === "assistant") {
-    if (message.parts.length === 1 && (message.parts[0].type === "step-start" || message.parts[0].type === "reasoning"))
-      return false;
+    const onlyPart = message.parts.length === 1 ? message.parts[0] : null;
+    if (onlyPart?.type === "thinking" || onlyPart?.type === "tool-result" || !onlyPart?.type) return false;
   }
   if (message.role === "user" || message.role === "assistant") {
-    if (message.parts.length === 1 && message.parts[0].type === "text" && message.parts[0].text?.trim().length === 0)
-      return false;
+    if (message.parts.length === 1 && message.parts[0].type === "text") {
+      const content = message.parts[0].content?.trim() ?? "";
+      if (content.length === 0) return false;
+    }
   }
   return true;
 };
 
+function flattenMessage(message: UIMessage): UIMessage[] {
+  return message.parts.reduce<UIMessage[]>((parts, part, index) => {
+    if (!shouldFlattenPart(part)) return parts;
+    parts.push({ ...message, id: message.id + "-" + index, parts: [part] });
+    return parts;
+  }, []);
+}
+
+function resolveStaticFlatMessage(message: UIMessage): UIMessage[] {
+  const signature = getMessageToolSignature(message);
+  const cached = getMessage(message.id);
+  if (cached && cached.signature === signature) {
+    return cached.flat;
+  }
+
+  const flatMessage = flattenMessage(message);
+  setMessage(message.id, { signature, flat: flatMessage });
+  return flatMessage;
+}
+
 /**
  * Split messages into static (completed) and dynamic (streaming) portions.
- *
- * Static messages are cached and rendered via Ink's <Static> component.
- * Dynamic messages are the currently streaming content that updates frequently.
- *
- * The split happens at "step-start" boundaries to allow completed steps
- * to become static while the current step remains dynamic.
+ * Tool-call parts with the same id are deduped (first wins) with state merged from later replays.
  */
 export const getMessages = (messages: UIMessage[]) => {
+  const normalizedMessages = normalizeToolPartsInMessages(messages);
+  const dedupedMessages = dedupeToolCallsInMessages(normalizedMessages);
   const staticMessages: UIMessage[] = [];
   const dynamicMessages: UIMessage[] = [];
 
-  for (let i = 0; i < messages.length; i++) {
-    const message = messages[i];
-    if (i < messages.length - 1) {
-      // Previous messages are fully static - use cache if available
-      const flatMessage =
-        getMessage(message.id) ||
-        message.parts.reduce<UIMessage[]>((p, c, index) => {
-          p.push({ ...message, id: message.id + "-" + index, parts: [c] });
-          return p;
-        }, []);
-
-      setMessage(message.id, flatMessage);
-
-      staticMessages.push(...flatMessage);
+  for (let i = 0; i < dedupedMessages.length; i++) {
+    const message = dedupedMessages[i];
+    if (i < dedupedMessages.length - 1) {
+      staticMessages.push(...resolveStaticFlatMessage(message));
     } else {
-      // Last message - split into static (completed steps) and dynamic (current step)
-      if (message.role === "user") {
-        for (let idx = 0; idx < message.parts.length; idx++) {
-          const part = message.parts[idx];
-          dynamicMessages.push({ ...message, id: message.id + "-" + idx, parts: [part] });
-        }
-      } else {
-        // For assistant messages, find the last step-start boundary.
-        // Parts before it are static, parts from it onward are dynamic.
-        let lastStepStartIdx = -1;
-        for (let j = message.parts.length - 1; j >= 0; j--) {
-          if (message.parts[j].type === "step-start") {
-            lastStepStartIdx = j;
-            break;
-          }
-        }
-
-        // Everything before lastStepStartIdx is static
-        for (let j = 0; j < lastStepStartIdx; j++) {
-          const part = message.parts[j];
-          if (part.type === "step-start") continue;
-          staticMessages.push({ ...message, id: message.id + "-static-" + j, parts: [part] });
-        }
-
-        // Everything from lastStepStartIdx onward is dynamic (skip the step-start itself)
-        const dynamicStart = lastStepStartIdx >= 0 ? lastStepStartIdx + 1 : 0;
-        for (let j = dynamicStart; j < message.parts.length; j++) {
-          const part = message.parts[j];
-          if (part.type === "step-start") continue;
-          dynamicMessages.push({ ...message, id: message.id + "-dynamic-" + j, parts: [part] });
-        }
+      for (let idx = 0; idx < message.parts.length; idx++) {
+        const part = message.parts[idx];
+        if (!shouldFlattenPart(part)) continue;
+        dynamicMessages.push({ ...message, id: message.id + "-" + idx, parts: [part] });
       }
     }
   }
@@ -82,5 +72,6 @@ export const getMessages = (messages: UIMessage[]) => {
   return {
     staticMessages: staticMessages.filter(filterValidMessage),
     dynamicMessages: dynamicMessages.filter(filterValidMessage),
+    toolCallsSignature: computeToolCallsRenderSignature(dedupedMessages),
   };
 };

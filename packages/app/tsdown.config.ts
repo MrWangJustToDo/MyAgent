@@ -2,7 +2,7 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig([
   {
-    entry: ["src/index.ts"],
+    entry: ["src/index.ts", "src/utils/input-feedback-queue.ts", "src/hooks/streaming-ingest.ts"],
     format: ["esm"],
     dts: true,
     clean: true,

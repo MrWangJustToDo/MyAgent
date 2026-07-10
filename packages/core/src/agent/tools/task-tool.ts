@@ -17,15 +17,17 @@
  * ```
  */
 
-import { tool } from "ai";
 import { z } from "zod";
 
-import { runSubagent } from "../subagent/runner.js";
+import { runSubagent } from "../subagent/run-subagent.js";
 import { generateId } from "../utils.js";
 
+import { defineServerTool } from "./tanstack/define-tool.js";
 import { withDuration } from "./util/helpers.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { toolOutputBaseSchema } from "./util/types.js";
+
+import type { AgentManager } from "../../managers/manager-agent.js";
 
 // ============================================================================
 // Types
@@ -34,6 +36,8 @@ import { toolOutputBaseSchema } from "./util/types.js";
 export interface TaskToolConfig {
   /** Parent agent ID to spawn subagent from */
   parentAgentId: string;
+  /** Agent manager for subagent lifecycle */
+  manager: AgentManager;
 }
 
 // ============================================================================
@@ -88,10 +92,11 @@ export type TaskOutput = z.infer<typeof taskOutputSchema>;
  * 4. Subagent's full message history is discarded
  *
  * @param config - Tool configuration with parent agent ID and manager
- * @returns Vercel AI SDK tool
+ * @returns TanStack server tool
  */
-export const createTaskTool = ({ parentAgentId }: TaskToolConfig) => {
-  return tool({
+export const createTaskTool = ({ parentAgentId, manager }: TaskToolConfig) => {
+  return defineServerTool({
+    name: "task",
     description: `Spawn a subagent with fresh context to complete a delegated task.
 
 Use this tool when you need to:
@@ -101,7 +106,7 @@ Use this tool when you need to:
 
 The subagent:
 - Starts with fresh context (doesn't see your conversation history)
-- Has read-only tools (read_file, glob, grep, run_command, list_file, tree)
+- Has read-only tools (read_file, glob, grep, list_file, tree)
 - Cannot modify files or spawn additional subagents
 - Returns only a summary of its findings
 
@@ -136,15 +141,18 @@ Example use cases:
         // We also pass no abortSignal to runSubagent so the subagent's
         // currentAbortController is the single source of truth for its
         // cancellation.
-        const result = await runSubagent({
-          subagentId: id,
-          prompt,
-          description,
-          parentAgentId,
-          parentTaskToolCallId: toolCallId,
-          autoDestroy: false,
-          maxOutputLength: Infinity,
-        });
+        const result = await runSubagent(
+          {
+            subagentId: id,
+            prompt,
+            description,
+            parentAgentId,
+            parentTaskToolCallId: toolCallId,
+            autoDestroy: false,
+            maxOutputLength: Infinity,
+          },
+          { manager }
+        );
 
         let summary = result.output;
         let truncated = result.truncated;
@@ -176,10 +184,7 @@ Example use cases:
     // The summary text itself already carries an incompleteness notice (appended
     // by the runner) when the subagent was force-stopped, so the model is aware.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: TaskOutput }) {
-      return {
-        type: "content" as const,
-        value: [{ type: "text" as const, text: output.summary }],
-      };
+      return [{ type: "text" as const, content: output.summary }];
     },
   });
 };

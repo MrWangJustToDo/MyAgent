@@ -1,8 +1,8 @@
-import { tool } from "ai";
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
 
+import { defineServerTool } from "./tanstack/define-tool.js";
 import { OutputAccumulator } from "./util/output-accumulator.js";
 import { emitStreamingChunk } from "./util/streaming-callback.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
@@ -10,13 +10,9 @@ import { runCommandOutputSchema } from "./util/types.js";
 
 import type { RunCommandOutput } from "./util/types.js";
 
-/**
- * Creates a run-command tool using Vercel AI SDK.
- *
- * Requires user approval before execution.
- */
 export const createRunCommandTool = () => {
-  return tool({
+  return defineServerTool({
+    name: "run_command",
     description:
       "Executes a shell command in the workspace environment. Returns stdout, stderr, exit code, and execution duration. Use this for running build commands, tests, scripts, or any shell operations. Large outputs are saved to disk — use read_file with the cachedOutputPath to read specific sections.",
     inputSchema: z.object({
@@ -87,18 +83,14 @@ export const createRunCommandTool = () => {
         cachedOutputPath,
       };
     },
-
     // Only send command output to the LLM — duration/success/cachedOutputPath
     // are execution metadata with no value for the model.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: RunCommandOutput }) {
-      return {
-        type: "content" as const,
-        value: [
-          { type: "text" as const, text: `Exit code: ${output.exitCode}` },
-          ...(output.stderr.trim() ? [{ type: "text" as const, text: `stderr:\n${output.stderr}` }] : []),
-          { type: "text" as const, text: output.stdout },
-        ],
-      };
+      return [
+        { type: "text" as const, content: `Exit code: ${output.exitCode}` },
+        ...(output.stderr?.trim?.() ? [{ type: "text" as const, content: `stderr:\n${output.stderr}` }] : []),
+        { type: "text" as const, content: output.stdout },
+      ];
     },
   });
 };

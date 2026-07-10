@@ -3,10 +3,10 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:emit-agent-event
  */
-/* eslint-disable no-undef, import/no-useless-path-segments */
+/* eslint-disable no-undef */
 import assert from "node:assert/strict";
 
-import { emitAgentEvent } from "../dist/index.mjs";
+import { emitAgentEvent } from "../dist/dev.mjs";
 
 const events = [];
 

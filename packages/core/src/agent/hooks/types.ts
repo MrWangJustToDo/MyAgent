@@ -93,6 +93,7 @@ export interface NotificationInput {
   hook_event_name: "Notification";
   session_id: string;
   message: string;
+  rawData?: unknown;
 }
 
 export interface SubagentStartInput {

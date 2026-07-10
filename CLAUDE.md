@@ -6,9 +6,9 @@ See [AGENTS.md](AGENTS.md) for full architecture, code conventions, and detailed
 
 ## Quick Reference
 
-**Project:** "My Agent" — an AI coding agent built on Vercel AI SDK. pnpm monorepo:
+**Project:** "My Agent" — an AI coding agent built on TanStack AI. pnpm monorepo:
 
-- **`@my-agent/core`** — Runtime-agnostic core: agent loop, tools, models, CoreEnv interface
+- **`@my-agent/core`** — Runtime-agnostic core: ManagedAgent runtime, tools, models, CoreEnv interface
 - **`@my-agent/app`** — Shared UI layer: React components, hooks, adapter interface, commands
 - **`@my-agent/cli`** — Terminal host using @my-react/react-terminal
 - **`@my-agent/node`** — Node.js CoreEnv implementation (filesystem, shell, OS sandbox)
@@ -47,7 +47,7 @@ After completing any task, always run: `pnpm lint`, `pnpm format`, then `pnpm bu
 ```
 Hosts (CLI / Extension)
   └─ App Layer (@my-agent/app) — shared UI, AgentAdapter interface
-      └─ Core Layer (@my-agent/core) — agent loop, tools, CoreEnv registry
+      └─ Core Layer (@my-agent/core) — ManagedAgent, tools, CoreEnv registry
           └─ CoreEnv Adapter Layer (@my-agent/node local | @my-agent/server remote)
 ```
 

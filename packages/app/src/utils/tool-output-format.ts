@@ -175,11 +175,12 @@ function formatTaskOutput(output: TaskOutput): string {
   const lines: string[] = [];
   const statusParts: string[] = [];
 
-  statusParts.push(`${iterations} iteration${iterations !== 1 ? "s" : ""}`);
-  statusParts.push(`${usage.totalTokens} tokens`);
+  if (typeof incomplete === "number") statusParts.push(`${iterations} iteration${iterations !== 1 ? "s" : ""}`);
+  if (usage) statusParts.push(`${usage.totalTokens} tokens`);
   if (truncated) statusParts.push("truncated");
   if (reachedLimit) statusParts.push("limit reached");
   if (incomplete && !reachedLimit) statusParts.push("stalled");
+  if (!summary) return "";
   lines.push(`[${statusParts.join(", ")}]`);
 
   const summaryLines = stripCacheHintLines(summary.trim().split("\n"));

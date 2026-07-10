@@ -1,6 +1,6 @@
 import { agentManager } from "@my-agent/core";
 
-import { useAgentContext } from "../hooks/use-agent-context.js";
+import { bumpAgentUsage } from "../hooks/use-agent-usage.js";
 import { useDynamic } from "../hooks/use-dynamic.js";
 
 import { registerCommand } from "./registry.js";
@@ -61,7 +61,8 @@ registerCommand({
 
       if (ctx.setMessages && result.uiMessages) {
         ctx.setMessages(result.uiMessages);
-        useAgentContext.getActions().bump();
+        agent.syncInteractionStateFromUIMessages(result.uiMessages);
+        bumpAgentUsage();
         setTimeout(() => {
           useDynamic.getActions().setDynamicKey(Date.now());
         }, 200);

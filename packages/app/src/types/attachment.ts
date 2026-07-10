@@ -1,5 +1,3 @@
-import type { FileUIPart } from "ai";
-
 export interface Attachment {
   /** Original file path */
   path: string;
@@ -13,14 +11,4 @@ export interface Attachment {
   size: number;
   /** Data URL with file content (base64-encoded) */
   dataUrl: string;
-}
-
-/** Convert an Attachment to the AI SDK's FileUIPart format */
-export function attachmentToFileUIPart(attachment: Attachment): FileUIPart {
-  return {
-    type: "file",
-    mediaType: attachment.mediaType,
-    filename: attachment.filename,
-    url: attachment.dataUrl,
-  };
 }
