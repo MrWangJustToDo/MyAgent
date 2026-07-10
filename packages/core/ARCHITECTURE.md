@@ -396,7 +396,11 @@ Fields: `uiMessages`, `summaryMessage`, `compactIndex`, `usage`, `cost`, `contex
 | Trigger | Function | What is saved |
 |---------|----------|---------------|
 | **Run finalizes** (finish / abort / error) | `ManagedAgent.finalizeRun` → `SessionService.persistSession` | Model fields: `summaryMessage`, `compactIndex`, `usage`, `cost`, `contextTokens`, `todos`; auto-title if `"New Session"` |
-| **Chat idle (app)** | `useAgentChat` → `saveSessionUIMessages` | Model fields **plus** `uiMessages` (only write path for UI history) |
+| **Pump idle (core)** | `AgentChatController.persistMessages` → `maybeSaveSessionUIMessages(..., "pump-complete")` | Model fields **plus** `uiMessages` when fingerprint changed |
+| **Stable UI checkpoint (app)** | `useAgentChat` subscribe / status → `maybeSaveSessionUIMessages(..., "checkpoint")` | Same as above; skips during `running`/`thinking`/`responding`/`compacting` |
+| **Manual flush** | `saveSessionUIMessages` (`/clear`, slash commands) | Force full persist regardless of streaming |
+
+`SessionSyncTracker` (`agent/session/session-sync-tracker.ts`) fingerprints each `UIMessage` and skips disk writes until a stable checkpoint (new user turn, approval wait, terminal status, or pump complete). Format remains full JSON v2; only write **frequency** is reduced.
 
 `SessionStore.save`: content-hash dedup, per-session write lock, full JSON overwrite.
 
@@ -440,10 +444,11 @@ uiMessages (source of truth in AgentContext, synced at each `chat()` start)
 ```
 
 - **Each run start** (`prepareForRun`): incoming `uiMessages` from `AgentChatController` → `context.setUIMessages` (summary + `compactIndex` preserved).
-- **After run idle** (`AgentChatController` after `pumpToolPhases`): `saveSessionUIMessages(messages)` — sole path that writes `uiMessages`.
+- **After run idle** (`AgentChatController` after `pumpToolPhases`): `maybeSaveSessionUIMessages(messages, "pump-complete")`.
+- **Stable UI checkpoints** (`useAgentChat`): `maybeSaveSessionUIMessages` on throttled message updates and status transitions; skips mid-stream writes.
 - **During runs / core**: `persistSession()` and `finalizeRun` write model fields only; they never pass `uiMessages`.
 - **Manual `/compact`**: syncs UI → context, compacts LLM path only; UI history stays complete; `persistSession()` saves model state only.
-- **Manual `/clear`**: `saveSessionFromChat()` flushes current chat messages before rotating session.
+- **Manual `/clear`**: `saveSessionUIMessages()` force-flushes before rotating session.
 
 ### 6.5 Session events
 
@@ -578,7 +583,8 @@ executeManagedAgentRun
                  └─ emit agent:stop
   │
   ▼
-[app] chat.status === "ready" → saveSessionUIMessages(chat.messages)
+[app] useAgentChat → maybeSaveSessionUIMessages (checkpoint on stable UI / status)
+[core] pump idle → maybeSaveSessionUIMessages(..., "pump-complete")
 [core] finalizeRun / /compact → persistSession() (model fields only)
 ```
 
@@ -616,6 +622,7 @@ pnpm --filter @my-agent/core run validate:subagent-run-stats
 pnpm --filter @my-agent/core run validate:model-config
 pnpm --filter @my-agent/core run validate:agent-context
 pnpm --filter @my-agent/core run validate:tool-phase-utils
+pnpm --filter @my-agent/core run validate:session-sync-tracker
 pnpm --filter @my-agent/core run validate:tool-resume-sentinel
 ```
 

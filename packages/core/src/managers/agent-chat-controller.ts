@@ -49,6 +49,7 @@ export class AgentChatController {
 
   clearMessages(): void {
     this.channel.clearMessages();
+    this.managed.resetSessionSyncTracker();
     this.managed.statusController.resetToIdle();
   }
 
@@ -131,7 +132,7 @@ export class AgentChatController {
   private persistMessages(): void {
     const messages = this.channel.getMessages();
     if (messages.length > 0) {
-      this.managed.saveSessionUIMessages(messages);
+      this.managed.maybeSaveSessionUIMessages(messages, "pump-complete");
     }
   }
 }

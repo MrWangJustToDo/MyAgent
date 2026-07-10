@@ -49,6 +49,15 @@ export { AgentChatController, formatChatError } from "./managers/agent-chat-cont
 // Agent state (hosts / UI)
 // ============================================================================
 
+export {
+  areAllUIMessagesStable,
+  computeSessionSyncSnapshot,
+  createSessionSyncTracker,
+  fingerprintUIMessage,
+  isUIMessageStable,
+  shouldPersistUIMessages,
+} from "./agent/session/session-sync-tracker.js";
+export type { SessionSaveReason, SessionSyncSnapshot } from "./agent/session/session-sync-tracker.js";
 export { AgentContext, buildCanonicalModelMessages, type TokenUsage } from "./agent/agent-context";
 export { AgentLog } from "./agent/agent-log";
 export { TodoManager, type TodoItem, type TodoStatus, type TodoPriority, STATUS_ICONS } from "./agent/todo-manager";

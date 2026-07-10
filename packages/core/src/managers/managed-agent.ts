@@ -12,6 +12,11 @@ import { isPromptTooLongError, reactiveCompact } from "../agent/compaction/react
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
 import { isToolContinuationPrepare } from "../agent/utils/tool-phase-utils.js";
 import { generateId } from "../agent/utils.js";
+import {
+  createSessionSyncTracker,
+  type SessionSaveReason,
+  type SessionSyncTracker,
+} from "../agent/session/session-sync-tracker.js";
 
 import { AgentChatController } from "./agent-chat-controller.js";
 import { createAgentStatusController, type AgentStatusController } from "./agent-status-controller.js";
@@ -129,6 +134,7 @@ export class ManagedAgent {
   skillRegister: SkillRegistry | null = null;
   compactionConfig: CompactionConfig | null = null;
   readonly toolCompactCache = new ToolCompactCache();
+  private readonly sessionSyncTracker: SessionSyncTracker = createSessionSyncTracker();
   hookRegistry: HookRegistry | null = null;
   modelInfo: ModelInfo | null = null;
   agentDocContent = "";
@@ -355,6 +361,20 @@ export class ManagedAgent {
   }
 
   /**
+   * Checkpoint-based session persist for live UI updates.
+   * Skips writes during streaming; persists stable deltas (user turns, approvals, pump idle).
+   */
+  maybeSaveSessionUIMessages(uiMessages: TanStackUIMessage[], reason: SessionSaveReason = "checkpoint"): void {
+    if (uiMessages.length === 0) return;
+    if (!this.sessionSyncTracker.shouldPersist(uiMessages, { reason, agentStatus: this.status })) {
+      return;
+    }
+    this.syncContextFromUIMessages(uiMessages);
+    this.session.persistSession(this.getSessionPersistInput(uiMessages));
+    this.sessionSyncTracker.markPersisted(uiMessages);
+  }
+
+  /**
    * Persist session `uiMessages` from the app `useChat` hook (single source of truth).
    * Also syncs AgentContext and writes model fields in the same session save.
    */
@@ -362,6 +382,12 @@ export class ManagedAgent {
     if (uiMessages.length === 0) return;
     this.syncContextFromUIMessages(uiMessages);
     this.session.persistSession(this.getSessionPersistInput(uiMessages));
+    this.sessionSyncTracker.markPersisted(uiMessages);
+  }
+
+  /** Reset checkpoint tracking after restore, clear, or new chat bootstrap. */
+  resetSessionSyncTracker(uiMessages?: TanStackUIMessage[]): void {
+    this.sessionSyncTracker.reset(uiMessages);
   }
 
   private getSessionPersistInput(uiMessages?: TanStackUIMessage[]): SessionPersistInput {
@@ -604,11 +630,13 @@ export class ManagedAgent {
 
   async restoreSession(sessionId: string): Promise<SessionData> {
     this.toolCompactCache.clear();
-    return this.session.restoreFromStore(sessionId, {
+    const session = await this.session.restoreFromStore(sessionId, {
       context: this.context,
       usage: this.usage,
       todoManager: this.todoManager,
     });
+    this.resetSessionSyncTracker(session.uiMessages);
+    return session;
   }
 
   isToolNeedsApproval(toolName: string): boolean {
@@ -620,6 +648,7 @@ export class ManagedAgent {
   /** Create or replace the core-owned main chat session (StreamProcessor + run loop). */
   initChat(manager: AgentManager, initialMessages?: TanStackUIMessage[]): AgentChatController {
     this.chatController = new AgentChatController(this, manager, initialMessages);
+    this.resetSessionSyncTracker(initialMessages);
     return this.chatController;
   }
 

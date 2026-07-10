@@ -94,6 +94,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   const forceUpdate = useForceUpdate({ time: 100 });
   const initIdRef = useRef(0);
+  const messagesRef = useRef<UIMessage[]>([]);
 
   useEffect(() => {
     if (agent) {
@@ -126,7 +127,9 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         setAgent(managed);
         setChat(controller);
         const initial = controller.getMessages();
+        messagesRef.current = initial;
         setMessages(initial);
+        managed.resetSessionSyncTracker(initial);
         managed.syncInteractionStateFromUIMessages(initial);
       } catch (e) {
         if (currentInitId !== initIdRef.current) return;
@@ -163,7 +166,9 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     if (!chat) return;
 
     const updateUi = throttle((next: UIMessage[]) => {
+      messagesRef.current = next;
       setMessages(next);
+      agent?.maybeSaveSessionUIMessages(next, "checkpoint");
     }, 60);
 
     const unsubMessages = chat.subscribeMessages(updateUi);
@@ -171,7 +176,17 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     return () => {
       unsubMessages();
     };
-  }, [chat, forceUpdate]);
+  }, [chat, agent, forceUpdate]);
+
+  useEffect(() => {
+    if (!agent) return;
+    return agent.subscribeState(() => {
+      const next = messagesRef.current;
+      if (next.length > 0) {
+        agent.maybeSaveSessionUIMessages(next, "checkpoint");
+      }
+    });
+  }, [agent]);
 
   const status = agent?.status ?? "idle";
   const error = agent?.error ? new Error(agent.error) : null;
@@ -184,8 +199,8 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   });
 
   useEffect(() => {
-    saveSessionFromChat();
-  }, [agent, messages, saveSessionFromChat]);
+    messagesRef.current = messages;
+  }, [messages]);
 
   const stop = useCallback(() => {
     if (agent) {
@@ -224,6 +239,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   const clearMessages = useCallback(() => {
     chat?.clearMessages();
+    messagesRef.current = [];
     setMessages([]);
   }, [chat]);
 

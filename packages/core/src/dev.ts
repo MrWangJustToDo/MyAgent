@@ -3,6 +3,15 @@
  * Not part of the public `@my-agent/core` package API.
  */
 
+export {
+  areAllUIMessagesStable,
+  computeSessionSyncSnapshot,
+  createSessionSyncTracker,
+  fingerprintUIMessage,
+  isUIMessageStable,
+  shouldPersistUIMessages,
+} from "./agent/session/session-sync-tracker.js";
+export type { SessionSaveReason, SessionSyncSnapshot } from "./agent/session/session-sync-tracker.js";
 export { AgentContext, buildCanonicalModelMessages } from "./agent/agent-context/agent-context.js";
 export { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, resolveFinishStatus } from "./managers/agent-status.js";
 export { AgentEventBus } from "./managers/agent-event-bus.js";
