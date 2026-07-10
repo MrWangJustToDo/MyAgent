@@ -2,6 +2,7 @@
  * MessageList - Renders a list of UIMessages with their parts.
  *
  * Uses AI SDK's UIMessage format with parts (text, reasoning, tool-*, etc).
+ * Static messages are capped to limit terminal output and improve performance.
  */
 
 import { Box, Text } from "ink";
@@ -19,6 +20,13 @@ import type { UIMessage } from "@tanstack/ai";
 import type { JSX } from "react";
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/** Maximum number of completed (static) flat parts to render. Older messages are truncated with a summary line. */
+const MAX_STATIC_PARTS = 40;
+
+// ============================================================================
 // Props
 // ============================================================================
 
@@ -33,24 +41,45 @@ export interface MessageListProps {
 export const MessageList = ({ messages }: MessageListProps) => {
   const { staticMessages, dynamicMessages, toolCallsSignature } = getMessages(messages);
 
+  // ── Truncate static list to bounded size ──
+  const hiddenPartCount = staticMessages.length > MAX_STATIC_PARTS ? staticMessages.length - MAX_STATIC_PARTS : 0;
+  const visibleStaticMessages = hiddenPartCount > 0 ? staticMessages.slice(-MAX_STATIC_PARTS) : staticMessages;
+  const visibleStaticLength = visibleStaticMessages.length;
+
   // Rebuild static list when length changes or merged tool-call state updates earlier rows.
   const lastStaticLengthRef = useRef(0);
   const lastToolCallsSignatureRef = useRef("");
+  const lastHiddenCountRef = useRef(0);
   const staticListRef = useRef<JSX.Element[]>([]);
 
   if (
-    staticMessages.length !== lastStaticLengthRef.current ||
-    toolCallsSignature !== lastToolCallsSignatureRef.current
+    visibleStaticLength !== lastStaticLengthRef.current ||
+    toolCallsSignature !== lastToolCallsSignatureRef.current ||
+    hiddenPartCount !== lastHiddenCountRef.current
   ) {
-    lastStaticLengthRef.current = staticMessages.length;
+    lastStaticLengthRef.current = visibleStaticLength;
     lastToolCallsSignatureRef.current = toolCallsSignature;
-    staticListRef.current = staticMessages.map((item) => (
+    lastHiddenCountRef.current = hiddenPartCount;
+
+    const elements = visibleStaticMessages.map((item) => (
       <Box key={item.id} paddingX={1} marginTop={1}>
         <StaticContext value={{ staticMessage: true }}>
           <MessageView message={item} />
         </StaticContext>
       </Box>
     ));
+
+    if (hiddenPartCount > 0) {
+      elements.unshift(
+        <Box key="truncation-marker" paddingX={1} marginTop={1}>
+          <Text color={COLORS.muted} dimColor>
+            ... {hiddenPartCount} older message{hiddenPartCount === 1 ? "" : "s"} hidden
+          </Text>
+        </Box>
+      );
+    }
+
+    staticListRef.current = elements;
   }
 
   useEffect(() => {
@@ -76,7 +105,7 @@ export const MessageList = ({ messages }: MessageListProps) => {
 
   useEffect(() => {
     useStatic.getActions().setStaticList(staticListRef.current);
-  }, [staticMessages.length, toolCallsSignature]);
+  }, [visibleStaticLength, toolCallsSignature, hiddenPartCount]);
 
   useEffect(() => {
     useDynamic.getActions().setDynamicList(dynamicList);

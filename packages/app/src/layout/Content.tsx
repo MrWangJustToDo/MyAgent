@@ -6,8 +6,9 @@ import { useDynamic } from "../hooks/use-dynamic";
 import { useStatic } from "../hooks/use-static";
 
 export const Content = memo(() => {
-  const { head, list, toolCallsSignature } = useStatic((s) => ({
+  const { head, list, listSet, toolCallsSignature } = useStatic((s) => ({
     list: s.list,
+    listSet: s.listSet,
     head: s.header,
     toolCallsSignature: s.toolCallsSignature,
   }));
@@ -24,7 +25,7 @@ export const Content = memo(() => {
 
   return (
     <>
-      <StaticRender width={width} deps={[width, validList.length, dynamicKey, toolCallsSignature]}>
+      <StaticRender width={width} deps={[width, validList.length, listSet, dynamicKey, toolCallsSignature]}>
         {() => validList}
       </StaticRender>
       {dynamicList}
