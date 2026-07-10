@@ -7,4 +7,11 @@ export {
   PROTECTED_TOOLS,
   TOOL_PLACEHOLDER_PREFIX,
 } from "./tool-compact-placeholders.js";
-export { extractCachedOutputPath, normalizeModelToolContent, parseToolMessageOutput } from "./parse-tool-message.js";
+export {
+  extractCachedOutputPath,
+  extractToolErrorMessage,
+  formatToolErrorForModel,
+  isToolErrorResult,
+  normalizeModelToolContent,
+  parseToolMessageOutput,
+} from "./parse-tool-message.js";

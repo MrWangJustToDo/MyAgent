@@ -303,6 +303,7 @@ Runs **after** context auto-compact in the middleware stack.
 
 - **Recent window** (`keepRecentToolResults`): tools with `toModelOutput` on `defineServerTool` are transformed for the LLM; result cached per `toolCallId` in `ToolCompactCache`
 - **Skips** approval placeholders (`pendingExecution: true`) — tool-compact runs on `onConfig` before execution; transforming those messages would strip the marker and TanStack would skip the real tool run
+- **Preserves tool errors** (`{ error: string }` from TanStack `output-error`) — bypasses success-only `toModelOutput` formatters and keeps an explicit `Error: …` text result; error results are not replaced with `[Previous: used …]` placeholders
 - **Outside window**: `role: "tool"` content replaced with `"[Previous: used {tool_name}]"`; clears tool-output cache + compact cache for that call
 - Skips small results (`minToolResultSize`); protects `list_skills`, `load_skill`, `todo`, etc.
 - **UI** `UIMessage` history is unchanged; only the LLM `ModelMessage` path is shaped

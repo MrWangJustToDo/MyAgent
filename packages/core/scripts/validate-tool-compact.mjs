@@ -159,4 +159,53 @@ const pendingTool = pendingClone.find((m) => m.role === "tool" && m.toolCallId =
 assert.ok(pendingTool);
 assert.match(String(pendingTool.content), /pendingExecution/);
 
+toModelOutputRegistry.register("write_file", ({ output }) => [
+  {
+    type: "text",
+    content: `${output.created ? "Created" : "Overwrote"} file: ${output.path}，modifiedTime：${output.modifiedTime}`,
+  },
+]);
+
+const errorMessages = [
+  {
+    role: "assistant",
+    content: null,
+    toolCalls: [
+      {
+        id: "call-err",
+        type: "function",
+        function: {
+          name: "write_file",
+          arguments: JSON.stringify({ path: "packages/app/src/WorkspacePanel.tsx", content: "x" }),
+        },
+      },
+    ],
+  },
+  {
+    role: "tool",
+    toolCallId: "call-err",
+    content: JSON.stringify({
+      error: "File already exists: packages/app/src/WorkspacePanel.tsx. You must read the file first.",
+    }),
+  },
+];
+
+const errorClone = structuredClone(errorMessages);
+await applyToolCompact(errorClone, {
+  config: { keepRecentToolResults: 10, minToolResultSize: 1 },
+  registry: toModelOutputRegistry,
+  cache: new ToolCompactCache(),
+});
+
+const errorTool = errorClone.find((m) => m.role === "tool" && m.toolCallId === "call-err");
+assert.ok(errorTool);
+const errorText =
+  typeof errorTool.content === "string"
+    ? errorTool.content
+    : Array.isArray(errorTool.content)
+      ? errorTool.content.map((part) => part.content ?? "").join("")
+      : String(errorTool.content);
+assert.match(errorText, /Error: File already exists/);
+assert.doesNotMatch(errorText, /Overwrote file: undefined/);
+
 console.log("tool-compact validation passed");

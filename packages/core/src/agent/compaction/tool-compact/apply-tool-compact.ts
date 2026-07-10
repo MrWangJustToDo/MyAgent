@@ -4,7 +4,9 @@ import { buildToolCallNameMap, getToolMessageContentSize } from "../message-util
 import { buildToolCallInputMap } from "./build-tool-call-input-map.js";
 import {
   extractCachedOutputPath,
+  formatToolErrorForModel,
   isPendingToolExecutionResult,
+  isToolErrorResult,
   normalizeModelToolContent,
   parseToolMessageOutput,
 } from "./parse-tool-message.js";
@@ -106,6 +108,7 @@ function isToolCompressible(
 
   const rawOutput = parseToolMessageOutput(message.content);
   if (isPendingToolExecutionResult(rawOutput)) return false;
+  if (isToolErrorResult(rawOutput)) return false;
 
   return true;
 }
@@ -181,9 +184,6 @@ export async function applyToolCompact(messages: ModelMessage[], options: ApplyT
     const rawOutput = parseToolMessageOutput(message.content);
     if (isPendingToolExecutionResult(rawOutput)) continue;
 
-    const toModelOutput = options.registry.get(toolName);
-    if (!toModelOutput) continue;
-
     const cached = cache.get(target.toolCallId);
     if (cached !== undefined) {
       applyModelToolContent(message, cached);
@@ -193,6 +193,16 @@ export async function applyToolCompact(messages: ModelMessage[], options: ApplyT
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore – approved check on raw output
     if (rawOutput?.approved === false) continue;
+
+    if (isToolErrorResult(rawOutput)) {
+      const normalized = normalizeModelToolContent(formatToolErrorForModel(rawOutput));
+      cache.set(target.toolCallId, normalized);
+      message.content = normalized;
+      continue;
+    }
+
+    const toModelOutput = options.registry.get(toolName);
+    if (!toModelOutput) continue;
     const input = toolInputMap.get(target.toolCallId);
     const transformed = await toModelOutput({
       toolCallId: target.toolCallId,

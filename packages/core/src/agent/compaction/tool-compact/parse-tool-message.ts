@@ -68,3 +68,45 @@ export function isPendingToolExecutionResult(output: unknown): boolean {
   if (!output || typeof output !== "object") return false;
   return (output as Record<string, unknown>).pendingExecution === true;
 }
+
+/**
+ * TanStack `output-error` tool results — `{ error: string }` from server execution.
+ * Must not pass through success-only `toModelOutput` handlers (they treat missing
+ * fields as success and emit misleading text like "Overwrote file: undefined").
+ */
+export function isToolErrorResult(output: unknown): boolean {
+  if (isPendingToolExecutionResult(output)) return false;
+
+  if (output && typeof output === "object" && "error" in output) {
+    const error = (output as Record<string, unknown>).error;
+    return typeof error === "string" && error.length > 0;
+  }
+
+  if (typeof output === "string") {
+    return output.startsWith("Error executing tool:");
+  }
+
+  return false;
+}
+
+/** Extract a human-readable error message from a tool error payload. */
+export function extractToolErrorMessage(output: unknown): string {
+  if (output && typeof output === "object" && "error" in output) {
+    const error = (output as Record<string, unknown>).error;
+    if (typeof error === "string" && error.length > 0) return error;
+  }
+
+  if (typeof output === "string") {
+    if (output.startsWith("Error executing tool:")) {
+      return output.slice("Error executing tool:".length).trim();
+    }
+    return output;
+  }
+
+  return "Tool execution failed";
+}
+
+/** LLM-facing shape for failed tool results (preserves failure semantics). */
+export function formatToolErrorForModel(output: unknown): string | ContentPart[] {
+  return [{ type: "text", content: `Error: ${extractToolErrorMessage(output)}` }];
+}
