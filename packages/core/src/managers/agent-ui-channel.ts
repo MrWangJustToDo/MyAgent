@@ -13,6 +13,7 @@ import {
 } from "../agent/subagent/extract-assistant-text.js";
 import { clearStreamingOutput, emitStreamingChunk } from "../agent/tools/util/streaming-callback.js";
 import { applyToolDenialReason } from "../agent/utils/apply-tool-denial-reason.js";
+import { stripEmptyAssistantShells } from "../agent/utils/empty-assistant-shell.js";
 
 import type { StreamChunk, StreamProcessorEvents, UIMessage as TanStackUIMessage, ContentPart } from "@tanstack/ai";
 
@@ -164,6 +165,10 @@ export class AgentUIChannel {
   /** Finalize an incrementally processed stream. */
   finalizeStream(): void {
     this.processor.finalizeStream();
+    const cleaned = stripEmptyAssistantShells(this.processor.getMessages());
+    if (cleaned.length !== this.processor.getMessages().length) {
+      this.processor.setMessages(cleaned);
+    }
   }
 
   /**

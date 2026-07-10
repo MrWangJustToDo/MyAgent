@@ -1,5 +1,9 @@
 import { formatAgentStreamError } from "../agent/utils/assert-async-iterable.js";
-import { hasPendingAskUser, hasPendingToolApprovals, needsToolPhaseContinue } from "../agent/utils/tool-phase-utils.js";
+import {
+  hasPendingAskUser,
+  hasPendingToolApprovals,
+  shouldContinueAgentPump,
+} from "../agent/utils/tool-phase-utils.js";
 
 import { AgentUIChannel } from "./agent-ui-channel.js";
 
@@ -61,6 +65,7 @@ export class AgentChatController {
 
   respondToToolApproval(approvalId: string, approved: boolean, reason?: string): Promise<void> {
     this.channel.addToolApprovalResponse(approvalId, approved, reason);
+    this.managed.syncContextFromUIMessages(this.channel.getMessages());
     this.managed.statusController.reconcileFromUIMessages(this.channel.getMessages(), { whenClear: "running" });
     return this.enqueueRun();
   }
@@ -89,7 +94,7 @@ export class AgentChatController {
       if (hasPendingToolApprovals(currentMessages)) break;
       if (hasPendingAskUser(currentMessages)) break;
 
-      if (iteration > 0 && !needsToolPhaseContinue(currentMessages)) break;
+      if (iteration > 0 && !shouldContinueAgentPump(currentMessages)) break;
 
       await this.executeStream(currentMessages, generation);
       if (generation !== this.runGeneration) return;
@@ -97,7 +102,7 @@ export class AgentChatController {
       const after = this.channel.getMessages();
       if (hasPendingToolApprovals(after)) break;
       if (hasPendingAskUser(after)) break;
-      if (!needsToolPhaseContinue(after)) break;
+      if (!shouldContinueAgentPump(after)) break;
     }
 
     if (generation === this.runGeneration) {

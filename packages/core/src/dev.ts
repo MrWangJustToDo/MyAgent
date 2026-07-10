@@ -57,10 +57,17 @@ export {
   DEFAULT_TOOL_DENIAL_MESSAGE,
 } from "./agent/utils/apply-tool-denial-reason.js";
 export {
+  findLastMeaningfulAssistant,
+  isEmptyAssistantShell,
+  stripEmptyAssistantShells,
+} from "./agent/utils/empty-assistant-shell.js";
+export {
   hasDeferredToolExecution,
   hasApprovedToolsPendingExecution,
   hasApprovalRespondedToolsPendingExecution,
+  needsAgentResponseAfterTools,
   needsToolPhaseContinue,
+  shouldContinueAgentPump,
   isToolContinuationPrepare,
   countPendingToolApprovals,
 } from "./agent/utils/tool-phase-utils.js";

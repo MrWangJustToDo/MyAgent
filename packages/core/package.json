@@ -42,6 +42,7 @@
     "validate:status-middleware": "pnpm run build && node scripts/validate-status-middleware.mjs",
     "validate:lifecycle-middleware": "pnpm run build && node scripts/validate-lifecycle-middleware.mjs",
     "validate:tool-phase-utils": "pnpm run build && node scripts/validate-tool-phase-utils.mjs",
+    "validate:empty-assistant-shell": "pnpm run build && node scripts/validate-empty-assistant-shell.mjs",
     "validate:tool-compact": "pnpm run build && node scripts/validate-tool-compact.mjs",
     "validate:tool-denial-reason": "pnpm run build && node scripts/validate-tool-denial-reason.mjs",
     "validate:streaming-callback": "pnpm run build && node scripts/validate-streaming-callback.mjs",

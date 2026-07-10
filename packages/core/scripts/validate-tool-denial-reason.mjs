@@ -7,7 +7,7 @@
 import { uiMessageToModelMessages } from "@tanstack/ai";
 import assert from "node:assert/strict";
 
-import { AgentUIChannel, applyToolDenialReason, hasApprovalRespondedToolsPendingExecution } from "../dist/dev.mjs";
+import { AgentUIChannel, applyToolDenialReason, needsAgentResponseAfterTools } from "../dist/dev.mjs";
 
 const approvalId = "approval_call_cmd";
 const initialMessages = [
@@ -44,7 +44,7 @@ assert.deepEqual(JSON.parse(denialResult.content), {
   message: "Too destructive for this workspace",
 });
 
-assert.equal(hasApprovalRespondedToolsPendingExecution(messages), true);
+assert.equal(needsAgentResponseAfterTools(messages), true);
 
 const modelMessages = uiMessageToModelMessages(assistant);
 const toolMessage = modelMessages.find((message) => message.role === "tool");

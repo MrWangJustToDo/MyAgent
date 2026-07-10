@@ -10,6 +10,7 @@
 import {
   countPendingToolApprovals,
   hasPendingAskUser,
+  needsAgentResponseAfterTools,
   needsToolPhaseContinue,
 } from "../agent/utils/tool-phase-utils.js";
 
@@ -225,6 +226,7 @@ export class AgentStatusController {
     const status = this.deps.getStatus();
     if (status === "waiting" || status === "awaiting_user") return;
     if (needsToolPhaseContinue(messages)) return;
+    if (needsAgentResponseAfterTools(messages)) return;
     if (isTerminalStatus(status)) return;
 
     if (status === "running" || status === "thinking" || status === "responding" || status === "compacting") {

@@ -70,4 +70,49 @@ assert.equal(
   "full engine at run start maps to converted UI history"
 );
 
+// In-place tool result update: engine length unchanged, content differs from stale UI conversion.
+const toolUiMessages = [
+  { id: "u1", role: "user", parts: [{ type: "text", content: "test" }] },
+  {
+    id: "a1",
+    role: "assistant",
+    parts: [
+      {
+        type: "tool-call",
+        id: "call_cmd",
+        name: "run_command",
+        arguments: '{"command":"pnpm typecheck"}',
+        state: "approval-responded",
+        approval: { id: "ap1", needsApproval: true, approved: true },
+      },
+    ],
+  },
+];
+const engineWithResults = [
+  { role: "user", content: "test" },
+  {
+    role: "assistant",
+    content: "",
+    toolCalls: [
+      {
+        id: "call_cmd",
+        type: "function",
+        function: { name: "run_command", arguments: '{"command":"pnpm typecheck"}' },
+      },
+    ],
+  },
+  { role: "tool", toolCallId: "call_cmd", content: "Exit status 1\nlint output..." },
+];
+const inPlaceCanon = buildCanonicalModelMessages(toolUiMessages, engineWithResults, {
+  runBaselineCount: 2,
+});
+assert.equal(inPlaceCanon.length, 3, "engine suffix appended when engine grew");
+assert.equal(inPlaceCanon[2]?.content, "Exit status 1\nlint output...");
+
+const sameLengthEngine = buildCanonicalModelMessages(toolUiMessages, engineWithResults, {
+  runBaselineCount: engineWithResults.length,
+});
+assert.equal(sameLengthEngine, engineWithResults, "prefer engine when length equals baseline (in-place tool results)");
+assert.equal(sameLengthEngine[2]?.content, "Exit status 1\nlint output...");
+
 console.log("canonical-model-messages validation passed");

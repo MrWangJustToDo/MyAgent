@@ -26,13 +26,13 @@ export interface BuildCanonicalModelMessagesOptions {
 }
 
 /**
- * Rebuild the full model-message history for compaction.
+ * Rebuild the full model-message history for compaction / LLM prep.
  *
- * TanStack may overwrite its internal `messages` with a compacted LLM view during a run.
- * UI messages are the durable source of truth; when the engine has grown past the run
- * baseline we append `engine.slice(runBaselineCount)`. When the engine has been replaced
- * with a compacted LLM view (`[summary, ...tail]`), rebuild as
- * `fromUI.slice(0, compactIndex) + tail`.
+ * Merge contract:
+ * - **UI** (`AgentContext.uiMessages`): durable history synced at `chat()` start; may lag mid-run.
+ * - **Engine** (`onConfig` messages): authoritative for the current run — tool results are often
+ *   applied in-place without growing the array length.
+ * - **runBaselineCount**: model-message count at `chat()` init; splits UI prefix vs engine suffix.
  */
 export function buildCanonicalModelMessages(
   uiMessages: UIMessage[],
@@ -53,18 +53,24 @@ export function buildCanonicalModelMessages(
 
   const fromUI = convertMessagesToModelMessages(uiMessages);
 
-  if (runBaselineCount > 0 && engineMessages.length > runBaselineCount) {
-    return [...fromUI, ...engineMessages.slice(runBaselineCount)];
+  if (runBaselineCount > 0) {
+    if (engineMessages.length > runBaselineCount) {
+      return [...fromUI.slice(0, runBaselineCount), ...engineMessages.slice(runBaselineCount)];
+    }
+
+    // Same length: engine has in-place updates (e.g. tool results) that stale UI conversion lacks.
+    if (engineMessages.length === runBaselineCount) {
+      return engineMessages;
+    }
+
+    // Shorter than baseline: prior onConfig wrote back a compacted LLM view.
+    if (engineMessages.length > 0 && engineMessages.length < runBaselineCount) {
+      if (summaryMessage && isCompactionSummaryMessage(engineMessages[0], summaryMessage)) {
+        return [...fromUI.slice(0, compactIndex), ...engineMessages.slice(1)];
+      }
+      return engineMessages;
+    }
   }
 
-  if (summaryMessage && engineMessages.length > 0 && isCompactionSummaryMessage(engineMessages[0], summaryMessage)) {
-    const engineTail = engineMessages.slice(1);
-    return [...fromUI.slice(0, compactIndex), ...engineTail];
-  }
-
-  if (runBaselineCount > 0 && engineMessages.length <= runBaselineCount) {
-    return fromUI;
-  }
-
-  return fromUI.length >= engineMessages.length ? fromUI : engineMessages;
+  return engineMessages.length >= fromUI.length ? engineMessages : fromUI;
 }

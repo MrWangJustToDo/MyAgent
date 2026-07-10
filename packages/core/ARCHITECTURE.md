@@ -260,9 +260,10 @@ managed.isToolNeedsApproval(toolName)  // managed-agent.ts
 | UI | `ToolCallPartView.tsx`, `Footer.tsx` |
 | Keyboard | `use-agent-keybindings.ts` — `y` approves **one** pending tool per press; `n` enters freeform deny-reason input |
 | Deny reason | App collects reason in freeform mode; `respondToToolApproval(id, false, reason)` stores it on `part.approval.reason` and adds a `tool-result` part for the LLM |
-| Resume | `respondToToolApproval()` — core re-runs when `needsToolPhaseContinue()` |
+| Empty model turn | TanStack may leave a `parts: []` assistant shell after `TEXT_MESSAGE_START` with no content; `AgentUIChannel.finalizeStream()` strips trailing shells; `needsAgentResponseAfterTools()` skips shells when deciding pump continuation |
+| Resume | `respondToToolApproval()` — core re-runs while `shouldContinueAgentPump()` (approved execution or model follow-up after denial) |
 
-**Mixed tool batches** (e.g. `tree` + `run_command`): TanStack defers non-approval tools while approvals are pending. Core `pumpToolPhases()` loops `runAgentStream()` until `needsToolPhaseContinue()` is false — no `ChatClient.shouldAutoSend()`.
+**Mixed tool batches** (e.g. `tree` + `run_command`): TanStack defers non-approval tools while approvals are pending. Core `pumpToolPhases()` loops `runAgentStream()` until `shouldContinueAgentPump()` is false — no `ChatClient.shouldAutoSend()`.
 
 ### 4.4 Client tools (`ask_user`)
 
@@ -430,10 +431,12 @@ App passes `initialMessages` from resume into `ManagedAgent.initChat()`.
 **Message flow (expected contract):**
 
 ```
-uiMessages (source of truth in AgentContext)
+uiMessages (source of truth in AgentContext, synced at each `chat()` start)
   → getCanonicalModelMessages(engine) on each onConfig
+     · engine.length > runBaseline → UI prefix + engine suffix
+     · engine.length === runBaseline → prefer engine (in-place tool results)
+     · engine shorter with summary → UI.slice(compactIndex) + engine tail
   → getMessagesForLLM(canon) → LLM view returned to TanStack
-  → TanStack engine state may be truncated; canonical rebuild avoids double-slice
 ```
 
 - **Each run start** (`prepareForRun`): incoming `uiMessages` from `AgentChatController` → `context.setUIMessages` (summary + `compactIndex` preserved).

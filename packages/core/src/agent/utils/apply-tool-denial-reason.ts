@@ -35,6 +35,7 @@ export function applyToolDenialReason(messages: UIMessage[], approvalId: string,
     const parts = [...message.parts];
     parts[toolCallIndex] = {
       ...toolCallPart,
+      state: "approval-responded",
       approval: toolCallPart.approval
         ? ({ ...toolCallPart.approval, approved: false, reason: denialMessage } as ToolCallPart["approval"])
         : toolCallPart.approval,

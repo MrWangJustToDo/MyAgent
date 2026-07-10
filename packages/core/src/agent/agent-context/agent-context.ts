@@ -14,7 +14,10 @@ export const generateContextId = (): string => generateId("ctx");
  * Conversation state for an agent.
  *
  * - {@link UIMessage} history is the client-facing source of truth (approvals, tool parts).
- * - Canonical model messages are rebuilt from UI + in-run engine delta on each compaction pass.
+ * - **Engine** (`onConfig` messages): authoritative for the current run (in-place tool results).
+ * - Canonical rebuild: `fromUI.slice(0, runBaseline) + engine.slice(runBaseline)` when engine grew;
+ *   prefer full `engine` when `engine.length === runBaseline` (stale UI conversion); compacted LLM
+ *   view uses `fromUI.slice(0, compactIndex) + engine.slice(1)`.
  * - Compaction summary + {@link compactIndex} apply to the canonical view in {@link getMessagesForLLM}.
  *
  * Token usage and pricing live on {@link UsageTracker} via {@link ManagedAgent.usage}.

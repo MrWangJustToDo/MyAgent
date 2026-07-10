@@ -133,5 +133,7 @@ export {
   hasDeferredToolExecution,
   hasPendingAskUser,
   hasPendingToolApprovals,
+  needsAgentResponseAfterTools,
   needsToolPhaseContinue,
+  shouldContinueAgentPump,
 } from "./agent/utils/tool-phase-utils.js";

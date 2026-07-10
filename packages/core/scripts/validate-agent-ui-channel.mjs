@@ -126,4 +126,58 @@ assert.equal(toolCall?.name, "read_file");
 assert.equal(customEvents.length, 1);
 assert.equal(customEvents[0].eventType, "subagent-progress");
 
+const emptyChannel = new AgentUIChannel({
+  initialMessages: [
+    {
+      id: "assistant-deny",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-call",
+          id: "call_cmd",
+          name: "run_command",
+          arguments: "{}",
+          state: "approval-responded",
+          approval: { id: "approval_1", needsApproval: true, approved: false },
+        },
+        {
+          type: "tool-result",
+          toolCallId: "call_cmd",
+          content: JSON.stringify({ approved: false, message: "no" }),
+          state: "complete",
+        },
+      ],
+    },
+  ],
+});
+
+await emptyChannel.consumeRun({
+  stream: (async function* () {
+    yield {
+      type: EventType.RUN_STARTED,
+      threadId: "thread-empty",
+      runId: "run-empty",
+      timestamp: Date.now(),
+    };
+    yield {
+      type: EventType.TEXT_MESSAGE_START,
+      messageId: "assistant-empty",
+      role: "assistant",
+      threadId: "thread-empty",
+      runId: "run-empty",
+    };
+    yield {
+      type: EventType.RUN_FINISHED,
+      threadId: "thread-empty",
+      runId: "run-empty",
+      timestamp: Date.now(),
+      finishReason: "stop",
+      model: "mock",
+    };
+  })(),
+});
+
+assert.equal(emptyChannel.getMessages().length, 1);
+assert.equal(emptyChannel.getMessages()[0].id, "assistant-deny");
+
 console.log("agent-ui-channel validation passed");

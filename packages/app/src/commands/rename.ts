@@ -45,7 +45,7 @@ registerCommand({
       return { ok: false, error: "No text adapter available for title generation" };
     }
 
-    const messages = context.getMessages();
+    const messages = context.getCanonicalModelMessages();
     const recentText = messages
       .filter((m) => m.role === "user" || m.role === "assistant")
       .slice(-4)
