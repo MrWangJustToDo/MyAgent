@@ -1,10 +1,11 @@
+import { useEffect, useMemo, useRef } from "react";
 import { agentManager } from "@my-agent/core";
-import { useEffect, useRef } from "react";
 import { toRaw } from "reactivity-store";
 
 import { dispatchCommand } from "../commands";
 
 import { useAgentKeybindings } from "./use-agent-keybindings.js";
+import { resolveFocusedPendingApproval, useMessageDiffFocus } from "./use-message-diff-focus.js";
 import { useAgent } from "./use-agent.js";
 import { useAutocomplete } from "./use-autocomplete.js";
 import { useCommandOutput } from "./use-command-output.js";
@@ -68,8 +69,18 @@ export function useAgentInputControls({
   const { mode, denyMode } = useInputMode((s) => ({ mode: s.mode, denyMode: s.denyMode }));
   const modeActions = useInputMode.getActions();
 
-  const pendingApproval = allPendingApproval[0];
-  const currentPendingIsLast = allPendingApproval.length === 1;
+  const diffEntries = useMessageDiffFocus((s) => s.entries);
+  const diffSelectedIndex = useMessageDiffFocus((s) => s.selectedIndex);
+
+  const pendingApproval = useMemo(
+    () => resolveFocusedPendingApproval(allPendingApproval, diffEntries, diffSelectedIndex),
+    [allPendingApproval, diffEntries, diffSelectedIndex]
+  );
+  const currentPendingIsLast = useMemo(() => {
+    if (!pendingApproval) return true;
+    const index = allPendingApproval.findIndex((item) => item.id === pendingApproval.id);
+    return index === allPendingApproval.length - 1;
+  }, [allPendingApproval, pendingApproval]);
   const pendingAskUser = allPendingAskUser[0];
   const setMode = modeActions.setMode;
   const setLoading = inputActions.setLoading;
@@ -79,12 +90,12 @@ export function useAgentInputControls({
       setMode("freeform");
     } else if (isSelectVisible) {
       setMode("select");
-    } else if (pendingApproval) {
+    } else if (allPendingApproval.length > 0) {
       setMode("approval");
     } else {
       setMode("normal");
     }
-  }, [denyMode, isSelectVisible, pendingApproval, setMode]);
+  }, [allPendingApproval.length, denyMode, isSelectVisible, setMode]);
 
   useEffect(() => {
     setClientToolWaiting(!!pendingAskUser);

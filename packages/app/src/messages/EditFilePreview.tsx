@@ -1,7 +1,7 @@
 import { Box, Text } from "ink";
 import { memo } from "react";
 
-import { EditDiff } from "../components/EditDiff";
+import { MessageDiffView } from "../components/MessageDiffView.js";
 // import { SplitNode } from "../components/SplitNode";
 import { usePreviewEdit, useSize } from "../hooks";
 import { BG } from "../theme/colors.js";
@@ -23,12 +23,14 @@ import { BG } from "../theme/colors.js";
  */
 export const EditFilePreview = memo(function EditFilePreview({
   toolCallId,
+  approvalId,
   path,
   edits,
   approved,
   output,
 }: {
   toolCallId: string;
+  approvalId?: string;
   path: string;
   edits: Array<{ oldString: string; newString: string; startLine?: number; replaceAll?: boolean }>;
   approved: boolean | undefined;
@@ -54,8 +56,10 @@ export const EditFilePreview = memo(function EditFilePreview({
       <Box flexDirection="column" borderColor={borderColor} borderStyle="single">
         {/* Full-file diff: original file → file after all edits applied */}
         {oldFile !== undefined && newFile !== undefined ? (
-          <EditDiff
-            id={toolCallId + "-full"}
+          <MessageDiffView
+            diffId={toolCallId + "-full"}
+            toolCallId={toolCallId}
+            approvalId={approvalId}
             width={width}
             oldPath={path}
             oldFile={oldFile}

@@ -107,4 +107,8 @@ export const BG = {
   borderSuccess: COLORS.success,
   /** Border for denied state */
   borderDanger: COLORS.danger,
+  /** File tree row — keyboard cursor (primary tint). */
+  rowCursor: interpolateColor(TERMINAL_BG, COLORS.primary, 0.32),
+  /** File tree row — open preview file (accent tint). */
+  rowSelected: interpolateColor(TERMINAL_BG, COLORS.accent, 0.26),
 } as const;

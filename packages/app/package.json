@@ -21,9 +21,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@git-diff-view/cli": "^0.1.8",
-    "@git-diff-view/core": "^0.1.6",
-    "@git-diff-view/file": "^0.1.6",
+    "@git-diff-view/cli": "^0.1.10",
+    "@git-diff-view/core": "^0.1.7",
+    "@git-diff-view/file": "^0.1.7",
+    "@m234/nerd-fonts": "^0.5.1",
     "@my-react/react": "^0.3.28",
     "@my-react/react-terminal": "^0.0.28",
     "@tanstack/ai": "^0.40.0",

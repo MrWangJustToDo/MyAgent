@@ -16,10 +16,11 @@ Designed with a runtime-agnostic core that decouples agent logic from execution 
 | Category | Description |
 |----------|-------------|
 | **Multi-Model** | OpenAI, Anthropic, DeepSeek, Ollama, OpenRouter — any LLM provider via model adapter |
-| **Terminal UI** | React-powered with Shiki syntax highlighting, diff views, streaming markdown |
+| **Terminal UI** | React-powered TUI with Shiki syntax highlighting, scrollable diff views, streaming markdown, and theme support |
+| **Workspace Browser** | Full-screen file tree (`Ctrl+E`) with git status, Seti/Nerd Font icons, scrollable file preview, and HEAD diff view |
 | **Chrome Extension** | Full agent UI running in the browser via remote CoreEnv (WXT + HeroUI) |
 | **Local / Remote** | Run tools locally or proxy through an HTTP server — seamless switching via `--remote` |
-| **Tool Approval** | Review + approve/deny tool calls with custom deny reasons |
+| **Tool Approval** | Review + approve/deny tool calls; scrollable diffs with Tab to switch when multiple edits are pending |
 | **Ask User** | Agent asks questions with selectable options or freeform answers |
 | **Subagents** | Context-isolated read-only tasks with 30-step limit for parallel exploration |
 | **Skills** | On-demand domain knowledge injection (list → load workflow) |
@@ -100,26 +101,64 @@ Designed with a runtime-agnostic core that decouples agent logic from execution 
 
 ## Screenshots
 
-### Tool Flow
-![Tool Flow](toolflow.png)
+### Welcome Screen
 
-### Edit with Diff View
-![Edit Diff View](editdiff.png)
+Default and alternate theme on the idle screen. Header shortcuts: `/` commands, `Ctrl+E` workspace, `Ctrl+T` task panel, `Ctrl+V` paste image.
+
+![Welcome — default theme](start-default.png)
+![Welcome — alternate theme](start-theme.png)
+
+### Slash Commands
+
+Type `/` to open the command palette with autocomplete (`/help`, `/compact`, `/resume`, `/usage`, …).
+
+![Slash commands](command.png)
+
+### Tool Flow & Approval
+
+Agent tool calls with inline status, approval prompts (`y` / `n`), and token/cost tracking in the status bar.
+
+![Tool flow and approval](tool-flow.png)
+
+### Ask User
+
+Interactive questions with arrow-key selection, multi-select toggles, and optional freeform answers.
+
+![Ask user](ask-user.png)
+
+### Code Edits with Diff View
+
+Side-by-side diff for `edit_file` / `write_file` tool previews. Long diffs use a scrollable viewport (`max(2/3 terminal height, 28 rows)`). When several diffs are pending, **Tab** switches focus and **↑↓** scrolls the selected diff; **y** / **n** apply to the focused one.
+
+![Edit diff view](edit-diff.png)
 
 ### Markdown Rendering
-![Markdown Rendering](markdown.png)
 
-### Subagent
-![Subagent](subagent.png)
+Streaming markdown with syntax-highlighted code blocks in the message stream.
 
-### Web Tools
-![Web Tools](web_tool.png)
+![Markdown rendering](markdown.png)
+
+### Task & Subagents
+
+Spawn read-only subagents via the `task` tool. Open the task panel with `Ctrl+T` to inspect live runs and summaries.
+
+![Task in main chat](task-main.png)
+![Task panel — live run](task-stream.png)
+![Task panel — completed summary](task-view.png)
+
+### Workspace Browser
+
+Press `Ctrl+E` for a full-screen workspace panel: file tree with git status badges, scrollable **Preview** (`CodeView`), and **Diff vs HEAD** (`DiffView`). **Tab** toggles preview/diff; **←→** moves focus; **↑↓** scrolls; **R** refreshes.
+
+![Workspace — file preview](workspace-file.png)
+![Workspace — git diff](workspace-diff.png)
 
 ### Devtools Debug
+
 Built with [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools) powered by [@my-react framework](https://github.com/MrWangJustToDo/MyReact)
 
-![Devtools Debug 1](devtools-debug-1.png)
-![Devtools Debug 2](devtools-debug-2.png)
+![Devtools debug 1](devtools-debug-1.png)
+![Devtools debug 2](devtools-debug-2.png)
 
 ---
 
@@ -191,7 +230,36 @@ pnpm start:mcp-server
 
 ---
 
+---
+
+## Workspace Browser
+
+Open with **`Ctrl+E`** from the main CLI (toggle close with `Ctrl+E` or `Esc`).
+
+| Key | Action |
+|-----|--------|
+| `←` `→` | Move focus between file tree and preview/diff pane |
+| `↑` `↓` | Navigate tree, or scroll preview/diff when right pane is focused |
+| `Enter` / `→` | Expand directory or open file for preview |
+| `Tab` | Toggle **Preview** ↔ **Diff vs HEAD** |
+| `R` | Refresh tree, git status, and file/diff caches |
+| `Esc` | Close workspace |
+
+The file tree shows git porcelain status (`M`, `?`, `D`, …), Seti/Nerd Font file icons (disable with `MY_AGENT_NERD_ICONS=0`), and chevron + folder icons for expanded/collapsed directories.
+
+---
+
 ## CLI Keyboard Shortcuts
+
+Global shortcuts (from the header):
+
+| Key | Action |
+|-----|--------|
+| `/` | Open slash-command autocomplete |
+| `Ctrl+E` | Toggle workspace browser |
+| `Ctrl+T` | Open task / subagent panel |
+| `Ctrl+V` | Paste image from clipboard |
+| `Esc` | Abort run / dismiss panels (context-dependent) |
 
 The CLI has **4 input modes** — shortcuts adapt to the current mode:
 
@@ -199,10 +267,10 @@ The CLI has **4 input modes** — shortcuts adapt to the current mode:
 |-----|--------|----------|-------------------|----------|
 | `Enter` | Submit | Submit command | Confirm selection | Submit |
 | `Esc` | Dismiss autocomplete / Abort | Cancel deny reason | Close list | Go back |
-| `y` / `n` | — | Approve / Deny | — | — |
-| `↑` `↓` | History / Autocomplete | Autocomplete nav | Navigate options | — |
+| `y` / `n` | — | Approve / Deny focused diff | — | — |
+| `↑` `↓` | History / Autocomplete | Scroll focused diff / Autocomplete | Navigate options | — |
 | `Space` | — | — | Toggle (multi-select) | — |
-| `Tab` | Accept autocomplete | Accept autocomplete | — | — |
+| `Tab` | Accept autocomplete | Switch focused diff (multi) / Accept autocomplete | — | — |
 | `Ctrl+V` | Paste image | — | — | — |
 | `Ctrl+C` | Exit | Exit | Exit | Exit |
 

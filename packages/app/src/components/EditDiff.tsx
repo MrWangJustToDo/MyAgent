@@ -1,8 +1,10 @@
-import { DiffModeEnum, DiffView } from "@git-diff-view/cli";
+import { DiffModeEnum, DiffView, type DiffViewRef } from "@git-diff-view/cli";
 import { generateDiffFile } from "@git-diff-view/file";
-import { memo } from "react";
+import { forwardRef, memo } from "@my-react/react";
 
-import { useDiffFileCache } from "../hooks/use-diff-file-cache";
+import { useDiffFileCache } from "../hooks/use-diff-file-cache.js";
+import { useSize } from "../hooks/use-size.js";
+import { getMessageDiffViewportHeight } from "../utils/diff-viewport.js";
 
 const { getDiffFile, setDiffFile } = useDiffFileCache.getActions();
 
@@ -12,44 +14,49 @@ function padContent(content: string, startLine?: number): string {
   return "\n".repeat(startLine - 1) + content;
 }
 
-export const EditDiff = memo(function EditDiff({
-  id,
-  width,
-  oldFile,
-  newFile,
-  oldPath,
-  newPath,
-  startLine,
-}: {
+export type EditDiffProps = {
   id: string;
   width: number;
+  /** Scroll viewport height in terminal rows. Defaults to max(2/3 screen height, 28). */
+  height?: number;
   oldFile: string;
   newFile: string;
   oldPath: string;
   newPath: string;
   startLine?: number;
-}) {
-  const paddedOld = padContent(oldFile, startLine);
-  const paddedNew = padContent(newFile, startLine);
+};
 
-  const diffFile = getDiffFile(id) || generateDiffFile(oldPath, paddedOld, newPath, paddedNew, "", "");
+export const EditDiff = memo(
+  forwardRef<DiffViewRef, EditDiffProps>(function EditDiff(
+    { id, width, height, oldFile, newFile, oldPath, newPath, startLine },
+    ref
+  ) {
+    const screenHeight = useSize((s) => s.state.screenHeight);
+    const viewportHeight = height ?? getMessageDiffViewportHeight(screenHeight);
+    const paddedOld = padContent(oldFile, startLine);
+    const paddedNew = padContent(newFile, startLine);
 
-  setDiffFile(id, diffFile);
+    const diffFile = getDiffFile(id) || generateDiffFile(oldPath, paddedOld, newPath, paddedNew, "", "");
 
-  diffFile.initTheme("dark");
+    setDiffFile(id, diffFile);
 
-  diffFile.init();
+    diffFile.initTheme("dark");
 
-  const finalWidth = width;
+    diffFile.init();
 
-  return (
-    <DiffView
-      width={finalWidth}
-      diffViewMode={finalWidth > 20 && oldFile ? DiffModeEnum.Split : DiffModeEnum.Unified}
-      diffFile={diffFile}
-      diffViewHideOperator
-      diffViewHighlight
-      diffViewTheme="dark"
-    />
-  );
-});
+    const finalWidth = width;
+
+    return (
+      <DiffView
+        ref={ref}
+        width={finalWidth}
+        height={viewportHeight}
+        diffViewMode={finalWidth > 20 && oldFile ? DiffModeEnum.Split : DiffModeEnum.Unified}
+        diffFile={diffFile}
+        diffViewHideOperator
+        diffViewHighlight
+        diffViewTheme="dark"
+      />
+    );
+  })
+);

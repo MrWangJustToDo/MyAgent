@@ -6,8 +6,10 @@ import { dispatchCommand } from "../commands";
 
 import { useAgent } from "./use-agent.js";
 import { useSelect } from "./use-select.js";
-import { useSubagentPanel, CLOSE_DEBOUNCE_MS } from "./use-subagent-panel.js";
+import { useSubagentPanel, CLOSE_DEBOUNCE_MS as SUBAGENT_CLOSE_DEBOUNCE_MS } from "./use-subagent-panel.js";
 import { useUserInput } from "./use-user-input.js";
+import { CLOSE_DEBOUNCE_MS as WORKSPACE_CLOSE_DEBOUNCE_MS, useWorkspaceView } from "./use-workspace-view.js";
+import { useMessageDiffFocus } from "./use-message-diff-focus.js";
 
 import type { AgentAdapter } from "../adapter/types.js";
 import type { CommandContext } from "../commands";
@@ -46,6 +48,8 @@ interface UseAgentKeybindingsOptions {
   submitAskUserAnswer: (answer: string) => void;
   addToolApprovalResponse: UseAgentChatReturn["addToolApprovalResponse"];
 }
+
+const MESSAGE_DIFF_SCROLL_STEP = 3;
 
 export function useAgentKeybindings({
   adapter,
@@ -116,13 +120,29 @@ export function useAgentKeybindings({
       return;
     }
 
+    if (inputKey.ctrl && inputChar === "e") {
+      const ws = useWorkspaceView.getReadonlyState();
+      if (ws.view === "workspace") {
+        useWorkspaceView.getActions().close();
+      } else {
+        useWorkspaceView.getActions().open();
+      }
+      return;
+    }
+
     if (inputKey.escape && mode !== "freeform" && mode !== "select") {
+      // Workspace panel open: let WorkspacePanel handle Esc
+      if (useWorkspaceView.getReadonlyState().view === "workspace") return;
       const panel = useSubagentPanel.getReadonlyState();
       if (panel.view !== "closed") {
         return;
       }
+      const workspace = useWorkspaceView.getReadonlyState();
+      if (Date.now() - workspace.lastClosedAt < WORKSPACE_CLOSE_DEBOUNCE_MS) {
+        return;
+      }
       // Debounce: prevent ESC from calling stop() right after panel closes.
-      if (Date.now() - panel.lastClosedAt < CLOSE_DEBOUNCE_MS) {
+      if (Date.now() - panel.lastClosedAt < SUBAGENT_CLOSE_DEBOUNCE_MS) {
         return;
       }
       if (isLoading) {
@@ -139,6 +159,8 @@ export function useAgentKeybindings({
   useInput(
     (inputChar, inputKey) => {
       if (isLoading) return;
+      // Workspace panel open: skip all normal-mode input handlers
+      if (useWorkspaceView.getReadonlyState().view === "workspace") return;
 
       if (inputKey.tab) {
         acceptAutocomplete(true);
@@ -208,21 +230,31 @@ export function useAgentKeybindings({
       if (!currentValue) {
         const char = inputChar?.toLowerCase();
         if (char === "y") {
+          if (!pendingApproval) return;
           const agentLog = toRaw(getAgent()?.getLog()) as AgentLog | null;
-          agentLog?.approval(`user approve ${pendingApproval!.id}`);
-          addToolApprovalResponse({ id: pendingApproval!.id, approved: true });
+          agentLog?.approval(`user approve ${pendingApproval.id}`);
+          addToolApprovalResponse({ id: pendingApproval.id, approved: true });
           return;
         }
         if (char === "n") {
+          if (!pendingApproval) return;
           denyingRef.current = {
-            id: pendingApproval!.id,
+            id: pendingApproval.id,
             isLast: currentPendingIsLast,
-            toolCallId: pendingApproval!.toolCallId,
-            toolName: pendingApproval!.toolName,
+            toolCallId: pendingApproval.toolCallId,
+            toolName: pendingApproval.toolName,
           };
           inputActions.clear();
           inputActions.setLoading(false);
           modeActions.setDenyMode(true, "deny");
+          return;
+        }
+      }
+
+      if (inputKey.tab && !currentValue) {
+        const diffCount = useMessageDiffFocus.getReadonlyState().entries.length;
+        if (diffCount > 1) {
+          useMessageDiffFocus.getActions().selectNext();
           return;
         }
       }
@@ -233,12 +265,16 @@ export function useAgentKeybindings({
       }
       if (inputKey.upArrow) {
         if (isAutocompleteVisible) autocompleteActions.selectPrev();
-        else if (commandOutputActions.hasScroll()) commandOutputActions.scrollPrev();
+        else if (useMessageDiffFocus.getReadonlyState().entries.length > 0) {
+          useMessageDiffFocus.getActions().getSelectedScrollRef()?.scrollUp({ step: MESSAGE_DIFF_SCROLL_STEP });
+        } else if (commandOutputActions.hasScroll()) commandOutputActions.scrollPrev();
         return;
       }
       if (inputKey.downArrow) {
         if (isAutocompleteVisible) autocompleteActions.selectNext();
-        else if (commandOutputActions.hasScroll()) commandOutputActions.scrollNext();
+        else if (useMessageDiffFocus.getReadonlyState().entries.length > 0) {
+          useMessageDiffFocus.getActions().getSelectedScrollRef()?.scrollDown({ step: MESSAGE_DIFF_SCROLL_STEP });
+        } else if (commandOutputActions.hasScroll()) commandOutputActions.scrollNext();
         return;
       }
       if (inputKey.return) {

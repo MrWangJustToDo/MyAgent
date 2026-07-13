@@ -10,13 +10,14 @@ export const useSize = createState(
   {
     withActions: (s) => {
       const useInitTerminalSize = () => {
-        const { columns } = useTerminalSize();
+        const { columns, rows } = useTerminalSize();
 
         useEffect(() => {
           s.state.screenWidth = columns;
-        }, [columns]);
+          s.state.screenHeight = rows;
+        }, [columns, rows]);
 
-        return { columns };
+        return { columns, rows };
       };
 
       return {

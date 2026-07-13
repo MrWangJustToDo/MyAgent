@@ -1,6 +1,6 @@
 import { Box } from "ink";
 
-import { EditDiff } from "../components/EditDiff";
+import { MessageDiffView } from "../components/MessageDiffView.js";
 import { useSize } from "../hooks";
 import { useTask } from "../hooks/use-task.js";
 import { BG } from "../theme/colors.js";
@@ -44,8 +44,10 @@ export const ToolInputView = ({
     return (
       <Box paddingLeft={2}>
         <Box borderColor={borderColor} borderStyle="single">
-          <EditDiff
-            id={part.id}
+          <MessageDiffView
+            diffId={part.id}
+            toolCallId={part.id}
+            approvalId={part.approval?.id}
             width={bodyWidth}
             oldPath=""
             oldFile=""
@@ -69,6 +71,7 @@ export const ToolInputView = ({
       return (
         <EditFilePreview
           toolCallId={part.id}
+          approvalId={part.approval?.id}
           path={content.path}
           edits={content.edits}
           approved={part.approval?.approved}

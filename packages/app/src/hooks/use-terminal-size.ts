@@ -14,16 +14,22 @@ const getValidSize = (size: number): number => {
   }
 };
 
-export function useTerminalSize(): { columns: number } {
+export function useTerminalSize(): { columns: number; rows: number } {
   const { stdout } = useStdout();
 
-  const [size, setSize] = useState(() => getValidSize(stdout?.columns || 60 - TERMINAL_PADDING_X));
+  const [size, setSize] = useState(() => ({
+    columns: getValidSize(stdout?.columns || 60 - TERMINAL_PADDING_X),
+    rows: stdout?.rows || 24,
+  }));
 
   useLayoutEffect(() => {
     if (!stdout) return;
 
     function updateSize() {
-      setSize(getValidSize(stdout?.columns || 60 - TERMINAL_PADDING_X));
+      setSize({
+        columns: getValidSize(stdout?.columns || 60 - TERMINAL_PADDING_X),
+        rows: stdout?.rows || 24,
+      });
     }
 
     updateSize();
@@ -39,5 +45,5 @@ export function useTerminalSize(): { columns: number } {
     };
   }, [stdout]);
 
-  return { columns: size };
+  return { columns: size.columns, rows: size.rows };
 }

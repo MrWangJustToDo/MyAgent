@@ -4,6 +4,7 @@ import { FullBox } from "../components/FullBox.js";
 import { MessageList } from "../components/MessageList.js";
 import { Spinner } from "../components/Spinner.js";
 import { SubagentPanel } from "../components/SubagentPanel.js";
+import { WorkspacePanel } from "../components/WorkspacePanel.js";
 import { useAdapter } from "../context/adapter-context.js";
 import { useAgentChat } from "../hooks/use-agent-chat.js";
 import { useAgentInputControls } from "../hooks/use-agent-input-controls.js";
@@ -11,6 +12,7 @@ import { useConfig } from "../hooks/use-config.js";
 import { useSize } from "../hooks/use-size.js";
 import { useStatic } from "../hooks/use-static.js";
 import { useSubagentPanel } from "../hooks/use-subagent-panel.js";
+import { useWorkspaceView } from "../hooks/use-workspace-view.js";
 import { Content } from "../layout/Content.js";
 import { Footer } from "../layout/Footer.js";
 import { Header } from "../layout/Header.js";
@@ -53,6 +55,8 @@ export const Agent = () => {
   } = useAgentChat(config);
   const subagentPanelView = useSubagentPanel((s) => s.view);
   const subagentPanelOpen = subagentPanelView !== "closed";
+  const workspaceView = useWorkspaceView((s) => s.view);
+  const workspaceOpen = workspaceView === "workspace";
 
   useAgentInputControls({
     adapter,
@@ -98,15 +102,19 @@ export const Agent = () => {
   return (
     <FullBox flexDirection="column">
       <Header />
-      {subagentPanelOpen ? (
+      {workspaceOpen ? (
+        <Box flexGrow={1} flexDirection="column">
+          <WorkspacePanel />
+        </Box>
+      ) : subagentPanelOpen ? (
         <SubagentPanel />
       ) : (
         <>
           <MessageList messages={messages} />
           <Content />
+          <Footer status={status} />
         </>
       )}
-      <Footer status={status} />
     </FullBox>
   );
 };

@@ -1,1 +1,1 @@
-export * from "./colors-gemini";
+export * from "./colors-gemini.js";
