@@ -60,7 +60,7 @@ export const useTask = ({ id, taskId }: { id: string; taskId: string }) => {
   const [phase, setPhase] = useState<TaskRunPhase>(() => getTaskPhaseFromAgent(agent));
 
   useEffect(() => {
-    if (!id) return;
+    if (!agent?.id) return;
 
     const refresh = () => {
       setInfo(getTaskInfoFromAgent(agent));
@@ -70,15 +70,15 @@ export const useTask = ({ id, taskId }: { id: string; taskId: string }) => {
     const unsubscribe = agent?.ui?.subscribe(() => refresh());
     const unsubs = [
       agentManager.on("subagent:created", (event) => {
-        if (event.agentId !== id) return;
+        if (event.agentId !== agent?.id) return;
         refresh();
       }),
       agentManager.on("subagent:started", (event) => {
-        if (event.data?.subagent_id !== id && event.agentId !== id) return;
+        if (event.data?.subagent_id !== agent?.id && event.agentId !== agent?.id) return;
         refresh();
       }),
       agentManager.on("subagent:ui-update", (event) => {
-        if (event.agentId !== id) return;
+        if (event.agentId !== agent?.id) return;
         refresh();
       }),
     ];
@@ -89,7 +89,7 @@ export const useTask = ({ id, taskId }: { id: string; taskId: string }) => {
       unsubscribe?.();
       unsubs.forEach((unsub) => unsub());
     };
-  }, [agent, id]);
+  }, [agent, agent?.id]);
 
   return { ...info, agent, phase: id ? phase : ("tools" as const) };
 };
