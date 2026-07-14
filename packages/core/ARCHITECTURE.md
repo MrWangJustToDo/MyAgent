@@ -129,7 +129,7 @@ manager-agent.ts
 | 5 | `todo`, `webfetch`, `websearch`, `ask_user` tools |
 | 6 | `SkillRegistry.loadFromDirectories` → `list_skills`, `load_skill`, `task` |
 | 7 | `setCompactionConfig` from model context window |
-| 8 | `McpManager.initialize` → merge MCP tools |
+| 8 | `McpManager.initialize` → merge MCP tools (execute wrapped to keep multimodal `content[]`) |
 | 9 | `MemoryManager.initialize` → `setMemoryContent` (MEMORY.md index) |
 | 10 | `HookRegistry.load` from `.agent-hooks/hooks.json` |
 | 11 | `SessionStore` → `setSessionStore({ modelStyle, model })` |

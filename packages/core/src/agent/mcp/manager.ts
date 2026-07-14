@@ -2,6 +2,8 @@ import { createMCPClient } from "@tanstack/ai-mcp";
 
 import { getEnv } from "../../env.js";
 
+import { wrapMcpToolForMultimodalContent } from "./prefer-multimodal-content.js";
+
 import type { McpConfig, McpServerConfig } from "./types.js";
 import type { McpProcessHandle } from "../../env.js";
 import type { ServerTool } from "@tanstack/ai";
@@ -85,7 +87,8 @@ export class McpManager {
         const tools = await client.tools();
 
         for (const tool of tools) {
-          allTools[tool.name] = tool;
+          // TanStack prefers structuredContent and drops content[] images; re-wrap execute.
+          allTools[tool.name] = wrapMcpToolForMultimodalContent(tool, client);
         }
 
         this.clients.set(name, client);

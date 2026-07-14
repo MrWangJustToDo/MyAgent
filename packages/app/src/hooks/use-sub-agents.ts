@@ -23,9 +23,11 @@ export const useSubAgents = ({ subId, taskId }: { subId: string; taskId: string 
     }
 
     return agentManager.on("subagent:created", (event) => {
-      if (event.agentId !== subId) return;
-      const managed = agentManager.getAgent(subId);
-      if (managed) setAgent(managed);
+      const managed = agentManager.getAgent(event.agentId);
+      if (managed?.parentTaskId === taskId) {
+        setAgent(managed);
+        return;
+      }
     });
   }, [subId, taskId]);
 

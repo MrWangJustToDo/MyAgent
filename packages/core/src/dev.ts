@@ -35,6 +35,12 @@ export { extractRunErrorMessage } from "./managers/reactive-compact-retry.js";
 export { formatReadFileToolResult } from "./agent/tools/util/format-read-file-result.js";
 export { BEGIN_SUMMARY_TOOL_NAME } from "./agent/subagent/begin-summary-tool.js";
 export {
+  mcpContentHasMultimodal,
+  mcpContentToTanstack,
+  resolveMcpToolExecuteResult,
+  wrapMcpToolForMultimodalContent,
+} from "./agent/mcp/prefer-multimodal-content.js";
+export {
   extractAssistantText,
   getSummaryStreamText,
   resolveTaskRunPhase,

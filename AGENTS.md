@@ -145,7 +145,7 @@ Key integration points:
 - `core/src/models/adapter-factory.ts` — TanStack text adapters (`createOpenaiChatCompletions`, `createAnthropicChat`)
 - `core/src/managers/run-agent.ts` — `AgentRunner` + `chat()` stream, compaction middleware
 - `core/src/agent/agent-context/` — Conversation state, tool calls, context management
-- `core/src/agent/mcp/` — MCP via `@tanstack/ai-mcp`
+- `core/src/agent/mcp/` — MCP via `@tanstack/ai-mcp` (`McpManager` re-wraps tool execute so multimodal `content[]` is not dropped when `structuredContent` is present)
 - `app/src/hooks/use-agent-chat.ts` — React hook via TanStack `useChat` + `localConnect`
 
 ## Build, Lint, Test Commands
