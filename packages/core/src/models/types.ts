@@ -22,6 +22,9 @@ export type ModelId = string;
 export type ModelCapability =
   | "reasoning"
   | "vision"
+  | "audio"
+  | "video"
+  | "document"
   | "tool_calling"
   | "prompt_caching"
   | "streaming"

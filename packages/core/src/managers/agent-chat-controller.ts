@@ -1,3 +1,4 @@
+import { throwOnRunError } from "../agent/subagent/stream-errors.js";
 import { formatAgentStreamError } from "../agent/utils/assert-async-iterable.js";
 import {
   hasPendingAskUser,
@@ -77,7 +78,9 @@ export class AgentChatController {
   }
 
   private enqueueRun(): Promise<void> {
-    this.runChain = this.runChain.then(() => this.pumpToolPhases());
+    // Recover from a previous rejected pump so later sendMessage/approval calls still run.
+    const run = () => this.pumpToolPhases();
+    this.runChain = this.runChain.then(run, run);
     return this.runChain;
   }
 
@@ -117,15 +120,21 @@ export class AgentChatController {
 
     const abortSignal = this.managed.run.currentAbortController?.signal;
     try {
-      const stream = this.manager.runAgentStream(this.managed.id, { messages, abortSignal });
+      const stream = throwOnRunError(this.manager.runAgentStream(this.managed.id, { messages, abortSignal }));
       await this.channel.consumeRun({ stream });
       this.managed.statusController.reconcileFromUIMessages(this.channel.getMessages(), { whenClear: "running" });
     } catch (err) {
       if (generation !== this.runGeneration) return;
       const error = err instanceof Error ? err : new Error(String(err));
       const message = formatAgentStreamError(error).message;
-      this.managed.statusController.onExternalError(message, this.managed.isAbortError(err));
-      throw error;
+      if (this.managed.isAbortError(err)) {
+        this.managed.statusController.onExternalError(message, true);
+      } else {
+        // Surface stream failures in status + agent:stream-error (not silent Completed).
+        this.managed.statusController.onRunError(message);
+      }
+      // Do not rethrow — hosts often do not catch sendMessage; an unhandled rejection
+      // aborts the entire CLI process. Status/error on ManagedAgent is the signal.
     }
   }
 

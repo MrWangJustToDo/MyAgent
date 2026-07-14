@@ -381,6 +381,12 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
 
         // Handle PDFs
         if (fileTypeInfo.type === "pdf") {
+          if (usage && !usage.hasCapability("document") && !usage.hasCapability("vision")) {
+            throw new Error(
+              `Cannot analyze PDF: ${filePath}. The current model does not support document/vision attachments — PDF content cannot be read.`
+            );
+          }
+
           if (!fsys.readFileBuffer) {
             throw new Error("PDF reading not supported in this environment");
           }

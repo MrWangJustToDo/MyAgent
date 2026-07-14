@@ -11,6 +11,7 @@ import {
   type TaskRunPhase,
   type TaskSummaryStreamState,
 } from "../agent/subagent/extract-assistant-text.js";
+import { throwOnRunError } from "../agent/subagent/stream-errors.js";
 import { clearStreamingOutput, emitStreamingChunk } from "../agent/tools/util/streaming-callback.js";
 import { applyToolDenialReason } from "../agent/utils/apply-tool-denial-reason.js";
 import { stripEmptyAssistantShells } from "../agent/utils/empty-assistant-shell.js";
@@ -178,7 +179,7 @@ export class AgentUIChannel {
     this.beginSummaryStream(options.parentTaskToolCallId, options.onUpdate);
 
     try {
-      for await (const chunk of options.stream) {
+      for await (const chunk of throwOnRunError(options.stream)) {
         this.processChunk(chunk);
       }
       this.finalizeStream();

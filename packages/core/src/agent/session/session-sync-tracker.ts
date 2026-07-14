@@ -3,6 +3,10 @@ import { isEmptyAssistantShell } from "../utils/empty-assistant-shell.js";
 import type { AgentStatus } from "../../managers/agent-types.js";
 import type { ToolCallPart, UIMessage } from "@tanstack/ai";
 
+// ToolCallPart["approval"] doesn't include `reason`, but
+// applyToolDenialReason dynamically adds it at runtime.
+type ToolCallApproval = ToolCallPart["approval"] & { reason?: string };
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -39,9 +43,13 @@ function fingerprintPart(part: UIMessage["parts"][number]): string {
         part.name,
         part.arguments,
         part.state,
-        part.approval?.id ?? "",
-        part.approval?.approved === true ? "1" : part.approval?.approved === false ? "0" : "",
-        part.approval?.reason ?? "",
+        (part.approval as ToolCallApproval | undefined)?.id ?? "",
+        (part.approval as ToolCallApproval | undefined)?.approved === true
+          ? "1"
+          : (part.approval as ToolCallApproval | undefined)?.approved === false
+            ? "0"
+            : "",
+        (part.approval as ToolCallApproval | undefined)?.reason ?? "",
         part.output !== undefined ? "out" : "",
       ].join(":");
     case "tool-result":

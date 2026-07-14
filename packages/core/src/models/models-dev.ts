@@ -167,11 +167,32 @@ function parseModelsDevModel(vendorId: string, modelId: string, data: ModelsDevM
 
   const capabilities: ModelCapability[] = ["streaming"];
   if (data.reasoning) capabilities.push("reasoning");
-  if (data.attachment) capabilities.push("vision");
+  if (data.attachment) {
+    capabilities.push("vision");
+    capabilities.push("document");
+  }
   if (data.tool_call) capabilities.push("tool_calling");
   if (data.structured_output) capabilities.push("json_output");
   if (data.cost?.cache_read !== undefined || data.cost?.cache_write !== undefined) {
     capabilities.push("prompt_caching");
+  }
+
+  // Prefer modalities.input when present (more precise than attachment boolean).
+  const inputModalities = data.modalities?.input ?? [];
+  if (inputModalities.includes("image") && !capabilities.includes("vision")) {
+    capabilities.push("vision");
+  }
+  if (inputModalities.includes("audio") && !capabilities.includes("audio")) {
+    capabilities.push("audio");
+  }
+  if (inputModalities.includes("video") && !capabilities.includes("video")) {
+    capabilities.push("video");
+  }
+  if (
+    (inputModalities.includes("pdf") || inputModalities.includes("document") || inputModalities.includes("file")) &&
+    !capabilities.includes("document")
+  ) {
+    capabilities.push("document");
   }
 
   const pricing = data.cost

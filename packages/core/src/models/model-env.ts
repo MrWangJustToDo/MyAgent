@@ -14,6 +14,9 @@ const capabilitySchema = z.string().transform((val, ctx): ModelCapability => {
   const known: readonly ModelCapability[] = [
     "reasoning",
     "vision",
+    "audio",
+    "video",
+    "document",
     "tool_calling",
     "prompt_caching",
     "streaming",
@@ -195,8 +198,8 @@ export function parseModelEnvConfig(env: Record<string, string | undefined>): Mo
  * - `modelId` is the active MODEL value (used as id / apiModel / name fallbacks).
  * - `fallbackStyle` is used when neither env nor models.dev can supply a style.
  *
- * The `multimodal: true` flag automatically adds the "vision" capability unless
- * `capabilities` is explicitly provided without "vision".
+ * The `multimodal: true` flag automatically adds the "vision" and "document"
+ * capabilities unless `capabilities` is explicitly provided.
  *
  * @example
  * ```typescript
@@ -214,16 +217,16 @@ export function resolveModelInfoFromEnv(
 
   const style = envConfig.style ?? fallbackStyle ?? "openai";
 
-  // Merge capabilities: explicit list > [multimodal ? vision : nothing].
+  // Merge capabilities: explicit list > [multimodal ? vision+document : nothing].
   let capabilities: ModelCapability[];
   if (envConfig.capabilities) {
-    // multimodal=true also implies vision, even if not listed explicitly
-    capabilities =
-      envConfig.multimodal && !envConfig.capabilities.includes("vision")
-        ? [...envConfig.capabilities, "vision"]
-        : [...envConfig.capabilities];
+    capabilities = [...envConfig.capabilities];
+    if (envConfig.multimodal) {
+      if (!capabilities.includes("vision")) capabilities.push("vision");
+      if (!capabilities.includes("document")) capabilities.push("document");
+    }
   } else if (envConfig.multimodal) {
-    capabilities = ["vision"];
+    capabilities = ["vision", "document"];
   } else {
     capabilities = [];
   }

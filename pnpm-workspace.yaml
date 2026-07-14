@@ -21,7 +21,7 @@ minimumReleaseAgeExclude:
   - "@git-diff-view/core@0.1.6 || 0.1.7"
   - "@git-diff-view/file@0.1.6 || 0.1.7"
   - "@git-diff-view/lowlight@0.1.6 || 0.1.7"
-  - '@git-diff-view/cli@0.1.8 || 0.1.9 || 0.1.10'
+  - "@git-diff-view/cli@0.1.8 || 0.1.9 || 0.1.10"
   - "@tanstack/ai-client@0.20.0"
   - "@tanstack/ai-ollama@0.8.14"
   - "@tanstack/ai-openai@0.16.0"

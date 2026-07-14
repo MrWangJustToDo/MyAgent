@@ -3,7 +3,7 @@ import { Box } from "ink";
 import { MessageDiffView } from "../components/MessageDiffView.js";
 import { useSize } from "../hooks";
 import { useTask } from "../hooks/use-task.js";
-import { BG } from "../theme/colors.js";
+import { approvalFrameColor } from "../utils/diff-frame.js";
 import { isToolExecuting } from "../utils/tool-part.js";
 
 import { EditFilePreview } from "./EditFilePreview";
@@ -38,23 +38,19 @@ export const ToolInputView = ({
     const content = toolInput as { content?: string; path?: string };
     if (!content || uiState === "input-streaming") return null;
 
-    const approved = part.approval?.approved;
-    const borderColor = typeof approved === "boolean" ? (approved ? BG.borderSuccess : BG.borderDanger) : BG.border;
-
     return (
       <Box paddingLeft={2}>
-        <Box borderColor={borderColor} borderStyle="single">
-          <MessageDiffView
-            diffId={part.id}
-            toolCallId={part.id}
-            approvalId={part.approval?.id}
-            width={bodyWidth}
-            oldPath=""
-            oldFile=""
-            newPath={content.path || ""}
-            newFile={content.content || ""}
-          />
-        </Box>
+        <MessageDiffView
+          diffId={part.id}
+          toolCallId={part.id}
+          approvalId={part.approval?.id}
+          width={bodyWidth}
+          oldPath=""
+          oldFile=""
+          newPath={content.path || ""}
+          newFile={content.content || ""}
+          frameColor={approvalFrameColor(part.approval?.approved)}
+        />
       </Box>
     );
   }

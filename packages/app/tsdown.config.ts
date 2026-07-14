@@ -8,6 +8,7 @@ export default defineConfig([
       "src/utils/workspace-scroll.ts",
       "src/utils/workspace-git-diff.ts",
       "src/utils/diff-viewport.ts",
+      "src/utils/diff-frame.ts",
       "src/utils/file-icons.ts",
       "src/hooks/streaming-ingest.ts",
       "src/hooks/use-message-diff-focus.ts",

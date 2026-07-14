@@ -205,6 +205,40 @@ function selectWithKeywords(query: string, memories: Memory[], maxItems: number)
     .map((s) => s.filename);
 }
 
+/**
+ * Map an LLM-selected name to a real memory filename.
+ * Accepts exact filename, missing `.md`, or bare `name` matching frontmatter.
+ */
+export function resolveSelectedMemoryFilename(
+  selected: string,
+  candidateMap: Map<string, Memory>,
+  candidates: Memory[]
+): Memory | undefined {
+  const trimmed = selected.trim();
+  if (!trimmed) return undefined;
+
+  const direct = candidateMap.get(trimmed);
+  if (direct) return direct;
+
+  const withMd = trimmed.endsWith(".md") ? trimmed : `${trimmed}.md`;
+  const byFilename = candidateMap.get(withMd);
+  if (byFilename) return byFilename;
+
+  const lower = trimmed.toLowerCase();
+  const lowerMd = withMd.toLowerCase();
+  const base = trimmed.replace(/\.md$/i, "").toLowerCase();
+
+  return candidates.find((m) => {
+    const filenameLower = m.filename.toLowerCase();
+    return (
+      filenameLower === lower ||
+      filenameLower === lowerMd ||
+      m.name.toLowerCase() === base ||
+      filenameLower.replace(/\.md$/i, "") === base
+    );
+  });
+}
+
 // ============================================================================
 // Main Entry Point
 // ============================================================================
@@ -292,18 +326,40 @@ export async function findRelevantMemories(
     return [];
   }
 
-  // Resolve filenames → Memory objects, load content with budget enforcement
+  // Resolve filenames → Memory objects (normalize LLM naming quirks)
   const candidateMap = new Map(candidates.map((m) => [m.filename, m]));
-  const results: RelevantMemory[] = [];
-  let totalBytes = 0;
-
+  let resolved: Memory[] = [];
   for (const filename of selectedFilenames.slice(0, maxItems)) {
-    const mem = candidateMap.get(filename);
+    const mem = resolveSelectedMemoryFilename(filename, candidateMap, candidates);
     if (!mem) {
       logger?.warn("memory", `Selected filename "${filename}" not found in candidate map`);
       continue;
     }
+    if (resolved.some((m) => m.filename === mem.filename)) continue;
+    resolved.push(mem);
+  }
 
+  // Non-empty but unresolvable LLM picks used to skip keyword fallback — fix that.
+  if (resolved.length === 0 && selectionMethod === "llm" && selectedFilenames.length > 0) {
+    const fallback = selectWithKeywords(query, candidates, maxItems);
+    if (fallback.length > 0) {
+      selectionMethod = "keyword-fallback";
+      logger?.debug("memory", "LLM selection resolved to 0 files, keyword fallback found matches", {
+        rawSelected: selectedFilenames,
+        fallback,
+      });
+      resolved = [];
+      for (const filename of fallback) {
+        const mem = candidateMap.get(filename);
+        if (mem) resolved.push(mem);
+      }
+    }
+  }
+
+  const results: RelevantMemory[] = [];
+  let totalBytes = 0;
+
+  for (const mem of resolved) {
     const content = truncateBody(mem.body, maxLinesPerFile, maxBytesPerFile);
     const contentBytes = getEnv().byteLength(content, "utf-8");
 

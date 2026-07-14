@@ -351,12 +351,16 @@ setStatus("running")
 When the API returns `prompt_too_long`:
 
 ```
-runStreamWithReactiveCompactRetry catches error
+runStreamWithReactiveCompactRetry catches RUN_ERROR / thrown error
   → handleReactiveCompact (max 1 retry by default)
   → reactiveCompact: summarize + keep tail messages
   → applyReactiveCompactionResult
   → retry runner.run with updated messages
 ```
+
+Unhandled `RUN_ERROR` chunks (anything other than a successful reactive compact) are **thrown** — never yielded. `AgentChatController` / `AgentUIChannel.consumeRun` also wrap streams with `throwOnRunError`, so failures surface as `status: error` + `agent:stream-error` instead of a silent `Completed` with no assistant message. Handled errors are recorded on the agent and **not** rethrown from the chat pump (avoids unhandled rejection crashing the CLI).
+
+**Vision / multimodal:** Some text-only APIs (notably DeepSeek Chat Completions) reject multimodal parts with `unknown variant image_url, expected text`. `runStreamWithReactiveCompactRetry` uses capability-aware sanitization (`vision` / `audio` / `video` / `document`): unsupported parts are stripped from the **wire** copy (and all multimodal parts are stripped once on schema rejection); UI history keeps media for display.
 
 ### 5.5 Manual `/compact`
 

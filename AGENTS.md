@@ -413,13 +413,15 @@ registerCoreEnv(env);
 | `prompt:submit` | Run prepared |
 | `agent:thinking` | Model reasoning stream starts |
 | `agent:tool-start` / `agent:tool-end` / `agent:tool-error` | Tool lifecycle (hooks middleware) |
-| `agent:abort` / `agent:stream-error` | User abort / stream failure |
+| `agent:abort` / `agent:stream-error` | User abort / stream failure (`RUN_ERROR` and other pump failures; main chat records error without crashing the host) |
 | `agent:stop` | Run finished or aborted |
 | `memory:prefetch` | Relevant memory injection before run |
 | `memory:extract` / `memory:consolidate` | Post-run memory extraction |
 | `compaction:auto-*` / `compaction:reactive-*` | Auto / reactive context compaction |
 | `session:save-error` | Session persistence failure |
 | `subagent:*` | Subagent lifecycle |
+
+**Vision note:** Official DeepSeek Chat Completions currently rejects multimodal parts such as `image_url` (text-only schema). Capability sanitization strips unsupported `image` / `audio` / `video` / `document` parts on the wire and retries once; switch to a provider with matching capabilities for real media understanding.
 
 **Event → Log bridge:** `attachEventLogBridge()` in `AgentManager` maps events to `AgentLog` entries. Policy lives in `event-log-bridge.ts` (`DEFAULT_EVENT_LOG_RULES`); override per event type with `EventLogPolicy`. Emit sites should not duplicate lifecycle logs covered by events.
 

@@ -221,8 +221,15 @@ function logMemoryPrefetch(log: AgentLog, event: AgentEvent): void {
     case "empty":
       log.debug("memory", "No relevant memories found for this query");
       break;
+    case "selected":
+      log.info("memory", `Selected ${event.data?.count ?? 0} relevant memories for turn context`, {
+        filenames: event.data?.filenames,
+        byteSize: event.data?.byteSize,
+      });
+      break;
     case "injected":
-      log.info("memory", `Injected ${event.data?.count ?? 0} relevant memories into context`, {
+      // Legacy status — treat like selected (buffer filled; injection is turn-context).
+      log.info("memory", `Selected ${event.data?.count ?? 0} relevant memories for turn context`, {
         filenames: event.data?.filenames,
         byteSize: event.data?.byteSize,
       });

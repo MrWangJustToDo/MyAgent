@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 
 import { useMessageDiffFocus } from "../hooks/use-message-diff-focus.js";
 import { useStaticContext } from "../messages/StaticContext.js";
-import { COLORS } from "../theme/colors.js";
+import { BG, COLORS } from "../theme/colors.js";
 
 import { EditDiff } from "./EditDiff.js";
 
@@ -20,8 +20,12 @@ export type MessageDiffViewProps = {
   oldPath: string;
   newPath: string;
   startLine?: number;
+  /**
+   * Approval / status frame color. A single border conveys both status and focus:
+   * focus → primary; otherwise this color (defaults to {@link BG.border}).
+   */
+  frameColor?: string;
 };
-
 export const MessageDiffView = memo(function MessageDiffView({
   diffId,
   toolCallId,
@@ -33,6 +37,7 @@ export const MessageDiffView = memo(function MessageDiffView({
   oldPath,
   newPath,
   startLine,
+  frameColor,
 }: MessageDiffViewProps) {
   const { staticMessage } = useStaticContext();
   const diffRef = useRef<DiffViewRef>(null);
@@ -59,22 +64,9 @@ export const MessageDiffView = memo(function MessageDiffView({
     [staticMessage, toolCallId]
   );
 
-  if (staticMessage) {
-    return (
-      <EditDiff
-        id={diffId}
-        width={width}
-        height={height}
-        oldPath={oldPath}
-        oldFile={oldFile}
-        newPath={newPath}
-        newFile={newFile}
-        startLine={startLine}
-      />
-    );
-  }
-
-  const showFocusHint = focusLabel !== null && focusLabel.count > 1;
+  const isFocused = focusLabel !== null;
+  const borderColor = isFocused ? COLORS.primary : (frameColor ?? BG.border);
+  const showFocusHint = isFocused && focusLabel.count > 1;
 
   return (
     <Box flexDirection="column">
@@ -85,9 +77,9 @@ export const MessageDiffView = memo(function MessageDiffView({
           </Text>
         </Box>
       )}
-      <Box borderStyle={focusLabel ? "double" : undefined} borderColor={focusLabel ? COLORS.primary : undefined}>
+      <Box borderStyle="single" borderColor={borderColor}>
         <EditDiff
-          ref={setDiffRef}
+          ref={staticMessage ? undefined : setDiffRef}
           id={diffId}
           width={width}
           height={height}

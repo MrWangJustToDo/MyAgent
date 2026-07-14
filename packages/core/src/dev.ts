@@ -31,7 +31,8 @@ export {
 } from "./models/reasoning-echo.js";
 export { runSideTextQuery } from "./models/side-text-query.js";
 export { isPromptTooLongError } from "./agent/compaction/reactive-compact.js";
-export { extractRunErrorMessage } from "./managers/reactive-compact-retry.js";
+export { extractRunErrorMessage, runStreamWithReactiveCompactRetry } from "./managers/reactive-compact-retry.js";
+export { throwOnRunError } from "./agent/subagent/stream-errors.js";
 export { formatReadFileToolResult } from "./agent/tools/util/format-read-file-result.js";
 export { BEGIN_SUMMARY_TOOL_NAME } from "./agent/subagent/begin-summary-tool.js";
 export {
@@ -49,13 +50,9 @@ export {
 export { countSubagentIterations, deriveSubagentRunStats } from "./agent/subagent/run-stats.js";
 export { resolveSubagentBridgeUI } from "./agent/subagent/types.js";
 export { extractFileOpsFromMessages, formatFileOperations } from "./agent/compaction/file-ops-tracker.js";
-export {
-  applyToolCompact,
-  createToolPlaceholder,
-  ToolCompactCache,
-  toModelOutputRegistry,
-} from "./agent/compaction/index.js";
+export { applyToolCompact, createToolPlaceholder, ToolCompactCache, toModelOutputRegistry } from "./agent/compaction";
 export { extractTextFromContent } from "./agent/compaction/message-utils.js";
+export { resolveSelectedMemoryFilename } from "./agent/memory/memory-retrieval.js";
 export {
   DEFAULT_SUMMARIZATION_CONTEXT_WINDOW,
   resolveSummarizationInputBudget,
@@ -76,6 +73,22 @@ export {
   isEmptyAssistantShell,
   stripEmptyAssistantShells,
 } from "./agent/utils/empty-assistant-shell.js";
+export {
+  IMAGE_OMITTED_PLACEHOLDER,
+  MULTIMODAL_OMITTED_PLACEHOLDER,
+  MULTIMODAL_PART_CAPABILITY,
+  chatMessagesHaveImages,
+  chatMessagesHaveMultimodal,
+  isMultimodalUnsupportedError,
+  isVisionUnsupportedError,
+  sanitizeMessagesForCapabilities,
+  stripImagesFromChatMessages,
+  stripMultimodalFromChatMessages,
+  trySanitizeForMultimodalRetry,
+  tryStripImagesForVisionRetry,
+  unsupportedMultimodalPartTypes,
+} from "./agent/utils/capability-message-utils.js";
+export type { CapabilityProbe, MultimodalPartType } from "./agent/utils/capability-message-utils.js";
 export {
   hasDeferredToolExecution,
   hasApprovedToolsPendingExecution,

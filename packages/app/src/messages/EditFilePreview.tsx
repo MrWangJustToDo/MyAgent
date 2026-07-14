@@ -2,9 +2,8 @@ import { Box, Text } from "ink";
 import { memo } from "react";
 
 import { MessageDiffView } from "../components/MessageDiffView.js";
-// import { SplitNode } from "../components/SplitNode";
 import { usePreviewEdit, useSize } from "../hooks";
-import { BG } from "../theme/colors.js";
+import { approvalFrameColor } from "../utils/diff-frame.js";
 
 /**
  * Renders the edit_file tool's input as a diff preview.
@@ -38,7 +37,6 @@ export const EditFilePreview = memo(function EditFilePreview({
   output?: { oldFile?: string; newFile?: string };
 }) {
   const width = useSize((s) => s.state.screenWidth) - 8;
-  const borderColor = typeof approved === "boolean" ? (approved ? BG.borderSuccess : BG.borderDanger) : BG.border;
 
   // Authoritative source once the tool has run: prefer output over preview.
   const hasOutput = output && typeof output.oldFile === "string" && typeof output.newFile === "string";
@@ -52,24 +50,23 @@ export const EditFilePreview = memo(function EditFilePreview({
   const newFile = hasOutput ? output!.newFile! : preview?.newFile;
 
   return (
-    <Box paddingLeft={2}>
-      <Box flexDirection="column" borderColor={borderColor} borderStyle="single">
-        {/* Full-file diff: original file → file after all edits applied */}
-        {oldFile !== undefined && newFile !== undefined ? (
-          <MessageDiffView
-            diffId={toolCallId + "-full"}
-            toolCallId={toolCallId}
-            approvalId={approvalId}
-            width={width}
-            oldPath={path}
-            oldFile={oldFile}
-            newPath={path}
-            newFile={newFile}
-          />
-        ) : (
-          <Text dimColor> loading full file preview… </Text>
-        )}
-      </Box>
+    <Box paddingLeft={2} flexDirection="column">
+      {/* Full-file diff: original file → file after all edits applied (one frame for status + focus) */}
+      {oldFile !== undefined && newFile !== undefined ? (
+        <MessageDiffView
+          diffId={toolCallId + "-full"}
+          toolCallId={toolCallId}
+          approvalId={approvalId}
+          width={width}
+          oldPath={path}
+          oldFile={oldFile}
+          newPath={path}
+          newFile={newFile}
+          frameColor={approvalFrameColor(approved)}
+        />
+      ) : (
+        <Text dimColor> loading full file preview… </Text>
+      )}
     </Box>
   );
 });

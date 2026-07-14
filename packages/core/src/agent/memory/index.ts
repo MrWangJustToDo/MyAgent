@@ -2,7 +2,7 @@
 export { MemoryManager } from "./memory-manager.js";
 export { extractMemories, consolidateMemories } from "./memory-extractor.js";
 export type { ConsolidationResult } from "./memory-extractor.js";
-export { findRelevantMemories, formatRelevantMemories } from "./memory-retrieval.js";
+export { findRelevantMemories, formatRelevantMemories, resolveSelectedMemoryFilename } from "./memory-retrieval.js";
 export {
   MEMORY_TYPES,
   DEFAULT_MEMORY_DIR,

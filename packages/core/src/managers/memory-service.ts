@@ -111,8 +111,9 @@ export class MemoryService {
       if (relevant.length > 0) {
         this.relevantContent = formatRelevantMemories(relevant);
         this.pendingSurfacedFilenames = relevant.map((r) => r.filename);
+        // Buffer only — turn-context middleware injects on the next LLM call.
         emitEvent?.("memory:prefetch", {
-          status: "injected",
+          status: "selected",
           count: relevant.length,
           filenames: this.pendingSurfacedFilenames,
           byteSize: getEnv().byteLength(this.relevantContent, "utf-8"),
@@ -139,11 +140,15 @@ export class MemoryService {
     }
 
     const canon = context.getCanonicalFromUI();
-    const messages = context.getMessagesForLLM(canon);
-    if (messages.length < 15) {
-      emitEvent?.("memory:extract", { status: "skip-short", count: messages.length });
+    // Gate on full UI-derived history so compaction cannot permanently disable extraction.
+    if (canon.length < 15) {
+      emitEvent?.("memory:extract", { status: "skip-short", count: canon.length });
       return;
     }
+
+    const llmMessages = context.getMessagesForLLM(canon);
+    // Prefer the compact LLM view when long enough; otherwise use a tail of canonical history.
+    const messages = llmMessages.length >= 15 ? llmMessages : canon.slice(-60);
 
     const memoryManager = this.manager;
 
@@ -155,7 +160,7 @@ export class MemoryService {
         const count = await extractMemories(messages, memoryManager, agentId, agentManager);
         if (count > 0) {
           await memoryManager.flushIndex();
-          this.content = memoryManager.getIndexContent();
+          this.setContent(memoryManager.getIndexContent());
           emitEvent?.("memory:extract", { status: "complete", count });
         } else {
           emitEvent?.("memory:extract", { status: "empty" });
@@ -167,7 +172,7 @@ export class MemoryService {
           const result = await consolidateMemories(memoryManager, agentId, agentManager);
           if (result.changed) {
             await memoryManager.flushIndex();
-            this.content = memoryManager.getIndexContent();
+            this.setContent(memoryManager.getIndexContent());
             emitEvent?.("memory:consolidate", {
               status: "complete",
               before: memoryCount,
