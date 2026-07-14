@@ -127,7 +127,7 @@ export function setNerdIconsEnabledForTesting(enabled: boolean | undefined): voi
 export function isNerdIconsEnabled(): boolean {
   if (nerdIconsOverride !== undefined) return nerdIconsOverride;
 
-  const env = process.env.MY_AGENT_NERD_ICONS;
+  const env = typeof process !== "undefined" ? process.env.MY_AGENT_NERD_ICONS : undefined;
   if (env === "0" || env === "false") return false;
   if (env === "1" || env === "true") return true;
   return true;
@@ -147,7 +147,25 @@ function extensionOf(filePath: string): string {
 }
 
 function basenameOf(filePath: string): string {
-  return (filePath.split("/").pop() || filePath).toLowerCase();
+  return pathBase(filePath).toLowerCase();
+}
+
+/** Last path segment with original casing (Seti base map keys are case-sensitive). */
+function pathBase(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, "/");
+  return normalized.split("/").pop() || normalized;
+}
+
+/**
+ * ParsedPath-shaped value so {@link fromPath} never calls `node:path.parse`.
+ * Vite externalizes `node:path` in browser extension builds.
+ */
+function toNerdPathArg(filePath: string): { root: string; dir: string; base: string; name: string; ext: string } {
+  const base = pathBase(filePath);
+  const dot = base.includes(".") ? base.lastIndexOf(".") : -1;
+  const ext = dot > 0 ? base.slice(dot) : "";
+  const name = dot > 0 ? base.slice(0, dot) : base;
+  return { root: "", dir: "", base, name, ext };
 }
 
 function getTextBadgeStyle(filePath: string): FileIconStyle {
@@ -170,7 +188,7 @@ function getTextBadgeStyle(filePath: string): FileIconStyle {
 
 function getNerdFileIconStyle(filePath: string): FileIconStyle | null {
   try {
-    const icon = fromPath(filePath, "seti");
+    const icon = fromPath(toNerdPathArg(filePath), "seti");
     if (!icon.value) return null;
 
     const fallback = getTextBadgeStyle(filePath);

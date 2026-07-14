@@ -1,5 +1,8 @@
 import react from "@my-react/react-vite";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "wxt";
+
+const nodePathShim = fileURLToPath(new URL("./shims/node-path.ts", import.meta.url));
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
@@ -10,6 +13,9 @@ export default defineConfig({
         // Map terminal ink → web renderer for browser extension
         ink: "@my-react/react-terminal/web",
         "ink-stream-markdown": "ink-stream-markdown/web",
+        // @m234/nerd-fonts imports node:path; MV3 can't use the Node built-in
+        "node:path": nodePathShim,
+        path: nodePathShim,
       },
       dedupe: ["ink", "@my-react/react-terminal", "ink-stream-markdown"],
     },
