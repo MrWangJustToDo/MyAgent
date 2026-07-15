@@ -1,18 +1,20 @@
-import { createState } from "reactivity-store";
+import {
+  clearFlatMessageCache,
+  getFlatMessage,
+  setFlatMessage,
+  type CachedFlatMessage,
+} from "../utils/message-flat-cache.js";
 
-import type { UIMessage } from "@tanstack/ai";
+export type { CachedFlatMessage };
 
-export type CachedFlatMessage = {
-  signature: string;
-  flat: UIMessage[];
-};
-
-export const useMessageCache = createState(() => ({ state: {} as Record<string, CachedFlatMessage> }), {
-  withActions: (s) => ({
-    setMessage: (key: string, value: CachedFlatMessage) => {
-      s.state[key] = value;
-    },
-    getMessage: (key: string) => s.state[key],
-    clear: () => (s.state = {}),
+/**
+ * Flatten cache access. Kept as a named export for existing imports; storage is a
+ * plain Map so getMessages can write during render without reactive store updates.
+ */
+export const useMessageCache = {
+  getActions: () => ({
+    setMessage: setFlatMessage,
+    getMessage: getFlatMessage,
+    clear: clearFlatMessageCache,
   }),
-});
+};

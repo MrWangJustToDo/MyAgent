@@ -1,5 +1,3 @@
-import { useMessageCache } from "../hooks/use-message-cache.js";
-
 import {
   computeToolCallsRenderSignature,
   dedupeToolCallsInMessages,
@@ -7,10 +5,19 @@ import {
   normalizeToolPartsInMessages,
   shouldFlattenPart,
 } from "./dedupe-tool-calls.js";
+import { getFlatMessage, setFlatMessage } from "./message-flat-cache.js";
+import {
+  isActivitySummaryMessage,
+  projectTranscriptForDisplay,
+  type TranscriptDisplayMode,
+} from "./project-transcript.js";
 
-import type { UIMessage } from "@tanstack/ai";
+import type { TextPart, UIMessage } from "@tanstack/ai";
 
-const { setMessage, getMessage } = useMessageCache.getActions();
+export type GetMessagesOptions = {
+  mode?: TranscriptDisplayMode;
+  isLoading?: boolean;
+};
 
 const filterValidMessage = (message: UIMessage) => {
   if (message.role === "assistant") {
@@ -37,29 +44,59 @@ function flattenMessage(message: UIMessage): UIMessage[] {
 
 function resolveStaticFlatMessage(message: UIMessage): UIMessage[] {
   const signature = getMessageToolSignature(message);
-  const cached = getMessage(message.id);
+  const cached = getFlatMessage(message.id);
   if (cached && cached.signature === signature) {
     return cached.flat;
   }
 
   const flatMessage = flattenMessage(message);
-  setMessage(message.id, { signature, flat: flatMessage });
+  setFlatMessage(message.id, { signature, flat: flatMessage });
   return flatMessage;
+}
+
+/**
+ * Signature for ink Static rebuilds.
+ * Only fingerprints the static portion (all but last display message) so live tool
+ * updates on the dynamic last message do not remount the entire transcript.
+ */
+function computeStaticRenderSignature(
+  displayMessages: UIMessage[],
+  options: { mode: TranscriptDisplayMode; isLoading: boolean }
+): string {
+  const staticSource = displayMessages.length > 1 ? displayMessages.slice(0, -1) : ([] as UIMessage[]);
+
+  const toolSig = computeToolCallsRenderSignature(staticSource);
+  const summaries = staticSource
+    .filter(isActivitySummaryMessage)
+    .map((m) => {
+      const text = m.parts[0]?.type === "text" ? ((m.parts[0] as TextPart).content ?? "") : "";
+      return `${m.id}:${text}`;
+    })
+    .join(";");
+
+  const ids = staticSource.map((m) => m.id).join(",");
+  return `${options.mode}|L${options.isLoading ? 1 : 0}|n${staticSource.length}|${ids}|${summaries}|${toolSig}`;
 }
 
 /**
  * Split messages into static (completed) and dynamic (streaming) portions.
  * Tool-call parts with the same id are deduped (first wins) with state merged from later replays.
+ * Compact mode collapses closed turns before flatten/split.
  */
-export const getMessages = (messages: UIMessage[]) => {
+export const getMessages = (messages: UIMessage[], options: GetMessagesOptions = {}) => {
+  const mode = options.mode ?? "full";
+  const isLoading = options.isLoading ?? false;
+
   const normalizedMessages = normalizeToolPartsInMessages(messages);
   const dedupedMessages = dedupeToolCallsInMessages(normalizedMessages);
+  const displayMessages = projectTranscriptForDisplay(dedupedMessages, { mode, isLoading });
+
   const staticMessages: UIMessage[] = [];
   const dynamicMessages: UIMessage[] = [];
 
-  for (let i = 0; i < dedupedMessages.length; i++) {
-    const message = dedupedMessages[i];
-    if (i < dedupedMessages.length - 1) {
+  for (let i = 0; i < displayMessages.length; i++) {
+    const message = displayMessages[i];
+    if (i < displayMessages.length - 1) {
       staticMessages.push(...resolveStaticFlatMessage(message));
     } else {
       for (let idx = 0; idx < message.parts.length; idx++) {
@@ -73,6 +110,6 @@ export const getMessages = (messages: UIMessage[]) => {
   return {
     staticMessages: staticMessages.filter(filterValidMessage),
     dynamicMessages: dynamicMessages.filter(filterValidMessage),
-    toolCallsSignature: computeToolCallsRenderSignature(dedupedMessages),
+    toolCallsSignature: computeStaticRenderSignature(displayMessages, { mode, isLoading }),
   };
 };

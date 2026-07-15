@@ -12,6 +12,8 @@ export default defineConfig([
       "src/utils/streaming-output-lines.ts",
       "src/utils/format-usage.ts",
       "src/utils/file-icons.ts",
+      "src/utils/tool-activity-summary.ts",
+      "src/utils/project-transcript.ts",
 
       "src/hooks/streaming-ingest.ts",
     ],

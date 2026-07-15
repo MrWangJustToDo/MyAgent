@@ -4,8 +4,10 @@ import { memo, useMemo } from "react";
 import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
 import { useSize } from "../hooks";
 import { BG, COLORS } from "../theme/colors.js";
+import { isActivitySummaryMessage } from "../utils/project-transcript.js";
 import { isImagePart, isToolCallPart } from "../utils/tool-part.js";
 
+import { ActivitySummaryView } from "./ActivitySummaryView.js";
 import { FilePartView } from "./FilePartView.js";
 import { TextPartView } from "./TextPartView.js";
 import { ToolCallPartView } from "./ToolCallPartView.js";
@@ -50,6 +52,11 @@ export const MessageView = memo(({ message, readOnly = false }: MessageViewProps
     });
     return map;
   }, [visibleParts]);
+
+  if (isActivitySummaryMessage(message)) {
+    const summary = visibleParts[0]?.type === "text" ? getTextContent(visibleParts[0] as TextPart) : "";
+    return summary ? <ActivitySummaryView summary={summary} /> : null;
+  }
 
   if (message.role === "user") {
     return <UserMessageView parts={visibleParts} fileIndexMap={fileIndexMap} />;

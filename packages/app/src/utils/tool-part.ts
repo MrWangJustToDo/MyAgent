@@ -10,16 +10,16 @@ export type UiToolState =
   | "approval-requested"
   | "approval-responded";
 
-export function isImagePart(part: { type?: string }): part is ImagePart {
-  return part.type === "image";
+export function isImagePart(part: { type?: string } | null | undefined): part is ImagePart {
+  return part != null && part.type === "image";
 }
 
-export function isToolCallPart(part: { type?: string }): part is ToolCallPart {
-  return part.type === "tool-call";
+export function isToolCallPart(part: { type?: string } | null | undefined): part is ToolCallPart {
+  return part != null && part.type === "tool-call";
 }
 
-export function isToolResultPart(part: { type?: string }): boolean {
-  return part.type === "tool-result";
+export function isToolResultPart(part: { type?: string } | null | undefined): boolean {
+  return part != null && part.type === "tool-result";
 }
 
 export function parseToolInput(part: ToolCallPart): unknown {

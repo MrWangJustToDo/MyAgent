@@ -1,6 +1,7 @@
 // Import command files to trigger registration
 import "./clear.js";
 import "./compact.js";
+import "./display.js";
 import "./help.js";
 import "./mcp.js";
 import "./paste.js";

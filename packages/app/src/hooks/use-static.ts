@@ -21,6 +21,7 @@ export const useStatic = createState(
         setStaticHeader: (item: JSX.Element) => ((s.header = item), s.headerSet++),
         setStaticList: (items: JSX.Element[]) => ((s.list = items), s.listSet++),
         setToolCallsSignature: (signature: string) => {
+          if (s.toolCallsSignature === signature) return;
           s.toolCallsSignature = signature;
         },
       };

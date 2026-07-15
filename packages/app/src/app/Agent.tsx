@@ -110,7 +110,7 @@ export const Agent = () => {
         <SubagentPanel />
       ) : (
         <>
-          <MessageList messages={messages} />
+          <MessageList messages={messages} isLoading={isLoading} />
           <Content />
           <Footer status={status} />
         </>

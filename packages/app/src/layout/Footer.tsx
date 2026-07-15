@@ -1,4 +1,3 @@
-import { getEnv } from "@my-agent/core";
 import { Box, Text } from "ink";
 import { useEffect, useState } from "react";
 
@@ -234,25 +233,15 @@ const ContextBar = ({
 };
 
 /**
- * Bottom status bar — shows workspace, sandbox, model info.
+ * Bottom status bar — shows MCP, usage, model info.
  */
 const StatusBar = ({ mcpCount }: { mcpCount: number }) => {
   const model = useConfig((s) => s.config.model);
-  const rootPath = getEnv().rootPath;
-  const shortPath = rootPath ? (rootPath.length > 30 ? `...${rootPath.slice(-27)}` : rootPath) : "";
-
   const { version } = useAgentUsage();
 
   return (
     <Box justifyContent="space-between" paddingX={1}>
       <Box gap={2} flexShrink={1}>
-        {shortPath && (
-          <Box>
-            <Text color={COLORS.muted} dimColor wrap="truncate-start">
-              {shortPath}
-            </Text>
-          </Box>
-        )}
         {mcpCount > 0 && (
           <Text color={COLORS.accent} dimColor wrap="truncate">
             MCP: {mcpCount}

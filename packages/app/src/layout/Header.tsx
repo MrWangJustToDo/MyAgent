@@ -1,8 +1,9 @@
 import { getEnv } from "@my-agent/core";
 import { Box, Text } from "ink";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { FullBox } from "../components/FullBox";
+import { useSize } from "../hooks/use-size.js";
 import { useStatic } from "../hooks/use-static";
 import { COLORS } from "../theme/colors.js";
 import { GRADIENT_STOPS, interpolateColor } from "../utils/gradient.js";
@@ -17,6 +18,9 @@ const LOGO_LINES = [
   " █▀▄▀█ █ █   ▄▀█ █▀▀ █▀▀ █▄ █ ▀█▀",
   " █ ▀ █ ▀▄▀   █▀█ █▄█ ██▄ █ ▀█  █ ",
 ];
+
+/** Hide workspace/git + tips when the terminal is too narrow to render them on one line. */
+const HEADER_META_MIN_WIDTH = 80;
 
 // ============================================================================
 // GradientText — per-character horizontal gradient using only <Text>
@@ -85,49 +89,73 @@ const TIPS = [
 ];
 
 // ============================================================================
-// Git line
+// Git / workspace line
 // ============================================================================
 
-const GitInfoLine = ({ git }: { git: WorkspaceGitInfo }) => {
-  const showSha = Boolean(git.shortSha) && !git.branch.includes(git.shortSha);
+function shortenPath(rootPath: string): string {
+  return rootPath.length > 40 ? `...${rootPath.slice(-37)}` : rootPath;
+}
+
+/** Single-line meta row — no flex children that wrap mid-token at narrow widths. */
+const GitInfoLine = ({ git, workspacePath }: { git: WorkspaceGitInfo | null; workspacePath: string }) => {
+  const showSha = Boolean(git?.shortSha) && git != null && !git.branch.includes(git.shortSha);
+  const branch = git ? `${git.branch}${git.dirty ? "*" : ""}` : "";
 
   return (
-    <Box marginTop={1} gap={1} justifyContent="center" width="100%">
-      <Text color={COLORS.muted} dimColor>
-        git
+    <Box marginTop={1} justifyContent="center" width="100%" flexShrink={0}>
+      <Text wrap="truncate">
+        {workspacePath ? (
+          <Text color={COLORS.muted} dimColor>
+            {workspacePath}
+          </Text>
+        ) : null}
+        {workspacePath && git ? (
+          <Text color={COLORS.muted} dimColor>
+            {" · "}
+          </Text>
+        ) : null}
+        {git ? (
+          <>
+            <Text color={COLORS.muted} dimColor>
+              git{" "}
+            </Text>
+            <Text color={COLORS.primary}>{branch}</Text>
+            {showSha ? (
+              <Text color={COLORS.muted} dimColor>
+                {" · "}
+                {git.shortSha}
+              </Text>
+            ) : null}
+          </>
+        ) : null}
       </Text>
-      <Text color={COLORS.primary}>
-        {git.branch}
-        {git.dirty ? "*" : ""}
-      </Text>
-      {showSha && (
-        <Text color={COLORS.muted} dimColor>
-          · {git.shortSha}
-        </Text>
-      )}
     </Box>
   );
 };
 
-function buildHeader(git: WorkspaceGitInfo | null) {
+function buildHeader(git: WorkspaceGitInfo | null, workspacePath: string, showMeta: boolean) {
   return (
     <FullBox flexDirection="column" key="header" marginBottom={1} paddingX={3} paddingY={1}>
       <Logo />
-      {git && <GitInfoLine git={git} />}
+      {showMeta && (workspacePath || git) && <GitInfoLine git={git} workspacePath={workspacePath} />}
 
-      <Box height={1} />
+      {showMeta && (
+        <>
+          <Box height={1} />
 
-      {/* Tips bar */}
-      <Box gap={3} justifyContent="center" width="100%">
-        {TIPS.map((tip, i) => (
-          <Box key={i} gap={1}>
-            <Text color={COLORS.muted}>{tip.key}</Text>
-            <Text color={COLORS.muted} dimColor>
-              {tip.desc}
-            </Text>
+          {/* Tips bar — only when wide enough to keep each tip on one line */}
+          <Box gap={3} justifyContent="center" width="100%" flexShrink={0}>
+            {TIPS.map((tip, i) => (
+              <Box key={i} gap={1} flexShrink={0}>
+                <Text color={COLORS.muted}>{tip.key}</Text>
+                <Text color={COLORS.muted} dimColor>
+                  {tip.desc}
+                </Text>
+              </Box>
+            ))}
           </Box>
-        ))}
-      </Box>
+        </>
+      )}
     </FullBox>
   );
 }
@@ -137,26 +165,41 @@ function buildHeader(git: WorkspaceGitInfo | null) {
 // ============================================================================
 
 export const Header = () => {
+  const screenWidth = useSize((s) => s.state.screenWidth);
+  const [git, setGit] = useState<WorkspaceGitInfo | null>(null);
+  const [workspacePath, setWorkspacePath] = useState("");
+  const [ready, setReady] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
 
-    const publish = async () => {
-      let git: WorkspaceGitInfo | null = null;
+    const load = async () => {
+      let nextGit: WorkspaceGitInfo | null = null;
+      let nextPath = "";
       try {
         const rootPath = getEnv().rootPath;
-        git = await fetchWorkspaceGitInfo(rootPath);
+        nextPath = rootPath ? shortenPath(rootPath) : "";
+        nextGit = await fetchWorkspaceGitInfo(rootPath);
       } catch {
-        git = null;
+        nextGit = null;
       }
       if (cancelled) return;
-      useStatic.getActions().setStaticHeader(buildHeader(git));
+      setGit(nextGit);
+      setWorkspacePath(nextPath);
+      setReady(true);
     };
 
-    void publish();
+    void load();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    const showMeta = screenWidth >= HEADER_META_MIN_WIDTH;
+    useStatic.getActions().setStaticHeader(buildHeader(git, workspacePath, showMeta));
+  }, [ready, git, workspacePath, screenWidth]);
 
   return null;
 };
