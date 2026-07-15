@@ -1,9 +1,11 @@
 import { Box, Text } from "ink";
 
 import { StreamingOutputView } from "../components/StreamingOutputView.js";
-import { useTask } from "../hooks/use-task.js";
+import { useLiveElapsedMs } from "../hooks/use-live-elapsed.js";
 import { useMessageDiffFocus } from "../hooks/use-message-diff-focus.js";
+import { useTask } from "../hooks/use-task.js";
 import { COLORS } from "../theme/colors.js";
+import { formatUsageBrief } from "../utils/format-usage.js";
 import {
   buildToolHeader,
   DURATION_THRESHOLD_MS,
@@ -13,6 +15,7 @@ import {
   getDurationMs,
   getInlineSummary,
   getToolCallColor,
+  LIVE_DURATION_THRESHOLD_MS,
 } from "../utils/format.js";
 import { getUiToolState, isToolExecuting, parseToolInput } from "../utils/tool-part.js";
 
@@ -71,8 +74,12 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
   const isRunCommand = toolName === "run_command";
   const isTask = toolName === "task";
   const isExecuting = isToolExecuting(part);
+  const liveElapsedMs = useLiveElapsedMs(toolCallId, isExecuting, LIVE_DURATION_THRESHOLD_MS);
   const taskInput = toolInput as { id?: string } | null;
-  const { phase: taskPhase } = useTask({ id: isTask && taskInput?.id ? taskInput.id : "", taskId: part.id });
+  const { phase: taskPhase, usage: taskUsage } = useTask({
+    id: isTask && taskInput?.id ? taskInput.id : "",
+    taskId: part.id,
+  });
   const showTaskSummaryStream = isTask && isExecuting && taskPhase === "summary";
 
   const displayInput =
@@ -88,9 +95,27 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
   const outputFailed = (part.output as { success?: boolean } | undefined)?.success === false;
   const stateColor = errorText || outputFailed ? COLORS.danger : getToolCallColor(uiState);
 
+  const outputUsage =
+    isTask && hasOutput && part.output && typeof part.output === "object" && "usage" in part.output
+      ? (part.output as { usage?: { inputTokens?: number; outputTokens?: number } }).usage
+      : null;
+  const displayUsage = taskUsage ?? outputUsage ?? null;
+
   const parenParts: string[] = [];
   if (inlineSummary) parenParts.push(inlineSummary);
-  if (showDuration) parenParts.push(formatDuration(durationMs!));
+  if (showDuration) {
+    parenParts.push(formatDuration(durationMs!));
+  } else if (liveElapsedMs != null) {
+    parenParts.push(formatDuration(liveElapsedMs));
+  }
+  if (isTask && displayUsage && ((displayUsage.inputTokens ?? 0) > 0 || (displayUsage.outputTokens ?? 0) > 0)) {
+    parenParts.push(
+      formatUsageBrief({
+        inputTokens: displayUsage.inputTokens ?? 0,
+        outputTokens: displayUsage.outputTokens ?? 0,
+      })
+    );
+  }
   const parenText = parenParts.length > 0 ? ` (${parenParts.join(", ")})` : "";
   const headerText = buildToolHeader(toolName, displayInput, parenText, stateColor);
 
@@ -116,7 +141,6 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
         <StreamingOutputView
           toolCallId={toolCallId}
           enabled={showTaskSummaryStream}
-          emptyMessage=""
           throttleMs={streamingThrottleMs ?? 0}
         />
       )}

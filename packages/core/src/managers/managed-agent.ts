@@ -10,13 +10,13 @@ import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
 import { getLatestUserMessage } from "../agent/compaction/message-utils.js";
 import { isPromptTooLongError, reactiveCompact } from "../agent/compaction/reactive-compact.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
-import { isToolContinuationPrepare } from "../agent/utils/tool-phase-utils.js";
-import { generateId } from "../agent/utils.js";
 import {
   createSessionSyncTracker,
   type SessionSaveReason,
   type SessionSyncTracker,
 } from "../agent/session/session-sync-tracker.js";
+import { isToolContinuationPrepare } from "../agent/utils/tool-phase-utils.js";
+import { generateId } from "../agent/utils.js";
 
 import { AgentChatController } from "./agent-chat-controller.js";
 import { createAgentStatusController, type AgentStatusController } from "./agent-status-controller.js";
@@ -196,8 +196,17 @@ export class ManagedAgent {
   // ============================================================================
 
   setStatus(status: AgentStatus): void {
+    if (status === "completed" || status === "aborted" || status === "error") {
+      this.recordStreamDuration();
+    }
     this.status = status;
     this.emitStateChange();
+  }
+
+  /** Snapshot wall-clock duration for the current turn into {@link lastStreamDurationMs}. */
+  private recordStreamDuration(): void {
+    if (this.streamStartedAt <= 0) return;
+    this.lastStreamDurationMs = Math.max(0, Date.now() - this.streamStartedAt);
   }
 
   setError(error: string): void {
@@ -411,6 +420,7 @@ export class ManagedAgent {
    * Memory extraction runs only when `reason === "finished"`.
    */
   finalizeRun(manager: AgentManager, reason: RunFinalizeReason): void {
+    this.recordStreamDuration();
     this.persistSession();
     this.memory.clearTurnContext();
     if (reason === "finished") {
@@ -523,9 +533,13 @@ export class ManagedAgent {
       },
     });
     this.run.resetReactiveCompactRetries();
-    if (this.streamStartedAt === 0) this.streamStartedAt = Date.now();
 
     const isToolContinuation = isToolContinuationPrepare(this.status, options.messages);
+    // Wall-clock for the whole user turn (including tool-phase continues). Reset only on a new turn.
+    if (!isToolContinuation || this.streamStartedAt === 0) {
+      this.streamStartedAt = Date.now();
+    }
+
     if (!isToolContinuation && !this.parentId) {
       await this.memory.prefetchRelevantMemories({
         messages:

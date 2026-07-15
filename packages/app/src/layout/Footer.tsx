@@ -1,5 +1,6 @@
 import { getEnv } from "@my-agent/core";
 import { Box, Text } from "ink";
+import { useEffect, useState } from "react";
 
 import { AutocompleteList } from "../components/AutocompleteList.js";
 import { CommandOutput } from "../components/CommandOutput.js";
@@ -16,17 +17,9 @@ import { useInputMode } from "../hooks/use-input-mode.js";
 import { useSelect } from "../hooks/use-select.js";
 import { useUserInput } from "../hooks/use-user-input.js";
 import { BG, COLORS } from "../theme/colors.js";
+import { formatDuration } from "../utils/format.js";
 
 import type { AgentStatus, ManagedAgent } from "@my-agent/core";
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const s = ms / 1000;
-  if (s < 60) return `${s.toFixed(1)}s`;
-  const m = Math.floor(s / 60);
-  const rem = Math.round(s % 60);
-  return rem > 0 ? `${m}m ${rem}s` : `${m}m`;
-}
 
 export const Footer = ({ status }: { status: AgentStatus }) => {
   const allMcp = useAgent((s) => s.agent?.mcpManager?.getConnectedServers());
@@ -147,8 +140,16 @@ const ContextBar = ({
   isMultiSelect: boolean;
   cursorOnFreeform: boolean;
 }) => {
-  const _error = useAgent((s) => (s.agent as ManagedAgent)?.error || "");
-  const lastRunDurationMs = useAgent((s) => (s.agent as ManagedAgent)?.lastStreamDurationMs || 0);
+  // ManagedAgent mutates fields in place; useAgent primitive selectors stay stale.
+  // Subscribe to agent state and read duration/error from the live agent ref.
+  const agent = useAgent((s) => s.agent) as ManagedAgent | null;
+  const [agentTick, setAgentTick] = useState(0);
+  useEffect(() => {
+    if (!agent) return;
+    return agent.subscribeState(() => setAgentTick((n) => n + 1));
+  }, [agent]);
+  const lastRunDurationMs = agentTick >= 0 ? agent?.lastStreamDurationMs || 0 : 0;
+  const _error = agent?.error || "";
 
   const inputError = useUserInput((s) => s.inputError);
   const inputFeedback = useUserInput((s) => s.inputFeedback);

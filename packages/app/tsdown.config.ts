@@ -9,7 +9,10 @@ export default defineConfig([
       "src/utils/workspace-git-diff.ts",
       "src/utils/diff-viewport.ts",
       "src/utils/diff-frame.ts",
+      "src/utils/streaming-output-lines.ts",
+      "src/utils/format-usage.ts",
       "src/utils/file-icons.ts",
+
       "src/hooks/streaming-ingest.ts",
       "src/hooks/use-message-diff-focus.ts",
     ],

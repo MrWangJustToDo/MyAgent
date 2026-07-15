@@ -229,7 +229,7 @@ function getTextFolderStyle(expanded: boolean): FolderIconStyle {
 }
 
 function getNerdFolderStyle(name: string, expanded: boolean): FolderIconStyle {
-  let icon = expanded ? icons["nf-cod-folder_opened"] : icons["nf-cod-folder"];
+  let icon = expanded ? icons["nf-md-folder_open"] : icons["nf-md-folder"];
   let color = expanded ? FOLDER_OPEN_COLOR : FOLDER_CLOSED_COLOR;
 
   if (name === ".git") {

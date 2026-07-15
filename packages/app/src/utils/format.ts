@@ -16,6 +16,7 @@ export { formatToolInput } from "./tool-input-format.js";
 export { formatToolArgs, formatToolOutput } from "./tool-output-format.js";
 export {
   DURATION_THRESHOLD_MS,
+  LIVE_DURATION_THRESHOLD_MS,
   buildToolHeader,
   getCompactOutput,
   getDurationMs,

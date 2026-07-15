@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "@my-react/react";
 import { Box, Text, useInput } from "ink";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useSize } from "../hooks/use-size.js";
 import { useWorkspaceView } from "../hooks/use-workspace-view.js";

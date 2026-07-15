@@ -1,13 +1,12 @@
 /**
- * StreamingOutputView — Standalone component for displaying streaming tool output.
- *
- * Can be used independently for testing or embedded in other components.
+ * Display streaming tool output in a capped-height window (latest N lines).
  */
 
 import { Box, Text } from "ink";
 
 import { useStreamingOutput } from "../hooks/use-streaming-output.js";
 import { COLORS } from "../theme/colors.js";
+import { buildFixedStreamingWindow } from "../utils/streaming-output-lines.js";
 
 // ============================================================================
 // Types
@@ -20,11 +19,14 @@ export interface StreamingOutputViewProps {
   enabled?: boolean;
   /** Min ms between UI store updates (default: 0 = every chunk). */
   throttleMs?: number;
-  /** Max lines to show from stdout (default: 5) */
+  /** Max stdout window height in lines (default: 5) */
   maxStdoutLines?: number;
-  /** Max lines to show from stderr (default: 3) */
+  /** Max stderr window height in lines when stderr is present (default: 3) */
   maxStderrLines?: number;
-  /** Custom empty state message */
+  /**
+   * Optional placeholder when there is no stream content yet.
+   * Default: empty — render nothing (no reserved height) until output arrives.
+   */
   emptyMessage?: string;
 }
 
@@ -34,6 +36,10 @@ export interface StreamingOutputViewProps {
 
 /**
  * Display streaming output for a tool call.
+ *
+ * - No content and no {@link emptyMessage}: renders nothing (no reserved height).
+ * - Content grows line-by-line up to {@link maxStdoutLines}, then keeps the latest lines.
+ * - Overflow is marked on the first visible line (`… `).
  *
  * @example
  * ```tsx
@@ -46,55 +52,48 @@ export const StreamingOutputView = ({
   throttleMs = 0,
   maxStdoutLines = 5,
   maxStderrLines = 3,
-  emptyMessage = "Waiting for output...",
+  emptyMessage = "",
 }: StreamingOutputViewProps) => {
   const output = useStreamingOutput(toolCallId, { enabled, throttleMs });
 
-  if (!output || (!output.stdout && !output.stderr)) {
-    return (
-      <Box paddingLeft={2}>
-        <Text color={COLORS.muted} dimColor>
-          {emptyMessage}
-        </Text>
-      </Box>
-    );
+  const stdoutText = output?.stdout ?? "";
+  const stderrText = output?.stderr ?? "";
+  const hasStdout = stdoutText.length > 0;
+  const hasStderr = stderrText.length > 0;
+
+  // Nothing to show yet — do not reserve vertical space.
+  if (!hasStdout && !hasStderr && !emptyMessage) {
+    return null;
   }
 
-  const stdoutLines = output.stdout ? output.stdout.split("\n") : [];
-  const stderrLines = output.stderr ? output.stderr.split("\n") : [];
+  const stdoutWindow = buildFixedStreamingWindow(stdoutText, maxStdoutLines, {
+    emptyPlaceholder: !hasStdout && !hasStderr ? emptyMessage : "",
+  });
 
-  const hiddenStdoutLines = Math.max(0, stdoutLines.length - maxStdoutLines);
-  const hiddenStderrLines = Math.max(0, stderrLines.length - maxStderrLines);
+  const stderrWindow = hasStderr
+    ? buildFixedStreamingWindow(stderrText, maxStderrLines)
+    : { lines: [] as string[], hidden: 0 };
 
-  const displayStdout = stdoutLines.slice(-maxStdoutLines);
-  const displayStderr = stderrLines.slice(-maxStderrLines);
+  if (stdoutWindow.lines.length === 0 && stderrWindow.lines.length === 0) {
+    return null;
+  }
 
   return (
     <Box flexDirection="column" paddingLeft={2}>
-      {displayStdout.length > 0 && (
-        <Box flexDirection="column">
-          {hiddenStdoutLines > 0 && (
-            <Text color={COLORS.muted} dimColor>
-              ... ({hiddenStdoutLines} more lines)
-            </Text>
-          )}
-          {displayStdout.map((line, i) => (
+      {stdoutWindow.lines.length > 0 && (
+        <Box flexDirection="column" height={stdoutWindow.lines.length} flexShrink={0}>
+          {stdoutWindow.lines.map((line, i) => (
             <Text key={`stdout-${i}`} color={COLORS.muted} dimColor>
-              {line}
+              {line.length > 0 ? line : " "}
             </Text>
           ))}
         </Box>
       )}
-      {displayStderr.length > 0 && (
-        <Box flexDirection="column">
-          {hiddenStderrLines > 0 && (
-            <Text color={COLORS.danger} dimColor>
-              ... ({hiddenStderrLines} more lines)
-            </Text>
-          )}
-          {displayStderr.map((line, i) => (
+      {stderrWindow.lines.length > 0 && (
+        <Box flexDirection="column" height={stderrWindow.lines.length} flexShrink={0}>
+          {stderrWindow.lines.map((line, i) => (
             <Text key={`stderr-${i}`} color={COLORS.danger} dimColor>
-              {line}
+              {line.length > 0 ? line : " "}
             </Text>
           ))}
         </Box>

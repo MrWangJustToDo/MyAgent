@@ -1,31 +1,13 @@
 import { Text } from "ink";
 import { useEffect, useState } from "react";
 
+import { formatCompactNumber } from "../utils/format-usage.js";
+
 /** Number of animation ticks before reaching the target */
 const TICK_COUNT = 8;
 
 /** Interval between ticks in milliseconds */
 const TICK_MS = 60;
-
-/**
- * Format a number into compact human-readable form.
- * - 0–999 → raw (e.g. "342")
- * - 1,000–999,999 → "1.50k", "342.00k" (two decimal places)
- * - 1,000,000+ → "1.20M", "3.55M" (two decimal places)
- */
-const formatCompact = (n: number): string => {
-  if (n < 1000) return String(n);
-  if (n < 1_000_000) {
-    // Thousands — show two decimal places
-    const thousands = n / 1000;
-    const rounded = Math.round(thousands * 100) / 100;
-    return `${rounded.toFixed(2)}k`;
-  }
-  // Millions — show two decimal places
-  const millions = n / 1_000_000;
-  const rounded = Math.round(millions * 100) / 100;
-  return `${rounded.toFixed(2)}M`;
-};
 
 /**
  * AnimateNumber — smoothly animates from the previous value to `number`.
@@ -53,5 +35,5 @@ export const AnimateNumber = ({ number }: { number: number }) => {
     return () => clearTimeout(id);
   }, [number, current]);
 
-  return <Text>{formatCompact(current)}</Text>;
+  return <Text>{formatCompactNumber(current)}</Text>;
 };

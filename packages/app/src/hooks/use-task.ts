@@ -5,7 +5,7 @@ import { isToolCallPart, parseToolInput } from "../utils/tool-part.js";
 
 import { useSubAgents } from "./use-sub-agents";
 
-import type { ManagedAgent } from "@my-agent/core";
+import type { ManagedAgent, TokenUsage } from "@my-agent/core";
 import type { ToolCallState } from "@tanstack/ai";
 
 const BEGIN_SUMMARY_TOOL_NAME = "begin_summary";
@@ -45,11 +45,17 @@ const getTaskToolsFromAgent = (agent?: ManagedAgent): TaskToolCall[] => {
   return tools;
 };
 
+const getTaskUsageFromAgent = (agent?: ManagedAgent): TokenUsage | null => {
+  if (!agent?.usage) return null;
+  return { ...agent.usage.getTotal() };
+};
+
 const getTaskInfoFromAgent = (agent?: ManagedAgent) => {
   const allTools = getTaskToolsFromAgent(agent);
   return {
     allTools,
     total: allTools.length,
+    usage: getTaskUsageFromAgent(agent),
   };
 };
 
@@ -79,6 +85,14 @@ export const useTask = ({ id, taskId }: { id: string; taskId: string }) => {
       }),
       agentManager.on("subagent:ui-update", (event) => {
         if (event.agentId !== agent?.id) return;
+        refresh();
+      }),
+      agentManager.on("agent:stop", (event) => {
+        if (event.agentId !== agent?.id) return;
+        refresh();
+      }),
+      agentManager.on("subagent:completed", (event) => {
+        if (event.agentId !== agent?.id && event.data?.subagent_id !== agent?.id) return;
         refresh();
       }),
     ];

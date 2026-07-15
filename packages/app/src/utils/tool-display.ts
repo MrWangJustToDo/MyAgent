@@ -26,8 +26,11 @@ export function getToolCallColor(state: UiToolState | string): string {
   }
 }
 
-/** Only show duration for slow operations (>= this threshold). */
+/** Only show final duration for slow operations (>= this threshold). */
 export const DURATION_THRESHOLD_MS = 500;
+
+/** Show a live elapsed timer on the tool header while executing past this threshold. */
+export const LIVE_DURATION_THRESHOLD_MS = 3000;
 
 /** Extract durationMs from tool output if available. */
 export function getDurationMs(output: unknown): number | null {

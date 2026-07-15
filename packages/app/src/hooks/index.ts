@@ -32,5 +32,6 @@ export { useSubagentMessages } from "./use-subagent-messages.js";
 export { useSubagentPanel, type SubagentPanelView } from "./use-subagent-panel.js";
 export { useTerminalSize } from "./use-terminal-size.js";
 export { useStreamingOutput, type UseStreamingOutputOptions } from "./use-streaming-output.js";
+export { useLiveElapsedMs } from "./use-live-elapsed.js";
 
 export type { UIMessage, TextPart, ToolCallPart, ToolResultPart, ThinkingPart, MessagePart } from "@tanstack/ai";
