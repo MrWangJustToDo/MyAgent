@@ -33,6 +33,17 @@ export interface AgentRunnerConfig {
 
 export interface AgentRunnerRunInput {
   messages?: Array<UIMessage | ModelMessage>;
+  /**
+   * Preferred: the same AbortController identity owned by {@link ManagedAgent.run}.
+   * `ManagedAgent.abort()` must abort this controller to cancel TanStack `chat()`.
+   * Production runs always pass this (via executeManagedAgentRun after prepareForRun).
+   */
+  abortController?: AbortController;
+  /**
+   * Fallback only: when `abortController` is omitted, create a fresh controller and
+   * link this signal. Not used by the main/subagent run path today; kept for
+   * resolveAbortController / ad-hoc AgentRunner callers.
+   */
   abortSignal?: AbortSignal;
   threadId?: string;
   runId?: string;
@@ -54,8 +65,12 @@ export class AgentRunner {
     this.config = config;
   }
 
-  /** Execute one agent run and yield AG-UI stream chunks. */
-  run(input: AgentRunnerRunInput): AsyncIterable<StreamChunk> {
+  /** Resolve the AbortController passed to TanStack `chat()`. */
+  static resolveAbortController(input: Pick<AgentRunnerRunInput, "abortController" | "abortSignal">): AbortController {
+    if (input.abortController) {
+      return input.abortController;
+    }
+
     const abortController = new AbortController();
     if (input.abortSignal) {
       if (input.abortSignal.aborted) {
@@ -66,6 +81,12 @@ export class AgentRunner {
         });
       }
     }
+    return abortController;
+  }
+
+  /** Execute one agent run and yield AG-UI stream chunks. */
+  run(input: AgentRunnerRunInput): AsyncIterable<StreamChunk> {
+    const abortController = AgentRunner.resolveAbortController(input);
 
     const toolContext = createToolRunContext(input.agentId);
 

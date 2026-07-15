@@ -3,7 +3,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:memory-service
  */
-/* eslint-disable no-undef */
+
 import assert from "node:assert/strict";
 
 import { extractTextFromContent, resolveSelectedMemoryFilename } from "../dist/dev.mjs";

@@ -1,35 +1,26 @@
-import { memo, useCallback, useEffect, useRef } from "@my-react/react";
-import { Box, Text } from "ink";
+import { memo } from "@my-react/react";
+import { Box } from "ink";
 
-import { useMessageDiffFocus } from "../hooks/use-message-diff-focus.js";
-import { useStaticContext } from "../messages/StaticContext.js";
-import { BG, COLORS } from "../theme/colors.js";
+import { BG } from "../theme/colors.js";
 
 import { EditDiff } from "./EditDiff.js";
 
-import type { DiffViewRef } from "@git-diff-view/cli";
-
 export type MessageDiffViewProps = {
   diffId: string;
-  toolCallId: string;
-  approvalId?: string;
   width: number;
+  /** Optional fixed height; omit for auto (full content) height. */
   height?: number;
   oldFile: string;
   newFile: string;
   oldPath: string;
   newPath: string;
   startLine?: number;
-  /**
-   * Approval / status frame color. A single border conveys both status and focus:
-   * focus → primary; otherwise this color (defaults to {@link BG.border}).
-   */
+  /** Approval / status frame color (defaults to {@link BG.border}). */
   frameColor?: string;
 };
+
 export const MessageDiffView = memo(function MessageDiffView({
   diffId,
-  toolCallId,
-  approvalId,
   width,
   height,
   oldFile,
@@ -39,57 +30,18 @@ export const MessageDiffView = memo(function MessageDiffView({
   startLine,
   frameColor,
 }: MessageDiffViewProps) {
-  const { staticMessage } = useStaticContext();
-  const diffRef = useRef<DiffViewRef>(null);
-  const focusLabel = useMessageDiffFocus((s) => {
-    const entry = s.entries[s.selectedIndex];
-    const isSelected = !staticMessage && s.entries.length > 0 && entry?.toolCallId === toolCallId;
-    return isSelected ? { index: s.selectedIndex + 1, count: s.entries.length } : null;
-  });
-
-  useEffect(() => {
-    if (staticMessage) return;
-    const { register, unregister } = useMessageDiffFocus.getActions();
-    register({ toolCallId, approvalId });
-    return () => unregister(toolCallId);
-  }, [approvalId, staticMessage, toolCallId]);
-
-  const setDiffRef = useCallback(
-    (instance: DiffViewRef | null) => {
-      diffRef.current = instance;
-      if (!staticMessage) {
-        useMessageDiffFocus.getActions().setScrollRef(toolCallId, instance);
-      }
-    },
-    [staticMessage, toolCallId]
-  );
-
-  const isFocused = focusLabel !== null;
-  const borderColor = isFocused ? COLORS.primary : (frameColor ?? BG.border);
-  const showFocusHint = isFocused && focusLabel.count > 1;
-
   return (
-    <Box flexDirection="column">
-      {showFocusHint && focusLabel && (
-        <Box paddingX={1} paddingY={0}>
-          <Text color={COLORS.primary} dimColor>
-            Selected diff ({focusLabel.index}/{focusLabel.count}) · Tab switch · ↑↓ scroll
-          </Text>
-        </Box>
-      )}
-      <Box borderStyle="single" borderColor={borderColor}>
-        <EditDiff
-          ref={staticMessage ? undefined : setDiffRef}
-          id={diffId}
-          width={width}
-          height={height}
-          oldPath={oldPath}
-          oldFile={oldFile}
-          newPath={newPath}
-          newFile={newFile}
-          startLine={startLine}
-        />
-      </Box>
+    <Box borderStyle="single" borderColor={frameColor ?? BG.border}>
+      <EditDiff
+        id={diffId}
+        width={width}
+        height={height}
+        oldPath={oldPath}
+        oldFile={oldFile}
+        newPath={newPath}
+        newFile={newFile}
+        startLine={startLine}
+      />
     </Box>
   );
 });

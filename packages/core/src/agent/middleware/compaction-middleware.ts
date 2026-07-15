@@ -4,7 +4,6 @@ import type { AgentEventType } from "../../managers/agent-event-bus.js";
 import type { AgentStatusController } from "../../managers/agent-status-controller.js";
 import type { AgentManager } from "../../managers/manager-agent.js";
 import type { UsageTracker } from "../../managers/usage-tracker.js";
-import type { ModelInfo } from "../../models/types.js";
 import type { AgentContext } from "../agent-context";
 import type { AgentLog } from "../agent-log";
 import type { CompactionConfig } from "../compaction/types.js";
@@ -19,32 +18,10 @@ export interface CompactionMiddlewareDeps {
   getContext: () => AgentContext | null;
   getUsage: () => UsageTracker;
   getTodoManager: () => TodoManager | null;
-  getModelInfo: () => ModelInfo | null;
   shouldTriggerAutoCompact: (messages?: ModelMessage[]) => boolean;
   status: AgentStatusController;
   log: AgentLog | null;
   emitEvent?: (type: AgentEventType, data?: Record<string, unknown>) => void;
-}
-
-function shouldStripReasoningForPrefixCache(modelInfo: ModelInfo | null): boolean {
-  if (!modelInfo) return false;
-  if (modelInfo.capabilities.includes("reasoning")) return false;
-  return true;
-}
-
-function stripReasoningFromHistory(messages: ModelMessage[], modelInfo: ModelInfo | null): void {
-  if (!shouldStripReasoningForPrefixCache(modelInfo)) return;
-
-  for (const msg of messages) {
-    if (msg.role !== "assistant") continue;
-
-    const hasToolCall = (msg.toolCalls?.length ?? 0) > 0;
-    if (hasToolCall) continue;
-
-    if (msg.thinking && msg.thinking.length > 0) {
-      msg.thinking = [];
-    }
-  }
 }
 
 /** TanStack compaction via {@link ChatMiddleware.onConfig}. */
@@ -65,7 +42,8 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
       const canon = agentContext.getCanonicalModelMessages(engineMessages);
       let llmMessages = agentContext.getMessagesForLLM(canon);
 
-      stripReasoningFromHistory(llmMessages, deps.getModelInfo());
+      // DeepSeek reasoning echo is handled entirely in ReasoningChatCompletionsTextAdapter
+      // (stream STEP_FINISHED.delta + toolCallId cache). Do not strip thinking here.
 
       const managed = deps.manager.getAgent(deps.agentId);
       const isSubagent = Boolean(managed?.parentId);

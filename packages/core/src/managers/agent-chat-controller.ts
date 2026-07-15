@@ -1,5 +1,11 @@
 import { throwOnRunError } from "../agent/subagent/stream-errors.js";
 import { formatAgentStreamError } from "../agent/utils/assert-async-iterable.js";
+import { stripEmptyAssistantShells } from "../agent/utils/empty-assistant-shell.js";
+import {
+  cancelIncompleteToolCalls,
+  hasCancellableIncompleteToolCalls,
+  TOOL_CANCELLED_MESSAGE,
+} from "../agent/utils/incomplete-tool-calls.js";
 import {
   hasPendingAskUser,
   hasPendingToolApprovals,
@@ -58,9 +64,13 @@ export class AgentChatController {
     this.managed.statusController.onUserCancel();
     this.managed.abort("user-cancelled");
     this.runGeneration += 1;
+    // Immediately clear loading tool rows; stream teardown may still finalize later.
+    this.applyCancelledIncompleteTools();
   }
 
   sendMessage(content: string | ContentPart[]): Promise<void> {
+    // Only strips truncated/invalid leftover tools — never approval-responded / valid queues.
+    this.applyCancelledIncompleteTools();
     this.channel.addUserMessage(content);
     return this.enqueueRun();
   }
@@ -87,6 +97,8 @@ export class AgentChatController {
   private async pumpToolPhases(): Promise<void> {
     const generation = ++this.runGeneration;
     this.managed.setError("");
+    // Safe: skips approval-responded and valid input-complete (needed for `y` / tool-phase).
+    this.applyCancelledIncompleteTools();
 
     const messages = this.channel.getMessages();
     this.managed.statusController.prepareRunPhase(messages);
@@ -101,7 +113,11 @@ export class AgentChatController {
       if (iteration > 0 && !shouldContinueAgentPump(currentMessages)) break;
 
       await this.executeStream(currentMessages, generation);
-      if (generation !== this.runGeneration) return;
+      if (generation !== this.runGeneration) {
+        // Stream may have finalized truncated tool args after Esc — cancel again.
+        this.applyCancelledIncompleteTools();
+        return;
+      }
 
       const after = this.channel.getMessages();
       if (hasPendingToolApprovals(after)) break;
@@ -116,19 +132,27 @@ export class AgentChatController {
   }
 
   private async executeStream(messages: UIMessage[], generation: number): Promise<void> {
-    this.managed.setupAbortController();
-
-    const abortSignal = this.managed.run.currentAbortController?.signal;
+    // AbortController is created inside prepareForRun (via runAgentStream) and wired
+    // directly into TanStack chat. Do not create a second controller here — that used
+    // to leave ManagedAgent.abort() aborting a controller chat was not listening to.
     try {
-      const stream = throwOnRunError(this.manager.runAgentStream(this.managed.id, { messages, abortSignal }));
+      const stream = throwOnRunError(this.manager.runAgentStream(this.managed.id, { messages }));
       await this.channel.consumeRun({ stream });
+      if (generation !== this.runGeneration || this.managed.status === "aborted") {
+        this.applyCancelledIncompleteTools();
+        return;
+      }
       this.managed.statusController.reconcileFromUIMessages(this.channel.getMessages(), { whenClear: "running" });
     } catch (err) {
-      if (generation !== this.runGeneration) return;
+      if (generation !== this.runGeneration || this.managed.status === "aborted") {
+        this.applyCancelledIncompleteTools();
+        return;
+      }
       const error = err instanceof Error ? err : new Error(String(err));
       const message = formatAgentStreamError(error).message;
       if (this.managed.isAbortError(err)) {
         this.managed.statusController.onExternalError(message, true);
+        this.applyCancelledIncompleteTools();
       } else {
         // Surface stream failures in status + agent:stream-error (not silent Completed).
         this.managed.statusController.onRunError(message);
@@ -136,6 +160,16 @@ export class AgentChatController {
       // Do not rethrow — hosts often do not catch sendMessage; an unhandled rejection
       // aborts the entire CLI process. Status/error on ManagedAgent is the signal.
     }
+  }
+
+  /** Mark aborted/truncated tool calls so they stop loading and are not resumed by the next pump. */
+  private applyCancelledIncompleteTools(): void {
+    const current = this.channel.getMessages();
+    if (!hasCancellableIncompleteToolCalls(current)) return;
+    const cancelled = cancelIncompleteToolCalls(current, TOOL_CANCELLED_MESSAGE);
+    const cleaned = stripEmptyAssistantShells(cancelled);
+    this.channel.setMessages(cleaned);
+    this.managed.syncContextFromUIMessages(cleaned);
   }
 
   private persistMessages(): void {

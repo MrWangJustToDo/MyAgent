@@ -3,7 +3,7 @@
  *
  * Run: node packages/core/scripts/validate-format-read-file-result.mjs
  */
-/* eslint-disable no-undef */
+
 import assert from "node:assert/strict";
 
 import { formatReadFileToolResult } from "../dist/dev.mjs";

@@ -3,7 +3,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:local-connect
  */
-/* eslint-disable no-undef, import/no-useless-path-segments */
+/* eslint-disable import/no-useless-path-segments */
 import { EventType } from "@tanstack/ai/client";
 import { ChatClient } from "@tanstack/ai-client";
 import assert from "node:assert/strict";

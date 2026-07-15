@@ -3,7 +3,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:agent-ui-channel
  */
-/* eslint-disable no-undef */
+
 import { EventType } from "@tanstack/ai/client";
 import assert from "node:assert/strict";
 

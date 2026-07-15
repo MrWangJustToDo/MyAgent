@@ -3,7 +3,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:capability-message-utils
  */
-/* eslint-disable no-undef */
+
 import assert from "node:assert/strict";
 
 import {

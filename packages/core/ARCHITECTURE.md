@@ -170,19 +170,23 @@ These also map to hook scripts where applicable (`SessionStart`, `Notification`,
 run-agent.ts: executeManagedAgentRun
   ensureAgentRunner(managed)          // build middleware + AgentRunner
   managed.prepareForRun({ messages, abortSignal })
-  runStreamWithReactiveCompactRetry({ run: () => runner.run(...) })
+  // Reuse RunCoordinator.currentAbortController as TanStack chat abortController
+  // so ManagedAgent.abort() cancels the live stream (main agent + subagent/task).
+  runStreamWithReactiveCompactRetry({ run: () => runner.run({ abortController }) })
 ```
 
 ### 3.2 `prepareForRun` (`managed-agent.ts`)
 
 ```
-RunCoordinator.prepareMessages(input)
-RunCoordinator.setupAbortController(abortSignal)
+RunCoordinator.setupAbortController(abortSignal)  // current = run AbortController
 if !isToolContinuationPrepare(agent.status, messages):
   memory.prefetchRelevantMemories()     // see §7
   emitEvent("prompt:submit", { prompt })
-return finalMessages
 ```
+
+`AgentChatController.executeStream` must **not** create a second AbortController before `runAgentStream` — that previously left `abort()` cancelling a controller `chat()` was not listening to. Status middleware keeps `"aborted"` sticky so leftover chunks cannot resurrect `"running"`.
+
+On user cancel, `cancelIncompleteToolCalls` marks truncated / never-executed tool calls (`input-streaming`, orphan `input-complete`, etc.) as `error` with a synthetic tool-result. That stops the UI spinner and prevents the next `chat()` from re-entering TanStack `executeToolCalls` with invalid JSON arguments.
 
 `isToolContinuationPrepare` uses existing state — no extra run-phase field:
 - `status === "waiting"` (approval pause), or
@@ -195,7 +199,7 @@ Built in `buildAgentRunner` (`run-agent.ts`), order matters:
 ```
 1. status-middleware         status transitions only (via AgentStatusController)
 2. lifecycle-middleware      usage tracking, thinking events, memory commit, finalizeRun
-3. compaction-middleware     reasoning strip + auto-compact (status via AgentStatusController)
+3. compaction-middleware     auto-compact only (DeepSeek reasoning echo is adapter-only)
 4. tool-compact-middleware  per-tool LLM shaping
 5. turn-context-middleware  inject <turn_context> (memory, todo nag)
 6. hooks-middleware         PreToolUse / PostToolUse scripts + tool events
@@ -310,12 +314,21 @@ Runs **after** context auto-compact in the middleware stack.
 
 Large tool outputs at **execute** time still use `maybeCacheOutput` (`.agent-cache/tool-output/`) as a separate fallback — not part of compaction.
 
-### 5.2 Layer 2 — Reasoning strip
+### 5.2 Adapter vs capability boundary
 
-**File:** `agent/middleware/compaction-middleware.ts` → `stripReasoningFromHistory`
+**Rule:** provider wire-protocol quirks belong under `packages/core/src/models/` (`createTextAdapter` and subclasses). Middleware / tools / UI must not branch on vendor names (`deepseek`, etc.).
 
-- **Disabled** — DeepSeek thinking mode requires `reasoning_content` on assistant messages to be echoed on subsequent API calls (especially after tool calls). Stripping `thinking` caused `400` errors.
-- Reasoning echo is handled by `models/reasoning-chat-completions-adapter.ts` for DeepSeek endpoints.
+| Kind | Where | Examples |
+|------|--------|----------|
+| **Adapter-specific** | `models/adapter-factory.ts`, `*-adapter.ts` | DeepSeek `reasoning_content` echo (`ReasoningChatCompletionsTextAdapter`); Anthropic vs OpenAI Chat Completions style selection |
+| **Capability-generic** | middleware / reactive retry | Multimodal strip via `vision`/`audio`/`video`/`document` (`capability-message-utils`); `prompt_too_long` reactive compact |
+| **Config / metadata** | `model-config`, `models.dev`, session | `modelStyle`, pricing, `capabilities[]`, unused-for-now `reasoningConfig` (tag/effort/budget — not yet mapped to request options) |
+
+**DeepSeek reasoning echo** (`reasoning-chat-completions-adapter.ts` + `reasoning-content-cache.ts`):
+
+1. Buffer stream `REASONING_MESSAGE_CONTENT` and emit `STEP_FINISHED.delta` so TanStack’s in-run engine keeps `message.thinking` on tool-call assistants.
+2. Cache by `toolCallId`; `convertMessage` restores `reasoning_content` when UI→model conversion dropped `thinking`.
+3. No chat / compaction / UI pipeline hooks for this.
 
 ### 5.3 Layer 3 — Auto compact
 
@@ -574,9 +587,8 @@ executeManagedAgentRun
   └─ runStreamWithReactiveCompactRetry
        └─ runner.run → TanStack chat()
             │
-            ├─ [each iteration] compaction.onConfig
-            │    ├─ stripReasoningFromHistory (DeepSeek)
-            │    └─ autoCompact if threshold exceeded
+            ├─ [each iteration] compaction.onConfig → autoCompact if threshold exceeded
+            │    (DeepSeek reasoning echo is adapter-only; no strip here)
             ├─ tool-compact.onConfig → toModelOutput + recent-window placeholders
             ├─ turn-context.onConfig → inject memory/todo
             ├─ hooks.onBeforeToolCall → PreToolUse + agent:tool-start

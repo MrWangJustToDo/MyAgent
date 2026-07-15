@@ -3,7 +3,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:empty-assistant-shell
  */
-/* eslint-disable no-undef */
+
 import assert from "node:assert/strict";
 
 import { findLastMeaningfulAssistant, isEmptyAssistantShell, stripEmptyAssistantShells } from "../dist/dev.mjs";

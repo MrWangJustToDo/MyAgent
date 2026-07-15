@@ -3,7 +3,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:tool-denial-reason
  */
-/* eslint-disable no-undef */
+
 import { uiMessageToModelMessages } from "@tanstack/ai";
 import assert from "node:assert/strict";
 

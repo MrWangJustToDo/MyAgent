@@ -62,6 +62,7 @@ export { estimateTokens } from "./agent/compaction/token-estimator.js";
 export { createHooksMiddleware, createLifecycleMiddleware } from "./agent/middleware";
 export { createStatusMiddleware } from "./agent/middleware/status-middleware.js";
 export { createAgentStatusController, AgentStatusController } from "./managers/agent-status-controller.js";
+export { AgentRunner } from "./agent/runner/agent-runner.js";
 export { assertAsyncIterable, formatAgentStreamError } from "./agent/utils/assert-async-iterable.js";
 export {
   applyToolDenialReason,
@@ -73,6 +74,15 @@ export {
   isEmptyAssistantShell,
   stripEmptyAssistantShells,
 } from "./agent/utils/empty-assistant-shell.js";
+export { ReasoningContentCache } from "./models/reasoning-content-cache.js";
+export { resolveReasoningContentForAssistant } from "./models/resolve-reasoning-content.js";
+export {
+  TOOL_CANCELLED_MESSAGE,
+  cancelIncompleteToolCalls,
+  hasCancellableIncompleteToolCalls,
+  hasValidToolArguments,
+  isCancellableIncompleteToolCall,
+} from "./agent/utils/incomplete-tool-calls.js";
 export {
   IMAGE_OMITTED_PLACEHOLDER,
   MULTIMODAL_OMITTED_PLACEHOLDER,

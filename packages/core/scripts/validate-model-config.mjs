@@ -3,15 +3,10 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:model-config
  */
-/* eslint-disable no-undef */
+
 import assert from "node:assert/strict";
 
-import {
-  DEFAULT_BASE_URLS,
-  DEFAULT_LOCAL_OPENAI_BASE_URL,
-  parseModelStyle,
-  resolveModelConnection,
-} from "../dist/index.mjs";
+import { DEFAULT_BASE_URLS, DEFAULT_LOCAL_OPENAI_BASE_URL, parseModelStyle, resolveModelConnection } from "../dist";
 
 assert.equal(parseModelStyle("anthropic"), "anthropic");
 assert.equal(parseModelStyle("openai"), "openai");

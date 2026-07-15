@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef } from "react";
 import { agentManager } from "@my-agent/core";
+import { useEffect, useMemo, useRef } from "react";
 import { toRaw } from "reactivity-store";
 
 import { dispatchCommand } from "../commands";
 
 import { useAgentKeybindings } from "./use-agent-keybindings.js";
-import { resolveFocusedPendingApproval, useMessageDiffFocus } from "./use-message-diff-focus.js";
 import { useAgent } from "./use-agent.js";
 import { useAutocomplete } from "./use-autocomplete.js";
 import { useCommandOutput } from "./use-command-output.js";
@@ -69,13 +68,7 @@ export function useAgentInputControls({
   const { mode, denyMode } = useInputMode((s) => ({ mode: s.mode, denyMode: s.denyMode }));
   const modeActions = useInputMode.getActions();
 
-  const diffEntries = useMessageDiffFocus((s) => s.entries);
-  const diffSelectedIndex = useMessageDiffFocus((s) => s.selectedIndex);
-
-  const pendingApproval = useMemo(
-    () => resolveFocusedPendingApproval(allPendingApproval, diffEntries, diffSelectedIndex),
-    [allPendingApproval, diffEntries, diffSelectedIndex]
-  );
+  const pendingApproval = allPendingApproval[0];
   const currentPendingIsLast = useMemo(() => {
     if (!pendingApproval) return true;
     const index = allPendingApproval.findIndex((item) => item.id === pendingApproval.id);

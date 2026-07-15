@@ -132,15 +132,13 @@ Example use cases:
 
     execute: async ({ id, prompt, description }, { toolCallId }) => {
       return withDuration(async () => {
-        // Subagent manages its own currentAbortController internally.
-        // We do NOT register it on the parent's pendingAbortControllers,
-        // because cancelling the parent must not cascade to the subagent
-        // (and vice versa). The app layer cancels a subagent directly via
-        // agentManager -> subagent.abort(), leaving the parent untouched.
+        // Subagent owns its RunCoordinator AbortController (created in prepareForRun
+        // and passed into TanStack chat). We do NOT register it on the parent's
+        // pendingAbortControllers — parent cancel must not cascade to the subagent
+        // (and vice versa). The app layer cancels via agentManager → sub.abort().
         //
-        // We also pass no abortSignal to runSubagent so the subagent's
-        // currentAbortController is the single source of truth for its
-        // cancellation.
+        // No external abortSignal is passed here; runAgent wires the subagent's
+        // currentAbortController into chat so sub.abort() actually stops the stream.
         const result = await runSubagent(
           {
             subagentId: id,

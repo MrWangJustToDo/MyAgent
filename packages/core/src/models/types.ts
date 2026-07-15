@@ -74,7 +74,12 @@ export interface ModelInfo {
   pricing?: ModelPricing;
   /** Capability flags */
   capabilities: ModelCapability[];
-  /** Reasoning-specific config (only if "reasoning" capability is present) */
+  /**
+   * Reasoning-specific config (only if "reasoning" capability is present).
+   * Metadata only today — not yet applied to TanStack adapter request options.
+   * Wire protocol quirks (e.g. DeepSeek `reasoning_content` echo) live in
+   * `createTextAdapter` / `ReasoningChatCompletionsTextAdapter`, not in middleware.
+   */
   reasoningConfig?: ReasoningConfig;
   /** Whether this is a recommended/default model for its style */
   isDefault?: boolean;

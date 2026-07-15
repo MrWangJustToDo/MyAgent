@@ -3,7 +3,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:status-middleware
  */
-/* eslint-disable no-undef */
+
 import assert from "node:assert/strict";
 
 import { AgentStatusController, createStatusMiddleware } from "../dist/dev.mjs";

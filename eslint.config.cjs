@@ -52,6 +52,16 @@ module.exports = [
       },
     },
   },
+  // Node.js test files and core validation scripts use console/setTimeout from node environment
+  {
+    files: ["packages/app/test/**", "packages/core/scripts/**"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        setTimeout: "readonly",
+      },
+    },
+  },
   // Relax rules for packages/app — uses reactivity-store patterns where:
   // - getActions() returns stable refs (exhaustive-deps false positives)
   // - refs are read during render for perf optimization

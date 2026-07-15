@@ -22,14 +22,14 @@ import { approvalFrameColor } from "../utils/diff-frame.js";
  */
 export const EditFilePreview = memo(function EditFilePreview({
   toolCallId,
-  approvalId,
+  _approvalId,
   path,
   edits,
   approved,
   output,
 }: {
   toolCallId: string;
-  approvalId?: string;
+  _approvalId?: string;
   path: string;
   edits: Array<{ oldString: string; newString: string; startLine?: number; replaceAll?: boolean }>;
   approved: boolean | undefined;
@@ -55,8 +55,6 @@ export const EditFilePreview = memo(function EditFilePreview({
       {oldFile !== undefined && newFile !== undefined ? (
         <MessageDiffView
           diffId={toolCallId + "-full"}
-          toolCallId={toolCallId}
-          approvalId={approvalId}
           width={width}
           oldPath={path}
           oldFile={oldFile}

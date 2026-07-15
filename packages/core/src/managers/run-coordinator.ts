@@ -1,7 +1,5 @@
 import { getMaxReactiveRetries } from "../agent/compaction/reactive-compact.js";
 
-import type { ModelMessage } from "@tanstack/ai";
-
 const MAX_REACTIVE_RETRIES = getMaxReactiveRetries();
 
 export interface AbortControllerSetup {
@@ -20,20 +18,6 @@ export class RunCoordinator {
   private externalAbortSignal: AbortSignal | null = null;
 
   private reactiveCompactRetries = 0;
-
-  prepareMessages(options: { prompt?: string | ModelMessage[]; messages?: ModelMessage[] }): ModelMessage[] {
-    const { prompt, messages } = options;
-    const finalMessages: ModelMessage[] = [];
-    if (messages) finalMessages.push(...messages);
-    if (prompt) {
-      if (typeof prompt === "string") {
-        finalMessages.push({ role: "user", content: prompt });
-      } else {
-        finalMessages.push(...prompt);
-      }
-    }
-    return finalMessages;
-  }
 
   setupAbortController(abortSignal: AbortSignal | undefined, setup: AbortControllerSetup): void {
     this.cancelAbortController();
@@ -82,8 +66,13 @@ export class RunCoordinator {
     this.pendingAbortControllers = this.pendingAbortControllers.filter((ac) => ac !== abortController);
   }
 
-  abort(): void {
-    if (this.currentAbortController) this.currentAbortController.abort();
+  abort(reason?: unknown): void {
+    let pending = this.pendingAbortControllers.pop();
+    while (pending) {
+      pending.abort(reason);
+      pending = this.pendingAbortControllers.pop();
+    }
+    this.currentAbortController?.abort(reason);
   }
 
   isAbortError(err: unknown): boolean {
@@ -101,10 +90,6 @@ export class RunCoordinator {
 
   recordReactiveCompactRetry(): number {
     this.reactiveCompactRetries += 1;
-    return this.reactiveCompactRetries;
-  }
-
-  getReactiveCompactRetries(): number {
     return this.reactiveCompactRetries;
   }
 

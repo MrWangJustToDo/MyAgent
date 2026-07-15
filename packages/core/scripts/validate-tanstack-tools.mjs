@@ -3,7 +3,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:tanstack-tools
  */
-/* eslint-disable no-undef */
+
 import assert from "node:assert/strict";
 
 import {

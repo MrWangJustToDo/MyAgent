@@ -1,8 +1,8 @@
 import {
+  convertMessagesToModelMessages,
   type ModelMessage,
   type UIMessage as TanStackUIMessage,
   type ServerTool,
-  convertMessagesToModelMessages,
 } from "@tanstack/ai";
 
 import { applyReactiveCompactionResult } from "../agent/compaction/apply-compaction-result.js";
@@ -510,10 +510,6 @@ export class ManagedAgent {
   // Run orchestration (ManagedAgent coordinates services)
   // ============================================================================
 
-  prepareMessages(options: { prompt?: string | ModelMessage[]; messages?: ModelMessage[] }): ModelMessage[] {
-    return this.run.prepareMessages(options);
-  }
-
   async prepareForRun(options: {
     prompt?: string;
     messages?: Array<TanStackUIMessage | ModelMessage>;
@@ -527,6 +523,8 @@ export class ManagedAgent {
 
     const inputMessages = options.messages || [];
 
+    // Abort setup lives here — not a separate ManagedAgent.setupAbortController API.
+    // The created controller is passed into TanStack chat by executeManagedAgentRun.
     this.run.setupAbortController(options.abortSignal, {
       onAborted: () => {
         this.setStatus("aborted");
@@ -570,14 +568,10 @@ export class ManagedAgent {
     return (total.cacheReadTokens ?? 0) / total.inputTokens;
   }
 
-  setupAbortController(abortSignal?: AbortSignal): void {
-    this.run.setupAbortController(abortSignal, {
-      onAborted: () => {
-        this.setStatus("aborted");
-      },
-    });
-  }
-
+  /**
+   * Register a tool-scoped AbortController so {@link abort} cancels in-flight
+   * HTTP work (e.g. webfetch / websearch) alongside the main run controller.
+   */
   addPendingAbortController(abortController: AbortController): void {
     this.run.addPendingAbortController(abortController);
   }
@@ -586,17 +580,22 @@ export class ManagedAgent {
     this.run.removePendingAbortController(abortController);
   }
 
+  /**
+   * Cancel the current run. Aborts {@link RunCoordinator.currentAbortController}
+   * (the same identity wired into TanStack `chat` by {@link prepareForRun}) and
+   * any pending tool controllers.
+   */
   abort(reason?: string): void {
     this.emitEvent("agent:abort", { reason: reason ?? "(no reason)" });
-    this.run.abort();
+    this.run.abort(reason ?? "user-cancelled");
+    // Ensure UI stays aborted even if stream teardown is slow / races with chunks.
+    if (this.status !== "aborted" && this.status !== "idle" && this.status !== "completed") {
+      this.setStatus("aborted");
+    }
   }
 
   isAbortError(err: unknown): boolean {
     return this.run.isAbortError(err);
-  }
-
-  resetReactiveCompactRetries(): void {
-    this.run.resetReactiveCompactRetries();
   }
 
   async handleReactiveCompact(error: unknown, manager: AgentManager): Promise<boolean> {

@@ -42,8 +42,6 @@ export const ToolInputView = ({
       <Box paddingLeft={2}>
         <MessageDiffView
           diffId={part.id}
-          toolCallId={part.id}
-          approvalId={part.approval?.id}
           width={bodyWidth}
           oldPath=""
           oldFile=""

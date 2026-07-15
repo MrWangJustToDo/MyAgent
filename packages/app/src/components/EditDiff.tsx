@@ -3,8 +3,6 @@ import { generateDiffFile } from "@git-diff-view/file";
 import { forwardRef, memo } from "@my-react/react";
 
 import { useDiffFileCache } from "../hooks/use-diff-file-cache.js";
-import { useSize } from "../hooks/use-size.js";
-import { getMessageDiffViewportHeight } from "../utils/diff-viewport.js";
 
 const { getDiffFile, setDiffFile } = useDiffFileCache.getActions();
 
@@ -17,7 +15,10 @@ function padContent(content: string, startLine?: number): string {
 export type EditDiffProps = {
   id: string;
   width: number;
-  /** Scroll viewport height in terminal rows. Defaults to max(2/3 screen height, 28). */
+  /**
+   * Optional fixed viewport height. When omitted, DiffView uses auto height
+   * (full content) — preferred for in-message previews so ↑↓ does not fight the terminal.
+   */
   height?: number;
   oldFile: string;
   newFile: string;
@@ -31,8 +32,6 @@ export const EditDiff = memo(
     { id, width, height, oldFile, newFile, oldPath, newPath, startLine },
     ref
   ) {
-    const screenHeight = useSize((s) => s.state.screenHeight);
-    const viewportHeight = height ?? getMessageDiffViewportHeight(screenHeight);
     const paddedOld = padContent(oldFile, startLine);
     const paddedNew = padContent(newFile, startLine);
 
@@ -50,7 +49,7 @@ export const EditDiff = memo(
       <DiffView
         ref={ref}
         width={finalWidth}
-        height={viewportHeight}
+        {...(height != null ? { height } : {})}
         diffViewMode={finalWidth > 20 && oldFile ? DiffModeEnum.Split : DiffModeEnum.Unified}
         diffFile={diffFile}
         diffViewHideOperator

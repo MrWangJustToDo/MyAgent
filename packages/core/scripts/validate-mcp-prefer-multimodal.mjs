@@ -3,7 +3,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:mcp-prefer-multimodal
  */
-/* eslint-disable no-undef */
+
 import assert from "node:assert/strict";
 
 import { mcpContentHasMultimodal, mcpContentToTanstack, resolveMcpToolExecuteResult } from "../dist/dev.mjs";

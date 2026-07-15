@@ -2,7 +2,6 @@ import { Box, Text } from "ink";
 
 import { StreamingOutputView } from "../components/StreamingOutputView.js";
 import { useLiveElapsedMs } from "../hooks/use-live-elapsed.js";
-import { useMessageDiffFocus } from "../hooks/use-message-diff-focus.js";
 import { useTask } from "../hooks/use-task.js";
 import { COLORS } from "../theme/colors.js";
 import { formatUsageBrief } from "../utils/format-usage.js";
@@ -66,10 +65,6 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
   const toolCallId = part.id;
   const toolInput = parseToolInput(part);
   const needsApproval = !readOnly && uiState === "approval-requested" && part.approval;
-  const diffEntryCount = useMessageDiffFocus((s) => s.entries.length);
-  const isFocusedDiff = useMessageDiffFocus(
-    (s) => s.entries[s.selectedIndex]?.toolCallId === toolCallId && s.entries.length > 0
-  );
 
   const isRunCommand = toolName === "run_command";
   const isTask = toolName === "task";
@@ -148,10 +143,7 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
       {needsApproval && (
         <Box paddingLeft={2}>
           <Text color={COLORS.warning}>
-            Approval required
-            {isFocusedDiff && diffEntryCount > 1 ? ` (${diffEntryCount} diffs — Tab to switch)` : ""}: Press{" "}
-            <Text bold>y</Text> to approve, <Text bold>n</Text> to deny
-            {isFocusedDiff ? " · ↑↓ scroll selected diff" : ""}
+            Approval required: Press <Text bold>y</Text> to approve, <Text bold>n</Text> to deny
           </Text>
         </Box>
       )}

@@ -118,7 +118,6 @@ export function buildAgentRunner(
       getContext: () => deps.context,
       getUsage: () => deps.usage,
       getTodoManager: () => deps.todoManager,
-      getModelInfo: () => deps.modelInfo,
       shouldTriggerAutoCompact: deps.shouldTriggerAutoCompact,
       status: managed.statusController,
       log: deps.log,
@@ -207,6 +206,13 @@ async function executeManagedAgentRun(
     abortSignal: input.abortSignal,
   });
 
+  // Use the RunCoordinator controller created in prepareForRun so ManagedAgent.abort()
+  // cancels the same AbortController identity TanStack chat listens to.
+  const abortController = managed.run.currentAbortController;
+  if (!abortController) {
+    throw new Error(`Agent "${agentId}" missing abort controller after prepareForRun`);
+  }
+
   const inputMessages = messages || [];
 
   return runStreamWithReactiveCompactRetry({
@@ -217,7 +223,7 @@ async function executeManagedAgentRun(
       runner.run({
         agentId,
         messages: runMessages,
-        abortSignal: input.abortSignal,
+        abortController,
         threadId: input.threadId,
         runId: input.runId,
       }),

@@ -9,7 +9,6 @@ import { useSelect } from "./use-select.js";
 import { useSubagentPanel, CLOSE_DEBOUNCE_MS as SUBAGENT_CLOSE_DEBOUNCE_MS } from "./use-subagent-panel.js";
 import { useUserInput } from "./use-user-input.js";
 import { CLOSE_DEBOUNCE_MS as WORKSPACE_CLOSE_DEBOUNCE_MS, useWorkspaceView } from "./use-workspace-view.js";
-import { useMessageDiffFocus } from "./use-message-diff-focus.js";
 
 import type { AgentAdapter } from "../adapter/types.js";
 import type { CommandContext } from "../commands";
@@ -48,8 +47,6 @@ interface UseAgentKeybindingsOptions {
   submitAskUserAnswer: (answer: string) => void;
   addToolApprovalResponse: UseAgentChatReturn["addToolApprovalResponse"];
 }
-
-const MESSAGE_DIFF_SCROLL_STEP = 3;
 
 export function useAgentKeybindings({
   adapter,
@@ -251,30 +248,18 @@ export function useAgentKeybindings({
         }
       }
 
-      if (inputKey.tab && !currentValue) {
-        const diffCount = useMessageDiffFocus.getReadonlyState().entries.length;
-        if (diffCount > 1) {
-          useMessageDiffFocus.getActions().selectNext();
-          return;
-        }
-      }
-
       if (inputKey.tab && isAutocompleteVisible) {
         acceptAutocomplete(false);
         return;
       }
       if (inputKey.upArrow) {
         if (isAutocompleteVisible) autocompleteActions.selectPrev();
-        else if (useMessageDiffFocus.getReadonlyState().entries.length > 0) {
-          useMessageDiffFocus.getActions().getSelectedScrollRef()?.scrollUp({ step: MESSAGE_DIFF_SCROLL_STEP });
-        } else if (commandOutputActions.hasScroll()) commandOutputActions.scrollPrev();
+        else if (commandOutputActions.hasScroll()) commandOutputActions.scrollPrev();
         return;
       }
       if (inputKey.downArrow) {
         if (isAutocompleteVisible) autocompleteActions.selectNext();
-        else if (useMessageDiffFocus.getReadonlyState().entries.length > 0) {
-          useMessageDiffFocus.getActions().getSelectedScrollRef()?.scrollDown({ step: MESSAGE_DIFF_SCROLL_STEP });
-        } else if (commandOutputActions.hasScroll()) commandOutputActions.scrollNext();
+        else if (commandOutputActions.hasScroll()) commandOutputActions.scrollNext();
         return;
       }
       if (inputKey.return) {

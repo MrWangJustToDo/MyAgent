@@ -47,7 +47,8 @@ function applyChunkStatus(getStatus: () => AgentStatus, setStatus: (s: AgentStat
   const type = chunk.type;
   const current = getStatus();
 
-  if (current === "waiting" || current === "awaiting_user") return;
+  // Keep interactive pauses and user cancel sticky — leftover chunks must not resurrect "running".
+  if (current === "waiting" || current === "awaiting_user" || current === "aborted") return;
 
   if (type === "TOOL_CALL_START") {
     setStatus("running");
@@ -90,6 +91,7 @@ export class AgentStatusController {
 
   onRunStart(): void {
     const status = this.deps.getStatus();
+    if (status === "aborted") return;
     if (status !== "waiting" && status !== "awaiting_user") {
       this.deps.setStatus("running");
     }

@@ -3,11 +3,10 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:session-sync-tracker
  */
-/* eslint-disable no-undef */
+
 import assert from "node:assert/strict";
 
 import {
-  areAllUIMessagesStable,
   computeSessionSyncSnapshot,
   createSessionSyncTracker,
   fingerprintUIMessage,

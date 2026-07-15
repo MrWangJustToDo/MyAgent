@@ -3,10 +3,17 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:agent-status
  */
-/* eslint-disable no-undef */
+
 import assert from "node:assert/strict";
 
-import { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, ManagedAgent, resolveFinishStatus } from "../dist/dev.mjs";
+import {
+  ACTIVE_STATUSES,
+  createAgentStatusController,
+  isActiveStatus,
+  isTerminalStatus,
+  ManagedAgent,
+  resolveFinishStatus,
+} from "../dist/dev.mjs";
 
 assert.equal(isTerminalStatus("aborted"), true);
 assert.equal(isTerminalStatus("waiting"), true);
@@ -86,5 +93,24 @@ managed.syncRunStatusFromUIMessages([
   },
 ]);
 assert.equal(managed.status, "waiting");
+
+{
+  let current = "aborted";
+  const status = createAgentStatusController({
+    getStatus: () => current,
+    setStatus: (next) => {
+      current = next;
+    },
+    getError: () => "",
+    setError: () => {},
+    setPendingApprovalCount: () => {},
+  });
+  status.onRunStart();
+  assert.equal(current, "aborted");
+  status.onStreamChunk({ type: "TOOL_CALL_START", toolCallId: "t1", toolName: "read_file" });
+  assert.equal(current, "aborted");
+  status.onStreamChunk({ type: "TEXT_MESSAGE_CONTENT", messageId: "m1", content: "x", delta: "x" });
+  assert.equal(current, "aborted");
+}
 
 console.log("agent-status validation passed");

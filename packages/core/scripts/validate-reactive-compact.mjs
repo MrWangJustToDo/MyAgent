@@ -3,7 +3,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:reactive-compact
  */
-/* eslint-disable no-undef */
+
 import assert from "node:assert/strict";
 
 import { isPromptTooLongError, extractRunErrorMessage } from "../dist/dev.mjs";

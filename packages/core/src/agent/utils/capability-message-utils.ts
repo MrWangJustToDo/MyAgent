@@ -1,10 +1,11 @@
 /**
  * Capability-gated chat message sanitization for the model wire format.
  *
- * Some providers reject non-text content parts (e.g. DeepSeek: `unknown variant
- * 'image_url', expected 'text'`). Before send (and after such API errors) we
- * strip unsupported multimodal parts from a **copy** of messages so UI history
- * can keep originals for display.
+ * Some Chat Completions endpoints reject multimodal parts (e.g.
+ * `unknown variant 'image_url', expected 'text'`). Before send (and after such
+ * API errors) we strip unsupported parts from a **wire copy** using
+ * {@link ModelCapability} flags — not provider name checks — so UI history can
+ * keep originals for display.
  */
 
 import type { ModelCapability } from "../../models/types.js";

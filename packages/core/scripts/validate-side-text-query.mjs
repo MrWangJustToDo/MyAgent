@@ -3,7 +3,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:side-text-query
  */
-/* eslint-disable no-undef, import/no-useless-path-segments */
+/* eslint-disable import/no-useless-path-segments */
 import { streamToText } from "@tanstack/ai";
 import assert from "node:assert/strict";
 

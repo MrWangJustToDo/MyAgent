@@ -15,6 +15,7 @@ const { setMessage, getMessage } = useMessageCache.getActions();
 const filterValidMessage = (message: UIMessage) => {
   if (message.role === "assistant") {
     const onlyPart = message.parts.length === 1 ? message.parts[0] : null;
+    // thinking-only rows are display-hidden; chat state keeps them until orphan-merge.
     if (onlyPart?.type === "thinking" || onlyPart?.type === "tool-result" || !onlyPart?.type) return false;
   }
   if (message.role === "user" || message.role === "assistant") {
