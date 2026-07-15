@@ -7,6 +7,8 @@ export default defineConfig([
       "src/utils/input-feedback-queue.ts",
       "src/utils/workspace-scroll.ts",
       "src/utils/workspace-git-diff.ts",
+      "src/utils/workspace-git-info.ts",
+
       "src/utils/diff-viewport.ts",
       "src/utils/diff-frame.ts",
       "src/utils/streaming-output-lines.ts",

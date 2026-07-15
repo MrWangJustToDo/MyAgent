@@ -5,6 +5,7 @@ import { useSize } from "../hooks/use-size.js";
 import { useWorkspaceView } from "../hooks/use-workspace-view.js";
 import { BG, COLORS } from "../theme/colors.js";
 import { clearWorkspaceDiffCache } from "../utils/workspace-git-diff.js";
+import { fetchWorkspaceGitInfo, type WorkspaceGitInfo } from "../utils/workspace-git-info.js";
 import { ensureIndexVisible } from "../utils/workspace-scroll.js";
 
 import { clearContentCache, FileContent } from "./FileContent.js";
@@ -93,6 +94,7 @@ export const WorkspaceFileMode = () => {
 
   const [rootPath, setRootPath] = useState("");
   const [gitStatus, setGitStatus] = useState<Map<string, string>>(new Map());
+  const [gitInfo, setGitInfo] = useState<WorkspaceGitInfo | null>(null);
   const [cursorIndex, setCursorIndex] = useState(0);
 
   const bodyHeight = Math.max(10, screenHeight - HEADER_LINES - FOOTER_LINES);
@@ -113,25 +115,36 @@ export const WorkspaceFileMode = () => {
     [items.length, paneBodyLines, setTreeScrollTop]
   );
 
+  const refreshGit = useCallback(async (path: string) => {
+    if (!path) return;
+    try {
+      clearGitStatusCache();
+      const [status, info] = await Promise.all([fetchGitStatus(path), fetchWorkspaceGitInfo(path)]);
+      setGitStatus(new Map(status));
+      setGitInfo(info);
+    } catch {
+      setGitStatus(new Map());
+      setGitInfo(null);
+    }
+  }, []);
+
   useEffect(() => {
     import("@my-agent/core")
       .then(({ getEnv }) => {
         const path = getEnv().rootPath;
         setRootPath(path);
-        return fetchGitStatus(path);
+        return refreshGit(path);
       })
-      .then((status) => setGitStatus(status))
       .catch(() => {});
-  }, []);
+  }, [refreshGit]);
 
   useEffect(() => {
     if (!rootPath) return;
-    const interval = setInterval(async () => {
-      clearGitStatusCache();
-      setGitStatus(new Map(await fetchGitStatus(rootPath)));
+    const interval = setInterval(() => {
+      void refreshGit(rootPath);
     }, 10_000);
     return () => clearInterval(interval);
-  }, [rootPath]);
+  }, [rootPath, refreshGit]);
 
   useEffect(() => {
     setCursorIndex((prev) => Math.min(prev, Math.max(0, items.length - 1)));
@@ -165,9 +178,7 @@ export const WorkspaceFileMode = () => {
       clearWorkspaceDiffCache();
       reload();
       scrollActivePane("top");
-      fetchGitStatus(rootPath)
-        .then((status) => setGitStatus(new Map(status)))
-        .catch(() => setGitStatus(new Map()));
+      void refreshGit(rootPath);
       return;
     }
 
@@ -254,6 +265,24 @@ export const WorkspaceFileMode = () => {
           {" "}
           {mode} · {rootPath || "…"}
         </Text>
+        {gitInfo && (
+          <>
+            <Text color={COLORS.muted} dimColor>
+              {" "}
+              ·{" "}
+            </Text>
+            <Text color={COLORS.primary}>
+              {gitInfo.branch}
+              {gitInfo.dirty ? "*" : ""}
+            </Text>
+            {gitInfo.shortSha && !gitInfo.branch.includes(gitInfo.shortSha) ? (
+              <Text color={COLORS.muted} dimColor>
+                {" "}
+                {gitInfo.shortSha}
+              </Text>
+            ) : null}
+          </>
+        )}
       </Box>
 
       <Box flexDirection="row" flexGrow={1} height={bodyHeight} gap={0}>
