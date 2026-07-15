@@ -102,6 +102,68 @@ export interface FlatTreeItem {
 }
 
 // ============================================================================
+// Directory Status Aggregation
+// ============================================================================
+
+interface DirStatusSummary {
+  modified: number;
+  added: number;
+  deleted: number;
+  untracked: number;
+  renamed: number;
+  total: number;
+}
+
+/**
+ * Compute aggregated git status for all directories by walking the git status map.
+ * A directory's status is the summary of all files under it (recursively).
+ */
+export function computeDirStatuses(gitStatus: Map<string, string>, rootPath: string): Map<string, DirStatusSummary> {
+  const dirStatuses = new Map<string, DirStatusSummary>();
+
+  const ensureDir = (dir: string): DirStatusSummary => {
+    if (!dirStatuses.has(dir)) {
+      dirStatuses.set(dir, { modified: 0, added: 0, deleted: 0, untracked: 0, renamed: 0, total: 0 });
+    }
+    return dirStatuses.get(dir)!;
+  };
+
+  for (const [filepath, status] of gitStatus) {
+    const parts = filepath.replace(/\\/g, "/").split("/");
+    // Accumulate status into every ancestor directory, using absolute paths
+    for (let i = 1; i < parts.length; i++) {
+      const relativeDir = parts.slice(0, i).join("/");
+      const dir = joinWorkspacePath(rootPath, relativeDir);
+      const summary = ensureDir(dir);
+      const s = status.trim();
+      if (s.startsWith("M") || s.endsWith("M")) summary.modified++;
+      else if (s.startsWith("A")) summary.added++;
+      else if (s.startsWith("D")) summary.deleted++;
+      else if (s === "??") summary.untracked++;
+      else if (s.startsWith("R")) summary.renamed++;
+      summary.total++;
+    }
+  }
+
+  return dirStatuses;
+}
+
+/**
+ * Format directory status summary for display.
+ * Example: "3M 1A" or "2? 1D"
+ */
+function formatDirStatus(summary: DirStatusSummary | undefined): string | null {
+  if (!summary || summary.total === 0) return null;
+  const parts: string[] = [];
+  if (summary.modified > 0) parts.push(`${summary.modified}M`);
+  if (summary.added > 0) parts.push(`${summary.added}A`);
+  if (summary.deleted > 0) parts.push(`${summary.deleted}D`);
+  if (summary.untracked > 0) parts.push(`${summary.untracked}?`);
+  if (summary.renamed > 0) parts.push(`${summary.renamed}R`);
+  return parts.length > 0 ? parts.join(" ") : null;
+}
+
+// ============================================================================
 // useFileTree
 // ============================================================================
 
@@ -204,6 +266,7 @@ export function useFileTree(rootPath: string): {
 interface FileTreeProps {
   items: FlatTreeItem[];
   gitStatus: Map<string, string>;
+  dirStatuses: Map<string, DirStatusSummary>;
   rootPath: string;
   cursorIndex: number;
   selectedPath: string | null;
@@ -215,6 +278,7 @@ interface FileTreeProps {
 export const FileTree = ({
   items,
   gitStatus,
+  dirStatuses,
   rootPath,
   cursorIndex,
   selectedPath,
@@ -246,6 +310,8 @@ export const FileTree = ({
 
         if (item.type === "directory") {
           const folderIcon = getFolderIconStyle(item.expanded, item.name);
+          const dirSummary = dirStatuses.get(item.path);
+          const dirLabel = formatDirStatus(dirSummary);
           return (
             <Box key={item.path} flexShrink={0} height={1} width="100%" backgroundColor={rowBg}>
               <Text wrap="truncate">
@@ -253,10 +319,10 @@ export const FileTree = ({
                 <Text color={rowColor}>{folderIcon.chevron}</Text>
                 <Text color={folderIcon.color}>{formatFolderGlyph(folderIcon)}</Text>
                 <Text color={rowColor}>{item.name}/</Text>
-                {style && (
-                  <Text color={style.color} bold>
+                {dirLabel && (
+                  <Text color={COLORS.warning} bold>
                     {" "}
-                    {style.label}
+                    [{dirLabel}]
                   </Text>
                 )}
               </Text>

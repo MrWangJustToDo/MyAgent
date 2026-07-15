@@ -65,7 +65,7 @@ export const ToolInputView = ({
       return (
         <EditFilePreview
           toolCallId={part.id}
-          approvalId={part.approval?.id}
+          _approvalId={part.approval?.id}
           path={content.path}
           edits={content.edits}
           approved={part.approval?.approved}

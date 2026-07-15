@@ -84,7 +84,12 @@ const sparse = projectTranscriptForDisplay(
     {
       id: "a-sparse",
       role: "assistant",
-      parts: [undefined, { type: "tool-call", id: "t1", name: "read_file", state: "complete", arguments: "{}", output: {} }, , null],
+      parts: [
+        undefined,
+        { type: "tool-call", id: "t1", name: "read_file", state: "complete", arguments: "{}", output: {} },
+        ,
+        null,
+      ],
     },
     final,
   ],

@@ -1,5 +1,5 @@
 import { Box, Text, useInput } from "ink";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSize } from "../hooks/use-size.js";
 import { useWorkspaceView } from "../hooks/use-workspace-view.js";
@@ -10,7 +10,14 @@ import { ensureIndexVisible } from "../utils/workspace-scroll.js";
 
 import { clearContentCache, FileContent } from "./FileContent.js";
 import { FileDiffContent } from "./FileDiffContent.js";
-import { clearDirCache, clearGitStatusCache, fetchGitStatus, FileTree, useFileTree } from "./FileTree.js";
+import {
+  clearDirCache,
+  clearGitStatusCache,
+  computeDirStatuses,
+  fetchGitStatus,
+  FileTree,
+  useFileTree,
+} from "./FileTree.js";
 
 import type { CodeViewRef, DiffViewRef } from "@git-diff-view/cli";
 import type { ReactNode } from "react";
@@ -104,6 +111,8 @@ export const WorkspaceFileMode = () => {
   const rightPaneTitle = mode === "preview" ? "Preview" : "Diff";
 
   const { items, loading: treeLoading, toggleDir, reload } = useFileTree(rootPath);
+
+  const dirStatuses = useMemo(() => computeDirStatuses(gitStatus, rootPath), [gitStatus, rootPath]);
 
   const moveCursor = useCallback(
     (nextIndex: number) => {
@@ -290,6 +299,7 @@ export const WorkspaceFileMode = () => {
           <FileTree
             items={items}
             gitStatus={gitStatus}
+            dirStatuses={dirStatuses}
             rootPath={rootPath}
             cursorIndex={cursorIndex}
             selectedPath={selectedPath}
