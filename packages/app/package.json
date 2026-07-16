@@ -18,7 +18,8 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "test": "pnpm run build && node --test test/*.test.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "validate:theme-palettes": "node ./scripts/validate-theme-palettes.mjs"
   },
   "dependencies": {
     "@git-diff-view/cli": "^0.1.10",

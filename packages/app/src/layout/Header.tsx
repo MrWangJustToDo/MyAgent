@@ -1,13 +1,13 @@
-import { getEnv } from "@my-agent/core";
 import { Box, Text } from "ink";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 
 import { FullBox } from "../components/FullBox";
 import { useSize } from "../hooks/use-size.js";
 import { useStatic } from "../hooks/use-static";
+import { useWorkspaceInfo } from "../hooks/use-workspace-info";
 import { COLORS } from "../theme/colors.js";
-import { GRADIENT_STOPS, interpolateColor } from "../utils/gradient.js";
-import { fetchWorkspaceGitInfo, type WorkspaceGitInfo } from "../utils/workspace-git-info.js";
+import { getGradientStops, interpolateColor } from "../utils/gradient.js";
+import { type WorkspaceGitInfo } from "../utils/workspace-git-info.js";
 
 // ============================================================================
 // ASCII Logo
@@ -63,7 +63,7 @@ const Logo = () => {
     <Box flexDirection="column" alignItems="center" width="100%">
       <Box flexDirection="column">
         {LOGO_LINES.map((line, i) => (
-          <GradientLine key={i} text={line} stops={GRADIENT_STOPS} rowOffset={i} />
+          <GradientLine key={i} text={line} stops={getGradientStops()} rowOffset={i} />
         ))}
       </Box>
 
@@ -91,10 +91,6 @@ const TIPS = [
 // ============================================================================
 // Git / workspace line
 // ============================================================================
-
-function shortenPath(rootPath: string): string {
-  return rootPath.length > 40 ? `...${rootPath.slice(-37)}` : rootPath;
-}
 
 /** Single-line meta row — no flex children that wrap mid-token at narrow widths. */
 const GitInfoLine = ({ git, workspacePath }: { git: WorkspaceGitInfo | null; workspacePath: string }) => {
@@ -166,40 +162,13 @@ function buildHeader(git: WorkspaceGitInfo | null, workspacePath: string, showMe
 
 export const Header = () => {
   const screenWidth = useSize((s) => s.state.screenWidth);
-  const [git, setGit] = useState<WorkspaceGitInfo | null>(null);
-  const [workspacePath, setWorkspacePath] = useState("");
-  const [ready, setReady] = useState(false);
+  const { git, path: workspacePath } = useWorkspaceInfo((s) => s.workspaceInfo);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      let nextGit: WorkspaceGitInfo | null = null;
-      let nextPath = "";
-      try {
-        const rootPath = getEnv().rootPath;
-        nextPath = rootPath ? shortenPath(rootPath) : "";
-        nextGit = await fetchWorkspaceGitInfo(rootPath);
-      } catch {
-        nextGit = null;
-      }
-      if (cancelled) return;
-      setGit(nextGit);
-      setWorkspacePath(nextPath);
-      setReady(true);
-    };
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
+    if (!workspacePath) return;
     const showMeta = screenWidth >= HEADER_META_MIN_WIDTH;
-    useStatic.getActions().setStaticHeader(buildHeader(git, workspacePath, showMeta));
-  }, [ready, git, workspacePath, screenWidth]);
+    useStatic.getActions().setStaticHeader(buildHeader(git || null, workspacePath, showMeta));
+  }, [git, workspacePath, screenWidth]);
 
   return null;
 };

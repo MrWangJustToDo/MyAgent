@@ -2,7 +2,7 @@ import { Text } from "ink";
 import { useEffect } from "react";
 
 import { useGlobalSpinner, frames } from "../hooks/use-global-spinner.js";
-import { mapCharsToGradient, GRADIENT_STOPS } from "../utils/gradient.js";
+import { mapCharsToGradient } from "../utils/gradient.js";
 
 export interface SpinnerProps {
   text?: string;
@@ -20,7 +20,7 @@ export const Spinner = ({ text }: SpinnerProps) => {
   }, []);
 
   const displayText = text ? `${frames[frame]} ${text}` : frames[frame];
-  const chars = mapCharsToGradient(displayText, GRADIENT_STOPS, 1 - phase);
+  const chars = mapCharsToGradient(displayText, undefined, 1 - phase);
 
   return (
     <Text wrap="truncate-end">

@@ -28,7 +28,13 @@ function load(): PlaygroundConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...defaults };
-    return { ...defaults, ...JSON.parse(raw) };
+    const stored = JSON.parse(raw) as Partial<PlaygroundConfig>;
+    // Empty string must not wipe a bake-time VITE_FETCH_PROXY_URL default.
+    if (!stored.fetchProxyUrl?.trim() && defaults.fetchProxyUrl) {
+      const { fetchProxyUrl: _ignored, ...rest } = stored;
+      return { ...defaults, ...rest, fetchProxyUrl: defaults.fetchProxyUrl };
+    }
+    return { ...defaults, ...stored };
   } catch {
     return { ...defaults };
   }

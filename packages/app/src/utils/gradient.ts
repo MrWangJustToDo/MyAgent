@@ -11,8 +11,10 @@ import { GRADIENT } from "../theme/colors.js";
 // Constants
 // ============================================================================
 
-/** Gradient color stops — derived from the active theme's GRADIENT object */
-export const GRADIENT_STOPS = [GRADIENT.cyan, GRADIENT.purple, GRADIENT.pink] as const;
+/** Live gradient stops from the active theme palette. */
+export function getGradientStops(): readonly [string, string, string] {
+  return [GRADIENT.cyan, GRADIENT.purple, GRADIENT.pink];
+}
 
 // ============================================================================
 // Color Utilities
@@ -55,11 +57,15 @@ export interface CharColor {
  * Map each character of a string to a color along the gradient.
  *
  * @param text - The string to colorize
- * @param stops - Gradient color stops (defaults to logo gradient)
+ * @param stops - Gradient color stops (defaults to live theme gradient)
  * @param offset - Optional phase offset for animation (0–1)
  * @returns Array of { ch, color } for each character
  */
-export function mapCharsToGradient(text: string, stops: readonly string[] = GRADIENT_STOPS, offset = 0): CharColor[] {
+export function mapCharsToGradient(
+  text: string,
+  stops: readonly string[] = getGradientStops(),
+  offset = 0
+): CharColor[] {
   const len = Math.max(text.length, 1);
   return [...text].map((ch, i) => ({
     ch,

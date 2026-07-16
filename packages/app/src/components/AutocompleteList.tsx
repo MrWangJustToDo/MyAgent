@@ -8,7 +8,7 @@ import { calcScrollOffset, ScrollableList } from "./ScrollableList.js";
 
 import type { AutocompleteSuggestion } from "../hooks/use-autocomplete.js";
 
-const MAX_VISIBLE = 10;
+const MAX_VISIBLE = 11;
 
 export const AutocompleteList = () => {
   const visible = useAutocomplete((s) => s.visible);

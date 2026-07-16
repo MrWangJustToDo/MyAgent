@@ -8,6 +8,7 @@ import { isToolCallPart, isPendingToolApproval, parseToolInput } from "../utils/
 import { useAgent } from "./use-agent.js";
 import { useCallbackRef } from "./use-callback-ref.js";
 import { useForceUpdate } from "./use-force-update.js";
+import { getWorkSpaceInfo } from "./use-workspace-info.js";
 
 import type { AppConfig } from "../adapter/types.js";
 import type { Attachment } from "../types/attachment.js";
@@ -115,6 +116,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       setInitError(null);
 
       try {
+        await getWorkSpaceInfo();
         await adapter.destroy();
         if (currentInitId !== initIdRef.current) return;
 
@@ -142,7 +144,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
           import("ansi-escapes").then((pkg) => process?.stdout?.write?.(pkg.clearScreen + pkg.cursorTo(0, 0)));
         }
         setInitLoading(false);
-      }, 500);
+      }, 200);
     };
 
     void init();

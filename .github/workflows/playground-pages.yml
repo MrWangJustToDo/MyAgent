@@ -44,10 +44,16 @@ jobs:
 
       - name: Build playground
         env:
-          # Optional: bake Cloudflare Worker URL into the static app (Settings still can override).
-          # Repo → Settings → Secrets and variables → Actions → Variables: VITE_FETCH_PROXY_URL
-          VITE_FETCH_PROXY_URL: ${{ vars.VITE_FETCH_PROXY_URL }}
-        run: pnpm build:core && pnpm build:app && pnpm build:playground
+          # Prefer repo Variables; also accept Secrets (same name) if Variables is empty.
+          # Must be Repository-level (not only the github-pages Environment) — the build job has no environment.
+          VITE_FETCH_PROXY_URL: ${{ vars.VITE_FETCH_PROXY_URL || secrets.VITE_FETCH_PROXY_URL }}
+        run: |
+          if [ -n "$VITE_FETCH_PROXY_URL" ]; then
+            echo "VITE_FETCH_PROXY_URL is set (length=${#VITE_FETCH_PROXY_URL})"
+          else
+            echo "::warning::VITE_FETCH_PROXY_URL is empty — webfetch/websearch will fail on GitHub Pages. Add a Repository Variable or Secret named VITE_FETCH_PROXY_URL, then re-run this workflow."
+          fi
+          pnpm build:core && pnpm build:app && pnpm build:playground
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

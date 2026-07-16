@@ -4,6 +4,8 @@ import { memo, type JSX } from "react";
 import { useSize } from "../hooks";
 import { useDynamic } from "../hooks/use-dynamic";
 import { useStatic } from "../hooks/use-static";
+import { useTheme } from "../hooks/use-theme";
+import { useWorkspaceInfo } from "../hooks/use-workspace-info";
 
 export const Content = memo(() => {
   const { head, list, listSet, headerSet, toolCallsSignature } = useStatic((s) => ({
@@ -14,9 +16,11 @@ export const Content = memo(() => {
     toolCallsSignature: s.toolCallsSignature,
   }));
 
-  const dynamicList = useDynamic((s) => s.list);
+  const theme = useTheme((s) => s.theme);
 
-  const dynamicKey = useDynamic((s) => s.key);
+  const hasPath = useWorkspaceInfo((s) => s.workspaceInfo.path);
+
+  const { dynamicList, dynamicKey } = useDynamic((s) => ({ dynamicList: s.list, dynamicKey: s.key }));
 
   const width = useSize((s) => s.state.screenWidth);
 
@@ -24,9 +28,14 @@ export const Content = memo(() => {
 
   const validList = [head, ...typedList].filter(Boolean);
 
+  if (!hasPath) return null;
+
   return (
     <>
-      <StaticRender width={width} deps={[width, validList.length, listSet, headerSet, dynamicKey, toolCallsSignature]}>
+      <StaticRender
+        width={width}
+        deps={[width, validList.length, listSet, headerSet, dynamicKey, toolCallsSignature, theme]}
+      >
         {() => validList}
       </StaticRender>
       {dynamicList}

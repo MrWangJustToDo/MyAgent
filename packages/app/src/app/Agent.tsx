@@ -53,6 +53,7 @@ export const Agent = () => {
     setMessages,
     saveSessionFromChat,
   } = useAgentChat(config);
+
   const subagentPanelView = useSubagentPanel((s) => s.view);
   const subagentPanelOpen = subagentPanelView !== "closed";
   const workspaceView = useWorkspaceView((s) => s.view);

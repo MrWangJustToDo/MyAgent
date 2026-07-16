@@ -66,13 +66,17 @@ Yes — set `VITE_FETCH_PROXY_URL` at **build** time (Vite inlines it). Users do
 VITE_FETCH_PROXY_URL=https://my-agent-fetch-proxy.<you>.workers.dev pnpm build:playground
 ```
 
-GitHub Pages workflow already reads the Actions variable:
+GitHub Pages workflow reads **Repository** Variable **or** Secret `VITE_FETCH_PROXY_URL`:
 
 1. Deploy the Worker once (`wrangler deploy`) — it stays online until you delete it.
-2. Repo → **Settings → Secrets and variables → Actions → Variables** → add `VITE_FETCH_PROXY_URL` = your Worker URL.
-3. Re-run **Deploy Playground to GitHub Pages**.
+2. Repo → **Settings → Secrets and variables → Actions**
+   - Prefer **Variables** → New repository variable → name `VITE_FETCH_PROXY_URL`
+   - Or **Secrets** with the same name (also supported)
+   - Do **not** put it only under Environments → `github-pages` (the build job does not use that environment)
+3. Re-run **Deploy Playground to GitHub Pages** (setting the variable alone does not rebuild)
+4. Hard-refresh the site (or clear site data if an old empty Settings value was saved)
 
-Priority at runtime: **Settings override** → baked `VITE_FETCH_PROXY_URL` → local Vite `/__fetch_proxy`.
+Check the build log for `VITE_FETCH_PROXY_URL is set (length=…)` — if you see a warning that it is empty, the variable was not visible to the build job.
 
 ### Will the Worker keep working?
 

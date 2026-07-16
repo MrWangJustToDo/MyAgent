@@ -7,6 +7,7 @@ import { Help } from "../components/Help.js";
 import { SessionPicker } from "../components/SessionPicker.js";
 import { Spinner } from "../components/Spinner.js";
 import { useConfig } from "../hooks/use-config.js";
+import { useTheme } from "../hooks/use-theme.js";
 import { COLORS } from "../theme/colors.js";
 
 import { Agent } from "./Agent.js";
@@ -14,6 +15,9 @@ import { Agent } from "./Agent.js";
 import type { SessionMeta } from "@my-agent/core";
 
 export const App = () => {
+  // Subscribe so /theme palette mutations re-render the tree.
+  useTheme((s) => s.theme);
+
   const helpRequested = useConfig((s) => s.helpRequested);
   const debug = useConfig((s) => s.config.debug);
   const resumeSession = useConfig((s) => s.config.resumeSession);

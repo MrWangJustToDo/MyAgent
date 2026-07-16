@@ -11,7 +11,7 @@
 import { Text } from "ink";
 import { useState, useEffect } from "react";
 
-import { GRADIENT_STOPS, mapCharsToGradient } from "../utils/gradient.js";
+import { mapCharsToGradient } from "../utils/gradient.js";
 
 // ============================================================================
 // Props
@@ -39,7 +39,7 @@ export const GradientText = ({ text, bold }: GradientTextProps) => {
     return () => clearInterval(timer);
   }, []);
 
-  const chars = mapCharsToGradient(text, GRADIENT_STOPS, phase);
+  const chars = mapCharsToGradient(text, undefined, phase);
 
   return (
     <Text bold={bold}>
