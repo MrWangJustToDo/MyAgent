@@ -1,5 +1,6 @@
 import { WebContainer } from "@webcontainer/api";
 
+import { FETCH_RUNNER_SOURCE, createWebContainerFetch } from "./create-fetch.js";
 import { createWebContainerFs } from "./create-fs.js";
 import { mimeFromPath } from "./mime.js";
 import { execWebContainerCommand, runWebContainerCommand } from "./run-command.js";
@@ -36,6 +37,15 @@ const INITIAL_FILES: FileSystemTree = {
       "hello.ts": {
         file: {
           contents: 'console.log("Hello from WebContainer");\n',
+        },
+      },
+    },
+  },
+  ".playground": {
+    directory: {
+      "fetch.mjs": {
+        file: {
+          contents: FETCH_RUNNER_SOURCE,
         },
       },
     },
@@ -96,7 +106,7 @@ export async function createWebContainerEnv(options: CreateWebContainerEnvOption
     fs,
     runCommand: (command, cmdOptions) => runWebContainerCommand(wc, ROOT_PATH, command, cmdOptions),
     exec: (command, execOptions) => execWebContainerCommand(wc, ROOT_PATH, command, execOptions),
-    fetch: (input, init) => fetch(input, init),
+    fetch: createWebContainerFetch(wc),
     getMimeType: async (filePath) => mimeFromPath(filePath),
     destroy: async () => {
       // WebContainer API does not expose a stable teardown; drop references.

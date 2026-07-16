@@ -34,6 +34,7 @@ Unlike the extension, there is **no** remote `@my-agent/server` — CoreEnv is l
 | **StackBlitz network** | WebContainers still talk to StackBlitz for runtime/npm acceleration. Not a fully offline static app; subject to their availability and ToS. |
 | **HTTPS / secure context** | Required for the COI service worker and WebContainers. `*.github.io` is fine; `file://` is not. |
 | **API keys** | Keys live in `localStorage` and LLM requests leave the browser toward your provider. Do not treat a public Pages deploy as a multi-tenant product without a proxy. |
+| **Web tools (`webfetch` / `websearch`)** | Playground routes `CoreEnv.fetch` through WebContainer Node (not browser fetch) so GitHub Pages is not blocked by CORS. |
 | **MCP stdio** | Not available in the browser CoreEnv (same limitation as the extension without a server). |
 | **Base path** | Vite `base: "./"` supports project-site paths (`username.github.io/repo/`). |
 
