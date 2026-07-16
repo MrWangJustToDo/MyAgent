@@ -11,6 +11,12 @@ import type { FileSystemTree } from "@webcontainer/api";
 const ROOT_PATH = "/";
 
 let bootPromise: Promise<CoreEnv> | null = null;
+let bootedWebContainer: WebContainer | null = null;
+
+/** Live WebContainer instance after boot (null until {@link createWebContainerEnv} finishes). */
+export function getBootedWebContainer(): WebContainer | null {
+  return bootedWebContainer;
+}
 
 /**
  * Loaded as project instructions (`AGENTS.md`) on agent bootstrap.
@@ -60,6 +66,12 @@ There is **no** separate remote CoreEnv server and **no** OS sandbox toggle: iso
 - Treat \`/\` as the project root; keep new work under clear paths (e.g. \`src/\`, \`package.json\`).
 - After changing dependencies or entrypoints, verify with a command before declaring done.
 - Be explicit when a failure is environment-related (CORS, missing binary, ephemeral FS) vs. a code bug.
+
+## Preview (host UI)
+
+- When a process **listens on a port**, the playground host opens a **Preview** side panel (iframe) automatically.
+- Bind to \`0.0.0.0\` (or the runtime default) so WebContainer can publish a preview URL — avoid host-only quirks.
+- Long-running servers (e.g. \`npm run dev\`) may keep \`run_command\` busy until the user aborts; that is expected. Preview still works while the server runs.
 `;
 
 const INITIAL_FILES: FileSystemTree = {
@@ -134,6 +146,7 @@ export async function createWebContainerEnv(options: CreateWebContainerEnvOption
   const wc = await WebContainer.boot({
     coep: "require-corp",
   });
+  bootedWebContainer = wc;
 
   await wc.mount(options.files ?? INITIAL_FILES);
 

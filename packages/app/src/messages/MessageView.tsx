@@ -3,6 +3,7 @@ import { memo, useMemo } from "react";
 
 import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
 import { useSize } from "../hooks";
+import { useTheme } from "../hooks/use-theme.js";
 import { BG, COLORS } from "../theme/colors.js";
 import { isActivitySummaryMessage } from "../utils/project-transcript.js";
 import { isImagePart, isToolCallPart } from "../utils/tool-part.js";
@@ -42,6 +43,8 @@ function formatFileSize(dataUrl: string): string {
 
 /** Render a single message */
 export const MessageView = memo(({ message, readOnly = false }: MessageViewProps) => {
+  useTheme((s) => s.theme);
+
   const validParts = useMemo(() => message.parts.filter((i) => Object.keys(i).length > 1), [message.parts]);
 
   const visibleParts = useMemo(

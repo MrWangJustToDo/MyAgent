@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
+import { useDraggableBubble } from "../hooks/use-draggable-bubble.js";
 import { usePlaygroundConfig } from "../hooks/use-playground-config.js";
 
 import type { ModelStyle } from "@my-agent/core";
+
+const BUBBLE_STORAGE_KEY = "my-agent-playground-settings-bubble";
 
 export const ConfigPanel = () => {
   const model = usePlaygroundConfig((s) => s.model);
@@ -15,10 +18,20 @@ export const ConfigPanel = () => {
   const [open, setOpen] = useState(() => !apiKey);
   const [draft, setDraft] = useState({ model, style, baseURL, apiKey, fetchProxyUrl });
 
+  const openPanel = useCallback(() => setOpen(true), []);
+  const { position, bubbleSize, pointerHandlers } = useDraggableBubble(BUBBLE_STORAGE_KEY, openPanel);
+
   if (!open) {
     return (
-      <button type="button" className="config-toggle" onClick={() => setOpen(true)}>
-        Settings
+      <button
+        type="button"
+        className="config-bubble"
+        aria-label="Settings"
+        title="Settings (drag to move)"
+        style={{ left: position.x, top: position.y, width: bubbleSize, height: bubbleSize }}
+        {...pointerHandlers}
+      >
+        ⚙
       </button>
     );
   }

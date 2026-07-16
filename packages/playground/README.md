@@ -27,6 +27,12 @@ Unlike the extension, there is **no** remote `@my-agent/server` — CoreEnv is l
 
 On boot the WebContainer mounts a starter tree (`package.json`, `README.md`, **`AGENTS.md`**). `AGENTS.md` is loaded as project instructions so the agent knows this is an in-browser WebContainer (CORS limits, no MCP stdio, ephemeral FS, prefer `webfetch` over in-container `curl`).
 
+### Preview panel
+
+When a process inside the WebContainer **listens on a TCP port**, the host UI opens a **Preview** side panel (iframe) using the URL from WebContainer `port` / `server-ready` events. Multiple ports appear as tabs; collapse/reopen with the **Preview** toggle. Refresh / Open / Copy act on the active preview URL.
+
+Long-running `npm run dev` may keep the agent’s `run_command` tool busy until abort — preview still works while the server is up.
+
 **Colors in Firefox:** chalk’s browser color detection only enables Chromium. The playground sets `chalk.level = 3` on startup (`force-chalk-color.ts`) so xterm receives ANSI in all browsers.
 
 ## Deploying to GitHub Pages

@@ -15,9 +15,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PlaygroundAgentAdapter } from "./adapters/playground-adapter.js";
 import { ConfigPanel } from "./components/ConfigPanel.js";
+import { PreviewPanel, PreviewToggle } from "./components/PreviewPanel.js";
 import { usePlaygroundConfig } from "./hooks/use-playground-config.js";
-import { getWebContainerEnv } from "./webcontainer/create-env.js";
+import { usePreviewPorts } from "./hooks/use-preview-ports.js";
+import { getBootedWebContainer, getWebContainerEnv } from "./webcontainer/create-env.js";
 import { resolveFetchProxyUrl, setFetchProxyUrl } from "./webcontainer/create-proxy-fetch.js";
+import { subscribePreviewPorts } from "./webcontainer/subscribe-preview-ports.js";
 
 import type { AgentAdapter } from "@my-agent/app";
 
@@ -135,12 +138,45 @@ const AgentBootstrap = () => {
   );
 };
 
+function useSubscribePreviewPorts(fetchProxyUrl: string) {
+  useEffect(() => {
+    let cancelled = false;
+    let unsub: (() => void) | undefined;
+
+    void getWebContainerEnv({ fetchProxyUrl }).then(() => {
+      if (cancelled) return;
+      const wc = getBootedWebContainer();
+      if (!wc) return;
+      const { upsertOpen, markReady, remove } = usePreviewPorts.getActions();
+      unsub = subscribePreviewPorts(wc, {
+        onOpen: (port, url) => upsertOpen(port, url),
+        onClose: (port) => remove(port),
+        onReady: (port, url) => markReady(port, url),
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [fetchProxyUrl]);
+}
+
 export const PlaygroundApp = () => {
+  const panelOpen = usePreviewPorts((s) => s.panelOpen);
+  const fetchProxyUrl = usePlaygroundConfig((s) => s.fetchProxyUrl);
+
+  useSubscribePreviewPorts(fetchProxyUrl);
+
   return (
     <div className="playground-shell">
       <ConfigPanel />
-      <div className="playground-terminal">
-        <AgentBootstrap />
+      <PreviewToggle />
+      <div className={panelOpen ? "playground-main playground-main--split" : "playground-main"}>
+        <div className="playground-terminal">
+          <AgentBootstrap />
+        </div>
+        <PreviewPanel />
       </div>
     </div>
   );
