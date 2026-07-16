@@ -1,7 +1,7 @@
 import { WebContainer } from "@webcontainer/api";
 
-import { FETCH_RUNNER_SOURCE, createWebContainerFetch } from "./create-fetch.js";
 import { createWebContainerFs } from "./create-fs.js";
+import { createProxiedFetch, resolveFetchProxyUrl, setFetchProxyUrl } from "./create-proxy-fetch.js";
 import { mimeFromPath } from "./mime.js";
 import { execWebContainerCommand, runWebContainerCommand } from "./run-command.js";
 
@@ -41,20 +41,16 @@ const INITIAL_FILES: FileSystemTree = {
       },
     },
   },
-  ".playground": {
-    directory: {
-      "fetch.mjs": {
-        file: {
-          contents: FETCH_RUNNER_SOURCE,
-        },
-      },
-    },
-  },
 };
 
 export interface CreateWebContainerEnvOptions {
   /** Initial filesystem tree mounted after boot. Defaults to a tiny sample workspace. */
   files?: FileSystemTree;
+  /**
+   * Server-side fetch proxy URL for webfetch/websearch.
+   * WebContainer cannot bypass CORS; use Vite `/__fetch_proxy` (dev) or Cloudflare Worker (Pages).
+   */
+  fetchProxyUrl?: string;
 }
 
 /**
@@ -64,6 +60,7 @@ export interface CreateWebContainerEnvOptions {
  * config updates instead of calling {@link createWebContainerEnv} again.
  */
 export function getWebContainerEnv(options: CreateWebContainerEnvOptions = {}): Promise<CoreEnv> {
+  setFetchProxyUrl(resolveFetchProxyUrl(options.fetchProxyUrl));
   if (!bootPromise) {
     bootPromise = createWebContainerEnv(options);
   }
@@ -83,6 +80,8 @@ export async function createWebContainerEnv(options: CreateWebContainerEnvOption
         "Use `pnpm dev:playground` (COOP/COEP headers) or open over HTTPS with coi-serviceworker.js."
     );
   }
+
+  setFetchProxyUrl(resolveFetchProxyUrl(options.fetchProxyUrl));
 
   const wc = await WebContainer.boot({
     coep: "require-corp",
@@ -106,7 +105,8 @@ export async function createWebContainerEnv(options: CreateWebContainerEnvOption
     fs,
     runCommand: (command, cmdOptions) => runWebContainerCommand(wc, ROOT_PATH, command, cmdOptions),
     exec: (command, execOptions) => execWebContainerCommand(wc, ROOT_PATH, command, execOptions),
-    fetch: createWebContainerFetch(wc),
+    // Must be a real server proxy — WebContainer outbound is still CORS-limited.
+    fetch: createProxiedFetch(),
     getMimeType: async (filePath) => mimeFromPath(filePath),
     destroy: async () => {
       // WebContainer API does not expose a stable teardown; drop references.

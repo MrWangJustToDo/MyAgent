@@ -43,6 +43,10 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build playground
+        env:
+          # Optional: bake Cloudflare Worker URL into the static app (Settings still can override).
+          # Repo → Settings → Secrets and variables → Actions → Variables: VITE_FETCH_PROXY_URL
+          VITE_FETCH_PROXY_URL: ${{ vars.VITE_FETCH_PROXY_URL }}
         run: pnpm build:core && pnpm build:app && pnpm build:playground
 
       - name: Upload Pages artifact

@@ -9,10 +9,11 @@ export const ConfigPanel = () => {
   const style = usePlaygroundConfig((s) => s.style);
   const baseURL = usePlaygroundConfig((s) => s.baseURL);
   const apiKey = usePlaygroundConfig((s) => s.apiKey);
+  const fetchProxyUrl = usePlaygroundConfig((s) => s.fetchProxyUrl);
   const { setConfig } = usePlaygroundConfig.getActions();
 
   const [open, setOpen] = useState(() => !apiKey);
-  const [draft, setDraft] = useState({ model, style, baseURL, apiKey });
+  const [draft, setDraft] = useState({ model, style, baseURL, apiKey, fetchProxyUrl });
 
   if (!open) {
     return (
@@ -54,6 +55,14 @@ export const ConfigPanel = () => {
           placeholder="stored in localStorage"
         />
       </label>
+      <label>
+        Fetch proxy URL
+        <input
+          value={draft.fetchProxyUrl}
+          onChange={(e) => setDraft((d) => ({ ...d, fetchProxyUrl: e.target.value }))}
+          placeholder="empty = Vite /__fetch_proxy (dev only)"
+        />
+      </label>
       <button
         type="button"
         className="config-panel__save"
@@ -65,8 +74,8 @@ export const ConfigPanel = () => {
         Save &amp; restart agent
       </button>
       <p className="config-panel__hint">
-        Workspace runs in-browser via WebContainers (npm / shell / same FS). API calls go from this page to your
-        provider — keep keys private.
+        WebContainer cannot bypass CORS for webfetch/websearch. Locally Vite proxies at <code>/__fetch_proxy</code>. On
+        GitHub Pages, deploy <code>packages/playground/workers/fetch-proxy</code> and paste the Worker URL here.
       </p>
     </div>
   );

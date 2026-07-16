@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "validate:workspace-path": "node ./scripts/validate-workspace-path.mjs"
+    "validate:workspace-path": "node ./scripts/validate-workspace-path.mjs",
+    "validate:resolve-fetch-proxy": "node ./scripts/validate-resolve-fetch-proxy.mjs"
   },
   "dependencies": {
     "@my-agent/app": "workspace:*",

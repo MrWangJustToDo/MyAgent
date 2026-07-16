@@ -17,6 +17,7 @@ import { PlaygroundAgentAdapter } from "./adapters/playground-adapter.js";
 import { ConfigPanel } from "./components/ConfigPanel.js";
 import { usePlaygroundConfig } from "./hooks/use-playground-config.js";
 import { getWebContainerEnv } from "./webcontainer/create-env.js";
+import { resolveFetchProxyUrl, setFetchProxyUrl } from "./webcontainer/create-proxy-fetch.js";
 
 import type { AgentAdapter } from "@my-agent/app";
 
@@ -27,6 +28,7 @@ const AgentBootstrap = () => {
   const style = usePlaygroundConfig((s) => s.style);
   const baseURL = usePlaygroundConfig((s) => s.baseURL);
   const apiKey = usePlaygroundConfig((s) => s.apiKey);
+  const fetchProxyUrl = usePlaygroundConfig((s) => s.fetchProxyUrl);
 
   const [adapter, setAdapter] = useState<AgentAdapter | null>(null);
   const [error, setError] = useState("");
@@ -37,12 +39,14 @@ const AgentBootstrap = () => {
   const initIdRef = useRef(0);
 
   const ensureCoreEnv = useCallback(async () => {
+    setFetchProxyUrl(resolveFetchProxyUrl(fetchProxyUrl));
+
     if (hasCoreEnv()) return;
 
-    const env = await getWebContainerEnv();
+    const env = await getWebContainerEnv({ fetchProxyUrl });
     registerCoreEnv(env);
     containerReadyRef.current = true;
-  }, []);
+  }, [fetchProxyUrl]);
 
   const runBootstrap = useCallback(async () => {
     const currentInitId = ++initIdRef.current;
@@ -88,7 +92,7 @@ const AgentBootstrap = () => {
         setLoading(false);
       }
     }
-  }, [model, style, baseURL, apiKey, ensureCoreEnv]);
+  }, [model, style, baseURL, apiKey, fetchProxyUrl, ensureCoreEnv]);
 
   useEffect(() => {
     void runBootstrap();

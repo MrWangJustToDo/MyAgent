@@ -34,11 +34,54 @@ Unlike the extension, there is **no** remote `@my-agent/server` — CoreEnv is l
 | **StackBlitz network** | WebContainers still talk to StackBlitz for runtime/npm acceleration. Not a fully offline static app; subject to their availability and ToS. |
 | **HTTPS / secure context** | Required for the COI service worker and WebContainers. `*.github.io` is fine; `file://` is not. |
 | **API keys** | Keys live in `localStorage` and LLM requests leave the browser toward your provider. Do not treat a public Pages deploy as a multi-tenant product without a proxy. |
-| **Web tools (`webfetch` / `websearch`)** | Playground routes `CoreEnv.fetch` through WebContainer Node (not browser fetch) so GitHub Pages is not blocked by CORS. |
+| **Web tools (`webfetch` / `websearch`)** | WebContainer outbound still hits browser CORS (`*.w-corp-staticblitz.com`). Playground uses a **server-side proxy**: Vite `/__fetch_proxy` locally, or a Cloudflare Worker on GitHub Pages. |
 | **MCP stdio** | Not available in the browser CoreEnv (same limitation as the extension without a server). |
 | **Base path** | Vite `base: "./"` supports project-site paths (`username.github.io/repo/`). |
 
 **Recommendation:** use `pnpm preview` or a host that can set COOP/COEP natively (Cloudflare Pages `_headers`, Netlify, self-hosted nginx). Treat GitHub Pages as best-effort via the COI service worker.
+
+### Fetch proxy (required for web tools)
+
+WebContainer cannot bypass CORS. Do **not** try Node `fetch` / `curl` inside the container — they still go through the browser.
+
+| Environment | Proxy |
+|-------------|--------|
+| `pnpm dev:playground` / `vite preview` | Built-in Vite middleware at `/__fetch_proxy` (automatic) |
+| GitHub Pages | Deploy [`workers/fetch-proxy`](./workers/fetch-proxy) Cloudflare Worker, then set **Settings → Fetch proxy URL** (or `VITE_FETCH_PROXY_URL` at build time) |
+
+```bash
+cd packages/playground/workers/fetch-proxy
+npx wrangler deploy
+# paste the worker URL into playground Settings → Fetch proxy URL
+```
+
+The Worker returns `Access-Control-Allow-Origin: *` and `Cross-Origin-Resource-Policy: cross-origin` so it works under COEP.
+
+### Bake proxy URL into the static build
+
+Yes — set `VITE_FETCH_PROXY_URL` at **build** time (Vite inlines it). Users do not need to open Settings.
+
+```bash
+# local production build
+VITE_FETCH_PROXY_URL=https://my-agent-fetch-proxy.<you>.workers.dev pnpm build:playground
+```
+
+GitHub Pages workflow already reads the Actions variable:
+
+1. Deploy the Worker once (`wrangler deploy`) — it stays online until you delete it.
+2. Repo → **Settings → Secrets and variables → Actions → Variables** → add `VITE_FETCH_PROXY_URL` = your Worker URL.
+3. Re-run **Deploy Playground to GitHub Pages**.
+
+Priority at runtime: **Settings override** → baked `VITE_FETCH_PROXY_URL` → local Vite `/__fetch_proxy`.
+
+### Will the Worker keep working?
+
+| Topic | Notes |
+|-------|--------|
+| Longevity | Cloudflare Workers stay deployed until you remove the Worker or account. Redeploy only when you change proxy code. |
+| Free tier | Generous daily request limits for personal demos; heavy public traffic may hit quotas — watch the Cloudflare dashboard. |
+| Abuse | Open proxy (`Access-Control-Allow-Origin: *`) can be used by anyone who knows the URL. For a public demo that is usually fine; for production, restrict origins or add a shared secret header. |
+| Cost | Free tier is enough for playground use; no need to redeploy the Worker on every Pages build. |
 
 ### GitHub Actions deploy
 

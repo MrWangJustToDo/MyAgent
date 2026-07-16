@@ -2,6 +2,7 @@ import react from "@my-react/react-vite";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
+import { fetchProxyPlugin } from "./vite-plugins/fetch-proxy.js";
 import { stubNodeBuiltins } from "./vite-plugins/stub-node-builtins.js";
 
 const nodePathShim = fileURLToPath(new URL("./shims/node-path.ts", import.meta.url));
@@ -9,9 +10,10 @@ const nodePathShim = fileURLToPath(new URL("./shims/node-path.ts", import.meta.u
 /**
  * WebContainers need SharedArrayBuffer → cross-origin isolation.
  * Dev/preview set COOP/COEP directly; GitHub Pages cannot — use public/coi-serviceworker.js.
+ * Web tools need `/__fetch_proxy` (this plugin) or a Cloudflare Worker on Pages.
  */
 export default defineConfig({
-  plugins: [stubNodeBuiltins(), react()],
+  plugins: [stubNodeBuiltins(), fetchProxyPlugin(), react()],
   base: "./",
   resolve: {
     alias: {

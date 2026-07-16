@@ -9,13 +9,19 @@ export interface PlaygroundConfig {
   style: ModelStyle;
   baseURL: string;
   apiKey: string;
+  /** Cloudflare Worker (or other) CORS proxy for webfetch/websearch. Empty = Vite `/__fetch_proxy` in dev. */
+  fetchProxyUrl: string;
 }
+
+const bakedFetchProxyUrl = (import.meta.env.VITE_FETCH_PROXY_URL as string | undefined)?.trim() ?? "";
 
 const defaults: PlaygroundConfig = {
   model: "gpt-4o-mini",
   style: "openai",
   baseURL: "https://api.openai.com/v1",
   apiKey: "",
+  // Baked at build time when VITE_FETCH_PROXY_URL is set (e.g. GitHub Actions / .env).
+  fetchProxyUrl: bakedFetchProxyUrl,
 };
 
 function load(): PlaygroundConfig {
@@ -47,6 +53,7 @@ export const usePlaygroundConfig = createState(() => ({ ...initial }), {
         style: state.style,
         baseURL: state.baseURL,
         apiKey: state.apiKey,
+        fetchProxyUrl: state.fetchProxyUrl,
       });
     },
   }),
