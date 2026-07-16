@@ -299,9 +299,153 @@ body,
   margin-top: 4px;
 }
 
+.config-panel__export {
+  background: #3c3c3c !important;
+}
+
+.config-panel__export:hover {
+  background: #4a4a4a !important;
+}
+
 .config-panel__hint {
   margin: 0;
   font-size: 11px;
   line-height: 1.45;
   color: #777;
+}
+
+.export-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 50;
+  width: min(480px, calc(100vw - 24px));
+  max-height: min(72vh, 640px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 10px;
+  background: #252526;
+  border: 1px solid #3c3c3c;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+}
+
+.export-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.export-dialog__header button,
+.export-dialog__toolbar button,
+.export-dialog__footer button {
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: #3c3c3c;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.export-dialog__header button:hover,
+.export-dialog__toolbar button:hover:not(:disabled),
+.export-dialog__footer button:hover:not(:disabled) {
+  background: #4a4a4a;
+}
+
+.export-dialog__toolbar button:disabled,
+.export-dialog__footer button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.export-dialog__hint,
+.export-dialog__warn,
+.export-dialog__error {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.export-dialog__hint {
+  color: #888;
+}
+
+.export-dialog__warn {
+  color: #d97706;
+}
+
+.export-dialog__error {
+  color: #f87171;
+}
+
+.export-dialog__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.export-dialog__count {
+  margin-left: auto;
+  font-size: 11px;
+  color: #999;
+}
+
+.export-dialog__list {
+  flex: 1;
+  min-height: 180px;
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid #3c3c3c;
+  border-radius: 8px;
+  background: #1e1e1e;
+}
+
+.export-dialog__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #ddd;
+  cursor: pointer;
+}
+
+.export-dialog__row:hover {
+  background: #2a2a2a;
+}
+
+.export-dialog__row--dir {
+  color: #bbb;
+  font-weight: 500;
+}
+
+.export-dialog__row input {
+  margin: 0;
+}
+
+.export-dialog__status {
+  padding: 16px;
+  text-align: center;
+  color: #777;
+  font-size: 12px;
+}
+
+.export-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.export-dialog__primary {
+  background: #2563eb !important;
+}
+
+.export-dialog__primary:hover:not(:disabled) {
+  background: #3b82f6 !important;
 }

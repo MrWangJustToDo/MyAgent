@@ -33,6 +33,10 @@ When a process inside the WebContainer **listens on a TCP port**, the host UI op
 
 Long-running `npm run dev` may keep the agent’s `run_command` tool busy until abort — preview still works while the server is up.
 
+### Export workspace
+
+**Settings → Export workspace…** opens a file picker over the WebContainer tree. Choose paths (checking a directory selects its children), then **Download ZIP**. Default selection skips `node_modules` and `.git`.
+
 **Colors in Firefox:** chalk’s browser color detection only enables Chromium. The playground sets `chalk.level = 3` on startup (`force-chalk-color.ts`) so xterm receives ANSI in all browsers.
 
 ## Deploying to GitHub Pages

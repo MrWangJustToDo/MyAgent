@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "validate:workspace-path": "node ./scripts/validate-workspace-path.mjs",
     "validate:resolve-fetch-proxy": "node ./scripts/validate-resolve-fetch-proxy.mjs",
-    "validate:preview-ports": "node ./scripts/validate-preview-ports.mjs"
+    "validate:preview-ports": "node ./scripts/validate-preview-ports.mjs",
+    "validate:workspace-export-selection": "node ./scripts/validate-workspace-export-selection.mjs"
   },
   "dependencies": {
     "@my-agent/app": "workspace:*",
@@ -21,6 +22,7 @@
     "@my-react/react-terminal": "^0.0.28",
     "@webcontainer/api": "^1.6.1",
     "chalk": "^5.6.2",
+    "fflate": "^0.8.2",
     "ink-stream-markdown": "^0.0.8",
     "reactivity-store": "^0.4.0"
   },
