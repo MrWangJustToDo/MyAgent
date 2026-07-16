@@ -8,7 +8,7 @@ export const useDynamic = createState(() => ({ list: [] as JSX.Element[] | JSX.E
     setDynamicKey: (key: number) => (s.key = key),
   }),
 
-  withNamespace: "useDynamic",
+  // withNamespace: "useDynamic",
 
   withDeepSelector: false,
 

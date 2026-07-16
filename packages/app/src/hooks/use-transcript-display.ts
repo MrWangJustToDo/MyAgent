@@ -20,7 +20,7 @@ export const useTranscriptDisplay = createState(
       },
       getMode: (): TranscriptDisplayMode => state.mode,
     }),
-    withNamespace: "useTranscriptDisplay",
+    // withNamespace: "useTranscriptDisplay",
     withDeepSelector: false,
     withStableSelector: true,
   }

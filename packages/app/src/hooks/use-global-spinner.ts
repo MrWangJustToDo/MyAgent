@@ -32,6 +32,6 @@ export const useGlobalSpinner = createState(() => ({ frame: 0, phase: 0 }), {
       },
     };
   },
-  withNamespace: "useGlobalSpinner",
+  // withNamespace: "useGlobalSpinner",
   withStableSelector: true,
 });

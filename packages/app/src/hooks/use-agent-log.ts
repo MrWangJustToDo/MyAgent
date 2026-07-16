@@ -9,7 +9,7 @@ export const useAgentLog = createState(() => ({ log: null as AgentLog | null }),
     },
   }),
 
-  withNamespace: "useAgentLog",
+  // withNamespace: "useAgentLog",
 
   withDeepSelector: false,
 

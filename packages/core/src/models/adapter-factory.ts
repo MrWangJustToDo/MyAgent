@@ -67,7 +67,10 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
   }
 
   return {
-    adapter: createOpenaiChatCompletions(model as Parameters<typeof createOpenaiChatCompletions>[0], key, openaiConfig),
+    adapter: createOpenaiChatCompletions(model as Parameters<typeof createOpenaiChatCompletions>[0], key, {
+      ...openaiConfig,
+      dangerouslyAllowBrowser: true,
+    }),
     model,
   };
 }

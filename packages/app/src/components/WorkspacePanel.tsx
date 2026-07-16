@@ -15,8 +15,8 @@ export const WorkspacePanel = () => {
       import("ansi-escapes").then((pkg) => {
         process?.stdout?.write?.(pkg.clearScreen + pkg.cursorTo(0, 0));
       });
-      setReady(true);
     }
+    setReady(true);
   }, [view]);
 
   if (view !== "workspace") return null;

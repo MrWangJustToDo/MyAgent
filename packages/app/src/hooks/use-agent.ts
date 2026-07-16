@@ -9,7 +9,7 @@ export const useAgent = createState(() => ({ agent: null as ManagedAgent | null 
     },
   }),
 
-  withNamespace: "useAgent",
+  // withNamespace: "useAgent",
 
   withDeepSelector: false,
 

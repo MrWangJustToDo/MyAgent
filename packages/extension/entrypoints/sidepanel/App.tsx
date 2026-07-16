@@ -23,10 +23,6 @@ import type { AgentAdapter } from "@my-agent/app";
 
 configureEnv({ allowNonBrowserUpdates: true });
 
-/**
- * Inner component rendered only when server connection is established.
- * Bootstraps remote CoreEnv, initializes config, creates adapter, then renders the shared App.
- */
 const AgentBootstrap = () => {
   const url = useServerConfig((s) => s.url);
   const model = useServerConfig((s) => s.model);
@@ -98,57 +94,51 @@ const AgentBootstrap = () => {
 
   if (error) {
     return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 12,
-          padding: 24,
-          height: "100%",
-          color: "#d4d4d4",
-        }}
-      >
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: "#f44336" }}>Initialization Error</h2>
-        <p style={{ color: "#aaa", textAlign: "center", fontSize: 13, maxWidth: 360 }}>{error}</p>
-        <button
-          onClick={runBootstrap}
-          style={{
-            padding: "6px 16px",
-            background: "#0070f3",
-            color: "#fff",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-            fontSize: 12,
-          }}
-        >
-          Retry
-        </button>
+      <div className="flex h-full flex-col items-center justify-center bg-[#1e1e1e] p-8 text-[#d4d4d4]">
+        <div className="flex max-w-sm flex-col items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-red-400"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+          </div>
+          <div className="text-center">
+            <h2 className="text-sm font-medium text-[#e0e0e0]">Initialization Error</h2>
+            <p className="mt-1 text-xs leading-relaxed text-[#888]">{error}</p>
+          </div>
+          <button
+            onClick={runBootstrap}
+            className="cursor-pointer rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-blue-500 active:scale-[0.98] active:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
 
   if (loading || !adapter) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
-          color: "#888",
-          fontSize: 13,
-        }}
-      >
+      <div className="flex h-full items-center justify-center gap-2.5 bg-[#1e1e1e] text-sm text-[#888]">
+        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[#444] border-t-[#888]" />
         Initializing agent...
       </div>
     );
   }
 
   return (
-    <InkTerminalBox style={{ height: "100%" }}>
+    <InkTerminalBox style={{ height: "100%" }} inkRenderOptions={{ exitOnCtrlC: false }}>
       <AdapterProvider value={adapter}>
         <App />
       </AdapterProvider>
@@ -156,13 +146,9 @@ const AgentBootstrap = () => {
   );
 };
 
-/**
- * Extension sidepanel entry point.
- * Wraps ConnectionGuard → AgentBootstrap → shared App.
- */
 export const SidepanelApp = () => {
   return (
-    <div style={{ height: "100vh", background: "#1e1e1e", color: "#d4d4d4" }}>
+    <div className="h-screen bg-[#1e1e1e] text-[#d4d4d4]">
       <ErrorBoundary>
         <ConnectionGuard>
           <AgentBootstrap />

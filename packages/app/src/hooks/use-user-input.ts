@@ -379,7 +379,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
 
   withStableSelector: true,
 
-  withNamespace: "useUserInput",
+  // withNamespace: "useUserInput",
 });
 
 // ============================================================================

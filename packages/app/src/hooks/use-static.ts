@@ -27,7 +27,7 @@ export const useStatic = createState(
       };
     },
 
-    withNamespace: "useStatic",
+    // withNamespace: "useStatic",
 
     withDeepSelector: false,
 

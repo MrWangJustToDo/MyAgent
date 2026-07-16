@@ -43,7 +43,7 @@ export const useCommandOutput = createState(
     }),
     withDeepSelector: false,
     withStableSelector: true,
-    withNamespace: "useCommandOutput",
+    // withNamespace: "useCommandOutput",
   }
 );
 

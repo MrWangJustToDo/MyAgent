@@ -1,0 +1,32 @@
+{
+  "name": "@my-agent/playground",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Browser playground — WebContainer CoreEnv + shared @my-agent/app",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --force",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "validate:workspace-path": "node ./scripts/validate-workspace-path.mjs"
+  },
+  "dependencies": {
+    "@my-agent/app": "workspace:*",
+    "@my-agent/core": "workspace:*",
+    "@my-react/react": "^0.3.28",
+    "@my-react/react-dom": "^0.3.28",
+    "@my-react/react-terminal": "^0.0.28",
+    "@webcontainer/api": "^1.6.1",
+    "ink-stream-markdown": "^0.0.8",
+    "reactivity-store": "^0.4.0"
+  },
+  "devDependencies": {
+    "@my-react/react-refresh": "^0.3.28",
+    "@my-react/react-vite": "^0.0.34",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.6.3",
+    "vite": "^8.0.0"
+  }
+}

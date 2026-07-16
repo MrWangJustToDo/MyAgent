@@ -30,7 +30,7 @@ export class ReasoningChatCompletionsTextAdapter extends OpenAIBaseChatCompletio
   private readonly reasoningCache = new ReasoningContentCache();
 
   constructor(config: ReasoningChatCompletionsConfig, model: string) {
-    super(model, "reasoning-chat", new OpenAI(config));
+    super(model, "reasoning-chat", new OpenAI({ ...config, dangerouslyAllowBrowser: true }));
   }
 
   /** Test / debug helper. */

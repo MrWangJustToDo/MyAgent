@@ -31,7 +31,7 @@ importers:
         version: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-typescript:
         specifier: ^4.4.4
-        version: 4.4.5(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
+        version: 4.4.5(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
       prettier:
         specifier: ^3.8.3
         version: 3.8.4
@@ -263,7 +263,7 @@ importers:
         version: 0.3.28(@my-react/react@0.3.28(react@19.2.7))
       '@my-react/react-vite':
         specifier: ^0.0.34
-        version: 0.0.34(@my-react/react-refresh@0.3.28(@my-react/react@0.3.28(react@19.2.7)))
+        version: 0.0.34(@my-react/react-refresh@0.3.28(@my-react/react@0.3.28(react@19.2.7)))(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
       '@tailwindcss/postcss':
         specifier: ^4.2.4
         version: 4.3.1
@@ -350,6 +350,52 @@ importers:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+
+  packages/playground:
+    dependencies:
+      '@my-agent/app':
+        specifier: workspace:*
+        version: link:../app
+      '@my-agent/core':
+        specifier: workspace:*
+        version: link:../core
+      '@my-react/react':
+        specifier: ^0.3.28
+        version: 0.3.28(react@19.2.7)
+      '@my-react/react-dom':
+        specifier: ^0.3.28
+        version: 0.3.28(@my-react/react@0.3.28(react@19.2.7))(react-dom@19.2.7(react@19.2.7))
+      '@my-react/react-terminal':
+        specifier: ^0.0.28
+        version: 0.0.28(@my-react/react@0.3.28(react@19.2.7))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)
+      '@webcontainer/api':
+        specifier: ^1.6.1
+        version: 1.6.4
+      ink-stream-markdown:
+        specifier: ^0.0.8
+        version: 0.0.8(ink@7.1.0(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
+      reactivity-store:
+        specifier: ^0.4.0
+        version: 0.4.0(react@19.2.7)
+    devDependencies:
+      '@my-react/react-refresh':
+        specifier: ^0.3.28
+        version: 0.3.28(@my-react/react@0.3.28(react@19.2.7))
+      '@my-react/react-vite':
+        specifier: ^0.0.34
+        version: 0.0.34(@my-react/react-refresh@0.3.28(@my-react/react@0.3.28(react@19.2.7)))(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.0.0
+        version: 8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0)
 
   packages/server:
     dependencies:
@@ -2224,6 +2270,9 @@ packages:
 
   '@vue/shared@3.5.38':
     resolution: {integrity: sha512-FTW0AFZNaK5/mOqvGBwVfUlNLU38TiQn4+DQgIFUnrBBJQ1crMJ82yeGQLV5jyKFsO8yRukpbuP7x+nRbH6aug==}
+
+  '@webcontainer/api@1.6.4':
+    resolution: {integrity: sha512-r9sHCXg1FcC1AMgppGwAc0vYWaQhqvg282cnsuPbJEzYnWifAdCVvg+8ngJUEHyHcomhJJp+/zuytite4ITHLw==}
 
   '@webext-core/fake-browser@1.5.2':
     resolution: {integrity: sha512-nkDQwOJ23X5Q7cEtN6LRuBtVFf1KVOFi5GoQAro0lzqdh59F5E+K350j1isbnqYbzsXRh1NJtboudIcHfZtvOQ==}
@@ -6658,7 +6707,7 @@ snapshots:
       '@xterm/addon-fit': 0.11.0
       '@xterm/xterm': 6.0.0
 
-  '@my-react/react-vite@0.0.34(@my-react/react-refresh@0.3.28(@my-react/react@0.3.28(react@19.2.7)))':
+  '@my-react/react-vite@0.0.34(@my-react/react-refresh@0.3.28(@my-react/react@0.3.28(react@19.2.7)))(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))':
     dependencies:
       '@babel/core': 7.29.7
       '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7)
@@ -6670,6 +6719,7 @@ snapshots:
       magic-string: 0.30.21
       periscopic: 3.1.0
       rsc-html-stream: 0.0.7
+      vite: 8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -7424,6 +7474,8 @@ snapshots:
       '@vue/shared': 3.5.38
 
   '@vue/shared@3.5.38': {}
+
+  '@webcontainer/api@1.6.4': {}
 
   '@webext-core/fake-browser@1.5.2':
     dependencies:
@@ -8316,7 +8368,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@4.4.5(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0)):
+  eslint-import-resolver-typescript@4.4.5(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       debug: 4.4.3
       eslint: 9.39.4(jiti@2.7.0)
@@ -8338,7 +8390,7 @@ snapshots:
       '@typescript-eslint/parser': 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 4.4.5(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
+      eslint-import-resolver-typescript: 4.4.5(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
@@ -10024,7 +10076,7 @@ snapshots:
       axios: 1.18.0
       eslint: 9.39.4(jiti@2.7.0)
       eslint-config-prettier: 10.1.8(eslint@9.39.4(jiti@2.7.0))
-      eslint-import-resolver-typescript: 4.4.5(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
+      eslint-import-resolver-typescript: 4.4.5(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-prettier: 5.5.6(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))(prettier@3.8.4)

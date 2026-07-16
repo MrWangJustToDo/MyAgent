@@ -1,5 +1,6 @@
 import { Box, Text } from "ink";
 import { useEffect, useState } from "react";
+import { toRaw } from "reactivity-store";
 
 import { AutocompleteList } from "../components/AutocompleteList.js";
 import { CommandOutput } from "../components/CommandOutput.js";
@@ -145,7 +146,7 @@ const ContextBar = ({
   const [agentTick, setAgentTick] = useState(0);
   useEffect(() => {
     if (!agent) return;
-    return agent.subscribeState(() => setAgentTick((n) => n + 1));
+    return toRaw(agent).subscribeState(() => setAgentTick((n) => n + 1));
   }, [agent]);
   const lastRunDurationMs = agentTick >= 0 ? agent?.lastStreamDurationMs || 0 : 0;
   const _error = agent?.error || "";

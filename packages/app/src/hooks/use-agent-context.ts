@@ -13,7 +13,7 @@ export const useAgentContext = createState(() => ({ context: null as AgentContex
     },
   }),
 
-  withNamespace: "useAgentContext",
+  // withNamespace: "useAgentContext",
 
   withDeepSelector: false,
 
