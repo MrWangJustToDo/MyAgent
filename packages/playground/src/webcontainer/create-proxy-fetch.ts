@@ -25,7 +25,7 @@ export function getFetchProxyUrl(): string {
   return proxyUrl;
 }
 
-/** Resolve proxy endpoint: settings → VITE_FETCH_PROXY_URL → local Vite middleware. */
+/** Resolve proxy endpoint: settings → VITE_FETCH_PROXY_URL → local Vite middleware (dev only). */
 export function resolveFetchProxyUrl(configured?: string): string {
   const fromSettings = configured?.trim();
   if (fromSettings) return fromSettings;
@@ -33,8 +33,12 @@ export function resolveFetchProxyUrl(configured?: string): string {
   const fromEnv = (import.meta.env.VITE_FETCH_PROXY_URL as string | undefined)?.trim();
   if (fromEnv) return fromEnv;
 
-  // Same-origin Vite middleware (dev + preview). GitHub Pages has no such route — set a Worker URL.
-  return new URL("/__fetch_proxy", window.location.origin).href;
+  // Vite middleware exists only for `vite` / `vite preview` — NOT on GitHub Pages.
+  if (import.meta.env.DEV) {
+    return new URL("/__fetch_proxy", window.location.origin).href;
+  }
+
+  return "";
 }
 
 function resolveUrl(input: string | URL | Request): string {
@@ -117,7 +121,16 @@ export function createProxiedFetch(): typeof fetch {
       }
       throw new TypeError(
         `Fetch proxy unreachable (${endpoint}): ${err instanceof Error ? err.message : String(err)}. ` +
-          "For GitHub Pages, deploy packages/playground/workers/fetch-proxy and set Fetch proxy URL."
+          "For GitHub Pages, deploy packages/playground/workers/fetch-proxy and set Fetch proxy URL / VITE_FETCH_PROXY_URL."
+      );
+    }
+
+    const contentType = proxyRes.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      throw new TypeError(
+        `Fetch proxy at ${endpoint} returned HTTP ${proxyRes.status} (not JSON). ` +
+          "GitHub Pages has no /__fetch_proxy — deploy the Cloudflare Worker and set VITE_FETCH_PROXY_URL " +
+          "(or Settings → Fetch proxy URL) to https://<your-worker>.workers.dev"
       );
     }
 

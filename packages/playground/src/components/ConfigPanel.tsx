@@ -60,7 +60,7 @@ export const ConfigPanel = () => {
         <input
           value={draft.fetchProxyUrl}
           onChange={(e) => setDraft((d) => ({ ...d, fetchProxyUrl: e.target.value }))}
-          placeholder="empty = Vite /__fetch_proxy (dev only)"
+          placeholder="https://….workers.dev (required on GitHub Pages)"
         />
       </label>
       <button
