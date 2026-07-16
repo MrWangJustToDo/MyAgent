@@ -7,6 +7,9 @@ import type { Attachment } from "../types/attachment.js";
 export const IMAGE_PLACEHOLDER_START = 0xe000;
 export const IMAGE_PLACEHOLDER_END = 0xe0ff;
 
+/** Stable ref embedded in submitted text for LLM + UI composition. Example: `[Image #1: clipboard-a1b2c3d4.png]` */
+export const IMAGE_REF_RE = /\[Image #(\d+): ([^\]]+)\]/g;
+
 /** Check if a character is an image placeholder. */
 export function isImagePlaceholder(char: string): boolean {
   const code = char.charCodeAt(0);
@@ -23,24 +26,36 @@ export function createImagePlaceholder(index: number): string {
   return String.fromCharCode(IMAGE_PLACEHOLDER_START + index);
 }
 
+/** Format a stable image ref for submitted text / history. */
+export function formatImageRef(displayIndex: number, filename: string): string {
+  return `[Image #${displayIndex}: ${filename}]`;
+}
+
 export function removeAttachmentAtIndex(attachments: Attachment[], imageIndex: number): Attachment[] {
   return attachments
     .map((attachment, index) => (index === imageIndex ? null : attachment))
     .filter(Boolean) as Attachment[];
 }
 
+/**
+ * Convert input value + sparse attachments into submitted text (with image refs) and
+ * attachments ordered by placeholder appearance.
+ */
 export function extractSubmittedInput(
   rawValue: string,
   attachments: Attachment[]
 ): { text: string; attachments: Attachment[] } {
   let text = "";
   const orderedAttachments: Attachment[] = [];
+  let displayNum = 1;
 
   for (const char of rawValue) {
     if (isImagePlaceholder(char)) {
       const attachment = attachments[getImageIndex(char)];
       if (attachment) {
+        text += formatImageRef(displayNum, attachment.filename);
         orderedAttachments.push(attachment);
+        displayNum++;
       }
     } else {
       text += char;

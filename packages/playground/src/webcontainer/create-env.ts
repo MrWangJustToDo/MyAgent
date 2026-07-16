@@ -12,6 +12,56 @@ const ROOT_PATH = "/";
 
 let bootPromise: Promise<CoreEnv> | null = null;
 
+/**
+ * Loaded as project instructions (`AGENTS.md`) on agent bootstrap.
+ * Keep focused: environment facts the model cannot infer from tools alone.
+ */
+const AGENTS_MD = `# Playground workspace (WebContainer)
+
+You are running inside **My Agent Playground**: a browser-hosted Linux-like workspace
+backed by [WebContainers](https://webcontainers.io/). The UI is the shared agent app;
+this filesystem and shell are the only project the tools can see.
+
+## Environment
+
+| Fact | Value |
+|------|--------|
+| Root / cwd | \`/\` |
+| Platform | Linux x64 (emulated in-browser) |
+| Home | \`/home\` |
+| Shell | \`jsh\` via \`run_command\` / \`exec\` |
+| Node / npm | Available (WebContainer Node runtime) |
+| Persistence | In-tab only — refresh or closing the tab resets the workspace unless the host remounts files |
+
+There is **no** separate remote CoreEnv server and **no** OS sandbox toggle: isolation is the browser + WebContainer.
+
+## What works well
+
+- Edit files with \`read_file\` / \`write_file\` / \`edit_file\`; explore with \`tree\` / \`glob\` / \`grep\`.
+- Install and run Node projects: \`npm install\`, \`npm run …\`, \`node …\`.
+- Use \`run_command\` for shell work (build, test, scripts). Prefer npm scripts over ad-hoc global tools that are not installed.
+
+## Network and web tools
+
+- Outbound HTTP from inside the container is still **CORS-limited** by the browser.
+- Prefer the agent **\`webfetch\` / \`websearch\`** tools (host routes them through a server-side fetch proxy).
+- Do **not** rely on \`curl\` / \`wget\` / Node \`fetch\` inside the container to reach arbitrary URLs — they often fail with CORS even when the proxy works for webfetch.
+- If webfetch fails with a proxy/CORS error, tell the user to configure **Settings → Fetch proxy URL** (or use local \`pnpm dev:playground\`, which provides \`/__fetch_proxy\`).
+
+## Limitations
+
+- **MCP stdio** is not available in this browser CoreEnv.
+- No real GPU, Docker, or native host filesystem access outside this WebContainer tree.
+- Binary / system packages beyond what WebContainer ships may be missing; stick to npm when possible.
+- Do not assume the host machine's files, SSH keys, or local \`~/.config\` exist here.
+
+## Guidance
+
+- Treat \`/\` as the project root; keep new work under clear paths (e.g. \`src/\`, \`package.json\`).
+- After changing dependencies or entrypoints, verify with a command before declaring done.
+- Be explicit when a failure is environment-related (CORS, missing binary, ephemeral FS) vs. a code bug.
+`;
+
 const INITIAL_FILES: FileSystemTree = {
   "package.json": {
     file: {
@@ -29,16 +79,14 @@ const INITIAL_FILES: FileSystemTree = {
   "README.md": {
     file: {
       contents:
-        "# WebContainer Playground\n\nThis workspace runs inside the browser via WebContainers.\nUse the agent to edit files, run npm, and explore with shell commands.\n",
+        "# WebContainer Playground\n\nThis workspace runs inside the browser via WebContainers.\n" +
+        "Use the agent to edit files, run npm, and explore with shell commands.\n\n" +
+        "See `AGENTS.md` for environment constraints the coding agent should follow.\n",
     },
   },
-  src: {
-    directory: {
-      "hello.ts": {
-        file: {
-          contents: 'console.log("Hello from WebContainer");\n',
-        },
-      },
+  "AGENTS.md": {
+    file: {
+      contents: AGENTS_MD,
     },
   },
 };

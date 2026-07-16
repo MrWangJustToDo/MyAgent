@@ -238,8 +238,9 @@ export const useUserInput = createState(() => ({ ...initialState }), {
     },
 
     /**
-     * Submit current input and optionally add to history
-     * Returns the submitted text (with placeholders removed) and any attachments in order
+     * Submit current input and optionally add to history.
+     * Returns submitted text (image PUA placeholders replaced with `[Image #N: filename]` refs)
+     * and attachments in appearance order.
      *
      * @param addToHistory - whether to append the submitted text to input history
      *   (default: true). Set to false for transient inputs like deny reasons or

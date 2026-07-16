@@ -14,6 +14,10 @@ export default defineConfig([
       "src/utils/file-icons.ts",
       "src/utils/tool-activity-summary.ts",
       "src/utils/project-transcript.ts",
+      "src/utils/user-message-images.ts",
+      "src/utils/attachment-hash.ts",
+      "src/utils/get-messages.ts",
+      "src/hooks/user-input-helpers.ts",
 
       "src/hooks/streaming-ingest.ts",
     ],

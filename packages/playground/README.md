@@ -25,6 +25,10 @@ Browser
 
 Unlike the extension, there is **no** remote `@my-agent/server` — CoreEnv is local to the tab.
 
+On boot the WebContainer mounts a starter tree (`package.json`, `README.md`, **`AGENTS.md`**). `AGENTS.md` is loaded as project instructions so the agent knows this is an in-browser WebContainer (CORS limits, no MCP stdio, ephemeral FS, prefer `webfetch` over in-container `curl`).
+
+**Colors in Firefox:** chalk’s browser color detection only enables Chromium. The playground sets `chalk.level = 3` on startup (`force-chalk-color.ts`) so xterm receives ANSI in all browsers.
+
 ## Deploying to GitHub Pages
 
 | Concern | Impact |

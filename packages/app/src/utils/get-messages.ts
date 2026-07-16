@@ -35,6 +35,10 @@ const filterValidMessage = (message: UIMessage) => {
 };
 
 function flattenMessage(message: UIMessage): UIMessage[] {
+  // Keep user text + image parts together so UserMessageView can compose inline refs.
+  if (message.role === "user") {
+    return [message];
+  }
   return message.parts.reduce<UIMessage[]>((parts, part, index) => {
     if (!shouldFlattenPart(part)) return parts;
     parts.push({ ...message, id: message.id + "-" + index, parts: [part] });
@@ -98,6 +102,8 @@ export const getMessages = (messages: UIMessage[], options: GetMessagesOptions =
     const message = displayMessages[i];
     if (i < displayMessages.length - 1) {
       staticMessages.push(...resolveStaticFlatMessage(message));
+    } else if (message.role === "user") {
+      dynamicMessages.push(message);
     } else {
       for (let idx = 0; idx < message.parts.length; idx++) {
         const part = message.parts[idx];

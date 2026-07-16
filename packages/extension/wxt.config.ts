@@ -17,7 +17,7 @@ export default defineConfig({
         "node:path": nodePathShim,
         path: nodePathShim,
       },
-      dedupe: ["ink", "@my-react/react-terminal", "ink-stream-markdown"],
+      dedupe: ["ink", "@my-react/react-terminal", "ink-stream-markdown", "chalk"],
     },
   }),
   webExt: {

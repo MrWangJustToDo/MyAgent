@@ -3,6 +3,7 @@ import { useInput } from "ink";
 import { toRaw } from "reactivity-store";
 
 import { dispatchCommand } from "../commands";
+import { clipboardImageFilename } from "../utils/attachment-hash.js";
 
 import { useAgent } from "./use-agent.js";
 import { useSelect } from "./use-select.js";
@@ -97,7 +98,7 @@ export function useAgentKeybindings({
           if (result) {
             inputActions.addAttachment({
               path: "clipboard",
-              filename: `clipboard-${Date.now()}.png`,
+              filename: clipboardImageFilename(result.data),
               mediaType: result.mediaType,
               type: "image",
               size: Math.ceil((result.data.length * 3) / 4),

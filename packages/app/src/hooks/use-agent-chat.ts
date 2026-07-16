@@ -62,12 +62,16 @@ export interface UseAgentChatReturn {
   saveSessionFromChat: () => void;
 }
 
-function attachmentToContentPart(attachment: Attachment): ContentPart {
+function attachmentToContentPart(attachment: Attachment, imageIndex?: number): ContentPart {
   if (attachment.type === "image") {
     return {
       type: "image",
       source: { type: "url", value: attachment.dataUrl },
-      metadata: { mediaType: attachment.mediaType, filename: attachment.filename },
+      metadata: {
+        mediaType: attachment.mediaType,
+        filename: attachment.filename,
+        ...(imageIndex !== undefined ? { imageIndex } : {}),
+      },
     };
   }
   return {
@@ -227,8 +231,14 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         await chat.sendMessage(content);
       } else if (content.files?.length) {
         const parts: ContentPart[] = [{ type: "text", content: content.text }];
+        let imageIndex = 0;
         for (const file of content.files) {
-          parts.push(attachmentToContentPart(file));
+          if (file.type === "image") {
+            imageIndex += 1;
+            parts.push(attachmentToContentPart(file, imageIndex));
+          } else {
+            parts.push(attachmentToContentPart(file));
+          }
         }
         await chat.sendMessage(parts);
       } else {

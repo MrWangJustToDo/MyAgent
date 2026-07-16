@@ -25,8 +25,10 @@ export default defineConfig({
       "node:path": nodePathShim,
       path: nodePathShim,
     },
-    dedupe: ["ink", "@my-react/react-terminal", "ink-stream-markdown"],
+    // One chalk instance so force-chalk-color covers Ink + @my-agent/app
+    dedupe: ["ink", "@my-react/react-terminal", "ink-stream-markdown", "chalk"],
   },
+
   server: {
     port: 5177,
     headers: {

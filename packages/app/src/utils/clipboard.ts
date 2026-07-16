@@ -1,3 +1,5 @@
+import { clipboardImageFilename } from "./attachment-hash.js";
+
 import type { ClipboardImageResult } from "../adapter/types.js";
 import type { Attachment } from "../types/attachment.js";
 
@@ -8,7 +10,7 @@ export function clipboardResultToAttachment(result: ClipboardImageResult): Attac
   if (size > IMAGE_SIZE_LIMIT) return null;
 
   const dataUrl = `data:${result.mediaType};base64,${result.data}`;
-  const filename = `clipboard-${Date.now()}.png`;
+  const filename = clipboardImageFilename(result.data);
 
   return {
     path: "clipboard",
