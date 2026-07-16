@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 
 import { COLORS } from "../theme/colors.js";
 import { formatToolOutput } from "../utils/format";
+import { splitStreamingLines } from "../utils/streaming-output-lines.js";
 
 import { TodoToolOutputView } from "./TodoToolOutputView.js";
 
@@ -25,7 +26,7 @@ export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState:
   }
 
   const output = formatToolOutput(part.output, toolName);
-  const lines = output.split("\n");
+  const lines = splitStreamingLines(output);
   const failed = toolName === "run_command" && (part.output as { success?: boolean } | undefined)?.success === false;
   const lineColor = failed ? COLORS.danger : COLORS.muted;
 
@@ -33,7 +34,7 @@ export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState:
     <Box flexDirection="column" paddingLeft={2}>
       {lines.map((line, i) => (
         <Text key={i} color={lineColor} dimColor={!failed}>
-          {line}
+          {line.length > 0 ? line : " "}
         </Text>
       ))}
     </Box>

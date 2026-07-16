@@ -1,5 +1,7 @@
 import { createState } from "reactivity-store";
 
+import { splitStreamingLines } from "../utils/streaming-output-lines.js";
+
 const MAX_VISIBLE = 7;
 
 export interface CommandOutputState {
@@ -20,10 +22,10 @@ export const useCommandOutput = createState(
   {
     withActions: (state) => ({
       show: (title: string, content: string) => {
-        const lines = content.split("\n");
+        const lines = splitStreamingLines(content);
         state.title = title;
-        state.lines = lines;
-        state.scrollOffset = Math.max(0, lines.length - MAX_VISIBLE);
+        state.lines = lines.length > 0 ? lines : [""];
+        state.scrollOffset = Math.max(0, state.lines.length - MAX_VISIBLE);
       },
       dismiss: () => {
         state.lines = null;

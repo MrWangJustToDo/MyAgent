@@ -27,6 +27,8 @@ Unlike the extension, there is **no** remote `@my-agent/server` — CoreEnv is l
 
 On boot the WebContainer mounts a starter tree (`package.json`, `README.md`, **`AGENTS.md`**). `AGENTS.md` is loaded as project instructions so the agent knows this is an in-browser WebContainer (CORS limits, no MCP stdio, ephemeral FS, prefer `webfetch` over in-container `curl`).
 
+File tools and `run_command` share the WebContainer **project workdir** (tools see it as `/`). Spawn `cwd` is mapped relative to that workdir — do not pass Linux `/` into `jsh` or the shell starts beside the project under `/home`.
+
 ### Preview panel
 
 When a process inside the WebContainer **listens on a TCP port**, the host UI opens a **Preview** side panel (iframe) using the URL from WebContainer `port` / `server-ready` events. Multiple ports appear as tabs; collapse/reopen with the **Preview** toggle. Refresh / Open / Copy act on the active preview URL.

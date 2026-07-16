@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 
 import { BG, COLORS } from "../theme/colors.js";
 import { formatFolderGlyph, formatIconGlyph, getFileIconStyle, getFolderIconStyle } from "../utils/file-icons.js";
+import { splitStreamingLines } from "../utils/streaming-output-lines.js";
 import { joinWorkspacePath, workspaceRelativePath } from "../utils/workspace-path.js";
 
 import type { FileEntry } from "@my-agent/core";
@@ -32,7 +33,7 @@ function sortEntries(entries: FileEntry[]): FileEntry[] {
 
 export function parseGitStatus(raw: string): Map<string, string> {
   const map = new Map<string, string>();
-  for (const line of raw.split("\n")) {
+  for (const line of splitStreamingLines(raw)) {
     if (line.length < 3) continue;
     const status = line.slice(0, 2).trim();
     const filepath = line.slice(3).trim();

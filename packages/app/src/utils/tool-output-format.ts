@@ -1,3 +1,5 @@
+import { splitStreamingLines } from "./streaming-output-lines.js";
+
 import type {
   EditFileOutput,
   GlobOutput,
@@ -57,10 +59,12 @@ function formatListFileOutput(output: ListFileOutput): string {
 const MAX_LINE_WIDTH = 400;
 
 function truncateLine(line: string, maxWidth: number = MAX_LINE_WIDTH): string {
-  if (line.length > maxWidth) {
-    return line.slice(0, maxWidth - 3) + "...";
+  // Defense: strip any leftover CR before measuring / rendering in Ink.
+  const cleaned = line.replace(/\r/g, "");
+  if (cleaned.length > maxWidth) {
+    return cleaned.slice(0, maxWidth - 3) + "...";
   }
-  return line;
+  return cleaned;
 }
 
 function formatRunCommandOutput(output: RunCommandOutput): string {
@@ -72,7 +76,7 @@ function formatRunCommandOutput(output: RunCommandOutput): string {
   }
 
   if (stderr && stderr.trim()) {
-    const stderrLines = stripCacheHintLines(stderr.trim().split("\n"));
+    const stderrLines = stripCacheHintLines(splitStreamingLines(stderr.trim()));
     const tail = stderrLines.slice(-3);
     if (stderrLines.length > 3) {
       lines.push(`stderr: ... (${stderrLines.length - 3} more lines)`);
@@ -81,7 +85,7 @@ function formatRunCommandOutput(output: RunCommandOutput): string {
   }
 
   if (stdout && stdout.trim()) {
-    const stdoutLines = stripCacheHintLines(stdout.trim().split("\n"));
+    const stdoutLines = stripCacheHintLines(splitStreamingLines(stdout.trim()));
     const tail = stdoutLines.slice(-3);
     if (stdoutLines.length > 3) {
       lines.push(`... (${stdoutLines.length - 3} more lines)`);
@@ -183,7 +187,7 @@ function formatTaskOutput(output: TaskOutput): string {
   if (!summary) return "";
   lines.push(`[${statusParts.join(", ")}]`);
 
-  const summaryLines = stripCacheHintLines(summary.trim().split("\n"));
+  const summaryLines = stripCacheHintLines(splitStreamingLines(summary.trim()));
   const maxSummaryLines = 10;
   const shown = summaryLines.length <= maxSummaryLines ? summaryLines : summaryLines.slice(0, maxSummaryLines);
   lines.push(...shown.map((i) => truncateLine(i)));

@@ -16,6 +16,9 @@ assert.deepEqual(splitStreamingLines(""), []);
 assert.deepEqual(splitStreamingLines("a\nb"), ["a", "b"]);
 assert.deepEqual(splitStreamingLines("a\nb\n"), ["a", "b"]);
 assert.deepEqual(splitStreamingLines("a\n\nb\n"), ["a", "", "b"]);
+// WebContainer / Windows shells often emit CRLF — trailing `\r` must not reach Ink Text.
+assert.deepEqual(splitStreamingLines("total 1\r\ndrwxr-xr-x usr\r\n"), ["total 1", "drwxr-xr-x usr"]);
+assert.deepEqual(splitStreamingLines("a\rb\rc"), ["a", "b", "c"]);
 
 assert.deepEqual(takeLatestLines(["a"], 3), ["a"]);
 assert.deepEqual(takeLatestLines(["a", "b", "c", "d"], 3), ["b", "c", "d"]);

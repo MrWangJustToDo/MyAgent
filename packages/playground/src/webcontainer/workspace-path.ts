@@ -14,6 +14,30 @@ export function resolveWorkspacePath(rootPath: string, inputPath: string): strin
   return resolved;
 }
 
+/**
+ * Map CoreEnv workspace paths to WebContainer `spawn({ cwd })`.
+ *
+ * WebContainer's spawn `cwd` is **relative to `wc.workdir`** (the mounted project).
+ * Passing a Linux absolute path like `"/"` starts jsh at the container FS root
+ * (`/bin`, `/home`, …) — not the project — so shell and `write_file` diverge.
+ */
+export function toWebContainerSpawnCwd(rootPath: string, cwd?: string): string {
+  const root = normalizeAbsolute(rootPath);
+  const resolved = cwd ? resolveWorkspacePath(root, cwd) : root;
+
+  if (root === "/") {
+    if (resolved === "/") return ".";
+    return resolved.replace(/^\//, "") || ".";
+  }
+
+  if (resolved === root) return ".";
+  if (resolved.startsWith(`${root}/`)) {
+    return resolved.slice(root.length + 1) || ".";
+  }
+
+  return ".";
+}
+
 function isInsideRoot(root: string, resolved: string): boolean {
   if (root === "/") return resolved.startsWith("/");
   return resolved === root || resolved.startsWith(`${root}/`);

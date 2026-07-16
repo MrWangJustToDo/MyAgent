@@ -1,13 +1,13 @@
 import { ExecutionError } from "@my-agent/core";
 
-import { resolveWorkspacePath } from "./workspace-path.js";
+import { toWebContainerSpawnCwd } from "./workspace-path.js";
 
 import type { CommandResult, CoreEnvExecOptions, CoreEnvExecResult, RunCommandOptions } from "@my-agent/core";
 import type { WebContainer } from "@webcontainer/api";
 
-function resolveCwd(rootPath: string, cwd?: string): string {
-  if (!cwd) return rootPath;
-  return resolveWorkspacePath(rootPath, cwd);
+/** WebContainer / jsh often emits CRLF; keep LF for Ink + consistent tool output. */
+function normalizeNewlines(text: string): string {
+  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
 async function collectProcessOutput(
@@ -25,12 +25,25 @@ async function collectProcessOutput(
   const stdoutChunks: string[] = [];
   let timedOut = false;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let carry = "";
 
   const outputDone = process.output.pipeTo(
     new WritableStream<string>({
       write(chunk) {
-        stdoutChunks.push(chunk);
-        options.onStdout?.(chunk);
+        // Avoid splitting CRLF across chunks when notifying the UI stream.
+        const combined = carry + chunk;
+        if (combined.endsWith("\r")) {
+          carry = "\r";
+          const body = combined.slice(0, -1);
+          if (body) {
+            stdoutChunks.push(body);
+            options.onStdout?.(normalizeNewlines(body));
+          }
+          return;
+        }
+        carry = "";
+        stdoutChunks.push(combined);
+        options.onStdout?.(normalizeNewlines(combined));
       },
     })
   );
@@ -51,8 +64,12 @@ async function collectProcessOutput(
     if (timedOut) {
       throw new ExecutionError("timeout", `Command timed out after ${options.timeout}ms`);
     }
+    if (carry) {
+      stdoutChunks.push(carry);
+      options.onStdout?.(normalizeNewlines(carry));
+    }
     return {
-      stdout: stdoutChunks.join(""),
+      stdout: normalizeNewlines(stdoutChunks.join("")),
       stderr: "",
       exitCode: exitCode ?? 1,
     };
@@ -68,7 +85,7 @@ export async function runWebContainerCommand(
   options?: RunCommandOptions
 ): Promise<CommandResult> {
   const start = Date.now();
-  const cwd = resolveCwd(rootPath, options?.cwd);
+  const cwd = toWebContainerSpawnCwd(rootPath, options?.cwd);
   try {
     const result = await collectProcessOutput(wc, command, cwd, options?.env, {
       onStdout: options?.onStdout,
@@ -96,7 +113,7 @@ export async function execWebContainerCommand(
   command: string,
   options?: CoreEnvExecOptions
 ): Promise<CoreEnvExecResult> {
-  const cwd = resolveCwd(rootPath, options?.cwd);
+  const cwd = toWebContainerSpawnCwd(rootPath, options?.cwd);
   const env = options?.env
     ? Object.fromEntries(Object.entries(options.env).filter((entry): entry is [string, string] => entry[1] != null))
     : undefined;

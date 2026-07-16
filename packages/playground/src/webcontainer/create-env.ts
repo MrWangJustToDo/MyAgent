@@ -32,14 +32,16 @@ this filesystem and shell are the only project the tools can see.
 
 | Fact | Value |
 |------|--------|
-| Root / cwd | \`/\` |
+| Root / cwd | \`/\` — file tools and \`run_command\` share this project workdir |
 | Platform | Linux x64 (emulated in-browser) |
-| Home | \`/home\` |
-| Shell | \`jsh\` via \`run_command\` / \`exec\` |
+| Home | \`/home\` (user home; **not** the project root — do not \`cd /home\` for app files) |
+| Shell | \`jsh\` via \`run_command\` / \`exec\` (starts in the project workdir, same as file tools) |
 | Node / npm | Available (WebContainer Node runtime) |
 | Persistence | In-tab only — refresh or closing the tab resets the workspace unless the host remounts files |
 
 There is **no** separate remote CoreEnv server and **no** OS sandbox toggle: isolation is the browser + WebContainer.
+
+**Workspace vs \`/home\`:** WebContainer also has a Linux-like tree (\`/bin\`, \`/home\`, …). Agent file tools and shell cwd use the **mounted project workdir** (exposed as \`/\` to tools). Listing Linux \`/home\` without entering the project folder will not show files you just wrote.
 
 ## What works well
 
@@ -145,6 +147,8 @@ export async function createWebContainerEnv(options: CreateWebContainerEnvOption
 
   const wc = await WebContainer.boot({
     coep: "require-corp",
+    // Stable project folder name under /home (cosmetic); fs + shell both use this workdir.
+    workdirName: "workspace",
   });
   bootedWebContainer = wc;
 

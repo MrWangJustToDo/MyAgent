@@ -54,4 +54,28 @@ assert.equal(resolveWorkspacePath("/home/project", "/home/project/pkg/x"), "/hom
 assert.throws(() => resolveWorkspacePath("/home/project", "../escape"), /traversal/i);
 assert.throws(() => resolveWorkspacePath("/home/project", "/etc/passwd"), /traversal/i);
 
+function toWebContainerSpawnCwd(rootPath, cwd) {
+  const root = normalizeAbsolute(rootPath);
+  const resolved = cwd ? resolveWorkspacePath(root, cwd) : root;
+
+  if (root === "/") {
+    if (resolved === "/") return ".";
+    return resolved.replace(/^\//, "") || ".";
+  }
+
+  if (resolved === root) return ".";
+  if (resolved.startsWith(`${root}/`)) {
+    return resolved.slice(root.length + 1) || ".";
+  }
+
+  return ".";
+}
+
+assert.equal(toWebContainerSpawnCwd("/", undefined), ".");
+assert.equal(toWebContainerSpawnCwd("/", "/"), ".");
+assert.equal(toWebContainerSpawnCwd("/", "src"), "src");
+assert.equal(toWebContainerSpawnCwd("/", "/src/app"), "src/app");
+assert.equal(toWebContainerSpawnCwd("/home/workspace", undefined), ".");
+assert.equal(toWebContainerSpawnCwd("/home/workspace", "pkg"), "pkg");
+
 process.stdout.write("validate-workspace-path: ok\n");
