@@ -1,5 +1,5 @@
-/*! coi-serviceworker v0.1.7 - Guido Zuidhof and contributors, licensed under MIT */
-let coepCredentialless = false;
+/*! coi-serviceworker v0.1.7 - modified: credentialless-only, no degrade dance */
+let coepCredentialless = true;
 if (typeof window === "undefined") {
   self.addEventListener("install", () => self.skipWaiting());
   self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
@@ -41,10 +41,8 @@ if (typeof window === "undefined") {
           }
 
           const newHeaders = new Headers(response.headers);
-          newHeaders.set("Cross-Origin-Embedder-Policy", coepCredentialless ? "credentialless" : "require-corp");
-          if (!coepCredentialless) {
-            newHeaders.set("Cross-Origin-Resource-Policy", "cross-origin");
-          }
+          newHeaders.set("Cross-Origin-Embedder-Policy", coepCredentialless ? "credentialless" : "credentialless");
+          newHeaders.set("Cross-Origin-Resource-Policy", "cross-origin");
           newHeaders.set("Cross-Origin-Opener-Policy", "same-origin");
 
           return new Response(response.body, {
@@ -58,44 +56,15 @@ if (typeof window === "undefined") {
   });
 } else {
   (() => {
-    const reloadedBySelf = window.sessionStorage.getItem("coiReloadedBySelf");
-    window.sessionStorage.removeItem("coiReloadedBySelf");
-    const coepDegrading = reloadedBySelf == "coepdegrade";
-
     const coi = {
-      shouldRegister: () => !reloadedBySelf,
+      shouldRegister: () => true,
       shouldDeregister: () => false,
-      coepCredentialless: () => true,
-      coepDegrade: () => true,
       doReload: () => window.location.reload(),
       quiet: false,
       ...window.coi,
     };
 
     const n = navigator;
-    const controlling = n.serviceWorker && n.serviceWorker.controller;
-
-    if (controlling && !window.crossOriginIsolated) {
-      window.sessionStorage.setItem("coiCoepHasFailed", "true");
-    }
-    const coepHasFailed = window.sessionStorage.getItem("coiCoepHasFailed");
-
-    if (controlling) {
-      const reloadToDegrade = coi.coepDegrade() && !(coepDegrading || window.crossOriginIsolated);
-      n.serviceWorker.controller.postMessage({
-        type: "coepCredentialless",
-        value: reloadToDegrade || (coepHasFailed && coi.coepDegrade()) ? false : coi.coepCredentialless(),
-      });
-      if (reloadToDegrade) {
-        !coi.quiet && console.log("Reloading page to degrade COEP.");
-        window.sessionStorage.setItem("coiReloadedBySelf", "coepdegrade");
-        coi.doReload("coepdegrade");
-      }
-
-      if (coi.shouldDeregister()) {
-        n.serviceWorker.controller.postMessage({ type: "deregister" });
-      }
-    }
 
     if (window.crossOriginIsolated !== false || !coi.shouldRegister()) return;
 
@@ -115,14 +84,12 @@ if (typeof window === "undefined") {
 
         registration.addEventListener("updatefound", () => {
           !coi.quiet && console.log("Reloading page to make use of updated COOP/COEP Service Worker.");
-          window.sessionStorage.setItem("coiReloadedBySelf", "updatefound");
-          coi.doReload();
+          coi.doReload?.();
         });
 
         if (registration.active && !n.serviceWorker.controller) {
           !coi.quiet && console.log("Reloading page to make use of COOP/COEP Service Worker.");
-          window.sessionStorage.setItem("coiReloadedBySelf", "notcontrolling");
-          coi.doReload();
+          coi.doReload?.();
         }
       },
       (err) => {

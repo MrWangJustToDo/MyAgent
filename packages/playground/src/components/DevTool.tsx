@@ -18,10 +18,28 @@ const getDevToolAPI = (): DevToolAPI | undefined => {
   return (window as any).__MY_REACT_DEVTOOL_IFRAME__ as DevToolAPI | undefined;
 };
 
+function patchCreateElement(): () => void {
+  const orig = document.createElement.bind(document);
+  (document as any).createElement = (tagName: string, options?: ElementCreationOptions) => {
+    const el = orig(tagName, options);
+    if (tagName.toLowerCase() === "iframe") {
+      el.setAttribute("credentialless", "");
+    }
+    return el;
+  };
+  return () => {
+    (document as any).createElement = orig;
+  };
+}
+
 async function initDevTool(): Promise<void> {
   const api = getDevToolAPI();
   if (typeof api === "function") {
+    const unpatch = patchCreateElement();
+    // 打包后函数变成了同步，额外使用setTimeout来模拟异步
     api(DEVTOOL_URL);
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    unpatch();
   } else {
     await loadScript(`${DEVTOOL_URL}/bundle/hook.js`);
     await initDevTool();

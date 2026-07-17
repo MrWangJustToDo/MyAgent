@@ -12,6 +12,19 @@
     <!-- COI for static hosts (GitHub Pages). Vite dev already sets COOP/COEP headers. -->
     <script>
       (function () {
+        // Dev mode: Vite server already sends COOP/COEP headers → no SW needed.
+        // Production (GitHub Pages): no custom headers → register SW for isolation.
+        if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+          // Unregister any stale SW from previous sessions
+          if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+              regs.forEach(function (r) {
+                r.unregister();
+              });
+            });
+          }
+          return;
+        }
         var s = document.createElement("script");
         s.src = "./coi-serviceworker.js";
         document.head.appendChild(s);

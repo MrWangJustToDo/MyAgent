@@ -32,14 +32,14 @@ export default defineConfig({
   server: {
     port: 5177,
     headers: {
-      "Cross-Origin-Embedder-Policy": "require-corp",
+      "Cross-Origin-Embedder-Policy": "credentialless",
       "Cross-Origin-Opener-Policy": "same-origin",
     },
   },
   preview: {
     port: 5177,
     headers: {
-      "Cross-Origin-Embedder-Policy": "require-corp",
+      "Cross-Origin-Embedder-Policy": "credentialless",
       "Cross-Origin-Opener-Policy": "same-origin",
     },
   },

@@ -148,8 +148,7 @@ export async function createWebContainerEnv(options: CreateWebContainerEnvOption
   setFetchProxyUrl(resolveFetchProxyUrl(options.fetchProxyUrl));
 
   const wc = await WebContainer.boot({
-    coep: "require-corp",
-    // Stable project folder name under /home (cosmetic); fs + shell both use this workdir.
+    coep: "credentialless",
     workdirName: "workspace",
   });
   bootedWebContainer = wc;
