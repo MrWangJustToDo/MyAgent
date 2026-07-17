@@ -255,14 +255,14 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
       path: z.string().describe("The path to the file or directory to read, relative to the project root."),
       offset: z
         .number()
-        .int()
-        .min(1)
+        .int({ message: "offset: must be an integer" })
+        .min(1, { message: "offset: must be >= 1 (1-indexed)" })
         .optional()
         .describe("The line number to start reading from (1-indexed). Only for text files. Defaults to 1."),
       limit: z
         .number()
-        .int()
-        .min(1)
+        .int({ message: "limit: must be an integer" })
+        .min(1, { message: "limit: must be >= 1" })
         .optional()
         .describe(
           "The maximum number of lines to read. Only for text files. Defaults to 2000. Use smaller values for targeted reading."

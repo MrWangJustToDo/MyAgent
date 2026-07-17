@@ -203,15 +203,15 @@ export const createGrepTool = () => {
       ignoreCase: z.boolean().optional().describe("If true, perform case-insensitive matching. Defaults to false."),
       offset: z
         .number()
-        .int()
-        .min(0)
+        .int({ message: "offset: must be an integer" })
+        .min(0, { message: "offset: must be >= 0 (0-indexed)" })
         .optional()
         .describe("Number of matches to skip (0-indexed). Use for pagination. Defaults to 0."),
       limit: z
         .number()
-        .int()
-        .min(1)
-        .max(500)
+        .int({ message: "limit: must be an integer" })
+        .min(1, { message: "limit: must be >= 1" })
+        .max(500, { message: "limit: must be <= 500" })
         .optional()
         .describe(`Maximum number of matches to return. Defaults to ${DEFAULT_LIMIT}.`),
       outputMode: z
@@ -224,9 +224,9 @@ export const createGrepTool = () => {
         ),
       context: z
         .number()
-        .int()
-        .min(0)
-        .max(20)
+        .int({ message: "context: must be an integer" })
+        .min(0, { message: "context: must be >= 0" })
+        .max(20, { message: "context: must be <= 20" })
         .optional()
         .describe("Lines of surrounding context per match (only with output_mode 'content'). Defaults to 0."),
     }),

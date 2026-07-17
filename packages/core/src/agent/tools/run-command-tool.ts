@@ -30,8 +30,8 @@ export const createRunCommandTool = () => {
         .describe("Environment variables to set for the command execution."),
       timeout: z
         .number()
-        .int()
-        .min(1000)
+        .int({ message: "timeout: must be an integer (milliseconds)" })
+        .min(1000, { message: "timeout: must be >= 1000ms (use ms, not seconds)" })
         .optional()
         .describe("Timeout in milliseconds (foreground only). If the command takes longer, it will be terminated."),
       run_in_background: z

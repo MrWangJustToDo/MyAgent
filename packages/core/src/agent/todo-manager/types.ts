@@ -41,7 +41,7 @@ export interface TodoItem {
 
 export const todoItemInputSchema = z.object({
   /** Description of the task */
-  content: z.string().min(1).describe("Brief description of the task"),
+  content: z.string().min(1, { message: "content: must not be empty" }).describe("Brief description of the task"),
   /** Current status of the task */
   status: z
     .enum(TODO_STATUSES)
@@ -54,12 +54,12 @@ export type TodoItemInput = z.infer<typeof todoItemInputSchema>;
 
 export const todoToolInputSchema = z.object({
   /** Title for this todo set */
-  title: z.string().min(1).describe("Short title for this todo set"),
+  title: z.string().min(1, { message: "title: must not be empty" }).describe("Short title for this todo set"),
   /** Array of todo items to set (replaces all existing todos) */
   todos: z
     .array(todoItemInputSchema)
-    .min(1)
-    .max(20)
+    .min(1, { message: "todos: must contain at least 1 item" })
+    .max(20, { message: "todos: must contain at most 20 items" })
     .describe("The complete list of todos. This replaces all existing todos."),
 });
 

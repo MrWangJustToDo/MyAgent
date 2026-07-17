@@ -354,12 +354,12 @@ Example response format:
   - [Source Title 2](https://example.com/page2)`,
 
     inputSchema: z.object({
-      query: z.string().min(2).describe("The search query to use"),
+      query: z.string().min(2, { message: "query: must be at least 2 characters" }).describe("The search query to use"),
       maxResults: z
         .number()
-        .int()
-        .min(1)
-        .max(MAX_RESULTS)
+        .int({ message: "maxResults: must be an integer" })
+        .min(1, { message: "maxResults: must be >= 1" })
+        .max(MAX_RESULTS, { message: "maxResults: must be <= 10" })
         .optional()
         .describe(`Maximum number of results to return (1-${MAX_RESULTS}). Defaults to ${DEFAULT_RESULTS}.`),
       allowedDomains: z
@@ -372,9 +372,9 @@ Example response format:
         .describe("Exclude results from these domains (e.g., ['pinterest.com', 'quora.com'])"),
       timeout: z
         .number()
-        .int()
-        .min(5)
-        .max(MAX_TIMEOUT)
+        .int({ message: "timeout: must be an integer (seconds)" })
+        .min(5, { message: "timeout: must be >= 5 seconds" })
+        .max(MAX_TIMEOUT, { message: "timeout: must be <= 60 seconds" })
         .optional()
         .describe(`Timeout in seconds (5-${MAX_TIMEOUT}). Defaults to ${DEFAULT_TIMEOUT}.`),
     }),

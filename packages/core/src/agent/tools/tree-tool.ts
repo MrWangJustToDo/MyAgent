@@ -26,7 +26,13 @@ export const createTreeTool = () => {
       "Displays the directory tree structure. Shows files and directories in a hierarchical format. Useful for understanding project structure.",
     inputSchema: z.object({
       path: z.string().optional().describe("The root directory to display tree from. Defaults to current directory."),
-      maxDepth: z.number().int().min(1).max(10).optional().describe("Maximum depth to traverse. Defaults to 3."),
+      maxDepth: z
+        .number()
+        .int({ message: "maxDepth: must be an integer" })
+        .min(1, { message: "maxDepth: must be >= 1" })
+        .max(10, { message: "maxDepth: must be <= 10" })
+        .optional()
+        .describe("Maximum depth to traverse. Defaults to 3."),
       showHidden: z
         .boolean()
         .optional()

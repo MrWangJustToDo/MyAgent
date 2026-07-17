@@ -14,7 +14,7 @@ export const createDeleteFileTool = () => {
     inputSchema: z.object({
       path: z.string().describe("The path to the file or directory to delete, relative to the project directory."),
       modifiedTime: z
-        .string()
+        .string({ message: "modifiedTime: must be a string" })
         .describe(
           "The modification timestamp from the read_file_tool response. Used to verify the file hasn't changed since it was read."
         ),

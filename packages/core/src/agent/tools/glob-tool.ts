@@ -131,15 +131,15 @@ export const createGlobTool = () => {
         .describe("Type of entries to find: 'file' (default), 'directory', or 'all' for both."),
       offset: z
         .number()
-        .int()
-        .min(0)
+        .int({ message: "offset: must be an integer" })
+        .min(0, { message: "offset: must be >= 0 (0-indexed)" })
         .optional()
         .describe("Number of files to skip (0-indexed). Use for pagination. Defaults to 0."),
       limit: z
         .number()
-        .int()
-        .min(1)
-        .max(DEFAULT_LIMIT)
+        .int({ message: "limit: must be an integer" })
+        .min(1, { message: "limit: must be >= 1" })
+        .max(DEFAULT_LIMIT, { message: "limit: exceeds maximum" })
         .optional()
         .describe(`Maximum number of files to return. Defaults to ${DEFAULT_LIMIT}.`),
       exclude: z

@@ -178,9 +178,9 @@ Usage notes:
         .describe("The format to return content in. Defaults to markdown."),
       timeout: z
         .number()
-        .int()
-        .min(1)
-        .max(MAX_TIMEOUT)
+        .int({ message: "timeout: must be an integer (seconds)" })
+        .min(1, { message: "timeout: must be >= 1 second" })
+        .max(MAX_TIMEOUT, { message: "timeout: must be <= 120 seconds" })
         .optional()
         .describe(`Timeout in seconds (1-${MAX_TIMEOUT}). Defaults to ${DEFAULT_TIMEOUT}.`),
     }),

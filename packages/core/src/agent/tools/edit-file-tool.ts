@@ -134,7 +134,7 @@ export const createEditFileTool = () => {
     inputSchema: z.object({
       path: z.string().describe("The path to the file to edit, relative to the project directory."),
       modifiedTime: z
-        .string()
+        .string({ message: "modifiedTime: must be a string" })
         .describe(
           "The modification timestamp from the read_file_tool response. Used to verify the file hasn't changed since it was read."
         ),
@@ -146,15 +146,15 @@ export const createEditFileTool = () => {
             replaceAll: z.boolean().optional().describe("If true, replace all occurrences of this string."),
             startLine: z
               .number()
-              .int()
-              .min(1)
+              .int({ message: "startLine: must be an integer" })
+              .min(1, { message: "startLine: must be >= 1 (1-indexed)" })
               .optional()
               .describe(
                 "The 1-indexed line number where oldString starts in the file. Used for diff display and validation."
               ),
           })
         )
-        .min(1)
+        .min(1, { message: "edits: must contain at least 1 edit operation" })
         .describe("Array of edit operations to apply sequentially. For a single edit, pass an array with one element."),
     }),
     outputSchema: editFileOutputSchema,
