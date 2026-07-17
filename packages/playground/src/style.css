@@ -350,44 +350,6 @@ body,
   margin: 0;
 }
 
-.devtool-bar {
-  position: fixed;
-  bottom: 16px;
-  left: 16px;
-  z-index: 50;
-  display: flex;
-  gap: 4px;
-}
-
-.devtool-bar__toggle,
-.devtool-bar__close {
-  border: 1px solid #3c3c3c;
-  border-radius: 6px;
-  padding: 6px 12px;
-  background: #1e1e1e;
-  color: #ccc;
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.devtool-bar__toggle:hover {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
-}
-
-.devtool-bar__close {
-  padding: 6px 8px;
-  line-height: 1;
-}
-
-.devtool-bar__close:hover {
-  background: #c00;
-  border-color: #c00;
-  color: #fff;
-}
-
 .export-dialog {
   position: fixed;
   top: 50%;
