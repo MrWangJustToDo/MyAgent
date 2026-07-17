@@ -29,13 +29,6 @@ body,
 .playground-main {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: row;
-}
-
-.playground-main--split .playground-terminal {
-  flex: 1;
-  min-width: 0;
 }
 
 .playground-terminal {
@@ -66,10 +59,42 @@ body,
 .preview-panel {
   display: flex;
   flex-direction: column;
-  width: min(42vw, 560px);
-  min-width: 280px;
+  height: 100%;
   border-left: 1px solid #3c3c3c;
   background: #1e1e1e;
+}
+
+.split-pane {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  min-height: 0;
+}
+
+.split-pane__left {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+}
+
+.split-pane__right {
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.split-pane__splitter {
+  flex: 0 0 5px;
+  cursor: col-resize;
+  background: #3c3c3c;
+  background-clip: content-box;
+  transition: background 0.15s;
+}
+
+.split-pane__splitter:hover,
+.split-pane__splitter:active {
+  background: #2563eb;
 }
 
 .preview-panel__header {
@@ -312,6 +337,55 @@ body,
   font-size: 11px;
   line-height: 1.45;
   color: #777;
+}
+
+.config-panel__checkbox {
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px !important;
+  cursor: pointer;
+}
+
+.config-panel__checkbox input {
+  margin: 0;
+}
+
+.devtool-bar {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 50;
+  display: flex;
+  gap: 4px;
+}
+
+.devtool-bar__toggle,
+.devtool-bar__close {
+  border: 1px solid #3c3c3c;
+  border-radius: 6px;
+  padding: 6px 12px;
+  background: #1e1e1e;
+  color: #ccc;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.devtool-bar__toggle:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.devtool-bar__close {
+  padding: 6px 8px;
+  line-height: 1;
+}
+
+.devtool-bar__close:hover {
+  background: #c00;
+  border-color: #c00;
+  color: #fff;
 }
 
 .export-dialog {

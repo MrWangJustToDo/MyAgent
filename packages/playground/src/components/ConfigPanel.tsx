@@ -15,11 +15,12 @@ export const ConfigPanel = () => {
   const baseURL = usePlaygroundConfig((s) => s.baseURL);
   const apiKey = usePlaygroundConfig((s) => s.apiKey);
   const fetchProxyUrl = usePlaygroundConfig((s) => s.fetchProxyUrl);
+  const devtoolEnabled = usePlaygroundConfig((s) => s.devtoolEnabled);
   const { setConfig } = usePlaygroundConfig.getActions();
 
   const [open, setOpen] = useState(() => !apiKey);
   const [exportOpen, setExportOpen] = useState(false);
-  const [draft, setDraft] = useState({ model, style, baseURL, apiKey, fetchProxyUrl });
+  const [draft, setDraft] = useState({ model, style, baseURL, apiKey, fetchProxyUrl, devtoolEnabled });
 
   const openPanel = useCallback(() => setOpen(true), []);
   const { position, bubbleSize, pointerHandlers } = useDraggableBubble(BUBBLE_STORAGE_KEY, openPanel);
@@ -79,6 +80,14 @@ export const ConfigPanel = () => {
               onChange={(e) => setDraft((d) => ({ ...d, fetchProxyUrl: e.target.value }))}
               placeholder="https://….workers.dev (required on GitHub Pages)"
             />
+          </label>
+          <label className="config-panel__checkbox">
+            <input
+              type="checkbox"
+              checked={draft.devtoolEnabled}
+              onChange={(e) => setDraft((d) => ({ ...d, devtoolEnabled: e.target.checked }))}
+            />
+            Enable DevTool (@my-react/react devtools)
           </label>
           <button
             type="button"

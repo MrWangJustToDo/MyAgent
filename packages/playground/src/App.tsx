@@ -15,7 +15,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PlaygroundAgentAdapter } from "./adapters/playground-adapter.js";
 import { ConfigPanel } from "./components/ConfigPanel.js";
+import { DevTool } from "./components/DevTool.js";
 import { PreviewPanel, PreviewToggle } from "./components/PreviewPanel.js";
+import { SplitPane } from "./components/SplitPane.js";
 import { usePlaygroundConfig } from "./hooks/use-playground-config.js";
 import { usePreviewPorts } from "./hooks/use-preview-ports.js";
 import { getBootedWebContainer, getWebContainerEnv } from "./webcontainer/create-env.js";
@@ -165,18 +167,25 @@ function useSubscribePreviewPorts(fetchProxyUrl: string) {
 export const PlaygroundApp = () => {
   const panelOpen = usePreviewPorts((s) => s.panelOpen);
   const fetchProxyUrl = usePlaygroundConfig((s) => s.fetchProxyUrl);
+  const devtoolEnabled = usePlaygroundConfig((s) => s.devtoolEnabled);
 
   useSubscribePreviewPorts(fetchProxyUrl);
 
   return (
     <div className="playground-shell">
       <ConfigPanel />
+      {devtoolEnabled && <DevTool />}
       <PreviewToggle />
-      <div className={panelOpen ? "playground-main playground-main--split" : "playground-main"}>
-        <div className="playground-terminal">
-          <AgentBootstrap />
-        </div>
-        <PreviewPanel />
+      <div className="playground-main">
+        <SplitPane
+          left={
+            <div className="playground-terminal">
+              <AgentBootstrap />
+            </div>
+          }
+          right={<PreviewPanel />}
+          visible={panelOpen}
+        />
       </div>
     </div>
   );

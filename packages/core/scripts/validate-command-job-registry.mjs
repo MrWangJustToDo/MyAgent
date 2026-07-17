@@ -66,7 +66,9 @@ assert.equal(result.running, false);
 // ---------------------------------------------------------------------------
 let killCalled = false;
 const killable = registry.create("sleep 10");
-registry.setKill(killable.id, async () => { killCalled = true; });
+registry.setKill(killable.id, async () => {
+  killCalled = true;
+});
 const killed = await registry.kill(killable.id);
 assert.equal(killed, true);
 assert.equal(killCalled, true);
@@ -83,7 +85,7 @@ assert.equal(registry.poll("nonexistent"), null);
 // ---------------------------------------------------------------------------
 registry.appendStdout(job.id, "after exit\n");
 result = registry.poll(job.id);
-assert.equal(result.stdout, "");  // no data — we stopped appending when exited
+assert.equal(result.stdout, ""); // no data — we stopped appending when exited
 
 // ---------------------------------------------------------------------------
 // 8. destroyAll kills all and clears
