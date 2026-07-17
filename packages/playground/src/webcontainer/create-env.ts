@@ -9,7 +9,7 @@ import { execWebContainerCommand, runWebContainerCommand, startWebContainerComma
 import type { CoreEnv } from "@my-agent/core";
 import type { FileSystemTree } from "@webcontainer/api";
 
-const ROOT_PATH = "/";
+const ROOT_PATH = "/home/workspace";
 
 let bootPromise: Promise<CoreEnv> | null = null;
 let bootedWebContainer: WebContainer | null = null;
@@ -33,7 +33,7 @@ this filesystem and shell are the only project the tools can see.
 
 | Fact | Value |
 |------|--------|
-| Root / cwd | \`/\` — file tools and \`run_command\` share this project workdir |
+| Root / cwd | \`/home/workspace\` — file tools and \`run_command\` share this project workdir |
 | Platform | Linux x64 (emulated in-browser) |
 | Home | \`/home\` (user home; **not** the project root — do not \`cd /home\` for app files) |
 | Shell | \`jsh\` via \`run_command\` / \`exec\` (starts in the project workdir, same as file tools) |
@@ -42,11 +42,11 @@ this filesystem and shell are the only project the tools can see.
 
 There is **no** separate remote CoreEnv server and **no** OS sandbox toggle: isolation is the browser + WebContainer.
 
-**Workspace vs \`/home\`:** WebContainer also has a Linux-like tree (\`/bin\`, \`/home\`, …). Agent file tools and shell cwd use the **mounted project workdir** (exposed as \`/\` to tools). Listing Linux \`/home\` without entering the project folder will not show files you just wrote.
+**Why \`/home/workspace\`?** WebContainer mounts your project at \`/home/workspace\` inside a real Linux tree (\`/bin\`, \`/home\`, …). Both file tools and shell commands use this same path — an absolute path like \`/home/workspace/src/index.js\` works identically in \`write_file\` and \`run_command\`. Do **not** use bare \`/\` as a project path; that is the Linux filesystem root.
 
 ## What works well
 
-- Edit files with \`read_file\` / \`write_file\` / \`edit_file\`; explore with \`tree\` / \`glob\` / \`grep\`.
+- Edit files with \`read_file\` / \`write_file\` / \`edit_file\`; explore with \`tree\` / \`glob\` / \`grep\`.  All paths are relative to \`/home/workspace\` (or absolute under it).
 - Install and run Node projects: \`npm install\`, \`npm run …\`, \`node …\`.
 - Use \`run_command\` for shell work (build, test, scripts). Prefer npm scripts over ad-hoc global tools that are not installed.
 - For **long-lived servers** (e.g. \`npm run dev\`, static file servers), set \`run_in_background: true\` on \`run_command\`. Then use \`get_command_output\` to poll logs/status and \`kill_command\` when done. Do **not** block the turn waiting for a forever-running process.
@@ -67,7 +67,7 @@ There is **no** separate remote CoreEnv server and **no** OS sandbox toggle: iso
 
 ## Guidance
 
-- Treat \`/\` as the project root; keep new work under clear paths (e.g. \`src/\`, \`package.json\`).
+- Use full paths under \`/home/workspace\` (e.g. \`/home/workspace/src/index.js\`) or paths relative to the project root (e.g. \`src/index.js\`).  Avoid starting paths with bare \`/\` — that refers to the Linux filesystem root, not the project.
 - After changing dependencies or entrypoints, verify with a command before declaring done.
 - Be explicit when a failure is environment-related (CORS, missing binary, ephemeral FS) vs. a code bug.
 
@@ -164,7 +164,7 @@ export async function createWebContainerEnv(options: CreateWebContainerEnvOption
     getArch: async () => "x64",
     getEnv: async () => ({
       HOME: "/home",
-      PWD: ROOT_PATH,
+      PWD: ROOT_PATH, // "/home/workspace"
       PATH: "/usr/local/bin:/usr/bin:/bin",
       TERM: "xterm-256color",
     }),

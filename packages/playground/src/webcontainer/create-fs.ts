@@ -1,6 +1,6 @@
 import { FileError } from "@my-agent/core";
 
-import { resolveWorkspacePath } from "./workspace-path.js";
+import { resolveWorkspacePath, toWorkdirPath } from "./workspace-path.js";
 
 import type { CoreEnvFs } from "@my-agent/core";
 import type { FileSystemAPI, WebContainer } from "@webcontainer/api";
@@ -33,9 +33,12 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string): CoreEn
     }
   };
 
+  // Convert workspace-resolved path → workdir-relative path for wc.fs
+  const wd = (resolvedPath: string): string => toWorkdirPath(rootPath, resolvedPath);
+
   return {
     readFile: async (filePath) => {
-      const fullPath = resolve(filePath);
+      const fullPath = wd(resolve(filePath));
       try {
         return await fs.readFile(fullPath, "utf-8");
       } catch (err) {
@@ -44,7 +47,7 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string): CoreEn
     },
 
     readFileBuffer: async (filePath) => {
-      const fullPath = resolve(filePath);
+      const fullPath = wd(resolve(filePath));
       try {
         return await fs.readFile(fullPath);
       } catch (err) {
@@ -53,7 +56,7 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string): CoreEn
     },
 
     stat: async (filePath) => {
-      const fullPath = resolve(filePath);
+      const fullPath = wd(resolve(filePath));
       try {
         // WebContainer has no direct stat — probe via readdir parent / read
         const parent = fullPath === "/" ? "/" : fullPath.slice(0, fullPath.lastIndexOf("/")) || "/";
@@ -78,7 +81,7 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string): CoreEn
     },
 
     readdir: async (dirPath) => {
-      const fullPath = resolve(dirPath);
+      const fullPath = wd(resolve(dirPath));
       try {
         const entries = await fs.readdir(fullPath, { withFileTypes: true });
         return entries.map((entry) => ({
@@ -91,7 +94,7 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string): CoreEn
     },
 
     writeFile: async (filePath, content) => {
-      const fullPath = resolve(filePath);
+      const fullPath = wd(resolve(filePath));
       try {
         const parent = fullPath.slice(0, fullPath.lastIndexOf("/")) || "/";
         if (parent !== "/") {
@@ -104,7 +107,7 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string): CoreEn
     },
 
     mkdir: async (dirPath) => {
-      const fullPath = resolve(dirPath);
+      const fullPath = wd(resolve(dirPath));
       try {
         await fs.mkdir(fullPath, { recursive: true });
       } catch (err) {
@@ -113,7 +116,7 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string): CoreEn
     },
 
     exists: async (filePath) => {
-      const fullPath = resolve(filePath);
+      const fullPath = wd(resolve(filePath));
       try {
         if (fullPath === "/") return true;
         const parent = fullPath.slice(0, fullPath.lastIndexOf("/")) || "/";
@@ -126,7 +129,7 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string): CoreEn
     },
 
     remove: async (filePath) => {
-      const fullPath = resolve(filePath);
+      const fullPath = wd(resolve(filePath));
       try {
         await fs.rm(fullPath, { recursive: true, force: true });
       } catch (err) {
@@ -135,7 +138,7 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string): CoreEn
     },
 
     appendFile: async (filePath, content) => {
-      const fullPath = resolve(filePath);
+      const fullPath = wd(resolve(filePath));
       try {
         let existing = "";
         try {
