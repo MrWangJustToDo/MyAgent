@@ -2,8 +2,10 @@ import { splitStreamingLines } from "./streaming-output-lines.js";
 
 import type {
   EditFileOutput,
+  GetCommandOutput,
   GlobOutput,
   GrepOutput,
+  KillCommandOutput,
   ListFileOutput,
   ReadFileOutput,
   RunCommandOutput,
@@ -68,6 +70,10 @@ function truncateLine(line: string, maxWidth: number = MAX_LINE_WIDTH): string {
 }
 
 function formatRunCommandOutput(output: RunCommandOutput): string {
+  if (output.runInBackground && output.jobId) {
+    return `Background job ${output.jobId} (${output.status ?? "running"}): ${output.command}`;
+  }
+
   const { stdout, stderr, exitCode, success } = output;
   const lines: string[] = [];
 
@@ -98,6 +104,28 @@ function formatRunCommandOutput(output: RunCommandOutput): string {
   }
 
   return lines.join("\n");
+}
+
+function formatGetCommandOutput(output: GetCommandOutput): string {
+  const lines = [`job ${output.jobId}: ${output.status}`];
+  if (output.exitCode != null) lines.push(`exit ${output.exitCode}`);
+  if (output.stderr?.trim()) {
+    const stderrLines = splitStreamingLines(output.stderr.trim()).slice(-3);
+    lines.push(...stderrLines.map((line) => `stderr: ${truncateLine(line)}`));
+  }
+  if (output.stdout?.trim()) {
+    const stdoutLines = splitStreamingLines(output.stdout.trim()).slice(-3);
+    lines.push(...stdoutLines.map((line) => truncateLine(line)));
+  } else if (!output.stderr?.trim()) {
+    lines.push(output.running ? "(no new output)" : "(no output)");
+  }
+  return lines.join("\n");
+}
+
+function formatKillCommandOutput(output: KillCommandOutput): string {
+  return output.killed
+    ? `Killed job ${output.jobId} (${output.status})`
+    : `Job ${output.jobId} not running (${output.status})`;
 }
 
 function formatReadFileOutput(output: ReadFileOutput): string {
@@ -210,6 +238,10 @@ export function formatToolOutput(output: unknown, toolName?: string): string {
         return formatListFileOutput(out as unknown as ListFileOutput);
       case "run_command":
         return formatRunCommandOutput(out as unknown as RunCommandOutput);
+      case "get_command_output":
+        return formatGetCommandOutput(out as unknown as GetCommandOutput);
+      case "kill_command":
+        return formatKillCommandOutput(out as unknown as KillCommandOutput);
       case "read_file":
         return formatReadFileOutput(out as unknown as ReadFileOutput);
       case "write_file":

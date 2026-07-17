@@ -33,7 +33,7 @@ File tools and `run_command` share the WebContainer **project workdir** (tools s
 
 When a process inside the WebContainer **listens on a TCP port**, the host UI opens a **Preview** side panel (iframe) using the URL from WebContainer `port` / `server-ready` events. Multiple ports appear as tabs; collapse/reopen with the **Preview** toggle. Refresh / Open / Copy act on the active preview URL.
 
-Long-running `npm run dev` may keep the agent’s `run_command` tool busy until abort — preview still works while the server is up.
+For long-running processes (`npm run dev`, static servers), set `run_command(run_in_background: true)` so the agent continues without blocking. Poll logs with `get_command_output` and stop with `kill_command`. Preview still auto-opens via port events.
 
 ### Export workspace
 

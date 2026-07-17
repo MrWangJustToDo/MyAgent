@@ -115,8 +115,10 @@ export {
 
 export type {
   EditFileOutput,
+  GetCommandOutput,
   GlobOutput,
   GrepOutput,
+  KillCommandOutput,
   ListFileOutput,
   RunCommandOutput,
   TodoOutput,
@@ -130,13 +132,22 @@ export type { TaskOutput } from "./agent/tools/task-tool.js";
 // ============================================================================
 
 export { FileError, ExecutionError } from "./environment";
-export type { FileEntry, FileStat, CommandResult, RunCommandOptions } from "./environment";
+export type {
+  FileEntry,
+  FileStat,
+  CommandResult,
+  RunCommandOptions,
+  CommandJobStatus,
+  StartCommandOptions,
+  StartCommandHandle,
+} from "./environment";
 
 // ============================================================================
 // Shared utilities
 // ============================================================================
 
 export { generateId, generateShortId, createSequentialIdGenerator } from "./agent/utils.js";
+export { destroyAllCommandJobs } from "./agent/tools/util/command-job-registry.js";
 export { formatAgentStreamError } from "./agent/utils/assert-async-iterable.js";
 export {
   hasDeferredToolExecution,

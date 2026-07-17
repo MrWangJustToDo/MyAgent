@@ -52,9 +52,40 @@ export const runCommandOutputSchema = z.object({
   command: z.string().describe("The command that was executed."),
   stdout: z.string().describe("Standard output from the command."),
   stderr: z.string().describe("Standard error output from the command."),
-  exitCode: z.number().describe("Exit code of the command (0 = success)."),
-  durationMs: z.number().describe("Execution duration in milliseconds."),
-  success: z.boolean().describe("Whether the command succeeded (exit code 0)."),
+  exitCode: z
+    .number()
+    .describe("Exit code of the command (0 = success). Use -1 while a background job is still running."),
+  durationMs: z.number().describe("Execution duration in milliseconds (0 for a just-started background job)."),
+  success: z
+    .boolean()
+    .describe(
+      "Whether the command succeeded (exit code 0). Background starts report success=true when spawn succeeds."
+    ),
+  /** Present when the command was started with run_in_background. */
+  jobId: z.string().optional().describe("Background job id — use get_command_output / kill_command."),
+  /** Present for background starts; typically "running". */
+  status: z
+    .enum(["running", "exited", "killed", "failed"])
+    .optional()
+    .describe("Background job status when run_in_background was used."),
+  runInBackground: z.boolean().optional().describe("True when the command was started in the background."),
+  ...toolOutputBaseSchema.shape,
+});
+
+export const getCommandOutputSchema = z.object({
+  jobId: z.string().describe("Background job id."),
+  status: z.enum(["running", "exited", "killed", "failed"]).describe("Current job status."),
+  stdout: z.string().describe("Stdout produced since the last poll (incremental)."),
+  stderr: z.string().describe("Stderr produced since the last poll (incremental)."),
+  exitCode: z.number().nullable().describe("Exit code when finished; null while running."),
+  running: z.boolean().describe("Whether the job is still running."),
+  ...toolOutputBaseSchema.shape,
+});
+
+export const killCommandOutputSchema = z.object({
+  jobId: z.string().describe("Background job id that was killed."),
+  status: z.enum(["running", "exited", "killed", "failed"]).describe("Status after kill attempt."),
+  killed: z.boolean().describe("Whether the job was found and kill was attempted."),
   ...toolOutputBaseSchema.shape,
 });
 
@@ -154,6 +185,8 @@ export const todoOutputSchema = z.object({
 
 export type ListFileOutput = z.infer<typeof listFileOutputSchema>;
 export type RunCommandOutput = z.infer<typeof runCommandOutputSchema>;
+export type GetCommandOutput = z.infer<typeof getCommandOutputSchema>;
+export type KillCommandOutput = z.infer<typeof killCommandOutputSchema>;
 // Note: ReadFileOutput is now exported from read-file-tool.ts
 export type WriteFileOutput = z.infer<typeof writeFileOutputSchema>;
 export type EditFileOutput = z.infer<typeof editFileOutputSchema>;

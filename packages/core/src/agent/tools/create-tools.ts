@@ -1,8 +1,10 @@
 import { createCopyFileTool } from "./copy-file-tool.js";
 import { createDeleteFileTool } from "./delete-file-tool.js";
 import { createEditFileTool } from "./edit-file-tool.js";
+import { createGetCommandOutputTool } from "./get-command-output-tool.js";
 import { createGlobTool } from "./glob-tool.js";
 import { createGrepTool } from "./grep-tool.js";
+import { createKillCommandTool } from "./kill-command-tool.js";
 import { createListFileTool } from "./list-file-tool.js";
 import { createMoveFileTool } from "./move-file-tool.js";
 import { createReadFileTool } from "./read-file-tool.js";
@@ -31,6 +33,8 @@ export type Tools = ToolsRecord & {
   grep: ReturnType<typeof createGrepTool>;
   tree: ReturnType<typeof createTreeTool>;
   run_command: ReturnType<typeof createRunCommandTool>;
+  get_command_output: ReturnType<typeof createGetCommandOutputTool>;
+  kill_command: ReturnType<typeof createKillCommandTool>;
 
   todo?: ReturnType<typeof createTodoTool>;
   task?: ReturnType<typeof createTaskTool>;
@@ -60,6 +64,8 @@ export const createTools = async ({
     grep: createGrepTool(),
     tree: createTreeTool(),
     run_command: createRunCommandTool(),
+    get_command_output: createGetCommandOutputTool(),
+    kill_command: createKillCommandTool(),
   };
 
   await processTools?.(res);

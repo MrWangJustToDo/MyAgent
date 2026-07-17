@@ -35,6 +35,8 @@ const TOOL_BUCKET: Record<string, ToolActivityBucket> = {
   grep: "searches",
   glob: "searches",
   run_command: "commands",
+  get_command_output: "commands",
+  kill_command: "commands",
   task: "tasks",
 };
 

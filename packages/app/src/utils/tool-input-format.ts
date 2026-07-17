@@ -32,7 +32,7 @@ function formatRunCommandInput(input: Record<string, unknown>): string {
   if (input.timeout) {
     res += ` (timeout: ${input.timeout}ms)`;
   }
-  if (input.background) {
+  if (input.run_in_background) {
     res += ` (background: true)`;
   }
   return res;

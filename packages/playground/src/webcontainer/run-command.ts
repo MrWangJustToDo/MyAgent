@@ -2,8 +2,15 @@ import { ExecutionError } from "@my-agent/core";
 
 import { toWebContainerSpawnCwd } from "./workspace-path.js";
 
-import type { CommandResult, CoreEnvExecOptions, CoreEnvExecResult, RunCommandOptions } from "@my-agent/core";
-import type { WebContainer } from "@webcontainer/api";
+import type {
+  CommandResult,
+  CoreEnvExecOptions,
+  CoreEnvExecResult,
+  RunCommandOptions,
+  StartCommandHandle,
+  StartCommandOptions,
+} from "@my-agent/core";
+import type { WebContainer, WebContainerProcess } from "@webcontainer/api";
 
 /** WebContainer / jsh often emits CRLF; keep LF for Ink + consistent tool output. */
 function normalizeNewlines(text: string): string {
@@ -78,6 +85,32 @@ async function collectProcessOutput(
   }
 }
 
+function attachProcessOutput(process: WebContainerProcess, onStdout?: (chunk: string) => void): void {
+  let carry = "";
+  void process.output
+    .pipeTo(
+      new WritableStream<string>({
+        write(chunk) {
+          const combined = carry + chunk;
+          if (combined.endsWith("\r")) {
+            carry = "\r";
+            const body = combined.slice(0, -1);
+            if (body) onStdout?.(normalizeNewlines(body));
+            return;
+          }
+          carry = "";
+          onStdout?.(normalizeNewlines(combined));
+        },
+        close() {
+          if (carry) onStdout?.(normalizeNewlines(carry));
+        },
+      })
+    )
+    .catch(() => {
+      // Process killed or stream aborted — ignore.
+    });
+}
+
 export async function runWebContainerCommand(
   wc: WebContainer,
   rootPath: string,
@@ -105,6 +138,42 @@ export async function runWebContainerCommand(
       durationMs: Date.now() - start,
     };
   }
+}
+
+/**
+ * Start a WebContainer process without awaiting exit.
+ */
+export async function startWebContainerCommand(
+  wc: WebContainer,
+  rootPath: string,
+  command: string,
+  options?: StartCommandOptions
+): Promise<StartCommandHandle> {
+  const cwd = toWebContainerSpawnCwd(rootPath, options?.cwd);
+  const process = await wc.spawn("jsh", ["-c", command], {
+    cwd,
+    env: options?.env,
+  });
+
+  attachProcessOutput(process, options?.onStdout);
+
+  void process.exit
+    .then((code) => {
+      options?.onExit?.(code ?? 1);
+    })
+    .catch(() => {
+      options?.onExit?.(1);
+    });
+
+  return {
+    kill: async () => {
+      try {
+        process.kill();
+      } catch {
+        // already exited
+      }
+    },
+  };
 }
 
 export async function execWebContainerCommand(

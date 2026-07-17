@@ -146,3 +146,35 @@ export interface CommandResult {
   exitCode: number;
   durationMs: number;
 }
+
+/**
+ * Status of a background shell job started via {@link StartCommandOptions}.
+ */
+export type CommandJobStatus = "running" | "exited" | "killed" | "failed";
+
+/**
+ * Options for starting a background command (does not await process exit).
+ * Foreground {@link RunCommandOptions} / `runCommand` remain unchanged.
+ */
+export interface StartCommandOptions {
+  /** Working directory for the command */
+  cwd?: string;
+  /** Environment variables */
+  env?: Record<string, string>;
+  /** Called with stdout chunks as they are produced (streaming). */
+  onStdout?: (chunk: string) => void;
+  /** Called with stderr chunks as they are produced (streaming). */
+  onStderr?: (chunk: string) => void;
+  /** Called once when the process exits (or fails to start after spawn). */
+  onExit?: (exitCode: number | null) => void;
+}
+
+/**
+ * Handle returned by `CoreEnv.startCommand` after the process has been spawned.
+ */
+export interface StartCommandHandle {
+  /** OS / runtime process id when available */
+  pid?: number;
+  /** Best-effort terminate the process (and children when supported). */
+  kill: () => Promise<void>;
+}

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getEnv } from "../../env.js";
 
 import { defineServerTool } from "./tanstack/define-tool.js";
+import { commandJobRegistry } from "./util/command-job-registry.js";
 import { OutputAccumulator } from "./util/output-accumulator.js";
 import { emitStreamingChunk } from "./util/streaming-callback.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
@@ -14,7 +15,9 @@ export const createRunCommandTool = () => {
   return defineServerTool({
     name: "run_command",
     description:
-      "Executes a shell command in the workspace environment. Returns stdout, stderr, exit code, and execution duration. Use this for running build commands, tests, scripts, or any shell operations. Large outputs are saved to disk — use read_file with the cachedOutputPath to read specific sections.",
+      "Executes a shell command in the workspace environment. Returns stdout, stderr, exit code, and execution duration. " +
+      "Set run_in_background=true for long-lived processes (dev servers, watchers); then poll with get_command_output and stop with kill_command. " +
+      "Large outputs are saved to disk — use read_file with the cachedOutputPath to read specific sections.",
     inputSchema: z.object({
       command: z.string().describe("The shell command to execute."),
       cwd: z
@@ -30,11 +33,65 @@ export const createRunCommandTool = () => {
         .int()
         .min(1000)
         .optional()
-        .describe("Timeout in milliseconds. If the command takes longer, it will be terminated."),
+        .describe("Timeout in milliseconds (foreground only). If the command takes longer, it will be terminated."),
+      run_in_background: z
+        .boolean()
+        .optional()
+        .describe(
+          "When true, start the command in the background and return a jobId immediately. " +
+            "Use get_command_output to read output/status and kill_command to stop it. " +
+            "Prefer for long-lived servers (e.g. npm run dev)."
+        ),
     }),
     outputSchema: runCommandOutputSchema,
     needsApproval: true,
-    execute: async ({ command, cwd, env, timeout }, { toolCallId }) => {
+    execute: async ({ command, cwd, env, timeout, run_in_background }, { toolCallId }) => {
+      if (run_in_background) {
+        const coreEnv = getEnv();
+        if (!coreEnv.startCommand) {
+          throw new Error(
+            "Background commands are not supported in this environment. " +
+              "Omit run_in_background or use a local/node or playground CoreEnv that implements startCommand."
+          );
+        }
+
+        const job = commandJobRegistry.create(command);
+
+        try {
+          const handle = await coreEnv.startCommand(command, {
+            cwd,
+            env,
+            onStdout: (chunk) => {
+              commandJobRegistry.appendStdout(job.id, chunk);
+            },
+            onStderr: (chunk) => {
+              commandJobRegistry.appendStderr(job.id, chunk);
+            },
+            onExit: (exitCode) => {
+              commandJobRegistry.markExited(job.id, exitCode);
+            },
+          });
+          commandJobRegistry.setKill(job.id, handle.kill);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          commandJobRegistry.markFailed(job.id, message);
+          throw err;
+        }
+
+        return {
+          command,
+          stdout: "",
+          stderr: "",
+          exitCode: -1,
+          durationMs: 0,
+          success: true,
+          jobId: job.id,
+          status: "running" as const,
+          runInBackground: true,
+          cachedOutputPath: null,
+        };
+      }
+
       const stdoutAccumulator = new OutputAccumulator({
         tempFilePrefix: `${toolCallId}-stdout`,
       });
@@ -50,12 +107,10 @@ export const createRunCommandTool = () => {
         timeout,
         onStdout: (chunk) => {
           stdoutAccumulator.append(encoder.encode(chunk));
-          // Emit streaming chunk for UI updates
           emitStreamingChunk(toolCallId, "stdout", chunk);
         },
         onStderr: (chunk) => {
           stderrAccumulator.append(encoder.encode(chunk));
-          // Emit streaming chunk for UI updates
           emitStreamingChunk(toolCallId, "stderr", chunk);
         },
       });
@@ -66,8 +121,6 @@ export const createRunCommandTool = () => {
       const stdoutSnapshot = stdoutAccumulator.snapshot();
       const stderrSnapshot = stderrAccumulator.snapshot();
 
-      // Use the accumulated content (which may be truncated for display)
-      // The maybeCacheOutput function will handle caching if needed
       const stdoutResult = await maybeCacheOutput(stdoutSnapshot.content, `${toolCallId}-stdout`);
       const stderrResult = await maybeCacheOutput(stderrSnapshot.content, `${toolCallId}-stderr`);
 
@@ -83,9 +136,19 @@ export const createRunCommandTool = () => {
         cachedOutputPath,
       };
     },
-    // Only send command output to the LLM — duration/success/cachedOutputPath
-    // are execution metadata with no value for the model.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: RunCommandOutput }) {
+      if (output.runInBackground && output.jobId) {
+        return [
+          {
+            type: "text" as const,
+            content:
+              `Started background job ${output.jobId} for: ${output.command}\n` +
+              `Status: ${output.status ?? "running"}\n` +
+              `Use get_command_output with jobId="${output.jobId}" to read output/status. ` +
+              `Use kill_command to stop the job when finished.`,
+          },
+        ];
+      }
       return [
         { type: "text" as const, content: `Exit code: ${output.exitCode}` },
         ...(output.stderr?.trim?.() ? [{ type: "text" as const, content: `stderr:\n${output.stderr}` }] : []),

@@ -1,9 +1,10 @@
+import { destroyAllCommandJobs } from "@my-agent/core";
 import { WebContainer } from "@webcontainer/api";
 
 import { createWebContainerFs } from "./create-fs.js";
 import { createProxiedFetch, resolveFetchProxyUrl, setFetchProxyUrl } from "./create-proxy-fetch.js";
 import { mimeFromPath } from "./mime.js";
-import { execWebContainerCommand, runWebContainerCommand } from "./run-command.js";
+import { execWebContainerCommand, runWebContainerCommand, startWebContainerCommand } from "./run-command.js";
 
 import type { CoreEnv } from "@my-agent/core";
 import type { FileSystemTree } from "@webcontainer/api";
@@ -48,6 +49,7 @@ There is **no** separate remote CoreEnv server and **no** OS sandbox toggle: iso
 - Edit files with \`read_file\` / \`write_file\` / \`edit_file\`; explore with \`tree\` / \`glob\` / \`grep\`.
 - Install and run Node projects: \`npm install\`, \`npm run …\`, \`node …\`.
 - Use \`run_command\` for shell work (build, test, scripts). Prefer npm scripts over ad-hoc global tools that are not installed.
+- For **long-lived servers** (e.g. \`npm run dev\`, static file servers), set \`run_in_background: true\` on \`run_command\`. Then use \`get_command_output\` to poll logs/status and \`kill_command\` when done. Do **not** block the turn waiting for a forever-running process.
 
 ## Network and web tools
 
@@ -73,7 +75,7 @@ There is **no** separate remote CoreEnv server and **no** OS sandbox toggle: iso
 
 - When a process **listens on a port**, the playground host opens a **Preview** side panel (iframe) automatically.
 - Bind to \`0.0.0.0\` (or the runtime default) so WebContainer can publish a preview URL — avoid host-only quirks.
-- Long-running servers (e.g. \`npm run dev\`) may keep \`run_command\` busy until the user aborts; that is expected. Preview still works while the server runs.
+- Start long-running servers with \`run_command\` + \`run_in_background: true\`. Preview still opens via port events while the job runs; poll with \`get_command_output\` if you need logs.
 `;
 
 const INITIAL_FILES: FileSystemTree = {
@@ -169,11 +171,13 @@ export async function createWebContainerEnv(options: CreateWebContainerEnvOption
     homedir: async () => "/home",
     fs,
     runCommand: (command, cmdOptions) => runWebContainerCommand(wc, ROOT_PATH, command, cmdOptions),
+    startCommand: (command, cmdOptions) => startWebContainerCommand(wc, ROOT_PATH, command, cmdOptions),
     exec: (command, execOptions) => execWebContainerCommand(wc, ROOT_PATH, command, execOptions),
     // Must be a real server proxy — WebContainer outbound is still CORS-limited.
     fetch: createProxiedFetch(),
     getMimeType: async (filePath) => mimeFromPath(filePath),
     destroy: async () => {
+      await destroyAllCommandJobs();
       // WebContainer API does not expose a stable teardown; drop references.
     },
   };

@@ -10,7 +10,14 @@ import type { UiToolState } from "../utils/tool-part.js";
 import type { TodoItem } from "@my-agent/core";
 import type { ToolCallPart } from "@tanstack/ai";
 
-const DETAILED_OUTPUT_TOOLS = new Set(["run_command", "task", "ask_user", "todo"]);
+const DETAILED_OUTPUT_TOOLS = new Set([
+  "run_command",
+  "get_command_output",
+  "kill_command",
+  "task",
+  "ask_user",
+  "todo",
+]);
 
 export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState: UiToolState }) => {
   if (uiState !== "output-available" && uiState !== "output-error") return null;

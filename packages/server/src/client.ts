@@ -18,6 +18,7 @@ import { hc } from "hono/client";
 
 import type { AppType } from ".";
 import type {
+  CommandJobStatus,
   CommandResult,
   CoreEnv,
   CoreEnvExecResult,
@@ -28,6 +29,8 @@ import type {
   McpProcessHandle,
   McpStdioTransportConfig,
   RunCommandOptions,
+  StartCommandHandle,
+  StartCommandOptions,
 } from "@my-agent/core";
 
 type Client = ReturnType<typeof hc<AppType>>;
@@ -204,6 +207,81 @@ export async function createRemoteCoreEnv(serverUrl: string): Promise<CoreEnv> {
     exec: async (command: string, options?): Promise<CoreEnvExecResult> => {
       const res = await client.command.exec.$post({ json: { command, options } });
       return await unwrap<CoreEnvExecResult>(res);
+    },
+
+    startCommand: async (command: string, options?: StartCommandOptions): Promise<StartCommandHandle> => {
+      const res = await client.command.start.$post({
+        json: { command, options: { cwd: options?.cwd, env: options?.env } },
+      });
+      const { id, pid } = await unwrap<{ id: string; pid?: number }>(res);
+
+      // Background polling loop: fetches incremental output from server
+      // and feeds it to the local callbacks so the in-process JobRegistry
+      // (used by get_command_output / kill_command) stays populated.
+      let pollActive = true;
+      let sinceStdout = 0;
+      let sinceStderr = 0;
+
+      const pollLoop = async () => {
+        while (pollActive) {
+          try {
+            const outRes = await client.command.output.$post({
+              json: { id, sinceStdout, sinceStderr },
+            });
+            const data = await unwrap<{
+              status: CommandJobStatus;
+              stdout: string;
+              stderr: string;
+              exitCode: number | null;
+              running: boolean;
+            }>(outRes);
+
+            if (data.stdout && options?.onStdout) {
+              options.onStdout(data.stdout);
+              sinceStdout += data.stdout.length;
+            }
+            if (data.stderr && options?.onStderr) {
+              options.onStderr(data.stderr);
+              sinceStderr += data.stderr.length;
+            }
+            if (!data.running) {
+              options?.onExit?.(data.exitCode);
+              pollActive = false;
+              break;
+            }
+          } catch {
+            if (pollActive) {
+              try {
+                // Check if job still exists — 404 means already cleaned up
+                const checkRes = await client.command.output.$post({ json: { id, sinceStdout, sinceStderr } });
+                if (!checkRes.ok) {
+                  pollActive = false;
+                  break;
+                }
+              } catch {
+                pollActive = false;
+                break;
+              }
+            }
+            break;
+          }
+
+          if (pollActive) {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
+        }
+      };
+
+      // Fire-and-forget: tool callbacks will be fed as output arrives
+      pollLoop();
+
+      return {
+        pid,
+        kill: async () => {
+          pollActive = false;
+          await fetch(`${baseUrl}/api/command/${id}`, { method: "DELETE" });
+        },
+      };
     },
 
     fetch: async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {

@@ -10,9 +10,9 @@ import {
   ensureOsSandbox,
   wrapOsSandboxCommand,
 } from "./os-sandbox.js";
-import { spawnCommand } from "./shell.js";
+import { spawnCommand, spawnDetachedCommand } from "./shell.js";
 
-import type { RunCommandOptions, CommandResult } from "@my-agent/core";
+import type { RunCommandOptions, CommandResult, StartCommandHandle, StartCommandOptions } from "@my-agent/core";
 
 type ResolvePath = (inputPath: string) => string;
 
@@ -102,4 +102,55 @@ export async function runNativeCommand(
       cleanupOsSandboxAfterCommand();
     }
   }
+}
+
+/**
+ * Start a command in the background (does not await exit).
+ * OS sandbox wrapping matches foreground when enabled.
+ */
+export async function startNativeCommand(
+  rootPath: string,
+  resolvePath: ResolvePath,
+  command: string,
+  options: StartCommandOptions | undefined,
+  useOsSandbox: boolean
+): Promise<StartCommandHandle> {
+  const cwd = options?.cwd ? resolvePath(options.cwd) : rootPath;
+  const mergedEnv = options?.env ? { ...process.env, ...options.env } : process.env;
+
+  let osSandbox = false;
+  if (useOsSandbox) {
+    osSandbox = await ensureOsSandbox(rootPath);
+  }
+
+  let commandToRun = command;
+  let useShellString = false;
+  if (osSandbox) {
+    commandToRun = await wrapOsSandboxCommand(command);
+    useShellString = true;
+  }
+
+  const handle = await spawnDetachedCommand(commandToRun, {
+    cwd,
+    env: mergedEnv as NodeJS.ProcessEnv,
+    useShellString,
+    onStdout: options?.onStdout,
+    onStderr: (chunk) => {
+      const annotated = osSandbox ? annotateOsSandboxStderr(command, chunk) : chunk;
+      options?.onStderr?.(annotated);
+    },
+  });
+
+  void handle.exited
+    .then((code) => {
+      options?.onExit?.(code);
+      if (osSandbox) cleanupOsSandboxAfterCommand();
+    })
+    .catch((err) => {
+      options?.onStderr?.(err instanceof Error ? err.message : String(err));
+      options?.onExit?.(1);
+      if (osSandbox) cleanupOsSandboxAfterCommand();
+    });
+
+  return { pid: handle.pid, kill: handle.kill };
 }

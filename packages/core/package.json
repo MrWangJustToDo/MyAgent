@@ -54,7 +54,8 @@
     "validate:memory-service": "pnpm run build && node scripts/validate-memory-service.mjs",
     "validate:summarization-budget": "pnpm run build && node scripts/validate-summarization-budget.mjs",
     "validate:subagent-bridge-ui": "pnpm run build && node scripts/validate-subagent-bridge-ui.mjs",
-    "validate:mcp-prefer-multimodal": "pnpm run build && node scripts/validate-mcp-prefer-multimodal.mjs"
+    "validate:mcp-prefer-multimodal": "pnpm run build && node scripts/validate-mcp-prefer-multimodal.mjs",
+    "validate:command-job-registry": "pnpm run build && node scripts/validate-command-job-registry.mjs"
   },
   "dependencies": {
     "@tanstack/ai": "^0.40.0",

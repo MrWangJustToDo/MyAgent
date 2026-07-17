@@ -19,9 +19,11 @@ import { exec } from "node:child_process";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { destroyAllCommandJobs } from "@my-agent/core";
+
 import { resolveLocalEnvironmentMode } from "./environment/local.js";
 import { createNativeFilesystem } from "./environment/native-fs.js";
-import { runNativeCommand } from "./environment/native-run.js";
+import { runNativeCommand, startNativeCommand } from "./environment/native-run.js";
 import { resetOsSandbox } from "./environment/os-sandbox.js";
 
 import type { LocalEnvironmentConfig } from "./environment/local.js";
@@ -86,6 +88,8 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
 
     runCommand: (command, cmdOptions) => runNativeCommand(rootPath, resolvePath, command, cmdOptions, useOsSandbox),
 
+    startCommand: (command, cmdOptions) => startNativeCommand(rootPath, resolvePath, command, cmdOptions, useOsSandbox),
+
     exec: (command: string, execOptions?) => {
       return new Promise<CoreEnvExecResult>((resolve) => {
         const child = exec(
@@ -116,6 +120,7 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
     },
 
     destroy: async () => {
+      await destroyAllCommandJobs();
       if (useOsSandbox) {
         await resetOsSandbox();
       }

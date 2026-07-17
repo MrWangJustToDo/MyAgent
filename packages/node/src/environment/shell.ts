@@ -201,6 +201,92 @@ export interface SpawnShellStringOptions extends SpawnOptions {
 }
 
 /**
+ * Spawn a command in the platform shell without awaiting exit.
+ * Used for background jobs (`CoreEnv.startCommand`).
+ */
+export async function spawnDetachedCommand(
+  command: string,
+  options: SpawnShellStringOptions
+): Promise<DetachedSpawnHandle> {
+  const isWindows = platform() === "win32";
+
+  try {
+    await access(options.cwd, constants.F_OK);
+  } catch {
+    throw new Error(`Working directory does not exist: ${options.cwd}`);
+  }
+
+  let child: ChildProcess;
+  if (options.useShellString) {
+    child = spawn(command, {
+      shell: true,
+      cwd: options.cwd,
+      detached: !isWindows,
+      env: options.env ?? getShellEnv(),
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+  } else {
+    const { shell, args } = await getShellConfig(options.shellPath);
+    child = spawn(shell, [...args, command], {
+      cwd: options.cwd,
+      detached: !isWindows,
+      env: options.env ?? getShellEnv(),
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+  }
+
+  if (child.pid) {
+    trackDetachedChildPid(child.pid);
+  }
+
+  child.stdin?.destroy();
+
+  if (options.onStdout && child.stdout) {
+    child.stdout.on("data", (data: Buffer) => {
+      options.onStdout?.(data.toString("utf-8"));
+    });
+  }
+
+  if (options.onStderr && child.stderr) {
+    child.stderr.on("data", (data: Buffer) => {
+      options.onStderr?.(data.toString("utf-8"));
+    });
+  }
+
+  const exited = new Promise<number | null>((resolve, reject) => {
+    child.once("error", (err) => {
+      if (child.pid) untrackDetachedChildPid(child.pid);
+      reject(err);
+    });
+    child.once("close", (code) => {
+      if (child.pid) untrackDetachedChildPid(child.pid);
+      resolve(code);
+    });
+  });
+
+  const kill = async (): Promise<void> => {
+    if (!child.pid) return;
+    await killProcessTree(child.pid, "SIGTERM");
+    setTimeout(() => {
+      if (child.pid) {
+        void killProcessTree(child.pid, "SIGKILL");
+      }
+    }, 5000);
+  };
+
+  return { pid: child.pid ?? undefined, kill, exited };
+}
+
+export interface DetachedSpawnHandle {
+  pid?: number;
+  kill: () => Promise<void>;
+  /** Resolves with exit code when the process closes; rejects on spawn error. */
+  exited: Promise<number | null>;
+}
+
+/**
  * Spawn a command in the platform shell with proper process tree management.
  *
  * Features:

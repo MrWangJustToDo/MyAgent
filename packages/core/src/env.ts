@@ -16,7 +16,15 @@
 
 import * as pathe from "pathe";
 
-import type { CommandResult, FileEntry, RunCommandOptions } from "./environment/types.js";
+import { commandJobRegistry } from "./agent/tools/util/command-job-registry.js";
+
+import type {
+  CommandResult,
+  FileEntry,
+  RunCommandOptions,
+  StartCommandHandle,
+  StartCommandOptions,
+} from "./environment/types.js";
 
 // ============================================================================
 // Path Utilities (synchronous — pure computation, no I/O)
@@ -194,10 +202,18 @@ export interface CoreEnv {
   fs: CoreEnvFs;
 
   /**
-   * Execute a shell command in the workspace.
+   * Execute a shell command in the workspace (foreground — awaits exit).
    * Normal non-zero exit codes are returned in {@link CommandResult} without throwing.
    */
   runCommand(command: string, options?: RunCommandOptions): Promise<CommandResult>;
+
+  /**
+   * Start a shell command in the background without awaiting exit.
+   * Optional — hosts that do not support background jobs omit this; tools feature-detect.
+   * Stream callbacks and {@link StartCommandHandle.kill} are provided by the adapter;
+   * job id / buffers live in the core JobRegistry used by tools.
+   */
+  startCommand?(command: string, options?: StartCommandOptions): Promise<StartCommandHandle>;
 
   /** Execute a simple shell command — used by hook system */
   exec(command: string, options?: CoreEnvExecOptions): Promise<CoreEnvExecResult>;
@@ -262,8 +278,10 @@ export function registerCoreEnv(env: CoreEnv): void {
 /**
  * Clear the registered CoreEnv, preventing stale references after disconnect.
  * After calling this, {@link getEnv} will throw until a new env is registered.
+ * Also best-effort kills any background command jobs.
  */
 export function clearCoreEnv(): void {
+  void commandJobRegistry.destroyAll();
   _env = null;
 }
 

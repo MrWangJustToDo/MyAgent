@@ -6,4 +6,12 @@
 
 export { FileError, ExecutionError } from "./types.js";
 
-export type { FileEntry, FileStat, CommandResult, RunCommandOptions } from "./types.js";
+export type {
+  FileEntry,
+  FileStat,
+  CommandResult,
+  RunCommandOptions,
+  CommandJobStatus,
+  StartCommandOptions,
+  StartCommandHandle,
+} from "./types.js";

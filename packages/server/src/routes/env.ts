@@ -1,6 +1,8 @@
 import { getEnv } from "@my-agent/core";
 import { Hono } from "hono";
 
+import { destroyAllServerJobs } from "./command.js";
+
 const SENSITIVE_EXACT = new Set([
   "AWS_SECRET_ACCESS_KEY",
   "AWS_SESSION_TOKEN",
@@ -35,6 +37,7 @@ export const envRoutes = new Hono()
     return c.json(filterSensitiveVars(vars));
   })
   .post("/destroy", async (c) => {
+    destroyAllServerJobs();
     const env = getEnv();
     if (env.destroy) {
       await env.destroy();

@@ -114,6 +114,9 @@ export function getCompactOutput(part: ToolCallPart, toolName: string): string |
   // run_command: derive a compact summary from exit code / success.
   // Previously this read output.message; now we generate it from structured fields.
   if (toolName === "run_command") {
+    if (output.runInBackground && output.jobId) {
+      return `Background job ${String(output.jobId)} started`;
+    }
     const success = output.success as boolean | undefined;
     const exitCode = output.exitCode as number | undefined;
     const durationMs = output.durationMs as number | undefined;
