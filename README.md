@@ -160,6 +160,13 @@ Built with [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools
 ![Devtools debug 1](devtools-debug-1.png)
 ![Devtools debug 2](devtools-debug-2.png)
 
+### Playground
+
+Check the link https://mrwangjusttodo.github.io/MyAgent/, you can create your own site
+![Playground start](playground-start.png)
+![Playground end](playground-end.png)
+![Playground devtool](playground-devtool.png)
+
 ---
 
 ## Quick Start
