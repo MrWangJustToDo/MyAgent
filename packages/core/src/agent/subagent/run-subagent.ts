@@ -121,7 +121,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     throw new Error(`Subagent not found: ${subagentId}`);
   }
 
-  subagentManaged.tools = customTools !== undefined ? customTools : createSubagentTools(subagentManaged.usage);
+  subagentManaged.tools = customTools !== undefined ? customTools : createSubagentTools(subagentManaged);
   subagentManaged.runner = undefined;
   subagentManaged.tanstackTools = undefined;
 

@@ -6,28 +6,21 @@ import { SUBAGENT_DEFAULT_MAX_ITERATIONS } from "./types.js";
 
 /** Build the default system prompt for task exploration subagents. */
 export function buildExploreSystemPrompt(maxIterations: number = SUBAGENT_DEFAULT_MAX_ITERATIONS): string {
-  return `You are a subagent with READ-ONLY access to the codebase.
+  return `You are a read-only subagent tasked with exploring and gathering information.
 
-Your role:
-- Complete the delegated task thoroughly
-- Use available tools to explore and gather information
+**Available Tools**:
+1. **File Exploration** — read_file, glob, grep, list_file, tree to navigate and examine the codebase.
+2. **Web Research** — websearch to find current information, webfetch to retrieve documentation from URLs.
+3. **Reporting** — begin_summary to signal completion and provide your final output.
 
-Constraints:
-- You have read-only tools only (read_file, glob, grep, list_file, tree)
-- You cannot modify files or create new files
-- You cannot spawn additional subagents
-- Focus on answering the specific question or completing the specific task
-- Work efficiently — stop exploring as soon as you have enough information to answer
-- You may use up to ${maxIterations} steps as a safety cap, but you should finish as soon as the task is done
+**Constraints**:
+- You have read-only access — no modifications, no command execution, no subagents.
+- Use up to ${maxIterations} steps as a safety cap, but finish as soon as the task is complete.
 
-Workflow:
-1. Exploration phase — use read-only tools to investigate. Do not write your final answer yet.
-2. When analysis is complete, call the \`begin_summary\` tool exactly once.
-3. Summary phase — after \`begin_summary\`, write your complete final answer as plain text.
-   Do not call exploration tools after \`begin_summary\`.
-
-IMPORTANT: Only your final text response (after \`begin_summary\`) is returned to the parent agent.
-Never end on a tool call other than \`begin_summary\` followed by your summary text.`;
+**Guidelines**:
+- Explore thoroughly but efficiently — stop once you have enough information to answer.
+- Call \`begin_summary\` exactly once when analysis is complete, then write your final answer.
+- Only your summary (text after \`begin_summary\`) is returned to the calling agent.`;
 }
 
 /** Default system prompt (with default max iterations). */

@@ -3,6 +3,7 @@ import { createTools } from "../create-tools.js";
 
 import { toolsToArray, type ToolsRecord } from "./tools-record.js";
 
+import type { ManagedAgent } from "../../../managers/managed-agent.js";
 import type { UsageTracker } from "../../../managers/usage-tracker.js";
 import type { AgentContext } from "../../agent-context/agent-context.js";
 import type { ClientTool, ServerTool } from "@tanstack/ai";
@@ -25,8 +26,6 @@ export const SUBAGENT_EXCLUDED_TOOL_NAMES = new Set([
   "task",
   "todo",
   "ask_user",
-  "webfetch",
-  "websearch",
   "list_skills",
   "load_skill",
 ]);
@@ -50,8 +49,8 @@ export function resolveToolsRecord(
 /**
  * Read-only exploration subagent tools as {@link ServerTool}[].
  */
-export function createTanStackSubagentTools(usage?: UsageTracker): ServerTool[] {
-  const toolRecord = createSubagentTools(usage);
+export function createTanStackSubagentTools(managed?: ManagedAgent): ServerTool[] {
+  const toolRecord = createSubagentTools(managed ?? ({} as ManagedAgent));
   return toolsToArray(toolRecord, { exclude: SUBAGENT_EXCLUDED_TOOL_NAMES }) as ServerTool[];
 }
 
