@@ -28,10 +28,10 @@ importers:
         version: link:packages/server
       eslint:
         specifier: ^9
-        version: 9.39.4(jiti@2.7.0)
+        version: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       eslint-import-resolver-typescript:
         specifier: ^4.4.4
-        version: 4.4.5(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+        version: 4.4.5(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2))(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)
       prettier:
         specifier: ^3.8.3
         version: 3.8.4
@@ -40,7 +40,7 @@ importers:
         version: 0.7.4(prettier@3.8.4)
       project-tool:
         specifier: https://github.com/MrWangJustToDo/project-tool.git
-        version: https://codeload.github.com/MrWangJustToDo/project-tool/tar.gz/64550787384b6d7be1da7e3376e5167e85a1c498(jiti@2.7.0)(typescript@5.9.3)
+        version: https://codeload.github.com/MrWangJustToDo/project-tool/tar.gz/64550787384b6d7be1da7e3376e5167e85a1c498(debug@4.4.3(supports-color@10.2.2))(jiti@2.7.0)(supports-color@10.2.2)(typescript@5.9.3)
       react:
         specifier: ^19
         version: 19.2.7
@@ -52,7 +52,7 @@ importers:
     dependencies:
       '@git-diff-view/cli':
         specifier: ^0.1.10
-        version: 0.1.10(@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.28)
+        version: 0.1.10(@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.29)
       '@git-diff-view/core':
         specifier: ^0.1.7
         version: 0.1.7
@@ -66,11 +66,11 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@my-react/react':
-        specifier: ^0.3.28
-        version: 0.3.28(@my-react/react@0.3.28)
+        specifier: ^0.3.29
+        version: 0.3.29(@my-react/react@0.3.29)
       '@my-react/react-terminal':
-        specifier: ^0.0.28
-        version: 0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)
+        specifier: ^0.0.29
+        version: 0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)
       '@tanstack/ai':
         specifier: ^0.40.0
         version: 0.40.0(@opentelemetry/api@1.9.1)
@@ -82,25 +82,25 @@ importers:
         version: 5.6.2
       ink-gradient:
         specifier: ^4.0.0
-        version: 4.0.1(@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.28)
+        version: 4.0.1(@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.29)
       ink-link:
         specifier: ^5.0.0
-        version: 5.0.0(@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))
+        version: 5.0.0(@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))
       ink-select-input:
         specifier: ^6.2.0
-        version: 6.2.0(@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.28)
+        version: 6.2.0(@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.29)
       ink-stream-markdown:
         specifier: ^0.0.8
-        version: 0.0.8(@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.28)
+        version: 0.0.8(@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.29)
       ink-tab:
         specifier: ^5.2.0
-        version: 5.2.0(@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.28)(@types/react@19.2.17)
+        version: 5.2.0(@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.29)(@types/react@19.2.17)
       lodash-es:
         specifier: ^4.17.23
         version: 4.18.1
       reactivity-store:
         specifier: ^0.4.0
-        version: 0.4.0(@my-react/react@0.3.28)
+        version: 0.4.0(@my-react/react@0.3.29)
     devDependencies:
       '@types/lodash-es':
         specifier: ^4.17.12
@@ -112,14 +112,14 @@ importers:
         specifier: ^19.2.14
         version: 19.2.17
       ink:
-        specifier: npm:@my-react/react-terminal@0.0.28
-        version: '@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
+        specifier: npm:@my-react/react-terminal@0.0.29
+        version: '@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
       react:
-        specifier: npm:@my-react/react@0.3.28
-        version: '@my-react/react@0.3.28(@my-react/react@0.3.28)'
+        specifier: npm:@my-react/react@0.3.29
+        version: '@my-react/react@0.3.29(@my-react/react@0.3.29)'
       socket.io-client:
         specifier: ^4.8.3
-        version: 4.8.3
+        version: 4.8.3(supports-color@10.2.2)
       tsdown:
         specifier: ^0.21.10
         version: 0.21.10(synckit@0.11.13)(typescript@5.9.3)
@@ -145,11 +145,11 @@ importers:
         specifier: workspace:*
         version: link:../server
       '@my-react/react':
-        specifier: ^0.3.28
-        version: 0.3.28(@my-react/react@0.3.28)
+        specifier: ^0.3.29
+        version: 0.3.29(@my-react/react@0.3.29)
       '@my-react/react-terminal':
-        specifier: ^0.0.28
-        version: 0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)
+        specifier: ^0.0.29
+        version: 0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)
       ai:
         specifier: ^7.0.4
         version: 7.0.4(zod@4.4.3)
@@ -158,7 +158,7 @@ importers:
         version: 17.4.2
       reactivity-store:
         specifier: ^0.4.0
-        version: 0.4.0(@my-react/react@0.3.28)
+        version: 0.4.0(@my-react/react@0.3.29)
     devDependencies:
       '@types/node':
         specifier: ^22.15.33
@@ -167,11 +167,11 @@ importers:
         specifier: ^19.2.14
         version: 19.2.17
       ink:
-        specifier: npm:@my-react/react-terminal@0.0.28
-        version: '@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
+        specifier: npm:@my-react/react-terminal@0.0.29
+        version: '@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
       react:
-        specifier: npm:@my-react/react@0.3.28
-        version: '@my-react/react@0.3.28(@my-react/react@0.3.28)'
+        specifier: npm:@my-react/react@0.3.29
+        version: '@my-react/react@0.3.29(@my-react/react@0.3.29)'
       tsdown:
         specifier: ^0.21.10
         version: 0.21.10(synckit@0.11.13)(typescript@5.9.3)
@@ -192,7 +192,7 @@ importers:
         version: 0.20.0(@opentelemetry/api@1.9.1)
       '@tanstack/ai-mcp':
         specifier: ^0.2.3
-        version: 0.2.3(@opentelemetry/api@1.9.1)(zod@4.4.3)
+        version: 0.2.3(@opentelemetry/api@1.9.1)(supports-color@10.2.2)(zod@4.4.3)
       '@tanstack/ai-openai':
         specifier: ^0.16.0
         version: 0.16.0(@tanstack/ai@0.40.0(@opentelemetry/api@1.9.1))(ws@8.21.0)(zod@4.4.3)
@@ -240,14 +240,14 @@ importers:
         specifier: workspace:*
         version: link:../server
       '@my-react/react':
-        specifier: ^0.3.28
-        version: 0.3.28(react@19.2.7)
+        specifier: ^0.3.29
+        version: 0.3.29(react@19.2.7)
       '@my-react/react-dom':
-        specifier: ^0.3.28
-        version: 0.3.28(@my-react/react@0.3.28(react@19.2.7))(react-dom@19.2.7(react@19.2.7))
+        specifier: ^0.3.29
+        version: 0.3.29(@my-react/react@0.3.29(react@19.2.7))(react-dom@19.2.7(react@19.2.7))
       '@my-react/react-terminal':
-        specifier: ^0.0.28
-        version: 0.0.28(@my-react/react@0.3.28(react@19.2.7))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)
+        specifier: ^0.0.29
+        version: 0.0.29(@my-react/react@0.3.29(react@19.2.7))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)
       ai:
         specifier: ^7.0.4
         version: 7.0.4(zod@4.4.3)
@@ -262,11 +262,11 @@ importers:
         version: 0.4.0(react@19.2.7)
     devDependencies:
       '@my-react/react-refresh':
-        specifier: ^0.3.28
-        version: 0.3.28(@my-react/react@0.3.28(react@19.2.7))
+        specifier: ^0.3.29
+        version: 0.3.29(@my-react/react@0.3.29(react@19.2.7))
       '@my-react/react-vite':
-        specifier: ^0.0.34
-        version: 0.0.34(@my-react/react-refresh@0.3.28(@my-react/react@0.3.28(react@19.2.7)))(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+        specifier: ^0.0.35
+        version: 0.0.35(@my-react/react-refresh@0.3.29(@my-react/react@0.3.29(react@19.2.7)))(supports-color@10.2.2)(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
       '@tailwindcss/postcss':
         specifier: ^4.2.4
         version: 4.3.1
@@ -281,7 +281,7 @@ importers:
         version: 19.2.3(@types/react@19.2.17)
       '@wxt-dev/module-react':
         specifier: ^1.2.2
-        version: 1.2.2(wxt@0.20.26(@types/node@22.19.21)(eslint@9.39.4(jiti@2.7.0))(jiti@2.7.0)(rolldown@1.0.3)(rollup@4.62.2)(terser@5.48.0)(yaml@2.9.0))
+        version: 1.2.2(wxt@0.20.26(@types/node@22.19.21)(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(jiti@2.7.0)(rolldown@1.0.3)(rollup@4.62.2)(supports-color@10.2.2)(terser@5.48.0)(yaml@2.9.0))
       '@xterm/addon-fit':
         specifier: 0.11.0
         version: 0.11.0
@@ -299,13 +299,13 @@ importers:
         version: 5.9.3
       wxt:
         specifier: ^0.20.25
-        version: 0.20.26(@types/node@22.19.21)(eslint@9.39.4(jiti@2.7.0))(jiti@2.7.0)(rolldown@1.0.3)(rollup@4.62.2)(terser@5.48.0)(yaml@2.9.0)
+        version: 0.20.26(@types/node@22.19.21)(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(jiti@2.7.0)(rolldown@1.0.3)(rollup@4.62.2)(supports-color@10.2.2)(terser@5.48.0)(yaml@2.9.0)
 
   packages/mcp-server:
     dependencies:
       '@cyanheads/mcp-ts-core':
         specifier: ^0.9.21
-        version: 0.9.21(hono-rate-limiter@0.5.3(hono@4.12.26))(js-yaml@4.2.0)(linkedom@0.18.12)(openai@6.45.0(ws@8.21.0)(zod@4.4.3))(partial-json@0.1.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)
+        version: 0.9.21(hono-rate-limiter@0.5.3(hono@4.12.26))(js-yaml@4.2.0)(linkedom@0.18.12)(openai@6.45.0(ws@8.21.0)(zod@4.4.3))(partial-json@0.1.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(supports-color@10.2.2)(zod@4.4.3)
       screenshot-desktop:
         specifier: ^1.15.4
         version: 1.15.4
@@ -336,7 +336,7 @@ importers:
         version: link:../core
       '@tanstack/ai-mcp':
         specifier: ^0.2.3
-        version: 0.2.3(@opentelemetry/api@1.9.1)(zod@4.4.3)
+        version: 0.2.3(@opentelemetry/api@1.9.1)(supports-color@10.2.2)(zod@4.4.3)
       mime-types:
         specifier: ^3.0.2
         version: 3.0.2
@@ -363,14 +363,14 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@my-react/react':
-        specifier: ^0.3.28
-        version: 0.3.28(react@19.2.7)
+        specifier: ^0.3.29
+        version: 0.3.29(react@19.2.7)
       '@my-react/react-dom':
-        specifier: ^0.3.28
-        version: 0.3.28(@my-react/react@0.3.28(react@19.2.7))(react-dom@19.2.7(react@19.2.7))
+        specifier: ^0.3.29
+        version: 0.3.29(@my-react/react@0.3.29(react@19.2.7))(react-dom@19.2.7(react@19.2.7))
       '@my-react/react-terminal':
-        specifier: ^0.0.28
-        version: 0.0.28(@my-react/react@0.3.28(react@19.2.7))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)
+        specifier: ^0.0.29
+        version: 0.0.29(@my-react/react@0.3.29(react@19.2.7))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)
       '@webcontainer/api':
         specifier: ^1.6.4
         version: 1.6.4
@@ -391,11 +391,11 @@ importers:
         version: 0.4.0(react@19.2.7)
     devDependencies:
       '@my-react/react-refresh':
-        specifier: ^0.3.28
-        version: 0.3.28(@my-react/react@0.3.28(react@19.2.7))
+        specifier: ^0.3.29
+        version: 0.3.29(@my-react/react@0.3.29(react@19.2.7))
       '@my-react/react-vite':
-        specifier: ^0.0.34
-        version: 0.0.34(@my-react/react-refresh@0.3.28(@my-react/react@0.3.28(react@19.2.7)))(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+        specifier: ^0.0.35
+        version: 0.0.35(@my-react/react-refresh@0.3.29(@my-react/react@0.3.29(react@19.2.7)))(supports-color@10.2.2)(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.17
@@ -1300,26 +1300,26 @@ packages:
       '@cfworker/json-schema':
         optional: true
 
-  '@my-react/react-dom@0.3.28':
-    resolution: {integrity: sha512-fOJD49do/xBuAY5APijPSUmqKj+tUUDN+sv/e+hJFHo+PFDxQCdnRcS86+yqg7xom0Pygm0wCi0fk2ctWNF9Aw==}
+  '@my-react/react-dom@0.3.29':
+    resolution: {integrity: sha512-gKI3EWzV/BnTwf+ONkbn1VpXYMeawRWq3RGTUq2H/TigBfKF4oZNDcgVMUEo9Ery/T2EoopLIbTEIfcGtN9aPg==}
     peerDependencies:
-      '@my-react/react': '>=0.3.28'
+      '@my-react/react': '>=0.3.29'
       react-dom: ^17 || ^18 || ^19
 
-  '@my-react/react-jsx@0.3.28':
-    resolution: {integrity: sha512-4jSvyeQ6YFNjVkDRtrw0XHtzDPheQuaKjWlM/7XuIgyfefAYfS/wycotRzzpwL69PIyXPzTYh7eMtknX7YFiSg==}
+  '@my-react/react-jsx@0.3.29':
+    resolution: {integrity: sha512-lhvbYg0D5EtmKqy4EPymFKI3sQB7anEjOewMvxo3ySP6d2ZGMnySfWkTKBInHm8Rp1Ba9SNT/jxPlxR9e5lrlg==}
     peerDependencies:
-      '@my-react/react': '>=0.3.28'
+      '@my-react/react': '>=0.3.29'
 
-  '@my-react/react-refresh@0.3.28':
-    resolution: {integrity: sha512-RTGNWAyftGDGT5supU4vCVcqa0vgrN5C2fuDuPqEiX1/NqxeZRAjoqyIYxVh9ox75hsoywUJCsJtkl9sLg58jw==}
+  '@my-react/react-refresh@0.3.29':
+    resolution: {integrity: sha512-wvFRih+JJ2aqlNGXLZo5/Go6hzXX5yu4TMRoQTCmHsrGCMQxdr3P/oz+21fKOaUb8Cvx1F+9H+BOvYo0CT5N7A==}
     peerDependencies:
-      '@my-react/react': '>=0.3.28'
+      '@my-react/react': '>=0.3.29'
 
-  '@my-react/react-terminal@0.0.28':
-    resolution: {integrity: sha512-w4hww66GyiB+ajz6DtWHEQeNnHMA8vQjaGPCehdpugWjKkL4o23l9n/yWXwgfzDgORh8qZDs9pIAH6kyVmnaGA==}
+  '@my-react/react-terminal@0.0.29':
+    resolution: {integrity: sha512-rt3DdKNth1pXf5F//sGyIep42aWJx8t3vEsaSRgXVJeoC+8eu02qJ+MRg4W4bTNstodIuhtRDJmUOgte4tgcNA==}
     peerDependencies:
-      '@my-react/react': '>=0.3.28'
+      '@my-react/react': '>=0.3.29'
       '@xterm/addon-fit': '>=0.11.0'
       '@xterm/xterm': '>=5.0.0 || >=6.0.0'
     peerDependenciesMeta:
@@ -1328,18 +1328,18 @@ packages:
       '@xterm/xterm':
         optional: true
 
-  '@my-react/react-vite@0.0.34':
-    resolution: {integrity: sha512-DP8rMefJlUI2GWNA4FJqnVkcfp6wNoqXq9a4JaWhxoMd52l+ryHBIp4Ga9tYhZGrcRZ4ej/SFe6EovDZ9mfNvA==}
+  '@my-react/react-vite@0.0.35':
+    resolution: {integrity: sha512-U1kUmFxefiyK2tgWCaa4WYGkMcSXOcXVDrocnM/zL7RvDayTCah8F6ihWsdmdhGqUfeUC3cSI3W8ugeLRQmGAQ==}
     peerDependencies:
       '@lazarv/rsc': ^0.0.0-experimental
-      '@my-react/react-refresh': '>=0.3.28'
+      '@my-react/react-refresh': '>=0.3.29'
       vite: ^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0
     peerDependenciesMeta:
       '@lazarv/rsc':
         optional: true
 
-  '@my-react/react@0.3.28':
-    resolution: {integrity: sha512-37iu+G8igDgEM40dx3i+hsndk6I5YnOgqBa9FivOYrSVRPk0bOO51q2ywg4HH0YAeouMzdKBn8Y4f2dRZyLPHQ==}
+  '@my-react/react@0.3.29':
+    resolution: {integrity: sha512-qX1ea0rHtShh1JuIzGX0DI5ZdJkuHS7IE72//5TXsBvjvrWX/rbWLpSd/F/Venp5uBmbAJFx9+px735veL8l0A==}
     peerDependencies:
       react: ^17 || ^18 || ^19
 
@@ -3056,9 +3056,6 @@ packages:
   es-to-primitive@1.3.4:
     resolution: {integrity: sha512-yPDz7wqpg1/mmHLmS3tcfTfbw5f1eryXvyghYBffGdERwe+mV7ZcWzTR8LR17Kvqt3qfPurjlonmnq3MKXIOXw==}
     engines: {node: '>= 0.4'}
-
-  es-toolkit@1.47.1:
-    resolution: {integrity: sha512-5RAqEwf4P4E17p+W75KLOWw/nOvKZzSQpxM32IpI2KZLaVonjTrZ0Ai5ghMaVI9eKC2p8eoQgcBdkEDgzFk6+Q==}
 
   es-toolkit@1.49.0:
     resolution: {integrity: sha512-G5iZ6Pc/FNRY/soKZHC+TxGDD83rHUDXxzaWhGCX44vAv/tMs56WMusnm/KMNK+luUPsgA9U28cGr4RDlSzL2g==}
@@ -6028,20 +6025,20 @@ snapshots:
 
   '@babel/compat-data@7.29.7': {}
 
-  '@babel/core@7.29.7':
+  '@babel/core@7.29.7(supports-color@10.2.2)':
     dependencies:
       '@babel/code-frame': 7.29.7
       '@babel/generator': 7.29.7
       '@babel/helper-compilation-targets': 7.29.7
-      '@babel/helper-module-transforms': 7.29.7(@babel/core@7.29.7)
+      '@babel/helper-module-transforms': 7.29.7(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2)
       '@babel/helpers': 7.29.7
       '@babel/parser': 7.29.7
       '@babel/template': 7.29.7
-      '@babel/traverse': 7.29.7
+      '@babel/traverse': 7.29.7(supports-color@10.2.2)
       '@babel/types': 7.29.7
       '@jridgewell/remapping': 2.3.5
       convert-source-map: 2.0.0
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       gensync: 1.0.0-beta.2
       json5: 2.2.3
       semver: 6.3.1
@@ -6058,8 +6055,8 @@ snapshots:
 
   '@babel/generator@8.0.0-rc.3':
     dependencies:
-      '@babel/parser': 8.0.0-rc.3
-      '@babel/types': 8.0.0-rc.3
+      '@babel/parser': 8.0.0
+      '@babel/types': 8.0.0
       '@jridgewell/gen-mapping': 0.3.13
       '@jridgewell/trace-mapping': 0.3.31
       '@types/jsesc': 2.5.1
@@ -6075,19 +6072,19 @@ snapshots:
 
   '@babel/helper-globals@7.29.7': {}
 
-  '@babel/helper-module-imports@7.29.7':
+  '@babel/helper-module-imports@7.29.7(supports-color@10.2.2)':
     dependencies:
-      '@babel/traverse': 7.29.7
+      '@babel/traverse': 7.29.7(supports-color@10.2.2)
       '@babel/types': 7.29.7
     transitivePeerDependencies:
       - supports-color
 
-  '@babel/helper-module-transforms@7.29.7(@babel/core@7.29.7)':
+  '@babel/helper-module-transforms@7.29.7(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2)':
     dependencies:
-      '@babel/core': 7.29.7
-      '@babel/helper-module-imports': 7.29.7
+      '@babel/core': 7.29.7(supports-color@10.2.2)
+      '@babel/helper-module-imports': 7.29.7(supports-color@10.2.2)
       '@babel/helper-validator-identifier': 7.29.7
-      '@babel/traverse': 7.29.7
+      '@babel/traverse': 7.29.7(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -6120,16 +6117,16 @@ snapshots:
 
   '@babel/parser@8.0.0-rc.3':
     dependencies:
-      '@babel/types': 8.0.0-rc.3
+      '@babel/types': 8.0.0
 
-  '@babel/plugin-transform-react-jsx-self@7.29.7(@babel/core@7.29.7)':
+  '@babel/plugin-transform-react-jsx-self@7.29.7(@babel/core@7.29.7(supports-color@10.2.2))':
     dependencies:
-      '@babel/core': 7.29.7
+      '@babel/core': 7.29.7(supports-color@10.2.2)
       '@babel/helper-plugin-utils': 7.29.7
 
-  '@babel/plugin-transform-react-jsx-source@7.29.7(@babel/core@7.29.7)':
+  '@babel/plugin-transform-react-jsx-source@7.29.7(@babel/core@7.29.7(supports-color@10.2.2))':
     dependencies:
-      '@babel/core': 7.29.7
+      '@babel/core': 7.29.7(supports-color@10.2.2)
       '@babel/helper-plugin-utils': 7.29.7
 
   '@babel/runtime@7.28.2': {}
@@ -6140,7 +6137,7 @@ snapshots:
       '@babel/parser': 7.29.7
       '@babel/types': 7.29.7
 
-  '@babel/traverse@7.29.7':
+  '@babel/traverse@7.29.7(supports-color@10.2.2)':
     dependencies:
       '@babel/code-frame': 7.29.7
       '@babel/generator': 7.29.7
@@ -6148,7 +6145,7 @@ snapshots:
       '@babel/parser': 7.29.7
       '@babel/template': 7.29.7
       '@babel/types': 7.29.7
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -6228,12 +6225,12 @@ snapshots:
     dependencies:
       postcss-selector-parser: 7.1.4
 
-  '@cyanheads/mcp-ts-core@0.9.21(hono-rate-limiter@0.5.3(hono@4.12.26))(js-yaml@4.2.0)(linkedom@0.18.12)(openai@6.45.0(ws@8.21.0)(zod@4.4.3))(partial-json@0.1.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)':
+  '@cyanheads/mcp-ts-core@0.9.21(hono-rate-limiter@0.5.3(hono@4.12.26))(js-yaml@4.2.0)(linkedom@0.18.12)(openai@6.45.0(ws@8.21.0)(zod@4.4.3))(partial-json@0.1.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(supports-color@10.2.2)(zod@4.4.3)':
     dependencies:
-      '@hono/mcp': 0.3.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(hono-rate-limiter@0.5.3(hono@4.12.26))(hono@4.12.26)(zod@4.4.3)
+      '@hono/mcp': 0.3.0(@modelcontextprotocol/sdk@1.29.0(supports-color@10.2.2)(zod@4.4.3))(hono-rate-limiter@0.5.3(hono@4.12.26))(hono@4.12.26)(zod@4.4.3)
       '@hono/node-server': 2.0.5(hono@4.12.26)
-      '@modelcontextprotocol/ext-apps': 1.7.4(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@modelcontextprotocol/ext-apps': 1.7.4(@modelcontextprotocol/sdk@1.29.0(supports-color@10.2.2)(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@10.2.2)(zod@4.4.3)
       '@opentelemetry/api': 1.9.1
       dotenv: 17.4.2
       hono: 4.12.26
@@ -6256,13 +6253,13 @@ snapshots:
 
   '@devicefarmer/adbkit-monkey@1.2.1': {}
 
-  '@devicefarmer/adbkit@3.3.8':
+  '@devicefarmer/adbkit@3.3.8(supports-color@10.2.2)':
     dependencies:
       '@devicefarmer/adbkit-logcat': 2.1.3
       '@devicefarmer/adbkit-monkey': 1.2.1
       bluebird: 3.7.2
       commander: 9.5.0
-      debug: 4.3.7
+      debug: 4.3.7(supports-color@10.2.2)
       node-forge: 1.4.0
       split: 1.0.1
     transitivePeerDependencies:
@@ -6367,17 +6364,17 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
-  '@eslint-community/eslint-utils@4.9.1(eslint@9.39.4(jiti@2.7.0))':
+  '@eslint-community/eslint-utils@4.9.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))':
     dependencies:
-      eslint: 9.39.4(jiti@2.7.0)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       eslint-visitor-keys: 3.4.3
 
   '@eslint-community/regexpp@4.12.2': {}
 
-  '@eslint/config-array@0.21.2':
+  '@eslint/config-array@0.21.2(supports-color@10.2.2)':
     dependencies:
       '@eslint/object-schema': 2.1.7
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       minimatch: 3.1.5
     transitivePeerDependencies:
       - supports-color
@@ -6390,10 +6387,10 @@ snapshots:
     dependencies:
       '@types/json-schema': 7.0.15
 
-  '@eslint/eslintrc@3.3.5':
+  '@eslint/eslintrc@3.3.5(supports-color@10.2.2)':
     dependencies:
       ajv: 6.15.0
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       espree: 10.4.0
       globals: 14.0.0
       ignore: 5.3.2
@@ -6413,19 +6410,19 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@git-diff-view/cli@0.1.10(@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.28)':
+  '@git-diff-view/cli@0.1.10(@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.29)':
     dependencies:
       '@git-diff-view/core': 0.1.7
       '@types/hast': 3.0.4
       chalk: 5.6.2
       fast-diff: 1.3.0
       highlight.js: 11.11.1
-      ink: '@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
+      ink: '@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
       lowlight: 3.3.0
-      react: '@my-react/react@0.3.28(@my-react/react@0.3.28)'
-      reactivity-store: 0.4.0(@my-react/react@0.3.28)
+      react: '@my-react/react@0.3.29(@my-react/react@0.3.29)'
+      reactivity-store: 0.4.0(@my-react/react@0.3.29)
       string-width: 7.2.0
-      use-sync-external-store: 1.6.0(@my-react/react@0.3.28)
+      use-sync-external-store: 1.6.0(@my-react/react@0.3.29)
 
   '@git-diff-view/core@0.1.7':
     dependencies:
@@ -6448,9 +6445,9 @@ snapshots:
       highlight.js: 11.11.1
       lowlight: 3.3.0
 
-  '@hono/mcp@0.3.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(hono-rate-limiter@0.5.3(hono@4.12.26))(hono@4.12.26)(zod@4.4.3)':
+  '@hono/mcp@0.3.0(@modelcontextprotocol/sdk@1.29.0(supports-color@10.2.2)(zod@4.4.3))(hono-rate-limiter@0.5.3(hono@4.12.26))(hono@4.12.26)(zod@4.4.3)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@10.2.2)(zod@4.4.3)
       hono: 4.12.26
       hono-rate-limiter: 0.5.3(hono@4.12.26)
       pkce-challenge: 5.0.1
@@ -6617,16 +6614,16 @@ snapshots:
 
   '@mixmark-io/domino@2.2.0': {}
 
-  '@modelcontextprotocol/ext-apps@1.7.4(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)':
+  '@modelcontextprotocol/ext-apps@1.7.4(@modelcontextprotocol/sdk@1.29.0(supports-color@10.2.2)(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@10.2.2)(zod@4.4.3)
       '@standard-schema/spec': 1.1.0
       zod: 4.4.3
     optionalDependencies:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
 
-  '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
+  '@modelcontextprotocol/sdk@1.29.0(supports-color@10.2.2)(zod@4.4.3)':
     dependencies:
       '@hono/node-server': 1.19.14(hono@4.12.26)
       ajv: 8.20.0
@@ -6636,8 +6633,8 @@ snapshots:
       cross-spawn: 7.0.6
       eventsource: 3.0.7
       eventsource-parser: 3.1.0
-      express: 5.2.1
-      express-rate-limit: 8.5.2(express@5.2.1)
+      express: 5.2.1(supports-color@10.2.2)
+      express-rate-limit: 8.5.2(express@5.2.1(supports-color@10.2.2))
       hono: 4.12.26
       jose: 6.2.3
       json-schema-typed: 8.0.2
@@ -6648,26 +6645,26 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@my-react/react-dom@0.3.28(@my-react/react@0.3.28(react@19.2.7))(react-dom@19.2.7(react@19.2.7))':
+  '@my-react/react-dom@0.3.29(@my-react/react@0.3.29(react@19.2.7))(react-dom@19.2.7(react@19.2.7))':
     dependencies:
-      '@my-react/react': 0.3.28(react@19.2.7)
+      '@my-react/react': 0.3.29(react@19.2.7)
       react-dom: 19.2.7(react@19.2.7)
 
-  '@my-react/react-jsx@0.3.28(@my-react/react@0.3.28(@my-react/react@0.3.28))':
+  '@my-react/react-jsx@0.3.29(@my-react/react@0.3.29(@my-react/react@0.3.29))':
     dependencies:
-      '@my-react/react': 0.3.28(@my-react/react@0.3.28)
+      '@my-react/react': 0.3.29(@my-react/react@0.3.29)
 
-  '@my-react/react-jsx@0.3.28(@my-react/react@0.3.28(react@19.2.7))':
+  '@my-react/react-jsx@0.3.29(@my-react/react@0.3.29(react@19.2.7))':
     dependencies:
-      '@my-react/react': 0.3.28(react@19.2.7)
+      '@my-react/react': 0.3.29(react@19.2.7)
 
-  '@my-react/react-refresh@0.3.28(@my-react/react@0.3.28(react@19.2.7))':
+  '@my-react/react-refresh@0.3.29(@my-react/react@0.3.29(react@19.2.7))':
     dependencies:
-      '@my-react/react': 0.3.28(react@19.2.7)
+      '@my-react/react': 0.3.29(react@19.2.7)
 
-  '@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)':
+  '@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)':
     dependencies:
-      '@my-react/react': 0.3.28(@my-react/react@0.3.28)
+      '@my-react/react': 0.3.29(@my-react/react@0.3.29)
       ansi-escapes: 7.3.0
       ansi-styles: 6.2.3
       auto-bind: 5.0.1
@@ -6677,7 +6674,7 @@ snapshots:
       cli-truncate: 4.0.0
       code-excerpt: 4.0.0
       environment: 1.1.0
-      es-toolkit: 1.47.1
+      es-toolkit: 1.49.0
       indent-string: 5.0.0
       is-fullwidth-code-point: 5.1.0
       is-in-ci: 2.0.0
@@ -6695,9 +6692,9 @@ snapshots:
       '@xterm/addon-fit': 0.11.0
       '@xterm/xterm': 6.0.0
 
-  '@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(react@19.2.7))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)':
+  '@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(react@19.2.7))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)':
     dependencies:
-      '@my-react/react': 0.3.28(react@19.2.7)
+      '@my-react/react': 0.3.29(react@19.2.7)
       ansi-escapes: 7.3.0
       ansi-styles: 6.2.3
       auto-bind: 5.0.1
@@ -6707,7 +6704,7 @@ snapshots:
       cli-truncate: 4.0.0
       code-excerpt: 4.0.0
       environment: 1.1.0
-      es-toolkit: 1.47.1
+      es-toolkit: 1.49.0
       indent-string: 5.0.0
       is-fullwidth-code-point: 5.1.0
       is-in-ci: 2.0.0
@@ -6725,12 +6722,12 @@ snapshots:
       '@xterm/addon-fit': 0.11.0
       '@xterm/xterm': 6.0.0
 
-  '@my-react/react-vite@0.0.34(@my-react/react-refresh@0.3.28(@my-react/react@0.3.28(react@19.2.7)))(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))':
+  '@my-react/react-vite@0.0.35(@my-react/react-refresh@0.3.29(@my-react/react@0.3.29(react@19.2.7)))(supports-color@10.2.2)(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))':
     dependencies:
-      '@babel/core': 7.29.7
-      '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7)
-      '@babel/plugin-transform-react-jsx-source': 7.29.7(@babel/core@7.29.7)
-      '@my-react/react-refresh': 0.3.28(@my-react/react@0.3.28(react@19.2.7))
+      '@babel/core': 7.29.7(supports-color@10.2.2)
+      '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7(supports-color@10.2.2))
+      '@babel/plugin-transform-react-jsx-source': 7.29.7(@babel/core@7.29.7(supports-color@10.2.2))
+      '@my-react/react-refresh': 0.3.29(@my-react/react@0.3.29(react@19.2.7))
       '@rolldown/pluginutils': 1.0.0-rc.6
       es-module-lexer: 1.7.0
       estree-walker: 3.0.3
@@ -6741,15 +6738,15 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@my-react/react@0.3.28(@my-react/react@0.3.28)':
+  '@my-react/react@0.3.29(@my-react/react@0.3.29)':
     dependencies:
-      '@my-react/react-jsx': 0.3.28(@my-react/react@0.3.28(@my-react/react@0.3.28))
-      react: '@my-react/react@0.3.28(@my-react/react@0.3.28)'
-      react-compiler-runtime: 1.0.0(@my-react/react@0.3.28)
+      '@my-react/react-jsx': 0.3.29(@my-react/react@0.3.29(@my-react/react@0.3.29))
+      react: '@my-react/react@0.3.29(@my-react/react@0.3.29)'
+      react-compiler-runtime: 1.0.0(@my-react/react@0.3.29)
 
-  '@my-react/react@0.3.28(react@19.2.7)':
+  '@my-react/react@0.3.29(react@19.2.7)':
     dependencies:
-      '@my-react/react-jsx': 0.3.28(@my-react/react@0.3.28(react@19.2.7))
+      '@my-react/react-jsx': 0.3.29(@my-react/react@0.3.29(react@19.2.7))
       react: 19.2.7
       react-compiler-runtime: 1.0.0(react@19.2.7)
 
@@ -7184,9 +7181,9 @@ snapshots:
     dependencies:
       '@tanstack/devtools-event-client': 0.4.4
 
-  '@tanstack/ai-mcp@0.2.3(@opentelemetry/api@1.9.1)(zod@4.4.3)':
+  '@tanstack/ai-mcp@0.2.3(@opentelemetry/api@1.9.1)(supports-color@10.2.2)(zod@4.4.3)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@10.2.2)(zod@4.4.3)
       '@tanstack/ai': 0.40.0(@opentelemetry/api@1.9.1)
     transitivePeerDependencies:
       - '@cfworker/json-schema'
@@ -7318,15 +7315,15 @@ snapshots:
 
   '@types/webextension-polyfill@0.12.5': {}
 
-  '@typescript-eslint/eslint-plugin@8.61.1(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)':
+  '@typescript-eslint/eslint-plugin@8.61.1(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)':
     dependencies:
       '@eslint-community/regexpp': 4.12.2
-      '@typescript-eslint/parser': 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/parser': 8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
       '@typescript-eslint/scope-manager': 8.61.1
-      '@typescript-eslint/type-utils': 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
-      '@typescript-eslint/utils': 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/type-utils': 8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
+      '@typescript-eslint/utils': 8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
       '@typescript-eslint/visitor-keys': 8.61.1
-      eslint: 9.39.4(jiti@2.7.0)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       ignore: 7.0.5
       natural-compare: 1.4.0
       ts-api-utils: 2.5.0(typescript@5.9.3)
@@ -7334,23 +7331,23 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)':
+  '@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)':
     dependencies:
       '@typescript-eslint/scope-manager': 8.61.1
       '@typescript-eslint/types': 8.61.1
-      '@typescript-eslint/typescript-estree': 8.61.1(typescript@5.9.3)
+      '@typescript-eslint/typescript-estree': 8.61.1(supports-color@10.2.2)(typescript@5.9.3)
       '@typescript-eslint/visitor-keys': 8.61.1
-      debug: 4.4.3
-      eslint: 9.39.4(jiti@2.7.0)
+      debug: 4.4.3(supports-color@10.2.2)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       typescript: 5.9.3
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/project-service@8.61.1(typescript@5.9.3)':
+  '@typescript-eslint/project-service@8.61.1(supports-color@10.2.2)(typescript@5.9.3)':
     dependencies:
       '@typescript-eslint/tsconfig-utils': 8.61.1(typescript@5.9.3)
       '@typescript-eslint/types': 8.61.1
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       typescript: 5.9.3
     transitivePeerDependencies:
       - supports-color
@@ -7364,13 +7361,13 @@ snapshots:
     dependencies:
       typescript: 5.9.3
 
-  '@typescript-eslint/type-utils@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)':
+  '@typescript-eslint/type-utils@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)':
     dependencies:
       '@typescript-eslint/types': 8.61.1
-      '@typescript-eslint/typescript-estree': 8.61.1(typescript@5.9.3)
-      '@typescript-eslint/utils': 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
-      debug: 4.4.3
-      eslint: 9.39.4(jiti@2.7.0)
+      '@typescript-eslint/typescript-estree': 8.61.1(supports-color@10.2.2)(typescript@5.9.3)
+      '@typescript-eslint/utils': 8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
+      debug: 4.4.3(supports-color@10.2.2)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       ts-api-utils: 2.5.0(typescript@5.9.3)
       typescript: 5.9.3
     transitivePeerDependencies:
@@ -7378,13 +7375,13 @@ snapshots:
 
   '@typescript-eslint/types@8.61.1': {}
 
-  '@typescript-eslint/typescript-estree@8.61.1(typescript@5.9.3)':
+  '@typescript-eslint/typescript-estree@8.61.1(supports-color@10.2.2)(typescript@5.9.3)':
     dependencies:
-      '@typescript-eslint/project-service': 8.61.1(typescript@5.9.3)
+      '@typescript-eslint/project-service': 8.61.1(supports-color@10.2.2)(typescript@5.9.3)
       '@typescript-eslint/tsconfig-utils': 8.61.1(typescript@5.9.3)
       '@typescript-eslint/types': 8.61.1
       '@typescript-eslint/visitor-keys': 8.61.1
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       minimatch: 10.2.5
       semver: 7.8.5
       tinyglobby: 0.2.17
@@ -7393,13 +7390,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/utils@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)':
+  '@typescript-eslint/utils@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)':
     dependencies:
-      '@eslint-community/eslint-utils': 4.9.1(eslint@9.39.4(jiti@2.7.0))
+      '@eslint-community/eslint-utils': 4.9.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))
       '@typescript-eslint/scope-manager': 8.61.1
       '@typescript-eslint/types': 8.61.1
-      '@typescript-eslint/typescript-estree': 8.61.1(typescript@5.9.3)
-      eslint: 9.39.4(jiti@2.7.0)
+      '@typescript-eslint/typescript-estree': 8.61.1(supports-color@10.2.2)(typescript@5.9.3)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       typescript: 5.9.3
     transitivePeerDependencies:
       - supports-color
@@ -7513,10 +7510,10 @@ snapshots:
       '@types/filesystem': 0.0.36
       '@types/har-format': 1.2.16
 
-  '@wxt-dev/module-react@1.2.2(wxt@0.20.26(@types/node@22.19.21)(eslint@9.39.4(jiti@2.7.0))(jiti@2.7.0)(rolldown@1.0.3)(rollup@4.62.2)(terser@5.48.0)(yaml@2.9.0))':
+  '@wxt-dev/module-react@1.2.2(wxt@0.20.26(@types/node@22.19.21)(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(jiti@2.7.0)(rolldown@1.0.3)(rollup@4.62.2)(supports-color@10.2.2)(terser@5.48.0)(yaml@2.9.0))':
     dependencies:
       '@vitejs/plugin-react': 6.0.2
-      wxt: 0.20.26(@types/node@22.19.21)(eslint@9.39.4(jiti@2.7.0))(jiti@2.7.0)(rolldown@1.0.3)(rollup@4.62.2)(terser@5.48.0)(yaml@2.9.0)
+      wxt: 0.20.26(@types/node@22.19.21)(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(jiti@2.7.0)(rolldown@1.0.3)(rollup@4.62.2)(supports-color@10.2.2)(terser@5.48.0)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@rolldown/plugin-babel'
       - babel-plugin-react-compiler
@@ -7546,9 +7543,9 @@ snapshots:
 
   adm-zip@0.5.17: {}
 
-  agent-base@6.0.2:
+  agent-base@6.0.2(supports-color@10.2.2):
     dependencies:
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -7707,11 +7704,11 @@ snapshots:
 
   axe-core@4.12.1: {}
 
-  axios@1.18.0:
+  axios@1.18.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2):
     dependencies:
-      follow-redirects: 1.16.0
+      follow-redirects: 1.16.0(debug@4.4.3(supports-color@10.2.2))
       form-data: 4.0.6
-      https-proxy-agent: 5.0.1
+      https-proxy-agent: 5.0.1(supports-color@10.2.2)
       proxy-from-env: 2.1.0
     transitivePeerDependencies:
       - debug
@@ -7734,11 +7731,11 @@ snapshots:
 
   bluebird@3.7.2: {}
 
-  body-parser@2.3.0:
+  body-parser@2.3.0(supports-color@10.2.2):
     dependencies:
       bytes: 3.1.2
       content-type: 2.0.0
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       http-errors: 2.0.1
       iconv-lite: 0.7.2
       on-finished: 2.4.1
@@ -7861,12 +7858,12 @@ snapshots:
     dependencies:
       readdirp: 5.0.0
 
-  chrome-launcher@1.2.0:
+  chrome-launcher@1.2.0(supports-color@10.2.2):
     dependencies:
       '@types/node': 22.19.21
       escape-string-regexp: 4.0.0
       is-wsl: 2.2.0
-      lighthouse-logger: 2.0.2
+      lighthouse-logger: 2.0.2(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -8049,17 +8046,23 @@ snapshots:
 
   debounce@1.2.1: {}
 
-  debug@3.2.7:
+  debug@3.2.7(supports-color@10.2.2):
     dependencies:
       ms: 2.1.3
+    optionalDependencies:
+      supports-color: 10.2.2
 
-  debug@4.3.7:
+  debug@4.3.7(supports-color@10.2.2):
     dependencies:
       ms: 2.1.3
+    optionalDependencies:
+      supports-color: 10.2.2
 
-  debug@4.4.3:
+  debug@4.4.3(supports-color@10.2.2):
     dependencies:
       ms: 2.1.3
+    optionalDependencies:
+      supports-color: 10.2.2
 
   deep-extend@0.6.0: {}
 
@@ -8176,10 +8179,10 @@ snapshots:
     dependencies:
       once: 1.4.0
 
-  engine.io-client@6.6.6:
+  engine.io-client@6.6.6(supports-color@10.2.2):
     dependencies:
       '@socket.io/component-emitter': 3.1.2
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       engine.io-parser: 5.2.3
       ws: 8.21.0
       xmlhttprequest-ssl: 2.1.2
@@ -8322,8 +8325,6 @@ snapshots:
       is-date-object: 1.1.0
       is-symbol: 1.1.1
 
-  es-toolkit@1.47.1: {}
-
   es-toolkit@1.49.0: {}
 
   es6-error@4.1.1: {}
@@ -8369,9 +8370,9 @@ snapshots:
 
   escape-string-regexp@5.0.0: {}
 
-  eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.7.0)):
+  eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2)):
     dependencies:
-      eslint: 9.39.4(jiti@2.7.0)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
 
   eslint-import-context@0.1.9(unrs-resolver@1.12.2):
     dependencies:
@@ -8380,18 +8381,18 @@ snapshots:
     optionalDependencies:
       unrs-resolver: 1.12.2
 
-  eslint-import-resolver-node@0.3.10:
+  eslint-import-resolver-node@0.3.10(supports-color@10.2.2):
     dependencies:
-      debug: 3.2.7
+      debug: 3.2.7(supports-color@10.2.2)
       is-core-module: 2.16.2
       resolve: 2.0.0-next.7
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@4.4.5(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
+  eslint-import-resolver-typescript@4.4.5(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2))(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2):
     dependencies:
-      debug: 4.4.3
-      eslint: 9.39.4(jiti@2.7.0)
+      debug: 4.4.3(supports-color@10.2.2)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       eslint-import-context: 0.1.9(unrs-resolver@1.12.2)
       get-tsconfig: 4.14.0
       is-bun-module: 2.0.0
@@ -8399,33 +8400,33 @@ snapshots:
       tinyglobby: 0.2.17
       unrs-resolver: 1.12.2
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.13.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)):
+  eslint-module-utils@2.13.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3))(eslint-import-resolver-node@0.3.10(supports-color@10.2.2))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2):
     dependencies:
-      debug: 3.2.7
+      debug: 3.2.7(supports-color@10.2.2)
     optionalDependencies:
-      '@typescript-eslint/parser': 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
-      eslint: 9.39.4(jiti@2.7.0)
-      eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 4.4.5(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      '@typescript-eslint/parser': 8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
+      eslint-import-resolver-node: 0.3.10(supports-color@10.2.2)
+      eslint-import-resolver-typescript: 4.4.5(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2))(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
       array.prototype.findlastindex: 1.2.6
       array.prototype.flat: 1.3.3
       array.prototype.flatmap: 1.3.3
-      debug: 3.2.7
+      debug: 3.2.7(supports-color@10.2.2)
       doctrine: 2.1.0
-      eslint: 9.39.4(jiti@2.7.0)
-      eslint-import-resolver-node: 0.3.10
-      eslint-module-utils: 2.13.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0))
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
+      eslint-import-resolver-node: 0.3.10(supports-color@10.2.2)
+      eslint-module-utils: 2.13.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3))(eslint-import-resolver-node@0.3.10(supports-color@10.2.2))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)
       hasown: 2.0.4
       is-core-module: 2.16.2
       is-glob: 4.0.3
@@ -8437,13 +8438,13 @@ snapshots:
       string.prototype.trimend: 1.0.10
       tsconfig-paths: 3.15.0
     optionalDependencies:
-      '@typescript-eslint/parser': 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/parser': 8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
     transitivePeerDependencies:
       - eslint-import-resolver-typescript
       - eslint-import-resolver-webpack
       - supports-color
 
-  eslint-plugin-jsx-a11y@6.10.2(eslint@9.39.4(jiti@2.7.0)):
+  eslint-plugin-jsx-a11y@6.10.2(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2)):
     dependencies:
       aria-query: 5.3.2
       array-includes: 3.1.9
@@ -8453,7 +8454,7 @@ snapshots:
       axobject-query: 4.1.0
       damerau-levenshtein: 1.0.8
       emoji-regex: 9.2.2
-      eslint: 9.39.4(jiti@2.7.0)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       hasown: 2.0.4
       jsx-ast-utils: 3.3.5
       language-tags: 1.0.9
@@ -8462,27 +8463,27 @@ snapshots:
       safe-regex-test: 1.1.0
       string.prototype.includes: 2.0.1
 
-  eslint-plugin-prettier@5.5.6(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))(prettier@3.8.4):
+  eslint-plugin-prettier@5.5.6(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2)))(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.8.4):
     dependencies:
-      eslint: 9.39.4(jiti@2.7.0)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       prettier: 3.8.4
       prettier-linter-helpers: 1.0.1
       synckit: 0.11.13
     optionalDependencies:
-      eslint-config-prettier: 10.1.8(eslint@9.39.4(jiti@2.7.0))
+      eslint-config-prettier: 10.1.8(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))
 
-  eslint-plugin-react-hooks@7.1.1(eslint@9.39.4(jiti@2.7.0)):
+  eslint-plugin-react-hooks@7.1.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2):
     dependencies:
-      '@babel/core': 7.29.7
+      '@babel/core': 7.29.7(supports-color@10.2.2)
       '@babel/parser': 7.29.7
-      eslint: 9.39.4(jiti@2.7.0)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       hermes-parser: 0.25.1
       zod: 4.4.3
       zod-validation-error: 4.0.2(zod@4.4.3)
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-react@7.37.5(eslint@9.39.4(jiti@2.7.0)):
+  eslint-plugin-react@7.37.5(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2)):
     dependencies:
       array-includes: 3.1.9
       array.prototype.findlast: 1.2.5
@@ -8490,7 +8491,7 @@ snapshots:
       array.prototype.tosorted: 1.1.4
       doctrine: 2.1.0
       es-iterator-helpers: 1.3.3
-      eslint: 9.39.4(jiti@2.7.0)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       estraverse: 5.3.0
       hasown: 2.0.4
       jsx-ast-utils: 3.3.5
@@ -8515,14 +8516,14 @@ snapshots:
 
   eslint-visitor-keys@5.0.1: {}
 
-  eslint@9.39.4(jiti@2.7.0):
+  eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2):
     dependencies:
-      '@eslint-community/eslint-utils': 4.9.1(eslint@9.39.4(jiti@2.7.0))
+      '@eslint-community/eslint-utils': 4.9.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))
       '@eslint-community/regexpp': 4.12.2
-      '@eslint/config-array': 0.21.2
+      '@eslint/config-array': 0.21.2(supports-color@10.2.2)
       '@eslint/config-helpers': 0.4.2
       '@eslint/core': 0.17.0
-      '@eslint/eslintrc': 3.3.5
+      '@eslint/eslintrc': 3.3.5(supports-color@10.2.2)
       '@eslint/js': 9.39.4
       '@eslint/plugin-kit': 0.4.1
       '@humanfs/node': 0.16.8
@@ -8532,7 +8533,7 @@ snapshots:
       ajv: 6.15.0
       chalk: 4.1.2
       cross-spawn: 7.0.6
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       escape-string-regexp: 4.0.0
       eslint-scope: 8.4.0
       eslint-visitor-keys: 4.2.1
@@ -8590,25 +8591,25 @@ snapshots:
     dependencies:
       eventsource-parser: 3.1.0
 
-  express-rate-limit@8.5.2(express@5.2.1):
+  express-rate-limit@8.5.2(express@5.2.1(supports-color@10.2.2)):
     dependencies:
-      express: 5.2.1
+      express: 5.2.1(supports-color@10.2.2)
       ip-address: 10.2.0
 
-  express@5.2.1:
+  express@5.2.1(supports-color@10.2.2):
     dependencies:
       accepts: 2.0.0
-      body-parser: 2.3.0
+      body-parser: 2.3.0(supports-color@10.2.2)
       content-disposition: 1.1.0
       content-type: 1.0.5
       cookie: 0.7.2
       cookie-signature: 1.2.2
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       depd: 2.0.0
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
-      finalhandler: 2.1.1
+      finalhandler: 2.1.1(supports-color@10.2.2)
       fresh: 2.0.0
       http-errors: 2.0.1
       merge-descriptors: 2.0.0
@@ -8619,9 +8620,9 @@ snapshots:
       proxy-addr: 2.0.7
       qs: 6.15.2
       range-parser: 1.2.1
-      router: 2.2.0
-      send: 1.2.1
-      serve-static: 2.2.1
+      router: 2.2.0(supports-color@10.2.2)
+      send: 1.2.1(supports-color@10.2.2)
+      serve-static: 2.2.1(supports-color@10.2.2)
       statuses: 2.0.2
       type-is: 2.1.0
       vary: 1.1.2
@@ -8686,9 +8687,9 @@ snapshots:
     dependencies:
       to-regex-range: 5.0.1
 
-  finalhandler@2.1.1:
+  finalhandler@2.1.1(supports-color@10.2.2):
     dependencies:
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       encodeurl: 2.0.0
       escape-html: 1.0.3
       on-finished: 2.4.1
@@ -8723,7 +8724,9 @@ snapshots:
 
   flatted@3.4.2: {}
 
-  follow-redirects@1.16.0: {}
+  follow-redirects@1.16.0(debug@4.4.3(supports-color@10.2.2)):
+    optionalDependencies:
+      debug: 4.4.3(supports-color@10.2.2)
 
   for-each@0.3.5:
     dependencies:
@@ -8976,10 +8979,10 @@ snapshots:
       statuses: 2.0.2
       toidentifier: 1.0.1
 
-  https-proxy-agent@5.0.1:
+  https-proxy-agent@5.0.1(supports-color@10.2.2):
     dependencies:
-      agent-base: 6.0.2
-      debug: 4.4.3
+      agent-base: 6.0.2(supports-color@10.2.2)
+      debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -9019,32 +9022,32 @@ snapshots:
 
   ini@4.1.3: {}
 
-  ink-gradient@4.0.1(@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.28):
+  ink-gradient@4.0.1(@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.29):
     dependencies:
       '@types/gradient-string': 1.1.6
       gradient-string: 3.0.0
-      ink: '@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
-      react: '@my-react/react@0.3.28(@my-react/react@0.3.28)'
+      ink: '@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
+      react: '@my-react/react@0.3.29(@my-react/react@0.3.29)'
       strip-ansi: 7.2.0
 
-  ink-link@5.0.0(@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)):
+  ink-link@5.0.0(@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)):
     dependencies:
-      ink: '@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
+      ink: '@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
       terminal-link: 5.0.0
 
-  ink-select-input@6.2.0(@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.28):
+  ink-select-input@6.2.0(@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.29):
     dependencies:
       figures: 6.1.0
-      ink: '@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
-      react: '@my-react/react@0.3.28(@my-react/react@0.3.28)'
+      ink: '@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
+      react: '@my-react/react@0.3.29(@my-react/react@0.3.29)'
       to-rotated: 1.0.0
 
-  ink-stream-markdown@0.0.8(@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.28):
+  ink-stream-markdown@0.0.8(@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.29):
     dependencies:
       beautiful-mermaid: 1.1.3
       chalk: 5.6.2
-      ink: '@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
-      react: '@my-react/react@0.3.28(@my-react/react@0.3.28)'
+      ink: '@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
+      react: '@my-react/react@0.3.29(@my-react/react@0.3.29)'
       shiki: 4.2.0
       stream-markdown-parser: 1.0.5
       string-width: 8.2.1
@@ -9067,10 +9070,10 @@ snapshots:
       unicodeit: 0.7.5
       wrap-ansi: 10.0.0
 
-  ink-tab@5.2.0(@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.28)(@types/react@19.2.17):
+  ink-tab@5.2.0(@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.29)(@types/react@19.2.17):
     dependencies:
-      ink: '@my-react/react-terminal@0.0.28(@my-react/react@0.3.28(@my-react/react@0.3.28))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
-      react: '@my-react/react@0.3.28(@my-react/react@0.3.28)'
+      ink: '@my-react/react-terminal@0.0.29(@my-react/react@0.3.29(@my-react/react@0.3.29))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
+      react: '@my-react/react@0.3.29(@my-react/react@0.3.29)'
     optionalDependencies:
       '@types/react': 19.2.17
 
@@ -9446,9 +9449,9 @@ snapshots:
     dependencies:
       immediate: 3.0.6
 
-  lighthouse-logger@2.0.2:
+  lighthouse-logger@2.0.2(supports-color@10.2.2):
     dependencies:
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       marky: 1.3.0
     transitivePeerDependencies:
       - supports-color
@@ -10084,7 +10087,7 @@ snapshots:
 
   process-warning@5.0.0: {}
 
-  project-tool@https://codeload.github.com/MrWangJustToDo/project-tool/tar.gz/64550787384b6d7be1da7e3376e5167e85a1c498(jiti@2.7.0)(typescript@5.9.3):
+  project-tool@https://codeload.github.com/MrWangJustToDo/project-tool/tar.gz/64550787384b6d7be1da7e3376e5167e85a1c498(debug@4.4.3(supports-color@10.2.2))(jiti@2.7.0)(supports-color@10.2.2)(typescript@5.9.3):
     dependencies:
       '@eslint/js': 9.39.4
       '@rollup/plugin-commonjs': 29.0.3(rollup@4.62.2)
@@ -10093,32 +10096,32 @@ snapshots:
       '@rollup/plugin-replace': 6.0.3(rollup@4.62.2)
       '@rollup/plugin-terser': 0.4.4(rollup@4.62.2)
       '@rollup/plugin-typescript': 12.3.0(rollup@4.62.2)(tslib@2.8.1)(typescript@5.9.3)
-      '@typescript-eslint/eslint-plugin': 8.61.1(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
-      '@typescript-eslint/parser': 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
-      axios: 1.18.0
-      eslint: 9.39.4(jiti@2.7.0)
-      eslint-config-prettier: 10.1.8(eslint@9.39.4(jiti@2.7.0))
-      eslint-import-resolver-typescript: 4.4.5(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0))
-      eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.4(jiti@2.7.0))
-      eslint-plugin-prettier: 5.5.6(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))(prettier@3.8.4)
-      eslint-plugin-react: 7.37.5(eslint@9.39.4(jiti@2.7.0))
-      eslint-plugin-react-hooks: 7.1.1(eslint@9.39.4(jiti@2.7.0))
+      '@typescript-eslint/eslint-plugin': 8.61.1(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
+      '@typescript-eslint/parser': 8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
+      axios: 1.18.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
+      eslint-config-prettier: 10.1.8(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))
+      eslint-import-resolver-typescript: 4.4.5(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2))(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)
+      eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))
+      eslint-plugin-prettier: 5.5.6(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2)))(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(prettier@3.8.4)
+      eslint-plugin-react: 7.37.5(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))
+      eslint-plugin-react-hooks: 7.1.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)
       lodash: 4.18.1
       pino: 9.14.0
       pino-pretty: 13.1.3
       postcss: 8.5.15
       prettier: 3.8.4
       rollup: 4.62.2
-      stylelint: 17.13.0(typescript@5.9.3)
-      stylelint-config-standard: 40.0.0(stylelint@17.13.0(typescript@5.9.3))
-      stylelint-config-standard-scss: 17.0.0(postcss@8.5.15)(stylelint@17.13.0(typescript@5.9.3))
-      stylelint-order: 7.0.1(stylelint@17.13.0(typescript@5.9.3))
-      stylelint-prettier: 5.0.3(prettier@3.8.4)(stylelint@17.13.0(typescript@5.9.3))
-      stylelint-scss: 7.2.0(stylelint@17.13.0(typescript@5.9.3))
+      stylelint: 17.13.0(supports-color@10.2.2)(typescript@5.9.3)
+      stylelint-config-standard: 40.0.0(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3))
+      stylelint-config-standard-scss: 17.0.0(postcss@8.5.15)(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3))
+      stylelint-order: 7.0.1(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3))
+      stylelint-prettier: 5.0.3(prettier@3.8.4)(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3))
+      stylelint-scss: 7.2.0(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3))
       tslib: 2.8.1
       typescript: 5.9.3
-      typescript-eslint: 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      typescript-eslint: 8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
     transitivePeerDependencies:
       - '@types/eslint'
       - debug
@@ -10219,9 +10222,9 @@ snapshots:
       minimist: 1.2.8
       strip-json-comments: 2.0.1
 
-  react-compiler-runtime@1.0.0(@my-react/react@0.3.28):
+  react-compiler-runtime@1.0.0(@my-react/react@0.3.29):
     dependencies:
-      react: '@my-react/react@0.3.28(@my-react/react@0.3.28)'
+      react: '@my-react/react@0.3.29(@my-react/react@0.3.29)'
 
   react-compiler-runtime@1.0.0(react@19.2.7):
     dependencies:
@@ -10241,12 +10244,12 @@ snapshots:
 
   react@19.2.7: {}
 
-  reactivity-store@0.4.0(@my-react/react@0.3.28):
+  reactivity-store@0.4.0(@my-react/react@0.3.29):
     dependencies:
       '@vue/reactivity': 3.5.38
       '@vue/shared': 3.5.38
-      react: '@my-react/react@0.3.28(@my-react/react@0.3.28)'
-      use-sync-external-store: 1.6.0(@my-react/react@0.3.28)
+      react: '@my-react/react@0.3.29(@my-react/react@0.3.29)'
+      use-sync-external-store: 1.6.0(@my-react/react@0.3.29)
 
   reactivity-store@0.4.0(react@19.2.7):
     dependencies:
@@ -10442,9 +10445,9 @@ snapshots:
       '@rollup/rollup-win32-x64-msvc': 4.62.2
       fsevents: 2.3.3
 
-  router@2.2.0:
+  router@2.2.0(supports-color@10.2.2):
     dependencies:
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       depd: 2.0.0
       is-promise: 4.0.0
       parseurl: 1.3.3
@@ -10503,9 +10506,9 @@ snapshots:
 
   semver@7.8.5: {}
 
-  send@1.2.1:
+  send@1.2.1(supports-color@10.2.2):
     dependencies:
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
@@ -10523,12 +10526,12 @@ snapshots:
     dependencies:
       randombytes: 2.1.0
 
-  serve-static@2.2.1:
+  serve-static@2.2.1(supports-color@10.2.2):
     dependencies:
       encodeurl: 2.0.0
       escape-html: 1.0.3
       parseurl: 1.3.3
-      send: 1.2.1
+      send: 1.2.1(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -10681,21 +10684,21 @@ snapshots:
 
   smob@1.6.2: {}
 
-  socket.io-client@4.8.3:
+  socket.io-client@4.8.3(supports-color@10.2.2):
     dependencies:
       '@socket.io/component-emitter': 3.1.2
-      debug: 4.4.3
-      engine.io-client: 6.6.6
-      socket.io-parser: 4.2.6
+      debug: 4.4.3(supports-color@10.2.2)
+      engine.io-client: 6.6.6(supports-color@10.2.2)
+      socket.io-parser: 4.2.6(supports-color@10.2.2)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
       - utf-8-validate
 
-  socket.io-parser@4.2.6:
+  socket.io-parser@4.2.6(supports-color@10.2.2):
     dependencies:
       '@socket.io/component-emitter': 3.1.2
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -10863,45 +10866,45 @@ snapshots:
 
   stubborn-utils@1.0.2: {}
 
-  stylelint-config-recommended-scss@17.0.1(postcss@8.5.15)(stylelint@17.13.0(typescript@5.9.3)):
+  stylelint-config-recommended-scss@17.0.1(postcss@8.5.15)(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3)):
     dependencies:
       postcss-scss: 4.0.9(postcss@8.5.15)
-      stylelint: 17.13.0(typescript@5.9.3)
-      stylelint-config-recommended: 18.0.0(stylelint@17.13.0(typescript@5.9.3))
-      stylelint-scss: 7.2.0(stylelint@17.13.0(typescript@5.9.3))
+      stylelint: 17.13.0(supports-color@10.2.2)(typescript@5.9.3)
+      stylelint-config-recommended: 18.0.0(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3))
+      stylelint-scss: 7.2.0(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3))
     optionalDependencies:
       postcss: 8.5.15
 
-  stylelint-config-recommended@18.0.0(stylelint@17.13.0(typescript@5.9.3)):
+  stylelint-config-recommended@18.0.0(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3)):
     dependencies:
-      stylelint: 17.13.0(typescript@5.9.3)
+      stylelint: 17.13.0(supports-color@10.2.2)(typescript@5.9.3)
 
-  stylelint-config-standard-scss@17.0.0(postcss@8.5.15)(stylelint@17.13.0(typescript@5.9.3)):
+  stylelint-config-standard-scss@17.0.0(postcss@8.5.15)(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3)):
     dependencies:
-      stylelint: 17.13.0(typescript@5.9.3)
-      stylelint-config-recommended-scss: 17.0.1(postcss@8.5.15)(stylelint@17.13.0(typescript@5.9.3))
-      stylelint-config-standard: 40.0.0(stylelint@17.13.0(typescript@5.9.3))
+      stylelint: 17.13.0(supports-color@10.2.2)(typescript@5.9.3)
+      stylelint-config-recommended-scss: 17.0.1(postcss@8.5.15)(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3))
+      stylelint-config-standard: 40.0.0(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3))
     optionalDependencies:
       postcss: 8.5.15
 
-  stylelint-config-standard@40.0.0(stylelint@17.13.0(typescript@5.9.3)):
+  stylelint-config-standard@40.0.0(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3)):
     dependencies:
-      stylelint: 17.13.0(typescript@5.9.3)
-      stylelint-config-recommended: 18.0.0(stylelint@17.13.0(typescript@5.9.3))
+      stylelint: 17.13.0(supports-color@10.2.2)(typescript@5.9.3)
+      stylelint-config-recommended: 18.0.0(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3))
 
-  stylelint-order@7.0.1(stylelint@17.13.0(typescript@5.9.3)):
+  stylelint-order@7.0.1(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3)):
     dependencies:
       postcss: 8.5.15
       postcss-sorting: 9.1.0(postcss@8.5.15)
-      stylelint: 17.13.0(typescript@5.9.3)
+      stylelint: 17.13.0(supports-color@10.2.2)(typescript@5.9.3)
 
-  stylelint-prettier@5.0.3(prettier@3.8.4)(stylelint@17.13.0(typescript@5.9.3)):
+  stylelint-prettier@5.0.3(prettier@3.8.4)(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3)):
     dependencies:
       prettier: 3.8.4
       prettier-linter-helpers: 1.0.1
-      stylelint: 17.13.0(typescript@5.9.3)
+      stylelint: 17.13.0(supports-color@10.2.2)(typescript@5.9.3)
 
-  stylelint-scss@7.2.0(stylelint@17.13.0(typescript@5.9.3)):
+  stylelint-scss@7.2.0(stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3)):
     dependencies:
       '@csstools/css-calc': 3.2.1(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)
       '@csstools/css-parser-algorithms': 4.0.0(@csstools/css-tokenizer@4.0.0)
@@ -10914,9 +10917,9 @@ snapshots:
       postcss-resolve-nested-selector: 0.1.6
       postcss-selector-parser: 7.1.4
       postcss-value-parser: 4.2.0
-      stylelint: 17.13.0(typescript@5.9.3)
+      stylelint: 17.13.0(supports-color@10.2.2)(typescript@5.9.3)
 
-  stylelint@17.13.0(typescript@5.9.3):
+  stylelint@17.13.0(supports-color@10.2.2)(typescript@5.9.3):
     dependencies:
       '@csstools/css-calc': 3.2.1(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)
       '@csstools/css-parser-algorithms': 4.0.0(@csstools/css-tokenizer@4.0.0)
@@ -10929,7 +10932,7 @@ snapshots:
       cosmiconfig: 9.0.2(typescript@5.9.3)
       css-functions-list: 3.3.3
       css-tree: 3.2.1
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       fast-glob: 3.3.3
       fastest-levenshtein: 1.0.16
       file-entry-cache: 11.1.3
@@ -11159,13 +11162,13 @@ snapshots:
 
   typedarray@0.0.6: {}
 
-  typescript-eslint@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3):
+  typescript-eslint@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3):
     dependencies:
-      '@typescript-eslint/eslint-plugin': 8.61.1(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
-      '@typescript-eslint/parser': 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
-      '@typescript-eslint/typescript-estree': 8.61.1(typescript@5.9.3)
-      '@typescript-eslint/utils': 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
-      eslint: 9.39.4(jiti@2.7.0)
+      '@typescript-eslint/eslint-plugin': 8.61.1(@typescript-eslint/parser@8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
+      '@typescript-eslint/parser': 8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
+      '@typescript-eslint/typescript-estree': 8.61.1(supports-color@10.2.2)(typescript@5.9.3)
+      '@typescript-eslint/utils': 8.61.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       typescript: 5.9.3
     transitivePeerDependencies:
       - supports-color
@@ -11312,9 +11315,9 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  use-sync-external-store@1.6.0(@my-react/react@0.3.28):
+  use-sync-external-store@1.6.0(@my-react/react@0.3.29):
     dependencies:
-      react: '@my-react/react@0.3.28(@my-react/react@0.3.28)'
+      react: '@my-react/react@0.3.29(@my-react/react@0.3.29)'
 
   use-sync-external-store@1.6.0(react@19.2.7):
     dependencies:
@@ -11377,11 +11380,11 @@ snapshots:
       glob-to-regexp: 0.4.1
       graceful-fs: 4.2.11
 
-  web-ext-run@0.2.4:
+  web-ext-run@0.2.4(supports-color@10.2.2):
     dependencies:
       '@babel/runtime': 7.28.2
-      '@devicefarmer/adbkit': 3.3.8
-      chrome-launcher: 1.2.0
+      '@devicefarmer/adbkit': 3.3.8(supports-color@10.2.2)
+      chrome-launcher: 1.2.0(supports-color@10.2.2)
       debounce: 1.2.1
       es6-error: 4.1.1
       firefox-profile: 4.7.0
@@ -11505,7 +11508,7 @@ snapshots:
       is-wsl: 3.1.1
       powershell-utils: 0.1.0
 
-  wxt@0.20.26(@types/node@22.19.21)(eslint@9.39.4(jiti@2.7.0))(jiti@2.7.0)(rolldown@1.0.3)(rollup@4.62.2)(terser@5.48.0)(yaml@2.9.0):
+  wxt@0.20.26(@types/node@22.19.21)(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(jiti@2.7.0)(rolldown@1.0.3)(rollup@4.62.2)(supports-color@10.2.2)(terser@5.48.0)(yaml@2.9.0):
     dependencies:
       '@1natsu/wait-element': 4.2.0
       '@aklinker1/rollup-plugin-visualizer': 5.12.0(rollup@4.62.2)
@@ -11548,9 +11551,9 @@ snapshots:
       unimport: 6.3.0(rolldown@1.0.3)
       vite: 8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0)
       vite-node: 6.0.0(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0)
-      web-ext-run: 0.2.4
+      web-ext-run: 0.2.4(supports-color@10.2.2)
     optionalDependencies:
-      eslint: 9.39.4(jiti@2.7.0)
+      eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
     transitivePeerDependencies:
       - '@types/node'
       - '@vitejs/devtools'
