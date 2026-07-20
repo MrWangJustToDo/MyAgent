@@ -69,7 +69,6 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
     async (path: string) => {
       try {
         const content = await wc.fs.readFile(path, "utf-8");
-        console.log("content", content, path);
         setFileContent(content);
         currentContentRef.current = content;
         setFileLang(extToLang(path.split("/").pop() ?? ""));
