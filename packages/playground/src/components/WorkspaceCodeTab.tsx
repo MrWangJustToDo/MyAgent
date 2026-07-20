@@ -8,6 +8,31 @@ import type { WebContainer } from "@webcontainer/api";
 
 const MonacoEditor = lazy(() => import("@monaco-editor/react").then((m) => ({ default: m.Editor })));
 
+const SIDEBAR_STORAGE_KEY = "my-agent-playground-sidebar";
+const MIN_SIDEBAR_WIDTH = 140;
+const MAX_SIDEBAR_WIDTH = 500;
+
+function loadSidebarWidth(): number {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+    if (raw) {
+      const n = Number(raw);
+      if (Number.isFinite(n) && n >= MIN_SIDEBAR_WIDTH) return n;
+    }
+  } catch {
+    // ignore
+  }
+  return 240;
+}
+
+function persistSidebarWidth(width: number): void {
+  try {
+    localStorage.setItem(SIDEBAR_STORAGE_KEY, String(width));
+  } catch {
+    // ignore
+  }
+}
+
 const EXT_LANG: Record<string, string> = {
   ts: "typescript",
   tsx: "typescript",
@@ -64,6 +89,11 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
+  const sidebarResizeRef = useRef(false);
+  const sidebarLiveRef = useRef(sidebarWidth);
+  sidebarLiveRef.current = sidebarWidth;
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const loadFile = useCallback(
     async (path: string) => {
@@ -162,6 +192,36 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
     [saveCurrentFile]
   );
 
+  const handleSidebarResizeStart = useCallback(() => {
+    sidebarResizeRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!sidebarResizeRef.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const newWidth = e.clientX - rect.left;
+      setSidebarWidth(Math.max(MIN_SIDEBAR_WIDTH, Math.min(newWidth, MAX_SIDEBAR_WIDTH)));
+    };
+    const handleMouseUp = () => {
+      if (!sidebarResizeRef.current) return;
+      sidebarResizeRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      persistSidebarWidth(sidebarLiveRef.current);
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, []);
+
   const handleEditorChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {
       currentContentRef.current = value;
@@ -186,8 +246,8 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
   const filename = selectedPath?.split("/").pop() ?? "";
 
   return (
-    <div className="workspace-code-tab">
-      <div className="workspace-code-tab__sidebar">
+    <div ref={containerRef} className="workspace-code-tab">
+      <div className="workspace-code-tab__sidebar" style={{ width: sidebarWidth }}>
         <div className="workspace-code-tab__sidebar-header">Files</div>
         <FileTree
           wc={wc}
@@ -197,6 +257,7 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
           selectedPath={selectedPath}
         />
       </div>
+      <div className="workspace-code-tab__splitter" onMouseDown={handleSidebarResizeStart} />
       <div className="workspace-code-tab__editor">
         <div className="workspace-code-tab__editor-header">
           <input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={handleFileChange} />

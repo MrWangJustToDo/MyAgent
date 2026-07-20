@@ -1,16 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="7" fill="#0D0D0F"/>
-  <rect x="3.5" y="3.5" width="25" height="25" rx="5.5" stroke="url(#g)" stroke-width="1.5"/>
-  <!-- stylized "A" / agent mark -->
-  <path
-    d="M16 7.5 L22.5 24 H19.6 L18.15 19.6 H13.85 L12.4 24 H9.5 L16 7.5 Z M14.7 17.2 H17.3 L16 13.1 L14.7 17.2 Z"
-    fill="url(#g)"
-  />
+  <rect width="32" height="32" rx="8" fill="#0f0f1a"/>
+  <path d="M18 4L8 18h6l-1 10 10-14h-6l1-10z" fill="url(#g)"/>
   <defs>
-    <linearGradient id="g" x1="8" y1="6" x2="24" y2="26" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#00D4FF"/>
-      <stop offset="0.5" stop-color="#7B61FF"/>
-      <stop offset="1" stop-color="#FF6B9D"/>
+    <linearGradient id="g" x1="8" y1="4" x2="24" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#a855f7"/>
     </linearGradient>
   </defs>
 </svg>
