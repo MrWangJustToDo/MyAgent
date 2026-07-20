@@ -16,8 +16,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PlaygroundAgentAdapter } from "./adapters/playground-adapter.js";
 import { ConfigPanel } from "./components/ConfigPanel.js";
-import { PreviewPanel, PreviewToggle } from "./components/PreviewPanel.js";
 import { SplitPane } from "./components/SplitPane.js";
+import { WorkspacePanel } from "./components/WorkspacePanel.js";
 import { usePlaygroundConfig } from "./hooks/use-playground-config.js";
 import { usePreviewPorts } from "./hooks/use-preview-ports.js";
 import { getBootedWebContainer, getWebContainerEnv } from "./webcontainer/create-env.js";
@@ -171,7 +171,6 @@ function useSubscribePreviewPorts(fetchProxyUrl: string) {
 }
 
 export const PlaygroundApp = () => {
-  const panelOpen = usePreviewPorts((s) => s.panelOpen);
   const fetchProxyUrl = usePlaygroundConfig((s) => s.fetchProxyUrl);
 
   useSubscribePreviewPorts(fetchProxyUrl);
@@ -179,7 +178,6 @@ export const PlaygroundApp = () => {
   return (
     <div className="playground-shell">
       <ConfigPanel />
-      <PreviewToggle />
       <div className="playground-main">
         <SplitPane
           left={
@@ -187,8 +185,8 @@ export const PlaygroundApp = () => {
               <AgentBootstrap />
             </div>
           }
-          right={<PreviewPanel />}
-          visible={panelOpen}
+          right={<WorkspacePanel />}
+          visible={true}
         />
       </div>
     </div>

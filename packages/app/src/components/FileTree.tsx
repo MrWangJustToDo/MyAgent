@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "@my-react/react";
 import { Box, Text } from "ink";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { BG, COLORS } from "../theme/colors.js";
 import { formatFolderGlyph, formatIconGlyph, getFileIconStyle, getFolderIconStyle } from "../utils/file-icons.js";

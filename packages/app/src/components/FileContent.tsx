@@ -1,6 +1,6 @@
 import { CodeView, type CodeViewRef, type ScrollState } from "@git-diff-view/cli";
-import { forwardRef, useEffect, useMemo, useState } from "@my-react/react";
 import { Box, Text } from "ink";
+import { forwardRef, useEffect, useMemo, useState } from "react";
 
 import { COLORS } from "../theme/colors.js";
 import { isLikelyBinaryPath } from "../utils/file-icons.js";

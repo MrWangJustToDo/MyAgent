@@ -155,7 +155,15 @@ export async function createWebContainerEnv(options: CreateWebContainerEnvOption
 
   await wc.mount(options.files ?? INITIAL_FILES);
 
-  const fs = createWebContainerFs(wc, ROOT_PATH);
+  const dispatchChange = () => {
+    try {
+      window.dispatchEvent(new CustomEvent("agent:action"));
+    } catch {
+      // not in browser
+    }
+  };
+
+  const fs = createWebContainerFs(wc, ROOT_PATH, dispatchChange);
 
   const env: CoreEnv = {
     rootPath: ROOT_PATH,
@@ -169,9 +177,12 @@ export async function createWebContainerEnv(options: CreateWebContainerEnvOption
     }),
     homedir: async () => "/home",
     fs,
-    runCommand: (command, cmdOptions) => runWebContainerCommand(wc, ROOT_PATH, command, cmdOptions),
-    startCommand: (command, cmdOptions) => startWebContainerCommand(wc, ROOT_PATH, command, cmdOptions),
-    exec: (command, execOptions) => execWebContainerCommand(wc, ROOT_PATH, command, execOptions),
+    runCommand: (command, cmdOptions) =>
+      runWebContainerCommand(wc, ROOT_PATH, command, { ...cmdOptions, onChange: dispatchChange }),
+    startCommand: (command, cmdOptions) =>
+      startWebContainerCommand(wc, ROOT_PATH, command, { ...cmdOptions, onChange: dispatchChange }),
+    exec: (command, execOptions) =>
+      execWebContainerCommand(wc, ROOT_PATH, command, { ...execOptions, onChange: dispatchChange }),
     // Must be a real server proxy — WebContainer outbound is still CORS-limited.
     fetch: createProxiedFetch(),
     getMimeType: async (filePath) => mimeFromPath(filePath),

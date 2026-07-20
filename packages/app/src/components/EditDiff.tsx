@@ -1,6 +1,6 @@
 import { DiffModeEnum, DiffView, type DiffViewRef } from "@git-diff-view/cli";
 import { generateDiffFile } from "@git-diff-view/file";
-import { forwardRef, memo } from "@my-react/react";
+import { forwardRef, memo } from "react";
 
 import { useDiffFileCache } from "../hooks/use-diff-file-cache.js";
 

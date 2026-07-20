@@ -6,8 +6,6 @@ export interface PreviewPortEntry {
   ready: boolean;
 }
 
-/** Pure helpers — kept testable without the store. */
-
 export function upsertPortOpen(ports: PreviewPortEntry[], port: number, url: string): PreviewPortEntry[] {
   const idx = ports.findIndex((p) => p.port === port);
   if (idx === -1) {
@@ -43,31 +41,19 @@ export const usePreviewPorts = createState(
   () => ({
     ports: [] as PreviewPortEntry[],
     activePort: null as number | null,
-    panelOpen: false,
-    autoOpened: false,
   }),
   {
     withActions: (state) => ({
       upsertOpen: (port: number, url: string) => {
-        const wasEmpty = state.ports.length === 0;
         state.ports = upsertPortOpen(state.ports, port, url);
         if (state.activePort === null) {
           state.activePort = port;
         }
-        if (wasEmpty && !state.autoOpened) {
-          state.panelOpen = true;
-          state.autoOpened = true;
-        }
       },
       markReady: (port: number, url: string) => {
-        const wasEmpty = state.ports.length === 0;
         state.ports = markPortReady(state.ports, port, url);
         if (state.activePort === null) {
           state.activePort = port;
-        }
-        if ((wasEmpty || !state.autoOpened) && !state.panelOpen) {
-          state.panelOpen = true;
-          state.autoOpened = true;
         }
       },
       remove: (port: number) => {
@@ -76,18 +62,11 @@ export const usePreviewPorts = createState(
         if (state.activePort === port) {
           state.activePort = nextActive;
         }
-        if (ports.length === 0) {
-          state.panelOpen = false;
-          state.activePort = null;
-        }
       },
       setActive: (port: number) => {
         if (state.ports.some((p) => p.port === port)) {
           state.activePort = port;
         }
-      },
-      setPanelOpen: (open: boolean) => {
-        state.panelOpen = open;
       },
     }),
   }

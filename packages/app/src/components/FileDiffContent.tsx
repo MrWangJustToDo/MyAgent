@@ -1,7 +1,7 @@
 import { DiffModeEnum, DiffView, type DiffViewRef, type ScrollState } from "@git-diff-view/cli";
 import { generateDiffFile } from "@git-diff-view/file";
-import { forwardRef, useEffect, useMemo, useState } from "@my-react/react";
 import { Box, Text } from "ink";
+import { forwardRef, useEffect, useMemo, useState } from "react";
 
 import { COLORS } from "../theme/colors.js";
 import { isLikelyBinaryPath } from "../utils/file-icons.js";

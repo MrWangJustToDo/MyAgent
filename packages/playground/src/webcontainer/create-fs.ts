@@ -17,7 +17,7 @@ function wrapFsError(err: unknown, path: string): never {
   throw new FileError("unknown", message, path, err instanceof Error ? err : undefined);
 }
 
-export function createWebContainerFs(wc: WebContainer, rootPath: string): CoreEnvFs {
+export function createWebContainerFs(wc: WebContainer, rootPath: string, onChange?: () => void): CoreEnvFs {
   const fs: FileSystemAPI = wc.fs;
 
   const resolve = (inputPath: string): string => {
@@ -101,6 +101,7 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string): CoreEn
           await fs.mkdir(parent, { recursive: true });
         }
         await fs.writeFile(fullPath, content);
+        onChange?.();
       } catch (err) {
         wrapFsError(err, filePath);
       }
@@ -110,6 +111,7 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string): CoreEn
       const fullPath = wd(resolve(dirPath));
       try {
         await fs.mkdir(fullPath, { recursive: true });
+        onChange?.();
       } catch (err) {
         wrapFsError(err, dirPath);
       }
@@ -132,6 +134,7 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string): CoreEn
       const fullPath = wd(resolve(filePath));
       try {
         await fs.rm(fullPath, { recursive: true, force: true });
+        onChange?.();
       } catch (err) {
         wrapFsError(err, filePath);
       }
@@ -151,6 +154,7 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string): CoreEn
           await fs.mkdir(parent, { recursive: true });
         }
         await fs.writeFile(fullPath, existing + content);
+        onChange?.();
       } catch (err) {
         wrapFsError(err, filePath);
       }

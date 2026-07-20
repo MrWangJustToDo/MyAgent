@@ -103,6 +103,7 @@ export const WorkspaceFileMode = () => {
   const [gitStatus, setGitStatus] = useState<Map<string, string>>(new Map());
   const [gitInfo, setGitInfo] = useState<WorkspaceGitInfo | null>(null);
   const [cursorIndex, setCursorIndex] = useState(0);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   const bodyHeight = Math.max(10, screenHeight - HEADER_LINES - FOOTER_LINES);
   const paneBodyLines = Math.max(4, bodyHeight - PANE_TITLE_LINES - 2);
@@ -187,6 +188,7 @@ export const WorkspaceFileMode = () => {
       clearWorkspaceDiffCache();
       reload();
       scrollActivePane("top");
+      setRefreshToken((t) => t + 1);
       void refreshGit(rootPath);
       return;
     }
@@ -312,9 +314,16 @@ export const WorkspaceFileMode = () => {
         <WorkspacePane title={rightPaneTitle} active={paneFocus === "preview"} width={undefined} height={bodyHeight}>
           {selectedPath ? (
             mode === "preview" ? (
-              <FileContent ref={previewRef} filePath={selectedPath} width={previewWidth - 2} height={paneBodyLines} />
+              <FileContent
+                key={refreshToken}
+                ref={previewRef}
+                filePath={selectedPath}
+                width={previewWidth - 2}
+                height={paneBodyLines}
+              />
             ) : (
               <FileDiffContent
+                key={refreshToken}
                 ref={diffRef}
                 rootPath={rootPath}
                 filePath={selectedPath}

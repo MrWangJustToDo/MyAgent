@@ -115,7 +115,7 @@ export async function runWebContainerCommand(
   wc: WebContainer,
   rootPath: string,
   command: string,
-  options?: RunCommandOptions
+  options?: RunCommandOptions & { onChange?: () => void }
 ): Promise<CommandResult> {
   const start = Date.now();
   const cwd = toWebContainerSpawnCwd(rootPath, options?.cwd);
@@ -125,12 +125,14 @@ export async function runWebContainerCommand(
       onStderr: options?.onStderr,
       timeout: options?.timeout,
     });
+    options?.onChange?.();
     return {
       ...result,
       durationMs: Date.now() - start,
     };
   } catch (err) {
     if (err instanceof ExecutionError) throw err;
+    options?.onChange?.();
     return {
       stdout: "",
       stderr: err instanceof Error ? err.message : String(err),
@@ -147,7 +149,7 @@ export async function startWebContainerCommand(
   wc: WebContainer,
   rootPath: string,
   command: string,
-  options?: StartCommandOptions
+  options?: StartCommandOptions & { onChange?: () => void }
 ): Promise<StartCommandHandle> {
   const cwd = toWebContainerSpawnCwd(rootPath, options?.cwd);
   const process = await wc.spawn("jsh", ["-c", command], {
@@ -160,9 +162,11 @@ export async function startWebContainerCommand(
   void process.exit
     .then((code) => {
       options?.onExit?.(code ?? 1);
+      options?.onChange?.();
     })
     .catch(() => {
       options?.onExit?.(1);
+      options?.onChange?.();
     });
 
   return {
@@ -180,7 +184,7 @@ export async function execWebContainerCommand(
   wc: WebContainer,
   rootPath: string,
   command: string,
-  options?: CoreEnvExecOptions
+  options?: CoreEnvExecOptions & { onChange?: () => void }
 ): Promise<CoreEnvExecResult> {
   const cwd = toWebContainerSpawnCwd(rootPath, options?.cwd);
   const env = options?.env
@@ -189,6 +193,7 @@ export async function execWebContainerCommand(
 
   try {
     const result = await collectProcessOutput(wc, command, cwd, env, { timeout: options?.timeout });
+    options?.onChange?.();
     return {
       stdout: result.stdout,
       stderr: result.stderr,
@@ -196,6 +201,7 @@ export async function execWebContainerCommand(
     };
   } catch (err) {
     if (err instanceof ExecutionError) throw err;
+    options?.onChange?.();
     return {
       stdout: "",
       stderr: err instanceof Error ? err.message : String(err),

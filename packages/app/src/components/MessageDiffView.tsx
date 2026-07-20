@@ -1,5 +1,5 @@
-import { memo } from "@my-react/react";
 import { Box } from "ink";
+import { memo } from "react";
 
 import { BG } from "../theme/colors.js";
 
