@@ -1,3 +1,4 @@
+/** @ts-nocheck */
 /**
  * Validates preview-port list helpers (open / ready / close + active fallback).
  * Mirrors packages/playground/src/hooks/use-preview-ports.ts pure helpers.
@@ -5,6 +6,7 @@
  * Run: pnpm --filter @my-agent/playground validate:preview-ports
  */
 import assert from "node:assert/strict";
+/* global console: readonly */
 
 function upsertPortOpen(ports, port, url) {
   const idx = ports.findIndex((p) => p.port === port);

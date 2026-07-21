@@ -13,13 +13,12 @@
  * ```
  */
 
+import { destroyAllCommandJobs } from "@my-agent/core";
 import { stdioTransport } from "@tanstack/ai-mcp/stdio";
 import mime from "mime-types";
 import { exec } from "node:child_process";
 import * as os from "node:os";
 import * as path from "node:path";
-
-import { destroyAllCommandJobs } from "@my-agent/core";
 
 import { resolveLocalEnvironmentMode } from "./environment/local.js";
 import { createNativeFilesystem } from "./environment/native-fs.js";

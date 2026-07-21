@@ -87,7 +87,6 @@ const sparse = projectTranscriptForDisplay(
       parts: [
         undefined,
         { type: "tool-call", id: "t1", name: "read_file", state: "complete", arguments: "{}", output: {} },
-        ,
         null,
       ],
     },

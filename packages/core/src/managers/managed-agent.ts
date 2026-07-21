@@ -1,9 +1,4 @@
-import {
-  convertMessagesToModelMessages,
-  type ModelMessage,
-  type UIMessage as TanStackUIMessage,
-  type ServerTool,
-} from "@tanstack/ai";
+import { convertMessagesToModelMessages, type ModelMessage, type UIMessage as TanStackUIMessage } from "@tanstack/ai";
 
 import { applyReactiveCompactionResult } from "../agent/compaction/apply-compaction-result.js";
 import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
@@ -67,6 +62,12 @@ export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
   mcpConfigPath?: string;
   agentDocFilenames?: string[];
   agentDocLoadOverride?: boolean;
+  /**
+   * Custom tools for subagents. When set, `spawnSubagent` will use these
+   * instead of the default subagent tools. Pass `null` to clear all tools,
+   * or omit to use the default read-only + web subagent tools.
+   */
+  subagentTools?: ToolsRecord | null;
 };
 
 /** Subagent preview / non-useChat UI channel (TanStack StreamProcessor). */
@@ -112,7 +113,6 @@ export class ManagedAgent {
   runner?: AgentRunner;
   runnerConfigKey?: string;
   textAdapter?: TextAdapterConfig;
-  tanstackTools?: ServerTool[];
   ui?: AgentUIChannel;
   chatController?: AgentChatController;
   parentId?: string;

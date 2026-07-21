@@ -1,3 +1,4 @@
+import { createSubagentTools } from "../agent/subagent/tools.js";
 import { getEnv } from "../env.js";
 
 import { AgentEventBus } from "./agent-event-bus.js";
@@ -10,6 +11,7 @@ import { emitSessionBootstrapEvents } from "./session-bootstrap-events.js";
 import type { AgentEvent, AgentEventListener, AgentEventType } from "./agent-event-bus.js";
 import type { ManagedAgent, ManagedAgentConfig } from "./managed-agent.js";
 import type { ResumeResult, SessionData } from "../agent/session/types.js";
+import type { ToolsRecord } from "../agent/tools/tanstack/tools-record.js";
 import type { StreamChunk } from "@tanstack/ai";
 
 export type { AgentEvent, AgentEventListener, AgentEventType } from "./agent-event-bus.js";
@@ -161,7 +163,17 @@ export class AgentManager {
       throw new Error(`Parent agent not found: ${parentId}`);
     }
     const finalConfig = { ...parent.config, ...config };
-    return await this.createManagedAgent(finalConfig, parentId);
+    const subagent = await this.createManagedAgent(finalConfig, parentId);
+
+    const customTools = (config as { subagentTools?: ToolsRecord | null }).subagentTools;
+    if (customTools !== undefined) {
+      subagent.tools = customTools ?? {};
+    } else {
+      subagent.tools = createSubagentTools(subagent);
+    }
+    subagent.runner = undefined;
+
+    return subagent;
   }
 
   /**

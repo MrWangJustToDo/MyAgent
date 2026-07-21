@@ -13,7 +13,6 @@ import { truncateSummary } from "./output.js";
 import { buildExploreSystemPrompt } from "./prompt.js";
 import { captureStreamFinishReason, deriveSubagentRunStats } from "./run-stats.js";
 import { throwOnRunError } from "./stream-errors.js";
-import { createSubagentTools } from "./tools.js";
 import { resolveSubagentBridgeUI, SUBAGENT_DEFAULT_MAX_ITERATIONS } from "./types.js";
 
 import type { SubagentConfig, SubagentResult } from "./types.js";
@@ -111,6 +110,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     name: `subagent-${description}`,
     systemPrompt,
     maxIterations,
+    subagentTools: customTools,
   });
 
   // link task to agent, for unstable input
@@ -120,10 +120,6 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
   if (!subagentManaged) {
     throw new Error(`Subagent not found: ${subagentId}`);
   }
-
-  subagentManaged.tools = customTools !== undefined ? customTools : createSubagentTools(subagentManaged);
-  subagentManaged.runner = undefined;
-  subagentManaged.tanstackTools = undefined;
 
   const messages: ModelMessage[] = [...(initialMessages ?? []), { role: "user", content: prompt }];
 

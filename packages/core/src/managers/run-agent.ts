@@ -21,7 +21,7 @@ import type { AgentRunDeps } from "./agent-run-deps.js";
 import type { ManagedAgent } from "./managed-agent.js";
 import type { AgentManager } from "./manager-agent.js";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
-import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai";
+import type { ModelMessage, ServerTool, StreamChunk, UIMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Run message selection
@@ -76,11 +76,11 @@ export async function resolveTextAdapterForManaged(managed: ManagedAgent): Promi
 // TanStack tools
 // ============================================================================
 
-function resolveTanStackTools(managed: ManagedAgent): ReturnType<typeof resolveToolsRecord> {
+function resolveTanStackTools(managed: ManagedAgent): ServerTool[] {
   if (managed.parentId) {
-    return resolveToolsRecord(managed.tools, { exclude: SUBAGENT_EXCLUDED_TOOL_NAMES });
+    return resolveToolsRecord(managed.tools, { exclude: SUBAGENT_EXCLUDED_TOOL_NAMES }) as ServerTool[];
   }
-  return resolveToolsRecord(managed.tools);
+  return resolveToolsRecord(managed.tools) as ServerTool[];
 }
 
 function buildRunDeps(managed: ManagedAgent, manager: AgentManager): AgentRunDeps {
@@ -148,7 +148,7 @@ export function buildAgentRunner(
     model: textAdapter.model,
     maxIterations: managed.config.maxIterations ?? 10,
     systemPrompts: systemPrompt ? [systemPrompt] : undefined,
-    tools: managed.tanstackTools ?? [],
+    tools: resolveTanStackTools(managed),
     middleware,
     temperature: managed.config.temperature,
     maxOutputTokens,
@@ -167,8 +167,6 @@ function runnerConfigKey(managed: ManagedAgent): string {
 }
 
 export async function ensureAgentRunner(_manager: AgentManager, managed: ManagedAgent): Promise<AgentRunner> {
-  managed.tanstackTools = resolveTanStackTools(managed) as ManagedAgent["tanstackTools"];
-
   const textAdapter = await resolveTextAdapterForManaged(managed);
   const configKey = runnerConfigKey(managed);
 

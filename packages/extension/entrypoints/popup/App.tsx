@@ -80,7 +80,7 @@ function App() {
       </div>
 
       <div className="mb-3 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-3">
-        <label className="mb-1.5 block text-[11px] font-medium tracking-wider text-[#666] uppercase">Server</label>
+        <div className="mb-1.5 block text-[11px] font-medium tracking-wider text-[#666] uppercase">Server</div>
         <div className="flex gap-1.5">
           <div className="relative flex-1">
             <input
@@ -110,7 +110,7 @@ function App() {
       </div>
 
       <div className="mb-3 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-3">
-        <label className="mb-2.5 block text-[11px] font-medium tracking-wider text-[#666] uppercase">API</label>
+        <div className="mb-2.5 block text-[11px] font-medium tracking-wider text-[#666] uppercase">API</div>
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <span className="w-16 shrink-0 text-[12px] text-[#888]">Style</span>

@@ -1,3 +1,4 @@
+/** @ts-nocheck */
 /**
  * Validates workspace export selection helpers.
  * Mirrors packages/playground/src/webcontainer/workspace-export-selection.ts
@@ -5,6 +6,7 @@
  * Run: pnpm --filter @my-agent/playground validate:workspace-export-selection
  */
 import assert from "node:assert/strict";
+/* global console: readonly */
 
 function isUnderPath(path, ancestor) {
   if (ancestor === "/") return path !== "/";
