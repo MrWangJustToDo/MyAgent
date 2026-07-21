@@ -11,6 +11,8 @@ export interface PlaygroundConfig {
   apiKey: string;
   /** Cloudflare Worker (or other) CORS proxy for webfetch/websearch. Empty = Vite `/__fetch_proxy` in dev. */
   fetchProxyUrl: string;
+  /** Whether the workspace panel is visible. */
+  workspaceVisible: boolean;
 }
 
 const bakedFetchProxyUrl = (import.meta.env.VITE_FETCH_PROXY_URL as string | undefined)?.trim() ?? "";
@@ -22,6 +24,7 @@ const defaults: PlaygroundConfig = {
   apiKey: "",
   // Baked at build time when VITE_FETCH_PROXY_URL is set (e.g. GitHub Actions / .env).
   fetchProxyUrl: bakedFetchProxyUrl,
+  workspaceVisible: false,
 };
 
 function load(): PlaygroundConfig {
@@ -60,6 +63,7 @@ export const usePlaygroundConfig = createState(() => ({ ...initial }), {
         baseURL: state.baseURL,
         apiKey: state.apiKey,
         fetchProxyUrl: state.fetchProxyUrl,
+        workspaceVisible: state.workspaceVisible,
       });
     },
   }),

@@ -172,8 +172,20 @@ function useSubscribePreviewPorts(fetchProxyUrl: string) {
 
 export const PlaygroundApp = () => {
   const fetchProxyUrl = usePlaygroundConfig((s) => s.fetchProxyUrl);
+  const workspaceVisible = usePlaygroundConfig((s) => s.workspaceVisible);
+  const { setConfig } = usePlaygroundConfig.getActions();
+
+  const [autoOpened, setAutoOpened] = useState(false);
 
   useSubscribePreviewPorts(fetchProxyUrl);
+
+  useEffect(() => {
+    if (autoOpened) return;
+    if (hasCoreEnv()) {
+      setConfig({ workspaceVisible: true });
+      setAutoOpened(true);
+    }
+  }, [autoOpened, setConfig]);
 
   return (
     <div className="playground-shell">
@@ -186,7 +198,7 @@ export const PlaygroundApp = () => {
             </div>
           }
           right={<WorkspacePanel />}
-          visible={true}
+          visible={workspaceVisible}
         />
       </div>
     </div>

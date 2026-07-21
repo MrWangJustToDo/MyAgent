@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { usePlaygroundConfig } from "../hooks/use-playground-config.js";
 import { usePreviewPorts } from "../hooks/use-preview-ports.js";
 import { getBootedWebContainer } from "../webcontainer/create-env.js";
 
@@ -12,10 +13,15 @@ const ROOT_PATH = "/";
 type TabId = "preview" | "code";
 
 export const WorkspacePanel = () => {
+  const { setConfig } = usePlaygroundConfig.getActions();
   const [activeTab, setActiveTab] = useState<TabId>("code");
   const [wc, setWc] = useState<WebContainer | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const rootPath = ROOT_PATH;
+
+  const close = useCallback(() => {
+    setConfig({ workspaceVisible: false });
+  }, [setConfig]);
 
   // Preview tab state
   const ports = usePreviewPorts((s) => s.ports);
@@ -105,6 +111,17 @@ export const WorkspacePanel = () => {
             Code
           </button>
         </div>
+        <button
+          type="button"
+          className="workspace-panel__close"
+          onClick={close}
+          title="Close workspace panel"
+          aria-label="Close workspace panel"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
       </header>
 
       {activeTab === "preview" && (

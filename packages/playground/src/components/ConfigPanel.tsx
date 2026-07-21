@@ -17,9 +17,10 @@ export const ConfigPanel = () => {
   const fetchProxyUrl = usePlaygroundConfig((s) => s.fetchProxyUrl);
   const { setConfig } = usePlaygroundConfig.getActions();
 
+  const workspaceVisible = usePlaygroundConfig((s) => s.workspaceVisible);
   const [open, setOpen] = useState(() => !apiKey);
   const [exportOpen, setExportOpen] = useState(false);
-  const [draft, setDraft] = useState({ model, style, baseURL, apiKey, fetchProxyUrl });
+  const [draft, setDraft] = useState({ model, style, baseURL, apiKey, fetchProxyUrl, workspaceVisible });
 
   const openPanel = useCallback(() => setOpen(true), []);
   const { position, bubbleSize, pointerHandlers } = useDraggableBubble(BUBBLE_STORAGE_KEY, openPanel);
@@ -80,6 +81,19 @@ export const ConfigPanel = () => {
               placeholder="https://….workers.dev (required on GitHub Pages)"
             />
           </label>
+          <label className="config-panel__toggle">
+            <span>Workspace panel</span>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={workspaceVisible}
+              onChange={(e) => {
+                setConfig({ workspaceVisible: e.target.checked });
+                setDraft((d) => ({ ...d, workspaceVisible: e.target.checked }));
+              }}
+            />
+          </label>
+
           <button
             type="button"
             className="config-panel__save"
