@@ -548,8 +548,10 @@ export class ManagedAgent {
         emitEvent: (type, data) => this.emitEvent(type, data),
       });
 
+      const userMsg = typeof options.prompt === "string" ? options.prompt : "(structured)";
       this.emitEvent("prompt:submit", {
-        prompt: typeof options.prompt === "string" ? options.prompt : "(structured)",
+        prompt: userMsg,
+        contextMessageCount: inputMessages?.length ?? 0,
       });
     }
   }
@@ -628,8 +630,9 @@ export class ManagedAgent {
       });
 
       this.emitEvent("compaction:reactive-complete", {
-        originalMessages: llmMessages.length,
-        compactedMessages: compactedMessages.length,
+        originalCount: llmMessages.length,
+        compactedCount: compactedMessages.length,
+        originalTokens: this.usage.getWindowUsage().inputTokens,
       });
 
       this.statusController.endCompaction();

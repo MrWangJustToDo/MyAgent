@@ -175,8 +175,6 @@ export async function summarizeConversation(
   const inputBudget = resolveSummarizationInputBudget(manager, parentAgentId);
   const batches = splitMessagesByTokenBudget(cleanMessages, inputBudget);
 
-  manager.getAgent(parentAgentId)?.log.agent("batch summary", { batches });
-
   if (batches.length <= 1) {
     return summarizeConversationBatch(cleanMessages, parentAgentId, manager, { focus, todos, existingSummary });
   }
@@ -232,8 +230,6 @@ async function summarizeConversationBatch(
     },
     { manager }
   );
-
-  manager.getAgent(parentAgentId)?.log.agent("summary", { fullPrompt, result });
 
   const output = result.output?.trim() ?? "";
   if (!output || output === "(no summary)") {

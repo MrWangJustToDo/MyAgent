@@ -96,11 +96,13 @@ export class AgentChatController {
 
   private async pumpToolPhases(): Promise<void> {
     const generation = ++this.runGeneration;
+    const turnStart = Date.now();
     this.managed.setError("");
     // Safe: skips approval-responded and valid input-complete (needed for `y` / tool-phase).
     this.applyCancelledIncompleteTools();
 
     let hasError = false;
+    let llmCallCount = 0;
     const messages = this.channel.getMessages();
     this.managed.statusController.prepareRunPhase(messages);
 
@@ -115,6 +117,7 @@ export class AgentChatController {
       if (iteration > 0 && !shouldContinueAgentPump(currentMessages)) break;
 
       await this.executeStream(currentMessages, generation);
+      llmCallCount++;
       if (this.managed.status === "error") {
         hasError = true;
       }
@@ -133,6 +136,20 @@ export class AgentChatController {
     if (generation === this.runGeneration) {
       this.managed.statusController.reconcileAfterRun(this.channel.getMessages());
       this.persistMessages();
+
+      const totalUsage = this.managed.usage?.getTotal();
+      const toolCallCount = this.channel
+        .getMessages()
+        .filter((m) => m.role === "assistant")
+        .reduce((count, m) => count + m.parts.filter((p) => p.type === "tool-call").length, 0);
+      this.managed.emitEvent("turn:summary", {
+        llmCalls: llmCallCount,
+        toolCalls: toolCallCount,
+        inputTokens: totalUsage?.inputTokens ?? 0,
+        outputTokens: totalUsage?.outputTokens ?? 0,
+        cacheReadTokens: totalUsage?.cacheReadTokens ?? 0,
+        durationMs: Date.now() - turnStart,
+      });
     }
   }
 

@@ -79,8 +79,6 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
             llmMessages = agentContext.getMessagesForLLM(canon);
           }
 
-          deps.log?.agent("compact result", { result, canon, llmMessages });
-
           if (result.compacted) {
             deps.emitEvent?.("compaction:auto-complete", {
               tokensBefore: result.tokensBefore,

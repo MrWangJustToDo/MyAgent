@@ -7,18 +7,17 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
 
 /** Log categories for filtering */
 export type LogCategory =
-  | "agent" // Agent lifecycle
-  | "chat" // Chat/LLM interactions
-  | "tool" // Tool calls and results
-  | "approval" // Approval flow
-  | "stream" // Stream events
-  | "todo" // Todo tracking
-  | "skill" // skill load
-  | "memory" // Memory system
-  | "hooks" // Hook system
-  | "error" // Errors
-  | "system" // System/initialization events
-  | "custom"; // Custom logs
+  | "agent"
+  | "chat"
+  | "llm"
+  | "tool"
+  | "approval"
+  | "compaction"
+  | "todo"
+  | "skill"
+  | "memory"
+  | "hooks"
+  | "system";
 
 /** Log entry */
 export interface LogEntry {

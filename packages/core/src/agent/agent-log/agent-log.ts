@@ -152,14 +152,6 @@ export class AgentLog {
     return this.info("approval", message, data);
   }
 
-  stream(message: string, data?: Record<string, unknown>): LogEntry | null {
-    return this.debug("stream", message, data);
-  }
-
-  chunk(chunkType: string, data?: Record<string, unknown>): LogEntry | null {
-    return this.debug("stream", `Chunk: ${chunkType}`, data, ["chunk"]);
-  }
-
   todo(message: string, data?: Record<string, unknown>): LogEntry | null {
     return this.debug("todo", message, data);
   }
