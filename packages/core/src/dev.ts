@@ -31,7 +31,7 @@ export {
 } from "./models/reasoning-echo.js";
 export { runSideTextQuery } from "./models/side-text-query.js";
 export { isPromptTooLongError } from "./agent/compaction/reactive-compact.js";
-export { extractRunErrorMessage, runStreamWithReactiveCompactRetry } from "./managers/reactive-compact-retry.js";
+export { extractRunErrorMessage, runStreamWithRecovery } from "./managers/reactive-compact-retry.js";
 export { throwOnRunError } from "./agent/subagent/stream-errors.js";
 export { formatReadFileToolResult } from "./agent/tools/util/format-read-file-result.js";
 export { BEGIN_SUMMARY_TOOL_NAME } from "./agent/subagent/begin-summary-tool.js";

@@ -12,6 +12,12 @@ import type { AgentManager } from "./manager-agent.js";
 import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai";
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+const MAX_RECOVERY_ATTEMPTS = 3;
+
+// ============================================================================
 // Helpers
 // ============================================================================
 
@@ -62,66 +68,36 @@ export function messagesForModelCapabilities(
 }
 
 // ============================================================================
-// Stream wrapper
+// Recovery helpers
 // ============================================================================
 
-export interface ReactiveCompactRetryOptions {
+interface RecoveryResult {
+  messages: Array<UIMessage | ModelMessage>;
+  multimodalStripAttempted: boolean;
+}
+
+interface AttemptRecoveryOptions {
   managed: ManagedAgent;
   manager: AgentManager;
   getMessages: () => Array<UIMessage | ModelMessage>;
-  run: (messages: Array<UIMessage | ModelMessage>) => AsyncIterable<StreamChunk>;
 }
 
-export async function* runStreamWithReactiveCompactRetry(
-  options: ReactiveCompactRetryOptions
-): AsyncIterable<StreamChunk> {
-  let messages = messagesForModelCapabilities(options.managed, options.getMessages());
-  let multimodalStripAttempted = false;
-
-  while (true) {
-    let retry = false;
-    const stream = options.run(messages);
-    assertAsyncIterable(stream, "AgentRunner.run");
-
-    try {
-      for await (const chunk of stream) {
-        if (chunk.type === "RUN_ERROR") {
-          const runError = errorFromUnknown(extractRunErrorMessage(chunk) || "Agent run failed");
-          const handled = await tryHandleRunFailure(options, runError, messages, multimodalStripAttempted);
-          if (handled) {
-            retry = true;
-            messages = handled.messages;
-            multimodalStripAttempted = handled.multimodalStripAttempted;
-            break;
-          }
-          // Fail visibly — do not yield RUN_ERROR for consumers to silently ignore.
-          throw runError;
-        }
-        yield chunk;
-      }
-    } catch (error) {
-      if (!retry) {
-        const handled = await tryHandleRunFailure(options, error, messages, multimodalStripAttempted);
-        if (handled) {
-          retry = true;
-          messages = handled.messages;
-          multimodalStripAttempted = handled.multimodalStripAttempted;
-        } else {
-          throw error;
-        }
-      }
-    }
-
-    if (!retry) return;
-  }
-}
-
-async function tryHandleRunFailure(
-  options: ReactiveCompactRetryOptions,
+async function attemptRecovery(
+  options: AttemptRecoveryOptions,
   error: unknown,
   currentMessages: Array<UIMessage | ModelMessage>,
-  multimodalStripAttempted: boolean
-): Promise<{ messages: Array<UIMessage | ModelMessage>; multimodalStripAttempted: boolean } | null> {
+  multimodalStripAttempted: boolean,
+  recoveryAttempts: number
+): Promise<RecoveryResult | null> {
+  if (recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
+    options.managed.log?.error(
+      "agent",
+      `Max recovery attempts (${MAX_RECOVERY_ATTEMPTS}) exceeded`,
+      errorFromUnknown(error)
+    );
+    return null;
+  }
+
   const compactHandled = await tryReactiveCompactRetry(options.managed, options.manager, error);
   if (compactHandled) {
     return {
@@ -143,4 +119,58 @@ async function tryHandleRunFailure(
   }
 
   return null;
+}
+
+// ============================================================================
+// Stream wrapper
+// ============================================================================
+
+export interface RecoveryOptions {
+  managed: ManagedAgent;
+  manager: AgentManager;
+  getMessages: () => Array<UIMessage | ModelMessage>;
+  run: (messages: Array<UIMessage | ModelMessage>) => AsyncIterable<StreamChunk>;
+}
+
+export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIterable<StreamChunk> {
+  let messages = messagesForModelCapabilities(options.managed, options.getMessages());
+  let multimodalStripAttempted = false;
+  let recoveryAttempts = 0;
+
+  while (true) {
+    let shouldRetry = false;
+    const stream = options.run(messages);
+    assertAsyncIterable<StreamChunk>(stream, "AgentRunner.run");
+
+    try {
+      for await (const chunk of stream) {
+        if (chunk.type === "RUN_ERROR") {
+          const runError = errorFromUnknown(extractRunErrorMessage(chunk) || "Agent run failed");
+          const result = await attemptRecovery(options, runError, messages, multimodalStripAttempted, recoveryAttempts);
+          if (result) {
+            shouldRetry = true;
+            messages = result.messages;
+            multimodalStripAttempted = result.multimodalStripAttempted;
+            break;
+          }
+          throw runError;
+        }
+        yield chunk;
+      }
+    } catch (error) {
+      if (!shouldRetry) {
+        const result = await attemptRecovery(options, error, messages, multimodalStripAttempted, recoveryAttempts);
+        if (result) {
+          shouldRetry = true;
+          messages = result.messages;
+          multimodalStripAttempted = result.multimodalStripAttempted;
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    if (!shouldRetry) return;
+    recoveryAttempts++;
+  }
 }

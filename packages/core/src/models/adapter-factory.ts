@@ -57,7 +57,7 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
   }
 
   const key = apiKey || "not-needed";
-  const openaiConfig = { baseURL: trimmedBaseURL };
+  const openaiConfig = { baseURL: trimmedBaseURL, maxRetries: 0 };
 
   if (shouldEchoReasoningContent(trimmedBaseURL, model)) {
     return {

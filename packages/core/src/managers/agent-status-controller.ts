@@ -83,8 +83,14 @@ export class AgentStatusController {
     if (countPendingToolApprovals(messages) > 0) return;
 
     const status = this.deps.getStatus();
-    if (status === "awaiting_user" || status === "aborted") return;
-    if (status === "waiting" || status === "idle" || status === "completed" || status === "error") {
+    if (status === "awaiting_user") return;
+    if (
+      status === "waiting" ||
+      status === "idle" ||
+      status === "completed" ||
+      status === "error" ||
+      status === "aborted"
+    ) {
       this.deps.setStatus("running");
     }
   }

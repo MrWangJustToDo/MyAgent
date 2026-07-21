@@ -100,10 +100,12 @@ export class AgentChatController {
     // Safe: skips approval-responded and valid input-complete (needed for `y` / tool-phase).
     this.applyCancelledIncompleteTools();
 
+    let hasError = false;
     const messages = this.channel.getMessages();
     this.managed.statusController.prepareRunPhase(messages);
 
     for (let iteration = 0; iteration < MAX_TOOL_PHASE_ITERATIONS; iteration++) {
+      if (hasError) break;
       if (generation !== this.runGeneration) return;
 
       const currentMessages = this.channel.getMessages();
@@ -113,6 +115,9 @@ export class AgentChatController {
       if (iteration > 0 && !shouldContinueAgentPump(currentMessages)) break;
 
       await this.executeStream(currentMessages, generation);
+      if (this.managed.status === "error") {
+        hasError = true;
+      }
       if (generation !== this.runGeneration) {
         // Stream may have finalized truncated tool args after Esc — cancel again.
         this.applyCancelledIncompleteTools();
@@ -156,6 +161,7 @@ export class AgentChatController {
       } else {
         // Surface stream failures in status + agent:stream-error (not silent Completed).
         this.managed.statusController.onRunError(message);
+        this.managed.log?.error("agent", "Stream execution failed", error);
       }
       // Do not rethrow — hosts often do not catch sendMessage; an unhandled rejection
       // aborts the entire CLI process. Status/error on ManagedAgent is the signal.

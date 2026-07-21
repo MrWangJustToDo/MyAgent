@@ -15,7 +15,7 @@ import { DEFAULT_BASE_URLS } from "../models/model-config.js";
 import { AgentUIChannel } from "./agent-ui-channel.js";
 import { createEmitFn } from "./emit-agent-event.js";
 import { buildManagedAgentDeps } from "./managed-agent-deps.js";
-import { runStreamWithReactiveCompactRetry } from "./reactive-compact-retry.js";
+import { runStreamWithRecovery } from "./reactive-compact-retry.js";
 
 import type { AgentRunDeps } from "./agent-run-deps.js";
 import type { ManagedAgent } from "./managed-agent.js";
@@ -213,7 +213,7 @@ async function executeManagedAgentRun(
 
   const inputMessages = messages || [];
 
-  return runStreamWithReactiveCompactRetry({
+  return runStreamWithRecovery({
     managed,
     manager,
     getMessages: () => inputMessages,
