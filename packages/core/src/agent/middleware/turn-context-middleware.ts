@@ -2,10 +2,10 @@ import type { ToolRunContext } from "../runner/run-context.js";
 import type { ChatMiddleware, ModelMessage } from "@tanstack/ai";
 
 export interface TurnContextMiddlewareDeps {
-  getDynamicTurnContext: () => string | undefined;
+  getDynamicTurnContext: () => string | undefined | Promise<string | undefined>;
 }
 
-/** Inject per-turn dynamic context (memory, todo nag) before the latest user message. */
+/** Inject per-turn dynamic context (memory, todo nag, date, git status) before the latest user message. */
 export function injectTurnContext(messages: ModelMessage[], dynamicContext: string | undefined): ModelMessage[] {
   if (!dynamicContext) return messages;
 
@@ -33,7 +33,8 @@ export function createTurnContextMiddleware(deps: TurnContextMiddlewareDeps): Ch
     name: "turn-context",
     onConfig: async (_ctx, config) => {
       const messages = config.messages as ModelMessage[];
-      return { messages: injectTurnContext(messages, deps.getDynamicTurnContext()) };
+      const context = await deps.getDynamicTurnContext();
+      return { messages: injectTurnContext(messages, context) };
     },
   };
 }

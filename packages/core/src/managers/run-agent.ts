@@ -226,6 +226,7 @@ async function executeManagedAgentRun(
         threadId: input.threadId,
         runId: input.runId,
       }),
+    runner,
   });
 }
 

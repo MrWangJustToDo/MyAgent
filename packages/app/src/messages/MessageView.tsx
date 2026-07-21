@@ -43,7 +43,7 @@ function formatFileSize(dataUrl: string): string {
 
 /** Render a single message */
 export const MessageView = memo(({ message, readOnly = false }: MessageViewProps) => {
-  useTheme((s) => s.theme);
+  const theme = useTheme((s) => s.theme);
 
   const validParts = useMemo(() => message.parts.filter((i) => Object.keys(i).length > 1), [message.parts]);
 
@@ -74,11 +74,11 @@ export const MessageView = memo(({ message, readOnly = false }: MessageViewProps
 
   if (isActivitySummaryMessage(message)) {
     const summary = visibleParts[0]?.type === "text" ? getTextContent(visibleParts[0] as TextPart) : "";
-    return summary ? <ActivitySummaryView summary={summary} /> : null;
+    return summary ? <ActivitySummaryView key={theme} summary={summary} /> : null;
   }
 
   if (message.role === "user") {
-    return <UserMessageView parts={visibleParts} fileIndexMap={fileIndexMap} />;
+    return <UserMessageView key={theme} parts={visibleParts} fileIndexMap={fileIndexMap} />;
   }
 
   if (visibleParts.length === 0) return null;
@@ -86,7 +86,7 @@ export const MessageView = memo(({ message, readOnly = false }: MessageViewProps
   return (
     <>
       {visibleParts.map((part, index) => (
-        <Box key={`${part.type}-${index}`} width="100%">
+        <Box key={`${theme}-${part.type}-${index}`} width="100%">
           {part.type === "text" && <TextPartView part={part as TextPart} role={message.role} />}
           {isImagePart(part) && <FilePartView part={part as ImagePart} index={fileIndexMap.get(index)} />}
           {isToolCallPart(part) && <ToolCallPartView part={part} readOnly={readOnly} />}

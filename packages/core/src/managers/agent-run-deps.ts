@@ -23,6 +23,6 @@ export interface AgentRunDeps {
   hookRegistry: HookRegistry | null;
   compactionConfig: CompactionConfig | null;
   modelInfo: ModelInfo | null;
-  getDynamicTurnContext: () => string | undefined;
+  getDynamicTurnContext: () => string | undefined | Promise<string | undefined>;
   shouldTriggerAutoCompact: (messages?: ModelMessage[]) => boolean;
 }

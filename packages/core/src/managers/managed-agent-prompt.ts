@@ -53,17 +53,48 @@ export function buildFrozenSystemPrompt(input: SystemPromptInput): string | unde
     );
   }
 
-  return parts.length > 0 ? parts.join("\n\n") : undefined;
+  const joined = parts.length > 0 ? parts.join("\n\n") : undefined;
+  if (joined) {
+    return joined + SYSTEM_PROMPT_DYNAMIC_BOUNDARY;
+  }
+  return undefined;
 }
+
+/**
+ * Separator between static and dynamic parts of the system prompt.
+ * Content before this marker is eligible for API-level prompt caching (Anthropic, OpenAI).
+ * Content after changes per-turn and cannot use global cache.
+ */
+export const SYSTEM_PROMPT_DYNAMIC_BOUNDARY = "\n<SYSTEM_PROMPT_DYNAMIC_BOUNDARY>\n";
 
 export interface DynamicTurnContextInput {
   relevantMemoryContent: string;
   todoNagReminder?: string;
+  currentDate?: string;
+  gitBranch?: string;
+  gitStatus?: string;
 }
 
 export function buildDynamicTurnContext(input: DynamicTurnContextInput): string | undefined {
   const parts: string[] = [];
+
+  if (input.currentDate) {
+    parts.push(["<current_date>", input.currentDate, "</current_date>"].join("\n"));
+  }
+
+  if (input.gitBranch || input.gitStatus) {
+    const gitParts: string[] = [];
+    if (input.gitBranch) {
+      gitParts.push(`Branch: ${input.gitBranch}`);
+    }
+    if (input.gitStatus) {
+      gitParts.push(`Status:\n${input.gitStatus}`);
+    }
+    parts.push(["<git_status>", ...gitParts, "</git_status>"].join("\n"));
+  }
+
   if (input.relevantMemoryContent) parts.push(input.relevantMemoryContent);
   if (input.todoNagReminder) parts.push(input.todoNagReminder);
+
   return parts.length > 0 ? parts.join("\n\n") : undefined;
 }

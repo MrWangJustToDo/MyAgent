@@ -72,6 +72,7 @@ registerCommand({
         };
       }
 
+      agent.resetSystemPrompt();
       agent.persistSession();
       bumpAgentUsage();
 

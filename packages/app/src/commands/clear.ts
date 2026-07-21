@@ -37,6 +37,7 @@ registerCommand({
       model: currentSession?.model ?? "unknown",
     });
     agent.setSessionData(newSession);
+    agent.resetSystemPrompt();
 
     const todoManager = agent.getTodoManager();
     if (todoManager) {

@@ -109,4 +109,8 @@ export class AgentRunner {
     assertAsyncIterable(stream, `chat(model=${this.config.model})`);
     return stream;
   }
+
+  setMaxOutputTokens(max: number): void {
+    this.config.maxOutputTokens = max;
+  }
 }

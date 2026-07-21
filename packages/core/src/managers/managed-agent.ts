@@ -12,6 +12,7 @@ import {
 } from "../agent/session/session-sync-tracker.js";
 import { isToolContinuationPrepare } from "../agent/utils/tool-phase-utils.js";
 import { generateId } from "../agent/utils.js";
+import { getEnv } from "../env.js";
 
 import { AgentChatController } from "./agent-chat-controller.js";
 import { createAgentStatusController, type AgentStatusController } from "./agent-status-controller.js";
@@ -492,7 +493,14 @@ export class ManagedAgent {
     return this.frozenSystemPrompt;
   }
 
-  getDynamicTurnContext(): string | undefined {
+  resetSystemPrompt(): void {
+    this.systemPromptFrozen = false;
+    this.frozenSystemPrompt = undefined;
+    this.runnerConfigKey = undefined;
+    this.runner = undefined;
+  }
+
+  async getDynamicTurnContext(): Promise<string | undefined> {
     let todoNagReminder: string | undefined;
     if (this.todoManager?.shouldNag()) {
       todoNagReminder = this.todoManager.getNagReminder();
@@ -500,9 +508,49 @@ export class ManagedAgent {
         roundsSinceUpdate: this.todoManager.getRoundsSinceUpdate(),
       });
     }
+
+    const env = getEnv();
+    const now = new Date();
+    const currentDate = now.toLocaleString("en-US", {
+      timeZoneName: "short",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    let gitBranch: string | undefined;
+    let gitStatus: string | undefined;
+    try {
+      const branchResult = await env.runCommand("git branch --show-current", {
+        cwd: env.rootPath,
+        timeout: 2000,
+      });
+      if (branchResult.exitCode === 0) {
+        gitBranch = branchResult.stdout.trim();
+      }
+    } catch {
+      // Git not available or not a git repo — skip
+    }
+    try {
+      const statusResult = await env.runCommand("git status --short", {
+        cwd: env.rootPath,
+        timeout: 2000,
+      });
+      if (statusResult.exitCode === 0 && statusResult.stdout.trim()) {
+        gitStatus = statusResult.stdout.trim();
+      }
+    } catch {
+      // Git not available — skip
+    }
+
     return buildDynamicTurnContext({
       relevantMemoryContent: this.relevantMemoryContent,
       todoNagReminder,
+      currentDate,
+      gitBranch,
+      gitStatus,
     });
   }
 
