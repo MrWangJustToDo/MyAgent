@@ -12,7 +12,7 @@ import {
 import { clearCoreEnv, hasCoreEnv, registerCoreEnv } from "@my-agent/core";
 import { InkTerminalBox } from "@my-react/react-terminal/web";
 import { WebglAddon } from "@xterm/addon-webgl";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 import { PlaygroundAgentAdapter } from "./adapters/playground-adapter.js";
 import { ConfigPanel } from "./components/ConfigPanel.js";
@@ -28,7 +28,7 @@ import type { AgentAdapter } from "@my-agent/app";
 
 configureEnv({ allowNonBrowserUpdates: true });
 
-const AgentBootstrap = () => {
+const AgentBootstrap = memo(() => {
   const model = usePlaygroundConfig((s) => s.model);
   const style = usePlaygroundConfig((s) => s.style);
   const baseURL = usePlaygroundConfig((s) => s.baseURL);
@@ -144,7 +144,9 @@ const AgentBootstrap = () => {
       </AdapterProvider>
     </InkTerminalBox>
   );
-};
+});
+
+AgentBootstrap.displayName = "AgentBootstrap";
 
 function useSubscribePreviewPorts(fetchProxyUrl: string) {
   useEffect(() => {
