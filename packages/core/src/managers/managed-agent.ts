@@ -31,7 +31,13 @@ import type { AgentManager } from "./manager-agent.js";
 import type { AgentContext } from "../agent/agent-context";
 import type { AgentLog } from "../agent/agent-log";
 import type { CompactionConfig, CompactionConfigInput } from "../agent/compaction/types.js";
-import type { HookRegistry } from "../agent/hooks/hook-registry.js";
+import type {
+  ExtensionCommand,
+  ExtensionFactory,
+  ExtensionLoader,
+  ExtensionRunner,
+  ExtensionToolDefinition,
+} from "../agent/extension";
 import type { McpManager } from "../agent/mcp/manager.js";
 import type { MemoryManager } from "../agent/memory/memory-manager.js";
 import type { AgentRunner } from "../agent/runner/agent-runner.js";
@@ -69,6 +75,11 @@ export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
    * or omit to use the default read-only + web subagent tools.
    */
   subagentTools?: ToolsRecord | null;
+  /**
+   * Programmatic extension factories to load on bootstrap.
+   * Each factory is called during agent initialization.
+   */
+  extensions?: Array<ExtensionFactory>;
 };
 
 /** Subagent preview / non-useChat UI channel (TanStack StreamProcessor). */
@@ -123,7 +134,7 @@ export class ManagedAgent {
   updatedAt: number;
 
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
-  /** Set by AgentManager to route events to listeners and hooks. */
+  /** Set by AgentManager to route events to listeners. */
   dispatchEvent?: (event: AgentEvent) => void;
 
   private managedToolsProvider?: () => ToolsRecord;
@@ -136,7 +147,8 @@ export class ManagedAgent {
   compactionConfig: CompactionConfig | null = null;
   readonly toolCompactCache = new ToolCompactCache();
   private readonly sessionSyncTracker: SessionSyncTracker = createSessionSyncTracker();
-  hookRegistry: HookRegistry | null = null;
+  extensionRunner: ExtensionRunner | null = null;
+  extensionLoader: ExtensionLoader | null = null;
   modelInfo: ModelInfo | null = null;
   agentDocContent = "";
   agentDocSource = "";
@@ -461,6 +473,20 @@ export class ManagedAgent {
 
   getMcpManager(): McpManager | null {
     return this.mcpManager;
+  }
+
+  registerTool(def: ExtensionToolDefinition): void {
+    if (this.tools[def.name]) {
+      this.log?.warn("system", `Tool "${def.name}" already registered, overwriting`);
+    }
+    (this.tools as Record<string, unknown>)[def.name] = def;
+    this.runnerConfigKey = undefined;
+  }
+
+  registerCommand(_cmd: ExtensionCommand): void {
+    // Commands stored in extensionRunner.commandRegistry via
+    // createContext → registerCommand callback. ManagedAgent
+    // keeps this method for future command dispatch.
   }
 
   setCompactionConfig(config: CompactionConfig): void {

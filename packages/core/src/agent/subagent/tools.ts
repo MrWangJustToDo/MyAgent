@@ -31,6 +31,3 @@ export const createSubagentTools = (managed: ManagedAgent): ToolsRecord => {
     begin_summary: createBeginSummaryTool(),
   };
 };
-
-/** @deprecated Use {@link createSubagentTools} instead. */
-export const createExploreTools = createSubagentTools;

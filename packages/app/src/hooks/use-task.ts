@@ -83,10 +83,6 @@ export const useTask = ({ id, taskId }: { id: string; taskId: string }) => {
         if (event.data?.subagent_id !== agent?.id && event.agentId !== agent?.id) return;
         refresh();
       }),
-      agentManager.on("subagent:ui-update", (event) => {
-        if (event.agentId !== agent?.id) return;
-        refresh();
-      }),
       agentManager.on("agent:stop", (event) => {
         if (event.agentId !== agent?.id) return;
         refresh();

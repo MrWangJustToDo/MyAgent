@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 
 import {
-  createHooksMiddleware,
+  createExtensionsMiddleware,
   createTanStackSubagentTools,
   createTanStackTools,
   getReadOnlyTanStackToolNames,
@@ -36,13 +36,13 @@ assert.ok(runCommand, "run_command tool missing");
 assert.equal(runCommand.needsApproval, true);
 assert.equal(runCommand.__toolSide, "server");
 
-const hooks = createHooksMiddleware({
-  getHookRegistry: () => null,
+const extensions = createExtensionsMiddleware({
+  getExtensionRunner: () => null,
   getSessionId: () => "session-1",
   log: null,
 });
-assert.equal(hooks.name, "hooks");
-assert.equal(typeof hooks.onBeforeToolCall, "function");
-assert.equal(typeof hooks.onAfterToolCall, "function");
+assert.equal(extensions.name, "extensions");
+assert.equal(typeof extensions.onBeforeToolCall, "function");
+assert.equal(typeof extensions.onAfterToolCall, "function");
 
 console.log("tanstack-tools validation passed");

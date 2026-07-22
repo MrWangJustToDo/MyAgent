@@ -1,3 +1,5 @@
+import { getToUI } from "@my-agent/core";
+
 import { splitStreamingLines } from "./streaming-output-lines.js";
 
 import type {
@@ -232,6 +234,11 @@ export function formatToolOutput(output: unknown, toolName?: string): string {
 
   if (toolName && typeof output === "object") {
     const out = output as Record<string, unknown>;
+
+    const uiRenderer = getToUI(toolName);
+    if (uiRenderer) {
+      return uiRenderer(output);
+    }
 
     switch (toolName) {
       case "list_file":

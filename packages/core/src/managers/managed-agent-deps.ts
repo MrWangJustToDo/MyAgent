@@ -13,7 +13,7 @@ export function buildManagedAgentDeps(managed: ManagedAgent, manager: AgentManag
     session: managed.session,
     log: managed.log,
     todoManager: managed.todoManager,
-    hookRegistry: managed.hookRegistry,
+    extensionRunner: managed.extensionRunner,
     compactionConfig: managed.getCompactionConfig(),
     modelInfo: managed.getModelInfo(),
     getDynamicTurnContext: () => managed.getDynamicTurnContext(),

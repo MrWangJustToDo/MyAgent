@@ -109,7 +109,13 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   useEffect(() => {
     if (!agent) return;
-    return agent.subscribeState(() => forceUpdate());
+    return agent.subscribeState(() => {
+      forceUpdate();
+      const next = messagesRef.current;
+      if (next.length > 0) {
+        agent.maybeSaveSessionUIMessages(next, "checkpoint");
+      }
+    });
   }, [agent, forceUpdate]);
 
   useEffect(() => {
@@ -183,16 +189,6 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       unsubMessages();
     };
   }, [chat, agent, forceUpdate]);
-
-  useEffect(() => {
-    if (!agent) return;
-    return agent.subscribeState(() => {
-      const next = messagesRef.current;
-      if (next.length > 0) {
-        agent.maybeSaveSessionUIMessages(next, "checkpoint");
-      }
-    });
-  }, [agent]);
 
   const status = agent?.status ?? "idle";
   const error = agent?.error ? new Error(agent.error) : null;

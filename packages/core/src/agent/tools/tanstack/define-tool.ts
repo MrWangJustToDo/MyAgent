@@ -1,6 +1,7 @@
 import { toolDefinition, type ClientTool, type InferSchemaType, type SchemaInput, type ServerTool } from "@tanstack/ai";
 
 import { toModelOutputRegistry, type ModelToolContent, type ToModelOutputContext } from "./to-model-output-registry.js";
+import { registerToUI } from "./to-ui-registry.js";
 
 // ============================================================================
 // Tool execute context (maps TanStack ToolExecutionContext)
@@ -38,6 +39,7 @@ export function defineServerTool<
   toModelOutput?: (
     ctx: ToModelOutputContext & { input: InferSchemaType<TInput>; output: InferSchemaType<TOutput> }
   ) => Promise<ModelToolContent> | ModelToolContent;
+  toUI?: (result: InferSchemaType<TOutput>) => string;
 }): ServerTool<TInput, TOutput, TName> {
   if (config.toModelOutput) {
     const toModel = config.toModelOutput;
@@ -48,6 +50,10 @@ export function defineServerTool<
         output: ctx.output as InferSchemaType<TOutput>,
       })
     );
+  }
+
+  if (config.toUI) {
+    registerToUI(config.name, config.toUI as (result: unknown) => string);
   }
 
   return toolDefinition({

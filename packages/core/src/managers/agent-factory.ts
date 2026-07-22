@@ -2,7 +2,7 @@ import { AgentContext } from "../agent/agent-context";
 import { loadAgentDoc } from "../agent/agent-doc-loader.js";
 import { AgentLog } from "../agent/agent-log";
 import { createCompactionConfig } from "../agent/compaction/types.js";
-import { HookRegistry } from "../agent/hooks/hook-registry.js";
+import { ExtensionLoader, ExtensionRunner } from "../agent/extension";
 import { loadMcpConfig, type McpConfigLoadResult } from "../agent/mcp/config.js";
 import { McpManager } from "../agent/mcp/manager.js";
 import { MemoryManager } from "../agent/memory/memory-manager.js";
@@ -154,15 +154,26 @@ export async function buildManagedAgent({
   }
 
   if (!parentId) {
-    const hookRegistry = new HookRegistry(fsRootPath);
-    try {
-      await hookRegistry.load();
-      managed.hookRegistry = hookRegistry;
-      if (hookRegistry.hasHooks()) {
-        log.info("system", "Hooks loaded from .agent-hooks/hooks.json");
+    const extensionRunner = new ExtensionRunner({
+      getEnvVar: (_key: string) => undefined,
+      onRegisterTool: (def) => managed.registerTool(def),
+      onRegisterCommand: (cmd) => managed.registerCommand(cmd),
+    });
+    managed.extensionRunner = extensionRunner;
+
+    const extensionLoader = new ExtensionLoader();
+    managed.extensionLoader = extensionLoader;
+
+    if (config.extensions && config.extensions.length > 0) {
+      for (const factory of config.extensions) {
+        try {
+          const api = await factory.create();
+          await extensionRunner.loadExtension(api);
+          log.info("system", `Extension loaded from config: ${api.id}`);
+        } catch (err) {
+          log.warn("system", `Failed to load extension from config: ${err}`);
+        }
       }
-    } catch (err) {
-      log.warn("system", `Failed to load hooks: ${err}`);
     }
   }
 

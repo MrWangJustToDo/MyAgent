@@ -120,7 +120,7 @@ export interface CoreEnvFs {
 }
 
 // ============================================================================
-// Shell Execution (for hooks)
+// Shell Execution
 // ============================================================================
 
 export interface CoreEnvExecOptions {
@@ -215,7 +215,7 @@ export interface CoreEnv {
    */
   startCommand?(command: string, options?: StartCommandOptions): Promise<StartCommandHandle>;
 
-  /** Execute a simple shell command — used by hook system */
+  /** Execute a simple shell command */
   exec(command: string, options?: CoreEnvExecOptions): Promise<CoreEnvExecResult>;
 
   /** HTTP fetch (replaces global fetch for runtime agnosticism) */

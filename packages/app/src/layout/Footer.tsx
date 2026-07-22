@@ -13,6 +13,7 @@ import { UserInput } from "../components/UserInput.js";
 import { useAgentUsage } from "../hooks/use-agent-usage.js";
 import { useAgent } from "../hooks/use-agent.js";
 import { useConfig } from "../hooks/use-config.js";
+import { useExtensionUI } from "../hooks/use-extension-ui.js";
 import { useInputMode } from "../hooks/use-input-mode.js";
 import { useSelect } from "../hooks/use-select.js";
 import { useUserInput } from "../hooks/use-user-input.js";
@@ -153,6 +154,7 @@ const ContextBar = ({
 
   const inputError = useUserInput((s) => s.inputError);
   const inputFeedback = useUserInput((s) => s.inputFeedback);
+  const extStatus = useExtensionUI((s) => s.statusText);
 
   const error = _error || inputError;
 
@@ -203,6 +205,12 @@ const ContextBar = ({
             dimColor={inputFeedback.level === "info"}
           >
             {inputFeedback.message}
+          </Text>
+        )}
+
+        {extStatus && status === "idle" && (
+          <Text color={COLORS.muted} dimColor>
+            {extStatus}
           </Text>
         )}
 

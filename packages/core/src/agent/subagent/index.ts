@@ -13,7 +13,7 @@ export { buildExploreSystemPrompt, SUBAGENT_EXPLORE_SYSTEM_PROMPT } from "./prom
 export { BEGIN_SUMMARY_TOOL_NAME, createBeginSummaryTool } from "./begin-summary-tool.js";
 
 // Tool creation
-export { createSubagentTools, createExploreTools } from "./tools.js";
+export { createSubagentTools } from "./tools.js";
 
 // Output utilities
 export { truncateSummary } from "./output.js";

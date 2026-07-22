@@ -1,9 +1,3 @@
-import { emitHook } from "../agent/hooks/hook-runner.js";
-
-import type { HookRegistry } from "../agent/hooks/hook-registry.js";
-import type { HookLogger } from "../agent/hooks/hook-runner.js";
-import type { HookEventInput, HookEventType } from "../agent/hooks/types.js";
-
 // ============================================================================
 // Event Types
 // ============================================================================
@@ -58,22 +52,13 @@ export interface AgentEvent {
 
 export type AgentEventListener = (event: AgentEvent) => void;
 
-export interface AgentEventHookTarget {
-  hookRegistry: HookRegistry | null | undefined;
-  log?: HookLogger | null;
-}
-
-export type AgentEventHookTargetResolver = (event: AgentEvent) => AgentEventHookTarget | undefined;
-
 // ============================================================================
 // AgentEventBus
 // ============================================================================
 
-/** In-process event bus that also bridges lifecycle events to configured hook scripts. */
+/** In-process event bus for lifecycle and notification events (fire-and-forget). */
 export class AgentEventBus {
   private eventListeners: Map<AgentEventType | "*", Set<AgentEventListener>> = new Map();
-
-  constructor(private readonly resolveHookTarget?: AgentEventHookTargetResolver) {}
 
   on(type: AgentEventType | "*", listener: AgentEventListener): () => void {
     if (!this.eventListeners.has(type)) {
@@ -86,10 +71,9 @@ export class AgentEventBus {
     };
   }
 
-  /** Emit an agent event. Dispatches to in-process listeners and hook scripts. */
+  /** Emit an agent event to all registered listeners. */
   emit(event: AgentEvent): void {
     this.notifyListeners(event);
-    this.dispatchHook(event);
   }
 
   private notifyListeners(event: AgentEvent): void {
@@ -114,94 +98,5 @@ export class AgentEventBus {
         }
       }
     }
-  }
-
-  private dispatchHook(event: AgentEvent): void {
-    const target = this.resolveHookTarget?.(event);
-    const registry = target?.hookRegistry;
-    if (!registry) return;
-
-    const hookEvent = mapToHookEvent(event);
-    if (!hookEvent) return;
-
-    emitHook(registry, hookEvent.name, hookEvent.input, { logger: target.log ?? undefined });
-  }
-}
-
-// ============================================================================
-// Event -> Hook Mapping
-// ============================================================================
-
-/** Map lifecycle AgentEvents to hook scripts. Tool hooks use hooks-middleware directly. */
-function mapToHookEvent(event: AgentEvent): { name: HookEventType; input: HookEventInput } | null {
-  const d = event.data ?? {};
-  switch (event.type) {
-    case "session:start":
-      return {
-        name: "SessionStart",
-        input: {
-          hook_event_name: "SessionStart",
-          session_id: (d.session_id as string) ?? event.agentId,
-          cwd: (d.cwd as string) ?? "",
-        },
-      };
-    case "prompt:submit":
-      return {
-        name: "UserPromptSubmit",
-        input: {
-          hook_event_name: "UserPromptSubmit",
-          session_id: (d.session_id as string) ?? event.agentId,
-          prompt: (d.prompt as string) ?? "",
-        },
-      };
-    case "agent:stop":
-      return {
-        name: "Stop",
-        input: {
-          hook_event_name: "Stop",
-          session_id: (d.session_id as string) ?? event.agentId,
-          reason: (d.reason as string) ?? "unknown",
-        },
-      };
-    case "subagent:started":
-      return {
-        name: "SubagentStart",
-        input: {
-          hook_event_name: "SubagentStart",
-          session_id: (d.session_id as string) ?? event.agentId,
-          subagent_id: (d.subagent_id as string) ?? event.agentId,
-          description: (d.description as string) ?? "",
-        },
-      };
-    case "subagent:completed":
-      return {
-        name: "SubagentStop",
-        input: {
-          hook_event_name: "SubagentStop",
-          session_id: (d.session_id as string) ?? event.agentId,
-          subagent_id: (d.subagent_id as string) ?? event.agentId,
-          summary: (d.summary as string) ?? "",
-        },
-      };
-    case "subagent:error":
-      return {
-        name: "Notification",
-        input: {
-          hook_event_name: "Notification",
-          session_id: (d.session_id as string) ?? event.agentId,
-          message: `Subagent error: ${(d.error as string) ?? "unknown"}`,
-          rawData: event.data,
-        },
-      };
-    default:
-      return {
-        name: "Notification",
-        input: {
-          hook_event_name: "Notification",
-          session_id: (d.session_id as string) ?? event.agentId,
-          message: event.type + (event.data?.message ? `：${event.data?.message}` : ""),
-          rawData: event.data,
-        },
-      };
   }
 }

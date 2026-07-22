@@ -67,11 +67,8 @@ export class AgentManager {
   /** Managed agents by ID */
   private agents: Map<string, ManagedAgent> = new Map();
 
-  /** Unified event bus for in-process listeners and hook scripts */
-  private eventBus = new AgentEventBus((event) => {
-    const managed = this.agents.get(event.agentId) ?? (event.parentId ? this.agents.get(event.parentId) : undefined);
-    return managed ? { hookRegistry: managed.hookRegistry, log: managed.log } : undefined;
-  });
+  /** Unified event bus for in-process listeners */
+  private eventBus = new AgentEventBus();
 
   private readonly _detachEventLogBridge: () => void;
 
@@ -114,7 +111,7 @@ export class AgentManager {
   }
 
   /**
-   * Emit an agent event. Dispatches to both in-process listeners and hook scripts.
+   * Emit an agent event.
    * @internal Agent code should use `emitAgentEvent()` / `agent.emitEvent()` instead.
    */
   emit(event: AgentEvent): void {

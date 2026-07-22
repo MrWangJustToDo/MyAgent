@@ -98,6 +98,7 @@ export { bridgeExternalToolToServer } from "./agent/tools/tanstack/bridge-extern
 // ============================================================================
 
 export { previewEdit, type PreviewEditResult } from "./agent/tools/util/preview-edit.js";
+export { registerToUI, getToUI, clearToUI } from "./agent/tools/tanstack/to-ui-registry.js";
 export {
   clearStreamingOutput,
   emitStreamingChunk,
@@ -141,6 +142,25 @@ export type {
   StartCommandOptions,
   StartCommandHandle,
 } from "./environment";
+
+// ============================================================================
+// Extension API
+// ============================================================================
+
+export { ExtensionRunner, ExtensionLoader } from "./agent/extension";
+export type {
+  ExtensionAPI,
+  ExtensionFactory,
+  ExtensionContext,
+  ExtensionConfig,
+  ExtensionInstance,
+  ExtensionToolDefinition,
+  ExtensionCommand,
+  ExtensionEventBus,
+  ExtensionUI,
+  InterceptableEvent,
+  EventInterceptor,
+} from "./agent/extension";
 
 // ============================================================================
 // Shared utilities

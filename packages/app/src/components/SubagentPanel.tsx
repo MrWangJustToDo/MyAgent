@@ -99,9 +99,6 @@ const SubagentPanelDetail = ({ subagentId, onBack }: { subagentId: string; onBac
     const bump = () => setTick((n) => n + 1);
     const unsubscribeUi = managed?.ui?.subscribe(bump);
     const unsubs = [
-      agentManager.on("subagent:ui-update", (event) => {
-        if (event.agentId === subagentId) bump();
-      }),
       agentManager.on("agent:stop", (event) => {
         if (event.agentId === subagentId) bump();
       }),
@@ -167,7 +164,6 @@ export const SubagentPanel = () => {
       agentManager.on("subagent:created", refresh),
       agentManager.on("subagent:started", refresh),
       agentManager.on("subagent:completed", refresh),
-      agentManager.on("subagent:ui-update", refresh),
       agentManager.on("agent:stop", refresh),
     ];
     return () => unsubs.forEach((u) => u());

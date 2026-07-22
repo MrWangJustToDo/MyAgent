@@ -59,7 +59,7 @@ export {
   splitMessagesByTokenBudget,
 } from "./agent/compaction/summarization-budget.js";
 export { estimateTokens } from "./agent/compaction/token-estimator.js";
-export { createHooksMiddleware, createLifecycleMiddleware } from "./agent/middleware";
+export { createExtensionsMiddleware, createLifecycleMiddleware } from "./agent/middleware";
 export { createStatusMiddleware } from "./agent/middleware/status-middleware.js";
 export { createAgentStatusController, AgentStatusController } from "./managers/agent-status-controller.js";
 export { AgentRunner } from "./agent/runner/agent-runner.js";

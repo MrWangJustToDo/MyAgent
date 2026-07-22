@@ -1,6 +1,6 @@
 import {
   createCompactionMiddleware,
-  createHooksMiddleware,
+  createExtensionsMiddleware,
   createLifecycleMiddleware,
   createStatusMiddleware,
   createToolCompactMiddleware,
@@ -133,11 +133,10 @@ export function buildAgentRunner(
     createTurnContextMiddleware({
       getDynamicTurnContext: deps.getDynamicTurnContext,
     }),
-    createHooksMiddleware({
-      getHookRegistry: () => deps.hookRegistry,
+    createExtensionsMiddleware({
+      getExtensionRunner: () => deps.extensionRunner,
       getSessionId: () => deps.session.getSessionData()?.id ?? deps.agentId,
       getTodoManager: () => deps.todoManager,
-      log: deps.log,
       emitEvent,
     }),
   ];
