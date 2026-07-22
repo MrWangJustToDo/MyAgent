@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { createState } from "reactivity-store";
+import { createState, toRaw } from "reactivity-store";
 
 import { useAgent } from "./use-agent.js";
 import { useUserInput } from "./use-user-input.js";
@@ -57,7 +57,7 @@ export function useExtensionUIBridge(): void {
 
   useEffect(() => {
     const runner = agent?.extensionRunner;
-    const ui = runner?.getUI();
+    const ui = toRaw(runner?.getUI());
     if (!ui) return;
 
     useExtensionUI.getActions().setNotifyExtension((type, data) => ui.notify(type, data));
@@ -97,7 +97,7 @@ export function useExtensionUIBridge(): void {
 
 export function useRespondToConfirm(): (id: string, ok: boolean) => void {
   return useCallback((id: string, ok: boolean) => {
-    const notify = useExtensionUI.getState().notifyExtension;
+    const notify = useExtensionUI.getReadonlyState().notifyExtension;
     if (notify) {
       notify("confirm:result", { id, ok });
     }
