@@ -431,7 +431,7 @@ registerCoreEnv(env);
 | `session:start` | Bootstrap complete |
 | `prompt:submit` | Run prepared |
 | `agent:thinking` | Model reasoning stream starts |
-| `agent:tool-start` / `agent:tool-end` / `agent:tool-error` | Tool lifecycle (hooks middleware) |
+| `agent:tool-start` / `agent:tool-end` / `agent:tool-error` | Tool lifecycle (extensions middleware) |
 | `agent:abort` / `agent:stream-error` | User abort / stream failure (`RUN_ERROR` and other pump failures; main chat records error without crashing the host) |
 | `agent:stop` | Run finished or aborted |
 | `memory:prefetch` | Relevant memory injection before run |
@@ -502,7 +502,7 @@ Skills provide on-demand domain knowledge via a two-layer injection pattern.
 | Layer 1 | `list_skills` tool for discovery | ~100/skill |
 | Layer 2 | `load_skill` tool for full content | ~2000+/skill |
 
-Skills are defined in `SKILL.md` files with YAML frontmatter and loaded from `.opencode/skills/` by default.
+Skills are defined in `SKILL.md` files with YAML frontmatter and loaded from `.agents/skills/` by default.
 
 ```
 packages/core/src/agent/skills/
@@ -633,7 +633,7 @@ packages/
 │   │   ├── agent-context/             # AgentContext — messages + compaction only
 │   │   ├── agent-log/                 # AgentLog — structured logging
 │   │   ├── compaction/                # Context compaction (micro + auto)
-│   │   ├── hooks/                     # Hook system (pre/post tool execution)
+│   │   ├── extension/                 # Extension API (loader, runner, EventBus interception)
 │   │   ├── memory/                    # Memory management
 │   │   ├── session/                   # Session persistence (SessionStore)
 │   │   ├── skills/                    # Skill loading (two-layer injection)

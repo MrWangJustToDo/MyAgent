@@ -7,7 +7,7 @@
  * @example
  * ```typescript
  * const registry = new SkillRegistry({ rootPath: "/project", logger });
- * await registry.loadFromDirectories([".opencode/skills"], "/project/root");
+ * await registry.loadFromDirectories([".agents/skills"], "/project/root");
  *
  * // List available skills
  * const skills = registry.list();

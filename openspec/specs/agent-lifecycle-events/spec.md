@@ -64,7 +64,7 @@ When a subagent run finishes successfully, the system SHALL emit `subagent:compl
 
 ### Requirement: Architecture docs describe extension observation model
 
-`packages/core/ARCHITECTURE.md` SHALL describe the current middleware stack (`extensions-middleware`, not hooks-middleware), SHALL NOT claim that `AgentEventBus` maps events to `.agent-hooks` scripts, and SHALL document the L1–L4 observation split (status, lifecycle bus, UI/streaming data, extension interception).
+`packages/core/ARCHITECTURE.md` SHALL describe the current middleware stack (`extensions-middleware`), SHALL NOT document `.agent-hooks` / HookRegistry as supported customization, and SHALL document the L1–L4 observation split (status, lifecycle bus, UI/streaming data, extension interception).
 
 #### Scenario: Doc middleware list matches buildAgentRunner
 - **WHEN** a reader follows ARCHITECTURE §3.3 middleware order

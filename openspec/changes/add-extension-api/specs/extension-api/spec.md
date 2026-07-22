@@ -14,9 +14,9 @@ The system SHALL provide an `ExtensionAPI` object passed as the default export p
 ### Requirement: ExtensionContext
 The system SHALL provide an `ExtensionContext` object as the second parameter to every event handler registered via `api.on()`.
 
-#### Scenario: Event handler receives context
-- **WHEN** an extension event handler is invoked
-- **THEN** it receives an `ExtensionContext` with `cwd`, `ui`, `sessionManager`, `signal`, `abort()`, `shutdown()`, `compact()` properties
+#### Scenario: Host provides Zod on context
+- **WHEN** an extension `activate(ctx)` runs
+- **THEN** `ctx.z` SHALL be the host Zod `z` API (same version as core); extensions SHALL NOT need to import `zod`
 
 #### Scenario: UI methods are no-ops in headless mode
 - **WHEN** `hasUI` is `false`
@@ -26,11 +26,11 @@ The system SHALL provide an `ExtensionContext` object as the second parameter to
 The system SHALL discover and load extensions from well-known directories at agent bootstrap time.
 
 #### Scenario: Project-local extension loaded
-- **WHEN** a `.ts` or `.js` file exists in `.opencode/extensions/`
+- **WHEN** a `.ts` or `.js` file exists in `.agents/extension/`
 - **THEN** it SHALL be loaded via dynamic `import()` and its default export function invoked with `ExtensionAPI`
 
 #### Scenario: User-global extension loaded
-- **WHEN** a `.ts` or `.js` file exists in `~/.config/opencode/extensions/`
+- **WHEN** a `.ts` or `.js` file exists in `~/.agents/extension/`
 - **THEN** it SHALL be loaded after project-local extensions
 
 #### Scenario: Programmatic extension factories
@@ -52,17 +52,13 @@ The system SHALL manage extension lifecycle through an `ExtensionRunner` that co
 - **WHEN** an event handler or tool execution references `ctx.cwd`
 - **THEN** it SHALL reflect the current workspace root path
 
-### Requirement: Hook system migration to built-in extension
-The existing `.agent-hooks/hooks.json` system SHALL be bridged to the extension event bus as a built-in extension, maintaining backward compatibility.
+### Requirement: No `.agent-hooks` / hook-script path
+The system SHALL NOT load, bridge, or execute `.agent-hooks/hooks.json` or a HookRegistry/HookRunner. Customization SHALL use Extension modules (`.agents/extension` or programmatic `config.extensions`) and `extensions-middleware.ts`.
 
-#### Scenario: Hook script continues to work
-- **WHEN** a user has `.agent-hooks/hooks.json` with `PreToolUse` hooks
-- **THEN** those hooks SHALL continue to execute via the built-in extension bridge without user migration
-
-#### Scenario: Extension handler runs before hook script
-- **WHEN** both a user extension handler and a hook script subscribe to `tool_call`
-- **THEN** the extension handler SHALL execute first, followed by the hook script
-
-#### Scenario: hooks-middleware replaced
+#### Scenario: hooks-middleware not used
 - **WHEN** the agent middleware pipeline is constructed
-- **THEN** `hooks-middleware.ts` SHALL no longer be used; replaced by `extensions-middleware.ts`
+- **THEN** `hooks-middleware.ts` SHALL NOT be present; tool interception SHALL go through `extensions-middleware.ts` and `ExtensionRunner`
+
+#### Scenario: legacy hook config is ignored
+- **WHEN** a workspace still contains `.agent-hooks/hooks.json`
+- **THEN** the agent SHALL NOT read or execute it

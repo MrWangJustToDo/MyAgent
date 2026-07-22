@@ -31,7 +31,7 @@ const FALLBACK_MCP_CONFIG_PATHS = [".mcp.json"];
  * Load MCP configuration from a JSON file on disk.
  *
  * When `configPath` is explicitly provided, only that single path is checked.
- * When `configPath` is omitted, the primary default (`.opencode/mcp.json`) is
+ * When `configPath` is omitted, the primary default (`.agents/mcp.json`) is
  * checked first, then fallback paths (`.mcp.json`) are tried in order.
  *
  * Returns null if no config file is found or all are invalid (MCP disabled).

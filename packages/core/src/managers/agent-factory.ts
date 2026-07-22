@@ -2,7 +2,7 @@ import { AgentContext } from "../agent/agent-context";
 import { loadAgentDoc } from "../agent/agent-doc-loader.js";
 import { AgentLog } from "../agent/agent-log";
 import { createCompactionConfig } from "../agent/compaction/types.js";
-import { ExtensionLoader, ExtensionRunner } from "../agent/extension";
+import { ExtensionLoader, ExtensionRunner, getDefaultExtensionDirs } from "../agent/extension";
 import { loadMcpConfig, type McpConfigLoadResult } from "../agent/mcp/config.js";
 import { McpManager } from "../agent/mcp/manager.js";
 import { MemoryManager } from "../agent/memory/memory-manager.js";
@@ -39,7 +39,7 @@ export interface BuildManagedAgentOptions {
 }
 
 /**
- * Construct and wire a {@link ManagedAgent} (tools, skills, MCP, memory, hooks, session).
+ * Construct and wire a {@link ManagedAgent} (tools, skills, MCP, memory, extensions, session).
  * Registry and parent linking remain the caller's responsibility.
  */
 export async function buildManagedAgent({
@@ -163,6 +163,22 @@ export async function buildManagedAgent({
 
     const extensionLoader = new ExtensionLoader();
     managed.extensionLoader = extensionLoader;
+
+    const extensionDirs = await getDefaultExtensionDirs();
+    log.debug("system", "Extension search directories", { dirs: extensionDirs });
+
+    const fromDisk = await extensionLoader.loadFromDirectories(extensionDirs);
+    for (const err of fromDisk.errors) {
+      log.warn("system", err.message);
+    }
+    for (const api of fromDisk.loaded) {
+      try {
+        await extensionRunner.loadExtension(api);
+        log.info("system", `Extension loaded from disk: ${api.id}`);
+      } catch (err) {
+        log.warn("system", `Failed to activate extension from disk "${api.id}": ${err}`);
+      }
+    }
 
     if (config.extensions && config.extensions.length > 0) {
       for (const factory of config.extensions) {

@@ -55,7 +55,11 @@ export interface CreateNodeEnvOptions extends LocalEnvironmentConfig {
 export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
   const { rootPath } = options;
   const useOsSandbox = resolveLocalEnvironmentMode(options) === "os";
-  const { filesystem, resolvePath } = createNativeFilesystem(rootPath);
+  const homeAgents = path.join(os.homedir(), ".agents");
+  const { filesystem, resolvePath } = createNativeFilesystem(rootPath, {
+    // Allow reading user-global skills / extensions under ~/.agents
+    extraReadRoots: [homeAgents],
+  });
 
   return {
     rootPath,

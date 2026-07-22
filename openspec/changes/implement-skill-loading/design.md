@@ -5,7 +5,7 @@ The agent currently has a static system prompt. Domain-specific workflows (git c
 1. **Layer 1 (System Prompt)**: Skill names + descriptions (~100 tokens/skill) - always present
 2. **Layer 2 (Tool Result)**: Full skill content (~2000+ tokens) - loaded on-demand via tool
 
-Existing skills are already defined in `.opencode/skills/` with `SKILL.md` files using YAML frontmatter. The infrastructure to use them is missing.
+Existing skills are already defined in `.agents/skills/` with `SKILL.md` files using YAML frontmatter. The infrastructure to use them is missing.
 
 ## Goals / Non-Goals
 
@@ -14,7 +14,7 @@ Existing skills are already defined in `.opencode/skills/` with `SKILL.md` files
 - Provide `list_skills` tool for on-demand skill discovery
 - Provide `load_skill` tool to load full skill content
 - Support configurable skill directories (not hardcoded paths)
-- Parse existing `.opencode/skills/*/SKILL.md` format (YAML frontmatter + markdown body)
+- Parse existing `.agents/skills/*/SKILL.md` format (YAML frontmatter + markdown body)
 
 **Non-Goals:**
 - Skill authoring/creation tools (users create SKILL.md files manually)
@@ -50,7 +50,7 @@ metadata:
 [Full skill content as markdown body]
 ```
 
-**Rationale:** Matches existing `.opencode/skills/` format. Standard pattern (Jekyll, Hugo, etc.).
+**Rationale:** Matches existing `.agents/skills/` format. Standard pattern (Jekyll, Hugo, etc.).
 
 ### 3. Tool-Based Discovery and Loading
 
@@ -79,7 +79,7 @@ metadata:
 
 ### 5. Configurable Skill Directories
 
-**Decision:** Add `skillDirs?: string[]` to agent config. Default: `[".opencode/skills"]` relative to `rootPath`.
+**Decision:** Add `skillDirs?: string[]` to agent config. Default: `[".agents/skills"]` relative to `rootPath`.
 
 **Rationale:** Per user requirement - fully configurable. Allows project-specific and shared skill directories.
 

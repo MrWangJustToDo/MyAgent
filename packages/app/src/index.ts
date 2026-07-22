@@ -21,7 +21,16 @@ export { StreamingOutputView } from "./components/StreamingOutputView.js";
 export * from "./hooks";
 
 // Commands
-export { dispatchCommand, getAllCommands, getCommand } from "./commands";
+export {
+  clearExtensionCommands,
+  dispatchCommand,
+  extensionCommandToSlashCommand,
+  getAllCommands,
+  getCommand,
+  registerExtensionCommand,
+  splitExtensionCommandArgs,
+  syncExtensionCommands,
+} from "./commands";
 export type { Command, CommandContext, CommandOption } from "./commands";
 
 // Utils

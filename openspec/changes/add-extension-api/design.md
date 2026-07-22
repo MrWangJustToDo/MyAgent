@@ -1,23 +1,13 @@
 ## Context
 
-Our codebase has three separate extension/customization mechanisms that all partially overlap:
-
-1. **AgentEventBus** (`agent-event-bus.ts`): 35 event types, fire-and-forget dispatch, drives lifecycle logging + hook bridge
-2. **HookRegistry** + **HookRunner** (`.agent-hooks/hooks.json`): External shell/code scripts, `PreToolUse` can `deny`
-3. **HooksMiddleware** (`hooks-middleware.ts`): TanStack middleware that calls both events and hook scripts
-
-Additionally, the app layer has redundancies:
-- `useTask.ts` and `SubagentPanel.tsx` both subscribe to `ui.subscribe()` + `subagent:ui-update` for the same data
-- `useAgentChat.ts` has two separate `subscribeState()` calls for different purposes
-
-Pi's extension system shows a cleaner model: one extension API with `on()`/`registerTool()`/`registerCommand()`, where hook scripts are translated into extension handlers. We need to consolidate our mechanisms into a unified extension pipeline while keeping backward compatibility.
+Customization previously overlapped across AgentEventBus, a planned `.agent-hooks` script system, and middleware. The chosen model is a single Extension API (`on` / `registerTool` / `registerCommand`) with no hook-script bridge.
 
 **Constraints:**
 - Core package has no Ink dependency (must stay that way)
-- Extension loading must work in Node.js CLI (dynamic import with tsx support)
+- Extension loading must work in Node.js CLI (dynamic `import` / `file://`)
 - Playground (browser) cannot load user filesystem extensions — inline factories only
 - Zod stays as the schema library (no TypeBox migration)
-- `.agent-hooks/hooks.json` must continue to work without user migration
+- **No** `.agent-hooks/hooks.json` support (removed, not bridged)
 
 ## Goals / Non-Goals
 
@@ -25,7 +15,7 @@ Pi's extension system shows a cleaner model: one extension API with `on()`/`regi
 - Single Extension API surface (`ExtensionAPI`, `ExtensionContext`, `ExtensionRunner`, `ExtensionLoader`)
 - Inject interceptable events into the TanStack middleware pipeline
 - Provide `toUI` parallel to `toModelOutput` for tool rendering
-- Move HookRegistry under the extension system as a built-in bridge
+- Delete hook registry / hooks-middleware; extensions only
 - Clean up redundant subscriptions in the app layer
 - Keep `ctx.ui.*` API serializable across core→app boundary
 
@@ -35,7 +25,7 @@ Pi's extension system shows a cleaner model: one extension API with `on()`/`regi
 - Not implementing extension hot-reload or packaging (future)
 - Not changing the Playground's lack of filesystem extension loading (programmatic only)
 - Not changing existing tool definitions' `needsApproval` semantics
-
+- **Not** bridging or supporting `.agent-hooks`
 ## Decisions
 
 ### Decision 1: Keep Two Event Buses (AgentEventBus + ExtensionEventBus)
@@ -45,7 +35,7 @@ Pi's extension system shows a cleaner model: one extension API with `on()`/`regi
 | Bus | Purpose | Semantics | Consumers |
 |-----|---------|-----------|-----------|
 | AgentEventBus | Lifecycle, logging, metrics | fire-and-forget | `event-log-bridge.ts`, `useAgentUsage.ts` |
-| ExtensionEventBus | Tool interception, input transform, context modify | return values (block, modify, transform) | Extension handlers, hook bridge |
+| ExtensionEventBus | Tool interception, input transform, context modify | return values (block, modify, transform) | Extension handlers |
 
 **Rationale:** Mixing notification events (which should never block) with interception events (which must return values) would make the type system harder and create confusion. Two buses with clear separation is cheaper than one overloaded bus.
 
@@ -76,31 +66,28 @@ class ExtensionRunner {
 
 A single generic dispatch would need type switches + per-event merge logic anyway. Dedicated methods are clearer and type-safe.
 
-### Decision 3: Hook System Becomes a Built-in Extension
+### Decision 3: Remove Hooks Entirely (No Bridge)
 
-**Decision:** The `.agent-hooks/hooks.json` system becomes an internal bridge extension registered at agent bootstrap time.
+**Decision:** Do not implement or keep `.agent-hooks`. Tool interception is extensions-only.
 
 ```
 [TanStack Middleware Pipeline]
   └── extensions-middleware.ts
         └── ExtensionRunner.emitToolCall(...)
-              ├── [user extension handler 1] → { block: true } ❌
-              ├── [user extension handler 2] → { needsApproval: true }
-              └── [built-in hook bridge] → runHooks(registry, "PreToolUse", ...)
+              ├── [user extension handler 1] → { block: true }
+              └── [user extension handler 2] → { needsApproval: true }
 ```
 
-**What stays:**
-- `HookRegistry`, `HookRunner`, `hookEntrySchema`, `HOOK_EVENTS` — all kept as internal modules
-- `.agent-hooks/hooks.json` config — still loaded and parsed
-- `HOOKS_DIR`, `HOOKS_CONFIG_FILE` constants — unchanged
+**Removed / never shipped:**
+- `HookRegistry`, `HookRunner`, `hooks-middleware.ts`, `dispatchHook` / `mapToHookEvent`
+- Loading of `.agent-hooks/hooks.json`
 
-**What changes:**
-- `hooks-middleware.ts` → deleted, replaced by `extensions-middleware.ts`
-- `agent-event-bus.ts` `dispatchHook()` / `mapToHookEvent()` → removed (hook dispatch moves to extension system)
-- `agent-factory.ts` — extension loader runs after `setUp`, before MCP initialization
+**What ships instead:**
+- `extensions-middleware.ts` + filesystem / programmatic extensions
+- `agent-factory.ts` loads `.agents/extension` then `~/.agents/extension`, then `config.extensions`
 - `managed-agent.ts` — adds `registerTool()`, `registerCommand()`, `extensions: Extension[]`
 
-**Rationale:** This removes an entire middleware class and replaces it with a single unified pipeline. Hook scripts become a consumer of the same events that user extensions consume, ensuring consistent ordering and no duplicate dispatch.
+**Rationale:** One interception path only. No parallel script runner, no compatibility bridge, fewer failure modes.
 
 ### Decision 4: toUI Registry (String-Based)
 
@@ -166,8 +153,9 @@ async function loadExtension(path: string): Promise<ExtensionFactory> {
 ```
 
 **Scan directories:**
-1. `.opencode/extensions/` (project-local)
-2. `~/.config/opencode/extensions/` (global)
+1. `.agents/extension/` (project-local)
+2. `~/.agents/extension/` (global)
+3. Optional override via `AGENT_EXTENSION_DIRS` (comma-separated)
 3. Programmatic `extensionFactories` array (for Playground inline config)
 
 **Rationale:** jiti adds a dependency and complexity. ESM `import()` handles .js natively. For .ts, `tsx` is already the standard Node.js TypeScript loader (used by the project). Users who write TS extensions just need `tsx` available (which it is, as a dev dependency or globally).
@@ -178,40 +166,36 @@ async function loadExtension(path: string): Promise<ExtensionFactory> {
 |------|-----------|------------|
 | Extension loading from untrusted directories | Low | Extensions run with the same permissions as the host process. Document security model. No sandbox for extensions (same as pi). |
 | `tsx` not available when loading .ts extensions | Medium | Graceful fallback: log clear error "TypeScript extension detected. Install tsx: npm install -g tsx". Extensions without .ts work fine. |
-| Breaking HookRegistry direct imports | Medium | Keep `HookRegistry` class exported but add deprecation notice. Internal hook bridge ensures `.agent-hooks/hooks.json` continues to work. |
+| Breaking removal of `.agent-hooks` | Medium | Document: migrate to `.agents/extension` TypeScript modules. No bridge. |
 | Extension registration order affects tool overrides | Low | Document: first registration wins. Built-in tools are registered first, then project extensions, then global extensions. This means user extensions override built-ins. |
 | toUI increases tool definition surface | Low | Optional field, default undefined. No change to existing tool definitions required. |
 | Two event buses cause confusion | Medium | Clear naming: `AgentEventBus` (lifecycle), `ExtensionEventBus` (interception). Documentation + type system prevents misuse. |
 
 ## Migration Plan
 
-1. **Phase 1 — Foundation** (no behavioral change):
+1. **Phase 1 — Foundation** (additive):
    - Create `core/src/agent/extension/` directory structure
-   - Implement `ExtensionAPI`, `ExtensionContext`, `ExtensionRunner`, `ExtensionLoader` types and classes
-   - Existing hook system and middleware unchanged
+   - Implement `ExtensionAPI`, `ExtensionContext`, `ExtensionRunner`, `ExtensionLoader`
 
-2. **Phase 2 — Middleware replacement**:
-   - Create `extensions-middleware.ts` that dispatches through `ExtensionRunner`
-   - Create built-in hook bridge extension
-   - Keep old `hooks-middleware.ts` side-by-side initially (not imported)
-   - Delete `hooks-middleware.ts` + remove `dispatchHook`/`mapToHookEvent` from `agent-event-bus.ts`
+2. **Phase 2 — Middleware + drop hooks**:
+   - Ship `extensions-middleware.ts` through `ExtensionRunner`
+   - Ensure no `hooks-middleware`, HookRegistry, or `.agent-hooks` loader remains
+   - Wire extension bootstrap in `agent-factory.ts`
 
 3. **Phase 3 — Tool enhancement**:
    - Add `toUI` to `defineServerTool`
    - Create `toUIRegistry`
    - Wire into app's `formatToolOutput()`
-   - Optionally migrate some built-in tools to use `toUI`
 
 4. **Phase 4 — Subscription cleanup**:
-   - Remove redundant `subagent:ui-update` subscriptions from `useTask.ts` and `SubagentPanel.tsx`
-   - Merge dual `subscribeState` in `useAgentChat.ts`
+   - Remove redundant dual subscriptions
+   - Prefer `ManagedAgent.observe` where applicable
 
 5. **Phase 5 — ctx.ui API**:
    - Implement `ExtensionUIContext` with notify/setStatus/setWidget/confirm
-   - Bridge through `subscribeCustomEvents`
-   - App-side rendering of custom events
+   - Bridge through custom events / app rendering
 
-**Rollback:** Phase 1-3 are safe (old code path unchanged until hooks-middleware deleted). Phase 4 is pure cleanup (no functional change). Phase 5 is additive (new API, existing code unaffected).
+**Rollback:** Extension loading is additive; interception already goes through extensions-middleware. No hook path to restore.
 
 ## Open Questions
 
@@ -222,5 +206,3 @@ async function loadExtension(path: string): Promise<ExtensionFactory> {
 3. **Extension API versioning**: Do we need a version field in extensions for future compatibility? Pi doesn't version. Skip for now; add if breaking changes occur.
 
 4. **Plugin for context events**: The `context` event (modifying messages before LLM) is powerful but risky. Should we require opt-in permission for it? Start without restriction; add permissions layer later.
-
-5. **Should the built-in hook bridge support PostToolUse modifications?** The current system doesn't allow hook scripts to modify tool output (only block). For v1, keep the same restriction. Extension handlers get full modify capability.

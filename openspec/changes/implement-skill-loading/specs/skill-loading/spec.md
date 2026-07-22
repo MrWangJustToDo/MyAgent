@@ -23,7 +23,7 @@ The system SHALL scan configured directories recursively for `SKILL.md` files. E
 - **THEN** a skill with ID `git-workflow` is registered
 
 #### Scenario: Multiple skill directories
-- **WHEN** SkillLoader is configured with multiple directories `[".opencode/skills", "custom/skills"]`
+- **WHEN** SkillLoader is configured with multiple directories `[".agents/skills", "custom/skills"]`
 - **THEN** skills from all directories are loaded and available
 
 #### Scenario: Non-existent directory
@@ -72,11 +72,11 @@ The system SHALL provide a `load_skill` tool that returns the full content of a 
 - **THEN** an error message is returned listing available skill names
 
 ### Requirement: Configurable skill directories
-The system SHALL support configurable skill directories via agent configuration with a default of `.opencode/skills` relative to the root path.
+The system SHALL support configurable skill directories via agent configuration with a default of `.agents/skills` relative to the root path.
 
 #### Scenario: Default skill directory
 - **WHEN** agent is created without explicit `skillDirs` config
-- **THEN** skills are loaded from `.opencode/skills` relative to rootPath
+- **THEN** skills are loaded from `.agents/skills` relative to rootPath
 
 #### Scenario: Custom skill directories
 - **WHEN** agent is created with `skillDirs: ["./my-skills", "/absolute/path/skills"]`

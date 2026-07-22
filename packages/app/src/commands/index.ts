@@ -11,6 +11,17 @@ import "./resume.js";
 import "./theme.js";
 import "./usage.js";
 
-export { dispatchCommand, getAllCommands, getCommand } from "./registry.js";
+export {
+  clearExtensionCommands,
+  dispatchCommand,
+  getAllCommands,
+  getCommand,
+  registerExtensionCommand,
+} from "./registry.js";
+export {
+  extensionCommandToSlashCommand,
+  splitExtensionCommandArgs,
+  syncExtensionCommands,
+} from "./sync-extension-commands.js";
 
 export type { Command, CommandContext, CommandOption, CommandResult } from "./types.js";

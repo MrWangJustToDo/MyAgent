@@ -1,3 +1,5 @@
+import { z } from "./extension-zod.js";
+
 import type {
   ExtensionInstance,
   ExtensionAPI,
@@ -171,6 +173,7 @@ export class ExtensionRunner {
     return {
       id: api.id,
       env: this.resolveEnv(api.id, config?.config),
+      z,
 
       registerTool: (def: ExtensionToolDefinition) => {
         this.toolRegistry.set(def.name, def);

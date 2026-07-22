@@ -232,13 +232,16 @@ function formatTaskOutput(output: TaskOutput): string {
 export function formatToolOutput(output: unknown, toolName?: string): string {
   if (output === undefined || output === null) return "";
 
-  if (toolName && typeof output === "object") {
-    const out = output as Record<string, unknown>;
-
+  if (toolName) {
     const uiRenderer = getToUI(toolName);
     if (uiRenderer) {
-      return uiRenderer(output);
+      const rendered = uiRenderer(output);
+      return typeof rendered === "string" ? rendered : "";
     }
+  }
+
+  if (toolName && typeof output === "object") {
+    const out = output as Record<string, unknown>;
 
     switch (toolName) {
       case "list_file":
@@ -269,7 +272,7 @@ export function formatToolOutput(output: unknown, toolName?: string): string {
         );
       default:
         // No generic fallback to output.message (removed in phase 2).
-        // Unknown tools get an empty string; they should add a dedicated case.
+        // Unknown tools get an empty string; they should add a dedicated case or register toUI.
         return "";
     }
   }

@@ -54,6 +54,7 @@
     "validate:streaming-scope": "pnpm run build && node scripts/validate-streaming-scope.mjs",
     "validate:agent-observe": "pnpm run build && node scripts/validate-agent-observe.mjs",
     "validate:turn-context": "pnpm run build && node scripts/validate-turn-context.mjs",
+    "validate:extension-loader": "pnpm run build && node scripts/validate-extension-loader.mjs",
     "validate:memory-service": "pnpm run build && node scripts/validate-memory-service.mjs",
     "validate:summarization-budget": "pnpm run build && node scripts/validate-summarization-budget.mjs",
     "validate:subagent-bridge-ui": "pnpm run build && node scripts/validate-subagent-bridge-ui.mjs",

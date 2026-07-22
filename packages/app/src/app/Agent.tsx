@@ -11,7 +11,7 @@ import { useAdapter } from "../context/adapter-context.js";
 import { useAgentChat } from "../hooks/use-agent-chat.js";
 import { useAgentInputControls } from "../hooks/use-agent-input-controls.js";
 import { useConfig } from "../hooks/use-config.js";
-import { useExtensionUI, useExtensionUIBridge, useRespondToConfirm } from "../hooks/use-extension-ui.js";
+import { useExtensionUI, useExtensionUIBridge } from "../hooks/use-extension-ui.js";
 import { useSize } from "../hooks/use-size.js";
 import { useStatic } from "../hooks/use-static.js";
 import { useSubagentPanel } from "../hooks/use-subagent-panel.js";
@@ -66,7 +66,6 @@ export const Agent = () => {
 
   const confirm = useExtensionUI((s) => s.confirm);
   const widgets = useExtensionUI((s) => s.widgets);
-  const onRespond = useRespondToConfirm();
 
   useAgentInputControls({
     adapter,
@@ -122,7 +121,7 @@ export const Agent = () => {
         <>
           <MessageList messages={messages} isLoading={isLoading} />
           <Content />
-          {confirm && <ExtensionConfirm confirm={confirm} onRespond={onRespond} />}
+          {confirm && <ExtensionConfirm confirm={confirm} />}
           {widgets.length > 0 && <ExtensionWidget widgets={widgets} />}
           <Footer status={status} />
         </>

@@ -6,6 +6,8 @@
 import { agentManager, buildDefaultSystemPrompt, resolveModelConfig } from "@my-agent/core";
 import { reactive, toRaw } from "reactivity-store";
 
+import { clearExtensionCommands, syncExtensionCommands } from "../commands";
+
 import type { AppConfig, InitResult } from "./types.js";
 import type { useAgentContext as useAgentContextType } from "../hooks/use-agent-context.js";
 import type { useAgentLog as useAgentLogType } from "../hooks/use-agent-log.js";
@@ -88,6 +90,8 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
   useAgentContext.getActions().setContext(toRaw(agent.getContext()));
   useTodoManager.getActions().setManager(toRaw(todoManager ?? null));
 
+  syncExtensionCommands(agent);
+
   let initialMessages: UIMessage[] | undefined;
   if (config.continueSession || config.resumeSession) {
     const result = config.continueSession
@@ -105,6 +109,7 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
  * Clear all hook stores (call in adapter.destroy()).
  */
 export function clearAdapterHooks(hooks: AdapterHooks): void {
+  clearExtensionCommands();
   hooks.useAgent.getActions().setAgent(null);
   hooks.useAgentLog.getActions().setLog(null);
   hooks.useAgentContext.getActions().setContext(null);

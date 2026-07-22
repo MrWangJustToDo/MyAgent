@@ -17,19 +17,28 @@ export interface NativeFilesystemHandle {
 /**
  * Create a filesystem implementation rooted at `rootPath`.
  */
-export function createNativeFilesystem(rootPath: string): NativeFilesystemHandle {
+export function createNativeFilesystem(
+  rootPath: string,
+  options?: { extraReadRoots?: string[] }
+): NativeFilesystemHandle {
   const resolvedRoot = path.resolve(rootPath);
+  const extraRoots = (options?.extraReadRoots ?? []).map((p) => path.resolve(p));
 
   const resolvePath = (inputPath: string): string => {
     const resolved = path.isAbsolute(inputPath) ? path.resolve(inputPath) : path.resolve(resolvedRoot, inputPath);
-    if (!resolved.startsWith(resolvedRoot + path.sep) && resolved !== resolvedRoot) {
-      throw new FileError(
-        "permission_denied",
-        `Path traversal blocked: "${inputPath}" resolves outside workspace root`,
-        inputPath
-      );
+    if (resolved === resolvedRoot || resolved.startsWith(resolvedRoot + path.sep)) {
+      return resolved;
     }
-    return resolved;
+    for (const extra of extraRoots) {
+      if (resolved === extra || resolved.startsWith(extra + path.sep)) {
+        return resolved;
+      }
+    }
+    throw new FileError(
+      "permission_denied",
+      `Path traversal blocked: "${inputPath}" resolves outside workspace root`,
+      inputPath
+    );
   };
 
   const filesystem: CoreEnvFs = {

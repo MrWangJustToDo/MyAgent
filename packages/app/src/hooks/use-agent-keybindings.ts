@@ -47,6 +47,9 @@ interface UseAgentKeybindingsOptions {
   handleNormalSubmit: () => void;
   submitAskUserAnswer: (answer: string) => void;
   addToolApprovalResponse: UseAgentChatReturn["addToolApprovalResponse"];
+  /** Active extension UI confirm dialog (blocks normal input). */
+  extensionConfirm: { id: string; question: string } | null;
+  onExtensionConfirmRespond: (id: string, ok: boolean) => void;
 }
 
 export function useAgentKeybindings({
@@ -69,11 +72,35 @@ export function useAgentKeybindings({
   handleNormalSubmit,
   submitAskUserAnswer,
   addToolApprovalResponse,
+  extensionConfirm,
+  onExtensionConfirmRespond,
 }: UseAgentKeybindingsOptions): void {
   const getAgent = () => toRaw(useAgent.getReactiveState().agent) as ManagedAgent | null;
 
+  const handleExtensionConfirmKeys = (
+    inputChar: string,
+    inputKey: { escape?: boolean; ctrl?: boolean; meta?: boolean }
+  ): boolean => {
+    if (!extensionConfirm) return false;
+    // Let global shortcuts (Ctrl+C / Ctrl+T / …) fall through.
+    if (inputKey.ctrl || inputKey.meta) return false;
+    const char = inputChar?.toLowerCase();
+    if (char === "y") {
+      onExtensionConfirmRespond(extensionConfirm.id, true);
+      return true;
+    }
+    if (char === "n" || inputKey.escape) {
+      onExtensionConfirmRespond(extensionConfirm.id, false);
+      return true;
+    }
+    // Swallow all other keys so they are not treated as chat input.
+    return true;
+  };
+
   useInput((inputChar, inputKey) => {
     inputActions.addEvent(inputChar, inputKey);
+
+    if (handleExtensionConfirmKeys(inputChar, inputKey)) return;
 
     if (inputKey.ctrl && inputChar === "c") {
       const agent = useAgent.getReadonlyState().agent;
@@ -156,6 +183,7 @@ export function useAgentKeybindings({
 
   useInput(
     (inputChar, inputKey) => {
+      if (handleExtensionConfirmKeys(inputChar, inputKey)) return;
       if (isLoading) return;
       // Workspace panel open: skip all normal-mode input handlers
       if (useWorkspaceView.getReadonlyState().view === "workspace") return;
@@ -223,6 +251,7 @@ export function useAgentKeybindings({
 
   useInput(
     (inputChar, inputKey) => {
+      if (handleExtensionConfirmKeys(inputChar, inputKey)) return;
       const currentValue = useUserInput.getReadonlyState().value;
 
       if (!currentValue) {
@@ -308,6 +337,7 @@ export function useAgentKeybindings({
 
   useInput(
     (inputChar, inputKey) => {
+      if (handleExtensionConfirmKeys(inputChar, inputKey)) return;
       if (inputKey.upArrow) {
         selectActions.selectPrev();
         return;
@@ -356,6 +386,7 @@ export function useAgentKeybindings({
 
   useInput(
     (inputChar, inputKey) => {
+      if (handleExtensionConfirmKeys(inputChar, inputKey)) return;
       if (inputKey.escape) {
         inputActions.clear();
         modeActions.setDenyMode(false);

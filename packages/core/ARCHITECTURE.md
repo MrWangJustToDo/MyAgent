@@ -19,13 +19,12 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 | Compaction (micro / auto / reactive) | **Done** | + manual `/compact` in app |
 | Memory (prefetch / extract / consolidate) | **Done** | Post-run extraction only |
 | Tool approval | **Done in core** | `status` middleware + `needsApproval` on tools; app handles UI/keyboard only |
-| Extensions | **Done** | `ExtensionRunner` + `extensions-middleware` (intercept via ExtensionEventBus) |
-| Hooks (`.agent-hooks`) | **Superseded** | Bridged/replaced by extension API (`add-extension-api`) |
+| Extensions | **Done** | `ExtensionRunner` + `extensions-middleware` (`.agents/extension`); no `.agent-hooks` |
 
 **Known gaps**
 
 1. **Tool approval** — core `AgentChatController` owns tool-phase continuation; app handles UI/keyboard only.
-2. **Subagents** — no session store, memory, MCP, or hooks (by design).
+2. **Subagents** — no session store, memory, MCP, or extensions (by design).
 
 ---
 
@@ -132,10 +131,10 @@ manager-agent.ts
 | 7 | `setCompactionConfig` from model context window |
 | 8 | `McpManager.initialize` → merge MCP tools (execute wrapped to keep multimodal `content[]`) |
 | 9 | `MemoryManager.initialize` → `setMemoryContent` (MEMORY.md index) |
-| 10 | `ExtensionLoader` / `ExtensionRunner` from extension directories |
+| 10 | `ExtensionLoader` / `ExtensionRunner` — scan `examples/extensions`, then `.agents/extension`, then `~/.agents/extension`; programmatic `config.extensions` last |
 | 11 | `SessionStore` → `setSessionStore({ modelStyle, model })` |
 
-**Subagent** (`parentId` set): inherits parent config via `spawnSubagent`; skips docs, skills, MCP, memory, hooks, session, and most root-only tools.
+**Subagent** (`parentId` set): inherits parent config via `spawnSubagent`; skips docs, skills, MCP, memory, extensions, session, and most root-only tools.
 
 ### 2.3 Event infrastructure (manager construct time)
 
@@ -593,9 +592,11 @@ Streaming chunks are scoped by required `agentId`; hosts receive them only via `
 - Complex events (MCP, memory, compaction) use dedicated log handlers (no UI notify)
 - Emit sites should **not** duplicate `log.info` / `log.approval` for lifecycle events covered by the bridge
 
-### 8.5 Extension interception (not EventBus hooks)
+### 8.5 Extension interception (L4)
 
-`ExtensionEventBus` (`tool:before:*` / `tool:after:*` / `tool:error:*`) is invoked from `extensions-middleware.ts`. It does **not** replace AgentEventBus and does not map lifecycle events to `.agent-hooks` scripts.
+`ExtensionEventBus` (`tool:before:*` / `tool:after:*` / `tool:error:*`) is invoked from `extensions-middleware.ts`. It does **not** replace AgentEventBus. There is **no** `.agent-hooks` / hook-script path — customize via `.agents/extension` modules or programmatic `config.extensions`.
+
+Repo demos live in `examples/extensions/` (loaded by default when present under `rootPath`). Extension `registerCommand()` is mirrored onto `ManagedAgent` and synced into app slash commands after bootstrap (`syncExtensionCommands`). Built-in names (`/help`, …) win over extension conflicts. `registerTool()` converts definitions via `defineServerTool` before they enter the TanStack tool set. Tool schemas must use **`ctx.z`** (host Zod); filesystem extensions should not import `zod`.
 ---
 
 ## 9. End-to-end run diagram

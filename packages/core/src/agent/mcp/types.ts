@@ -32,7 +32,7 @@ export type McpServerConfig = z.infer<typeof mcpServerConfigSchema>;
 // MCP Config File Schema
 // ============================================================================
 
-/** Top-level MCP configuration (matches .opencode/mcp.json) */
+/** Top-level MCP configuration (matches `.agents/mcp.json`) */
 export const mcpConfigSchema = z.object({
   mcpServers: z.record(z.string(), mcpServerConfigSchema),
 });

@@ -1,0 +1,64 @@
+/**
+ * Extension discovery paths — project and user defaults under `.agents/`.
+ */
+
+import { getEnv } from "../../env.js";
+
+/** Project-local extension directory (relative to CoreEnv rootPath). */
+export const DEFAULT_EXTENSION_DIR = ".agents/extension";
+
+/** Environment variable for additional extension directories (comma-separated). */
+export const EXTENSION_DIRS_ENV_VAR = "AGENT_EXTENSION_DIRS";
+
+/**
+ * Default extension directories to discover.
+ *
+ * Load order (later registrations with the same id win):
+ * 1. `AGENT_EXTENSION_DIRS` (comma-separated)
+ * 2. Repo demos: `examples/extensions` (when present under rootPath)
+ * 3. Project: `.agents/extension`
+ * 4. User home: `~/.agents/extension`
+ */
+export async function getDefaultExtensionDirs(): Promise<string[]> {
+  const env = getEnv();
+  const dirs: string[] = [];
+
+  const runEnv = await env.getEnv();
+  const envDirs = runEnv[EXTENSION_DIRS_ENV_VAR];
+  if (envDirs) {
+    const parsedDirs = envDirs
+      .split(",")
+      .map((d) => d.trim())
+      .filter((d) => d.length > 0);
+    dirs.push(...parsedDirs);
+  }
+
+  dirs.push("examples/extensions");
+  dirs.push(DEFAULT_EXTENSION_DIR);
+  dirs.push(env.path.join(await env.homedir(), ".agents", "extension"));
+
+  return dirs;
+}
+
+/** Resolve a search dir against CoreEnv rootPath when relative. */
+export function resolveExtensionDir(dir: string): string {
+  const env = getEnv();
+  return env.path.isAbsolute(dir) ? env.path.normalize(dir) : env.path.join(env.rootPath, dir);
+}
+
+/** True for loadable extension entry files (not tests / declarations). */
+export function isExtensionModuleFile(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".d.ts")) return false;
+  if (/\.(test|spec)\.(m?[jt]s)$/i.test(lower)) return false;
+  return /\.(mjs|cjs|js|ts)$/i.test(lower);
+}
+
+/** Build a `file://` URL for dynamic import without depending on `node:url`. */
+export function pathToFileUrl(absPath: string): string {
+  const normalized = absPath.replace(/\\/g, "/");
+  if (normalized.startsWith("/")) {
+    return `file://${normalized}`;
+  }
+  return `file:///${normalized}`;
+}

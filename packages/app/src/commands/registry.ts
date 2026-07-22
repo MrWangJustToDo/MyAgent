@@ -2,18 +2,44 @@ import { useCommandOutput } from "../hooks/use-command-output.js";
 
 import type { Command, CommandContext, CommandResult } from "./types.js";
 
-const commands: Command[] = [];
+/** Built-in slash commands (module-load registration). */
+const builtinCommands: Command[] = [];
+
+/** Extension slash commands (synced from ManagedAgent after bootstrap). */
+const extensionCommands = new Map<string, Command>();
 
 export function registerCommand(command: Command): void {
-  commands.push(command);
+  const index = builtinCommands.findIndex((c) => c.name === command.name);
+  if (index >= 0) {
+    builtinCommands[index] = command;
+    return;
+  }
+  builtinCommands.push(command);
+}
+
+/**
+ * Register an extension-provided slash command.
+ * Built-in names win — conflicting extension commands are skipped.
+ */
+export function registerExtensionCommand(command: Command): boolean {
+  if (builtinCommands.some((c) => c.name === command.name)) {
+    console.warn(`[commands] Extension command "/${command.name}" skipped — conflicts with built-in`);
+    return false;
+  }
+  extensionCommands.set(command.name, command);
+  return true;
+}
+
+export function clearExtensionCommands(): void {
+  extensionCommands.clear();
 }
 
 export function getCommand(name: string): Command | undefined {
-  return commands.find((c) => c.name === name);
+  return builtinCommands.find((c) => c.name === name) ?? extensionCommands.get(name);
 }
 
 export function getAllCommands(): readonly Command[] {
-  return commands;
+  return [...builtinCommands, ...extensionCommands.values()];
 }
 
 function handleResult(result: CommandResult, ctx: CommandContext, commandName: string): void {

@@ -7,6 +7,7 @@ import {
   type SessionSaveReason,
   type SessionSyncTracker,
 } from "../agent/session/session-sync-tracker.js";
+import { defineServerTool } from "../agent/tools/tanstack/define-tool.js";
 import { generateId } from "../agent/utils.js";
 import { getEnv } from "../env.js";
 
@@ -488,14 +489,37 @@ export class ManagedAgent {
     if (this.tools[def.name]) {
       this.log?.warn("system", `Tool "${def.name}" already registered, overwriting`);
     }
-    (this.tools as Record<string, unknown>)[def.name] = def;
+    const serverTool = defineServerTool({
+      name: def.name,
+      description: def.description,
+      inputSchema: def.inputSchema,
+      outputSchema: def.outputSchema,
+      execute: async (args, ctx) =>
+        def.execute(args, {
+          toolCallId: ctx.toolCallId,
+          abortSignal: ctx.abortSignal,
+        }),
+      toUI: def.toUI,
+    });
+    (this.tools as Record<string, unknown>)[def.name] = serverTool;
     this.runnerConfigKey = undefined;
   }
 
-  registerCommand(_cmd: ExtensionCommand): void {
-    // Commands stored in extensionRunner.commandRegistry via
-    // createContext → registerCommand callback. ManagedAgent
-    // keeps this method for future command dispatch.
+  /** Extension slash commands registered via {@link ExtensionContext.registerCommand}. */
+  private extensionCommands = new Map<string, ExtensionCommand>();
+
+  registerCommand(cmd: ExtensionCommand): void {
+    if (this.extensionCommands.has(cmd.name)) {
+      this.log?.warn("system", `Command "/${cmd.name}" already registered, overwriting`);
+    }
+    this.extensionCommands.set(cmd.name, cmd);
+  }
+
+  getExtensionCommands(): ExtensionCommand[] {
+    if (this.extensionRunner) {
+      return this.extensionRunner.getCommands();
+    }
+    return Array.from(this.extensionCommands.values());
   }
 
   setCompactionConfig(config: CompactionConfig): void {

@@ -1,4 +1,7 @@
-import type { z } from "zod";
+import type { ExtensionZod } from "./extension-zod.js";
+import type { ZodType } from "zod";
+
+export type { ExtensionZod } from "./extension-zod.js";
 
 // ============================================================================
 // Tool execution types (mirrored from @tanstack/ai to avoid ai package dep)
@@ -24,8 +27,8 @@ export type ExtensionLifecycleEvent = "bootstrap" | "activate" | "deactivate" | 
 export interface ExtensionToolDefinition {
   name: string;
   description: string;
-  inputSchema: z.ZodSchema;
-  outputSchema?: z.ZodSchema;
+  inputSchema: ZodType;
+  outputSchema?: ZodType;
   execute: (input: unknown, options: ToolExecutionOptions) => Promise<ToolCallResult>;
   toUI?: (result: unknown) => string;
 }
@@ -127,6 +130,12 @@ export interface ExtensionUI {
 export interface ExtensionContext {
   id: string;
   env: Record<string, string>;
+
+  /**
+   * Host-provided Zod `z` API (same package version as core).
+   * Extension modules should use `ctx.z` for schemas — do not `import` zod yourself.
+   */
+  z: ExtensionZod;
 
   registerTool(def: ExtensionToolDefinition): void;
   registerCommand(cmd: ExtensionCommand): void;

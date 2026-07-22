@@ -146,7 +146,13 @@ export type {
 // Extension API
 // ============================================================================
 
-export { ExtensionRunner, ExtensionLoader } from "./agent/extension";
+export {
+  ExtensionRunner,
+  ExtensionLoader,
+  DEFAULT_EXTENSION_DIR,
+  EXTENSION_DIRS_ENV_VAR,
+  getDefaultExtensionDirs,
+} from "./agent/extension";
 export type {
   ExtensionAPI,
   ExtensionFactory,
@@ -157,6 +163,7 @@ export type {
   ExtensionCommand,
   ExtensionEventBus,
   ExtensionUI,
+  ExtensionZod,
   InterceptableEvent,
   EventInterceptor,
 } from "./agent/extension";

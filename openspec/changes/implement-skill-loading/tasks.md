@@ -32,7 +32,7 @@
 ## 5. Agent Configuration
 
 - [x] 5.1 Add `skillDirs?: string[]` to agent config types in `packages/core/src/types.ts`
-- [x] 5.2 Set default value `[".opencode/skills"]` when not specified
+- [x] 5.2 Set default value `[".agents/skills"]` when not specified
 
 ## 6. Agent Manager Integration
 
@@ -49,7 +49,7 @@
 
 ## 8. Verification
 
-- [x] 8.1 Verify existing `.opencode/skills/` files are parsed correctly
+- [x] 8.1 Verify existing `.agents/skills/` files are parsed correctly
 - [x] 8.2 Test list_skills returns skill names and descriptions
 - [x] 8.3 Test load_skill returns wrapped skill content
 - [x] 8.4 Run build to verify no type errors

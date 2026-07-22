@@ -62,6 +62,14 @@ export { estimateTokens } from "./agent/compaction/token-estimator.js";
 export { createExtensionsMiddleware, createLifecycleMiddleware } from "./agent/middleware";
 export { createStatusMiddleware } from "./agent/middleware/status-middleware.js";
 export {
+  ExtensionLoader,
+  normalizeExtensionExport,
+  isExtensionModuleFile,
+  pathToFileUrl,
+  DEFAULT_EXTENSION_DIR,
+  getDefaultExtensionDirs,
+} from "./agent/extension";
+export {
   buildSystemPromptWithTurnContext,
   SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
   buildDynamicTurnContext,
