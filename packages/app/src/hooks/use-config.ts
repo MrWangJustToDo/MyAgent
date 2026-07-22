@@ -26,6 +26,7 @@ export const useConfig = createState(
       debug: false,
       apiKey: "",
       mcpConfigPath: "",
+      extensionDirs: [],
       continueSession: false,
       resumeSession: "",
     } as AppConfig,
@@ -45,6 +46,7 @@ export const useConfig = createState(
         state.config.debug = config.debug ?? false;
         state.config.apiKey = config.apiKey || "";
         state.config.mcpConfigPath = config.mcpConfigPath || "";
+        state.config.extensionDirs = config.extensionDirs ?? [];
         state.config.continueSession = config.continueSession ?? false;
         state.config.resumeSession = config.resumeSession || "";
         state.config.modelInfo = config.modelInfo;
@@ -76,6 +78,7 @@ export const useConfig = createState(
         state.config.debug = false;
         state.config.apiKey = "";
         state.config.mcpConfigPath = "";
+        state.config.extensionDirs = [];
         state.config.continueSession = false;
         state.config.resumeSession = "";
         state.helpRequested = false;

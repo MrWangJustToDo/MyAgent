@@ -127,6 +127,13 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
   const remoteFlag = getFlag(parsed, "remote", "R");
   const remote = typeof remoteFlag === "string" ? remoteFlag : envRemote || undefined;
 
+  // Extra dirs from CLI only; `AGENT_EXTENSION_DIRS` is read in core `getDefaultExtensionDirs`.
+  const extensionDirsRaw = getFlagString(parsed, "", "extension-dirs", "extension-dir");
+  const extensionDirs = extensionDirsRaw
+    .split(",")
+    .map((d) => d.trim())
+    .filter((d) => d.length > 0);
+
   return {
     model: connection.model,
     style: connection.style,
@@ -137,6 +144,7 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
     maxIterations: getFlagNumber(parsed, isNaN(envMaxIter) ? 50 : envMaxIter, "max-iterations"),
     debug: getFlagBoolean(parsed, "debug", "d"),
     mcpConfigPath: getFlagString(parsed, envMcpConfig, "mcp-config"),
+    extensionDirs,
     continueSession: getFlagBoolean(parsed, "continue", "c"),
     resumeSession,
     remote,

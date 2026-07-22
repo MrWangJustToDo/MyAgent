@@ -17,6 +17,11 @@ export interface AppConfig {
   maxIterations: number;
   debug: boolean;
   mcpConfigPath: string;
+  /**
+   * Extra extension directories (comma-separated on CLI as `--extension-dirs`).
+   * Merged ahead of `.agents/extension` and `~/.agents/extension`.
+   */
+  extensionDirs: string[];
   continueSession: boolean;
   resumeSession: string;
   /** Optional model metadata override from MODEL_* env vars */

@@ -92,6 +92,11 @@ export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
    * Each factory is called during agent initialization.
    */
   extensions?: Array<ExtensionFactory>;
+  /**
+   * Extra filesystem directories to scan for extensions (before env / defaults).
+   * Relative paths resolve against CoreEnv `rootPath`.
+   */
+  extensionDirs?: string[];
 };
 
 /** Subagent preview / non-useChat UI channel (TanStack StreamProcessor). */

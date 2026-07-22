@@ -14,14 +14,24 @@ export const EXTENSION_DIRS_ENV_VAR = "AGENT_EXTENSION_DIRS";
  * Default extension directories to discover.
  *
  * Load order (later registrations with the same id win):
- * 1. `AGENT_EXTENSION_DIRS` (comma-separated)
- * 2. Repo demos: `examples/extensions` (when present under rootPath)
+ * 1. `extraDirs` (caller / `ManagedAgentConfig.extensionDirs` / CLI `--extension-dirs`)
+ * 2. `AGENT_EXTENSION_DIRS` (comma-separated env via CoreEnv)
  * 3. Project: `.agents/extension`
  * 4. User home: `~/.agents/extension`
+ *
+ * Project-specific demo dirs (e.g. `examples/extensions`) are **not** included —
+ * pass them via `extraDirs`, CLI `--extension-dirs`, or `AGENT_EXTENSION_DIRS`.
  */
-export async function getDefaultExtensionDirs(): Promise<string[]> {
+export async function getDefaultExtensionDirs(extraDirs?: readonly string[]): Promise<string[]> {
   const env = getEnv();
   const dirs: string[] = [];
+
+  if (extraDirs) {
+    for (const dir of extraDirs) {
+      const trimmed = dir.trim();
+      if (trimmed) dirs.push(trimmed);
+    }
+  }
 
   const runEnv = await env.getEnv();
   const envDirs = runEnv[EXTENSION_DIRS_ENV_VAR];
@@ -33,7 +43,6 @@ export async function getDefaultExtensionDirs(): Promise<string[]> {
     dirs.push(...parsedDirs);
   }
 
-  dirs.push("examples/extensions");
   dirs.push(DEFAULT_EXTENSION_DIR);
   dirs.push(env.path.join(await env.homedir(), ".agents", "extension"));
 

@@ -70,6 +70,7 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
     systemPrompt: config.systemPrompt || (await buildDefaultSystemPrompt()),
     maxIterations: config.maxIterations,
     mcpConfigPath: config.mcpConfigPath || undefined,
+    extensionDirs: config.extensionDirs?.length ? config.extensionDirs : undefined,
     modelStyle: connection.style,
     modelBaseURL: connection.baseURL,
     modelApiKey: connection.apiKey,

@@ -164,7 +164,7 @@ export async function buildManagedAgent({
     const extensionLoader = new ExtensionLoader();
     managed.extensionLoader = extensionLoader;
 
-    const extensionDirs = await getDefaultExtensionDirs();
+    const extensionDirs = await getDefaultExtensionDirs(config.extensionDirs);
     log.debug("system", "Extension search directories", { dirs: extensionDirs });
 
     const fromDisk = await extensionLoader.loadFromDirectories(extensionDirs);

@@ -131,7 +131,7 @@ manager-agent.ts
 | 7 | `setCompactionConfig` from model context window |
 | 8 | `McpManager.initialize` → merge MCP tools (execute wrapped to keep multimodal `content[]`) |
 | 9 | `MemoryManager.initialize` → `setMemoryContent` (MEMORY.md index) |
-| 10 | `ExtensionLoader` / `ExtensionRunner` — scan `examples/extensions`, then `.agents/extension`, then `~/.agents/extension`; programmatic `config.extensions` last |
+| 10 | `ExtensionLoader` / `ExtensionRunner` — scan `.agents/extension` then `~/.agents/extension` (plus `AGENT_EXTENSION_DIRS` / `config.extensionDirs` / `--extension-dirs`); programmatic `config.extensions` last |
 | 11 | `SessionStore` → `setSessionStore({ modelStyle, model })` |
 
 **Subagent** (`parentId` set): inherits parent config via `spawnSubagent`; skips docs, skills, MCP, memory, extensions, session, and most root-only tools.
@@ -596,7 +596,7 @@ Streaming chunks are scoped by required `agentId`; hosts receive them only via `
 
 `ExtensionEventBus` (`tool:before:*` / `tool:after:*` / `tool:error:*`) is invoked from `extensions-middleware.ts`. It does **not** replace AgentEventBus. There is **no** `.agent-hooks` / hook-script path — customize via `.agents/extension` modules or programmatic `config.extensions`.
 
-Repo demos live in `examples/extensions/` (loaded by default when present under `rootPath`). Extension `registerCommand()` is mirrored onto `ManagedAgent` and synced into app slash commands after bootstrap (`syncExtensionCommands`). Built-in names (`/help`, …) win over extension conflicts. `registerTool()` converts definitions via `defineServerTool` before they enter the TanStack tool set. Tool schemas must use **`ctx.z`** (host Zod); filesystem extensions should not import `zod`.
+Repo demos live in `examples/extensions/` and are **opt-in** via `AGENT_EXTENSION_DIRS`, `ManagedAgentConfig.extensionDirs`, or CLI `--extension-dirs` (not in core defaults). Extension `registerCommand()` is mirrored onto `ManagedAgent` and synced into app slash commands after bootstrap (`syncExtensionCommands`). Built-in names (`/help`, …) win over extension conflicts. `registerTool()` converts definitions via `defineServerTool` before they enter the TanStack tool set. Tool schemas must use **`ctx.z`** (host Zod); filesystem extensions should not import `zod`.
 ---
 
 ## 9. End-to-end run diagram
