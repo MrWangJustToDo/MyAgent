@@ -138,9 +138,13 @@ export class AgentStatusController {
     }
   }
 
-  beginCompaction(): void {
+  beginCompaction(kind: "auto" | "reactive" = "auto", data?: Record<string, unknown>): void {
     this.deps.setStatus("compacting");
-    this.deps.emitEvent?.("compaction:auto-start");
+    if (kind === "reactive") {
+      this.deps.emitEvent?.("compaction:reactive-start", data);
+    } else {
+      this.deps.emitEvent?.("compaction:auto-start", data);
+    }
   }
 
   endCompaction(): void {
@@ -166,11 +170,6 @@ export class AgentStatusController {
     }
 
     for (const approval of needsApproval) {
-      this.deps.log?.approval("Tool approval requested", {
-        toolCallId: approval.toolCallId,
-        toolName: approval.toolName,
-        approvalId: approval.approvalId,
-      });
       this.deps.emitEvent?.("agent:tool-approval-request", {
         tool_call_id: approval.toolCallId,
         tool_name: approval.toolName,

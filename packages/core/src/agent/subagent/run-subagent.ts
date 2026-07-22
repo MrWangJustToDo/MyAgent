@@ -188,7 +188,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
 
   emitAgentEvent(subagent, aborted ? "subagent:error" : "subagent:completed", {
     parentId: parentAgentId,
-    data: { subagentId, output: finalOutput },
+    data: aborted ? { subagentId, error: finalOutput } : { subagentId, summary: finalOutput },
   });
 
   if (autoDestroy) {

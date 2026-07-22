@@ -683,13 +683,12 @@ export class ManagedAgent {
     }
 
     const retry = this.run.recordReactiveCompactRetry();
-    this.emitEvent("compaction:reactive-start", {
-      retry,
-      maxRetries: this.run.getMaxReactiveCompactRetries(),
-    });
 
     try {
-      this.statusController.beginCompaction();
+      this.statusController.beginCompaction("reactive", {
+        retry,
+        maxRetries: this.run.getMaxReactiveCompactRetries(),
+      });
       const canon = this.context.getCanonicalFromUI();
       const llmMessages = this.context.getMessagesForLLM(canon);
       const compactedMessages = await reactiveCompact(llmMessages, this.id, manager);
@@ -726,6 +725,11 @@ export class ManagedAgent {
       todoManager: this.todoManager,
     });
     this.resetSessionSyncTracker(session.uiMessages);
+    this.emitEvent("session:restore", {
+      sessionId,
+      messageCount: session.uiMessages.length,
+      tokenEstimate: session.contextTokens ?? this.usage.getWindowUsage().inputTokens ?? 0,
+    });
     return session;
   }
 

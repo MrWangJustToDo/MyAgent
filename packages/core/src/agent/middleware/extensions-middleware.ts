@@ -58,18 +58,26 @@ export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): Chat
         deps.getTodoManager?.()?.resetRoundCounter();
       }
 
-      const runner = deps.getExtensionRunner();
-      if (!runner) return;
-
-      const eventBus = runner.getEventBus();
-
+      // Lifecycle bus always fires; ExtensionEventBus interception is optional.
       if (info.ok) {
         deps.emitEvent?.("agent:tool-end", {
           tool_name: info.toolName,
           duration_ms: info.duration,
           tool_output: info.result,
         });
+      } else {
+        deps.emitEvent?.("agent:tool-error", {
+          tool_name: info.toolName,
+          error: info.error instanceof Error ? info.error.message : String(info.error),
+        });
+      }
 
+      const runner = deps.getExtensionRunner();
+      if (!runner) return;
+
+      const eventBus = runner.getEventBus();
+
+      if (info.ok) {
         await eventBus.emit({
           type: `tool:after:${info.toolName}`,
           payload: {
@@ -81,11 +89,6 @@ export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): Chat
           defaultReturn: undefined,
         });
       } else {
-        deps.emitEvent?.("agent:tool-error", {
-          tool_name: info.toolName,
-          error: info.error instanceof Error ? info.error.message : String(info.error),
-        });
-
         await eventBus.emit({
           type: `tool:error:${info.toolName}`,
           payload: {

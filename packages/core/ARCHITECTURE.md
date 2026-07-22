@@ -18,8 +18,9 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 | Session persistence | **Done** | Unified `persistSession`; `finalizeRun` on finish/abort/error |
 | Compaction (micro / auto / reactive) | **Done** | + manual `/compact` in app |
 | Memory (prefetch / extract / consolidate) | **Done** | Post-run extraction only |
-| Tool approval | **Done in core** | `approval` middleware + `needsApproval` on tools; app handles UI/keyboard only |
-| Hooks (`.agent-hooks`) | **Done** | Separate from user approval |
+| Tool approval | **Done in core** | `status` middleware + `needsApproval` on tools; app handles UI/keyboard only |
+| Extensions | **Done** | `ExtensionRunner` + `extensions-middleware` (intercept via ExtensionEventBus) |
+| Hooks (`.agent-hooks`) | **Superseded** | Bridged/replaced by extension API (`add-extension-api`) |
 
 **Known gaps**
 
@@ -47,7 +48,7 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 │    ├─ UsageTracker      (tokens, cost, window usage)            │
 │    ├─ AgentLog          (debug log + UI notifications)          │
 │    └─ AgentRunner       (TanStack chat + middleware)              │
-│  AgentEventBus ──► hooks + Event→Log bridge                     │
+│  AgentEventBus ──► Event→Log bridge (lifecycle notify only)             │
 └────────────────────────────┬────────────────────────────────────┘
                              │ CoreEnv interface
 ┌────────────────────────────▼────────────────────────────────────┐
@@ -131,7 +132,7 @@ manager-agent.ts
 | 7 | `setCompactionConfig` from model context window |
 | 8 | `McpManager.initialize` → merge MCP tools (execute wrapped to keep multimodal `content[]`) |
 | 9 | `MemoryManager.initialize` → `setMemoryContent` (MEMORY.md index) |
-| 10 | `HookRegistry.load` from `.agent-hooks/hooks.json` |
+| 10 | `ExtensionLoader` / `ExtensionRunner` from extension directories |
 | 11 | `SessionStore` → `setSessionStore({ modelStyle, model })` |
 
 **Subagent** (`parentId` set): inherits parent config via `spawnSubagent`; skips docs, skills, MCP, memory, hooks, session, and most root-only tools.
@@ -140,9 +141,18 @@ manager-agent.ts
 
 ```
 AgentManager constructor
-  new AgentEventBus(resolveHookTarget)
+  new AgentEventBus()
   attachEventLogBridge(bus, resolveLog)   // centralized lifecycle logging
 ```
+
+Observation is split into four layers (do not mix interception into the lifecycle bus):
+
+| Layer | Mechanism | Role |
+|-------|-----------|------|
+| L1 Control plane | `AgentStatusController` + `ManagedAgent.subscribeState` | status / error / pendingApproval |
+| L2 Lifecycle bus | `AgentEventBus` → Event→Log (+ host `agentManager.on`) | fire-and-forget notify |
+| L3 Data plane | `AgentUIChannel` + streaming callbacks | UIMessages / tool stdout |
+| L4 Interception | `ExtensionEventBus` only | skip / transform tool args |
 
 ### 2.4 Session bootstrap events (`session-bootstrap-events.ts`)
 
@@ -202,7 +212,7 @@ Built in `buildAgentRunner` (`run-agent.ts`), order matters:
 3. compaction-middleware     auto-compact only (DeepSeek reasoning echo is adapter-only)
 4. tool-compact-middleware  per-tool LLM shaping
 5. turn-context-middleware  inject <turn_context> (memory, todo nag)
-6. hooks-middleware         PreToolUse / PostToolUse scripts + tool events
+6. extensions-middleware    ExtensionEventBus intercept + agent:tool-* lifecycle events
 ```
 
 Status logic is centralized in `AgentStatusController` (`managers/agent-status-controller.ts`). `status-middleware` is the runtime hook for status; `lifecycle-middleware` owns usage and run finalization side-effects. `AgentChatController` calls `prepareRunPhase` / `reconcileAfterRun` for pump boundaries.
@@ -217,7 +227,8 @@ Status logic is centralized in `AgentStatusController` (`managers/agent-status-c
 | Tool call | `running` | `TOOL_CALL_START` |
 | Tool approval pending | `waiting` | `status.syncApprovals` on `onToolPhaseComplete` |
 | Client tool (`ask_user`) | `awaiting_user` | App host calls `ManagedAgent.setClientToolWaiting(true)` |
-| Auto-compact | `compacting` | `status.beginCompaction` |
+| Auto-compact | `compacting` | `status.beginCompaction("auto")` |
+| Reactive compact | `compacting` | `status.beginCompaction("reactive")` |
 | Success | `completed` / `idle` | `onRunFinish` (preserves `waiting` / `awaiting_user` if set) |
 | Stream ended, tools waiting | `completed` / `waiting` | `statusController.reconcileAfterRun` after `pumpToolPhases` |
 | User abort | `aborted` | `onRunAbort` / `onUserCancel` / `RunCoordinator` |
@@ -284,14 +295,14 @@ Status becomes `awaiting_user` (distinct from approval `waiting`). Exposed in CL
 
 No manual user text is required; each `y` only approves one tool when several `run_command` calls are pending.
 
-### 4.4 Hooks vs user approval (different mechanisms)
+### 4.4 Extensions vs user approval (different mechanisms)
 
 | Mechanism | File | Purpose |
 |-----------|------|---------|
 | **User approval** | TanStack + app | Block destructive tools until user confirms |
-| **Hook deny** | `hooks-middleware.ts` → `runHooks(PreToolUse)` | Script-based deny/transform before tool runs |
+| **Extension deny/transform** | `extensions-middleware.ts` → `ExtensionEventBus` (`tool:before:*`) | Extension skip/transform before tool runs |
 
-Hook events also emit `agent:tool-start` / `agent:tool-end` / `agent:tool-error` for logging.
+Lifecycle tool events (`agent:tool-start` / `agent:tool-end` / `agent:tool-error`) always emit on AgentEventBus (L2), whether or not an extension runner is present. Extension bus traffic is L4 only.
 
 ---
 
@@ -337,7 +348,7 @@ Large tool outputs at **execute** time still use `maybeCacheOutput` (`.agent-cac
 **Trigger:** `shouldTriggerAutoCompact` when window input tokens ≥ `tokenThreshold × compactAtPercent / 100`
 
 ```
-setStatus("compacting")
+setStatus("compacting") via beginCompaction("auto")
 emit compaction:auto-start
 autoCompact(messages, config, agentId, manager)
   → findCutPoint (keep recent flows)
@@ -345,7 +356,7 @@ autoCompact(messages, config, agentId, manager)
 applyCompactionResult(context, usage, result)
   → setSummaryMessage, setCompactIndex, reset window usage
 emit compaction:auto-complete | compaction:auto-error
-setStatus("running")
+setStatus("running") via endCompaction
 ```
 
 `AgentContext.getMessagesForLLM(canon)` returns:
@@ -366,8 +377,10 @@ When the API returns `prompt_too_long`:
 ```
 runStreamWithReactiveCompactRetry catches RUN_ERROR / thrown error
   → handleReactiveCompact (max 1 retry by default)
+  → beginCompaction("reactive")  // emits compaction:reactive-start only (not auto-start)
   → reactiveCompact: summarize + keep tail messages
   → applyReactiveCompactionResult
+  → endCompaction + emit compaction:reactive-complete | compaction:reactive-error
   → retry runner.run with updated messages
 ```
 
@@ -472,6 +485,7 @@ uiMessages (source of truth in AgentContext, synced at each `chat()` start)
 
 | Event | When |
 |-------|------|
+| `session:restore` | `ManagedAgent.restoreSession` succeeds (`messageCount`, `tokenEstimate`) |
 | `session:save-error` | `SessionStore.save` fails (target: `session`, `uiMessages`, or `session+uiMessages`) |
 
 ---
@@ -541,33 +555,41 @@ emitAgentEvent(emitter, type, { data })   // injects session_id
 managed.emitEvent(type, data)
 ```
 
-### 8.2 Event types (summary)
+### 8.2 Observation layers (L1–L4)
+
+| Layer | API | Notes |
+|-------|-----|-------|
+| L1 | `subscribeState` | Status machine for UI chrome |
+| L2 | `agentManager.on` / AgentEventBus | Lifecycle notify; Event→Log is the only core `*` listener |
+| L3 | `AgentUIChannel` + `subscribeStreamingCallback` | Message/stream data — not lifecycle events |
+| L4 | `ExtensionEventBus` | Intercept/transform only; never gates L2 tool events |
+
+### 8.3 Event types (summary)
 
 | Category | Events |
 |----------|--------|
 | Session bootstrap | `session:doc`, `session:skill`, `session:mcp`, `session:memory`, `session:start` |
+| Session I/O | `session:restore`, `session:save-error` |
 | Run lifecycle | `prompt:submit`, `agent:thinking`, `agent:abort`, `agent:stream-error`, `agent:stop` |
+| LLM iteration | `llm:request`, `llm:response` — **per TanStack iteration**, not per user turn |
+| Turn rollup | `turn:summary` — end of `AgentChatController.pumpToolPhases` |
 | Tools | `agent:tool-start`, `agent:tool-approval-request`, `agent:tool-end`, `agent:tool-error` |
 | Memory | `memory:prefetch`, `memory:extract`, `memory:consolidate` |
-| Compaction | `compaction:auto-*`, `compaction:reactive-*` |
-| Session I/O | `session:save-error` |
-| Subagent | `subagent:created`, `subagent:started`, `subagent:completed`, `subagent:error`, … |
+| Compaction | `compaction:auto-*`, `compaction:reactive-*` (start kind matches path) |
+| Subagent | `subagent:created`, `subagent:started`, `subagent:completed` (`summary`), `subagent:error`, `subagent:destroyed`, `subagent:ui-update` |
 
-### 8.3 Event → Log bridge
+### 8.4 Event → Log bridge
 
 **File:** `managers/event-log-bridge.ts`
 
 - Attached in `AgentManager` constructor
 - `DEFAULT_EVENT_LOG_RULES` controls level/category/message per event
 - Complex events (MCP, memory, compaction) use dedicated log handlers (no UI notify)
-- Emit sites should **not** duplicate `log.info` for lifecycle events covered by the bridge
+- Emit sites should **not** duplicate `log.info` / `log.approval` for lifecycle events covered by the bridge
 
-### 8.4 Hook bridge
+### 8.5 Extension interception (not EventBus hooks)
 
-`AgentEventBus` also maps select events to `.agent-hooks/hooks.json` scripts (`SessionStart`, `UserPromptSubmit`, `Stop`, `SubagentStart`, …).
-
-Tool hooks (`PreToolUse`, `PostToolUse`) are invoked directly from `hooks-middleware.ts`, not via the event bus.
-
+`ExtensionEventBus` (`tool:before:*` / `tool:after:*` / `tool:error:*`) is invoked from `extensions-middleware.ts`. It does **not** replace AgentEventBus and does not map lifecycle events to `.agent-hooks` scripts.
 ---
 
 ## 9. End-to-end run diagram
@@ -591,9 +613,9 @@ executeManagedAgentRun
             │    (DeepSeek reasoning echo is adapter-only; no strip here)
             ├─ tool-compact.onConfig → toModelOutput + recent-window placeholders
             ├─ turn-context.onConfig → inject memory/todo
-            ├─ hooks.onBeforeToolCall → PreToolUse + agent:tool-start
+            ├─ extensions.onBeforeToolCall → agent:tool-start (+ optional ExtensionEventBus)
             ├─ [tool execute or approval pause]
-            ├─ hooks.onAfterToolCall → PostToolUse + agent:tool-end
+            ├─ extensions.onAfterToolCall → agent:tool-end/error (+ optional ExtensionEventBus)
             └─ lifecycle.onFinish / onAbort / onError → finalizeRun (once)
                  ├─ session.persistSession (model state)
                  ├─ memory.runExtraction (async, finished only)
@@ -632,6 +654,7 @@ executeManagedAgentRun
 ```bash
 pnpm --filter @my-agent/core run validate:emit-agent-event
 pnpm --filter @my-agent/core run validate:event-log-bridge
+pnpm --filter @my-agent/core run validate:extensions-middleware
 pnpm --filter @my-agent/core run validate:tanstack-tools
 pnpm --filter @my-agent/core run validate:compaction-messages
 pnpm --filter @my-agent/core run validate:reactive-compact

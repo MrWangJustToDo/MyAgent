@@ -43,6 +43,7 @@
     "validate:approval-middleware": "pnpm run build && node scripts/validate-status-middleware.mjs",
     "validate:status-middleware": "pnpm run build && node scripts/validate-status-middleware.mjs",
     "validate:lifecycle-middleware": "pnpm run build && node scripts/validate-lifecycle-middleware.mjs",
+    "validate:extensions-middleware": "pnpm run build && node scripts/validate-extensions-middleware.mjs",
     "validate:tool-phase-utils": "pnpm run build && node scripts/validate-tool-phase-utils.mjs",
     "validate:session-sync-tracker": "pnpm run build && node scripts/validate-session-sync-tracker.mjs",
     "validate:empty-assistant-shell": "pnpm run build && node scripts/validate-empty-assistant-shell.mjs",

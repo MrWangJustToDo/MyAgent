@@ -264,6 +264,7 @@ export class AgentManager {
         parent.childIds = parent.childIds.filter((cid) => cid !== id);
         parent.updatedAt = Date.now();
       }
+      managedAgent.emitEvent("subagent:destroyed", { subagentId: id }, { parentId: managedAgent.parentId });
     }
 
     this.agents.delete(id);

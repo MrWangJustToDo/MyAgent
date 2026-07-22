@@ -50,7 +50,7 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
 
       if (!isSubagent && deps.shouldTriggerAutoCompact(llmMessages) && agentContext) {
         try {
-          deps.status.beginCompaction();
+          deps.status.beginCompaction("auto");
 
           const incompleteTodos = deps.getTodoManager()?.getIncompleteTodos() ?? [];
           const todos = incompleteTodos.map((t) => ({
