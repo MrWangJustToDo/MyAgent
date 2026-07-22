@@ -111,7 +111,7 @@ export class MemoryService {
       if (relevant.length > 0) {
         this.relevantContent = formatRelevantMemories(relevant);
         this.pendingSurfacedFilenames = relevant.map((r) => r.filename);
-        // Buffer only — turn-context middleware injects on the next LLM call.
+        // Buffer only — captured into turnContextSnapshot at prepareForRun for system prompt.
         emitEvent?.("memory:prefetch", {
           status: "selected",
           count: relevant.length,

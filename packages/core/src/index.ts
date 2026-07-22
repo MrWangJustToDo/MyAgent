@@ -40,6 +40,8 @@ export {
   type BuildManagedAgentResult,
 } from "./managers/agent-factory.js";
 export { ManagedAgent, type ManagedAgentConfig, type RunFinalizeReason } from "./managers/managed-agent.js";
+export type { AgentObserveHandlers } from "./managers/managed-agent-observe.js";
+export { DEFAULT_OBSERVE_EVENTS } from "./managers/managed-agent-observe.js";
 export { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, resolveFinishStatus } from "./managers/agent-status.js";
 export type { AgentStatus } from "./managers/agent-types.js";
 export { localConnect, createLocalConnect, type LocalConnectManager } from "./connect";
@@ -99,15 +101,12 @@ export { bridgeExternalToolToServer } from "./agent/tools/tanstack/bridge-extern
 
 export { previewEdit, type PreviewEditResult } from "./agent/tools/util/preview-edit.js";
 export { registerToUI, getToUI, clearToUI } from "./agent/tools/tanstack/to-ui-registry.js";
+/** Streaming emit APIs (tools / UI channel). Hosts subscribe via {@link ManagedAgent.observe}. */
 export {
   clearStreamingOutput,
   emitStreamingChunk,
-  getStreamingSubscriberCounts,
-  subscribeStreamingCallback,
-  subscribeStreamingClearCallback,
-  type StreamingCallback,
-  type StreamingClearCallback,
   type StreamingChunk,
+  type StreamingEmitOptions,
 } from "./agent/tools/util/streaming-callback.js";
 
 // ============================================================================

@@ -5,10 +5,11 @@
  * consumer via {@link UseStreamingOutputOptions.throttleMs}.
  */
 
-import { subscribeStreamingCallback, subscribeStreamingClearCallback } from "@my-agent/core";
+import { agentManager } from "@my-agent/core";
 import { useEffect } from "react";
 
 import { clearStreamingIngest, ingestStreamingChunk, registerStreamingThrottle } from "./streaming-ingest.js";
+import { useAgent } from "./use-agent.js";
 import { useStreamingStore } from "./use-streaming-store.js";
 
 import type { StreamingOutput } from "./use-streaming-store.js";
@@ -25,47 +26,69 @@ export interface UseStreamingOutputOptions {
    * `0` flushes every chunk (default).
    */
   throttleMs?: number;
+  /** Override agent scope; defaults to the current root agent from {@link useAgent}. */
+  agentId?: string;
 }
 
 // ============================================================================
-// Bridge (ref-counted — one store bridge, many hook consumers)
+// Bridge (ref-counted per agentId — one store bridge, many hook consumers)
 // ============================================================================
 
-let bridgeRefCount = 0;
-let unsubscribeBridge: (() => void) | undefined;
+const bridges = new Map<
+  string,
+  {
+    refCount: number;
+    unsubscribe: () => void;
+  }
+>();
 
-function acquireStreamingBridge(): void {
-  bridgeRefCount += 1;
-  if (bridgeRefCount > 1) return;
+function acquireStreamingBridge(agentId: string): boolean {
+  const existing = bridges.get(agentId);
+  if (existing) {
+    existing.refCount += 1;
+    return true;
+  }
 
-  const unsubChunk = subscribeStreamingCallback(({ toolCallId, type, chunk }) => {
-    ingestStreamingChunk(toolCallId, type, chunk);
+  const agent = agentManager.getAgent(agentId);
+  if (!agent) return false;
+
+  const unsubscribe = agent.observe({
+    onStreaming: ({ toolCallId, type, chunk }) => {
+      ingestStreamingChunk(toolCallId, type, chunk);
+    },
+    onStreamingClear: (toolCallId) => {
+      clearStreamingIngest(toolCallId);
+    },
   });
 
-  const unsubClear = subscribeStreamingClearCallback((toolCallId) => {
-    clearStreamingIngest(toolCallId);
+  bridges.set(agentId, {
+    refCount: 1,
+    unsubscribe,
   });
-
-  unsubscribeBridge = () => {
-    unsubChunk();
-    unsubClear();
-  };
+  return true;
 }
 
-function releaseStreamingBridge(): void {
-  bridgeRefCount -= 1;
-  if (bridgeRefCount > 0) return;
-  unsubscribeBridge?.();
-  unsubscribeBridge = undefined;
+function releaseStreamingBridge(agentId: string): void {
+  const existing = bridges.get(agentId);
+  if (!existing) return;
+  existing.refCount -= 1;
+  if (existing.refCount > 0) return;
+  existing.unsubscribe();
+  bridges.delete(agentId);
 }
 
-function resolveOptions(options?: boolean | UseStreamingOutputOptions): Required<UseStreamingOutputOptions> {
+function resolveOptions(options?: boolean | UseStreamingOutputOptions): {
+  enabled: boolean;
+  throttleMs: number;
+  agentId?: string;
+} {
   if (typeof options === "boolean") {
     return { enabled: options, throttleMs: 0 };
   }
   return {
     enabled: options?.enabled ?? true,
     throttleMs: options?.throttleMs ?? 0,
+    agentId: options?.agentId,
   };
 }
 
@@ -77,22 +100,24 @@ function resolveOptions(options?: boolean | UseStreamingOutputOptions): Required
  * Subscribe to streaming output for a tool call.
  *
  * @param toolCallId - The tool call ID to subscribe to
- * @param options - `enabled` and/or `throttleMs` (or legacy boolean for enabled)
+ * @param options - `enabled`, `throttleMs`, and/or `agentId`
  */
 export function useStreamingOutput(
   toolCallId: string | undefined,
   options?: boolean | UseStreamingOutputOptions
 ): StreamingOutput | undefined {
-  const { enabled, throttleMs } = resolveOptions(options);
+  const { enabled, throttleMs, agentId: agentIdOption } = resolveOptions(options);
+  const rootAgentId = useAgent((s) => s.agent?.id);
+  const agentId = agentIdOption || rootAgentId;
   const output = useStreamingStore((state) => (toolCallId ? state.outputs[toolCallId] : undefined));
 
   useEffect(() => {
-    if (!enabled) return;
-    acquireStreamingBridge();
+    if (!enabled || !agentId) return;
+    if (!acquireStreamingBridge(agentId)) return;
     return () => {
-      releaseStreamingBridge();
+      releaseStreamingBridge(agentId);
     };
-  }, [enabled]);
+  }, [enabled, agentId]);
 
   useEffect(() => {
     if (!enabled || !toolCallId) return;

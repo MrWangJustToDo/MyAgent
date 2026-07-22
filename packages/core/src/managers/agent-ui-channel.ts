@@ -37,6 +37,11 @@ export interface ConsumeRunOptions {
   stream: AsyncIterable<StreamChunk>;
   /** Parent task tool call ID — summary text streams here like run_command stdout. */
   parentTaskToolCallId?: string;
+  /**
+   * Agent id that owns the parent task tool UI (usually the parent agent).
+   * Used to scope streaming emits for task summary.
+   */
+  streamingAgentId?: string;
   onUpdate?: (messages: TanStackUIMessage[]) => void;
 }
 
@@ -69,6 +74,7 @@ export class AgentUIChannel {
   private readonly approvalListeners = new Set<ApprovalListener>();
   private readonly customEventListeners = new Set<UICustomEventListener>();
   private parentTaskToolCallId?: string;
+  private streamingAgentId?: string;
   private onUpdate?: (messages: TanStackUIMessage[]) => void;
   private streamedSummaryLength = 0;
   private summaryStreamState: TaskSummaryStreamState = { summaryPhaseUnlocked: false };
@@ -176,7 +182,7 @@ export class AgentUIChannel {
    * Consume a TanStack {@link StreamChunk} stream and return final messages.
    */
   async consumeRun(options: ConsumeRunOptions): Promise<TanStackUIMessage[]> {
-    this.beginSummaryStream(options.parentTaskToolCallId, options.onUpdate);
+    this.beginSummaryStream(options.parentTaskToolCallId, options.onUpdate, options.streamingAgentId);
 
     try {
       for await (const chunk of throwOnRunError(options.stream)) {
@@ -189,24 +195,40 @@ export class AgentUIChannel {
     }
   }
 
-  private beginSummaryStream(parentTaskToolCallId: string | undefined, onUpdate: ConsumeRunOptions["onUpdate"]): void {
+  private beginSummaryStream(
+    parentTaskToolCallId: string | undefined,
+    onUpdate: ConsumeRunOptions["onUpdate"],
+    streamingAgentId?: string
+  ): void {
     this.parentTaskToolCallId = parentTaskToolCallId;
+    this.streamingAgentId = streamingAgentId;
     this.onUpdate = onUpdate;
     this.streamedSummaryLength = 0;
     this.summaryStreamState = { summaryPhaseUnlocked: false };
     this.currentTurnMessageId = undefined;
 
-    if (parentTaskToolCallId) {
-      clearStreamingOutput(parentTaskToolCallId);
+    if (parentTaskToolCallId && streamingAgentId) {
+      clearStreamingOutput(parentTaskToolCallId, { agentId: streamingAgentId });
     }
   }
 
   private endSummaryStream(): void {
     this.parentTaskToolCallId = undefined;
+    this.streamingAgentId = undefined;
     this.onUpdate = undefined;
     this.streamedSummaryLength = 0;
     this.summaryStreamState = { summaryPhaseUnlocked: false };
     this.currentTurnMessageId = undefined;
+  }
+
+  private emitScopedChunk(toolCallId: string, type: "stdout" | "stderr", chunk: string): void {
+    if (!this.streamingAgentId) return;
+    emitStreamingChunk(toolCallId, type, chunk, { agentId: this.streamingAgentId });
+  }
+
+  private clearScopedOutput(toolCallId: string): void {
+    if (!this.streamingAgentId) return;
+    clearStreamingOutput(toolCallId, { agentId: this.streamingAgentId });
   }
 
   private trackSummaryStreamPhase(chunk: StreamChunk): void {
@@ -220,7 +242,7 @@ export class AgentUIChannel {
     const toolName = readToolCallName(chunk);
     if (toolName === BEGIN_SUMMARY_TOOL_NAME) {
       this.summaryStreamState = { summaryPhaseUnlocked: true };
-      clearStreamingOutput(this.parentTaskToolCallId);
+      this.clearScopedOutput(this.parentTaskToolCallId);
       this.streamedSummaryLength = 0;
     }
   }
@@ -255,12 +277,12 @@ export class AgentUIChannel {
       }
       const delta = summaryText.slice(this.streamedSummaryLength);
       if (delta) {
-        emitStreamingChunk(this.parentTaskToolCallId, "stdout", delta);
+        this.emitScopedChunk(this.parentTaskToolCallId, "stdout", delta);
         this.streamedSummaryLength = summaryText.length;
       }
     } else if (this.streamedSummaryLength > 0) {
       this.streamedSummaryLength = 0;
-      clearStreamingOutput(this.parentTaskToolCallId);
+      this.clearScopedOutput(this.parentTaskToolCallId);
     }
   }
 }

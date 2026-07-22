@@ -10,6 +10,8 @@ import { registerToUI } from "./to-ui-registry.js";
 export interface ToolExecuteCtx {
   toolCallId: string;
   abortSignal?: AbortSignal;
+  /** Managed agent id from {@link ToolRunContext} when available. */
+  agentId?: string;
 }
 
 export type { ModelToolContent, ToModelOutputContext };
@@ -63,9 +65,11 @@ export function defineServerTool<
     outputSchema: config.outputSchema,
     needsApproval: config.needsApproval,
   }).server(async (args, ctx) => {
+    const runContext = ctx?.context as { agentId?: string } | undefined;
     return config.execute(args, {
       toolCallId: ctx?.toolCallId ?? "",
       abortSignal: ctx?.abortSignal,
+      agentId: runContext?.agentId,
     });
   });
 }

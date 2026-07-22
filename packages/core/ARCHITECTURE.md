@@ -149,9 +149,9 @@ Observation is split into four layers (do not mix interception into the lifecycl
 
 | Layer | Mechanism | Role |
 |-------|-----------|------|
-| L1 Control plane | `AgentStatusController` + `ManagedAgent.subscribeState` | status / error / pendingApproval |
-| L2 Lifecycle bus | `AgentEventBus` → Event→Log (+ host `agentManager.on`) | fire-and-forget notify |
-| L3 Data plane | `AgentUIChannel` + streaming callbacks | UIMessages / tool stdout |
+| L1 Control plane | `AgentStatusController` + `observe({ onState })` | status / error / pendingApproval |
+| L2 Lifecycle bus | `AgentEventBus` → Event→Log (+ advanced `agentManager.on`) | fire-and-forget notify |
+| L3 Data plane | `AgentUIChannel` + scoped streaming via `observe({ onStreaming })` | UIMessages / tool stdout |
 | L4 Interception | `ExtensionEventBus` only | skip / transform tool args |
 
 ### 2.4 Session bootstrap events (`session-bootstrap-events.ts`)
@@ -211,7 +211,7 @@ Built in `buildAgentRunner` (`run-agent.ts`), order matters:
 2. lifecycle-middleware      usage tracking, thinking events, memory commit, finalizeRun
 3. compaction-middleware     auto-compact only (DeepSeek reasoning echo is adapter-only)
 4. tool-compact-middleware  per-tool LLM shaping
-5. turn-context-middleware  inject <turn_context> (memory, todo nag)
+5. turn-context-middleware  append <turn_context> after SYSTEM_PROMPT_DYNAMIC_BOUNDARY
 6. extensions-middleware    ExtensionEventBus intercept + agent:tool-* lifecycle events
 ```
 
@@ -269,7 +269,7 @@ managed.isToolNeedsApproval(toolName)  // managed-agent.ts
 | Step | Location |
 |------|----------|
 | Chat session | **core** `AgentChatController` — `StreamProcessor` + `pumpToolPhases()` |
-| App hook | `use-agent-chat.ts` — subscribes to controller messages + `ManagedAgent.subscribeState()` |
+| App hook | `use-agent-chat.ts` — controller messages + `ManagedAgent.observe({ onState })` |
 | Detect pending approval (UI) | `use-agent-chat.ts` — `isPendingToolApproval()` for keyboard / input mode |
 | Agent status | **core** `approval` middleware — not app |
 | UI | `ToolCallPartView.tsx`, `Footer.tsx` |
@@ -514,13 +514,15 @@ emit memory:prefetch { status: injected | empty | skip-* | error }
 
 ### 7.3 Per-iteration injection
 
-**`turn-context-middleware`** via `buildDynamicTurnContext`:
+**`turn-context-middleware`** via `buildDynamicTurnContext` + `buildSystemPromptWithTurnContext`:
 
 ```
-injectTurnContext(messages, dynamicContext)
-  → insert <turn_context> user + assistant ack before latest user message
-  → contains relevantMemoryContent + optional todo nag
+prepareForRun → captureTurnContextSnapshot() once per user turn
+onConfig → systemPrompts = frozen + <turn_context>… (same snapshot every iteration)
 ```
+
+Dynamic context lives **after** `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` in the system prompt so conversation
+message prefixes stay stable for provider prompt cache. Snapshot is not recomputed mid-turn (tool loops).
 
 ### 7.4 Commit surfaced memories
 
@@ -559,10 +561,14 @@ managed.emitEvent(type, data)
 
 | Layer | API | Notes |
 |-------|-----|-------|
-| L1 | `subscribeState` | Status machine for UI chrome |
-| L2 | `agentManager.on` / AgentEventBus | Lifecycle notify; Event→Log is the only core `*` listener |
-| L3 | `AgentUIChannel` + `subscribeStreamingCallback` | Message/stream data — not lifecycle events |
-| L4 | `ExtensionEventBus` | Intercept/transform only; never gates L2 tool events |
+| L1 | `observe({ onState })` | Status machine for UI chrome (`subscribeState` is private) |
+| L2 | `observe({ onEvent })` | Per-agent lifecycle; use advanced `agentManager.on` only for cross-agent / `"*"` telemetry |
+| L3 | `observe({ onMessages, onStreaming })` | Message/stream data — not lifecycle events |
+| L4 | `ExtensionEventBus` / ExtensionUI `ui.subscribe` | Intercept/transform + typed UI channels; not part of `observe` |
+
+**Host observation API:** `managed.observe({ onState, onEvent, onStreaming, onMessages })` is the only supported per-agent subscribe path for L1–L3. App hooks go through `observe`. Streaming subscribe helpers are not exported from `@my-agent/core` (package-internal / `dev.ts` for validates). `agentManager.on` remains for process-wide bus listeners. ExtensionUI typed `ui.subscribe` stays L4.
+
+Streaming chunks are scoped by required `agentId`; hosts receive them only via `observe({ onStreaming })`.
 
 ### 8.3 Event types (summary)
 
@@ -612,7 +618,7 @@ executeManagedAgentRun
             ├─ [each iteration] compaction.onConfig → autoCompact if threshold exceeded
             │    (DeepSeek reasoning echo is adapter-only; no strip here)
             ├─ tool-compact.onConfig → toModelOutput + recent-window placeholders
-            ├─ turn-context.onConfig → inject memory/todo
+            ├─ turn-context.onConfig → system prompt dynamic segment (turn snapshot)
             ├─ extensions.onBeforeToolCall → agent:tool-start (+ optional ExtensionEventBus)
             ├─ [tool execute or approval pause]
             ├─ extensions.onAfterToolCall → agent:tool-end/error (+ optional ExtensionEventBus)
@@ -655,6 +661,8 @@ executeManagedAgentRun
 pnpm --filter @my-agent/core run validate:emit-agent-event
 pnpm --filter @my-agent/core run validate:event-log-bridge
 pnpm --filter @my-agent/core run validate:extensions-middleware
+pnpm --filter @my-agent/core run validate:streaming-scope
+pnpm --filter @my-agent/core run validate:agent-observe
 pnpm --filter @my-agent/core run validate:tanstack-tools
 pnpm --filter @my-agent/core run validate:compaction-messages
 pnpm --filter @my-agent/core run validate:reactive-compact

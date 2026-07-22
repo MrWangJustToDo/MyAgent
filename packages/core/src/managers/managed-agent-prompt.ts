@@ -98,3 +98,24 @@ export function buildDynamicTurnContext(input: DynamicTurnContextInput): string 
 
   return parts.length > 0 ? parts.join("\n\n") : undefined;
 }
+
+/**
+ * Append per-turn dynamic context after {@link SYSTEM_PROMPT_DYNAMIC_BOUNDARY}.
+ * Conversation messages stay free of synthetic turn_context pairs (prefix-cache friendly).
+ */
+export function buildSystemPromptWithTurnContext(
+  frozen: string | undefined,
+  dynamicContext: string | undefined
+): string[] | undefined {
+  if (!frozen && !dynamicContext) return undefined;
+  if (!dynamicContext) return frozen ? [frozen] : undefined;
+
+  const block = `<turn_context>\n${dynamicContext}\n</turn_context>`;
+  if (!frozen) {
+    return [SYSTEM_PROMPT_DYNAMIC_BOUNDARY + block];
+  }
+  if (frozen.includes("<SYSTEM_PROMPT_DYNAMIC_BOUNDARY>")) {
+    return [frozen + block];
+  }
+  return [frozen + SYSTEM_PROMPT_DYNAMIC_BOUNDARY + block];
+}

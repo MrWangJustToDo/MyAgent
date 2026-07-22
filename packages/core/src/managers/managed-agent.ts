@@ -1,16 +1,12 @@
-import { convertMessagesToModelMessages, type ModelMessage, type UIMessage as TanStackUIMessage } from "@tanstack/ai";
+import { type ModelMessage, type UIMessage as TanStackUIMessage } from "@tanstack/ai";
 
-import { applyReactiveCompactionResult } from "../agent/compaction/apply-compaction-result.js";
 import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
-import { getLatestUserMessage } from "../agent/compaction/message-utils.js";
-import { isPromptTooLongError, reactiveCompact } from "../agent/compaction/reactive-compact.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
 import {
   createSessionSyncTracker,
   type SessionSaveReason,
   type SessionSyncTracker,
 } from "../agent/session/session-sync-tracker.js";
-import { isToolContinuationPrepare } from "../agent/utils/tool-phase-utils.js";
 import { generateId } from "../agent/utils.js";
 import { getEnv } from "../env.js";
 
@@ -18,10 +14,22 @@ import { AgentChatController } from "./agent-chat-controller.js";
 import { createAgentStatusController, type AgentStatusController } from "./agent-status-controller.js";
 import { AgentConfigSchema } from "./agent-types.js";
 import { emitAgentEvent } from "./emit-agent-event.js";
+import { handleManagedReactiveCompact } from "./managed-agent-compact.js";
+import { observeManagedAgent, type AgentObserveHandlers } from "./managed-agent-observe.js";
 import { buildDynamicTurnContext, buildFrozenSystemPrompt } from "./managed-agent-prompt.js";
+import {
+  abortManagedAgentRun,
+  finalizeManagedAgentRun,
+  prepareManagedAgentForRun,
+} from "./managed-agent-run-lifecycle.js";
+import {
+  persistSessionModelState,
+  restoreManagedSession,
+  saveSessionUIMessages as saveSessionUIMessagesHelper,
+} from "./managed-agent-session.js";
 import { MemoryService } from "./memory-service.js";
 import { RunCoordinator } from "./run-coordinator.js";
-import { SessionService, type SessionPersistInput } from "./session-service.js";
+import { SessionService } from "./session-service.js";
 import { UsageTracker } from "./usage-tracker.js";
 
 import type { AgentEvent, AgentEventType } from "./agent-event-bus.js";
@@ -49,6 +57,9 @@ import type { ToolsRecord } from "../agent/tools/tanstack/tools-record.js";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
 import type { ModelStyle } from "../models/model-config.js";
 import type { ModelInfo } from "../models/types.js";
+
+export type { AgentObserveHandlers } from "./managed-agent-observe.js";
+export { DEFAULT_OBSERVE_EVENTS } from "./managed-agent-observe.js";
 
 // ============================================================================
 // Config
@@ -136,6 +147,8 @@ export class ManagedAgent {
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   /** Set by AgentManager to route events to listeners. */
   dispatchEvent?: (event: AgentEvent) => void;
+  /** Owning manager — set when registered via {@link AgentManager.createManagedAgent}. */
+  manager?: AgentManager;
 
   private managedToolsProvider?: () => ToolsRecord;
   private agentConfig: AgentConfig;
@@ -146,7 +159,7 @@ export class ManagedAgent {
   skillRegister: SkillRegistry | null = null;
   compactionConfig: CompactionConfig | null = null;
   readonly toolCompactCache = new ToolCompactCache();
-  private readonly sessionSyncTracker: SessionSyncTracker = createSessionSyncTracker();
+  readonly sessionSyncTracker: SessionSyncTracker = createSessionSyncTracker();
   extensionRunner: ExtensionRunner | null = null;
   extensionLoader: ExtensionLoader | null = null;
   modelInfo: ModelInfo | null = null;
@@ -155,6 +168,8 @@ export class ManagedAgent {
 
   private frozenSystemPrompt: string | undefined;
   private systemPromptFrozen = false;
+  /** Stable dynamic turn context for the current user turn (system prompt segment). */
+  private turnContextSnapshot: string | undefined;
 
   constructor(
     config: ManagedAgentConfig,
@@ -217,7 +232,7 @@ export class ManagedAgent {
   }
 
   /** Snapshot wall-clock duration for the current turn into {@link lastStreamDurationMs}. */
-  private recordStreamDuration(): void {
+  recordStreamDuration(): void {
     if (this.streamStartedAt <= 0) return;
     this.lastStreamDurationMs = Math.max(0, Date.now() - this.streamStartedAt);
   }
@@ -253,8 +268,30 @@ export class ManagedAgent {
     this.statusController.reconcileAfterRun(messages);
   }
 
-  /** Subscribe to status / error / pending-approval changes (for UI refresh). */
-  subscribeState(listener: () => void): () => void {
+  /**
+   * Host observation path for L1–L3 (+ optional log).
+   * Prefer this over raw bus / streaming registry APIs.
+   * Returns a single idempotent unsubscribe.
+   */
+  observe(handlers: AgentObserveHandlers): () => void {
+    const manager = this.manager;
+    if (!manager) {
+      throw new Error(`Agent "${this.id}" is not registered on an AgentManager`);
+    }
+    return observeManagedAgent(
+      {
+        id: this.id,
+        subscribeState: (listener) => this.subscribeState(listener),
+        ui: this.ui,
+        log: this.log,
+      },
+      handlers,
+      manager
+    );
+  }
+
+  /** @internal Used by {@link observe}; hosts must use `observe({ onState })`. */
+  private subscribeState(listener: () => void): () => void {
     this.stateListeners.add(listener);
     listener();
     return () => {
@@ -391,9 +428,7 @@ export class ManagedAgent {
     if (!this.sessionSyncTracker.shouldPersist(uiMessages, { reason, agentStatus: this.status })) {
       return;
     }
-    this.syncContextFromUIMessages(uiMessages);
-    this.session.persistSession(this.getSessionPersistInput(uiMessages));
-    this.sessionSyncTracker.markPersisted(uiMessages);
+    saveSessionUIMessagesHelper(this, uiMessages);
   }
 
   /**
@@ -401,10 +436,7 @@ export class ManagedAgent {
    * Also syncs AgentContext and writes model fields in the same session save.
    */
   saveSessionUIMessages(uiMessages: TanStackUIMessage[]): void {
-    if (uiMessages.length === 0) return;
-    this.syncContextFromUIMessages(uiMessages);
-    this.session.persistSession(this.getSessionPersistInput(uiMessages));
-    this.sessionSyncTracker.markPersisted(uiMessages);
+    saveSessionUIMessagesHelper(this, uiMessages);
   }
 
   /** Reset checkpoint tracking after restore, clear, or new chat bootstrap. */
@@ -412,20 +444,9 @@ export class ManagedAgent {
     this.sessionSyncTracker.reset(uiMessages);
   }
 
-  private getSessionPersistInput(uiMessages?: TanStackUIMessage[]): SessionPersistInput {
-    return {
-      context: this.context,
-      usage: this.usage,
-      todoManager: this.todoManager,
-      resolveTextAdapter: this.resolveTextAdapter,
-      emitEvent: (type, data) => this.emitEvent(type, data),
-      uiMessages,
-    };
-  }
-
   /** Persist model state only (summary, compact index, usage, todos). Does not write `uiMessages`. */
   persistSession(): void {
-    this.session.persistSession(this.getSessionPersistInput());
+    persistSessionModelState(this);
   }
 
   /**
@@ -433,19 +454,7 @@ export class ManagedAgent {
    * Memory extraction runs only when `reason === "finished"`.
    */
   finalizeRun(manager: AgentManager, reason: RunFinalizeReason): void {
-    this.recordStreamDuration();
-    this.persistSession();
-    this.memory.clearTurnContext();
-    if (reason === "finished") {
-      this.memory.runExtraction({
-        agentId: this.id,
-        context: this.context,
-        log: this.log,
-        manager,
-        emitEvent: (type, data) => this.emitEvent(type, data),
-      });
-    }
-    this.emitEvent("agent:stop", { reason });
+    finalizeManagedAgentRun(this, manager, reason);
   }
 
   setAgentDocContent(content: string, source?: string): void {
@@ -519,6 +528,24 @@ export class ManagedAgent {
     return this.frozenSystemPrompt;
   }
 
+  /** Alias for the cacheable system prompt prefix (before per-turn dynamic segment). */
+  getFrozenSystemPrompt(): string | undefined {
+    return this.getSystemPrompt();
+  }
+
+  getTurnContextSnapshot(): string | undefined {
+    return this.turnContextSnapshot;
+  }
+
+  async captureTurnContextSnapshot(): Promise<void> {
+    this.turnContextSnapshot = await this.getDynamicTurnContext();
+  }
+
+  clearTurnContext(): void {
+    this.memory.clearTurnContext();
+    this.turnContextSnapshot = undefined;
+  }
+
   resetSystemPrompt(): void {
     this.systemPromptFrozen = false;
     this.frozenSystemPrompt = undefined;
@@ -530,7 +557,7 @@ export class ManagedAgent {
     let todoNagReminder: string | undefined;
     if (this.todoManager?.shouldNag()) {
       todoNagReminder = this.todoManager.getNagReminder();
-      this.log?.todo("Injecting nag reminder via turn context", {
+      this.log?.todo("Capturing nag reminder in turn context snapshot", {
         roundsSinceUpdate: this.todoManager.getRoundsSinceUpdate(),
       });
     }
@@ -589,45 +616,7 @@ export class ManagedAgent {
     messages?: Array<TanStackUIMessage | ModelMessage>;
     abortSignal?: AbortSignal;
   }) {
-    if (options.messages?.length) {
-      this.syncContextFromUIMessages(options.messages as TanStackUIMessage[]);
-      const baseline = convertMessagesToModelMessages(options.messages as TanStackUIMessage[]).length;
-      this.context?.setRunBaselineCount(baseline);
-    }
-
-    const inputMessages = options.messages || [];
-
-    // Abort setup lives here — not a separate ManagedAgent.setupAbortController API.
-    // The created controller is passed into TanStack chat by executeManagedAgentRun.
-    this.run.setupAbortController(options.abortSignal, {
-      onAborted: () => {
-        this.setStatus("aborted");
-      },
-    });
-    this.run.resetReactiveCompactRetries();
-
-    const isToolContinuation = isToolContinuationPrepare(this.status, options.messages);
-    // Wall-clock for the whole user turn (including tool-phase continues). Reset only on a new turn.
-    if (!isToolContinuation || this.streamStartedAt === 0) {
-      this.streamStartedAt = Date.now();
-    }
-
-    if (!isToolContinuation && !this.parentId) {
-      await this.memory.prefetchRelevantMemories({
-        messages:
-          getLatestUserMessage(options.prompt ? [{ role: "user", content: options.prompt }] : inputMessages) || [],
-        usage: this.usage,
-        log: this.log,
-        resolveTextAdapter: this.resolveTextAdapter,
-        emitEvent: (type, data) => this.emitEvent(type, data),
-      });
-
-      const userMsg = typeof options.prompt === "string" ? options.prompt : "(structured)";
-      this.emitEvent("prompt:submit", {
-        prompt: userMsg,
-        contextMessageCount: inputMessages?.length ?? 0,
-      });
-    }
+    await prepareManagedAgentForRun(this, options);
   }
 
   shouldTriggerAutoCompact(messages?: ModelMessage[]): boolean {
@@ -662,12 +651,7 @@ export class ManagedAgent {
    * any pending tool controllers.
    */
   abort(reason?: string): void {
-    this.emitEvent("agent:abort", { reason: reason ?? "(no reason)" });
-    this.run.abort(reason ?? "user-cancelled");
-    // Ensure UI stays aborted even if stream teardown is slow / races with chunks.
-    if (this.status !== "aborted" && this.status !== "idle" && this.status !== "completed") {
-      this.setStatus("aborted");
-    }
+    abortManagedAgentRun(this, reason);
   }
 
   isAbortError(err: unknown): boolean {
@@ -675,62 +659,11 @@ export class ManagedAgent {
   }
 
   async handleReactiveCompact(error: unknown, manager: AgentManager): Promise<boolean> {
-    if (this.parentId) return false;
-    if (!isPromptTooLongError(error)) return false;
-    if (!this.run.canRetryReactiveCompact()) {
-      this.emitEvent("compaction:reactive-max-retries");
-      return false;
-    }
-
-    const retry = this.run.recordReactiveCompactRetry();
-
-    try {
-      this.statusController.beginCompaction("reactive", {
-        retry,
-        maxRetries: this.run.getMaxReactiveCompactRetries(),
-      });
-      const canon = this.context.getCanonicalFromUI();
-      const llmMessages = this.context.getMessagesForLLM(canon);
-      const compactedMessages = await reactiveCompact(llmMessages, this.id, manager);
-
-      applyReactiveCompactionResult(canon, this.context, this.usage, compactedMessages, {
-        onCacheCleanupError: (err) => {
-          this.emitEvent("compaction:reactive-error", {
-            phase: "cache-cleanup",
-            error: err.message,
-          });
-        },
-      });
-
-      this.emitEvent("compaction:reactive-complete", {
-        originalCount: llmMessages.length,
-        compactedCount: compactedMessages.length,
-        originalTokens: this.usage.getWindowUsage().inputTokens,
-      });
-
-      this.statusController.endCompaction();
-      return true;
-    } catch (err) {
-      const compactError = err instanceof Error ? err : new Error(String(err));
-      this.emitEvent("compaction:reactive-error", { error: compactError.message });
-      return false;
-    }
+    return handleManagedReactiveCompact(this, error, manager);
   }
 
   async restoreSession(sessionId: string): Promise<SessionData> {
-    this.toolCompactCache.clear();
-    const session = await this.session.restoreFromStore(sessionId, {
-      context: this.context,
-      usage: this.usage,
-      todoManager: this.todoManager,
-    });
-    this.resetSessionSyncTracker(session.uiMessages);
-    this.emitEvent("session:restore", {
-      sessionId,
-      messageCount: session.uiMessages.length,
-      tokenEstimate: session.contextTokens ?? this.usage.getWindowUsage().inputTokens ?? 0,
-    });
-    return session;
+    return restoreManagedSession(this, sessionId);
   }
 
   isToolNeedsApproval(toolName: string): boolean {
@@ -761,6 +694,7 @@ export class ManagedAgent {
     this.setError("");
     this.pendingApprovalCount = 0;
     this.memory.resetState();
+    this.turnContextSnapshot = undefined;
     this.log?.clear();
     this.context?.reset();
     this.usage.reset();

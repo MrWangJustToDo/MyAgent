@@ -1,8 +1,5 @@
 /**
- * Streaming Callback — multicast bridge for streaming tool output.
- *
- * Multiple consumers (e.g. run_command + task summary streams) can subscribe
- * concurrently. The app layer typically installs one bridge into the streaming store.
+ * Streaming Callback — agent-scoped multicast bridge for tool stdout/stderr.
  */
 
 // ============================================================================
@@ -19,40 +16,69 @@ export type StreamingCallback = (data: StreamingChunk) => void;
 
 export type StreamingClearCallback = (toolCallId: string) => void;
 
+export interface StreamingSubscribeOptions {
+  /** Only receive chunks/clears emitted for this agent. */
+  agentId: string;
+}
+
+export interface StreamingEmitOptions {
+  /** Target agent scope. */
+  agentId: string;
+}
+
 // ============================================================================
-// Global State
+// State
 // ============================================================================
 
-const streamingCallbacks = new Set<StreamingCallback>();
-const streamingClearCallbacks = new Set<StreamingClearCallback>();
+const scopedChunkCallbacks = new Map<string, Set<StreamingCallback>>();
+const scopedClearCallbacks = new Map<string, Set<StreamingClearCallback>>();
 
-/**
- * Subscribe to streaming chunks. Returns an unsubscribe function.
- */
-export function subscribeStreamingCallback(callback: StreamingCallback): () => void {
-  streamingCallbacks.add(callback);
+function addScoped<T>(map: Map<string, Set<T>>, agentId: string, callback: T): () => void {
+  let set = map.get(agentId);
+  if (!set) {
+    set = new Set();
+    map.set(agentId, set);
+  }
+  set.add(callback);
   return () => {
-    streamingCallbacks.delete(callback);
+    set!.delete(callback);
+    if (set!.size === 0) map.delete(agentId);
   };
 }
 
 /**
- * Subscribe to streaming clear events. Returns an unsubscribe function.
+ * @internal Package-internal / `dev.ts` validates. Hosts must use `ManagedAgent.observe({ onStreaming })`.
  */
-export function subscribeStreamingClearCallback(callback: StreamingClearCallback): () => void {
-  streamingClearCallbacks.add(callback);
-  return () => {
-    streamingClearCallbacks.delete(callback);
-  };
+export function subscribeStreamingCallback(
+  callback: StreamingCallback,
+  options: StreamingSubscribeOptions
+): () => void {
+  return addScoped(scopedChunkCallbacks, options.agentId, callback);
 }
 
 /**
- * Emit a streaming chunk to all subscribers.
- * Called by tools during execution.
+ * @internal Package-internal / `dev.ts` validates. Hosts must use `ManagedAgent.observe({ onStreamingClear })`.
  */
-export function emitStreamingChunk(toolCallId: string, type: "stdout" | "stderr", chunk: string): void {
+export function subscribeStreamingClearCallback(
+  callback: StreamingClearCallback,
+  options: StreamingSubscribeOptions
+): () => void {
+  return addScoped(scopedClearCallbacks, options.agentId, callback);
+}
+
+/**
+ * Emit a streaming chunk to subscribers of {@link StreamingEmitOptions.agentId}.
+ */
+export function emitStreamingChunk(
+  toolCallId: string,
+  type: "stdout" | "stderr",
+  chunk: string,
+  options: StreamingEmitOptions
+): void {
+  const set = scopedChunkCallbacks.get(options.agentId);
+  if (!set) return;
   const data: StreamingChunk = { toolCallId, type, chunk };
-  for (const callback of streamingCallbacks) {
+  for (const callback of set) {
     callback(data);
   }
 }
@@ -60,13 +86,35 @@ export function emitStreamingChunk(toolCallId: string, type: "stdout" | "stderr"
 /**
  * Clear streamed output for a tool call (e.g. before a subagent retry).
  */
-export function clearStreamingOutput(toolCallId: string): void {
-  for (const callback of streamingClearCallbacks) {
+export function clearStreamingOutput(toolCallId: string, options: StreamingEmitOptions): void {
+  const set = scopedClearCallbacks.get(options.agentId);
+  if (!set) return;
+  for (const callback of set) {
     callback(toolCallId);
   }
 }
 
 /** Exposed for validation scripts. */
-export function getStreamingSubscriberCounts(): { chunk: number; clear: number } {
-  return { chunk: streamingCallbacks.size, clear: streamingClearCallbacks.size };
+export function getStreamingSubscriberCounts(): {
+  chunk: number;
+  clear: number;
+  scopedChunkAgents: number;
+  scopedClearAgents: number;
+} {
+  let chunk = 0;
+  for (const set of scopedChunkCallbacks.values()) chunk += set.size;
+  let clear = 0;
+  for (const set of scopedClearCallbacks.values()) clear += set.size;
+  return {
+    chunk,
+    clear,
+    scopedChunkAgents: scopedChunkCallbacks.size,
+    scopedClearAgents: scopedClearCallbacks.size,
+  };
+}
+
+/** Reset all subscribers (validation only). */
+export function resetStreamingCallbacksForTests(): void {
+  scopedChunkCallbacks.clear();
+  scopedClearCallbacks.clear();
 }

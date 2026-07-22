@@ -61,6 +61,12 @@ export {
 export { estimateTokens } from "./agent/compaction/token-estimator.js";
 export { createExtensionsMiddleware, createLifecycleMiddleware } from "./agent/middleware";
 export { createStatusMiddleware } from "./agent/middleware/status-middleware.js";
+export {
+  buildSystemPromptWithTurnContext,
+  SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
+  buildDynamicTurnContext,
+  buildFrozenSystemPrompt,
+} from "./managers/managed-agent-prompt.js";
 export { createAgentStatusController, AgentStatusController } from "./managers/agent-status-controller.js";
 export { AgentRunner } from "./agent/runner/agent-runner.js";
 export { assertAsyncIterable, formatAgentStreamError } from "./agent/utils/assert-async-iterable.js";
@@ -114,8 +120,14 @@ export {
   clearStreamingOutput,
   emitStreamingChunk,
   getStreamingSubscriberCounts,
+  resetStreamingCallbacksForTests,
   subscribeStreamingCallback,
   subscribeStreamingClearCallback,
 } from "./agent/tools/util/streaming-callback.js";
+export {
+  observeManagedAgent,
+  DEFAULT_OBSERVE_EVENTS,
+  type AgentObserveHandlers,
+} from "./managers/managed-agent-observe.js";
 export { commandJobRegistry } from "./agent/tools/util/command-job-registry.js";
 export type { CommandJobRecord, CommandJobPollResult } from "./agent/tools/util/command-job-registry.js";

@@ -1,4 +1,3 @@
-import { agentManager } from "@my-agent/core";
 import { useEffect, useState } from "react";
 
 import { isToolCallPart, parseToolInput } from "../utils/tool-part.js";
@@ -73,32 +72,12 @@ export const useTask = ({ id, taskId }: { id: string; taskId: string }) => {
       setPhase(getTaskPhaseFromAgent(agent));
     };
 
-    const unsubscribe = agent?.ui?.subscribe(() => refresh());
-    const unsubs = [
-      agentManager.on("subagent:created", (event) => {
-        if (event.agentId !== agent?.id) return;
-        refresh();
-      }),
-      agentManager.on("subagent:started", (event) => {
-        if (event.data?.subagent_id !== agent?.id && event.agentId !== agent?.id) return;
-        refresh();
-      }),
-      agentManager.on("agent:stop", (event) => {
-        if (event.agentId !== agent?.id) return;
-        refresh();
-      }),
-      agentManager.on("subagent:completed", (event) => {
-        if (event.agentId !== agent?.id && event.data?.subagent_id !== agent?.id) return;
-        refresh();
-      }),
-    ];
-
     refresh();
-
-    return () => {
-      unsubscribe?.();
-      unsubs.forEach((unsub) => unsub());
-    };
+    return agent.observe({
+      onMessages: () => refresh(),
+      events: ["subagent:created", "subagent:started", "subagent:completed", "agent:stop"],
+      onEvent: refresh,
+    });
   }, [agent, agent?.id]);
 
   return { ...info, agent, phase: id ? phase : ("tools" as const) };

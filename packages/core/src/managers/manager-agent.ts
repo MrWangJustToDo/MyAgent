@@ -84,25 +84,19 @@ export class AgentManager {
   // ============================================================================
 
   /**
-   * Subscribe to agent events.
+   * Advanced: subscribe to the process-wide lifecycle bus (cross-agent / `"*"` telemetry).
+   * For a single managed agent’s UI wiring, prefer {@link ManagedAgent.observe}.
    *
-   * @param type - Event type or "*" for all events
+   * @param type - Event type or `"*"` for all events
    * @param listener - Callback function
    * @returns Unsubscribe function
    *
    * @example
    * ```typescript
-   * // Listen to specific event
-   * const unsubscribe = agentManager.on("subagent:created", (event) => {
-   *   console.log(`Subagent ${event.data?.subagentId} created`);
+   * // Process-wide telemetry
+   * const unsubscribe = agentManager.on("*", (event) => {
+   *   console.log(`Event: ${event.type}`, event.agentId);
    * });
-   *
-   * // Listen to all events
-   * agentManager.on("*", (event) => {
-   *   console.log(`Event: ${event.type}`);
-   * });
-   *
-   * // Unsubscribe
    * unsubscribe();
    * ```
    */
@@ -135,6 +129,7 @@ export class AgentManager {
     });
 
     this.agents.set(managed.id, managed);
+    managed.manager = this;
 
     if (bootstrap) {
       await emitSessionBootstrapEvents(managed, bootstrap);

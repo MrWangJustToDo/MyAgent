@@ -97,16 +97,11 @@ const SubagentPanelDetail = ({ subagentId, onBack }: { subagentId: string; onBac
   useEffect(() => {
     const managed = agentManager.getAgent(subagentId);
     const bump = () => setTick((n) => n + 1);
-    const unsubscribeUi = managed?.ui?.subscribe(bump);
-    const unsubs = [
-      agentManager.on("agent:stop", (event) => {
-        if (event.agentId === subagentId) bump();
-      }),
-    ];
-    return () => {
-      unsubscribeUi?.();
-      unsubs.forEach((unsub) => unsub());
-    };
+    return managed?.observe({
+      onMessages: bump,
+      events: ["agent:stop"],
+      onEvent: bump,
+    });
   }, [subagentId]);
 
   const managed = agentManager.getAgent(subagentId);
@@ -160,14 +155,13 @@ export const SubagentPanel = () => {
     if (view === "closed") return;
 
     const refresh = () => setListRevision((n) => n + 1);
-    const unsubs = [
-      agentManager.on("subagent:created", refresh),
-      agentManager.on("subagent:started", refresh),
-      agentManager.on("subagent:completed", refresh),
-      agentManager.on("agent:stop", refresh),
-    ];
-    return () => unsubs.forEach((u) => u());
-  }, [view]);
+    const root = rootAgentId ? agentManager.getAgent(rootAgentId) : undefined;
+    const unsub = root?.observe({
+      events: ["subagent:created", "subagent:started", "subagent:completed", "agent:stop"],
+      onEvent: refresh,
+    });
+    return () => unsub?.();
+  }, [view, rootAgentId]);
 
   const runningTasks = useMemo(() => {
     if (!rootAgentId) return [];

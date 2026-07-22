@@ -53,11 +53,11 @@ export const useExtensionUI = createState(
 );
 
 export function useExtensionUIBridge(): void {
-  const agent = useAgent((s) => s.agent) as ManagedAgent | null;
+  const agent = toRaw(useAgent((s) => s.agent)) as ManagedAgent | null;
 
   useEffect(() => {
     const runner = agent?.extensionRunner;
-    const ui = toRaw(runner?.getUI());
+    const ui = runner?.getUI();
     if (!ui) return;
 
     useExtensionUI.getActions().setNotifyExtension((type, data) => ui.notify(type, data));

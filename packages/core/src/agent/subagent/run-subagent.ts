@@ -70,6 +70,7 @@ async function consumeSubagentStream(options: {
   return (await channel.consumeRun({
     stream,
     parentTaskToolCallId,
+    streamingAgentId: parentAgentId,
     onUpdate: (updated) => {
       emitAgentEvent(subagentManaged, "subagent:ui-update", {
         parentId: parentAgentId,
@@ -133,7 +134,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     };
 
     if (parentTaskToolCallId) {
-      clearStreamingOutput(parentTaskToolCallId);
+      clearStreamingOutput(parentTaskToolCallId, { agentId: parentAgentId });
     }
 
     channel = new AgentUIChannel({ initialMessages: [userUIMessage] });

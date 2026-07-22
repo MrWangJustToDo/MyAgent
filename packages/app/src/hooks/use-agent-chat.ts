@@ -109,12 +109,14 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   useEffect(() => {
     if (!agent) return;
-    return agent.subscribeState(() => {
-      forceUpdate();
-      const next = messagesRef.current;
-      if (next.length > 0) {
-        agent.maybeSaveSessionUIMessages(next, "checkpoint");
-      }
+    return agent.observe({
+      onState: () => {
+        forceUpdate();
+        const next = messagesRef.current;
+        if (next.length > 0) {
+          agent.maybeSaveSessionUIMessages(next, "checkpoint");
+        }
+      },
     });
   }, [agent, forceUpdate]);
 

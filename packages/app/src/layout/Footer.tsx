@@ -147,7 +147,9 @@ const ContextBar = ({
   const [agentTick, setAgentTick] = useState(0);
   useEffect(() => {
     if (!agent) return;
-    return toRaw(agent).subscribeState(() => setAgentTick((n) => n + 1));
+    return toRaw(agent).observe({
+      onState: () => setAgentTick((n) => n + 1),
+    });
   }, [agent]);
   const lastRunDurationMs = agentTick >= 0 ? agent?.lastStreamDurationMs || 0 : 0;
   const _error = agent?.error || "";

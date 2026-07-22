@@ -3,8 +3,4 @@ export { createLifecycleMiddleware, type LifecycleMiddlewareDeps } from "./lifec
 export { createToolCompactMiddleware, type ToolCompactMiddlewareDeps } from "./tool-compact-middleware.js";
 export { createExtensionsMiddleware, type ExtensionsMiddlewareDeps } from "./extensions-middleware.js";
 export { createStatusMiddleware, type StatusMiddlewareDeps } from "./status-middleware.js";
-export {
-  createTurnContextMiddleware,
-  injectTurnContext,
-  type TurnContextMiddlewareDeps,
-} from "./turn-context-middleware.js";
+export { createTurnContextMiddleware, type TurnContextMiddlewareDeps } from "./turn-context-middleware.js";

@@ -1,6 +1,5 @@
-import { agentManager } from "@my-agent/core";
 import { useEffect } from "react";
-import { createState } from "reactivity-store";
+import { createState, toRaw } from "reactivity-store";
 
 import { useAgent } from "./use-agent.js";
 
@@ -42,25 +41,17 @@ const usageState = createState(() => ({ version: 0 }), {
 
 /** Reactive view of {@link ManagedAgent.usage} for footer and slash commands. */
 export const useAgentUsage = (): AgentUsageView => {
-  const agent = useAgent((s) => s.agent);
+  const agent = toRaw(useAgent((s) => s.agent));
   const version = usageState((s) => s.version);
 
   useEffect(() => {
     if (!agent) return;
 
     const bump = () => usageState.getActions().bump();
-    const agentId = agent.id;
-    const unsubStop = agentManager.on("agent:stop", (event) => {
-      if (event.agentId === agentId) bump();
+    return agent.observe({
+      events: ["agent:stop", "prompt:submit"],
+      onEvent: bump,
     });
-    const unsubSubmit = agentManager.on("prompt:submit", (event) => {
-      if (event.agentId === agentId) bump();
-    });
-
-    return () => {
-      unsubStop();
-      unsubSubmit();
-    };
   }, [agent]);
 
   if (!agent) {

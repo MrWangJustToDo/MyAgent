@@ -150,7 +150,7 @@ ConnectionGuard(/health) → createRemoteCoreEnv(url) → registerCoreEnv → in
 | UI / state | `AgentContext`, `AgentLog`, `TodoManager`, `SessionStore` |
 | Compaction | `applyCompactionResult`, `autoCompact`, `estimateTokens` |
 | Bootstrap | `buildDefaultSystemPrompt`, `parseModelInfoFromEnv`, `bridgeExternalToolToServer` |
-| UI helpers | `previewEdit`, streaming callbacks, tool output types |
+| UI helpers | `previewEdit`, streaming emit + `observe({ onStreaming })`, tool output types |
 | Adapters | `FileError`, `ExecutionError`, `generateId` |
 
 Internal modules (tools, middleware, subagent runner, hook registry, etc.) stay package-private. Core validation scripts import from `dist/dev.mjs` (`src/dev.ts`), which is not part of the published package export map.

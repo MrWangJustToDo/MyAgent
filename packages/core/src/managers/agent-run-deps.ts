@@ -23,6 +23,7 @@ export interface AgentRunDeps {
   extensionRunner: ExtensionRunner | null;
   compactionConfig: CompactionConfig | null;
   modelInfo: ModelInfo | null;
-  getDynamicTurnContext: () => string | undefined | Promise<string | undefined>;
+  getFrozenSystemPrompt: () => string | undefined;
+  getTurnContextSnapshot: () => string | undefined;
   shouldTriggerAutoCompact: (messages?: ModelMessage[]) => boolean;
 }

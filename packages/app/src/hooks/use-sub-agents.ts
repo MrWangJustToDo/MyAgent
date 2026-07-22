@@ -1,5 +1,6 @@
 import { agentManager } from "@my-agent/core";
 import { useEffect, useState } from "react";
+import { toRaw } from "reactivity-store";
 
 import { useAgent } from "./use-agent.js";
 
@@ -13,6 +14,7 @@ const getManagerSubagent = (subId: string, taskId: string): ManagedAgent | undef
 };
 
 export const useSubAgents = ({ subId, taskId }: { subId: string; taskId: string }) => {
+  const parent = toRaw(useAgent((s) => s.agent));
   const [agent, setAgent] = useState<ManagedAgent | undefined>(() => getManagerSubagent(subId, taskId));
 
   useEffect(() => {
@@ -22,14 +24,18 @@ export const useSubAgents = ({ subId, taskId }: { subId: string; taskId: string 
       return;
     }
 
-    return agentManager.on("subagent:created", (event) => {
-      const managed = agentManager.getAgent(event.agentId);
-      if (managed?.parentTaskId === taskId) {
-        setAgent(managed);
-        return;
-      }
+    if (!parent) return;
+
+    return parent.observe({
+      events: ["subagent:created"],
+      onEvent: (event) => {
+        const managed = agentManager.getAgent(event.agentId);
+        if (managed?.parentTaskId === taskId) {
+          setAgent(managed);
+        }
+      },
     });
-  }, [subId, taskId]);
+  }, [subId, taskId, parent]);
 
   return agent;
 };

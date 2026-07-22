@@ -16,7 +16,8 @@ export function buildManagedAgentDeps(managed: ManagedAgent, manager: AgentManag
     extensionRunner: managed.extensionRunner,
     compactionConfig: managed.getCompactionConfig(),
     modelInfo: managed.getModelInfo(),
-    getDynamicTurnContext: () => managed.getDynamicTurnContext(),
+    getFrozenSystemPrompt: () => managed.getFrozenSystemPrompt(),
+    getTurnContextSnapshot: () => managed.getTurnContextSnapshot(),
     shouldTriggerAutoCompact: (messages) => managed.shouldTriggerAutoCompact(messages),
   };
 }

@@ -1,6 +1,9 @@
 import { agentManager } from "@my-agent/core";
 import { throttle } from "lodash-es";
 import { useEffect, useState } from "react";
+import { toRaw } from "reactivity-store";
+
+import { useAgent } from "./use-agent.js";
 
 import type { UIMessage } from "@tanstack/ai";
 
@@ -12,6 +15,7 @@ function readSubagentMessages(subagentId: string): UIMessage[] {
  * Subscribe to live UIMessage snapshots for a subagent preview.
  */
 export function useSubagentMessages(subagentId: string | undefined): UIMessage[] {
+  const rootAgent = toRaw(useAgent((s) => s.agent));
   const [messages, setMessages] = useState<UIMessage[]>(() => (subagentId ? readSubagentMessages(subagentId) : []));
 
   useEffect(() => {
@@ -23,34 +27,55 @@ export function useSubagentMessages(subagentId: string | undefined): UIMessage[]
     const refresh = throttle(() => setMessages(readSubagentMessages(subagentId)), 200);
     refresh();
 
-    let unsubChannel: (() => void) | undefined;
-    const attachChannel = () => {
-      unsubChannel?.();
-      unsubChannel = undefined;
-      const ui = agentManager.getAgent(subagentId)?.ui;
-      if (!ui) return;
-      unsubChannel = ui.subscribe(refresh);
-      refresh();
+    let unsubMessages: (() => void) | undefined;
+    const attachMessages = () => {
+      unsubMessages?.();
+      unsubMessages = undefined;
+      const managed = agentManager.getAgent(subagentId);
+      if (!managed?.ui) return;
+      unsubMessages = managed.observe({
+        onMessages: (next) => {
+          refresh.cancel();
+          setMessages(next);
+        },
+      });
     };
 
-    attachChannel();
+    attachMessages();
 
-    const unsubs = [
-      agentManager.on("subagent:started", (event) => {
-        if (event.agentId !== subagentId) return;
-        attachChannel();
-      }),
-      agentManager.on("subagent:ui-update", (event) => {
-        if (event.agentId !== subagentId) return;
-        refresh();
-      }),
-    ];
+    const unsubs: Array<() => void> = [];
+    const managed = agentManager.getAgent(subagentId);
+    if (managed) {
+      unsubs.push(
+        managed.observe({
+          events: ["subagent:started", "subagent:ui-update"],
+          onEvent: () => {
+            attachMessages();
+            refresh();
+          },
+        })
+      );
+    }
+
+    if (rootAgent) {
+      unsubs.push(
+        rootAgent.observe({
+          events: ["subagent:created", "subagent:started"],
+          onEvent: (event) => {
+            if (event.agentId !== subagentId) return;
+            attachMessages();
+            refresh();
+          },
+        })
+      );
+    }
 
     return () => {
-      unsubChannel?.();
+      unsubMessages?.();
       unsubs.forEach((unsub) => unsub());
+      refresh.cancel();
     };
-  }, [subagentId]);
+  }, [subagentId, rootAgent]);
 
   return messages;
 }

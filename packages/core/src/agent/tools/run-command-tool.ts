@@ -45,7 +45,7 @@ export const createRunCommandTool = () => {
     }),
     outputSchema: runCommandOutputSchema,
     needsApproval: true,
-    execute: async ({ command, cwd, env, timeout, run_in_background }, { toolCallId }) => {
+    execute: async ({ command, cwd, env, timeout, run_in_background }, { toolCallId, agentId }) => {
       if (run_in_background) {
         const coreEnv = getEnv();
         if (!coreEnv.startCommand) {
@@ -107,11 +107,11 @@ export const createRunCommandTool = () => {
         timeout,
         onStdout: (chunk) => {
           stdoutAccumulator.append(encoder.encode(chunk));
-          emitStreamingChunk(toolCallId, "stdout", chunk);
+          if (agentId) emitStreamingChunk(toolCallId, "stdout", chunk, { agentId });
         },
         onStderr: (chunk) => {
           stderrAccumulator.append(encoder.encode(chunk));
-          emitStreamingChunk(toolCallId, "stderr", chunk);
+          if (agentId) emitStreamingChunk(toolCallId, "stderr", chunk, { agentId });
         },
       });
 
