@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 
 import { StreamingOutputView } from "../components/StreamingOutputView.js";
+import { useTranscriptDisplayMode } from "../context/transcript-display-context.js";
 import { useLiveElapsedMs } from "../hooks/use-live-elapsed.js";
 import { useTask } from "../hooks/use-task.js";
 import { COLORS } from "../theme/colors.js";
@@ -60,6 +61,7 @@ const RUN_COMMAND_STREAM_THROTTLE_MS = 100;
 
 /** Render a tool invocation part — unified compact style for all tools */
 export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }: ToolCallPartViewProps) => {
+  const displayMode = useTranscriptDisplayMode();
   const uiState = getUiToolState(part);
   const toolName = part.name;
   const toolCallId = part.id;
@@ -76,7 +78,9 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
   const showTaskSummaryStream = isTask && isExecuting && taskPhase === "summary";
 
   const displayInput =
-    toolInput === undefined || toolInput === null ? null : formatToolInput(toolInput, toolName) || null;
+    toolInput === undefined || toolInput === null
+      ? null
+      : formatToolInput(toolInput, toolName, { compact: displayMode === "compact" }) || null;
 
   const hasOutput = uiState === "output-available" || uiState === "output-error" || uiState === "output-denied";
   const durationMs = hasOutput ? getDurationMs(part.output) : null;
@@ -84,8 +88,12 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
 
   const errorText = extractErrorText(part);
   const inlineSummary = errorText ? null : getInlineSummary(part, toolName);
-  const compactOutput = hasOutput ? getCompactOutput(part, toolName) : null;
   const outputFailed = (part.output as { success?: boolean } | undefined)?.success === false;
+  // Density compact: skip success one-liners; keep failure hints.
+  const compactOutput =
+    hasOutput && (displayMode !== "compact" || outputFailed || Boolean(errorText))
+      ? getCompactOutput(part, toolName)
+      : null;
   const stateColor = errorText || outputFailed ? COLORS.danger : getToolCallColor(uiState);
 
   const outputUsage =

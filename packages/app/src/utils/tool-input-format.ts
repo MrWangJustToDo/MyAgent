@@ -22,8 +22,13 @@ function formatFilePathInput(input: Record<string, unknown>, toolName?: string):
   return path;
 }
 
-function formatRunCommandInput(input: Record<string, unknown>): string {
+function formatRunCommandInput(input: Record<string, unknown>, compact = false): string {
   const command = input.command as string | undefined;
+  if (compact) {
+    const cmd = command ?? "";
+    const short = cmd.length > 56 ? `${cmd.slice(0, 55)}…` : cmd;
+    return `$ ${short}`;
+  }
   let res = chalk.bold.green("$");
   res += ` ${command ?? ""}`;
   if (input.cwd) {
@@ -127,51 +132,79 @@ function formatCreatePlanInput(input: Record<string, unknown>): string {
 }
 
 /** Format tool input for display based on tool name. */
-export function formatToolInput(input: unknown, toolName?: string): string {
+export function formatToolInput(
+  input: unknown,
+  toolName?: string,
+  options?: { compact?: boolean; maxLen?: number }
+): string {
   if (input === undefined || input === null) return "";
 
+  const compact = options?.compact === true;
+  const maxLen = options?.maxLen ?? (compact ? 72 : undefined);
+
+  let formatted = "";
   if (toolName && typeof input === "object") {
     const obj = input as Record<string, unknown>;
 
     switch (toolName) {
       case "read_file":
-        return formatFilePathInput(obj, toolName);
+        formatted = formatFilePathInput(obj, toolName);
+        break;
       case "list_file":
       case "write_file":
       case "edit_file":
       case "delete_file":
-        return formatFilePathInput(obj);
+        formatted = formatFilePathInput(obj);
+        break;
       case "run_command":
-        return formatRunCommandInput(obj);
+        formatted = formatRunCommandInput(obj, compact);
+        break;
       case "grep":
-        return formatGrepInput(obj);
+        formatted = formatGrepInput(obj);
+        break;
       case "glob":
-        return formatGlobInput(obj);
+        formatted = formatGlobInput(obj);
+        break;
       case "task":
-        return formatTaskInput(obj);
+        formatted = formatTaskInput(obj);
+        break;
       case "todo":
-        return formatTodoInput(obj);
+        formatted = formatTodoInput(obj);
+        break;
       case "web_search":
       case "websearch":
-        return formatWebSearchInput(obj);
+        formatted = formatWebSearchInput(obj);
+        break;
       case "web_fetch":
       case "webfetch":
-        return formatWebFetchInput(obj);
+        formatted = formatWebFetchInput(obj);
+        break;
       case "tree":
-        return formatTreeInput(obj);
+        formatted = formatTreeInput(obj);
+        break;
       case "load_skill":
-        return formatLoadSkillInput(obj);
+        formatted = formatLoadSkillInput(obj);
+        break;
       case "ask_user":
-        return formatAskUserInput(obj);
+        formatted = formatAskUserInput(obj);
+        break;
       case "create_plan":
       case "update_plan":
-        return formatCreatePlanInput(obj);
+        formatted = formatCreatePlanInput(obj);
+        break;
       case "list_skills":
-        return "";
+        formatted = "";
+        break;
       default:
-        return formatGenericInput(input);
+        formatted = formatGenericInput(input);
+        break;
     }
+  } else {
+    formatted = formatGenericInput(input);
   }
 
-  return formatGenericInput(input);
+  if (maxLen != null && formatted.length > maxLen) {
+    return `${formatted.slice(0, maxLen - 1)}…`;
+  }
+  return formatted;
 }

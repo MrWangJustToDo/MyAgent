@@ -16,7 +16,6 @@ import type { TextPart, UIMessage } from "@tanstack/ai";
 
 export type GetMessagesOptions = {
   mode?: TranscriptDisplayMode;
-  isLoading?: boolean;
 };
 
 const filterValidMessage = (message: UIMessage) => {
@@ -63,10 +62,7 @@ function resolveStaticFlatMessage(message: UIMessage): UIMessage[] {
  * Only fingerprints the static portion (all but last display message) so live tool
  * updates on the dynamic last message do not remount the entire transcript.
  */
-function computeStaticRenderSignature(
-  displayMessages: UIMessage[],
-  options: { mode: TranscriptDisplayMode; isLoading: boolean }
-): string {
+function computeStaticRenderSignature(displayMessages: UIMessage[], options: { mode: TranscriptDisplayMode }): string {
   const staticSource = displayMessages.length > 1 ? displayMessages.slice(0, -1) : ([] as UIMessage[]);
 
   const toolSig = computeToolCallsRenderSignature(staticSource);
@@ -79,21 +75,20 @@ function computeStaticRenderSignature(
     .join(";");
 
   const ids = staticSource.map((m) => m.id).join(",");
-  return `${options.mode}|L${options.isLoading ? 1 : 0}|n${staticSource.length}|${ids}|${summaries}|${toolSig}`;
+  return `${options.mode}|n${staticSource.length}|${ids}|${summaries}|${toolSig}`;
 }
 
 /**
  * Split messages into static (completed) and dynamic (streaming) portions.
  * Tool-call parts with the same id are deduped (first wins) with state merged from later replays.
- * Compact mode collapses closed turns before flatten/split.
+ * Compact mode selectively folds exploration tools before flatten/split.
  */
 export const getMessages = (messages: UIMessage[], options: GetMessagesOptions = {}) => {
   const mode = options.mode ?? "full";
-  const isLoading = options.isLoading ?? false;
 
   const normalizedMessages = normalizeToolPartsInMessages(messages);
   const dedupedMessages = dedupeToolCallsInMessages(normalizedMessages);
-  const displayMessages = projectTranscriptForDisplay(dedupedMessages, { mode, isLoading });
+  const displayMessages = projectTranscriptForDisplay(dedupedMessages, { mode });
 
   const staticMessages: UIMessage[] = [];
   const dynamicMessages: UIMessage[] = [];
@@ -116,6 +111,6 @@ export const getMessages = (messages: UIMessage[], options: GetMessagesOptions =
   return {
     staticMessages: staticMessages.filter(filterValidMessage),
     dynamicMessages: dynamicMessages.filter(filterValidMessage),
-    toolCallsSignature: computeStaticRenderSignature(displayMessages, { mode, isLoading }),
+    toolCallsSignature: computeStaticRenderSignature(displayMessages, { mode }),
   };
 };

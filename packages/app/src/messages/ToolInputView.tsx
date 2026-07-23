@@ -1,6 +1,7 @@
 import { Box } from "ink";
 
 import { MessageDiffView } from "../components/MessageDiffView.js";
+import { useTranscriptDisplayMode } from "../context/transcript-display-context.js";
 import { useSize } from "../hooks";
 import { useTask } from "../hooks/use-task.js";
 import { approvalFrameColor } from "../utils/diff-frame.js";
@@ -21,6 +22,7 @@ export const ToolInputView = ({
   toolInput: unknown;
   uiState: UiToolState;
 }) => {
+  const mode = useTranscriptDisplayMode();
   const toolName = part.name;
   const width = useSize((s) => s.state.screenWidth);
   const bodyWidth = width - 8;
@@ -29,12 +31,16 @@ export const ToolInputView = ({
   const taskInput = toolInput as { prompt?: string; description?: string };
   const { phase: taskPhase } = useTask({ taskId: isTask ? part.id : "" });
 
+  // Compact: hide bulky diffs unless the user must review for approval.
+  const showFileDiffs = mode === "full" || uiState === "approval-requested";
+
   if (toolName === "task") {
     if (!taskInput?.prompt || !isExecuting || taskPhase === "summary") return null;
     return <TaskToolInputView part={part} toolInput={toolInput} />;
   }
 
   if (toolName === "write_file") {
+    if (!showFileDiffs) return null;
     const content = toolInput as { content?: string; path?: string };
     if (!content || uiState === "input-streaming") return null;
 
@@ -54,6 +60,7 @@ export const ToolInputView = ({
   }
 
   if (toolName === "edit_file") {
+    if (!showFileDiffs) return null;
     const content = toolInput as {
       path?: string;
       edits?: Array<{ oldString: string; newString: string; startLine?: number; replaceAll?: boolean }>;

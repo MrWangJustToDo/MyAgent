@@ -126,7 +126,7 @@ export const Agent = () => {
         <SubagentPanel />
       ) : (
         <>
-          <MessageList messages={messages} isLoading={isLoading} />
+          <MessageList messages={messages} />
           <Content />
           {confirm && <ExtensionConfirm confirm={confirm} />}
           {widgets.length > 0 && <ExtensionWidget widgets={widgets} />}

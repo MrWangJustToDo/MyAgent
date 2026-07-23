@@ -1,5 +1,5 @@
-import { summarizeToolActivity } from "./tool-activity-summary.js";
-import { isPendingToolApproval, isToolCallPart } from "./tool-part.js";
+import { formatExploredActivitySummary, MIN_FOLD_COUNT, shouldFoldToolRow } from "./tool-activity-summary.js";
+import { isToolCallPart } from "./tool-part.js";
 
 import type { TextPart, ToolCallPart, UIMessage } from "@tanstack/ai";
 
@@ -15,6 +15,12 @@ export function isActivitySummaryMessage(message: { id?: string }): boolean {
 type Turn = {
   userMessageId: string | null;
   messages: UIMessage[];
+};
+
+type PendingFoldable = {
+  part: ToolCallPart;
+  source: UIMessage;
+  partIndex: number;
 };
 
 function groupTurns(messages: UIMessage[]): Turn[] {
@@ -38,67 +44,109 @@ function groupTurns(messages: UIMessage[]): Turn[] {
   return turns;
 }
 
-function collectToolParts(messages: UIMessage[]): ToolCallPart[] {
-  const parts: ToolCallPart[] = [];
-  for (const message of messages) {
-    for (const part of message.parts ?? []) {
-      if (isToolCallPart(part)) parts.push(part);
-    }
-  }
-  return parts;
-}
-
-function isPendingAskUser(part: ToolCallPart): boolean {
-  return part.name === "ask_user" && part.state === "input-complete" && part.output === undefined;
-}
-
-function turnShouldStayExpanded(turn: Turn): boolean {
-  for (const part of collectToolParts(turn.messages)) {
-    if (isPendingToolApproval(part) || isPendingAskUser(part)) return true;
-  }
-  return false;
-}
-
 function getTextContent(part: TextPart): string {
   return part.content?.trim() ?? "";
 }
 
+function emitPartMessage(source: UIMessage, part: UIMessage["parts"][number], partIndex: number): UIMessage {
+  return {
+    ...source,
+    id: `${source.id}-d${partIndex}`,
+    parts: [part],
+  } as UIMessage;
+}
+
+/**
+ * Density-first compact projection:
+ * - Keep tools as rows by default (render layer hides bulky outputs / shortens headers)
+ * - Only fold contiguous completed exploration tools when count >= {@link MIN_FOLD_COUNT}
+ * - Folded segments use path-aware activity summaries
+ */
 function collapseTurn(turn: Turn): UIMessage[] {
-  const users = turn.messages.filter((m) => m.role === "user");
-  const assistants = turn.messages.filter((m) => m.role === "assistant");
-  const toolParts = collectToolParts(assistants);
+  const out: UIMessage[] = [];
+  let pendingFoldable: PendingFoldable[] = [];
+  let summarySeq = 0;
+  let didFold = false;
 
-  let lastText: { content: string; sourceMessageId: string } | null = null;
-  for (const message of assistants) {
-    for (const part of message.parts ?? []) {
-      if (!part || part.type !== "text") continue;
-      const content = getTextContent(part as TextPart);
-      if (!content) continue;
-      lastText = { content: (part as TextPart).content ?? content, sourceMessageId: message.id };
+  const flushSummary = () => {
+    if (pendingFoldable.length === 0) return;
+
+    const folded = pendingFoldable;
+    pendingFoldable = [];
+
+    // Below threshold: keep as individual tool rows (density mode, no projection loss).
+    if (folded.length < MIN_FOLD_COUNT) {
+      for (const item of folded) {
+        out.push(emitPartMessage(item.source, item.part, item.partIndex));
+      }
+      return;
     }
-  }
 
-  const summary = summarizeToolActivity(toolParts);
-  const out: UIMessage[] = [...users];
+    const summary = formatExploredActivitySummary(folded.map((f) => f.part));
+    if (!summary) {
+      for (const item of folded) {
+        out.push(emitPartMessage(item.source, item.part, item.partIndex));
+      }
+      return;
+    }
 
-  if (summary) {
+    didFold = true;
     out.push({
-      id: `${ACTIVITY_SUMMARY_ID_PREFIX}${turn.userMessageId ?? "orphan"}`,
+      id: `${ACTIVITY_SUMMARY_ID_PREFIX}${turn.userMessageId ?? "orphan"}:${summarySeq++}`,
       role: "assistant",
       parts: [{ type: "text", content: summary } as TextPart],
     } as UIMessage);
+  };
+
+  for (const message of turn.messages) {
+    if (message.role === "user") {
+      flushSummary();
+      out.push(message);
+      continue;
+    }
+
+    if (message.role !== "assistant") {
+      flushSummary();
+      out.push(message);
+      continue;
+    }
+
+    const parts = message.parts ?? [];
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (!part) continue;
+
+      if (part.type === "text") {
+        if (!getTextContent(part as TextPart)) continue;
+        flushSummary();
+        out.push(emitPartMessage(message, part, i));
+        continue;
+      }
+
+      if (part.type === "image") {
+        flushSummary();
+        out.push(emitPartMessage(message, part, i));
+        continue;
+      }
+
+      if (!isToolCallPart(part)) {
+        continue;
+      }
+
+      if (shouldFoldToolRow(part)) {
+        pendingFoldable.push({ part, source: message, partIndex: i });
+        continue;
+      }
+
+      flushSummary();
+      out.push(emitPartMessage(message, part, i));
+    }
   }
 
-  if (lastText) {
-    out.push({
-      id: `${lastText.sourceMessageId}-compact-final`,
-      role: "assistant",
-      parts: [{ type: "text", content: lastText.content } as TextPart],
-    } as UIMessage);
-  }
+  flushSummary();
 
-  // Nothing useful collapsed — keep original messages (e.g. image-only assistant).
-  if (out.length === users.length && assistants.length > 0) {
+  // No segment reached the fold threshold — keep original messages (stable ids).
+  if (!didFold) {
     return turn.messages;
   }
 
@@ -107,25 +155,20 @@ function collapseTurn(turn: Turn): UIMessage[] {
 
 /**
  * Project transcript for compact display.
- * Closed turns collapse to user + activity summary + final assistant text.
- * The open (loading) turn and turns with pending approval / ask_user stay verbose.
+ *
+ * Density-first: most tools stay as one-line rows. Only long runs of completed
+ * exploration tools collapse into path-aware activity summaries.
  */
 export function projectTranscriptForDisplay(
   messages: UIMessage[],
-  options: { mode: TranscriptDisplayMode; isLoading: boolean }
+  options: { mode: TranscriptDisplayMode }
 ): UIMessage[] {
   if (options.mode !== "compact" || messages.length === 0) return messages;
 
   const turns = groupTurns(messages);
   const result: UIMessage[] = [];
 
-  for (let i = 0; i < turns.length; i++) {
-    const turn = turns[i];
-    const isOpenTurn = i === turns.length - 1 && options.isLoading;
-    if (isOpenTurn || turnShouldStayExpanded(turn)) {
-      result.push(...turn.messages);
-      continue;
-    }
+  for (const turn of turns) {
     result.push(...collapseTurn(turn));
   }
 

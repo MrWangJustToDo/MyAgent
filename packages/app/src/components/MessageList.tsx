@@ -8,6 +8,7 @@
 import { Box, Text } from "ink";
 import { useEffect, useRef } from "react";
 
+import { TranscriptDisplayContext } from "../context/transcript-display-context.js";
 import { useDynamic } from "../hooks/use-dynamic";
 import { useStatic } from "../hooks/use-static";
 import { useTranscriptDisplay } from "../hooks/use-transcript-display.js";
@@ -33,8 +34,6 @@ const MAX_STATIC_PARTS = 40;
 
 export interface MessageListProps {
   messages: UIMessage[];
-  /** When true, the open turn stays verbose in compact mode. */
-  isLoading?: boolean;
 }
 
 function computeDynamicListSignature(messages: UIMessage[]): string {
@@ -62,11 +61,10 @@ function computeDynamicListSignature(messages: UIMessage[]): string {
 // Main Component
 // ============================================================================
 
-export const MessageList = ({ messages, isLoading = false }: MessageListProps) => {
+export const MessageList = ({ messages }: MessageListProps) => {
   const mode = useTranscriptDisplay((s) => s.mode);
   const { staticMessages, dynamicMessages, toolCallsSignature } = getMessages(messages, {
     mode,
-    isLoading,
   });
 
   // ── Truncate static list to bounded size ──
@@ -82,6 +80,7 @@ export const MessageList = ({ messages, isLoading = false }: MessageListProps) =
   const lastModeRef = useRef(mode);
   const lastDynamicSignatureRef = useRef("");
   const lastHasStaticRef = useRef(false);
+  const lastDynamicModeRef = useRef(mode);
   const staticListRef = useRef<JSX.Element[]>([]);
   const dynamicListRef = useRef<JSX.Element | JSX.Element[]>(
     <Box paddingX={1} marginTop={1}>
@@ -105,9 +104,11 @@ export const MessageList = ({ messages, isLoading = false }: MessageListProps) =
 
     const elements = visibleStaticMessages.map((item) => (
       <Box key={item.id} paddingX={1} marginTop={1}>
-        <StaticContext value={{ staticMessage: true }}>
-          <MessageView message={item} />
-        </StaticContext>
+        <TranscriptDisplayContext value={mode}>
+          <StaticContext value={{ staticMessage: true }}>
+            <MessageView message={item} />
+          </StaticContext>
+        </TranscriptDisplayContext>
       </Box>
     ));
 
@@ -124,17 +125,24 @@ export const MessageList = ({ messages, isLoading = false }: MessageListProps) =
     staticListRef.current = elements;
   }
 
-  if (dynamicSignature !== lastDynamicSignatureRef.current || hasStatic !== lastHasStaticRef.current) {
-    // Rebuild dynamic list only when live content changes (not every parent forceUpdate).
+  if (
+    dynamicSignature !== lastDynamicSignatureRef.current ||
+    hasStatic !== lastHasStaticRef.current ||
+    mode !== lastDynamicModeRef.current
+  ) {
+    // Rebuild dynamic list only when live content or display mode changes.
     lastDynamicSignatureRef.current = dynamicSignature;
     lastHasStaticRef.current = hasStatic;
+    lastDynamicModeRef.current = mode;
 
     dynamicListRef.current = dynamicMessages.length ? (
       dynamicMessages.map((message) => (
         <Box key={message.id} paddingX={1} marginTop={1}>
-          <StaticContext value={{ staticMessage: false }}>
-            <MessageView message={message} />
-          </StaticContext>
+          <TranscriptDisplayContext value={mode}>
+            <StaticContext value={{ staticMessage: false }}>
+              <MessageView message={message} />
+            </StaticContext>
+          </TranscriptDisplayContext>
         </Box>
       ))
     ) : (
@@ -156,7 +164,7 @@ export const MessageList = ({ messages, isLoading = false }: MessageListProps) =
 
   useEffect(() => {
     useDynamic.getActions().setDynamicList(dynamicListRef.current);
-  }, [dynamicSignature, visibleStaticLength]);
+  }, [dynamicSignature, visibleStaticLength, mode]);
 
   return null;
 };

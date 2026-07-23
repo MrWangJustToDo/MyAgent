@@ -11,7 +11,7 @@ export type ActivitySummaryViewProps = {
 export const ActivitySummaryView = memo(function ActivitySummaryView({ summary }: ActivitySummaryViewProps) {
   return (
     <Text color={COLORS.muted} dimColor>
-      {"⚒️ ～"}
+      {"· "}
       {summary}
     </Text>
   );

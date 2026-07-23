@@ -231,6 +231,12 @@ export const Help = () => {
           </Box>
           <Box>
             <Box width={28}>
+              <Text color={COLORS.success}>/display</Text>
+            </Box>
+            <Text>full outputs, or compact density (fold long explores)</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
               <Text color={COLORS.success}>/plan</Text>
             </Box>
             <Text>Toggle plan mode (read-only; task exploration allowed)</Text>

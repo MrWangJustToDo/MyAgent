@@ -12,7 +12,7 @@ function parseMode(args: string): TranscriptDisplayMode | null {
 
 registerCommand({
   name: "display",
-  description: "Set transcript display mode (compact summary vs full tools)",
+  description: "Set transcript display (full outputs vs compact density; fold long explore runs)",
   usage: "/display [compact|full]",
   immediate: true,
   execute: (args) => {
@@ -33,6 +33,10 @@ registerCommand({
     }
 
     setMode(mode);
-    return { ok: true, message: `Display mode: ${mode}` };
+    const hint =
+      mode === "compact"
+        ? " (one-line tools; fold 3+ consecutive reads/searches into path summaries)"
+        : " (full tool rows and outputs)";
+    return { ok: true, message: `Display mode: ${mode}${hint}` };
   },
 });

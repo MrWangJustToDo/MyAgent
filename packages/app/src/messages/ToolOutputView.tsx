@@ -1,6 +1,7 @@
 import { getToUI } from "@my-agent/core";
 import { Box, Text } from "ink";
 
+import { useTranscriptDisplayMode } from "../context/transcript-display-context.js";
 import { COLORS } from "../theme/colors.js";
 import { formatToolOutput } from "../utils/format";
 import { splitStreamingLines } from "../utils/streaming-output-lines.js";
@@ -21,10 +22,18 @@ const DETAILED_OUTPUT_TOOLS = new Set([
   "todo",
 ]);
 
+/** In compact mode, only these keep a detailed output block (interactive / structured UI). */
+const COMPACT_DETAILED_OUTPUT_TOOLS = new Set(["ask_user", "todo"]);
+
 export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState: UiToolState }) => {
+  const mode = useTranscriptDisplayMode();
+  const toolName = part.name;
+
   if (uiState !== "output-available" && uiState !== "output-error") return null;
 
-  const toolName = part.name;
+  if (mode === "compact" && !COMPACT_DETAILED_OUTPUT_TOOLS.has(toolName)) {
+    return null;
+  }
 
   if (toolName === "todo") {
     const output = part.output as { items?: TodoItem[] };
