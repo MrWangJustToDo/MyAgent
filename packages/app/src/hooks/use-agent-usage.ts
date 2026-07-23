@@ -11,6 +11,7 @@ export interface AgentUsageSnapshot {
   total: TokenUsage;
   window: TokenUsage;
   percent: number;
+  tokenLimit: number;
   cost: number;
 }
 
@@ -26,6 +27,7 @@ const readUsage = (agent: AgentRef): AgentUsageSnapshot => {
     total: { ...tracker.getTotal() },
     window: { ...tracker.getWindowUsage() },
     percent: tracker.getTokenLimitPercent(),
+    tokenLimit: tracker.getTokenLimit(),
     cost: tracker.getTotalCostUsd(),
   };
 };
