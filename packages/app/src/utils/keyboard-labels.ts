@@ -5,8 +5,10 @@
  * - Prefer what Ink actually receives, not desktop-app habits.
  * - TUI chords use **Ctrl**, never Cmd/⌘ (terminals deliver Control; ⌘ is usually
  *   eaten by the host terminal or OS).
- * - Option/Alt+Enter is unreliable on macOS — do not advertise it.
- * - Shift+Enter usually arrives as `return + meta` (ESC+CR), not `return + shift`.
+ * - Option/Alt+Enter sends \x1b\r (ESC+CR) which parseKeypress detects
+ *   as `meta+return` — this is the reliable way to get a modified Enter.
+ * - On macOS terminals, Shift+Enter sends \r like plain Enter and cannot be
+ *   distinguished from plain Enter, so it will submit rather than insert a newline.
  * - Platform comes from CoreEnv (`getPlatform`), never `process.platform`.
  */
 
@@ -68,11 +70,11 @@ export function shiftEnterLabel(): string {
 
 /**
  * Follow-up chord while the agent is running.
- * Never advertise Alt/Option+Enter — macOS terminals usually do not deliver it to Ink.
+ * On macOS, Option+Enter sends \x1b\r which parseKeypress detects as meta+return.
  */
 export function followUpEnterLabel(): string {
-  // On macOS advertise Ctrl+Enter as a reliable fallback; elsewhere Shift+Enter is enough.
-  return isMacPlatform() ? "Shift/Ctrl+Enter" : KeyLabel.shiftEnter;
+  // On macOS advertise Ctrl+Enter as a reliable fallback; Option+Enter is the meta key.
+  return isMacPlatform() ? "Option/Ctrl+Enter" : KeyLabel.shiftEnter;
 }
 
 /** Idle multi-line insert chord. */
@@ -146,7 +148,11 @@ export function selectListHint(options: { multiSelect: boolean; cursorOnFreeform
  * True when the user pressed a modified Enter that should mean follow-up (busy)
  * or newline (idle) — not a plain submit/steer.
  *
- * - `shift` / `meta`: Shift+Enter (meta from ESC+CR on most terminals)
+ * - `meta` + return: Option+Enter on macOS / Alt+Enter on Linux
+ *   (ESC+CR, detected as meta)
+ * - `shift` + return: Shift+Enter (only works on terminals that send \x1b\r;
+ *   on macOS terminals Shift+Enter sends \r like plain Enter and cannot be
+ *   distinguished — use Option+Enter instead)
  * - `ctrl` + return: Ctrl+Enter
  * - `ctrl` + `\n`: Ctrl+J (some terminals map Ctrl+Enter this way)
  */

@@ -203,10 +203,13 @@ export function useAgentKeybindings({
         return;
       }
       if (inputKey.return || (inputKey.ctrl && inputChar === "\n")) {
-        // While running: Enter = steer; Shift/Ctrl+Enter = follow-up.
-        // Idle: Shift+Enter = newline; Enter = submit.
-        // Note: Alt/Option+Enter is unreliable in macOS terminals — do not rely on it.
-        // Shift+Enter usually arrives as return+meta (ESC+CR), not return+shift.
+        // While running: Enter = steer; Option/Ctrl+Enter = follow-up.
+        // Idle: Option+Enter = newline; Enter = submit.
+        //
+        // On macOS, Option+Enter sends \x1b\r (ESC+CR), which parseKeypress
+        // detects as meta+return — this is the reliable way to insert a newline.
+        // Shift+Enter sends the same \r as plain Enter and cannot be
+        // distinguished, so it will submit rather than insert a newline.
         if (isLoading) {
           if (isModifiedEnter(inputChar, inputKey)) {
             handleNormalSubmit("followUp");
