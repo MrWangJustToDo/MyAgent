@@ -5,6 +5,7 @@ import "./display.js";
 import "./help.js";
 import "./mcp.js";
 import "./paste.js";
+import "./plan.js";
 import "./quit.js";
 import "./rename.js";
 import "./resume.js";

@@ -4,3 +4,4 @@ export { createToolCompactMiddleware, type ToolCompactMiddlewareDeps } from "./t
 export { createExtensionsMiddleware, type ExtensionsMiddlewareDeps } from "./extensions-middleware.js";
 export { createStatusMiddleware, type StatusMiddlewareDeps } from "./status-middleware.js";
 export { createTurnContextMiddleware, type TurnContextMiddlewareDeps } from "./turn-context-middleware.js";
+export { createPlanModeMiddleware, type PlanModeMiddlewareDeps } from "../plan/plan-mode-middleware.js";

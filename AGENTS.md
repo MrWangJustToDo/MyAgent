@@ -439,10 +439,25 @@ registerCoreEnv(env);
 | `compaction:auto-*` / `compaction:reactive-*` | Auto / reactive context compaction |
 | `session:save-error` | Session persistence failure |
 | `subagent:*` | Subagent lifecycle |
+| `plan:enter` / `plan:ready` / `plan:execute` / `plan:cancel-execution` / `plan:exit` | Plan mode phase transitions |
 
 **Vision note:** Official DeepSeek Chat Completions currently rejects multimodal parts such as `image_url` (text-only schema). Capability sanitization strips unsupported `image` / `audio` / `video` / `document` parts on the wire and retries once; switch to a provider with matching capabilities for real media understanding.
 
 **Event → Log bridge:** `attachEventLogBridge()` in `AgentManager` maps events to `AgentLog` entries. Policy lives in `event-log-bridge.ts` (`DEFAULT_EVENT_LOG_RULES`); override per event type with `EventLogPolicy`. Emit sites should not duplicate lifecycle logs covered by events.
+
+## Plan Mode
+
+Read-only planning → structured plan → user confirm → execute with TodoManager progress.
+
+| Phase | Tools | Behavior |
+|-------|-------|----------|
+| `planning` / `ready` | Mutate tools + MCP hidden; `run_command` allowlisted | Agent explores and writes `## Plan` with numbered steps (optional mermaid) |
+| `executing` | Full tools restored | Agent follows plan; todos / `[DONE:n]` track progress |
+| `off` | Normal | Default |
+
+**App:** `/plan` toggles planning; `/plan execute` starts execution from `ready`; `/plan cancel` pauses execution back to `ready`; `/plan status` reports phase. Footer shows `plan` / `plan ready · /plan execute` / `plan n/m`. Exiting plan mode clears plan-seeded todos; unrelated todos are preserved until execute.
+
+**Core:** `ManagedAgent.planMode` (`PlanModeController`), tool filter in `run-agent`, `createPlanModeMiddleware`, prompts via turn context. See `packages/core/src/agent/plan/`.
 
 ## Subagent System
 
@@ -638,6 +653,7 @@ packages/
 │   │   ├── compaction/                # Context compaction (micro + auto)
 │   │   ├── extension/                 # Extension API (loader, runner, EventBus interception)
 │   │   ├── memory/                    # Memory management
+│   │   ├── plan/                      # Plan mode (controller, extract-plan, safe-command)
 │   │   ├── session/                   # Session persistence (SessionStore)
 │   │   ├── skills/                    # Skill loading (two-layer injection)
 │   │   ├── subagent/                  # Subagent spawning
@@ -658,7 +674,7 @@ packages/
 │   │   ├── types.ts                   # AgentAdapter, AppConfig, InitResult interfaces
 │   │   └── create-agent.ts            # Shared createAgentFromConfig() helper
 │   ├── app/                           # Main app components (App.tsx, Agent.tsx)
-│   ├── commands/                      # Slash commands (/help, /compact, /display, /theme, /clear, etc.)
+│   ├── commands/                      # Slash commands (/help, /plan, /compact, /display, /theme, /clear, etc.)
 │   ├── components/                    # React components (UserInput, EditDiff, Help, etc.)
 │   ├── context/                       # React contexts (AdapterProvider)
 │   ├── hooks/                         # Shared hooks (useAgentChat, useConfig, useAgent, etc.)

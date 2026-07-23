@@ -79,6 +79,9 @@ export class TodoManager {
   /** Auto-clear timer (when all todos completed) */
   private autoClearTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
+  /** When false, completed todos stay visible (plan execution keeps Footer progress). */
+  private autoClearEnabled = true;
+
   /** Timestamps */
   createdAt: number;
   updatedAt: number;
@@ -336,6 +339,20 @@ export class TodoManager {
   }
 
   /**
+   * Enable or disable auto-clear after all todos complete (default: enabled).
+   */
+  setAutoClearEnabled(enabled: boolean): void {
+    this.autoClearEnabled = enabled;
+    if (!enabled) {
+      this.clearAutoClearTimer();
+    }
+  }
+
+  isAutoClearEnabled(): boolean {
+    return this.autoClearEnabled;
+  }
+
+  /**
    * Clear all todos.
    */
   clear(): void {
@@ -365,7 +382,7 @@ export class TodoManager {
   private scheduleAutoClearIfNeeded(): void {
     this.clearAutoClearTimer();
 
-    if (!this.isAllCompleted()) {
+    if (!this.autoClearEnabled || !this.isAllCompleted()) {
       return;
     }
 

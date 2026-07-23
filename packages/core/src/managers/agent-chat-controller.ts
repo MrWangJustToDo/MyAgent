@@ -1,3 +1,4 @@
+import { extractAssistantText } from "../agent/subagent/extract-assistant-text.js";
 import { throwOnRunError } from "../agent/subagent/stream-errors.js";
 import { formatAgentStreamError } from "../agent/utils/assert-async-iterable.js";
 import { stripEmptyAssistantShells } from "../agent/utils/empty-assistant-shell.js";
@@ -299,6 +300,8 @@ export class AgentChatController {
           return;
         }
 
+        this.syncPlanModeFromMessages();
+
         const after = this.channel.getMessages();
         if (hasPendingToolApprovals(after)) break;
         if (hasPendingAskUser(after)) break;
@@ -306,6 +309,7 @@ export class AgentChatController {
       }
 
       if (generation === this.runGeneration) {
+        this.syncPlanModeFromMessages();
         this.managed.statusController.reconcileAfterRun(this.channel.getMessages());
         this.persistMessages();
 
@@ -375,6 +379,13 @@ export class AgentChatController {
     if (messages.length > 0) {
       this.managed.maybeSaveSessionUIMessages(messages, "pump-complete");
     }
+  }
+
+  /** Extract ## Plan / [DONE:n] from the latest assistant text while plan mode is active. */
+  private syncPlanModeFromMessages(): void {
+    if (this.managed.planMode.getPhase() === "off") return;
+    const text = extractAssistantText(this.channel.getMessages());
+    if (text) this.managed.planMode.onAssistantText(text);
   }
 }
 

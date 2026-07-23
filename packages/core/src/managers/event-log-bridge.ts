@@ -225,6 +225,44 @@ const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | false> = {
   },
   "subagent:destroyed": false,
   "subagent:ui-update": false,
+
+  // ============================================================================
+  // Plan mode
+  // ============================================================================
+  "plan:enter": {
+    level: "info",
+    category: "agent",
+    formatMessage: () => "Plan mode: planning (read-only)",
+  },
+  "plan:ready": {
+    level: "info",
+    category: "agent",
+    formatMessage: (event) => `Plan ready (${event.data?.stepCount ?? "?"} steps) — /plan execute to run`,
+  },
+  "plan:execute": {
+    level: "info",
+    category: "agent",
+    formatMessage: (event) => {
+      const steps = event.data?.stepCount ?? "?";
+      const replaced = event.data?.replacedExistingTodos ? " (replaced existing todos)" : "";
+      return `Plan execution started (${steps} steps)${replaced}`;
+    },
+  },
+  "plan:cancel-execution": {
+    level: "info",
+    category: "agent",
+    formatMessage: () => "Plan execution paused — back to ready (read-only)",
+  },
+  "plan:todo-replaced": {
+    level: "info",
+    category: "agent",
+    formatMessage: (event) => `Plan todos replaced previous list (${event.data?.stepCount ?? "?"} steps)`,
+  },
+  "plan:exit": {
+    level: "info",
+    category: "agent",
+    formatMessage: () => "Plan mode off",
+  },
 };
 
 function resolveRule(type: AgentEventType, policy?: EventLogPolicy): EventLogRule | false | undefined {

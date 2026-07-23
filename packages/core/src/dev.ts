@@ -141,3 +141,16 @@ export {
 } from "./managers/managed-agent-observe.js";
 export { commandJobRegistry } from "./agent/tools/util/command-job-registry.js";
 export type { CommandJobRecord, CommandJobPollResult } from "./agent/tools/util/command-job-registry.js";
+export {
+  PlanModeController,
+  cleanStepText,
+  extractDoneSteps,
+  extractPlan,
+  isSafeCommand,
+  getPlanModeToolExcludeSet,
+  isMcpToolName,
+  PLAN_MODE_EXCLUDED_TOOL_NAMES,
+  buildPlanModePrompt,
+  createPlanModeMiddleware,
+} from "./agent/plan";
+export type { BeginPlanExecutionResult, PlanModePhase, PlanModeState, PlanStep, ExtractedPlan } from "./agent/plan";

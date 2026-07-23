@@ -2,6 +2,8 @@ import { type ModelMessage, type UIMessage as TanStackUIMessage } from "@tanstac
 
 import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
+import { PlanModeController } from "../agent/plan/plan-mode-controller.js";
+import { buildPlanModePrompt } from "../agent/plan/plan-prompts.js";
 import {
   createSessionSyncTracker,
   type SessionSaveReason,
@@ -13,6 +15,7 @@ import { getEnv } from "../env.js";
 
 import { AgentChatController } from "./agent-chat-controller.js";
 import { createAgentStatusController, type AgentStatusController } from "./agent-status-controller.js";
+import { isActiveStatus } from "./agent-status.js";
 import { AgentConfigSchema } from "./agent-types.js";
 import { emitAgentEvent } from "./emit-agent-event.js";
 import { handleManagedReactiveCompact } from "./managed-agent-compact.js";
@@ -49,6 +52,7 @@ import type {
 } from "../agent/extension";
 import type { McpManager } from "../agent/mcp/manager.js";
 import type { MemoryManager } from "../agent/memory/memory-manager.js";
+import type { BeginPlanExecutionResult, PlanModePhase, PlanModeState } from "../agent/plan/plan-mode-controller.js";
 import type { AgentRunner } from "../agent/runner/agent-runner.js";
 import type { SessionStore } from "../agent/session/session-store.js";
 import type { SessionData } from "../agent/session/types.js";
@@ -138,6 +142,8 @@ export class ManagedAgent {
   tools: ToolsRecord;
   log: AgentLog;
   todoManager: TodoManager | null;
+  /** Plan mode (read-only planning → execute). Root agents only; subagents leave phase off. */
+  readonly planMode: PlanModeController;
 
   runner?: AgentRunner;
   runnerConfigKey?: string;
@@ -218,6 +224,16 @@ export class ManagedAgent {
       setPendingApprovalCount: (count) => this.setPendingApprovalCount(count),
       log: this.log,
       emitEvent: (type, data) => this.emitEvent(type, data),
+    });
+
+    this.planMode = new PlanModeController({
+      emitEvent: (type, data) => this.emitEvent(type, data),
+      getTodoManager: () => this.todoManager,
+      onPhaseChange: () => {
+        this.runner = undefined;
+        this.runnerConfigKey = undefined;
+        this.emitStateChange();
+      },
     });
 
     if (config.setUp) {
@@ -629,13 +645,59 @@ export class ManagedAgent {
       // Git not available — skip
     }
 
+    const planState = this.planMode.getState();
+    const planModeContent = buildPlanModePrompt(planState.phase, planState.planMarkdown);
+
     return buildDynamicTurnContext({
       relevantMemoryContent: this.relevantMemoryContent,
       todoNagReminder,
       currentDate,
       gitBranch,
       gitStatus,
+      planModeContent,
     });
+  }
+
+  // ============================================================================
+  // Plan mode
+  // ============================================================================
+
+  enablePlanMode(): void {
+    this.planMode.enable();
+  }
+
+  disablePlanMode(): void {
+    this.planMode.disable();
+  }
+
+  togglePlanMode(): PlanModePhase {
+    return this.planMode.toggle();
+  }
+
+  getPlanModeState(): PlanModeState {
+    return this.planMode.getState();
+  }
+
+  /**
+   * Move from `ready` → `executing`, restore tools, and optionally send a steer message.
+   * When `sendSteer` is true (default) and a chat controller exists, starts the run.
+   */
+  beginPlanExecution(options: { sendSteer?: boolean } = {}): BeginPlanExecutionResult {
+    const result = this.planMode.beginExecution();
+    if (!result.ok || !result.steerMessage) return result;
+
+    const queued = options.sendSteer !== false && this.chatController != null && isActiveStatus(this.status);
+
+    if (options.sendSteer !== false && this.chatController) {
+      void this.chatController.sendMessage(result.steerMessage);
+    }
+
+    return { ...result, queued };
+  }
+
+  /** Pause execution and return to `ready` (plan artifact kept, read-only again). */
+  cancelPlanExecution(): boolean {
+    return this.planMode.cancelExecution();
   }
 
   // ============================================================================

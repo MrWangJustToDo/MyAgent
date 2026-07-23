@@ -38,7 +38,13 @@ export type AgentEventType =
   | "subagent:completed"
   | "subagent:error"
   | "subagent:destroyed"
-  | "subagent:ui-update";
+  | "subagent:ui-update"
+  | "plan:enter"
+  | "plan:ready"
+  | "plan:execute"
+  | "plan:cancel-execution"
+  | "plan:todo-replaced"
+  | "plan:exit";
 
 /** Unified agent event */
 export interface AgentEvent {

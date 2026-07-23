@@ -232,6 +232,27 @@ const ContextBar = ({
           </Text>
         )}
 
+        {agentTick >= 0 && agent && agent.getPlanModeState().phase !== "off" && (
+          <Text color={COLORS.accent} dimColor>
+            {(() => {
+              const plan = agent.getPlanModeState();
+              if (plan.phase === "executing") {
+                const stats = agent.todoManager?.getStats();
+                if (stats && stats.total > 0) {
+                  return `plan ${stats.completed}/${stats.total}`;
+                }
+                return "plan exec";
+              }
+              if (plan.phase === "ready") {
+                const steps = plan.steps.length > 0 ? ` (${plan.steps.length})` : "";
+                const preserved = plan.preservedExistingTodos ? " · todos kept" : "";
+                return `plan ready${steps} · /plan execute${preserved}`;
+              }
+              return "plan";
+            })()}
+          </Text>
+        )}
+
         {/* Contextual shortcuts */}
         {isAgentBusy && !isPendingApproval && !showFreeformInput && !showSelectList && (
           <Text color={COLORS.muted} dimColor>
@@ -257,7 +278,7 @@ const ContextBar = ({
         )}
         {showSelectList && (
           <Text color={COLORS.primary} dimColor>
-            {selectListHint({ isMultiSelect, cursorOnFreeform })}
+            {selectListHint({ multiSelect: isMultiSelect, cursorOnFreeform })}
           </Text>
         )}
       </Box>

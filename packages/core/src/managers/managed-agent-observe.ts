@@ -30,6 +30,12 @@ export const DEFAULT_OBSERVE_EVENTS: AgentEventType[] = [
   "subagent:destroyed",
   "subagent:ui-update",
   "turn:summary",
+  "plan:enter",
+  "plan:ready",
+  "plan:execute",
+  "plan:cancel-execution",
+  "plan:todo-replaced",
+  "plan:exit",
 ];
 
 export interface AgentObserveHandlers {

@@ -51,6 +51,7 @@ export type {
   QueuedMessagesSnapshot,
   QueueUpdateListener,
 } from "./managers/agent-chat-controller.js";
+export type { PlanModePhase, PlanModeState, BeginPlanExecutionResult } from "./agent/plan/plan-mode-controller.js";
 export type { QueueMode } from "./agent/utils/pending-message-queue.js";
 
 // ============================================================================

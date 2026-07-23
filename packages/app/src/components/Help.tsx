@@ -223,6 +223,24 @@ export const Help = () => {
             </Box>
             <Text>Exit / abort</Text>
           </Box>
+          <Box>
+            <Box width={28}>
+              <Text color={COLORS.success}>/plan</Text>
+            </Box>
+            <Text>Toggle plan mode (read-only planning)</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
+              <Text color={COLORS.success}>/plan execute</Text>
+            </Box>
+            <Text>Run an approved plan</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
+              <Text color={COLORS.success}>/plan cancel</Text>
+            </Box>
+            <Text>Pause execution (back to ready, read-only)</Text>
+          </Box>
         </Box>
       </Box>
     </Box>

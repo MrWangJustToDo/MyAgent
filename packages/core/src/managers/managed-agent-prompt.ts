@@ -73,6 +73,8 @@ export interface DynamicTurnContextInput {
   currentDate?: string;
   gitBranch?: string;
   gitStatus?: string;
+  /** Plan-mode instructions (planning / ready / executing). */
+  planModeContent?: string;
 }
 
 export function buildDynamicTurnContext(input: DynamicTurnContextInput): string | undefined {
@@ -95,6 +97,7 @@ export function buildDynamicTurnContext(input: DynamicTurnContextInput): string 
 
   if (input.relevantMemoryContent) parts.push(input.relevantMemoryContent);
   if (input.todoNagReminder) parts.push(input.todoNagReminder);
+  if (input.planModeContent) parts.push(input.planModeContent);
 
   return parts.length > 0 ? parts.join("\n\n") : undefined;
 }

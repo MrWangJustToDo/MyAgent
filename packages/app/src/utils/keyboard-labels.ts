@@ -91,6 +91,7 @@ export function approveDenyLabel(): string {
 export function headerShortcutTips(): ReadonlyArray<{ key: string; desc: string }> {
   return [
     { key: KeyLabel.slash, desc: "for commands" },
+    { key: "/plan", desc: "plan mode" },
     { key: KeyLabel.ctrlE, desc: "workspace" },
     { key: KeyLabel.ctrlT, desc: "task panel" },
     { key: KeyLabel.ctrlV, desc: "paste image" },

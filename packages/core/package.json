@@ -60,7 +60,9 @@
     "validate:subagent-bridge-ui": "pnpm run build && node scripts/validate-subagent-bridge-ui.mjs",
     "validate:mcp-prefer-multimodal": "pnpm run build && node scripts/validate-mcp-prefer-multimodal.mjs",
     "validate:command-job-registry": "pnpm run build && node scripts/validate-command-job-registry.mjs",
-    "validate:pending-message-queue": "pnpm run build && node scripts/validate-pending-message-queue.mjs"
+    "validate:pending-message-queue": "pnpm run build && node scripts/validate-pending-message-queue.mjs",
+    "validate:extract-plan": "pnpm run build && node scripts/validate-extract-plan.mjs",
+    "validate:safe-command": "pnpm run build && node scripts/validate-safe-command.mjs"
   },
   "dependencies": {
     "@tanstack/ai": "^0.40.0",

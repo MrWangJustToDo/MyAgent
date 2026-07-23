@@ -20,6 +20,7 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 | Memory (prefetch / extract / consolidate) | **Done** | Post-run extraction only |
 | Tool approval | **Done in core** | `status` middleware + `needsApproval` on tools; app handles UI/keyboard only |
 | Extensions | **Done** | `ExtensionRunner` + `extensions-middleware` (`.agents/extension`); no `.agent-hooks` |
+| Plan mode | **Done** | `PlanModeController` + tool filter + `/plan` in app |
 
 **Known gaps**
 

@@ -2,10 +2,12 @@ import {
   createCompactionMiddleware,
   createExtensionsMiddleware,
   createLifecycleMiddleware,
+  createPlanModeMiddleware,
   createStatusMiddleware,
   createToolCompactMiddleware,
   createTurnContextMiddleware,
 } from "../agent/middleware";
+import { getPlanModeToolExcludeSet } from "../agent/plan/plan-tools.js";
 import { AgentRunner } from "../agent/runner/agent-runner.js";
 import { resolveToolsRecord, SUBAGENT_EXCLUDED_TOOL_NAMES } from "../agent/tools/tanstack";
 import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
@@ -80,6 +82,11 @@ function resolveTanStackTools(managed: ManagedAgent): ServerTool[] {
   if (managed.parentId) {
     return resolveToolsRecord(managed.tools, { exclude: SUBAGENT_EXCLUDED_TOOL_NAMES }) as ServerTool[];
   }
+  if (managed.planMode.isRestrictingTools()) {
+    return resolveToolsRecord(managed.tools, {
+      exclude: getPlanModeToolExcludeSet(managed.tools),
+    }) as ServerTool[];
+  }
   return resolveToolsRecord(managed.tools) as ServerTool[];
 }
 
@@ -140,6 +147,9 @@ export function buildAgentRunner(
       getTodoManager: () => deps.todoManager,
       emitEvent,
     }),
+    createPlanModeMiddleware({
+      getPlanMode: () => managed.planMode,
+    }),
   ];
 
   const maxOutputTokens = managed.getConfig().maxTokens ?? deps.modelInfo?.defaultMaxTokens;
@@ -164,6 +174,8 @@ function runnerConfigKey(managed: ManagedAgent): string {
     temperature: managed.config.temperature,
     modelStyle: managed.config.modelStyle,
     modelBaseURL: managed.config.modelBaseURL,
+    // Rebuild when plan mode hides/restores tools
+    planPhase: managed.planMode.getPhase(),
   });
 }
 
