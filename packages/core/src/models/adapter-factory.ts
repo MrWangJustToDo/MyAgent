@@ -51,6 +51,7 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
     return {
       adapter: createAnthropicChat(model as Parameters<typeof createAnthropicChat>[0], apiKey, {
         baseURL: trimmedBaseURL,
+        dangerouslyAllowBrowser: true,
       }),
       model,
     };
@@ -61,7 +62,9 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
 
   if (shouldEchoReasoningContent(trimmedBaseURL, model)) {
     return {
-      adapter: createReasoningChatCompletions(model, key, openaiConfig) as AnyTextAdapter,
+      adapter: createReasoningChatCompletions(model, key, {
+        ...openaiConfig,
+      }) as AnyTextAdapter,
       model,
     };
   }
