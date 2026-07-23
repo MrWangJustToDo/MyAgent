@@ -149,9 +149,25 @@ export {
   extractPlan,
   isSafeCommand,
   getPlanModeToolExcludeSet,
+  getPlanModeToolBlockReason,
   isMcpToolName,
+  isPlanModeForbiddenTool,
+  PLAN_AUTHORING_TOOL_NAMES,
   PLAN_MODE_EXCLUDED_TOOL_NAMES,
+  PLAN_STORE_DIR,
+  formatStructuredPlanMarkdown,
+  slugifyPlanName,
+  planFilePath,
   buildPlanModePrompt,
+  buildPlanModePlanningPrompt,
+  buildPlanModeReadyPrompt,
   createPlanModeMiddleware,
 } from "./agent/plan";
-export type { BeginPlanExecutionResult, PlanModePhase, PlanModeState, PlanStep, ExtractedPlan } from "./agent/plan";
+export type {
+  BeginPlanExecutionResult,
+  PlanModePhase,
+  PlanModeState,
+  PlanStep,
+  ExtractedPlan,
+  StructuredPlanInput,
+} from "./agent/plan";

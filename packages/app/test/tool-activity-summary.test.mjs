@@ -20,6 +20,8 @@ assert.equal(getToolActivityBucket("write_file"), "edits");
 assert.equal(getToolActivityBucket("delete_file"), "edits");
 assert.equal(getToolActivityBucket("grep"), "searches");
 assert.equal(getToolActivityBucket("glob"), "searches");
+assert.equal(getToolActivityBucket("websearch"), "searches");
+assert.equal(getToolActivityBucket("webfetch"), "searches");
 assert.equal(getToolActivityBucket("run_command"), "commands");
 assert.equal(getToolActivityBucket("task"), "tasks");
 assert.equal(getToolActivityBucket("todo"), "other");

@@ -4,6 +4,7 @@ import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
 import { PlanModeController } from "../agent/plan/plan-mode-controller.js";
 import { buildPlanModePrompt } from "../agent/plan/plan-prompts.js";
+import { listPlanFiles, loadPlanFile, savePlanFile } from "../agent/plan/plan-store.js";
 import {
   createSessionSyncTracker,
   type SessionSaveReason,
@@ -698,6 +699,44 @@ export class ManagedAgent {
   /** Pause execution and return to `ready` (plan artifact kept, read-only again). */
   cancelPlanExecution(): boolean {
     return this.planMode.cancelExecution();
+  }
+
+  /** Save current plan markdown under `.agents/plans/`. */
+  async savePlanToWorkspace(nameHint?: string): Promise<{ ok: boolean; path?: string; error?: string }> {
+    const { planMarkdown, phase } = this.planMode.getState();
+    if (!planMarkdown?.trim()) {
+      return { ok: false, error: "No plan markdown to save — create a plan first" };
+    }
+    if (phase !== "ready" && phase !== "executing" && phase !== "planning") {
+      return { ok: false, error: `Cannot save plan from phase "${phase}"` };
+    }
+    try {
+      const { path } = await savePlanFile(planMarkdown, nameHint);
+      return { ok: true, path };
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /** Load a saved plan file into ready state. */
+  async loadPlanFromWorkspace(
+    name: string
+  ): Promise<{ ok: boolean; path?: string; error?: string; stepCount?: number }> {
+    try {
+      const { path, markdown } = await loadPlanFile(name);
+      const result = this.planMode.loadPlanMarkdown(markdown);
+      if (!result.ok) return { ok: false, error: result.error, path };
+      return { ok: true, path, stepCount: result.stepCount };
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /** List plan markdown files under `.agents/plans/`. */
+  async listWorkspacePlans(): Promise<string[]> {
+    return listPlanFiles();
   }
 
   // ============================================================================

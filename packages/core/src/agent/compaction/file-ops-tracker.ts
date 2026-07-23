@@ -16,9 +16,6 @@ import type { ModelMessage } from "@tanstack/ai";
  * Tracked file operations from tool calls.
  *
  * To add new tools, update READ_TOOLS or WRITE_TOOLS below.
- * For tools with non-standard arg field names (e.g., copy_file uses
- * sourcePath/targetPath instead of path), add special handling in
- * extractFileOpsFromMessages().
  */
 export interface FileOps {
   /** Files that were read (read_file, list_file, tree, etc.) */
@@ -31,7 +28,7 @@ export interface FileOps {
 const READ_TOOLS = new Set(["read_file", "list_file", "tree"]);
 
 /** Tools that create or modify files */
-const WRITE_TOOLS = new Set(["write_file", "edit_file", "copy_file", "move_file", "delete_file"]);
+const WRITE_TOOLS = new Set(["write_file", "edit_file", "delete_file"]);
 
 // ============================================================================
 // Internal Helpers
@@ -68,15 +65,6 @@ function trackFileOp(ops: FileOps, toolName: string, args: unknown): void {
   }
 
   if (!WRITE_TOOLS.has(toolName)) return;
-
-  if (toolName === "copy_file" || toolName === "move_file") {
-    const sourcePath = extractPathFromArgs(args, "sourcePath");
-    const targetPath = extractPathFromArgs(args, "targetPath");
-    if (targetPath) ops.modifiedFiles.add(targetPath);
-    if (toolName === "move_file" && sourcePath) ops.modifiedFiles.add(sourcePath);
-    if (toolName === "copy_file" && sourcePath) ops.readFiles.add(sourcePath);
-    return;
-  }
 
   const path = extractPathFromArgs(args, "path");
   if (path) ops.modifiedFiles.add(path);

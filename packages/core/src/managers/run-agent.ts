@@ -7,7 +7,7 @@ import {
   createToolCompactMiddleware,
   createTurnContextMiddleware,
 } from "../agent/middleware";
-import { getPlanModeToolExcludeSet } from "../agent/plan/plan-tools.js";
+import { getPlanModeToolExcludeSet, PLAN_AUTHORING_TOOL_NAMES } from "../agent/plan/plan-tools.js";
 import { AgentRunner } from "../agent/runner/agent-runner.js";
 import { resolveToolsRecord, SUBAGENT_EXCLUDED_TOOL_NAMES } from "../agent/tools/tanstack";
 import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
@@ -87,7 +87,10 @@ function resolveTanStackTools(managed: ManagedAgent): ServerTool[] {
       exclude: getPlanModeToolExcludeSet(managed.tools),
     }) as ServerTool[];
   }
-  return resolveToolsRecord(managed.tools) as ServerTool[];
+  // Agent / executing: hide plan-authoring tools
+  return resolveToolsRecord(managed.tools, {
+    exclude: PLAN_AUTHORING_TOOL_NAMES,
+  }) as ServerTool[];
 }
 
 function buildRunDeps(managed: ManagedAgent, manager: AgentManager): AgentRunDeps {

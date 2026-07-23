@@ -3,16 +3,14 @@ import { isSafeCommand } from "./safe-command.js";
 import type { PlanModeController } from "./plan-mode-controller.js";
 import type { ToolsRecord } from "../tools/tanstack/tools-record.js";
 
-/** Mutating / spawn tools hidden while planning or ready. */
-export const PLAN_MODE_EXCLUDED_TOOL_NAMES = new Set([
-  "write_file",
-  "edit_file",
-  "delete_file",
-  "copy_file",
-  "move_file",
-  "task",
-  "kill_command",
-]);
+/**
+ * Mutating tools hidden while planning or ready.
+ * `task` stays available — subagents are already read-only (Claude/Cursor-style explore).
+ */
+export const PLAN_MODE_EXCLUDED_TOOL_NAMES = new Set(["write_file", "edit_file", "delete_file", "kill_command"]);
+
+/** Plan authoring tools — only offered while planning/ready. */
+export const PLAN_AUTHORING_TOOL_NAMES = new Set(["create_plan", "update_plan"]);
 
 export function isMcpToolName(name: string): boolean {
   return name.startsWith("mcp__");

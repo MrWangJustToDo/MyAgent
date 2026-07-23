@@ -14,7 +14,7 @@ import {
 } from "../dist/dev.mjs";
 
 const readOnlyNames = getReadOnlyTanStackToolNames();
-assert.deepEqual(readOnlyNames, ["read_file", "glob", "grep", "list_file", "tree"]);
+assert.deepEqual(readOnlyNames, ["read_file", "glob", "grep", "list_file", "tree", "webfetch", "websearch"]);
 
 const baseTools = await createTanStackTools();
 const baseNames = baseTools.map((t) => t.name).sort();
@@ -27,6 +27,8 @@ const subagentNames = new Set(subagentTools.map((t) => t.name));
 for (const name of readOnlyNames) {
   assert.ok(subagentNames.has(name), `missing subagent tool: ${name}`);
 }
+assert.ok(subagentNames.has("webfetch"), "missing subagent tool: webfetch");
+assert.ok(subagentNames.has("websearch"), "missing subagent tool: websearch");
 assert.ok(!subagentNames.has("run_command"));
 assert.ok(!subagentNames.has("write_file"));
 assert.ok(!subagentNames.has("task"));

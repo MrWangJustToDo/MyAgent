@@ -17,7 +17,7 @@ import type { ManagedAgent } from "../../managers/managed-agent.js";
 
 /**
  * Creates the restricted read-only tool set for exploration subagents.
- * These tools allow exploration but not modification.
+ * Includes local fs exploration plus websearch/webfetch for external docs.
  */
 export const createSubagentTools = (managed: ManagedAgent): ToolsRecord => {
   return {

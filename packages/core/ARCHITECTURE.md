@@ -251,7 +251,7 @@ Core **declares** which tools need approval and **owns agent status** during the
 
 Tools with approval required (`defineServerTool` in `tanstack/define-tool.ts`):
 
-- `write_file`, `edit_file`, `delete_file`, `copy_file`, `move_file`
+- `write_file`, `edit_file`, `delete_file`
 - `run_command`
 
 Helper (available but not used by app today):

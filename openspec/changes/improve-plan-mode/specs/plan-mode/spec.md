@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Read-only tooling while planning
-While phase is `planning` or `ready`, the system SHALL exclude mutate tools (`write_file`, `edit_file`, `delete_file`, `copy_file`, `move_file`, `kill_command`) from the LLM tool list, block MCP tools, and allow `run_command` only when the command matches the read-only allowlist. The system SHALL keep the `task` tool available so the agent can spawn read-only exploration subagents. A before-tool middleware SHALL skip forbidden tools with an error result if invoked.
+While phase is `planning` or `ready`, the system SHALL exclude mutate tools (`write_file`, `edit_file`, `delete_file`, `kill_command`) from the LLM tool list, block MCP tools, and allow `run_command` only when the command matches the read-only allowlist. The system SHALL keep the `task` tool available so the agent can spawn read-only exploration subagents. A before-tool middleware SHALL skip forbidden tools with an error result if invoked.
 
 #### Scenario: Write tool unavailable
 - **WHEN** phase is `planning` and the model would call `write_file`

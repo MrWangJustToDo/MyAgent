@@ -14,7 +14,6 @@ test("formatDuration formats millisecond, second, and minute durations", () => {
 test("formatToolInput renders tool-specific summaries", () => {
   assert.equal(formatToolInput({ path: "src/index.ts", offset: 3, limit: 4 }, "read_file"), "src/index.ts lines 3-6");
   assert.equal(formatToolInput({ pattern: "TODO", path: "src" }, "grep"), '"TODO" in src');
-  assert.equal(formatToolInput({ sourcePath: "a.ts", targetPath: "b.ts" }, "move_file"), "a.ts → b.ts");
 });
 
 test("formatToolOutput renders common tool results", () => {

@@ -32,6 +32,7 @@ When to use:
 - You need confirmation on a significant decision before proceeding
 - Multiple valid approaches exist and user preference matters
 - You need specific information (e.g. a file path, config value, preference)
+- In plan mode: ask 2–4 clarifying questions (prefer options) before calling create_plan if needed
 
 Do NOT use this tool for:
 - Rhetorical questions or status updates (just say them in your response)

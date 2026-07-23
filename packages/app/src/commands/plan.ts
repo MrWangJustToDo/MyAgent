@@ -2,8 +2,8 @@ import { registerCommand } from "./registry.js";
 
 registerCommand({
   name: "plan",
-  description: "Toggle plan mode, execute a ready plan, or show status",
-  usage: "/plan [execute|cancel|status]",
+  description: "Toggle plan mode, execute/save/load plans, or show status",
+  usage: "/plan [execute|cancel|status|save [name]|load <name>|list]",
   immediate: false,
   execute: async (args, ctx) => {
     const agent = ctx.getAgent();
@@ -11,7 +11,10 @@ registerCommand({
       return { ok: false, error: "Agent not initialized" };
     }
 
-    const sub = args.trim().toLowerCase();
+    const trimmed = args.trim();
+    const [subRaw = "", ...rest] = trimmed.split(/\s+/);
+    const sub = subRaw.toLowerCase();
+    const nameArg = rest.join(" ").trim();
 
     if (sub === "status") {
       const state = agent.getPlanModeState();
@@ -32,7 +35,7 @@ registerCommand({
           : state.phase === "executing"
             ? " — /plan cancel to pause"
             : state.phase === "planning"
-              ? " — send a task, then wait for ## Plan"
+              ? " — explore with task/read tools, then create_plan (or ## Plan)"
               : "";
       return {
         ok: true,
@@ -62,16 +65,46 @@ registerCommand({
       return { ok: true, message: parts.join(" ") };
     }
 
+    if (sub === "save") {
+      const result = await agent.savePlanToWorkspace(nameArg || undefined);
+      if (!result.ok) return { ok: false, error: result.error ?? "Save failed" };
+      return { ok: true, message: `Plan saved to ${result.path}` };
+    }
+
+    if (sub === "load") {
+      if (!nameArg) {
+        return { ok: false, error: "Usage: /plan load <name>" };
+      }
+      const result = await agent.loadPlanFromWorkspace(nameArg);
+      if (!result.ok) return { ok: false, error: result.error ?? "Load failed" };
+      return {
+        ok: true,
+        message: `Loaded ${result.path} (${result.stepCount ?? 0} steps) — ready. Run /plan execute to build.`,
+      };
+    }
+
+    if (sub === "list") {
+      const files = await agent.listWorkspacePlans();
+      if (files.length === 0) {
+        return { ok: true, message: "No saved plans in .agents/plans/" };
+      }
+      return { ok: true, message: `Saved plans:\n${files.map((f) => `- ${f}`).join("\n")}` };
+    }
+
     if (sub && sub !== "on" && sub !== "off" && sub !== "toggle") {
       return {
         ok: false,
-        error: "Usage: /plan | /plan execute | /plan cancel | /plan status",
+        error:
+          "Usage: /plan | /plan execute | /plan cancel | /plan status | /plan save [name] | /plan load <name> | /plan list",
       };
     }
 
     if (sub === "on") {
       agent.enablePlanMode();
-      return { ok: true, message: "Plan mode on — send a task to explore read-only, then output ## Plan" };
+      return {
+        ok: true,
+        message: "Plan mode on — explore read-only (prefer task), then create_plan when ready",
+      };
     }
     if (sub === "off") {
       agent.disablePlanMode();
@@ -80,7 +113,10 @@ registerCommand({
 
     const phase = agent.togglePlanMode();
     if (phase === "planning") {
-      return { ok: true, message: "Plan mode on — send a task to explore read-only, then output ## Plan" };
+      return {
+        ok: true,
+        message: "Plan mode on — explore read-only (prefer task), then create_plan when ready",
+      };
     }
     return { ok: true, message: "Plan mode off (plan todos cleared if any)" };
   },

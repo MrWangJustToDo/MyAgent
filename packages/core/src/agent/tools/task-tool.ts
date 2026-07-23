@@ -102,18 +102,20 @@ export const createTaskTool = ({ parentAgentId, manager }: TaskToolConfig) => {
 Use this tool when you need to:
 - Explore the codebase to find specific information
 - Research a question that requires reading multiple files
+- Look up current external docs or web information without polluting your context
 - Perform complex multi-step exploration without polluting your context
 
 The subagent:
 - Starts with fresh context (doesn't see your conversation history)
-- Has read-only tools (read_file, glob, grep, list_file, tree)
-- Cannot modify files or spawn additional subagents
+- Has read-only tools: read_file, glob, grep, list_file, tree, websearch, webfetch
+- Cannot modify files, run shell commands, or spawn additional subagents
 - Returns only a summary of its findings
 
 Example use cases:
 - "Find what testing framework this project uses"
 - "List all API endpoints in the codebase"
 - "Search for how error handling is implemented"
+- "Look up the latest docs for library X and summarize the API"
 - "Explore the authentication module structure"`,
 
     inputSchema: z.object({

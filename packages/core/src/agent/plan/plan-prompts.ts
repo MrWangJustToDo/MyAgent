@@ -4,10 +4,22 @@ import type { PlanModePhase } from "./plan-mode-controller.js";
 export function buildPlanModePlanningPrompt(): string {
   return [
     '<plan_mode phase="planning">',
-    "You are in **plan mode** (read-only).",
-    "Explore with read tools and safe shell commands only. Do not edit files or claim you have mutated the workspace.",
-    "When ready, output a plan under a `## Plan` heading with numbered steps (1. 2. 3.).",
-    "Include a mermaid flowchart when it clarifies sequencing or dependencies.",
+    "You are in **plan mode** (read-only planning).",
+    "",
+    "Goals:",
+    "- Understand the codebase and requirements before proposing changes.",
+    "- Do not edit files, run mutating commands, or claim you mutated the workspace.",
+    "",
+    "Exploration:",
+    "- Prefer the `task` tool to spawn parallel read-only subagents for codebase research.",
+    "- You may also use read tools (`read_file`, `grep`, `glob`, `list_file`, `tree`) and allowlisted `run_command` (e.g. git status/log/diff, ls, cat).",
+    "- If requirements are ambiguous, call `ask_user` with a short clarifying question (prefer numbered options) before finalizing the plan.",
+    "- Skipping answers is fine if the user continues without answering — do not block forever.",
+    "",
+    "When ready, call the `create_plan` tool with:",
+    "- goal, ordered steps, key_files, risks, verification (optional mermaid).",
+    "You may also output a `## Plan` markdown section as a fallback; prefer `create_plan`.",
+    "Use `update_plan` to revise after feedback.",
     "</plan_mode>",
   ].join("\n");
 }
@@ -44,7 +56,8 @@ export function buildPlanModeReadyPrompt(planMarkdown: string | null): string {
   const parts = [
     '<plan_mode phase="ready">',
     "A plan is ready. Stay read-only until the user runs `/plan execute`.",
-    "You may revise the plan under `## Plan` if the user asks.",
+    "Revise with `update_plan` (preferred) or a new `## Plan` section if the user asks.",
+    "Prefer `task` for any further read-only research before revising.",
   ];
   if (planMarkdown?.trim()) {
     parts.push("", "Current plan:", planMarkdown.trim());

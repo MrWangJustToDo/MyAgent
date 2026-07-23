@@ -4,6 +4,7 @@ import { ExtensionConfirm } from "../components/ExtensionConfirm.js";
 import { ExtensionWidget } from "../components/ExtensionWidget.js";
 import { FullBox } from "../components/FullBox.js";
 import { MessageList } from "../components/MessageList.js";
+import { PlanReadyBanner } from "../components/PlanReadyBanner.js";
 import { Spinner } from "../components/Spinner.js";
 import { SubagentPanel } from "../components/SubagentPanel.js";
 import { WorkspacePanel } from "../components/WorkspacePanel.js";
@@ -129,6 +130,7 @@ export const Agent = () => {
           <Content />
           {confirm && <ExtensionConfirm confirm={confirm} />}
           {widgets.length > 0 && <ExtensionWidget widgets={widgets} />}
+          <PlanReadyBanner />
           <Footer status={status} queuedMessages={queuedMessages} />
         </>
       )}

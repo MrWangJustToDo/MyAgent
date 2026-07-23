@@ -20,6 +20,17 @@ export {
   getPlanModeToolExcludeSet,
   isMcpToolName,
   isPlanModeForbiddenTool,
+  PLAN_AUTHORING_TOOL_NAMES,
   PLAN_MODE_EXCLUDED_TOOL_NAMES,
 } from "./plan-tools.js";
+export { formatStructuredPlanMarkdown, stepsFromTexts, type StructuredPlanInput } from "./plan-format.js";
+export {
+  PLAN_STORE_DIR,
+  listPlanFiles,
+  loadPlanFile,
+  planFilePath,
+  savePlanFile,
+  slugifyPlanName,
+} from "./plan-store.js";
+
 export { createPlanModeMiddleware, type PlanModeMiddlewareDeps } from "./plan-mode-middleware.js";

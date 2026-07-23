@@ -5,6 +5,7 @@ import { toRaw } from "reactivity-store";
 import { dispatchCommand } from "../commands";
 import { clipboardImageFilename } from "../utils/attachment-hash.js";
 import { isModifiedEnter } from "../utils/keyboard-labels.js";
+import { togglePlanModeWithFeedback } from "../utils/plan-mode-toggle.js";
 
 import { useAgent } from "./use-agent.js";
 import { useSelect } from "./use-select.js";
@@ -188,6 +189,14 @@ export function useAgentKeybindings({
       // Workspace panel open: skip all normal-mode input handlers
       if (useWorkspaceView.getReadonlyState().view === "workspace") return;
 
+      if (inputKey.tab && inputKey.shift) {
+        // Shift+Tab toggles plan mode (Cursor-style). Do not treat as autocomplete accept.
+        if (isLoading) return;
+        togglePlanModeWithFeedback(getAgent(), (message, level) => {
+          inputActions.setInputFeedback(message, level);
+        });
+        return;
+      }
       if (inputKey.tab) {
         if (isLoading) return;
         acceptAutocomplete(true);

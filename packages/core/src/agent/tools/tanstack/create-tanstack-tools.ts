@@ -21,16 +21,17 @@ export const SUBAGENT_EXCLUDED_TOOL_NAMES = new Set([
   "write_file",
   "edit_file",
   "delete_file",
-  "copy_file",
-  "move_file",
   "task",
   "todo",
   "ask_user",
+  "create_plan",
+  "update_plan",
   "list_skills",
   "load_skill",
 ]);
 
-const READ_ONLY_TOOL_NAMES = ["read_file", "glob", "grep", "list_file", "tree"] as const;
+/** Default exploration subagent tools (read-only fs + web research + begin_summary). */
+const SUBAGENT_TOOL_NAMES = ["read_file", "glob", "grep", "list_file", "tree", "webfetch", "websearch"] as const;
 
 // ============================================================================
 // TanStack tool arrays
@@ -64,7 +65,7 @@ export async function createTanStackTools(
   return toolsToArray(toolRecord) as ServerTool[];
 }
 
-/** Names of read-only tools included in subagent preview sets. */
+/** Names of tools included in the default exploration subagent set (excluding begin_summary). */
 export function getReadOnlyTanStackToolNames(): readonly string[] {
-  return READ_ONLY_TOOL_NAMES;
+  return SUBAGENT_TOOL_NAMES;
 }

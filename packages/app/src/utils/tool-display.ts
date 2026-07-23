@@ -86,13 +86,27 @@ export function getInlineSummary(part: ToolCallPart, toolName: string): string |
     }
     case "delete_file":
       return "deleted";
-    case "move_file":
-    case "copy_file":
-      return "done";
     case "todo": {
       const stats = output.stats as { total?: number; completed?: number } | undefined;
       if (stats) return `${stats.completed ?? 0}/${stats.total ?? 0} done`;
       return null;
+    }
+    case "create_plan":
+    case "update_plan": {
+      const stepCount = output.stepCount as number | undefined;
+      if (typeof stepCount === "number") return `${stepCount} steps`;
+      return output.ok === false ? "failed" : "ready";
+    }
+    case "websearch": {
+      const results = output.results as unknown[] | undefined;
+      if (!results) return null;
+      return results.length === 0 ? "no results" : `${results.length} result${results.length !== 1 ? "s" : ""}`;
+    }
+    case "webfetch": {
+      const truncated = output.truncated === true;
+      const contentType = typeof output.contentType === "string" ? output.contentType : null;
+      if (contentType) return truncated ? `${contentType} (truncated)` : contentType;
+      return truncated ? "truncated" : "fetched";
     }
     case "tree": {
       const totalEntries = output.totalEntries as number | undefined;

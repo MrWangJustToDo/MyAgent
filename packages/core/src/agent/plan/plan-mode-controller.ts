@@ -1,4 +1,5 @@
 import { extractDoneSteps, extractPlan, type PlanStep } from "./extract-plan.js";
+import { formatStructuredPlanMarkdown, stepsFromTexts, type StructuredPlanInput } from "./plan-format.js";
 import { buildPlanExecuteSteerMessage } from "./plan-prompts.js";
 
 import type { AgentEventType } from "../../managers/agent-event-bus.js";
@@ -148,6 +149,31 @@ export class PlanModeController {
   }
 
   /**
+   * Apply a structured plan from `create_plan` / `update_plan`.
+   * Transitions `planning` → `ready` when steps are present.
+   */
+  applyStructuredPlan(input: StructuredPlanInput): { ok: boolean; error?: string; stepCount?: number } {
+    if (this.phase !== "planning" && this.phase !== "ready") {
+      return {
+        ok: false,
+        error: `Plan tools only work in planning/ready (current: ${this.phase})`,
+      };
+    }
+
+    const steps = stepsFromTexts(input.steps);
+    if (steps.length === 0) {
+      return { ok: false, error: "Plan must include at least one step" };
+    }
+    if (!input.goal.trim()) {
+      return { ok: false, error: "Plan goal is required" };
+    }
+
+    const planMarkdown = formatStructuredPlanMarkdown({ ...input, steps: steps.map((s) => s.text) });
+    this.applyPlanArtifact(planMarkdown, steps);
+    return { ok: true, stepCount: this.steps.length };
+  }
+
+  /**
    * After an assistant turn: extract plan in planning, or apply [DONE:n] while executing.
    */
   onAssistantText(text: string): void {
@@ -156,28 +182,59 @@ export class PlanModeController {
     if (this.phase === "planning" || this.phase === "ready") {
       const extracted = extractPlan(text);
       if (!extracted) return;
-
-      this.planMarkdown = extracted.planMarkdown;
-      this.steps = extracted.steps;
-      const { seeded, skippedDueToExisting } = this.seedTodosFromSteps({ force: false });
-      this.preservedExistingTodos = skippedDueToExisting;
-
-      if (this.phase === "planning") {
-        this.phase = "ready";
-        this.deps.emitEvent("plan:ready", {
-          phase: this.phase,
-          stepCount: this.steps.length,
-          preservedExistingTodos: skippedDueToExisting,
-          todosSeeded: seeded,
-        });
-        this.deps.onPhaseChange?.();
-      }
+      this.applyPlanArtifact(extracted.planMarkdown, extracted.steps);
       return;
     }
 
     if (this.phase === "executing") {
       this.applyDoneMarkers(text);
     }
+  }
+
+  /** Shared path for tool + markdown plan artifacts. */
+  applyPlanArtifact(planMarkdown: string, steps: PlanStep[]): void {
+    if (steps.length === 0) return;
+    if (this.phase !== "planning" && this.phase !== "ready") return;
+
+    this.planMarkdown = planMarkdown;
+    this.steps = steps;
+    const { seeded, skippedDueToExisting } = this.seedTodosFromSteps({ force: false });
+    this.preservedExistingTodos = skippedDueToExisting;
+
+    if (this.phase === "planning") {
+      this.phase = "ready";
+      this.deps.emitEvent("plan:ready", {
+        phase: this.phase,
+        stepCount: this.steps.length,
+        preservedExistingTodos: skippedDueToExisting,
+        todosSeeded: seeded,
+      });
+      this.deps.onPhaseChange?.();
+    } else {
+      // Revise while already ready — notify UI without re-emitting plan:ready.
+      this.deps.onPhaseChange?.();
+    }
+  }
+
+  /**
+   * Load markdown into plan state (enables planning first if off).
+   * Used by `/plan load`.
+   */
+  loadPlanMarkdown(markdown: string): { ok: boolean; error?: string; stepCount?: number } {
+    if (this.phase === "off") {
+      this.enable();
+    }
+    if (this.phase !== "planning" && this.phase !== "ready") {
+      return { ok: false, error: `Cannot load plan while phase is "${this.phase}"` };
+    }
+
+    const extracted = extractPlan(markdown);
+    if (!extracted) {
+      return { ok: false, error: "File does not contain a ## Plan section with numbered steps" };
+    }
+
+    this.applyPlanArtifact(extracted.planMarkdown, extracted.steps);
+    return { ok: true, stepCount: this.steps.length };
   }
 
   /** @returns seed outcome for ready vs execute flows */

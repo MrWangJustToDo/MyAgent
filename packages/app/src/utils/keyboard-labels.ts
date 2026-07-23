@@ -56,6 +56,7 @@ export const KeyLabel = {
   ctrlU: "Ctrl+U",
   ctrlV: "Ctrl+V",
   shiftEnter: "Shift+Enter",
+  shiftTab: "Shift+Tab",
 } as const;
 
 export type KeyLabelId = keyof typeof KeyLabel;
@@ -91,7 +92,7 @@ export function approveDenyLabel(): string {
 export function headerShortcutTips(): ReadonlyArray<{ key: string; desc: string }> {
   return [
     { key: KeyLabel.slash, desc: "for commands" },
-    { key: "/plan", desc: "plan mode" },
+    { key: KeyLabel.shiftTab, desc: "plan mode" },
     { key: KeyLabel.ctrlE, desc: "workspace" },
     { key: KeyLabel.ctrlT, desc: "task panel" },
     { key: KeyLabel.ctrlV, desc: "paste image" },

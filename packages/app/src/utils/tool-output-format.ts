@@ -157,7 +157,7 @@ function formatEditFileOutput(output: EditFileOutput): string {
 
 function formatGlobOutput(output: GlobOutput): string {
   const { files } = output;
-  if (files.length === 0) return "No files found";
+  if (!files || files.length === 0) return "No files found";
 
   const maxShow = 5;
   const shown = files.slice(0, maxShow);
@@ -172,7 +172,7 @@ function formatGlobOutput(output: GlobOutput): string {
 
 function formatGrepOutput(output: GrepOutput): string {
   const { matches } = output;
-  if (matches.length === 0) return "No matches found";
+  if (!matches || matches.length === 0) return "No matches found";
 
   const maxShow = 5;
   const shown = matches.slice(0, maxShow);
@@ -266,6 +266,27 @@ export function formatToolOutput(output: unknown, toolName?: string): string {
         return formatTodoOutput(out as unknown as TodoOutput);
       case "task":
         return formatTaskOutput(out as unknown as TaskOutput);
+      case "create_plan":
+      case "update_plan": {
+        const msg = typeof out.message === "string" ? out.message : "";
+        return msg;
+      }
+      case "websearch": {
+        const results = Array.isArray(out.results) ? out.results : [];
+        const query = typeof out.query === "string" ? out.query : "";
+        if (results.length === 0) return query ? `No results for ${query}` : "No results";
+        const lines = results.slice(0, 5).map((r) => {
+          const row = r as { title?: string; url?: string };
+          return `- ${row.title ?? "result"}${row.url ? ` (${row.url})` : ""}`;
+        });
+        return [`Search: ${query}`, ...lines].join("\n");
+      }
+      case "webfetch": {
+        const url = typeof out.url === "string" ? out.url : "";
+        const content = typeof out.content === "string" ? out.content : "";
+        const preview = content.length > 400 ? `${content.slice(0, 400)}...` : content;
+        return url ? `${url}\n${preview}` : preview;
+      }
       case "ask_user":
         return formatAskUserOutput(
           out as unknown as { question?: string; answer?: string; hasOptions?: boolean; message?: string }

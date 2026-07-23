@@ -88,13 +88,6 @@ function formatTreeInput(input: Record<string, unknown>): string {
   return parts.join(" ");
 }
 
-function formatMoveOrCopyInput(input: Record<string, unknown>): string {
-  const source = input.sourcePath as string | undefined;
-  const target = input.targetPath as string | undefined;
-  if (!source || !target) return "";
-  return `${source} → ${target}`;
-}
-
 function formatLoadSkillInput(input: Record<string, unknown>): string {
   const name = input.name as string | undefined;
   return name ?? "";
@@ -125,6 +118,14 @@ function formatAskUserInput(input: Record<string, unknown>): string {
   return question ?? "";
 }
 
+function formatCreatePlanInput(input: Record<string, unknown>): string {
+  const goal = typeof input.goal === "string" ? input.goal : "";
+  const steps = Array.isArray(input.steps) ? input.steps.length : 0;
+  if (!goal) return steps > 0 ? `${steps} steps` : "";
+  const short = goal.length > 60 ? `${goal.slice(0, 57)}...` : goal;
+  return steps > 0 ? `${short} (${steps} steps)` : short;
+}
+
 /** Format tool input for display based on tool name. */
 export function formatToolInput(input: unknown, toolName?: string): string {
   if (input === undefined || input === null) return "";
@@ -151,18 +152,20 @@ export function formatToolInput(input: unknown, toolName?: string): string {
       case "todo":
         return formatTodoInput(obj);
       case "web_search":
+      case "websearch":
         return formatWebSearchInput(obj);
       case "web_fetch":
+      case "webfetch":
         return formatWebFetchInput(obj);
       case "tree":
         return formatTreeInput(obj);
-      case "move_file":
-      case "copy_file":
-        return formatMoveOrCopyInput(obj);
       case "load_skill":
         return formatLoadSkillInput(obj);
       case "ask_user":
         return formatAskUserInput(obj);
+      case "create_plan":
+      case "update_plan":
+        return formatCreatePlanInput(obj);
       case "list_skills":
         return "";
       default:

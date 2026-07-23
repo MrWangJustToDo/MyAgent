@@ -225,9 +225,15 @@ export const Help = () => {
           </Box>
           <Box>
             <Box width={28}>
+              <Text color={COLORS.success}>{KeyLabel.shiftTab}</Text>
+            </Box>
+            <Text>Toggle plan mode</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
               <Text color={COLORS.success}>/plan</Text>
             </Box>
-            <Text>Toggle plan mode (read-only planning)</Text>
+            <Text>Toggle plan mode (read-only; task exploration allowed)</Text>
           </Box>
           <Box>
             <Box width={28}>
@@ -240,6 +246,24 @@ export const Help = () => {
               <Text color={COLORS.success}>/plan cancel</Text>
             </Box>
             <Text>Pause execution (back to ready, read-only)</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
+              <Text color={COLORS.success}>/plan save</Text>
+            </Box>
+            <Text>Save plan to .agents/plans/</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
+              <Text color={COLORS.success}>/plan load</Text>
+            </Box>
+            <Text>Load a saved plan into ready</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
+              <Text color={COLORS.success}>/plan list</Text>
+            </Box>
+            <Text>List saved plans</Text>
           </Box>
         </Box>
       </Box>

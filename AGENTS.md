@@ -451,11 +451,11 @@ Read-only planning → structured plan → user confirm → execute with TodoMan
 
 | Phase | Tools | Behavior |
 |-------|-------|----------|
-| `planning` / `ready` | Mutate tools + MCP hidden; `run_command` allowlisted | Agent explores and writes `## Plan` with numbered steps (optional mermaid) |
-| `executing` | Full tools restored | Agent follows plan; todos / `[DONE:n]` track progress |
-| `off` | Normal | Default |
+| `planning` / `ready` | Mutate tools + MCP hidden; `task` allowed; `create_plan` / `update_plan` offered; `run_command` allowlisted | Explore (prefer `task`), ask clarifying questions if needed, call `create_plan` (or `## Plan` fallback) |
+| `executing` | Full tools restored (`create_plan` / `update_plan` hidden) | Agent follows plan; todos / `[DONE:n]` track progress |
+| `off` | Normal (`create_plan` / `update_plan` hidden) | Default |
 
-**App:** `/plan` toggles planning; `/plan execute` starts execution from `ready`; `/plan cancel` pauses execution back to `ready`; `/plan status` reports phase. Footer shows `plan` / `plan ready · /plan execute` / `plan n/m`. Exiting plan mode clears plan-seeded todos; unrelated todos are preserved until execute.
+**App:** `Shift+Tab` or `/plan` toggles planning; `/plan execute` starts execution from `ready`; `/plan cancel` pauses execution back to `ready`; `/plan status` reports phase; `/plan save [name]`, `/plan load <name>`, `/plan list` persist under `.agents/plans/`. Footer shows `plan` / `plan ready · /plan execute` / `plan n/m`. When ready, a banner above the input also shows execute / revise / exit hints. Clarifying questions use `ask_user` during planning. Exiting plan mode clears plan-seeded todos; unrelated todos are preserved until execute.
 
 **Core:** `ManagedAgent.planMode` (`PlanModeController`), tool filter in `run-agent`, `createPlanModeMiddleware`, prompts via turn context. See `packages/core/src/agent/plan/`.
 
@@ -468,7 +468,7 @@ The project supports **subagents** — context-isolated agents spawned to handle
 | Feature | Behavior |
 |---------|----------|
 | Context | Fresh (starts with empty messages) |
-| Tools | Read-only: `read_file`, `glob`, `grep`, `list_file`, `tree`, plus marker `begin_summary` (no `run_command`) |
+| Tools | Read-only: `read_file`, `glob`, `grep`, `list_file`, `tree`, `websearch`, `webfetch`, plus marker `begin_summary` (no `run_command` / write tools) |
 | Return | Summary only to parent LLM context; UI keeps a read-only UIMessage preview when `bridgeUI` is enabled |
 | Iteration Limit | 30 steps max |
 | Summary Limit | 5000 characters max |
@@ -637,6 +637,7 @@ createNodeEnv({ rootPath: "/path", mode: "native" });   // No sandbox
 | `Ctrl+U` | Clear input | Clear input | - |
 | `Ctrl+A` | Select all | Select all | - |
 | `Ctrl+V` | Paste image | Paste image | - |
+| `Shift+Tab` | - | Toggle plan mode | - |
 | `y` | - | - | Approve (when input empty) |
 | `n` | - | - | Enter deny-reason mode |
 | `↑/↓` | - | Navigate history / autocomplete | Navigate autocomplete |
