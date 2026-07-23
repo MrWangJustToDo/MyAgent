@@ -20,6 +20,8 @@ export { emitAgentEvent } from "./managers/emit-agent-event.js";
 export { AgentLog } from "./agent/agent-log/agent-log.js";
 export { AgentUIChannel } from "./managers/agent-ui-channel.js";
 export { AgentChatController } from "./managers/agent-chat-controller.js";
+export { PendingMessageQueue } from "./agent/utils/pending-message-queue.js";
+export type { QueueMode } from "./agent/utils/pending-message-queue.js";
 export { ManagedAgent } from "./managers/managed-agent.js";
 export { RunCoordinator } from "./managers/run-coordinator.js";
 export { createLocalConnect } from "./connect/local-connect.js";

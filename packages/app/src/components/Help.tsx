@@ -3,9 +3,20 @@ import { Box, Text } from "ink";
 
 import { useConfig } from "../hooks/use-config.js";
 import { COLORS } from "../theme/colors.js";
+import {
+  approveDenyLabel,
+  exitAbortLabel,
+  followUpEnterLabel,
+  KeyLabel,
+  newlineEnterLabel,
+} from "../utils/keyboard-labels.js";
 
 export const Help = () => {
   const config = useConfig((s) => s.config);
+  const modifiedEnter = followUpEnterLabel();
+  const newlineChord = newlineEnterLabel();
+  const yn = approveDenyLabel();
+  const exitAbort = exitAbortLabel();
 
   return (
     <Box flexDirection="column" padding={1}>
@@ -183,22 +194,34 @@ export const Help = () => {
         </Text>
         <Box flexDirection="column" paddingLeft={2}>
           <Box>
-            <Box width={14}>
-              <Text color={COLORS.success}>Enter</Text>
+            <Box width={28}>
+              <Text color={COLORS.success}>{KeyLabel.enter}</Text>
             </Box>
-            <Text>Submit prompt</Text>
+            <Text>Submit prompt (while running: queue steer)</Text>
           </Box>
           <Box>
-            <Box width={14}>
-              <Text color={COLORS.success}>Y / N</Text>
+            <Box width={28}>
+              <Text color={COLORS.success}>{newlineChord}</Text>
+            </Box>
+            <Text>Insert newline when idle</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
+              <Text color={COLORS.success}>{modifiedEnter}</Text>
+            </Box>
+            <Text>Queue follow-up while running</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
+              <Text color={COLORS.success}>{yn}</Text>
             </Box>
             <Text>Approve / Deny tool execution</Text>
           </Box>
           <Box>
-            <Box width={14}>
-              <Text color={COLORS.success}>Ctrl+C / Esc</Text>
+            <Box width={28}>
+              <Text color={COLORS.success}>{exitAbort}</Text>
             </Box>
-            <Text>Exit</Text>
+            <Text>Exit / abort</Text>
           </Box>
         </Box>
       </Box>

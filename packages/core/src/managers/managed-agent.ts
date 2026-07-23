@@ -160,6 +160,8 @@ export class ManagedAgent {
   private agentConfig: AgentConfig;
   streamStartedAt = 0;
   lastStreamDurationMs = 0;
+  /** When true, next {@link prepareForRun} skips memory prefetch / prompt:submit (steer / tool continue). */
+  private prepareAsContinuation = false;
   systemPrompt = "";
   mcpManager: McpManager | null = null;
   skillRegister: SkillRegistry | null = null;
@@ -639,6 +641,18 @@ export class ManagedAgent {
   // ============================================================================
   // Run orchestration (ManagedAgent coordinates services)
   // ============================================================================
+
+  /** Mark the next prepareForRun as a mid-turn continuation (queued steer / tool phase). */
+  markNextPrepareAsContinuation(): void {
+    this.prepareAsContinuation = true;
+  }
+
+  /** Consume and clear the continuation flag for prepareForRun. */
+  consumePrepareAsContinuation(): boolean {
+    const value = this.prepareAsContinuation;
+    this.prepareAsContinuation = false;
+    return value;
+  }
 
   async prepareForRun(options: {
     prompt?: string;

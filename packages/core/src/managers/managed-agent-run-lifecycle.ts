@@ -36,6 +36,8 @@ export interface RunLifecycleHost {
   recordStreamDuration: () => void;
   captureTurnContextSnapshot: () => Promise<void>;
   clearTurnContext: () => void;
+  /** Optional: mid-run steer / tool-phase continuation skips one-shot prepare work. */
+  consumePrepareAsContinuation?: () => boolean;
 }
 
 export async function prepareManagedAgentForRun(
@@ -61,7 +63,8 @@ export async function prepareManagedAgentForRun(
   });
   host.run.resetReactiveCompactRetries();
 
-  const isToolContinuation = isToolContinuationPrepare(host.status, options.messages);
+  const isToolContinuation =
+    isToolContinuationPrepare(host.status, options.messages) || host.consumePrepareAsContinuation?.() === true;
   if (!isToolContinuation || host.streamStartedAt === 0) {
     host.streamStartedAt = Date.now();
   }

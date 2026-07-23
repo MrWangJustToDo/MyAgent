@@ -28,6 +28,9 @@ interface UseAgentInputControlsOptions {
   initLoading: boolean;
   messages: UIMessage[];
   sendMessage: UseAgentChatReturn["sendMessage"];
+  steer: UseAgentChatReturn["steer"];
+  followUp: UseAgentChatReturn["followUp"];
+  queuedMessages: UseAgentChatReturn["queuedMessages"];
   stop: UseAgentChatReturn["stop"];
   addToolApprovalResponse: UseAgentChatReturn["addToolApprovalResponse"];
   addToolOutput: UseAgentChatReturn["addToolOutput"];
@@ -46,6 +49,9 @@ export function useAgentInputControls({
   initLoading,
   messages,
   sendMessage,
+  steer,
+  followUp,
+  queuedMessages: _queuedMessages,
   stop,
   addToolApprovalResponse,
   addToolOutput,
@@ -174,24 +180,38 @@ export function useAgentInputControls({
     return true;
   };
 
-  const handleNormalSubmit = async () => {
+  const handleNormalSubmit = async (behavior: "send" | "steer" | "followUp" = "send") => {
     commandOutputActions.dismiss();
     const { text: prompt, attachments } = inputActions.submit();
 
     if (prompt.startsWith("/")) {
+      if (behavior !== "send") {
+        inputActions.setInputError("Slash commands cannot be queued while the agent is running");
+        return;
+      }
       if (await dispatchCommand(prompt, commandCtx)) return;
       inputActions.setInputError(`Unknown command: ${prompt.split(" ")[0]}`);
       return;
     }
 
     if (!prompt && !attachments.length) return;
-    if (!isReady || isLoading) return;
+    if (!isReady) return;
 
-    if (attachments.length > 0) {
-      await sendMessage({ text: prompt, files: attachments });
-    } else {
-      await sendMessage(prompt);
+    const content = attachments.length > 0 ? { text: prompt, files: attachments } : prompt;
+
+    if (behavior === "steer") {
+      steer(content);
+      return;
     }
+    if (behavior === "followUp") {
+      followUp(content);
+      return;
+    }
+    if (isLoading) {
+      steer(content);
+      return;
+    }
+    await sendMessage(content);
   };
 
   useAgentKeybindings({

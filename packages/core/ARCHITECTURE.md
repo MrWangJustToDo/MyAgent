@@ -87,7 +87,7 @@ packages/app/src/adapter/create-agent.ts
 | API | File | Use |
 |-----|------|-----|
 | `ManagedAgent.initChat(manager, initialMessages?)` | `managers/agent-chat-controller.ts` | Main CLI chat session |
-| `AgentChatController.sendMessage` / `respondToToolApproval` | same | User turns + tool-phase continuation |
+| `AgentChatController.sendMessage` / `steer` / `followUp` / `respondToToolApproval` | same | User turns, mid-run queues, tool-phase continuation |
 | `agentManager.runAgentStream(agentId, input)` | `managers/run-agent.ts` | Core streaming entry |
 | `localConnect`, `createLocalConnect` | `connect/local-connect.ts` | Legacy / tests only |
 
@@ -278,6 +278,15 @@ managed.isToolNeedsApproval(toolName)  // managed-agent.ts
 | Resume | `respondToToolApproval()` — core re-runs while `shouldContinueAgentPump()` (approved execution or model follow-up after denial) |
 
 **Mixed tool batches** (e.g. `tree` + `run_command`): TanStack defers non-approval tools while approvals are pending. Core `pumpToolPhases()` loops `runAgentStream()` until `shouldContinueAgentPump()` is false — no `ChatClient.shouldAutoSend()`.
+
+**Steering / follow-up queues:** While a pump (or active status including approval wait) is in progress, `steer()` / `followUp()` enqueue user content without aborting. Drain points in `pumpToolPhases`:
+
+| API | When delivered |
+|-----|----------------|
+| `steer` | After tool execution finishes for the current batch, before the next LLM call |
+| `followUp` | Only when the agent would otherwise stop (no tool continuation) |
+
+Default drain mode is `one-at-a-time`. `stop()` / `clearMessages()` clear both queues. Mid-run injects call `markNextPrepareAsContinuation()` so prepare skips memory prefetch / `prompt:submit`.
 
 ### 4.4 Client tools (`ask_user`)
 

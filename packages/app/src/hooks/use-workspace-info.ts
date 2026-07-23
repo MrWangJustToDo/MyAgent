@@ -1,6 +1,7 @@
 import { getEnv } from "@my-agent/core";
 import { createState } from "reactivity-store";
 
+import { refreshKeyboardPlatform } from "../utils/keyboard-labels.js";
 import { fetchWorkspaceGitInfo } from "../utils/workspace-git-info";
 
 import type { WorkspaceGitInfo } from "../utils/workspace-git-info";
@@ -41,6 +42,7 @@ export const getWorkSpaceInfo = async () => {
     const rootPath = getEnv().rootPath;
     path = rootPath ? shortenPath(rootPath) : "";
     git = (await fetchWorkspaceGitInfo(rootPath)) || undefined;
+    await refreshKeyboardPlatform();
   } catch {
     void 0;
   }

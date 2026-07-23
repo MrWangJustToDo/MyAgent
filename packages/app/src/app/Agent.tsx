@@ -42,6 +42,9 @@ export const Agent = () => {
   const {
     messages,
     sendMessage,
+    steer,
+    followUp,
+    queuedMessages,
     isLoading,
     isReady,
     status,
@@ -75,6 +78,9 @@ export const Agent = () => {
     initLoading,
     messages,
     sendMessage,
+    steer,
+    followUp,
+    queuedMessages,
     stop,
     addToolApprovalResponse,
     addToolOutput,
@@ -123,7 +129,7 @@ export const Agent = () => {
           <Content />
           {confirm && <ExtensionConfirm confirm={confirm} />}
           {widgets.length > 0 && <ExtensionWidget widgets={widgets} />}
-          <Footer status={status} />
+          <Footer status={status} queuedMessages={queuedMessages} />
         </>
       )}
     </FullBox>

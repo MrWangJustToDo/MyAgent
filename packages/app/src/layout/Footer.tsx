@@ -19,10 +19,17 @@ import { useSelect } from "../hooks/use-select.js";
 import { useUserInput } from "../hooks/use-user-input.js";
 import { BG, COLORS } from "../theme/colors.js";
 import { formatDuration } from "../utils/format.js";
+import { approvalKeysHint, busyQueueHint, freeformSubmitHint, selectListHint } from "../utils/keyboard-labels.js";
 
-import type { AgentStatus, ManagedAgent } from "@my-agent/core";
+import type { AgentStatus, ManagedAgent, QueuedMessagesSnapshot } from "@my-agent/core";
 
-export const Footer = ({ status }: { status: AgentStatus }) => {
+export const Footer = ({
+  status,
+  queuedMessages,
+}: {
+  status: AgentStatus;
+  queuedMessages?: QueuedMessagesSnapshot;
+}) => {
   const allMcp = useAgent((s) => s.agent?.mcpManager?.getConnectedServers());
 
   const { mode, denyMode, freeformContext } = useInputMode((s) => ({
@@ -46,15 +53,15 @@ export const Footer = ({ status }: { status: AgentStatus }) => {
   const showFreeformInput = denyMode;
   const showSelectList = mode === "select";
   const freeformLabel = freeformContext === "deny" ? "Deny reason > " : "Answer > ";
-  const isInputEnabled =
-    mode === "normal"
-      ? displayStatus === "idle" ||
-        displayStatus === "completed" ||
-        displayStatus === "error" ||
-        displayStatus === "aborted" ||
-        displayStatus === "waiting" ||
-        displayStatus === "awaiting_user"
-      : true;
+  // Allow typing while the agent runs so users can queue steer / follow-up messages.
+  const isInputEnabled = mode === "normal" || mode === "approval" || denyMode || mode === "select";
+  const isAgentBusy =
+    displayStatus === "running" ||
+    displayStatus === "thinking" ||
+    displayStatus === "responding" ||
+    displayStatus === "compacting";
+  const steerCount = queuedMessages?.steer.length ?? 0;
+  const followUpCount = queuedMessages?.followUp.length ?? 0;
 
   return (
     <FullBox flexDirection="column" flexGrow={1} flexShrink={0} paddingY={1}>
@@ -77,6 +84,9 @@ export const Footer = ({ status }: { status: AgentStatus }) => {
         showSelectList={showSelectList}
         isMultiSelect={isMultiSelect}
         cursorOnFreeform={cursorOnFreeform}
+        isAgentBusy={isAgentBusy}
+        steerCount={steerCount}
+        followUpCount={followUpCount}
       />
 
       {/* Input */}
@@ -89,7 +99,7 @@ export const Footer = ({ status }: { status: AgentStatus }) => {
                 {freeformLabel}
               </Text>
             ) : (
-              <Text color={isInputEnabled ? COLORS.accent : COLORS.muted} bold>
+              <Text color={COLORS.accent} bold>
                 {" > "}
               </Text>
             )}
@@ -133,6 +143,9 @@ const ContextBar = ({
   showSelectList,
   isMultiSelect,
   cursorOnFreeform,
+  isAgentBusy,
+  steerCount,
+  followUpCount,
 }: {
   status: AgentStatus;
   isPendingApproval: boolean;
@@ -140,6 +153,9 @@ const ContextBar = ({
   showSelectList: boolean;
   isMultiSelect: boolean;
   cursorOnFreeform: boolean;
+  isAgentBusy: boolean;
+  steerCount: number;
+  followUpCount: number;
 }) => {
   // ManagedAgent mutates fields in place; useAgent primitive selectors stay stale.
   // Subscribe to agent state and read duration/error from the live agent ref.
@@ -217,25 +233,31 @@ const ContextBar = ({
         )}
 
         {/* Contextual shortcuts */}
+        {isAgentBusy && !isPendingApproval && !showFreeformInput && !showSelectList && (
+          <Text color={COLORS.muted} dimColor>
+            {busyQueueHint(steerCount, followUpCount)}
+          </Text>
+        )}
+        {(steerCount > 0 || followUpCount > 0) && !isAgentBusy && !isPendingApproval && (
+          <Text color={COLORS.primary} dimColor>
+            Queued: {steerCount > 0 ? `${steerCount} steer` : ""}
+            {steerCount > 0 && followUpCount > 0 ? ", " : ""}
+            {followUpCount > 0 ? `${followUpCount} follow-up` : ""}
+          </Text>
+        )}
         {isPendingApproval && !showFreeformInput && (
           <Text color={COLORS.warning} dimColor>
-            y: approve | n: deny
+            {approvalKeysHint()}
           </Text>
         )}
         {showFreeformInput && (
           <Text color={COLORS.warning} dimColor>
-            Submit: Enter | Cancel: Esc
+            {freeformSubmitHint()}
           </Text>
         )}
         {showSelectList && (
           <Text color={COLORS.primary} dimColor>
-            {isMultiSelect
-              ? cursorOnFreeform
-                ? "Up/Down | Space: toggle | →: edit answer | Enter: submit"
-                : "Up/Down | Space: toggle | Enter: submit"
-              : cursorOnFreeform
-                ? "Up/Down | →: edit answer | Enter: submit"
-                : "Up/Down | Enter: select"}
+            {selectListHint({ isMultiSelect, cursorOnFreeform })}
           </Text>
         )}
       </Box>

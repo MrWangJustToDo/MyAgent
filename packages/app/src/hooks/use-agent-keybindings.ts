@@ -4,6 +4,7 @@ import { toRaw } from "reactivity-store";
 
 import { dispatchCommand } from "../commands";
 import { clipboardImageFilename } from "../utils/attachment-hash.js";
+import { isModifiedEnter } from "../utils/keyboard-labels.js";
 
 import { useAgent } from "./use-agent.js";
 import { useSelect } from "./use-select.js";
@@ -44,7 +45,7 @@ interface UseAgentKeybindingsOptions {
   commandCtx: CommandContext;
   stop: UseAgentChatReturn["stop"];
   acceptAutocomplete: (triggerSubmit: boolean) => boolean;
-  handleNormalSubmit: () => void;
+  handleNormalSubmit: (behavior?: "send" | "steer" | "followUp") => void;
   submitAskUserAnswer: (answer: string) => void;
   addToolApprovalResponse: UseAgentChatReturn["addToolApprovalResponse"];
   /** Active extension UI confirm dialog (blocks normal input). */
@@ -115,12 +116,12 @@ export function useAgentKeybindings({
     }
 
     if (inputKey.ctrl && inputChar === "a") {
-      if (!isLoading && !pendingApproval) inputActions.setSelectAll(true);
+      if (!pendingApproval) inputActions.setSelectAll(true);
       return;
     }
 
     if (inputKey.ctrl && inputChar === "v") {
-      if (!isLoading && !pendingApproval) {
+      if (!pendingApproval) {
         adapter.readClipboardImage?.().then((result) => {
           if (result) {
             inputActions.addAttachment({
@@ -184,30 +185,38 @@ export function useAgentKeybindings({
   useInput(
     (inputChar, inputKey) => {
       if (handleExtensionConfirmKeys(inputChar, inputKey)) return;
-      if (isLoading) return;
       // Workspace panel open: skip all normal-mode input handlers
       if (useWorkspaceView.getReadonlyState().view === "workspace") return;
 
       if (inputKey.tab) {
+        if (isLoading) return;
         acceptAutocomplete(true);
         return;
       }
-      if (inputKey.return) {
-        // Shift+Enter (or Alt+Enter) inserts a newline instead of submitting,
-        // allowing multi-line input. Plain Enter still submits as before.
-        //
-        // Why check `meta` instead of `shift`: most terminals encode
-        // Shift+Enter as the 2-byte sequence `\x1b\r` (ESC + CR). The
-        // underlying parseKeypress maps `\x1b\r` to `name=return, meta=true`
-        // and never sets `shift` (only kitty-keyboard-protocol terminals emit
-        // `\x1b[13;2u`, which sets `shift`). Checking both covers both cases.
-        if (inputKey.shift || inputKey.meta) {
+      if (inputKey.return || (inputKey.ctrl && inputChar === "\n")) {
+        // While running: Enter = steer; Shift/Ctrl+Enter = follow-up.
+        // Idle: Shift+Enter = newline; Enter = submit.
+        // Note: Alt/Option+Enter is unreliable in macOS terminals — do not rely on it.
+        // Shift+Enter usually arrives as return+meta (ESC+CR), not return+shift.
+        if (isLoading) {
+          if (isModifiedEnter(inputChar, inputKey)) {
+            handleNormalSubmit("followUp");
+          } else if (inputKey.return) {
+            handleNormalSubmit("steer");
+          }
+          return;
+        }
+        if (isModifiedEnter(inputChar, inputKey)) {
           inputActions.append("\n");
           autocompleteActions.update(useUserInput.getReadonlyState().value);
           return;
         }
+        if (!inputKey.return) return;
         if (acceptAutocomplete(true)) return;
-        handleNormalSubmit();
+        handleNormalSubmit("send");
+        return;
+      }
+      if (isLoading && (inputKey.upArrow || inputKey.downArrow) && isAutocompleteVisible) {
         return;
       }
       if (inputKey.backspace) {
@@ -229,12 +238,14 @@ export function useAgentKeybindings({
         return;
       }
       if (inputKey.upArrow) {
+        if (isLoading) return;
         if (isAutocompleteVisible) autocompleteActions.selectPrev();
         else if (commandOutputActions.hasScroll()) commandOutputActions.scrollPrev();
         else inputActions.historyPrev();
         return;
       }
       if (inputKey.downArrow) {
+        if (isLoading) return;
         if (isAutocompleteVisible) autocompleteActions.selectNext();
         else if (commandOutputActions.hasScroll()) commandOutputActions.scrollNext();
         else inputActions.historyNext();

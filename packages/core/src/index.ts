@@ -46,6 +46,12 @@ export { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, resolveFinishStatus 
 export type { AgentStatus } from "./managers/agent-types.js";
 export { localConnect, createLocalConnect, type LocalConnectManager } from "./connect";
 export { AgentChatController, formatChatError } from "./managers/agent-chat-controller.js";
+export type {
+  QueuedMessageContent,
+  QueuedMessagesSnapshot,
+  QueueUpdateListener,
+} from "./managers/agent-chat-controller.js";
+export type { QueueMode } from "./agent/utils/pending-message-queue.js";
 
 // ============================================================================
 // Agent state (hosts / UI)

@@ -7,6 +7,7 @@ import { useStatic } from "../hooks/use-static";
 import { useWorkspaceInfo } from "../hooks/use-workspace-info";
 import { COLORS } from "../theme/colors.js";
 import { getGradientStops, interpolateColor } from "../utils/gradient.js";
+import { headerShortcutTips } from "../utils/keyboard-labels.js";
 import { type WorkspaceGitInfo } from "../utils/workspace-git-info.js";
 
 // ============================================================================
@@ -80,13 +81,7 @@ const Logo = () => {
 // Tips
 // ============================================================================
 
-const TIPS = [
-  { key: "/", desc: "for commands" },
-  { key: "Ctrl+E", desc: "workspace" },
-  { key: "Ctrl+T", desc: "task panel" },
-  { key: "Ctrl+V", desc: "paste image" },
-  { key: "Esc", desc: "to abort" },
-];
+const TIPS = headerShortcutTips();
 
 // ============================================================================
 // Git / workspace line

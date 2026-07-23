@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSize } from "../hooks/use-size.js";
 import { useWorkspaceView } from "../hooks/use-workspace-view.js";
 import { BG, COLORS } from "../theme/colors.js";
+import { workspacePanelHint } from "../utils/keyboard-labels.js";
 import { clearWorkspaceDiffCache } from "../utils/workspace-git-diff.js";
 import { fetchWorkspaceGitInfo, type WorkspaceGitInfo } from "../utils/workspace-git-info.js";
 import { ensureIndexVisible } from "../utils/workspace-scroll.js";
@@ -343,7 +344,7 @@ export const WorkspaceFileMode = () => {
 
       <Box flexShrink={0} height={FOOTER_LINES} paddingX={1}>
         <Text color={COLORS.muted} dimColor>
-          Tab preview/diff · ←→ focus · ↑↓ scroll · Enter open · R refresh · Ctrl+E/Esc close
+          {workspacePanelHint()}
         </Text>
       </Box>
     </Box>

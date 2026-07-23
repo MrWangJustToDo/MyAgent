@@ -12,7 +12,7 @@ import { getWorkSpaceInfo } from "./use-workspace-info.js";
 
 import type { AppConfig } from "../adapter/types.js";
 import type { Attachment } from "../types/attachment.js";
-import type { AgentChatController, AgentStatus, ManagedAgent } from "@my-agent/core";
+import type { AgentChatController, AgentStatus, ManagedAgent, QueuedMessagesSnapshot } from "@my-agent/core";
 import type { ContentPart, UIMessage } from "@tanstack/ai";
 
 // ============================================================================
@@ -27,6 +27,11 @@ export interface SendMessageContent {
 export interface UseAgentChatReturn {
   messages: UIMessage[];
   sendMessage: (content: string | SendMessageContent) => Promise<void>;
+  /** Queue a mid-run correction (after current tool batch). Idle → sendMessage. */
+  steer: (content: string | SendMessageContent) => void;
+  /** Queue a message for when the agent would stop. Idle → sendMessage. */
+  followUp: (content: string | SendMessageContent) => void;
+  queuedMessages: QueuedMessagesSnapshot;
   status: AgentStatus;
   isLoading: boolean;
   isReady: boolean;
@@ -80,6 +85,22 @@ function attachmentToContentPart(attachment: Attachment, imageIndex?: number): C
   };
 }
 
+function toChatContent(content: string | SendMessageContent): string | ContentPart[] {
+  if (typeof content === "string") return content;
+  if (!content.files?.length) return content.text;
+  const parts: ContentPart[] = [{ type: "text", content: content.text }];
+  let imageIndex = 0;
+  for (const file of content.files) {
+    if (file.type === "image") {
+      imageIndex += 1;
+      parts.push(attachmentToContentPart(file, imageIndex));
+    } else {
+      parts.push(attachmentToContentPart(file));
+    }
+  }
+  return parts;
+}
+
 function isAgentLoading(status: AgentStatus): boolean {
   return isActiveStatus(status) && status !== "waiting" && status !== "awaiting_user";
 }
@@ -96,6 +117,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   const [agent, setAgent] = useState<ManagedAgent | null>(null);
   const [chat, setChat] = useState<AgentChatController | null>(null);
   const [messages, setMessages] = useState<UIMessage[]>([]);
+  const [queuedMessages, setQueuedMessages] = useState<QueuedMessagesSnapshot>({ steer: [], followUp: [] });
 
   const forceUpdate = useForceUpdate({ time: 100 });
   const initIdRef = useRef(0);
@@ -186,9 +208,11 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     }, 60);
 
     const unsubMessages = chat.subscribeMessages(updateUi);
+    const unsubQueue = chat.subscribeQueuedMessages(setQueuedMessages);
 
     return () => {
       unsubMessages();
+      unsubQueue();
     };
   }, [chat, agent, forceUpdate]);
 
@@ -224,24 +248,25 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   const sendMessage = useCallback(
     async (content: string | SendMessageContent) => {
       if (!chat) return;
+      await chat.sendMessage(toChatContent(content));
+      forceUpdate();
+    },
+    [chat, forceUpdate]
+  );
 
-      if (typeof content === "string") {
-        await chat.sendMessage(content);
-      } else if (content.files?.length) {
-        const parts: ContentPart[] = [{ type: "text", content: content.text }];
-        let imageIndex = 0;
-        for (const file of content.files) {
-          if (file.type === "image") {
-            imageIndex += 1;
-            parts.push(attachmentToContentPart(file, imageIndex));
-          } else {
-            parts.push(attachmentToContentPart(file));
-          }
-        }
-        await chat.sendMessage(parts);
-      } else {
-        await chat.sendMessage(content.text);
-      }
+  const steer = useCallback(
+    (content: string | SendMessageContent) => {
+      if (!chat) return;
+      chat.steer(toChatContent(content));
+      forceUpdate();
+    },
+    [chat, forceUpdate]
+  );
+
+  const followUp = useCallback(
+    (content: string | SendMessageContent) => {
+      if (!chat) return;
+      chat.followUp(toChatContent(content));
       forceUpdate();
     },
     [chat, forceUpdate]
@@ -251,6 +276,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     chat?.clearMessages();
     messagesRef.current = [];
     setMessages([]);
+    setQueuedMessages({ steer: [], followUp: [] });
   }, [chat]);
 
   const addToolApprovalResponse = useCallback(
@@ -330,6 +356,9 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   return {
     messages,
     sendMessage,
+    steer,
+    followUp,
+    queuedMessages,
     allPendingApproval,
     allPendingAskUser,
     addToolOutput,

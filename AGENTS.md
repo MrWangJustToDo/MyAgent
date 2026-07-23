@@ -612,16 +612,19 @@ createNodeEnv({ rootPath: "/path", mode: "native" });   // No sandbox
 
 | Key | When Running | When Idle | When Approval Pending |
 |-----|--------------|-----------|----------------------|
-| `Esc` | Aborts current agent run | - | Cancel deny-reason input |
+| `Esc` | Aborts current agent run (clears queued messages) | - | Cancel deny-reason input |
 | `Ctrl+C` | Exits the app | Exits the app | Exits the app |
-| `Ctrl+U` | - | Clear input | - |
-| `Ctrl+A` | - | Select all | - |
-| `Ctrl+V` | - | Paste image | - |
+| `Ctrl+U` | Clear input | Clear input | - |
+| `Ctrl+A` | Select all | Select all | - |
+| `Ctrl+V` | Paste image | Paste image | - |
 | `y` | - | - | Approve (when input empty) |
 | `n` | - | - | Enter deny-reason mode |
 | `↑/↓` | - | Navigate history / autocomplete | Navigate autocomplete |
-| `Enter` | - | Submit input | Submit deny reason |
+| `Enter` | Queue steering message (after current tools) | Submit input | Submit deny reason |
+| `Shift+Enter` / `Ctrl+Enter` | Queue follow-up (when agent would stop) | Insert newline (`Shift+Enter`) | - |
 | `/...` | - | Slash commands | Slash commands |
+
+Note: In the TUI, modifier chords use **Ctrl** (not Cmd/⌘). `Option`/`Alt+Enter` is unreliable on macOS terminals — prefer `Shift+Enter` or `Ctrl+Enter` for follow-up. Shortcut labels are centralized in `packages/app/src/utils/keyboard-labels.ts`.
 
 ## File Structure
 

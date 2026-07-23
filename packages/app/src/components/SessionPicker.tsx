@@ -2,6 +2,7 @@ import { Box, Text, useInput } from "ink";
 import { useState } from "react";
 
 import { COLORS } from "../theme/colors.js";
+import { listNavHint } from "../utils/keyboard-labels.js";
 
 import type { SessionMeta } from "@my-agent/core";
 
@@ -40,7 +41,7 @@ export const SessionPicker = ({ sessions, onSelect, onCancel }: SessionPickerPro
         <Text bold color={COLORS.primary}>
           Resume Session
         </Text>
-        <Text dimColor> (↑↓ navigate, Enter select, Esc cancel)</Text>
+        <Text dimColor> {listNavHint("select", "cancel")}</Text>
       </Box>
 
       {sessions.slice(0, 10).map((session, i) => {

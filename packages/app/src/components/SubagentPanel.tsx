@@ -7,6 +7,7 @@ import { useSubagentPanel } from "../hooks/use-subagent-panel.js";
 import { SubagentPreviewView } from "../messages/SubagentPreviewView.js";
 import { COLORS } from "../theme/colors.js";
 import { formatUsageBrief } from "../utils/format-usage.js";
+import { KeyLabel, listNavHint, pressEscToReturnHint } from "../utils/keyboard-labels.js";
 
 type ActiveSubagent = ReturnType<typeof agentManager.getActiveSubagents>[number];
 
@@ -54,7 +55,7 @@ const SubagentPanelList = ({
           No active subagent tasks.
         </Text>
         <Text color={COLORS.muted} dimColor>
-          Press Esc to return.
+          {pressEscToReturnHint()}
         </Text>
       </Box>
     );
@@ -66,7 +67,7 @@ const SubagentPanelList = ({
         <Text bold color={COLORS.primary}>
           Running Tasks
         </Text>
-        <Text dimColor> (↑↓ navigate, Enter open, Esc back)</Text>
+        <Text dimColor> {listNavHint("open")}</Text>
       </Box>
       {tasks.map((task, i) => {
         const isSelected = i === selectedIndex;
@@ -121,7 +122,7 @@ const SubagentPanelDetail = ({ subagentId, onBack }: { subagentId: string; onBac
             · {usageLabel}
           </Text>
         )}
-        <Text dimColor> (Esc back to task list)</Text>
+        <Text dimColor> ({KeyLabel.esc} back to task list)</Text>
       </Box>
       <SubagentPreviewView subagentId={subagentId} />
     </Box>
