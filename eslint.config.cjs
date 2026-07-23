@@ -9,6 +9,7 @@ module.exports = [
       "dev",
       "scripts",
       "node_modules",
+      ".pnpm-store",
       ".output",
       ".wxt",
       "**/.wxt",

@@ -26,11 +26,11 @@ export const ToolInputView = ({
   const bodyWidth = width - 8;
   const isExecuting = isToolExecuting(part);
   const isTask = toolName === "task";
-  const taskInput = toolInput as { prompt?: string; description?: string; id?: string };
-  const { phase: taskPhase } = useTask({ id: isTask && taskInput?.id ? taskInput.id : "", taskId: part.id });
+  const taskInput = toolInput as { prompt?: string; description?: string };
+  const { phase: taskPhase } = useTask({ taskId: isTask ? part.id : "" });
 
   if (toolName === "task") {
-    if (!taskInput?.prompt || !taskInput.id || !isExecuting || taskPhase === "summary") return null;
+    if (!taskInput?.prompt || !isExecuting || taskPhase === "summary") return null;
     return <TaskToolInputView part={part} toolInput={toolInput} />;
   }
 

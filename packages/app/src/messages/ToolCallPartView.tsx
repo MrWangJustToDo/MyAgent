@@ -70,10 +70,8 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
   const isTask = toolName === "task";
   const isExecuting = isToolExecuting(part);
   const liveElapsedMs = useLiveElapsedMs(toolCallId, isExecuting, LIVE_DURATION_THRESHOLD_MS);
-  const taskInput = toolInput as { id?: string } | null;
   const { phase: taskPhase, usage: taskUsage } = useTask({
-    id: isTask && taskInput?.id ? taskInput.id : "",
-    taskId: part.id,
+    taskId: isTask ? part.id : "",
   });
   const showTaskSummaryStream = isTask && isExecuting && taskPhase === "summary";
 
@@ -94,7 +92,8 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
     isTask && hasOutput && part.output && typeof part.output === "object" && "usage" in part.output
       ? (part.output as { usage?: { inputTokens?: number; outputTokens?: number } }).usage
       : null;
-  const displayUsage = taskUsage ?? outputUsage ?? null;
+  // Completed tasks: prefer frozen tool-output usage over live ManagedAgent totals.
+  const displayUsage = hasOutput ? (outputUsage ?? taskUsage) : taskUsage;
 
   const parenParts: string[] = [];
   if (inlineSummary) parenParts.push(inlineSummary);

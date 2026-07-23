@@ -479,6 +479,11 @@ The project supports **subagents** — context-isolated agents spawned to handle
 
 `runSubagent({ bridgeUI: true })` attaches an `AgentUIChannel` on `ManagedAgent.ui` for the task panel (`Ctrl+T`).
 Headless runs (`bridgeUI: false`) consume the stream via `StreamProcessor` only and skip UI wiring.
+Task-tool subagents use `autoDestroy: false` so the preview stays available; after the stream ends,
+`statusController.finalizeDetachedRun()` marks them `completed`/`aborted` so `getActiveSubagents()`
+(and the Ctrl+T list) only shows truly active tasks.
+Task spawn ids are always auto-generated via `generateId("subagent", { exists })` — the model
+does not supply an `id` input.
 The default task tool row shows the current subagent exploration tool during analysis.
 After the subagent calls `begin_summary`, the UI switches to summary phase and streams final text
 via `emitStreamingChunk` into `StreamingOutputView` (current-turn parts only, like Vercel AI SDK).

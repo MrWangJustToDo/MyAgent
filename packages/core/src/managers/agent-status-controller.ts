@@ -240,6 +240,34 @@ export class AgentStatusController {
       this.deps.setStatus(this.deps.getError() ? "error" : "completed");
     }
   }
+
+  /**
+   * Finalize status for runs that do not go through {@link AgentChatController}
+   * (e.g. task subagents via {@link AgentUIChannel.consumeRun}).
+   *
+   * Without this, TanStack may leave status as `running` after the stream ends,
+   * so `getActiveSubagents` keeps listing finished tasks in the panel.
+   */
+  finalizeDetachedRun(messages: UIMessage[], options?: { aborted?: boolean }): void {
+    if (options?.aborted) {
+      this.onRunAbort();
+      return;
+    }
+
+    this.reconcileAfterRun(messages);
+
+    const status = this.deps.getStatus();
+    if (status === "waiting" || status === "awaiting_user") {
+      // Subagent run is over — do not linger as "active" for the task panel.
+      this.deps.setStatus(this.deps.getError() ? "error" : "completed");
+      return;
+    }
+    if (isTerminalStatus(status) || status === "completed" || status === "idle") return;
+
+    if (status === "running" || status === "thinking" || status === "responding" || status === "compacting") {
+      this.deps.setStatus(this.deps.getError() ? "error" : "completed");
+    }
+  }
 }
 
 export function createAgentStatusController(deps: AgentStatusControllerDeps): AgentStatusController {

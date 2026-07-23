@@ -180,6 +180,7 @@ export type {
 // ============================================================================
 
 export { generateId, generateShortId, createSequentialIdGenerator } from "./agent/utils.js";
+export type { GenerateIdOptions } from "./agent/utils.js";
 export { destroyAllCommandJobs } from "./agent/tools/util/command-job-registry.js";
 export { formatAgentStreamError } from "./agent/utils/assert-async-iterable.js";
 export {

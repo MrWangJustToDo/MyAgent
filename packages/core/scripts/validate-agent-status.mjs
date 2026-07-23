@@ -113,4 +113,35 @@ assert.equal(managed.status, "waiting");
   assert.equal(current, "aborted");
 }
 
+{
+  let current = "running";
+  const status = createAgentStatusController({
+    getStatus: () => current,
+    setStatus: (next) => {
+      current = next;
+    },
+    getError: () => "",
+    setError: () => {},
+    setPendingApprovalCount: () => {},
+  });
+  const doneMessages = [
+    {
+      id: "u1",
+      role: "user",
+      parts: [{ type: "text", content: "explore" }],
+    },
+    {
+      id: "a1",
+      role: "assistant",
+      parts: [{ type: "text", content: "done" }],
+    },
+  ];
+  status.finalizeDetachedRun(doneMessages);
+  assert.equal(current, "completed", "detached subagent run must leave completed, not running");
+
+  current = "running";
+  status.finalizeDetachedRun(doneMessages, { aborted: true });
+  assert.equal(current, "aborted");
+}
+
 console.log("agent-status validation passed");

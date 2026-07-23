@@ -6,19 +6,20 @@ import { useAgent } from "./use-agent.js";
 
 import type { ManagedAgent } from "@my-agent/core";
 
-const getManagerSubagent = (subId: string, taskId: string): ManagedAgent | undefined => {
+/** Look up the subagent for a parent task tool call via `parentTaskId`. */
+const getManagerSubagent = (taskId: string): ManagedAgent | undefined => {
   const id = useAgent.getReadonlyState().agent?.id;
-  if (!id) return;
+  if (!id || !taskId) return;
 
-  return agentManager.getSubagents(id).find((managed) => managed.id === subId || managed.parentTaskId === taskId);
+  return agentManager.getSubagents(id).find((managed) => managed.parentTaskId === taskId);
 };
 
-export const useSubAgents = ({ subId, taskId }: { subId: string; taskId: string }) => {
+export const useSubAgents = ({ taskId }: { taskId: string }) => {
   const parent = toRaw(useAgent((s) => s.agent));
-  const [agent, setAgent] = useState<ManagedAgent | undefined>(() => getManagerSubagent(subId, taskId));
+  const [agent, setAgent] = useState<ManagedAgent | undefined>(() => getManagerSubagent(taskId));
 
   useEffect(() => {
-    const existing = getManagerSubagent(subId, taskId);
+    const existing = getManagerSubagent(taskId);
     if (existing) {
       setAgent(existing);
       return;
@@ -35,7 +36,7 @@ export const useSubAgents = ({ subId, taskId }: { subId: string; taskId: string 
         }
       },
     });
-  }, [subId, taskId, parent]);
+  }, [taskId, parent]);
 
   return agent;
 };

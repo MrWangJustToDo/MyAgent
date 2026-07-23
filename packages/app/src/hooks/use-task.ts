@@ -58,8 +58,8 @@ const getTaskInfoFromAgent = (agent?: ManagedAgent) => {
   };
 };
 
-export const useTask = ({ id, taskId }: { id: string; taskId: string }) => {
-  const agent = useSubAgents({ subId: id, taskId });
+export const useTask = ({ taskId }: { taskId: string }) => {
+  const agent = useSubAgents({ taskId });
 
   const [info, setInfo] = useState(() => getTaskInfoFromAgent(agent));
   const [phase, setPhase] = useState<TaskRunPhase>(() => getTaskPhaseFromAgent(agent));
@@ -80,5 +80,5 @@ export const useTask = ({ id, taskId }: { id: string; taskId: string }) => {
     });
   }, [agent, agent?.id]);
 
-  return { ...info, agent, phase: id ? phase : ("tools" as const) };
+  return { ...info, agent, phase: taskId ? phase : ("tools" as const) };
 };

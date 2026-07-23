@@ -7,10 +7,8 @@ import { formatToolInput } from "../utils/format";
 
 import type { ToolCallPart } from "@tanstack/ai";
 
-export const TaskToolInputView = ({ part, toolInput }: { part: ToolCallPart; toolInput: unknown }) => {
-  const content = toolInput as { prompt?: string; description?: string; id: string };
-
-  const { allTools, total, agent } = useTask({ id: content.id, taskId: part.id });
+export const TaskToolInputView = ({ part }: { part: ToolCallPart; toolInput: unknown }) => {
+  const { allTools, total, agent } = useTask({ taskId: part.id });
 
   const currentTool = allTools?.at(-1);
   const toolName = currentTool ? currentTool.toolName : "";

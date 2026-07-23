@@ -128,6 +128,10 @@ export class AgentManager {
       getDefaultSkillDirs,
     });
 
+    if (this.agents.has(managed.id)) {
+      throw new Error(`Agent id already registered: ${managed.id}`);
+    }
+
     this.agents.set(managed.id, managed);
     managed.manager = this;
 
@@ -217,6 +221,7 @@ export class AgentManager {
    */
   getActiveSubagents(rootAgentId: string): ManagedAgent[] {
     const result: ManagedAgent[] = [];
+    const seen = new Set<string>();
 
     const walk = (agentId: string) => {
       const managed = this.agents.get(agentId);
@@ -226,7 +231,8 @@ export class AgentManager {
         walk(childId);
       }
       // Include this node if it is a subagent (has parent) and currently active
-      if (managed.parentId && ACTIVE_STATUSES.has(managed.status)) {
+      if (managed.parentId && ACTIVE_STATUSES.has(managed.status) && !seen.has(managed.id)) {
+        seen.add(managed.id);
         result.push(managed);
       }
     };

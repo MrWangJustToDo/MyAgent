@@ -62,7 +62,8 @@
     "validate:command-job-registry": "pnpm run build && node scripts/validate-command-job-registry.mjs",
     "validate:pending-message-queue": "pnpm run build && node scripts/validate-pending-message-queue.mjs",
     "validate:extract-plan": "pnpm run build && node scripts/validate-extract-plan.mjs",
-    "validate:safe-command": "pnpm run build && node scripts/validate-safe-command.mjs"
+    "validate:safe-command": "pnpm run build && node scripts/validate-safe-command.mjs",
+    "validate:generate-id": "pnpm run build && node scripts/validate-generate-id.mjs"
   },
   "dependencies": {
     "@tanstack/ai": "^0.40.0",

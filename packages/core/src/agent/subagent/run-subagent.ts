@@ -98,7 +98,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
   } = config;
 
   const bridgeUI = resolveBridgeUI(config);
-  const subagentId = customId ?? generateId("subagent");
+  const subagentId = customId ?? generateId("subagent", { exists: (id) => manager.getAgent(id) != null });
   const systemPrompt = customSystemPrompt ?? buildExploreSystemPrompt(maxIterations);
 
   const parentManaged = manager.getAgent(parentAgentId);
@@ -186,6 +186,11 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
   if (aggregateUsageToParent && parentManaged) {
     parentManaged.usage.addTotal(usage);
   }
+
+  // Task tool keeps subagents alive (`autoDestroy: false`) for UI preview.
+  // Main chat finalizes via AgentChatController.reconcileAfterRun; subagents must
+  // do the same here or status stays `running` and the task panel lists ghosts.
+  subagentManaged.statusController.finalizeDetachedRun(previewMessages, { aborted });
 
   emitAgentEvent(subagent, aborted ? "subagent:error" : "subagent:completed", {
     parentId: parentAgentId,

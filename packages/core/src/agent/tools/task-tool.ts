@@ -117,10 +117,6 @@ Example use cases:
 - "Explore the authentication module structure"`,
 
     inputSchema: z.object({
-      id: z
-        .string()
-        .default(() => generateId("subagent"))
-        .describe("Unique ID for this subagent task. Auto-generated if not provided."),
       prompt: z.string().describe("The task for the subagent to complete. Be specific about what you want to know."),
       description: z
         .string()
@@ -130,7 +126,7 @@ Example use cases:
 
     outputSchema: taskOutputSchema,
 
-    execute: async ({ id, prompt, description }, { toolCallId }) => {
+    execute: async ({ prompt, description }, { toolCallId }) => {
       return withDuration(async () => {
         // Subagent owns its RunCoordinator AbortController (created in prepareForRun
         // and passed into TanStack chat). We do NOT register it on the parent's
@@ -141,7 +137,9 @@ Example use cases:
         // currentAbortController into chat so sub.abort() actually stops the stream.
         const result = await runSubagent(
           {
-            subagentId: id,
+            subagentId: generateId("subagent", {
+              exists: (id) => manager.getAgent(id) != null,
+            }),
             prompt,
             description,
             parentAgentId,
