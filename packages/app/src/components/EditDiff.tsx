@@ -54,6 +54,7 @@ export const EditDiff = memo(
         diffFile={diffFile}
         diffViewHideOperator
         diffViewHighlight
+        diffViewNoBG
         diffViewTheme="dark"
       />
     );

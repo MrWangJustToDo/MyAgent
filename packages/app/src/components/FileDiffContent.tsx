@@ -129,6 +129,7 @@ export const FileDiffContent = forwardRef<DiffViewRef, FileDiffContentProps>(fun
           diffViewMode={diffMode}
           diffViewHideOperator
           diffViewHighlight
+          diffViewNoBG
           diffViewTheme="dark"
           onScrollChange={handleScrollChange}
         />
