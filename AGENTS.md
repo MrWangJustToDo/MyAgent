@@ -551,7 +551,7 @@ const agent = await agentManager.createManagedAgent({
   modelBaseURL: "https://api.openai.com/v1",
   compaction: {
     tokenThreshold: 100000,
-    keepRecentToolResults: 3,
+    keepRecentToolResults: 100,
     minToolResultSize: 100,
     keepRecentFlows: 4,
   },

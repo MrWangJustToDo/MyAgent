@@ -78,21 +78,6 @@ async function cleanupToolCachesForMessage(
 }
 
 /**
- * Count tool results eligible for toModelOutput or placeholder replacement.
- * Skips messages that are already placeholders or pending execution.
- */
-function countNonPlaceholderToolResults(toolResults: ToolResultRef[], messages: ModelMessage[]): number {
-  let count = 0;
-  for (const target of toolResults) {
-    const message = messages[target.messageIndex];
-    if (!message || message.role !== "tool") continue;
-    if (isToolPlaceholder(message.content)) continue;
-    count++;
-  }
-  return count;
-}
-
-/**
  * Deterministic check: is this tool result compressible into a placeholder?
  * (non-protected, not pending, above minimum size)
  */
@@ -113,6 +98,41 @@ function isToolCompressible(
   return true;
 }
 
+/**
+ * Message index of the first tool result that must stay in the recent window.
+ * Everything at/after this index is never placeholder-compressed.
+ *
+ * Counts **non-placeholder** tool results from the end so already-compressed
+ * slots do not consume the keep quota (avoids cascading loss of full results).
+ *
+ * Returns `-1` when fewer than `keepRecentToolResults` full results exist
+ * (compress nothing). Returns `+Infinity` when keep is 0 (compress all eligible).
+ */
+function getRecentKeepBoundary(
+  toolResults: ToolResultRef[],
+  messages: ModelMessage[],
+  keepRecentToolResults: number
+): number {
+  if (keepRecentToolResults <= 0) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  let keptFull = 0;
+  for (let i = toolResults.length - 1; i >= 0; i--) {
+    const message = messages[toolResults[i]!.messageIndex];
+    if (!message || message.role !== "tool") continue;
+    if (isToolPlaceholder(message.content)) continue;
+
+    keptFull += 1;
+    if (keptFull === keepRecentToolResults) {
+      return toolResults[i]!.messageIndex;
+    }
+  }
+
+  // Not enough full results to fill the window — do not placeholder-compress more.
+  return -1;
+}
+
 // ============================================================================
 // Public API
 // ============================================================================
@@ -122,9 +142,13 @@ function isToolCompressible(
  *
  * Two-layer approach:
  * 1. **Placeholder replacement** (threshold-triggered):
- *    When non-placeholder tool results exceed `keepRecentToolResults`,
- *    compress the oldest eligible results into short `[Previous: used toolName]`
- *    placeholders. Once compressed, they stay compressed — no re-expansion.
+ *    Tool results **before** the last `keepRecentToolResults` *full*
+ *    (non-placeholder) results may be compressed into
+ *    `[Previous: used toolName]` when eligible.
+ *    The recent window is a hard boundary — skipped older results (small /
+ *    protected / pending) must not cause compression to eat into recent ones.
+ *    Already-placeholder slots do not consume the keep quota.
+ *    Once compressed, placeholders stay compressed — no re-expansion.
  *
  * 2. **toModelOutput formatting** (always applied):
  *    Every non-placeholder tool result passes through its registered
@@ -136,7 +160,7 @@ function isToolCompressible(
  * trigger), enabling AI service prompt caching to hit.
  */
 export async function applyToolCompact(messages: ModelMessage[], options: ApplyToolCompactOptions): Promise<void> {
-  const { keepRecentToolResults = 60, minToolResultSize = 100 } = options.config ?? {};
+  const { keepRecentToolResults = 100, minToolResultSize = 100 } = options.config ?? {};
   const cache = options.cache;
   const toolResults = findToolResultMessages(messages);
 
@@ -147,17 +171,13 @@ export async function applyToolCompact(messages: ModelMessage[], options: ApplyT
   const toolCallMap = buildToolCallNameMap(messages);
   const toolInputMap = buildToolCallInputMap(messages);
 
-  // ── Phase 1: Threshold-triggered placeholder compression ──
-  // If non-placeholder tool results exceed the configured limit, compress
-  // the oldest eligible results into placeholders in one shot.
-  const nonPlaceholderCount = countNonPlaceholderToolResults(toolResults, messages);
-  const compressTarget = nonPlaceholderCount - keepRecentToolResults;
+  // ── Phase 1: Placeholder compression before the recent-window boundary ──
+  const keepBoundary = getRecentKeepBoundary(toolResults, messages, keepRecentToolResults);
 
-  if (compressTarget > 0) {
-    let compressed = 0;
-
+  if (keepBoundary !== -1) {
     for (const target of toolResults) {
-      if (compressed >= compressTarget) break;
+      // Hard stop: never placeholder-compress the recent window.
+      if (Number.isFinite(keepBoundary) && target.messageIndex >= keepBoundary) break;
 
       const message = messages[target.messageIndex];
       if (!message || message.role !== "tool") continue;
@@ -167,7 +187,6 @@ export async function applyToolCompact(messages: ModelMessage[], options: ApplyT
 
       await cleanupToolCachesForMessage(message, target.toolCallId, cache);
       applyToolPlaceholder(message, createToolPlaceholder(toolName));
-      compressed++;
     }
   }
 

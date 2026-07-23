@@ -409,7 +409,7 @@ Calls exported `autoCompact` + `applyCompactionResult` directly (same engine as 
 compaction: {
   tokenThreshold: 100_000,      // default from model contextWindow (capped)
   compactAtPercent: 80,         // trigger at 80% of threshold
-  keepRecentToolResults: 3,
+  keepRecentToolResults: 100,
   keepRecentFlows: 4,
   minToolResultSize: 100,
 }

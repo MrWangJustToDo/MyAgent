@@ -21,8 +21,8 @@ export const compactionConfigSchema = z.object({
   tokenThreshold: z.number().int().positive().default(100000),
   /** Percentage of tokenThreshold at which compaction triggers (default: 80) */
   compactAtPercent: z.number().min(50).max(99).default(80),
-  /** Number of recent tool results to preserve before placeholder compaction (default: 60) */
-  keepRecentToolResults: z.number().int().nonnegative().default(60),
+  /** Number of most recent *full* tool results to never placeholder-compress (default: 100) */
+  keepRecentToolResults: z.number().int().nonnegative().default(100),
   /** Minimum size of tool result to consider for compaction (default: 100 chars) */
   minToolResultSize: z.number().int().nonnegative().default(100),
   /** Number of recent user turns (inclusive) to keep after compaction (default: 2) */
@@ -78,7 +78,7 @@ export type CompactionResult = z.infer<typeof compactionResultSchema>;
 export const DEFAULT_COMPACTION_CONFIG: CompactionConfig = {
   tokenThreshold: 100000,
   compactAtPercent: 80,
-  keepRecentToolResults: 60,
+  keepRecentToolResults: 100,
   minToolResultSize: 100,
   keepRecentFlows: 2,
 };
@@ -92,7 +92,7 @@ export const DEFAULT_COMPACTION_CONFIG: CompactionConfig = {
  * @example
  * ```typescript
  * const config = createCompactionConfig({ tokenThreshold: 50000 });
- * // Result: { enabled: true, tokenThreshold: 50000, keepRecentToolResults: 3, ... }
+ * // Result: { tokenThreshold: 50000, keepRecentToolResults: 100, ... }
  * ```
  */
 export function createCompactionConfig(input?: CompactionConfigInput): CompactionConfig {
