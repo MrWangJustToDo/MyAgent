@@ -59,3 +59,5 @@ Hosts (CLI / Extension)
 SANDBOX_ENV=local          # local (OS sandbox) | native (no sandbox)
 REMOTE=http://localhost:3100  # remote CoreEnv server URL (CLI --remote flag)
 ```
+
+Workspace runtime data (sessions, memory, cache, plans, transcripts, skills, extensions, MCP) lives under gitignored `.agents/`. See [AGENTS.md](AGENTS.md) for the path layout.

@@ -24,11 +24,12 @@ Designed with a runtime-agnostic core that decouples agent logic from execution 
 | **Ask User** | Agent asks questions with selectable options or freeform answers |
 | **Subagents** | Context-isolated read-only tasks with 30-step limit for parallel exploration |
 | **Skills** | On-demand domain knowledge injection (list → load workflow) |
-| **Context Compaction** | 3-layer compression (micro, reasoning stripping, auto) + reactive compaction on errors for infinite conversations |
-| **Session Persistence** | Save/resume conversations to disk with auto-save |
-| **Memory** | Automatic cross-session knowledge extraction and consolidation |
+| **Context Compaction** | Tool-result compact + auto/reactive LLM summarization; cut-away transcripts archived under `.agents/transcripts/` for on-demand grep |
+| **Session Persistence** | Save/resume conversations under `.agents/sessions/` with auto-save |
+| **Memory** | Automatic cross-session knowledge extraction under `.agents/memory/` |
+| **Plan Mode** | Read-only planning → confirm → execute with todos (`/plan`, persisted under `.agents/plans/`) |
 | **Event System** | Full lifecycle event bus with logging bridge |
-| **Hooks System** | Pre-tool-use and post-tool-use script execution (permissions, transformations) |
+| **Extensions** | Project/user modules under `.agents/extension` (tool before/after hooks, custom tools) |
 | **Sandbox** | Isolated command execution with OS-level sandboxing (`@anthropic-ai/sandbox-runtime`) |
 | **MCP Integration** | Connect to external MCP servers for additional tools |
 | **Web** | DuckDuckGo search + page fetch |
@@ -199,6 +200,8 @@ SANDBOX_ENV=native
 SERVER_PORT=3200
 ```
 
+Runtime data (sessions, memory, cache, plans, compaction transcripts, skills, extensions, MCP config) lives under a single gitignored **`.agents/`** directory. See [AGENTS.md — Workspace `.agents/` layout](AGENTS.md#workspace-agents-layout).
+
 ### Running
 
 ```bash
@@ -234,8 +237,6 @@ pnpm start:mcp-server
 | **System** | `run_command` |
 | **Web** | `websearch` (DuckDuckGo), `webfetch` (page fetch) |
 | **Agent** | `task` (subagents), `ask_user` (questions with multi-select), `todo` (task lists), `list_skills`, `load_skill` |
-
----
 
 ---
 
@@ -281,7 +282,7 @@ The CLI has **4 input modes** — shortcuts adapt to the current mode:
 | `Ctrl+V` | Paste image | — | — | — |
 | `Ctrl+C` | Exit | Exit | Exit | Exit |
 
-Slash commands: `/help`, `/compact`, `/clear`, `/rename`, `/resume`, `/mcp`, `/usage`, `/quit`
+Slash commands: `/help`, `/compact`, `/plan`, `/clear`, `/rename`, `/resume`, `/mcp`, `/usage`, `/display`, `/theme`, `/paste`, `/quit`
 
 ---
 
