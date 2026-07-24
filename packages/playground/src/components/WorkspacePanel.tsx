@@ -192,7 +192,18 @@ export const WorkspacePanel = () => {
               />
             ) : (
               <div className="workspace-panel__placeholder">
-                Start a server (e.g. <code>npm run dev</code>) to preview.
+                <div className="workspace-panel__placeholder-icon" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                    <rect x="2.5" y="3.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+                    <path d="M2.5 6.5h13" stroke="currentColor" strokeWidth="1.4" />
+                    <circle cx="5" cy="5" r="0.7" fill="currentColor" />
+                    <circle cx="7.2" cy="5" r="0.7" fill="currentColor" />
+                  </svg>
+                </div>
+                <div className="workspace-panel__placeholder-title">No preview yet</div>
+                <span>
+                  Start a server (e.g. <code>npm run dev</code>) to preview.
+                </span>
               </div>
             )}
           </div>
@@ -207,7 +218,21 @@ export const WorkspacePanel = () => {
 
       {activeTab === "code" && !wc && (
         <div className="workspace-panel__body">
-          <div className="workspace-panel__placeholder">Waiting for WebContainer…</div>
+          <div className="workspace-panel__placeholder">
+            <div className="workspace-panel__placeholder-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path
+                  d="M9 2.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13Z"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  opacity="0.35"
+                />
+                <path d="M9 2.5a6.5 6.5 0 0 1 6.5 6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            </div>
+            <div className="workspace-panel__placeholder-title">Booting workspace</div>
+            <span>Waiting for WebContainer…</span>
+          </div>
         </div>
       )}
     </aside>

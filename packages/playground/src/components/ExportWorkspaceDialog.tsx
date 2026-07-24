@@ -55,6 +55,17 @@ export const ExportWorkspaceDialog = ({ onClose }: Props) => {
     };
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   const fileCount = useMemo(() => selectedFilePaths(selected, entries).length, [selected, entries]);
 
   const toggle = useCallback(
@@ -102,77 +113,90 @@ export const ExportWorkspaceDialog = ({ onClose }: Props) => {
     }
   }, [entries, onClose, selected]);
 
+  const handleBackdropClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target === e.currentTarget) {
+        onClose();
+      }
+    },
+    [onClose]
+  );
+
   return (
-    <div className="export-dialog" role="dialog" aria-modal="true" aria-label="Export workspace">
-      <div className="export-dialog__header">
-        <strong>Export workspace</strong>
-        <button type="button" onClick={onClose}>
-          Close
-        </button>
-      </div>
+    <div className="export-dialog-backdrop" onClick={handleBackdropClick}>
+      <div className="export-dialog" role="dialog" aria-modal="true" aria-label="Export workspace">
+        <div className="export-dialog__header">
+          <strong>Export workspace</strong>
+          <button type="button" onClick={onClose}>
+            Close
+          </button>
+        </div>
 
-      <p className="export-dialog__hint">
-        Choose files to download as a ZIP. Directories include their children when checked. Default selection skips{" "}
-        <code>node_modules</code> and <code>.git</code>.
-      </p>
-
-      <div className="export-dialog__toolbar">
-        <button type="button" onClick={selectAll} disabled={loading || entries.length === 0}>
-          Select all
-        </button>
-        <button type="button" onClick={selectNone} disabled={loading}>
-          None
-        </button>
-        <button type="button" onClick={skipHeavy} disabled={loading || entries.length === 0}>
-          Skip node_modules / .git
-        </button>
-        <span className="export-dialog__count">
-          {fileCount} file{fileCount === 1 ? "" : "s"}
-        </span>
-      </div>
-
-      <div className="export-dialog__list">
-        {loading && <div className="export-dialog__status">Scanning workspace…</div>}
-        {!loading && entries.length === 0 && !error && <div className="export-dialog__status">Workspace is empty.</div>}
-        {!loading &&
-          entries.map((entry) => {
-            const depth = pathDepth(entry.path);
-            const label = entry.path === "/" ? "/" : entry.path.slice(entry.path.lastIndexOf("/") + 1);
-            return (
-              <label
-                key={entry.path}
-                className={
-                  entry.type === "directory" ? "export-dialog__row export-dialog__row--dir" : "export-dialog__row"
-                }
-                style={{ paddingLeft: 10 + depth * 14 }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selected.has(entry.path)}
-                  onChange={(e) => toggle(entry.path, e.target.checked)}
-                />
-                <span title={entry.path}>{entry.type === "directory" ? `${label}/` : label}</span>
-              </label>
-            );
-          })}
-      </div>
-
-      {truncated && (
-        <p className="export-dialog__warn">
-          Listing stopped at 5000 entries — trim the workspace or export in batches.
+        <p className="export-dialog__hint">
+          Choose files to download as a ZIP. Directories include their children when checked. Default selection skips{" "}
+          <code>node_modules</code> and <code>.git</code>.
         </p>
-      )}
-      {error && <p className="export-dialog__error">{error}</p>}
 
-      <div className="export-dialog__footer">
-        <button
-          type="button"
-          className="export-dialog__primary"
-          disabled={exporting || loading}
-          onClick={() => void runExport()}
-        >
-          {exporting ? "Exporting…" : "Download ZIP"}
-        </button>
+        <div className="export-dialog__toolbar">
+          <button type="button" onClick={selectAll} disabled={loading || entries.length === 0}>
+            Select all
+          </button>
+          <button type="button" onClick={selectNone} disabled={loading}>
+            None
+          </button>
+          <button type="button" onClick={skipHeavy} disabled={loading || entries.length === 0}>
+            Skip node_modules / .git
+          </button>
+          <span className="export-dialog__count">
+            {fileCount} file{fileCount === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        <div className="export-dialog__list">
+          {loading && <div className="export-dialog__status">Scanning workspace…</div>}
+          {!loading && entries.length === 0 && !error && (
+            <div className="export-dialog__status">Workspace is empty.</div>
+          )}
+          {!loading &&
+            entries.map((entry) => {
+              const depth = pathDepth(entry.path);
+              const label = entry.path === "/" ? "/" : entry.path.slice(entry.path.lastIndexOf("/") + 1);
+              return (
+                <label
+                  key={entry.path}
+                  className={
+                    entry.type === "directory" ? "export-dialog__row export-dialog__row--dir" : "export-dialog__row"
+                  }
+                  style={{ paddingLeft: 10 + depth * 14 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.has(entry.path)}
+                    onChange={(e) => toggle(entry.path, e.target.checked)}
+                  />
+                  <span title={entry.path}>{entry.type === "directory" ? `${label}/` : label}</span>
+                </label>
+              );
+            })}
+        </div>
+
+        {truncated && (
+          <p className="export-dialog__warn">
+            Listing stopped at 5000 entries — trim the workspace or export in batches.
+          </p>
+        )}
+        {error && <p className="export-dialog__error">{error}</p>}
+
+        <div className="export-dialog__footer">
+          <button
+            type="button"
+            className="export-dialog__primary"
+            disabled={exporting || loading}
+            onClick={() => void runExport()}
+          >
+            {exporting ? "Exporting…" : "Download ZIP"}
+          </button>
+        </div>
       </div>
     </div>
   );

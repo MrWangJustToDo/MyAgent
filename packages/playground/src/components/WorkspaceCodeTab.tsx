@@ -185,6 +185,30 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
     (editor, monaco) => {
       editorRef.current = editor;
 
+      monaco.editor.defineTheme("playground-dark", {
+        base: "vs-dark",
+        inherit: true,
+        rules: [],
+        colors: {
+          "editor.background": "#141418",
+          "editor.foreground": "#e4e4e7",
+          "editorLineNumber.foreground": "#3f3f46",
+          "editorLineNumber.activeForeground": "#a1a1aa",
+          "editor.selectionBackground": "#6b8cff33",
+          "editor.inactiveSelectionBackground": "#6b8cff1a",
+          "editor.lineHighlightBackground": "#ffffff06",
+          "editorCursor.foreground": "#8fa4ff",
+          "editorIndentGuide.background1": "#ffffff0a",
+          "editorIndentGuide.activeBackground1": "#ffffff18",
+          "editorWidget.background": "#1a1a20",
+          "editorWidget.border": "#ffffff12",
+          "dropdown.background": "#1a1a20",
+          "input.background": "#121216",
+          focusBorder: "#6b8cff66",
+        },
+      });
+      monaco.editor.setTheme("playground-dark");
+
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
         void saveCurrentFile();
       });
@@ -268,7 +292,7 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
               {savedFlash && <span className="workspace-code-tab__saved">Saved</span>}
             </>
           ) : (
-            <span className="workspace-code-tab__editor-filename" style={{ color: "#666" }}>
+            <span className="workspace-code-tab__editor-filename workspace-code-tab__editor-filename--muted">
               No file selected
             </span>
           )}
@@ -283,7 +307,11 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
           >
             {uploading ? "Uploading…" : "Upload"}
           </button>
-          <button type="button" className="workspace-code-tab__header-btn" onClick={() => setExportOpen(true)}>
+          <button
+            type="button"
+            className="workspace-code-tab__header-btn workspace-code-tab__header-btn--primary"
+            onClick={() => setExportOpen(true)}
+          >
             Export
           </button>
         </div>
@@ -295,7 +323,7 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
                   key={selectedPath}
                   value={fileContent}
                   language={fileLang}
-                  theme="vs-dark"
+                  theme="playground-dark"
                   onChange={handleEditorChange}
                   onMount={handleEditorMount}
                   options={{
@@ -315,7 +343,20 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
             </div>
           </>
         ) : (
-          <div className="workspace-code-tab__placeholder">Select a file from the tree to preview and edit</div>
+          <div className="workspace-code-tab__placeholder">
+            <div className="workspace-panel__placeholder-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path
+                  d="M5 3.5h5.5L14 7v7.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1Z"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                />
+                <path d="M10.5 3.5V7H14" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div className="workspace-panel__placeholder-title">No file open</div>
+            <span>Select a file from the tree to preview and edit</span>
+          </div>
         )}
       </div>
       {exportOpen && <ExportWorkspaceDialog onClose={() => setExportOpen(false)} />}

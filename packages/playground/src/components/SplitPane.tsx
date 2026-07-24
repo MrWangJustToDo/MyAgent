@@ -91,7 +91,7 @@ export const SplitPane = ({
       <div className="split-pane__left">{left}</div>
       {visible && <div className="split-pane__splitter" onMouseDown={onMouseDown} />}
       {visible && (
-        <div className="split-pane__right" style={{ width: rightWidth }}>
+        <div className="split-pane__right split-pane__right-enter" style={{ width: rightWidth }}>
           {right}
         </div>
       )}

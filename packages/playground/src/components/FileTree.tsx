@@ -5,6 +5,7 @@ import { ensureLoaded, getIconUrlSync } from "../hooks/use-icon-theme.js";
 import type { WebContainer } from "@webcontainer/api";
 
 const SKIP_DIRS = new Set(["node_modules", ".git", "dist", ".next", ".cache"]);
+const GUIDE_WIDTH = 14;
 
 interface DirEntry {
   name: string;
@@ -32,6 +33,45 @@ function sortEntries(entries: DirEntry[]): DirEntry[] {
   return [...dirs, ...files];
 }
 
+function isAncestorPath(ancestor: string, target: string | null | undefined): boolean {
+  if (!target) return false;
+  return target === ancestor || target.startsWith(`${ancestor}/`);
+}
+
+function IndentGuides({ depth }: { depth: number }) {
+  if (depth <= 0) return null;
+  return (
+    <div className="file-tree__guides" style={{ width: depth * GUIDE_WIDTH }} aria-hidden="true">
+      {Array.from({ length: depth }, (_, i) => (
+        <span key={i} className="file-tree__guide" />
+      ))}
+    </div>
+  );
+}
+
+function ChevronIcon({ open, loading }: { open: boolean; loading?: boolean }) {
+  if (loading) {
+    return (
+      <span className="file-tree__chevron file-tree__chevron--loading" aria-hidden="true">
+        <span className="file-tree__spinner" />
+      </span>
+    );
+  }
+  return (
+    <span className={`file-tree__chevron ${open ? "file-tree__chevron--open" : ""}`} aria-hidden="true">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <path
+          d="M3.5 1.5L7 5L3.5 8.5"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
+}
+
 function TreeNodeRow({
   node,
   path,
@@ -39,6 +79,8 @@ function TreeNodeRow({
   onToggle,
   onSelect,
   selected,
+  activePath,
+  loading,
 }: {
   node: TreeNode;
   path: string;
@@ -46,21 +88,61 @@ function TreeNodeRow({
   onToggle: (path: string) => void;
   onSelect: (path: string) => void;
   selected: boolean;
+  activePath: boolean;
+  loading: boolean;
 }) {
   const iconUrl = getIconUrlSync(node.name, node.type === "directory");
+  const isDir = node.type === "directory";
 
-  const handleClick = useCallback(() => {
-    if (node.type === "directory") {
+  const handleActivate = useCallback(() => {
+    if (isDir) {
       onToggle(path);
     } else {
       onSelect(path);
     }
-  }, [node.type, path, onToggle, onSelect]);
+  }, [isDir, path, onToggle, onSelect]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleActivate();
+      }
+    },
+    [handleActivate]
+  );
+
+  const className = [
+    "file-tree__item",
+    isDir ? "file-tree__item--dir" : "file-tree__item--file",
+    selected ? "file-tree__item--selected" : "",
+    !selected && activePath ? "file-tree__item--active-path" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div className={`file-tree__item ${selected ? "file-tree__item--selected" : ""}`} onClick={handleClick}>
-      <div className="file-tree__indent" style={{ width: depth * 12 }} />
-      {iconUrl && <img className="file-tree__icon" src={iconUrl} alt="" />}
+    <div
+      className={className}
+      role="treeitem"
+      tabIndex={0}
+      aria-selected={selected}
+      aria-expanded={isDir ? Boolean(node.expanded) : undefined}
+      aria-busy={loading || undefined}
+      onClick={handleActivate}
+      onKeyDown={handleKeyDown}
+    >
+      <IndentGuides depth={depth} />
+      {isDir ? (
+        <ChevronIcon open={Boolean(node.expanded)} loading={loading} />
+      ) : (
+        <span className="file-tree__chevron file-tree__chevron--spacer" />
+      )}
+      {iconUrl ? (
+        <img className="file-tree__icon" src={iconUrl} alt="" draggable={false} />
+      ) : (
+        <span className="file-tree__icon file-tree__icon--fallback" aria-hidden="true" />
+      )}
       <span className="file-tree__name">{node.name}</span>
     </div>
   );
@@ -70,7 +152,10 @@ export const FileTree = ({ wc, rootPath, onSelect, refreshKey, selectedPath }: F
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [iconsReady, setIconsReady] = useState(false);
+  const [expanding, setExpanding] = useState<Set<string>>(() => new Set());
   const loadingRef = useRef(false);
+  const treeRef = useRef(tree);
+  treeRef.current = tree;
 
   useEffect(() => {
     ensureLoaded().then(() => setIconsReady(true));
@@ -135,10 +220,34 @@ export const FileTree = ({ wc, rootPath, onSelect, refreshKey, selectedPath }: F
         );
       };
 
-      setTree((prev) => {
-        void updateChildren(prev, 0).then(setTree);
-        return prev;
-      });
+      const current = treeRef.current;
+      const willExpand = (() => {
+        const walk = (nodes: TreeNode[], depth: number): boolean => {
+          for (const n of nodes) {
+            if (n.name !== parts[depth] || n.type !== "directory") continue;
+            if (depth >= parts.length - 1) return !n.expanded;
+            return walk(n.children ?? [], depth + 1);
+          }
+          return false;
+        };
+        return walk(current, 0);
+      })();
+
+      if (willExpand) {
+        setExpanding((prev) => new Set(prev).add(dirPath));
+      }
+
+      try {
+        setTree(await updateChildren(current, 0));
+      } finally {
+        if (willExpand) {
+          setExpanding((prev) => {
+            const next = new Set(prev);
+            next.delete(dirPath);
+            return next;
+          });
+        }
+      }
     },
     [rootPath, loadDir]
   );
@@ -156,6 +265,8 @@ export const FileTree = ({ wc, rootPath, onSelect, refreshKey, selectedPath }: F
           onSelect={onSelect}
           onToggle={handleToggle}
           selected={isSelected}
+          activePath={isAncestorPath(nodePath, selectedPath)}
+          loading={expanding.has(nodePath)}
         />,
       ];
       if (node.type === "directory" && node.expanded && node.children) {
@@ -166,16 +277,35 @@ export const FileTree = ({ wc, rootPath, onSelect, refreshKey, selectedPath }: F
   };
 
   if (!iconsReady) {
-    return <div className="file-tree__loading">Loading icons…</div>;
+    return (
+      <div className="file-tree__status">
+        <span className="file-tree__spinner" />
+        Loading icons…
+      </div>
+    );
   }
 
   if (loading) {
-    return <div className="file-tree__loading">Loading…</div>;
+    return (
+      <div className="file-tree__status">
+        <span className="file-tree__spinner" />
+        Loading…
+      </div>
+    );
   }
 
   if (tree.length === 0) {
-    return <div className="file-tree__empty">Empty workspace</div>;
+    return (
+      <div className="file-tree__status file-tree__status--empty">
+        <span className="file-tree__status-title">Empty workspace</span>
+        <span>Upload files or let the agent scaffold a project</span>
+      </div>
+    );
   }
 
-  return <div className="file-tree">{renderNodes(tree, 0, rootPath)}</div>;
+  return (
+    <div className="file-tree" role="tree" aria-label="Workspace files">
+      {renderNodes(tree, 0, rootPath)}
+    </div>
+  );
 };
