@@ -10,6 +10,14 @@ registerCommand({
   description: "Rename current session (or auto-generate a title)",
   usage: "/rename [title]",
   immediate: false,
+  allowCustomInput: true,
+  getOptions: () => [
+    {
+      label: "auto",
+      value: "",
+      description: "Generate a title from recent conversation",
+    },
+  ],
   execute: async (args, ctx) => {
     const agent = ctx.getAgent();
     if (!agent) {

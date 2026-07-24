@@ -231,9 +231,27 @@ export const Help = () => {
           </Box>
           <Box>
             <Box width={28}>
+              <Text color={COLORS.success}>{KeyLabel.ctrlV}</Text>
+            </Box>
+            <Text>Paste image from clipboard</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
+              <Text color={COLORS.success}>/shortcuts</Text>
+            </Box>
+            <Text>List all keyboard shortcuts</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
               <Text color={COLORS.success}>/display</Text>
             </Box>
-            <Text>full outputs, or compact density (fold long explores)</Text>
+            <Text>Transcript density (option menu: compact / full)</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
+              <Text color={COLORS.success}>/theme</Text>
+            </Box>
+            <Text>Color theme (option menu: gemini / claude)</Text>
           </Box>
           <Box>
             <Box width={28}>

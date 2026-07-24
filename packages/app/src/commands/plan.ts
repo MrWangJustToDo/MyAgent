@@ -1,10 +1,43 @@
 import { registerCommand } from "./registry.js";
 
+import type { CommandOption } from "./types.js";
+
 registerCommand({
   name: "plan",
   description: "Toggle plan mode, execute/save/load plans, or show status",
   usage: "/plan [execute|cancel|status|save [name]|load <name>|list]",
   immediate: false,
+  allowCustomInput: true,
+  getOptions: async (): Promise<CommandOption[]> => {
+    const base: CommandOption[] = [
+      { label: "toggle", value: "", description: "Enter or leave plan mode" },
+      { label: "execute", value: "execute", description: "Run approved plan" },
+      { label: "cancel", value: "cancel", description: "Pause execution → ready" },
+      { label: "status", value: "status", description: "Show phase and progress" },
+      { label: "list", value: "list", description: "List saved plans" },
+      { label: "save", value: "save", description: "Save current plan (optional name via custom)" },
+    ];
+
+    try {
+      const { useAgent } = await import("../hooks/use-agent.js");
+      const agent = useAgent.getReadonlyState().agent;
+      if (!agent) return base;
+
+      const files = await agent.listWorkspacePlans();
+      for (const file of files.slice(0, 15)) {
+        const name = file.replace(/\.md$/i, "");
+        base.push({
+          label: `load ${name}`,
+          value: `load ${name}`,
+          description: file,
+        });
+      }
+    } catch {
+      // ignore list errors in autocomplete
+    }
+
+    return base;
+  },
   execute: async (args, ctx) => {
     const agent = ctx.getAgent();
     if (!agent) {

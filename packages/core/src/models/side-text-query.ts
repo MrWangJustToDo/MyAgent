@@ -49,6 +49,7 @@ export async function runSideTextQuery(
     messages: [{ role: "user", content: options.userPrompt }],
     systemPrompts: options.systemPrompt ? [options.systemPrompt] : undefined,
     abortController,
+    debug: false,
     modelOptions: options.maxOutputTokens != null ? { maxTokens: options.maxOutputTokens } : undefined,
   });
 

@@ -30,6 +30,9 @@ export {
   registerExtensionCommand,
   splitExtensionCommandArgs,
   syncExtensionCommands,
+  COMMAND_FREEFORM_VALUE,
+  typedArgsAfterCommand,
+  withFreeformOption,
 } from "./commands";
 export type { Command, CommandContext, CommandOption } from "./commands";
 

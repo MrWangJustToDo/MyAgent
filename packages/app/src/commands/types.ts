@@ -37,6 +37,11 @@ export interface CommandOption {
   value: string;
   /** Optional description */
   description?: string;
+  /**
+   * When true, selecting this option executes with the text the user typed
+   * after `/{command}` (custom input), not {@link value}.
+   */
+  freeform?: boolean;
 }
 
 /**
@@ -51,8 +56,16 @@ export interface Command {
   usage: string;
   /** Execute the command. `args` is everything after "/name " trimmed. */
   execute: (args: string, ctx: CommandContext) => CommandResult | Promise<CommandResult>;
-  /** If true, execute immediately when selected from autocomplete (no args needed) */
+  /**
+   * If true, execute immediately when selected from autocomplete (no args).
+   * Mutually exclusive with opening a submenu via {@link getOptions} — `immediate` wins.
+   */
   immediate?: boolean;
-  /** Dynamic options for submenu (e.g., model list). Called when command is selected. */
+  /** Dynamic options for submenu (e.g., theme list). Called when command is selected. */
   getOptions?: (ctx?: CommandContext) => CommandOption[] | Promise<CommandOption[]>;
+  /**
+   * When true with {@link getOptions}, autocomplete keeps a freeform row so users
+   * can type a custom value (session name, rename title, etc.).
+   */
+  allowCustomInput?: boolean;
 }

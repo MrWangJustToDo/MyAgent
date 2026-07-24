@@ -680,7 +680,7 @@ packages/
 │   │   ├── types.ts                   # AgentAdapter, AppConfig, InitResult interfaces
 │   │   └── create-agent.ts            # Shared createAgentFromConfig() helper
 │   ├── app/                           # Main app components (App.tsx, Agent.tsx)
-│   ├── commands/                      # Slash commands (/help, /plan, /compact, /display, /theme, /clear, etc.)
+│   ├── commands/                      # Slash commands (/help, /shortcuts, /plan, /compact, /display, /theme, /clear, etc.)
 │   ├── components/                    # React components (UserInput, EditDiff, Help, etc.)
 │   ├── context/                       # React contexts (AdapterProvider)
 │   ├── hooks/                         # Shared hooks (useAgentChat, useConfig, useAgent, etc.)

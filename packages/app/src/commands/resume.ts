@@ -10,6 +10,7 @@ registerCommand({
   description: "Resume a previous session",
   usage: "/resume [session-id or name]",
   immediate: false,
+  allowCustomInput: true,
   getOptions: async () => {
     const { useAgent } = await import("../hooks/use-agent.js");
     const agent = useAgent.getReadonlyState().agent;

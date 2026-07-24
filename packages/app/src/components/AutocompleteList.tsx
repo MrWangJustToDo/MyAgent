@@ -32,14 +32,16 @@ export const AutocompleteList = () => {
   const renderItem = (suggestion: AutocompleteSuggestion, index: number) => {
     const isSelected = index === selectedIndex;
     const label = suggestion.label.padEnd(maxLabelWidth + 2);
+    const labelColor = suggestion.freeform ? COLORS.muted : COLORS.primary;
 
     return (
       <Box flexDirection="row" width="100%">
         <Box width="60%" flexShrink={0} flexGrow={0}>
           <Text
             backgroundColor={isSelected ? COLORS.success : undefined}
-            color={isSelected ? "black" : COLORS.primary}
+            color={isSelected ? "black" : labelColor}
             bold={isSelected}
+            dimColor={!isSelected && suggestion.freeform}
             wrap="truncate"
           >
             {label}

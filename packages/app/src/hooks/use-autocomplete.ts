@@ -1,6 +1,7 @@
 import { createState } from "reactivity-store";
 
 import { getAllCommands } from "../commands";
+import { COMMAND_FREEFORM_VALUE, typedArgsAfterCommand, withFreeformOption } from "../commands/command-options.js";
 
 import type { Command, CommandOption } from "../commands";
 
@@ -21,6 +22,8 @@ export interface AutocompleteSuggestion {
   command?: Command;
   /** The option value (for options mode) */
   optionValue?: string;
+  /** Freeform option — execute with typed args */
+  freeform?: boolean;
 }
 
 export interface AutocompleteState {
@@ -64,10 +67,43 @@ function commandToSuggestion(cmd: Command): AutocompleteSuggestion {
 function optionToSuggestion(opt: CommandOption, command: Command): AutocompleteSuggestion {
   return {
     label: opt.label,
-    usage: `/${command.name} ${opt.label}`,
+    usage: opt.freeform ? `/${command.name} <custom>` : `/${command.name} ${opt.label}`,
     description: opt.description || "",
     optionValue: opt.value,
+    freeform: opt.freeform === true,
   };
+}
+
+function normalizeOptions(command: Command, options: CommandOption[]): CommandOption[] {
+  const hasFreeform = options.some((o) => o.freeform);
+  if (command.allowCustomInput && !hasFreeform) {
+    return withFreeformOption(options);
+  }
+  return options;
+}
+
+function filterOptions(options: CommandOption[], optionPrefix: string): CommandOption[] {
+  const freeform = options.filter((o) => o.freeform);
+  const presets = options.filter((o) => !o.freeform);
+  const filtered = optionPrefix
+    ? presets.filter(
+        (o) => o.label.toLowerCase().includes(optionPrefix) || o.value.toLowerCase().includes(optionPrefix)
+      )
+    : presets;
+  return [...filtered, ...freeform];
+}
+
+function applyOptionsToState(
+  state: AutocompleteState,
+  command: Command,
+  options: CommandOption[],
+  optionPrefix: string
+): void {
+  const normalized = normalizeOptions(command, options);
+  const filtered = filterOptions(normalized, optionPrefix);
+  state.suggestions = filtered.map((o) => optionToSuggestion(o, command));
+  state.selectedIndex = Math.min(state.selectedIndex, Math.max(0, filtered.length - 1));
+  state.visible = filtered.length > 0;
 }
 
 // ============================================================================
@@ -95,26 +131,21 @@ export const useAutocomplete = createState(() => ({ ...initialState }), {
 
       if (spaceIndex !== -1 && state.mode === "options" && state.currentCommand) {
         // In options mode, filter options based on input after command
-        const optionPrefix = input.slice(spaceIndex + 1).toLowerCase();
+        const optionPrefix = input
+          .slice(spaceIndex + 1)
+          .toLowerCase()
+          .trim();
         const command = state.currentCommand;
 
         if (command.getOptions) {
           const options = command.getOptions();
           if (options instanceof Promise) {
-            // Handle async options
             options.then((opts) => {
-              const filtered = optionPrefix ? opts.filter((o) => o.label.toLowerCase().includes(optionPrefix)) : opts;
-              state.suggestions = filtered.map((o) => optionToSuggestion(o, command));
-              state.selectedIndex = Math.min(state.selectedIndex, Math.max(0, filtered.length - 1));
-              state.visible = filtered.length > 0;
+              if (state.currentCommand !== command) return;
+              applyOptionsToState(state, command, opts, optionPrefix);
             });
           } else {
-            const filtered = optionPrefix
-              ? options.filter((o) => o.label.toLowerCase().includes(optionPrefix))
-              : options;
-            state.suggestions = filtered.map((o) => optionToSuggestion(o, command));
-            state.selectedIndex = Math.min(state.selectedIndex, Math.max(0, filtered.length - 1));
-            state.visible = filtered.length > 0;
+            applyOptionsToState(state, command, options, optionPrefix);
           }
         }
         return;
@@ -158,15 +189,14 @@ export const useAutocomplete = createState(() => ({ ...initialState }), {
 
     /**
      * Accept the currently selected suggestion.
-     * Returns object with action type and value.
+     * Pass `currentInput` so freeform options can use the typed suffix.
      */
-    accept: (): { type: "input" | "execute"; value: string } | null => {
+    accept: (currentInput?: string): { type: "input" | "execute"; value: string } | null => {
       if (!state.visible || state.suggestions.length === 0) return null;
       const selected = state.suggestions[state.selectedIndex];
       if (!selected) return null;
 
       if (state.mode === "options") {
-        // In options mode, return the full command with selected option
         const command = state.currentCommand;
         state.mode = "commands";
         state.suggestions = [];
@@ -174,10 +204,21 @@ export const useAutocomplete = createState(() => ({ ...initialState }), {
         state.visible = false;
         state.currentCommand = null;
 
-        if (command) {
-          return { type: "execute", value: `/${command.name} ${selected.optionValue || selected.label}` };
+        if (!command) return null;
+
+        if (selected.freeform || selected.optionValue === COMMAND_FREEFORM_VALUE) {
+          const typed = typedArgsAfterCommand(currentInput ?? "", command.name);
+          return {
+            type: "execute",
+            value: typed ? `/${command.name} ${typed}` : `/${command.name}`,
+          };
         }
-        return null;
+
+        const value = selected.optionValue ?? selected.label;
+        return {
+          type: "execute",
+          value: value ? `/${command.name} ${value}` : `/${command.name}`,
+        };
       }
 
       // Commands mode
@@ -202,15 +243,13 @@ export const useAutocomplete = createState(() => ({ ...initialState }), {
         const options = command.getOptions();
         if (options instanceof Promise) {
           options.then((opts) => {
-            state.suggestions = opts.map((o) => optionToSuggestion(o, command));
-            state.visible = opts.length > 0;
+            if (state.currentCommand !== command) return;
+            applyOptionsToState(state, command, opts, "");
           });
           return { type: "input", value: `/${command.name} ` };
-        } else {
-          state.suggestions = options.map((o) => optionToSuggestion(o, command));
-          state.visible = options.length > 0;
-          return { type: "input", value: `/${command.name} ` };
         }
+        applyOptionsToState(state, command, options, "");
+        return { type: "input", value: `/${command.name} ` };
       }
 
       // Default: set input to command with trailing space

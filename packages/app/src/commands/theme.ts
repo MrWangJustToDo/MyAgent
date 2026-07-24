@@ -7,12 +7,27 @@ registerCommand({
   name: "theme",
   description: "Set UI color theme (gemini vs claude)",
   usage: "/theme [gemini|claude]",
-  immediate: true,
+  immediate: false,
+  getOptions: () => {
+    const current = useTheme.getActions().getTheme();
+    return [
+      {
+        label: "toggle",
+        value: "",
+        description: `Switch theme (current: ${current})`,
+      },
+      ...THEME_NAMES.map((name) => ({
+        label: name,
+        value: name,
+        description: name === current ? "current" : `Use ${name} palette`,
+      })),
+    ];
+  },
   execute: (args) => {
     const { setTheme, toggle, getTheme } = useTheme.getActions();
     const trimmed = args.trim().toLowerCase();
 
-    if (!trimmed) {
+    if (!trimmed || trimmed === "toggle") {
       const next = toggle();
       return { ok: true, message: `Theme: ${next}` };
     }

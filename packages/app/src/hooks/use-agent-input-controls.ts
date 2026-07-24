@@ -171,7 +171,8 @@ export function useAgentInputControls({
 
   const acceptAutocomplete = (triggerSubmit: boolean): boolean => {
     if (!isAutocompleteVisible) return false;
-    const result = autocompleteActions.accept();
+    const currentInput = useUserInput.getReadonlyState().value;
+    const result = autocompleteActions.accept(currentInput);
     if (!result) return false;
     inputActions.setValue(result.value);
     if (triggerSubmit && result.type === "execute") {

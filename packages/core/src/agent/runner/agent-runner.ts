@@ -100,6 +100,9 @@ export class AgentRunner {
       threadId: input.threadId,
       runId: input.runId,
       agentLoopStrategy: maxIterations(this.config.maxIterations ?? 30),
+      // Silence [tanstack-ai:errors] console dumps — they break Ink TUI layout.
+      // Failures still surface via RUN_ERROR / agent:stream-error / ManagedAgent.error.
+      debug: false,
       modelOptions: {
         ...(this.config.temperature != null ? { temperature: this.config.temperature } : {}),
         ...(this.config.maxOutputTokens != null ? { maxTokens: this.config.maxOutputTokens } : {}),

@@ -97,9 +97,73 @@ export function headerShortcutTips(): ReadonlyArray<{ key: string; desc: string 
     { key: KeyLabel.shiftTab, desc: "plan mode" },
     { key: KeyLabel.ctrlE, desc: "workspace" },
     { key: KeyLabel.ctrlT, desc: "task panel" },
-    { key: KeyLabel.ctrlV, desc: "paste image" },
     { key: KeyLabel.esc, desc: "to abort" },
   ];
+}
+
+export interface ShortcutSection {
+  title: string;
+  lines: ReadonlyArray<{ key: string; desc: string }>;
+}
+
+/** Full shortcut reference for `/shortcuts` (and docs). */
+export function getKeyboardShortcutSections(): ShortcutSection[] {
+  const modifiedEnter = followUpEnterLabel();
+  const newline = newlineEnterLabel();
+  return [
+    {
+      title: "Chat",
+      lines: [
+        { key: KeyLabel.enter, desc: "Submit prompt (while running: queue steer)" },
+        { key: newline, desc: "Insert newline when idle" },
+        { key: modifiedEnter, desc: "Queue follow-up while running" },
+        { key: KeyLabel.esc, desc: "Abort current run / dismiss UI" },
+        { key: KeyLabel.ctrlC, desc: "Exit the app" },
+        { key: KeyLabel.ctrlU, desc: "Clear input" },
+        { key: KeyLabel.ctrlA, desc: "Select all input" },
+        { key: KeyLabel.ctrlV, desc: "Paste image from clipboard" },
+        { key: KeyLabel.slash, desc: "Open slash commands" },
+      ],
+    },
+    {
+      title: "Panels",
+      lines: [
+        { key: KeyLabel.shiftTab, desc: "Toggle plan mode" },
+        { key: KeyLabel.ctrlE, desc: "Workspace panel" },
+        { key: KeyLabel.ctrlT, desc: "Task / subagent panel" },
+      ],
+    },
+    {
+      title: "Approvals",
+      lines: [
+        { key: KeyLabel.y, desc: "Approve tool (when input empty)" },
+        { key: KeyLabel.n, desc: "Deny tool / enter reason" },
+      ],
+    },
+    {
+      title: "Navigation",
+      lines: [
+        { key: KeyLabel.upDown, desc: "History / autocomplete / lists" },
+        { key: KeyLabel.tab, desc: "Accept autocomplete suggestion" },
+        { key: `${KeyLabel.esc} (autocomplete)`, desc: "Dismiss suggestions" },
+      ],
+    },
+  ];
+}
+
+/** Format shortcut sections for CommandOutput / terminal. */
+export function formatKeyboardShortcutsHelp(): string {
+  const sections = getKeyboardShortcutSections();
+  const lines: string[] = ["Keyboard shortcuts", ""];
+  for (const section of sections) {
+    lines.push(section.title);
+    for (const row of section.lines) {
+      lines.push(`  ${row.key.padEnd(28)} ${row.desc}`);
+    }
+    lines.push("");
+  }
+  lines.push(`Tip: /theme, /display, /plan, /resume open option menus after Tab/Enter.`);
+  return lines.join("\n").trimEnd();
 }
 
 /** Workspace panel footer hint. */

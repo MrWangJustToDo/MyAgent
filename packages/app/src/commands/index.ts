@@ -9,6 +9,7 @@ import "./plan.js";
 import "./quit.js";
 import "./rename.js";
 import "./resume.js";
+import "./shortcuts.js";
 import "./theme.js";
 import "./usage.js";
 
@@ -24,5 +25,6 @@ export {
   splitExtensionCommandArgs,
   syncExtensionCommands,
 } from "./sync-extension-commands.js";
+export { COMMAND_FREEFORM_VALUE, typedArgsAfterCommand, withFreeformOption } from "./command-options.js";
 
 export type { Command, CommandContext, CommandOption, CommandResult } from "./types.js";

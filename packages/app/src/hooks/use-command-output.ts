@@ -25,7 +25,8 @@ export const useCommandOutput = createState(
         const lines = splitStreamingLines(content);
         state.title = title;
         state.lines = lines.length > 0 ? lines : [""];
-        state.scrollOffset = Math.max(0, state.lines.length - MAX_VISIBLE);
+        // Start at the top so help / shortcuts open from the beginning.
+        state.scrollOffset = 0;
       },
       dismiss: () => {
         state.lines = null;
