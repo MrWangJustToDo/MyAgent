@@ -1,7 +1,7 @@
 /**
  * MemoryManager - Manages persistent cross-session memory files.
  *
- * Stores memories as markdown files with YAML frontmatter in `.agent-memory/`.
+ * Stores memories as markdown files with YAML frontmatter in `.agents/memory/`.
  * Auto-generates a `MEMORY.md` index that is injected into the system prompt.
  *
  * Uses getEnv().fs for all I/O.

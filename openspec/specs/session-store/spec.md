@@ -1,7 +1,7 @@
 # session-store
 
 ### Requirement: Session creation on agent start
-The system SHALL create a new session with a unique ID when an agent starts a new conversation. The session SHALL be stored in `.sessions/{id}.json` relative to the project root.
+The system SHALL create a new session with a unique ID when an agent starts a new conversation. The session SHALL be stored in `.agents/sessions/{id}.session.json` relative to the project root.
 
 #### Scenario: New session created
 - **WHEN** the agent starts a new conversation (no resume flag)
@@ -23,7 +23,7 @@ The system SHALL provide a function to list all available sessions for a given p
 
 #### Scenario: List sessions
 - **WHEN** the user requests session list
-- **THEN** all session files in `.sessions/` are read and metadata is returned sorted by updatedAt descending
+- **THEN** all session files in `.agents/sessions/` are read and metadata is returned sorted by updatedAt descending
 
 #### Scenario: Empty sessions directory
 - **WHEN** no sessions exist for the project

@@ -64,9 +64,11 @@ export {
 export {
   COMPACT_TRANSCRIPT_ROOT,
   buildCompactArchiveMarkdown,
-  formatCompactArchivePointer,
+  extractCompactArchivePaths,
+  formatCompactArchivesSection,
   maybeAppendCompactArchive,
   parseCompactSequence,
+  stripCompactArchiveSections,
   writeCompactArchive,
   type CompactArchiveWriteResult,
   type WriteCompactArchiveOptions,

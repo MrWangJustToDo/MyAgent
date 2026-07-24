@@ -1,7 +1,7 @@
 /**
  * SessionStore - Single-file JSON session persistence.
  *
- * Stores sessions as `.session.json` files in `.sessions/` directory.
+ * Stores sessions as `.session.json` files in `.agents/sessions/` directory.
  * Each file contains a single JSON object with the full SessionData.
  * Writes are full overwrites — simple, correct, and produces exactly
  * one copy of uiMessages regardless of how many saves occur.

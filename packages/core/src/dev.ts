@@ -68,12 +68,14 @@ export {
   buildSegmentedConversationText,
   buildSummarizationUserPrompt,
   COMPACT_TRANSCRIPT_ROOT,
+  extractCompactArchivePaths,
   findCutPoint,
-  formatCompactArchivePointer,
+  formatCompactArchivesSection,
   maybeAppendCompactArchive,
   parseCompactSequence,
   serializeConversation,
   STILL_IN_CONTEXT_RULES,
+  stripCompactArchiveSections,
   writeCompactArchive,
 } from "./agent/compaction";
 export { extractTextFromContent } from "./agent/compaction/message-utils.js";

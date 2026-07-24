@@ -562,7 +562,7 @@ const agent = await agentManager.createManagedAgent({
 
 **Summarizer input:** The summarization subagent receives labeled segments — `<to_compress>` (pre-cut history) and `<still_in_context>` (kept turns) — plus optional `<previous-summary>` for incremental updates. Prompt rules tell the model to summarize the compressed segment thoroughly and use the kept segment only to align Goal/Next (no detailed restatement). Post-compact assembly is unchanged: `summaryMessage + messages[compactIndex:]`.
 
-**Transcript archive:** On successful auto, manual (`/compact`), or reactive compaction, the compressed slice is written as greppable markdown under `.agents/transcripts/<sessionId>/compact-<n>.md` (gitignored via `.agents`). The summary appends a `## Compact archive` pointer when the write succeeds (prefer grep / small reads — not loading the whole archive); archive I/O failures are non-fatal.
+**Transcript archive:** On successful auto, manual (`/compact`), or reactive compaction, the compressed slice is written as greppable markdown under `.agents/transcripts/<sessionId>/compact-<n>.md` (gitignored via `.agents`). The summary gets a runtime-managed `## Compact archives` list (merged across successive comped, with a short file-shape note). Prefer grep / small reads — not loading whole archives. Archive I/O failures are non-fatal; prior paths are still re-attached when known.
 
 ```
 packages/core/src/agent/compaction/
@@ -585,6 +585,22 @@ packages/core/src/agent/compaction/
 **Reasoning stripping (Layer 2)** is disabled in `compaction-middleware.ts` because DeepSeek thinking mode requires `reasoning_content` echo-back. DeepSeek endpoints use `ReasoningChatCompletionsTextAdapter`, which maps stream `reasoning_content` into `thinking` and writes it back on subsequent requests.
 
 **Reactive compaction** runs in `run-agent.ts` via `runStreamWithReactiveCompactRetry` — on `prompt_too_long` errors, `ManagedAgent.handleReactiveCompact()` compacts context and retries once.
+
+## Workspace `.agents/` layout
+
+Runtime data under the project root is grouped under a single gitignored `.agents/` directory (alongside config such as skills / MCP / extensions):
+
+| Path | Purpose |
+|------|---------|
+| `.agents/sessions/` | Session JSON (`*.session.json`) |
+| `.agents/memory/` | Cross-session memory markdown + `MEMORY.md` |
+| `.agents/cache/tool-output/` | Large tool-output spill files |
+| `.agents/cache/models-dev.json` | models.dev metadata disk cache |
+| `.agents/transcripts/<sessionId>/` | Compaction transcript archives |
+| `.agents/plans/` | Saved plan markdown |
+| `.agents/skills/` | Project skills |
+| `.agents/extension/` | Project extensions |
+| `.agents/mcp.json` | Project MCP config |
 
 ## Sandbox Environment Configuration
 

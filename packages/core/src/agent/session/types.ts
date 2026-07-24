@@ -2,7 +2,7 @@
  * Session Types - Type definitions for session persistence and resume.
  *
  * Uses a single JSON file per session. Each session is stored as
- * `.sessions/{id}.session.json` containing the full SessionData object.
+ * `.agents/sessions/{id}.session.json` containing the full SessionData object.
  */
 
 import { z } from "zod";
@@ -17,7 +17,7 @@ import type { UIMessage, ModelMessage } from "@tanstack/ai";
 // ============================================================================
 
 export const SESSION_VERSION = 2;
-export const SESSION_DIR = ".sessions";
+export const SESSION_DIR = ".agents/sessions";
 export const SESSION_FILE_SUFFIX = ".session.json";
 
 // ============================================================================

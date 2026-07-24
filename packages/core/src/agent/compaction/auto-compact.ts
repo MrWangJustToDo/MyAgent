@@ -292,11 +292,15 @@ export async function autoCompact(
 
     const managed = manager.getAgent(parentAgentId);
     const sessionId = managed?.getSessionData()?.id ?? parentAgentId;
-    summaryWithFileOps = await maybeAppendCompactArchive(summaryWithFileOps, {
-      sessionId,
-      messages: toSummarize,
-      cutIndex,
-    });
+    summaryWithFileOps = await maybeAppendCompactArchive(
+      summaryWithFileOps,
+      {
+        sessionId,
+        messages: toSummarize,
+        cutIndex,
+      },
+      prevSummary
+    );
 
     const keptTokens = estimateTokens(keptMessages);
     const summaryTokens = estimateTokens(createCompactedMessages(summaryWithFileOps));

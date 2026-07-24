@@ -2,7 +2,7 @@
  * Tool Output Cache — saves large tool results to disk and returns a preview.
  *
  * When a tool result exceeds the cache threshold, the full output is written
- * to `.agent-cache/tool-output/{id}.txt` and a preview (head + tail) is returned
+ * to `.agents/cache/tool-output/{id}.txt` and a preview (head + tail) is returned
  * to the LLM with instructions to use `read_file` for the full content.
  *
  * ## Cache Cleanup on Compaction
@@ -21,7 +21,7 @@ import type { ModelMessage } from "@tanstack/ai";
 // Constants
 // ============================================================================
 
-const CACHE_DIR = ".agent-cache/tool-output";
+const CACHE_DIR = ".agents/cache/tool-output";
 
 /** Content length threshold to trigger disk caching (~2.5k tokens) */
 export const CACHE_THRESHOLD = 10000;

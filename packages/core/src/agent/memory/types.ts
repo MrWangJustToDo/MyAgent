@@ -1,7 +1,7 @@
 /**
  * Memory Types - Type definitions for the persistent memory system.
  *
- * Memories are cross-session knowledge files stored in `.agent-memory/`.
+ * Memories are cross-session knowledge files stored in `.agents/memory/`.
  * Each memory is a markdown file with YAML frontmatter (same format as skills).
  */
 
@@ -13,7 +13,7 @@ import { z } from "zod";
 
 export const MEMORY_TYPES = ["user", "feedback", "project", "reference"] as const;
 
-export const DEFAULT_MEMORY_DIR = ".agent-memory";
+export const DEFAULT_MEMORY_DIR = ".agents/memory";
 
 export const MEMORY_INDEX_FILENAME = "MEMORY.md";
 
@@ -77,7 +77,7 @@ export type Memory = z.infer<typeof memorySchema>;
 export interface MemoryManagerConfig {
   /** Root path of the project */
   rootPath: string;
-  /** Memory directory name (relative to rootPath). Default: `.agent-memory` */
+  /** Memory directory name (relative to rootPath). Default: `.agents/memory` */
   memoryDir?: string;
   /** Trigger consolidation when file count exceeds this. Default: 15 */
   consolidateThreshold?: number;

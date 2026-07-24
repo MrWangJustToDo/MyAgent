@@ -21,8 +21,8 @@ import type {
 // ============================================================================
 
 const CACHE_HINT_PATTERNS = [
-  /^Full output saved to:\s*.agent-cache\//,
-  /^Use read_file with path=".agent-cache\//,
+  /^Full output saved to:\s*\.agents\/cache\//,
+  /^Use read_file with path="\.agents\/cache\//,
   /^\.\.\.\s*\(\d+\s+lines?\s+omitted\)\s*\.\.\.$/,
   /^\.\.\.\s*\(\d+\s+chars?\s+omitted\)\s*\.\.\.$/,
 ];

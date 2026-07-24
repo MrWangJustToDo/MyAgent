@@ -30,13 +30,9 @@ web-ext.config.ts
 
 .env
 */.env
-.transcripts
-.sessions
 .claude
 .mcp.json
 .agents
-.agent-cache
-.agent-memory
 tmp/
 skills-lock.json
 

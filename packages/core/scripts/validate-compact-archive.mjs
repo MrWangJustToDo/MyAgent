@@ -13,10 +13,12 @@ import {
   buildCompactArchiveMarkdown,
   clearCoreEnv,
   COMPACT_TRANSCRIPT_ROOT,
-  formatCompactArchivePointer,
+  extractCompactArchivePaths,
+  formatCompactArchivesSection,
   maybeAppendCompactArchive,
   parseCompactSequence,
   registerCoreEnv,
+  stripCompactArchiveSections,
   writeCompactArchive,
 } from "../dist/dev.mjs";
 
@@ -41,11 +43,27 @@ assert.match(markdown, /sequence: 3/);
 assert.match(markdown, /cutIndex: 4/);
 assert.match(markdown, /\[User\]: Investigate login bug/);
 
-const pointer = formatCompactArchivePointer(".agents/transcripts/ses_test/compact-1.md");
-assert.match(pointer, /## Compact archive/);
-assert.match(pointer, /\.agents\/transcripts\/ses_test\/compact-1\.md/);
-assert.match(pointer, /search this archive with grep/);
-assert.match(pointer, /Do not read the whole file/);
+const section = formatCompactArchivesSection([
+  ".agents/transcripts/ses_test/compact-1.md",
+  ".agents/transcripts/ses_test/compact-2.md",
+]);
+assert.match(section, /## Compact archives/);
+assert.match(section, /one compaction slice/);
+assert.match(section, /File shape:/);
+assert.match(section, /compact-1\.md/);
+assert.match(section, /compact-2\.md/);
+assert.match(section, /Do not read whole archive files/);
+
+assert.deepEqual(
+  extractCompactArchivePaths(
+    `## Compact archives\n\n- \`.agents/transcripts/ses/compact-1.md\`\n- \`.agents/transcripts/ses/compact-2.md\``
+  ),
+  [".agents/transcripts/ses/compact-1.md", ".agents/transcripts/ses/compact-2.md"]
+);
+
+const stripped = stripCompactArchiveSections(`## Goal\n\nShip it${section}`);
+assert.match(stripped, /## Goal/);
+assert.doesNotMatch(stripped, /## Compact archives/);
 
 const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "compact-archive-"));
 const files = new Map();
@@ -113,24 +131,38 @@ try {
   assert.ok(second);
   assert.equal(second.sequence, 2);
 
-  const withPointer = await maybeAppendCompactArchive("## Goal\n\nShip it", {
-    sessionId: "ses_abc",
-    messages,
-    cutIndex: 2,
-  });
+  const prevSummary = `## Goal\n\nOld work${formatCompactArchivesSection([first.relativePath])}`;
+  const withPointer = await maybeAppendCompactArchive(
+    "## Goal\n\nShip it\n\n## Compact archives\n\nLLM should not keep this",
+    {
+      sessionId: "ses_abc",
+      messages,
+      cutIndex: 2,
+    },
+    prevSummary
+  );
   assert.match(withPointer, /## Goal/);
-  assert.match(withPointer, /## Compact archive/);
+  assert.match(withPointer, /## Compact archives/);
+  assert.match(withPointer, /compact-1\.md/);
   assert.match(withPointer, /compact-3\.md/);
+  assert.equal((withPointer.match(/## Compact archives/g) ?? []).length, 1);
+  assert.doesNotMatch(withPointer, /LLM should not keep this/);
 
-  // Empty messages → no archive / no pointer
+  // Empty messages → keep prior paths, no new write
+  const priorOnly = await maybeAppendCompactArchive(
+    "summary only",
+    {
+      sessionId: "ses_abc",
+      messages: [],
+      cutIndex: 0,
+    },
+    prevSummary
+  );
+  assert.match(priorOnly, /compact-1\.md/);
+  assert.doesNotMatch(priorOnly, /compact-3\.md/);
+
   const empty = await writeCompactArchive({ sessionId: "ses_abc", messages: [], cutIndex: 0 });
   assert.equal(empty, null);
-  const unchanged = await maybeAppendCompactArchive("summary only", {
-    sessionId: "ses_abc",
-    messages: [],
-    cutIndex: 0,
-  });
-  assert.equal(unchanged, "summary only");
 } finally {
   clearCoreEnv();
   await fs.rm(rootPath, { recursive: true, force: true });

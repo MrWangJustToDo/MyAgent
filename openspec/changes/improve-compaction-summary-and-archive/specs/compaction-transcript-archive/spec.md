@@ -20,7 +20,11 @@ The system SHALL include the archive location in the compaction summary when an 
 
 #### Scenario: Pointer section present
 - **WHEN** compaction completes and an archive file was written
-- **THEN** the summary text includes a short archive section with a workspace-relative path and guidance to search with grep (or small offset/limit reads) for missing details, without reading the whole archive
+- **THEN** the summary text includes a `## Compact archives` section listing workspace-relative paths (merged with any paths from the previous summary), a short description of archive file shape, and guidance to search with grep (or small offset/limit reads) without reading whole archives
+
+#### Scenario: Prior archive paths survive re-compaction
+- **WHEN** a later compaction runs and the previous summary listed older compact archive paths
+- **THEN** the new summary's archive section still includes those older paths in addition to any newly written archive
 
 #### Scenario: No pointer without archive
 - **WHEN** archive was not written

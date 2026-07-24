@@ -81,7 +81,8 @@ When constructing the summary, stick to this template:
 [Construct a structured list of relevant files that have been read, edited, or created that pertain to the task at hand. If all the files in a directory are relevant, include the path to the directory.]
 ---
 
-Be concise but complete. Include specific file paths, function names, and technical details.`;
+Be concise but complete. Include specific file paths, function names, and technical details.
+Do NOT include a "## Compact archive" or "## Compact archives" section — the runtime appends archive paths after your summary.`;
 
 /**
  * Extra rules when the summarizer receives a `<still_in_context>` segment.
@@ -112,6 +113,7 @@ Update the existing structured summary with new information. RULES:
 - UPDATE "Next Steps" based on what was accomplished
 - PRESERVE exact file paths, function names, and error messages
 - If something is no longer relevant, you may remove it
+- Do NOT include a "## Compact archive" or "## Compact archives" section — the runtime appends archive paths after your summary
 
 When constructing the summary, stick to this template:
 ---

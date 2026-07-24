@@ -332,7 +332,7 @@ Runs **after** context auto-compact in the middleware stack.
 - Skips small results (`minToolResultSize`); protects `list_skills`, `load_skill`, `todo`, etc.
 - **UI** `UIMessage` history is unchanged; only the LLM `ModelMessage` path is shaped
 
-Large tool outputs at **execute** time still use `maybeCacheOutput` (`.agent-cache/tool-output/`) as a separate fallback — not part of compaction.
+Large tool outputs at **execute** time still use `maybeCacheOutput` (`.agents/cache/tool-output/`) as a separate fallback — not part of compaction.
 
 ### 5.2 Adapter vs capability boundary
 
@@ -362,7 +362,7 @@ emit compaction:auto-start
 autoCompact(messages, config, agentId, manager)
   → findCutPoint (keep recent user turns)
   → summarizeConversation with <to_compress> + <still_in_context> (+ optional <previous-summary>)
-  → writeCompactArchive (.agents/transcripts/<sessionId>/compact-<n>.md) — non-fatal; pointer appended to summary on success
+  → writeCompactArchive (.agents/transcripts/<sessionId>/compact-<n>.md) — non-fatal; merged ## Compact archives list (+ file-shape note) appended to summary
 applyCompactionResult(context, usage, result)
   → setSummaryMessage, setCompactIndex, reset window usage
 emit compaction:auto-complete | compaction:auto-error
@@ -427,7 +427,7 @@ Set via `ManagedAgentConfig.compaction` in `agent-factory.ts`.
 
 | Item | Value |
 |------|-------|
-| Directory | `.sessions/` |
+| Directory | `.agents/sessions/` |
 | File | `{sessionId}.session.json` |
 | Schema | `SessionData` v2 (`agent/session/types.ts`) |
 
@@ -506,7 +506,7 @@ uiMessages (source of truth in AgentContext, synced at each `chat()` start)
 ### 7.1 Static index (bootstrap → system prompt)
 
 ```
-MemoryManager.initialize()     // .agent-memory/*.md + MEMORY.md
+MemoryManager.initialize()     // .agents/memory/*.md + MEMORY.md
 buildManagedAgent → setMemoryContent(index)
 buildFrozenSystemPrompt → <memory_index> in frozen system prompt
 ```
@@ -547,7 +547,7 @@ message prefixes stay stable for provider prompt cache. Snapshot is not recomput
 
 ```
 Guard: manager exists, ≥15 messages, not already in progress
-extractMemories → runSubagent → write .agent-memory/*.md files
+extractMemories → runSubagent → write .agents/memory/*.md files
   → emit memory:extract { status: start | complete | empty | skip-short | error }
 If count >= consolidateThreshold:
   consolidateMemories → merge/delete via subagent
