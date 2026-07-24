@@ -76,7 +76,7 @@ export const createListFileTool = () => {
         {
           type: "text" as const,
           content:
-            `<params> offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit} </params>` +
+            `offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit}` +
             lines?.join("\n"),
         },
       ];

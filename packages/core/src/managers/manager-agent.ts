@@ -220,8 +220,41 @@ export class AgentManager {
    * @returns Active subagents, deepest-first
    */
   getActiveSubagents(rootAgentId: string): ManagedAgent[] {
+    return this._collectSubagents(rootAgentId, {
+      filter: (managed) => managed.parentId != null && ACTIVE_STATUSES.has(managed.status),
+    });
+  }
+
+  /**
+   * Recursively collect all subagents (completed and active) under the given
+   * root agent, ordered deepest-first.
+   *
+   * Unlike {@link getActiveSubagents}, this includes subagents that have
+   * already terminated (completed, aborted, error, idle). This is useful for
+   * the app layer's task panel, which should show the full history of all
+   * subagent tasks in the current session.
+   *
+   * @param rootAgentId The root agent to search under
+   * @returns All subagents, deepest-first
+   */
+  getAllSubagents(rootAgentId: string): ManagedAgent[] {
+    return this._collectSubagents(rootAgentId, {
+      filter: (managed) => managed.parentId != null,
+    });
+  }
+
+  /**
+   * Shared internal walker that recursively collects subagents under a root
+   * agent, applying an optional filter predicate. Results are ordered
+   * deepest-first (most recently spawned subagent first).
+   */
+  private _collectSubagents(
+    rootAgentId: string,
+    options?: { filter?: (managed: ManagedAgent) => boolean }
+  ): ManagedAgent[] {
     const result: ManagedAgent[] = [];
     const seen = new Set<string>();
+    const { filter } = options ?? {};
 
     const walk = (agentId: string) => {
       const managed = this.agents.get(agentId);
@@ -230,8 +263,8 @@ export class AgentManager {
       for (const childId of [...managed.childIds].reverse()) {
         walk(childId);
       }
-      // Include this node if it is a subagent (has parent) and currently active
-      if (managed.parentId && ACTIVE_STATUSES.has(managed.status) && !seen.has(managed.id)) {
+      // Include this node if it passes the filter (or no filter) and is not yet seen
+      if ((!filter || filter(managed)) && !seen.has(managed.id)) {
         seen.add(managed.id);
         result.push(managed);
       }

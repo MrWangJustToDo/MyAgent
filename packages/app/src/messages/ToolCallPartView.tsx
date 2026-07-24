@@ -130,7 +130,7 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
         <Text wrap="wrap">{headerText}</Text>
       </Box>
 
-      <ToolInputView part={part} toolInput={toolInput} uiState={uiState} />
+      <ToolInputView part={part} toolInput={toolInput} uiState={uiState} hasError={Boolean(errorText)} />
 
       {isRunCommand && isExecuting && (
         <StreamingOutputView

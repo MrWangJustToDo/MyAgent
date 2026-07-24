@@ -77,7 +77,7 @@ export const createWriteFileTool = () => {
       return [
         {
           type: "text" as const,
-          content: `${output.created ? "Created" : "Overwrote"} file: ${output.path}，modifiedTime：${output.modifiedTime}`,
+          content: `<write_file> ${output.created ? "Created" : "Overwrote"} file: ${output.path}，modifiedTime：${output.modifiedTime} </write_file>`,
         },
       ];
     },

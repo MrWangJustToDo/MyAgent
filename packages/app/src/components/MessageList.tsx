@@ -26,7 +26,7 @@ import type { JSX } from "react";
 // ============================================================================
 
 /** Maximum number of completed (static) flat parts to render. Older messages are truncated with a summary line. */
-const MAX_STATIC_PARTS = 40;
+const MAX_STATIC_PARTS = 60;
 
 // ============================================================================
 // Props

@@ -17,10 +17,12 @@ export const ToolInputView = ({
   part,
   toolInput,
   uiState,
+  hasError,
 }: {
   part: ToolCallPart;
   toolInput: unknown;
   uiState: UiToolState;
+  hasError: boolean;
 }) => {
   const mode = useTranscriptDisplayMode();
   const toolName = part.name;
@@ -38,6 +40,8 @@ export const ToolInputView = ({
     if (!taskInput?.prompt || !isExecuting || taskPhase === "summary") return null;
     return <TaskToolInputView part={part} toolInput={toolInput} />;
   }
+
+  if (hasError) return null;
 
   if (toolName === "write_file") {
     if (!showFileDiffs) return null;

@@ -1,4 +1,4 @@
-import { agentManager } from "@my-agent/core";
+import { agentManager, type ManagedAgent } from "@my-agent/core";
 import { Box, Text, useInput } from "ink";
 import { useEffect, useMemo, useState } from "react";
 
@@ -9,9 +9,42 @@ import { COLORS } from "../theme/colors.js";
 import { formatUsageBrief } from "../utils/format-usage.js";
 import { KeyLabel, listNavHint, pressEscToReturnHint } from "../utils/keyboard-labels.js";
 
+// ============================================================================
+// Status display helpers
+// ============================================================================
+
+const STATUS_ICON: Record<string, string> = {
+  running: ">",
+  thinking: ">",
+  responding: ">",
+  compacting: ">",
+  waiting: "⌛",
+  awaiting_user: "⌛",
+  completed: "✓",
+  error: "✗",
+  aborted: "⊘",
+  idle: "○",
+};
+
+function getStatusIcon(status: string): string {
+  return STATUS_ICON[status] ?? "?";
+}
+
+function getStatusColor(status: string): string {
+  if (status === "completed") return COLORS.success;
+  if (status === "error") return COLORS.danger;
+  if (status === "aborted") return COLORS.muted;
+  if (["running", "thinking", "responding", "compacting"].includes(status)) return COLORS.warning;
+  return COLORS.muted;
+}
+
+function isActiveStatus(status: string): boolean {
+  return ["running", "thinking", "responding", "compacting", "waiting", "awaiting_user"].includes(status);
+}
+
 type ActiveSubagent = ReturnType<typeof agentManager.getActiveSubagents>[number];
 
-function getTaskLabel(managed: ActiveSubagent): string {
+function getTaskLabel(managed: ActiveSubagent | ManagedAgent): string {
   const name = managed.name ?? managed.id;
   return name.startsWith("subagent-") ? name.slice("subagent-".length) : name;
 }
@@ -21,7 +54,7 @@ const SubagentPanelList = ({
   onSelect,
   onClose,
 }: {
-  tasks: ActiveSubagent[];
+  tasks: ManagedAgent[];
   onSelect: (id: string) => void;
   onClose: () => void;
 }) => {
@@ -49,10 +82,10 @@ const SubagentPanelList = ({
     return (
       <Box flexDirection="column" paddingX={1} paddingY={1}>
         <Text bold color={COLORS.primary}>
-          Running Tasks
+          Tasks
         </Text>
         <Text color={COLORS.muted} dimColor>
-          No active subagent tasks.
+          No subagent tasks yet.
         </Text>
         <Text color={COLORS.muted} dimColor>
           {pressEscToReturnHint()}
@@ -61,21 +94,29 @@ const SubagentPanelList = ({
     );
   }
 
+  const activeCount = tasks.filter((t) => isActiveStatus(t.status)).length;
+
   return (
     <Box flexDirection="column" paddingX={1} paddingY={1}>
       <Box marginBottom={1}>
         <Text bold color={COLORS.primary}>
-          Running Tasks
+          Tasks
+        </Text>
+        <Text dimColor>
+          {" "}
+          ({tasks.length} total{activeCount > 0 ? `, ${activeCount} active` : ""})
         </Text>
         <Text dimColor> {listNavHint("open")}</Text>
       </Box>
       {tasks.map((task, i) => {
         const isSelected = i === selectedIndex;
+        const icon = getStatusIcon(task.status);
+        const iconColor = isSelected ? COLORS.primary : getStatusColor(task.status);
         return (
           <Box key={task.id}>
-            <Text color={isSelected ? COLORS.primary : COLORS.muted} bold={isSelected}>
+            <Text color={isSelected ? COLORS.primary : iconColor} bold={isSelected || isActiveStatus(task.status)}>
               {isSelected ? "❯ " : "  "}
-              {getTaskLabel(task)}
+              {icon} {getTaskLabel(task)}
             </Text>
             <Text color={COLORS.muted} dimColor>
               {" "}
@@ -158,15 +199,15 @@ export const SubagentPanel = () => {
     const refresh = () => setListRevision((n) => n + 1);
     const root = rootAgentId ? agentManager.getAgent(rootAgentId) : undefined;
     const unsub = root?.observe({
-      events: ["subagent:created", "subagent:started", "subagent:completed", "agent:stop"],
+      events: ["subagent:created", "subagent:started", "subagent:completed", "subagent:destroyed", "agent:stop"],
       onEvent: refresh,
     });
     return () => unsub?.();
   }, [view, rootAgentId]);
 
-  const runningTasks = useMemo(() => {
+  const allTasks = useMemo(() => {
     if (!rootAgentId) return [];
-    return agentManager.getActiveSubagents(rootAgentId);
+    return agentManager.getAllSubagents(rootAgentId);
     // listRevision forces refresh when subagent lifecycle events fire
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rootAgentId, view, listRevision]);
@@ -179,5 +220,5 @@ export const SubagentPanel = () => {
     return <SubagentPanelDetail subagentId={selectedSubagentId} onBack={backToList} />;
   }
 
-  return <SubagentPanelList tasks={runningTasks} onSelect={openDetail} onClose={close} />;
+  return <SubagentPanelList tasks={allTasks} onSelect={openDetail} onClose={close} />;
 };

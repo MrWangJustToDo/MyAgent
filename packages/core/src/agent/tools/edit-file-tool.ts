@@ -350,7 +350,7 @@ export const createEditFileTool = () => {
       return [
         {
           type: "text" as const,
-          content: `Edited ${output.path} (${output.replacements} replacement${output.replacements !== 1 ? "s" : ""})`,
+          content: `<edit_file> Edited ${output.path} (${output.replacements} replacement${output.replacements !== 1 ? "s" : ""}), modifiedTime: ${output.modifiedTime} </edit_file>`,
         },
       ];
     },
