@@ -96,7 +96,6 @@ export const writeFileOutputSchema = z.object({
   path: z.string().describe("The file path that was written."),
   bytesWritten: z.number().describe("Number of bytes written."),
   created: z.boolean().describe("Whether a new file was created (vs overwritten)."),
-  modifiedTime: z.string().describe("ISO timestamp of the new modification time."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
   ...toolOutputBaseSchema.shape,
 });
@@ -104,7 +103,6 @@ export const writeFileOutputSchema = z.object({
 export const editFileOutputSchema = z.object({
   path: z.string().describe("The file path that was edited."),
   replacements: z.number().describe("Number of replacements made."),
-  modifiedTime: z.string().describe("The new modification timestamp after editing."),
   oldFile: z.string().describe("The original file content before any edits were applied."),
   newFile: z.string().describe("The full file content after all edits have been applied."),
   results: z

@@ -12,7 +12,6 @@ const textOutput = formatReadFileToolResult({
   type: "text",
   path: "src/index.ts",
   content: "1: export {}",
-  modifiedTime: "abc",
   totalLines: 1,
   startLine: 1,
   endLine: 1,
@@ -20,7 +19,9 @@ const textOutput = formatReadFileToolResult({
   durationMs: 1,
   cachedOutputPath: null,
 });
-assert.equal(textOutput.type, "text");
+assert.equal(typeof textOutput, "string");
+assert.match(textOutput, /"type":"text"/);
+assert.match(textOutput, /src\/index\.ts/);
 
 const imageOutput = formatReadFileToolResult({
   type: "image",

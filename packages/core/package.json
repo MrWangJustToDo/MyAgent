@@ -65,7 +65,8 @@
     "validate:safe-command": "pnpm run build && node scripts/validate-safe-command.mjs",
     "validate:plan-tools": "pnpm run build && node scripts/validate-plan-tools.mjs",
     "validate:plan-store": "pnpm run build && node scripts/validate-plan-store.mjs",
-    "validate:generate-id": "pnpm run build && node scripts/validate-generate-id.mjs"
+    "validate:generate-id": "pnpm run build && node scripts/validate-generate-id.mjs",
+    "validate:find-edit-match": "pnpm run build && node scripts/validate-find-edit-match.mjs"
   },
   "dependencies": {
     "@tanstack/ai": "^0.40.0",

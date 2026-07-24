@@ -36,6 +36,14 @@ export { isPromptTooLongError } from "./agent/compaction/reactive-compact.js";
 export { extractRunErrorMessage, runStreamWithRecovery } from "./managers/reactive-compact-retry.js";
 export { throwOnRunError } from "./agent/subagent/stream-errors.js";
 export { formatReadFileToolResult } from "./agent/tools/util/format-read-file-result.js";
+export {
+  applyResolvedEdit,
+  expandMatchVariants,
+  formatNotFoundHint,
+  resolveEditMatch,
+  START_LINE_TOLERANCE,
+  unescapeCommonEscapes,
+} from "./agent/tools/util/find-edit-match.js";
 export { BEGIN_SUMMARY_TOOL_NAME } from "./agent/subagent/begin-summary-tool.js";
 export {
   mcpContentHasMultimodal,

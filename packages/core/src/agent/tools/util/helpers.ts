@@ -1,43 +1,10 @@
 import { getEnv } from "../../../env.js";
 
 /**
- * Get file content and a modification identifier.
- * Uses a content hash as the modification identifier when mtime is unavailable.
+ * Get file content.
  */
-export async function getFile(path: string): Promise<{
-  content: string;
-  modifiedTime: string;
-}> {
-  const content = await getEnv().fs.readFile(path);
-  const modifiedTime = hashContent(content);
-  return { content, modifiedTime };
-}
-
-/**
- * Get just the modification identifier for a file.
- *
- * When the caller already has the content in memory (e.g. edit-file tool
- * after applying edits), pass it via `knownContent` to avoid a redundant
- * re-read of the file from disk.
- */
-export async function getFileModifiedTime(path: string, knownContent?: string): Promise<string> {
-  const content = knownContent ?? (await getEnv().fs.readFile(path));
-  return hashContent(content);
-}
-
-/**
- * Simple hash function for content-based modification detection.
- * Uses a fast non-cryptographic hash.
- *
- * Exported so callers that already hold the content in memory can compute the
- * modification identifier without re-reading the file.
- */
-export function hashContent(content: string): string {
-  let hash = 5381;
-  for (let i = 0; i < content.length; i++) {
-    hash = ((hash << 5) + hash) ^ content.charCodeAt(i);
-  }
-  return (hash >>> 0).toString(16);
+export async function getFile(path: string): Promise<string> {
+  return getEnv().fs.readFile(path);
 }
 
 /**

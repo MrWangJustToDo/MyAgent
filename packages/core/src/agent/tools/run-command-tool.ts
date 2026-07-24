@@ -144,8 +144,8 @@ export const createRunCommandTool = () => {
             content:
               `Started background job ${output.jobId} for: ${output.command}\n` +
               `Status: ${output.status ?? "running"}\n` +
-              `<command> Use get_command_output with jobId="${output.jobId}" to read output/status. </command>` +
-              `<command> Use kill_command to stop the job when finished. </command>`,
+              `Use get_command_output with jobId="${output.jobId}" to read output/status. ` +
+              `Use kill_command to stop the job when finished. `,
           },
         ];
       }

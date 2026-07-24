@@ -171,7 +171,6 @@ export const readFileOutputSchema = z.discriminatedUnion("type", [
     type: z.literal("text"),
     path: z.string().describe("The file path that was read."),
     content: z.string().describe("The file content with line numbers."),
-    modifiedTime: z.string().describe("ISO timestamp or hash of last modification."),
     totalLines: z.number().describe("Total number of lines in the file."),
     startLine: z.number().describe("Starting line number (1-indexed)."),
     endLine: z.number().describe("Ending line number (inclusive)."),
@@ -421,9 +420,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
         }
 
         // Read text file
-        const fileRes = await getFile(filePath);
-        const modifiedTime = fileRes.modifiedTime;
-        const content = fileRes.content;
+        const content = await getFile(filePath);
 
         const lines = content.split("\n");
         const totalLines = lines.length;
@@ -483,7 +480,6 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
           type: "text" as const,
           path: filePath,
           content: selectedContent,
-          modifiedTime,
           totalLines,
           startLine,
           endLine,

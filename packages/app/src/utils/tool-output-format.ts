@@ -43,7 +43,7 @@ export function stripCacheNote(message: string): string {
 
 function formatListFileOutput(output: ListFileOutput): string {
   const { entries, count } = output;
-  if (count === 0) return "Empty directory";
+  if (!count || count === 0 || !entries || entries.length === 0) return "Empty directory";
 
   const maxShow = 5;
   const shown = entries.slice(0, maxShow);

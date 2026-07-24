@@ -3,103 +3,29 @@ import { z } from "zod";
 import { getEnv } from "../../env.js";
 
 import { defineServerTool } from "./tanstack/define-tool.js";
-import {
-  fuzzyIncludes,
-  fuzzyCount,
-  fuzzyReplace,
-  fuzzyReplaceAll,
-  normalizeForFuzzyMatch,
-} from "./util/fuzzy-match.js";
-import { getFile, getFileModifiedTime, withDuration } from "./util/helpers.js";
+import { withFileMutationQueue } from "./util/file-mutation-queue.js";
+import { applyResolvedEdit, isErrorResult, resolveEditMatch } from "./util/find-edit-match.js";
+import { normalizeForFuzzyMatch } from "./util/fuzzy-match.js";
+import { getFile, withDuration } from "./util/helpers.js";
 import { editFileOutputSchema } from "./util/types.js";
 
 import type { EditFileOutput } from "./util/types.js";
 
 // ============================================================================
-// Types
-// ============================================================================
-
-interface EditOperation {
-  oldString: string;
-  newString: string;
-  replaceAll?: boolean;
-  startLine?: number;
-}
-
-interface EditValidationError {
-  oldString: string;
-  reason: string;
-}
-
-// ============================================================================
 // Helpers
 // ============================================================================
 
-/**
- * Find the line number (1-indexed) where a substring appears in content.
- * Returns the first occurrence line, or -1 if not found.
- *
- * Uses indexOf + newline counting instead of substring+split to avoid
- * allocating a copy of the file prefix and an array of all lines.
- */
-function findLineNumber(content: string, substring: string): number {
-  const index = content.indexOf(substring);
-  if (index === -1) {
-    return -1;
-  }
-  // Count newlines in [0, index) — line number is newlineCount + 1.
+function findLineNumber(content: string, index: number): number {
+  if (index < 0) return -1;
   let line = 1;
   let from = 0;
   while (true) {
     const nl = content.indexOf("\n", from);
-    if (nl === -1 || nl >= index) {
-      break;
-    }
+    if (nl === -1 || nl >= index) break;
     line++;
     from = nl + 1;
   }
   return line;
-}
-
-/**
- * Count non-overlapping occurrences of `needle` in `content` using indexOf.
- *
- * Replaces `content.split(needle).length - 1`, which allocates an array of
- * all segments (expensive for large files). indexOf-based counting only
- * walks the string once and allocates nothing.
- */
-function countOccurrences(content: string, needle: string): number {
-  if (needle.length === 0) {
-    return 0;
-  }
-  let count = 0;
-  let pos = 0;
-  while ((pos = content.indexOf(needle, pos)) !== -1) {
-    count++;
-    pos += needle.length;
-  }
-  return count;
-}
-
-/**
- * Validate that a match is near the expected start line.
- * Allows a tolerance of 5 lines for fuzzy matching differences.
- * Returns the actual line number, or -1 if not found.
- */
-function validateStartLine(content: string, oldString: string, expectedLine: number, tolerance = 5): number {
-  const actualLine = findLineNumber(content, oldString);
-  if (actualLine === -1) {
-    return -1;
-  }
-
-  if (Math.abs(actualLine - expectedLine) > tolerance) {
-    throw new Error(
-      `oldString found at line ${actualLine}, but expected near line ${expectedLine}. ` +
-        `The file may have changed or the startLine is incorrect. Please read the file again.`
-    );
-  }
-
-  return actualLine;
 }
 
 // ============================================================================
@@ -109,35 +35,26 @@ function validateStartLine(content: string, oldString: string, expectedLine: num
 /**
  * Creates an edit-file tool for replacing text in files.
  *
- * This tool edits a file by replacing occurrences of oldString with newString.
- * Supports multiple edits in a single call via the `edits` array.
- * Requires the modifiedTime from a previous read operation to ensure
- * the file hasn't been modified since it was read.
- *
- * All edits are validated before any are applied (atomic all-or-nothing).
- * Returns detailed per-edit results including found/replaced status.
- *
- * Requires user approval before execution.
+ * Safety without modifiedTime:
+ * - Per-file mutation queue serializes concurrent edits to the same path
+ * - oldString must uniquely match (unless replaceAll) — wrong/stale text fails naturally
+ * - Edits apply in memory first; disk write only after all succeed (atomic)
+ * - User approval is still required before execution
  */
 export const createEditFileTool = () => {
   return defineServerTool({
     name: "edit_file",
-    description: `Edits a file by replacing occurrences of oldString with newString. Supports one or more edits in a single call via the \`edits\` array.
+    description: `Edits a file by replacing oldString with newString. Supports one or more edits via the \`edits\` array.
 
 **Key Rules:**
-- Requires modifiedTime from a previous read_file call to prevent concurrent modifications.
-- IMPORTANT: Use actual newline characters (not escaped \\\\\\n) in oldString and newString.
-- Each edit must have a unique oldString that appears exactly once in the file (unless replaceAll is true).
-- Edits are applied sequentially in the order provided.
-- **startLine**: Provide the 1-indexed line number where oldString starts (from the read_file output). Used for diff display and to validate the match location.
-- **Fuzzy Matching**: Handles common Unicode issues like smart quotes, dashes, and special spaces that LLMs sometimes produce.`,
+- Prefer edit_file over write_file for existing files (surgical edits).
+- Use real newlines in oldString/newString (not the two-character sequence \\\\n).
+- Each oldString must appear exactly once unless replaceAll is true.
+- Provide startLine (1-indexed, from read_file) when the snippet may appear more than once — it selects the nearest match within ±20 lines.
+- Matching tolerates common LLM over-escapes (\\\\n, over-escaped backticks) and smart-quote Unicode differences.
+- If a match fails, the error includes a nearest similar line — re-read there and widen oldString.`,
     inputSchema: z.object({
       path: z.string().describe("The path to the file to edit, relative to the project directory."),
-      modifiedTime: z
-        .string({ message: "modifiedTime: must be a string" })
-        .describe(
-          "The modification timestamp from the read_file_tool response. Used to verify the file hasn't changed since it was read."
-        ),
       edits: z
         .array(
           z.object({
@@ -150,7 +67,7 @@ export const createEditFileTool = () => {
               .min(1, { message: "startLine: must be >= 1 (1-indexed)" })
               .optional()
               .describe(
-                "The 1-indexed line number where oldString starts in the file. Used for diff display and validation."
+                "1-indexed line where oldString starts (from read_file). Required to disambiguate multiple matches; must be within ±20 lines of the real hit."
               ),
           })
         )
@@ -159,198 +76,72 @@ export const createEditFileTool = () => {
     }),
     outputSchema: editFileOutputSchema,
     needsApproval: true,
-    execute: async ({ path, modifiedTime, edits }) => {
-      return withDuration(async () => {
-        // ====================================================================
-        // Phase 1: Build the list of edit operations
-        // ====================================================================
+    execute: async ({ path, edits }) => {
+      return withFileMutationQueue(path, async () =>
+        withDuration(async () => {
+          const originalContent = await getFile(path);
 
-        const editOperations: EditOperation[] = edits.map((edit) => ({
-          oldString: edit.oldString,
-          newString: edit.newString,
-          replaceAll: edit.replaceAll,
-          startLine: edit.startLine,
-        }));
+          let content = originalContent;
+          let normalizedContent = normalizeForFuzzyMatch(content);
+          let normalizedValid = true;
+          const results: EditFileOutput["results"] = [];
 
-        // ====================================================================
-        // Phase 2: Read file and check modification time
-        // ====================================================================
+          for (const edit of edits) {
+            if (!normalizedValid) {
+              normalizedContent = normalizeForFuzzyMatch(content);
+              normalizedValid = true;
+            }
 
-        const fileRes = await getFile(path);
-        const currentModifiedTime = fileRes.modifiedTime;
-
-        if (currentModifiedTime !== modifiedTime) {
-          throw new Error(
-            `File has been modified since it was read. Expected modifiedTime: ${modifiedTime}, current: ${currentModifiedTime}. Please read the file again before editing.`
-          );
-        }
-
-        // ====================================================================
-        // Phase 3: Validate all edits before applying any (find errors early)
-        // ====================================================================
-
-        // Normalize the original content once and reuse across all edits'
-        // fuzzy checks. Normalization is O(M); without this cache each edit
-        // would re-scan the whole file.
-        const normalizedOriginal = normalizeForFuzzyMatch(fileRes.content);
-
-        const validationErrors: EditValidationError[] = [];
-        for (const edit of editOperations) {
-          // Check if string exists (try exact match first, then fall back to fuzzy)
-          const hasExactMatch = fileRes.content.includes(edit.oldString);
-          const hasFuzzyMatch = hasExactMatch || fuzzyIncludes(fileRes.content, edit.oldString, normalizedOriginal);
-
-          if (!hasExactMatch && !hasFuzzyMatch) {
-            validationErrors.push({
-              oldString: edit.oldString.substring(0, 100),
-              reason: "not found in file content",
+            const match = resolveEditMatch(content, edit.oldString, edit.newString, {
+              replaceAll: edit.replaceAll,
+              startLine: edit.startLine,
+              normalizedContent,
             });
-            continue;
-          }
 
-          // Validate startLine if provided
-          if (edit.startLine !== undefined) {
-            try {
-              validateStartLine(fileRes.content, edit.oldString, edit.startLine);
-            } catch (e) {
-              validationErrors.push({
-                oldString: edit.oldString.substring(0, 100),
-                reason: e instanceof Error ? e.message : "startLine validation failed",
-              });
-              continue;
+            if (isErrorResult(match)) {
+              throw new Error(
+                `edit_file failed, no changes were written: "${edit.oldString.substring(0, 100)}": ${match.error}`
+              );
+            }
+
+            const newContent = applyResolvedEdit(content, match, Boolean(edit.replaceAll), normalizedContent);
+            const actualLine = findLineNumber(content, match.index);
+
+            results.push({
+              oldString: edit.oldString.substring(0, 50) + (edit.oldString.length > 50 ? "..." : ""),
+              newString: edit.newString.substring(0, 50) + (edit.newString.length > 50 ? "..." : ""),
+              found: true,
+              replaced: true,
+              count: match.occurrences,
+              startLine: edit.startLine,
+              actualLine: actualLine > 0 ? actualLine : undefined,
+            });
+
+            if (newContent !== content) {
+              content = newContent;
+              normalizedValid = false;
             }
           }
 
-          // Check for multiple occurrences (unless replaceAll is set)
-          if (!edit.replaceAll) {
-            const occurrences = hasExactMatch
-              ? countOccurrences(fileRes.content, edit.oldString)
-              : fuzzyCount(fileRes.content, edit.oldString, normalizedOriginal);
+          await getEnv().fs.writeFile(path, content);
 
-            if (occurrences > 1) {
-              validationErrors.push({
-                oldString: edit.oldString.substring(0, 50),
-                reason: `found ${occurrences} matches; set replaceAll to replace all, or provide more context to make it unique`,
-              });
-              continue;
-            }
-          }
-        }
+          const totalReplacements = results.reduce((sum, r) => sum + r.count, 0);
 
-        // If any validation errors, throw with all of them listed
-        if (validationErrors.length > 0) {
-          const details = validationErrors.map((e) => `  - "${e.oldString}": ${e.reason}`).join("\n");
-          throw new Error(`${validationErrors.length} edit(s) failed validation, no changes were made:\n${details}`);
-        }
-
-        // ====================================================================
-        // Phase 4: Apply all edits (all validated, so this should succeed)
-        // ====================================================================
-
-        let content = fileRes.content;
-        // Cache of the normalized `content`; invalidated whenever `content`
-        // changes. Only (re)computed when a fuzzy path is actually needed.
-        let normalizedContent = normalizedOriginal;
-        let normalizedContentValid = true;
-        const results: Array<{
-          oldString: string;
-          newString: string;
-          found: boolean;
-          replaced: boolean;
-          count: number;
-          startLine?: number;
-          actualLine?: number;
-        }> = [];
-
-        for (const edit of editOperations) {
-          // Try exact match first, then fall back to fuzzy match
-          const hasExactMatch = content.includes(edit.oldString);
-
-          // Ensure the normalized cache reflects the current `content`.
-          if (!normalizedContentValid) {
-            normalizedContent = normalizeForFuzzyMatch(content);
-            normalizedContentValid = true;
-          }
-
-          // Count occurrences
-          const occurrences = hasExactMatch
-            ? countOccurrences(content, edit.oldString)
-            : fuzzyCount(content, edit.oldString, normalizedContent);
-
-          // Find actual line for result
-          let actualLine: number | undefined;
-          if (edit.startLine !== undefined) {
-            actualLine = findLineNumber(content, edit.oldString);
-          }
-
-          // Apply the edit
-          let newContent: string;
-          if (hasExactMatch) {
-            newContent = edit.replaceAll
-              ? content.replaceAll(edit.oldString, edit.newString)
-              : content.replace(edit.oldString, edit.newString);
-          } else {
-            newContent = edit.replaceAll
-              ? fuzzyReplaceAll(content, edit.oldString, edit.newString, normalizedContent)
-              : fuzzyReplace(content, edit.oldString, edit.newString, normalizedContent);
-          }
-
-          const replacementCount = edit.replaceAll ? occurrences : 1;
-
-          results.push({
-            oldString: edit.oldString.substring(0, 50) + (edit.oldString.length > 50 ? "..." : ""),
-            newString: edit.newString.substring(0, 50) + (edit.newString.length > 50 ? "..." : ""),
-            found: true,
-            replaced: true,
-            count: replacementCount,
-            startLine: edit.startLine,
-            actualLine,
-          });
-
-          if (newContent !== content) {
-            content = newContent;
-            normalizedContentValid = false; // content changed, invalidate cache
-          }
-        }
-
-        // ====================================================================
-        // Phase 5: Write the final content
-        // ====================================================================
-
-        await getEnv().fs.writeFile(path, content);
-
-        // Re-read the file from disk to compute the modification identifier.
-        // This guarantees the returned modifiedTime matches what read_file_tool
-        // would produce (both hash the on-disk content via getFile/getFileModifiedTime).
-        // Using the in-memory `content` instead would risk a mismatch if the
-        // CoreEnv writeFile/readFile pair isn't perfectly symmetric (e.g. remote
-        // mode, encoding edge cases), which would trigger false conflict
-        // detection on the next edit.
-        const newModifiedTime = await getFileModifiedTime(path);
-
-        const totalReplacements = results.reduce((sum, r) => sum + r.count, 0);
-
-        return {
-          path,
-          replacements: totalReplacements,
-          modifiedTime: newModifiedTime,
-          // Capture the original content (before any edit) and the final
-          // content (after all edits, identical to what was written to disk)
-          // so the UI can render a full-file diff without re-reading the file
-          // — which would be stale once other edits touch it later.
-          oldFile: fileRes.content,
-          newFile: content,
-          results,
-        };
-      });
+          return {
+            path,
+            replacements: totalReplacements,
+            oldFile: originalContent,
+            newFile: content,
+            results,
+          };
+        })
+      );
     },
-    // Only confirm success to the LLM — modifiedTime is for the next edit's
-    // conflict detection, results/details are for the UI, durationMs is metadata.
     toModelOutput: ({ output }: { toolCallId: string; input: unknown; output: EditFileOutput }) => {
       return [
         {
           type: "text" as const,
-          content: `<edit_file> Edited ${output.path} (${output.replacements} replacement${output.replacements !== 1 ? "s" : ""}), modifiedTime: ${output.modifiedTime} </edit_file>`,
+          content: `Edited ${output.path} (${output.replacements} replacement${output.replacements !== 1 ? "s" : ""})`,
         },
       ];
     },

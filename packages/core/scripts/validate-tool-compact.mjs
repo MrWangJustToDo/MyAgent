@@ -162,7 +162,7 @@ assert.match(String(pendingTool.content), /pendingExecution/);
 toModelOutputRegistry.register("write_file", ({ output }) => [
   {
     type: "text",
-    content: `${output.created ? "Created" : "Overwrote"} file: ${output.path}，modifiedTime：${output.modifiedTime}`,
+    content: `${output.created ? "Created" : "Overwrote"} file: ${output.path}`,
   },
 ]);
 
@@ -185,7 +185,7 @@ const errorMessages = [
     role: "tool",
     toolCallId: "call-err",
     content: JSON.stringify({
-      error: "File already exists: packages/app/src/WorkspacePanel.tsx. You must read the file first.",
+      error: "File already exists: packages/app/src/WorkspacePanel.tsx. Use edit_file for surgical edits, or pass overwrite: true.",
     }),
   },
 ];
