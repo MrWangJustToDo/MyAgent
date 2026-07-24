@@ -360,8 +360,9 @@ Large tool outputs at **execute** time still use `maybeCacheOutput` (`.agent-cac
 setStatus("compacting") via beginCompaction("auto")
 emit compaction:auto-start
 autoCompact(messages, config, agentId, manager)
-  → findCutPoint (keep recent flows)
-  → summarizeConversation via runSubagent (no tools, 1 iteration)
+  → findCutPoint (keep recent user turns)
+  → summarizeConversation with <to_compress> + <still_in_context> (+ optional <previous-summary>)
+  → writeCompactArchive (.agents/transcripts/<sessionId>/compact-<n>.md) — non-fatal; pointer appended to summary on success
 applyCompactionResult(context, usage, result)
   → setSummaryMessage, setCompactIndex, reset window usage
 emit compaction:auto-complete | compaction:auto-error
@@ -374,6 +375,7 @@ setStatus("running") via endCompaction
 [summaryMessage, ...canon.slice(compactIndex)]
 ```
 
+The summarizer sees both the cut-away history and the kept tail (budget-aware) so Goal/Next stay aligned, but the main agent still receives only `summary + kept` after apply.
 `canon` is rebuilt each `onConfig` via `getCanonicalModelMessages(engine)`:
 `convert(uiMessages) + engine.slice(runBaselineCount)`.
 

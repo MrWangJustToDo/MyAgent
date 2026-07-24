@@ -62,7 +62,23 @@ export { resolveSubagentBridgeUI } from "./agent/subagent/types.js";
 export { generateId, resetGeneratedIdsForTesting } from "./agent/utils.js";
 export { extractFileOpsFromMessages, formatFileOperations } from "./agent/compaction/file-ops-tracker.js";
 export { applyToolCompact, createToolPlaceholder, ToolCompactCache, toModelOutputRegistry } from "./agent/compaction";
+export {
+  buildCompactArchiveMarkdown,
+  buildCompactionPrompt,
+  buildSegmentedConversationText,
+  buildSummarizationUserPrompt,
+  COMPACT_TRANSCRIPT_ROOT,
+  findCutPoint,
+  formatCompactArchivePointer,
+  maybeAppendCompactArchive,
+  parseCompactSequence,
+  serializeConversation,
+  STILL_IN_CONTEXT_RULES,
+  writeCompactArchive,
+} from "./agent/compaction";
 export { extractTextFromContent } from "./agent/compaction/message-utils.js";
+export { clearCoreEnv, registerCoreEnv } from "./env.js";
+export type { CoreEnv } from "./env.js";
 export { resolveSelectedMemoryFilename } from "./agent/memory/memory-retrieval.js";
 export {
   DEFAULT_SUMMARIZATION_CONTEXT_WINDOW,

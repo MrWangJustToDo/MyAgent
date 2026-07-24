@@ -84,6 +84,18 @@ When constructing the summary, stick to this template:
 Be concise but complete. Include specific file paths, function names, and technical details.`;
 
 /**
+ * Extra rules when the summarizer receives a `<still_in_context>` segment.
+ * Kept separate so callers can attach it only when that segment is present.
+ */
+export const STILL_IN_CONTEXT_RULES = `## Segment rules
+
+The conversation is split into labeled segments:
+- \`<to_compress>\`: history that will leave the main agent's context — summarize this thoroughly.
+- \`<still_in_context>\`: recent turns that remain after compaction — use only to align Goal / Next / Accomplished with what is still visible.
+
+Do NOT restate the \`<still_in_context>\` turns in detail; they will still be in the agent's context after compaction. Prefer capturing decisions, discoveries, and unfinished work from \`<to_compress>\`.`;
+
+/**
  * UPDATE compaction prompt template — used when a previous summary already exists.
  *
  * Based on PI's UPDATE_SUMMARIZATION_PROMPT, this tells the LLM to preserve
@@ -158,6 +170,7 @@ export interface CompactionTodoItem {
  * @param options.focus - Optional focus area to emphasize in summarization
  * @param options.todos - Optional list of active todos to include in summary
  * @param options.existingSummary - Previous summary text (triggers update mode with <previous-summary> tags)
+ * @param options.hasStillInContext - When true, append anti-duplication segment rules
  * @returns The complete prompt string
  *
  * @example
@@ -182,8 +195,9 @@ export function buildCompactionPrompt(options?: {
   focus?: string;
   todos?: CompactionTodoItem[];
   existingSummary?: string;
+  hasStillInContext?: boolean;
 }): string {
-  const { focus, todos, existingSummary } = options ?? {};
+  const { focus, todos, existingSummary, hasStillInContext } = options ?? {};
 
   const parts: string[] = [];
 
@@ -196,6 +210,10 @@ export function buildCompactionPrompt(options?: {
     parts.push(UPDATE_COMPACTION_PROMPT);
   } else {
     parts.push(COMPACTION_PROMPT);
+  }
+
+  if (hasStillInContext) {
+    parts.push(`\n${STILL_IN_CONTEXT_RULES}`);
   }
 
   if (focus) {

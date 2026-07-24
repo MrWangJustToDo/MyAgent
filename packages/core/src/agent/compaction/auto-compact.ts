@@ -18,96 +18,19 @@
 import { runSubagent } from "../subagent/run-subagent.js";
 
 import { buildCompactionPrompt, COMPACTION_SYSTEM_PROMPT } from "./compaction-prompt.js";
+import { extractExistingSummary, findCutPoint } from "./cut-point.js";
 import { extractFileOpsFromMessages, formatFileOperations } from "./file-ops-tracker.js";
-import { extractTextFromContent } from "./message-utils.js";
-import { serializeConversation } from "./serialize-conversation.js";
+import { buildSegmentedConversationText } from "./serialize-conversation.js";
 import { resolveSummarizationInputBudget, splitMessagesByTokenBudget } from "./summarization-budget.js";
 import { estimateTokens } from "./token-estimator.js";
+import { maybeAppendCompactArchive } from "./write-compact-archive.js";
 
 import type { CompactionTodoItem } from "./compaction-prompt.js";
 import type { CompactionConfig, CompactionResult } from "./types.js";
 import type { AgentManager } from "../../managers/manager-agent.js";
 import type { ModelMessage } from "@tanstack/ai";
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Detect and extract existing conversation summary from the first message.
- *
- * After compaction, the first message in compactMessages is always a user message
- * with format:
- *   [CONVERSATION SUMMARY]
- *   ...summary text...
- *   [END SUMMARY]
- *   ...
- *
- * When detected, we strip this message from the conversation and pass it separately
- * via <previous-summary> tags, enabling incremental (update-style) compaction.
- *
- * @returns extracted summary text and remaining messages (without the summary message)
- */
-function extractExistingSummary(messages: ModelMessage[]): { existingSummary?: string; cleanMessages: ModelMessage[] } {
-  if (messages.length === 0) return { cleanMessages: messages };
-
-  const first = messages[0];
-  if (first.role !== "user") return { cleanMessages: messages };
-
-  const text = extractTextFromContent(first.content);
-
-  const START_MARKER = "[CONVERSATION SUMMARY]";
-  const END_MARKER = "[END SUMMARY]";
-
-  if (!text.startsWith(START_MARKER)) return { cleanMessages: messages };
-
-  const endIndex = text.indexOf(END_MARKER);
-  if (endIndex === -1) return { cleanMessages: messages };
-
-  const summary = text.slice(START_MARKER.length, endIndex).trim();
-  if (!summary) return { cleanMessages: messages };
-
-  return {
-    existingSummary: summary,
-    cleanMessages: messages.slice(1),
-  };
-}
-
-/**
- * Find the cut point by keeping the latest N user messages (inclusive).
- *
- * Walks backward counting user messages. The Nth user message from the end
- * (inclusive) becomes the cut point — everything before it gets summarized,
- * the user message itself and everything after is kept.
- *
- * The optional `summaryMessageIndex` (0 if a summary message is present at
- * the head of `messages`) is excluded from counting so the previous
- * compaction summary is never treated as a "user turn".
- *
- * @returns cutIndex (messages[0..cutIndex) = to summarize,
- *          messages[cutIndex..] = to keep). Returns 0 if not enough user turns.
- */
-function findCutPoint(messages: ModelMessage[], keepRecentUserTurns: number, summaryMessageIndex = -1): number {
-  if (messages.length === 0) return 0;
-
-  let userCount = 0;
-
-  for (let i = messages.length - 1; i >= 0; i--) {
-    // Skip the previous compaction summary message — it's not a real user turn.
-    if (i === summaryMessageIndex) continue;
-
-    if (messages[i].role === "user") {
-      userCount++;
-      if (userCount === keepRecentUserTurns) {
-        // Cut AT this user message (inclusive) — it stays in the kept portion.
-        return i;
-      }
-    }
-  }
-
-  // Not enough user turns to warrant compaction.
-  return 0;
-}
+export { extractExistingSummary, findCutPoint } from "./cut-point.js";
 
 // ============================================================================
 // Public API
@@ -138,6 +61,27 @@ export interface SummarizeOptions {
   todos?: CompactionTodoItem[];
   /** Optional previous summary for incremental update (skips auto-detection) */
   existingSummary?: string;
+  /**
+   * Recent turns that remain after compaction. Included in the summarizer prompt
+   * under `<still_in_context>` for alignment; not applied as part of the cut.
+   */
+  stillInContext?: ModelMessage[];
+}
+
+/**
+ * Build the full summarizer user prompt (segments + instructions) without calling the LLM.
+ * Exported for validation scripts.
+ */
+export function buildSummarizationUserPrompt(toCompress: ModelMessage[], options?: SummarizeOptions): string {
+  const { focus, todos, existingSummary, stillInContext } = options ?? {};
+  const conversationText = buildSegmentedConversationText(toCompress, stillInContext);
+  const instructionPrompt = buildCompactionPrompt({
+    focus,
+    todos,
+    existingSummary,
+    hasStillInContext: Boolean(stillInContext?.length),
+  });
+  return `${conversationText}\n\n${instructionPrompt}`;
 }
 
 /**
@@ -172,11 +116,20 @@ export async function summarizeConversation(
     cleanMessages = detected.cleanMessages;
   }
 
+  const stillInContext = options?.stillInContext;
   const inputBudget = resolveSummarizationInputBudget(manager, parentAgentId);
-  const batches = splitMessagesByTokenBudget(cleanMessages, inputBudget);
+  // Prefer keeping still_in_context in budget; batch only the to-compress slice.
+  const stillTokens = stillInContext?.length ? estimateTokens(stillInContext) : 0;
+  const compressBudget = Math.max(8_000, inputBudget - stillTokens);
+  const batches = splitMessagesByTokenBudget(cleanMessages, compressBudget);
 
   if (batches.length <= 1) {
-    return summarizeConversationBatch(cleanMessages, parentAgentId, manager, { focus, todos, existingSummary });
+    return summarizeConversationBatch(cleanMessages, parentAgentId, manager, {
+      focus,
+      todos,
+      existingSummary,
+      stillInContext,
+    });
   }
 
   const partialSummaries: string[] = [];
@@ -191,6 +144,7 @@ export async function summarizeConversation(
         focus: batchFocus,
         todos: i === batches.length - 1 ? todos : undefined,
         existingSummary: i === 0 ? existingSummary : undefined,
+        // Align with kept turns only on the final merge step.
       })
     );
   }
@@ -200,6 +154,7 @@ export async function summarizeConversation(
     focus: focus ?? "Merge the segment summaries into one cohesive continuation prompt for the next agent",
     todos,
     existingSummary,
+    stillInContext,
   });
 }
 
@@ -209,11 +164,7 @@ async function summarizeConversationBatch(
   manager: AgentManager,
   options?: SummarizeOptions
 ): Promise<string> {
-  const { focus, todos, existingSummary } = options ?? {};
-
-  const conversationText = serializeConversation(messages);
-  const instructionPrompt = buildCompactionPrompt({ focus, todos, existingSummary });
-  const fullPrompt = `<conversation>\n${conversationText}\n</conversation>\n\n${instructionPrompt}`;
+  const fullPrompt = buildSummarizationUserPrompt(messages, options);
 
   const result = await runSubagent(
     {
@@ -273,9 +224,10 @@ Continue if you have next steps, or stop and ask for clarification if you are un
  * Algorithm:
  * 1. Detect & strip the previous summary message (if present at index 0).
  * 2. Find the cut point = the Nth user message from the end (inclusive).
- * 3. Summarize everything before the cut point (excluding the stripped summary,
- *    which is fed to the summarizer as `existingSummary` for incremental updates).
- * 4. Return `cutIndex` relative to the *input* `messages` array (i.e. including
+ * 3. Summarize with segmented input: `<to_compress>` (pre-cut) + `<still_in_context>`
+ *    (kept turns). Previous summary is fed as `existingSummary` for incremental updates.
+ * 4. Optionally archive the compressed slice and append a pointer to the summary.
+ * 5. Return `cutIndex` relative to the *input* `messages` array (i.e. including
  *    the summary message offset). The caller converts it to an absolute index
  *    into the raw `context.messages` store.
  *
@@ -315,7 +267,8 @@ export async function autoCompact(
   }
 
   // Slice to summarize: everything before llmCutIndex, excluding the previous
-  // summary message (it's passed as existingSummary instead).
+  // summary message (it's passed as existingSummary instead). Kept turns are
+  // passed as stillInContext for summarizer alignment only.
   const toSummarize = messages.slice(summaryOffset, llmCutIndex);
   const keptMessages = messages.slice(llmCutIndex);
 
@@ -328,15 +281,22 @@ export async function autoCompact(
     // If there's a previous summary, pass it for incremental update.
     const prevSummary = hasPrevSummary ? extractExistingSummary([messages[0]]).existingSummary : undefined;
 
-    const summary = await summarizeConversation(
-      toSummarize,
-      parentAgentId,
-      manager,
-      prevSummary ? { ...options, existingSummary: prevSummary } : options
-    );
+    const summary = await summarizeConversation(toSummarize, parentAgentId, manager, {
+      ...options,
+      ...(prevSummary ? { existingSummary: prevSummary } : {}),
+      stillInContext: keptMessages,
+    });
 
     const fileOps = extractFileOpsFromMessages(toSummarize);
-    const summaryWithFileOps = summary + formatFileOperations(fileOps);
+    let summaryWithFileOps = summary + formatFileOperations(fileOps);
+
+    const managed = manager.getAgent(parentAgentId);
+    const sessionId = managed?.getSessionData()?.id ?? parentAgentId;
+    summaryWithFileOps = await maybeAppendCompactArchive(summaryWithFileOps, {
+      sessionId,
+      messages: toSummarize,
+      cutIndex,
+    });
 
     const keptTokens = estimateTokens(keptMessages);
     const summaryTokens = estimateTokens(createCompactedMessages(summaryWithFileOps));

@@ -1,0 +1,63 @@
+/**
+ * Validates segmented summarization prompt construction (labels + cut index).
+ *
+ * Run: pnpm --filter @my-agent/core run validate:summarization-segments
+ */
+
+import assert from "node:assert/strict";
+
+import {
+  buildCompactionPrompt,
+  buildSegmentedConversationText,
+  buildSummarizationUserPrompt,
+  findCutPoint,
+  STILL_IN_CONTEXT_RULES,
+} from "../dist/dev.mjs";
+
+const messages = [
+  { role: "user", content: "First request about auth" },
+  { role: "assistant", content: "Working on auth" },
+  { role: "user", content: "Second request about tests" },
+  { role: "assistant", content: "Writing tests" },
+  { role: "user", content: "Third request about docs" },
+  { role: "assistant", content: "Updating docs" },
+];
+
+const keepRecent = 2;
+const llmCutIndex = findCutPoint(messages, keepRecent);
+assert.equal(llmCutIndex, 2, "cut should land on the second-from-last user turn");
+
+const toCompress = messages.slice(0, llmCutIndex);
+const stillInContext = messages.slice(llmCutIndex);
+
+assert.equal(toCompress.length, 2);
+assert.equal(stillInContext[0].content, "Second request about tests");
+
+const segmented = buildSegmentedConversationText(toCompress, stillInContext);
+assert.match(segmented, /<to_compress>/);
+assert.match(segmented, /<\/to_compress>/);
+assert.match(segmented, /<still_in_context>/);
+assert.match(segmented, /<\/still_in_context>/);
+assert.match(segmented, /First request about auth/);
+assert.match(segmented, /Second request about tests/);
+assert.doesNotMatch(segmented, /<conversation>/);
+
+const prompt = buildSummarizationUserPrompt(toCompress, { stillInContext });
+assert.match(prompt, /<to_compress>/);
+assert.match(prompt, /<still_in_context>/);
+assert.match(prompt, /Segment rules/);
+assert.ok(prompt.includes(STILL_IN_CONTEXT_RULES));
+
+const withoutStill = buildSummarizationUserPrompt(toCompress);
+assert.match(withoutStill, /<to_compress>/);
+assert.doesNotMatch(withoutStill, /<still_in_context>/);
+assert.doesNotMatch(withoutStill, /Segment rules/);
+
+const instruction = buildCompactionPrompt({ hasStillInContext: true });
+assert.match(instruction, /Do NOT restate/);
+
+// Cut index must stay relative to input messages for applyCompactionResult.
+const cutIndex = llmCutIndex; // no previous summary offset
+assert.equal(cutIndex, 2);
+
+console.log("summarization-segments validation passed");

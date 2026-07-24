@@ -32,6 +32,7 @@ export {
   COMPACTION_PROMPT,
   UPDATE_COMPACTION_PROMPT,
   COMPACTION_SYSTEM_PROMPT,
+  STILL_IN_CONTEXT_RULES,
   buildCompactionPrompt,
   type CompactionTodoItem,
 } from "./compaction-prompt.js";
@@ -47,13 +48,29 @@ export {
   summarizeConversation,
   autoCompact,
   createCompactedMessages,
+  buildSummarizationUserPrompt,
+  findCutPoint,
+  extractExistingSummary,
   type SummarizeOptions,
 } from "./auto-compact.js";
+export { buildSegmentedConversationText, serializeConversation } from "./serialize-conversation.js";
 export {
   applyCompactionResult,
   applyReactiveCompactionResult,
   type ApplyCompactionResultOptions,
 } from "./apply-compaction-result.js";
+
+// Compact transcript archive
+export {
+  COMPACT_TRANSCRIPT_ROOT,
+  buildCompactArchiveMarkdown,
+  formatCompactArchivePointer,
+  maybeAppendCompactArchive,
+  parseCompactSequence,
+  writeCompactArchive,
+  type CompactArchiveWriteResult,
+  type WriteCompactArchiveOptions,
+} from "./write-compact-archive.js";
 
 // Reactive compaction (Emergency)
 export { isPromptTooLongError, reactiveCompact, getMaxReactiveRetries } from "./reactive-compact.js";

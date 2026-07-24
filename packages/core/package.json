@@ -57,6 +57,8 @@
     "validate:extension-loader": "pnpm run build && node scripts/validate-extension-loader.mjs",
     "validate:memory-service": "pnpm run build && node scripts/validate-memory-service.mjs",
     "validate:summarization-budget": "pnpm run build && node scripts/validate-summarization-budget.mjs",
+    "validate:summarization-segments": "pnpm run build && node scripts/validate-summarization-segments.mjs",
+    "validate:compact-archive": "pnpm run build && node scripts/validate-compact-archive.mjs",
     "validate:subagent-bridge-ui": "pnpm run build && node scripts/validate-subagent-bridge-ui.mjs",
     "validate:mcp-prefer-multimodal": "pnpm run build && node scripts/validate-mcp-prefer-multimodal.mjs",
     "validate:command-job-registry": "pnpm run build && node scripts/validate-command-job-registry.mjs",

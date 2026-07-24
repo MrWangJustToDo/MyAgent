@@ -185,7 +185,8 @@ const errorMessages = [
     role: "tool",
     toolCallId: "call-err",
     content: JSON.stringify({
-      error: "File already exists: packages/app/src/WorkspacePanel.tsx. Use edit_file for surgical edits, or pass overwrite: true.",
+      error:
+        "File already exists: packages/app/src/WorkspacePanel.tsx. Use edit_file for surgical edits, or pass overwrite: true.",
     }),
   },
 ];

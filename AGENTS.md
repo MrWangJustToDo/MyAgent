@@ -558,18 +558,25 @@ const agent = await agentManager.createManagedAgent({
 });
 ```
 
-**Auto-compact cut-point strategy:** `findCutPoint()` counts assistant-tool "flows" from the end and keeps the latest N (default: 4). Everything before is summarized.
+**Auto-compact cut-point strategy:** `findCutPoint()` counts recent *user turns* from the end and keeps the latest N (default: 2 via `keepRecentFlows`). Everything before the cut is summarized; the kept turns remain in the main agent context.
+
+**Summarizer input:** The summarization subagent receives labeled segments — `<to_compress>` (pre-cut history) and `<still_in_context>` (kept turns) — plus optional `<previous-summary>` for incremental updates. Prompt rules tell the model to summarize the compressed segment thoroughly and use the kept segment only to align Goal/Next (no detailed restatement). Post-compact assembly is unchanged: `summaryMessage + messages[compactIndex:]`.
+
+**Transcript archive:** On successful auto, manual (`/compact`), or reactive compaction, the compressed slice is written as greppable markdown under `.agents/transcripts/<sessionId>/compact-<n>.md` (gitignored via `.agents`). The summary appends a `## Compact archive` pointer when the write succeeds (prefer grep / small reads — not loading the whole archive); archive I/O failures are non-fatal.
 
 ```
 packages/core/src/agent/compaction/
 ├── tool-compact/          # Layer 1 — toModelOutput + recent-window placeholders
 ├── auto-compact.ts        # Layer 3 — LLM summarization when token threshold exceeded
+├── cut-point.ts           # findCutPoint + previous-summary extraction
 ├── reactive-compact.ts    # Reactive — emergency compaction on prompt_too_long errors
 ├── apply-compaction-result.ts
 ├── compaction-prompt.ts
+├── write-compact-archive.ts  # Persist searchable pre-cut transcripts
 ├── file-ops-tracker.ts    # Track file operation tool calls for compaction decisions
 ├── message-utils.ts       # Shared message manipulation helpers
 ├── serialize-conversation.ts  # Serialize conversation for compaction input
+├── summarization-budget.ts
 ├── token-estimator.ts
 ├── types.ts
 └── index.ts

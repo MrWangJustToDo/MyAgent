@@ -14,6 +14,7 @@
  */
 
 import { createCompactedMessages, summarizeConversation } from "./auto-compact.js";
+import { maybeAppendCompactArchive } from "./write-compact-archive.js";
 
 import type { AgentManager } from "../../managers/manager-agent.js";
 import type { ModelMessage } from "@tanstack/ai";
@@ -103,14 +104,23 @@ export async function reactiveCompact(
   let summary: string;
 
   try {
-    // Generate LLM summary of the older portion
+    // Generate LLM summary of the older portion; pass tail as still_in_context for alignment.
     summary = await summarizeConversation(summaryMessages, parentAgentId, manager, {
       focus: "Emergency compaction — preserve all critical information for continuing work",
+      stillInContext: tailMessages,
     });
   } catch {
     // If summarization fails, use a simple fallback so the session isn't lost
     summary = `[Emergency reactive compaction performed. ${summaryMessages.length} messages summarized. Full history is preserved in session storage. Please read relevant files to re-establish detailed context.]`;
   }
+
+  const managed = manager.getAgent(parentAgentId);
+  const sessionId = managed?.getSessionData()?.id ?? parentAgentId;
+  summary = await maybeAppendCompactArchive(summary, {
+    sessionId,
+    messages: summaryMessages,
+    cutIndex: summaryMessages.length,
+  });
 
   // Build compacted messages: summary + recent tail
   const compacted = createCompactedMessages(`[Reactive Compact]\n\n${summary}`);

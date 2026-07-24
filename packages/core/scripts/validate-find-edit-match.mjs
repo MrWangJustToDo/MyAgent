@@ -76,6 +76,9 @@ const missing = resolveEditMatch(
 );
 assert.ok("error" in missing);
 assert.match(missing.error, /Nearest similar line 2/);
-assert.match(formatNotFoundHint("const createEditFileTool = () => {\n", "createEditFileTool"), /Nearest similar line 1/);
+assert.match(
+  formatNotFoundHint("const createEditFileTool = () => {\n", "createEditFileTool"),
+  /Nearest similar line 1/
+);
 
 console.log("validate-find-edit-match: ok");

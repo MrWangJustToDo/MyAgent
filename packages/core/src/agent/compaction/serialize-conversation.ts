@@ -66,3 +66,18 @@ export function serializeConversation(messages: ModelMessage[]): string {
 
   return parts.join("\n\n");
 }
+
+/**
+ * Build labeled summarizer input: history to compress vs turns that remain after cut.
+ *
+ * When `stillInContext` is omitted/empty, only `<to_compress>` is emitted.
+ */
+export function buildSegmentedConversationText(toCompress: ModelMessage[], stillInContext?: ModelMessage[]): string {
+  const parts: string[] = [`<to_compress>\n${serializeConversation(toCompress)}\n</to_compress>`];
+
+  if (stillInContext && stillInContext.length > 0) {
+    parts.push(`<still_in_context>\n${serializeConversation(stillInContext)}\n</still_in_context>`);
+  }
+
+  return parts.join("\n\n");
+}
