@@ -81,4 +81,9 @@ assert.match(
   /Nearest similar line 1/
 );
 
+// Identical old/new is rejected as a no-op
+const noop = resolveEditMatch("hello world\n", "hello", "hello");
+assert.ok("error" in noop);
+assert.match(noop.error, /identical \(no-op\)/);
+
 console.log("validate-find-edit-match: ok");

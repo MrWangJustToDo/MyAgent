@@ -68,7 +68,8 @@
     "validate:plan-tools": "pnpm run build && node scripts/validate-plan-tools.mjs",
     "validate:plan-store": "pnpm run build && node scripts/validate-plan-store.mjs",
     "validate:generate-id": "pnpm run build && node scripts/validate-generate-id.mjs",
-    "validate:find-edit-match": "pnpm run build && node scripts/validate-find-edit-match.mjs"
+    "validate:find-edit-match": "pnpm run build && node scripts/validate-find-edit-match.mjs",
+    "validate:websearch-providers": "pnpm run build && node scripts/validate-websearch-providers.mjs"
   },
   "dependencies": {
     "@tanstack/ai": "^0.40.0",
@@ -77,6 +78,7 @@
     "@tanstack/ai-mcp": "^0.2.3",
     "@tanstack/ai-openai": "^0.16.0",
     "@tanstack/openai-base": "^0.9.7",
+    "htmlparser2": "^12.0.0",
     "openai": "^6.45.0",
     "pathe": "^2.0.3",
     "turndown": "^7.2.4",

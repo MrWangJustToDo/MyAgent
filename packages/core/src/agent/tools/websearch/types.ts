@@ -1,0 +1,68 @@
+/**
+ * WebSearch Types — Shared types for the multi-provider search architecture.
+ */
+
+// ============================================================================
+// Search Result
+// ============================================================================
+
+export interface SearchResult {
+  /** Title of the search result */
+  title: string;
+  /** Snippet/description of the result */
+  snippet: string;
+  /** URL of the result */
+  url: string;
+}
+
+export interface SearchOutcome {
+  results: SearchResult[];
+  /** Provider that actually produced the results (after fallback). */
+  provider: string;
+}
+
+// ============================================================================
+// Provider Interface
+// ============================================================================
+
+export interface SearchOptions {
+  /** Maximum number of results to return */
+  maxResults?: number;
+  /** Only include results from these domains */
+  allowedDomains?: string[];
+  /** Exclude results from these domains */
+  blockedDomains?: string[];
+  /** Timeout in milliseconds */
+  timeoutMs?: number;
+  /** Abort signal for cancellation */
+  signal?: AbortSignal;
+}
+
+export interface SearchProvider {
+  /** Unique provider name */
+  readonly name: string;
+  /** Whether this provider is available (e.g., API key configured) */
+  isAvailable(): boolean | Promise<boolean>;
+  /**
+   * Search the web.
+   * Should throw on failure so the ProviderManager can fallback.
+   */
+  search(query: string, options?: SearchOptions): Promise<SearchResult[]>;
+}
+
+// ============================================================================
+// Provider Metadata
+// ============================================================================
+
+export interface ProviderInfo {
+  name: string;
+  available: boolean;
+  description: string;
+}
+
+// ============================================================================
+// Environment variable keys
+// ============================================================================
+
+export const ENV_BRAVE_API_KEY = "BRAVE_API_KEY";
+export const ENV_WEBSEARCH_PROVIDER = "WEBSEARCH_PROVIDER";

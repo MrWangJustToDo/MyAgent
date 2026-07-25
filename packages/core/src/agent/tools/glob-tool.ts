@@ -115,10 +115,9 @@ export const createGlobTool = () => {
   return defineServerTool({
     name: "glob",
     description:
-      "Finds files matching a glob pattern. Supports patterns like '**/*.js', 'src/**/*.ts', '*.json', etc. " +
+      "Finds paths matching a glob pattern (e.g. '**/*.ts', 'src/**/*.json'). Prefer over tree/list_file when you know a filename pattern; use grep to search file contents. " +
       "Uses `fd` when available (respects .gitignore), falls back to `find`. " +
-      "Supports pagination with offset/limit, type filtering (file/directory), " +
-      "and automatic exclusion of common non-source directories (node_modules, .git, etc.).",
+      "Supports pagination, type filtering (file/directory), and automatic exclusion of common non-source directories.",
     inputSchema: z.object({
       pattern: z.string().describe("The glob pattern to match files against (e.g., '**/*.js', 'src/**/*.ts')."),
       path: z

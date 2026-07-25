@@ -49,6 +49,7 @@ export const createEditFileTool = () => {
 **Key Rules:**
 - Prefer edit_file over write_file for existing files (surgical edits).
 - Use real newlines in oldString/newString (not the two-character sequence \\\\n).
+- newString must differ from oldString — identical strings are rejected as a no-op.
 - Each oldString must appear exactly once unless replaceAll is true.
 - Provide startLine (1-indexed, from read_file) when the snippet may appear more than once — it selects the nearest match within ±20 lines.
 - Matching tolerates common LLM over-escapes (\\\\n, over-escaped backticks) and smart-quote Unicode differences.
@@ -59,7 +60,7 @@ export const createEditFileTool = () => {
         .array(
           z.object({
             oldString: z.string().describe("The exact string to search for and replace."),
-            newString: z.string().describe("The string to replace oldString with."),
+            newString: z.string().describe("The string to replace oldString with. Must differ from oldString."),
             replaceAll: z.boolean().optional().describe("If true, replace all occurrences of this string."),
             startLine: z
               .number()

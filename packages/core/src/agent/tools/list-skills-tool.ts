@@ -27,12 +27,10 @@ export type ListSkillsOutput = z.infer<typeof listSkillsOutputSchema>;
 export const createListSkillsTool = ({ skillRegistry }: ListSkillsToolConfig) => {
   return defineServerTool({
     name: "list_skills",
-    description: `List available skills that can be loaded on-demand.
+    description: `List available skills (name + brief description).
 
-Use this tool to discover what specialized knowledge is available before loading it.
-Each skill contains domain-specific instructions or workflows.
-
-After discovering skills, use load_skill to load the full content of a specific skill.`,
+Prefer the <skills> index already in the system prompt. Call this only to refresh the list.
+Then use load_skill to load the full content of a specific skill.`,
     inputSchema: z.object({}),
     outputSchema: listSkillsOutputSchema,
     execute: async () => {

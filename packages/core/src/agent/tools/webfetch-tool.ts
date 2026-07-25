@@ -10,7 +10,6 @@
  * Based on OpenCode's webfetch implementation.
  */
 
-import TurndownService from "turndown";
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
@@ -19,6 +18,7 @@ import { defineServerTool } from "./tanstack/define-tool.js";
 import { withDuration } from "./util/helpers.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { toolOutputBaseSchema } from "./util/types.js";
+import { convertHTMLToMarkdown, extractTextFromHTML } from "./webfetch-html.js";
 
 import type { ManagedAgent } from "../../managers/managed-agent.js";
 
@@ -30,63 +30,6 @@ const MAX_RESPONSE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_CONTENT_CHARS = 100000; // ~100KB, roughly 25k tokens
 const DEFAULT_TIMEOUT = 30; // 30 seconds
 const MAX_TIMEOUT = 120; // 2 minutes
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Convert HTML to Markdown using Turndown
- */
-function convertHTMLToMarkdown(html: string): string {
-  const turndownService = new TurndownService({
-    headingStyle: "atx",
-    hr: "---",
-    bulletListMarker: "-",
-    codeBlockStyle: "fenced",
-    emDelimiter: "*",
-  });
-
-  // Remove script, style, and other non-content elements
-  turndownService.remove(["script", "style", "meta", "link", "noscript"]);
-
-  return turndownService.turndown(html);
-}
-
-/**
- * Extract plain text from HTML by stripping tags
- */
-function extractTextFromHTML(html: string): string {
-  // Remove script and style content first
-  let text = html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
-    .replace(/<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi, "");
-
-  // Replace block-level elements with newlines
-  text = text.replace(/<(p|div|br|hr|h[1-6]|li|tr)[^>]*>/gi, "\n");
-
-  // Remove all remaining tags
-  text = text.replace(/<[^>]+>/g, "");
-
-  // Decode HTML entities
-  text = text
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-
-  // Clean up whitespace
-  text = text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .join("\n");
-
-  return text.trim();
-}
 
 /**
  * Build Accept header based on requested format
@@ -330,7 +273,7 @@ Usage notes:
     // Only send url + content to the LLM — contentType/contentLength/isImage/
     // truncated/cachedOutputPath are UI metadata.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: z.infer<typeof webfetchOutputSchema> }) {
-      return [{ type: "text" as const, content: output.content }];
+      return [{ type: "text" as const, content: `Fetched ${output.url}\n\n${output.content}` }];
     },
   });
 };

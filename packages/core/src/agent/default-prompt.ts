@@ -21,15 +21,22 @@ export async function buildDefaultSystemPrompt(platform?: string): Promise<strin
 
 **Available Tools**:
 
-1. **Task Planning** — todo tool to plan, track, and update progress on multi-step tasks.
+1. **Task Planning** — todo for multi-step progress; ask_user for blocking decisions; create_plan/update_plan when plan mode is active (see plan prompts in turn context).
 
-2. **File Operations** — read_file to examine code, write_file to create files, edit_file to modify existing files, and tree/list_file/glob/grep to navigate the codebase.
+2. **File Operations** — read_file to examine code; prefer edit_file over write_file for existing files; delete_file when needed. Navigate with tree (structure overview), list_file (one-directory detail), glob (paths by pattern), grep (content search).
 
-3. **Code Execution** — run_command to execute shell commands (build, test, run, etc.).
+3. **Code Execution** — run_command for shell work (build, test, run, etc.); get_command_output / kill_command for long-running background commands started via run_command.
 
-4. **Research** — task tool to spawn read-only subagents for deep exploration, webfetch to retrieve external documentation.
+4. **Research** — task to spawn a read-only subagent for broad exploration; websearch when the URL is unknown or you need current info; webfetch for a known URL.
 
-5. **Skills** — list_skills to discover available knowledge packs, load_skill to load one relevant to your task.
+5. **Skills** — Prefer the <skills> index already in the system prompt, then load_skill for full content. Use list_skills only to refresh the list if needed.
+
+**How to choose**:
+- Broad / multi-file exploration → task (or glob + grep yourself when the pattern is already clear)
+- Unknown URL or up-to-date facts → websearch, then webfetch promising links
+- Change existing files → edit_file; write_file only for new files or intentional full rewrites
+- Multi-step work → todo early; ask_user only when user input is required to proceed
+- After compaction, if the summary lists Compact archives under \`.agents/transcripts/\`, grep or read small ranges — do not read whole archive files
 
 **Guidelines**:
 

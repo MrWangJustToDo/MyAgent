@@ -14,7 +14,7 @@ export const createListFileTool = () => {
   return defineServerTool({
     name: "list_file",
     description:
-      "Lists files and directories in the specified directory. Returns the name, type (file or directory), size, and modification date for each entry. Supports pagination with offset/limit.",
+      "Lists one directory level with name, type, size, and modification date. Prefer tree for hierarchical overview; glob for pattern matching across the tree. Supports pagination with offset/limit.",
     inputSchema: z.object({
       path: z
         .string()

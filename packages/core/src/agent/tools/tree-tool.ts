@@ -23,7 +23,7 @@ export const createTreeTool = () => {
   return defineServerTool({
     name: "tree",
     description:
-      "Displays the directory tree structure. Shows files and directories in a hierarchical format. Useful for understanding project structure.",
+      "Shows a hierarchical directory tree (structure overview). Prefer over list_file when you need depth/layout; use list_file for one-level detail with sizes/dates; use glob to find paths by pattern.",
     inputSchema: z.object({
       path: z.string().optional().describe("The root directory to display tree from. Defaults to current directory."),
       maxDepth: z

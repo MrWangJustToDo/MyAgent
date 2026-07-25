@@ -236,6 +236,13 @@ export function resolveEditMatch(
     return { error: "oldString must not be empty" };
   }
 
+  if (oldString === newString) {
+    return {
+      error:
+        "oldString and newString are identical (no-op). Provide a different newString, or skip the edit if the file is already correct.",
+    };
+  }
+
   const { replaceAll = false, startLine, startLineTolerance = START_LINE_TOLERANCE, normalizedContent } = options;
 
   // ── 1–2: Exact + unescape variants ──

@@ -81,6 +81,13 @@ export {
 export { extractTextFromContent } from "./agent/compaction/message-utils.js";
 export { clearCoreEnv, registerCoreEnv } from "./env.js";
 export type { CoreEnv } from "./env.js";
+export {
+  createTimeoutAbort,
+  filterResultsByDomain,
+  getProviderManager,
+  initializeProviders,
+  resetWebsearchProviders,
+} from "./agent/tools/websearch";
 export { resolveSelectedMemoryFilename } from "./agent/memory/memory-retrieval.js";
 export {
   DEFAULT_SUMMARIZATION_CONTEXT_WINDOW,
