@@ -32,11 +32,20 @@ export async function ensurePlanStoreDir(): Promise<string> {
   return dir;
 }
 
-export async function savePlanFile(markdown: string, nameHint?: string): Promise<{ path: string }> {
+export type SavePlanFileOptions = {
+  /** When set, overwrite this relative path instead of slugifying a new name. */
+  existingRelativePath?: string;
+};
+
+export async function savePlanFile(
+  markdown: string,
+  nameHint?: string,
+  options?: SavePlanFileOptions
+): Promise<{ path: string }> {
   const env = getEnv();
   await ensurePlanStoreDir();
   const hint = nameHint?.trim() || extractPlan(markdown)?.steps[0]?.text || "plan";
-  const relative = planFilePath(hint);
+  const relative = options?.existingRelativePath?.trim() || planFilePath(hint);
   const absolute = join(env.rootPath, relative);
   await env.fs.writeFile(absolute, markdown.endsWith("\n") ? markdown : `${markdown}\n`);
   return { path: relative };

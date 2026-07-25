@@ -44,6 +44,8 @@ export type AgentEventType =
   | "plan:execute"
   | "plan:cancel-execution"
   | "plan:todo-replaced"
+  | "plan:retro"
+  | "plan:complete"
   | "plan:exit";
 
 /** Unified agent event */

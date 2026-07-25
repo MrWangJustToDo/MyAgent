@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 
 import {
   PLAN_AUTHORING_TOOL_NAMES,
+  PLAN_COMPLETION_TOOL_NAMES,
   PLAN_MODE_EXCLUDED_TOOL_NAMES,
   PlanModeController,
   buildPlanModePlanningPrompt,
@@ -25,17 +26,20 @@ assert.equal(isPlanModeForbiddenTool("write_file"), true);
 assert.equal(isPlanModeForbiddenTool("mcp__foo"), true);
 assert.ok(PLAN_AUTHORING_TOOL_NAMES.has("create_plan"));
 assert.ok(PLAN_AUTHORING_TOOL_NAMES.has("update_plan"));
+assert.ok(PLAN_COMPLETION_TOOL_NAMES.has("complete_plan"));
 
 const planning = buildPlanModePlanningPrompt();
 assert.ok(planning.includes("task"), "planning prompt must mention task exploration");
 assert.ok(planning.includes("create_plan"), "planning prompt must mention create_plan");
 assert.ok(planning.includes("ask_user"), "planning prompt must mention ask_user for clarifying questions");
 assert.ok(/clarif/i.test(planning));
+assert.ok(planning.includes(".agents/plans"), "planning prompt must mention plan file location");
 
-const ready = buildPlanModeReadyPrompt("## Plan\n1. Do thing");
+const ready = buildPlanModeReadyPrompt("## Plan\n1. Do thing", ".agents/plans/x.md");
 assert.ok(ready.includes("task"));
 assert.ok(ready.includes("update_plan"));
 assert.ok(ready.includes("/plan execute"));
+assert.ok(/review/i.test(ready));
 
 const md = formatStructuredPlanMarkdown({
   goal: "Add worktree support",
@@ -55,7 +59,7 @@ const controller = new PlanModeController({
   getTodoManager: () => null,
 });
 controller.enable();
-const applied = controller.applyStructuredPlan({
+const applied = await controller.applyStructuredPlan({
   goal: "Ship feature",
   steps: ["Explore", "Implement", "Verify"],
   keyFiles: ["a.ts"],
@@ -65,7 +69,7 @@ assert.equal(controller.getPhase(), "ready");
 assert.equal(controller.getState().steps.length, 3);
 assert.ok(events.some((e) => e.type === "plan:ready"));
 
-const rejected = controller.applyStructuredPlan({ goal: "", steps: [] });
+const rejected = await controller.applyStructuredPlan({ goal: "", steps: [] });
 assert.equal(rejected.ok, false);
 
 console.log("validate:plan-tools OK");

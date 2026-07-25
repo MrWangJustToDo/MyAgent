@@ -82,6 +82,9 @@ export class TodoManager {
   /** When false, completed todos stay visible (plan execution keeps Footer progress). */
   private autoClearEnabled = true;
 
+  /** True while this list is bound to an active plan lifecycle (seeded by plan mode). */
+  private planBound = false;
+
   /** Timestamps */
   createdAt: number;
   updatedAt: number;
@@ -331,11 +334,29 @@ export class TodoManager {
   /**
    * Restore todo items from a saved session (bypasses validation).
    */
-  restoreTodos(items: TodoItem[]): void {
+  restoreTodos(items: TodoItem[], options?: { title?: string | null; planBound?: boolean }): void {
     this.items = [...items];
+    this.title = options?.title?.trim() || null;
+    this.planBound = options?.planBound === true;
     this.roundsSinceUpdate = 0;
     this.touch();
     this.notifyListeners();
+  }
+
+  /** Mark whether this todo set belongs to plan building (survives title edits while bound). */
+  setPlanBound(bound: boolean): void {
+    this.planBound = bound;
+  }
+
+  isPlanBound(): boolean {
+    return this.planBound;
+  }
+
+  /** Resolve UI/tool source marker for the current list. */
+  getSource(): "plan" | "agent" {
+    if (this.planBound) return "plan";
+    if (this.title === "Plan") return "plan";
+    return "agent";
   }
 
   /**
@@ -359,6 +380,7 @@ export class TodoManager {
     this.items = [];
     this.roundsSinceUpdate = 0;
     this.title = null;
+    this.planBound = false;
     this.clearAutoClearTimer();
     this.touch();
     this.notifyListeners();

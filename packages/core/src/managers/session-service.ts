@@ -107,6 +107,8 @@ export class SessionService {
 
     if (todoManager) {
       this.data.todos = todoManager.getItems();
+      this.data.todoTitle = todoManager.getTitle();
+      this.data.todoPlanBound = todoManager.isPlanBound();
     }
 
     if (uiMessages !== undefined) {
@@ -166,7 +168,10 @@ export class SessionService {
 
     if (todoManager) {
       if (session.todos?.length) {
-        todoManager.restoreTodos(session.todos);
+        todoManager.restoreTodos(session.todos, {
+          title: session.todoTitle,
+          planBound: session.todoPlanBound,
+        });
       } else {
         todoManager.reset();
       }

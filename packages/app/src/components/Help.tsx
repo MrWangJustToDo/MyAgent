@@ -257,31 +257,37 @@ export const Help = () => {
             <Box width={28}>
               <Text color={COLORS.success}>/plan</Text>
             </Box>
-            <Text>Toggle plan mode (read-only; task exploration allowed)</Text>
+            <Text>Toggle plan mode (planning → review → Build → retro)</Text>
           </Box>
           <Box>
             <Box width={28}>
               <Text color={COLORS.success}>/plan execute</Text>
             </Box>
-            <Text>Run an approved plan</Text>
+            <Text>Build the approved plan (from review)</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
+              <Text color={COLORS.success}>/plan done</Text>
+            </Box>
+            <Text>Finish retro and exit plan mode</Text>
           </Box>
           <Box>
             <Box width={28}>
               <Text color={COLORS.success}>/plan cancel</Text>
             </Box>
-            <Text>Pause execution (back to ready, read-only)</Text>
+            <Text>Pause building (back to review, read-only)</Text>
           </Box>
           <Box>
             <Box width={28}>
               <Text color={COLORS.success}>/plan save</Text>
             </Box>
-            <Text>Save plan to .agents/plans/</Text>
+            <Text>Save/rename plan under .agents/plans/ (create auto-saves)</Text>
           </Box>
           <Box>
             <Box width={28}>
               <Text color={COLORS.success}>/plan load</Text>
             </Box>
-            <Text>Load a saved plan into ready</Text>
+            <Text>Load a saved plan into review</Text>
           </Box>
           <Box>
             <Box width={28}>

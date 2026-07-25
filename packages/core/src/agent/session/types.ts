@@ -61,6 +61,10 @@ export interface SessionData {
   contextTokens?: number;
   /** Active todos */
   todos: TodoItem[];
+  /** Todo set title (optional; older sessions omit this). */
+  todoTitle?: string | null;
+  /** Whether todos are bound to plan building (optional; older sessions omit this). */
+  todoPlanBound?: boolean;
   /** Timestamp when session was created */
   createdAt: number;
   /** Timestamp when session was last updated */

@@ -88,8 +88,10 @@ export function getInlineSummary(part: ToolCallPart, toolName: string): string |
       return "deleted";
     case "todo": {
       const stats = output.stats as { total?: number; completed?: number } | undefined;
-      if (stats) return `${stats.completed ?? 0}/${stats.total ?? 0} done`;
-      return null;
+      const source = output.source as string | undefined;
+      const planTag = source === "plan" ? " plan" : "";
+      if (stats) return `${stats.completed ?? 0}/${stats.total ?? 0} done${planTag}`;
+      return source === "plan" ? "plan" : null;
     }
     case "create_plan":
     case "update_plan": {
@@ -97,6 +99,8 @@ export function getInlineSummary(part: ToolCallPart, toolName: string): string |
       if (typeof stepCount === "number") return `${stepCount} steps`;
       return output.ok === false ? "failed" : "ready";
     }
+    case "complete_plan":
+      return output.ok === false ? "failed" : "done";
     case "websearch": {
       const results = output.results as unknown[] | undefined;
       if (!results) return null;

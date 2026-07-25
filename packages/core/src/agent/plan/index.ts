@@ -3,6 +3,7 @@ export { cleanStepText, extractDoneSteps, extractPlan, type ExtractedPlan, type 
 export {
   PlanModeController,
   PLAN_TODO_TITLE,
+  type ApplyPlanResult,
   type BeginPlanExecutionResult,
   type PlanModeControllerDeps,
   type PlanModePhase,
@@ -14,6 +15,8 @@ export {
   buildPlanModePlanningPrompt,
   buildPlanModePrompt,
   buildPlanModeReadyPrompt,
+  buildPlanModeRetroPrompt,
+  buildPlanRetroSteerMessage,
 } from "./plan-prompts.js";
 export {
   getPlanModeToolBlockReason,
@@ -21,9 +24,11 @@ export {
   isMcpToolName,
   isPlanModeForbiddenTool,
   PLAN_AUTHORING_TOOL_NAMES,
+  PLAN_COMPLETION_TOOL_NAMES,
   PLAN_MODE_EXCLUDED_TOOL_NAMES,
 } from "./plan-tools.js";
 export { formatStructuredPlanMarkdown, stepsFromTexts, type StructuredPlanInput } from "./plan-format.js";
+export { extractGoalFromPlanMarkdown, formatPlanSummary, type FormatPlanSummaryInput } from "./plan-summary.js";
 export {
   PLAN_STORE_DIR,
   listPlanFiles,
@@ -31,6 +36,7 @@ export {
   planFilePath,
   savePlanFile,
   slugifyPlanName,
+  type SavePlanFileOptions,
 } from "./plan-store.js";
 
 export { createPlanModeMiddleware, type PlanModeMiddlewareDeps } from "./plan-mode-middleware.js";

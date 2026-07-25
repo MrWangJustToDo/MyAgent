@@ -3,7 +3,7 @@ import { type ModelMessage, type UIMessage as TanStackUIMessage } from "@tanstac
 import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
 import { PlanModeController } from "../agent/plan/plan-mode-controller.js";
-import { buildPlanModePrompt } from "../agent/plan/plan-prompts.js";
+import { buildPlanModePrompt, buildPlanRetroSteerMessage } from "../agent/plan/plan-prompts.js";
 import { listPlanFiles, loadPlanFile, savePlanFile } from "../agent/plan/plan-store.js";
 import {
   createSessionSyncTracker,
@@ -234,6 +234,12 @@ export class ManagedAgent {
         this.runner = undefined;
         this.runnerConfigKey = undefined;
         this.emitStateChange();
+      },
+      onEnterRetro: (state) => {
+        const steer = buildPlanRetroSteerMessage(state.planFilePath);
+        if (this.chatController) {
+          void this.chatController.sendMessage(steer);
+        }
       },
     });
 
@@ -647,7 +653,7 @@ export class ManagedAgent {
     }
 
     const planState = this.planMode.getState();
-    const planModeContent = buildPlanModePrompt(planState.phase, planState.planMarkdown);
+    const planModeContent = buildPlanModePrompt(planState.phase, planState.planMarkdown, planState.planFilePath);
 
     return buildDynamicTurnContext({
       relevantMemoryContent: this.relevantMemoryContent,
@@ -703,15 +709,18 @@ export class ManagedAgent {
 
   /** Save current plan markdown under `.agents/plans/`. */
   async savePlanToWorkspace(nameHint?: string): Promise<{ ok: boolean; path?: string; error?: string }> {
-    const { planMarkdown, phase } = this.planMode.getState();
+    const { planMarkdown, phase, planFilePath } = this.planMode.getState();
     if (!planMarkdown?.trim()) {
       return { ok: false, error: "No plan markdown to save — create a plan first" };
     }
-    if (phase !== "ready" && phase !== "executing" && phase !== "planning") {
+    if (phase !== "ready" && phase !== "executing" && phase !== "planning" && phase !== "retro") {
       return { ok: false, error: `Cannot save plan from phase "${phase}"` };
     }
     try {
-      const { path } = await savePlanFile(planMarkdown, nameHint);
+      const { path } = await savePlanFile(planMarkdown, nameHint, {
+        existingRelativePath: nameHint?.trim() ? undefined : (planFilePath ?? undefined),
+      });
+      this.planMode.setPlanFilePath(path);
       return { ok: true, path };
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
@@ -725,13 +734,18 @@ export class ManagedAgent {
   ): Promise<{ ok: boolean; path?: string; error?: string; stepCount?: number }> {
     try {
       const { path, markdown } = await loadPlanFile(name);
-      const result = this.planMode.loadPlanMarkdown(markdown);
+      const result = await this.planMode.loadPlanMarkdown(markdown, { relativePath: path });
       if (!result.ok) return { ok: false, error: result.error, path };
       return { ok: true, path, stepCount: result.stepCount };
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       return { ok: false, error: err.message };
     }
+  }
+
+  /** Finish retro / exit plan mode (`complete_plan` or `/plan done`). */
+  completePlan(): { ok: boolean; error?: string } {
+    return this.planMode.complete();
   }
 
   /** List plan markdown files under `.agents/plans/`. */

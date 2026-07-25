@@ -7,7 +7,11 @@ import {
   createToolCompactMiddleware,
   createTurnContextMiddleware,
 } from "../agent/middleware";
-import { getPlanModeToolExcludeSet, PLAN_AUTHORING_TOOL_NAMES } from "../agent/plan/plan-tools.js";
+import {
+  getPlanModeToolExcludeSet,
+  PLAN_AUTHORING_TOOL_NAMES,
+  PLAN_COMPLETION_TOOL_NAMES,
+} from "../agent/plan/plan-tools.js";
 import { AgentRunner } from "../agent/runner/agent-runner.js";
 import { resolveToolsRecord, SUBAGENT_EXCLUDED_TOOL_NAMES } from "../agent/tools/tanstack";
 import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
@@ -83,14 +87,19 @@ function resolveTanStackTools(managed: ManagedAgent): ServerTool[] {
     return resolveToolsRecord(managed.tools, { exclude: SUBAGENT_EXCLUDED_TOOL_NAMES }) as ServerTool[];
   }
   if (managed.planMode.isRestrictingTools()) {
+    const exclude = getPlanModeToolExcludeSet(managed.tools);
+    for (const name of PLAN_COMPLETION_TOOL_NAMES) exclude.add(name);
+    return resolveToolsRecord(managed.tools, { exclude }) as ServerTool[];
+  }
+  if (managed.planMode.getPhase() === "retro") {
+    // Retro: allow mutate tools + complete_plan; hide authoring tools
     return resolveToolsRecord(managed.tools, {
-      exclude: getPlanModeToolExcludeSet(managed.tools),
+      exclude: PLAN_AUTHORING_TOOL_NAMES,
     }) as ServerTool[];
   }
-  // Agent / executing: hide plan-authoring tools
-  return resolveToolsRecord(managed.tools, {
-    exclude: PLAN_AUTHORING_TOOL_NAMES,
-  }) as ServerTool[];
+  // Agent / executing / off: hide plan-authoring and complete_plan
+  const exclude = new Set([...PLAN_AUTHORING_TOOL_NAMES, ...PLAN_COMPLETION_TOOL_NAMES]);
+  return resolveToolsRecord(managed.tools, { exclude }) as ServerTool[];
 }
 
 function buildRunDeps(managed: ManagedAgent, manager: AgentManager): AgentRunDeps {

@@ -20,10 +20,13 @@ const DETAILED_OUTPUT_TOOLS = new Set([
   "task",
   "ask_user",
   "todo",
+  "create_plan",
+  "update_plan",
+  "complete_plan",
 ]);
 
 /** In compact mode, only these keep a detailed output block (interactive / structured UI). */
-const COMPACT_DETAILED_OUTPUT_TOOLS = new Set(["ask_user", "todo"]);
+const COMPACT_DETAILED_OUTPUT_TOOLS = new Set(["ask_user", "todo", "create_plan", "update_plan"]);
 
 export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState: UiToolState }) => {
   const mode = useTranscriptDisplayMode();
@@ -36,9 +39,9 @@ export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState:
   }
 
   if (toolName === "todo") {
-    const output = part.output as { items?: TodoItem[] };
+    const output = part.output as { items?: TodoItem[]; title?: string; source?: "plan" | "agent" };
     if (!output.items) return null;
-    return <TodoToolOutputView items={output.items} />;
+    return <TodoToolOutputView items={output.items} title={output.title} source={output.source} />;
   }
 
   const isBuiltinDetailed = DETAILED_OUTPUT_TOOLS.has(toolName);

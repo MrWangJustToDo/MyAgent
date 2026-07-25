@@ -4,18 +4,19 @@ import type { CommandOption } from "./types.js";
 
 registerCommand({
   name: "plan",
-  description: "Toggle plan mode, execute/save/load plans, or show status",
-  usage: "/plan [execute|cancel|status|save [name]|load <name>|list]",
+  description: "Toggle plan mode, Build/save/load plans, or show status",
+  usage: "/plan [execute|cancel|done|status|save [name]|load <name>|list]",
   immediate: false,
   allowCustomInput: true,
   getOptions: async (): Promise<CommandOption[]> => {
     const base: CommandOption[] = [
       { label: "toggle", value: "", description: "Enter or leave plan mode" },
-      { label: "execute", value: "execute", description: "Run approved plan" },
-      { label: "cancel", value: "cancel", description: "Pause execution → ready" },
+      { label: "execute", value: "execute", description: "Build approved plan (from review)" },
+      { label: "done", value: "done", description: "Finish retro and exit plan mode" },
+      { label: "cancel", value: "cancel", description: "Pause building → review" },
       { label: "status", value: "status", description: "Show phase and progress" },
       { label: "list", value: "list", description: "List saved plans" },
-      { label: "save", value: "save", description: "Save current plan (optional name via custom)" },
+      { label: "save", value: "save", description: "Save/rename current plan (optional name)" },
     ];
 
     try {
@@ -52,43 +53,60 @@ registerCommand({
     if (sub === "status") {
       const state = agent.getPlanModeState();
       const stats = agent.todoManager?.getStats();
+      const displayPhase =
+        state.phase === "ready"
+          ? "review"
+          : state.phase === "executing"
+            ? "building"
+            : state.phase === "planning"
+              ? "planning"
+              : state.phase;
       const progress =
         state.phase === "executing" && stats
           ? ` (${stats.completed}/${stats.total} todos)`
           : state.steps.length > 0
             ? ` (${state.steps.length} steps)`
             : "";
+      const path = state.planFilePath ? ` · ${state.planFilePath}` : "";
       const preserved =
         state.preservedExistingTodos && state.phase === "ready"
           ? " — existing todos kept; /plan execute will replace them"
           : "";
       const next =
         state.phase === "ready"
-          ? " — run /plan execute to start"
+          ? " — run /plan execute to Build"
           : state.phase === "executing"
             ? " — /plan cancel to pause"
-            : state.phase === "planning"
-              ? " — explore with task/read tools, then create_plan (or ## Plan)"
-              : "";
+            : state.phase === "retro"
+              ? " — complete_plan or /plan done"
+              : state.phase === "planning"
+                ? " — explore with task/read tools, then create_plan (or ## Plan)"
+                : "";
       return {
         ok: true,
-        message: `Plan mode: ${state.phase}${progress}${preserved}${next}`,
+        message: `Plan mode: ${displayPhase}${progress}${path}${preserved}${next}`,
       };
+    }
+
+    if (sub === "done" || sub === "complete") {
+      const result = agent.completePlan();
+      if (!result.ok) return { ok: false, error: result.error ?? "Cannot complete plan" };
+      return { ok: true, message: "Plan complete — plan mode off" };
     }
 
     if (sub === "cancel") {
       if (!agent.cancelPlanExecution()) {
-        return { ok: false, error: "Not executing a plan — nothing to cancel" };
+        return { ok: false, error: "Not building a plan — nothing to cancel" };
       }
-      return { ok: true, message: "Plan execution paused — still ready (read-only). Run /plan execute to resume." };
+      return { ok: true, message: "Building paused — back to review (read-only). Run /plan execute to Build." };
     }
 
-    if (sub === "execute" || sub === "run") {
+    if (sub === "execute" || sub === "run" || sub === "build") {
       const result = agent.beginPlanExecution();
       if (!result.ok) {
         return { ok: false, error: result.error ?? "Cannot execute plan" };
       }
-      const parts = ["Executing approved plan…"];
+      const parts = ["Building approved plan…"];
       if (result.queued) {
         parts.push("(queued — starts after the current run finishes)");
       }
@@ -112,7 +130,7 @@ registerCommand({
       if (!result.ok) return { ok: false, error: result.error ?? "Load failed" };
       return {
         ok: true,
-        message: `Loaded ${result.path} (${result.stepCount ?? 0} steps) — ready. Run /plan execute to build.`,
+        message: `Loaded ${result.path} (${result.stepCount ?? 0} steps) — review. Run /plan execute to Build.`,
       };
     }
 
@@ -128,7 +146,7 @@ registerCommand({
       return {
         ok: false,
         error:
-          "Usage: /plan | /plan execute | /plan cancel | /plan status | /plan save [name] | /plan load <name> | /plan list",
+          "Usage: /plan | /plan execute | /plan done | /plan cancel | /plan status | /plan save [name] | /plan load <name> | /plan list",
       };
     }
 

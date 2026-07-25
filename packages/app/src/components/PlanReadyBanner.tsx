@@ -8,7 +8,7 @@ import { COLORS } from "../theme/colors.js";
 import type { ManagedAgent } from "@my-agent/core";
 
 /**
- * Visible ready-state affordances above the footer (execute / revise / exit).
+ * Visible ready-state affordances above the footer (Build / revise / exit).
  */
 export const PlanReadyBanner = () => {
   const agent = useAgent((s) => s.agent) as ManagedAgent | null;
@@ -27,16 +27,18 @@ export const PlanReadyBanner = () => {
   if (plan.phase !== "ready") return null;
 
   const steps = plan.steps.length;
-  const preserved = plan.preservedExistingTodos ? " · existing todos kept until execute" : "";
+  const path = plan.planFilePath ? ` · ${plan.planFilePath}` : "";
+  const preserved = plan.preservedExistingTodos ? " · existing todos kept until Build" : "";
 
   return (
     <Box flexDirection="column" paddingX={1} paddingTop={1}>
       <Text color={COLORS.accent} bold>
-        Plan ready{steps > 0 ? ` (${steps} steps)` : ""}
+        Plan ready for review{steps > 0 ? ` (${steps} steps)` : ""}
+        {path}
         {preserved}
       </Text>
       <Text color={COLORS.muted} dimColor>
-        /plan execute to build · /plan save · revise in chat · /plan to exit
+        /plan execute to Build · /plan save · revise in chat · /plan to exit
       </Text>
     </Box>
   );

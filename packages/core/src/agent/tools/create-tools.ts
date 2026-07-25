@@ -12,7 +12,7 @@ import { createTreeTool } from "./tree-tool.js";
 import { createWriteFileTool } from "./write-file-tool.js";
 
 import type { createAskUserTool } from "./ask-user-tool.js";
-import type { createCreatePlanTool, createUpdatePlanTool } from "./create-plan-tool.js";
+import type { createCompletePlanTool, createCreatePlanTool, createUpdatePlanTool } from "./create-plan-tool.js";
 import type { createListSkillsTool } from "./list-skills-tool.js";
 import type { createLoadSkillTool } from "./load-skill-tool.js";
 import type { createTaskTool } from "./task-tool.js";
@@ -40,6 +40,7 @@ export type Tools = ToolsRecord & {
   ask_user?: ReturnType<typeof createAskUserTool>;
   create_plan?: ReturnType<typeof createCreatePlanTool>;
   update_plan?: ReturnType<typeof createUpdatePlanTool>;
+  complete_plan?: ReturnType<typeof createCompletePlanTool>;
 };
 
 export const createTools = async ({

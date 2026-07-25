@@ -258,6 +258,16 @@ const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | false> = {
     category: "agent",
     formatMessage: (event) => `Plan todos replaced previous list (${event.data?.stepCount ?? "?"} steps)`,
   },
+  "plan:retro": {
+    level: "info",
+    category: "agent",
+    formatMessage: () => "Plan retrospective — review against the plan, then complete_plan or /plan done",
+  },
+  "plan:complete": {
+    level: "info",
+    category: "agent",
+    formatMessage: () => "Plan complete — plan mode off",
+  },
   "plan:exit": {
     level: "info",
     category: "agent",

@@ -26,6 +26,7 @@ export const SUBAGENT_EXCLUDED_TOOL_NAMES = new Set([
   "ask_user",
   "create_plan",
   "update_plan",
+  "complete_plan",
   "list_skills",
   "load_skill",
 ]);

@@ -26,19 +26,26 @@ const PRIORITY_LABELS: Record<TodoPriority, string | null> = {
   low: "low",
 };
 
+/** Fallback for older tool parts that only stored title. */
+const PLAN_TODO_TITLE = "Plan";
+
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface TodoToolOutputViewProps {
   items: TodoItem[];
+  /** Explicit marker from todo tool output (`source=plan`). */
+  source?: "plan" | "agent" | null;
+  /** Fallback when `source` is missing (pre-marker transcripts). */
+  title?: string | null;
 }
 
 // ============================================================================
 // Sub-components
 // ============================================================================
 
-const TodoRow = ({ item }: { item: TodoItem }) => {
+const TodoRow = ({ item, stepIndex, showStep }: { item: TodoItem; stepIndex: number; showStep: boolean }) => {
   const icon = STATUS_ICONS[item.status];
   const color = STATUS_COLORS[item.status];
   const priorityLabel = PRIORITY_LABELS[item.priority];
@@ -48,6 +55,13 @@ const TodoRow = ({ item }: { item: TodoItem }) => {
       <Box flexShrink={0}>
         <Text color={color}>{icon}</Text>
       </Box>
+      {showStep && (
+        <Box flexShrink={0}>
+          <Text color={COLORS.muted} dimColor>
+            {stepIndex}.
+          </Text>
+        </Box>
+      )}
       <Text color={color} wrap="wrap">
         {item.content}
       </Text>
@@ -66,20 +80,32 @@ const TodoRow = ({ item }: { item: TodoItem }) => {
 // Main component
 // ============================================================================
 
+function isPlanTodoSource(source?: string | null, title?: string | null): boolean {
+  if (source === "plan") return true;
+  if (source === "agent") return false;
+  return title === PLAN_TODO_TITLE;
+}
+
 /**
  * Rich todo list renderer for the `todo` tool output.
  *
- * Shows every todo item with status-colored icons. The title and progress
- * summary (e.g. "2/5 done") are already shown in the tool header, so they
- * are not repeated here.
+ * Plan-sourced lists (`source=plan`, or legacy title `"Plan"`) get step numbers.
  */
-export const TodoToolOutputView = ({ items }: TodoToolOutputViewProps) => {
+export const TodoToolOutputView = ({ items, source, title }: TodoToolOutputViewProps) => {
   if (items.length === 0) return null;
+
+  const showStep = isPlanTodoSource(source, title);
+  const completed = items.filter((i) => i.status === "completed").length;
 
   return (
     <Box flexDirection="column" paddingLeft={2} gap={0}>
-      {items.map((item) => (
-        <TodoRow key={item.id} item={item} />
+      {showStep && (
+        <Text color={COLORS.muted} dimColor>
+          Plan steps · {completed}/{items.length}
+        </Text>
+      )}
+      {items.map((item, index) => (
+        <TodoRow key={item.id} item={item} stepIndex={index + 1} showStep={showStep} />
       ))}
     </Box>
   );

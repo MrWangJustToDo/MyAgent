@@ -1,3 +1,4 @@
+import { PLAN_TODO_TITLE } from "../plan/plan-mode-controller.js";
 import { todoToolInputSchema } from "../todo-manager/types.js";
 
 import { defineServerTool } from "./tanstack/define-tool.js";
@@ -18,6 +19,7 @@ export const createTodoTool = ({ todoManager }: { todoManager: TodoManager }) =>
 
 IMPORTANT RULES:
  - Always include a short title for the current todo set
+ - While building an approved plan, keep title "${PLAN_TODO_TITLE}" so progress stays linked to the plan
  - Only ONE task can be in_progress at a time
  - Update todos frequently - mark tasks complete immediately when done
  - Each call REPLACES all todos, so include the full updated list
@@ -27,24 +29,30 @@ IMPORTANT RULES:
     execute: async ({ todos, title }) => {
       return withDuration(async () => {
         todoManager.update(todos, title);
+        // Keep plan binding when the model updates under the plan title during building.
+        if (title.trim() === PLAN_TODO_TITLE) {
+          todoManager.setPlanBound(true);
+        }
         const stats = todoManager.getStats();
         const items = todoManager.getItems();
+        const source = todoManager.getSource();
 
         return {
           title,
+          source,
           items,
           stats,
         };
       });
     },
-    // Only send items to the LLM — it needs the todo list to plan. title is
-    // echoed in the input, stats can be derived from items, durationMs is metadata.
+    // Send title + source + items so the model keeps plan linkage across turns.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: TodoOutput }) {
       const lines = output.items?.map?.((item) => {
         const icon = item.status === "completed" ? "[x]" : item.status === "in_progress" ? "[>]" : "[ ]";
         return `${icon} ${item.content}`;
       });
-      return [{ type: "text" as const, content: `${output.title}\n${lines?.join("\n")}` }];
+      const sourceTag = output.source === "plan" ? " [source=plan]" : "";
+      return [{ type: "text" as const, content: `${output.title}${sourceTag}\n${lines?.join("\n")}` }];
     },
   });
 };

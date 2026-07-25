@@ -57,6 +57,7 @@ export const HIGH_SIGNAL_TOOLS = new Set([
   "todo",
   "create_plan",
   "update_plan",
+  "complete_plan",
   "ask_user",
   "compact",
 ]);

@@ -67,6 +67,7 @@
     "validate:safe-command": "pnpm run build && node scripts/validate-safe-command.mjs",
     "validate:plan-tools": "pnpm run build && node scripts/validate-plan-tools.mjs",
     "validate:plan-store": "pnpm run build && node scripts/validate-plan-store.mjs",
+    "validate:plan-lifecycle": "pnpm run build && node scripts/validate-plan-lifecycle.mjs",
     "validate:generate-id": "pnpm run build && node scripts/validate-generate-id.mjs",
     "validate:find-edit-match": "pnpm run build && node scripts/validate-find-edit-match.mjs",
     "validate:websearch-providers": "pnpm run build && node scripts/validate-websearch-providers.mjs"

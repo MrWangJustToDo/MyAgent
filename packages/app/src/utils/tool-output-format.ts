@@ -189,8 +189,9 @@ function formatGrepOutput(output: GrepOutput): string {
 }
 
 function formatTodoOutput(output: TodoOutput): string {
-  const { stats } = output;
-  return `Updated ${stats.total} todos: ${stats.completed} completed, ${stats.inProgress} in progress, ${stats.pending} pending`;
+  const { stats, source } = output;
+  const tag = source === "plan" ? " (plan)" : "";
+  return `Updated ${stats.total} todos${tag}: ${stats.completed} completed, ${stats.inProgress} in progress, ${stats.pending} pending`;
 }
 
 function formatAskUserOutput(output: { question?: string; answer?: string; hasOptions?: boolean }): string {
@@ -268,8 +269,13 @@ export function formatToolOutput(output: unknown, toolName?: string): string {
         return formatTaskOutput(out as unknown as TaskOutput);
       case "create_plan":
       case "update_plan": {
+        const summary = typeof out.summary === "string" ? out.summary : "";
+        if (summary.trim()) return summary;
         const msg = typeof out.message === "string" ? out.message : "";
         return msg;
+      }
+      case "complete_plan": {
+        return typeof out.message === "string" ? out.message : "Plan complete";
       }
       case "websearch": {
         const results = Array.isArray(out.results) ? out.results : [];

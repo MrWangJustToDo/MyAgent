@@ -163,6 +163,8 @@ export const todoOutputItemSchema = z.object({
 
 export const todoOutputSchema = z.object({
   title: z.string().describe("Title for the current todo set."),
+  /** Whether this list is plan-bound (`plan`) or a normal agent todo list (`agent`). Survives resume via tool parts. */
+  source: z.enum(["plan", "agent"]).describe("Origin of this todo set for UI and resume."),
   /** Structured todo items for rich UI rendering. Mirrors the internal TodoItem list. */
   items: z.array(todoOutputItemSchema).describe("Structured todo items for UI rendering."),
   stats: z

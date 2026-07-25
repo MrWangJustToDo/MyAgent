@@ -439,7 +439,7 @@ registerCoreEnv(env);
 | `compaction:auto-*` / `compaction:reactive-*` | Auto / reactive context compaction |
 | `session:save-error` | Session persistence failure |
 | `subagent:*` | Subagent lifecycle |
-| `plan:enter` / `plan:ready` / `plan:execute` / `plan:cancel-execution` / `plan:exit` | Plan mode phase transitions |
+| `plan:enter` / `plan:ready` / `plan:execute` / `plan:cancel-execution` / `plan:retro` / `plan:complete` / `plan:exit` | Plan mode phase transitions |
 
 **Vision note:** Official DeepSeek Chat Completions currently rejects multimodal parts such as `image_url` (text-only schema). Capability sanitization strips unsupported `image` / `audio` / `video` / `document` parts on the wire and retries once; switch to a provider with matching capabilities for real media understanding.
 
@@ -447,15 +447,17 @@ registerCoreEnv(env);
 
 ## Plan Mode
 
-Read-only planning → structured plan → user confirm → execute with TodoManager progress.
+Cursor-like lifecycle: explore → review → Build → forced retro → complete (exit).
 
-| Phase | Tools | Behavior |
-|-------|-------|----------|
-| `planning` / `ready` | Mutate tools + MCP hidden; `task` allowed; `create_plan` / `update_plan` offered; `run_command` allowlisted | Explore (prefer `task`), ask clarifying questions if needed, call `create_plan` (or `## Plan` fallback) |
-| `executing` | Full tools restored (`create_plan` / `update_plan` hidden) | Agent follows plan; todos / `[DONE:n]` track progress |
-| `off` | Normal (`create_plan` / `update_plan` hidden) | Default |
+| Phase (internal) | UI label | Tools | Behavior |
+|------------------|----------|-------|----------|
+| `planning` | planning | Mutate tools + MCP hidden; `task` allowed; `create_plan` / `update_plan` offered; `run_command` allowlisted | Explore (prefer `task`), clarify if needed, call `create_plan` (or `## Plan` fallback). Plan auto-saves under `.agents/plans/` with a static summary in the transcript. |
+| `ready` | review | Same read-only restrictions | User reviews; revise via chat + `update_plan`. `/plan execute` = Build (no extra confirm). |
+| `executing` | building | Full tools (`create_plan` / `update_plan` / `complete_plan` hidden) | Follow plan; plan-seeded todos show step progress. Todo tool output includes `source: "plan"` (persisted in transcript + session `todoPlanBound`) so resume still renders plan todos. |
+| `retro` | retro | Full tools + `complete_plan` | Forced retrospective against the plan file; end with `complete_plan` or `/plan done`. |
+| `off` | — | Plan authoring/completion tools hidden | Default |
 
-**App:** `Shift+Tab` or `/plan` toggles planning; `/plan execute` starts execution from `ready`; `/plan cancel` pauses execution back to `ready`; `/plan status` reports phase; `/plan save [name]`, `/plan load <name>`, `/plan list` persist under `.agents/plans/`. Footer shows `plan` / `plan ready · /plan execute` / `plan n/m`. When ready, a banner above the input also shows execute / revise / exit hints. Clarifying questions use `ask_user` during planning. Exiting plan mode clears plan-seeded todos; unrelated todos are preserved until execute.
+**App:** `Shift+Tab` or `/plan` toggles mode; `/plan execute` Builds from review; `/plan cancel` pauses building → review; `/plan done` finishes retro; `/plan status` reports phase; `/plan save` / `load` / `list` for named persistence (create/update already auto-save). Footer shows `planning` / `review · /plan execute` / `building n/m` / `retro`. Ready banner points at Build. No scrollable plan panel (TUI) — summary is static text + plan file on disk.
 
 **Core:** `ManagedAgent.planMode` (`PlanModeController`), tool filter in `run-agent`, `createPlanModeMiddleware`, prompts via turn context. See `packages/core/src/agent/plan/`.
 

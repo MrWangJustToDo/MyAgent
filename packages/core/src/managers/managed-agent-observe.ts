@@ -35,6 +35,8 @@ export const DEFAULT_OBSERVE_EVENTS: AgentEventType[] = [
   "plan:execute",
   "plan:cancel-execution",
   "plan:todo-replaced",
+  "plan:retro",
+  "plan:complete",
   "plan:exit",
 ];
 

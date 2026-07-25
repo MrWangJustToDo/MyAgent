@@ -11,7 +11,7 @@ import { SkillRegistry } from "../agent/skills/skill-registry.js";
 import { TodoManager } from "../agent/todo-manager";
 import { createTools, createWebfetchTool, createWebsearchTool } from "../agent/tools";
 import { createAskUserTool } from "../agent/tools/ask-user-tool.js";
-import { createCreatePlanTool, createUpdatePlanTool } from "../agent/tools/create-plan-tool.js";
+import { createCreatePlanTool, createUpdatePlanTool, createCompletePlanTool } from "../agent/tools/create-plan-tool.js";
 import { createListSkillsTool } from "../agent/tools/list-skills-tool.js";
 import { createLoadSkillTool } from "../agent/tools/load-skill-tool.js";
 import { type ToolsRecord } from "../agent/tools/tanstack/tools-record.js";
@@ -121,6 +121,7 @@ export async function buildManagedAgent({
     toolsRecord.ask_user = createAskUserTool();
     toolsRecord.create_plan = createCreatePlanTool({ getPlanMode: () => managed.planMode });
     toolsRecord.update_plan = createUpdatePlanTool({ getPlanMode: () => managed.planMode });
+    toolsRecord.complete_plan = createCompletePlanTool({ getPlanMode: () => managed.planMode });
   }
 
   let mcpLoadResult: McpConfigLoadResult | null = null;

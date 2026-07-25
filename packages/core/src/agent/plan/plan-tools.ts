@@ -12,6 +12,9 @@ export const PLAN_MODE_EXCLUDED_TOOL_NAMES = new Set(["write_file", "edit_file",
 /** Plan authoring tools — only offered while planning/ready. */
 export const PLAN_AUTHORING_TOOL_NAMES = new Set(["create_plan", "update_plan"]);
 
+/** Plan completion — only offered while in retro. */
+export const PLAN_COMPLETION_TOOL_NAMES = new Set(["complete_plan"]);
+
 export function isMcpToolName(name: string): boolean {
   return name.startsWith("mcp__");
 }

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { formatPlanSummary } from "../plan/plan-summary.js";
+
 import { defineServerTool } from "./tanstack/define-tool.js";
 import { withDuration } from "./util/helpers.js";
 import { toolOutputBaseSchema } from "./util/types.js";
@@ -20,6 +22,8 @@ const planToolOutputSchema = z.object({
   phase: z.string(),
   stepCount: z.number().int().nonnegative(),
   message: z.string(),
+  summary: z.string().optional(),
+  planFilePath: z.string().nullable().optional(),
   error: z.string().optional(),
   durationMs: z.number().describe("Execution duration in milliseconds."),
   ...toolOutputBaseSchema.shape,
@@ -34,14 +38,14 @@ function createPlanAuthoringTool(name: "create_plan" | "update_plan", deps: Crea
   return defineServerTool({
     name,
     description: isUpdate
-      ? `Update the current plan while in plan mode (ready or planning). Replaces the previous plan artifact and steps. Prefer this over rewriting ## Plan in chat.`
-      : `Create a structured implementation plan while in plan mode. Call this when exploration is done and you are ready for user review. Prefer this over free-form ## Plan markdown when possible.`,
+      ? `Update the current plan while in plan mode (review/planning). Replaces the plan artifact, overwrites the plan file, and refreshes the static summary. Prefer this over rewriting ## Plan in chat.`
+      : `Create a structured implementation plan while in plan mode. Auto-saves under .agents/plans/ and shows a static summary for user review. Prefer this over free-form ## Plan markdown when possible.`,
     inputSchema: structuredPlanInputSchema,
     outputSchema: planToolOutputSchema,
     execute: async (input) => {
       return withDuration(async () => {
         const planMode = deps.getPlanMode();
-        const result = planMode.applyStructuredPlan({
+        const result = await planMode.applyStructuredPlan({
           goal: input.goal,
           steps: input.steps,
           keyFiles: input.key_files,
@@ -60,14 +64,24 @@ function createPlanAuthoringTool(name: "create_plan" | "update_plan", deps: Crea
           };
         }
 
-        const phase = planMode.getPhase();
+        const state = planMode.getState();
+        const summary = formatPlanSummary({
+          path: state.planFilePath,
+          goal: input.goal,
+          steps: state.steps,
+        });
+        const phase = state.phase;
+        const hint = isUpdate
+          ? "Updated. Still in review — user runs /plan execute to Build."
+          : "Ready for review — user runs /plan execute to Build.";
+
         return {
           ok: true,
           phase,
           stepCount: result.stepCount ?? 0,
-          message: isUpdate
-            ? `Plan updated (${result.stepCount} steps). Waiting for /plan execute.`
-            : `Plan ready (${result.stepCount} steps). Waiting for /plan execute.`,
+          planFilePath: state.planFilePath,
+          summary,
+          message: `${hint}\n\n${summary}`,
         };
       });
     },
@@ -75,7 +89,8 @@ function createPlanAuthoringTool(name: "create_plan" | "update_plan", deps: Crea
       if (!output.ok) {
         return [{ type: "text" as const, content: `Plan tool error: ${output.error ?? output.message}` }];
       }
-      return [{ type: "text" as const, content: output.message }];
+      const body = output.summary?.trim() || output.message;
+      return [{ type: "text" as const, content: body }];
     },
   });
 }
@@ -83,3 +98,47 @@ function createPlanAuthoringTool(name: "create_plan" | "update_plan", deps: Crea
 export const createCreatePlanTool = (deps: CreatePlanToolDeps) => createPlanAuthoringTool("create_plan", deps);
 
 export const createUpdatePlanTool = (deps: CreatePlanToolDeps) => createPlanAuthoringTool("update_plan", deps);
+
+const completePlanOutputSchema = z.object({
+  ok: z.boolean(),
+  message: z.string(),
+  error: z.string().optional(),
+  durationMs: z.number().describe("Execution duration in milliseconds."),
+  ...toolOutputBaseSchema.shape,
+});
+
+/** End plan mode after forced retrospective. */
+export const createCompletePlanTool = (deps: CreatePlanToolDeps) => {
+  return defineServerTool({
+    name: "complete_plan",
+    description: `End the current plan lifecycle after the retrospective. Only use in retro phase when you have summarized done / deviations / verification. Exits plan mode.`,
+    inputSchema: z.object({
+      note: z.string().optional().describe("Optional one-line note about the retrospective outcome"),
+    }),
+    outputSchema: completePlanOutputSchema,
+    execute: async (input) => {
+      return withDuration(async () => {
+        const planMode = deps.getPlanMode();
+        if (planMode.getPhase() !== "retro") {
+          return {
+            ok: false,
+            message: `complete_plan only works in retro phase (current: ${planMode.getPhase()})`,
+            error: `complete_plan only works in retro phase (current: ${planMode.getPhase()})`,
+          };
+        }
+        const result = planMode.complete();
+        if (!result.ok) {
+          return { ok: false, message: result.error ?? "Failed to complete plan", error: result.error };
+        }
+        const note = input.note?.trim();
+        return {
+          ok: true,
+          message: note ? `Plan complete — ${note}` : "Plan complete — plan mode off",
+        };
+      });
+    },
+    toModelOutput({ output }) {
+      return [{ type: "text" as const, content: output.message }];
+    },
+  });
+};
