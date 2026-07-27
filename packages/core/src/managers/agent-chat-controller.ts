@@ -21,7 +21,7 @@ import { AgentUIChannel } from "./agent-ui-channel.js";
 
 import type { ManagedAgent } from "./managed-agent.js";
 import type { AgentManager } from "./manager-agent.js";
-import type { ContentPart, UIMessage } from "@tanstack/ai";
+import type { ContentPart, ToolCallPart, UIMessage } from "@tanstack/ai";
 
 const MAX_TOOL_PHASE_ITERATIONS = 40;
 
@@ -302,6 +302,10 @@ export class AgentChatController {
 
         this.syncPlanModeFromMessages();
 
+        // Auto-approve tools during plan execution so the agent can
+        // run without waiting for user confirmation on each tool call.
+        this.autoApprovePendingTools();
+
         const after = this.channel.getMessages();
         if (hasPendingToolApprovals(after)) break;
         if (hasPendingAskUser(after)) break;
@@ -386,6 +390,35 @@ export class AgentChatController {
     if (this.managed.planMode.getPhase() === "off") return;
     const text = extractAssistantText(this.channel.getMessages());
     if (text) this.managed.planMode.onAssistantText(text);
+  }
+
+  /**
+   * Auto-approve all pending tool approvals when plan mode is executing.
+   * This allows the agent to run tools without waiting for user confirmation
+   * during the plan execution phase.
+   */
+  private autoApprovePendingTools(): void {
+    if (this.managed.planMode.getPhase() !== "executing") return;
+
+    const messages = this.channel.getMessages();
+    let didApprove = false;
+
+    for (const part of messages.flatMap((m) => m.parts)) {
+      if (part.type !== "tool-call") continue;
+      const toolCall = part as ToolCallPart;
+      if (toolCall.approval?.needsApproval === true && toolCall.approval.approved === undefined) {
+        const approvalId = toolCall.approval.id;
+        if (approvalId) {
+          this.channel.addToolApprovalResponse(approvalId, true);
+          didApprove = true;
+        }
+      }
+    }
+
+    if (didApprove) {
+      this.managed.syncContextFromUIMessages(this.channel.getMessages());
+      this.managed.statusController.reconcileFromUIMessages(this.channel.getMessages(), { whenClear: "running" });
+    }
   }
 }
 
