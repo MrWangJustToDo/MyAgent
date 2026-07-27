@@ -268,12 +268,9 @@ export function formatToolOutput(output: unknown, toolName?: string): string {
       case "task":
         return formatTaskOutput(out as unknown as TaskOutput);
       case "create_plan":
-      case "update_plan": {
-        const summary = typeof out.summary === "string" ? out.summary : "";
-        if (summary.trim()) return summary;
-        const msg = typeof out.message === "string" ? out.message : "";
-        return msg;
-      }
+      case "update_plan":
+        // Plan body is reviewed via PlanReadyBanner markdown preview — no tool output dump.
+        return "";
       case "complete_plan": {
         return typeof out.message === "string" ? out.message : "Plan complete";
       }

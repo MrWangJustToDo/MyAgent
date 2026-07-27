@@ -20,13 +20,11 @@ const DETAILED_OUTPUT_TOOLS = new Set([
   "task",
   "ask_user",
   "todo",
-  "create_plan",
-  "update_plan",
   "complete_plan",
 ]);
 
 /** In compact mode, only these keep a detailed output block (interactive / structured UI). */
-const COMPACT_DETAILED_OUTPUT_TOOLS = new Set(["ask_user", "todo", "create_plan", "update_plan"]);
+const COMPACT_DETAILED_OUTPUT_TOOLS = new Set(["ask_user", "todo"]);
 
 export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState: UiToolState }) => {
   const mode = useTranscriptDisplayMode();

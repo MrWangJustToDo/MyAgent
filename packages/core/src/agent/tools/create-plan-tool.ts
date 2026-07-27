@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-import { formatPlanSummary } from "../plan/plan-summary.js";
-
 import { defineServerTool } from "./tanstack/define-tool.js";
 import { withDuration } from "./util/helpers.js";
 import { toolOutputBaseSchema } from "./util/types.js";
@@ -10,7 +8,13 @@ import type { PlanModeController } from "../plan/plan-mode-controller.js";
 
 const structuredPlanInputSchema = z.object({
   goal: z.string().min(1).describe("One-sentence outcome of the plan"),
-  steps: z.array(z.string().min(3)).min(1).max(30).describe("Numbered implementation steps (plain text, ordered)"),
+  steps: z
+    .array(z.string().min(3))
+    .min(1)
+    .max(30)
+    .describe(
+      "Ordered implementation steps as plain text (do not prefix with 1. 2. — numbering is added automatically)"
+    ),
   key_files: z.array(z.string()).optional().describe("Important file paths the plan will touch or rely on"),
   risks: z.string().optional().describe("Brief risks or trade-offs"),
   verification: z.string().optional().describe("How to verify success after execution"),
@@ -22,7 +26,6 @@ const planToolOutputSchema = z.object({
   phase: z.string(),
   stepCount: z.number().int().nonnegative(),
   message: z.string(),
-  summary: z.string().optional(),
   planFilePath: z.string().nullable().optional(),
   error: z.string().optional(),
   durationMs: z.number().describe("Execution duration in milliseconds."),
@@ -38,8 +41,8 @@ function createPlanAuthoringTool(name: "create_plan" | "update_plan", deps: Crea
   return defineServerTool({
     name,
     description: isUpdate
-      ? `Update the current plan while in plan mode (review/planning). Replaces the plan artifact, overwrites the plan file, and refreshes the static summary. Prefer this over rewriting ## Plan in chat.`
-      : `Create a structured implementation plan while in plan mode. Auto-saves under .agents/plans/ and shows a static summary for user review. Prefer this over free-form ## Plan markdown when possible.`,
+      ? `Update the current plan while in plan mode (review/planning). Replaces the plan artifact and overwrites the plan file. Prefer this over rewriting ## Plan in chat.`
+      : `Create a structured implementation plan while in plan mode. Auto-saves under .agents/plans/ for user review in the ready banner. Prefer this over free-form ## Plan markdown when possible.`,
     inputSchema: structuredPlanInputSchema,
     outputSchema: planToolOutputSchema,
     execute: async (input) => {
@@ -65,23 +68,12 @@ function createPlanAuthoringTool(name: "create_plan" | "update_plan", deps: Crea
         }
 
         const state = planMode.getState();
-        const summary = formatPlanSummary({
-          path: state.planFilePath,
-          goal: input.goal,
-          steps: state.steps,
-        });
-        const phase = state.phase;
-        const hint = isUpdate
-          ? "Updated. Still in review — user runs /plan execute to Build."
-          : "Ready for review — user runs /plan execute to Build.";
-
         return {
           ok: true,
-          phase,
+          phase: state.phase,
           stepCount: result.stepCount ?? 0,
           planFilePath: state.planFilePath,
-          summary,
-          message: `${hint}\n\n${summary}`,
+          message: isUpdate ? "Plan updated — ready for review." : "Plan saved — ready for review.",
         };
       });
     },
@@ -89,8 +81,10 @@ function createPlanAuthoringTool(name: "create_plan" | "update_plan", deps: Crea
       if (!output.ok) {
         return [{ type: "text" as const, content: `Plan tool error: ${output.error ?? output.message}` }];
       }
-      const body = output.summary?.trim() || output.message;
-      return [{ type: "text" as const, content: body }];
+      // Minimal: full plan is in <plan_mode> + disk; UI review uses ready-banner markdown preview.
+      const hint = isUpdate ? "Plan updated — ready for review." : "Plan saved — ready for review.";
+      const path = output.planFilePath ? ` (${output.planFilePath})` : "";
+      return [{ type: "text" as const, content: `${hint}${path}` }];
     },
   });
 }

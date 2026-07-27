@@ -255,6 +255,12 @@ export const Help = () => {
           </Box>
           <Box>
             <Box width={28}>
+              <Text color={COLORS.success}>{KeyLabel.p}</Text>
+            </Box>
+            <Text>Review full plan (markdown preview when plan is ready)</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
               <Text color={COLORS.success}>/plan</Text>
             </Box>
             <Text>Toggle plan mode (planning → review → Build → retro)</Text>

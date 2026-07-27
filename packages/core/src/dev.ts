@@ -197,6 +197,8 @@ export {
   extractGoalFromPlanMarkdown,
   slugifyPlanName,
   planFilePath,
+  stepsFromTexts,
+  stripLeadingStepNumber,
   buildPlanModePrompt,
   buildPlanModePlanningPrompt,
   buildPlanModeReadyPrompt,

@@ -458,7 +458,7 @@ Cursor-like lifecycle: explore → review → Build → forced retro → complet
 | `retro` | retro | Full tools + `complete_plan` | Forced retrospective against the plan file; end with `complete_plan` or `/plan done`. |
 | `off` | — | Plan authoring/completion tools hidden | Default |
 
-**App:** `Shift+Tab` or `/plan` toggles mode; `/plan execute` Builds from review; `/plan cancel` pauses building → review; `/plan done` finishes retro; `/plan status` reports phase; `/plan save` / `load` / `list` for named persistence (create/update already auto-save). Footer shows `planning` / `review · /plan execute` / `building n/m` / `retro`. Ready banner points at Build. No scrollable plan panel (TUI) — summary is static text + plan file on disk.
+**App:** `Shift+Tab` or `/plan` toggles mode; when **review** (`ready`), press `p` (empty input) to toggle a bordered markdown plan preview in the banner (`Esc` closes). `/plan execute` Builds from review; `/plan cancel` pauses building → review; `/plan done` finishes retro; `/plan status` reports phase; `/plan save` / `load` / `list` for named persistence (create/update already auto-save). Footer shows `planning` / `review · /plan execute` / `building n/m` / `retro`. `create_plan` / `update_plan` do not dump plan text into the tool transcript — review is via the banner preview.
 
 **Core:** `ManagedAgent.planMode` (`PlanModeController`), tool filter in `run-agent`, `createPlanModeMiddleware`, prompts via turn context. See `packages/core/src/agent/plan/`.
 

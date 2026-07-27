@@ -27,7 +27,12 @@ export {
   PLAN_COMPLETION_TOOL_NAMES,
   PLAN_MODE_EXCLUDED_TOOL_NAMES,
 } from "./plan-tools.js";
-export { formatStructuredPlanMarkdown, stepsFromTexts, type StructuredPlanInput } from "./plan-format.js";
+export {
+  formatStructuredPlanMarkdown,
+  stepsFromTexts,
+  stripLeadingStepNumber,
+  type StructuredPlanInput,
+} from "./plan-format.js";
 export { extractGoalFromPlanMarkdown, formatPlanSummary, type FormatPlanSummaryInput } from "./plan-summary.js";
 export {
   PLAN_STORE_DIR,

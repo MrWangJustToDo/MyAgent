@@ -34,6 +34,7 @@ assert.ok(planning.includes("create_plan"), "planning prompt must mention create
 assert.ok(planning.includes("ask_user"), "planning prompt must mention ask_user for clarifying questions");
 assert.ok(/clarif/i.test(planning));
 assert.ok(planning.includes(".agents/plans"), "planning prompt must mention plan file location");
+assert.ok(!/static summary/i.test(planning), "planning prompt should not advertise tool-output static summary");
 
 const ready = buildPlanModeReadyPrompt("## Plan\n1. Do thing", ".agents/plans/x.md");
 assert.ok(ready.includes("task"));
@@ -52,6 +53,15 @@ assert.ok(md.includes("## Plan"));
 assert.ok(md.includes("**Goal:**"));
 assert.ok(md.includes("1. Survey"));
 assert.ok(md.includes("`packages/core/src/env.ts`"));
+
+const deduped = formatStructuredPlanMarkdown({
+  goal: "Dedup numbers",
+  steps: ["1. First step text", "2) Second step text", "3. 3. Third already doubled"],
+});
+assert.match(deduped, /^1\. First step text$/m);
+assert.match(deduped, /^2\. Second step text$/m);
+assert.match(deduped, /^3\. Third already doubled$/m);
+assert.doesNotMatch(deduped, /1\. 1\./);
 
 const events = [];
 const controller = new PlanModeController({

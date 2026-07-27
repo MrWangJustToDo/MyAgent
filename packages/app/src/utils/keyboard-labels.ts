@@ -50,6 +50,7 @@ export const KeyLabel = {
   leftRight: "←→",
   y: "y",
   n: "n",
+  p: "p",
   r: "R",
   ctrlA: "Ctrl+A",
   ctrlC: "Ctrl+C",
@@ -129,6 +130,7 @@ export function getKeyboardShortcutSections(): ShortcutSection[] {
       title: "Panels",
       lines: [
         { key: KeyLabel.shiftTab, desc: "Toggle plan mode" },
+        { key: KeyLabel.p, desc: "Review plan markdown (when plan ready, input empty)" },
         { key: KeyLabel.ctrlE, desc: "Workspace panel" },
         { key: KeyLabel.ctrlT, desc: "Task / subagent panel" },
       ],

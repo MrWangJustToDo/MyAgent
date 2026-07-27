@@ -8,6 +8,7 @@ import { isModifiedEnter } from "../utils/keyboard-labels.js";
 import { togglePlanModeWithFeedback } from "../utils/plan-mode-toggle.js";
 
 import { useAgent } from "./use-agent.js";
+import { usePlanPreview } from "./use-plan-preview.js";
 import { useSelect } from "./use-select.js";
 import { useSubagentPanel, CLOSE_DEBOUNCE_MS as SUBAGENT_CLOSE_DEBOUNCE_MS } from "./use-subagent-panel.js";
 import { useUserInput } from "./use-user-input.js";
@@ -164,6 +165,10 @@ export function useAgentKeybindings({
       if (panel.view !== "closed") {
         return;
       }
+      if (usePlanPreview.getReadonlyState().open) {
+        usePlanPreview.getActions().hide();
+        return;
+      }
       const workspace = useWorkspaceView.getReadonlyState();
       if (Date.now() - workspace.lastClosedAt < WORKSPACE_CLOSE_DEBOUNCE_MS) {
         return;
@@ -196,6 +201,20 @@ export function useAgentKeybindings({
           inputActions.setInputFeedback(message, level);
         });
         return;
+      }
+      // Empty input + plan ready: `p` toggles full-plan markdown preview in the banner.
+      if (
+        !isLoading &&
+        inputChar?.toLowerCase() === "p" &&
+        !inputKey.ctrl &&
+        !inputKey.meta &&
+        !useUserInput.getReadonlyState().value
+      ) {
+        const phase = getAgent()?.getPlanModeState().phase;
+        if (phase === "ready") {
+          usePlanPreview.getActions().toggle();
+          return;
+        }
       }
       if (inputKey.tab) {
         if (isLoading) return;

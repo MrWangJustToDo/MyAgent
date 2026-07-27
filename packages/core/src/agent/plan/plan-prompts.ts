@@ -18,7 +18,7 @@ export function buildPlanModePlanningPrompt(): string {
     "",
     "When ready, call the `create_plan` tool with:",
     "- goal, ordered steps, key_files, risks, verification (optional mermaid).",
-    "The plan is auto-saved under `.agents/plans/` and a static summary (path + steps) is shown — prefer that over a long chat overview.",
+    "The plan is auto-saved under `.agents/plans/`. The user reviews it in the ready banner (markdown preview) — do not dump a long plan overview in chat.",
     "You may also output a `## Plan` markdown section as a fallback; prefer `create_plan`.",
     "Use `update_plan` to revise after feedback.",
     "</plan_mode>",
@@ -65,7 +65,7 @@ export function buildPlanModeReadyPrompt(planMarkdown: string | null, planFilePa
     "A plan is ready for **review** (still read-only). Stay read-only until the user runs `/plan execute` (Build).",
     "Revise with `update_plan` (preferred) or a new `## Plan` section if the user asks — updates overwrite the plan file.",
     "Prefer `task` for any further read-only research before revising.",
-    "Do not replace the plan summary with a vague overview — the plan file and step list are the source of truth.",
+    "Do not replace the plan with a vague chat overview — the plan file and ready-banner preview are the source of truth.",
   ];
   if (planFilePath?.trim()) {
     parts.push(`Plan file: \`${planFilePath.trim()}\``);

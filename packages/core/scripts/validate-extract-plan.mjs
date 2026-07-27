@@ -6,7 +6,11 @@
 
 import assert from "node:assert/strict";
 
-import { cleanStepText, extractDoneSteps, extractPlan } from "../dist/dev.mjs";
+import { cleanStepText, extractDoneSteps, extractPlan, stripLeadingStepNumber } from "../dist/dev.mjs";
+
+assert.equal(stripLeadingStepNumber("1. Do the thing"), "Do the thing");
+assert.equal(stripLeadingStepNumber("1. 1. Nested"), "Nested");
+assert.equal(stripLeadingStepNumber("2) Also paren"), "Also paren");
 
 const sample = `
 Here is my analysis.
@@ -45,5 +49,11 @@ assert.equal(colonPlan.steps.length, 2);
 
 assert.deepEqual(extractDoneSteps("Finished [DONE:1] and [DONE:3]"), [1, 3]);
 assert.equal(cleanStepText("**Read** the `file`").length > 0, true);
+
+const doubled = extractPlan(`## Plan\n\n1. 1. First nested step here\n2. 2. Second nested step here\n`);
+assert.ok(doubled);
+assert.equal(doubled.steps.length, 2);
+assert.doesNotMatch(doubled.steps[0].text, /^\d+[.)]/);
+assert.doesNotMatch(doubled.steps[1].text, /^\d+[.)]/);
 
 console.log("validate:extract-plan OK");

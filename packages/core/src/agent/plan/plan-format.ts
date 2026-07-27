@@ -13,9 +13,22 @@ export interface StructuredPlanInput {
   mermaid?: string;
 }
 
+/**
+ * Strip one or more leading list markers (`1. ` / `2) `) so we do not double-number
+ * when the model already includes indices in step text.
+ */
+export function stripLeadingStepNumber(text: string): string {
+  let t = text.trim();
+  // Repeat: models sometimes send "1. 1. Define …"
+  while (/^\d+[.)]\s+/.test(t)) {
+    t = t.replace(/^\d+[.)]\s+/, "").trim();
+  }
+  return t;
+}
+
 export function stepsFromTexts(texts: string[]): PlanStep[] {
   return texts
-    .map((text) => text.trim())
+    .map((text) => stripLeadingStepNumber(text))
     .filter((text) => text.length >= 3)
     .map((text, index) => ({ step: index + 1, text }));
 }
@@ -34,9 +47,10 @@ export function formatStructuredPlanMarkdown(input: StructuredPlanInput): string
   }
 
   lines.push("**Steps:**");
-  input.steps.forEach((step, index) => {
-    lines.push(`${index + 1}. ${step.trim()}`);
-  });
+  const steps = stepsFromTexts(input.steps);
+  for (const step of steps) {
+    lines.push(`${step.step}. ${step.text}`);
+  }
   lines.push("");
 
   if (input.risks?.trim()) {

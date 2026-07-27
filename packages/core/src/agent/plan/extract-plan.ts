@@ -60,7 +60,9 @@ export function extractPlan(message: string): ExtractedPlan | null {
       .trim();
     if (raw.length < 3) continue;
     if (raw.startsWith("`") || raw.startsWith("/") || raw.startsWith("-")) continue;
-    const cleaned = cleanStepText(raw);
+    // Drop nested markers if the model already numbered the step text ("1. 1. Do X").
+    const withoutNested = raw.replace(/^(?:\d+[.)]\s+)+/, "").trim() || raw;
+    const cleaned = cleanStepText(withoutNested);
     if (cleaned.length < 3) continue;
     steps.push({ step: steps.length + 1, text: cleaned });
   }
