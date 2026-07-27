@@ -159,6 +159,7 @@ export {
   DEFAULT_EXTENSION_DIR,
   EXTENSION_DIRS_ENV_VAR,
   getDefaultExtensionDirs,
+  joinExtensionAppendSegments,
 } from "./agent/extension";
 export type {
   ExtensionAPI,
@@ -173,6 +174,10 @@ export type {
   ExtensionZod,
   InterceptableEvent,
   EventInterceptor,
+  BeforeAgentStartEvent,
+  BeforeAgentStartPayload,
+  ExtensionPromptAppends,
+  TurnContextProvider,
 } from "./agent/extension";
 
 // ============================================================================

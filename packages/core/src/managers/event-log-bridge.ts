@@ -76,6 +76,15 @@ const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | false> = {
       return `Prompt: ${preview}  (${msgCount} context messages)`;
     },
   },
+  "prompt:before": {
+    level: "debug",
+    category: "chat",
+    formatMessage: (event) => {
+      const hasTurn = event.data?.hasTurnContext ? "turn+ctx" : "no-turn-ctx";
+      const hasSys = event.data?.hasSystemAppend ? "sys+append" : "no-sys-append";
+      return `Extension prompt hooks (${hasTurn}, ${hasSys})`;
+    },
+  },
   "turn:summary": {
     level: "info",
     category: "chat",

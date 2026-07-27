@@ -152,6 +152,7 @@ export function buildAgentRunner(
     createTurnContextMiddleware({
       getFrozenSystemPrompt: deps.getFrozenSystemPrompt,
       getTurnContextSnapshot: deps.getTurnContextSnapshot,
+      getExtensionSystemAppendSnapshot: deps.getExtensionSystemAppendSnapshot,
     }),
     createExtensionsMiddleware({
       getExtensionRunner: () => deps.extensionRunner,

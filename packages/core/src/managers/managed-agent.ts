@@ -185,6 +185,10 @@ export class ManagedAgent {
   private systemPromptFrozen = false;
   /** Stable dynamic turn context for the current user turn (system prompt segment). */
   private turnContextSnapshot: string | undefined;
+  /** Extension append-only system text for the current user turn (after `<turn_context>`). */
+  private extensionSystemAppendSnapshot: string | undefined;
+  /** Pending extension turn-context text collected in prepareForRun (before snapshot). */
+  private pendingExtensionTurnContext: string | undefined;
 
   constructor(
     config: ManagedAgentConfig,
@@ -591,6 +595,32 @@ export class ManagedAgent {
     return this.turnContextSnapshot;
   }
 
+  getExtensionSystemAppendSnapshot(): string | undefined {
+    return this.extensionSystemAppendSnapshot;
+  }
+
+  /**
+   * Collect `before_agent_start` interceptors + turn-context providers for this user turn.
+   * Call before {@link captureTurnContextSnapshot}.
+   */
+  async collectExtensionPromptHooks(prompt: string): Promise<void> {
+    this.pendingExtensionTurnContext = undefined;
+    this.extensionSystemAppendSnapshot = undefined;
+
+    const runner = this.extensionRunner;
+    if (!runner) return;
+
+    const collected = await runner.collectBeforeAgentStart(prompt, this.id);
+    this.pendingExtensionTurnContext = collected.turnContext;
+    this.extensionSystemAppendSnapshot = collected.systemAppend;
+
+    this.emitEvent("prompt:before", {
+      prompt,
+      hasTurnContext: Boolean(collected.turnContext),
+      hasSystemAppend: Boolean(collected.systemAppend),
+    });
+  }
+
   async captureTurnContextSnapshot(): Promise<void> {
     this.turnContextSnapshot = await this.getDynamicTurnContext();
   }
@@ -598,6 +628,8 @@ export class ManagedAgent {
   clearTurnContext(): void {
     this.memory.clearTurnContext();
     this.turnContextSnapshot = undefined;
+    this.extensionSystemAppendSnapshot = undefined;
+    this.pendingExtensionTurnContext = undefined;
   }
 
   resetSystemPrompt(): void {
@@ -662,6 +694,7 @@ export class ManagedAgent {
       gitBranch,
       gitStatus,
       planModeContent,
+      extensionTurnContext: this.pendingExtensionTurnContext,
     });
   }
 
@@ -853,6 +886,8 @@ export class ManagedAgent {
     this.pendingApprovalCount = 0;
     this.memory.resetState();
     this.turnContextSnapshot = undefined;
+    this.extensionSystemAppendSnapshot = undefined;
+    this.pendingExtensionTurnContext = undefined;
     this.log?.clear();
     this.context?.reset();
     this.usage.reset();

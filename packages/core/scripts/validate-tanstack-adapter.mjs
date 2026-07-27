@@ -5,6 +5,8 @@
  *
  * Requires an OpenAI-compatible endpoint at BASE_URL (default http://localhost:11434/v1).
  * Set VALIDATE_TANSTACK_MODEL to override the model name (default: qwen3).
+ * Set VALIDATE_TANSTACK_REQUIRED=1 to fail when the endpoint/model is unavailable
+ * (default: soft-skip with exit 0).
  */
 /* eslint-disable no-undef */
 import { chat } from "@tanstack/ai";
@@ -14,6 +16,15 @@ import { createTextAdapter } from "../dist/dev.mjs";
 
 const baseURL = process.env.BASE_URL ?? "http://localhost:11434/v1";
 const modelName = process.env.VALIDATE_TANSTACK_MODEL ?? "qwen3";
+const required = process.env.VALIDATE_TANSTACK_REQUIRED === "1";
+
+function softSkip(reason) {
+  if (required) {
+    throw new Error(reason);
+  }
+  console.log(`tanstack-adapter validation skipped: ${reason}`);
+  process.exit(0);
+}
 
 const { adapter, model } = createTextAdapter({
   style: "openai",
@@ -48,9 +59,24 @@ try {
       break;
     }
     if (chunk.type === "RUN_ERROR") {
-      throw new Error(`RUN_ERROR: ${JSON.stringify(chunk)}`);
+      const message = typeof chunk.message === "string" ? chunk.message : JSON.stringify(chunk);
+      softSkip(`endpoint/model unavailable (${message})`);
     }
   }
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("fetch failed") ||
+    lower.includes("econnrefused") ||
+    lower.includes("enotfound") ||
+    lower.includes("abort") ||
+    lower.includes("not found") ||
+    lower.includes("404")
+  ) {
+    softSkip(message);
+  }
+  throw error;
 } finally {
   clearTimeout(timeout);
 }

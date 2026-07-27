@@ -12,6 +12,7 @@ export type AgentEventType =
   | "session:restore"
   | "session:save-error"
   | "prompt:submit"
+  | "prompt:before"
   | "agent:thinking"
   | "agent:tool-start"
   | "agent:tool-approval-request"

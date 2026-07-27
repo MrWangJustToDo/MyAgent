@@ -25,5 +25,6 @@ export interface AgentRunDeps {
   modelInfo: ModelInfo | null;
   getFrozenSystemPrompt: () => string | undefined;
   getTurnContextSnapshot: () => string | undefined;
+  getExtensionSystemAppendSnapshot: () => string | undefined;
   shouldTriggerAutoCompact: (messages?: ModelMessage[]) => boolean;
 }

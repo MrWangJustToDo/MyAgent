@@ -430,6 +430,7 @@ registerCoreEnv(env);
 | `session:doc` / `session:skill` / `session:mcp` / `session:memory` | After agent registration during bootstrap |
 | `session:start` | Bootstrap complete |
 | `prompt:submit` | Run prepared |
+| `prompt:before` | Extension `before_agent_start` / turn-context providers collected |
 | `agent:thinking` | Model reasoning stream starts |
 | `agent:tool-start` / `agent:tool-end` / `agent:tool-error` | Tool lifecycle (extensions middleware) |
 | `agent:abort` / `agent:stream-error` | User abort / stream failure (`RUN_ERROR` and other pump failures; main chat records error without crashing the host) |

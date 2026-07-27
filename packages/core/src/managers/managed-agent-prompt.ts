@@ -75,6 +75,8 @@ export interface DynamicTurnContextInput {
   gitStatus?: string;
   /** Plan-mode instructions (planning / ready / executing). */
   planModeContent?: string;
+  /** Extension-contributed situational context (nested under `<extension_context>`). */
+  extensionTurnContext?: string;
 }
 
 export function buildDynamicTurnContext(input: DynamicTurnContextInput): string | undefined {
@@ -99,26 +101,45 @@ export function buildDynamicTurnContext(input: DynamicTurnContextInput): string 
   if (input.todoNagReminder) parts.push(input.todoNagReminder);
   if (input.planModeContent) parts.push(input.planModeContent);
 
+  if (input.extensionTurnContext?.trim()) {
+    parts.push(["<extension_context>", input.extensionTurnContext.trim(), "</extension_context>"].join("\n"));
+  }
+
   return parts.length > 0 ? parts.join("\n\n") : undefined;
 }
 
 /**
  * Append per-turn dynamic context after {@link SYSTEM_PROMPT_DYNAMIC_BOUNDARY}.
  * Conversation messages stay free of synthetic turn_context pairs (prefix-cache friendly).
+ *
+ * @param extensionSystemAppend - Optional append-only system text after `<turn_context>` (still after the boundary).
  */
 export function buildSystemPromptWithTurnContext(
   frozen: string | undefined,
-  dynamicContext: string | undefined
+  dynamicContext: string | undefined,
+  extensionSystemAppend?: string
 ): string[] | undefined {
-  if (!frozen && !dynamicContext) return undefined;
-  if (!dynamicContext) return frozen ? [frozen] : undefined;
+  const append = extensionSystemAppend?.trim();
+  const hasDynamic = Boolean(dynamicContext?.trim());
+  const hasAppend = Boolean(append);
 
-  const block = `<turn_context>\n${dynamicContext}\n</turn_context>`;
+  if (!frozen && !hasDynamic && !hasAppend) return undefined;
+  if (!hasDynamic && !hasAppend) return frozen ? [frozen] : undefined;
+
+  const segments: string[] = [];
+  if (hasDynamic) {
+    segments.push(`<turn_context>\n${dynamicContext!.trim()}\n</turn_context>`);
+  }
+  if (hasAppend) {
+    segments.push(append!);
+  }
+  const dynamicBlock = segments.join("\n\n");
+
   if (!frozen) {
-    return [SYSTEM_PROMPT_DYNAMIC_BOUNDARY + block];
+    return [SYSTEM_PROMPT_DYNAMIC_BOUNDARY + dynamicBlock];
   }
   if (frozen.includes("<SYSTEM_PROMPT_DYNAMIC_BOUNDARY>")) {
-    return [frozen + block];
+    return [frozen + dynamicBlock];
   }
-  return [frozen + SYSTEM_PROMPT_DYNAMIC_BOUNDARY + block];
+  return [frozen + SYSTEM_PROMPT_DYNAMIC_BOUNDARY + dynamicBlock];
 }

@@ -19,7 +19,7 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 | Compaction (micro / auto / reactive) | **Done** | + manual `/compact` in app |
 | Memory (prefetch / extract / consolidate) | **Done** | Post-run extraction only |
 | Tool approval | **Done in core** | `status` middleware + `needsApproval` on tools; app handles UI/keyboard only |
-| Extensions | **Done** | `ExtensionRunner` + `extensions-middleware` (`.agents/extension`); no `.agent-hooks` |
+| Extensions | **Done** | `ExtensionRunner` + `extensions-middleware` + per-turn `before_agent_start` / turn-context providers |
 | Plan mode | **Done** | `PlanModeController` + tool filter + `/plan` in app |
 
 **Known gaps**
@@ -606,7 +606,13 @@ Streaming chunks are scoped by required `agentId`; hosts receive them only via `
 
 ### 8.5 Extension interception (L4)
 
-`ExtensionEventBus` (`tool:before:*` / `tool:after:*` / `tool:error:*`) is invoked from `extensions-middleware.ts`. It does **not** replace AgentEventBus. There is **no** `.agent-hooks` / hook-script path — customize via `.agents/extension` modules or programmatic `config.extensions`.
+`ExtensionEventBus` (`tool:before:*` / `tool:after:*` / `tool:error:*` / `before_agent_start`) is invoked from middleware and prepare-for-run. It does **not** replace AgentEventBus. There is **no** `.agent-hooks` / hook-script path — customize via `.agents/extension` modules or programmatic `config.extensions`.
+
+**Per-turn prompt hooks:** On each root user prompt (not tool continuations / subagents), `prepareForRun` calls `ExtensionRunner.collectBeforeAgentStart`, which:
+
+1. Runs `before_agent_start` interceptors (fresh event per handler; `appendTurnContext` / `appendSystemPrompt` are chained append-only).
+2. Runs `registerTurnContextProvider` callbacks.
+3. Merges turn-context text into `<extension_context>` inside the dynamic turn snapshot; system appends go after `<turn_context>` but still after `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` (frozen prefix stays cacheable).
 
 Repo demos live in `examples/extensions/` and are **opt-in** via `AGENT_EXTENSION_DIRS`, `ManagedAgentConfig.extensionDirs`, or CLI `--extension-dirs` (not in core defaults). Extension `registerCommand()` is mirrored onto `ManagedAgent` and synced into app slash commands after bootstrap (`syncExtensionCommands`). Built-in names (`/help`, …) win over extension conflicts. `registerTool()` converts definitions via `defineServerTool` before they enter the TanStack tool set. Tool schemas must use **`ctx.z`** (host Zod); filesystem extensions should not import `zod`.
 ---
@@ -674,6 +680,7 @@ executeManagedAgentRun
 pnpm --filter @my-agent/core run validate:emit-agent-event
 pnpm --filter @my-agent/core run validate:event-log-bridge
 pnpm --filter @my-agent/core run validate:extensions-middleware
+pnpm --filter @my-agent/core run validate:extension-prompt-hooks
 pnpm --filter @my-agent/core run validate:streaming-scope
 pnpm --filter @my-agent/core run validate:agent-observe
 pnpm --filter @my-agent/core run validate:tanstack-tools

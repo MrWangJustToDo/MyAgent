@@ -18,6 +18,13 @@ const middleware = createLifecycleMiddleware({
     updateWindowUsage: () => {
       usageUpdated = true;
     },
+    getWindowUsage: () => ({
+      inputTokens: 1,
+      outputTokens: 2,
+      totalTokens: 3,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    }),
     getPricing: () => null,
   },
   getPricing: () => null,

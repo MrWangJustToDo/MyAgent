@@ -6,12 +6,7 @@
 
 import assert from "node:assert/strict";
 
-import {
-  AgentUIChannel,
-  extractRunErrorMessage,
-  runStreamWithReactiveCompactRetry,
-  throwOnRunError,
-} from "../dist/dev.mjs";
+import { AgentUIChannel, extractRunErrorMessage, runStreamWithRecovery, throwOnRunError } from "../dist/dev.mjs";
 
 assert.equal(extractRunErrorMessage({ type: "TEXT_MESSAGE_CONTENT", delta: "hi" }), "");
 assert.equal(extractRunErrorMessage({ type: "RUN_ERROR", message: "upstream failed" }), "upstream failed");
@@ -50,7 +45,7 @@ async function* onlyRunError() {
 
 threw = false;
 try {
-  for await (const chunk of runStreamWithReactiveCompactRetry({
+  for await (const chunk of runStreamWithRecovery({
     managed: { parentId: "sub", usage: { hasCapability: () => true } },
     manager: {},
     getMessages: () => [],

@@ -103,6 +103,38 @@ export interface ToolErrorEvent extends InterceptableEvent<ToolErrorPayload> {
 }
 
 // ============================================================================
+// Per-turn prompt hooks (before_agent_start)
+// ============================================================================
+
+export interface BeforeAgentStartPayload {
+  /** User prompt text for this turn (or a placeholder when structured-only). */
+  prompt: string;
+  /** Root agent / session id. */
+  sessionId: string;
+}
+
+/**
+ * Interceptable event fired once per user prompt before turn-context snapshot.
+ * Handlers mutate `appendTurnContext` / `appendSystemPrompt`; the runner concatenates
+ * contributions across handlers (append-only — does not replace the frozen system prompt).
+ */
+export interface BeforeAgentStartEvent extends InterceptableEvent<BeforeAgentStartPayload> {
+  type: "before_agent_start";
+  payload: BeforeAgentStartPayload;
+  /** Appended into `<turn_context>` / `<extension_context>` for this user turn. */
+  appendTurnContext?: string;
+  /** Appended after DYNAMIC_BOUNDARY for this turn only (outside `<turn_context>`). */
+  appendSystemPrompt?: string;
+}
+
+export type TurnContextProvider = () => string | undefined | Promise<string | undefined>;
+
+export interface ExtensionPromptAppends {
+  turnContext?: string;
+  systemAppend?: string;
+}
+
+// ============================================================================
 // Union type for tool lifecycle events
 // ============================================================================
 
@@ -140,6 +172,11 @@ export interface ExtensionContext {
   registerTool(def: ExtensionToolDefinition): void;
   registerCommand(cmd: ExtensionCommand): void;
   registerInterceptor<T extends InterceptableEvent>(eventType: string, handler: EventInterceptor<T>): () => void;
+  /**
+   * Register a callback that contributes turn-context text each user turn.
+   * Returns an unsubscribe function.
+   */
+  registerTurnContextProvider(fn: TurnContextProvider): () => void;
 
   events: ExtensionEventBus;
   ui: ExtensionUI;

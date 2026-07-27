@@ -40,4 +40,13 @@ assert.equal(buildSystemPromptWithTurnContext(undefined, undefined), undefined);
 const dynamicOnly = buildSystemPromptWithTurnContext(undefined, dynamic);
 assert.ok(dynamicOnly?.[0]?.includes("<turn_context>"));
 
+const withAppend = buildSystemPromptWithTurnContext(frozen, dynamic, "Extra system note");
+assert.ok(withAppend?.[0]?.includes("</turn_context>"));
+assert.ok(withAppend?.[0]?.includes("Extra system note"));
+assert.ok(withAppend?.[0]?.indexOf("</turn_context>") < withAppend?.[0]?.indexOf("Extra system note"));
+
+const appendOnly = buildSystemPromptWithTurnContext(frozen, undefined, "Only append");
+assert.ok(appendOnly?.[0]?.includes("Only append"));
+assert.ok(!appendOnly?.[0]?.includes("<turn_context>"));
+
 console.log("turn-context validation passed");

@@ -18,6 +18,7 @@ export function buildManagedAgentDeps(managed: ManagedAgent, manager: AgentManag
     modelInfo: managed.getModelInfo(),
     getFrozenSystemPrompt: () => managed.getFrozenSystemPrompt(),
     getTurnContextSnapshot: () => managed.getTurnContextSnapshot(),
+    getExtensionSystemAppendSnapshot: () => managed.getExtensionSystemAppendSnapshot(),
     shouldTriggerAutoCompact: (messages) => managed.shouldTriggerAutoCompact(messages),
   };
 }

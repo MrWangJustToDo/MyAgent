@@ -34,6 +34,8 @@ export interface RunLifecycleHost {
   emitEvent: (type: AgentEventType, data?: Record<string, unknown>) => void;
   persistSession: () => void;
   recordStreamDuration: () => void;
+  /** Collect extension before_agent_start + turn-context providers (root user turns only). */
+  collectExtensionPromptHooks?: (prompt: string) => Promise<void>;
   captureTurnContextSnapshot: () => Promise<void>;
   clearTurnContext: () => void;
   /** Optional: mid-run steer / tool-phase continuation skips one-shot prepare work. */
@@ -80,6 +82,7 @@ export async function prepareManagedAgentForRun(
     });
 
     // Snapshot once per user turn — middleware reuses it across tool iterations.
+    await host.collectExtensionPromptHooks?.(typeof options.prompt === "string" ? options.prompt : "(structured)");
     await host.captureTurnContextSnapshot();
 
     const userMsg = typeof options.prompt === "string" ? options.prompt : "(structured)";

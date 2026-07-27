@@ -1,4 +1,5 @@
 import { z } from "./extension-zod.js";
+import { joinExtensionAppendSegments } from "./join-append-segments.js";
 
 import type {
   ExtensionInstance,
@@ -11,6 +12,9 @@ import type {
   EventInterceptor,
   ExtensionEventBus,
   ExtensionUI,
+  BeforeAgentStartEvent,
+  ExtensionPromptAppends,
+  TurnContextProvider,
 } from "./types.js";
 
 // ============================================================================
@@ -47,6 +51,12 @@ class DefaultExtensionEventBus implements ExtensionEventBus {
 
   off<T extends InterceptableEvent>(type: string, handler: EventInterceptor<T>): void {
     this.handlers.get(type)?.delete(handler as EventInterceptor<InterceptableEvent>);
+  }
+
+  /** Handlers for a given event type in registration order. */
+  getHandlers(type: string): EventInterceptor<InterceptableEvent>[] {
+    const set = this.handlers.get(type);
+    return set ? Array.from(set) : [];
   }
 }
 
@@ -95,6 +105,7 @@ export class ExtensionRunner {
   private extensions: ExtensionInstance[] = [];
   private toolRegistry = new Map<string, ExtensionToolDefinition>();
   private commandRegistry = new Map<string, ExtensionCommand>();
+  private turnContextProviders = new Set<TurnContextProvider>();
   private eventBus: DefaultExtensionEventBus;
   private ui: DefaultExtensionUI;
   private options: ExtensionRunnerOptions;
@@ -123,6 +134,48 @@ export class ExtensionRunner {
 
   getTool(name: string): ExtensionToolDefinition | undefined {
     return this.toolRegistry.get(name);
+  }
+
+  /**
+   * Emit `before_agent_start` to each interceptor with a fresh event, then run turn-context
+   * providers. Returns concatenated append-only segments.
+   */
+  async collectBeforeAgentStart(prompt: string, sessionId: string): Promise<ExtensionPromptAppends> {
+    const turnParts: string[] = [];
+    const systemParts: string[] = [];
+
+    const handlers = this.eventBus.getHandlers("before_agent_start");
+    for (const handler of handlers) {
+      const event: BeforeAgentStartEvent = {
+        type: "before_agent_start",
+        payload: { prompt, sessionId },
+        defaultReturn: undefined,
+      };
+      await handler(event);
+      if (event.appendTurnContext?.trim()) {
+        turnParts.push(event.appendTurnContext.trim());
+      }
+      if (event.appendSystemPrompt?.trim()) {
+        systemParts.push(event.appendSystemPrompt.trim());
+      }
+    }
+
+    for (const provider of this.turnContextProviders) {
+      try {
+        const value = await provider();
+        if (value?.trim()) {
+          turnParts.push(value.trim());
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[extension] turn context provider failed: ${message}`);
+      }
+    }
+
+    return {
+      turnContext: joinExtensionAppendSegments(...turnParts),
+      systemAppend: joinExtensionAppendSegments(...systemParts),
+    };
   }
 
   async loadExtension(api: ExtensionAPI, config?: ExtensionConfig): Promise<ExtensionInstance> {
@@ -167,6 +220,7 @@ export class ExtensionRunner {
     this.extensions = [];
     this.toolRegistry.clear();
     this.commandRegistry.clear();
+    this.turnContextProviders.clear();
   }
 
   private createContext(api: ExtensionAPI, config?: ExtensionConfig): ExtensionContext {
@@ -190,6 +244,13 @@ export class ExtensionRunner {
         handler: EventInterceptor<T>
       ): (() => void) => {
         return this.eventBus.on(eventType, handler);
+      },
+
+      registerTurnContextProvider: (fn: TurnContextProvider): (() => void) => {
+        this.turnContextProviders.add(fn);
+        return () => {
+          this.turnContextProviders.delete(fn);
+        };
       },
 
       events: this.eventBus,

@@ -8,6 +8,8 @@ export interface TurnContextMiddlewareDeps {
   getFrozenSystemPrompt: () => string | undefined;
   /** Per-user-turn snapshot — stable across tool iterations within the turn. */
   getTurnContextSnapshot: () => string | undefined;
+  /** Optional extension append-only system text for this turn (after `<turn_context>`). */
+  getExtensionSystemAppendSnapshot?: () => string | undefined;
 }
 
 /** Apply turn-scoped dynamic context via system prompt (not conversation messages). */
@@ -17,7 +19,8 @@ export function createTurnContextMiddleware(deps: TurnContextMiddlewareDeps): Ch
     onConfig: async (_ctx, _config) => {
       const systemPrompts = buildSystemPromptWithTurnContext(
         deps.getFrozenSystemPrompt(),
-        deps.getTurnContextSnapshot()
+        deps.getTurnContextSnapshot(),
+        deps.getExtensionSystemAppendSnapshot?.()
       );
       return systemPrompts ? { systemPrompts } : {};
     },

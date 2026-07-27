@@ -99,11 +99,13 @@ export { createExtensionsMiddleware, createLifecycleMiddleware } from "./agent/m
 export { createStatusMiddleware } from "./agent/middleware/status-middleware.js";
 export {
   ExtensionLoader,
+  ExtensionRunner,
   normalizeExtensionExport,
   isExtensionModuleFile,
   pathToFileUrl,
   DEFAULT_EXTENSION_DIR,
   getDefaultExtensionDirs,
+  joinExtensionAppendSegments,
 } from "./agent/extension";
 export {
   buildSystemPromptWithTurnContext,

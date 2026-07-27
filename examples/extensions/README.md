@@ -8,6 +8,7 @@ Sample modules for manual testing. **Not** loaded by default — core only scans
 | `demo-echo-tool.mjs` | Custom tool `ext_echo` | Ask the agent to call `ext_echo` |
 | `demo-guard.mjs` | `tool:before:run_command` deny | Ask agent to run `rm -rf /` |
 | `demo-status.mjs` | Footer status + confirm | `/ext-status on`, `/ext-confirm` |
+| `demo-turn-context.mjs` | Per-turn `before_agent_start` + turn-context provider | `/ext-turn on`, then chat; `/ext-turn tab example.com` |
 
 Load demos explicitly:
 
