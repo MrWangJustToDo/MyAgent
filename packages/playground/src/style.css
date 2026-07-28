@@ -966,7 +966,7 @@ body,
     0 4px 20px rgba(0, 0, 0, 0.35),
     0 1px 4px rgba(0, 0, 0, 0.2);
   opacity: 0.92;
-  transition: all 0.25s;
+  /* No transition — left/top must track the pointer immediately while dragging */
 }
 
 .config-bubble:hover {
@@ -974,12 +974,11 @@ body,
   box-shadow:
     0 6px 28px rgba(99, 130, 255, 0.3),
     0 2px 8px rgba(0, 0, 0, 0.25);
-  transform: scale(1.05);
 }
 
 .config-bubble:active {
   cursor: grabbing;
-  transform: scale(0.92);
+  opacity: 1;
 }
 
 /* ============================================================================
@@ -1199,6 +1198,10 @@ body,
   position: fixed;
   inset: 0;
   z-index: 49;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
   background: rgba(6, 6, 10, 0.62);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
@@ -1215,10 +1218,7 @@ body,
 }
 
 .export-dialog {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  position: relative;
   z-index: 50;
   width: min(500px, calc(100vw - 24px));
   max-height: min(72vh, 640px);
@@ -1235,7 +1235,17 @@ body,
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
-  animation: panelEnter 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  /* Opacity-only enter — avoid overriding a centering transform */
+  animation: exportDialogEnter 0.2s ease-out;
+}
+
+@keyframes exportDialogEnter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .export-dialog__header {
