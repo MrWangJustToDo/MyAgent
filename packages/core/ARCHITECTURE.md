@@ -340,7 +340,7 @@ Large tool outputs at **execute** time still use `maybeCacheOutput` (`.agents/ca
 
 | Kind | Where | Examples |
 |------|--------|----------|
-| **Adapter-specific** | `models/adapter-factory.ts`, `*-adapter.ts` | DeepSeek `reasoning_content` echo (`ReasoningChatCompletionsTextAdapter`); Anthropic vs OpenAI Chat Completions style selection |
+| **Adapter-specific** | `models/adapter-factory.ts`, `*-adapter.ts` | DeepSeek `reasoning_content` echo (`ReasoningChatCompletionsTextAdapter`); Chat Completions tool-image lift (`liftToolMediaForChatCompletions` — tool text stays string, images become a synthetic user `image_url` message); PDF text extract in `read_file` for Completions; Anthropic vs OpenAI Chat Completions style selection |
 | **Capability-generic** | middleware / reactive retry | Multimodal strip via `vision`/`audio`/`video`/`document` (`capability-message-utils`); `prompt_too_long` reactive compact |
 | **Config / metadata** | `model-config`, `models.dev`, session | `modelStyle`, pricing, `capabilities[]`, unused-for-now `reasoningConfig` (tag/effort/budget — not yet mapped to request options) |
 

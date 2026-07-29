@@ -5,6 +5,8 @@
  * Handles TanStack {@link ModelMessage} shape including `toolCalls` and tool messages.
  */
 
+import { estimateImageInputTokens } from "../utils/estimate-image-tokens.js";
+
 import { getToolMessageContentSize } from "./message-utils.js";
 
 import type { ContentPart, ModelMessage } from "@tanstack/ai";
@@ -32,7 +34,14 @@ export function estimateContentPartChars(part: ContentPart): number {
     case "video":
     case "document":
       if (part.source.type === "data") {
-        return part.source.value.length;
+        // Vision/document input is not billed like raw base64 text. Approximate tokens
+        // then convert back to the estimator's char units (tokens * CHARS_PER_TOKEN).
+        const byteLength = Math.floor(part.source.value.length * 0.75);
+        if (part.type === "image") {
+          return estimateImageInputTokens(byteLength) * CHARS_PER_TOKEN;
+        }
+        // Documents/audio/video: coarse size brackets (same as large-image fallback).
+        return estimateImageInputTokens(byteLength) * CHARS_PER_TOKEN;
       }
       return 1000 * CHARS_PER_TOKEN;
     default:

@@ -442,7 +442,7 @@ registerCoreEnv(env);
 | `subagent:*` | Subagent lifecycle |
 | `plan:enter` / `plan:ready` / `plan:execute` / `plan:cancel-execution` / `plan:retro` / `plan:complete` / `plan:exit` | Plan mode phase transitions |
 
-**Vision note:** Official DeepSeek Chat Completions currently rejects multimodal parts such as `image_url` (text-only schema). Capability sanitization strips unsupported `image` / `audio` / `video` / `document` parts on the wire and retries once; switch to a provider with matching capabilities for real media understanding.
+**Vision note:** On OpenAI-compatible Chat Completions, multimodal tool results are lifted to a synthetic user `image_url` message (`liftToolMediaForChatCompletions`) so base64 is not stringified into `role: "tool"`. Anthropic keeps native multimodal `tool_result` parts. Official DeepSeek Chat Completions may still reject `image_url` (text-only schema); capability sanitization strips unsupported `image` / `audio` / `video` / `document` parts on the wire and retries once — use a vision-capable provider for real media understanding.
 
 **Event → Log bridge:** `attachEventLogBridge()` in `AgentManager` maps events to `AgentLog` entries. Policy lives in `event-log-bridge.ts` (`DEFAULT_EVENT_LOG_RULES`); override per event type with `EventLogPolicy`. Emit sites should not duplicate lifecycle logs covered by events.
 
@@ -638,11 +638,13 @@ createNodeEnv({ rootPath: "/path", mode: "native" });   // No sandbox
 |------|------------|----------|
 | Text | `.ts`, `.js`, `.py`, `.md`, etc. | Line-numbered content, offset/limit pagination |
 | Directory | (path to directory) | List of entries |
-| Image | `.png`, `.jpg`, `.gif`, `.webp`, `.svg` | Base64 for LLM vision |
-| PDF | `.pdf` | Base64 for document analysis |
+| Image | `.png`, `.jpg`, `.gif`, `.webp` (not SVG) | Vision part for the model; budget uses vision-token estimate (dimensions / size), not base64-as-text |
+| PDF | `.pdf` | Extracted text in the tool text part (Completions-safe) + `document` part for Anthropic-style providers |
 | Binary | `.mp3`, `.zip`, `.exe`, etc. | Error (cannot read) |
 
 **Text limits:** 2000 lines default, max 100KB, max 2000 chars/line.
+
+**Chat Completions note:** Multimodal tool images are lifted to a synthetic user `image_url` message (`liftToolMediaForChatCompletions`). PDF binaries are not liftable on Completions — rely on extracted text.
 
 ### run_command Tool
 - Max 50KB for stdout and stderr each

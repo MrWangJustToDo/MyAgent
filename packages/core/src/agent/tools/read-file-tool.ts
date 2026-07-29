@@ -1,10 +1,13 @@
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
+import { estimateImageInputTokens, tryReadImageDimensions } from "../utils/estimate-image-tokens.js";
 
 import { defineServerTool } from "./tanstack/define-tool.js";
+import { extractPdfText } from "./util/extract-pdf-text.js";
 import { formatReadFileToolResult } from "./util/format-read-file-result.js";
 import { getFile, withDuration } from "./util/helpers.js";
+import { detectReadFileType, isBinaryContent } from "./util/read-file-detect.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 
 import type { FileStat } from "../../environment";
@@ -28,138 +31,6 @@ const MAX_LINE_LENGTH = 2000;
 
 /** Characters per token for budget estimation */
 const CHARS_PER_TOKEN = 4;
-
-// ============================================================================
-// File Type Detection
-// ============================================================================
-
-type FileType = "text" | "image" | "pdf" | "directory" | "binary";
-
-interface FileTypeInfo {
-  type: FileType;
-  mimeType?: string;
-}
-
-/**
- * Known binary file extensions that should never be read as text.
- * Based on OpenCode's approach - only list known binary types.
- */
-const BINARY_EXTENSIONS = new Set([
-  // Archives
-  ".zip",
-  ".tar",
-  ".gz",
-  ".7z",
-  ".rar",
-  ".bz2",
-  ".xz",
-  // Executables and libraries
-  ".exe",
-  ".dll",
-  ".so",
-  ".dylib",
-  ".bin",
-  // Compiled code
-  ".class",
-  ".jar",
-  ".war",
-  ".pyc",
-  ".pyo",
-  ".wasm",
-  ".o",
-  ".a",
-  ".lib",
-  ".obj",
-  // Office documents (binary formats)
-  ".doc",
-  ".docx",
-  ".xls",
-  ".xlsx",
-  ".ppt",
-  ".pptx",
-  ".odt",
-  ".ods",
-  ".odp",
-  // Data files
-  ".dat",
-  ".db",
-  ".sqlite",
-  ".sqlite3",
-]);
-
-/**
- * Check if a file has a known binary extension
- */
-function isBinaryExtension(filePath: string): boolean {
-  const ext = getEnv().path.extname(filePath).toLowerCase();
-  return BINARY_EXTENSIONS.has(ext);
-}
-
-/**
- * Detect file type based on MIME type and extension.
- *
- * Strategy (following OpenCode's approach):
- * 1. Use MIME type to detect images and PDFs
- * 2. Use extension list to detect known binary files
- * 3. Everything else is assumed to be text (with binary content check later)
- */
-async function detectFileType(filePath: string, stat?: FileStat): Promise<FileTypeInfo> {
-  // Check if it's a directory
-  if (stat?.isDirectory) {
-    return { type: "directory" };
-  }
-
-  const getMimeType = getEnv().getMimeType;
-  const mimeType = (getMimeType ? await getMimeType(filePath) : false) || undefined;
-
-  // Check for images (supported for LLM vision)
-  // Exclude SVG (XML-based, can be read as text) and vnd.fastbidsheet
-  if (
-    mimeType &&
-    mimeType.startsWith("image/") &&
-    mimeType !== "image/svg+xml" &&
-    mimeType !== "image/vnd.fastbidsheet"
-  ) {
-    return { type: "image", mimeType };
-  }
-
-  // Check for PDF
-  if (mimeType === "application/pdf") {
-    return { type: "pdf", mimeType };
-  }
-
-  // Check for known binary extensions
-  if (isBinaryExtension(filePath)) {
-    return { type: "binary", mimeType };
-  }
-
-  // Everything else is assumed to be text
-  // Binary content check will be done later when reading the file
-  return { type: "text", mimeType };
-}
-
-/**
- * Check if file content appears to be binary by sampling the first bytes
- */
-async function isBinaryContent(buffer: Uint8Array): Promise<boolean> {
-  if (buffer.length === 0) return false;
-
-  const sampleSize = Math.min(4096, buffer.length);
-  let nonPrintableCount = 0;
-
-  for (let i = 0; i < sampleSize; i++) {
-    const byte = buffer[i];
-    // Null byte is a strong indicator of binary
-    if (byte === 0) return true;
-    // Count non-printable characters (excluding common whitespace)
-    if (byte < 9 || (byte > 13 && byte < 32)) {
-      nonPrintableCount++;
-    }
-  }
-
-  // If >30% non-printable characters, consider it binary
-  return nonPrintableCount / sampleSize > 0.3;
-}
 
 // ============================================================================
 // Output Schema
@@ -204,6 +75,9 @@ export const readFileOutputSchema = z.discriminatedUnion("type", [
     path: z.string().describe("The PDF file path."),
     base64: z.string().describe("Base64 encoded PDF data."),
     size: z.number().describe("File size in bytes."),
+    /** Plain-text layer when extractable (Completions-friendly). */
+    extractedText: z.string().optional().describe("Extracted PDF text when available."),
+    pageCount: z.number().int().optional().describe("Number of PDF pages when known."),
     durationMs: z.number().describe("Execution duration in milliseconds."),
     ...toolOutputBaseSchema.shape,
   }),
@@ -312,7 +186,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
         }
 
         // Detect file type
-        const fileTypeInfo = await detectFileType(filePath, stat);
+        const fileTypeInfo = await detectReadFileType(filePath, stat);
 
         // Handle directory
         if (fileTypeInfo.type === "directory") {
@@ -357,13 +231,17 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
 
           const buffer = await fsys.readFileBuffer(filePath);
 
-          // Check context budget — base64 is ~33% larger than raw bytes
-          const base64Chars = Math.ceil(buffer.length * 1.37);
+          // TODO(image-resize): optionally downscale/compress large screenshots before
+          // base64 encode to cut vision tokens (see mcp-server screenshot tool). Deferred.
+
+          // Budget against vision-token estimate (not base64-as-text).
+          const dimensions = tryReadImageDimensions(buffer);
+          const estimatedTokens = estimateImageInputTokens(buffer.length, dimensions);
           const remainingTokens = getRemainingTokenBudget();
-          const remainingChars = remainingTokens * CHARS_PER_TOKEN;
-          if (base64Chars > remainingChars) {
+          if (estimatedTokens > remainingTokens) {
+            const dimLabel = dimensions ? `${dimensions.width}x${dimensions.height}` : "unknown size";
             throw new Error(
-              `Skipping image to avoid context overflow: ${Math.round(buffer.length / 1024)}KB image would use ~${Math.ceil(base64Chars / CHARS_PER_TOKEN)} tokens, but only ~${remainingTokens} tokens remain in budget. Try reading fewer images per turn.`
+              `Skipping image to avoid context overflow: ${Math.round(buffer.length / 1024)}KB image (${dimLabel}) would use ~${estimatedTokens} vision tokens, but only ~${remainingTokens} tokens remain in budget. Try reading fewer images per turn.`
             );
           }
 
@@ -380,12 +258,8 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
 
         // Handle PDFs
         if (fileTypeInfo.type === "pdf") {
-          if (usage && !usage.hasCapability("document") && !usage.hasCapability("vision")) {
-            throw new Error(
-              `Cannot analyze PDF: ${filePath}. The current model does not support document/vision attachments — PDF content cannot be read.`
-            );
-          }
-
+          // Completions cannot embed PDF binaries on the wire; we extract text for those
+          // models. Anthropic (and similar) also receive the `document` part via toModelOutput.
           if (!fsys.readFileBuffer) {
             throw new Error("PDF reading not supported in this environment");
           }
@@ -398,11 +272,27 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
             );
           }
 
+          const extracted = await extractPdfText(buffer);
+          let extractedText = extracted?.text;
+          if (extractedText && extractedText.length > MAX_CONTENT_LENGTH) {
+            extractedText = extractedText.slice(0, MAX_CONTENT_LENGTH) + "\n...[PDF text truncated for context limit]";
+          }
+          if (extractedText) {
+            const remainingTokens = getRemainingTokenBudget();
+            const remainingChars = remainingTokens * CHARS_PER_TOKEN;
+            if (remainingChars > 0 && extractedText.length > remainingChars) {
+              extractedText =
+                extractedText.slice(0, remainingChars) + "\n...[PDF text truncated: context budget limit reached]";
+            }
+          }
+
           return {
             type: "pdf" as const,
             path: filePath,
             base64: getEnv().base64Encode(buffer),
             size: buffer.length,
+            ...(extractedText ? { extractedText } : {}),
+            ...(extracted?.totalPages != null ? { pageCount: extracted.totalPages } : {}),
           };
         }
 
@@ -411,7 +301,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
         if (fsys.readFileBuffer) {
           try {
             const buffer = await fsys.readFileBuffer(filePath);
-            if (await isBinaryContent(buffer)) {
+            if (isBinaryContent(buffer)) {
               throw new Error(`File appears to be binary: ${filePath}. Cannot read binary file content.`);
             }
           } catch {

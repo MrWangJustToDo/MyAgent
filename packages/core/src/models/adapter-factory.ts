@@ -1,6 +1,6 @@
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
-import { createOpenaiChatCompletions } from "@tanstack/ai-openai";
 
+import { createChatCompletions } from "./chat-completions-text-adapter.js";
 import { createReasoningChatCompletions } from "./reasoning-chat-completions-adapter.js";
 import { shouldEchoReasoningContent } from "./reasoning-echo.js";
 
@@ -70,10 +70,10 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
   }
 
   return {
-    adapter: createOpenaiChatCompletions(model as Parameters<typeof createOpenaiChatCompletions>[0], key, {
+    adapter: createChatCompletions(model, key, {
       ...openaiConfig,
       dangerouslyAllowBrowser: true,
-    }),
+    }) as AnyTextAdapter,
     model,
   };
 }

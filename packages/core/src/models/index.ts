@@ -32,6 +32,12 @@ export {
 // TanStack text adapter (+ provider-specific protocol quirks live here only)
 export { createTextAdapter, type TextAdapterConfig, type ModelAdapterConfig } from "./adapter-factory.js";
 export {
+  createChatCompletions,
+  ChatCompletionsTextAdapter,
+  type ChatCompletionsTextAdapterConfig,
+} from "./chat-completions-text-adapter.js";
+export { liftToolMediaForChatCompletions } from "./lift-tool-media-for-chat-completions.js";
+export {
   buildReasoningContentFromThinking,
   extractReasoningContentFromStreamChunk,
   shouldEchoReasoningContent,

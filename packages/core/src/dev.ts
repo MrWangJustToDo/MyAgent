@@ -26,6 +26,7 @@ export { ManagedAgent } from "./managers/managed-agent.js";
 export { RunCoordinator } from "./managers/run-coordinator.js";
 export { createLocalConnect } from "./connect/local-connect.js";
 export { createTextAdapter } from "./models/adapter-factory.js";
+export { liftToolMediaForChatCompletions } from "./models/lift-tool-media-for-chat-completions.js";
 export {
   buildReasoningContentFromThinking,
   extractReasoningContentFromStreamChunk,
@@ -36,6 +37,11 @@ export { isPromptTooLongError } from "./agent/compaction/reactive-compact.js";
 export { extractRunErrorMessage, runStreamWithRecovery } from "./managers/reactive-compact-retry.js";
 export { throwOnRunError } from "./agent/subagent/stream-errors.js";
 export { formatReadFileToolResult } from "./agent/tools/util/format-read-file-result.js";
+export {
+  estimateImageInputTokens,
+  estimateImageTokensFromDimensions,
+  tryReadImageDimensions,
+} from "./agent/utils/estimate-image-tokens.js";
 export {
   applyResolvedEdit,
   expandMatchVariants,

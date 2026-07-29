@@ -1,7 +1,6 @@
 import { EventType } from "@tanstack/ai";
-import { OpenAIBaseChatCompletionsTextAdapter } from "@tanstack/openai-base";
-import OpenAI from "openai";
 
+import { ChatCompletionsTextAdapter, type ChatCompletionsTextAdapterConfig } from "./chat-completions-text-adapter.js";
 import { ReasoningContentCache } from "./reasoning-content-cache.js";
 import { extractReasoningContentFromStreamChunk } from "./reasoning-echo.js";
 import { resolveReasoningContentForAssistant } from "./resolve-reasoning-content.js";
@@ -9,10 +8,7 @@ import { resolveReasoningContentForAssistant } from "./resolve-reasoning-content
 import type { ModelMessage, StreamChunk, TextOptions } from "@tanstack/ai";
 import type { ChatCompletionChunk, ChatCompletionMessageParam } from "openai/resources/chat/completions/completions";
 
-export interface ReasoningChatCompletionsConfig {
-  apiKey: string;
-  baseURL?: string;
-}
+export type ReasoningChatCompletionsConfig = ChatCompletionsTextAdapterConfig;
 
 /**
  * Chat Completions adapter that round-trips DeepSeek thinking mode `reasoning_content`.
@@ -22,15 +18,14 @@ export interface ReasoningChatCompletionsConfig {
  *    keeps `message.thinking` on the in-run tool-call assistant.
  * 2. Cache reasoning by `toolCallId` so `convertMessage` can echo `reasoning_content`
  *    even when UI→model conversion dropped `thinking` parts.
+ *
+ * Inherits tool-result image lifting from {@link ChatCompletionsTextAdapter}.
  */
-export class ReasoningChatCompletionsTextAdapter extends OpenAIBaseChatCompletionsTextAdapter<
-  string,
-  Record<string, unknown>
-> {
+export class ReasoningChatCompletionsTextAdapter extends ChatCompletionsTextAdapter {
   private readonly reasoningCache = new ReasoningContentCache();
 
   constructor(config: ReasoningChatCompletionsConfig, model: string) {
-    super(model, "reasoning-chat", new OpenAI({ ...config, dangerouslyAllowBrowser: true }));
+    super(config, model);
   }
 
   /** Test / debug helper. */

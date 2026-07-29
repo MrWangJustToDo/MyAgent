@@ -5,6 +5,13 @@
  * Each file contains a single JSON object with the full SessionData.
  * Writes are full overwrites — simple, correct, and produces exactly
  * one copy of uiMessages regardless of how many saves occur.
+ *
+ * TODO(session-media): Large tool/user image (and PDF) payloads currently live
+ * inline as base64 inside uiMessages, which preserves full fidelity for resume
+ * but bloats `.session.json`. Preferred follow-up: content-addressed blobs under
+ * `.agents/media/<hash>.{png,pdf,…}` with `{ mediaRef, mimeType, size, filename }`
+ * in message parts; hydrate to data URLs on load / before model send. Keeps
+ * sessions complete and rewindable without multi‑MB JSON lines.
  */
 
 import { getEnv } from "../../env.js";

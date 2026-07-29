@@ -270,10 +270,33 @@ Usage notes:
         }
       });
     },
-    // Only send url + content to the LLM — contentType/contentLength/isImage/
-    // truncated/cachedOutputPath are UI metadata.
+    // Only send url + content (or multimodal image parts) to the LLM —
+    // contentType/contentLength/isImage/truncated/cachedOutputPath are UI metadata.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: z.infer<typeof webfetchOutputSchema> }) {
+      if (output.isImage) {
+        const parsed = parseDataUrl(output.content);
+        if (parsed) {
+          return [
+            { type: "text" as const, content: `Fetched image: ${output.url}` },
+            {
+              type: "image" as const,
+              source: { type: "data" as const, value: parsed.base64, mimeType: parsed.mimeType },
+            },
+          ];
+        }
+        // Fallback: keep prior text behavior if content is not a data URL
+        return [{ type: "text" as const, content: `Fetched image: ${output.url}\n\n${output.content}` }];
+      }
       return [{ type: "text" as const, content: `Fetched ${output.url}\n\n${output.content}` }];
     },
   });
 };
+
+function parseDataUrl(content: string): { mimeType: string; base64: string } | null {
+  const match = /^data:([^;,]+);base64,(.+)$/s.exec(content);
+  if (!match) return null;
+  const mimeType = match[1]?.trim();
+  const base64 = match[2];
+  if (!mimeType || !base64) return null;
+  return { mimeType, base64 };
+}
