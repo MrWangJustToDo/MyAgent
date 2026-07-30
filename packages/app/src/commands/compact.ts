@@ -2,7 +2,7 @@ import { agentManager, applyCompactionResult, autoCompact, estimateTokens } from
 
 import { bumpAgentUsage } from "../hooks/use-agent-usage.js";
 
-import { registerCommand } from "./registry.js";
+import { registerCommand } from "./utils/registry.js";
 
 registerCommand({
   name: "compact",

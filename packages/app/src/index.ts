@@ -15,7 +15,7 @@ export { App } from "./app/App.js";
 export { Agent } from "./app/Agent.js";
 
 // Components
-export { StreamingOutputView } from "./components/StreamingOutputView.js";
+export { StreamingOutputView } from "./messages/StreamingOutputView.js";
 
 // Hooks
 export * from "./hooks";

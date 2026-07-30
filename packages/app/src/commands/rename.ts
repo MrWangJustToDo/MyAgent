@@ -1,7 +1,7 @@
 import { agentManager, extractTextFromContent, runSideTextQuery, resolveTextAdapterForManaged } from "@my-agent/core";
 import { toRaw } from "reactivity-store";
 
-import { registerCommand } from "./registry.js";
+import { registerCommand } from "./utils/registry.js";
 
 import type { AgentLog } from "@my-agent/core";
 

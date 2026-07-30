@@ -1,9 +1,8 @@
 import { Box } from "ink";
 import { memo } from "react";
 
+import { EditDiff } from "../components/EditDiff.js";
 import { BG } from "../theme/colors.js";
-
-import { EditDiff } from "./EditDiff.js";
 
 export type MessageDiffViewProps = {
   diffId: string;

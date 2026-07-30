@@ -19,12 +19,12 @@ export {
   getAllCommands,
   getCommand,
   registerExtensionCommand,
-} from "./registry.js";
+} from "./utils/registry.js";
 export {
   extensionCommandToSlashCommand,
   splitExtensionCommandArgs,
   syncExtensionCommands,
-} from "./sync-extension-commands.js";
-export { COMMAND_FREEFORM_VALUE, typedArgsAfterCommand, withFreeformOption } from "./command-options.js";
+} from "./utils/sync-extension-commands.js";
+export { COMMAND_FREEFORM_VALUE, typedArgsAfterCommand, withFreeformOption } from "./utils/command-options.js";
 
-export type { Command, CommandContext, CommandOption, CommandResult } from "./types.js";
+export type { Command, CommandContext, CommandOption, CommandResult } from "./utils/types.js";

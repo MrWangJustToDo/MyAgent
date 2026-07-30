@@ -1,4 +1,4 @@
-import { registerCommand } from "./registry.js";
+import { registerCommand } from "./utils/registry.js";
 
 function fmt(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;

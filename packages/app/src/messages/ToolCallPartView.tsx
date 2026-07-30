@@ -1,6 +1,5 @@
 import { Box, Text } from "ink";
 
-import { StreamingOutputView } from "../components/StreamingOutputView.js";
 import { useTranscriptDisplayMode } from "../context/transcript-display-context.js";
 import { useLiveElapsedMs } from "../hooks/use-live-elapsed.js";
 import { useTask } from "../hooks/use-task.js";
@@ -19,6 +18,7 @@ import {
 } from "../utils/format.js";
 import { getUiToolState, isToolExecuting, parseToolInput } from "../utils/tool-part.js";
 
+import { StreamingOutputView } from "./StreamingOutputView.js";
 import { ToolInputView } from "./ToolInputView.js";
 import { ToolOutputView } from "./ToolOutputView.js";
 import { ToolStatusIcon } from "./ToolStatusIcon.js";

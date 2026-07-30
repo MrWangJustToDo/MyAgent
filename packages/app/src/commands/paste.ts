@@ -1,6 +1,6 @@
 import { clipboardResultToAttachment } from "../utils/clipboard.js";
 
-import { registerCommand } from "./registry.js";
+import { registerCommand } from "./utils/registry.js";
 
 registerCommand({
   name: "paste",

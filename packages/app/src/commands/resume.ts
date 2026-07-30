@@ -3,7 +3,7 @@ import { agentManager } from "@my-agent/core";
 import { bumpAgentUsage } from "../hooks/use-agent-usage.js";
 import { useDynamic } from "../hooks/use-dynamic.js";
 
-import { registerCommand } from "./registry.js";
+import { registerCommand } from "./utils/registry.js";
 
 registerCommand({
   name: "resume",

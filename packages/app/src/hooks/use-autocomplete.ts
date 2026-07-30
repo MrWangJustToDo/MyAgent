@@ -1,7 +1,11 @@
 import { createState } from "reactivity-store";
 
 import { getAllCommands } from "../commands";
-import { COMMAND_FREEFORM_VALUE, typedArgsAfterCommand, withFreeformOption } from "../commands/command-options.js";
+import {
+  COMMAND_FREEFORM_VALUE,
+  typedArgsAfterCommand,
+  withFreeformOption,
+} from "../commands/utils/command-options.js";
 
 import type { Command, CommandOption } from "../commands";
 

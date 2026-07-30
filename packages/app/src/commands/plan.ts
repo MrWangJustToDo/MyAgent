@@ -1,6 +1,6 @@
-import { registerCommand } from "./registry.js";
+import { registerCommand } from "./utils/registry.js";
 
-import type { CommandOption } from "./types.js";
+import type { CommandOption } from "./utils/types.js";
 
 registerCommand({
   name: "plan",

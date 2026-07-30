@@ -1,4 +1,4 @@
-import { getAllCommands, registerCommand } from "./registry.js";
+import { getAllCommands, registerCommand } from "./utils/registry.js";
 
 registerCommand({
   name: "help",

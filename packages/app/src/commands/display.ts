@@ -1,6 +1,6 @@
 import { useTranscriptDisplay } from "../hooks/use-transcript-display.js";
 
-import { registerCommand } from "./registry.js";
+import { registerCommand } from "./utils/registry.js";
 
 import type { TranscriptDisplayMode } from "../hooks/use-transcript-display.js";
 

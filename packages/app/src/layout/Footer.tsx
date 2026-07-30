@@ -30,8 +30,6 @@ export const Footer = ({
   status: AgentStatus;
   queuedMessages?: QueuedMessagesSnapshot;
 }) => {
-  const allMcp = useAgent((s) => s.agent?.mcpManager?.getConnectedServers());
-
   const { mode, denyMode, freeformContext } = useInputMode((s) => ({
     mode: s.mode,
     denyMode: s.denyMode,
@@ -127,8 +125,8 @@ export const Footer = ({
       {/* Autocomplete suggestions (idle typing) */}
       {!showSelectList && isInputEnabled && <AutocompleteList />}
 
-      {/* Bottom status bar — workspace, sandbox, model */}
-      <StatusBar mcpCount={allMcp?.length ?? 0} />
+      {/* Bottom status bar — mode, usage, model */}
+      <StatusBar />
     </FullBox>
   );
 };
@@ -232,30 +230,6 @@ const ContextBar = ({
           </Text>
         )}
 
-        {agentTick >= 0 && agent && agent.getPlanModeState().phase !== "off" && (
-          <Text color={COLORS.accent} dimColor>
-            {(() => {
-              const plan = agent.getPlanModeState();
-              if (plan.phase === "executing") {
-                const stats = agent.todoManager?.getStats();
-                if (stats && stats.total > 0) {
-                  return `building ${stats.completed}/${stats.total}`;
-                }
-                return "building";
-              }
-              if (plan.phase === "retro") {
-                return "retro · complete_plan or /plan done";
-              }
-              if (plan.phase === "ready") {
-                const steps = plan.steps.length > 0 ? ` (${plan.steps.length})` : "";
-                const preserved = plan.preservedExistingTodos ? " · todos kept" : "";
-                return `review${steps} · /plan execute${preserved}`;
-              }
-              return "planning";
-            })()}
-          </Text>
-        )}
-
         {/* Contextual shortcuts */}
         {isAgentBusy && !isPendingApproval && !showFreeformInput && !showSelectList && (
           <Text color={COLORS.muted} dimColor>
@@ -290,20 +264,23 @@ const ContextBar = ({
 };
 
 /**
- * Bottom status bar — shows MCP, usage, model info.
+ * Bottom status bar — mode, usage, model.
  */
-const StatusBar = ({ mcpCount }: { mcpCount: number }) => {
+const StatusBar = () => {
   const model = useConfig((s) => s.config.model);
   const { version } = useAgentUsage();
+  const agent = useAgent((s) => s.agent) as ManagedAgent | null;
+
+  const planModePhase = agent?.getPlanModeState().phase ?? "off";
+  const modeLabel = planModePhase === "off" ? "Normal" : "Plan";
+  const modeColor = planModePhase === "off" ? COLORS.muted : COLORS.accent;
 
   return (
     <Box justifyContent="space-between" paddingX={1}>
       <Box gap={2} flexShrink={1}>
-        {mcpCount > 0 && (
-          <Text color={COLORS.accent} dimColor wrap="truncate">
-            MCP: {mcpCount}
-          </Text>
-        )}
+        <Text color={modeColor} dimColor={planModePhase === "off"} bold={planModePhase !== "off"}>
+          {modeLabel}
+        </Text>
       </Box>
 
       <Box gap={2} flexShrink={0}>

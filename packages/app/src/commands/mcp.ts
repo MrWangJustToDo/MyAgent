@@ -1,4 +1,4 @@
-import { registerCommand } from "./registry.js";
+import { registerCommand } from "./utils/registry.js";
 
 registerCommand({
   name: "mcp",

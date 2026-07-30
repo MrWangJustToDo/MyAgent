@@ -1,4 +1,4 @@
-import { useCommandOutput } from "../hooks/use-command-output.js";
+import { useCommandOutput } from "../../hooks/use-command-output.js";
 
 import type { Command, CommandContext, CommandResult } from "./types.js";
 

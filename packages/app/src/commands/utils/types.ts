@@ -1,5 +1,5 @@
-import type { AgentAdapter, CommandResult } from "../adapter/types.js";
-import type { useUserInput } from "../hooks/use-user-input.js";
+import type { AgentAdapter, CommandResult } from "../../adapter/types.js";
+import type { useUserInput } from "../../hooks/use-user-input.js";
 import type { ManagedAgent } from "@my-agent/core";
 import type { UIMessage } from "@tanstack/ai";
 

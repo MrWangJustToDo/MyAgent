@@ -12,7 +12,7 @@ import { TranscriptDisplayContext } from "../context/transcript-display-context.
 import { useDynamic } from "../hooks/use-dynamic";
 import { useStatic } from "../hooks/use-static";
 import { useTranscriptDisplay } from "../hooks/use-transcript-display.js";
-import { MessageView, StaticContext } from "../messages";
+import { MessageView } from "../messages";
 import { COLORS } from "../theme/colors.js";
 import { getMessages } from "../utils/get-messages";
 
@@ -20,6 +20,7 @@ import { CursorFlush } from "./CursorFlush";
 
 import type { UIMessage } from "@tanstack/ai";
 import type { JSX } from "react";
+import { StaticContext } from "../context/static-context.js";
 
 // ============================================================================
 // Constants

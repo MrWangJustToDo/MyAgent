@@ -30,6 +30,6 @@ test("formatToolArgs renders compact multi-line arguments", () => {
 test("tool display helpers handle duration and state colors", () => {
   assert.equal(getDurationMs({ durationMs: 1200 }), 1200);
   assert.equal(getDurationMs({ durationMs: "1200" }), null);
-  assert.equal(getToolCallColor("output-available"), "green");
-  assert.equal(getToolCallColor("unknown"), "gray");
+  assert.equal(getToolCallColor("output-available"), "#3FB950");
+  assert.equal(getToolCallColor("unknown"), "#8B949E");
 });

@@ -1,14 +1,14 @@
 import { Box } from "ink";
 
-import { MessageDiffView } from "../components/MessageDiffView.js";
 import { useTranscriptDisplayMode } from "../context/transcript-display-context.js";
 import { useSize } from "../hooks";
 import { useTask } from "../hooks/use-task.js";
 import { approvalFrameColor } from "../utils/diff-frame.js";
 import { isToolExecuting } from "../utils/tool-part.js";
 
-import { EditFilePreview } from "./EditFilePreview";
-import { TaskToolInputView } from "./TaskToolInputView";
+import { EditFilePreview } from "./EditFilePreview.js";
+import { MessageDiffView } from "./MessageDiffView.js";
+import { TaskToolInputView } from "./TaskToolInputView.js";
 
 import type { UiToolState } from "../utils/tool-part.js";
 import type { ToolCallPart } from "@tanstack/ai";

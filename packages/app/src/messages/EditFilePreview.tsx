@@ -1,9 +1,10 @@
-import { Box, Text } from "ink";
-import { memo } from "react";
+import { Box } from "ink";
+import { Fragment, memo } from "react";
 
-import { MessageDiffView } from "../components/MessageDiffView.js";
 import { usePreviewEdit, useSize } from "../hooks";
 import { approvalFrameColor } from "../utils/diff-frame.js";
+
+import { MessageDiffView } from "./MessageDiffView.js";
 
 /**
  * Renders the edit_file tool's input as a diff preview.
@@ -19,6 +20,11 @@ import { approvalFrameColor } from "../utils/diff-frame.js";
  *    even if the file is later modified by other edits.
  *  - Before execution (approval phase): compute on the fly via `previewEdit`,
  *    which reads the current file and applies the edits in memory.
+ *
+ * When the full-file preview is unavailable (file not found, read error, etc.),
+ * falls back to rendering each per-edit fragment as its own diff, using
+ * oldString → newString as the before/after content with `startLine` for
+ * proper line number alignment.
  */
 export const EditFilePreview = memo(function EditFilePreview({
   toolCallId,
@@ -48,11 +54,12 @@ export const EditFilePreview = memo(function EditFilePreview({
 
   const oldFile = hasOutput ? output!.oldFile! : preview?.oldFile;
   const newFile = hasOutput ? output!.newFile! : preview?.newFile;
+  const hasFullPreview = oldFile !== undefined && newFile !== undefined;
 
   return (
     <Box paddingLeft={2} flexDirection="column">
-      {/* Full-file diff: original file → file after all edits applied (one frame for status + focus) */}
-      {oldFile !== undefined && newFile !== undefined ? (
+      {hasFullPreview ? (
+        /* Full-file diff: original file → file after all edits applied */
         <MessageDiffView
           diffId={toolCallId + "-full"}
           width={width}
@@ -63,7 +70,23 @@ export const EditFilePreview = memo(function EditFilePreview({
           frameColor={approvalFrameColor(approved)}
         />
       ) : (
-        <Text dimColor> loading full file preview… </Text>
+        /* Fallback: per-edit fragment diffs when full-file preview is unavailable */
+        edits.map((edit, i) => (
+          <Fragment key={i}>
+            {edit.oldString !== edit.newString && (
+              <MessageDiffView
+                diffId={`${toolCallId}-edit-${i}`}
+                width={width}
+                oldPath={path}
+                oldFile={edit.oldString}
+                newPath={path}
+                newFile={edit.newString}
+                startLine={edit.startLine}
+                frameColor={approvalFrameColor(approved)}
+              />
+            )}
+          </Fragment>
+        ))
       )}
     </Box>
   );

@@ -1,6 +1,6 @@
 import { formatKeyboardShortcutsHelp } from "../utils/keyboard-labels.js";
 
-import { registerCommand } from "./registry.js";
+import { registerCommand } from "./utils/registry.js";
 
 registerCommand({
   name: "shortcuts",

@@ -1,7 +1,7 @@
 import { useTheme } from "../hooks/use-theme.js";
 import { isThemeName, THEME_NAMES } from "../theme/colors.js";
 
-import { registerCommand } from "./registry.js";
+import { registerCommand } from "./utils/registry.js";
 
 registerCommand({
   name: "theme",
