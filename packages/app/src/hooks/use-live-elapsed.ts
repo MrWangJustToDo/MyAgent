@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 /** Tick interval for live elapsed clocks (ms). */
 const TICK_MS = 200;
 
+const msMap = new Map<string, number>();
+
 /**
  * Live elapsed milliseconds while `active` is true.
  *
@@ -11,11 +13,12 @@ const TICK_MS = 200;
  */
 export function useLiveElapsedMs(id: string, active: boolean, thresholdMs = 0): number | null {
   const startedAtRef = useRef<number | null>(null);
-  const [elapsedMs, setElapsedMs] = useState(0);
+  const [elapsedMs, setElapsedMs] = useState(() => msMap.get(id) ?? 0);
 
   useEffect(() => {
     if (!active || !id) {
       startedAtRef.current = null;
+      msMap.delete(id);
       setElapsedMs(0);
       return;
     }
@@ -27,7 +30,9 @@ export function useLiveElapsedMs(id: string, active: boolean, thresholdMs = 0): 
     const tick = () => {
       const start = startedAtRef.current;
       if (start == null) return;
-      setElapsedMs(Date.now() - start);
+      const elapsed = Date.now() - start;
+      msMap.set(id, elapsed);
+      setElapsedMs(elapsed);
     };
 
     tick();
