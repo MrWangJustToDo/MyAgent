@@ -9,10 +9,10 @@ import {
 } from "../agent/tools/util/streaming-callback.js";
 
 import type { AgentEvent, AgentEventType } from "./agent-event-bus.js";
-import type { AgentUIChannel } from "./agent-ui-channel.js";
-import type { AgentManager } from "./manager-agent.js";
+import type { AgentManager } from "./agent-manager.js";
 import type { AgentLog } from "../agent/agent-log";
 import type { LogEntry } from "../agent/agent-log/types.js";
+import type { AgentUIChannel } from "../agent/ui-channel.js";
 import type { UIMessage } from "@tanstack/ai";
 
 /** Default L2 events for UI / usage hosts (not every llm:iteration). */

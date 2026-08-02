@@ -4,17 +4,17 @@
 
 import { StreamProcessor } from "@tanstack/ai";
 
-import { BEGIN_SUMMARY_TOOL_NAME } from "../agent/subagent/begin-summary-tool.js";
 import {
   getSummaryStreamText,
   resolveTaskRunPhase,
   type TaskRunPhase,
   type TaskSummaryStreamState,
-} from "../agent/subagent/extract-assistant-text.js";
-import { throwOnRunError } from "../agent/subagent/stream-errors.js";
-import { clearStreamingOutput, emitStreamingChunk } from "../agent/tools/util/streaming-callback.js";
-import { applyToolDenialReason } from "../agent/utils/apply-tool-denial-reason.js";
-import { stripEmptyAssistantShells } from "../agent/utils/empty-assistant-shell.js";
+} from "./stream/extract-assistant-text.js";
+import { throwOnRunError } from "./stream/stream-errors.js";
+import { BEGIN_SUMMARY_TOOL_NAME } from "./subagent/begin-summary-tool.js";
+import { clearStreamingOutput, emitStreamingChunk } from "./tools/util/streaming-callback.js";
+import { applyToolDenialReason } from "./utils/apply-tool-denial-reason.js";
+import { stripEmptyAssistantShells } from "./utils/empty-assistant-shell.js";
 
 import type { StreamChunk, StreamProcessorEvents, UIMessage as TanStackUIMessage, ContentPart } from "@tanstack/ai";
 

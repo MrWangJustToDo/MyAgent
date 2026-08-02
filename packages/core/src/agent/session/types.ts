@@ -7,8 +7,8 @@
 
 import { z } from "zod";
 
-import type { TokenUsage } from "../../managers/usage-tracker-utils.js";
 import type { ModelStyle } from "../../models/types.js";
+import type { TokenUsage } from "../../runtime-types/token-usage.js";
 import type { PlanModeState } from "../plan/plan-mode-controller.js";
 import type { TodoItem } from "../todo-manager";
 import type { UIMessage, ModelMessage } from "@tanstack/ai";

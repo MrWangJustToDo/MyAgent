@@ -1,7 +1,7 @@
 import { stream } from "@tanstack/ai-client";
 
 import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
-import { agentManager } from "../managers/manager-agent.js";
+import { agentManager } from "../managers/agent-manager.js";
 
 import type { RunAgentStreamInput } from "../managers/run-agent.js";
 import type { StreamChunk } from "@tanstack/ai";

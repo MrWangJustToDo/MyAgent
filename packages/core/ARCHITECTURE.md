@@ -15,7 +15,7 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 | TanStack agent loop | **Done** | `AgentRunner` + middleware stack |
 | Event protocol + Event→Log bridge | **Done** | `AgentEventBus`, `event-log-bridge.ts` |
 | Model config (`openai` / `anthropic`) | **Done** | `resolveModelConfig`, `createTextAdapter` |
-| Session persistence | **Done** | Unified `persistSession`; `finalizeRun` on finish/abort/error |
+| Session persistence | **Done** | Unified `persistSession`; `finalizeRun` + `applyRunOutcome` on finish/abort/error |
 | Compaction (micro / auto / reactive) | **Done** | + manual `/compact` in app |
 | Memory (prefetch / extract / consolidate) | **Done** | Post-run extraction only |
 | Tool approval | **Done in core** | `status` middleware + `needsApproval` on tools; app handles UI/keyboard only |
@@ -100,8 +100,38 @@ packages/app/src/adapter/create-agent.ts
 | `ManagedAgent`, `ManagedAgentConfig` | Yes |
 | `AgentChatController`, `ManagedAgent.initChat` | Yes |
 | `localConnect`, `createLocalConnect` | Yes (legacy) |
-| `buildManagedAgent`, `getDefaultSkillDirs` | Yes |
+| `buildManagedAgent`, `getDefaultSkillDirs` | **No** — package-internal / `dev.ts` |
+| Session-sync tracker helpers, tool-phase pump helpers | **No** — `dev.ts` / package-private |
 | `attachEventLogBridge` | **No** — wired in `AgentManager` constructor |
+
+See `openspec/changes/harden-core-organization/API-REMOVALS.md` for the full public-entry removal list.
+
+### 1.5 Module layering
+
+```
+hosts / app  →  managers (orchestration)  →  agent/* (domain)  →  models / env
+                              ↓
+                       runtime-types/   (shared status, events, TokenUsage — no manager deps)
+```
+
+**Rules (enforced by validate scripts):**
+
+- `agent/**` MUST NOT import `managers/**`
+- `models/**` MUST NOT import `managers/**`
+- Shared cross-layer types live in `runtime-types/`
+- Package-wide stream helpers live in `agent/stream/` (not under `subagent/`)
+- UI channel lives in `agent/ui-channel.ts`
+- Run middleware lives in `managers/middleware/` (wired by `run-agent`); plan-mode middleware stays in `agent/plan/`
+
+### 1.6 ManagedAgent host surface
+
+| Field / API | Host access |
+|-------------|-------------|
+| `status`, `context`, `ui` | Read-only getters |
+| `usage`, `planMode`, `autoApprove` | `readonly` service refs (mutate via methods) |
+| `runner`, `textAdapter`, `runnerConfigKey` | **Private** — package-internal accessors only |
+| `setStatus` / `setContext` / `setUIChannel` | Mutation entry points (`setUIChannel` package-internal) |
+| `statusController.applyRunOutcome(...)` | Unified run finalization (chat + detached/subagent) |
 
 ---
 
@@ -110,7 +140,7 @@ packages/app/src/adapter/create-agent.ts
 ### 2.1 `AgentManager.createManagedAgent(config, parentId?)`
 
 ```
-manager-agent.ts
+agent-manager.ts
   buildManagedAgent({ config, manager, emit, getDefaultSkillDirs })
   agents.set(managed.id, managed)
   emitSessionBootstrapEvents(managed, bootstrap)   // root agents only
@@ -182,7 +212,7 @@ run-agent.ts: executeManagedAgentRun
   managed.prepareForRun({ messages, abortSignal })
   // Reuse RunCoordinator.currentAbortController as TanStack chat abortController
   // so ManagedAgent.abort() cancels the live stream (main agent + subagent/task).
-  runStreamWithReactiveCompactRetry({ run: () => runner.run({ abortController }) })
+  runStreamWithRecovery({ run: () => runner.run({ abortController }) })
 ```
 
 ### 3.2 `prepareForRun` (`managed-agent.ts`)
@@ -204,7 +234,8 @@ On user cancel, `cancelIncompleteToolCalls` marks truncated / never-executed too
 
 ### 3.3 Middleware stack (each LLM iteration)
 
-Built in `buildAgentRunner` (`run-agent.ts`), order matters:
+Built in `buildAgentRunner` (`run-agent.ts`), order matters.
+Sources: `managers/middleware/*` for run stack; `agent/plan/plan-mode-middleware.ts` for plan gating.
 
 ```
 1. status-middleware         status transitions only (via AgentStatusController)
@@ -213,11 +244,13 @@ Built in `buildAgentRunner` (`run-agent.ts`), order matters:
 4. tool-compact-middleware  per-tool LLM shaping
 5. turn-context-middleware  append <turn_context> after SYSTEM_PROMPT_DYNAMIC_BOUNDARY
 6. extensions-middleware    ExtensionEventBus intercept + agent:tool-* lifecycle events
-7. plan-mode-middleware     block forbidden tools while plan mode restricts tooling
-8. prompt-cache-middleware  Anthropic cache_control + OpenAI prompt_cache_key + sorted tools
+7. early-tool-result-ui     apply each tool output to StreamProcessor as soon as it finishes
+8. plan-mode-middleware     block forbidden tools while plan mode restricts tooling
+9. prompt-cache-middleware  Anthropic cache_control + OpenAI prompt_cache_key + sorted tools
 ```
 
-Status logic is centralized in `AgentStatusController` (`managers/agent-status-controller.ts`). `status-middleware` is the runtime hook for status; `lifecycle-middleware` owns usage and run finalization side-effects. `AgentChatController` calls `prepareRunPhase` / `reconcileAfterRun` for pump boundaries.
+TanStack runs tools sequentially but emits batched `TOOL_CALL_END` results only after the whole tool phase. `early-tool-result-ui` calls `AgentUIChannel.addToolResult` in `onAfterToolCall` so finished tools (e.g. the first of two `task` calls) show complete while later tools still run. The later stream chunks re-apply the same output idempotently.
+Status logic is centralized in `AgentStatusController` (`managers/agent-status-controller.ts`). `status-middleware` is the runtime hook for status; `lifecycle-middleware` owns usage and run finalization side-effects. Chat and detached runs converge on `statusController.applyRunOutcome(...)` (see `managers/agent-run-outcome.ts`).
 
 ### 3.4 Lifecycle status transitions
 
@@ -244,7 +277,7 @@ Core **declares** which tools need approval and **owns agent status** during the
 
 ### 4.1 Core: `needsApproval: true` + status middleware
 
-`createStatusMiddleware` (`agent/middleware/status-middleware.ts`) delegates approval transitions to `AgentStatusController`:
+`createStatusMiddleware` (`managers/middleware/status-middleware.ts`) delegates approval transitions to `AgentStatusController`:
 
 | Hook | Action |
 |------|--------|
@@ -323,7 +356,7 @@ Three proactive layers run on **every** LLM iteration (via `compaction-middlewar
 
 ### 5.1 Layer 1 — Tool compact
 
-**Files:** `agent/compaction/tool-compact/`, `agent/middleware/tool-compact-middleware.ts`
+**Files:** `agent/compaction/tool-compact/`, `managers/middleware/tool-compact-middleware.ts`
 
 Runs **after** context auto-compact in the middleware stack.
 
@@ -383,13 +416,14 @@ The summarizer sees both the cut-away history and the kept tail (budget-aware) s
 
 ### 5.4 Reactive compact (emergency)
 
-**Files:** `reactive-compact-retry.ts`, `reactive-compact.ts`, `managed-agent.handleReactiveCompact`
+**Files:** `run-stream-recovery.ts`, `stream-recovery/*`, `reactive-compact.ts`, `managed-agent.handleReactiveCompact`
 
 When the API returns `prompt_too_long`:
 
 ```
-runStreamWithReactiveCompactRetry catches RUN_ERROR / thrown error
-  → handleReactiveCompact (max 1 retry by default)
+runStreamWithRecovery catches RUN_ERROR / thrown error
+  → strategies: reactive-compact | capability-sanitize | max-tokens-continue
+  → reactive path: handleReactiveCompact (max 1 retry by default)
   → beginCompaction("reactive")  // emits compaction:reactive-start only (not auto-start)
   → reactiveCompact: summarize + keep tail messages
   → applyReactiveCompactionResult
@@ -397,9 +431,9 @@ runStreamWithReactiveCompactRetry catches RUN_ERROR / thrown error
   → retry runner.run with updated messages
 ```
 
-Unhandled `RUN_ERROR` chunks (anything other than a successful reactive compact) are **thrown** — never yielded. `AgentChatController` / `AgentUIChannel.consumeRun` also wrap streams with `throwOnRunError`, so failures surface as `status: error` + `agent:stream-error` instead of a silent `Completed` with no assistant message. Handled errors are recorded on the agent and **not** rethrown from the chat pump (avoids unhandled rejection crashing the CLI).
+Unhandled `RUN_ERROR` chunks (anything other than a successful recovery strategy) are **thrown** — never yielded. `AgentChatController` / `AgentUIChannel.consumeRun` also wrap streams with `throwOnRunError`, so failures surface as `status: error` + `agent:stream-error` instead of a silent `Completed` with no assistant message. Handled errors are recorded on the agent and **not** rethrown from the chat pump (avoids unhandled rejection crashing the CLI).
 
-**Vision / multimodal:** Some text-only APIs (notably DeepSeek Chat Completions) reject multimodal parts with `unknown variant image_url, expected text`. `runStreamWithReactiveCompactRetry` uses capability-aware sanitization (`vision` / `audio` / `video` / `document`): unsupported parts are stripped from the **wire** copy (and all multimodal parts are stripped once on schema rejection); UI history keeps media for display.
+**Vision / multimodal:** Some text-only APIs (notably DeepSeek Chat Completions) reject multimodal parts with `unknown variant image_url, expected text`. `runStreamWithRecovery` uses capability-aware sanitization (`vision` / `audio` / `video` / `document`): unsupported parts are stripped from the **wire** copy (and all multimodal parts are stripped once on schema rejection); UI history keeps media for display.
 
 ### 5.5 Manual `/compact`
 
@@ -651,6 +685,7 @@ executeManagedAgentRun
             ├─ extensions.onBeforeToolCall → agent:tool-start (+ optional ExtensionEventBus)
             ├─ [tool execute or approval pause]
             ├─ extensions.onAfterToolCall → agent:tool-end/error (+ optional ExtensionEventBus)
+            ├─ early-tool-result-ui.onAfterToolCall → AgentUIChannel.addToolResult (per-tool UI)
             └─ lifecycle.onFinish / onAbort / onError → finalizeRun (once)
                  ├─ session.persistSession (model state)
                  ├─ memory.runExtraction (async, finished only)
@@ -664,38 +699,61 @@ executeManagedAgentRun
 
 ---
 
-## 10. Key file index
+## 10. Plan domain vs tool factories
+
+| Concern | Location | Examples |
+|---------|----------|----------|
+| Plan **domain** (phase machine, prompts, safe-command, middleware) | `agent/plan/` | `PlanModeController`, `plan-mode-middleware`, `plan-prompts` |
+| Plan **tool factories** (model-callable tools) | `agent/tools/` | `create-plan-tool`, `update-plan-tool`, `complete-plan-tool` |
+
+Same pattern as skills: registry/domain under `agent/skills/`, discovery tools under `agent/tools/`. Do not move tool factories into `plan/` unless it clearly reduces confusion.
+
+---
+
+## 11. Key file index
 
 | Area | Primary files |
 |------|---------------|
 | Entry / connect | `connect/local-connect.ts`, `index.ts` |
-| Manager | `managers/manager-agent.ts`, `managers/agent-factory.ts` |
-| Agent runtime | `managers/managed-agent.ts`, `managers/run-agent.ts` |
+| Manager | `managers/agent-manager.ts`, `managers/agent-factory.ts` |
+| Agent runtime | `managers/managed-agent.ts`, `managers/run-agent.ts`, `managers/agent-run-outcome.ts` |
+| Stream recovery | `managers/run-stream-recovery.ts`, `managers/stream-recovery/*` |
 | Runner | `agent/runner/agent-runner.ts` |
-| Middleware | `agent/middleware/*.ts` |
-| Events | `managers/agent-event-bus.ts`, `managers/emit-agent-event.ts`, `managers/event-log-bridge.ts` |
+| Middleware | `managers/middleware/*.ts` (+ `agent/plan/plan-mode-middleware.ts`) |
+| Stream helpers | `agent/stream/*` |
+| UI channel | `agent/ui-channel.ts` |
+| Shared types | `runtime-types/*` |
+| Events | `managers/agent-event-bus.ts`, `managers/emit-agent-event.ts`, `managers/event-log-bridge.ts`, `managers/event-log-rules.ts` |
 | Session | `managers/session-service.ts`, `agent/session/session-store.ts` |
 | Memory | `managers/memory-service.ts`, `agent/memory/*.ts` |
 | Compaction | `agent/compaction/*.ts` |
+| Plan | `agent/plan/*` (domain); plan tools under `agent/tools/` |
 | Tools | `agent/tools/*.ts`, `agent/tools/tanstack/define-tool.ts` |
 | Subagent | `agent/subagent/run-subagent.ts`, `agent/tools/task-tool.ts` |
-| Models | `models/model-config.ts`, `models/adapter-factory.ts` |
+| Models | `models/model-config.ts`, `models/adapter-factory.ts`, `models/prompt-cache.ts` |
 | CoreEnv | `env.ts` (+ `@my-agent/node` / `@my-agent/server`) |
 
 ---
 
-## 11. Validation scripts
+## 12. Validation scripts
 
 ```bash
 pnpm --filter @my-agent/core run validate:emit-agent-event
 pnpm --filter @my-agent/core run validate:event-log-bridge
 pnpm --filter @my-agent/core run validate:extensions-middleware
+pnpm --filter @my-agent/core run validate:early-tool-result-ui
 pnpm --filter @my-agent/core run validate:extension-prompt-hooks
 pnpm --filter @my-agent/core run validate:streaming-scope
 pnpm --filter @my-agent/core run validate:agent-observe
 pnpm --filter @my-agent/core run validate:tanstack-tools
 pnpm --filter @my-agent/core run validate:compaction-messages
 pnpm --filter @my-agent/core run validate:reactive-compact
+pnpm --filter @my-agent/core run validate:run-stream-recovery
+pnpm --filter @my-agent/core run validate:agent-run-finalization
+pnpm --filter @my-agent/core run validate:agent-managers-boundary
+pnpm --filter @my-agent/core run validate:models-managers-boundary
+pnpm --filter @my-agent/core run validate:agent-status
+pnpm --filter @my-agent/core run validate:prompt-cache
 pnpm --filter @my-agent/core run validate:subagent-run-stats
 pnpm --filter @my-agent/core run validate:model-config
 pnpm --filter @my-agent/core run validate:agent-context

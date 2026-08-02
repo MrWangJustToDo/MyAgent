@@ -1,11 +1,16 @@
-import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../managers/managed-agent-prompt.js";
-
 import type { ModelStyle } from "./types.js";
 import type { ContentPart, ModelMessage, ServerTool, SystemPrompt } from "@tanstack/ai";
 
 // ============================================================================
 // Constants
 // ============================================================================
+
+/**
+ * Separator between static and dynamic parts of the system prompt.
+ * Content before this marker is eligible for API-level prompt caching (Anthropic, OpenAI).
+ * Content after changes per-turn and cannot use global cache.
+ */
+export const SYSTEM_PROMPT_DYNAMIC_BOUNDARY = "\n<SYSTEM_PROMPT_DYNAMIC_BOUNDARY>\n";
 
 /** Anthropic / OpenAI-compatible ephemeral prompt-cache marker (default 5m TTL). */
 export const EPHEMERAL_CACHE_CONTROL = { type: "ephemeral" as const };

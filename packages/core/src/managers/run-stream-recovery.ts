@@ -1,16 +1,23 @@
-import { isPromptTooLongError } from "../agent/compaction/reactive-compact.js";
-import { extractRunErrorMessage } from "../agent/subagent/stream-errors.js";
+import { extractRunErrorMessage } from "../agent/stream/stream-errors.js";
 import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
-import {
-  sanitizeMessagesForCapabilities,
-  trySanitizeForMultimodalRetry,
-  unsupportedMultimodalPartTypes,
-} from "../agent/utils/capability-message-utils.js";
 
+import { messagesForModelCapabilities, tryCapabilitySanitizeRetry } from "./stream-recovery/capability-sanitize.js";
+import { createTruncationState, handleMaxTokensTruncation } from "./stream-recovery/max-tokens-continue.js";
+import { tryReactiveCompactRetry } from "./stream-recovery/reactive-compact.js";
+
+import type { AgentManager } from "./agent-manager.js";
 import type { ManagedAgent } from "./managed-agent.js";
-import type { AgentManager } from "./manager-agent.js";
 import type { AgentRunner } from "../agent/runner/agent-runner.js";
 import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai";
+
+export { messagesForModelCapabilities } from "./stream-recovery/capability-sanitize.js";
+export { tryReactiveCompactRetry } from "./stream-recovery/reactive-compact.js";
+export {
+  CONTINUATION_PROMPT,
+  ESCALATED_MAX_TOKENS,
+  MAX_TRUNCATION_CONTINUATIONS,
+  handleMaxTokensTruncation,
+} from "./stream-recovery/max-tokens-continue.js";
 
 // ============================================================================
 // Constants
@@ -22,23 +29,10 @@ const MAX_RETRY_BACKOFF_MS = 32000;
 const BASE_RETRY_DELAY_MS = 500;
 /** Max number of overall recovery attempts (reactive compact, multimodal strip, truncation, backoff). */
 const MAX_RECOVERY_ATTEMPTS = 3;
-/** Max number of truncation continuation retries after max_tokens escalation. */
-const MAX_TRUNCATION_CONTINUATIONS = 3;
-/** Escalated max output tokens for the first truncation retry. */
-const ESCALATED_MAX_TOKENS = 64000;
-
-/**
- * Continuation prompt injected when the model hits max_tokens.
- * Tells the model to resume directly without apology or recap.
- */
-const CONTINUATION_PROMPT =
-  "Output token limit hit. Resume directly — no apology, no recap of what you were doing. Pick up mid-thought if that is where the cut happened. Break remaining work into smaller pieces.";
 
 // ============================================================================
 // Helpers
 // ============================================================================
-
-export { extractRunErrorMessage };
 
 function errorFromUnknown(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
@@ -50,59 +44,10 @@ function errorFromUnknown(error: unknown): Error {
  * delay = min(BASE_RETRY_DELAY_MS × 2^attempt, MAX_RETRY_BACKOFF_MS) + random(0~25%)
  * If a `retryAfter` value is provided (from Retry-After header), use it directly.
  */
-function retryDelayMs(attempt: number, retryAfter?: number): number {
+export function retryDelayMs(attempt: number, retryAfter?: number): number {
   if (retryAfter != null && retryAfter > 0) return retryAfter * 1000;
   const base = Math.min(BASE_RETRY_DELAY_MS * Math.pow(2, attempt), MAX_RETRY_BACKOFF_MS);
   return base + Math.random() * base * 0.25;
-}
-
-async function applyReactiveCompactRetry(managed: ManagedAgent): Promise<boolean> {
-  if (!managed.getContext()) return false;
-  managed.statusController.endCompaction();
-  managed.setError("");
-  return true;
-}
-
-export async function tryReactiveCompactRetry(
-  managed: ManagedAgent,
-  manager: AgentManager,
-  error: unknown
-): Promise<boolean> {
-  if (managed.parentId) return false;
-  if (!isPromptTooLongError(error)) return false;
-
-  const compacted = await managed.handleReactiveCompact(error, manager);
-  if (!compacted) return false;
-
-  return applyReactiveCompactRetry(managed);
-}
-
-/** Prepare messages for the wire: drop multimodal parts the model cannot accept. */
-export function messagesForModelCapabilities(
-  managed: ManagedAgent,
-  messages: Array<UIMessage | ModelMessage>
-): Array<UIMessage | ModelMessage> {
-  const probe = managed.usage ?? null;
-  const drop = unsupportedMultimodalPartTypes(probe);
-  if (drop.size === 0) return messages;
-
-  const sanitized = sanitizeMessagesForCapabilities(messages, probe);
-  if (sanitized !== messages) {
-    managed.log?.warn(
-      "agent",
-      `Stripping unsupported multimodal parts for model capabilities: ${[...drop].join(", ")}`
-    );
-  }
-  return sanitized;
-}
-
-// ============================================================================
-// Truncation recovery state
-// ============================================================================
-
-interface TruncationState {
-  maxTokensEscalated: boolean;
-  continuationCount: number;
 }
 
 // ============================================================================
@@ -144,16 +89,9 @@ async function attemptErrorRecovery(
     };
   }
 
-  if (!multimodalStripAttempted) {
-    const stripped = trySanitizeForMultimodalRetry(error, currentMessages);
-    if (stripped) {
-      options.managed.log?.warn(
-        "agent",
-        "Retrying without multimodal parts after capability/schema API error (UI history unchanged)"
-      );
-      options.managed.setError("");
-      return { messages: stripped, multimodalStripAttempted: true };
-    }
+  const stripped = tryCapabilitySanitizeRetry(options.managed, error, currentMessages, multimodalStripAttempted);
+  if (stripped) {
+    return { messages: stripped, multimodalStripAttempted: true };
   }
 
   return null;
@@ -176,10 +114,7 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
   let messages = messagesForModelCapabilities(options.managed, options.getMessages());
   let multimodalStripAttempted = false;
   let recoveryAttempts = 0;
-  const truncation: TruncationState = {
-    maxTokensEscalated: false,
-    continuationCount: 0,
-  };
+  const truncation = createTruncationState();
 
   while (true) {
     let shouldRetry = false;
@@ -231,43 +166,20 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
       }
     }
 
-    // ========================================================================
-    // Truncation handling (finishReason === "length")
-    // ========================================================================
-
     if (truncationDetected) {
-      if (!truncation.maxTokensEscalated && options.runner) {
-        // First truncation: escalate max_tokens and retry same messages
-        options.runner.setMaxOutputTokens(ESCALATED_MAX_TOKENS);
-        truncation.maxTokensEscalated = true;
+      const truncationResult = handleMaxTokensTruncation({
+        managed: options.managed,
+        runner: options.runner,
+        messages,
+        truncation,
+      });
+      if (truncationResult.shouldRetry && truncationResult.messages) {
+        messages = truncationResult.messages;
         shouldRetry = true;
-
-        options.managed.log?.debug("agent", "Output truncated — escalating max_tokens", {
-          escalatedTokens: ESCALATED_MAX_TOKENS,
-        });
-      } else if (truncation.continuationCount < MAX_TRUNCATION_CONTINUATIONS) {
-        // Subsequent truncations: inject continuation prompt
-        const contextMessages =
-          options.managed.getContext()?.getMessagesForLLM() ?? (messages as Array<UIMessage | ModelMessage>);
-        messages = [...contextMessages, { role: "user" as const, content: CONTINUATION_PROMPT }];
-        truncation.continuationCount++;
-        shouldRetry = true;
-
-        options.managed.log?.debug("agent", "Output truncated — injecting continuation prompt", {
-          continuationCount: truncation.continuationCount,
-        });
-      } else {
-        // Max continuation retries exceeded — yield RUN_FINISHED 'length' as-fallback
-        options.managed.log?.warn("agent", "Output truncated — max continuations reached, returning partial result");
-        // The stream ends naturally (no more retry)
       }
     }
 
     if (!shouldRetry) return;
-
-    // ========================================================================
-    // Exponential backoff: wait before retrying
-    // ========================================================================
 
     const delay = retryDelayMs(recoveryAttempts);
     options.managed.log?.debug("agent", "Backoff before retry", {

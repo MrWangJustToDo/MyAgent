@@ -22,14 +22,3 @@ export { truncateSummary } from "./output.js";
 export { runSubagent, getSubagent, destroySubagent, type SubagentRunDeps } from "./run-subagent.js";
 
 export { countSubagentIterations, deriveSubagentRunStats } from "./run-stats.js";
-export {
-  extractAssistantText,
-  getSummaryStreamText,
-  hasIncompleteToolCalls,
-  resolveTaskRunPhase,
-  shouldStreamTaskSummary,
-  splitStepSegments,
-  SUMMARY_STREAM_MIN_CHARS,
-  type TaskRunPhase,
-  type TaskSummaryStreamState,
-} from "./extract-assistant-text.js";

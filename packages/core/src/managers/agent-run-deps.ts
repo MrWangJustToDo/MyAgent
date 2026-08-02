@@ -1,4 +1,4 @@
-import type { AgentManager } from "./manager-agent.js";
+import type { AgentManager } from "./agent-manager.js";
 import type { MemoryService } from "./memory-service.js";
 import type { SessionService } from "./session-service.js";
 import type { UsageTracker } from "./usage-tracker.js";

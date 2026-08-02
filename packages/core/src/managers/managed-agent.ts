@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { type ModelMessage, type UIMessage as TanStackUIMessage } from "@tanstack/ai";
 
 import { AutoApproveController } from "../agent/approval/auto-approve-controller.js";
@@ -49,9 +50,8 @@ import { SessionService } from "./session-service.js";
 import { UsageTracker } from "./usage-tracker.js";
 
 import type { AgentEvent, AgentEventType } from "./agent-event-bus.js";
+import type { AgentManager } from "./agent-manager.js";
 import type { AgentConfig, AgentStatus, RunFinalizeReason } from "./agent-types.js";
-import type { AgentUIChannel } from "./agent-ui-channel.js";
-import type { AgentManager } from "./manager-agent.js";
 import type { AgentContext } from "../agent/agent-context";
 import type { AgentLog } from "../agent/agent-log";
 import type { CompactionConfig, CompactionConfigInput } from "../agent/compaction/types.js";
@@ -71,6 +71,7 @@ import type { SessionData } from "../agent/session/types.js";
 import type { SkillRegistry } from "../agent/skills";
 import type { TodoManager } from "../agent/todo-manager";
 import type { ToolsRecord } from "../agent/tools/tanstack/tools-record.js";
+import type { AgentUIChannel } from "../agent/ui-channel.js";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
 import type { ModelStyle } from "../models/model-config.js";
 import type { ModelInfo } from "../models/types.js";
@@ -135,8 +136,8 @@ export class ManagedAgent {
   name: string;
   readonly config: ManagedAgentConfig;
 
-  /** Lifecycle */
-  status: AgentStatus = "idle";
+  /** Lifecycle — hosts read via getter; mutate through {@link setStatus}. */
+  private _status: AgentStatus = "idle";
   error = "";
   /** Tools awaiting user approval in the current run (set by approval middleware). */
   pendingApprovalCount = 0;
@@ -150,7 +151,7 @@ export class ManagedAgent {
   readonly run: RunCoordinator;
   readonly statusController: AgentStatusController;
 
-  context: AgentContext;
+  private _context: AgentContext;
   tools: ToolsRecord;
   log: AgentLog;
   todoManager: TodoManager | null;
@@ -160,10 +161,11 @@ export class ManagedAgent {
   /** Auto / YOLO mode — skip all tool approvals. Cleared on reset / `/clear`. */
   readonly autoApprove: AutoApproveController;
 
-  runner?: AgentRunner;
-  runnerConfigKey?: string;
-  textAdapter?: TextAdapterConfig;
-  ui?: AgentUIChannel;
+  /** Package-internal TanStack runner wiring — not part of the host-facing surface. */
+  private runner?: AgentRunner;
+  private runnerConfigKey?: string;
+  private textAdapter?: TextAdapterConfig;
+  private _ui?: AgentUIChannel;
   chatController?: AgentChatController;
   parentId?: string;
   parentTaskId?: string;
@@ -222,7 +224,7 @@ export class ManagedAgent {
     this.name = config.name;
     this.config = config;
     this.agentConfig = AgentConfigSchema.parse(config);
-    this.context = init.context;
+    this._context = init.context;
     this.log = init.log;
     this.tools = init.tools;
     this.todoManager = init.todoManager;
@@ -249,8 +251,7 @@ export class ManagedAgent {
       emitEvent: (type, data) => this.emitEvent(type, data),
       getTodoManager: () => this.todoManager,
       onPhaseChange: () => {
-        this.runner = undefined;
-        this.runnerConfigKey = undefined;
+        this.invalidateRunner();
         this.emitStateChange();
       },
       onEnterRetro: (state) => {
@@ -273,11 +274,26 @@ export class ManagedAgent {
   // Status & events
   // ============================================================================
 
+  /** Host-facing status (read-only; use {@link setStatus} to mutate). */
+  get status(): AgentStatus {
+    return this._status;
+  }
+
+  /** Host-facing conversation context (read-only; use {@link setContext} to replace). */
+  get context(): AgentContext {
+    return this._context;
+  }
+
+  /** Host-facing UI channel when present (read-only; package-internal {@link setUIChannel}). */
+  get ui(): AgentUIChannel | undefined {
+    return this._ui;
+  }
+
   setStatus(status: AgentStatus): void {
     if (status === "completed" || status === "aborted" || status === "error") {
       this.recordStreamDuration();
     }
-    this.status = status;
+    this._status = status;
     this.emitStateChange();
   }
 
@@ -310,12 +326,20 @@ export class ManagedAgent {
     messages: TanStackUIMessage[],
     options?: { whenClear?: "idle" | "running" | "completed" }
   ): void {
-    this.statusController.reconcileFromUIMessages(messages, options);
+    if (options?.whenClear === "running") {
+      this.statusController.reconcileWithPolicy(messages, "during-run");
+      return;
+    }
+    if (options?.whenClear === "completed") {
+      this.statusController.reconcileWithPolicy(messages, "after-chat-run");
+      return;
+    }
+    this.statusController.reconcileWithPolicy(messages, "idle-clear");
   }
 
   /** Reconcile status after a chat pump finishes. */
   syncRunStatusFromUIMessages(messages: TanStackUIMessage[]): void {
-    this.statusController.reconcileAfterRun(messages);
+    this.statusController.applyRunOutcome({ kind: "finished", messages, path: "chat" });
   }
 
   /**
@@ -397,7 +421,7 @@ export class ManagedAgent {
   }
 
   setContext(c: AgentContext): void {
-    this.context = c;
+    this._context = c;
     if (this.compactionConfig) {
       this.usage.setTokenLimit(this.compactionConfig.tokenThreshold);
     }
@@ -551,7 +575,7 @@ export class ManagedAgent {
       toUI: def.toUI,
     });
     (this.tools as Record<string, unknown>)[def.name] = serverTool;
-    this.runnerConfigKey = undefined;
+    this.setRunnerConfigKey(undefined);
   }
 
   /** Extension slash commands registered via {@link ExtensionContext.registerCommand}. */
@@ -650,8 +674,7 @@ export class ManagedAgent {
   resetSystemPrompt(): void {
     this.systemPromptFrozen = false;
     this.frozenSystemPrompt = undefined;
-    this.runnerConfigKey = undefined;
-    this.runner = undefined;
+    this.invalidateRunner();
   }
 
   async getDynamicTurnContext(): Promise<string | undefined> {
@@ -892,9 +915,54 @@ export class ManagedAgent {
     this.usage.reset();
     this.todoManager?.reset();
     this.chatController = undefined;
-    this.ui = undefined;
+    this._ui = undefined;
     this.systemPromptFrozen = false;
     this.frozenSystemPrompt = undefined;
+  }
+
+  // ============================================================================
+  // Package-internal runner / adapter / UI wiring
+  // ============================================================================
+
+  /** @internal Used by run-agent / stream recovery. */
+  getRunner(): AgentRunner | undefined {
+    return this.runner;
+  }
+
+  /** @internal */
+  setRunner(runner: AgentRunner | undefined): void {
+    this.runner = runner;
+  }
+
+  /** @internal */
+  getRunnerConfigKey(): string | undefined {
+    return this.runnerConfigKey;
+  }
+
+  /** @internal */
+  setRunnerConfigKey(key: string | undefined): void {
+    this.runnerConfigKey = key;
+  }
+
+  /** @internal Invalidate cached AgentRunner (tools / plan phase / prompt changed). */
+  invalidateRunner(): void {
+    this.runner = undefined;
+    this.runnerConfigKey = undefined;
+  }
+
+  /** @internal */
+  getTextAdapter(): TextAdapterConfig | undefined {
+    return this.textAdapter;
+  }
+
+  /** @internal */
+  setTextAdapter(adapter: TextAdapterConfig | undefined): void {
+    this.textAdapter = adapter;
+  }
+
+  /** @internal Wire chat / subagent UI channel (hosts read via {@link ui}). */
+  setUIChannel(ui: AgentUIChannel | undefined): void {
+    this._ui = ui;
   }
 }
 

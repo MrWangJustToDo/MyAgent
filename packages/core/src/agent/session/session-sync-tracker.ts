@@ -1,6 +1,6 @@
 import { isEmptyAssistantShell } from "../utils/empty-assistant-shell.js";
 
-import type { AgentStatus } from "../../managers/agent-types.js";
+import type { AgentStatus } from "../../runtime-types/agent-status.js";
 import type { ToolCallPart, UIMessage } from "@tanstack/ai";
 
 // ToolCallPart["approval"] doesn't include `reason`, but

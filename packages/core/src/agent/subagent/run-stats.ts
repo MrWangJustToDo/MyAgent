@@ -2,10 +2,10 @@
  * Derive subagent run statistics from UI message snapshots and stream metadata.
  */
 
-import { splitStepSegments } from "./extract-assistant-text.js";
+import { splitStepSegments } from "../stream/extract-assistant-text.js";
 
 import type { SubagentResult } from "./types.js";
-import type { AgentStatus } from "../../managers/agent-types.js";
+import type { AgentStatus } from "../../runtime-types/agent-status.js";
 import type { StreamChunk, UIMessage } from "@tanstack/ai";
 
 const LIMIT_FINISH_REASONS = new Set(["max-steps", "max_steps", "max-iterations", "length"]);

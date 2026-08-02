@@ -26,7 +26,7 @@ import { DEFAULT_HARD_MAX_MEMORIES, MEMORY_TYPES } from "./types.js";
 
 import type { MemoryManager } from "./memory-manager.js";
 import type { Memory, MemoryType } from "./types.js";
-import type { AgentManager } from "../../managers/manager-agent.js";
+import type { AgentManager } from "../../runtime-types/hosts.js";
 import type { ModelMessage } from "@tanstack/ai";
 
 // ============================================================================

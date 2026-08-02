@@ -2,52 +2,9 @@
 // Event Types
 // ============================================================================
 
-/** Agent lifecycle event types (emitted via {@link emitAgentEvent}). */
-export type AgentEventType =
-  | "session:doc"
-  | "session:memory"
-  | "session:mcp"
-  | "session:skill"
-  | "session:start"
-  | "session:restore"
-  | "session:save-error"
-  | "prompt:submit"
-  | "prompt:before"
-  | "agent:thinking"
-  | "agent:tool-start"
-  | "agent:tool-approval-request"
-  | "agent:tool-end"
-  | "agent:tool-error"
-  | "agent:abort"
-  | "agent:stream-error"
-  | "agent:stop"
-  | "memory:prefetch"
-  | "memory:extract"
-  | "memory:consolidate"
-  | "llm:request"
-  | "llm:response"
-  | "turn:summary"
-  | "compaction:auto-start"
-  | "compaction:auto-complete"
-  | "compaction:auto-error"
-  | "compaction:reactive-start"
-  | "compaction:reactive-complete"
-  | "compaction:reactive-error"
-  | "compaction:reactive-max-retries"
-  | "subagent:created"
-  | "subagent:started"
-  | "subagent:completed"
-  | "subagent:error"
-  | "subagent:destroyed"
-  | "subagent:ui-update"
-  | "plan:enter"
-  | "plan:ready"
-  | "plan:execute"
-  | "plan:cancel-execution"
-  | "plan:todo-replaced"
-  | "plan:retro"
-  | "plan:complete"
-  | "plan:exit";
+import type { AgentEventType } from "../runtime-types/agent-events.js";
+
+export type { AgentEventType } from "../runtime-types/agent-events.js";
 
 /** Unified agent event */
 export interface AgentEvent {

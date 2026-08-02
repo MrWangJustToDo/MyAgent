@@ -8,8 +8,8 @@ import { extractMemories, consolidateMemories } from "../agent/memory/memory-ext
 import { findRelevantMemories, formatRelevantMemories } from "../agent/memory/memory-retrieval.js";
 import { getEnv } from "../env.js";
 
+import type { AgentManager } from "./agent-manager.js";
 import type { EmitAgentEventFn } from "./emit-agent-event.js";
-import type { AgentManager } from "./manager-agent.js";
 import type { UsageTracker } from "./usage-tracker.js";
 import type { AgentContext } from "../agent/agent-context";
 import type { AgentLog } from "../agent/agent-log";

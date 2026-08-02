@@ -1,6 +1,6 @@
+import type { AgentManager } from "./agent-manager.js";
 import type { AgentRunDeps } from "./agent-run-deps.js";
 import type { ManagedAgent } from "./managed-agent.js";
-import type { AgentManager } from "./manager-agent.js";
 
 /** Build {@link AgentRunDeps} for middleware and runner construction. */
 export function buildManagedAgentDeps(managed: ManagedAgent, manager: AgentManager): AgentRunDeps {

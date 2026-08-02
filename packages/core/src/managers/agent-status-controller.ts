@@ -14,12 +14,20 @@ import {
   needsToolPhaseContinue,
 } from "../agent/utils/tool-phase-utils.js";
 
+import {
+  whenClearForReconcilePolicy,
+  type AgentRunOutcome,
+  type StatusReconcilePolicy,
+  type WhenClearStatus,
+} from "./agent-run-outcome.js";
 import { isTerminalStatus, resolveFinishStatus } from "./agent-status.js";
 
 import type { AgentEventType } from "./agent-event-bus.js";
 import type { AgentStatus } from "./agent-types.js";
 import type { AgentLog } from "../agent/agent-log";
 import type { StreamChunk, ToolPhaseCompleteInfo, UIMessage } from "@tanstack/ai";
+
+export type { AgentRunOutcome, AgentRunOutcomeKind, AgentRunPath, StatusReconcilePolicy } from "./agent-run-outcome.js";
 
 // ============================================================================
 // Types
@@ -36,7 +44,7 @@ export interface AgentStatusControllerDeps {
 }
 
 export interface ReconcileFromUIMessagesOptions {
-  whenClear?: "idle" | "running" | "completed";
+  whenClear?: WhenClearStatus;
 }
 
 // ============================================================================
@@ -221,6 +229,11 @@ export class AgentStatusController {
     }
   }
 
+  /** Mid-run / resume reconcile using a named policy instead of raw `whenClear` literals. */
+  reconcileWithPolicy(messages: UIMessage[], policy: StatusReconcilePolicy): void {
+    this.reconcileFromUIMessages(messages, { whenClear: whenClearForReconcilePolicy(policy) });
+  }
+
   /**
    * Reconcile status after a chat pump finishes.
    *
@@ -242,20 +255,54 @@ export class AgentStatusController {
   }
 
   /**
-   * Finalize status for runs that do not go through {@link AgentChatController}
-   * (e.g. task subagents via {@link AgentUIChannel.consumeRun}).
+   * Single entry for end-of-run status finalization (chat pump and detached/subagent).
    *
-   * Without this, TanStack may leave status as `running` after the stream ends,
-   * so `getActiveSubagents` keeps listing finished tasks in the panel.
+   * Prefer this over calling {@link reconcileAfterRun} / legacy detached helpers directly.
    */
-  finalizeDetachedRun(messages: UIMessage[], options?: { aborted?: boolean }): void {
-    if (options?.aborted) {
+  applyRunOutcome(outcome: AgentRunOutcome): void {
+    const path = outcome.path ?? "chat";
+    const { kind, messages } = outcome;
+
+    // Keep approval badge in sync even when we take a terminal shortcut (error/abort).
+    this.deps.setPendingApprovalCount(countPendingToolApprovals(messages));
+
+    if (kind === "aborted") {
       this.onRunAbort();
       return;
     }
 
-    this.reconcileAfterRun(messages);
+    if (kind === "error") {
+      // executeStream may already have called onRunError — do not re-emit agent:stream-error.
+      if (this.deps.getStatus() !== "error") {
+        if (outcome.errorMessage) {
+          this.onRunError(outcome.errorMessage);
+        } else {
+          this.deps.setStatus("error");
+        }
+      } else if (outcome.errorMessage && !this.deps.getError()) {
+        this.deps.setError(outcome.errorMessage);
+      }
+      return;
+    }
 
+    if (kind === "waiting") {
+      // Pending approval / ask_user: reconcile sets waiting|awaiting_user from messages.
+      // whenClear only matters if messages no longer require a wait (should not happen for this kind).
+      this.reconcileWithPolicy(messages, path === "detached" ? "after-chat-run" : "during-run");
+      if (path === "detached") {
+        this.forceDetachedTerminal();
+      }
+      return;
+    }
+
+    // finished
+    this.reconcileAfterRun(messages);
+    if (path === "detached") {
+      this.forceDetachedTerminal();
+    }
+  }
+
+  private forceDetachedTerminal(): void {
     const status = this.deps.getStatus();
     if (status === "waiting" || status === "awaiting_user") {
       // Subagent run is over — do not linger as "active" for the task panel.

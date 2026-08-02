@@ -136,11 +136,11 @@ assert.equal(managed.status, "waiting");
       parts: [{ type: "text", content: "done" }],
     },
   ];
-  status.finalizeDetachedRun(doneMessages);
+  status.applyRunOutcome({ kind: "finished", messages: doneMessages, path: "detached" });
   assert.equal(current, "completed", "detached subagent run must leave completed, not running");
 
   current = "running";
-  status.finalizeDetachedRun(doneMessages, { aborted: true });
+  status.applyRunOutcome({ kind: "aborted", messages: doneMessages, path: "detached" });
   assert.equal(current, "aborted");
 }
 

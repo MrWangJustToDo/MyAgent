@@ -1,5 +1,6 @@
-import { extractAssistantText } from "../agent/subagent/extract-assistant-text.js";
-import { throwOnRunError } from "../agent/subagent/stream-errors.js";
+import { extractAssistantText } from "../agent/stream/extract-assistant-text.js";
+import { throwOnRunError } from "../agent/stream/stream-errors.js";
+import { AgentUIChannel } from "../agent/ui-channel.js";
 import { formatAgentStreamError } from "../agent/utils/assert-async-iterable.js";
 import { stripEmptyAssistantShells } from "../agent/utils/empty-assistant-shell.js";
 import {
@@ -17,10 +18,9 @@ import {
 } from "../agent/utils/tool-phase-utils.js";
 
 import { isActiveStatus } from "./agent-status.js";
-import { AgentUIChannel } from "./agent-ui-channel.js";
 
+import type { AgentManager } from "./agent-manager.js";
 import type { ManagedAgent } from "./managed-agent.js";
-import type { AgentManager } from "./manager-agent.js";
 import type { ContentPart, ToolCallPart, UIMessage } from "@tanstack/ai";
 
 const MAX_TOOL_PHASE_ITERATIONS = 40;
@@ -59,7 +59,7 @@ export class AgentChatController {
     initialMessages?: UIMessage[]
   ) {
     this.channel = new AgentUIChannel({ initialMessages });
-    this.managed.ui = this.channel;
+    this.managed.setUIChannel(this.channel);
   }
 
   getUIChannel(): AgentUIChannel {
@@ -176,7 +176,7 @@ export class AgentChatController {
   respondToToolApproval(approvalId: string, approved: boolean, reason?: string): Promise<void> {
     this.channel.addToolApprovalResponse(approvalId, approved, reason);
     this.managed.syncContextFromUIMessages(this.channel.getMessages());
-    this.managed.statusController.reconcileFromUIMessages(this.channel.getMessages(), { whenClear: "running" });
+    this.managed.statusController.reconcileWithPolicy(this.channel.getMessages(), "during-run");
     return this.enqueueRun();
   }
 
@@ -314,7 +314,26 @@ export class AgentChatController {
 
       if (generation === this.runGeneration) {
         this.syncPlanModeFromMessages();
-        this.managed.statusController.reconcileAfterRun(this.channel.getMessages());
+        const messages = this.channel.getMessages();
+        // Prefer status already set by executeStream (error/abort) over message-derived waits.
+        const outcomeKind =
+          this.managed.status === "aborted"
+            ? "aborted"
+            : hasError || this.managed.status === "error"
+              ? "error"
+              : hasPendingToolApprovals(messages) || hasPendingAskUser(messages)
+                ? "waiting"
+                : "finished";
+        this.managed.statusController.applyRunOutcome({
+          kind: outcomeKind,
+          messages,
+          path: "chat",
+          // Only supply a message when status is not already error (avoids duplicate stream-error).
+          errorMessage:
+            outcomeKind === "error" && this.managed.status !== "error"
+              ? this.managed.error || "Stream execution failed"
+              : undefined,
+        });
         this.persistMessages();
 
         const totalUsage = this.managed.usage?.getTotal();
@@ -347,7 +366,7 @@ export class AgentChatController {
         this.applyCancelledIncompleteTools();
         return;
       }
-      this.managed.statusController.reconcileFromUIMessages(this.channel.getMessages(), { whenClear: "running" });
+      this.managed.statusController.reconcileWithPolicy(this.channel.getMessages(), "during-run");
     } catch (err) {
       if (generation !== this.runGeneration || this.managed.status === "aborted") {
         this.applyCancelledIncompleteTools();
@@ -415,7 +434,7 @@ export class AgentChatController {
 
     if (didApprove) {
       this.managed.syncContextFromUIMessages(this.channel.getMessages());
-      this.managed.statusController.reconcileFromUIMessages(this.channel.getMessages(), { whenClear: "running" });
+      this.managed.statusController.reconcileWithPolicy(this.channel.getMessages(), "during-run");
     }
   }
 }

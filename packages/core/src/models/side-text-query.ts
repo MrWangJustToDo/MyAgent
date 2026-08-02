@@ -1,9 +1,8 @@
 import { chat } from "@tanstack/ai";
 
-import { extractTanStackUsage } from "../managers/usage-tracker.js";
+import { extractTanStackUsage, type TokenUsage } from "../runtime-types/token-usage.js";
 
 import type { TextAdapterConfig } from "./adapter-factory.js";
-import type { TokenUsage } from "../managers/usage-tracker-utils.js";
 
 // ============================================================================
 // Types

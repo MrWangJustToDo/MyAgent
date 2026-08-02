@@ -4,7 +4,7 @@
 
 import { estimateTokens } from "./token-estimator.js";
 
-import type { AgentManager } from "../../managers/manager-agent.js";
+import type { AgentManager } from "../../runtime-types/hosts.js";
 import type { ModelMessage } from "@tanstack/ai";
 
 /** Fallback context window when model metadata is unavailable. */

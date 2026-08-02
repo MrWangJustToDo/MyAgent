@@ -27,7 +27,7 @@ import { withDuration } from "./util/helpers.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 
-import type { AgentManager } from "../../managers/manager-agent.js";
+import type { AgentManager } from "../../runtime-types/hosts.js";
 
 // ============================================================================
 // Types

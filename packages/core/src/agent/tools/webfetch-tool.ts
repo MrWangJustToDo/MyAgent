@@ -20,7 +20,7 @@ import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 import { convertHTMLToMarkdown, extractTextFromHTML } from "./webfetch-html.js";
 
-import type { ManagedAgent } from "../../managers/managed-agent.js";
+import type { ManagedAgent } from "../../runtime-types/hosts.js";
 
 // ============================================================================
 // Constants

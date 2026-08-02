@@ -18,7 +18,7 @@ import { withDuration } from "./util/helpers.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 import { filterResultsByDomain, getProviderManager, initializeProviders } from "./websearch";
 
-import type { ManagedAgent } from "../../managers/managed-agent.js";
+import type { ManagedAgent } from "../../runtime-types/hosts.js";
 
 // ============================================================================
 // Constants

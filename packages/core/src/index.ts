@@ -26,26 +26,20 @@ export {
 // Runtime — agent manager & managed agent
 // ============================================================================
 
-export { agentManager, AgentManager, getDefaultSkillDirs, SKILL_DIRS_ENV_VAR } from "./managers/manager-agent.js";
+export { agentManager, AgentManager } from "./managers/agent-manager.js";
 export type {
   AgentEvent,
   AgentEventListener,
   AgentEventType,
   RunAgentOptions,
   RunAgentStreamInput,
-} from "./managers/manager-agent.js";
-export {
-  buildManagedAgent,
-  type BuildManagedAgentOptions,
-  type BuildManagedAgentResult,
-} from "./managers/agent-factory.js";
-export { ManagedAgent, type ManagedAgentConfig, type RunFinalizeReason } from "./managers/managed-agent.js";
+} from "./managers/agent-manager.js";
+export { ManagedAgent, type ManagedAgentConfig } from "./managers/managed-agent.js";
 export type { AgentObserveHandlers } from "./managers/managed-agent-observe.js";
-export { DEFAULT_OBSERVE_EVENTS } from "./managers/managed-agent-observe.js";
-export { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, resolveFinishStatus } from "./managers/agent-status.js";
-export type { AgentStatus } from "./managers/agent-types.js";
+export { isActiveStatus } from "./managers/agent-status.js";
+export type { AgentStatus } from "./runtime-types/agent-status.js";
 export { localConnect, createLocalConnect, type LocalConnectManager } from "./connect";
-export { AgentChatController, formatChatError } from "./managers/agent-chat-controller.js";
+export { AgentChatController } from "./managers/agent-chat-controller.js";
 export type {
   QueuedMessageContent,
   QueuedMessagesSnapshot,
@@ -63,18 +57,9 @@ export type { QueueMode } from "./agent/utils/pending-message-queue.js";
 // Agent state (hosts / UI)
 // ============================================================================
 
-export {
-  areAllUIMessagesStable,
-  computeSessionSyncSnapshot,
-  createSessionSyncTracker,
-  fingerprintUIMessage,
-  isUIMessageStable,
-  shouldPersistUIMessages,
-} from "./agent/session/session-sync-tracker.js";
-export type { SessionSaveReason, SessionSyncSnapshot } from "./agent/session/session-sync-tracker.js";
-export { AgentContext, buildCanonicalModelMessages, type TokenUsage } from "./agent/agent-context";
+export { AgentContext, type TokenUsage } from "./agent/agent-context";
 export { AgentLog } from "./agent/agent-log";
-export { TodoManager, type TodoItem, type TodoStatus, type TodoPriority, STATUS_ICONS } from "./agent/todo-manager";
+export { TodoManager, type TodoItem, type TodoStatus, type TodoPriority } from "./agent/todo-manager";
 
 // ============================================================================
 // Session
@@ -98,14 +83,12 @@ export {
   parseModelStyle,
   resolveModelConfig,
   resolveModelConnection,
-  lookupModelFromModelsDev,
   parseModelInfoFromEnv,
   runSideTextQuery,
 } from "./models";
 export type { ModelInfo, ModelStyle, ModelConnection, ResolvedModelConfig } from "./models";
 export { resolveTextAdapterForManaged } from "./managers/run-agent.js";
 export { buildDefaultSystemPrompt } from "./agent/default-prompt.js";
-export { bridgeExternalToolToServer } from "./agent/tools/tanstack/bridge-external-tool.js";
 
 // ============================================================================
 // UI utilities
@@ -113,13 +96,6 @@ export { bridgeExternalToolToServer } from "./agent/tools/tanstack/bridge-extern
 
 export { previewEdit, type PreviewEditResult } from "./agent/tools/util/preview-edit.js";
 export { registerToUI, getToUI, clearToUI } from "./agent/tools/tanstack/to-ui-registry.js";
-/** Streaming emit APIs (tools / UI channel). Hosts subscribe via {@link ManagedAgent.observe}. */
-export {
-  clearStreamingOutput,
-  emitStreamingChunk,
-  type StreamingChunk,
-  type StreamingEmitOptions,
-} from "./agent/tools/util/streaming-callback.js";
 
 // ============================================================================
 // Tool output types (message formatting)
@@ -158,14 +134,7 @@ export type {
 // Extension API
 // ============================================================================
 
-export {
-  ExtensionRunner,
-  ExtensionLoader,
-  DEFAULT_EXTENSION_DIR,
-  EXTENSION_DIRS_ENV_VAR,
-  getDefaultExtensionDirs,
-  joinExtensionAppendSegments,
-} from "./agent/extension";
+export { ExtensionRunner, ExtensionLoader, DEFAULT_EXTENSION_DIR, getDefaultExtensionDirs } from "./agent/extension";
 export type {
   ExtensionAPI,
   ExtensionFactory,
@@ -189,15 +158,6 @@ export type {
 // Shared utilities
 // ============================================================================
 
-export { generateId, generateShortId, createSequentialIdGenerator } from "./agent/utils.js";
+export { generateId } from "./agent/utils.js";
 export type { GenerateIdOptions } from "./agent/utils.js";
 export { destroyAllCommandJobs } from "./agent/tools/util/command-job-registry.js";
-export { formatAgentStreamError } from "./agent/utils/assert-async-iterable.js";
-export {
-  hasDeferredToolExecution,
-  hasPendingAskUser,
-  hasPendingToolApprovals,
-  needsAgentResponseAfterTools,
-  needsToolPhaseContinue,
-  shouldContinueAgentPump,
-} from "./agent/utils/tool-phase-utils.js";

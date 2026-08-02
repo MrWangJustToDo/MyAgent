@@ -1,14 +1,11 @@
-import { applyCompactionResult, autoCompact } from "../compaction";
+import { applyCompactionResult, autoCompact } from "../../agent/compaction";
 
-import type { AgentEventType } from "../../managers/agent-event-bus.js";
-import type { AgentStatusController } from "../../managers/agent-status-controller.js";
-import type { AgentManager } from "../../managers/manager-agent.js";
-import type { UsageTracker } from "../../managers/usage-tracker.js";
-import type { AgentContext } from "../agent-context";
-import type { AgentLog } from "../agent-log";
-import type { CompactionConfig } from "../compaction/types.js";
-import type { ToolRunContext } from "../runner/run-context.js";
-import type { TodoManager } from "../todo-manager";
+import type { AgentContext } from "../../agent/agent-context";
+import type { AgentLog } from "../../agent/agent-log";
+import type { CompactionConfig } from "../../agent/compaction/types.js";
+import type { ToolRunContext } from "../../agent/runner/run-context.js";
+import type { TodoManager } from "../../agent/todo-manager";
+import type { AgentEventType, AgentManager, AgentStatusController, UsageTracker } from "../../runtime-types";
 import type { ChatMiddleware, ModelMessage } from "@tanstack/ai";
 
 export interface CompactionMiddlewareDeps {

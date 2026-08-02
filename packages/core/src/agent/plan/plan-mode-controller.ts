@@ -4,7 +4,7 @@ import { buildPlanExecuteSteerMessage } from "./plan-prompts.js";
 import { savePlanFile } from "./plan-store.js";
 import { extractGoalFromPlanMarkdown } from "./plan-summary.js";
 
-import type { AgentEventType } from "../../managers/agent-event-bus.js";
+import type { AgentEventType } from "../../runtime-types/agent-events.js";
 import type { TodoManager } from "../todo-manager/todo-manager.js";
 
 export type PlanModePhase = "off" | "planning" | "ready" | "executing" | "retro";

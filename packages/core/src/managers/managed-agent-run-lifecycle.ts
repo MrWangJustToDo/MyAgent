@@ -7,40 +7,12 @@ import { convertMessagesToModelMessages, type ModelMessage, type UIMessage as Ta
 import { getLatestUserMessage } from "../agent/compaction/message-utils.js";
 import { isToolContinuationPrepare } from "../agent/utils/tool-phase-utils.js";
 
-import type { AgentEventType } from "./agent-event-bus.js";
-import type { AgentStatus, RunFinalizeReason } from "./agent-types.js";
-import type { AgentManager } from "./manager-agent.js";
-import type { MemoryService } from "./memory-service.js";
-import type { RunCoordinator } from "./run-coordinator.js";
-import type { UsageTracker } from "./usage-tracker.js";
-import type { AgentContext } from "../agent/agent-context";
-import type { AgentLog } from "../agent/agent-log";
-import type { TextAdapterConfig } from "../models/adapter-factory.js";
+import type { AgentManager } from "./agent-manager.js";
+import type { RunFinalizeReason } from "./agent-types.js";
+import type { ManagedAgent } from "./managed-agent.js";
 
-export interface RunLifecycleHost {
-  id: string;
-  parentId?: string;
-  status: AgentStatus;
-  context: AgentContext | null;
-  usage: UsageTracker;
-  memory: MemoryService;
-  run: RunCoordinator;
-  log: AgentLog | null;
-  streamStartedAt: number;
-  lastStreamDurationMs: number;
-  resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
-  syncContextFromUIMessages: (uiMessages: TanStackUIMessage[]) => void;
-  setStatus: (status: AgentStatus) => void;
-  emitEvent: (type: AgentEventType, data?: Record<string, unknown>) => void;
-  persistSession: () => void;
-  recordStreamDuration: () => void;
-  /** Collect extension before_agent_start + turn-context providers (root user turns only). */
-  collectExtensionPromptHooks?: (prompt: string) => Promise<void>;
-  captureTurnContextSnapshot: () => Promise<void>;
-  clearTurnContext: () => void;
-  /** Optional: mid-run steer / tool-phase continuation skips one-shot prepare work. */
-  consumePrepareAsContinuation?: () => boolean;
-}
+/** Lifecycle helpers operate on the full ManagedAgent surface (type-only import). */
+export type RunLifecycleHost = ManagedAgent;
 
 export async function prepareManagedAgentForRun(
   host: RunLifecycleHost,
@@ -66,7 +38,7 @@ export async function prepareManagedAgentForRun(
   host.run.resetReactiveCompactRetries();
 
   const isToolContinuation =
-    isToolContinuationPrepare(host.status, options.messages) || host.consumePrepareAsContinuation?.() === true;
+    isToolContinuationPrepare(host.status, options.messages) || host.consumePrepareAsContinuation() === true;
   if (!isToolContinuation || host.streamStartedAt === 0) {
     host.streamStartedAt = Date.now();
   }
@@ -82,7 +54,7 @@ export async function prepareManagedAgentForRun(
     });
 
     // Snapshot once per user turn — middleware reuses it across tool iterations.
-    await host.collectExtensionPromptHooks?.(typeof options.prompt === "string" ? options.prompt : "(structured)");
+    await host.collectExtensionPromptHooks(typeof options.prompt === "string" ? options.prompt : "(structured)");
     await host.captureTurnContextSnapshot();
 
     const userMsg = typeof options.prompt === "string" ? options.prompt : "(structured)";

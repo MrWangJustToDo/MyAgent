@@ -32,8 +32,8 @@ import {
 
 import type { MemoryManager } from "./memory-manager.js";
 import type { Memory } from "./types.js";
-import type { UsageTracker } from "../../managers/usage-tracker.js";
 import type { TextAdapterConfig } from "../../models/adapter-factory.js";
+import type { UsageTracker } from "../../runtime-types/hosts.js";
 import type { AgentLog } from "../agent-log/agent-log.js";
 
 // ============================================================================

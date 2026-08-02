@@ -27,7 +27,7 @@ import { maybeAppendCompactArchive } from "./write-compact-archive.js";
 
 import type { CompactionTodoItem } from "./compaction-prompt.js";
 import type { CompactionConfig, CompactionResult } from "./types.js";
-import type { AgentManager } from "../../managers/manager-agent.js";
+import type { AgentManager } from "../../runtime-types/hosts.js";
 import type { ModelMessage } from "@tanstack/ai";
 
 export { extractExistingSummary, findCutPoint } from "./cut-point.js";

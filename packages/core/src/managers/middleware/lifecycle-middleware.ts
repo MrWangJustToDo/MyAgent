@@ -5,13 +5,11 @@
  * everything else that hooks into the agent run lifecycle.
  */
 
-import { extractTanStackUsage } from "../../managers/usage-tracker.js";
+import { extractTanStackUsage } from "../../runtime-types/token-usage.js";
 
-import type { AgentEventType } from "../../managers/agent-event-bus.js";
-import type { RunFinalizeReason } from "../../managers/agent-types.js";
-import type { UsageTracker } from "../../managers/usage-tracker.js";
+import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { ModelPricing } from "../../models/types.js";
-import type { ToolRunContext } from "../runner/run-context.js";
+import type { AgentEventType, RunFinalizeReason, UsageTracker } from "../../runtime-types";
 import type { ChatMiddleware } from "@tanstack/ai";
 
 // ============================================================================

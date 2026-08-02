@@ -2,7 +2,7 @@
 // Token Usage
 // ============================================================================
 
-import type { ModelPricing } from "../models/types";
+import type { ModelPricing } from "../models/types.js";
 
 export interface TokenUsage {
   inputTokens: number;
@@ -29,4 +29,25 @@ export function calculateCost(usage: TokenUsage, pricing: ModelPricing): number 
   const outputCost = usage.outputTokens * pricing.outputPerM;
 
   return (inputCost + cacheReadCost + cacheWriteCost + outputCost) / 1_000_000;
+}
+
+/**
+ * Map TanStack usage from `@tanstack/ai` RUN_FINISHED to core TokenUsage.
+ */
+export function extractTanStackUsage(usage: {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  promptTokensDetails?: { cachedTokens?: number };
+  completionTokensDetails?: { reasoningTokens?: number };
+}): TokenUsage {
+  const input = usage.promptTokens ?? 0;
+  const output = usage.completionTokens ?? 0;
+  return {
+    inputTokens: input,
+    outputTokens: output,
+    totalTokens: usage.totalTokens ?? input + output,
+    cacheReadTokens: usage.promptTokensDetails?.cachedTokens ?? undefined,
+    reasoningTokens: usage.completionTokensDetails?.reasoningTokens ?? undefined,
+  };
 }

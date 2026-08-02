@@ -11,7 +11,7 @@ import { detectReadFileType, isBinaryContent } from "./util/read-file-detect.js"
 import { toolOutputBaseSchema } from "./util/types.js";
 
 import type { FileStat } from "../../environment";
-import type { UsageTracker } from "../../managers/usage-tracker.js";
+import type { UsageTracker } from "../../runtime-types/hosts.js";
 
 // ============================================================================
 // Constants

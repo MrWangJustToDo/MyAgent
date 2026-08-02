@@ -3,8 +3,7 @@ import { createTools } from "../create-tools.js";
 
 import { toolsToArray, type ToolsRecord } from "./tools-record.js";
 
-import type { ManagedAgent } from "../../../managers/managed-agent.js";
-import type { UsageTracker } from "../../../managers/usage-tracker.js";
+import type { ManagedAgent, UsageTracker } from "../../../runtime-types/hosts.js";
 import type { AgentContext } from "../../agent-context/agent-context.js";
 import type { ClientTool, ServerTool } from "@tanstack/ai";
 

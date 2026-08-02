@@ -1,6 +1,6 @@
-import { buildSystemPromptWithTurnContext } from "../../managers/managed-agent-prompt.js";
+import { buildSystemPromptWithTurnContext } from "../managed-agent-prompt.js";
 
-import type { ToolRunContext } from "../runner/run-context.js";
+import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { ChatMiddleware } from "@tanstack/ai";
 
 export interface TurnContextMiddlewareDeps {

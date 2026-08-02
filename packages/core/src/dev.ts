@@ -18,7 +18,7 @@ export { AgentEventBus } from "./managers/agent-event-bus.js";
 export { attachEventLogBridge } from "./managers/event-log-bridge.js";
 export { emitAgentEvent } from "./managers/emit-agent-event.js";
 export { AgentLog } from "./agent/agent-log/agent-log.js";
-export { AgentUIChannel } from "./managers/agent-ui-channel.js";
+export { AgentUIChannel } from "./agent/ui-channel.js";
 export { AgentChatController } from "./managers/agent-chat-controller.js";
 export { PendingMessageQueue } from "./agent/utils/pending-message-queue.js";
 export type { QueueMode } from "./agent/utils/pending-message-queue.js";
@@ -34,8 +34,13 @@ export {
 } from "./models/reasoning-echo.js";
 export { runSideTextQuery } from "./models/side-text-query.js";
 export { isPromptTooLongError } from "./agent/compaction/reactive-compact.js";
-export { extractRunErrorMessage, runStreamWithRecovery } from "./managers/reactive-compact-retry.js";
-export { throwOnRunError } from "./agent/subagent/stream-errors.js";
+export {
+  messagesForModelCapabilities,
+  retryDelayMs,
+  runStreamWithRecovery,
+  tryReactiveCompactRetry,
+} from "./managers/run-stream-recovery.js";
+export { extractRunErrorMessage, throwOnRunError } from "./agent/stream/stream-errors.js";
 export { formatReadFileToolResult } from "./agent/tools/util/format-read-file-result.js";
 export {
   estimateImageInputTokens,
@@ -62,7 +67,7 @@ export {
   getSummaryStreamText,
   resolveTaskRunPhase,
   shouldStreamTaskSummary,
-} from "./agent/subagent/extract-assistant-text.js";
+} from "./agent/stream/extract-assistant-text.js";
 export { countSubagentIterations, deriveSubagentRunStats } from "./agent/subagent/run-stats.js";
 export { resolveSubagentBridgeUI } from "./agent/subagent/types.js";
 export { generateId, resetGeneratedIdsForTesting } from "./agent/utils.js";
@@ -101,8 +106,12 @@ export {
   splitMessagesByTokenBudget,
 } from "./agent/compaction/summarization-budget.js";
 export { estimateTokens } from "./agent/compaction/token-estimator.js";
-export { createExtensionsMiddleware, createLifecycleMiddleware } from "./agent/middleware";
-export { createStatusMiddleware } from "./agent/middleware/status-middleware.js";
+export {
+  createEarlyToolResultUiMiddleware,
+  createExtensionsMiddleware,
+  createLifecycleMiddleware,
+} from "./managers/middleware";
+export { createStatusMiddleware } from "./managers/middleware/status-middleware.js";
 export {
   ExtensionLoader,
   ExtensionRunner,
@@ -115,11 +124,11 @@ export {
 } from "./agent/extension";
 export {
   buildSystemPromptWithTurnContext,
-  SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
   buildDynamicTurnContext,
   buildFrozenSystemPrompt,
 } from "./managers/managed-agent-prompt.js";
 export {
+  SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
   ANTHROPIC_CACHE_BREAKPOINT_CAP,
   EPHEMERAL_CACHE_CONTROL,
   applyAnthropicLatestUserCacheBreakpoint,
@@ -132,8 +141,15 @@ export {
   splitSystemPromptAtDynamicBoundary,
 } from "./models/prompt-cache.js";
 export { toolsToArray } from "./agent/tools/tanstack/tools-record.js";
-export { createPromptCacheMiddleware } from "./agent/middleware/prompt-cache-middleware.js";
+export { createPromptCacheMiddleware } from "./managers/middleware/prompt-cache-middleware.js";
 export { createAgentStatusController, AgentStatusController } from "./managers/agent-status-controller.js";
+export type {
+  AgentRunOutcome,
+  AgentRunOutcomeKind,
+  AgentRunPath,
+  StatusReconcilePolicy,
+} from "./managers/agent-run-outcome.js";
+export { whenClearForReconcilePolicy } from "./managers/agent-run-outcome.js";
 export { AgentRunner } from "./agent/runner/agent-runner.js";
 export { assertAsyncIterable, formatAgentStreamError } from "./agent/utils/assert-async-iterable.js";
 export {

@@ -1,6 +1,6 @@
 import { findLastMeaningfulAssistant, isEmptyAssistantShell } from "./empty-assistant-shell.js";
 
-import type { AgentStatus } from "../../managers/agent-types.js";
+import type { AgentStatus } from "../../runtime-types/agent-status.js";
 import type { ModelMessage, ToolCallPart, ToolResultPart, UIMessage } from "@tanstack/ai";
 
 /** Client-side tools — UI supplies output via {@link AgentChatController.addToolResult}. */

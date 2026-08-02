@@ -6,8 +6,8 @@ import { applyReactiveCompactionResult } from "../agent/compaction/apply-compact
 import { isPromptTooLongError, reactiveCompact } from "../agent/compaction/reactive-compact.js";
 
 import type { AgentEventType } from "./agent-event-bus.js";
+import type { AgentManager } from "./agent-manager.js";
 import type { AgentStatusController } from "./agent-status-controller.js";
-import type { AgentManager } from "./manager-agent.js";
 import type { RunCoordinator } from "./run-coordinator.js";
 import type { UsageTracker } from "./usage-tracker.js";
 import type { AgentContext } from "../agent/agent-context";

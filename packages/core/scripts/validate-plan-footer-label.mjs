@@ -12,10 +12,7 @@ assert.equal(formatPlanModeFooterLabel({ phase: "off" }), null);
 assert.equal(formatPlanModeFooterLabel({ phase: "planning" }), "planning");
 assert.equal(formatPlanModeFooterLabel({ phase: "ready" }), "review · /plan execute");
 assert.equal(formatPlanModeFooterLabel({ phase: "executing" }), "building");
-assert.equal(
-  formatPlanModeFooterLabel({ phase: "executing" }, { completed: 2, total: 5 }),
-  "building 2/5"
-);
+assert.equal(formatPlanModeFooterLabel({ phase: "executing" }, { completed: 2, total: 5 }), "building 2/5");
 assert.equal(formatPlanModeFooterLabel({ phase: "retro" }), "retro");
 
 assert.deepEqual(

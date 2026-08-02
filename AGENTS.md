@@ -149,11 +149,11 @@ ConnectionGuard(/health) → createRemoteCoreEnv(url) → registerCoreEnv → in
 | Runtime | `agentManager`, `AgentManager`, `ManagedAgent`, `localConnect` |
 | UI / state | `AgentContext`, `AgentLog`, `TodoManager`, `SessionStore` |
 | Compaction | `applyCompactionResult`, `autoCompact`, `estimateTokens` |
-| Bootstrap | `buildDefaultSystemPrompt`, `parseModelInfoFromEnv`, `bridgeExternalToolToServer` |
-| UI helpers | `previewEdit`, streaming emit + `observe({ onStreaming })`, tool output types |
+| Bootstrap | `buildDefaultSystemPrompt`, `parseModelInfoFromEnv`, `resolveModelConfig` |
+| UI helpers | `previewEdit`, `ManagedAgent.observe({ onStreaming })`, tool output types |
 | Adapters | `FileError`, `ExecutionError`, `generateId` |
 
-Internal modules (tools, middleware, subagent runner, hook registry, etc.) stay package-private. Core validation scripts import from `dist/dev.mjs` (`src/dev.ts`), which is not part of the published package export map.
+Internal modules (tools, middleware, subagent runner, hook registry, session-sync / tool-phase helpers, etc.) stay package-private. Core validation scripts import from `dist/dev.mjs` (`src/dev.ts`), which is not part of the published package export map. See `openspec/changes/harden-core-organization/API-REMOVALS.md` for the latest public-entry removals.
 
 ### TanStack AI Integration
 
@@ -499,8 +499,8 @@ The project supports **subagents** — context-isolated agents spawned to handle
 `runSubagent({ bridgeUI: true })` attaches an `AgentUIChannel` on `ManagedAgent.ui` for the task panel (`Ctrl+T`).
 Headless runs (`bridgeUI: false`) consume the stream via `StreamProcessor` only and skip UI wiring.
 Task-tool subagents use `autoDestroy: false` so the preview stays available; after the stream ends,
-`statusController.finalizeDetachedRun()` marks them `completed`/`aborted` so `getActiveSubagents()`
-(and the Ctrl+T list) only shows truly active tasks.
+`statusController.applyRunOutcome({ kind, path: "detached", ... })` marks them `completed`/`aborted`
+so `getActiveSubagents()` (and the Ctrl+T list) only shows truly active tasks.
 Task spawn ids are always auto-generated via `generateId("subagent", { exists })` — the model
 does not supply an `id` input.
 The default task tool row shows the current subagent exploration tool during analysis.
@@ -603,7 +603,7 @@ packages/core/src/agent/compaction/
 
 **Reasoning stripping (Layer 2)** is disabled in `compaction-middleware.ts` because DeepSeek thinking mode requires `reasoning_content` echo-back. DeepSeek endpoints use `ReasoningChatCompletionsTextAdapter`, which maps stream `reasoning_content` into `thinking` and writes it back on subsequent requests.
 
-**Reactive compaction** runs in `run-agent.ts` via `runStreamWithReactiveCompactRetry` — on `prompt_too_long` errors, `ManagedAgent.handleReactiveCompact()` compacts context and retries once.
+**Reactive compaction** runs via `runStreamWithRecovery` (`managers/run-stream-recovery.ts`) — on `prompt_too_long` errors, `ManagedAgent.handleReactiveCompact()` compacts context and retries once.
 
 ## Workspace `.agents/` layout
 
@@ -703,19 +703,21 @@ packages/
 │   │   ├── compaction/                # Context compaction (micro + auto)
 │   │   ├── extension/                 # Extension API (loader, runner, EventBus interception)
 │   │   ├── memory/                    # Memory management
-│   │   ├── plan/                      # Plan mode (controller, extract-plan, safe-command)
+│   │   ├── plan/                      # Plan domain (controller, prompts, middleware)
 │   │   ├── session/                   # Session persistence (SessionStore)
 │   │   ├── skills/                    # Skill loading (two-layer injection)
+│   │   ├── stream/                    # Package-wide stream helpers (errors, text extract)
 │   │   ├── subagent/                  # Subagent spawning
 │   │   ├── todo-manager/             # Todo tracking for agent tasks
-│   │   ├── tools/                     # AI tools (fs, bash, grep, glob, etc.)
+│   │   ├── tools/                     # AI tools (fs, bash, grep, glob, plan tools, etc.)
+│   │   ├── ui-channel.ts              # AgentUIChannel (chat / subagent preview)
 │   │   ├── mcp/                       # MCP integration
 │   │   ├── default-prompt.ts          # System prompt builder
 │   │   └── agent-doc-loader.ts        # Agent documentation loader
 │   ├── environment/                   # Error types (FileError, ExecutionError), data types
-│   ├── managers/                      # AgentManager, ManagedAgent (hub), services, run pipeline
+│   ├── managers/                      # AgentManager, ManagedAgent, middleware, run pipeline
+│   ├── runtime-types/                 # Shared status / event / usage types (no manager deps)
 │   ├── models/                        # Model config (model-config.ts), adapters, models.dev lookup
-│   ├── types.ts                       # Shared type definitions
 │   ├── index.ts                       # Curated public API exports (hosts / adapters)
 │   └── dev.ts                         # Internal-only re-exports for `pnpm validate:*` scripts
 │

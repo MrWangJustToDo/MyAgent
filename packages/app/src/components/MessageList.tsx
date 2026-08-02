@@ -8,6 +8,7 @@
 import { Box, Text } from "ink";
 import { useEffect, useRef } from "react";
 
+import { StaticContext } from "../context/static-context.js";
 import { TranscriptDisplayContext } from "../context/transcript-display-context.js";
 import { useDynamic } from "../hooks/use-dynamic";
 import { useStatic } from "../hooks/use-static";
@@ -20,7 +21,6 @@ import { CursorFlush } from "./CursorFlush";
 
 import type { UIMessage } from "@tanstack/ai";
 import type { JSX } from "react";
-import { StaticContext } from "../context/static-context.js";
 
 // ============================================================================
 // Constants

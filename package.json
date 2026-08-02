@@ -37,6 +37,7 @@
     "@my-agent/core": "workspace:*",
     "@my-agent/mcp-server": "workspace:*",
     "@my-agent/server": "workspace:*",
+    "@typescript-eslint/utils": "8.61.1",
     "eslint": "^9",
     "eslint-import-resolver-typescript": "^4.4.4",
     "prettier": "^3.8.3",

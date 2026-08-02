@@ -20,22 +20,10 @@ export const AgentConfigSchema = z.object({
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
 
 // ============================================================================
-// Agent Status
+// Agent Status (compat re-exports)
 // ============================================================================
 
-export type AgentStatus =
-  | "idle"
-  | "running"
-  | "completed"
-  | "error"
-  | "aborted"
-  | "waiting"
-  | "awaiting_user"
-  | "compacting"
-  | "thinking"
-  | "responding";
-
-export type RunFinalizeReason = "finished" | "aborted" | "error";
+export type { AgentStatus, RunFinalizeReason } from "../runtime-types/agent-status.js";
 
 // ============================================================================
 // Run options

@@ -7,8 +7,8 @@ import {
   sortToolsByName,
 } from "../../models/prompt-cache.js";
 
+import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { ModelStyle } from "../../models/types.js";
-import type { ToolRunContext } from "../runner/run-context.js";
 import type { ChatMiddleware, ModelMessage, ServerTool, SystemPrompt } from "@tanstack/ai";
 
 export interface PromptCacheMiddlewareDeps {

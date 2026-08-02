@@ -1,5 +1,5 @@
 /**
- * Extract final assistant text from subagent UIMessage snapshots.
+ * Extract assistant text and task-summary stream helpers from UIMessage snapshots.
  */
 
 import type { UIMessage } from "@tanstack/ai";

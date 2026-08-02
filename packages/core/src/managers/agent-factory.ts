@@ -23,7 +23,7 @@ import { ManagedAgent, type ManagedAgentConfig } from "./managed-agent.js";
 import { resolveTextAdapterForManaged } from "./run-agent.js";
 
 import type { AgentEvent } from "./agent-event-bus.js";
-import type { AgentManager } from "./manager-agent.js";
+import type { AgentManager } from "./agent-manager.js";
 import type { SessionBootstrapContext } from "./session-bootstrap-events.js";
 
 export interface BuildManagedAgentResult {

@@ -167,7 +167,7 @@ export class AgentManager {
     } else {
       subagent.tools = createSubagentTools(subagent);
     }
-    subagent.runner = undefined;
+    subagent.invalidateRunner();
 
     return subagent;
   }

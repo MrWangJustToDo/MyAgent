@@ -1,12 +1,12 @@
-import { applyToolCompact } from "../compaction/tool-compact/apply-tool-compact.js";
-import { toModelOutputRegistry } from "../tools/tanstack/to-model-output-registry.js";
+import { applyToolCompact } from "../../agent/compaction/tool-compact/apply-tool-compact.js";
+import { toModelOutputRegistry } from "../../agent/tools/tanstack/to-model-output-registry.js";
 
-import type { ManagedAgent } from "../../dev.js";
-import type { AgentLog } from "../agent-log";
-import type { ToolCompactCache } from "../compaction/tool-compact/tool-compact-cache.js";
-import type { ToModelOutputRegistry } from "../compaction/tool-compact/types.js";
-import type { CompactionConfig } from "../compaction/types.js";
-import type { ToolRunContext } from "../runner/run-context.js";
+import type { AgentLog } from "../../agent/agent-log";
+import type { ToolCompactCache } from "../../agent/compaction/tool-compact/tool-compact-cache.js";
+import type { ToModelOutputRegistry } from "../../agent/compaction/tool-compact/types.js";
+import type { CompactionConfig } from "../../agent/compaction/types.js";
+import type { ToolRunContext } from "../../agent/runner/run-context.js";
+import type { ManagedAgent } from "../../runtime-types";
 import type { ChatMiddleware, ModelMessage } from "@tanstack/ai";
 
 export interface ToolCompactMiddlewareDeps {

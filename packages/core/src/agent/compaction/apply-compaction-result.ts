@@ -8,7 +8,7 @@ import { cleanupOrphanedToolCache } from "../tools/util/tool-output-cache.js";
 import { createCompactedMessages } from "./auto-compact.js";
 
 import type { CompactionResult } from "./types.js";
-import type { UsageTracker } from "../../managers/usage-tracker.js";
+import type { UsageTracker } from "../../runtime-types/hosts.js";
 import type { AgentContext } from "../agent-context/agent-context.js";
 import type { ModelMessage } from "@tanstack/ai";
 

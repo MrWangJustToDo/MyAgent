@@ -17,7 +17,7 @@ import type { createListSkillsTool } from "./list-skills-tool.js";
 import type { createLoadSkillTool } from "./load-skill-tool.js";
 import type { createTaskTool } from "./task-tool.js";
 import type { createTodoTool } from "./todo-tool.js";
-import type { UsageTracker } from "../../managers/usage-tracker.js";
+import type { UsageTracker } from "../../runtime-types/hosts.js";
 import type { AgentContext } from "../agent-context/agent-context.js";
 
 export type Tools = ToolsRecord & {

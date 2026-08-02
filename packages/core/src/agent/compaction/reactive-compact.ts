@@ -17,7 +17,7 @@ import { createCompactedMessages, summarizeConversation } from "./auto-compact.j
 import { extractExistingSummary } from "./cut-point.js";
 import { maybeAppendCompactArchive } from "./write-compact-archive.js";
 
-import type { AgentManager } from "../../managers/manager-agent.js";
+import type { AgentManager } from "../../runtime-types/hosts.js";
 import type { ModelMessage } from "@tanstack/ai";
 
 // ============================================================================

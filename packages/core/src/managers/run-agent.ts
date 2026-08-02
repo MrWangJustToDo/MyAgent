@@ -1,5 +1,21 @@
 import {
+  getPlanModeToolExcludeSet,
+  PLAN_AUTHORING_TOOL_NAMES,
+  PLAN_COMPLETION_TOOL_NAMES,
+} from "../agent/plan/plan-tools.js";
+import { AgentRunner } from "../agent/runner/agent-runner.js";
+import { resolveToolsRecord, SUBAGENT_EXCLUDED_TOOL_NAMES } from "../agent/tools/tanstack";
+import { AgentUIChannel } from "../agent/ui-channel.js";
+import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
+import { createTextAdapter } from "../models/adapter-factory.js";
+import { DEFAULT_BASE_URLS } from "../models/model-config.js";
+import { resolvePromptCacheKey } from "../models/prompt-cache.js";
+
+import { createEmitFn } from "./emit-agent-event.js";
+import { buildManagedAgentDeps } from "./managed-agent-deps.js";
+import {
   createCompactionMiddleware,
+  createEarlyToolResultUiMiddleware,
   createExtensionsMiddleware,
   createLifecycleMiddleware,
   createPlanModeMiddleware,
@@ -7,27 +23,12 @@ import {
   createStatusMiddleware,
   createToolCompactMiddleware,
   createTurnContextMiddleware,
-} from "../agent/middleware";
-import {
-  getPlanModeToolExcludeSet,
-  PLAN_AUTHORING_TOOL_NAMES,
-  PLAN_COMPLETION_TOOL_NAMES,
-} from "../agent/plan/plan-tools.js";
-import { AgentRunner } from "../agent/runner/agent-runner.js";
-import { resolveToolsRecord, SUBAGENT_EXCLUDED_TOOL_NAMES } from "../agent/tools/tanstack";
-import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
-import { createTextAdapter } from "../models/adapter-factory.js";
-import { DEFAULT_BASE_URLS } from "../models/model-config.js";
-import { resolvePromptCacheKey } from "../models/prompt-cache.js";
+} from "./middleware";
+import { runStreamWithRecovery } from "./run-stream-recovery.js";
 
-import { AgentUIChannel } from "./agent-ui-channel.js";
-import { createEmitFn } from "./emit-agent-event.js";
-import { buildManagedAgentDeps } from "./managed-agent-deps.js";
-import { runStreamWithRecovery } from "./reactive-compact-retry.js";
-
+import type { AgentManager } from "./agent-manager.js";
 import type { AgentRunDeps } from "./agent-run-deps.js";
 import type { ManagedAgent } from "./managed-agent.js";
-import type { AgentManager } from "./manager-agent.js";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
 import type { ModelMessage, ServerTool, StreamChunk, UIMessage } from "@tanstack/ai";
 
@@ -61,7 +62,8 @@ export interface RunAgentOptions {
 // ============================================================================
 
 export async function resolveTextAdapterForManaged(managed: ManagedAgent): Promise<TextAdapterConfig> {
-  if (managed.textAdapter) return managed.textAdapter;
+  const cached = managed.getTextAdapter();
+  if (cached) return cached;
 
   const { config } = managed;
   const style = config.modelStyle;
@@ -71,13 +73,14 @@ export async function resolveTextAdapterForManaged(managed: ManagedAgent): Promi
     );
   }
 
-  managed.textAdapter = createTextAdapter({
+  const adapter = createTextAdapter({
     style,
     model: config.model,
     baseURL: config.modelBaseURL ?? DEFAULT_BASE_URLS[style],
     apiKey: config.modelApiKey,
   });
-  return managed.textAdapter;
+  managed.setTextAdapter(adapter);
+  return adapter;
 }
 
 // ============================================================================
@@ -162,6 +165,10 @@ export function buildAgentRunner(
       getTodoManager: () => deps.todoManager,
       emitEvent,
     }),
+    // TanStack batches TOOL_CALL_END until all tools finish; mirror each result into UI early.
+    createEarlyToolResultUiMiddleware({
+      getUIChannel: () => managed.ui,
+    }),
     createPlanModeMiddleware({
       getPlanMode: () => managed.planMode,
     }),
@@ -203,13 +210,15 @@ export async function ensureAgentRunner(_manager: AgentManager, managed: Managed
   const textAdapter = await resolveTextAdapterForManaged(managed);
   const configKey = runnerConfigKey(managed);
 
-  if (managed.runner && managed.runnerConfigKey === configKey) {
-    return managed.runner;
+  const existing = managed.getRunner();
+  if (existing && managed.getRunnerConfigKey() === configKey) {
+    return existing;
   }
 
-  managed.runnerConfigKey = configKey;
-  managed.runner = buildAgentRunner(managed, textAdapter, _manager);
-  return managed.runner;
+  managed.setRunnerConfigKey(configKey);
+  const runner = buildAgentRunner(managed, textAdapter, _manager);
+  managed.setRunner(runner);
+  return runner;
 }
 
 // ============================================================================
@@ -293,10 +302,11 @@ export async function runManagedAgent(
 }
 
 function ensureUIChannel(managed: ManagedAgent): AgentUIChannel {
-  if (!managed.ui) {
-    managed.ui = new AgentUIChannel();
-  }
-  return managed.ui;
+  const existing = managed.ui;
+  if (existing) return existing;
+  const channel = new AgentUIChannel();
+  managed.setUIChannel(channel);
+  return channel;
 }
 
 async function* bridgeAgentStream(

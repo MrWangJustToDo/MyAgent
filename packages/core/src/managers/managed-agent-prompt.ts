@@ -1,5 +1,9 @@
+import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/prompt-cache.js";
+
 import type { AgentConfig } from "./agent-types.js";
 import type { SkillRegistry } from "../agent/skills";
+
+export { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/prompt-cache.js";
 
 export interface SystemPromptInput {
   config: AgentConfig;
@@ -59,13 +63,6 @@ export function buildFrozenSystemPrompt(input: SystemPromptInput): string | unde
   }
   return undefined;
 }
-
-/**
- * Separator between static and dynamic parts of the system prompt.
- * Content before this marker is eligible for API-level prompt caching (Anthropic, OpenAI).
- * Content after changes per-turn and cannot use global cache.
- */
-export const SYSTEM_PROMPT_DYNAMIC_BOUNDARY = "\n<SYSTEM_PROMPT_DYNAMIC_BOUNDARY>\n";
 
 export interface DynamicTurnContextInput {
   relevantMemoryContent: string;

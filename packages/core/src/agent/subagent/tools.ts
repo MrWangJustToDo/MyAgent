@@ -13,7 +13,7 @@ import { createWebsearchTool } from "../tools/websearch-tool.js";
 
 import { createBeginSummaryTool } from "./begin-summary-tool.js";
 
-import type { ManagedAgent } from "../../managers/managed-agent.js";
+import type { ManagedAgent } from "../../runtime-types/hosts.js";
 
 /**
  * Creates the restricted read-only tool set for exploration subagents.

@@ -1,8 +1,8 @@
-import type { AgentEventType } from "../../managers/agent-event-bus.js";
-import type { ExtensionRunner } from "../extension/runner.js";
-import type { ToolBeforeEvent } from "../extension/types.js";
-import type { ToolRunContext } from "../runner/run-context.js";
-import type { TodoManager } from "../todo-manager";
+import type { ExtensionRunner } from "../../agent/extension/runner.js";
+import type { ToolBeforeEvent } from "../../agent/extension/types.js";
+import type { ToolRunContext } from "../../agent/runner/run-context.js";
+import type { TodoManager } from "../../agent/todo-manager";
+import type { AgentEventType } from "../../runtime-types";
 import type { ChatMiddleware } from "@tanstack/ai";
 
 export interface ExtensionsMiddlewareDeps {
@@ -62,12 +62,14 @@ export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): Chat
       if (info.ok) {
         deps.emitEvent?.("agent:tool-end", {
           tool_name: info.toolName,
+          tool_call_id: info.toolCallId,
           duration_ms: info.duration,
           tool_output: info.result,
         });
       } else {
         deps.emitEvent?.("agent:tool-error", {
           tool_name: info.toolName,
+          tool_call_id: info.toolCallId,
           error: info.error instanceof Error ? info.error.message : String(info.error),
         });
       }

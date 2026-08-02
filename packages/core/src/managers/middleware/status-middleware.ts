@@ -6,8 +6,8 @@
  * directly via {@link createCompactionMiddleware}.
  */
 
-import type { AgentStatusController } from "../../managers/agent-status-controller.js";
-import type { ToolRunContext } from "../runner/run-context.js";
+import type { ToolRunContext } from "../../agent/runner/run-context.js";
+import type { AgentStatusController } from "../../runtime-types";
 import type { ChatMiddleware } from "@tanstack/ai";
 
 // ============================================================================
