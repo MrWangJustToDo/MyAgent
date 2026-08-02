@@ -1,4 +1,5 @@
 import { calculateCost, type TokenUsage } from "../runtime-types/token-usage.js";
+import { Emitter } from "../utils/emitter.js";
 
 import type { ModelCapability, ModelPricing } from "../models/types.js";
 
@@ -22,6 +23,19 @@ export interface UsageSnapshot {
   costUsd?: number;
 }
 
+/** Payload-carrying usage view for Emitter / AgentSession `usage` channel. */
+export interface UsageChangeSnapshot {
+  total: TokenUsage;
+  window: TokenUsage;
+  percent: number;
+  tokenLimit: number;
+  cost: number;
+}
+
+type UsageTrackerEvents = {
+  change: UsageChangeSnapshot;
+};
+
 /**
  * Tracks per-step context window fill and lifetime token usage for a managed agent.
  */
@@ -36,6 +50,12 @@ export class UsageTracker {
   private pricing: ModelPricing | null = null;
   private capabilities: ModelCapability[] = [];
   private tokenLimit = 0;
+  private readonly events = new Emitter<UsageTrackerEvents>();
+
+  /** Subscribe to usage change events (payload is a serializable snapshot). */
+  on<K extends keyof UsageTrackerEvents>(type: K, listener: (payload: UsageTrackerEvents[K]) => void): () => void {
+    return this.events.on(type, listener);
+  }
 
   /** Update window usage from a main run step and accumulate into lifetime totals. */
   updateWindowUsage(usage: TokenUsage, pricing?: ModelPricing | null): void {
@@ -53,11 +73,13 @@ export class UsageTracker {
     this.window.totalTokens = this.window.inputTokens + this.window.outputTokens;
 
     this.accumulateTotal(usage, resolvedPricing);
+    this.emitChange();
   }
 
   /** Add usage to lifetime totals only (side queries, title generation, etc.). */
   addTotal(usage: TokenUsage, pricing?: ModelPricing | null): void {
     this.accumulateTotal(usage, pricing ?? this.pricing);
+    this.emitChange();
   }
 
   private accumulateTotal(usage: TokenUsage, pricing: ModelPricing | null | undefined): void {
@@ -90,6 +112,7 @@ export class UsageTracker {
 
   setTotalCostUsd(cost: number): void {
     this.totalCostUsd = cost;
+    this.emitChange();
   }
 
   setPricing(pricing: ModelPricing): void {
@@ -124,18 +147,36 @@ export class UsageTracker {
 
   resetWindow(): void {
     this.window = emptyUsage();
+    this.emitChange();
   }
 
   reset(): void {
     this.window = emptyUsage();
     this.total = emptyUsage();
     this.totalCostUsd = 0;
+    this.emitChange();
   }
 
   snapshot(pricing?: ModelPricing | null): UsageSnapshot {
+    const resolved = pricing ?? this.pricing;
     return {
       usage: { ...this.total },
-      ...(pricing ? { costUsd: this.totalCostUsd || calculateCost(this.total, pricing) } : {}),
+      ...(resolved ? { costUsd: this.totalCostUsd || calculateCost(this.total, resolved) } : {}),
     };
+  }
+
+  /** Full UI-oriented usage snapshot (totals + window fill). */
+  getChangeSnapshot(): UsageChangeSnapshot {
+    return {
+      total: { ...this.total },
+      window: { ...this.window },
+      percent: this.getTokenLimitPercent(),
+      tokenLimit: this.tokenLimit,
+      cost: this.totalCostUsd,
+    };
+  }
+
+  private emitChange(): void {
+    this.events.emit("change", this.getChangeSnapshot());
   }
 }

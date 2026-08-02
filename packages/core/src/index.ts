@@ -62,10 +62,35 @@ export { AgentLog } from "./agent/agent-log";
 export { TodoManager, type TodoItem, type TodoStatus, type TodoPriority } from "./agent/todo-manager";
 
 // ============================================================================
-// Session
+// Session persistence
 // ============================================================================
 
 export { SessionStore, type SessionMeta, type SessionData, type ResumeResult } from "./agent/session";
+
+// ============================================================================
+// Agent Session API (host-facing transport-agnostic surface)
+// ============================================================================
+
+export {
+  AGENT_SESSION_CHANNELS,
+  DEFAULT_AGENT_SESSION_CHANNELS,
+  DEFAULT_SESSION_LIFECYCLE_EVENTS,
+  createLocalAgentSession,
+  sessionForSubagent,
+  type AgentSession,
+  type AgentSessionChannel,
+  type AgentSessionCommand,
+  type AgentSessionCommandResult,
+  type AgentSessionEvent,
+  type AgentSessionMessageContent,
+  type AgentSessionSnapshot,
+  type AgentSessionSubagentSummary,
+  type AgentSessionSubscribeOptions,
+  type AgentSessionSubscriber,
+  type CreateLocalAgentSessionOptions,
+} from "./agent-session";
+export type { AgentL1State } from "./managers/managed-agent.js";
+export type { UsageChangeSnapshot, UsageSnapshot } from "./managers/usage-tracker.js";
 
 // ============================================================================
 // Compaction (/compact command)

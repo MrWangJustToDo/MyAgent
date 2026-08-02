@@ -1,11 +1,12 @@
+import { agentManager, createLocalAgentSession, sessionForSubagent } from "@my-agent/core";
 import { useEffect, useState } from "react";
 
 import { isToolCallPart, parseToolInput } from "../utils/tool-part.js";
 
 import { useSubAgents } from "./use-sub-agents";
 
-import type { ManagedAgent, TokenUsage } from "@my-agent/core";
-import type { ToolCallState } from "@tanstack/ai";
+import type { AgentSession, ManagedAgent, TokenUsage } from "@my-agent/core";
+import type { ToolCallState, UIMessage } from "@tanstack/ai";
 
 const BEGIN_SUMMARY_TOOL_NAME = "begin_summary";
 
@@ -18,15 +19,22 @@ type TaskToolCall = {
 
 export type TaskRunPhase = "tools" | "summary";
 
-const getTaskPhaseFromAgent = (agent?: ManagedAgent): TaskRunPhase => {
-  const phase = agent?.ui?.getTaskRunPhase?.();
-  return phase === "summary" ? "summary" : "tools";
+const getTaskPhaseFromMessages = (messages: UIMessage[], managed?: ManagedAgent): TaskRunPhase => {
+  const phase = managed?.ui?.getTaskRunPhase?.();
+  if (phase === "summary") return "summary";
+  // Fallback: if begin_summary appears in messages, treat as summary phase.
+  for (const msg of messages) {
+    if (msg.role !== "assistant") continue;
+    for (const part of msg.parts) {
+      if (isToolCallPart(part) && part.name === BEGIN_SUMMARY_TOOL_NAME) {
+        return "summary";
+      }
+    }
+  }
+  return "tools";
 };
 
-const getTaskToolsFromAgent = (agent?: ManagedAgent): TaskToolCall[] => {
-  const messages = agent?.ui?.getMessages();
-  if (!messages) return [];
-
+const getTaskToolsFromMessages = (messages: UIMessage[]): TaskToolCall[] => {
   const tools: TaskToolCall[] = [];
   for (const msg of messages) {
     if (msg.role !== "assistant") continue;
@@ -44,41 +52,41 @@ const getTaskToolsFromAgent = (agent?: ManagedAgent): TaskToolCall[] => {
   return tools;
 };
 
-const getTaskUsageFromAgent = (agent?: ManagedAgent): TokenUsage | null => {
-  if (!agent?.usage) return null;
-  return { ...agent.usage.getTotal() };
-};
-
-const getTaskInfoFromAgent = (agent?: ManagedAgent) => {
-  const allTools = getTaskToolsFromAgent(agent);
+const readTaskInfo = (session: AgentSession | null, managed?: ManagedAgent) => {
+  const messages = session?.getSnapshot().messages ?? managed?.ui?.getMessages() ?? [];
+  const allTools = getTaskToolsFromMessages(messages);
+  const usage: TokenUsage | null = session ? { ...session.getSnapshot().usage.total } : null;
   return {
     allTools,
     total: allTools.length,
-    usage: getTaskUsageFromAgent(agent),
+    usage,
+    phase: getTaskPhaseFromMessages(messages, managed),
   };
 };
 
 export const useTask = ({ taskId }: { taskId: string }) => {
   const agent = useSubAgents({ taskId });
 
-  const [info, setInfo] = useState(() => getTaskInfoFromAgent(agent));
-  const [phase, setPhase] = useState<TaskRunPhase>(() => getTaskPhaseFromAgent(agent));
+  const [info, setInfo] = useState(() => readTaskInfo(null, agent));
 
   useEffect(() => {
     if (!agent?.id) return;
 
+    const childSession =
+      sessionForSubagent(agentManager, agent.id) ?? createLocalAgentSession({ managed: agent, manager: agentManager });
+
     const refresh = () => {
-      setInfo(getTaskInfoFromAgent(agent));
-      setPhase(getTaskPhaseFromAgent(agent));
+      setInfo(readTaskInfo(childSession, agent));
     };
 
     refresh();
-    return agent.observe({
-      onMessages: () => refresh(),
-      events: ["subagent:created", "subagent:started", "subagent:completed", "agent:stop"],
-      onEvent: refresh,
-    });
+    return childSession.subscribe(
+      () => {
+        refresh();
+      },
+      { channels: ["messages", "usage", "state", "lifecycle"] }
+    );
   }, [agent, agent?.id]);
 
-  return { ...info, agent, phase: taskId ? phase : ("tools" as const) };
+  return { ...info, agent, phase: taskId ? info.phase : ("tools" as const) };
 };

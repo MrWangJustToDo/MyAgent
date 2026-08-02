@@ -1,11 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createState, toRaw } from "reactivity-store";
 
 import { useAgent } from "./use-agent.js";
 
-import type { TokenUsage } from "@my-agent/core";
-
-type AgentRef = NonNullable<ReturnType<typeof useAgent.getReadonlyState>["agent"]>;
+import type { AgentSession, TokenUsage, UsageChangeSnapshot } from "@my-agent/core";
 
 export interface AgentUsageSnapshot {
   total: TokenUsage;
@@ -17,20 +15,17 @@ export interface AgentUsageSnapshot {
 
 export interface AgentUsageView {
   version: number;
-  agent: AgentRef | null;
+  session: AgentSession | null;
   usage: AgentUsageSnapshot | null;
 }
 
-const readUsage = (agent: AgentRef): AgentUsageSnapshot => {
-  const tracker = agent.usage;
-  return {
-    total: { ...tracker.getTotal() },
-    window: { ...tracker.getWindowUsage() },
-    percent: tracker.getTokenLimitPercent(),
-    tokenLimit: tracker.getTokenLimit(),
-    cost: tracker.getTotalCostUsd(),
-  };
-};
+const toView = (snap: UsageChangeSnapshot): AgentUsageSnapshot => ({
+  total: { ...snap.total },
+  window: { ...snap.window },
+  percent: snap.percent,
+  tokenLimit: snap.tokenLimit,
+  cost: snap.cost,
+});
 
 const usageState = createState(() => ({ version: 0 }), {
   withActions: (s) => ({
@@ -41,29 +36,36 @@ const usageState = createState(() => ({ version: 0 }), {
   withNamespace: "useAgentUsage",
 });
 
-/** Reactive view of {@link ManagedAgent.usage} for footer and slash commands. */
+/** Reactive view of session usage for footer and slash commands. */
 export const useAgentUsage = (): AgentUsageView => {
-  const agent = toRaw(useAgent((s) => s.agent));
+  const session = toRaw(useAgent((s) => s.session));
   const version = usageState((s) => s.version);
+  const [usage, setUsage] = useState<AgentUsageSnapshot | null>(() => {
+    if (!session) return null;
+    return toView(session.getSnapshot().usage);
+  });
 
   useEffect(() => {
-    if (!agent) return;
+    if (!session) {
+      setUsage(null);
+      return;
+    }
 
-    const bump = () => usageState.getActions().bump();
-    return agent.observe({
-      events: ["agent:stop", "prompt:submit"],
-      onEvent: bump,
-    });
-  }, [agent]);
-
-  if (!agent) {
-    return { version, agent: null, usage: null };
-  }
+    setUsage(toView(session.getSnapshot().usage));
+    return session.subscribe(
+      (event) => {
+        if (event.channel !== "usage") return;
+        setUsage(toView(event.payload));
+        usageState.getActions().bump();
+      },
+      { channels: ["usage"] }
+    );
+  }, [session]);
 
   return {
     version,
-    agent,
-    usage: readUsage(agent),
+    session,
+    usage,
   };
 };
 

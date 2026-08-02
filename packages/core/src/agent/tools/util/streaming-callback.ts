@@ -47,7 +47,7 @@ function addScoped<T>(map: Map<string, Set<T>>, agentId: string, callback: T): (
 }
 
 /**
- * @internal Package-internal / `dev.ts` validates. Hosts must use `ManagedAgent.observe({ onStreaming })`.
+ * @internal Package-internal / `dev.ts` validates. Hosts should use AgentSession `streaming` channel.
  */
 export function subscribeStreamingCallback(
   callback: StreamingCallback,
@@ -57,7 +57,7 @@ export function subscribeStreamingCallback(
 }
 
 /**
- * @internal Package-internal / `dev.ts` validates. Hosts must use `ManagedAgent.observe({ onStreamingClear })`.
+ * @internal Package-internal / `dev.ts` validates. Hosts should use AgentSession `streaming` channel.
  */
 export function subscribeStreamingClearCallback(
   callback: StreamingClearCallback,

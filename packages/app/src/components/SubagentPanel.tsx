@@ -1,6 +1,7 @@
-import { agentManager, type ManagedAgent } from "@my-agent/core";
+import { agentManager, sessionForSubagent, type ManagedAgent } from "@my-agent/core";
 import { Box, Text, useInput } from "ink";
 import { useEffect, useMemo, useState } from "react";
+import { toRaw } from "reactivity-store";
 
 import { useAgent } from "../hooks/use-agent.js";
 import { useSubagentPanel } from "../hooks/use-subagent-panel.js";
@@ -137,18 +138,21 @@ const SubagentPanelDetail = ({ subagentId, onBack }: { subagentId: string; onBac
   });
 
   useEffect(() => {
-    const managed = agentManager.getAgent(subagentId);
+    const session = sessionForSubagent(agentManager, subagentId);
+    if (!session) return;
     const bump = () => setTick((n) => n + 1);
-    return managed?.observe({
-      onMessages: bump,
-      events: ["agent:stop"],
-      onEvent: bump,
-    });
+    return session.subscribe(
+      () => {
+        bump();
+      },
+      { channels: ["messages", "usage", "state", "lifecycle"] }
+    );
   }, [subagentId]);
 
   const managed = agentManager.getAgent(subagentId);
+  const childSession = sessionForSubagent(agentManager, subagentId);
   const title = managed ? getTaskLabel(managed) : subagentId;
-  const usage = managed?.usage.getTotal();
+  const usage = childSession?.getSnapshot().usage.total ?? managed?.usage.getTotal();
   const usageLabel = usage && (usage.inputTokens > 0 || usage.outputTokens > 0) ? formatUsageBrief(usage) : null;
 
   return (
@@ -181,6 +185,7 @@ export const SubagentPanel = () => {
   const { openDetail, close, backToList } = useSubagentPanel.getActions();
 
   const rootAgentId = useAgent((s) => (s.agent as { id?: string } | null)?.id);
+  const rootSession = toRaw(useAgent((s) => s.session));
 
   const [listRevision, setListRevision] = useState(0);
 
@@ -197,13 +202,24 @@ export const SubagentPanel = () => {
     if (view === "closed") return;
 
     const refresh = () => setListRevision((n) => n + 1);
-    const root = rootAgentId ? agentManager.getAgent(rootAgentId) : undefined;
-    const unsub = root?.observe({
-      events: ["subagent:created", "subagent:started", "subagent:completed", "subagent:destroyed", "agent:stop"],
-      onEvent: refresh,
-    });
-    return () => unsub?.();
-  }, [view, rootAgentId]);
+    if (!rootSession) return;
+    return rootSession.subscribe(
+      (event) => {
+        if (event.channel !== "lifecycle") return;
+        const type = event.payload.type;
+        if (
+          type === "subagent:created" ||
+          type === "subagent:started" ||
+          type === "subagent:completed" ||
+          type === "subagent:destroyed" ||
+          type === "agent:stop"
+        ) {
+          refresh();
+        }
+      },
+      { channels: ["lifecycle"] }
+    );
+  }, [view, rootAgentId, rootSession]);
 
   const allTasks = useMemo(() => {
     if (!rootAgentId) return [];

@@ -62,7 +62,7 @@ export interface ObserveManagedAgentTarget {
   id: string;
   subscribeState: (listener: () => void) => () => void;
   ui?: Pick<AgentUIChannel, "subscribe" | "getMessages">;
-  log?: Pick<AgentLog, "onLog"> | null;
+  log?: Pick<AgentLog, "on"> | null;
 }
 
 function eventTypeAllowed(type: AgentEventType, filter: AgentEventType[] | "*"): boolean {
@@ -122,7 +122,7 @@ export function observeManagedAgent(
   }
 
   if (handlers.onLog && target.log) {
-    unsubs.push(target.log.onLog(handlers.onLog));
+    unsubs.push(target.log.on("entry", handlers.onLog));
   }
 
   return () => {

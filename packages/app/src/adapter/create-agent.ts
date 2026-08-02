@@ -13,8 +13,13 @@ import type { useAgentContext as useAgentContextType } from "../hooks/use-agent-
 import type { useAgentLog as useAgentLogType } from "../hooks/use-agent-log.js";
 import type { useAgent as useAgentType } from "../hooks/use-agent.js";
 import type { useTodoManager as useTodoManagerType } from "../hooks/use-todo-manager.js";
-import type { ManagedAgent } from "@my-agent/core";
+import type { AgentSession, ManagedAgent } from "@my-agent/core";
 import type { UIMessage } from "@tanstack/ai";
+
+/** Wire LocalAgentSession into the app store (call after `initChat`). */
+export function bindAgentSession(session: AgentSession | null, hooks: Pick<AdapterHooks, "useAgent">): void {
+  hooks.useAgent.getActions().setSession(session);
+}
 
 export interface AdapterHooks {
   useAgent: typeof useAgentType;
@@ -80,13 +85,9 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
   const { useAgent, useAgentLog, useAgentContext, useTodoManager } = hooks;
 
   const todoManager = agent.getTodoManager();
-  if (todoManager) {
-    todoManager.onChange(() => {
-      useTodoManager.getActions().refresh();
-    });
-  }
 
   useAgent.getActions().setAgent(agent);
+  useAgent.getActions().setSession(null);
   useAgentLog.getActions().setLog(toRaw(agent.getLog()));
   useAgentContext.getActions().setContext(toRaw(agent.getContext()));
   useTodoManager.getActions().setManager(toRaw(todoManager ?? null));
@@ -112,6 +113,7 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
 export function clearAdapterHooks(hooks: AdapterHooks): void {
   clearExtensionCommands();
   hooks.useAgent.getActions().setAgent(null);
+  hooks.useAgent.getActions().setSession(null);
   hooks.useAgentLog.getActions().setLog(null);
   hooks.useAgentContext.getActions().setContext(null);
   hooks.useTodoManager.getActions().setManager(null);

@@ -49,6 +49,12 @@ if (remote) {
   registerCoreEnv(createNodeEnv({ rootPath: process.cwd(), sandbox: useOsSandbox }));
 }
 
+if (appConfig.agentRemote) {
+  // Agent plane remote is distinct from CoreEnv `--remote`. Full HttpAgentSessionClient
+  // chat wiring can bind via `@my-agent/server/agent-session` when hosts opt in.
+  console.log(`[cli] Agent Session remote configured: ${appConfig.agentRemote}`);
+}
+
 configureEnv({ allowNonBrowserUpdates: true });
 
 await initConfig(appConfig);

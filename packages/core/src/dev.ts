@@ -18,6 +18,15 @@ export { AgentEventBus } from "./managers/agent-event-bus.js";
 export { attachEventLogBridge } from "./managers/event-log-bridge.js";
 export { emitAgentEvent } from "./managers/emit-agent-event.js";
 export { AgentLog } from "./agent/agent-log/agent-log.js";
+export { Emitter } from "./utils/emitter.js";
+export { UsageTracker } from "./managers/usage-tracker.js";
+export {
+  AGENT_SESSION_CHANNELS,
+  DEFAULT_AGENT_SESSION_CHANNELS,
+  DEFAULT_SESSION_LIFECYCLE_EVENTS,
+  createLocalAgentSession,
+  sessionForSubagent,
+} from "./agent-session";
 export { AgentUIChannel } from "./agent/ui-channel.js";
 export { AgentChatController } from "./managers/agent-chat-controller.js";
 export { PendingMessageQueue } from "./agent/utils/pending-message-queue.js";

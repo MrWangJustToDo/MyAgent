@@ -33,26 +33,21 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Hosts: CLI (@my-agent/cli)  │  Extension (@my-agent/extension)   │
-│   registerCoreEnv(node|remote)                                  │
-│   @my-agent/app: createAgentFromConfig → useAgentChat           │
+│ Hosts: CLI / Extension                                           │
+│   AgentSession (Local or HTTP) ← preferred host API              │
+│   registerCoreEnv(node|remote) — workspace plane (separate)      │
 └────────────────────────────┬────────────────────────────────────┘
-                             │ AgentChatController → runAgentStream
+                             │ getSnapshot / dispatch / subscribe
 ┌────────────────────────────▼────────────────────────────────────┐
 │ @my-agent/core                                                  │
-│  AgentManager ──► ManagedAgent (composition root)               │
-│    ├─ AgentContext      (LLM message store + compaction state)  │
-│    ├─ SessionService    (persistence orchestration)             │
-│    ├─ MemoryService     (prefetch / turn context / extraction)  │
-│    ├─ RunCoordinator    (abort, reactive compact retries)       │
-│    ├─ UsageTracker      (tokens, cost, window usage)            │
-│    ├─ AgentLog          (debug log + UI notifications)          │
-│    └─ AgentRunner       (TanStack chat + middleware)              │
-│  AgentEventBus ──► Event→Log bridge (lifecycle notify only)             │
+│  AgentSession ← Domain Emitters + filtered AgentEventBus         │
+│  AgentManager ──► ManagedAgent (run semantics unchanged)         │
+│  AgentEventBus ──► Event→Log (lifecycle telemetry)               │
 └────────────────────────────┬────────────────────────────────────┘
-                             │ CoreEnv interface
+                             │
 ┌────────────────────────────▼────────────────────────────────────┐
-│ @my-agent/node (local)  │  @my-agent/server (remote HTTP RPC)   │
+│ Workspace: node | server /api/fs|command…                        │
+│ Agent HTTP: server /api/agent/* (Session REST + SSE)             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -304,7 +299,7 @@ managed.isToolNeedsApproval(toolName)  // managed-agent.ts
 | Step | Location |
 |------|----------|
 | Chat session | **core** `AgentChatController` — `StreamProcessor` + `pumpToolPhases()` |
-| App hook | `use-agent-chat.ts` — controller messages + `ManagedAgent.observe({ onState })` |
+| App hook | `use-agent-chat.ts` — `AgentSession` dispatch + subscribe (`messages` / `queues` / `state`) |
 | Detect pending approval (UI) | `use-agent-chat.ts` — `isPendingToolApproval()` for keyboard / input mode |
 | Agent status | **core** `approval` middleware — not app |
 | UI | `ToolCallPartView.tsx`, `Footer.tsx` |
@@ -621,9 +616,13 @@ managed.emitEvent(type, data)
 | L3 | `observe({ onMessages, onStreaming })` | Message/stream data — not lifecycle events |
 | L4 | `ExtensionEventBus` / ExtensionUI `ui.subscribe` | Intercept/transform + typed UI channels; not part of `observe` |
 
-**Host observation API:** `managed.observe({ onState, onEvent, onStreaming, onMessages })` is the only supported per-agent subscribe path for L1–L3. App hooks go through `observe`. Streaming subscribe helpers are not exported from `@my-agent/core` (package-internal / `dev.ts` for validates). `agentManager.on` remains for process-wide bus listeners. ExtensionUI typed `ui.subscribe` stays L4.
+**Host observation API (legacy / advanced):** `managed.observe({ onState, onEvent, onStreaming, onMessages })` remains for advanced tooling. **Preferred host path:** `AgentSession` (`createLocalAgentSession` / HTTP client) — `getSnapshot` / `dispatch` / `subscribe(channels)`.
 
-Streaming chunks are scoped by required `agentId`; hosts receive them only via `observe({ onStreaming })`.
+Internal domain updates use a typed `Emitter` (todos, usage, L1 state, queues, plan, UI messages, log). Session channels project from those emitters; `lifecycle` projects a filtered `AgentEventBus` set. Structured `log` is an opt-in session channel (not in default subscribe).
+
+**TODO(messages-incremental):** Session delivers full `UIMessage[]` on snapshot and the `messages` channel; JSON-patch / delta delivery is deferred.
+
+Streaming chunks are scoped by required `agentId`; Session `streaming` channel (or advanced `observe({ onStreaming })`) receives them.
 
 ### 8.3 Event types (summary)
 

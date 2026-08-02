@@ -13,6 +13,10 @@
     "./client": {
       "types": "./dist/client.d.mts",
       "import": "./dist/client.mjs"
+    },
+    "./agent-session": {
+      "types": "./dist/agent-session-client.d.mts",
+      "import": "./dist/agent-session-client.mjs"
     }
   },
   "bin": {
@@ -26,7 +30,8 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "start": "node dist/index.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "validate:agent-session-http": "pnpm run build && node scripts/validate-agent-session-http.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.14",

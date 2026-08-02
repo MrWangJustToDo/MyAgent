@@ -387,9 +387,17 @@ Use section separators in large files:
 - **@heroui/react** — UI component library
 - **tailwindcss** (v4.x) — CSS framework
 
+## Agent Session API (host-facing)
+
+Hosts should prefer `AgentSession` (`getSnapshot` / `dispatch` / `subscribe`) over reading `ManagedAgent` fields. Local: `createLocalAgentSession`. HTTP: `@my-agent/server/agent-session` against `/api/agent/*`. Subagents reuse the same Session contract by id.
+
+Internal domain updates use a typed `Emitter` (todos, usage, state, queues, plan, messages, log). Session channels project from Emitters; `lifecycle` projects a filtered `AgentEventBus` set. Opt-in `log` channel is excluded from default subscribe. `ManagedAgent.observe()` remains advanced/internal.
+
+**TODO:** message channel currently delivers full `UIMessage[]` (incremental/patch later).
+
 ## CoreEnv Server (Remote Mode)
 
-The `@my-agent/server` package exposes CoreEnv APIs over HTTP using Hono RPC for end-to-end type safety.
+The `@my-agent/server` package exposes CoreEnv APIs over HTTP using Hono RPC for end-to-end type safety. Agent Session routes are a **separate plane** under `/api/agent/*` (not CoreEnv).
 
 ### Server Routes
 
@@ -406,6 +414,11 @@ The `@my-agent/server` package exposes CoreEnv APIs over HTTP using Hono RPC for
 | `/api/mcp/init` | POST | Create a new MCP stdio process session |
 | `/api/mcp/:id/message` | POST | Send a JSON-RPC message to an MCP session |
 | `/api/mcp/:id` | DELETE | Clean up an MCP stdio process session |
+| `/api/agent` | POST | Create/bind AgentSession |
+| `/api/agent/:id/snapshot` | GET | AgentSession snapshot (root or subagent id) |
+| `/api/agent/:id/command` | POST | `dispatch(command)` |
+| `/api/agent/:id/events` | GET | SSE session channels |
+| `/api/agent/:id` | DELETE | Close session |
 
 ### Client Usage
 

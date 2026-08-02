@@ -156,16 +156,19 @@ const ContextBar = ({
   steerCount: number;
   followUpCount: number;
 }) => {
-  // ManagedAgent mutates fields in place; useAgent primitive selectors stay stale.
-  // Subscribe to agent state and read duration/error from the live agent ref.
+  // Prefer session `state` channel; duration still lives on ManagedAgent.
   const agent = useAgent((s) => s.agent) as ManagedAgent | null;
+  const session = toRaw(useAgent((s) => s.session));
   const [agentTick, setAgentTick] = useState(0);
   useEffect(() => {
-    if (!agent) return;
-    return toRaw(agent).observe({
-      onState: () => setAgentTick((n) => n + 1),
-    });
-  }, [agent]);
+    if (!session) return;
+    return session.subscribe(
+      () => {
+        setAgentTick((n) => n + 1);
+      },
+      { channels: ["state"] }
+    );
+  }, [session]);
   const lastRunDurationMs = agentTick >= 0 ? agent?.lastStreamDurationMs || 0 : 0;
   const _error = agent?.error || "";
 
@@ -271,20 +274,18 @@ const StatusBar = () => {
   const model = useConfig((s) => s.config.model);
   const { version } = useAgentUsage();
   const agent = useAgent((s) => s.agent) as ManagedAgent | null;
+  const session = toRaw(useAgent((s) => s.session));
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    if (!agent) return;
-    const raw = toRaw(agent);
-    const unsubState = raw.observe({
-      onState: () => setTick((n) => n + 1),
-    });
-    const unsubTodos = raw.getTodoManager()?.onChange(() => setTick((n) => n + 1));
-    return () => {
-      unsubState();
-      unsubTodos?.();
-    };
-  }, [agent]);
+    if (!session) return;
+    return session.subscribe(
+      () => {
+        setTick((n) => n + 1);
+      },
+      { channels: ["state", "plan", "todos"] }
+    );
+  }, [session]);
 
   // tick forces re-read when plan phase / auto mode / todos change
   void tick;

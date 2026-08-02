@@ -10,37 +10,42 @@ import { COLORS } from "../theme/colors.js";
 import { markdownTheme } from "../theme/markdown-theme.js";
 import { KeyLabel } from "../utils/keyboard-labels.js";
 
-import type { ManagedAgent } from "@my-agent/core";
+import type { PlanModeState } from "@my-agent/core";
 
 /**
  * Ready-state banner: Build/revise hints + optional full-plan markdown preview.
  * Toggle preview with {@link KeyLabel.p} when the chat input is empty (wired in keybindings).
  */
 export const PlanReadyBanner = () => {
-  const agent = useAgent((s) => s.agent) as ManagedAgent | null;
-  const [tick, setTick] = useState(0);
+  const session = toRaw(useAgent((s) => s.session));
+  const [plan, setPlan] = useState<PlanModeState | null>(() => session?.getSnapshot().plan ?? null);
   const previewOpen = usePlanPreview((s) => s.open);
   const width = useSize((s) => s.state.screenWidth);
 
   useEffect(() => {
-    if (!agent) return;
-    return toRaw(agent).observe({
-      onState: () => setTick((n) => n + 1),
-    });
-  }, [agent]);
+    if (!session) {
+      setPlan(null);
+      return;
+    }
+    setPlan(session.getSnapshot().plan);
+    return session.subscribe(
+      (event) => {
+        if (event.channel === "plan") {
+          setPlan(event.payload);
+        }
+      },
+      { channels: ["plan"] }
+    );
+  }, [session]);
 
   useEffect(() => {
-    if (tick < 0 || !agent) return;
-    const phase = agent.getPlanModeState().phase;
-    if (phase !== "ready" && previewOpen) {
+    if (!plan) return;
+    if (plan.phase !== "ready" && previewOpen) {
       usePlanPreview.getActions().hide();
     }
-  }, [agent, tick, previewOpen]);
+  }, [plan, previewOpen]);
 
-  if (tick < 0 || !agent) return null;
-
-  const plan = agent.getPlanModeState();
-  if (plan.phase !== "ready") return null;
+  if (!plan || plan.phase !== "ready") return null;
 
   const steps = plan.steps.length;
   const path = plan.planFilePath ? ` · ${plan.planFilePath}` : "";

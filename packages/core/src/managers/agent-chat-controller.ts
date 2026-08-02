@@ -16,6 +16,7 @@ import {
   needsToolPhaseContinue,
   shouldContinueAgentPump,
 } from "../agent/utils/tool-phase-utils.js";
+import { Emitter } from "../utils/emitter.js";
 
 import { isActiveStatus } from "./agent-status.js";
 
@@ -51,7 +52,7 @@ export class AgentChatController {
 
   private readonly steeringQueue = new PendingMessageQueue<QueuedMessageContent>();
   private readonly followUpQueue = new PendingMessageQueue<QueuedMessageContent>();
-  private readonly queueListeners = new Set<QueueUpdateListener>();
+  private readonly queueEvents = new Emitter<{ change: QueuedMessagesSnapshot }>();
 
   constructor(
     private readonly managed: ManagedAgent,
@@ -119,12 +120,14 @@ export class AgentChatController {
     };
   }
 
-  subscribeQueuedMessages(listener: QueueUpdateListener): () => void {
-    this.queueListeners.add(listener);
+  /**
+   * Subscribe to typed queue events (`change` carries steer/followUp snapshot).
+   * Fires the current snapshot immediately on subscribe.
+   */
+  on(type: "change", listener: (snapshot: QueuedMessagesSnapshot) => void): () => void {
+    const unsub = this.queueEvents.on(type, listener);
     listener(this.getQueuedMessages());
-    return () => {
-      this.queueListeners.delete(listener);
-    };
+    return unsub;
   }
 
   clearQueuedMessages(): QueuedMessagesSnapshot {
@@ -191,10 +194,7 @@ export class AgentChatController {
   }
 
   private notifyQueueListeners(): void {
-    const snapshot = this.getQueuedMessages();
-    for (const listener of this.queueListeners) {
-      listener(snapshot);
-    }
+    this.queueEvents.emit("change", this.getQueuedMessages());
   }
 
   private enqueueRun(): Promise<void> {

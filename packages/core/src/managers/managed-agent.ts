@@ -14,6 +14,7 @@ import {
 import { defineServerTool } from "../agent/tools/tanstack/define-tool.js";
 import { generateId } from "../agent/utils.js";
 import { getEnv } from "../env.js";
+import { Emitter } from "../utils/emitter.js";
 
 import { AgentChatController } from "./agent-chat-controller.js";
 import { createAgentStatusController, type AgentStatusController } from "./agent-status-controller.js";
@@ -85,6 +86,13 @@ export { DEFAULT_OBSERVE_EVENTS } from "./managed-agent-observe.js";
 
 export type { RunFinalizeReason } from "./agent-types.js";
 
+/** L1 runtime status surface projected to AgentSession `state` channel. */
+export interface AgentL1State {
+  status: AgentStatus;
+  error: string;
+  pendingApprovalCount: number;
+}
+
 export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
   id?: string;
   name: string;
@@ -142,7 +150,11 @@ export class ManagedAgent {
   /** Tools awaiting user approval in the current run (set by approval middleware). */
   pendingApprovalCount = 0;
 
-  private readonly stateListeners = new Set<() => void>();
+  private readonly stateEvents = new Emitter<{
+    change: AgentL1State;
+    /** Fired when {@link setUIChannel} attaches/clears the UI channel. */
+    ui: AgentUIChannel | undefined;
+  }>();
 
   /** Composed services — each owns only its domain state */
   readonly usage: UsageTracker;
@@ -364,23 +376,40 @@ export class ManagedAgent {
     );
   }
 
-  /** @internal Used by {@link observe}; hosts must use `observe({ onState })`. */
-  private subscribeState(listener: () => void): () => void {
-    this.stateListeners.add(listener);
-    listener();
-    return () => {
-      this.stateListeners.delete(listener);
+  /** L1 status snapshot for Emitter / Session projection. */
+  getL1State(): AgentL1State {
+    return {
+      status: this._status,
+      error: this.error,
+      pendingApprovalCount: this.pendingApprovalCount,
     };
   }
 
-  private emitStateChange(): void {
-    for (const listener of this.stateListeners) {
-      try {
-        listener();
-      } catch {
-        // Ignore listener errors
-      }
+  /**
+   * Typed domain events for this agent:
+   * - `change` — L1 status/error/pendingApproval (fires current snapshot on subscribe)
+   * - `ui` — UI channel attach/clear
+   *
+   * Hosts should prefer AgentSession channels.
+   */
+  on<K extends "change" | "ui">(
+    type: K,
+    listener: (payload: K extends "change" ? AgentL1State : AgentUIChannel | undefined) => void
+  ): () => void {
+    const unsub = this.stateEvents.on(type, listener as (payload: AgentL1State | AgentUIChannel | undefined) => void);
+    if (type === "change") {
+      (listener as (payload: AgentL1State) => void)(this.getL1State());
     }
+    return unsub;
+  }
+
+  /** @internal Used by {@link observe}; hosts must use AgentSession or `observe({ onState })`. */
+  private subscribeState(listener: () => void): () => void {
+    return this.on("change", () => listener());
+  }
+
+  private emitStateChange(): void {
+    this.stateEvents.emit("change", this.getL1State());
   }
 
   emitEvent(
@@ -963,6 +992,7 @@ export class ManagedAgent {
   /** @internal Wire chat / subagent UI channel (hosts read via {@link ui}). */
   setUIChannel(ui: AgentUIChannel | undefined): void {
     this._ui = ui;
+    this.stateEvents.emit("ui", ui);
   }
 }
 

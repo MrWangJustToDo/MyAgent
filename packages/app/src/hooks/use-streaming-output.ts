@@ -5,7 +5,7 @@
  * consumer via {@link UseStreamingOutputOptions.throttleMs}.
  */
 
-import { agentManager } from "@my-agent/core";
+import { agentManager, createLocalAgentSession } from "@my-agent/core";
 import { useEffect } from "react";
 
 import { clearStreamingIngest, ingestStreamingChunk, registerStreamingThrottle } from "./streaming-ingest.js";
@@ -49,17 +49,22 @@ function acquireStreamingBridge(agentId: string): boolean {
     return true;
   }
 
-  const agent = agentManager.getAgent(agentId);
-  if (!agent) return false;
+  const managed = agentManager.getAgent(agentId);
+  if (!managed) return false;
 
-  const unsubscribe = agent.observe({
-    onStreaming: ({ toolCallId, type, chunk }) => {
-      ingestStreamingChunk(toolCallId, type, chunk);
+  const session = createLocalAgentSession({ managed, manager: agentManager });
+  const unsubscribe = session.subscribe(
+    (event) => {
+      if (event.channel !== "streaming") return;
+      if (event.payload.kind === "chunk") {
+        const { toolCallId, type, chunk } = event.payload.chunk;
+        ingestStreamingChunk(toolCallId, type, chunk);
+        return;
+      }
+      clearStreamingIngest(event.payload.toolCallId);
     },
-    onStreamingClear: (toolCallId) => {
-      clearStreamingIngest(toolCallId);
-    },
-  });
+    { channels: ["streaming"] }
+  );
 
   bridges.set(agentId, {
     refCount: 1,

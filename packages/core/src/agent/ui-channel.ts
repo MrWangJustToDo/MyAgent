@@ -4,6 +4,8 @@
 
 import { StreamProcessor } from "@tanstack/ai";
 
+import { Emitter } from "../utils/emitter.js";
+
 import {
   getSummaryStreamText,
   resolveTaskRunPhase,
@@ -17,6 +19,10 @@ import { applyToolDenialReason } from "./utils/apply-tool-denial-reason.js";
 import { stripEmptyAssistantShells } from "./utils/empty-assistant-shell.js";
 
 import type { StreamChunk, StreamProcessorEvents, UIMessage as TanStackUIMessage, ContentPart } from "@tanstack/ai";
+
+type UIChannelEvents = {
+  messages: TanStackUIMessage[];
+};
 
 // ============================================================================
 // Types
@@ -70,7 +76,7 @@ function readTextMessageId(chunk: StreamChunk): string | undefined {
  */
 export class AgentUIChannel {
   private readonly processor: StreamProcessor;
-  private readonly messageListeners = new Set<MessageListener>();
+  private readonly messageEvents = new Emitter<UIChannelEvents>();
   private readonly approvalListeners = new Set<ApprovalListener>();
   private readonly customEventListeners = new Set<UICustomEventListener>();
   private parentTaskToolCallId?: string;
@@ -142,11 +148,13 @@ export class AgentUIChannel {
     this.processor.addToolResult(toolCallId, output, error);
   }
 
+  /** Subscribe to typed UI events (`messages` carries full UIMessage[]). */
+  on<K extends keyof UIChannelEvents>(type: K, listener: (payload: UIChannelEvents[K]) => void): () => void {
+    return this.messageEvents.on(type, listener);
+  }
+
   subscribe(listener: MessageListener): () => void {
-    this.messageListeners.add(listener);
-    return () => {
-      this.messageListeners.delete(listener);
-    };
+    return this.messageEvents.on("messages", listener);
   }
 
   subscribeApprovalRequests(listener: ApprovalListener): () => void {
@@ -259,14 +267,7 @@ export class AgentUIChannel {
 
   private handleMessagesChange(messages: TanStackUIMessage[]): void {
     this.onUpdate?.(messages);
-
-    for (const listener of this.messageListeners) {
-      try {
-        listener(messages);
-      } catch {
-        // Ignore listener errors
-      }
-    }
+    this.messageEvents.emit("messages", messages);
 
     if (!this.parentTaskToolCallId) return;
 

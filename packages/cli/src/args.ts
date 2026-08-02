@@ -87,7 +87,10 @@ const getEnv = (key: string, fallback: string = ""): string => process.env[key] 
 // ============================================================================
 
 export interface ParsedCliConfig extends Partial<AppConfig> {
+  /** CoreEnv workspace remote URL (`--remote` / REMOTE). */
   remote?: string;
+  /** Agent Session HTTP remote URL (`--agent-remote` / AGENT_REMOTE). */
+  agentRemote?: string;
 }
 
 export function parseCliArgs(argv: string[]): ParsedCliConfig {
@@ -127,6 +130,10 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
   const remoteFlag = getFlag(parsed, "remote", "R");
   const remote = typeof remoteFlag === "string" ? remoteFlag : envRemote || undefined;
 
+  const envAgentRemote = getEnv("AGENT_REMOTE") || getEnv("AGENT_REMOTE_URL");
+  const agentRemoteFlag = getFlag(parsed, "agent-remote");
+  const agentRemote = typeof agentRemoteFlag === "string" ? agentRemoteFlag : envAgentRemote || undefined;
+
   // Extra dirs from CLI only; `AGENT_EXTENSION_DIRS` is read in core `getDefaultExtensionDirs`.
   const extensionDirsRaw = getFlagString(parsed, "", "extension-dirs", "extension-dir");
   const extensionDirs = extensionDirsRaw
@@ -148,6 +155,7 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
     continueSession: getFlagBoolean(parsed, "continue", "c"),
     resumeSession,
     remote,
+    agentRemote,
     ...(modelInfo ? { modelInfo } : {}),
   };
 }

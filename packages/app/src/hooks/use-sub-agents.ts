@@ -8,14 +8,22 @@ import type { ManagedAgent } from "@my-agent/core";
 
 /** Look up the subagent for a parent task tool call via `parentTaskId`. */
 const getManagerSubagent = (taskId: string): ManagedAgent | undefined => {
-  const id = useAgent.getReadonlyState().agent?.id;
-  if (!id || !taskId) return;
+  const parentId = useAgent.getReadonlyState().agent?.id;
+  if (!parentId || !taskId) return;
 
-  return agentManager.getSubagents(id).find((managed) => managed.parentTaskId === taskId);
+  const fromSnapshot = useAgent
+    .getReadonlyState()
+    .session?.getSnapshot()
+    .subagents.find((entry) => entry.parentTaskToolCallId === taskId);
+  if (fromSnapshot) {
+    return agentManager.getAgent(fromSnapshot.id);
+  }
+
+  return agentManager.getSubagents(parentId).find((managed) => managed.parentTaskId === taskId);
 };
 
 export const useSubAgents = ({ taskId }: { taskId: string }) => {
-  const parent = toRaw(useAgent((s) => s.agent));
+  const parentSession = toRaw(useAgent((s) => s.session));
   const [agent, setAgent] = useState<ManagedAgent | undefined>(() => getManagerSubagent(taskId));
 
   useEffect(() => {
@@ -25,18 +33,20 @@ export const useSubAgents = ({ taskId }: { taskId: string }) => {
       return;
     }
 
-    if (!parent) return;
+    if (!parentSession) return;
 
-    return parent.observe({
-      events: ["subagent:created"],
-      onEvent: (event) => {
-        const managed = agentManager.getAgent(event.agentId);
+    return parentSession.subscribe(
+      (event) => {
+        if (event.channel !== "lifecycle") return;
+        if (event.payload.type !== "subagent:created") return;
+        const managed = agentManager.getAgent(event.payload.agentId);
         if (managed?.parentTaskId === taskId) {
           setAgent(managed);
         }
       },
-    });
-  }, [taskId, parent]);
+      { channels: ["lifecycle"] }
+    );
+  }, [taskId, parentSession]);
 
   return agent;
 };

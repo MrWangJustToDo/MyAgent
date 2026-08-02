@@ -1,18 +1,26 @@
-import { agentManager, isActiveStatus } from "@my-agent/core";
+import { agentManager, createLocalAgentSession, isActiveStatus } from "@my-agent/core";
 import { throttle } from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { bindAgentSession } from "../adapter/create-agent.js";
 import { useAdapter } from "../context/adapter-context.js";
 import { isToolCallPart, isPendingToolApproval, parseToolInput } from "../utils/tool-part.js";
 
 import { useAgent } from "./use-agent.js";
 import { useCallbackRef } from "./use-callback-ref.js";
 import { useForceUpdate } from "./use-force-update.js";
+import { useTodoManager } from "./use-todo-manager.js";
 import { getWorkSpaceInfo } from "./use-workspace-info.js";
 
 import type { AppConfig } from "../adapter/types.js";
 import type { Attachment } from "../types/attachment.js";
-import type { AgentChatController, AgentStatus, ManagedAgent, QueuedMessagesSnapshot } from "@my-agent/core";
+import type {
+  AgentChatController,
+  AgentSession,
+  AgentStatus,
+  ManagedAgent,
+  QueuedMessagesSnapshot,
+} from "@my-agent/core";
 import type { ContentPart, UIMessage } from "@tanstack/ai";
 
 // ============================================================================
@@ -115,9 +123,12 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   const [initLoading, setInitLoading] = useState(true);
   const [initError, setInitError] = useState<Error | null>(null);
   const [agent, setAgent] = useState<ManagedAgent | null>(null);
+  const [session, setSession] = useState<AgentSession | null>(null);
   const [chat, setChat] = useState<AgentChatController | null>(null);
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessagesSnapshot>({ steer: [], followUp: [] });
+  const [status, setStatus] = useState<AgentStatus>("idle");
+  const [agentError, setAgentError] = useState("");
 
   const forceUpdate = useForceUpdate({ time: 100 });
   const initIdRef = useRef(0);
@@ -128,19 +139,6 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       useAgent.getActions().setAgent(agent);
     }
   }, [agent]);
-
-  useEffect(() => {
-    if (!agent) return;
-    return agent.observe({
-      onState: () => {
-        forceUpdate();
-        const next = messagesRef.current;
-        if (next.length > 0) {
-          agent.maybeSaveSessionUIMessages(next, "checkpoint");
-        }
-      },
-    });
-  }, [agent, forceUpdate]);
 
   useEffect(() => {
     const currentInitId = ++initIdRef.current;
@@ -159,12 +157,18 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
         const managed = result.agent;
         const controller = managed.initChat(agentManager, (result.initialMessages as UIMessage[] | undefined) ?? []);
+        const localSession = createLocalAgentSession({ managed, manager: agentManager });
+        bindAgentSession(localSession, { useAgent });
 
         setAgent(managed);
         setChat(controller);
+        setSession(localSession);
         const initial = controller.getMessages();
         messagesRef.current = initial;
         setMessages(initial);
+        setStatus(managed.status);
+        setAgentError(managed.error);
+        setQueuedMessages(controller.getQueuedMessages());
         managed.resetSessionSyncTracker(initial);
         managed.syncInteractionStateFromUIMessages(initial);
       } catch (e) {
@@ -184,6 +188,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     void init();
 
     return () => {
+      bindAgentSession(null, { useAgent });
       void adapter.destroy();
     };
   }, [
@@ -199,26 +204,44 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   ]);
 
   useEffect(() => {
-    if (!chat) return;
+    if (!session || !agent) return;
 
     const updateUi = throttle((next: UIMessage[]) => {
       messagesRef.current = next;
       setMessages(next);
-      agent?.maybeSaveSessionUIMessages(next, "checkpoint");
+      agent.maybeSaveSessionUIMessages(next, "checkpoint");
     }, 60);
 
-    const unsubMessages = chat.subscribeMessages(updateUi);
-    const unsubQueue = chat.subscribeQueuedMessages(setQueuedMessages);
+    return session.subscribe(
+      (event) => {
+        if (event.channel === "messages") {
+          updateUi(event.payload);
+          return;
+        }
+        if (event.channel === "queues") {
+          setQueuedMessages(event.payload);
+          return;
+        }
+        if (event.channel === "state") {
+          setStatus(event.payload.status);
+          setAgentError(event.payload.error);
+          forceUpdate();
+          const next = messagesRef.current;
+          if (next.length > 0) {
+            agent.maybeSaveSessionUIMessages(next, "checkpoint");
+          }
+          return;
+        }
+        if (event.channel === "todos") {
+          useTodoManager.getActions().refresh();
+        }
+      },
+      { channels: ["messages", "queues", "state", "todos"] }
+    );
+  }, [session, agent, forceUpdate]);
 
-    return () => {
-      unsubMessages();
-      unsubQueue();
-    };
-  }, [chat, agent, forceUpdate]);
-
-  const status = agent?.status ?? "idle";
-  const error = agent?.error ? new Error(agent.error) : null;
-  const isLoading = agent ? isAgentLoading(agent.status) : false;
+  const error = agentError ? new Error(agentError) : null;
+  const isLoading = isAgentLoading(status);
 
   const saveSessionFromChat = useCallbackRef(() => {
     if (messages.length > 0 && agent) {
@@ -235,49 +258,49 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       const activeSubagents = agentManager.getActiveSubagents(agent.id);
       if (activeSubagents.length > 0) {
         for (const sub of activeSubagents) {
-          sub.abort("user-cancelled");
+          void createLocalAgentSession({ managed: sub, manager: agentManager }).dispatch({ type: "stop" });
         }
         forceUpdate();
         return;
       }
     }
-    chat?.stop();
+    void session?.dispatch({ type: "stop" });
     forceUpdate();
-  }, [agent, chat, forceUpdate]);
+  }, [agent, session, forceUpdate]);
 
   const sendMessage = useCallback(
     async (content: string | SendMessageContent) => {
-      if (!chat) return;
-      await chat.sendMessage(toChatContent(content));
+      if (!session) return;
+      await session.dispatch({ type: "send", content: toChatContent(content) });
       forceUpdate();
     },
-    [chat, forceUpdate]
+    [session, forceUpdate]
   );
 
   const steer = useCallback(
     (content: string | SendMessageContent) => {
-      if (!chat) return;
-      chat.steer(toChatContent(content));
+      if (!session) return;
+      void session.dispatch({ type: "steer", content: toChatContent(content) });
       forceUpdate();
     },
-    [chat, forceUpdate]
+    [session, forceUpdate]
   );
 
   const followUp = useCallback(
     (content: string | SendMessageContent) => {
-      if (!chat) return;
-      chat.followUp(toChatContent(content));
+      if (!session) return;
+      void session.dispatch({ type: "followUp", content: toChatContent(content) });
       forceUpdate();
     },
-    [chat, forceUpdate]
+    [session, forceUpdate]
   );
 
   const clearMessages = useCallback(() => {
-    chat?.clearMessages();
+    void session?.dispatch({ type: "clear" });
     messagesRef.current = [];
     setMessages([]);
     setQueuedMessages({ steer: [], followUp: [] });
-  }, [chat]);
+  }, [session]);
 
   const addToolApprovalResponse = useCallback(
     async (options: {
@@ -288,10 +311,15 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       toolCallId?: string;
       toolName?: string;
     }) => {
-      await chat?.respondToToolApproval(options.id, options.approved, options.reason);
+      await session?.dispatch({
+        type: "respondApproval",
+        approvalId: options.id,
+        approved: options.approved,
+        reason: options.reason,
+      });
       forceUpdate();
     },
-    [chat, forceUpdate]
+    [session, forceUpdate]
   );
 
   const allPendingApproval = useMemo(() => {
@@ -339,18 +367,22 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   const setClientToolWaiting = useCallback(
     (active: boolean) => {
-      agent?.setClientToolWaiting(active);
+      void session?.dispatch({ type: "setClientToolWaiting", active });
       forceUpdate();
     },
-    [agent, forceUpdate]
+    [session, forceUpdate]
   );
 
   const addToolOutput = useCallback(
     async (options: { tool: string; toolCallId: string; output: Record<string, unknown> }) => {
-      await chat?.addToolResult(options.toolCallId, options.output);
+      await session?.dispatch({
+        type: "addToolResult",
+        toolCallId: options.toolCallId,
+        output: options.output,
+      });
       forceUpdate();
     },
-    [chat, forceUpdate]
+    [session, forceUpdate]
   );
 
   return {
@@ -365,7 +397,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     setClientToolWaiting,
     status,
     isLoading,
-    isReady: !initLoading && chat !== null,
+    isReady: !initLoading && session !== null,
     stop,
     clearMessages,
     setMessages: (next) => {

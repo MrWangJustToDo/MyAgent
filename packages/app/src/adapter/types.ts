@@ -1,4 +1,4 @@
-import type { ManagedAgent, ModelInfo, ModelStyle } from "@my-agent/core";
+import type { AgentSession, ManagedAgent, ModelInfo, ModelStyle } from "@my-agent/core";
 import type { UIMessage } from "@tanstack/ai";
 
 // ============================================================================
@@ -24,6 +24,11 @@ export interface AppConfig {
   extensionDirs: string[];
   continueSession: boolean;
   resumeSession: string;
+  /**
+   * Optional Agent Session HTTP base URL (distinct from CoreEnv `--remote`).
+   * When set, hosts may bind {@link AgentSession} via HttpAgentSessionClient.
+   */
+  agentRemote?: string;
   /** Optional model metadata override from MODEL_* env vars */
   modelInfo?: ModelInfo;
 }
@@ -40,6 +45,8 @@ export type CommandResult = { ok: true; message?: string } | { ok: false; error:
 
 export interface InitResult {
   agent: ManagedAgent;
+  /** Set after chat init when LocalAgentSession is wired (see useAgentChat). */
+  session?: AgentSession;
   initialMessages?: UIMessage[];
 }
 

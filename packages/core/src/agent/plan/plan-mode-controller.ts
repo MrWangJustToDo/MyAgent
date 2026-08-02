@@ -1,3 +1,5 @@
+import { Emitter } from "../../utils/emitter.js";
+
 import { extractDoneSteps, extractPlan, type PlanStep } from "./extract-plan.js";
 import { formatStructuredPlanMarkdown, stepsFromTexts, type StructuredPlanInput } from "./plan-format.js";
 import { buildPlanExecuteSteerMessage } from "./plan-prompts.js";
@@ -24,6 +26,10 @@ export interface PlanModeState {
   /** Relative path under `.agents/plans/` when auto-persisted or loaded. */
   planFilePath: string | null;
 }
+
+type PlanModeEvents = {
+  change: PlanModeState;
+};
 
 export interface PlanModeControllerDeps {
   emitEvent: (type: AgentEventType, data?: Record<string, unknown>) => void;
@@ -65,8 +71,19 @@ export class PlanModeController {
   private preservedExistingTodos = false;
   private planFilePath: string | null = null;
   private todoUnsub: (() => void) | null = null;
+  private readonly events = new Emitter<PlanModeEvents>();
 
   constructor(private readonly deps: PlanModeControllerDeps) {}
+
+  /** Subscribe to plan public-state changes. */
+  on<K extends keyof PlanModeEvents>(type: K, listener: (payload: PlanModeEvents[K]) => void): () => void {
+    return this.events.on(type, listener);
+  }
+
+  private notifyChange(): void {
+    this.events.emit("change", this.getState());
+    this.deps.onPhaseChange?.();
+  }
 
   getState(): PlanModeState {
     return {
@@ -112,7 +129,7 @@ export class PlanModeController {
       this.todosSeeded = false;
       this.preservedExistingTodos = false;
       this.planFilePath = null;
-      this.deps.onPhaseChange?.();
+      this.notifyChange();
       return;
     }
 
@@ -142,7 +159,7 @@ export class PlanModeController {
       }
     }
 
-    this.deps.onPhaseChange?.();
+    this.notifyChange();
   }
 
   enable(): void {
@@ -155,7 +172,7 @@ export class PlanModeController {
     this.preservedExistingTodos = false;
     this.planFilePath = null;
     this.deps.emitEvent("plan:enter", { phase: this.phase });
-    this.deps.onPhaseChange?.();
+    this.notifyChange();
   }
 
   disable(): void {
@@ -170,7 +187,7 @@ export class PlanModeController {
     this.preservedExistingTodos = false;
     this.planFilePath = null;
     this.deps.emitEvent("plan:exit", { phase: this.phase });
-    this.deps.onPhaseChange?.();
+    this.notifyChange();
   }
 
   /**
@@ -210,7 +227,7 @@ export class PlanModeController {
       phase: this.phase,
       stepCount: this.steps.length,
     });
-    this.deps.onPhaseChange?.();
+    this.notifyChange();
     return true;
   }
 
@@ -236,7 +253,7 @@ export class PlanModeController {
       replacedExistingTodos: replacedExisting,
       planFilePath: this.planFilePath,
     });
-    this.deps.onPhaseChange?.();
+    this.notifyChange();
     this.maybeEnterRetro();
 
     return {
@@ -330,9 +347,9 @@ export class PlanModeController {
         todosSeeded: seeded,
         planFilePath: this.planFilePath,
       });
-      this.deps.onPhaseChange?.();
+      this.notifyChange();
     } else {
-      this.deps.onPhaseChange?.();
+      this.notifyChange();
     }
 
     return {
@@ -441,7 +458,7 @@ export class PlanModeController {
       stepCount: this.steps.length,
       planFilePath: this.planFilePath,
     });
-    this.deps.onPhaseChange?.();
+    this.notifyChange();
     this.deps.onEnterRetro?.(this.getState());
   }
 
@@ -449,7 +466,7 @@ export class PlanModeController {
     this.detachTodoListener();
     const todoManager = this.deps.getTodoManager();
     if (!todoManager) return;
-    this.todoUnsub = todoManager.onChange(() => {
+    this.todoUnsub = todoManager.on("change", () => {
       this.maybeEnterRetro();
     });
   }

@@ -7,6 +7,7 @@ import "dotenv/config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
+import { agentSessionRoutes } from "./routes/agent-session.js";
 import { commandRoutes } from "./routes/command.js";
 import { envRoutes } from "./routes/env.js";
 import { fetchRoutes } from "./routes/fetch.js";
@@ -32,7 +33,9 @@ const api = new Hono()
   .route("/fs", fsRoutes)
   .route("/command", commandRoutes)
   .route("/fetch", fetchRoutes)
-  .route("/mcp", mcpRoutes);
+  .route("/mcp", mcpRoutes)
+  // Agent plane (AgentSession) — separate from CoreEnv workspace routes above
+  .route("/agent", agentSessionRoutes);
 
 export type AppType = typeof api;
 
@@ -51,8 +54,8 @@ app.use(
       if (origin.includes("localhost") || origin.includes("127.0.0.1")) return origin;
       return "";
     },
-    allowMethods: ["GET", "POST", "OPTIONS"],
-    allowHeaders: ["Content-Type"],
+    allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Accept"],
   })
 );
 

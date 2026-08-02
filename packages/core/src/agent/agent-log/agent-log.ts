@@ -1,6 +1,11 @@
+import { Emitter } from "../../utils/emitter.js";
 import { createSequentialIdGenerator } from "../utils.js";
 
 import type { LogCategory, LogEntry, LogFilter, LogLevel } from "./types.js";
+
+type AgentLogEvents = {
+  entry: LogEntry;
+};
 
 // ============================================================================
 // Log ID Generator
@@ -22,7 +27,7 @@ export const generateLogId = createSequentialIdGenerator("log");
  */
 export class AgentLog {
   private entries: LogEntry[] = [];
-  private listeners: Set<(entry: LogEntry) => void> = new Set();
+  private readonly events = new Emitter<AgentLogEvents>();
   private enabled = true;
   private minLevel: LogLevel = "debug";
   private maxEntries = 10000;
@@ -98,14 +103,7 @@ export class AgentLog {
 
     this.entries.push(entry);
     this.trimEntries();
-
-    for (const listener of this.listeners) {
-      try {
-        listener(entry);
-      } catch {
-        // Ignore listener errors
-      }
-    }
+    this.events.emit("entry", entry);
 
     return entry;
   }
@@ -220,13 +218,13 @@ export class AgentLog {
   // Subscription
   // ============================================================================
 
-  onLog(listener: (entry: LogEntry) => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+  /** Subscribe to typed log events (`entry` carries each new LogEntry). */
+  on<K extends keyof AgentLogEvents>(type: K, listener: (payload: AgentLogEvents[K]) => void): () => void {
+    return this.events.on(type, listener);
   }
 
   toConsole(options?: { minLevel?: LogLevel; categories?: LogCategory[] }): () => void {
-    return this.onLog((entry) => {
+    return this.on("entry", (entry) => {
       if (options?.minLevel && AgentLog.levelPriority[entry.level] < AgentLog.levelPriority[options.minLevel]) {
         return;
       }

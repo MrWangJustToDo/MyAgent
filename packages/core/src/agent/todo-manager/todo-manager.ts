@@ -1,3 +1,4 @@
+import { Emitter } from "../../utils/emitter.js";
 import { generateId, generateShortId } from "../utils.js";
 
 import {
@@ -9,6 +10,10 @@ import {
   type TodoManagerConfig,
   type TodoStatus,
 } from "./types.js";
+
+type TodoManagerEvents = {
+  change: TodoItem[];
+};
 
 // ============================================================================
 // TodoManager ID Generator
@@ -73,8 +78,7 @@ export class TodoManager {
   /** Rounds since last todo update */
   private roundsSinceUpdate = 0;
 
-  /** Event listeners */
-  private changeListeners: Set<(items: TodoItem[]) => void> = new Set();
+  private readonly events = new Emitter<TodoManagerEvents>();
 
   /** Auto-clear timer (when all todos completed) */
   private autoClearTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -309,22 +313,14 @@ export class TodoManager {
   // ============================================================================
 
   /**
-   * Subscribe to todo changes.
+   * Subscribe to typed todo events (`change` carries current items).
    */
-  onChange(listener: (items: TodoItem[]) => void): () => void {
-    this.changeListeners.add(listener);
-    return () => this.changeListeners.delete(listener);
+  on<K extends keyof TodoManagerEvents>(type: K, listener: (payload: TodoManagerEvents[K]) => void): () => void {
+    return this.events.on(type, listener);
   }
 
   private notifyListeners(): void {
-    const items = this.getItems();
-    for (const listener of this.changeListeners) {
-      try {
-        listener(items);
-      } catch {
-        // Ignore listener errors
-      }
-    }
+    this.events.emit("change", this.getItems());
   }
 
   // ============================================================================
