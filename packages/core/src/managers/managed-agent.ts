@@ -21,7 +21,6 @@ import { createAgentStatusController, type AgentStatusController } from "./agent
 import { AgentConfigSchema } from "./agent-types.js";
 import { emitAgentEvent } from "./emit-agent-event.js";
 import { handleManagedReactiveCompact } from "./managed-agent-compact.js";
-import { observeManagedAgent, type AgentObserveHandlers } from "./managed-agent-observe.js";
 import {
   beginPlanExecution as beginPlanExecutionHelper,
   cancelPlanExecution as cancelPlanExecutionHelper,
@@ -76,9 +75,6 @@ import type { AgentUIChannel } from "../agent/ui-channel.js";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
 import type { ModelStyle } from "../models/model-config.js";
 import type { ModelInfo } from "../models/types.js";
-
-export type { AgentObserveHandlers } from "./managed-agent-observe.js";
-export { DEFAULT_OBSERVE_EVENTS } from "./managed-agent-observe.js";
 
 // ============================================================================
 // Config
@@ -354,28 +350,6 @@ export class ManagedAgent {
     this.statusController.applyRunOutcome({ kind: "finished", messages, path: "chat" });
   }
 
-  /**
-   * Host observation path for L1–L3 (+ optional log).
-   * Prefer this over raw bus / streaming registry APIs.
-   * Returns a single idempotent unsubscribe.
-   */
-  observe(handlers: AgentObserveHandlers): () => void {
-    const manager = this.manager;
-    if (!manager) {
-      throw new Error(`Agent "${this.id}" is not registered on an AgentManager`);
-    }
-    return observeManagedAgent(
-      {
-        id: this.id,
-        subscribeState: (listener) => this.subscribeState(listener),
-        ui: this.ui,
-        log: this.log,
-      },
-      handlers,
-      manager
-    );
-  }
-
   /** L1 status snapshot for Emitter / Session projection. */
   getL1State(): AgentL1State {
     return {
@@ -401,11 +375,6 @@ export class ManagedAgent {
       (listener as (payload: AgentL1State) => void)(this.getL1State());
     }
     return unsub;
-  }
-
-  /** @internal Used by {@link observe}; hosts must use AgentSession or `observe({ onState })`. */
-  private subscribeState(listener: () => void): () => void {
-    return this.on("change", () => listener());
   }
 
   private emitStateChange(): void {

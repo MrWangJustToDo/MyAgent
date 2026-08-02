@@ -35,7 +35,6 @@ export type {
   RunAgentStreamInput,
 } from "./managers/agent-manager.js";
 export { ManagedAgent, type ManagedAgentConfig } from "./managers/managed-agent.js";
-export type { AgentObserveHandlers } from "./managers/managed-agent-observe.js";
 export { isActiveStatus } from "./managers/agent-status.js";
 export type { AgentStatus } from "./runtime-types/agent-status.js";
 export { localConnect, createLocalConnect, type LocalConnectManager } from "./connect";

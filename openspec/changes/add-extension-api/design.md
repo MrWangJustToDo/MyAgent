@@ -189,7 +189,7 @@ async function loadExtension(path: string): Promise<ExtensionFactory> {
 
 4. **Phase 4 — Subscription cleanup**:
    - Remove redundant dual subscriptions
-   - Prefer `ManagedAgent.observe` where applicable
+   - Prefer AgentSession subscribe channels where applicable
 
 5. **Phase 5 — ctx.ui API**:
    - Implement `ExtensionUIContext` with notify/setStatus/setWidget/confirm

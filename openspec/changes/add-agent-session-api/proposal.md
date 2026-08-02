@@ -23,7 +23,7 @@ App 层仍通过 `ManagedAgent` / `AgentChatController` / `agentManager` / `Todo
 
 ### Modified Capabilities
 
-- `agent-lifecycle-events`: 明确 hosts **SHALL** 优先经 Agent Session 订阅 UI 相关更新；原始 bus/`observe` 保留为高级/内部路径，并文档化与 session 事件的关系
+- `agent-lifecycle-events`: 明确 hosts **SHALL** 经 Agent Session 订阅 UI 相关更新；域 Emitter / AgentEventBus 为内部路径，并文档化与 session 事件的关系
 
 ## Impact
 

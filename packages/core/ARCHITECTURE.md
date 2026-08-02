@@ -174,9 +174,9 @@ Observation is split into four layers (do not mix interception into the lifecycl
 
 | Layer | Mechanism | Role |
 |-------|-----------|------|
-| L1 Control plane | `AgentStatusController` + `observe({ onState })` | status / error / pendingApproval |
-| L2 Lifecycle bus | `AgentEventBus` → Event→Log (+ advanced `agentManager.on`) | fire-and-forget notify |
-| L3 Data plane | `AgentUIChannel` + scoped streaming via `observe({ onStreaming })` | UIMessages / tool stdout |
+| L1 Control plane | `AgentStatusController` + L1 Emitter → Session `state` | status / error / pendingApproval |
+| L2 Lifecycle bus | `AgentEventBus` → Event→Log (+ Session `lifecycle` / `agentManager.on`) | fire-and-forget notify |
+| L3 Data plane | `AgentUIChannel` + streaming registry → Session `messages` / `streaming` | UIMessages / tool stdout |
 | L4 Interception | `ExtensionEventBus` only | skip / transform tool args |
 
 ### 2.4 Session bootstrap events (`session-bootstrap-events.ts`)
@@ -609,20 +609,20 @@ managed.emitEvent(type, data)
 
 ### 8.2 Observation layers (L1–L4)
 
-| Layer | API | Notes |
-|-------|-----|-------|
-| L1 | `observe({ onState })` | Status machine for UI chrome (`subscribeState` is private) |
-| L2 | `observe({ onEvent })` | Per-agent lifecycle; use advanced `agentManager.on` only for cross-agent / `"*"` telemetry |
-| L3 | `observe({ onMessages, onStreaming })` | Message/stream data — not lifecycle events |
-| L4 | `ExtensionEventBus` / ExtensionUI `ui.subscribe` | Intercept/transform + typed UI channels; not part of `observe` |
+| Layer | Internal | Host |
+|-------|----------|------|
+| L1 | Status controller + ManagedAgent Emitter `change` | Session `state` |
+| L2 | `AgentEventBus` (+ Event→Log) | Session `lifecycle` (filtered); `agentManager.on` for cross-agent / `"*"` |
+| L3 | UIChannel Emitter `messages` + streaming registry | Session `messages` / `streaming` |
+| L4 | `ExtensionEventBus` / ExtensionUI | Not part of AgentSession |
 
-**Host observation API (legacy / advanced):** `managed.observe({ onState, onEvent, onStreaming, onMessages })` remains for advanced tooling. **Preferred host path:** `AgentSession` (`createLocalAgentSession` / HTTP client) — `getSnapshot` / `dispatch` / `subscribe(channels)`.
+**Host observation API:** `AgentSession` only (`createLocalAgentSession` / HTTP client) — `getSnapshot` / `dispatch` / `subscribe(channels)`. Domain classes expose typed `.on(...)` for Session projection and package-internal use; there is no parallel `ManagedAgent.observe()` facade.
 
 Internal domain updates use a typed `Emitter` (todos, usage, L1 state, queues, plan, UI messages, log). Session channels project from those emitters; `lifecycle` projects a filtered `AgentEventBus` set. Structured `log` is an opt-in session channel (not in default subscribe).
 
 **TODO(messages-incremental):** Session delivers full `UIMessage[]` on snapshot and the `messages` channel; JSON-patch / delta delivery is deferred.
 
-Streaming chunks are scoped by required `agentId`; Session `streaming` channel (or advanced `observe({ onStreaming })`) receives them.
+Streaming chunks are scoped by required `agentId`; Session `streaming` channel receives them.
 
 ### 8.3 Event types (summary)
 
@@ -743,7 +743,7 @@ pnpm --filter @my-agent/core run validate:extensions-middleware
 pnpm --filter @my-agent/core run validate:early-tool-result-ui
 pnpm --filter @my-agent/core run validate:extension-prompt-hooks
 pnpm --filter @my-agent/core run validate:streaming-scope
-pnpm --filter @my-agent/core run validate:agent-observe
+pnpm --filter @my-agent/core run validate:local-agent-session
 pnpm --filter @my-agent/core run validate:tanstack-tools
 pnpm --filter @my-agent/core run validate:compaction-messages
 pnpm --filter @my-agent/core run validate:reactive-compact

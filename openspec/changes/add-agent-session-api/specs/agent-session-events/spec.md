@@ -12,7 +12,7 @@ AgentSession subscription SHALL support distinct channels at least for: `state`,
 - **THEN** usage updates are delivered and a todos-only change does not invoke the subscriber for a todos payload
 
 ### Requirement: Dedicated channels supersede nudge-and-read
-For hosts using AgentSession, updates to usage, todos, plan, messages, and status SHALL be delivered on their dedicated channels with payloads sufficient to update UI without reading `ManagedAgent` fields. Those channels SHALL be projected from the internal domain Emitter streams (see `agent-internal-emitter`). The session layer MUST NOT require a parallel `observe({ onState })` plus direct field read for those concerns.
+For hosts using AgentSession, updates to usage, todos, plan, messages, and status SHALL be delivered on their dedicated channels with payloads sufficient to update UI without reading `ManagedAgent` fields. Those channels SHALL be projected from the internal domain Emitter streams (see `agent-internal-emitter`). The session layer MUST NOT require a parallel empty state nudge plus direct field read for those concerns.
 
 #### Scenario: Todos channel carries list
 - **WHEN** the todo manager changes

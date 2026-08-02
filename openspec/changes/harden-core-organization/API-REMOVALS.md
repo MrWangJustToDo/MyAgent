@@ -41,7 +41,7 @@ They remain available to validate scripts via `dist/dev.mjs` / `src/dev.ts` wher
 - `bridgeExternalToolToServer`
 - `buildCanonicalModelMessages`
 
-## Streaming emit (hosts use `ManagedAgent.observe`)
+## Streaming emit (hosts use AgentSession `streaming` channel)
 
 - `clearStreamingOutput`
 - `emitStreamingChunk`

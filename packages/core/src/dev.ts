@@ -215,11 +215,6 @@ export {
   subscribeStreamingCallback,
   subscribeStreamingClearCallback,
 } from "./agent/tools/util/streaming-callback.js";
-export {
-  observeManagedAgent,
-  DEFAULT_OBSERVE_EVENTS,
-  type AgentObserveHandlers,
-} from "./managers/managed-agent-observe.js";
 export { commandJobRegistry } from "./agent/tools/util/command-job-registry.js";
 export type { CommandJobRecord, CommandJobPollResult } from "./agent/tools/util/command-job-registry.js";
 export {

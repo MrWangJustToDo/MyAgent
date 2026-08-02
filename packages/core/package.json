@@ -64,7 +64,6 @@
     "validate:tool-denial-reason": "pnpm run build && node scripts/validate-tool-denial-reason.mjs",
     "validate:streaming-callback": "pnpm run build && node scripts/validate-streaming-callback.mjs",
     "validate:streaming-scope": "pnpm run build && node scripts/validate-streaming-scope.mjs",
-    "validate:agent-observe": "pnpm run build && node scripts/validate-agent-observe.mjs",
     "validate:turn-context": "pnpm run build && node scripts/validate-turn-context.mjs",
     "validate:prompt-cache": "pnpm run build && node scripts/validate-prompt-cache.mjs",
     "validate:extension-prompt-hooks": "pnpm run build && node scripts/validate-extension-prompt-hooks.mjs",

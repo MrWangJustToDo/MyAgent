@@ -3,8 +3,8 @@
 Today:
 
 - **Workspace plane**: CoreEnv (local Node or remote HTTP) — already language-agnostic for fs/shell.
-- **Agent plane**: `ManagedAgent` + `AgentChatController` + `observe()` — in-process only; app holds live objects.
-- `converge-agent-observation` added `ManagedAgent.observe()` for L1–L3, but commands, todos, usage, plan, and chat control remain direct field access.
+- **Agent plane**: `ManagedAgent` + `AgentChatController` — in-process only; app held live objects before Session cutover.
+- Commands, todos, usage, plan, and chat control previously required direct field access alongside ad-hoc subscriptions.
 
 Constraints from product intent:
 
@@ -156,9 +156,9 @@ Unknown commands → typed error result (no throw across HTTP boundary).
 | `plan` | plan public state | PlanMode Emitter `change` |
 | `streaming` | chunk / clear | streaming Emitter (or registry wrap) |
 | `log` (optional) | LogEntry | AgentLog Emitter `entry` |
-| `lifecycle` | filtered AgentEvent | AgentEventBus (default ≈ DEFAULT_OBSERVE_EVENTS minus facts covered by dedicated channels) |
+| `lifecycle` | filtered AgentEvent | AgentEventBus (`DEFAULT_SESSION_LIFECYCLE_EVENTS`; facts covered by dedicated channels omitted) |
 
-**Dedupe rule:** Hosts using Session MUST NOT need `observe()` + field reads for UI data. Dedicated channels are authoritative. `lifecycle` is telemetry / approval / subagent directory — not a second path for usage/todos/plan/status payloads. `log` is opt-in (debug panel / remote console); default chat UI need not subscribe. Do not dual-deliver the same fact as both raw lifecycle and a derived log line on Session unless the host explicitly wants both channels.
+**Dedupe rule:** Hosts using Session MUST NOT need ManagedAgent field reads for UI data. Dedicated channels are authoritative. `lifecycle` is telemetry / approval / subagent directory — not a second path for usage/todos/plan/status payloads. `log` is opt-in (debug panel / remote console); default chat UI need not subscribe. Do not dual-deliver the same fact as both raw lifecycle and a derived log line on Session unless the host explicitly wants both channels.
 
 Optional subscribe filter: `channels?: AgentSessionChannel[]` — omit = all (or document whether `log` is excluded from default “all” — **default: exclude `log` from implicit all**, require explicit `channels: ["log"]`).
 
@@ -183,11 +183,11 @@ Workspace CoreEnv stays on existing `/api/fs|command|...` — **separate base pa
 3. **BREAKING:** remove `ManagedAgent` from `useAgent` public store (keep escape hatch only if needed for commands during transition — prefer none).
 4. Add HTTP server + client; CLI flag / extension URL for remote agent session.
 
-### D8 — Relationship to `observe()` and Emitter
+### D8 — Relationship to Emitter and host API
 
-- **Emitter** = internal source of truth for domain change streams.
-- **`LocalAgentSession.subscribe`** fans in from domain Emitters + filtered AgentEventBus → session channels. Prefer this path over reimplementing fan-in inside `observe()`.
-- **`ManagedAgent.observe()`** remains advanced/compat: either thin-wrap the same Emitters or stay as a secondary facade during migration; app MUST NOT require it after Session cutover.
+- **Emitter** = internal source of truth for domain change streams (domain `.on(...)`).
+- **`LocalAgentSession.subscribe`** fans in from domain Emitters + filtered AgentEventBus → session channels.
+- There is **no** host-facing `ManagedAgent.observe()` facade after Session cutover; hosts use AgentSession only.
 
 ### D9 — Simplicity over generality
 

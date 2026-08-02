@@ -150,7 +150,7 @@ ConnectionGuard(/health) → createRemoteCoreEnv(url) → registerCoreEnv → in
 | UI / state | `AgentContext`, `AgentLog`, `TodoManager`, `SessionStore` |
 | Compaction | `applyCompactionResult`, `autoCompact`, `estimateTokens` |
 | Bootstrap | `buildDefaultSystemPrompt`, `parseModelInfoFromEnv`, `resolveModelConfig` |
-| UI helpers | `previewEdit`, `ManagedAgent.observe({ onStreaming })`, tool output types |
+| UI helpers | `previewEdit`, AgentSession `streaming` channel, tool output types |
 | Adapters | `FileError`, `ExecutionError`, `generateId` |
 
 Internal modules (tools, middleware, subagent runner, hook registry, session-sync / tool-phase helpers, etc.) stay package-private. Core validation scripts import from `dist/dev.mjs` (`src/dev.ts`), which is not part of the published package export map. See `openspec/changes/harden-core-organization/API-REMOVALS.md` for the latest public-entry removals.
@@ -391,7 +391,7 @@ Use section separators in large files:
 
 Hosts should prefer `AgentSession` (`getSnapshot` / `dispatch` / `subscribe`) over reading `ManagedAgent` fields. Local: `createLocalAgentSession`. HTTP: `@my-agent/server/agent-session` against `/api/agent/*`. Subagents reuse the same Session contract by id.
 
-Internal domain updates use a typed `Emitter` (todos, usage, state, queues, plan, messages, log). Session channels project from Emitters; `lifecycle` projects a filtered `AgentEventBus` set. Opt-in `log` channel is excluded from default subscribe. `ManagedAgent.observe()` remains advanced/internal.
+Internal domain updates use a typed `Emitter` (todos, usage, state, queues, plan, messages, log). Hosts subscribe via `AgentSession` channels projected from those Emitters; `lifecycle` projects a filtered `AgentEventBus` set. Opt-in `log` channel is excluded from default subscribe. Domain classes expose `.on(...)` for internal Session projection — not a parallel host observation API.
 
 **TODO:** message channel currently delivers full `UIMessage[]` (incremental/patch later).
 

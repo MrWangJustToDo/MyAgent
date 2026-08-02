@@ -85,7 +85,7 @@ export class AgentManager {
 
   /**
    * Advanced: subscribe to the process-wide lifecycle bus (cross-agent / `"*"` telemetry).
-   * For a single managed agent’s UI wiring, prefer {@link ManagedAgent.observe}.
+   * For a single managed agent’s UI wiring, use AgentSession (`lifecycle` channel).
    *
    * @param type - Event type or `"*"` for all events
    * @param listener - Callback function
