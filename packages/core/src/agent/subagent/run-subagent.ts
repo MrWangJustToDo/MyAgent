@@ -1,14 +1,14 @@
 /**
- * Subagent runner — spawns and executes context-isolated subagents.
+ * Worker-profile runner — spawns and executes context-isolated subagents.
+ * Uses shared `runAgentOnce` for stream consume + detached outcome.
  */
 
+import { ensureUIChannel, runAgentOnce } from "../run/run-agent-skeleton.js";
 import { extractAssistantText } from "../stream/extract-assistant-text.js";
 import { throwOnRunError } from "../stream/stream-errors.js";
 import { clearStreamingOutput } from "../tools/util/streaming-callback.js";
-import { AgentUIChannel } from "../ui-channel.js";
 import { generateId } from "../utils.js";
 
-import { consumeStreamToMessages } from "./consume-stream-to-messages.js";
 import { truncateSummary } from "./output.js";
 import { buildExploreSystemPrompt } from "./prompt.js";
 import { captureStreamFinishReason, deriveSubagentRunStats } from "./run-stats.js";
@@ -16,7 +16,7 @@ import { resolveSubagentBridgeUI, SUBAGENT_DEFAULT_MAX_ITERATIONS } from "./type
 
 import type { SubagentConfig, SubagentResult } from "./types.js";
 import type { AgentManager } from "../../runtime-types/hosts.js";
-import type { ModelMessage, StreamChunk, UIMessage as TanStackUIMessage, UIMessage } from "@tanstack/ai";
+import type { ModelMessage, UIMessage as TanStackUIMessage, UIMessage } from "@tanstack/ai";
 
 export interface SubagentRunDeps {
   manager: AgentManager;
@@ -43,43 +43,6 @@ export function destroySubagent(manager: AgentManager, subagentId: string) {
   manager.destroyAgent(subagentId);
 }
 
-function resolveBridgeUI(config: SubagentConfig): boolean {
-  return resolveSubagentBridgeUI(config);
-}
-
-async function consumeSubagentStream(options: {
-  stream: AsyncIterable<StreamChunk>;
-  bridgeUI: boolean;
-  parentAgentId: string;
-  subagentId: string;
-  parentTaskToolCallId?: string;
-  subagentManaged: NonNullable<ReturnType<AgentManager["getAgent"]>>;
-  channel?: AgentUIChannel;
-}): Promise<UIMessage[]> {
-  const { stream, bridgeUI, parentAgentId, subagentId, parentTaskToolCallId, subagentManaged, channel } = options;
-
-  if (!bridgeUI) {
-    return consumeStreamToMessages(stream);
-  }
-
-  if (!channel) {
-    throw new Error("AgentUIChannel is required when bridgeUI is enabled");
-  }
-
-  return (await channel.consumeRun({
-    stream,
-    parentTaskToolCallId,
-    streamingAgentId: parentAgentId,
-    onUpdate: (updated) => {
-      subagentManaged.emitEvent(
-        "subagent:ui-update",
-        { subagentId, messageCount: updated.length },
-        { parentId: parentAgentId }
-      );
-    },
-  })) as UIMessage[];
-}
-
 async function executeSubagentRun(config: SubagentConfig, manager: AgentManager): Promise<SubagentResult> {
   const {
     subagentId: customId,
@@ -97,7 +60,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     initialMessages,
   } = config;
 
-  const bridgeUI = resolveBridgeUI(config);
+  const bridgeUI = resolveSubagentBridgeUI(config);
   const subagentId = customId ?? generateId("subagent", { exists: (id) => manager.getAgent(id) != null });
   const systemPrompt = customSystemPrompt ?? buildExploreSystemPrompt(maxIterations);
 
@@ -124,7 +87,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
 
   const messages: ModelMessage[] = [...(initialMessages ?? []), { role: "user", content: prompt }];
 
-  let channel: AgentUIChannel | undefined;
+  let channel = undefined;
   if (bridgeUI) {
     const userUIMessage: TanStackUIMessage = {
       id: generateId("msg"),
@@ -137,8 +100,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       clearStreamingOutput(parentTaskToolCallId, { agentId: parentAgentId });
     }
 
-    channel = new AgentUIChannel({ initialMessages: [userUIMessage] });
-    subagentManaged.setUIChannel(channel);
+    channel = ensureUIChannel(subagentManaged, { initialMessages: [userUIMessage] });
   } else {
     subagentManaged.setUIChannel(undefined);
   }
@@ -152,26 +114,44 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
   let previewMessages: UIMessage[] = [];
 
   try {
-    const rawStream = await manager.runAgent(subagentId, { messages, abortSignal });
-    const stream = throwOnRunError(
-      captureStreamFinishReason(rawStream, (reason) => {
-        finishReason = reason;
-      })
-    );
-    previewMessages = await consumeSubagentStream({
-      stream,
-      bridgeUI,
-      parentAgentId,
-      subagentId,
-      parentTaskToolCallId: bridgeUI ? parentTaskToolCallId : undefined,
-      subagentManaged,
+    const result = await runAgentOnce({
+      manager,
+      agentId: subagentId,
+      messages,
+      abortSignal,
+      consume: bridgeUI ? "ui" : "headless",
       channel,
+      parentTaskToolCallId: bridgeUI ? parentTaskToolCallId : undefined,
+      streamingAgentId: bridgeUI ? parentAgentId : undefined,
+      onUpdate: bridgeUI
+        ? (updated) => {
+            subagentManaged.emitEvent(
+              "subagent:ui-update",
+              { subagentId, messageCount: updated.length },
+              { parentId: parentAgentId }
+            );
+          }
+        : undefined,
+      transformStream: (stream) =>
+        throwOnRunError(
+          captureStreamFinishReason(stream, (reason) => {
+            finishReason = reason;
+          })
+        ),
+      // Detached path avoids task-panel ghosts; chat pump applies path:"chat" itself.
+      outcome: { path: "detached", kind: "finished" },
     });
+    previewMessages = result.messages;
     output = extractAssistantText(previewMessages)?.trim() || "(no summary)";
   } catch (err) {
     const managed = manager.getAgent(subagentId);
     if (managed?.status === "aborted") {
       aborted = true;
+      subagentManaged.statusController.applyRunOutcome({
+        kind: "aborted",
+        messages: previewMessages,
+        path: "detached",
+      });
     } else {
       throw err;
     }
@@ -183,15 +163,6 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
   if (aggregateUsageToParent && parentManaged) {
     parentManaged.usage.addTotal(usage);
   }
-
-  // Task tool keeps subagents alive (`autoDestroy: false`) for UI preview.
-  // Main chat finalizes via applyRunOutcome(path: "chat"); subagents must use
-  // path: "detached" or status stays `running` and the task panel lists ghosts.
-  subagentManaged.statusController.applyRunOutcome({
-    kind: aborted ? "aborted" : "finished",
-    messages: previewMessages,
-    path: "detached",
-  });
 
   subagent.emitEvent(
     aborted ? "subagent:error" : "subagent:completed",

@@ -1,3 +1,4 @@
+import { runAgentOnce } from "../agent/run/run-agent-skeleton.js";
 import { extractAssistantText } from "../agent/stream/extract-assistant-text.js";
 import { throwOnRunError } from "../agent/stream/stream-errors.js";
 import { AgentUIChannel } from "../agent/ui-channel.js";
@@ -359,9 +360,16 @@ export class AgentChatController {
     // AbortController is created inside prepareForRun (via runAgentStream) and wired
     // directly into TanStack chat. Do not create a second controller here — that used
     // to leave ManagedAgent.abort() aborting a controller chat was not listening to.
+    // Outcome finalization (path: "chat") stays in pumpToolPhases after the full loop.
     try {
-      const stream = throwOnRunError(this.manager.runAgentStream(this.managed.id, { messages }));
-      await this.channel.consumeRun({ stream });
+      await runAgentOnce({
+        manager: this.manager,
+        agentId: this.managed.id,
+        messages,
+        consume: "ui",
+        channel: this.channel,
+        transformStream: throwOnRunError,
+      });
       if (generation !== this.runGeneration || this.managed.status === "aborted") {
         this.applyCancelledIncompleteTools();
         return;

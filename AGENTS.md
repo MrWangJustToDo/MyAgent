@@ -495,6 +495,8 @@ Cursor-like lifecycle: explore → review → Build → forced retro → complet
 
 The project supports **subagents** — context-isolated agents spawned to handle delegated tasks.
 
+**Run profiles:** InteractiveChat (`AgentChatController` pump) and Worker (`runSubagent`) share `runAgentOnce` / `consumeAgentStream` in `agent/run/run-agent-skeleton.ts`. Workers use outcome path `"detached"`; chat finalizes with `"chat"` after the full pump. Hosts still observe via `AgentSession` only.
+
 ### Subagent Characteristics
 
 | Feature | Behavior |
@@ -509,10 +511,10 @@ The project supports **subagents** — context-isolated agents spawned to handle
 
 ### Subagent UI Preview
 
-`runSubagent({ bridgeUI: true })` attaches an `AgentUIChannel` on `ManagedAgent.ui` for the task panel (`Ctrl+T`).
-Headless runs (`bridgeUI: false`) consume the stream via `StreamProcessor` only and skip UI wiring.
+`runSubagent({ bridgeUI: true })` attaches an `AgentUIChannel` via `ensureUIChannel` for the task panel (`Ctrl+T`).
+Headless runs (`bridgeUI: false`) use `consumeAgentStream({ mode: "headless" })` and skip UI wiring.
 Task-tool subagents use `autoDestroy: false` so the preview stays available; after the stream ends,
-`statusController.applyRunOutcome({ kind, path: "detached", ... })` marks them `completed`/`aborted`
+detached outcome finalization marks them `completed`/`aborted`
 so `getActiveSubagents()` (and the Ctrl+T list) only shows truly active tasks.
 Task spawn ids are always auto-generated via `generateId("subagent", { exists })` — the model
 does not supply an `id` input.
@@ -536,8 +538,10 @@ Only the last text-only step is returned to the parent as the task `summary`.
 
 ```
 packages/core/src/agent/
+├── run/
+│   └── run-agent-skeleton.ts  # runAgentOnce / consumeAgentStream / ensureUIChannel
 ├── subagent/
-│   ├── run-subagent.ts # runSubagent(), getSubagent(), destroySubagent()
+│   ├── run-subagent.ts # Worker profile: runSubagent(), getSubagent(), destroySubagent()
 │   ├── run-stats.ts    # Iteration/limit stats from UI messages + stream
 │   ├── tools.ts      # Read-only tool set for subagents
 │   └── index.ts

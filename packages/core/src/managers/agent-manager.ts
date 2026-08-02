@@ -5,7 +5,7 @@ import { AgentEventBus } from "./agent-event-bus.js";
 import { buildManagedAgent } from "./agent-factory.js";
 import { ACTIVE_STATUSES } from "./agent-status.js";
 import { attachEventLogBridge } from "./event-log-bridge.js";
-import { runManagedAgent, runManagedAgentStream, type RunAgentOptions, type RunAgentStreamInput } from "./run-agent.js";
+import { runManagedAgent, runManagedAgentStream, type RunAgentStreamInput } from "./run-agent.js";
 import { emitSessionBootstrapEvents } from "./session-bootstrap-events.js";
 
 import type { AgentEvent, AgentEventListener, AgentEventType } from "./agent-event-bus.js";
@@ -16,7 +16,7 @@ import type { StreamChunk } from "@tanstack/ai";
 
 export type { AgentEvent, AgentEventListener, AgentEventType } from "./agent-event-bus.js";
 export type { ManagedAgent, ManagedAgentConfig } from "./managed-agent.js";
-export type { RunAgentOptions, RunAgentStreamInput } from "./run-agent.js";
+export type { RunAgentStreamInput } from "./run-agent.js";
 
 // ============================================================================
 // Types & Schemas
@@ -367,14 +367,10 @@ export class AgentManager {
 
   /**
    * Run an agent via TanStack `AgentRunner`.
-   * Returns AG-UI stream chunks; optionally bridges to UIMessages when `bridgeUI` is set.
+   * Returns AG-UI stream chunks. UI consume / outcome finalization use `runAgentOnce`.
    */
-  runAgent(
-    agentId: string,
-    input: RunAgentStreamInput,
-    options?: RunAgentOptions
-  ): Promise<AsyncIterable<StreamChunk>> {
-    return runManagedAgent(this, agentId, input, options);
+  runAgent(agentId: string, input: RunAgentStreamInput): Promise<AsyncIterable<StreamChunk>> {
+    return runManagedAgent(this, agentId, input);
   }
 
   /**

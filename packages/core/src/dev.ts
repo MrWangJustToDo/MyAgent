@@ -79,6 +79,13 @@ export {
 } from "./agent/stream/extract-assistant-text.js";
 export { countSubagentIterations, deriveSubagentRunStats } from "./agent/subagent/run-stats.js";
 export { resolveSubagentBridgeUI } from "./agent/subagent/types.js";
+export {
+  consumeAgentStream,
+  ensureUIChannel,
+  runAgentOnce,
+  type AgentStreamConsumeMode,
+  type RunAgentOnceOutcome,
+} from "./agent/run/run-agent-skeleton.js";
 export { generateId, resetGeneratedIdsForTesting } from "./agent/utils.js";
 export { extractFileOpsFromMessages, formatFileOperations } from "./agent/compaction/file-ops-tracker.js";
 export { applyToolCompact, createToolPlaceholder, ToolCompactCache, toModelOutputRegistry } from "./agent/compaction";

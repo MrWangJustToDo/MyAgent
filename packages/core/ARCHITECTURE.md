@@ -199,7 +199,27 @@ These also map to hook scripts where applicable (`SessionStart`, `Notification`,
 
 ## 3. Session start flow (user prompt → first LLM call)
 
-### 3.1 `runAgentStream` pipeline
+### 3.1 Shared run skeleton + profiles
+
+Inner LLM/tool stream execution is shared. Outer orchestration differs by **profile**:
+
+```
+Shared skeleton (agent/run/run-agent-skeleton.ts)
+  ensureUIChannel? → manager.runAgentStream → consumeAgentStream(ui|headless)
+  → optional applyRunOutcome(path: chat|detached)
+
+InteractiveChat profile (AgentChatController)
+  pumpToolPhases / queues / approvals / session persist
+  → runAgentOnce(consume:"ui") per stream; outcome path "chat" after full pump
+
+Worker profile (runSubagent — task / compact / memory)
+  spawn + tool isolation → runAgentOnce(ui|headless) once
+  → outcome path "detached" (avoids task-panel ghosts)
+```
+
+Host observation remains **AgentSession** only. Future interactive child agents or multiple root sessions can reuse the same skeleton per `ManagedAgent` instance (not implemented here).
+
+### 3.2 `runAgentStream` pipeline
 
 ```
 run-agent.ts: executeManagedAgentRun
@@ -210,7 +230,7 @@ run-agent.ts: executeManagedAgentRun
   runStreamWithRecovery({ run: () => runner.run({ abortController }) })
 ```
 
-### 3.2 `prepareForRun` (`managed-agent.ts`)
+### 3.3 `prepareForRun` (`managed-agent.ts`)
 
 ```
 RunCoordinator.setupAbortController(abortSignal)  // current = run AbortController
@@ -227,7 +247,7 @@ On user cancel, `cancelIncompleteToolCalls` marks truncated / never-executed too
 - `status === "waiting"` (approval pause), or
 - last message is not `user` (tool-phase / approval continuation within the same turn).
 
-### 3.3 Middleware stack (each LLM iteration)
+### 3.4 Middleware stack (each LLM iteration)
 
 Built in `buildAgentRunner` (`run-agent.ts`), order matters.
 Sources: `managers/middleware/*` for run stack; `agent/plan/plan-mode-middleware.ts` for plan gating.
@@ -247,7 +267,7 @@ Sources: `managers/middleware/*` for run stack; `agent/plan/plan-mode-middleware
 TanStack runs tools sequentially but emits batched `TOOL_CALL_END` results only after the whole tool phase. `early-tool-result-ui` calls `AgentUIChannel.addToolResult` in `onAfterToolCall` so finished tools (e.g. the first of two `task` calls) show complete while later tools still run. The later stream chunks re-apply the same output idempotently.
 Status logic is centralized in `AgentStatusController` (`managers/agent-status-controller.ts`). `status-middleware` is the runtime hook for status; `lifecycle-middleware` owns usage and run finalization side-effects. Chat and detached runs converge on `statusController.applyRunOutcome(...)` (see `managers/agent-run-outcome.ts`).
 
-### 3.4 Lifecycle status transitions
+### 3.5 Lifecycle status transitions
 
 | Phase | Status | Trigger |
 |-------|--------|---------|
@@ -744,6 +764,7 @@ pnpm --filter @my-agent/core run validate:early-tool-result-ui
 pnpm --filter @my-agent/core run validate:extension-prompt-hooks
 pnpm --filter @my-agent/core run validate:streaming-scope
 pnpm --filter @my-agent/core run validate:local-agent-session
+pnpm --filter @my-agent/core run validate:run-agent-skeleton
 pnpm --filter @my-agent/core run validate:tanstack-tools
 pnpm --filter @my-agent/core run validate:compaction-messages
 pnpm --filter @my-agent/core run validate:reactive-compact

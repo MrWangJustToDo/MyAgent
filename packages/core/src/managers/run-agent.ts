@@ -5,7 +5,6 @@ import {
 } from "../agent/plan/plan-tools.js";
 import { AgentRunner } from "../agent/runner/agent-runner.js";
 import { resolveToolsRecord, SUBAGENT_EXCLUDED_TOOL_NAMES } from "../agent/tools/tanstack";
-import { AgentUIChannel } from "../agent/ui-channel.js";
 import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
 import { createTextAdapter } from "../models/adapter-factory.js";
 import { DEFAULT_BASE_URLS } from "../models/model-config.js";
@@ -49,12 +48,6 @@ export interface RunAgentStreamInput {
   threadId?: string;
   runId?: string;
   parentRunId?: string;
-}
-
-export interface RunAgentOptions {
-  bridgeUI?: boolean;
-  parentAgentId?: string;
-  parentTaskToolCallId?: string;
 }
 
 // ============================================================================
@@ -283,42 +276,11 @@ export function runManagedAgentStream(
   })();
 }
 
+/** Start a managed agent run and return the AG-UI chunk stream (no UI bridging). */
 export async function runManagedAgent(
   manager: AgentManager,
   agentId: string,
-  input: RunAgentStreamInput,
-  options: RunAgentOptions = {}
+  input: RunAgentStreamInput
 ): Promise<AsyncIterable<StreamChunk>> {
-  const rawStream = await executeManagedAgentRun(manager, agentId, input);
-
-  if (!options.bridgeUI) {
-    return rawStream;
-  }
-
-  const managed = manager.getAgent(agentId);
-  if (!managed) throw new Error(`Agent not found: ${agentId}`);
-
-  return bridgeAgentStream(managed, rawStream);
-}
-
-function ensureUIChannel(managed: ManagedAgent): AgentUIChannel {
-  const existing = managed.ui;
-  if (existing) return existing;
-  const channel = new AgentUIChannel();
-  managed.setUIChannel(channel);
-  return channel;
-}
-
-async function* bridgeAgentStream(
-  managed: ManagedAgent,
-  stream: AsyncIterable<StreamChunk>
-): AsyncIterable<StreamChunk> {
-  const channel = ensureUIChannel(managed);
-
-  for await (const chunk of stream) {
-    channel.processChunk(chunk);
-    yield chunk;
-  }
-
-  channel.finalizeStream();
+  return executeManagedAgentRun(manager, agentId, input);
 }

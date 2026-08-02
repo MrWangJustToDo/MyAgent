@@ -72,7 +72,7 @@ function readTextMessageId(chunk: StreamChunk): string | undefined {
 
 /**
  * Converts agent run streams into observable TanStack {@link UIMessage} snapshots.
- * Main chat uses {@link AgentChatController}; subagent preview uses this directly.
+ * InteractiveChat and Worker UI runs attach this via `ensureUIChannel` / `runAgentOnce`.
  */
 export class AgentUIChannel {
   private readonly processor: StreamProcessor;
