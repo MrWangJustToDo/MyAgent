@@ -20,7 +20,7 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 | Memory (prefetch / extract / consolidate) | **Done** | Post-run extraction only |
 | Tool approval | **Done in core** | `status` middleware + `needsApproval` on tools; app handles UI/keyboard only |
 | Extensions | **Done** | `ExtensionRunner` + `extensions-middleware` + per-turn `before_agent_start` / turn-context providers |
-| Plan mode | **Done** | `PlanModeController` + tool filter + `/plan` in app |
+| Plan mode | **Done** | `PlanModeController` + tool filter + `/plan`; session `planMode` restore; executing auto-approve gated on `todosSeeded` |
 
 **Known gaps**
 
@@ -431,20 +431,20 @@ Set via `ManagedAgentConfig.compaction` in `agent-factory.ts`.
 |------|-------|
 | Directory | `.agents/sessions/` |
 | File | `{sessionId}.session.json` |
-| Schema | `SessionData` v2 (`agent/session/types.ts`) |
+| Schema | `SessionData` v3 (`agent/session/types.ts`; older files omit `planMode`) |
 
-Fields: `uiMessages`, `summaryMessage`, `compactIndex`, `usage`, `cost`, `contextTokens`, `todos`, `modelStyle`, `model`, metadata.
+Fields: `uiMessages`, `summaryMessage`, `compactIndex`, `usage`, `cost`, `contextTokens`, `todos`, `todoPlanBound`, `planMode` (phase/markdown/path/seeded), `modelStyle`, `model`, metadata.
 
 ### 6.2 Write paths (unified persist)
 
 | Trigger | Function | What is saved |
 |---------|----------|---------------|
-| **Run finalizes** (finish / abort / error) | `ManagedAgent.finalizeRun` → `SessionService.persistSession` | Model fields: `summaryMessage`, `compactIndex`, `usage`, `cost`, `contextTokens`, `todos`; auto-title if `"New Session"` |
+| **Run finalizes** (finish / abort / error) | `ManagedAgent.finalizeRun` → `SessionService.persistSession` | Model fields: `summaryMessage`, `compactIndex`, `usage`, `cost`, `contextTokens`, `todos`, `planMode`; auto-title if `"New Session"` |
 | **Pump idle (core)** | `AgentChatController.persistMessages` → `maybeSaveSessionUIMessages(..., "pump-complete")` | Model fields **plus** `uiMessages` when fingerprint changed |
 | **Stable UI checkpoint (app)** | `useAgentChat` subscribe / status → `maybeSaveSessionUIMessages(..., "checkpoint")` | Same as above; skips during `running`/`thinking`/`responding`/`compacting` |
 | **Manual flush** | `saveSessionUIMessages` (`/clear`, slash commands) | Force full persist regardless of streaming |
 
-`SessionSyncTracker` (`agent/session/session-sync-tracker.ts`) fingerprints each `UIMessage` and skips disk writes until a stable checkpoint (new user turn, approval wait, terminal status, or pump complete). Format remains full JSON v2; only write **frequency** is reduced.
+`SessionSyncTracker` (`agent/session/session-sync-tracker.ts`) fingerprints each `UIMessage` and skips disk writes until a stable checkpoint (new user turn, approval wait, terminal status, or pump complete). Format remains full JSON; only write **frequency** is reduced. On restore, `PlanModeController.restoreState` rehydrates phase (and reloads markdown from `planFilePath` when missing). `/clear` / `ManagedAgent.reset` always `planMode.disable()`.
 
 `SessionStore.save`: content-hash dedup, per-session write lock, full JSON overwrite.
 

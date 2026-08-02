@@ -9,6 +9,7 @@ import { runSideTextQuery } from "../models/side-text-query.js";
 import type { EmitAgentEventFn } from "./emit-agent-event.js";
 import type { UsageTracker } from "./usage-tracker.js";
 import type { AgentContext } from "../agent/agent-context";
+import type { PlanModeState } from "../agent/plan/plan-mode-controller.js";
 import type { SessionStore } from "../agent/session/session-store.js";
 import type { SessionData } from "../agent/session/types.js";
 import type { TodoManager } from "../agent/todo-manager";
@@ -19,6 +20,10 @@ export interface SessionPersistInput {
   context: AgentContext;
   usage: UsageTracker;
   todoManager: TodoManager | null;
+  /** Current plan-mode snapshot; null/undefined when off. */
+  planMode?: PlanModeState | null;
+  /** Auto-approve (skip all tool approvals) flag. */
+  autoApprove?: boolean;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   emitEvent?: EmitAgentEventFn;
   uiMessages?: UIMessage[];
@@ -89,7 +94,7 @@ export class SessionService {
    * Persist session model state. Pass `uiMessages` only from the app `useChat` layer.
    */
   persistSession(input: SessionPersistInput): void {
-    const { context, usage, todoManager, resolveTextAdapter, emitEvent, uiMessages } = input;
+    const { context, usage, todoManager, planMode, autoApprove, resolveTextAdapter, emitEvent, uiMessages } = input;
     if (!this.store || !context) return;
     if (!this.data) {
       this.ensureSession();
@@ -109,6 +114,14 @@ export class SessionService {
       this.data.todos = todoManager.getItems();
       this.data.todoTitle = todoManager.getTitle();
       this.data.todoPlanBound = todoManager.isPlanBound();
+    }
+
+    if (planMode !== undefined) {
+      this.data.planMode = !planMode || planMode.phase === "off" ? null : { ...planMode, steps: [...planMode.steps] };
+    }
+
+    if (autoApprove !== undefined) {
+      this.data.autoApprove = autoApprove;
     }
 
     if (uiMessages !== undefined) {

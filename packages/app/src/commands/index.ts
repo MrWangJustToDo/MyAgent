@@ -1,4 +1,5 @@
 // Import command files to trigger registration
+import "./auto.js";
 import "./clear.js";
 import "./compact.js";
 import "./display.js";

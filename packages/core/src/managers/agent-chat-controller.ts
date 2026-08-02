@@ -393,12 +393,10 @@ export class AgentChatController {
   }
 
   /**
-   * Auto-approve all pending tool approvals when plan mode is executing.
-   * This allows the agent to run tools without waiting for user confirmation
-   * during the plan execution phase.
+   * Auto-approve pending tools when auto mode is on, or plan mode is building.
    */
   private autoApprovePendingTools(): void {
-    if (this.managed.planMode.getPhase() !== "executing") return;
+    if (!this.managed.shouldAutoApprovePendingTools()) return;
 
     const messages = this.channel.getMessages();
     let didApprove = false;

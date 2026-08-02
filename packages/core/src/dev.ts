@@ -212,6 +212,8 @@ export {
   PLAN_MODE_EXCLUDED_TOOL_NAMES,
   PLAN_STORE_DIR,
   PLAN_TODO_TITLE,
+  formatPlanModeFooterLabel,
+  todoProgressFromItems,
   formatStructuredPlanMarkdown,
   formatPlanSummary,
   extractGoalFromPlanMarkdown,

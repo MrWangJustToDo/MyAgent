@@ -89,6 +89,62 @@ export class PlanModeController {
     return this.phase === "planning" || this.phase === "ready";
   }
 
+  /**
+   * Auto-approve pending `needsApproval` tools only while actively building a seeded plan.
+   * Requires both `executing` and `todosSeeded` so a stuck phase alone cannot bypass approval.
+   */
+  shouldAutoApproveTools(): boolean {
+    return this.phase === "executing" && this.todosSeeded;
+  }
+
+  /**
+   * Hydrate controller from session persistence without clearing TodoManager.
+   * Call after todos have been restored. Does not emit plan lifecycle enter/exit events.
+   */
+  restoreState(snapshot: PlanModeState | null | undefined): void {
+    this.detachTodoListener();
+
+    if (!snapshot || snapshot.phase === "off") {
+      this.phase = "off";
+      this.planMarkdown = null;
+      this.steps = [];
+      this.enabledAt = null;
+      this.todosSeeded = false;
+      this.preservedExistingTodos = false;
+      this.planFilePath = null;
+      this.deps.onPhaseChange?.();
+      return;
+    }
+
+    this.phase = snapshot.phase;
+    this.planMarkdown = snapshot.planMarkdown;
+    this.steps = [...snapshot.steps];
+    this.enabledAt = snapshot.enabledAt;
+    this.todosSeeded = snapshot.todosSeeded;
+    this.preservedExistingTodos = snapshot.preservedExistingTodos;
+    this.planFilePath = snapshot.planFilePath;
+
+    if (this.phase === "executing" || this.phase === "retro") {
+      this.setPlanTodoAutoClear(false);
+      const todoManager = this.deps.getTodoManager();
+      if (this.todosSeeded) {
+        todoManager?.setPlanBound(true);
+      }
+      if (this.phase === "executing") {
+        this.attachTodoListener();
+        this.maybeEnterRetro();
+      }
+    } else if (this.phase === "ready" || this.phase === "planning") {
+      // Keep plan-bound todos from auto-clearing while reviewing / planning.
+      if (this.todosSeeded) {
+        this.setPlanTodoAutoClear(false);
+        this.deps.getTodoManager()?.setPlanBound(true);
+      }
+    }
+
+    this.deps.onPhaseChange?.();
+  }
+
   enable(): void {
     if (this.phase !== "off") return;
     this.phase = "planning";

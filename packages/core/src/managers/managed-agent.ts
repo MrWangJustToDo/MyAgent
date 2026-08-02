@@ -1,10 +1,10 @@
 import { type ModelMessage, type UIMessage as TanStackUIMessage } from "@tanstack/ai";
 
+import { AutoApproveController } from "../agent/approval/auto-approve-controller.js";
 import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
 import { PlanModeController } from "../agent/plan/plan-mode-controller.js";
 import { buildPlanModePrompt, buildPlanRetroSteerMessage } from "../agent/plan/plan-prompts.js";
-import { listPlanFiles, loadPlanFile, savePlanFile } from "../agent/plan/plan-store.js";
 import {
   createSessionSyncTracker,
   type SessionSaveReason,
@@ -16,11 +16,22 @@ import { getEnv } from "../env.js";
 
 import { AgentChatController } from "./agent-chat-controller.js";
 import { createAgentStatusController, type AgentStatusController } from "./agent-status-controller.js";
-import { isActiveStatus } from "./agent-status.js";
 import { AgentConfigSchema } from "./agent-types.js";
 import { emitAgentEvent } from "./emit-agent-event.js";
 import { handleManagedReactiveCompact } from "./managed-agent-compact.js";
 import { observeManagedAgent, type AgentObserveHandlers } from "./managed-agent-observe.js";
+import {
+  beginPlanExecution as beginPlanExecutionHelper,
+  cancelPlanExecution as cancelPlanExecutionHelper,
+  completePlan as completePlanHelper,
+  disablePlanMode as disablePlanModeHelper,
+  enablePlanMode as enablePlanModeHelper,
+  getPlanModeState as getPlanModeStateHelper,
+  listWorkspacePlans as listWorkspacePlansHelper,
+  loadPlanFromWorkspace as loadPlanFromWorkspaceHelper,
+  savePlanToWorkspace as savePlanToWorkspaceHelper,
+  togglePlanMode as togglePlanModeHelper,
+} from "./managed-agent-plan.js";
 import { buildDynamicTurnContext, buildFrozenSystemPrompt } from "./managed-agent-prompt.js";
 import {
   abortManagedAgentRun,
@@ -146,6 +157,9 @@ export class ManagedAgent {
   /** Plan mode (read-only planning → execute). Root agents only; subagents leave phase off. */
   readonly planMode: PlanModeController;
 
+  /** Auto / YOLO mode — skip all tool approvals. Cleared on reset / `/clear`. */
+  readonly autoApprove: AutoApproveController;
+
   runner?: AgentRunner;
   runnerConfigKey?: string;
   textAdapter?: TextAdapterConfig;
@@ -246,6 +260,7 @@ export class ManagedAgent {
         }
       },
     });
+    this.autoApprove = new AutoApproveController(() => this.emitStateChange());
 
     if (config.setUp) {
       return config.setUp(this);
@@ -697,91 +712,74 @@ export class ManagedAgent {
   }
 
   // ============================================================================
+  // Auto-approve mode (skip all tool approvals)
+  // ============================================================================
+
+  isAutoApproveEnabled(): boolean {
+    return this.autoApprove.isEnabled();
+  }
+
+  setAutoApproveEnabled(enabled: boolean): void {
+    this.autoApprove.setEnabled(enabled);
+  }
+
+  /** @returns new enabled state */
+  toggleAutoApprove(): boolean {
+    return this.autoApprove.toggle();
+  }
+
+  /**
+   * Whether pending tool approvals should be auto-approved this turn.
+   * True when auto mode is on, or plan mode is building a seeded plan.
+   */
+  shouldAutoApprovePendingTools(): boolean {
+    return this.autoApprove.isEnabled() || this.planMode.shouldAutoApproveTools();
+  }
+
+  // ============================================================================
   // Plan mode
   // ============================================================================
 
   enablePlanMode(): void {
-    this.planMode.enable();
+    enablePlanModeHelper(this);
   }
 
   disablePlanMode(): void {
-    this.planMode.disable();
+    disablePlanModeHelper(this);
   }
 
   togglePlanMode(): PlanModePhase {
-    return this.planMode.toggle();
+    return togglePlanModeHelper(this);
   }
 
   getPlanModeState(): PlanModeState {
-    return this.planMode.getState();
+    return getPlanModeStateHelper(this);
   }
 
-  /**
-   * Move from `ready` → `executing`, restore tools, and optionally send a steer message.
-   * When `sendSteer` is true (default) and a chat controller exists, starts the run.
-   */
   beginPlanExecution(options: { sendSteer?: boolean } = {}): BeginPlanExecutionResult {
-    const result = this.planMode.beginExecution();
-    if (!result.ok || !result.steerMessage) return result;
-
-    const queued = options.sendSteer !== false && this.chatController != null && isActiveStatus(this.status);
-
-    if (options.sendSteer !== false && this.chatController) {
-      void this.chatController.sendMessage(result.steerMessage);
-    }
-
-    return { ...result, queued };
+    return beginPlanExecutionHelper(this, options);
   }
 
-  /** Pause execution and return to `ready` (plan artifact kept, read-only again). */
   cancelPlanExecution(): boolean {
-    return this.planMode.cancelExecution();
+    return cancelPlanExecutionHelper(this);
   }
 
-  /** Save current plan markdown under `.agents/plans/`. */
   async savePlanToWorkspace(nameHint?: string): Promise<{ ok: boolean; path?: string; error?: string }> {
-    const { planMarkdown, phase, planFilePath } = this.planMode.getState();
-    if (!planMarkdown?.trim()) {
-      return { ok: false, error: "No plan markdown to save — create a plan first" };
-    }
-    if (phase !== "ready" && phase !== "executing" && phase !== "planning" && phase !== "retro") {
-      return { ok: false, error: `Cannot save plan from phase "${phase}"` };
-    }
-    try {
-      const { path } = await savePlanFile(planMarkdown, nameHint, {
-        existingRelativePath: nameHint?.trim() ? undefined : (planFilePath ?? undefined),
-      });
-      this.planMode.setPlanFilePath(path);
-      return { ok: true, path };
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      return { ok: false, error: err.message };
-    }
+    return savePlanToWorkspaceHelper(this, nameHint);
   }
 
-  /** Load a saved plan file into ready state. */
   async loadPlanFromWorkspace(
     name: string
   ): Promise<{ ok: boolean; path?: string; error?: string; stepCount?: number }> {
-    try {
-      const { path, markdown } = await loadPlanFile(name);
-      const result = await this.planMode.loadPlanMarkdown(markdown, { relativePath: path });
-      if (!result.ok) return { ok: false, error: result.error, path };
-      return { ok: true, path, stepCount: result.stepCount };
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      return { ok: false, error: err.message };
-    }
+    return loadPlanFromWorkspaceHelper(this, name);
   }
 
-  /** Finish retro / exit plan mode (`complete_plan` or `/plan done`). */
   completePlan(): { ok: boolean; error?: string } {
-    return this.planMode.complete();
+    return completePlanHelper(this);
   }
 
-  /** List plan markdown files under `.agents/plans/`. */
   async listWorkspacePlans(): Promise<string[]> {
-    return listPlanFiles();
+    return listWorkspacePlansHelper();
   }
 
   // ============================================================================
@@ -878,6 +876,9 @@ export class ManagedAgent {
       previousStatus: prevStatus,
       hadTodos: this.todoManager?.hasTodos() ?? false,
     });
+    // Exit plan / auto-approve first so approval bypass cannot stick across sessions.
+    this.planMode.disable();
+    this.setAutoApproveEnabled(false);
     this.run.resetRunState();
     this.statusController.resetToIdle();
     this.setError("");

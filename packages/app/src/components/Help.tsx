@@ -261,6 +261,12 @@ export const Help = () => {
           </Box>
           <Box>
             <Box width={28}>
+              <Text color={COLORS.success}>/auto</Text>
+            </Box>
+            <Text>Toggle auto mode — skip all tool approvals</Text>
+          </Box>
+          <Box>
+            <Box width={28}>
               <Text color={COLORS.success}>/plan</Text>
             </Box>
             <Text>Toggle plan mode (planning → review → Build → retro)</Text>

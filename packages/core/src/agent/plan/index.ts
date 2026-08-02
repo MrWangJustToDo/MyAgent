@@ -34,11 +34,13 @@ export {
   type StructuredPlanInput,
 } from "./plan-format.js";
 export { extractGoalFromPlanMarkdown, formatPlanSummary, type FormatPlanSummaryInput } from "./plan-summary.js";
+export { formatPlanModeFooterLabel, todoProgressFromItems, type PlanTodoProgress } from "./plan-footer-label.js";
 export {
   PLAN_STORE_DIR,
   listPlanFiles,
   loadPlanFile,
   planFilePath,
+  readPlanFileAtRelativePath,
   savePlanFile,
   slugifyPlanName,
   type SavePlanFileOptions,

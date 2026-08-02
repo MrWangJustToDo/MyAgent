@@ -59,6 +59,18 @@ export async function loadPlanFile(name: string): Promise<{ path: string; markdo
   return { path: relative, markdown };
 }
 
+/** Read a plan file by workspace-relative path (e.g. from session `planFilePath`). */
+export async function readPlanFileAtRelativePath(relativePath: string): Promise<string | null> {
+  const trimmed = relativePath.trim();
+  if (!trimmed) return null;
+  try {
+    const env = getEnv();
+    return await env.fs.readFile(join(env.rootPath, trimmed));
+  } catch {
+    return null;
+  }
+}
+
 export async function listPlanFiles(): Promise<string[]> {
   const env = getEnv();
   const dir = join(env.rootPath, PLAN_STORE_DIR);

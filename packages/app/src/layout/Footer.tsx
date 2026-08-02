@@ -18,6 +18,7 @@ import { useInputMode } from "../hooks/use-input-mode.js";
 import { useSelect } from "../hooks/use-select.js";
 import { useUserInput } from "../hooks/use-user-input.js";
 import { BG, COLORS } from "../theme/colors.js";
+import { formatStatusBarModeLabel } from "../utils/agent-mode-label.js";
 import { formatDuration } from "../utils/format.js";
 import { approvalKeysHint, busyQueueHint, freeformSubmitHint, selectListHint } from "../utils/keyboard-labels.js";
 
@@ -270,15 +271,32 @@ const StatusBar = () => {
   const model = useConfig((s) => s.config.model);
   const { version } = useAgentUsage();
   const agent = useAgent((s) => s.agent) as ManagedAgent | null;
+  const [tick, setTick] = useState(0);
 
-  const planModePhase = agent?.getPlanModeState().phase ?? "off";
-  const modeLabel = planModePhase === "off" ? "Normal" : "Plan";
-  const modeColor = planModePhase === "off" ? COLORS.muted : COLORS.accent;
+  useEffect(() => {
+    if (!agent) return;
+    const raw = toRaw(agent);
+    const unsubState = raw.observe({
+      onState: () => setTick((n) => n + 1),
+    });
+    const unsubTodos = raw.getTodoManager()?.onChange(() => setTick((n) => n + 1));
+    return () => {
+      unsubState();
+      unsubTodos?.();
+    };
+  }, [agent]);
+
+  // tick forces re-read when plan phase / auto mode / todos change
+  void tick;
+
+  const modeLabel = formatStatusBarModeLabel(agent);
+  const isDefault = modeLabel === "Normal";
+  const modeColor = isDefault ? COLORS.muted : COLORS.accent;
 
   return (
     <Box justifyContent="space-between" paddingX={1}>
       <Box gap={2} flexShrink={1}>
-        <Text color={modeColor} dimColor={planModePhase === "off"} bold={planModePhase !== "off"}>
+        <Text color={modeColor} dimColor={isDefault} bold={!isDefault} wrap="truncate">
           {modeLabel}
         </Text>
       </Box>

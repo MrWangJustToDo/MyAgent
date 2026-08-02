@@ -466,13 +466,17 @@ Cursor-like lifecycle: explore → review → Build → forced retro → complet
 |------------------|----------|-------|----------|
 | `planning` | planning | Mutate tools + MCP hidden; `task` allowed; `create_plan` / `update_plan` offered; `run_command` allowlisted | Explore (prefer `task`), clarify if needed, call `create_plan` (or `## Plan` fallback). Plan auto-saves under `.agents/plans/` with a static summary in the transcript. |
 | `ready` | review | Same read-only restrictions | User reviews; revise via chat + `update_plan`. `/plan execute` = Build (no extra confirm). |
-| `executing` | building | Full tools (`create_plan` / `update_plan` / `complete_plan` hidden) | Follow plan; plan-seeded todos show step progress. Todo tool output includes `source: "plan"` (persisted in transcript + session `todoPlanBound`) so resume still renders plan todos. |
+| `executing` | building | Full tools (`create_plan` / `update_plan` / `complete_plan` hidden); pending approvals auto-approved while seeded | Follow plan; plan-seeded todos show step progress. Session persists `planMode` (phase/markdown/path/seeded) + `todoPlanBound` so resume continues building/retro. |
 | `retro` | retro | Full tools + `complete_plan` | Forced retrospective against the plan file; end with `complete_plan` or `/plan done`. |
 | `off` | — | Plan authoring/completion tools hidden | Default |
 
 **App:** `Shift+Tab` or `/plan` toggles mode; when **review** (`ready`), press `p` (empty input) to toggle a bordered markdown plan preview in the banner (`Esc` closes). `/plan execute` Builds from review; `/plan cancel` pauses building → review; `/plan done` finishes retro; `/plan status` reports phase; `/plan save` / `load` / `list` for named persistence (create/update already auto-save). Footer shows `planning` / `review · /plan execute` / `building n/m` / `retro`. `create_plan` / `update_plan` do not dump plan text into the tool transcript — review is via the banner preview.
 
 **Core:** `ManagedAgent.planMode` (`PlanModeController`), tool filter in `run-agent`, `createPlanModeMiddleware`, prompts via turn context. See `packages/core/src/agent/plan/`.
+
+**Auto mode:** `/auto` (or `/auto on|off|status`) skips all tool approvals. Footer shows `auto` (can combine with plan: `auto · building 2/5`). Cleared on `/clear` / reset; persisted as `SessionData.autoApprove`.
+
+**Session / safety:** `/clear` and `ManagedAgent.reset()` always `planMode.disable()` and turn off auto mode. Resume restores `planMode` + `autoApprove`. Plan building auto-approve still requires `executing` **and** `todosSeeded` (separate from `/auto`).
 
 ## Subagent System
 

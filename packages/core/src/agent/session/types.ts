@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import type { TokenUsage } from "../../managers/usage-tracker-utils.js";
 import type { ModelStyle } from "../../models/types.js";
+import type { PlanModeState } from "../plan/plan-mode-controller.js";
 import type { TodoItem } from "../todo-manager";
 import type { UIMessage, ModelMessage } from "@tanstack/ai";
 
@@ -16,7 +17,8 @@ import type { UIMessage, ModelMessage } from "@tanstack/ai";
 // Constants
 // ============================================================================
 
-export const SESSION_VERSION = 2;
+/** v3: optional `planMode` snapshot for resume continuity. Older files omit it. */
+export const SESSION_VERSION = 3;
 export const SESSION_DIR = ".agents/sessions";
 export const SESSION_FILE_SUFFIX = ".session.json";
 
@@ -65,6 +67,13 @@ export interface SessionData {
   todoTitle?: string | null;
   /** Whether todos are bound to plan building (optional; older sessions omit this). */
   todoPlanBound?: boolean;
+  /**
+   * Plan-mode lifecycle snapshot (phase, markdown, path, seeded flags).
+   * Omitted or null when plan mode is off. Older sessions omit this field.
+   */
+  planMode?: PlanModeState | null;
+  /** When true, skip all tool approvals (auto / YOLO mode). Older sessions omit this. */
+  autoApprove?: boolean;
   /** Timestamp when session was created */
   createdAt: number;
   /** Timestamp when session was last updated */
