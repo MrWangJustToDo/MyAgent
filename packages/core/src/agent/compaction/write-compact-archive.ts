@@ -61,20 +61,33 @@ export function stripCompactArchiveSections(text: string): string {
 
 /**
  * Format the summary section listing all known compact archives for this session.
+ *
+ * Paths are listed oldest → newest. Guidance steers the agent to grep newest first
+ * so it knows which file holds the most recently compacted details.
  */
 export function formatCompactArchivesSection(paths: string[]): string {
   if (paths.length === 0) return "";
 
-  const list = paths.map((path) => `- \`${path}\``).join("\n");
+  const newest = paths[paths.length - 1]!;
+  const list = paths
+    .map((path, index) => {
+      const suffix = index === paths.length - 1 ? " ← newest slice (search here first for recent details)" : "";
+      return `- \`${path}\`${suffix}`;
+    })
+    .join("\n");
+
   return `
 
 ## Compact archives
 
-Each file is one compaction slice (not the full session). Older \`compact-1.md\`, later \`compact-N.md\`. Search across the listed paths when details are missing.
+Cold storage for compacted turns — details live in these files, not duplicated in the summary body above.
+
+- \`compact-1.md\` = earliest compressed slice; higher N = later slices.
+- Missing a detail? Grep **newest → oldest** (start with \`${newest}\`). Prefer the highest \`compact-N.md\` for work done just before the latest compaction.
+- Use grep or small offset/limit \`read_file\` reads. Do **not** load whole archive files into context.
+- Cite the archive path when looking something up; do not paste large archive excerpts back into the conversation.
 
 File shape: short header (\`session\`, \`sequence\`, \`timestamp\`, \`cutIndex\`) then a plain-text transcript (\`[User]\` / \`[Assistant]\` / tool calls / truncated tool results).
-
-Prefer grep (or small offset/limit reads). Do not read whole archive files.
 
 ${list}`;
 }

@@ -119,6 +119,20 @@ export {
   buildDynamicTurnContext,
   buildFrozenSystemPrompt,
 } from "./managers/managed-agent-prompt.js";
+export {
+  ANTHROPIC_CACHE_BREAKPOINT_CAP,
+  EPHEMERAL_CACHE_CONTROL,
+  applyAnthropicLatestUserCacheBreakpoint,
+  applyAnthropicToolCacheBreakpoint,
+  buildAnthropicCachedSystemPrompts,
+  resolvePromptCacheKey,
+  shouldApplyAnthropicCacheBreakpoints,
+  shouldApplyOpenAIPromptCacheKey,
+  sortToolsByName,
+  splitSystemPromptAtDynamicBoundary,
+} from "./models/prompt-cache.js";
+export { toolsToArray } from "./agent/tools/tanstack/tools-record.js";
+export { createPromptCacheMiddleware } from "./agent/middleware/prompt-cache-middleware.js";
 export { createAgentStatusController, AgentStatusController } from "./managers/agent-status-controller.js";
 export { AgentRunner } from "./agent/runner/agent-runner.js";
 export { assertAsyncIterable, formatAgentStreamError } from "./agent/utils/assert-async-iterable.js";

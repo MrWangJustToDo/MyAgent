@@ -649,14 +649,12 @@ export class ManagedAgent {
     }
 
     const env = getEnv();
-    const now = new Date();
-    const currentDate = now.toLocaleString("en-US", {
+    // Day granularity keeps `<current_date>` stable within a session day (prefix-cache friendly).
+    const currentDate = new Date().toLocaleDateString("en-US", {
       timeZoneName: "short",
       year: "numeric",
       month: "long",
       day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
     });
 
     let gitBranch: string | undefined;

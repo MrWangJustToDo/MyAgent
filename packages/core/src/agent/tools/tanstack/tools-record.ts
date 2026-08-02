@@ -16,7 +16,9 @@ export function toolsToArray(tools: ToolsRecord, options: ToolsToArrayOptions = 
   const exclude = options.exclude ?? new Set<string>();
   const result: Array<ServerTool | ClientTool> = [];
 
-  for (const [name, tool] of Object.entries(tools)) {
+  // Sort by name so tool-schema prefixes stay byte-stable across Map/object iteration.
+  for (const name of Object.keys(tools).sort((a, b) => a.localeCompare(b))) {
+    const tool = tools[name];
     if (!tool || exclude.has(name)) continue;
     result.push(tool);
   }

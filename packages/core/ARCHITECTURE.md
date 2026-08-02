@@ -213,6 +213,8 @@ Built in `buildAgentRunner` (`run-agent.ts`), order matters:
 4. tool-compact-middleware  per-tool LLM shaping
 5. turn-context-middleware  append <turn_context> after SYSTEM_PROMPT_DYNAMIC_BOUNDARY
 6. extensions-middleware    ExtensionEventBus intercept + agent:tool-* lifecycle events
+7. plan-mode-middleware     block forbidden tools while plan mode restricts tooling
+8. prompt-cache-middleware  Anthropic cache_control + OpenAI prompt_cache_key + sorted tools
 ```
 
 Status logic is centralized in `AgentStatusController` (`managers/agent-status-controller.ts`). `status-middleware` is the runtime hook for status; `lifecycle-middleware` owns usage and run finalization side-effects. `AgentChatController` calls `prepareRunPhase` / `reconcileAfterRun` for pump boundaries.
@@ -362,7 +364,7 @@ emit compaction:auto-start
 autoCompact(messages, config, agentId, manager)
   → findCutPoint (keep recent user turns)
   → summarizeConversation with <to_compress> + <still_in_context> (+ optional <previous-summary>)
-  → writeCompactArchive (.agents/transcripts/<sessionId>/compact-<n>.md) — non-fatal; merged ## Compact archives list (+ file-shape note) appended to summary
+  → writeCompactArchive (.agents/transcripts/<sessionId>/compact-<n>.md) — non-fatal; merged ## Compact archives list appended (newest-first search guidance); prior archive sections stripped from <previous-summary> input
 applyCompactionResult(context, usage, result)
   → setSummaryMessage, setCompactIndex, reset window usage
 emit compaction:auto-complete | compaction:auto-error
@@ -534,6 +536,14 @@ onConfig → systemPrompts = frozen + <turn_context>… (same snapshot every ite
 
 Dynamic context lives **after** `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` in the system prompt so conversation
 message prefixes stay stable for provider prompt cache. Snapshot is not recomputed mid-turn (tool loops).
+
+**Provider cache wiring** (`prompt-cache-middleware`, `models/prompt-cache.ts`):
+
+| Style | Behavior |
+|-------|----------|
+| `anthropic` | Split system at the boundary; `cache_control: ephemeral` on frozen system, last tool, and latest user message (≤3 of Anthropic's 4 breakpoints) |
+| `openai` (and other Chat Completions) | `prompt_cache_key` = session id (or agent id), merged into `modelOptions` |
+| all | Tools sorted by name before each request (`toolsToArray` + middleware) |
 
 ### 7.4 Commit surfaced memories
 

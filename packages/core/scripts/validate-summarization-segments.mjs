@@ -56,6 +56,17 @@ assert.doesNotMatch(withoutStill, /Segment rules/);
 const instruction = buildCompactionPrompt({ hasStillInContext: true });
 assert.match(instruction, /Do NOT restate/);
 
+// Prior ## Compact archives must not be fed into <previous-summary> (instruction text may still mention the section name).
+const withArchives = buildCompactionPrompt({
+  existingSummary: `## Goal\n\nShip it\n\n## Compact archives\n\n- \`.agents/transcripts/ses/compact-1.md\``,
+});
+assert.match(withArchives, /<previous-summary>/);
+const prevBlock = withArchives.match(/<previous-summary>\n([\s\S]*?)\n<\/previous-summary>/)?.[1] ?? "";
+assert.match(prevBlock, /## Goal/);
+assert.doesNotMatch(prevBlock, /## Compact archives/);
+assert.doesNotMatch(prevBlock, /compact-1\.md/);
+assert.match(withArchives, /Do NOT copy or restate archive file paths/);
+
 // Cut index must stay relative to input messages for applyCompactionResult.
 const cutIndex = llmCutIndex; // no previous summary offset
 assert.equal(cutIndex, 2);

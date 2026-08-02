@@ -5,6 +5,8 @@
  * essential context for continued agent work.
  */
 
+import { stripCompactArchiveSections } from "./write-compact-archive.js";
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -113,7 +115,8 @@ Update the existing structured summary with new information. RULES:
 - UPDATE "Next Steps" based on what was accomplished
 - PRESERVE exact file paths, function names, and error messages
 - If something is no longer relevant, you may remove it
-- Do NOT include a "## Compact archive" or "## Compact archives" section — the runtime appends archive paths after your summary
+- Do NOT include a "## Compact archive" or "## Compact archives" section — the runtime strips prior archive lists from <previous-summary> and re-appends a merged list after your summary
+- Do NOT copy or restate archive file paths or transcript excerpts from cold storage
 
 When constructing the summary, stick to this template:
 ---
@@ -206,8 +209,11 @@ export function buildCompactionPrompt(options?: {
   // If we have an existing summary, wrap it in <previous-summary> tags
   // and use the update prompt. The conversation history (initialMessages)
   // should NOT include this old summary message — it's passed here instead.
+  // Strip runtime-managed ## Compact archives so the summarizer does not
+  // restate path lists (runtime re-merges them after the update).
   if (existingSummary) {
-    parts.push(`<previous-summary>\n${existingSummary}\n</previous-summary>`);
+    const summaryForUpdate = stripCompactArchiveSections(existingSummary);
+    parts.push(`<previous-summary>\n${summaryForUpdate}\n</previous-summary>`);
     parts.push("");
     parts.push(UPDATE_COMPACTION_PROMPT);
   } else {

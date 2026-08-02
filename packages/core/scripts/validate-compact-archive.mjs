@@ -48,11 +48,13 @@ const section = formatCompactArchivesSection([
   ".agents/transcripts/ses_test/compact-2.md",
 ]);
 assert.match(section, /## Compact archives/);
-assert.match(section, /one compaction slice/);
+assert.match(section, /Cold storage for compacted turns/);
+assert.match(section, /newest → oldest/);
 assert.match(section, /File shape:/);
 assert.match(section, /compact-1\.md/);
 assert.match(section, /compact-2\.md/);
-assert.match(section, /Do not read whole archive files/);
+assert.match(section, /newest slice/);
+assert.match(section, /Do \*\*not\*\* load whole archive files/);
 
 assert.deepEqual(
   extractCompactArchivePaths(

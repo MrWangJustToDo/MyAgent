@@ -3,6 +3,7 @@ import {
   createExtensionsMiddleware,
   createLifecycleMiddleware,
   createPlanModeMiddleware,
+  createPromptCacheMiddleware,
   createStatusMiddleware,
   createToolCompactMiddleware,
   createTurnContextMiddleware,
@@ -17,6 +18,7 @@ import { resolveToolsRecord, SUBAGENT_EXCLUDED_TOOL_NAMES } from "../agent/tools
 import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
 import { createTextAdapter } from "../models/adapter-factory.js";
 import { DEFAULT_BASE_URLS } from "../models/model-config.js";
+import { resolvePromptCacheKey } from "../models/prompt-cache.js";
 
 import { AgentUIChannel } from "./agent-ui-channel.js";
 import { createEmitFn } from "./emit-agent-event.js";
@@ -162,6 +164,11 @@ export function buildAgentRunner(
     }),
     createPlanModeMiddleware({
       getPlanMode: () => managed.planMode,
+    }),
+    // After turn-context / tool filtering so breakpoints see the final wire payload.
+    createPromptCacheMiddleware({
+      getModelStyle: () => managed.config.modelStyle,
+      getPromptCacheKey: () => resolvePromptCacheKey(deps.session.getSessionData()?.id, deps.agentId),
     }),
   ];
 

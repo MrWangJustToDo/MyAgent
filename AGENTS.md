@@ -446,6 +446,18 @@ registerCoreEnv(env);
 
 **Event → Log bridge:** `attachEventLogBridge()` in `AgentManager` maps events to `AgentLog` entries. Policy lives in `event-log-bridge.ts` (`DEFAULT_EVENT_LOG_RULES`); override per event type with `EventLogPolicy`. Emit sites should not duplicate lifecycle logs covered by events.
 
+## Prompt Cache (prefix)
+
+Frozen system text ends with `SYSTEM_PROMPT_DYNAMIC_BOUNDARY`; per-turn `<turn_context>` stays after it.
+`<current_date>` uses **day** granularity (not hour/minute) so the dynamic segment stays stable within a calendar day.
+`prompt-cache-middleware` then:
+
+- **Anthropic** — `cache_control: { type: "ephemeral" }` on frozen system, last tool definition, and latest user message (tool-loop friendly)
+- **OpenAI-compatible** — `prompt_cache_key` from session id (≤64 chars)
+- **All styles** — tools sorted by name for stable schemas
+
+Helpers: `packages/core/src/models/prompt-cache.ts`. Validate: `pnpm --filter @my-agent/core run validate:prompt-cache`.
+
 ## Plan Mode
 
 Cursor-like lifecycle: explore → review → Build → forced retro → complete (exit).
@@ -565,7 +577,7 @@ const agent = await agentManager.createManagedAgent({
 
 **Summarizer input:** The summarization subagent receives labeled segments — `<to_compress>` (pre-cut history) and `<still_in_context>` (kept turns) — plus optional `<previous-summary>` for incremental updates. Prompt rules tell the model to summarize the compressed segment thoroughly and use the kept segment only to align Goal/Next (no detailed restatement). Post-compact assembly is unchanged: `summaryMessage + messages[compactIndex:]`.
 
-**Transcript archive:** On successful auto, manual (`/compact`), or reactive compaction, the compressed slice is written as greppable markdown under `.agents/transcripts/<sessionId>/compact-<n>.md` (gitignored via `.agents`). The summary gets a runtime-managed `## Compact archives` list (merged across successive comped, with a short file-shape note). Prefer grep / small reads — not loading whole archives. Archive I/O failures are non-fatal; prior paths are still re-attached when known.
+**Transcript archive:** On successful auto, manual (`/compact`), or reactive compaction, the compressed slice is written as greppable markdown under `.agents/transcripts/<sessionId>/compact-<n>.md` (gitignored via `.agents`). The summary gets a runtime-managed `## Compact archives` list (merged across successive compactions). Search **newest → oldest** (`compact-N` first for recent details); prefer grep / small reads — not whole files. Prior archive sections are stripped before `<previous-summary>` so the summarizer does not restate path lists. Archive I/O failures are non-fatal; prior paths are still re-attached when known.
 
 ```
 packages/core/src/agent/compaction/
