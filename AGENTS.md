@@ -514,7 +514,9 @@ The project supports **subagents** — context-isolated agents spawned to handle
 `runSubagent({ bridgeUI: true })` attaches an `AgentUIChannel` via `ensureUIChannel` for the task panel (`Ctrl+T`).
 Headless runs (`bridgeUI: false`) use `consumeAgentStream({ mode: "headless" })` and skip UI wiring.
 Task-tool subagents use `autoDestroy: false` so the preview stays available; after the stream ends,
-detached outcome finalization marks them `completed`/`aborted`
+detached outcome finalization marks them `completed`/`aborted`. Esc while a task is active aborts the
+subagent first: `runSubagent` sets `aborted: true` and appends `[Task cancelled by user.]` into the
+task `summary` (parent model + UI), even when the stream ends without throwing.
 so `getActiveSubagents()` (and the Ctrl+T list) only shows truly active tasks.
 Task spawn ids are always auto-generated via `generateId("subagent", { exists })` — the model
 does not supply an `id` input.

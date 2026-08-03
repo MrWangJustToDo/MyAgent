@@ -94,6 +94,8 @@ export class AgentChatController {
     this.runGeneration += 1;
     // Immediately clear loading tool rows; stream teardown may still finalize later.
     this.applyCancelledIncompleteTools();
+    // App no longer checkpoints on status — persist cancelled tools on abort.
+    this.persistMessages("pump-complete");
   }
 
   /** How steering messages are drained at each drain point. */
@@ -174,6 +176,7 @@ export class AgentChatController {
     // Only strips truncated/invalid leftover tools — never approval-responded / valid queues.
     this.applyCancelledIncompleteTools();
     this.channel.addUserMessage(content);
+    this.persistMessages("user-message");
     return this.enqueueRun();
   }
 
@@ -212,6 +215,7 @@ export class AgentChatController {
       this.channel.addUserMessage(content);
     }
     this.notifyQueueListeners();
+    this.persistMessages("user-message");
     return true;
   }
 
@@ -222,6 +226,7 @@ export class AgentChatController {
       this.channel.addUserMessage(content);
     }
     this.notifyQueueListeners();
+    this.persistMessages("user-message");
     return true;
   }
 
@@ -298,6 +303,7 @@ export class AgentChatController {
         if (generation !== this.runGeneration) {
           // Stream may have finalized truncated tool args after Esc — cancel again.
           this.applyCancelledIncompleteTools();
+          this.persistMessages("pump-complete");
           return;
         }
 
@@ -335,7 +341,7 @@ export class AgentChatController {
               ? this.managed.error || "Stream execution failed"
               : undefined,
         });
-        this.persistMessages();
+        this.persistMessages("pump-complete");
 
         const totalUsage = this.managed.usage?.getTotal();
         const toolCallCount = this.channel
@@ -405,10 +411,10 @@ export class AgentChatController {
     this.managed.syncContextFromUIMessages(cleaned);
   }
 
-  private persistMessages(): void {
+  private persistMessages(reason: "user-message" | "pump-complete"): void {
     const messages = this.channel.getMessages();
     if (messages.length > 0) {
-      this.managed.maybeSaveSessionUIMessages(messages, "pump-complete");
+      this.managed.maybeSaveSessionUIMessages(messages, reason);
     }
   }
 

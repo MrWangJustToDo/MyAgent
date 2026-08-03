@@ -492,26 +492,26 @@ export class ManagedAgent {
   }
 
   /**
-   * Checkpoint-based session persist for live UI updates.
-   * Skips writes during streaming; persists stable deltas (user turns, approvals, pump idle).
+   * Persist `uiMessages` when an explicit trigger fires and the fingerprint changed.
+   * Reasons: `user-message` | `pump-complete` | `force` (via {@link saveSessionUIMessages}).
    */
-  maybeSaveSessionUIMessages(uiMessages: TanStackUIMessage[], reason: SessionSaveReason = "checkpoint"): void {
+  maybeSaveSessionUIMessages(uiMessages: TanStackUIMessage[], reason: SessionSaveReason): void {
     if (uiMessages.length === 0) return;
-    if (!this.sessionSyncTracker.shouldPersist(uiMessages, { reason, agentStatus: this.status })) {
+    if (!this.sessionSyncTracker.shouldPersist(uiMessages, { reason })) {
       return;
     }
     saveSessionUIMessagesHelper(this, uiMessages);
   }
 
   /**
-   * Persist session `uiMessages` from the app `useChat` hook (single source of truth).
+   * Force-persist session `uiMessages` (slash commands such as `/clear`).
    * Also syncs AgentContext and writes model fields in the same session save.
    */
   saveSessionUIMessages(uiMessages: TanStackUIMessage[]): void {
     saveSessionUIMessagesHelper(this, uiMessages);
   }
 
-  /** Reset checkpoint tracking after restore, clear, or new chat bootstrap. */
+  /** Reset fingerprint tracking after restore, clear, or new chat bootstrap. */
   resetSessionSyncTracker(uiMessages?: TanStackUIMessage[]): void {
     this.sessionSyncTracker.reset(uiMessages);
   }

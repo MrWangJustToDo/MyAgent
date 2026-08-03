@@ -17,6 +17,7 @@ import { BEGIN_SUMMARY_TOOL_NAME } from "./subagent/begin-summary-tool.js";
 import { clearStreamingOutput, emitStreamingChunk } from "./tools/util/streaming-callback.js";
 import { applyToolDenialReason } from "./utils/apply-tool-denial-reason.js";
 import { stripEmptyAssistantShells } from "./utils/empty-assistant-shell.js";
+import { shouldSuppressReplayedToolChunk } from "./utils/suppress-replayed-tool-chunks.js";
 
 import type { StreamChunk, StreamProcessorEvents, UIMessage as TanStackUIMessage, ContentPart } from "@tanstack/ai";
 
@@ -173,6 +174,13 @@ export class AgentUIChannel {
 
   /** Process a single stream chunk (for incremental bridge during `runAgent`). */
   processChunk(chunk: StreamChunk): void {
+    // TanStack approval continuation re-emits TOOL_CALL_START/ARGS with argsMap.
+    // StreamProcessor only dedupes within the active message, so a new chat() run
+    // would clone the same toolCallId onto a second assistant. Drop those replays;
+    // END/RESULT still update the existing part (and early-tool-result already may have).
+    if (shouldSuppressReplayedToolChunk(this.getMessages(), chunk)) {
+      return;
+    }
     this.trackSummaryStreamPhase(chunk);
     this.processor.processChunk(chunk);
   }

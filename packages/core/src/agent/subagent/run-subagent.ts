@@ -9,7 +9,7 @@ import { throwOnRunError } from "../stream/stream-errors.js";
 import { clearStreamingOutput } from "../tools/util/streaming-callback.js";
 import { generateId } from "../utils.js";
 
-import { truncateSummary } from "./output.js";
+import { applySubagentCancelNotice, truncateSummary } from "./output.js";
 import { buildExploreSystemPrompt } from "./prompt.js";
 import { captureStreamFinishReason, deriveSubagentRunStats } from "./run-stats.js";
 import { resolveSubagentBridgeUI, SUBAGENT_DEFAULT_MAX_ITERATIONS } from "./types.js";
@@ -138,26 +138,36 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
             finishReason = reason;
           })
         ),
-      // Detached path avoids task-panel ghosts; chat pump applies path:"chat" itself.
-      outcome: { path: "detached", kind: "finished" },
+      // Outcome applied below — abort ends the stream without throwing, so we must
+      // not hardcode `finished` (that would clobber `aborted` / skip cancel notice).
     });
     previewMessages = result.messages;
     output = extractAssistantText(previewMessages)?.trim() || "(no summary)";
   } catch (err) {
     const managed = manager.getAgent(subagentId);
-    if (managed?.status === "aborted") {
+    if (managed?.status === "aborted" || managed?.isAbortError(err)) {
       aborted = true;
-      subagentManaged.statusController.applyRunOutcome({
-        kind: "aborted",
-        messages: previewMessages,
-        path: "detached",
-      });
+      previewMessages = channel?.getMessages() ?? previewMessages;
+      output = extractAssistantText(previewMessages)?.trim() || "(no summary)";
     } else {
       throw err;
     }
   }
 
-  const { summary: finalOutput, truncated } = truncateSummary(output, maxOutputLength);
+  // Esc → managed.abort() sets status during consume; stream often completes without throw.
+  aborted =
+    aborted ||
+    subagentManaged.status === "aborted" ||
+    Boolean(subagentManaged.run.currentAbortController?.signal.aborted);
+
+  subagentManaged.statusController.applyRunOutcome({
+    kind: aborted ? "aborted" : "finished",
+    messages: previewMessages,
+    path: "detached",
+  });
+
+  const noticed = applySubagentCancelNotice(output, aborted);
+  const { summary: finalOutput, truncated } = truncateSummary(noticed, maxOutputLength);
   const usage = subagentManaged.usage.getTotal();
 
   if (aggregateUsageToParent && parentManaged) {

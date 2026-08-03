@@ -98,7 +98,7 @@ function pickArguments(primary: string, duplicate: string): string {
   return primary.length >= duplicate.length ? primary : duplicate;
 }
 
-/** Merge a later duplicate tool-call into the first occurrence (display anchor). */
+/** Merge a later duplicate tool-call into the first occurrence (display anchor). TODO(cleanup): remove with dedupeToolCallsInMessages. */
 export function mergeToolCallPart(primary: ToolCallPart, duplicate: ToolCallPart): ToolCallPart {
   const winner = getToolStateRank(duplicate) >= getToolStateRank(primary) ? duplicate : primary;
 
@@ -117,6 +117,11 @@ type ToolLocation = { messageIdx: number; partIdx: number };
 /**
  * Dedupe assistant tool-call parts by `id` across messages.
  * The first occurrence is kept for display; later duplicates merge state into it.
+ *
+ * TODO(cleanup): Remove once we no longer need to resume pre-suppress-replay sessions.
+ * Core `suppress-replayed-tool-chunks` now prevents duplicate toolCallIds at ingest;
+ * new sessions (e.g. ses_mscmazgx) have zero duplicates. Keep only while old dirty
+ * sessions may still be opened. Do not remove {@link normalizeToolPartsInMessages}.
  */
 export function dedupeToolCallsInMessages(messages: UIMessage[]): UIMessage[] {
   if (messages.length === 0) return messages;

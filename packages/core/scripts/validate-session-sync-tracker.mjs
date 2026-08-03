@@ -1,5 +1,5 @@
 /**
- * Validation for checkpoint-based session UIMessage persistence.
+ * Validation for explicit-trigger session UIMessage persistence.
  *
  * Run: pnpm --filter @my-agent/core run validate:session-sync-tracker
  */
@@ -61,32 +61,31 @@ const fp2 = fingerprintUIMessage({ ...userMessage, parts: [{ type: "text", conte
 assert.notEqual(fp1, fp2);
 
 const tracker = createSessionSyncTracker();
-assert.equal(tracker.shouldPersist([userMessage], { reason: "checkpoint", agentStatus: "running" }), true);
+assert.equal(tracker.shouldPersist([userMessage], { reason: "user-message" }), true);
 tracker.markPersisted([userMessage]);
-assert.equal(tracker.shouldPersist([userMessage], { reason: "checkpoint", agentStatus: "idle" }), false);
+assert.equal(tracker.shouldPersist([userMessage], { reason: "user-message" }), false);
+assert.equal(tracker.shouldPersist([userMessage], { reason: "pump-complete" }), false);
 
 assert.equal(
   shouldPersistUIMessages([userMessage, streamingAssistant], tracker.getSnapshot(), {
-    reason: "checkpoint",
-    agentStatus: "responding",
+    reason: "user-message",
   }),
-  false
+  true
 );
 
 assert.equal(
   shouldPersistUIMessages([userMessage, stableAssistant], tracker.getSnapshot(), {
-    reason: "checkpoint",
-    agentStatus: "waiting",
+    reason: "pump-complete",
   }),
   true
 );
 
+tracker.markPersisted([userMessage, stableAssistant]);
 assert.equal(
-  shouldPersistUIMessages([userMessage, stableAssistant], null, {
-    reason: "pump-complete",
-    agentStatus: "running",
+  shouldPersistUIMessages([userMessage, stableAssistant], tracker.getSnapshot(), {
+    reason: "force",
   }),
-  true
+  false
 );
 
 const snap = computeSessionSyncSnapshot([userMessage, stableAssistant]);

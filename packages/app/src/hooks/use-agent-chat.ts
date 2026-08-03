@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { bindAgentSession } from "../adapter/create-agent.js";
 import { useAdapter } from "../context/adapter-context.js";
+import { clearFlatMessageCache } from "../utils/message-flat-cache.js";
 import { isToolCallPart, isPendingToolApproval, parseToolInput } from "../utils/tool-part.js";
 
 import { useAgent } from "./use-agent.js";
@@ -132,7 +133,6 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   const forceUpdate = useForceUpdate({ time: 100 });
   const initIdRef = useRef(0);
-  const messagesRef = useRef<UIMessage[]>([]);
 
   useEffect(() => {
     if (agent) {
@@ -164,7 +164,6 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         setChat(controller);
         setSession(localSession);
         const initial = controller.getMessages();
-        messagesRef.current = initial;
         setMessages(initial);
         setStatus(managed.status);
         setAgentError(managed.error);
@@ -206,10 +205,9 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   useEffect(() => {
     if (!session || !agent) return;
 
+    // UI only — session disk writes are owned by core (user-message / pump-complete / force).
     const updateUi = throttle((next: UIMessage[]) => {
-      messagesRef.current = next;
       setMessages(next);
-      agent.maybeSaveSessionUIMessages(next, "checkpoint");
     }, 60);
 
     return session.subscribe(
@@ -226,10 +224,6 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
           setStatus(event.payload.status);
           setAgentError(event.payload.error);
           forceUpdate();
-          const next = messagesRef.current;
-          if (next.length > 0) {
-            agent.maybeSaveSessionUIMessages(next, "checkpoint");
-          }
           return;
         }
         if (event.channel === "todos") {
@@ -248,10 +242,6 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       agent.saveSessionUIMessages(messages);
     }
   });
-
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
 
   const stop = useCallback(() => {
     if (agent) {
@@ -297,7 +287,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   const clearMessages = useCallback(() => {
     void session?.dispatch({ type: "clear" });
-    messagesRef.current = [];
+    clearFlatMessageCache();
     setMessages([]);
     setQueuedMessages({ steer: [], followUp: [] });
   }, [session]);
@@ -402,6 +392,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     clearMessages,
     setMessages: (next) => {
       chat?.setMessages(next);
+      if (next.length === 0) clearFlatMessageCache();
       setMessages(next);
       agent?.syncInteractionStateFromUIMessages(next);
     },

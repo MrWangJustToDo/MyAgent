@@ -265,6 +265,8 @@ Sources: `managers/middleware/*` for run stack; `agent/plan/plan-mode-middleware
 ```
 
 TanStack runs tools sequentially but emits batched `TOOL_CALL_END` results only after the whole tool phase. `early-tool-result-ui` calls `AgentUIChannel.addToolResult` in `onAfterToolCall` so finished tools (e.g. the first of two `task` calls) show complete while later tools still run. The later stream chunks re-apply the same output idempotently.
+
+**Approval continuation:** After the user (or auto-approve) responds, a second `chat()` run executes pending tools and TanStack may re-emit `TOOL_CALL_START`/`ARGS` with an `argsMap`. `AgentUIChannel` drops those replays when the `toolCallId` already exists in UI messages so the call is not cloned onto a new assistant (approval metadata stays on the original part). `TOOL_CALL_END`/`RESULT` still flow to update that part.
 Status logic is centralized in `AgentStatusController` (`managers/agent-status-controller.ts`). `status-middleware` is the runtime hook for status; `lifecycle-middleware` owns usage and run finalization side-effects. Chat and detached runs converge on `statusController.applyRunOutcome(...)` (see `managers/agent-run-outcome.ts`).
 
 ### 3.5 Lifecycle status transitions
@@ -489,11 +491,13 @@ Fields: `uiMessages`, `summaryMessage`, `compactIndex`, `usage`, `cost`, `contex
 | Trigger | Function | What is saved |
 |---------|----------|---------------|
 | **Run finalizes** (finish / abort / error) | `ManagedAgent.finalizeRun` → `SessionService.persistSession` | Model fields: `summaryMessage`, `compactIndex`, `usage`, `cost`, `contextTokens`, `todos`, `planMode`; auto-title if `"New Session"` |
-| **Pump idle (core)** | `AgentChatController.persistMessages` → `maybeSaveSessionUIMessages(..., "pump-complete")` | Model fields **plus** `uiMessages` when fingerprint changed |
-| **Stable UI checkpoint (app)** | `useAgentChat` subscribe / status → `maybeSaveSessionUIMessages(..., "checkpoint")` | Same as above; skips during `running`/`thinking`/`responding`/`compacting` |
-| **Manual flush** | `saveSessionUIMessages` (`/clear`, slash commands) | Force full persist regardless of streaming |
+| **User message (core)** | `AgentChatController` after `addUserMessage` (send / drained steer|follow-up) → `maybeSaveSessionUIMessages(..., "user-message")` | Model fields **plus** `uiMessages` when fingerprint changed |
+| **Pump idle (core)** | `AgentChatController.persistMessages` → `maybeSaveSessionUIMessages(..., "pump-complete")` | Same; also on Esc/abort after cancelling incomplete tools |
+| **Manual flush** | `saveSessionUIMessages` (`/clear`, slash commands) | Force full persist |
 
-`SessionSyncTracker` (`agent/session/session-sync-tracker.ts`) fingerprints each `UIMessage` and skips disk writes until a stable checkpoint (new user turn, approval wait, terminal status, or pump complete). Format remains full JSON; only write **frequency** is reduced. On restore, `PlanModeController.restoreState` rehydrates phase (and reloads markdown from `planFilePath` when missing). `/clear` / `ManagedAgent.reset` always `planMode.disable()`.
+App hosts subscribe to Session `messages`/`state` for UI only — they do **not** checkpoint to disk. Approval still mutates tool-call parts in memory; durable write waits until the next pump idle (or explicit flush). Format remains full JSON; `SessionSyncTracker` only skips duplicate fingerprints.
+
+On restore, `PlanModeController.restoreState` rehydrates phase (and reloads markdown from `planFilePath` when missing). `/clear` / `ManagedAgent.reset` always `planMode.disable()`.
 
 `SessionStore.save`: content-hash dedup, per-session write lock, full JSON overwrite.
 
@@ -537,8 +541,8 @@ uiMessages (source of truth in AgentContext, synced at each `chat()` start)
 ```
 
 - **Each run start** (`prepareForRun`): incoming `uiMessages` from `AgentChatController` → `context.setUIMessages` (summary + `compactIndex` preserved).
-- **After run idle** (`AgentChatController` after `pumpToolPhases`): `maybeSaveSessionUIMessages(messages, "pump-complete")`.
-- **Stable UI checkpoints** (`useAgentChat`): `maybeSaveSessionUIMessages` on throttled message updates and status transitions; skips mid-stream writes.
+- **User send** (`AgentChatController.sendMessage` / drained queues): `maybeSaveSessionUIMessages(messages, "user-message")`.
+- **After run idle** (`AgentChatController` after `pumpToolPhases`, including approval wait / abort cleanup): `maybeSaveSessionUIMessages(messages, "pump-complete")`.
 - **During runs / core**: `persistSession()` and `finalizeRun` write model fields only; they never pass `uiMessages`.
 - **Manual `/compact`**: syncs UI → context, compacts LLM path only; UI history stays complete; `persistSession()` saves model state only.
 - **Manual `/clear`**: `saveSessionUIMessages()` force-flushes before rotating session.
@@ -711,9 +715,10 @@ executeManagedAgentRun
                  └─ emit agent:stop
   │
   ▼
-[app] useAgentChat → maybeSaveSessionUIMessages (checkpoint on stable UI / status)
-[core] pump idle → maybeSaveSessionUIMessages(..., "pump-complete")
+[core] user send / drained queues → maybeSaveSessionUIMessages(..., "user-message")
+[core] pump idle / abort cleanup → maybeSaveSessionUIMessages(..., "pump-complete")
 [core] finalizeRun / /compact → persistSession() (model fields only)
+[app] /clear etc. → saveSessionUIMessages() (force)
 ```
 
 ---
@@ -760,6 +765,8 @@ Same pattern as skills: registry/domain under `agent/skills/`, discovery tools u
 pnpm --filter @my-agent/core run validate:emit-agent-event
 pnpm --filter @my-agent/core run validate:event-log-bridge
 pnpm --filter @my-agent/core run validate:extensions-middleware
+pnpm --filter @my-agent/core run validate:agent-ui-channel
+pnpm --filter @my-agent/core run validate:suppress-replayed-tool-chunks
 pnpm --filter @my-agent/core run validate:early-tool-result-ui
 pnpm --filter @my-agent/core run validate:extension-prompt-hooks
 pnpm --filter @my-agent/core run validate:streaming-scope

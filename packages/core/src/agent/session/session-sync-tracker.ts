@@ -1,6 +1,5 @@
 import { isEmptyAssistantShell } from "../utils/empty-assistant-shell.js";
 
-import type { AgentStatus } from "../../runtime-types/agent-status.js";
 import type { ToolCallPart, UIMessage } from "@tanstack/ai";
 
 // ToolCallPart["approval"] doesn't include `reason`, but
@@ -11,14 +10,19 @@ type ToolCallApproval = ToolCallPart["approval"] & { reason?: string };
 // Types
 // ============================================================================
 
-export type SessionSaveReason = "checkpoint" | "pump-complete" | "force";
+/**
+ * Explicit UIMessage persist triggers (no streaming/status heuristics).
+ *
+ * - `user-message` — user text entered the channel (send / drained steer|follow-up)
+ * - `pump-complete` — chat pump idle (finished, waiting, error, or abort cleanup)
+ * - `force` — slash commands (`/clear`, etc.)
+ */
+export type SessionSaveReason = "user-message" | "pump-complete" | "force";
 
 export interface SessionSyncSnapshot {
   messageCount: number;
   fingerprints: string[];
 }
-
-const STREAMING_AGENT_STATUSES = new Set<AgentStatus>(["running", "thinking", "responding", "compacting"]);
 
 const STABLE_TOOL_CALL_STATES = new Set<ToolCallPart["state"]>([
   "input-complete",
@@ -87,7 +91,7 @@ function isToolCallPart(part: UIMessage["parts"][number]): part is ToolCallPart 
   return part.type === "tool-call";
 }
 
-/** Whether a UIMessage is safe to treat as a durable checkpoint (not mid-stream). */
+/** Whether a UIMessage is free of mid-stream tool/structured parts (debug / tests). */
 export function isUIMessageStable(message: UIMessage): boolean {
   if (message.role === "user") return true;
   if (isEmptyAssistantShell(message)) return false;
@@ -135,47 +139,24 @@ function snapshotsEqual(a: SessionSyncSnapshot | null, b: SessionSyncSnapshot): 
 
 export interface ShouldPersistUIMessagesOptions {
   reason: SessionSaveReason;
-  agentStatus?: AgentStatus;
 }
 
 /**
  * Decide whether to flush {@link UIMessage} history to session storage.
  *
- * - `force` / `pump-complete`: always persist when messages are non-empty.
- * - `checkpoint`: skip during active model/tool streaming; persist stable deltas
- *   (new user turns, approval waits, terminal status).
+ * All reasons persist when messages are non-empty and the fingerprint changed
+ * since the last successful write. Streaming chunks never call this path.
  */
 export function shouldPersistUIMessages(
   messages: UIMessage[],
   previous: SessionSyncSnapshot | null,
   options: ShouldPersistUIMessagesOptions
 ): boolean {
+  void options;
   if (messages.length === 0) return false;
 
   const snapshot = computeSessionSyncSnapshot(messages);
-  if (snapshotsEqual(previous, snapshot)) return false;
-
-  if (options.reason === "force" || options.reason === "pump-complete") {
-    return true;
-  }
-
-  const lastMessage = messages[messages.length - 1];
-  if (lastMessage?.role === "user") return true;
-
-  const status = options.agentStatus;
-  if (status && STREAMING_AGENT_STATUSES.has(status)) {
-    return false;
-  }
-
-  if (status === "waiting" || status === "awaiting_user") {
-    return true;
-  }
-
-  if (status === "completed" || status === "idle" || status === "error" || status === "aborted") {
-    return areAllUIMessagesStable(messages);
-  }
-
-  return areAllUIMessagesStable(messages);
+  return !snapshotsEqual(previous, snapshot);
 }
 
 // ============================================================================

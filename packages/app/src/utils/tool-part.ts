@@ -18,10 +18,6 @@ export function isToolCallPart(part: { type?: string } | null | undefined): part
   return part != null && part.type === "tool-call";
 }
 
-export function isToolResultPart(part: { type?: string } | null | undefined): boolean {
-  return part != null && part.type === "tool-result";
-}
-
 export function parseToolInput(part: ToolCallPart): unknown {
   if (!part.arguments) return undefined;
   try {

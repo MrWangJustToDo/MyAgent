@@ -32,11 +32,6 @@ function stripCacheHintLines(lines: string[]): string[] {
   return lines.filter((line) => !CACHE_HINT_PATTERNS.some((pattern) => pattern.test(line)));
 }
 
-/** Strip "(large output/content cached to disk)" note from message text. */
-export function stripCacheNote(message: string): string {
-  return message.replace(/\s*\(large (?:output|content) cached to disk\)/, "");
-}
-
 // ============================================================================
 // Formatters
 // ============================================================================
@@ -206,17 +201,18 @@ function formatAskUserOutput(output: { question?: string; answer?: string; hasOp
 }
 
 function formatTaskOutput(output: TaskOutput): string {
-  const { summary, iterations, truncated, reachedLimit, incomplete, usage } = output;
+  const { summary, iterations, truncated, reachedLimit, incomplete, aborted, usage } = output;
   const lines: string[] = [];
   const statusParts: string[] = [];
 
-  if (typeof incomplete === "number") statusParts.push(`${iterations} iteration${iterations !== 1 ? "s" : ""}`);
+  if (typeof iterations === "number") statusParts.push(`${iterations} iteration${iterations !== 1 ? "s" : ""}`);
   if (usage) statusParts.push(`${usage.totalTokens} tokens`);
   if (truncated) statusParts.push("truncated");
+  if (aborted) statusParts.push("cancelled");
   if (reachedLimit) statusParts.push("limit reached");
-  if (incomplete && !reachedLimit) statusParts.push("stalled");
-  if (!summary) return "";
-  lines.push(`[${statusParts.join(", ")}]`);
+  if (incomplete && !reachedLimit && !aborted) statusParts.push("stalled");
+  if (!summary) return aborted ? "[cancelled]" : "";
+  if (statusParts.length > 0) lines.push(`[${statusParts.join(", ")}]`);
 
   const summaryLines = stripCacheHintLines(splitStreamingLines(summary.trim()));
   const maxSummaryLines = 10;

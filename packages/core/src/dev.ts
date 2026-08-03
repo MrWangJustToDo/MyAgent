@@ -28,6 +28,7 @@ export {
   sessionForSubagent,
 } from "./agent-session";
 export { AgentUIChannel } from "./agent/ui-channel.js";
+export { findToolCallPart, shouldSuppressReplayedToolChunk } from "./agent/utils/suppress-replayed-tool-chunks.js";
 export { AgentChatController } from "./managers/agent-chat-controller.js";
 export { PendingMessageQueue } from "./agent/utils/pending-message-queue.js";
 export type { QueueMode } from "./agent/utils/pending-message-queue.js";
@@ -78,6 +79,7 @@ export {
   shouldStreamTaskSummary,
 } from "./agent/stream/extract-assistant-text.js";
 export { countSubagentIterations, deriveSubagentRunStats } from "./agent/subagent/run-stats.js";
+export { applySubagentCancelNotice, SUBAGENT_CANCELLED_NOTICE, truncateSummary } from "./agent/subagent/output.js";
 export { resolveSubagentBridgeUI } from "./agent/subagent/types.js";
 export {
   consumeAgentStream,

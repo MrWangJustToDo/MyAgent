@@ -21,7 +21,7 @@ export type GetMessagesOptions = {
 const filterValidMessage = (message: UIMessage) => {
   if (message.role === "assistant") {
     const onlyPart = message.parts.length === 1 ? message.parts[0] : null;
-    // thinking-only rows are display-hidden; chat state keeps them until orphan-merge.
+    // thinking-only rows are display-hidden (MessageView also skips thinking parts).
     if (onlyPart?.type === "thinking" || onlyPart?.type === "tool-result" || !onlyPart?.type) return false;
   }
   if (message.role === "user" || message.role === "assistant") {
@@ -80,13 +80,16 @@ function computeStaticRenderSignature(displayMessages: UIMessage[], options: { m
 
 /**
  * Split messages into static (completed) and dynamic (streaming) portions.
- * Tool-call parts with the same id are deduped (first wins) with state merged from later replays.
  * Compact mode selectively folds exploration tools before flatten/split.
+ *
+ * TODO(cleanup): Drop `dedupeToolCallsInMessages` once legacy duplicate-id sessions
+ * are out of scope — core suppress-replayed already keeps new transcripts clean.
  */
 export const getMessages = (messages: UIMessage[], options: GetMessagesOptions = {}) => {
   const mode = options.mode ?? "full";
 
   const normalizedMessages = normalizeToolPartsInMessages(messages);
+  // Temporary display-only safety net for old sessions with cloned toolCallIds.
   const dedupedMessages = dedupeToolCallsInMessages(normalizedMessages);
   const displayMessages = projectTranscriptForDisplay(dedupedMessages, { mode });
 

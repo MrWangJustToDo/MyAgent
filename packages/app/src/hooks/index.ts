@@ -23,7 +23,6 @@ export { useDiffFileCache } from "./use-diff-file-cache.js";
 export { useDynamic } from "./use-dynamic.js";
 export { useForceUpdate } from "./use-force-update.js";
 export { useInputMode, type InputMode, type FreeformContext } from "./use-input-mode.js";
-export { useMessageCache } from "./use-message-cache.js";
 export { usePreviewEdit } from "./use-preview-edit.js";
 export { useSelect } from "./use-select.js";
 export { useStatic } from "./use-static.js";
