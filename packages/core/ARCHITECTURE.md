@@ -450,6 +450,8 @@ runStreamWithRecovery catches RUN_ERROR / thrown error
 
 Unhandled `RUN_ERROR` chunks (anything other than a successful recovery strategy) are **thrown** — never yielded. `AgentChatController` / `AgentUIChannel.consumeRun` also wrap streams with `throwOnRunError`, so failures surface as `status: error` + `agent:stream-error` instead of a silent `Completed` with no assistant message. Handled errors are recorded on the agent and **not** rethrown from the chat pump (avoids unhandled rejection crashing the CLI).
 
+**Empty stream guard:** Some OpenAI-compatible gateways return HTTP 200 HTML (e.g. SSO login) for `stream: true`; the SDK iterates zero chunks and does not throw. After each `chat()` consume, `AgentChatController` flags an error when messages show no model progress (no new/updated assistant text, tool calls, or tool results) via `shouldFlagEmptyModelStream` (`agent/utils/empty-model-stream.ts`).
+
 **Vision / multimodal:** Some text-only APIs (notably DeepSeek Chat Completions) reject multimodal parts with `unknown variant image_url, expected text`. `runStreamWithRecovery` uses capability-aware sanitization (`vision` / `audio` / `video` / `document`): unsupported parts are stripped from the **wire** copy (and all multimodal parts are stripped once on schema rejection); UI history keeps media for display.
 
 ### 5.5 Manual `/compact`

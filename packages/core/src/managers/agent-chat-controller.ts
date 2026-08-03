@@ -4,6 +4,7 @@ import { throwOnRunError } from "../agent/stream/stream-errors.js";
 import { AgentUIChannel } from "../agent/ui-channel.js";
 import { formatAgentStreamError } from "../agent/utils/assert-async-iterable.js";
 import { stripEmptyAssistantShells } from "../agent/utils/empty-assistant-shell.js";
+import { EMPTY_MODEL_STREAM_MESSAGE, shouldFlagEmptyModelStream } from "../agent/utils/empty-model-stream.js";
 import {
   cancelIncompleteToolCalls,
   hasCancellableIncompleteToolCalls,
@@ -367,6 +368,7 @@ export class AgentChatController {
     // directly into TanStack chat. Do not create a second controller here — that used
     // to leave ManagedAgent.abort() aborting a controller chat was not listening to.
     // Outcome finalization (path: "chat") stays in pumpToolPhases after the full loop.
+    const messagesBefore = messages;
     try {
       await runAgentOnce({
         manager: this.manager,
@@ -380,7 +382,17 @@ export class AgentChatController {
         this.applyCancelledIncompleteTools();
         return;
       }
-      this.managed.statusController.reconcileWithPolicy(this.channel.getMessages(), "during-run");
+
+      // OpenAI-compatible streaming against SSO/HTML (HTTP 200) can yield zero chunks
+      // without throwing. Treat "no model progress" as an error instead of Completed.
+      const messagesAfter = this.channel.getMessages();
+      if (shouldFlagEmptyModelStream(messagesBefore, messagesAfter) && this.managed.status !== "error") {
+        this.managed.statusController.onRunError(EMPTY_MODEL_STREAM_MESSAGE);
+        this.managed.log?.error("agent", EMPTY_MODEL_STREAM_MESSAGE);
+        return;
+      }
+
+      this.managed.statusController.reconcileWithPolicy(messagesAfter, "during-run");
     } catch (err) {
       if (generation !== this.runGeneration || this.managed.status === "aborted") {
         this.applyCancelledIncompleteTools();

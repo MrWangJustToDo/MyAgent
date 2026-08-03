@@ -446,7 +446,7 @@ registerCoreEnv(env);
 | `prompt:before` | Extension `before_agent_start` / turn-context providers collected |
 | `agent:thinking` | Model reasoning stream starts |
 | `agent:tool-start` / `agent:tool-end` / `agent:tool-error` | Tool lifecycle (extensions middleware) |
-| `agent:abort` / `agent:stream-error` | User abort / stream failure (`RUN_ERROR` and other pump failures; main chat records error without crashing the host) |
+| `agent:abort` / `agent:stream-error` | User abort / stream failure (`RUN_ERROR`, empty-stream guard, and other pump failures; main chat records error without crashing the host) |
 | `agent:stop` | Run finished or aborted |
 | `memory:prefetch` | Relevant memory injection before run |
 | `memory:extract` / `memory:consolidate` | Post-run memory extraction |

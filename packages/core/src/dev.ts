@@ -180,6 +180,12 @@ export {
   isEmptyAssistantShell,
   stripEmptyAssistantShells,
 } from "./agent/utils/empty-assistant-shell.js";
+export {
+  EMPTY_MODEL_STREAM_MESSAGE,
+  assistantProgressSignature,
+  didStreamProduceModelOutput,
+  shouldFlagEmptyModelStream,
+} from "./agent/utils/empty-model-stream.js";
 export { ReasoningContentCache } from "./models/reasoning-content-cache.js";
 export { resolveReasoningContentForAssistant } from "./models/resolve-reasoning-content.js";
 export {
