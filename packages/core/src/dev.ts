@@ -45,6 +45,8 @@ export {
 export { runSideTextQuery } from "./models/side-text-query.js";
 export { isPromptTooLongError } from "./agent/compaction/reactive-compact.js";
 export {
+  extractRetryAfterSeconds,
+  isTransientRetryableError,
   messagesForModelCapabilities,
   retryDelayMs,
   runStreamWithRecovery,

@@ -439,13 +439,15 @@ When the API returns `prompt_too_long`:
 
 ```
 runStreamWithRecovery catches RUN_ERROR / thrown error
-  → strategies: reactive-compact | capability-sanitize | max-tokens-continue
-  → reactive path: handleReactiveCompact (max 1 retry by default)
+  → strategies: reactive-compact | capability-sanitize | transient-retry | max-tokens-continue
+  → reactive path: handleReactiveCompact (max 1 retry by default; skipped for subagents)
+  → transient path: 429 / rate-limit / 502–504 / network — same messages + exponential backoff
+    (honors Retry-After when present; works for main agent and subagents)
   → beginCompaction("reactive")  // emits compaction:reactive-start only (not auto-start)
   → reactiveCompact: summarize + keep tail messages
   → applyReactiveCompactionResult
   → endCompaction + emit compaction:reactive-complete | compaction:reactive-error
-  → retry runner.run with updated messages
+  → retry runner.run with updated messages (shared MAX_RECOVERY_ATTEMPTS ≈ 3)
 ```
 
 Unhandled `RUN_ERROR` chunks (anything other than a successful recovery strategy) are **thrown** — never yielded. `AgentChatController` / `AgentUIChannel.consumeRun` also wrap streams with `throwOnRunError`, so failures surface as `status: error` + `agent:stream-error` instead of a silent `Completed` with no assistant message. Handled errors are recorded on the agent and **not** rethrown from the chat pump (avoids unhandled rejection crashing the CLI).

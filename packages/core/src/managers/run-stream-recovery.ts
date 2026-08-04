@@ -4,6 +4,7 @@ import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
 import { messagesForModelCapabilities, tryCapabilitySanitizeRetry } from "./stream-recovery/capability-sanitize.js";
 import { createTruncationState, handleMaxTokensTruncation } from "./stream-recovery/max-tokens-continue.js";
 import { tryReactiveCompactRetry } from "./stream-recovery/reactive-compact.js";
+import { extractRetryAfterSeconds, isTransientRetryableError } from "./stream-recovery/transient-retry.js";
 
 import type { AgentManager } from "./agent-manager.js";
 import type { ManagedAgent } from "./managed-agent.js";
@@ -12,6 +13,7 @@ import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai";
 
 export { messagesForModelCapabilities } from "./stream-recovery/capability-sanitize.js";
 export { tryReactiveCompactRetry } from "./stream-recovery/reactive-compact.js";
+export { extractRetryAfterSeconds, isTransientRetryableError } from "./stream-recovery/transient-retry.js";
 export {
   CONTINUATION_PROMPT,
   ESCALATED_MAX_TOKENS,
@@ -57,6 +59,8 @@ export function retryDelayMs(attempt: number, retryAfter?: number): number {
 interface RecoveryResult {
   messages: Array<UIMessage | ModelMessage>;
   multimodalStripAttempted: boolean;
+  /** Prefer provider Retry-After when present (seconds). */
+  retryAfterSeconds?: number;
 }
 
 interface AttemptRecoveryOptions {
@@ -94,6 +98,23 @@ async function attemptErrorRecovery(
     return { messages: stripped, multimodalStripAttempted: true };
   }
 
+  // Same messages + backoff (429 / gateway / network). Applies to root and subagents.
+  if (isTransientRetryableError(error)) {
+    const retryAfterSeconds = extractRetryAfterSeconds(error);
+    options.managed.log?.warn("agent", "Transient provider error — retrying with backoff", {
+      attempt: recoveryAttempts + 1,
+      maxAttempts: MAX_RECOVERY_ATTEMPTS,
+      retryAfterSeconds,
+      error: errorFromUnknown(error).message,
+    });
+    options.managed.setError("");
+    return {
+      messages: messagesForModelCapabilities(options.managed, currentMessages),
+      multimodalStripAttempted,
+      ...(retryAfterSeconds != null ? { retryAfterSeconds } : {}),
+    };
+  }
+
   return null;
 }
 
@@ -119,6 +140,7 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
   while (true) {
     let shouldRetry = false;
     let truncationDetected = false;
+    let retryAfterSeconds: number | undefined;
     const stream = options.run(messages);
     assertAsyncIterable<StreamChunk>(stream, "AgentRunner.run");
 
@@ -137,6 +159,7 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
             shouldRetry = true;
             messages = result.messages;
             multimodalStripAttempted = result.multimodalStripAttempted;
+            retryAfterSeconds = result.retryAfterSeconds;
             break;
           }
           throw runError;
@@ -160,6 +183,7 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
           shouldRetry = true;
           messages = result.messages;
           multimodalStripAttempted = result.multimodalStripAttempted;
+          retryAfterSeconds = result.retryAfterSeconds;
         } else {
           throw error;
         }
@@ -181,10 +205,11 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
 
     if (!shouldRetry) return;
 
-    const delay = retryDelayMs(recoveryAttempts);
+    const delay = retryDelayMs(recoveryAttempts, retryAfterSeconds);
     options.managed.log?.debug("agent", "Backoff before retry", {
       attempt: recoveryAttempts,
       delayMs: Math.round(delay),
+      retryAfterSeconds,
     });
     await new Promise((resolve) => setTimeout(resolve, delay));
 
