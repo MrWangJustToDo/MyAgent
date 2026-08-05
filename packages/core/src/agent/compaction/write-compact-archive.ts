@@ -14,8 +14,8 @@ import type { ModelMessage } from "@tanstack/ai";
 /** Workspace-relative root for compact transcript archives. */
 export const COMPACT_TRANSCRIPT_ROOT = ".agents/transcripts";
 
-/** Match backtick paths that look like compact archive files. */
-const ARCHIVE_PATH_RE = /`([^`\n]*compact-\d+\.md)`/g;
+/** Match workspace-relative compact archive paths (ignore bare `compact-N.md` examples). */
+const ARCHIVE_PATH_RE = /`(\.agents\/transcripts\/[^`\n]*compact-\d+\.md)`/g;
 
 export interface WriteCompactArchiveOptions {
   sessionId: string;
@@ -32,6 +32,8 @@ export interface CompactArchiveWriteResult {
 
 /**
  * Extract archive paths previously listed in a summary (singular or plural section).
+ * Dedupes and sorts oldest → newest by `compact-N` so instructional "start with newest"
+ * mentions do not scramble merge order on the next compaction.
  */
 export function extractCompactArchivePaths(...texts: Array<string | undefined>): string[] {
   const seen = new Set<string>();
@@ -49,7 +51,11 @@ export function extractCompactArchivePaths(...texts: Array<string | undefined>):
     }
   }
 
-  return paths;
+  return paths.sort((a, b) => {
+    const seqA = parseCompactSequence(a.split("/").pop() ?? "") ?? 0;
+    const seqB = parseCompactSequence(b.split("/").pop() ?? "") ?? 0;
+    return seqA - seqB;
+  });
 }
 
 /**
@@ -82,8 +88,8 @@ export function formatCompactArchivesSection(paths: string[]): string {
 
 Cold storage for compacted turns — details live in these files, not duplicated in the summary body above.
 
-- \`compact-1.md\` = earliest compressed slice; higher N = later slices.
-- Missing a detail? Grep **newest → oldest** (start with \`${newest}\`). Prefer the highest \`compact-N.md\` for work done just before the latest compaction.
+- Filenames are compact-N.md (N=1 earliest; higher N = later slices).
+- Missing a detail? Grep **newest → oldest** (start with \`${newest}\`). Prefer the highest N for work done just before the latest compaction.
 - Use grep or small offset/limit \`read_file\` reads. Do **not** load whole archive files into context.
 - Cite the archive path when looking something up; do not paste large archive excerpts back into the conversation.
 

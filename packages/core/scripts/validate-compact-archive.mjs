@@ -56,12 +56,12 @@ assert.match(section, /compact-2\.md/);
 assert.match(section, /newest slice/);
 assert.match(section, /Do \*\*not\*\* load whole archive files/);
 
-assert.deepEqual(
-  extractCompactArchivePaths(
-    `## Compact archives\n\n- \`.agents/transcripts/ses/compact-1.md\`\n- \`.agents/transcripts/ses/compact-2.md\``
-  ),
-  [".agents/transcripts/ses/compact-1.md", ".agents/transcripts/ses/compact-2.md"]
-);
+// Instructional prose must not be mistaken for real archive paths on the next compact.
+assert.deepEqual(extractCompactArchivePaths(section), [
+  ".agents/transcripts/ses_test/compact-1.md",
+  ".agents/transcripts/ses_test/compact-2.md",
+]);
+assert.deepEqual(extractCompactArchivePaths("- `compact-1.md` = earliest compressed slice"), []);
 
 const stripped = stripCompactArchiveSections(`## Goal\n\nShip it${section}`);
 assert.match(stripped, /## Goal/);

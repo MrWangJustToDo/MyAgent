@@ -89,9 +89,17 @@ export class AgentChatController {
   }
 
   stop(): void {
+    this.interruptCurrentRun("user-cancelled");
+  }
+
+  /**
+   * Abort the in-flight pump, cancel incomplete tools, and finalize the aborted turn.
+   * Bumps {@link runGeneration} so the old pump exits without double-finalizing.
+   */
+  private interruptCurrentRun(reason: string): void {
     this.clearQueuedMessages();
     this.managed.statusController.onUserCancel();
-    this.managed.abort("user-cancelled");
+    this.managed.abort(reason);
     this.runGeneration += 1;
     // Immediately clear loading tool rows; stream teardown may still finalize later.
     this.applyCancelledIncompleteTools();
@@ -148,6 +156,14 @@ export class AgentChatController {
   /**
    * Queue a mid-run correction. Delivered after the current assistant turn / tool batch.
    * When idle, behaves like {@link sendMessage}.
+   *
+   * NOTE: This is no longer the default Enter keybinding. The default Enter
+   * (while running) now calls {@link followUp} — it queues the message for
+   * after the agent would naturally stop, then starts a new LLM turn.
+   * Option+Enter calls {@link forceSubmit} — it aborts the current run,
+   * cancels incomplete tools, injects the message, and starts a new pump.
+   * `steer` is kept for programmatic use where you want the message to be
+   * delivered within the same turn (before the next LLM call).
    */
   steer(content: QueuedMessageContent): void {
     if (!this.shouldDeferQueue()) {
@@ -161,6 +177,10 @@ export class AgentChatController {
   /**
    * Queue a message for after the agent would otherwise stop.
    * When idle, behaves like {@link sendMessage}.
+   *
+   * This is the default Enter keybinding while the agent is running:
+   * the message is delivered only after the current turn completes, then
+   * starts a new LLM turn.
    */
   followUp(content: QueuedMessageContent): void {
     if (!this.shouldDeferQueue()) {
@@ -169,6 +189,20 @@ export class AgentChatController {
     }
     this.followUpQueue.enqueue(content);
     this.notifyQueueListeners();
+  }
+
+  /**
+   * Force-submit: abort the current run, cancel incomplete tools, finalize the
+   * aborted turn, inject the message, and start a new pump immediately.
+   *
+   * This is the Option/Ctrl+Enter keybinding while the agent is running.
+   */
+  forceSubmit(content: string | ContentPart[]): void {
+    this.interruptCurrentRun("force-submit");
+    this.channel.addUserMessage(content);
+    this.persistMessages("user-message");
+    this.managed.statusController.reconcileWithPolicy(this.channel.getMessages(), "during-run");
+    void this.enqueueRun();
   }
 
   sendMessage(content: string | ContentPart[]): Promise<void> {

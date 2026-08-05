@@ -84,6 +84,7 @@ export type AgentSessionCommand =
   | { type: "send"; content: AgentSessionMessageContent }
   | { type: "steer"; content: AgentSessionMessageContent }
   | { type: "followUp"; content: AgentSessionMessageContent }
+  | { type: "forceSubmit"; content: AgentSessionMessageContent }
   | { type: "stop" }
   | { type: "clear" }
   | { type: "respondApproval"; approvalId: string; approved: boolean; reason?: string }

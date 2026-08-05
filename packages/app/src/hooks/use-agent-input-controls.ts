@@ -30,6 +30,7 @@ interface UseAgentInputControlsOptions {
   sendMessage: UseAgentChatReturn["sendMessage"];
   steer: UseAgentChatReturn["steer"];
   followUp: UseAgentChatReturn["followUp"];
+  forceSubmit: UseAgentChatReturn["forceSubmit"];
   queuedMessages: UseAgentChatReturn["queuedMessages"];
   stop: UseAgentChatReturn["stop"];
   addToolApprovalResponse: UseAgentChatReturn["addToolApprovalResponse"];
@@ -51,6 +52,7 @@ export function useAgentInputControls({
   sendMessage,
   steer,
   followUp,
+  forceSubmit,
   queuedMessages: _queuedMessages,
   stop,
   addToolApprovalResponse,
@@ -181,7 +183,7 @@ export function useAgentInputControls({
     return true;
   };
 
-  const handleNormalSubmit = async (behavior: "send" | "steer" | "followUp" = "send") => {
+  const handleNormalSubmit = async (behavior: "send" | "steer" | "followUp" | "forceSubmit" = "send") => {
     commandOutputActions.dismiss();
     const { text: prompt, attachments } = inputActions.submit();
 
@@ -201,6 +203,9 @@ export function useAgentInputControls({
     const content = attachments.length > 0 ? { text: prompt, files: attachments } : prompt;
 
     if (behavior === "steer") {
+      // NOTE: steer is not the default Enter keybinding anymore.
+      // Enter (running) → followUp; Option+Enter → forceSubmit.
+      // steer is kept for programmatic use (same-turn injection).
       steer(content);
       return;
     }
@@ -208,8 +213,12 @@ export function useAgentInputControls({
       followUp(content);
       return;
     }
+    if (behavior === "forceSubmit") {
+      forceSubmit(content);
+      return;
+    }
     if (isLoading) {
-      steer(content);
+      followUp(content);
       return;
     }
     await sendMessage(content);

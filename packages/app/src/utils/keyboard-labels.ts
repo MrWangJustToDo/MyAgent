@@ -70,12 +70,19 @@ export function shiftEnterLabel(): string {
 }
 
 /**
- * Follow-up chord while the agent is running.
+ * Chord for Option/Ctrl+Enter (macOS) or Shift+Enter (Linux) — force-submit while
+ * running; also used as the advertised modified-Enter chord in help text.
+ *
  * On macOS, Option+Enter sends \x1b\r which parseKeypress detects as meta+return.
  */
-export function followUpEnterLabel(): string {
+export function modifiedEnterLabel(): string {
   // On macOS advertise Ctrl+Enter as a reliable fallback; Option+Enter is the meta key.
   return isMacPlatform() ? "Option/Ctrl+Enter" : KeyLabel.shiftEnter;
+}
+
+/** @deprecated Prefer {@link modifiedEnterLabel} — same chord. */
+export function followUpEnterLabel(): string {
+  return modifiedEnterLabel();
 }
 
 /** Idle multi-line insert chord. */
@@ -109,15 +116,15 @@ export interface ShortcutSection {
 
 /** Full shortcut reference for `/shortcuts` (and docs). */
 export function getKeyboardShortcutSections(): ShortcutSection[] {
-  const modifiedEnter = followUpEnterLabel();
+  const modifiedEnter = modifiedEnterLabel();
   const newline = newlineEnterLabel();
   return [
     {
       title: "Chat",
       lines: [
-        { key: KeyLabel.enter, desc: "Submit prompt (while running: queue steer)" },
+        { key: KeyLabel.enter, desc: "Submit prompt (while running: queue follow-up)" },
         { key: newline, desc: "Insert newline when idle" },
-        { key: modifiedEnter, desc: "Queue follow-up while running" },
+        { key: modifiedEnter, desc: "Force-submit while running (abort + new turn)" },
         { key: KeyLabel.esc, desc: "Abort current run / dismiss UI" },
         { key: KeyLabel.ctrlC, desc: "Exit the app" },
         { key: KeyLabel.ctrlU, desc: "Clear input" },
@@ -173,11 +180,15 @@ export function workspacePanelHint(): string {
   return `${KeyLabel.tab} preview/diff · ${KeyLabel.leftRight} focus · ${KeyLabel.upDown} scroll · ${KeyLabel.enter} open · ${KeyLabel.r} refresh · ${KeyLabel.ctrlE}/${KeyLabel.esc} close`;
 }
 
-/** Busy-agent footer: steer / follow-up / abort. */
+/** Busy-agent footer: follow-up / force-submit / abort. */
 export function busyQueueHint(steerCount: number, followUpCount: number): string {
-  const steer = `${KeyLabel.enter}: queue steer${steerCount > 0 ? ` (${steerCount})` : ""}`;
-  const follow = `${followUpEnterLabel()}: follow-up${followUpCount > 0 ? ` (${followUpCount})` : ""}`;
-  return `${steer} | ${follow} | ${KeyLabel.esc}: abort`;
+  const follow = `${KeyLabel.enter}: follow-up${followUpCount > 0 ? ` (${followUpCount})` : ""}`;
+  const force = `${modifiedEnterLabel()}: force submit`;
+  const parts = [follow, force, `${KeyLabel.esc}: abort`];
+  if (steerCount > 0) {
+    parts.unshift(`steer queued (${steerCount})`);
+  }
+  return parts.join(" | ");
 }
 
 export function freeformSubmitHint(): string {
@@ -211,8 +222,8 @@ export function selectListHint(options: { multiSelect: boolean; cursorOnFreeform
 }
 
 /**
- * True when the user pressed a modified Enter that should mean follow-up (busy)
- * or newline (idle) — not a plain submit/steer.
+ * True when the user pressed a modified Enter that should mean force-submit (busy)
+ * or newline (idle) — not a plain submit/follow-up.
  *
  * - `meta` + return: Option+Enter on macOS / Alt+Enter on Linux
  *   (ESC+CR, detected as meta)

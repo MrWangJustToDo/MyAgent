@@ -52,7 +52,7 @@ export const Footer = ({
   const showFreeformInput = denyMode;
   const showSelectList = mode === "select";
   const freeformLabel = freeformContext === "deny" ? "Deny reason > " : "Answer > ";
-  // Allow typing while the agent runs so users can queue steer / follow-up messages.
+  // Allow typing while the agent runs so users can queue follow-up / force-submit.
   const isInputEnabled = mode === "normal" || mode === "approval" || denyMode || mode === "select";
   const isAgentBusy =
     displayStatus === "running" ||

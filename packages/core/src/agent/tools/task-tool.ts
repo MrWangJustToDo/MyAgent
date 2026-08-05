@@ -49,8 +49,8 @@ export const taskOutputSchema = z.object({
   subagentId: z.string().describe("ID of the subagent that executed this task"),
   /** Summary of what the subagent found/accomplished */
   summary: z.string().describe("Summary of the subagent's findings"),
-  /** Whether the summary was truncated due to length */
-  truncated: z.boolean().describe("Whether the summary was truncated"),
+  /** Whether the summary was truncated by maxOutputLength (not disk-cache preview) */
+  truncated: z.boolean().describe("Whether the summary was truncated by maxOutputLength"),
   /** Number of iterations the subagent used */
   iterations: z.number().describe("Number of iterations used"),
   /** Whether the subagent hit the iteration limit */
@@ -159,14 +159,16 @@ Example use cases:
         );
 
         let summary = result.output;
-        let truncated = result.truncated;
+        // Length truncation from subagent (maxOutputLength). Separate from disk-cache preview below.
+        const truncated = result.truncated;
         let cachedOutputPath: string | null = null;
 
+        // Large summaries are previewed for the parent context; full text stays on disk.
+        // Do NOT flip `truncated` here — that flag means maxOutputLength cut the summary.
         const cached = await maybeCacheOutput(result.output, `${toolCallId}-task`);
         cachedOutputPath = cached.cachedOutputPath;
         if (cachedOutputPath) {
           summary = cached.content;
-          truncated = true;
         }
 
         return {

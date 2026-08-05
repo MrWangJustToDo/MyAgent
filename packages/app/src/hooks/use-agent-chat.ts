@@ -37,10 +37,18 @@ export interface SendMessageContent {
 export interface UseAgentChatReturn {
   messages: UIMessage[];
   sendMessage: (content: string | SendMessageContent) => Promise<void>;
-  /** Queue a mid-run correction (after current tool batch). Idle → sendMessage. */
+  /**
+   * Queue a mid-run correction (after current tool batch). Idle → sendMessage.
+   *
+   * NOTE: Not the default keybinding anymore. Enter (running) → followUp;
+   * Option+Enter → forceSubmit. `steer` is for programmatic use where you
+   * want the message delivered within the same turn (before the next LLM call).
+   */
   steer: (content: string | SendMessageContent) => void;
   /** Queue a message for when the agent would stop. Idle → sendMessage. */
   followUp: (content: string | SendMessageContent) => void;
+  /** Force-submit: abort current run, inject message, start new pump. */
+  forceSubmit: (content: string | SendMessageContent) => void;
   queuedMessages: QueuedMessagesSnapshot;
   status: AgentStatus;
   isLoading: boolean;
@@ -273,6 +281,9 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   );
 
   const steer = useCallback(
+    // NOTE: Not the default keybinding anymore. Enter (running) → followUp;
+    // Option+Enter → forceSubmit. `steer` is kept for programmatic use where
+    // you want the message delivered within the same turn (before the next LLM call).
     (content: string | SendMessageContent) => {
       if (!session) return;
       void session.dispatch({ type: "steer", content: toChatContent(content) });
@@ -285,6 +296,15 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     (content: string | SendMessageContent) => {
       if (!session) return;
       void session.dispatch({ type: "followUp", content: toChatContent(content) });
+      forceUpdate();
+    },
+    [session, forceUpdate]
+  );
+
+  const forceSubmit = useCallback(
+    (content: string | SendMessageContent) => {
+      if (!session) return;
+      void session.dispatch({ type: "forceSubmit", content: toChatContent(content) });
       forceUpdate();
     },
     [session, forceUpdate]
@@ -385,6 +405,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     sendMessage,
     steer,
     followUp,
+    forceSubmit,
     queuedMessages,
     allPendingApproval,
     allPendingAskUser,

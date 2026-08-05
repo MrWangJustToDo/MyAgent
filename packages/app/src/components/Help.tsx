@@ -6,14 +6,14 @@ import { COLORS } from "../theme/colors.js";
 import {
   approveDenyLabel,
   exitAbortLabel,
-  followUpEnterLabel,
   KeyLabel,
+  modifiedEnterLabel,
   newlineEnterLabel,
 } from "../utils/keyboard-labels.js";
 
 export const Help = () => {
   const config = useConfig((s) => s.config);
-  const modifiedEnter = followUpEnterLabel();
+  const modifiedEnter = modifiedEnterLabel();
   const newlineChord = newlineEnterLabel();
   const yn = approveDenyLabel();
   const exitAbort = exitAbortLabel();
@@ -197,7 +197,7 @@ export const Help = () => {
             <Box width={28}>
               <Text color={COLORS.success}>{KeyLabel.enter}</Text>
             </Box>
-            <Text>Submit prompt (while running: queue steer)</Text>
+            <Text>Submit prompt (while running: queue follow-up)</Text>
           </Box>
           <Box>
             <Box width={28}>
@@ -209,7 +209,7 @@ export const Help = () => {
             <Box width={28}>
               <Text color={COLORS.success}>{modifiedEnter}</Text>
             </Box>
-            <Text>Queue follow-up while running</Text>
+            <Text>Force-submit while running (abort + new turn)</Text>
           </Box>
           <Box>
             <Box width={28}>

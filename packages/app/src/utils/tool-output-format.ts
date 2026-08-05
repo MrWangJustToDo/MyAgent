@@ -201,13 +201,15 @@ function formatAskUserOutput(output: { question?: string; answer?: string; hasOp
 }
 
 function formatTaskOutput(output: TaskOutput): string {
-  const { summary, iterations, truncated, reachedLimit, incomplete, aborted, usage } = output;
+  const { summary, iterations, truncated, reachedLimit, incomplete, aborted, usage, cachedOutputPath } = output;
   const lines: string[] = [];
   const statusParts: string[] = [];
 
   if (typeof iterations === "number") statusParts.push(`${iterations} iteration${iterations !== 1 ? "s" : ""}`);
   if (usage) statusParts.push(`${usage.totalTokens} tokens`);
-  if (truncated) statusParts.push("truncated");
+  // Disk cache preview (large summary) vs length truncation (maxOutputLength) are different.
+  if (cachedOutputPath) statusParts.push("cached");
+  else if (truncated) statusParts.push("truncated");
   if (aborted) statusParts.push("cancelled");
   if (reachedLimit) statusParts.push("limit reached");
   if (incomplete && !reachedLimit && !aborted) statusParts.push("stalled");

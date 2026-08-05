@@ -706,11 +706,11 @@ createNodeEnv({ rootPath: "/path", mode: "native" });   // No sandbox
 | `y` | - | - | Approve (when input empty) |
 | `n` | - | - | Enter deny-reason mode |
 | `↑/↓` | - | Navigate history / autocomplete | Navigate autocomplete |
-| `Enter` | Queue steering message (after current tools) | Submit input | Submit deny reason |
-| `Shift+Enter` / `Ctrl+Enter` | Queue follow-up (when agent would stop) | Insert newline (`Shift+Enter`) | - |
+| `Enter` | Queue follow-up (delivered when the agent would stop) | Submit input | Submit deny reason |
+| `Option`/`Ctrl+Enter` (macOS) or `Shift+Enter` | Force-submit (abort current run, start new turn) | Insert newline (`Shift+Enter`) | - |
 | `/...` | - | Slash commands | Slash commands |
 
-Note: In the TUI, modifier chords use **Ctrl** (not Cmd/⌘). `Option`/`Alt+Enter` is unreliable on macOS terminals — prefer `Shift+Enter` or `Ctrl+Enter` for follow-up. Shortcut labels are centralized in `packages/app/src/utils/keyboard-labels.ts`.
+Note: In the TUI, modifier chords use **Ctrl** (not Cmd/⌘). On macOS, prefer `Option+Enter` or `Ctrl+Enter` for force-submit / newline — plain `Shift+Enter` often cannot be distinguished from Enter. Shortcut labels are centralized in `packages/app/src/utils/keyboard-labels.ts`.
 
 ## File Structure
 

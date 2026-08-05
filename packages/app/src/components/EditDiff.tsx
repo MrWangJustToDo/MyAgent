@@ -1,8 +1,10 @@
 import { DiffModeEnum, DiffView, type DiffViewRef } from "@git-diff-view/cli";
 import { generateDiffFile } from "@git-diff-view/file";
+import { Text } from "ink";
 import { forwardRef, memo } from "react";
 
 import { useDiffFileCache } from "../hooks/use-diff-file-cache.js";
+import { COLORS } from "../theme/colors.js";
 
 const { getDiffFile, setDiffFile } = useDiffFileCache.getActions();
 
@@ -35,28 +37,32 @@ export const EditDiff = memo(
     const paddedOld = padContent(oldFile, startLine);
     const paddedNew = padContent(newFile, startLine);
 
-    const diffFile = getDiffFile(id) || generateDiffFile(oldPath, paddedOld, newPath, paddedNew, "", "");
+    try {
+      const diffFile = getDiffFile(id) || generateDiffFile(oldPath, paddedOld, newPath, paddedNew, "", "");
 
-    setDiffFile(id, diffFile);
+      setDiffFile(id, diffFile);
 
-    diffFile.initTheme("dark");
+      diffFile.initTheme("dark");
 
-    diffFile.init();
+      diffFile.init();
 
-    const finalWidth = width;
+      const finalWidth = width;
 
-    return (
-      <DiffView
-        ref={ref}
-        width={finalWidth}
-        {...(height != null ? { height } : {})}
-        diffViewMode={finalWidth > 20 && oldFile ? DiffModeEnum.Split : DiffModeEnum.Unified}
-        diffFile={diffFile}
-        diffViewHideOperator
-        diffViewHighlight
-        diffViewNoBG
-        diffViewTheme="dark"
-      />
-    );
+      return (
+        <DiffView
+          ref={ref}
+          width={finalWidth}
+          {...(height != null ? { height } : {})}
+          diffViewMode={finalWidth > 20 && oldFile ? DiffModeEnum.Split : DiffModeEnum.Unified}
+          diffFile={diffFile}
+          diffViewHideOperator
+          diffViewHighlight
+          diffViewNoBG
+          diffViewTheme="dark"
+        />
+      );
+    } catch {
+      return <Text color={COLORS.danger}>Error generating diff</Text>;
+    }
   })
 );

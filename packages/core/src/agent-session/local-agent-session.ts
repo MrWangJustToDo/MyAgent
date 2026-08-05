@@ -111,6 +111,11 @@ async function dispatchCommand(
         chat.followUp(command.content);
         return { ok: true };
       }
+      case "forceSubmit": {
+        if (!chat) return { ok: false, code: "failed", error: "Chat controller not initialized" };
+        chat.forceSubmit(command.content);
+        return { ok: true };
+      }
       case "stop": {
         if (chat) {
           chat.stop();

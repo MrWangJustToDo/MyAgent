@@ -47,7 +47,7 @@ interface UseAgentKeybindingsOptions {
   commandCtx: CommandContext;
   stop: UseAgentChatReturn["stop"];
   acceptAutocomplete: (triggerSubmit: boolean) => boolean;
-  handleNormalSubmit: (behavior?: "send" | "steer" | "followUp") => void;
+  handleNormalSubmit: (behavior?: "send" | "steer" | "followUp" | "forceSubmit") => void;
   submitAskUserAnswer: (answer: string) => void;
   addToolApprovalResponse: UseAgentChatReturn["addToolApprovalResponse"];
   /** Active extension UI confirm dialog (blocks normal input). */
@@ -222,7 +222,7 @@ export function useAgentKeybindings({
         return;
       }
       if (inputKey.return || (inputKey.ctrl && inputChar === "\n")) {
-        // While running: Enter = steer; Option/Ctrl+Enter = follow-up.
+        // While running: Enter = follow-up; Option/Ctrl+Enter = force-submit.
         // Idle: Option+Enter = newline; Enter = submit.
         //
         // On macOS, Option+Enter sends \x1b\r (ESC+CR), which parseKeypress
@@ -231,9 +231,11 @@ export function useAgentKeybindings({
         // distinguished, so it will submit rather than insert a newline.
         if (isLoading) {
           if (isModifiedEnter(inputChar, inputKey)) {
-            handleNormalSubmit("followUp");
+            // Option+Enter: force-submit — abort current run, inject message, start new pump.
+            handleNormalSubmit("forceSubmit");
           } else if (inputKey.return) {
-            handleNormalSubmit("steer");
+            // Enter: follow-up — queue message for after the current turn completes.
+            handleNormalSubmit("followUp");
           }
           return;
         }
