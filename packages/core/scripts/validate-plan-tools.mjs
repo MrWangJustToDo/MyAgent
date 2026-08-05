@@ -34,6 +34,9 @@ assert.ok(planning.includes("create_plan"), "planning prompt must mention create
 assert.ok(planning.includes("ask_user"), "planning prompt must mention ask_user for clarifying questions");
 assert.ok(/clarif/i.test(planning));
 assert.ok(planning.includes(".agents/plans"), "planning prompt must mention plan file location");
+assert.ok(/verification/i.test(planning), "planning prompt must require verification");
+assert.ok(/task status/i.test(planning), "planning prompt must judge task results via status flags");
+assert.ok(/trustworthy|extendable/i.test(planning), "planning prompt must mention trustworthy/extendable judgment");
 assert.ok(!/static summary/i.test(planning), "planning prompt should not advertise tool-output static summary");
 
 const ready = buildPlanModeReadyPrompt("## Plan\n1. Do thing", ".agents/plans/x.md");

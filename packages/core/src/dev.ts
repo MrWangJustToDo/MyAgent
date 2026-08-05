@@ -81,7 +81,7 @@ export {
   resolveTaskRunPhase,
   shouldStreamTaskSummary,
 } from "./agent/stream/extract-assistant-text.js";
-export { countSubagentIterations, deriveSubagentRunStats } from "./agent/subagent/run-stats.js";
+export { countSubagentIterations, deriveSubagentRunStats, hasBeginSummaryCall } from "./agent/subagent/run-stats.js";
 export { applySubagentCancelNotice, SUBAGENT_CANCELLED_NOTICE, truncateSummary } from "./agent/subagent/output.js";
 export { resolveSubagentBridgeUI } from "./agent/subagent/types.js";
 export {
@@ -265,6 +265,10 @@ export {
   buildPlanModeRetroPrompt,
   buildPlanRetroSteerMessage,
   createPlanModeMiddleware,
+  gateCompletePlanVerification,
+  isUsableVerification,
+  parseVerificationItemsFromPlanMarkdown,
+  parseVerificationItemsFromText,
 } from "./agent/plan";
 export type {
   BeginPlanExecutionResult,
@@ -274,6 +278,7 @@ export type {
   PlanStep,
   ExtractedPlan,
   StructuredPlanInput,
+  VerificationResultItem,
 } from "./agent/plan";
 export { TodoManager } from "./agent/todo-manager";
 export {

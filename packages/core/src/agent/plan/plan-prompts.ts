@@ -11,16 +11,18 @@ export function buildPlanModePlanningPrompt(): string {
     "- Do not edit files, run mutating commands, or claim you mutated the workspace.",
     "",
     "Exploration:",
-    "- Prefer the `task` tool to spawn parallel read-only subagents for codebase research.",
+    "- Prefer the `task` tool for read-only research (prefer focused prompts; avoid burning the full iteration budget).",
     "- You may also use read tools (`read_file`, `grep`, `glob`, `list_file`, `tree`) and allowlisted `run_command` (e.g. git status/log/diff, ls, cat).",
+    "- After each `task`, read `[task status: …]` (`reachedLimit`, `incomplete`, `aborted`, `truncated`). Only treat findings as trustworthy/extendable when the run completed cleanly; otherwise re-run narrower research before `create_plan`.",
     "- If requirements are ambiguous, call `ask_user` with a short clarifying question (prefer numbered options) before finalizing the plan.",
     "- Skipping answers is fine if the user continues without answering — do not block forever.",
     "",
     "When ready, call the `create_plan` tool with:",
-    "- goal, ordered steps, key_files, risks, verification (optional mermaid).",
+    "- goal, ordered steps, key_files, risks, **verification** (required), optional mermaid.",
+    "- **verification** MUST be a concrete checklist that proves the plan outcome (observable behavior, acceptance checks, or focused project scripts).",
     "The plan is auto-saved under `.agents/plans/`. The user reviews it in the ready banner (markdown preview) — do not dump a long plan overview in chat.",
     "You may also output a `## Plan` markdown section as a fallback; prefer `create_plan`.",
-    "Use `update_plan` to revise after feedback.",
+    "Use `update_plan` to revise after feedback (verification still required).",
     "</plan_mode>",
   ].join("\n");
 }
@@ -32,6 +34,7 @@ export function buildPlanModeExecutingPrompt(planMarkdown: string | null, planFi
     "You are **building** the approved plan (Cursor Build). Execute step-by-step. Update the todo list as you progress.",
     "Do not expand scope without asking the user.",
     "Mark completed steps via the `todo` tool (preferred) or `[DONE:n]` markers (1-based).",
+    "Before treating the build as done, run the plan **Verification** checklist and keep evidence (commands, scripts, or observed behavior).",
     "When all plan todos are done, you will enter a forced retrospective — do not skip ahead to unrelated work.",
   ];
   if (planFilePath?.trim()) {
@@ -47,7 +50,7 @@ export function buildPlanModeExecutingPrompt(planMarkdown: string | null, planFi
 /** Short user steer when `/plan execute` starts a run. */
 export function buildPlanExecuteSteerMessage(planMarkdown: string | null, planFilePath?: string | null): string {
   const header = [
-    "Build the approved plan step-by-step (you are now in building phase). Update todos as you go. Do not expand scope without asking.",
+    "Build the approved plan step-by-step (you are now in building phase). Update todos as you go. Do not expand scope without asking. Run Verification items with evidence before finishing.",
   ];
   if (planFilePath?.trim()) {
     header.push(`Plan file: \`${planFilePath.trim()}\``);
@@ -82,8 +85,10 @@ export function buildPlanModeRetroPrompt(planMarkdown: string | null, planFilePa
   const parts = [
     '<plan_mode phase="retro">',
     "All plan todos are complete. You are in a **forced retrospective** — do not start new feature work.",
-    "Review outcomes against the approved plan: what was done, any deviations, and how verification went.",
-    "When the retrospective is written, call `complete_plan` (or the user may run `/plan done`) to end plan mode.",
+    "Review outcomes against the approved plan: what was done, any deviations, and **Verification**.",
+    "For each Verification checklist item, record pass/fail with concrete evidence (command, validate script, or observed behavior).",
+    "Call `complete_plan` with `verificationResults` covering every checklist item (all passed). Do not call it if any item failed — fix or update the plan first.",
+    "The user may force-exit with `/plan done` without the agent gate.",
   ];
   if (planFilePath?.trim()) {
     parts.push(`Plan file: \`${planFilePath.trim()}\` — prefer reading it if you need the full text.`);
@@ -98,7 +103,7 @@ export function buildPlanModeRetroPrompt(planMarkdown: string | null, planFilePa
 /** Steer message when entering retro (optional chat injection). */
 export function buildPlanRetroSteerMessage(planFilePath?: string | null): string {
   const pathLine = planFilePath?.trim() ? ` Plan file: \`${planFilePath.trim()}\`.` : "";
-  return `All plan steps are done. Write a short retrospective against the plan (done / deviations / verification), then call \`complete_plan\` to finish plan mode.${pathLine}`;
+  return `All plan steps are done. Report Verification pass/fail with evidence, then call \`complete_plan\` with verificationResults (or the user may run \`/plan done\`).${pathLine}`;
 }
 
 export function buildPlanModePrompt(

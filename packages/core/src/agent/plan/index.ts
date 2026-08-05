@@ -33,6 +33,15 @@ export {
   stripLeadingStepNumber,
   type StructuredPlanInput,
 } from "./plan-format.js";
+export {
+  gateCompletePlanVerification,
+  isUsableVerification,
+  normalizeVerificationItem,
+  parseVerificationItemsFromPlanMarkdown,
+  parseVerificationItemsFromText,
+  type GateCompletePlanResult,
+  type VerificationResultItem,
+} from "./plan-verification.js";
 export { extractGoalFromPlanMarkdown, formatPlanSummary, type FormatPlanSummaryInput } from "./plan-summary.js";
 export { formatPlanModeFooterLabel, todoProgressFromItems, type PlanTodoProgress } from "./plan-footer-label.js";
 export {

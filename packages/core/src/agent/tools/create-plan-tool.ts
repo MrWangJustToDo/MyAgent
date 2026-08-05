@@ -1,10 +1,16 @@
 import { z } from "zod";
 
+import { isUsableVerification, gateCompletePlanVerification } from "../plan/plan-verification.js";
+
 import { defineServerTool } from "./tanstack/define-tool.js";
 import { withDuration } from "./util/helpers.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 
 import type { PlanModeController } from "../plan/plan-mode-controller.js";
+
+const VERIFICATION_DESCRIBE =
+  "Required checklist of how to prove the plan outcome succeeded after execution " +
+  "(markdown list or newline items). Prefer observable behavior, acceptance checks, or focused project scripts.";
 
 const structuredPlanInputSchema = z.object({
   goal: z.string().min(1).describe("One-sentence outcome of the plan"),
@@ -17,7 +23,7 @@ const structuredPlanInputSchema = z.object({
     ),
   key_files: z.array(z.string()).optional().describe("Important file paths the plan will touch or rely on"),
   risks: z.string().optional().describe("Brief risks or trade-offs"),
-  verification: z.string().optional().describe("How to verify success after execution"),
+  verification: z.string().min(1).describe(VERIFICATION_DESCRIBE),
   mermaid: z.string().optional().describe("Optional mermaid diagram body (without fences)"),
 });
 
@@ -41,13 +47,24 @@ function createPlanAuthoringTool(name: "create_plan" | "update_plan", deps: Crea
   return defineServerTool({
     name,
     description: isUpdate
-      ? `Update the current plan while in plan mode (review/planning). Replaces the plan artifact and overwrites the plan file. Prefer this over rewriting ## Plan in chat.`
-      : `Create a structured implementation plan while in plan mode. Auto-saves under .agents/plans/ for user review in the ready banner. Prefer this over free-form ## Plan markdown when possible.`,
+      ? `Update the current plan while in plan mode (review/planning). Replaces the plan artifact and overwrites the plan file. Prefer this over rewriting ## Plan in chat. Requires a non-empty verification checklist.`
+      : `Create a structured implementation plan while in plan mode. Auto-saves under .agents/plans/ for user review in the ready banner. Prefer this over free-form ## Plan markdown when possible. Requires a non-empty verification checklist.`,
     inputSchema: structuredPlanInputSchema,
     outputSchema: planToolOutputSchema,
     execute: async (input) => {
       return withDuration(async () => {
         const planMode = deps.getPlanMode();
+
+        if (!isUsableVerification(input.verification)) {
+          return {
+            ok: false,
+            phase: planMode.getPhase(),
+            stepCount: 0,
+            message: "verification is required (non-empty checklist)",
+            error: "verification is required (non-empty checklist)",
+          };
+        }
+
         const result = await planMode.applyStructuredPlan({
           goal: input.goal,
           steps: input.steps,
@@ -93,6 +110,12 @@ export const createCreatePlanTool = (deps: CreatePlanToolDeps) => createPlanAuth
 
 export const createUpdatePlanTool = (deps: CreatePlanToolDeps) => createPlanAuthoringTool("update_plan", deps);
 
+const verificationResultSchema = z.object({
+  item: z.string().min(1).describe("Checklist item text (match the plan Verification line)"),
+  passed: z.boolean().describe("Whether this item passed"),
+  evidence: z.string().min(1).describe("Evidence: command name, validate script, file path, or observed behavior"),
+});
+
 const completePlanOutputSchema = z.object({
   ok: z.boolean(),
   message: z.string(),
@@ -105,9 +128,13 @@ const completePlanOutputSchema = z.object({
 export const createCompletePlanTool = (deps: CreatePlanToolDeps) => {
   return defineServerTool({
     name: "complete_plan",
-    description: `End the current plan lifecycle after the retrospective. Only use in retro phase when you have summarized done / deviations / verification. Exits plan mode.`,
+    description: `End the current plan lifecycle after the retrospective. Only use in retro phase when every Verification checklist item has a pass/fail result with evidence. Exits plan mode. (Users may still force-exit with /plan done.)`,
     inputSchema: z.object({
       note: z.string().optional().describe("Optional one-line note about the retrospective outcome"),
+      verificationResults: z
+        .array(verificationResultSchema)
+        .min(1)
+        .describe("Per-item results covering the plan Verification checklist"),
     }),
     outputSchema: completePlanOutputSchema,
     execute: async (input) => {
@@ -120,6 +147,12 @@ export const createCompletePlanTool = (deps: CreatePlanToolDeps) => {
             error: `complete_plan only works in retro phase (current: ${planMode.getPhase()})`,
           };
         }
+
+        const gate = gateCompletePlanVerification(planMode.getState().planMarkdown, input.verificationResults);
+        if (!gate.ok) {
+          return { ok: false, message: gate.error, error: gate.error };
+        }
+
         const result = planMode.complete();
         if (!result.ok) {
           return { ok: false, message: result.error ?? "Failed to complete plan", error: result.error };

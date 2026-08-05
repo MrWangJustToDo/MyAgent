@@ -7,6 +7,9 @@ import type { UIMessage } from "@tanstack/ai";
 /** Minimum chars before streaming summary text to the parent task tool UI. */
 export const SUMMARY_STREAM_MIN_CHARS = 80;
 
+/** Must match {@link BEGIN_SUMMARY_TOOL_NAME} — kept local to avoid stream↔subagent import cycles. */
+const BEGIN_SUMMARY_TOOL_NAME = "begin_summary";
+
 type MessagePart = UIMessage["parts"][number];
 
 function isToolPart(part: MessagePart): boolean {
@@ -128,12 +131,20 @@ export function shouldStreamTaskSummary(
 /**
  * Text from the last text-only step (final summary), excluding exploration narration
  * from earlier steps that also had leading text before tool calls.
+ *
+ * When {@link BEGIN_SUMMARY_TOOL_NAME} was called, only text **after** that tool is used
+ * (matches the explore subagent contract).
  */
 export function extractAssistantText(messages: UIMessage[]): string {
   const lastAssistant = getLastAssistantMessage(messages);
   if (!lastAssistant) return "";
 
-  const segments = splitStepSegments(lastAssistant.parts);
+  const beginSummaryIndex = lastAssistant.parts.findIndex(
+    (part) => part.type === "tool-call" && "name" in part && part.name === BEGIN_SUMMARY_TOOL_NAME
+  );
+  const scopedParts = beginSummaryIndex >= 0 ? lastAssistant.parts.slice(beginSummaryIndex + 1) : lastAssistant.parts;
+
+  const segments = splitStepSegments(scopedParts);
   for (let i = segments.length - 1; i >= 0; i--) {
     const segment = segments[i]!;
     if (segmentHasTool(segment)) continue;
@@ -141,10 +152,10 @@ export function extractAssistantText(messages: UIMessage[]): string {
     if (text) return text;
   }
 
-  const lastText = [...lastAssistant.parts].reverse().find((part) => part.type === "text");
+  const lastText = [...scopedParts].reverse().find((part) => part.type === "text");
   if (lastText) return textFromPart(lastText);
 
-  const lastThinking = [...lastAssistant.parts].reverse().find((part) => part.type === "thinking");
+  const lastThinking = [...scopedParts].reverse().find((part) => part.type === "thinking");
   return lastThinking ? thinkingFromPart(lastThinking) : "";
 }
 

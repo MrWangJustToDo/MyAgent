@@ -21,4 +21,4 @@ export { truncateSummary } from "./output.js";
 // Runner
 export { runSubagent, getSubagent, destroySubagent, type SubagentRunDeps } from "./run-subagent.js";
 
-export { countSubagentIterations, deriveSubagentRunStats } from "./run-stats.js";
+export { countSubagentIterations, deriveSubagentRunStats, hasBeginSummaryCall } from "./run-stats.js";

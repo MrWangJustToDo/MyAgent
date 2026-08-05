@@ -745,10 +745,12 @@ executeManagedAgentRun
 
 | Concern | Location | Examples |
 |---------|----------|----------|
-| Plan **domain** (phase machine, prompts, safe-command, middleware) | `agent/plan/` | `PlanModeController`, `plan-mode-middleware`, `plan-prompts` |
-| Plan **tool factories** (model-callable tools) | `agent/tools/` | `create-plan-tool`, `update-plan-tool`, `complete-plan-tool` |
+| Plan **domain** (phase machine, prompts, safe-command, verification gate, middleware) | `agent/plan/` | `PlanModeController`, `plan-mode-middleware`, `plan-prompts`, `plan-verification` |
+| Plan **tool factories** (model-callable tools) | `agent/tools/` | `create-plan-tool` (`create_plan` / `update_plan` / `complete_plan`) |
 
 Same pattern as skills: registry/domain under `agent/skills/`, discovery tools under `agent/tools/`. Do not move tool factories into `plan/` unless it clearly reduces confusion.
+
+**Verification contract:** `create_plan` / `update_plan` require a non-empty `verification` checklist (content quality is prompt guidance, not a hardcoded command blacklist). Plan markdown gets a `**Verification:**` section. In retro, `complete_plan` requires `verificationResults: { item, passed, evidence }[]` covering every parsed checklist item (all `passed: true`). Legacy plans with no Verification section accept a single passing smoke/N/A result. User `/plan done` bypasses the agent gate. Helpers: `parseVerificationItemsFrom*`, `gateCompletePlanVerification`. Validate: `pnpm --filter @my-agent/core run validate:plan-verification`.
 
 ---
 

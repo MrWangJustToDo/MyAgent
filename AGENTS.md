@@ -477,15 +477,15 @@ Cursor-like lifecycle: explore → review → Build → forced retro → complet
 
 | Phase (internal) | UI label | Tools | Behavior |
 |------------------|----------|-------|----------|
-| `planning` | planning | Mutate tools + MCP hidden; `task` allowed; `create_plan` / `update_plan` offered; `run_command` allowlisted | Explore (prefer `task`), clarify if needed, call `create_plan` (or `## Plan` fallback). Plan auto-saves under `.agents/plans/` with a static summary in the transcript. |
-| `ready` | review | Same read-only restrictions | User reviews; revise via chat + `update_plan`. `/plan execute` = Build (no extra confirm). |
-| `executing` | building | Full tools (`create_plan` / `update_plan` / `complete_plan` hidden); pending approvals auto-approved while seeded | Follow plan; plan-seeded todos show step progress. Session persists `planMode` (phase/markdown/path/seeded) + `todoPlanBound` so resume continues building/retro. |
-| `retro` | retro | Full tools + `complete_plan` | Forced retrospective against the plan file; end with `complete_plan` or `/plan done`. |
+| `planning` | planning | Mutate tools + MCP hidden; `task` allowed; `create_plan` / `update_plan` offered; `run_command` allowlisted | Explore (prefer `task`), clarify if needed, call `create_plan` (or `## Plan` fallback). **verification** required (non-empty outcome checklist). Judge `task` via status flags (`reachedLimit` / `incomplete` / `aborted` / `truncated`) before treating research as extendable. Auto-saves under `.agents/plans/`. |
+| `ready` | review | Same read-only restrictions | User reviews; revise via chat + `update_plan` (verification still required). `/plan execute` = Build (no extra confirm). |
+| `executing` | building | Full tools (`create_plan` / `update_plan` / `complete_plan` hidden); pending approvals auto-approved while seeded | Follow plan; run Verification with evidence before finishing. Session persists `planMode` + `todoPlanBound`. |
+| `retro` | retro | Full tools + `complete_plan` | Forced retrospective; `complete_plan` requires `verificationResults` covering every checklist item (all passed). `/plan done` force-exits without that gate. |
 | `off` | — | Plan authoring/completion tools hidden | Default |
 
-**App:** `Shift+Tab` or `/plan` toggles mode; when **review** (`ready`), press `p` (empty input) to toggle a bordered markdown plan preview in the banner (`Esc` closes). `/plan execute` Builds from review; `/plan cancel` pauses building → review; `/plan done` finishes retro; `/plan status` reports phase; `/plan save` / `load` / `list` for named persistence (create/update already auto-save). Footer shows `planning` / `review · /plan execute` / `building n/m` / `retro`. `create_plan` / `update_plan` do not dump plan text into the tool transcript — review is via the banner preview.
+**App:** `Shift+Tab` or `/plan` toggles mode; when **review** (`ready`), press `p` (empty input) to toggle a bordered markdown plan preview in the banner (`Esc` closes). `/plan execute` Builds from review; `/plan cancel` pauses building → review; `/plan done` finishes retro (user force — no agent verification gate); `/plan status` reports phase; `/plan save` / `load` / `list` for named persistence (create/update already auto-save). Footer shows `planning` / `review · /plan execute` / `building n/m` / `retro`. `create_plan` / `update_plan` do not dump plan text into the tool transcript — review is via the banner preview.
 
-**Core:** `ManagedAgent.planMode` (`PlanModeController`), tool filter in `run-agent`, `createPlanModeMiddleware`, prompts via turn context. See `packages/core/src/agent/plan/`.
+**Core:** `ManagedAgent.planMode` (`PlanModeController`), tool filter in `run-agent`, `createPlanModeMiddleware`, prompts via turn context, `plan-verification` parse/gate helpers. See `packages/core/src/agent/plan/`. Validate: `pnpm --filter @my-agent/core run validate:plan-verification`.
 
 **Auto mode:** `/auto` (or `/auto on|off|status`) skips all tool approvals. Footer shows `auto` (can combine with plan: `auto · building 2/5`). Cleared on `/clear` / reset; persisted as `SessionData.autoApprove`.
 
@@ -504,8 +504,10 @@ The project supports **subagents** — context-isolated agents spawned to handle
 | Context | Fresh (starts with empty messages) |
 | Tools | Read-only: `read_file`, `glob`, `grep`, `list_file`, `tree`, `websearch`, `webfetch`, plus marker `begin_summary` (no `run_command` / write tools) |
 | Return | Summary only to parent LLM context; UI keeps a read-only UIMessage preview when `bridgeUI` is enabled |
-| Iteration Limit | 30 steps max |
+| Iteration Limit | 50 steps max (TanStack `maxIterations`; cutoff leaves `finishReason: tool_calls`) |
+| Status flags | `toModelOutput` exposes `reachedLimit` / `incomplete` / `aborted` / `truncated`; explore runs require `begin_summary` for a complete result |
 | Summary Limit | 5000 characters max |
+
 | UI Preview | `bridgeUI: true` (default when `parentTaskToolCallId` is set): `ManagedAgent.ui` (`AgentUIChannel`) + `Ctrl+T` task panel; inline task UI shows tool progress + summary stream |
 | Headless | `bridgeUI: false` (default otherwise): no `AgentUIChannel`, no `subagent:ui-update`, no task-tool streaming — used by compaction and memory subagents |
 
@@ -523,7 +525,7 @@ does not supply an `id` input.
 The default task tool row shows the current subagent exploration tool during analysis.
 After the subagent calls `begin_summary`, the UI switches to summary phase and streams final text
 via `emitStreamingChunk` into `StreamingOutputView` (current-turn parts only, like Vercel AI SDK).
-Only the last text-only step is returned to the parent as the task `summary`.
+Only the last text-only step is returned to the parent as the task `summary`; `toModelOutput` also includes completion status (`reachedLimit` / `incomplete` / `aborted` / `truncated`) so the parent can judge whether findings are trustworthy to extend.
 
 
 ```typescript

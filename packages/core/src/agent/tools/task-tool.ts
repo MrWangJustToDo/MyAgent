@@ -56,8 +56,8 @@ export const taskOutputSchema = z.object({
   /** Whether the subagent hit the iteration limit */
   reachedLimit: z.boolean().describe("Whether iteration limit was reached"),
   /**
-   * Whether the subagent finished without a natural end — stopped by the
-   * step-count cap or stall detector instead of producing a final answer.
+   * Whether the subagent finished without a natural end — step-budget cutoff,
+   * output length limit, error, empty summary, or missing `begin_summary` after tools.
    * The returned findings may be partial.
    */
   incomplete: z.boolean().describe("Whether the subagent was force-stopped before producing a final answer"),
@@ -109,7 +109,13 @@ The subagent:
 - Starts with fresh context (doesn't see your conversation history)
 - Has read-only tools: read_file, glob, grep, list_file, tree, websearch, webfetch
 - Cannot modify files, run shell commands, or spawn additional subagents
-- Returns only a summary of its findings
+- Returns a summary plus status flags (iterations, reachedLimit, incomplete, aborted, truncated)
+
+How to use the result:
+- Treat findings as trustworthy and extendable only when the run completed cleanly
+  (incomplete=false, aborted=false, reachedLimit=false; truncated=false preferred).
+- If any of those flags indicate a partial/forced stop, treat the summary as incomplete —
+  re-run with a narrower prompt or continue exploring before finalizing decisions (e.g. create_plan).
 
 Example use cases:
 - "Find what testing framework this project uses"
@@ -177,11 +183,21 @@ Example use cases:
       });
     },
 
-    // Only send the summary to the LLM — execution metadata (iterations, usage,
-    // reachedLimit, incomplete, aborted) is for the UI only. Cancel / truncate
-    // notices are appended into `summary` by the subagent runner.
+    // Summary + completion status for the model (usage stays UI-only).
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: TaskOutput }) {
-      return [{ type: "text" as const, content: output.summary }];
+      const status = [
+        `iterations=${output.iterations}`,
+        `reachedLimit=${output.reachedLimit}`,
+        `incomplete=${output.incomplete}`,
+        `aborted=${output.aborted}`,
+        `truncated=${output.truncated}`,
+      ].join(" ");
+      return [
+        {
+          type: "text" as const,
+          content: `${output.summary}\n\n[task status: ${status}]`,
+        },
+      ];
     },
   });
 };

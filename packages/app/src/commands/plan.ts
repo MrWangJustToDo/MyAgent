@@ -89,6 +89,7 @@ registerCommand({
     }
 
     if (sub === "done" || sub === "complete") {
+      // User force-exit — does not require agent complete_plan verificationResults gate.
       const result = agent.completePlan();
       if (!result.ok) return { ok: false, error: result.error ?? "Cannot complete plan" };
       return { ok: true, message: "Plan complete — plan mode off" };

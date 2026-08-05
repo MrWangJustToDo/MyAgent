@@ -90,9 +90,9 @@ export interface SubagentResult {
   /** Whether iteration limit was reached */
   reachedLimit: boolean;
   /**
-   * Whether the subagent finished without a natural end — i.e. it was
-   * stopped by the step-count cap or by the stall detector rather than
-   * producing a final text answer. The findings returned may be partial.
+   * Whether the subagent finished without a natural end — e.g. step-budget cut
+   * off (`finishReason: tool_calls`), output truncated (`length`), error, empty
+   * summary, or explore tools used without `begin_summary`. Findings may be partial.
    */
   incomplete: boolean;
   /** Whether the subagent was cancelled (aborted) before completing */
