@@ -1,3 +1,2 @@
-// Context class
-export { AgentContext, buildCanonicalModelMessages, generateContextId } from "./agent-context.js";
+export { buildCanonicalModelMessages } from "./build-canonical-model-messages.js";
 export type { TokenUsage } from "../../runtime-types/token-usage.js";

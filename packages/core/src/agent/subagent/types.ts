@@ -58,11 +58,11 @@ export interface SubagentConfig {
    */
   initialMessages?: ModelMessage[];
   /**
-   * Bridge the run through {@link AgentUIChannel} for SubagentPanel preview and
-   * task-tool summary streaming via {@link parentTaskToolCallId}.
+   * Stream parent-panel / task-tool preview via {@link parentTaskToolCallId}.
    *
    * Defaults to `true` when `parentTaskToolCallId` is set, otherwise `false`.
-   * Set explicitly to `false` for headless runs (compaction, memory extraction).
+   * A UI channel is always attached; set `false` to skip parent panel streaming
+   * (compaction, memory extraction).
    */
   bridgeUI?: boolean;
 }

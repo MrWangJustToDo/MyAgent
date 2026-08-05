@@ -66,8 +66,6 @@ export class SessionStore {
       modelStyle: options.modelStyle === "anthropic" ? "anthropic" : "openai",
       model: options.model,
       uiMessages: [],
-      summaryMessage: null,
-      compactIndex: 0,
       usage: { ...EMPTY_USAGE },
       todos: [],
       createdAt: now,

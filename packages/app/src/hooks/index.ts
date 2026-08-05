@@ -13,7 +13,6 @@ export { useSize } from "./use-size.js";
 export { useTodoManager, type TodoStats } from "./use-todo-manager.js";
 
 export { useAgent } from "./use-agent.js";
-export { useAgentContext } from "./use-agent-context.js";
 export { bumpAgentUsage, useAgentUsage } from "./use-agent-usage.js";
 export { useAgentLog } from "./use-agent-log.js";
 export { useAgentManager } from "./use-agent-manager.js";

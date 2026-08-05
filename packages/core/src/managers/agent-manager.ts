@@ -305,7 +305,7 @@ export class AgentManager {
   }
 
   /**
-   * Resume a session by ID. Restores messages, summary, compactIndex, usage, and todos.
+   * Resume a session by ID. Restores uiMessages, usage, and todos.
    * Returns UIMessages for the client to display.
    */
   async resumeSession(agentId: string, sessionId: string): Promise<ResumeResult> {

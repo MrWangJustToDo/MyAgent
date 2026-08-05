@@ -1,3 +1,4 @@
+import { isCompactionSummaryUIMessage } from "@my-agent/core";
 import { Box, Text } from "ink";
 import { memo, useMemo } from "react";
 
@@ -75,6 +76,17 @@ export const MessageView = memo(({ message, readOnly = false }: MessageViewProps
   if (isActivitySummaryMessage(message)) {
     const summary = visibleParts[0]?.type === "text" ? getTextContent(visibleParts[0] as TextPart) : "";
     return summary ? <ActivitySummaryView key={theme} summary={summary} /> : null;
+  }
+
+  if (isCompactionSummaryUIMessage(message)) {
+    return (
+      <HalfLinePaddedBox key={theme} backgroundColor={COLORS.muted}>
+        <Text color={COLORS.muted}>── compact checkpoint ──</Text>
+        <Text color={COLORS.muted} dimColor wrap="wrap">
+          Conversation context was summarized. Full history remains above; the model continues from the summary.
+        </Text>
+      </HalfLinePaddedBox>
+    );
   }
 
   if (message.role === "user") {

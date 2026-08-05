@@ -4,6 +4,12 @@
 
 import { isTurnContextModelMessage } from "../turn-context/turn-context-message.js";
 
+import {
+  CONVERSATION_SUMMARY_END,
+  extractCompactionSummaryBody,
+  isCompactionSummaryModelMessage,
+  isCompactionSummaryText,
+} from "./compaction-summary.js";
 import { extractTextFromContent } from "./message-utils.js";
 
 import type { ModelMessage } from "@tanstack/ai";
@@ -13,9 +19,8 @@ import type { ModelMessage } from "@tanstack/ai";
  *
  * After compaction, the first message in compactMessages is always a user message
  * with format:
- *   [CONVERSATION SUMMARY]
+ *   [CONVERSATION SUMMARY] / [END SUMMARY] markers (see compaction-summary.ts)
  *   ...summary text...
- *   [END SUMMARY]
  *   ...
  *
  * When detected, we strip this message from the conversation and pass it separately
@@ -33,16 +38,11 @@ export function extractExistingSummary(messages: ModelMessage[]): {
   if (first.role !== "user") return { cleanMessages: messages };
 
   const text = extractTextFromContent(first.content);
+  if (!isCompactionSummaryText(text) || !text.includes(CONVERSATION_SUMMARY_END)) {
+    return { cleanMessages: messages };
+  }
 
-  const START_MARKER = "[CONVERSATION SUMMARY]";
-  const END_MARKER = "[END SUMMARY]";
-
-  if (!text.startsWith(START_MARKER)) return { cleanMessages: messages };
-
-  const endIndex = text.indexOf(END_MARKER);
-  if (endIndex === -1) return { cleanMessages: messages };
-
-  const summary = text.slice(START_MARKER.length, endIndex).trim();
+  const summary = extractCompactionSummaryBody(text);
   if (!summary) return { cleanMessages: messages };
 
   return {
@@ -59,7 +59,8 @@ export function extractExistingSummary(messages: ModelMessage[]): {
  * the user message itself and everything after is kept.
  *
  * Skips:
- * - `summaryMessageIndex` (previous compaction summary at the head)
+ * - `summaryMessageIndex` (optional explicit index, e.g. wire-head summary)
+ * - In-chain compaction summary user messages ({@link CONVERSATION_SUMMARY_START})
  * - Synthetic `<turn_context>` user messages (epoch dynamic context)
  *
  * @returns cutIndex (messages[0..cutIndex) = to summarize,
@@ -71,11 +72,12 @@ export function findCutPoint(messages: ModelMessage[], keepRecentUserTurns: numb
   let userCount = 0;
 
   for (let i = messages.length - 1; i >= 0; i--) {
-    // Skip the previous compaction summary message — it's not a real user turn.
+    // Skip an explicit summary index (wire-head) and any in-chain summary markers.
     if (i === summaryMessageIndex) continue;
 
-    const message = messages[i];
+    const message = messages[i]!;
     if (message.role !== "user") continue;
+    if (isCompactionSummaryModelMessage(message)) continue;
     // Synthetic turn_context is not a user turn — keep looking upward.
     if (isTurnContextModelMessage(message)) continue;
 

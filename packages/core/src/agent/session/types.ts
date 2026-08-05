@@ -11,7 +11,7 @@ import type { ModelStyle } from "../../models/types.js";
 import type { TokenUsage } from "../../runtime-types/token-usage.js";
 import type { PlanModeState } from "../plan/plan-mode-controller.js";
 import type { TodoItem } from "../todo-manager";
-import type { UIMessage, ModelMessage } from "@tanstack/ai";
+import type { UIMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Constants
@@ -49,12 +49,8 @@ export interface SessionData {
   modelStyle: ModelStyle;
   /** Model name used */
   model: string;
-  /** Full conversation as UIMessages (for client display on resume) */
+  /** Full conversation as UIMessages (for client display on resume; includes in-chain summaries) */
   uiMessages: UIMessage[];
-  /** Compaction summary message (null if never compacted) */
-  summaryMessage: ModelMessage | null;
-  /** Index in messages where the last compaction cut happened (0 = no compaction) */
-  compactIndex: number;
   /** Token usage statistics */
   usage: TokenUsage;
   /** Session cost in USD */

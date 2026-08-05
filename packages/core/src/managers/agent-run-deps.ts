@@ -2,11 +2,11 @@ import type { AgentManager } from "./agent-manager.js";
 import type { MemoryService } from "./memory-service.js";
 import type { SessionService } from "./session-service.js";
 import type { UsageTracker } from "./usage-tracker.js";
-import type { AgentContext } from "../agent/agent-context";
 import type { AgentLog } from "../agent/agent-log";
 import type { CompactionConfig } from "../agent/compaction/types.js";
 import type { ExtensionRunner } from "../agent/extension/runner.js";
 import type { TodoManager } from "../agent/todo-manager";
+import type { AgentUIChannel } from "../agent/ui-channel.js";
 import type { ModelInfo } from "../models/types.js";
 import type { ModelMessage } from "@tanstack/ai";
 
@@ -14,7 +14,6 @@ import type { ModelMessage } from "@tanstack/ai";
 export interface AgentRunDeps {
   agentId: string;
   manager: AgentManager;
-  context: AgentContext;
   usage: UsageTracker;
   memory: MemoryService;
   session: SessionService;
@@ -24,5 +23,7 @@ export interface AgentRunDeps {
   compactionConfig: CompactionConfig | null;
   modelInfo: ModelInfo | null;
   getFrozenSystemPrompt: () => string | undefined;
+  getUIChannel: () => AgentUIChannel | null;
+  getRunBaselineCount: () => number;
   shouldTriggerAutoCompact: (messages?: ModelMessage[]) => boolean;
 }

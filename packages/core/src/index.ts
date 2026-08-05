@@ -50,7 +50,7 @@ export type { QueueMode } from "./agent/utils/pending-message-queue.js";
 // Agent state (hosts / UI)
 // ============================================================================
 
-export { AgentContext, type TokenUsage } from "./agent/agent-context";
+export { buildCanonicalModelMessages, type TokenUsage } from "./agent/agent-context";
 export { AgentLog } from "./agent/agent-log";
 export { TodoManager, type TodoItem, type TodoStatus, type TodoPriority } from "./agent/todo-manager";
 
@@ -89,7 +89,18 @@ export type { UsageChangeSnapshot, UsageSnapshot } from "./managers/usage-tracke
 // Compaction (/compact command)
 // ============================================================================
 
-export { applyCompactionResult, autoCompact, estimateTokens, extractTextFromContent } from "./agent/compaction";
+export {
+  applyCompactionResult,
+  autoCompact,
+  CONVERSATION_SUMMARY_END,
+  CONVERSATION_SUMMARY_START,
+  estimateTokens,
+  extractCompactionSummaryBody,
+  extractTextFromContent,
+  getModelVisibleMessages,
+  isCompactionSummaryUIMessage,
+  isCompactionSummaryText,
+} from "./agent/compaction";
 
 // ============================================================================
 // Models & agent bootstrap helpers

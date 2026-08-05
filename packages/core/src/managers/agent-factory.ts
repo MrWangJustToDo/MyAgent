@@ -1,4 +1,3 @@
-import { AgentContext } from "../agent/agent-context";
 import { loadAgentDoc } from "../agent/agent-doc-loader.js";
 import { AgentLog } from "../agent/agent-log";
 import { createCompactionConfig } from "../agent/compaction/types.js";
@@ -65,13 +64,10 @@ export async function buildManagedAgent({
   const log = new AgentLog();
   const todoManager = parentId ? null : new TodoManager();
 
-  const context = new AgentContext();
-
   const managed = new ManagedAgent(
     { ...restConfig, name },
     {
       id: customId,
-      context,
       log,
       tools: {},
       todoManager,
@@ -79,7 +75,7 @@ export async function buildManagedAgent({
     }
   );
 
-  const toolsRecord: ToolsRecord = { ...(await createTools({ context, usage: managed.usage })) };
+  const toolsRecord: ToolsRecord = { ...(await createTools({ usage: managed.usage })) };
   managed.tools = toolsRecord;
   managed.resolveTextAdapter = () => resolveTextAdapterForManaged(managed);
   managed.dispatchEvent = emit;
@@ -92,7 +88,6 @@ export async function buildManagedAgent({
     managed.usage.setCapabilities(resolvedModelInfo.capabilities);
   }
 
-  managed.setContext(context);
   managed.setLog(log);
 
   if (!parentId) {

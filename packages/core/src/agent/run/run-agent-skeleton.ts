@@ -4,17 +4,17 @@
  * Profiles own outer loops (chat pump vs one-shot worker). This module owns
  * UI attach, stream consume, and optional outcome application.
  *
+ * Every LLM run requires an {@link AgentUIChannel} (durable message SoT).
+ * Parent-panel streaming is gated separately via `bridgeUI` / streaming ids.
+ *
  * Lives under `agent/run/` so Worker code can import it without crossing the
  * agent→managers boundary. Managers may import this module.
  */
 
-import { consumeStreamToMessages } from "../subagent/consume-stream-to-messages.js";
 import { AgentUIChannel } from "../ui-channel.js";
 
 import type { AgentManager, ManagedAgent } from "../../runtime-types/hosts.js";
 import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai";
-
-export type AgentStreamConsumeMode = "ui" | "headless";
 
 export interface EnsureUIChannelOptions {
   /** Used only when creating a new channel (no existing `managed.ui`). */
@@ -35,26 +35,20 @@ export function ensureUIChannel(managed: ManagedAgent, options?: EnsureUIChannel
 
 export interface ConsumeAgentStreamOptions {
   stream: AsyncIterable<StreamChunk>;
-  mode: AgentStreamConsumeMode;
-  /** Required when `mode` is `"ui"`. */
-  channel?: AgentUIChannel;
+  channel: AgentUIChannel;
   parentTaskToolCallId?: string;
   streamingAgentId?: string;
   onUpdate?: (messages: UIMessage[]) => void;
 }
 
 /**
- * Consume one agent stream into UIMessage snapshots (UI channel or headless).
+ * Consume one agent stream into UIMessage snapshots via the UI channel.
  */
 export async function consumeAgentStream(options: ConsumeAgentStreamOptions): Promise<UIMessage[]> {
-  const { stream, mode, channel, parentTaskToolCallId, streamingAgentId, onUpdate } = options;
-
-  if (mode === "headless") {
-    return consumeStreamToMessages(stream);
-  }
+  const { stream, channel, parentTaskToolCallId, streamingAgentId, onUpdate } = options;
 
   if (!channel) {
-    throw new Error('AgentUIChannel is required when consume mode is "ui"');
+    throw new Error("AgentUIChannel is required to consume an agent stream");
   }
 
   return (await channel.consumeRun({
@@ -80,8 +74,7 @@ export interface RunAgentOnceOptions {
   abortSignal?: AbortSignal;
   threadId?: string;
   runId?: string;
-  consume: AgentStreamConsumeMode;
-  /** Pre-attached channel for UI mode; otherwise {@link ensureUIChannel} is used. */
+  /** Pre-attached channel; otherwise {@link ensureUIChannel} is used. */
   channel?: AgentUIChannel;
   uiAttach?: EnsureUIChannelOptions;
   parentTaskToolCallId?: string;
@@ -98,7 +91,7 @@ export interface RunAgentOnceOptions {
 
 export interface RunAgentOnceResult {
   messages: UIMessage[];
-  channel?: AgentUIChannel;
+  channel: AgentUIChannel;
 }
 
 /**
@@ -113,7 +106,6 @@ export async function runAgentOnce(options: RunAgentOnceOptions): Promise<RunAge
     abortSignal,
     threadId,
     runId,
-    consume,
     uiAttach,
     parentTaskToolCallId,
     streamingAgentId,
@@ -127,10 +119,7 @@ export async function runAgentOnce(options: RunAgentOnceOptions): Promise<RunAge
     throw new Error(`Agent not found: ${agentId}`);
   }
 
-  let channel = options.channel;
-  if (consume === "ui") {
-    channel = channel ?? ensureUIChannel(managed, uiAttach);
-  }
+  const channel = options.channel ?? ensureUIChannel(managed, uiAttach);
 
   let stream: AsyncIterable<StreamChunk> = manager.runAgentStream(agentId, {
     messages: inputMessages,
@@ -144,7 +133,6 @@ export async function runAgentOnce(options: RunAgentOnceOptions): Promise<RunAge
 
   const messages = await consumeAgentStream({
     stream,
-    mode: consume,
     channel,
     parentTaskToolCallId,
     streamingAgentId,

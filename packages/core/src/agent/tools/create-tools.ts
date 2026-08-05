@@ -18,7 +18,6 @@ import type { createLoadSkillTool } from "./load-skill-tool.js";
 import type { createTaskTool } from "./task-tool.js";
 import type { createTodoTool } from "./todo-tool.js";
 import type { UsageTracker } from "../../runtime-types/hosts.js";
-import type { AgentContext } from "../agent-context/agent-context.js";
 
 export type Tools = ToolsRecord & {
   delete_file: ReturnType<typeof createDeleteFileTool>;
@@ -44,11 +43,9 @@ export type Tools = ToolsRecord & {
 };
 
 export const createTools = async ({
-  context: _context,
   usage,
   processTools,
 }: {
-  context?: AgentContext;
   usage?: UsageTracker;
   processTools?: (t: Tools) => Promise<void>;
 } = {}): Promise<Tools> => {

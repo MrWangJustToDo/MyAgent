@@ -12,7 +12,7 @@ export {
   shouldPersistUIMessages,
 } from "./agent/session/session-sync-tracker.js";
 export type { SessionSaveReason, SessionSyncSnapshot } from "./agent/session/session-sync-tracker.js";
-export { AgentContext, buildCanonicalModelMessages } from "./agent/agent-context/agent-context.js";
+export { buildCanonicalModelMessages } from "./agent/agent-context/build-canonical-model-messages.js";
 export { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, resolveFinishStatus } from "./managers/agent-status.js";
 export { AgentEventBus } from "./managers/agent-event-bus.js";
 export { attachEventLogBridge } from "./managers/event-log-bridge.js";
@@ -88,7 +88,6 @@ export {
   consumeAgentStream,
   ensureUIChannel,
   runAgentOnce,
-  type AgentStreamConsumeMode,
   type RunAgentOnceOutcome,
 } from "./agent/run/run-agent-skeleton.js";
 export { generateId, resetGeneratedIdsForTesting } from "./agent/utils.js";
@@ -103,6 +102,14 @@ export {
   extractCompactArchivePaths,
   findCutPoint,
   formatCompactArchivesSection,
+  createCompactionSummaryUIMessage,
+  findLatestSummaryIndex,
+  formatCompactionSummaryContent,
+  extractCompactionSummaryBody,
+  getModelVisibleMessages,
+  isCompactionSummaryModelMessage,
+  isCompactionSummaryText,
+  isCompactionSummaryUIMessage,
   maybeAppendCompactArchive,
   parseCompactSequence,
   serializeConversation,

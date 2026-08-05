@@ -8,7 +8,6 @@ import {
   configureEnv,
   useAgent,
   useAgentLog,
-  useAgentContext,
   useConfig,
   useTodoManager,
 } from "@my-agent/app";
@@ -81,7 +80,7 @@ const adapter = new LocalAgentAdapter({
     setTimeout(() => process.exit(0), 200);
   },
   readClipboardImage,
-  hooks: { useAgent, useAgentLog, useAgentContext, useTodoManager },
+  hooks: { useAgent, useAgentLog, useTodoManager },
 });
 
 initHighlighter()

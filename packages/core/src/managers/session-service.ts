@@ -11,7 +11,6 @@ import { runSideTextQuery } from "../models/side-text-query.js";
 
 import type { EmitAgentEventFn } from "./emit-agent-event.js";
 import type { UsageTracker } from "./usage-tracker.js";
-import type { AgentContext } from "../agent/agent-context";
 import type { PlanModeState } from "../agent/plan/plan-mode-controller.js";
 import type { SessionStore } from "../agent/session/session-store.js";
 import type { SessionData } from "../agent/session/types.js";
@@ -20,7 +19,6 @@ import type { TextAdapterConfig } from "../models/adapter-factory.js";
 import type { UIMessage } from "@tanstack/ai";
 
 export interface SessionPersistInput {
-  context: AgentContext;
   usage: UsageTracker;
   todoManager: TodoManager | null;
   /** Current plan-mode snapshot; null/undefined when off. */
@@ -33,7 +31,6 @@ export interface SessionPersistInput {
 }
 
 export interface SessionRestoreInput {
-  context: AgentContext;
   usage: UsageTracker;
   todoManager: TodoManager | null;
 }
@@ -99,18 +96,14 @@ export class SessionService {
    * before writing. The original uiMessages array is never mutated.
    */
   async persistSession(input: SessionPersistInput): Promise<void> {
-    const { context, usage, todoManager, planMode, autoApprove, resolveTextAdapter, emitEvent, uiMessages } = input;
-    if (!this.store || !context) return;
+    const { usage, todoManager, planMode, autoApprove, resolveTextAdapter, emitEvent, uiMessages } = input;
+    if (!this.store) return;
     if (!this.data) {
       this.ensureSession();
       await this.persistSession(input);
       return;
     }
 
-    // const messages = context.getMessages();
-
-    this.data.summaryMessage = context.getSummaryMessage();
-    this.data.compactIndex = context.getCompactIndex();
     this.data.usage = { ...usage.getTotal() };
     this.data.cost = usage.getTotalCostUsd();
     this.data.contextTokens = usage.getWindowUsage().inputTokens;
@@ -130,9 +123,6 @@ export class SessionService {
     }
 
     if (uiMessages !== undefined) {
-      // Clone → dehydrate — never mutate the original runtime messages.
-      // The dehydrated version (media:// refs) is written to disk;
-      // runtime UIMessages keep their hydrated data URLs for UI/LLM use.
       const dehydrated = await dehydrateUIMessages(uiMessages);
       this.data.uiMessages = dehydrated;
     }
@@ -155,10 +145,9 @@ export class SessionService {
   }
 
   /**
-   * Restore conversation, usage, and todos from a persisted session.
-   * Hydrates media:// refs back to data URLs / raw base64 on load.
-   * Old sessions (without mediaRef metadata) are handled gracefully.
-   * @throws if store/context unavailable or session not found
+   * Restore usage and todos from a persisted session.
+   * Hydrates media:// refs on uiMessages for the return value.
+   * Obsolete compact fields in old files are ignored.
    */
   async restoreFromStore(sessionId: string, input: SessionRestoreInput): Promise<SessionData> {
     if (!this.store) throw new Error("Session store not available");
@@ -166,19 +155,10 @@ export class SessionService {
     const session = await this.store.load(sessionId);
     if (!session) throw new Error(`Session not found: ${sessionId}`);
 
-    const { context, usage, todoManager } = input;
-    if (!context) throw new Error("Agent context not available");
-
-    context.reset();
+    const { usage, todoManager } = input;
     usage.reset();
 
-    // Hydrate media:// refs back to data URLs / raw base64.
-    // Old sessions (no mediaRef metadata) are handled gracefully by hydrateUIMessages.
     const hydrated = await hydrateUIMessages(session.uiMessages);
-
-    context.setUIMessages(hydrated);
-    context.setSummaryMessage(session.summaryMessage ?? null);
-    context.setCompactIndex(session.compactIndex ?? 0);
 
     if (session.usage) {
       usage.addTotal(session.usage);
@@ -205,9 +185,6 @@ export class SessionService {
       }
     }
 
-    // Keep this.data dehydrated (media:// refs) so model-only persistSession
-    // doesn't write big base64 back to disk. The return value has hydrated
-    // uiMessages so callers (agent-manager, managed-agent-session) get data URLs.
     this.setSessionData(session);
 
     return {

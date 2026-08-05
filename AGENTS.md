@@ -147,7 +147,7 @@ ConnectionGuard(/health) → createRemoteCoreEnv(url) → registerCoreEnv → in
 |----------|----------|
 | CoreEnv | `registerCoreEnv`, `getEnv`, `CoreEnv` types |
 | Runtime | `agentManager`, `AgentManager`, `ManagedAgent`, `localConnect` |
-| UI / state | `AgentContext`, `AgentLog`, `TodoManager`, `SessionStore` |
+| UI / state | `AgentUIChannel`, `AgentLog`, `TodoManager`, `SessionStore` |
 | Compaction | `applyCompactionResult`, `autoCompact`, `estimateTokens` |
 | Bootstrap | `buildDefaultSystemPrompt`, `parseModelInfoFromEnv`, `resolveModelConfig` |
 | UI helpers | `previewEdit`, AgentSession `streaming` channel, tool output types |
@@ -163,7 +163,8 @@ Key integration points:
 - `core/src/models/model-config.ts` — connection resolution (`openai` | `anthropic` style, baseURL, apiKey, models.dev metadata)
 - `core/src/models/adapter-factory.ts` — TanStack text adapters (`createOpenaiChatCompletions`, `createAnthropicChat`)
 - `core/src/managers/run-agent.ts` — `AgentRunner` + `chat()` stream, compaction middleware
-- `core/src/agent/agent-context/` — Conversation state, tool calls, context management
+- `core/src/agent/agent-context/` — Pure UI↔engine merge (`buildCanonicalModelMessages`); no durable store
+- `core/src/agent/ui-channel.ts` — Durable UIMessage chain (SoT); compaction appends SUMMARY here
 - `core/src/agent/mcp/` — MCP via `@tanstack/ai-mcp` (`McpManager` re-wraps tool execute so multimodal `content[]` is not dropped when `structuredContent` is present)
 - `app/src/hooks/use-agent-chat.ts` — React hook via TanStack `useChat` + `localConnect`
 
@@ -510,13 +511,14 @@ The project supports **subagents** — context-isolated agents spawned to handle
 | Status flags | `toModelOutput` exposes `reachedLimit` / `incomplete` / `aborted` / `truncated`; explore runs require `begin_summary` for a complete result |
 | Summary Limit | 5000 characters max |
 
-| UI Preview | `bridgeUI: true` (default when `parentTaskToolCallId` is set): `ManagedAgent.ui` (`AgentUIChannel`) + `Ctrl+T` task panel; inline task UI shows tool progress + summary stream |
-| Headless | `bridgeUI: false` (default otherwise): no `AgentUIChannel`, no `subagent:ui-update`, no task-tool streaming — used by compaction and memory subagents |
+| UI Preview | `bridgeUI: true` (default when `parentTaskToolCallId` is set): parent panel + task-tool streaming via the subagent’s `AgentUIChannel` |
+| No parent bridge | `bridgeUI: false` (default otherwise): still has an internal `AgentUIChannel` (message SoT); skips `subagent:ui-update` / task-tool streaming — used by compaction and memory subagents |
 
 ### Subagent UI Preview
 
-`runSubagent({ bridgeUI: true })` attaches an `AgentUIChannel` via `ensureUIChannel` for the task panel (`Ctrl+T`).
-Headless runs (`bridgeUI: false`) use `consumeAgentStream({ mode: "headless" })` and skip UI wiring.
+`runSubagent` always attaches an `AgentUIChannel` via `ensureUIChannel`.
+`bridgeUI: true` enables the task panel (`Ctrl+T`) and parent streaming ids;
+`bridgeUI: false` keeps the channel internal only.
 Task-tool subagents use `autoDestroy: false` so the preview stays available; after the stream ends,
 detached outcome finalization marks them `completed`/`aborted`. Esc while a task is active aborts the
 subagent first: `runSubagent` sets `aborted: true` and appends `[Task cancelled by user.]` into the
@@ -602,7 +604,9 @@ const agent = await agentManager.createManagedAgent({
 
 **Auto-compact cut-point strategy:** `findCutPoint()` counts recent *user turns* from the end and keeps the latest N (default: 2 via `keepRecentFlows`). Everything before the cut is summarized; the kept turns remain in the main agent context.
 
-**Summarizer input:** The summarization subagent receives labeled segments — `<to_compress>` (pre-cut history) and `<still_in_context>` (kept turns) — plus optional `<previous-summary>` for incremental updates. Prompt rules tell the model to summarize the compressed segment thoroughly and use the kept segment only to align Goal/Next (no detailed restatement). Post-compact assembly is unchanged: `summaryMessage + messages[compactIndex:]`.
+**Summarizer input:** The summarization subagent receives labeled segments — `<to_compress>` (pre-cut history) and `<still_in_context>` (kept turns) — plus optional `<previous-summary>` for incremental updates. Prompt rules tell the model to summarize the compressed segment thoroughly and use the kept segment only to align Goal/Next (no detailed restatement).
+
+**Post-compact (same request):** Append `[CONVERSATION SUMMARY]` onto the UI channel (chronological SoT). Compaction middleware then projects summary-first wire from the **channel** (not the pre-compact TanStack engine merge), sets `runBaselineCount` to a sentinel so later iterations prefer the projected engine (UI/engine index spaces diverge), and never writes the projection back. Recovery (`prompt_too_long` / retries) re-reads `managed.ui.getMessages()` live so mid-run appends are visible.
 
 **Transcript archive:** On successful auto, manual (`/compact`), or reactive compaction, the compressed slice is written as greppable markdown under `.agents/transcripts/<sessionId>/compact-<n>.md` (gitignored via `.agents`). The summary gets a runtime-managed `## Compact archives` list (merged across successive compactions). Search **newest → oldest** (`compact-N` first for recent details); prefer grep / small reads — not whole files. Prior archive sections are stripped before `<previous-summary>` so the summarizer does not restate path lists. Archive I/O failures are non-fatal; prior paths are still re-attached when known.
 
@@ -613,6 +617,8 @@ packages/core/src/agent/compaction/
 ├── cut-point.ts           # findCutPoint + previous-summary extraction
 ├── reactive-compact.ts    # Reactive — emergency compaction on prompt_too_long errors
 ├── apply-compaction-result.ts
+├── compaction-summary.ts  # SUMMARY markers, detectors, createCompactionSummaryUIMessage
+├── message-chain-projection.ts  # getModelVisibleMessages (summary-first wire)
 ├── compaction-prompt.ts
 ├── write-compact-archive.ts  # Persist searchable pre-cut transcripts
 ├── file-ops-tracker.ts    # Track file operation tool calls for compaction decisions
@@ -626,7 +632,7 @@ packages/core/src/agent/compaction/
 
 **Reasoning stripping (Layer 2)** is disabled in `compaction-middleware.ts` because DeepSeek thinking mode requires `reasoning_content` echo-back. DeepSeek endpoints use `ReasoningChatCompletionsTextAdapter`, which maps stream `reasoning_content` into `thinking` and writes it back on subsequent requests.
 
-**Reactive compaction** runs via `runStreamWithRecovery` (`managers/run-stream-recovery.ts`) — on `prompt_too_long` errors, `ManagedAgent.handleReactiveCompact()` compacts context and retries once (skipped for subagents). The same shell also retries **transient** provider errors (429 / rate-limit / 502–504 / network) with exponential backoff for both main agent and subagents (honors Retry-After when available).
+**Reactive compaction** runs via `runStreamWithRecovery` (`managers/run-stream-recovery.ts`) — on `prompt_too_long` errors, `ManagedAgent.handleReactiveCompact()` appends a SUMMARY onto the live UI channel, realigns `runBaselineCount`, and retries (skipped for subagents). `getMessages` is a live channel read so the retry does not reuse a pre-run snapshot. The same shell also retries **transient** provider errors (429 / rate-limit / 502–504 / network) with exponential backoff for both main agent and subagents (honors Retry-After when available).
 
 ## Workspace `.agents/` layout
 
@@ -721,9 +727,9 @@ packages/
 ├── core/src/                          # @my-agent/core — runtime-agnostic core
 │   ├── env.ts                         # CoreEnv interface, registry (registerCoreEnv/getEnv/clearCoreEnv)
 │   ├── agent/
-│   │   ├── agent-context/             # AgentContext — messages + compaction only
+│   │   ├── agent-context/             # buildCanonicalModelMessages (ephemeral UI↔engine merge)
 │   │   ├── agent-log/                 # AgentLog — structured logging
-│   │   ├── compaction/                # Context compaction (micro + auto)
+│   │   ├── compaction/                # Append SUMMARY + summary-first wire projection
 │   │   ├── extension/                 # Extension API (loader, runner, EventBus interception)
 │   │   ├── memory/                    # Memory management
 │   │   ├── plan/                      # Plan domain (controller, prompts, middleware)

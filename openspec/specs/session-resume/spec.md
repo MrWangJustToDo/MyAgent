@@ -1,22 +1,26 @@
 # session-resume
 
-### Requirement: Restore compactMessages on resume
-The system SHALL restore the persisted `compactMessages` into the agent's `AgentContext` when resuming a session, so the LLM continues with the correct working context.
+### Requirement: Restore conversation from uiMessages on resume
+The system SHALL restore conversation continuity on resume from persisted `uiMessages` only (including any in-chain compaction summary already present in that list). The system SHALL NOT restore or migrate separate `compactMessages` / `summaryMessage` / `compactIndex` into the runtime.
 
-#### Scenario: CompactMessages restored
-- **WHEN** a session is resumed with stored compactMessages
-- **THEN** the AgentContext's compactMessages and messages are both set to the stored compactMessages
+#### Scenario: In-chain summary present
+- **WHEN** a session is resumed whose `uiMessages` contain an in-chain `[CONVERSATION SUMMARY]` message
+- **THEN** the UI channel is hydrated with those `uiMessages` and model-visible projection uses that summary
+
+#### Scenario: Obsolete compact fields present
+- **WHEN** a session file still contains obsolete compact fields
+- **THEN** those fields are ignored; no migration runs
 
 ### Requirement: Provide UIMessages to client on resume
-The system SHALL return the stored `uiMessages` to the client layer so the UI can display the full conversation history.
+The system SHALL return the stored `uiMessages` to the client and load them into the UI channel.
 
 #### Scenario: CLI resume
 - **WHEN** a session is resumed in CLI mode
-- **THEN** the stored uiMessages are passed as `initialMessages` to the Chat constructor
+- **THEN** the stored uiMessages are applied to the UI channel
 
 #### Scenario: Extension resume
 - **WHEN** a session is resumed via the server API
-- **THEN** the stored uiMessages are returned in the API response for the client to render
+- **THEN** the stored uiMessages are returned for the client to render
 
 ### Requirement: Restore model configuration
 The system SHALL use the stored provider and model name to recreate the LanguageModel instance on resume. API keys SHALL be read from environment variables (not stored in session files).
@@ -34,7 +38,7 @@ The system SHALL restore token usage statistics and todo list state from the ses
 
 #### Scenario: Usage restored
 - **WHEN** a session with usage data is resumed
-- **THEN** the AgentContext reflects the stored usage (totalUsage for lifetime tracking)
+- **THEN** the agent's usage tracker reflects the stored usage (totalUsage for lifetime tracking)
 
 #### Scenario: Todos restored
 - **WHEN** a session with todos is resumed

@@ -1,4 +1,11 @@
-import { agentManager, applyCompactionResult, autoCompact, estimateTokens } from "@my-agent/core";
+import {
+  agentManager,
+  applyCompactionResult,
+  autoCompact,
+  estimateTokens,
+  getModelVisibleMessages,
+} from "@my-agent/core";
+import { convertMessagesToModelMessages } from "@tanstack/ai";
 
 import { bumpAgentUsage } from "../hooks/use-agent-usage.js";
 
@@ -15,19 +22,19 @@ registerCommand({
       return { ok: false, error: "Agent not initialized" };
     }
 
-    const context = agent.getContext();
-    if (!context) {
-      return { ok: false, error: "Agent context not available" };
+    const channel = agent.ui;
+    if (!channel) {
+      return { ok: false, error: "Agent UI channel not available" };
     }
 
-    const uiMessages = ctx.getMessages?.();
-    if (uiMessages?.length) {
-      agent.syncContextFromUIMessages(uiMessages);
+    const uiMessages = ctx.getMessages?.() ?? channel.getMessages();
+    if (uiMessages.length) {
+      channel.setMessages(uiMessages);
     }
 
-    const allModelMessages = context.getCanonicalFromUI();
-
-    const messages = context.getMessagesForLLM(allModelMessages);
+    const allModelMessages = convertMessagesToModelMessages(channel.getMessages());
+    const keepRecentFlows = agent.compactionConfig?.keepRecentFlows ?? 2;
+    const messages = getModelVisibleMessages(allModelMessages, { keepRecentFlows });
     if (messages.length === 0) {
       return { ok: false, error: "No messages to compact" };
     }
@@ -55,7 +62,8 @@ registerCommand({
         actualTokens: actualTokens || undefined,
       });
 
-      const applied = applyCompactionResult(allModelMessages, context, agent.usage, result, {
+      const applied = applyCompactionResult(allModelMessages, channel, agent.usage, result, {
+        keepRecentFlows,
         onCacheCleanupError: (err) => {
           agent.getLog()?.warn("agent", "Failed to cleanup tool cache after /compact", { error: err.message });
         },
@@ -74,7 +82,9 @@ registerCommand({
 
       agent.resetAdmittedTurnContext();
       agent.resetSystemPrompt();
+      ctx.setMessages?.(channel.getMessages());
       agent.persistSession();
+      agent.maybeSaveSessionUIMessages(channel.getMessages(), "force");
       bumpAgentUsage();
 
       const tokensBefore = result.tokensBefore ?? tokensBeforeEstimate;

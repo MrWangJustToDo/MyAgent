@@ -132,7 +132,9 @@ export function buildAgentRunner(
       agentId: deps.agentId,
       manager: deps.manager,
       getCompactionConfig: () => deps.compactionConfig,
-      getContext: () => deps.context,
+      getUIChannel: () => deps.getUIChannel(),
+      getRunBaselineCount: () => deps.getRunBaselineCount(),
+      setRunBaselineCount: (count) => managed.setRunBaselineCount(count),
       getUsage: () => deps.usage,
       getTodoManager: () => deps.todoManager,
       shouldTriggerAutoCompact: deps.shouldTriggerAutoCompact,
@@ -237,10 +239,8 @@ async function executeManagedAgentRun(
   });
 
   // prepareForRun may have admitted a synthetic turn_context into the UI channel.
-  if (managed.ui) {
-    messages = managed.ui.getMessages();
-  } else if (managed.context) {
-    messages = managed.context.getUIMessages();
+  if (!managed.ui) {
+    throw new Error(`Agent "${agentId}" requires a UI channel before LLM runs`);
   }
 
   // Use the RunCoordinator controller created in prepareForRun so ManagedAgent.abort()
@@ -250,12 +250,11 @@ async function executeManagedAgentRun(
     throw new Error(`Agent "${agentId}" missing abort controller after prepareForRun`);
   }
 
-  const inputMessages = messages || [];
-
+  // Always read the live channel — compact / turn_context may mutate it mid-run/recovery.
   return runStreamWithRecovery({
     managed,
     manager,
-    getMessages: () => inputMessages,
+    getMessages: () => managed.ui?.getMessages() ?? [],
     run: (runMessages) =>
       runner.run({
         agentId,

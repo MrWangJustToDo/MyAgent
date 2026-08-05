@@ -1,12 +1,12 @@
 /**
- * Validation for canonical model message rebuilding (compaction dual-view).
+ * Validation for canonical model message rebuilding (UI + engine merge).
  *
  * Run: pnpm --filter @my-agent/core run validate:canonical-model-messages
  */
 
 import assert from "node:assert/strict";
 
-import { AgentContext, buildCanonicalModelMessages } from "../dist/dev.mjs";
+import { buildCanonicalModelMessages, formatCompactionSummaryContent, getModelVisibleMessages } from "../dist/dev.mjs";
 
 const uiMessages = Array.from({ length: 69 }, (_, i) => ({
   id: `u${i}`,
@@ -18,57 +18,42 @@ const fromUI = buildCanonicalModelMessages(uiMessages, [], 0);
 assert.equal(fromUI.length, 69);
 
 const runBaseline = 69;
-const summaryMessage = { role: "user", content: "[CONVERSATION SUMMARY]\nold\n[END SUMMARY]" };
-const compactIndex = 40;
-const engineTail = [
-  ...Array.from({ length: 29 }, (_, i) => ({ role: "user", content: `message ${i + compactIndex}` })),
-  {
-    role: "assistant",
-    content: "working",
-    toolCalls: [{ id: "c1", type: "function", function: { name: "read_file", arguments: "{}" } }],
-  },
-  { role: "tool", toolCallId: "c1", content: "file contents" },
-];
-const compactedEngine = [summaryMessage, ...engineTail];
 
-const canon = buildCanonicalModelMessages(uiMessages, compactedEngine, {
-  runBaselineCount: runBaseline,
-  summaryMessage,
-  compactIndex,
-});
-assert.equal(canon.length, 71, "preserved prefix + compacted engine tail");
-assert.equal(canon[39]?.content, "message 39");
-assert.equal(canon[40]?.content, "message 40");
-assert.equal(canon[69]?.role, "assistant");
+// Engine grew beyond baseline: UI prefix + engine suffix
+{
+  const engine = Array.from({ length: runBaseline + 2 }, (_, i) => ({
+    role: "user",
+    content: `engine ${i}`,
+  }));
+  const canon = buildCanonicalModelMessages(uiMessages, engine, runBaseline);
+  assert.equal(canon.length, runBaseline + 2);
+  assert.equal(canon[0]?.content, "message 0");
+  assert.equal(canon[runBaseline]?.content, `engine ${runBaseline}`);
+}
 
-const ctx = new AgentContext();
-ctx.setUIMessages(uiMessages);
-ctx.setRunBaselineCount(runBaseline);
-ctx.setSummaryMessage(summaryMessage);
-ctx.setCompactIndex(compactIndex);
+// Engine same length as baseline: prefer engine (in-place updates)
+{
+  const fullEngine = Array.from({ length: runBaseline }, (_, i) => ({
+    role: "user",
+    content: `engine ${i}`,
+  }));
+  const canon = buildCanonicalModelMessages(uiMessages, fullEngine, runBaseline);
+  assert.equal(canon.length, runBaseline);
+  assert.equal(canon[0]?.content, "engine 0");
+}
 
-const llmView = ctx.getMessagesForLLM(ctx.getCanonicalModelMessages(compactedEngine));
-assert.equal(llmView.length, 32, "summary + canon.slice(40) with in-run tool messages");
-assert.match(String(llmView[0].content), /CONVERSATION SUMMARY/);
-assert.equal(llmView[1]?.content, "message 40");
-
-const secondPass = ctx.getMessagesForLLM(ctx.getCanonicalModelMessages(llmView));
-assert.equal(secondPass.length, 32, "second onConfig must not double-slice truncated engine state");
-
-const grownEngine = [...compactedEngine, { role: "assistant", content: "next step" }];
-const regrownCanon = ctx.getCanonicalModelMessages(grownEngine);
-assert.equal(regrownCanon.length, 72, "in-run growth after compacted engine view is preserved");
-assert.equal(ctx.getMessagesForLLM(regrownCanon).length, 33);
-
-const fullEngine = Array.from({ length: runBaseline }, (_, i) => ({
-  role: "user",
-  content: `message ${i}`,
-}));
-assert.equal(
-  buildCanonicalModelMessages(uiMessages, fullEngine, { runBaselineCount: runBaseline }).length,
-  runBaseline,
-  "full engine at run start maps to converted UI history"
-);
+// In-chain summary projection (chronological → summary-first)
+{
+  const chronologic = [
+    ...Array.from({ length: 40 }, (_, i) => ({ role: "user", content: `message ${i}` })),
+    { role: "user", content: formatCompactionSummaryContent("old") },
+    ...Array.from({ length: 5 }, (_, i) => ({ role: "user", content: `after ${i}` })),
+  ];
+  const visible = getModelVisibleMessages(chronologic, { keepRecentFlows: 2 });
+  assert.match(String(visible[0].content), /CONVERSATION SUMMARY/);
+  assert.ok(visible.some((m) => m.content === "after 0"));
+  assert.ok(!visible.some((m) => m.content === "message 0"));
+}
 
 // In-place tool result update: engine length unchanged, content differs from stale UI conversion.
 const toolUiMessages = [
@@ -79,40 +64,63 @@ const toolUiMessages = [
     parts: [
       {
         type: "tool-call",
-        id: "call_cmd",
-        name: "run_command",
-        arguments: '{"command":"pnpm typecheck"}',
-        state: "approval-responded",
-        approval: { id: "ap1", needsApproval: true, approved: true },
+        id: "tc1",
+        name: "read_file",
+        arguments: {},
+        state: "output-available",
+        output: { content: "stale" },
       },
     ],
   },
 ];
-const engineWithResults = [
+
+const engineWithTool = [
   { role: "user", content: "test" },
   {
     role: "assistant",
-    content: "",
-    toolCalls: [
-      {
-        id: "call_cmd",
-        type: "function",
-        function: { name: "run_command", arguments: '{"command":"pnpm typecheck"}' },
-      },
-    ],
+    content: null,
+    toolCalls: [{ id: "tc1", type: "function", function: { name: "read_file", arguments: "{}" } }],
   },
-  { role: "tool", toolCallId: "call_cmd", content: "Exit status 1\nlint output..." },
+  { role: "tool", toolCallId: "tc1", content: "fresh tool result" },
 ];
-const inPlaceCanon = buildCanonicalModelMessages(toolUiMessages, engineWithResults, {
-  runBaselineCount: 2,
-});
-assert.equal(inPlaceCanon.length, 3, "engine suffix appended when engine grew");
-assert.equal(inPlaceCanon[2]?.content, "Exit status 1\nlint output...");
 
-const sameLengthEngine = buildCanonicalModelMessages(toolUiMessages, engineWithResults, {
-  runBaselineCount: engineWithResults.length,
-});
-assert.equal(sameLengthEngine, engineWithResults, "prefer engine when length equals baseline (in-place tool results)");
-assert.equal(sameLengthEngine[2]?.content, "Exit status 1\nlint output...");
+const toolCanon = buildCanonicalModelMessages(toolUiMessages, engineWithTool, 3);
+assert.equal(toolCanon.length, 3);
+assert.equal(toolCanon[2]?.content, "fresh tool result");
 
-console.log("canonical-model-messages validation passed");
+// Post-compact: engine is summary-first (shorter); UI stays chronological.
+// Baseline sentinel forces engine-prefer so UI/engine index spaces do not merge incorrectly.
+{
+  const summary = formatCompactionSummaryContent("compacted");
+  const chronologicUI = [
+    ...Array.from({ length: 8 }, (_, i) => ({
+      id: `c${i}`,
+      role: "user",
+      parts: [{ type: "text", content: `old ${i}` }],
+    })),
+    { id: "sum", role: "user", parts: [{ type: "text", content: summary }] },
+  ];
+  const projectedEngine = getModelVisibleMessages(
+    chronologicUI.map((m) => ({
+      role: m.role,
+      content: m.parts[0].content,
+    })),
+    { keepRecentFlows: 2 }
+  );
+  assert.ok(projectedEngine.length < chronologicUI.length);
+  // Grow engine past chronological channel length — must still prefer engine, not UI∥engine merge.
+  const grownEngine = [
+    ...projectedEngine,
+    ...Array.from({ length: chronologicUI.length }, (_, i) => ({
+      role: "assistant",
+      content: `post ${i}`,
+    })),
+  ];
+  assert.ok(grownEngine.length > chronologicUI.length);
+  const postCompact = buildCanonicalModelMessages(chronologicUI, grownEngine, Number.MAX_SAFE_INTEGER);
+  assert.equal(postCompact, grownEngine);
+  assert.match(String(postCompact[0].content), /CONVERSATION SUMMARY/);
+  assert.ok(!postCompact.some((m) => m.content === "old 0"));
+}
+
+console.log("validate:canonical-model-messages OK");

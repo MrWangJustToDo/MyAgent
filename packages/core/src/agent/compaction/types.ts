@@ -40,8 +40,8 @@ export const compactionResultSchema = z.object({
   /** Estimated tokens after compaction */
   tokensAfter: z.number().int().nonnegative(),
   /** Type of compaction performed */
-  type: z.enum(["micro", "auto", "manual"]).optional(),
-  /** Summary generated if auto/manual compaction */
+  type: z.enum(["micro", "auto", "manual", "reactive"]).optional(),
+  /** Summary generated if auto/manual/reactive compaction */
   summary: z.string().optional(),
   /** Index in the input messages where the kept portion starts (messages before this were summarized) */
   cutIndex: z.number().int().nonnegative().optional(),

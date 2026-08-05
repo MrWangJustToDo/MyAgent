@@ -5,7 +5,6 @@ import {
   initConfig,
   initHighlighter,
   useAgent,
-  useAgentContext,
   useAgentLog,
   useTodoManager,
 } from "@my-agent/app";
@@ -84,7 +83,7 @@ const AgentBootstrap = memo(() => {
       if (currentInitId !== initIdRef.current) return;
 
       const playground = new PlaygroundAgentAdapter({
-        hooks: { useAgent, useAgentLog, useAgentContext, useTodoManager },
+        hooks: { useAgent, useAgentLog, useTodoManager },
       });
 
       adapterRef.current = playground;

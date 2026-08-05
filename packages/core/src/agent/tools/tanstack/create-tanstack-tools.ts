@@ -4,7 +4,6 @@ import { createTools } from "../create-tools.js";
 import { toolsToArray, type ToolsRecord } from "./tools-record.js";
 
 import type { ManagedAgent, UsageTracker } from "../../../runtime-types/hosts.js";
-import type { AgentContext } from "../../agent-context/agent-context.js";
 import type { ClientTool, ServerTool } from "@tanstack/ai";
 
 // ============================================================================
@@ -58,10 +57,8 @@ export function createTanStackSubagentTools(managed?: ManagedAgent): ServerTool[
 /**
  * Default root-agent filesystem/shell tools (before task/skills/MCP extensions).
  */
-export async function createTanStackTools(
-  options: { context?: AgentContext; usage?: UsageTracker } = {}
-): Promise<ServerTool[]> {
-  const toolRecord = await createTools({ context: options.context, usage: options.usage });
+export async function createTanStackTools(options: { usage?: UsageTracker } = {}): Promise<ServerTool[]> {
+  const toolRecord = await createTools({ usage: options.usage });
   return toolsToArray(toolRecord) as ServerTool[];
 }
 

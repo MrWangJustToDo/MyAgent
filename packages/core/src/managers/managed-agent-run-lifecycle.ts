@@ -22,10 +22,6 @@ export async function prepareManagedAgentForRun(
     abortSignal?: AbortSignal;
   }
 ): Promise<void> {
-  if (options.messages?.length) {
-    host.syncContextFromUIMessages(options.messages as TanStackUIMessage[]);
-  }
-
   const inputMessages = options.messages || [];
 
   host.run.setupAbortController(options.abortSignal, {
@@ -65,12 +61,9 @@ export async function prepareManagedAgentForRun(
   }
 
   // Baseline after optional turn_context admission so engine/UI lengths stay aligned.
-  const baselineMessages = (host.ui?.getMessages() ?? host.context?.getUIMessages() ?? options.messages) as
-    | TanStackUIMessage[]
-    | undefined;
+  const baselineMessages = (host.ui?.getMessages() ?? options.messages) as TanStackUIMessage[] | undefined;
   if (baselineMessages?.length) {
-    host.syncContextFromUIMessages(baselineMessages);
-    host.context?.setRunBaselineCount(convertMessagesToModelMessages(baselineMessages).length);
+    host.setRunBaselineCount(convertMessagesToModelMessages(baselineMessages).length);
   }
 }
 
@@ -89,7 +82,7 @@ export function finalizeManagedAgentRun(
   if (reason === "finished") {
     host.memory.runExtraction({
       agentId: host.id,
-      context: host.context!,
+      getMessagesForLLM: () => host.getMessagesForLLM(),
       log: host.log,
       manager,
       emitEvent: (type, data) => host.emitEvent(type, data),

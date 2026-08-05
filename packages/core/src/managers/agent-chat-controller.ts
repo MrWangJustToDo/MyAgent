@@ -220,7 +220,6 @@ export class AgentChatController {
 
   respondToToolApproval(approvalId: string, approved: boolean, reason?: string): Promise<void> {
     this.channel.addToolApprovalResponse(approvalId, approved, reason);
-    this.managed.syncContextFromUIMessages(this.channel.getMessages());
     this.managed.statusController.reconcileWithPolicy(this.channel.getMessages(), "during-run");
     return this.enqueueRun();
   }
@@ -418,7 +417,6 @@ export class AgentChatController {
         manager: this.manager,
         agentId: this.managed.id,
         messages,
-        consume: "ui",
         channel: this.channel,
         transformStream: throwOnRunError,
       });
@@ -464,7 +462,6 @@ export class AgentChatController {
     const cancelled = cancelIncompleteToolCalls(current, TOOL_CANCELLED_MESSAGE);
     const cleaned = stripEmptyAssistantShells(cancelled);
     this.channel.setMessages(cleaned);
-    this.managed.syncContextFromUIMessages(cleaned);
   }
 
   private persistMessages(reason: "user-message" | "pump-complete"): void {
@@ -503,7 +500,6 @@ export class AgentChatController {
     }
 
     if (didApprove) {
-      this.managed.syncContextFromUIMessages(this.channel.getMessages());
       this.managed.statusController.reconcileWithPolicy(this.channel.getMessages(), "during-run");
     }
   }

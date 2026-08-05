@@ -37,10 +37,24 @@ export {
   type CompactionTodoItem,
 } from "./compaction-prompt.js";
 
-// Tool compaction (Layer 1 — placeholders + toModelOutput)
 export { applyToolCompact, createToolPlaceholder, type ApplyToolCompactOptions } from "./tool-compact";
 export { ToolCompactCache } from "./tool-compact/tool-compact-cache.js";
 export { toModelOutputRegistry } from "../tools/tanstack/to-model-output-registry.js";
+
+// Message-chain projection (summary-first wire)
+export {
+  CONVERSATION_SUMMARY_END,
+  CONVERSATION_SUMMARY_START,
+  createCompactionSummaryUIMessage,
+  findLatestSummaryIndex,
+  formatCompactionSummaryContent,
+  getModelVisibleMessages,
+  isCompactionSummaryModelMessage,
+  isCompactionSummaryText,
+  isCompactionSummaryUIMessage,
+  type GetModelVisibleMessagesOptions,
+} from "./message-chain-projection.js";
+export { extractCompactionSummaryBody } from "./compaction-summary.js";
 
 // Auto compaction (Layer 2)
 export {

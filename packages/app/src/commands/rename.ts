@@ -38,11 +38,6 @@ registerCommand({
       return { ok: true, message: `Session renamed: ${title}` };
     }
 
-    const context = toRaw(agent.getContext());
-    if (!context) {
-      return { ok: false, error: "No context available" };
-    }
-
     const managed = agentManager.getAgent(agent.id);
     if (!managed) {
       return { ok: false, error: "Managed agent not found" };
@@ -53,7 +48,7 @@ registerCommand({
       return { ok: false, error: "No text adapter available for title generation" };
     }
 
-    const messages = context.getCanonicalModelMessages();
+    const messages = managed.getCanonicalFromUI();
     const recentText = messages
       .filter((m) => m.role === "user" || m.role === "assistant")
       .slice(-4)

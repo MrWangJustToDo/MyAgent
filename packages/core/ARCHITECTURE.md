@@ -74,7 +74,7 @@ packages/cli/src/index.tsx
 packages/app/src/adapter/create-agent.ts
   resolveModelConfig({ model, style, baseURL, apiKey })
   agentManager.createManagedAgent({ modelInfo, modelStyle, ... })
-  wire React stores (useAgent, useAgentLog, useAgentContext, useTodoManager)
+  wire React stores (useAgent, useAgentLog, useTodoManager)
   optional: continueLatestSession() / resumeSession() → initialMessages
 ```
 
@@ -148,7 +148,7 @@ agent-manager.ts
 
 | Step | Action |
 |------|--------|
-| 1 | `new AgentContext`, `AgentLog`, `TodoManager`, `ManagedAgent` |
+| 1 | `AgentLog`, `TodoManager`, `ManagedAgent` (UI channel attached before LLM runs) |
 | 2 | `createTools()` → filesystem, grep, glob, tree, run_command, … |
 | 3 | `managed.dispatchEvent = emit` (routes to `AgentEventBus`) |
 | 4 | `loadAgentDoc()` → `setAgentDocContent` (AGENTS.md / CLAUDE.md) |
@@ -205,15 +205,16 @@ Inner LLM/tool stream execution is shared. Outer orchestration differs by **prof
 
 ```
 Shared skeleton (agent/run/run-agent-skeleton.ts)
-  ensureUIChannel? → manager.runAgentStream → consumeAgentStream(ui|headless)
+  ensureUIChannel → manager.runAgentStream → consumeAgentStream(channel)
   → optional applyRunOutcome(path: chat|detached)
 
 InteractiveChat profile (AgentChatController)
   pumpToolPhases / queues / approvals / session persist
-  → runAgentOnce(consume:"ui") per stream; outcome path "chat" after full pump
+  → runAgentOnce(channel) per stream; outcome path "chat" after full pump
 
 Worker profile (runSubagent — task / compact / memory)
-  spawn + tool isolation → runAgentOnce(ui|headless) once
+  spawn + tool isolation → always ensureUIChannel → runAgentOnce once
+  → bridgeUI only gates parent panel / task-tool streaming
   → outcome path "detached" (avoids task-panel ghosts)
 ```
 
@@ -415,21 +416,29 @@ autoCompact(messages, config, agentId, manager)
   → findCutPoint (keep recent user turns)
   → summarizeConversation with <to_compress> + <still_in_context> (+ optional <previous-summary>)
   → writeCompactArchive (.agents/transcripts/<sessionId>/compact-<n>.md) — non-fatal; merged ## Compact archives list appended (newest-first search guidance); prior archive sections stripped from <previous-summary> input
-applyCompactionResult(context, usage, result)
-  → setSummaryMessage, setCompactIndex, reset window usage
+applyCompactionResult(channel, usage, result)
+  → append `[CONVERSATION SUMMARY]` UIMessage onto the UI channel, reset window usage
+  → return chronological post-append messages (for orphan tool-cache cleanup)
+compaction middleware (same onConfig):
+  → convertMessages(channel) → getModelVisibleMessages → setMessages(wire)
+  → setRunBaselineCount(MAX_SAFE_INTEGER)  // UI/engine index spaces diverge after projection
 emit compaction:auto-complete | compaction:auto-error
 setStatus("running") via endCompaction
 ```
 
-`AgentContext.getMessagesForLLM(canon)` returns:
+**Why re-project from the channel:** After append, TanStack `engineMessages` still match the **pre-compact** length. Naively merging with `buildCanonicalModelMessages(ui, engine, baseline)` when `engine.length === runBaselineCount` would prefer that stale engine and **drop** the new SUMMARY for the immediate LLM call. Post-compact always rebuilds wire from the channel.
+
+**Why `MAX_SAFE_INTEGER` baseline:** TanStack `applyMiddlewareConfig` writes the projected (summary-first, shorter) array into the engine. Channel stays chronological. Those arrays no longer share indices — setting baseline to channel length still allows a later `engine.length > baseline` merge of `UI[0:baseline] + engine[baseline:]`, which can drop mid-run tool results. Sentinel baseline forces the engine-prefer path until the next `prepareForRun` resets it.
+
+`getModelVisibleMessages(chronological)` returns summary-first wire order:
 
 ```
-[summaryMessage, ...canon.slice(compactIndex)]
+[latestSummary, …kept turns before summary…, …messages after summary…]
 ```
 
-The summarizer sees both the cut-away history and the kept tail (budget-aware) so Goal/Next stay aligned, but the main agent still receives only `summary + kept` after apply.
-`canon` is rebuilt each `onConfig` via `getCanonicalModelMessages(engine)`:
-`convert(uiMessages) + engine.slice(runBaselineCount)`.
+The durable channel stays chronological. Projection is never written back.
+The summarizer sees both the cut-away history and the kept tail (budget-aware) so Goal/Next stay aligned.
+On later iterations (no compact), `canon` is rebuilt via `buildCanonicalModelMessages(ui, engine, runBaselineCount)`.
 
 ### 5.4 Reactive compact (emergency)
 
@@ -440,14 +449,16 @@ When the API returns `prompt_too_long`:
 ```
 runStreamWithRecovery catches RUN_ERROR / thrown error
   → strategies: reactive-compact | capability-sanitize | transient-retry | max-tokens-continue
+  → getMessages: () => managed.ui.getMessages()   // live channel, not a pre-run snapshot
   → reactive path: handleReactiveCompact (max 1 retry by default; skipped for subagents)
   → transient path: 429 / rate-limit / 502–504 / network — same messages + exponential backoff
     (honors Retry-After when present; works for main agent and subagents)
   → beginCompaction("reactive")  // emits compaction:reactive-start only (not auto-start)
   → reactiveCompact: summarize + keep tail messages
-  → applyReactiveCompactionResult
+  → applyReactiveCompactionResult → append SUMMARY on channel
+  → setRunBaselineCount(MAX_SAFE_INTEGER)
   → endCompaction + emit compaction:reactive-complete | compaction:reactive-error
-  → retry runner.run with updated messages (shared MAX_RECOVERY_ATTEMPTS ≈ 3)
+  → retry runner.run; next onConfig projects from live channel (shared MAX_RECOVERY_ATTEMPTS ≈ 3)
 ```
 
 Unhandled `RUN_ERROR` chunks (anything other than a successful recovery strategy) are **thrown** — never yielded. `AgentChatController` / `AgentUIChannel.consumeRun` also wrap streams with `throwOnRunError`, so failures surface as `status: error` + `agent:stream-error` instead of a silent `Completed` with no assistant message. Handled errors are recorded on the agent and **not** rethrown from the chat pump (avoids unhandled rejection crashing the CLI).
@@ -488,7 +499,7 @@ Set via `ManagedAgentConfig.compaction` in `agent-factory.ts`.
 | File | `{sessionId}.session.json` |
 | Schema | `SessionData` v4 (`agent/session/types.ts`; older files omit `planMode` / inline base64 media) |
 
-Fields: `uiMessages`, `summaryMessage`, `compactIndex`, `usage`, `cost`, `contextTokens`, `todos`, `todoPlanBound`, `planMode` (phase/markdown/path/seeded), `modelStyle`, `model`, metadata.
+Fields: `uiMessages` (includes in-chain summaries), `usage`, `cost`, `contextTokens`, `todos`, `todoPlanBound`, `planMode` (phase/markdown/path/seeded), `modelStyle`, `model`, metadata.
 
 **Binary media (v4):** On persist with `uiMessages`, `SessionService` clones → dehydrates Image/Audio/Video/Document parts to content-addressed files under `.agents/media/<hash>.<ext>`, writing `media://` refs + `metadata.mediaRef` into the session JSON. Runtime messages stay hydrated (data URLs / raw base64). Restore hydrates before UI/context; `this.data.uiMessages` stays dehydrated so model-only saves do not re-inline blobs. See `agent/media/`.
 
@@ -496,7 +507,7 @@ Fields: `uiMessages`, `summaryMessage`, `compactIndex`, `usage`, `cost`, `contex
 
 | Trigger | Function | What is saved |
 |---------|----------|---------------|
-| **Run finalizes** (finish / abort / error) | `ManagedAgent.finalizeRun` → `SessionService.persistSession` | Model fields: `summaryMessage`, `compactIndex`, `usage`, `cost`, `contextTokens`, `todos`, `planMode`; auto-title if `"New Session"` |
+| **Run finalizes** (finish / abort / error) | `ManagedAgent.finalizeRun` → `SessionService.persistSession` | Model fields: `usage`, `cost`, `contextTokens`, `todos`, `planMode`; auto-title if `"New Session"` |
 | **User message (core)** | `AgentChatController` after `addUserMessage` (send / drained steer|follow-up) → `maybeSaveSessionUIMessages(..., "user-message")` | Model fields **plus** `uiMessages` when fingerprint changed |
 | **Pump idle (core)** | `AgentChatController.persistMessages` → `maybeSaveSessionUIMessages(..., "pump-complete")` | Same; also on Esc/abort after cancelling incomplete tools |
 | **Manual flush** | `saveSessionUIMessages` (`/clear`, slash commands) | Force full persist |
@@ -529,9 +540,9 @@ Idempotent per turn via `resetTurnLifecycle` / `beginTurnFinalize` (stop + pump 
 AgentManager.resumeSession(agentId, sessionId)
   → managed.restoreSession(sessionId)
     → SessionService.restoreFromStore
-      → context.reset(); usage.reset()
-      → context.setUIMessages(session.uiMessages)
-      → restore summaryMessage, compactIndex, usage, todos
+      → usage.reset(); hydrate uiMessages
+      → restore usage, todos (ignore obsolete compact fields)
+    → UI channel.setMessages(uiMessages) when channel present
 
 AgentManager.continueLatestSession(agentId)
   → store.getLatest() → resumeSession
@@ -539,24 +550,28 @@ AgentManager.continueLatestSession(agentId)
 
 App passes `initialMessages` from resume into `ManagedAgent.initChat()`.
 
-### 6.4 Context ↔ UI sync rules
+### 6.4 Channel ↔ wire projection
 
 **Message flow (expected contract):**
 
 ```
-uiMessages (source of truth in AgentContext, synced at each `chat()` start)
-  → getCanonicalModelMessages(engine) on each onConfig
-     · engine.length > runBaseline → UI prefix + engine suffix
-     · engine.length === runBaseline → prefer engine (in-place tool results)
-     · engine shorter with summary → UI.slice(compactIndex) + engine tail
-  → getMessagesForLLM(canon) → LLM view returned to TanStack
+uiMessages (source of truth on AgentUIChannel; chronological, including SUMMARY checkpoints)
+  → onConfig (normal):
+      buildCanonicalModelMessages(ui, engine, runBaselineCount)
+      → getModelVisibleMessages(canon) → summary-first LLM wire
+  → onConfig (just compacted):
+      convertMessages(channel) → getModelVisibleMessages → setMessages(wire)
+      → setRunBaselineCount(MAX_SAFE_INTEGER) // prefer projected engine for rest of chat()
+  → never write projected wire arrays back as durable channel state
 ```
 
-- **Each run start** (`prepareForRun`): incoming `uiMessages` from `AgentChatController` → `context.setUIMessages` (summary + `compactIndex` preserved).
+Recovery / continuation always re-reads `managed.ui.getMessages()` (not a closed-over snapshot from run start), so a mid-run compact is visible to the next attempt.
+
+- **Each run start** (`prepareForRun`): baseline from channel messages; turn_context may be admitted into the channel.
 - **User send** (`AgentChatController.sendMessage` / drained queues): `maybeSaveSessionUIMessages(messages, "user-message")`.
 - **After run idle** (`AgentChatController` after `pumpToolPhases`, including approval wait / abort cleanup): `maybeSaveSessionUIMessages(messages, "pump-complete")`.
 - **During runs / core**: `persistSession()` and `finalizeRun` write model fields only; they never pass `uiMessages`.
-- **Manual `/compact`**: syncs UI → context, compacts LLM path only; UI history stays complete; `persistSession()` saves model state only.
+- **Manual `/compact`**: appends summary checkpoint onto the channel; `persistSession()` + `maybeSaveSessionUIMessages(..., "force")`.
 - **Manual `/clear`**: `saveSessionUIMessages()` force-flushes before rotating session.
 
 ### 6.5 Session events

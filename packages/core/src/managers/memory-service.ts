@@ -11,7 +11,6 @@ import { getEnv } from "../env.js";
 import type { AgentManager } from "./agent-manager.js";
 import type { EmitAgentEventFn } from "./emit-agent-event.js";
 import type { UsageTracker } from "./usage-tracker.js";
-import type { AgentContext } from "../agent/agent-context";
 import type { AgentLog } from "../agent/agent-log";
 import type { MemoryManager } from "../agent/memory/memory-manager.js";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
@@ -27,7 +26,7 @@ export interface MemoryPrefetchInput {
 
 export interface MemoryExtractionInput {
   agentId: string;
-  context: AgentContext;
+  getMessagesForLLM: () => ModelMessage[];
   log: AgentLog | null;
   manager: AgentManager;
   emitEvent?: EmitAgentEventFn;
@@ -132,24 +131,22 @@ export class MemoryService {
   }
 
   runExtraction(input: MemoryExtractionInput): void {
-    const { agentId, context, manager: agentManager, emitEvent } = input;
-    if (!this.manager || !context) return;
+    const { agentId, getMessagesForLLM, manager: agentManager, emitEvent } = input;
+    if (!this.manager) return;
     if (this.extractionInProgress) {
       emitEvent?.("memory:extract", { status: "skip-in-progress" });
       return;
     }
 
-    const canon = context.getCanonicalFromUI();
-    // Gate on full UI-derived history so compaction cannot permanently disable extraction.
+    const llmMessages = getMessagesForLLM();
+    // Prefer projected LLM view; fall back to a longer tail if projection is short.
     const MIN_MESSAGES_FOR_EXTRACT = 8;
-    if (canon.length < MIN_MESSAGES_FOR_EXTRACT) {
-      emitEvent?.("memory:extract", { status: "skip-short", count: canon.length });
+    if (llmMessages.length < MIN_MESSAGES_FOR_EXTRACT) {
+      emitEvent?.("memory:extract", { status: "skip-short", count: llmMessages.length });
       return;
     }
 
-    const llmMessages = context.getMessagesForLLM(canon);
-    // Prefer the compact LLM view when long enough; otherwise use a tail of canonical history.
-    const messages = llmMessages.length >= MIN_MESSAGES_FOR_EXTRACT ? llmMessages : canon.slice(-80);
+    const messages = llmMessages.slice(-80);
 
     const memoryManager = this.manager;
 

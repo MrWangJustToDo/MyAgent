@@ -53,7 +53,7 @@ export function handleMaxTokensTruncation(options: {
   }
 
   if (truncation.continuationCount < MAX_TRUNCATION_CONTINUATIONS) {
-    const contextMessages = managed.getContext()?.getMessagesForLLM() ?? (messages as Array<UIMessage | ModelMessage>);
+    const contextMessages = managed.getMessagesForLLM() ?? (messages as Array<UIMessage | ModelMessage>);
     truncation.continuationCount++;
     managed.log?.debug("agent", "Output truncated — injecting continuation prompt", {
       continuationCount: truncation.continuationCount,

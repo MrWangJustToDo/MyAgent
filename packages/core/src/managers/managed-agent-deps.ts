@@ -7,7 +7,6 @@ export function buildManagedAgentDeps(managed: ManagedAgent, manager: AgentManag
   return {
     agentId: managed.id,
     manager,
-    context: managed.context,
     usage: managed.usage,
     memory: managed.memory,
     session: managed.session,
@@ -17,6 +16,8 @@ export function buildManagedAgentDeps(managed: ManagedAgent, manager: AgentManag
     compactionConfig: managed.getCompactionConfig(),
     modelInfo: managed.getModelInfo(),
     getFrozenSystemPrompt: () => managed.getFrozenSystemPrompt(),
+    getUIChannel: () => managed.ui ?? null,
+    getRunBaselineCount: () => managed.getRunBaselineCount(),
     shouldTriggerAutoCompact: (messages) => managed.shouldTriggerAutoCompact(messages),
   };
 }

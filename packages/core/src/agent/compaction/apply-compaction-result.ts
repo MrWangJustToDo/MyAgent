@@ -1,59 +1,71 @@
 /**
- * Apply a successful autoCompact result to AgentContext.
- * Shared by prepareStep auto-compaction and CLI /compact.
+ * Apply a successful compaction result onto the UI channel.
+ * Shared by auto-compaction middleware and CLI `/compact`.
  */
+
+import { convertMessagesToModelMessages } from "@tanstack/ai";
 
 import { cleanupOrphanedToolCache } from "../tools/util/tool-output-cache.js";
 
-import { createCompactedMessages } from "./auto-compact.js";
+import { extractCompactionSummaryBody } from "./compaction-summary.js";
+import { createCompactionSummaryUIMessage, getModelVisibleMessages } from "./message-chain-projection.js";
 
 import type { CompactionResult } from "./types.js";
 import type { UsageTracker } from "../../runtime-types/hosts.js";
-import type { AgentContext } from "../agent-context/agent-context.js";
+import type { AgentUIChannel } from "../ui-channel.js";
 import type { ModelMessage } from "@tanstack/ai";
 
 export interface ApplyCompactionResultOptions {
   /** Called if orphaned tool-cache cleanup fails (non-fatal). */
   onCacheCleanupError?: (error: Error) => void;
+  /** keepRecentFlows used for post-append visible window / cache cleanup (default: 2). */
+  keepRecentFlows?: number;
 }
 
 /**
- * Update context after compaction: summary, compactIndex, window usage reset, cache cleanup.
+ * Append a compaction summary checkpoint to the UI channel, reset window usage,
+ * and clean orphaned tool-output caches for messages no longer on the wire.
  *
- * @returns true if result was applied; false if nothing to apply (not compacted or missing cut)
+ * @returns true if result was applied; false if nothing to apply
  */
 export function applyCompactionResult(
-  messages: ModelMessage[],
-  context: AgentContext,
+  _messages: ModelMessage[],
+  channel: AgentUIChannel,
   usage: UsageTracker,
   result: CompactionResult,
   options?: ApplyCompactionResultOptions
 ): boolean {
-  if (!result.compacted || !result.summary || result.cutIndex == null) {
+  if (!result.compacted || !result.summary) {
     return false;
   }
 
-  const summaryMsg = createCompactedMessages(result.summary)[0];
-  context.setSummaryMessage(summaryMsg);
-  const absoluteCut = context.getCompactIndex() + result.cutIndex;
-  context.setCompactIndex(absoluteCut);
+  const keepRecentFlows = options?.keepRecentFlows ?? 2;
+  const summaryUI = createCompactionSummaryUIMessage(result.summary);
+  channel.setMessages([...channel.getMessages(), summaryUI]);
   usage.resetWindow();
 
-  const allMessages = messages;
-  cleanupOrphanedToolCache(allMessages, absoluteCut).catch((err) => {
-    const error = err instanceof Error ? err : new Error(String(err));
-    options?.onCacheCleanupError?.(error);
-  });
+  // Orphan cleanup must use post-append chronology (summary at end changes the wire window).
+  const chronologic = convertMessagesToModelMessages(channel.getMessages());
+  const visible = getModelVisibleMessages(chronologic, { keepRecentFlows });
+  const visibleToolIds = collectToolCallIds(visible);
+  const orphanCut = firstOrphanToolIndex(chronologic, visibleToolIds);
+  if (orphanCut > 0) {
+    cleanupOrphanedToolCache(chronologic, orphanCut).catch((err) => {
+      const error = err instanceof Error ? err : new Error(String(err));
+      options?.onCacheCleanupError?.(error);
+    });
+  }
 
   return true;
 }
 
 /**
- * Apply reactive compaction output (summary + tail messages) to context.
+ * Apply reactive compaction: append the summary message onto the channel.
+ * Tail continuity comes from in-chain look-back projection (not compactIndex).
  */
 export function applyReactiveCompactionResult(
   messages: ModelMessage[],
-  context: AgentContext,
+  channel: AgentUIChannel,
   usage: UsageTracker,
   compactedMessages: ModelMessage[],
   options?: ApplyCompactionResultOptions
@@ -61,22 +73,51 @@ export function applyReactiveCompactionResult(
   if (compactedMessages.length === 0) return false;
 
   const summaryMsg = compactedMessages[0];
-  if (!summaryMsg) return false;
+  if (!summaryMsg || summaryMsg.role !== "user") return false;
 
-  const tailMessages = compactedMessages.slice(1);
+  const text =
+    typeof summaryMsg.content === "string"
+      ? summaryMsg.content
+      : Array.isArray(summaryMsg.content)
+        ? summaryMsg.content
+            .map((part) => (part.type === "text" && "content" in part ? String(part.content) : ""))
+            .join("")
+        : "";
 
-  context.setSummaryMessage(summaryMsg);
-  const oldCompactIndex = context.getCompactIndex();
-  const newCompactIndex = messages.length - tailMessages.length;
-  context.setCompactIndex(newCompactIndex);
+  // Strip markers if present — createCompactionSummaryUIMessage re-wraps.
+  const body = extractCompactionSummaryBody(text);
+  if (!body) return false;
 
-  if (newCompactIndex > oldCompactIndex) {
-    cleanupOrphanedToolCache(messages, newCompactIndex).catch((err) => {
-      const error = err instanceof Error ? err : new Error(String(err));
-      options?.onCacheCleanupError?.(error);
-    });
+  return applyCompactionResult(
+    messages,
+    channel,
+    usage,
+    {
+      compacted: true,
+      tokensBefore: 0,
+      tokensAfter: 0,
+      type: "reactive",
+      summary: body,
+    },
+    options
+  );
+}
+
+function collectToolCallIds(messages: ModelMessage[]): Set<string> {
+  const ids = new Set<string>();
+  for (const msg of messages) {
+    if (msg.role === "tool" && msg.toolCallId) ids.add(msg.toolCallId);
   }
+  return ids;
+}
 
-  usage.resetWindow();
-  return true;
+/** First index of a tool message whose toolCallId is not in the visible set. */
+function firstOrphanToolIndex(messages: ModelMessage[], visibleToolIds: Set<string>): number {
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i]!;
+    if (msg.role === "tool" && msg.toolCallId && !visibleToolIds.has(msg.toolCallId)) {
+      return i + 1;
+    }
+  }
+  return 0;
 }

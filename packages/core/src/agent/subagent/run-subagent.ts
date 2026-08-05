@@ -87,23 +87,19 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
 
   const messages: ModelMessage[] = [...(initialMessages ?? []), { role: "user", content: prompt }];
 
-  let channel = undefined;
-  if (bridgeUI) {
-    const userUIMessage: TanStackUIMessage = {
-      id: generateId("msg"),
-      role: "user",
-      parts: [{ type: "text", content: prompt }],
-      createdAt: new Date(),
-    };
+  const userUIMessage: TanStackUIMessage = {
+    id: generateId("msg"),
+    role: "user",
+    parts: [{ type: "text", content: prompt }],
+    createdAt: new Date(),
+  };
 
-    if (parentTaskToolCallId) {
-      clearStreamingOutput(parentTaskToolCallId, { agentId: parentAgentId });
-    }
-
-    channel = ensureUIChannel(subagentManaged, { initialMessages: [userUIMessage] });
-  } else {
-    subagentManaged.setUIChannel(undefined);
+  if (bridgeUI && parentTaskToolCallId) {
+    clearStreamingOutput(parentTaskToolCallId, { agentId: parentAgentId });
   }
+
+  // Always attach a channel (durable message SoT). bridgeUI only gates parent panel streaming.
+  const channel = ensureUIChannel(subagentManaged, { initialMessages: [userUIMessage] });
 
   subagent.emitEvent("subagent:created", { subagentId }, { parentId: parentAgentId });
   subagent.emitEvent("subagent:started", { subagent_id: subagentId, description }, { parentId: parentAgentId });
@@ -121,7 +117,6 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       agentId: subagentId,
       messages,
       abortSignal,
-      consume: bridgeUI ? "ui" : "headless",
       channel,
       parentTaskToolCallId: bridgeUI ? parentTaskToolCallId : undefined,
       streamingAgentId: bridgeUI ? parentAgentId : undefined,

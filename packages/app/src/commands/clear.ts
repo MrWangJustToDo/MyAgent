@@ -14,11 +14,9 @@ registerCommand({
       return { ok: false, error: "Agent not initialized" };
     }
 
-    const context = agent.getContext();
     const store = agent.getSessionStore();
-
-    if (!context || !store) {
-      return { ok: false, error: "Agent context or session store not available" };
+    if (!store) {
+      return { ok: false, error: "Session store not available" };
     }
 
     const usage = agent.usage;
@@ -33,7 +31,7 @@ registerCommand({
     agent.planMode.disable();
     agent.setAutoApproveEnabled(false);
 
-    context.reset();
+    agent.reset();
     usage.reset();
     bumpAgentUsage();
 

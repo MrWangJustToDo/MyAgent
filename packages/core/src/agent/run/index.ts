@@ -2,7 +2,6 @@ export {
   consumeAgentStream,
   ensureUIChannel,
   runAgentOnce,
-  type AgentStreamConsumeMode,
   type ConsumeAgentStreamOptions,
   type EnsureUIChannelOptions,
   type RunAgentOnceOptions,

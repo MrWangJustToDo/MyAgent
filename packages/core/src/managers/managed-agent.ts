@@ -1,8 +1,9 @@
 /* eslint-disable max-lines */
-import { type ModelMessage, type UIMessage as TanStackUIMessage } from "@tanstack/ai";
+import { type ModelMessage, type UIMessage as TanStackUIMessage, convertMessagesToModelMessages } from "@tanstack/ai";
 
 import { AutoApproveController } from "../agent/approval/auto-approve-controller.js";
 import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
+import { getModelVisibleMessages } from "../agent/compaction/message-chain-projection.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
 import { PlanModeController } from "../agent/plan/plan-mode-controller.js";
 import { buildPlanModePrompt, buildPlanRetroSteerMessage } from "../agent/plan/plan-prompts.js";
@@ -59,7 +60,6 @@ import { UsageTracker } from "./usage-tracker.js";
 import type { AgentEvent, AgentEventType } from "./agent-event-bus.js";
 import type { AgentManager } from "./agent-manager.js";
 import type { AgentConfig, AgentStatus, RunFinalizeReason } from "./agent-types.js";
-import type { AgentContext } from "../agent/agent-context";
 import type { AgentLog } from "../agent/agent-log";
 import type { CompactionConfig, CompactionConfigInput } from "../agent/compaction/types.js";
 import type {
@@ -166,7 +166,7 @@ export class ManagedAgent {
   readonly run: RunCoordinator;
   readonly statusController: AgentStatusController;
 
-  private _context: AgentContext;
+  private _runBaselineCount = 0;
   tools: ToolsRecord;
   log: AgentLog;
   todoManager: TodoManager | null;
@@ -229,7 +229,6 @@ export class ManagedAgent {
     config: ManagedAgentConfig,
     init: {
       id?: string;
-      context: AgentContext;
       log: AgentLog;
       tools: ToolsRecord;
       todoManager: TodoManager | null;
@@ -243,7 +242,6 @@ export class ManagedAgent {
     this.name = config.name;
     this.config = config;
     this.agentConfig = AgentConfigSchema.parse(config);
-    this._context = init.context;
     this.log = init.log;
     this.tools = init.tools;
     this.todoManager = init.todoManager;
@@ -296,11 +294,6 @@ export class ManagedAgent {
   /** Host-facing status (read-only; use {@link setStatus} to mutate). */
   get status(): AgentStatus {
     return this._status;
-  }
-
-  /** Host-facing conversation context (read-only; use {@link setContext} to replace). */
-  get context(): AgentContext {
-    return this._context;
   }
 
   /** Host-facing UI channel when present (read-only; package-internal {@link setUIChannel}). */
@@ -429,15 +422,29 @@ export class ManagedAgent {
     return this.modelInfo;
   }
 
-  setContext(c: AgentContext): void {
-    this._context = c;
-    if (this.compactionConfig) {
-      this.usage.setTokenLimit(this.compactionConfig.tokenThreshold);
-    }
+  /** Model-message count at the start of the current `chat()` invocation. */
+  setRunBaselineCount(count: number): void {
+    this._runBaselineCount = Math.max(0, count);
   }
 
-  getContext(): AgentContext {
-    return this.context;
+  getRunBaselineCount(): number {
+    return this._runBaselineCount;
+  }
+
+  /** Canonical model messages from the UI channel only. */
+  getCanonicalFromUI(): ModelMessage[] {
+    const uiMessages = this.ui?.getMessages() ?? [];
+    if (uiMessages.length === 0) return [];
+    return convertMessagesToModelMessages(uiMessages);
+  }
+
+  /**
+   * Messages sent to the LLM after in-chain compaction summary projection.
+   */
+  getMessagesForLLM(canon?: ModelMessage[]): ModelMessage[] {
+    const base = canon ?? this.getCanonicalFromUI();
+    const keepRecentFlows = this.compactionConfig?.keepRecentFlows ?? 2;
+    return getModelVisibleMessages(base, { keepRecentFlows });
   }
 
   setLog(c: AgentLog): void {
@@ -494,15 +501,6 @@ export class ManagedAgent {
   }
 
   /**
-   * Sync {@link AgentContext} messages from UI messages (preserves compaction summary state).
-   * Skipped during active runs unless explicitly requested.
-   */
-  syncContextFromUIMessages(uiMessages: TanStackUIMessage[]): void {
-    if (!this.context || uiMessages.length === 0) return;
-    this.context.setUIMessages(uiMessages);
-  }
-
-  /**
    * Persist `uiMessages` when an explicit trigger fires and the fingerprint changed.
    * Reasons: `user-message` | `pump-complete` | `force` (via {@link saveSessionUIMessages}).
    * Fire-and-forget — dehydrate + disk write happen in the background.
@@ -517,7 +515,6 @@ export class ManagedAgent {
 
   /**
    * Force-persist session `uiMessages` (slash commands such as `/clear`).
-   * Also syncs AgentContext and writes model fields in the same session save.
    * Fire-and-forget — dehydrate + disk write happen in the background.
    */
   saveSessionUIMessages(uiMessages: TanStackUIMessage[]): void {
@@ -529,7 +526,7 @@ export class ManagedAgent {
     this.sessionSyncTracker.reset(uiMessages);
   }
 
-  /** Persist model state only (summary, compact index, usage, todos). Does not write `uiMessages`. */
+  /** Persist model state only (usage, todos). Does not write `uiMessages`. */
   persistSession(): void {
     void persistSessionModelState(this);
   }
@@ -701,8 +698,7 @@ export class ManagedAgent {
 
     const hash = hashTurnContextPayload(payload);
     if (this.lastAdmittedTurnContextHash === undefined) {
-      const existing =
-        findLatestTurnContextHash(this.ui?.getMessages() ?? this.context?.getUIMessages() ?? []) ?? undefined;
+      const existing = findLatestTurnContextHash(this.ui?.getMessages() ?? []) ?? undefined;
       this.lastAdmittedTurnContextHash = existing;
     }
     if (hash === this.lastAdmittedTurnContextHash) return false;
@@ -712,15 +708,14 @@ export class ManagedAgent {
     });
 
     const ui = this.ui;
-    if (ui) {
-      const next = insertTurnContextUIMessage(ui.getMessages(), content);
-      ui.setMessages(next);
-      this.syncContextFromUIMessages(next);
-      this.maybeSaveSessionUIMessages(next, "user-message");
-    } else if (this.context) {
-      const next = insertTurnContextUIMessage(this.context.getUIMessages(), content);
-      this.context.setUIMessages(next);
+    if (!ui) {
+      this.log?.warn("agent", "admitTurnContextIfNeeded: UI channel missing; skipping turn_context admit");
+      return false;
     }
+
+    const next = insertTurnContextUIMessage(ui.getMessages(), content);
+    ui.setMessages(next);
+    this.maybeSaveSessionUIMessages(next, "user-message");
 
     this.lastAdmittedTurnContextHash = hash;
     return true;
@@ -983,12 +978,13 @@ export class ManagedAgent {
     this.extensionSystemAppendSnapshot = undefined;
     this.pendingExtensionTurnContext = undefined;
     this.log?.clear();
-    this.context?.reset();
+    this._runBaselineCount = 0;
     this.usage.reset();
     this.todoManager?.reset();
     this.turnLifecycleFinalized = false;
     this.chatController = undefined;
     this._ui = undefined;
+    this.lastAdmittedTurnContextHash = undefined;
     this.systemPromptFrozen = false;
     this.frozenSystemPrompt = undefined;
   }

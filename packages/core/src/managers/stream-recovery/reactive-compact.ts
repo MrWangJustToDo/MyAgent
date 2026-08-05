@@ -4,7 +4,7 @@ import type { AgentManager } from "../agent-manager.js";
 import type { ManagedAgent } from "../managed-agent.js";
 
 async function applyReactiveCompactRetry(managed: ManagedAgent): Promise<boolean> {
-  if (!managed.getContext()) return false;
+  if (!managed.ui) return false;
   managed.statusController.endCompaction();
   managed.setError("");
   return true;

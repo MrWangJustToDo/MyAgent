@@ -10,17 +10,22 @@ import type { AgentManager } from "./agent-manager.js";
 import type { AgentStatusController } from "./agent-status-controller.js";
 import type { RunCoordinator } from "./run-coordinator.js";
 import type { UsageTracker } from "./usage-tracker.js";
-import type { AgentContext } from "../agent/agent-context";
+import type { AgentUIChannel } from "../agent/ui-channel.js";
+import type { ModelMessage } from "@tanstack/ai";
 
 export interface ReactiveCompactHost {
   id: string;
   parentId?: string;
-  context: AgentContext;
+  ui?: AgentUIChannel;
   usage: UsageTracker;
   run: RunCoordinator;
   statusController: AgentStatusController;
+  getCanonicalFromUI: () => ModelMessage[];
+  getMessagesForLLM: (canon?: ModelMessage[]) => ModelMessage[];
+  setRunBaselineCount: (count: number) => void;
   emitEvent: (type: AgentEventType, data?: Record<string, unknown>) => void;
   resetAdmittedTurnContext?: () => void;
+  compactionConfig?: { keepRecentFlows?: number } | null;
 }
 
 export async function handleManagedReactiveCompact(
@@ -35,6 +40,9 @@ export async function handleManagedReactiveCompact(
     return false;
   }
 
+  const channel = host.ui;
+  if (!channel) return false;
+
   const retry = host.run.recordReactiveCompactRetry();
 
   try {
@@ -42,11 +50,12 @@ export async function handleManagedReactiveCompact(
       retry,
       maxRetries: host.run.getMaxReactiveCompactRetries(),
     });
-    const canon = host.context.getCanonicalFromUI();
-    const llmMessages = host.context.getMessagesForLLM(canon);
+    const canon = host.getCanonicalFromUI();
+    const llmMessages = host.getMessagesForLLM(canon);
     const compactedMessages = await reactiveCompact(llmMessages, host.id, manager);
 
-    applyReactiveCompactionResult(canon, host.context, host.usage, compactedMessages, {
+    applyReactiveCompactionResult(canon, channel, host.usage, compactedMessages, {
+      keepRecentFlows: host.compactionConfig?.keepRecentFlows ?? 2,
       onCacheCleanupError: (err) => {
         host.emitEvent("compaction:reactive-error", {
           phase: "cache-cleanup",
@@ -55,6 +64,9 @@ export async function handleManagedReactiveCompact(
       },
     });
     host.resetAdmittedTurnContext?.();
+    // Recovery retries chat() without prepareForRun; UI stays chronological while
+    // the next onConfig projects summary-first onto the engine — prefer engine.
+    host.setRunBaselineCount(Number.MAX_SAFE_INTEGER);
 
     host.emitEvent("compaction:reactive-complete", {
       originalCount: llmMessages.length,

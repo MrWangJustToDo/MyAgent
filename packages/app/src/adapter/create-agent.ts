@@ -9,7 +9,6 @@ import { reactive, toRaw } from "reactivity-store";
 import { clearExtensionCommands, syncExtensionCommands } from "../commands";
 
 import type { AppConfig, InitResult } from "./types.js";
-import type { useAgentContext as useAgentContextType } from "../hooks/use-agent-context.js";
 import type { useAgentLog as useAgentLogType } from "../hooks/use-agent-log.js";
 import type { useAgent as useAgentType } from "../hooks/use-agent.js";
 import type { useTodoManager as useTodoManagerType } from "../hooks/use-todo-manager.js";
@@ -24,7 +23,6 @@ export function bindAgentSession(session: AgentSession | null, hooks: Pick<Adapt
 export interface AdapterHooks {
   useAgent: typeof useAgentType;
   useAgentLog: typeof useAgentLogType;
-  useAgentContext: typeof useAgentContextType;
   useTodoManager: typeof useTodoManagerType;
 }
 
@@ -82,14 +80,13 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
     setUp: patchInstance,
   });
 
-  const { useAgent, useAgentLog, useAgentContext, useTodoManager } = hooks;
+  const { useAgent, useAgentLog, useTodoManager } = hooks;
 
   const todoManager = agent.getTodoManager();
 
   useAgent.getActions().setAgent(agent);
   useAgent.getActions().setSession(null);
   useAgentLog.getActions().setLog(toRaw(agent.getLog()));
-  useAgentContext.getActions().setContext(toRaw(agent.getContext()));
   useTodoManager.getActions().setManager(toRaw(todoManager ?? null));
 
   syncExtensionCommands(agent);
@@ -115,6 +112,5 @@ export function clearAdapterHooks(hooks: AdapterHooks): void {
   hooks.useAgent.getActions().setAgent(null);
   hooks.useAgent.getActions().setSession(null);
   hooks.useAgentLog.getActions().setLog(null);
-  hooks.useAgentContext.getActions().setContext(null);
   hooks.useTodoManager.getActions().setManager(null);
 }

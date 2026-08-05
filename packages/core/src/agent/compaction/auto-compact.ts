@@ -18,6 +18,7 @@
 import { runSubagent } from "../subagent/run-subagent.js";
 
 import { buildCompactionPrompt, COMPACTION_SYSTEM_PROMPT } from "./compaction-prompt.js";
+import { formatCompactionSummaryContent } from "./compaction-summary.js";
 import { extractExistingSummary, findCutPoint } from "./cut-point.js";
 import { extractFileOpsFromMessages, formatFileOperations } from "./file-ops-tracker.js";
 import { buildSegmentedConversationText } from "./serialize-conversation.js";
@@ -203,13 +204,7 @@ export function createCompactedMessages(summary: string): ModelMessage[] {
   return [
     {
       role: "user" as const,
-      content: `[CONVERSATION SUMMARY]
-
-${summary}
-
-[END SUMMARY]
-
-Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.`,
+      content: formatCompactionSummaryContent(summary),
     },
   ];
 }
@@ -217,21 +212,22 @@ Continue if you have next steps, or stop and ask for clarification if you are un
 /**
  * Perform auto compaction on messages.
  *
- * The `messages` array is what `getMessagesForLLM()` returns:
- *   - First compaction:  `[m0, m1, ..., user_N, assistant, tool, ...]` (raw messages)
- *   - Later compactions: `[summaryMessage, m_k, ..., user_M, assistant, tool, ...]`
+ * `messages` is the chronological channel-derived list (may already include
+ * prior `[CONVERSATION SUMMARY]` checkpoints mid-chain). After success the
+ * caller appends a new SUMMARY onto the UI channel; middleware then projects
+ * summary-first wire and realigns `runBaselineCount`.
  *
  * Algorithm:
- * 1. Detect & strip the previous summary message (if present at index 0).
- * 2. Find the cut point = the Nth user message from the end (inclusive).
+ * 1. Detect a previous summary at index 0 when the input is already wire-ordered
+ *    (summary-first); strip it from cut counting and feed as `existingSummary`.
+ * 2. Find the cut point = the Nth real user message from the end (inclusive).
  * 3. Summarize with segmented input: `<to_compress>` (pre-cut) + `<still_in_context>`
  *    (kept turns). Previous summary is fed as `existingSummary` for incremental updates.
  * 4. Optionally archive the compressed slice and append a pointer to the summary.
- * 5. Return `cutIndex` relative to the *input* `messages` array (i.e. including
- *    the summary message offset). The caller converts it to an absolute index
- *    into the raw `context.messages` store.
+ * 5. Return `cutIndex` relative to the input `messages` array (including any
+ *    summary-first offset). The caller maps that onto the chronological channel.
  *
- * @param messages - Current LLM-visible messages (output of getMessagesForLLM)
+ * @param messages - Chronological or summary-first model-visible messages
  * @param config - Compaction configuration (uses keepRecentFlows as keepRecentUserTurns)
  * @param parentAgentId - Parent agent ID for spawning summarization subagent
  * @param options - Optional summarization options (focus, todos)
