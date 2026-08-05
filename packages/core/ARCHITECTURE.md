@@ -486,9 +486,11 @@ Set via `ManagedAgentConfig.compaction` in `agent-factory.ts`.
 |------|-------|
 | Directory | `.agents/sessions/` |
 | File | `{sessionId}.session.json` |
-| Schema | `SessionData` v3 (`agent/session/types.ts`; older files omit `planMode`) |
+| Schema | `SessionData` v4 (`agent/session/types.ts`; older files omit `planMode` / inline base64 media) |
 
 Fields: `uiMessages`, `summaryMessage`, `compactIndex`, `usage`, `cost`, `contextTokens`, `todos`, `todoPlanBound`, `planMode` (phase/markdown/path/seeded), `modelStyle`, `model`, metadata.
+
+**Binary media (v4):** On persist with `uiMessages`, `SessionService` clones → dehydrates Image/Audio/Video/Document parts to content-addressed files under `.agents/media/<hash>.<ext>`, writing `media://` refs + `metadata.mediaRef` into the session JSON. Runtime messages stay hydrated (data URLs / raw base64). Restore hydrates before UI/context; `this.data.uiMessages` stays dehydrated so model-only saves do not re-inline blobs. See `agent/media/`.
 
 ### 6.2 Write paths (unified persist)
 

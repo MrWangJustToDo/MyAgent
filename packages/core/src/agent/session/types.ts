@@ -17,8 +17,8 @@ import type { UIMessage, ModelMessage } from "@tanstack/ai";
 // Constants
 // ============================================================================
 
-/** v3: optional `planMode` snapshot for resume continuity. Older files omit it. */
-export const SESSION_VERSION = 3;
+/** v4: base64 binary assets extracted to .agents/media/ with mediaRef in metadata. */
+export const SESSION_VERSION = 4;
 export const SESSION_DIR = ".agents/sessions";
 export const SESSION_FILE_SUFFIX = ".session.json";
 

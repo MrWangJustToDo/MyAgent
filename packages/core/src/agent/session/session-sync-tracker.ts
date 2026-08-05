@@ -36,6 +36,18 @@ const STABLE_TOOL_CALL_STATES = new Set<ToolCallPart["state"]>([
 // Fingerprint & stability
 // ============================================================================
 
+/**
+ * Stable summary of a media source value for fingerprinting.
+ * Uses the first 64 chars + total length as a deterministic hash.
+ * This avoids embedding full base64 in the fingerprint string while
+ * still detecting changes: if the content changes, one of these will differ.
+ * Fast and synchronous — no SHA-256 computation on every shouldPersist check.
+ */
+function stableMediaSummary(value: string): string {
+  if (value.length <= 64) return value;
+  return `${value.slice(0, 64)}...${value.length}`;
+}
+
 function fingerprintPart(part: UIMessage["parts"][number]): string {
   switch (part.type) {
     case "text":
@@ -68,6 +80,20 @@ function fingerprintPart(part: UIMessage["parts"][number]): string {
       return `thinking:${part.content}:${part.signature ?? ""}`;
     case "structured-output":
       return `structured:${part.status}:${part.raw}`;
+    case "image":
+    case "audio":
+    case "video":
+    case "document": {
+      const source = part.source;
+      const metadata = part.metadata as { mediaRef?: { hash?: string } } | undefined;
+      const mediaRef = metadata?.mediaRef;
+      const value = source.value;
+      // Use the mediaRef hash when available (dehydrated on disk), otherwise a
+      // stable short summary of the value to avoid embedding full base64 in the
+      // fingerprint string.
+      const fingerprint = mediaRef?.hash ?? stableMediaSummary(value);
+      return `${part.type}:${source.type}:${fingerprint}`;
+    }
     default:
       return part.type;
   }

@@ -6,12 +6,11 @@
  * Writes are full overwrites — simple, correct, and produces exactly
  * one copy of uiMessages regardless of how many saves occur.
  *
- * TODO(session-media): Large tool/user image (and PDF) payloads currently live
- * inline as base64 inside uiMessages, which preserves full fidelity for resume
- * but bloats `.session.json`. Preferred follow-up: content-addressed blobs under
- * `.agents/media/<hash>.{png,pdf,…}` with `{ mediaRef, mimeType, size, filename }`
- * in message parts; hydrate to data URLs on load / before model send. Keeps
- * sessions complete and rewindable without multi‑MB JSON lines.
+ * Binary assets (images, audio, PDFs) are extracted from inline base64 and
+ * stored as content-addressed files under `.agents/media/<hash>.<ext>`. The
+ * session JSON stores only `media://<hash>` references in `source.value` and
+ * a `MediaRef` in `metadata.mediaRef`. Hydrate/Dehydrate happens in
+ * SessionService via `media-utils.ts`.
  */
 
 import { getEnv } from "../../env.js";

@@ -44,15 +44,15 @@ export function getSessionPersistInput(host: SessionHost, uiMessages?: TanStackU
   };
 }
 
-export function saveSessionUIMessages(host: SessionHost, uiMessages: TanStackUIMessage[]): void {
+export async function saveSessionUIMessages(host: SessionHost, uiMessages: TanStackUIMessage[]): Promise<void> {
   if (uiMessages.length === 0) return;
   host.syncContextFromUIMessages(uiMessages);
-  host.session.persistSession(getSessionPersistInput(host, uiMessages));
+  await host.session.persistSession(getSessionPersistInput(host, uiMessages));
   host.sessionSyncTracker.markPersisted(uiMessages);
 }
 
-export function persistSessionModelState(host: SessionHost): void {
-  host.session.persistSession(getSessionPersistInput(host));
+export async function persistSessionModelState(host: SessionHost): Promise<void> {
+  await host.session.persistSession(getSessionPersistInput(host));
 }
 
 export async function restoreManagedSession(host: SessionHost, sessionId: string): Promise<SessionData> {
@@ -73,7 +73,7 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
   host.planMode.restoreState(planSnapshot);
   host.setAutoApproveEnabled(Boolean(session.autoApprove));
 
-  host.sessionSyncTracker.reset(session.uiMessages);
+  host.sessionSyncTracker.reset(host.context.getUIMessages());
   host.emitEvent("session:restore", {
     sessionId,
     messageCount: session.uiMessages.length,

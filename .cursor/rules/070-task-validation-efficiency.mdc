@@ -1,0 +1,15 @@
+---
+description: Validate once at task end with scoped lint/format and affected builds
+alwaysApply: true
+---
+
+# Task Validation Efficiency
+
+Validate when the task is done — not after every intermediate edit.
+
+- Do **not** re-run full `pnpm lint` / `pnpm format` / `pnpm build` after each small change.
+- Prefer formatting and linting **only the files you changed**.
+- Prefer package-level builds (`pnpm build:core`, etc.) per `010-affected-package-builds`.
+- Run relevant `validate:*` scripts when you added or changed a utility that has one.
+- Use full-repo `pnpm format` / `pnpm lint` / `pnpm build` only for broad refactors, shared contracts, or when scoped checks are insufficient.
+- Fix type errors with proper types/guards first; avoid fix→full-validate→refix loops driven by `as` casts.

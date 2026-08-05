@@ -29,9 +29,9 @@ pnpm lint                 # ESLint
 pnpm format               # Prettier
 ```
 
-No test framework is configured. Use `pnpm typecheck` and `pnpm build` for validation.
+No test framework is configured. Use `pnpm typecheck` and package builds for validation.
 
-After completing any task, always run: `pnpm lint`, `pnpm format`, then `pnpm build`.
+After completing a task, validate **once** (not after every edit): format/lint **changed files**, then `pnpm build:<affected>` (prefer package builds over full `pnpm build`). See [AGENTS.md](AGENTS.md) Task Completion Checklist.
 
 ## Key Rules
 

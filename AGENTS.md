@@ -807,22 +807,25 @@ packages/
 
 ## Task Completion Checklist
 
-After completing each task, you MUST:
+Validate **once at the end of the task** (not after every small edit). Prefer scoped checks:
 
-1. **Run lint and fix issues**:
+1. **Format / lint changed files** (avoid full-repo churn on every tweak):
    ```bash
-   pnpm lint             # Check for lint errors
-   pnpm format           # Auto-fix formatting issues
+   pnpm exec prettier --write <changed-files...>
+   pnpm exec eslint <changed-files...>
    ```
+   Use `pnpm format` / `pnpm lint` only when many files changed or Prettier/ESLint config itself changed.
 
-2. **Run build to verify**:
+2. **Build affected packages only** (see also `.cursor/rules/010-affected-package-builds.mdc`):
    ```bash
-   pnpm build            # Build all packages
+   pnpm build:core          # example: core-only change
+   # or: pnpm build:app / build:cli / …
    ```
+   Run full `pnpm build` only for shared contracts, lockfile/workspace config, or unclear multi-package impact.
 
-3. **Fix any errors before marking task complete**
+3. **Package validate scripts** when you touched a utility that has one (e.g. `pnpm --filter @my-agent/core run validate:media-store`).
 
-This ensures code quality and prevents accumulation of lint/type errors.
+4. **Fix errors before marking the task complete.** Do not loop lint→format→build after each intermediate edit.
 
 ## Important Notes
 

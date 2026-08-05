@@ -1,9 +1,12 @@
 /**
  * SessionService — session persistence.
  * `uiMessages` are written only when callers pass them (app `useChat` layer).
+ * When uiMessages are provided, they are dehydrated (base64 → `media://` refs)
+ * before writing to disk. Runtime (hydrated) messages are never mutated.
  */
 
 import { getFirstUserInput } from "../agent/compaction/message-utils.js";
+import { dehydrateUIMessages, hydrateUIMessages } from "../agent/media/media-utils.js";
 import { runSideTextQuery } from "../models/side-text-query.js";
 
 import type { EmitAgentEventFn } from "./emit-agent-event.js";
@@ -92,13 +95,15 @@ export class SessionService {
 
   /**
    * Persist session model state. Pass `uiMessages` only from the app `useChat` layer.
+   * When uiMessages are provided, they are dehydrated (clone → extract base64 → media:// refs)
+   * before writing. The original uiMessages array is never mutated.
    */
-  persistSession(input: SessionPersistInput): void {
+  async persistSession(input: SessionPersistInput): Promise<void> {
     const { context, usage, todoManager, planMode, autoApprove, resolveTextAdapter, emitEvent, uiMessages } = input;
     if (!this.store || !context) return;
     if (!this.data) {
       this.ensureSession();
-      this.persistSession(input);
+      await this.persistSession(input);
       return;
     }
 
@@ -125,7 +130,11 @@ export class SessionService {
     }
 
     if (uiMessages !== undefined) {
-      this.data.uiMessages = uiMessages;
+      // Clone → dehydrate — never mutate the original runtime messages.
+      // The dehydrated version (media:// refs) is written to disk;
+      // runtime UIMessages keep their hydrated data URLs for UI/LLM use.
+      const dehydrated = await dehydrateUIMessages(uiMessages);
+      this.data.uiMessages = dehydrated;
     }
 
     if (this.data.name === "New Session") {
@@ -147,6 +156,8 @@ export class SessionService {
 
   /**
    * Restore conversation, usage, and todos from a persisted session.
+   * Hydrates media:// refs back to data URLs / raw base64 on load.
+   * Old sessions (without mediaRef metadata) are handled gracefully.
    * @throws if store/context unavailable or session not found
    */
   async restoreFromStore(sessionId: string, input: SessionRestoreInput): Promise<SessionData> {
@@ -161,7 +172,11 @@ export class SessionService {
     context.reset();
     usage.reset();
 
-    context.setUIMessages(session.uiMessages);
+    // Hydrate media:// refs back to data URLs / raw base64.
+    // Old sessions (no mediaRef metadata) are handled gracefully by hydrateUIMessages.
+    const hydrated = await hydrateUIMessages(session.uiMessages);
+
+    context.setUIMessages(hydrated);
     context.setSummaryMessage(session.summaryMessage ?? null);
     context.setCompactIndex(session.compactIndex ?? 0);
 
@@ -190,7 +205,14 @@ export class SessionService {
       }
     }
 
+    // Keep this.data dehydrated (media:// refs) so model-only persistSession
+    // doesn't write big base64 back to disk. The return value has hydrated
+    // uiMessages so callers (agent-manager, managed-agent-session) get data URLs.
     this.setSessionData(session);
-    return session;
+
+    return {
+      ...session,
+      uiMessages: hydrated,
+    };
   }
 }

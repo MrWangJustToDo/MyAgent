@@ -496,21 +496,23 @@ export class ManagedAgent {
   /**
    * Persist `uiMessages` when an explicit trigger fires and the fingerprint changed.
    * Reasons: `user-message` | `pump-complete` | `force` (via {@link saveSessionUIMessages}).
+   * Fire-and-forget — dehydrate + disk write happen in the background.
    */
   maybeSaveSessionUIMessages(uiMessages: TanStackUIMessage[], reason: SessionSaveReason): void {
     if (uiMessages.length === 0) return;
     if (!this.sessionSyncTracker.shouldPersist(uiMessages, { reason })) {
       return;
     }
-    saveSessionUIMessagesHelper(this, uiMessages);
+    void saveSessionUIMessagesHelper(this, uiMessages);
   }
 
   /**
    * Force-persist session `uiMessages` (slash commands such as `/clear`).
    * Also syncs AgentContext and writes model fields in the same session save.
+   * Fire-and-forget — dehydrate + disk write happen in the background.
    */
   saveSessionUIMessages(uiMessages: TanStackUIMessage[]): void {
-    saveSessionUIMessagesHelper(this, uiMessages);
+    void saveSessionUIMessagesHelper(this, uiMessages);
   }
 
   /** Reset fingerprint tracking after restore, clear, or new chat bootstrap. */
@@ -520,7 +522,7 @@ export class ManagedAgent {
 
   /** Persist model state only (summary, compact index, usage, todos). Does not write `uiMessages`. */
   persistSession(): void {
-    persistSessionModelState(this);
+    void persistSessionModelState(this);
   }
 
   /**

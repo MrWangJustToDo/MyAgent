@@ -1,0 +1,89 @@
+/**
+ * Media types — content-addressed asset references for session persistence.
+ *
+ * Binary assets (images, audio, PDFs) are extracted from inline base64 in
+ * {@link UIMessage} parts and stored as content-addressed files under
+ * `.agents/media/<hash>.<ext>`. The session JSON stores only the
+ * {@link MediaRef} metadata and a `media://<hash>` reference.
+ *
+ * Runtime (hydrated) state always keeps data URLs in `source.value` so the
+ * UI and LLM conversion see the full multimodal content. Dehydrate happens
+ * only during persist, and hydrate happens only during restore.
+ */
+
+/** Directory relative to workspace root where media files are stored. */
+export const MEDIA_DIR = ".agents/media";
+
+/** Protocol prefix used in dehydrated source.value to reference a media file. */
+export const MEDIA_PROTOCOL = "media://";
+
+/**
+ * Content-addressed media reference stored in part metadata after dehydrate.
+ * On hydrate, the file is read back and `source.value` is reconstructed
+ * as a data URL (or raw base64, matching the original source type).
+ */
+export interface MediaRef {
+  /** SHA-256 hex digest of the base64 string (not the decoded binary). */
+  hash: string;
+  /** MIME type (e.g. "image/png", "application/pdf"). */
+  mimeType: string;
+  /** Original filename (may be empty if unknown). */
+  filename?: string;
+  /** File size in bytes. */
+  size: number;
+  /**
+   * Original source type before dehydrate.
+   * - `"url"` → `source.value` was `data:{mimeType};base64,{raw}` (data URL)
+   * - `"data"` → `source.value` was raw base64 (no prefix)
+   *
+   * Hydrate uses this to reconstruct the original shape.
+   */
+  sourceType: "url" | "data";
+}
+
+/** Standard MIME → file extension mapping for content-addressed filenames. */
+const MIME_TO_EXT: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/svg+xml": "svg",
+  "image/bmp": "bmp",
+  "image/tiff": "tiff",
+  "audio/mpeg": "mp3",
+  "audio/wav": "wav",
+  "audio/ogg": "ogg",
+  "audio/webm": "weba",
+  "audio/flac": "flac",
+  "application/pdf": "pdf",
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+  "video/ogg": "ogv",
+};
+
+/**
+ * Get the file extension for a MIME type.
+ * Falls back to `"bin"` for unknown types.
+ */
+export function mimeToExtension(mimeType: string): string {
+  return MIME_TO_EXT[mimeType] ?? "bin";
+}
+
+/**
+ * Build a `media://<hash>.<ext>` reference string for a MediaRef.
+ */
+export function buildMediaRefPath(ref: MediaRef): string {
+  return `${MEDIA_PROTOCOL}${ref.hash}.${mimeToExtension(ref.mimeType)}`;
+}
+
+/**
+ * Parse a `media://<hash>.<ext>` reference string.
+ * Returns `{ hash, ext }` or `null` if the string is not a valid media reference.
+ */
+export function parseMediaRefPath(ref: string): { hash: string; ext: string } | null {
+  if (!ref.startsWith(MEDIA_PROTOCOL)) return null;
+  const rest = ref.slice(MEDIA_PROTOCOL.length);
+  const dot = rest.lastIndexOf(".");
+  if (dot === -1) return null;
+  return { hash: rest.slice(0, dot), ext: rest.slice(dot + 1) };
+}
