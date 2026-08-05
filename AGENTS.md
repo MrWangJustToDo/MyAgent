@@ -461,8 +461,10 @@ registerCoreEnv(env);
 
 ## Prompt Cache (prefix)
 
-Frozen system text ends with `SYSTEM_PROMPT_DYNAMIC_BOUNDARY`; per-turn `<turn_context>` stays after it.
-`<current_date>` uses **day** granularity (not hour/minute) so the dynamic segment stays stable within a calendar day.
+Frozen system text ends with `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` and stays byte-stable across turns.
+Per-turn dynamic context is admitted as a synthetic `<turn_context>` user message when its payload hash changes (persisted in `uiMessages`, hidden in the transcript UI).
+`<current_date>` uses **day** granularity (not hour/minute) so the payload stays stable within a calendar day.
+`findCutPoint` / `keepRecentFlows` skip `<turn_context>` messages when counting user turns.
 `prompt-cache-middleware` then:
 
 - **Anthropic** — `cache_control: { type: "ephemeral" }` on frozen system, last tool definition, and latest user message (tool-loop friendly)

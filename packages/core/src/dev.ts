@@ -149,6 +149,19 @@ export {
   buildFrozenSystemPrompt,
 } from "./managers/managed-agent-prompt.js";
 export {
+  TURN_CONTEXT_OPEN,
+  TURN_CONTEXT_CLOSE,
+  hashTurnContextPayload,
+  buildTurnContextPayload,
+  formatTurnContextUserContent,
+  isTurnContextText,
+  isTurnContextModelMessage,
+  isTurnContextUIMessage,
+  extractTurnContextPayload,
+  findLatestTurnContextHash,
+  insertTurnContextUIMessage,
+} from "./agent/turn-context";
+export {
   SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
   ANTHROPIC_CACHE_BREAKPOINT_CAP,
   EPHEMERAL_CACHE_CONTROL,

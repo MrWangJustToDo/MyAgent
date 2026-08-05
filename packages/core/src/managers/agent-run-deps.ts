@@ -24,7 +24,5 @@ export interface AgentRunDeps {
   compactionConfig: CompactionConfig | null;
   modelInfo: ModelInfo | null;
   getFrozenSystemPrompt: () => string | undefined;
-  getTurnContextSnapshot: () => string | undefined;
-  getExtensionSystemAppendSnapshot: () => string | undefined;
   shouldTriggerAutoCompact: (messages?: ModelMessage[]) => boolean;
 }

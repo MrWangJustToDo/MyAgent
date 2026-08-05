@@ -257,7 +257,7 @@ Sources: `managers/middleware/*` for run stack; `agent/plan/plan-mode-middleware
 2. lifecycle-middleware      usage tracking, thinking events, memory commit, llm:request/response
 3. compaction-middleware     auto-compact only (DeepSeek reasoning echo is adapter-only)
 4. tool-compact-middleware  per-tool LLM shaping
-5. turn-context-middleware  append <turn_context> after SYSTEM_PROMPT_DYNAMIC_BOUNDARY
+5. turn-context-middleware  systemPrompts = frozen only (dynamic admitted as UI messages in prepare)
 6. extensions-middleware    ExtensionEventBus intercept + agent:tool-* lifecycle events
 7. early-tool-result-ui     apply each tool output to StreamProcessor as soon as it finishes
 8. plan-mode-middleware     block forbidden tools while plan mode restricts tooling
@@ -592,15 +592,19 @@ emit memory:prefetch { status: injected | empty | skip-* | error }
 
 ### 7.3 Per-iteration injection
 
-**`turn-context-middleware`** via `buildDynamicTurnContext` + `buildSystemPromptWithTurnContext`:
+**`turn-context-middleware`** + epoch admission via `admitTurnContextIfNeeded`:
 
 ```
 prepareForRun → captureTurnContextSnapshot() once per user turn
-onConfig → systemPrompts = frozen + <turn_context>… (same snapshot every iteration)
+             → if payload hash changed: insert synthetic <turn_context> user UIMessage
+               (after latest real user; persisted; UI-filtered)
+onConfig → systemPrompts = frozen only (no dynamic tail)
 ```
 
-Dynamic context lives **after** `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` in the system prompt so conversation
-message prefixes stay stable for provider prompt cache. Snapshot is not recomputed mid-turn (tool loops).
+Dynamic context lives in chronological user messages so OpenAI/DeepSeek prefix cache keeps
+the frozen system + prior history stable across turns. Snapshot is not recomputed mid-turn
+(tool loops). `findCutPoint` skips `<turn_context>` when counting `keepRecentFlows`.
+After compaction / clear, `resetAdmittedTurnContext()` forces a fresh admission.
 
 **Provider cache wiring** (`prompt-cache-middleware`, `models/prompt-cache.ts`):
 
@@ -691,7 +695,7 @@ Streaming chunks are scoped by required `agentId`; Session `streaming` channel r
 
 1. Runs `before_agent_start` interceptors (fresh event per handler; `appendTurnContext` / `appendSystemPrompt` are chained append-only).
 2. Runs `registerTurnContextProvider` callbacks.
-3. Merges turn-context text into `<extension_context>` inside the dynamic turn snapshot; system appends go after `<turn_context>` but still after `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` (frozen prefix stays cacheable).
+3. Merges turn-context text into `<extension_context>` inside the dynamic turn snapshot; `appendSystemPrompt` is merged into the same `<turn_context>` user message payload (frozen system stays cacheable).
 
 Repo demos live in `examples/extensions/` and are **opt-in** via `AGENT_EXTENSION_DIRS`, `ManagedAgentConfig.extensionDirs`, or CLI `--extension-dirs` (not in core defaults). Extension `registerCommand()` is mirrored onto `ManagedAgent` and synced into app slash commands after bootstrap (`syncExtensionCommands`). Built-in names (`/help`, …) win over extension conflicts. `registerTool()` converts definitions via `defineServerTool` before they enter the TanStack tool set. Tool schemas must use **`ctx.z`** (host Zod); filesystem extensions should not import `zod`.
 ---

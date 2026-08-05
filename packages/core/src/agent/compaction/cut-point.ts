@@ -2,6 +2,8 @@
  * Cut-point helpers for auto-compaction.
  */
 
+import { isTurnContextModelMessage } from "../turn-context/turn-context-message.js";
+
 import { extractTextFromContent } from "./message-utils.js";
 
 import type { ModelMessage } from "@tanstack/ai";
@@ -56,9 +58,9 @@ export function extractExistingSummary(messages: ModelMessage[]): {
  * (inclusive) becomes the cut point — everything before it gets summarized,
  * the user message itself and everything after is kept.
  *
- * The optional `summaryMessageIndex` (0 if a summary message is present at
- * the head of `messages`) is excluded from counting so the previous
- * compaction summary is never treated as a "user turn".
+ * Skips:
+ * - `summaryMessageIndex` (previous compaction summary at the head)
+ * - Synthetic `<turn_context>` user messages (epoch dynamic context)
  *
  * @returns cutIndex (messages[0..cutIndex) = to summarize,
  *          messages[cutIndex..] = to keep). Returns 0 if not enough user turns.
@@ -72,12 +74,15 @@ export function findCutPoint(messages: ModelMessage[], keepRecentUserTurns: numb
     // Skip the previous compaction summary message — it's not a real user turn.
     if (i === summaryMessageIndex) continue;
 
-    if (messages[i].role === "user") {
-      userCount++;
-      if (userCount === keepRecentUserTurns) {
-        // Cut AT this user message (inclusive) — it stays in the kept portion.
-        return i;
-      }
+    const message = messages[i];
+    if (message.role !== "user") continue;
+    // Synthetic turn_context is not a user turn — keep looking upward.
+    if (isTurnContextModelMessage(message)) continue;
+
+    userCount++;
+    if (userCount === keepRecentUserTurns) {
+      // Cut AT this user message (inclusive) — it stays in the kept portion.
+      return i;
     }
   }
 

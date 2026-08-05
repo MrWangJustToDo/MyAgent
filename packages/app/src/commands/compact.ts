@@ -72,6 +72,7 @@ registerCommand({
         };
       }
 
+      agent.resetAdmittedTurnContext();
       agent.resetSystemPrompt();
       agent.persistSession();
       bumpAgentUsage();

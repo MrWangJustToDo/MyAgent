@@ -73,6 +73,7 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
               },
             })
           ) {
+            managed?.resetAdmittedTurnContext();
             llmMessages = agentContext.getMessagesForLLM(canon);
           }
 

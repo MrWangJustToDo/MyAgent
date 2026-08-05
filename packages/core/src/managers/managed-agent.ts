@@ -12,6 +12,13 @@ import {
   type SessionSyncTracker,
 } from "../agent/session/session-sync-tracker.js";
 import { defineServerTool } from "../agent/tools/tanstack/define-tool.js";
+import {
+  buildTurnContextPayload,
+  findLatestTurnContextHash,
+  formatTurnContextUserContent,
+  hashTurnContextPayload,
+  insertTurnContextUIMessage,
+} from "../agent/turn-context/turn-context-message.js";
 import { generateId } from "../agent/utils.js";
 import { getEnv } from "../env.js";
 import { Emitter } from "../utils/emitter.js";
@@ -209,12 +216,14 @@ export class ManagedAgent {
 
   private frozenSystemPrompt: string | undefined;
   private systemPromptFrozen = false;
-  /** Stable dynamic turn context for the current user turn (system prompt segment). */
+  /** Stable dynamic turn context for the current user turn (payload snapshot). */
   private turnContextSnapshot: string | undefined;
-  /** Extension append-only system text for the current user turn (after `<turn_context>`). */
+  /** Extension append-only text for the current user turn (merged into turn_context message). */
   private extensionSystemAppendSnapshot: string | undefined;
   /** Pending extension turn-context text collected in prepareForRun (before snapshot). */
   private pendingExtensionTurnContext: string | undefined;
+  /** Hash of the last turn_context payload admitted into UIMessage history. */
+  private lastAdmittedTurnContextHash: string | undefined;
 
   constructor(
     config: ManagedAgentConfig,
@@ -680,6 +689,46 @@ export class ManagedAgent {
 
   async captureTurnContextSnapshot(): Promise<void> {
     this.turnContextSnapshot = await this.getDynamicTurnContext();
+  }
+
+  /**
+   * When the dynamic payload changed, insert a synthetic `<turn_context>` user message
+   * into the UI channel (persisted, display-filtered). No-op when unchanged.
+   */
+  admitTurnContextIfNeeded(): boolean {
+    const payload = buildTurnContextPayload(this.turnContextSnapshot, this.extensionSystemAppendSnapshot);
+    if (!payload) return false;
+
+    const hash = hashTurnContextPayload(payload);
+    if (this.lastAdmittedTurnContextHash === undefined) {
+      const existing =
+        findLatestTurnContextHash(this.ui?.getMessages() ?? this.context?.getUIMessages() ?? []) ?? undefined;
+      this.lastAdmittedTurnContextHash = existing;
+    }
+    if (hash === this.lastAdmittedTurnContextHash) return false;
+
+    const content = formatTurnContextUserContent(payload, {
+      isUpdate: Boolean(this.lastAdmittedTurnContextHash),
+    });
+
+    const ui = this.ui;
+    if (ui) {
+      const next = insertTurnContextUIMessage(ui.getMessages(), content);
+      ui.setMessages(next);
+      this.syncContextFromUIMessages(next);
+      this.maybeSaveSessionUIMessages(next, "user-message");
+    } else if (this.context) {
+      const next = insertTurnContextUIMessage(this.context.getUIMessages(), content);
+      this.context.setUIMessages(next);
+    }
+
+    this.lastAdmittedTurnContextHash = hash;
+    return true;
+  }
+
+  /** After compaction / clear — force the next turn to re-admit full dynamic context. */
+  resetAdmittedTurnContext(): void {
+    this.lastAdmittedTurnContextHash = undefined;
   }
 
   clearTurnContext(): void {

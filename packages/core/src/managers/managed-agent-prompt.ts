@@ -106,37 +106,15 @@ export function buildDynamicTurnContext(input: DynamicTurnContextInput): string 
 }
 
 /**
- * Append per-turn dynamic context after {@link SYSTEM_PROMPT_DYNAMIC_BOUNDARY}.
- * Conversation messages stay free of synthetic turn_context pairs (prefix-cache friendly).
+ * Frozen system prompt only (dynamic turn context is admitted as synthetic user messages).
  *
- * @param extensionSystemAppend - Optional append-only system text after `<turn_context>` (still after the boundary).
+ * `dynamicContext` / `extensionSystemAppend` are ignored here — kept in the signature so
+ * older call sites compile; use {@link buildTurnContextPayload} + UI admission instead.
  */
 export function buildSystemPromptWithTurnContext(
   frozen: string | undefined,
-  dynamicContext: string | undefined,
-  extensionSystemAppend?: string
+  _dynamicContext?: string | undefined,
+  _extensionSystemAppend?: string
 ): string[] | undefined {
-  const append = extensionSystemAppend?.trim();
-  const hasDynamic = Boolean(dynamicContext?.trim());
-  const hasAppend = Boolean(append);
-
-  if (!frozen && !hasDynamic && !hasAppend) return undefined;
-  if (!hasDynamic && !hasAppend) return frozen ? [frozen] : undefined;
-
-  const segments: string[] = [];
-  if (hasDynamic) {
-    segments.push(`<turn_context>\n${dynamicContext!.trim()}\n</turn_context>`);
-  }
-  if (hasAppend) {
-    segments.push(append!);
-  }
-  const dynamicBlock = segments.join("\n\n");
-
-  if (!frozen) {
-    return [SYSTEM_PROMPT_DYNAMIC_BOUNDARY + dynamicBlock];
-  }
-  if (frozen.includes("<SYSTEM_PROMPT_DYNAMIC_BOUNDARY>")) {
-    return [frozen + dynamicBlock];
-  }
-  return [frozen + SYSTEM_PROMPT_DYNAMIC_BOUNDARY + dynamicBlock];
+  return frozen ? [frozen] : undefined;
 }

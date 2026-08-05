@@ -28,6 +28,8 @@ const filterValidMessage = (message: UIMessage) => {
     if (message.parts.length === 1 && message.parts[0].type === "text") {
       const content = message.parts[0].content?.trim() ?? "";
       if (content.length === 0) return false;
+      // Epoch turn_context is persisted for the model but hidden in the transcript.
+      if (message.role === "user" && content.startsWith("<turn_context>")) return false;
     }
   }
   return true;
@@ -91,7 +93,14 @@ export const getMessages = (messages: UIMessage[], options: GetMessagesOptions =
   const normalizedMessages = normalizeToolPartsInMessages(messages);
   // Temporary display-only safety net for old sessions with cloned toolCallIds.
   const dedupedMessages = dedupeToolCallsInMessages(normalizedMessages);
-  const displayMessages = projectTranscriptForDisplay(dedupedMessages, { mode });
+  // Hide epoch turn_context before turn grouping / activity folding.
+  const withoutTurnContext = dedupedMessages.filter((message) => {
+    if (message.role !== "user") return true;
+    const part = message.parts.length === 1 ? message.parts[0] : null;
+    if (part?.type !== "text") return true;
+    return !(part.content?.trimStart().startsWith("<turn_context>") ?? false);
+  });
+  const displayMessages = projectTranscriptForDisplay(withoutTurnContext, { mode });
 
   const staticMessages: UIMessage[] = [];
   const dynamicMessages: UIMessage[] = [];

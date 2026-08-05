@@ -43,8 +43,16 @@ const paddedWaiting = buildFixedStreamingWindow("", 3, {
 assert.deepEqual(paddedWaiting.lines, ["", "", "Waiting..."]);
 
 const overflowing = buildFixedStreamingWindow("1\n2\n3\n4\n5", 3);
-assert.deepEqual(overflowing.lines, ["… 3", "4", "5"]);
+assert.deepEqual(overflowing.lines, ["… 2 lines hidden above", "4", "5"]);
 assert.equal(overflowing.hidden, 2);
+
+const overflowingSingle = buildFixedStreamingWindow("1\n2\n3\n4", 3);
+assert.deepEqual(overflowingSingle.lines, ["… 1 line hidden above", "3", "4"]);
+assert.equal(overflowingSingle.hidden, 1);
+
+const overflowingLarge = buildFixedStreamingWindow("a\nb\nc\nd\ne\nf\ng", 4);
+assert.deepEqual(overflowingLarge.lines, ["… 3 lines hidden above", "e", "f", "g"]);
+assert.equal(overflowingLarge.hidden, 3);
 
 const growing = buildFixedStreamingWindow("line1\nline2", 5);
 assert.deepEqual(growing.lines, ["line1", "line2"]);

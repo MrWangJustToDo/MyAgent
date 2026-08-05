@@ -27,6 +27,21 @@ const keepRecent = 2;
 const llmCutIndex = findCutPoint(messages, keepRecent);
 assert.equal(llmCutIndex, 2, "cut should land on the second-from-last user turn");
 
+// Synthetic turn_context must not count as a user turn for keepRecentFlows.
+const withTurnContext = [
+  { role: "user", content: "First request about auth" },
+  { role: "assistant", content: "Working on auth" },
+  {
+    role: "user",
+    content: "<turn_context>\n<current_date>\nAug 5\n</current_date>\n</turn_context>",
+  },
+  { role: "user", content: "Second request about tests" },
+  { role: "assistant", content: "Writing tests" },
+  { role: "user", content: "Third request about docs" },
+  { role: "assistant", content: "Updating docs" },
+];
+assert.equal(findCutPoint(withTurnContext, 2), 3, "skip turn_context; cut on Second");
+
 const toCompress = messages.slice(0, llmCutIndex);
 const stillInContext = messages.slice(llmCutIndex);
 

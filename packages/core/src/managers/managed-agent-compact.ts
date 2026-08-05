@@ -20,6 +20,7 @@ export interface ReactiveCompactHost {
   run: RunCoordinator;
   statusController: AgentStatusController;
   emitEvent: (type: AgentEventType, data?: Record<string, unknown>) => void;
+  resetAdmittedTurnContext?: () => void;
 }
 
 export async function handleManagedReactiveCompact(
@@ -53,6 +54,7 @@ export async function handleManagedReactiveCompact(
         });
       },
     });
+    host.resetAdmittedTurnContext?.();
 
     host.emitEvent("compaction:reactive-complete", {
       originalCount: llmMessages.length,

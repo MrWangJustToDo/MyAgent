@@ -148,8 +148,6 @@ export function buildAgentRunner(
     }),
     createTurnContextMiddleware({
       getFrozenSystemPrompt: deps.getFrozenSystemPrompt,
-      getTurnContextSnapshot: deps.getTurnContextSnapshot,
-      getExtensionSystemAppendSnapshot: deps.getExtensionSystemAppendSnapshot,
     }),
     createExtensionsMiddleware({
       getExtensionRunner: () => deps.extensionRunner,
@@ -237,6 +235,13 @@ async function executeManagedAgentRun(
     prompt: input.prompt,
     abortSignal: input.abortSignal,
   });
+
+  // prepareForRun may have admitted a synthetic turn_context into the UI channel.
+  if (managed.ui) {
+    messages = managed.ui.getMessages();
+  } else if (managed.context) {
+    messages = managed.context.getUIMessages();
+  }
 
   // Use the RunCoordinator controller created in prepareForRun so ManagedAgent.abort()
   // cancels the same AbortController identity TanStack chat listens to.

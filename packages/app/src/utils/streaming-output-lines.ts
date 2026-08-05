@@ -35,7 +35,8 @@ export function padLatestLines(lines: string[], maxLines: number, filler = ""): 
 
 /**
  * Build a streaming window of the latest lines (grows up to `maxLines`, then scrolls).
- * When `hidden > 0`, marks the first visible line with a leading ellipsis.
+ * When `hidden > 0`, the first visible line becomes an indicator like
+ * `"… N lines hidden above"`, and the rest are the latest content lines.
  * Empty text with no placeholder yields `{ lines: [], hidden: 0 }`.
  */
 export function buildFixedStreamingWindow(
@@ -50,9 +51,17 @@ export function buildFixedStreamingWindow(
     return { lines: [], hidden: 0 };
   }
   const hidden = Math.max(0, source.length - maxLines);
-  const lines = padToMax ? padLatestLines(source, maxLines) : takeLatestLines(source, maxLines);
-  if (markOverflow && hidden > 0 && lines[0] !== undefined && lines[0] !== "") {
-    lines[0] = `… ${lines[0]}`;
+
+  let lines: string[];
+  if (markOverflow && hidden > 0) {
+    // Use one slot for the "N lines hidden above" indicator line
+    const contentCount = Math.max(0, maxLines - 1);
+    const contentLines = takeLatestLines(source, contentCount);
+    const indicator = `… ${hidden} line${hidden !== 1 ? "s" : ""} hidden above`;
+    lines = [indicator, ...contentLines];
+  } else {
+    lines = padToMax ? padLatestLines(source, maxLines) : takeLatestLines(source, maxLines);
   }
+
   return { lines, hidden };
 }

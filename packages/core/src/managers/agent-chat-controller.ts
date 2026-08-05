@@ -84,6 +84,7 @@ export class AgentChatController {
   clearMessages(): void {
     this.clearQueuedMessages();
     this.channel.clearMessages();
+    this.managed.resetAdmittedTurnContext();
     this.managed.resetSessionSyncTracker();
     this.managed.statusController.resetToIdle();
   }

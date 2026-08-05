@@ -24,8 +24,6 @@ export async function prepareManagedAgentForRun(
 ): Promise<void> {
   if (options.messages?.length) {
     host.syncContextFromUIMessages(options.messages as TanStackUIMessage[]);
-    const baseline = convertMessagesToModelMessages(options.messages as TanStackUIMessage[]).length;
-    host.context?.setRunBaselineCount(baseline);
   }
 
   const inputMessages = options.messages || [];
@@ -54,15 +52,25 @@ export async function prepareManagedAgentForRun(
       emitEvent: (type, data) => host.emitEvent(type, data),
     });
 
-    // Snapshot once per user turn — middleware reuses it across tool iterations.
+    // Snapshot once per user turn — admit into UI when payload changes (epoch-style).
     await host.collectExtensionPromptHooks(typeof options.prompt === "string" ? options.prompt : "(structured)");
     await host.captureTurnContextSnapshot();
+    host.admitTurnContextIfNeeded();
 
     const userMsg = typeof options.prompt === "string" ? options.prompt : "(structured)";
     host.emitEvent("prompt:submit", {
       prompt: userMsg,
-      contextMessageCount: inputMessages.length,
+      contextMessageCount: (host.ui?.getMessages() ?? inputMessages).length,
     });
+  }
+
+  // Baseline after optional turn_context admission so engine/UI lengths stay aligned.
+  const baselineMessages = (host.ui?.getMessages() ?? host.context?.getUIMessages() ?? options.messages) as
+    | TanStackUIMessage[]
+    | undefined;
+  if (baselineMessages?.length) {
+    host.syncContextFromUIMessages(baselineMessages);
+    host.context?.setRunBaselineCount(convertMessagesToModelMessages(baselineMessages).length);
   }
 }
 

@@ -60,17 +60,17 @@ const frozen = buildFrozenSystemPrompt({
 const dynamic = "<current_date>\nJuly 22, 2026\n</current_date>";
 const system = buildSystemPromptWithTurnContext(frozen, dynamic);
 assert.ok(system?.[0]);
+assert.equal(system[0], frozen);
+assert.ok(!system[0].includes("<turn_context>"));
 
 const split = splitSystemPromptAtDynamicBoundary(system[0]);
 assert.ok(split.frozen.includes(SYSTEM_PROMPT_DYNAMIC_BOUNDARY.trim()));
-assert.ok(split.dynamic?.includes("<turn_context>"));
+assert.equal(split.dynamic, undefined);
 
 const cachedSystem = buildAnthropicCachedSystemPrompts(system);
-assert.equal(cachedSystem?.length, 2);
+assert.equal(cachedSystem?.length, 1);
 assert.equal(typeof cachedSystem?.[0], "object");
 assert.deepEqual(cachedSystem?.[0]?.metadata?.cache_control, EPHEMERAL_CACHE_CONTROL);
-assert.equal(typeof cachedSystem?.[1], "string");
-assert.ok(String(cachedSystem?.[1]).includes("<turn_context>"));
 
 const tools = applyAnthropicToolCacheBreakpoint([
   { name: "read_file", description: "r" },

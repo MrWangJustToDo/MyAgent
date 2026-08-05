@@ -39,7 +39,7 @@ export interface StreamingOutputViewProps {
  *
  * - No content and no {@link emptyMessage}: renders nothing (no reserved height).
  * - Content grows line-by-line up to {@link maxStdoutLines}, then keeps the latest lines.
- * - Overflow is marked on the first visible line (`… `).
+ * - Overflow replaces the first visible line with a `"… N lines hidden above"` indicator.
  *
  * @example
  * ```tsx
