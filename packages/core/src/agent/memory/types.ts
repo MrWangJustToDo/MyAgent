@@ -17,12 +17,12 @@ export const DEFAULT_MEMORY_DIR = ".agents/memory";
 
 export const MEMORY_INDEX_FILENAME = "MEMORY.md";
 
-export const DEFAULT_CONSOLIDATE_THRESHOLD = 15;
+export const DEFAULT_CONSOLIDATE_THRESHOLD = 25;
 
 /** Hard cap on memory count. If consolidation leaves more than this, oldest
  * memories (by updatedAt) are evicted. Prevents unbounded growth when the LLM
  * doesn't merge aggressively enough. */
-export const DEFAULT_HARD_MAX_MEMORIES = 50;
+export const DEFAULT_HARD_MAX_MEMORIES = 80;
 
 export const DEFAULT_MAX_INDEX_LINES = 200;
 
@@ -79,7 +79,7 @@ export interface MemoryManagerConfig {
   rootPath: string;
   /** Memory directory name (relative to rootPath). Default: `.agents/memory` */
   memoryDir?: string;
-  /** Trigger consolidation when file count exceeds this. Default: 15 */
+  /** Trigger consolidation when file count exceeds this. Default: 25 */
   consolidateThreshold?: number;
   /** Max lines in MEMORY.md index. Default: 200 */
   maxIndexLines?: number;

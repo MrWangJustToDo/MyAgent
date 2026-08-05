@@ -34,22 +34,23 @@ import type { ModelMessage } from "@tanstack/ai";
 // ============================================================================
 
 const EXTRACTION_SYSTEM_PROMPT = `You are a memory extraction assistant. Your role is to identify and extract \
-important knowledge from conversation transcripts that should be remembered across sessions.
+durable knowledge from conversation transcripts that should be remembered across sessions.
 
-You extract:
+You extract (prefer capturing rather than skipping when unsure):
 - User preferences (coding style, tool choices, communication preferences)
 - User corrections and feedback (things the user corrected or asked you to do differently)
-- Project facts (architecture, conventions, dependencies, build commands)
+- Project facts (architecture, conventions, dependencies, workflows, tool contracts)
+- Decisions and constraints the user stated for this repo or agent behavior
 - External references (URLs, docs, tools mentioned)
 
 Rules:
-- Only extract genuinely useful, reusable knowledge
-- Do NOT extract task-specific details that are only relevant to the current task
-- Do NOT duplicate information already covered by existing memories
+- Extract reusable knowledge that would help a future session — when in doubt, extract a short entry
+- Do NOT extract ephemeral one-off task chatter (temporary file paths, one-time debug noise, transient errors)
+- Do NOT duplicate information already covered by existing memories (update wording only if clearly new)
 - Keep descriptions concise (one line)
 - Keep body content focused and specific
 - Use kebab-case for names (e.g., "user-prefers-tabs")
-- Return a JSON array, or [] if nothing new to extract`;
+- Return a JSON array; use [] only when the dialogue truly has nothing durable`;
 
 const CONSOLIDATION_SYSTEM_PROMPT = `You are a memory consolidation assistant. Your role is to merge, \
 deduplicate, and clean up a collection of memory entries.
@@ -60,7 +61,7 @@ Your job is to decide which memories to merge, delete, or keep.
 Rules:
 1. Merge memories that cover the same topic into a single entry. Provide the merged description and body.
 2. Delete memories that are outdated, contradicted, or no longer useful.
-3. Keep the total as small as possible — aim for under 30.
+3. Prefer merging over deleting; keep a healthy set (roughly under 40) without discarding useful project facts.
 4. Preserve user preferences and feedback above all else.
 5. Keep descriptions concise (one line).
 6. Use kebab-case for names.
@@ -81,10 +82,10 @@ Return a JSON object:
 - If no changes needed, return { "merged": [], "deleted": [] }.`;
 
 /** Number of recent messages to analyze for extraction */
-const EXTRACTION_WINDOW = 10;
+const EXTRACTION_WINDOW = 30;
 
 /** Maximum characters of dialogue to send for extraction */
-const MAX_EXTRACTION_CHARS = 4000;
+const MAX_EXTRACTION_CHARS = 12000;
 
 /** Maximum characters of the lightweight catalog (frontmatter only) sent for consolidation */
 const MAX_CONSOLIDATION_CATALOG_CHARS = 20000;

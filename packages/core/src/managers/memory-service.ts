@@ -141,14 +141,15 @@ export class MemoryService {
 
     const canon = context.getCanonicalFromUI();
     // Gate on full UI-derived history so compaction cannot permanently disable extraction.
-    if (canon.length < 15) {
+    const MIN_MESSAGES_FOR_EXTRACT = 8;
+    if (canon.length < MIN_MESSAGES_FOR_EXTRACT) {
       emitEvent?.("memory:extract", { status: "skip-short", count: canon.length });
       return;
     }
 
     const llmMessages = context.getMessagesForLLM(canon);
     // Prefer the compact LLM view when long enough; otherwise use a tail of canonical history.
-    const messages = llmMessages.length >= 15 ? llmMessages : canon.slice(-60);
+    const messages = llmMessages.length >= MIN_MESSAGES_FOR_EXTRACT ? llmMessages : canon.slice(-80);
 
     const memoryManager = this.manager;
 

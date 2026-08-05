@@ -621,10 +621,10 @@ message prefixes stay stable for provider prompt cache. Snapshot is not recomput
 **`MemoryService.runExtraction`** — async, fire-and-forget from `finalizeRun` when `reason === "finished"`:
 
 ```
-Guard: manager exists, ≥15 messages, not already in progress
+Guard: manager exists, ≥8 messages, not already in progress
 extractMemories → runSubagent → write .agents/memory/*.md files
   → emit memory:extract { status: start | complete | empty | skip-short | error }
-If count >= consolidateThreshold:
+If count >= consolidateThreshold (default 25):
   consolidateMemories → merge/delete via subagent
   → emit memory:consolidate
 flushIndex → update memory.content for next session
