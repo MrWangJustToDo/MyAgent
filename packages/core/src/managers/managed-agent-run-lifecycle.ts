@@ -37,8 +37,9 @@ export async function prepareManagedAgentForRun(
   });
   host.run.resetReactiveCompactRetries();
 
-  const isToolContinuation =
-    isToolContinuationPrepare(host.status, options.messages) || host.consumePrepareAsContinuation() === true;
+  // Always consume the flag (avoid `||` short-circuit leaving a stale continuation mark).
+  const flaggedContinuation = host.consumePrepareAsContinuation() === true;
+  const isToolContinuation = isToolContinuationPrepare(host.status, options.messages) || flaggedContinuation;
   if (!isToolContinuation || host.streamStartedAt === 0) {
     host.streamStartedAt = Date.now();
   }
@@ -70,6 +71,10 @@ export function finalizeManagedAgentRun(
   manager: AgentManager,
   reason: RunFinalizeReason
 ): void {
+  // Idempotent per turn — pump `stop()` and outcome paths may both attempt finalize.
+  if (!host.beginTurnFinalize()) return;
+
+  host.clearPrepareAsContinuation();
   host.recordStreamDuration();
   host.persistSession();
   host.clearTurnContext();

@@ -254,7 +254,7 @@ Sources: `managers/middleware/*` for run stack; `agent/plan/plan-mode-middleware
 
 ```
 1. status-middleware         status transitions only (via AgentStatusController)
-2. lifecycle-middleware      usage tracking, thinking events, memory commit, finalizeRun
+2. lifecycle-middleware      usage tracking, thinking events, memory commit, llm:request/response
 3. compaction-middleware     auto-compact only (DeepSeek reasoning echo is adapter-only)
 4. tool-compact-middleware  per-tool LLM shaping
 5. turn-context-middleware  append <turn_context> after SYSTEM_PROMPT_DYNAMIC_BOUNDARY
@@ -513,7 +513,13 @@ On restore, `PlanModeController.restoreState` rehydrates phase (and reloads mark
 | `aborted` | Yes | No | `{ reason: "aborted" }` |
 | `error` | Yes | No | `{ reason: "error" }` |
 
-Lifecycle middleware calls `onRunFinalize` once per run (`finalizeOnce` guard).
+Owned by the **chat pump** / detached runners — not per-`chat()` lifecycle middleware:
+
+- `AgentChatController.pumpToolPhases` — after `applyRunOutcome` when kind is `finished` / `aborted` / `error` (not `waiting`, so approval resume keeps turn context)
+- `AgentChatController.stop` — `aborted` (generation bump skips the in-flight pump’s outcome path)
+- `run-subagent` — after detached `applyRunOutcome`
+
+Idempotent per turn via `resetTurnLifecycle` / `beginTurnFinalize` (stop + pump must not double-fire).
 
 ### 6.3 Resume
 
@@ -713,10 +719,16 @@ executeManagedAgentRun
             ├─ [tool execute or approval pause]
             ├─ extensions.onAfterToolCall → agent:tool-end/error (+ optional ExtensionEventBus)
             ├─ early-tool-result-ui.onAfterToolCall → AgentUIChannel.addToolResult (per-tool UI)
-            └─ lifecycle.onFinish / onAbort / onError → finalizeRun (once)
-                 ├─ session.persistSession (model state)
-                 ├─ memory.runExtraction (async, finished only)
-                 └─ emit agent:stop
+            └─ lifecycle.onFinish → llm:response (usage snapshot)
+                 (turn finalizeRun is NOT here — see pump / detached below)
+  │
+  ▼
+[core] AgentChatController.pumpToolPhases end (finished/aborted/error) → finalizeRun
+[core] AgentChatController.stop → finalizeRun(aborted)
+[core] run-subagent after detached outcome → finalizeRun
+       ├─ session.persistSession (model state)
+       ├─ memory.runExtraction (async, finished only)
+       └─ emit agent:stop
   │
   ▼
 [core] user send / drained queues → maybeSaveSessionUIMessages(..., "user-message")

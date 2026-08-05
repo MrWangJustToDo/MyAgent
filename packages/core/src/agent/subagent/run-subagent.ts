@@ -108,6 +108,8 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
   subagent.emitEvent("subagent:created", { subagentId }, { parentId: parentAgentId });
   subagent.emitEvent("subagent:started", { subagent_id: subagentId, description }, { parentId: parentAgentId });
 
+  subagentManaged.resetTurnLifecycle();
+
   let output = "(no summary)";
   let aborted = false;
   let finishReason: string | null = null;
@@ -150,6 +152,11 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       previewMessages = channel?.getMessages() ?? previewMessages;
       output = extractAssistantText(previewMessages)?.trim() || "(no summary)";
     } else {
+      try {
+        subagentManaged.finalizeRun(manager, "error");
+      } catch {
+        // ignore finalize errors while propagating the run failure
+      }
       throw err;
     }
   }
@@ -160,12 +167,13 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     subagentManaged.status === "aborted" ||
     Boolean(subagentManaged.run.currentAbortController?.signal.aborted);
 
+  const outcomeKind = aborted ? "aborted" : "finished";
   subagentManaged.statusController.applyRunOutcome({
-    kind: aborted ? "aborted" : "finished",
+    kind: outcomeKind,
     messages: previewMessages,
     path: "detached",
   });
-
+  subagentManaged.finalizeRun(manager, outcomeKind);
   const noticed = applySubagentCancelNotice(output, aborted);
   const { summary: finalOutput, truncated } = truncateSummary(noticed, maxOutputLength);
   const usage = subagentManaged.usage.getTotal();

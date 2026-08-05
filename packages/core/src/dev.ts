@@ -30,6 +30,7 @@ export {
 export { AgentUIChannel } from "./agent/ui-channel.js";
 export { findToolCallPart, shouldSuppressReplayedToolChunk } from "./agent/utils/suppress-replayed-tool-chunks.js";
 export { AgentChatController } from "./managers/agent-chat-controller.js";
+export { finalizeManagedAgentRun } from "./managers/managed-agent-run-lifecycle.js";
 export { PendingMessageQueue } from "./agent/utils/pending-message-queue.js";
 export type { QueueMode } from "./agent/utils/pending-message-queue.js";
 export { ManagedAgent } from "./managers/managed-agent.js";

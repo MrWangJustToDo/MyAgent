@@ -126,7 +126,6 @@ export function buildAgentRunner(
       getPricing: () => deps.usage.getPricing(),
       onThinking: () => emitEvent("agent:thinking"),
       onFirstModelOutput: () => deps.memory.commitSurfacedMemories(),
-      onRunFinalize: (reason) => managed.finalizeRun(manager, reason),
       emitEvent,
     }),
     createCompactionMiddleware({

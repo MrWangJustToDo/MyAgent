@@ -193,6 +193,8 @@ export class ManagedAgent {
   lastStreamDurationMs = 0;
   /** When true, next {@link prepareForRun} skips memory prefetch / prompt:submit (steer / tool continue). */
   private prepareAsContinuation = false;
+  /** Guards turn-level finalizeRun so stop() + pump outcome do not double-fire. */
+  private turnLifecycleFinalized = false;
   systemPrompt = "";
   mcpManager: McpManager | null = null;
   skillRegister: SkillRegistry | null = null;
@@ -522,11 +524,27 @@ export class ManagedAgent {
   }
 
   /**
-   * Finalize a run — persist session, clear turn memory, optionally extract memories, emit `agent:stop`.
-   * Memory extraction runs only when `reason === "finished"`.
+   * Finalize a user turn / detached run — persist session, clear turn memory, optionally extract memories, emit `agent:stop`.
+   * Owned by {@link AgentChatController} / subagent runners (not per-`chat()` middleware).
+   * Memory extraction runs only when `reason === "finished"`. Idempotent per turn until {@link resetTurnLifecycle}.
    */
   finalizeRun(manager: AgentManager, reason: RunFinalizeReason): void {
     finalizeManagedAgentRun(this, manager, reason);
+  }
+
+  /** Call at the start of a chat pump or detached run so finalize can run once for that turn. */
+  resetTurnLifecycle(): void {
+    this.turnLifecycleFinalized = false;
+  }
+
+  /**
+   * Claim turn finalization. @returns false when already finalized for this turn.
+   * @internal Used by {@link finalizeManagedAgentRun}.
+   */
+  beginTurnFinalize(): boolean {
+    if (this.turnLifecycleFinalized) return false;
+    this.turnLifecycleFinalized = true;
+    return true;
   }
 
   setAgentDocContent(content: string, source?: string): void {
@@ -812,6 +830,11 @@ export class ManagedAgent {
     this.prepareAsContinuation = true;
   }
 
+  /** Clear a leftover continuation mark (e.g. on turn finalize). */
+  clearPrepareAsContinuation(): void {
+    this.prepareAsContinuation = false;
+  }
+
   /** Consume and clear the continuation flag for prepareForRun. */
   consumePrepareAsContinuation(): boolean {
     const value = this.prepareAsContinuation;
@@ -912,6 +935,7 @@ export class ManagedAgent {
     this.context?.reset();
     this.usage.reset();
     this.todoManager?.reset();
+    this.turnLifecycleFinalized = false;
     this.chatController = undefined;
     this._ui = undefined;
     this.systemPromptFrozen = false;

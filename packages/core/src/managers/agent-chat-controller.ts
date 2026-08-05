@@ -97,6 +97,8 @@ export class AgentChatController {
     this.applyCancelledIncompleteTools();
     // App no longer checkpoints on status — persist cancelled tools on abort.
     this.persistMessages("pump-complete");
+    // Turn finalize here: bumping runGeneration makes the in-flight pump skip its outcome path.
+    this.managed.finalizeRun(this.manager, "aborted");
   }
 
   /** How steering messages are drained at each drain point. */
@@ -272,12 +274,14 @@ export class AgentChatController {
     const generation = ++this.runGeneration;
     const turnStart = Date.now();
     this.pumpDepth += 1;
+    this.managed.resetTurnLifecycle();
+    this.managed.clearPrepareAsContinuation();
     this.managed.setError("");
     // Safe: skips approval-responded and valid input-complete (needed for `y` / tool-phase).
     this.applyCancelledIncompleteTools();
 
     let hasError = false;
-    let llmCallCount = 0;
+    let llmCalls = 0;
     const messages = this.channel.getMessages();
     this.managed.statusController.prepareRunPhase(messages);
 
@@ -297,7 +301,7 @@ export class AgentChatController {
         }
 
         await this.executeStream(currentMessages, generation);
-        llmCallCount++;
+        llmCalls = iteration + 1;
         if (this.managed.status === "error") {
           hasError = true;
         }
@@ -344,13 +348,18 @@ export class AgentChatController {
         });
         this.persistMessages("pump-complete");
 
+        // Waiting (approval / ask_user) keeps turn context for the resume pump.
+        if (outcomeKind === "finished" || outcomeKind === "aborted" || outcomeKind === "error") {
+          this.managed.finalizeRun(this.manager, outcomeKind);
+        }
+
         const totalUsage = this.managed.usage?.getTotal();
         const toolCallCount = this.channel
           .getMessages()
           .filter((m) => m.role === "assistant")
           .reduce((count, m) => count + m.parts.filter((p) => p.type === "tool-call").length, 0);
         this.managed.emitEvent("turn:summary", {
-          llmCalls: llmCallCount,
+          llmCalls: llmCalls,
           toolCalls: toolCallCount,
           inputTokens: totalUsage?.inputTokens ?? 0,
           outputTokens: totalUsage?.outputTokens ?? 0,

@@ -1,15 +1,16 @@
 /**
- * Run lifecycle middleware — usage tracking, run finalization, and stream side-effects.
+ * Run lifecycle middleware — usage tracking and stream side-effects.
  *
- * Status transitions live in {@link createStatusMiddleware}; this middleware owns
- * everything else that hooks into the agent run lifecycle.
+ * Status transitions live in {@link createStatusMiddleware}.
+ * Turn-level finalization (`finalizeRun`: clear turn context, `agent:stop`, memory extract)
+ * is owned by {@link AgentChatController.pumpToolPhases} / detached runners — not per-`chat()` finish.
  */
 
 import { extractTanStackUsage } from "../../runtime-types/token-usage.js";
 
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { ModelPricing } from "../../models/types.js";
-import type { AgentEventType, RunFinalizeReason, UsageTracker } from "../../runtime-types";
+import type { AgentEventType, UsageTracker } from "../../runtime-types";
 import type { ChatMiddleware } from "@tanstack/ai";
 
 // ============================================================================
@@ -21,30 +22,20 @@ export interface LifecycleMiddlewareDeps {
   getPricing: () => ModelPricing | null | undefined;
   onThinking?: () => void;
   onFirstModelOutput?: () => void;
-  onRunFinalize?: (reason: RunFinalizeReason, finishReason?: string | null) => void;
   emitEvent?: (type: AgentEventType, data?: Record<string, unknown>) => void;
 }
 
 export function createLifecycleMiddleware(deps: LifecycleMiddlewareDeps): ChatMiddleware<ToolRunContext> {
   let memoryCommitted = false;
   let thinkingEmitted = false;
-  let runFinalized = false;
   let startTime = 0;
-
-  const finalizeOnce = (reason: RunFinalizeReason, finishReason?: string | null): void => {
-    if (runFinalized) return;
-    runFinalized = true;
-    deps.onRunFinalize?.(reason, finishReason);
-  };
 
   return {
     name: "lifecycle",
     onStart: (ctx) => {
       memoryCommitted = false;
       thinkingEmitted = false;
-      runFinalized = false;
       startTime = Date.now();
-      // llmRequestEmitted = false;
 
       deps.emitEvent?.("llm:request", {
         model: ctx.model,
@@ -82,13 +73,6 @@ export function createLifecycleMiddleware(deps: LifecycleMiddlewareDeps): ChatMi
         cacheWriteTokens: windowUsage.cacheWriteTokens ?? 0,
         durationMs: elapsed,
       });
-      finalizeOnce("finished", info.finishReason);
-    },
-    onAbort: () => {
-      finalizeOnce("aborted");
-    },
-    onError: () => {
-      finalizeOnce("error");
     },
   };
 }

@@ -1,5 +1,6 @@
 /**
- * Validates lifecycle middleware side-effects (finalize, memory commit, thinking).
+ * Validates lifecycle middleware side-effects (usage, memory commit, thinking).
+ * Turn-level finalizeRun is owned by the chat pump / detached runners — not this middleware.
  *
  * Run: pnpm --filter @my-agent/core run validate:lifecycle-middleware
  */
@@ -11,7 +12,7 @@ import { createLifecycleMiddleware } from "../dist/dev.mjs";
 let usageUpdated = false;
 let thinkingEmitted = false;
 let memoryCommitted = false;
-const finalizeReasons = [];
+let llmResponseEmitted = false;
 
 const middleware = createLifecycleMiddleware({
   usage: {
@@ -34,26 +35,28 @@ const middleware = createLifecycleMiddleware({
   onFirstModelOutput: () => {
     memoryCommitted = true;
   },
-  onRunFinalize: (reason) => {
-    finalizeReasons.push(reason);
+  emitEvent: (type) => {
+    if (type === "llm:response") llmResponseEmitted = true;
   },
 });
 
-middleware.onStart?.();
+middleware.onStart?.({ model: "m", messages: [], toolNames: [] });
 await middleware.onChunk?.(undefined, { type: "REASONING_MESSAGE_START" });
 assert.equal(thinkingEmitted, true);
 
-middleware.onStart?.();
+middleware.onStart?.({ model: "m", messages: [], toolNames: [] });
 await middleware.onChunk?.(undefined, { type: "TEXT_MESSAGE_CONTENT", delta: "hi" });
 assert.equal(memoryCommitted, true);
 
-middleware.onStart?.();
+middleware.onStart?.({ model: "m", messages: [], toolNames: [] });
 await middleware.onUsage?.(undefined, { inputTokens: 1, outputTokens: 2, totalTokens: 3 });
 assert.equal(usageUpdated, true);
 
-middleware.onStart?.();
+middleware.onStart?.({ model: "m", messages: [], toolNames: [] });
 await middleware.onFinish?.(undefined, { finishReason: "stop" });
 await middleware.onFinish?.(undefined, { finishReason: "stop" });
-assert.deepEqual(finalizeReasons, ["finished"]);
+assert.equal(llmResponseEmitted, true);
+assert.equal(typeof middleware.onAbort, "undefined");
+assert.equal(typeof middleware.onError, "undefined");
 
 console.log("lifecycle-middleware validation passed");
