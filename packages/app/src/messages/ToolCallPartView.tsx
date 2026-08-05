@@ -1,8 +1,8 @@
 import { Box, Text } from "ink";
 
 import { useTranscriptDisplayMode } from "../context/transcript-display-context.js";
-import { useLiveElapsedMs } from "../hooks/use-live-elapsed.js";
 import { useTask } from "../hooks/use-task.js";
+import { useToolElapsed } from "../hooks/use-tool-elapsed.js";
 import { COLORS } from "../theme/colors.js";
 import { formatUsageBrief } from "../utils/format-usage.js";
 import {
@@ -71,7 +71,7 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
   const isRunCommand = toolName === "run_command";
   const isTask = toolName === "task";
   const isExecuting = isToolExecuting(part);
-  const liveElapsedMs = useLiveElapsedMs(toolCallId, isExecuting, LIVE_DURATION_THRESHOLD_MS);
+  const liveElapsedMs = useToolElapsed(toolCallId, isExecuting, LIVE_DURATION_THRESHOLD_MS);
   const { phase: taskPhase, usage: taskUsage } = useTask({
     taskId: isTask ? part.id : "",
   });

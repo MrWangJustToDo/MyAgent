@@ -152,24 +152,42 @@ const SubagentPanelDetail = ({ subagentId, onBack }: { subagentId: string; onBac
   const managed = agentManager.getAgent(subagentId);
   const childSession = sessionForSubagent(agentManager, subagentId);
   const title = managed ? getTaskLabel(managed) : subagentId;
+  const status = managed?.status ?? childSession?.getSnapshot().status ?? "idle";
   const usage = childSession?.getSnapshot().usage.total ?? managed?.usage.getTotal();
   const usageLabel = usage && (usage.inputTokens > 0 || usage.outputTokens > 0) ? formatUsageBrief(usage) : null;
+  const statusIcon = getStatusIcon(status);
+  const statusColor = getStatusColor(status);
 
   return (
-    <Box flexDirection="column" paddingX={1} paddingY={1}>
-      <Box marginBottom={1}>
-        <Text bold color={COLORS.primary}>
-          {title}
-        </Text>
-        {usageLabel && (
+    <Box flexDirection="column" paddingX={1} paddingY={1} flexGrow={1}>
+      <Box flexDirection="column" marginBottom={1} flexShrink={0}>
+        <Box>
+          <Text color={statusColor} bold>
+            {statusIcon}{" "}
+          </Text>
+          <Text bold color={COLORS.primary} wrap="truncate">
+            {title}
+          </Text>
+        </Box>
+        <Box>
+          <Text color={COLORS.muted} dimColor>
+            {status}
+          </Text>
+          {usageLabel ? (
+            <Text color={COLORS.muted} dimColor>
+              {" "}
+              · {usageLabel}
+            </Text>
+          ) : null}
           <Text color={COLORS.muted} dimColor>
             {" "}
-            · {usageLabel}
+            · ({KeyLabel.esc} back to task list)
           </Text>
-        )}
-        <Text dimColor> ({KeyLabel.esc} back to task list)</Text>
+        </Box>
       </Box>
-      <SubagentPreviewView subagentId={subagentId} />
+      <Box flexDirection="column" flexGrow={1}>
+        <SubagentPreviewView subagentId={subagentId} />
+      </Box>
     </Box>
   );
 };

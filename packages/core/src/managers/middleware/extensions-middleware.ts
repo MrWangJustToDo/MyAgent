@@ -18,7 +18,9 @@ export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): Chat
     onBeforeToolCall: async (_ctx, hookCtx) => {
       deps.emitEvent?.("agent:tool-start", {
         tool_name: hookCtx.toolName,
+        tool_call_id: hookCtx.toolCallId,
         tool_input: hookCtx.args,
+        timestamp: Date.now(),
       });
 
       const runner = deps.getExtensionRunner();
@@ -65,12 +67,14 @@ export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): Chat
           tool_call_id: info.toolCallId,
           duration_ms: info.duration,
           tool_output: info.result,
+          timestamp: Date.now(),
         });
       } else {
         deps.emitEvent?.("agent:tool-error", {
           tool_name: info.toolName,
           tool_call_id: info.toolCallId,
           error: info.error instanceof Error ? info.error.message : String(info.error),
+          timestamp: Date.now(),
         });
       }
 

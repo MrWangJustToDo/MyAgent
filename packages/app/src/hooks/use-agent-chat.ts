@@ -11,6 +11,7 @@ import { useAgent } from "./use-agent.js";
 import { useCallbackRef } from "./use-callback-ref.js";
 import { useForceUpdate } from "./use-force-update.js";
 import { useTodoManager } from "./use-todo-manager.js";
+import { handleToolLifecycleEvent } from "./use-tool-timing-store.js";
 import { getWorkSpaceInfo } from "./use-workspace-info.js";
 
 import type { AppConfig } from "../adapter/types.js";
@@ -228,9 +229,13 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         }
         if (event.channel === "todos") {
           useTodoManager.getActions().refresh();
+          return;
+        }
+        if (event.channel === "lifecycle") {
+          handleToolLifecycleEvent(event.payload);
         }
       },
-      { channels: ["messages", "queues", "state", "todos"] }
+      { channels: ["messages", "queues", "state", "todos", "lifecycle"] }
     );
   }, [session, agent, forceUpdate]);
 
