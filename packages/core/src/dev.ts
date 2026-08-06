@@ -253,6 +253,18 @@ export {
   subscribeStreamingCallback,
   subscribeStreamingClearCallback,
 } from "./agent/tools/util/streaming-callback.js";
+export {
+  SUMMARY_STREAM_SNAPSHOT_LINE_CAP,
+  SummaryStreamHub,
+  applyAppendToDisplayWindow,
+  applySummaryStreamAppend,
+  displayWindowFromSnapshot,
+  emptySummaryDisplayWindow,
+  emptySummaryLineBuffer,
+  renderSummaryDisplayRows,
+  compactSummaryStreamId,
+  summaryStreamKey,
+} from "./agent/summary-stream";
 export { commandJobRegistry } from "./agent/tools/util/command-job-registry.js";
 export type { CommandJobRecord, CommandJobPollResult } from "./agent/tools/util/command-job-registry.js";
 export {

@@ -4,11 +4,13 @@ import { useMemo } from "react";
 import { Spinner } from "../components/Spinner.js";
 import { TranscriptDisplayContext } from "../context/transcript-display-context.js";
 import { useSubagentMessages } from "../hooks/use-subagent-messages.js";
+import { useTranscriptDisplay } from "../hooks/use-transcript-display.js";
 import { COLORS } from "../theme/colors.js";
 import { getMessages } from "../utils/get-messages.js";
 
 import { MessageView } from "./MessageView.js";
 
+import type { TranscriptDisplayMode } from "../hooks/use-transcript-display.js";
 import type { TextPart, UIMessage } from "@tanstack/ai";
 
 export interface SubagentPreviewViewProps {
@@ -44,13 +46,16 @@ function collapseUserPrompts(messages: UIMessage[]): UIMessage[] {
   });
 }
 
-function selectPanelPreviewMessages(messages: UIMessage[]): {
+function selectPanelPreviewMessages(
+  messages: UIMessage[],
+  mode: TranscriptDisplayMode
+): {
   prompt: UIMessage | null;
   activity: UIMessage[];
   omittedEarlier: boolean;
 } {
   const collapsed = collapseUserPrompts(messages);
-  const { staticMessages, dynamicMessages } = getMessages(collapsed, { mode: "compact" });
+  const { staticMessages, dynamicMessages } = getMessages(collapsed, { mode });
   const all = [...staticMessages, ...dynamicMessages];
 
   const firstUserIndex = all.findIndex((m) => m.role === "user");
@@ -71,7 +76,13 @@ function selectPanelPreviewMessages(messages: UIMessage[]): {
  */
 export const SubagentPreviewView = ({ subagentId }: SubagentPreviewViewProps) => {
   const messages = useSubagentMessages(subagentId);
-  const { prompt, activity, omittedEarlier } = useMemo(() => selectPanelPreviewMessages(messages), [messages]);
+
+  const mode = useTranscriptDisplay((s) => s.mode);
+
+  const { prompt, activity, omittedEarlier } = useMemo(
+    () => selectPanelPreviewMessages(messages, mode),
+    [messages, mode]
+  );
 
   if (!prompt && activity.length === 0) {
     return (

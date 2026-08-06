@@ -14,6 +14,7 @@
 import { AgentUIChannel } from "../ui-channel.js";
 
 import type { AgentManager, ManagedAgent } from "../../runtime-types/hosts.js";
+import type { SummaryStreamHub } from "../summary-stream";
 import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai";
 
 export interface EnsureUIChannelOptions {
@@ -38,6 +39,8 @@ export interface ConsumeAgentStreamOptions {
   channel: AgentUIChannel;
   parentTaskToolCallId?: string;
   streamingAgentId?: string;
+  summaryHub?: SummaryStreamHub;
+  compactId?: string;
   onUpdate?: (messages: UIMessage[]) => void;
 }
 
@@ -45,7 +48,7 @@ export interface ConsumeAgentStreamOptions {
  * Consume one agent stream into UIMessage snapshots via the UI channel.
  */
 export async function consumeAgentStream(options: ConsumeAgentStreamOptions): Promise<UIMessage[]> {
-  const { stream, channel, parentTaskToolCallId, streamingAgentId, onUpdate } = options;
+  const { stream, channel, parentTaskToolCallId, streamingAgentId, summaryHub, compactId, onUpdate } = options;
 
   if (!channel) {
     throw new Error("AgentUIChannel is required to consume an agent stream");
@@ -55,6 +58,8 @@ export async function consumeAgentStream(options: ConsumeAgentStreamOptions): Pr
     stream,
     parentTaskToolCallId,
     streamingAgentId,
+    summaryHub,
+    compactId,
     onUpdate,
   })) as UIMessage[];
 }
@@ -79,6 +84,8 @@ export interface RunAgentOnceOptions {
   uiAttach?: EnsureUIChannelOptions;
   parentTaskToolCallId?: string;
   streamingAgentId?: string;
+  summaryHub?: SummaryStreamHub;
+  compactId?: string;
   onUpdate?: (messages: UIMessage[]) => void;
   /** Optional wrapper (e.g. finish-reason capture). Applied before consume. */
   transformStream?: (stream: AsyncIterable<StreamChunk>) => AsyncIterable<StreamChunk>;
@@ -109,6 +116,8 @@ export async function runAgentOnce(options: RunAgentOnceOptions): Promise<RunAge
     uiAttach,
     parentTaskToolCallId,
     streamingAgentId,
+    summaryHub,
+    compactId,
     onUpdate,
     transformStream,
     outcome,
@@ -136,6 +145,8 @@ export async function runAgentOnce(options: RunAgentOnceOptions): Promise<RunAge
     channel,
     parentTaskToolCallId,
     streamingAgentId,
+    summaryHub,
+    compactId,
     onUpdate,
   });
 

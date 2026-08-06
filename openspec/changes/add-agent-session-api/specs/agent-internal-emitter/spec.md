@@ -30,7 +30,7 @@ Migrating domain notify paths to Emitter MUST NOT suppress AgentEventBus emissio
 - **THEN** `agent:stop` is still emitted on the AgentEventBus for existing bus consumers
 
 ### Requirement: Session projects from Emitters
-LocalAgentSession channel subscription for `state`, `messages`, `queues`, `usage`, `todos`, `plan`, and `streaming` SHALL be implemented by subscribing to the corresponding domain Emitter events (plus streaming registry if wrapped), not by requiring hosts to combine empty `subscribeState` nudges with direct ManagedAgent field reads.
+LocalAgentSession channel subscription for `state`, `messages`, `queues`, `usage`, `todos`, `plan`, and `tool` SHALL be implemented by subscribing to the corresponding domain Emitter events (plus tool-output registry if wrapped), not by requiring hosts to combine empty `subscribeState` nudges with direct ManagedAgent field reads.
 
 #### Scenario: Usage channel from UsageTracker emitter
 - **WHEN** UsageTracker emits `change`

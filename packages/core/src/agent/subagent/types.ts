@@ -65,6 +65,11 @@ export interface SubagentConfig {
    * (compaction, memory extraction).
    */
   bridgeUI?: boolean;
+  /**
+   * When set, stream assistant text into the parent's compact summary stream
+   * (`source: "compact"`). Used by compaction summarizer subagents.
+   */
+  compactSummaryStream?: { compactId: string };
 }
 
 /** Resolve whether a subagent run should bridge through {@link AgentUIChannel}. */

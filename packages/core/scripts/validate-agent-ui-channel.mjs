@@ -7,7 +7,7 @@
 import { EventType } from "@tanstack/ai/client";
 import assert from "node:assert/strict";
 
-import { AgentUIChannel } from "../dist/dev.mjs";
+import { AgentUIChannel, SummaryStreamHub, summaryStreamKey } from "../dist/dev.mjs";
 
 const threadId = "thread-ui";
 const runId = "run-ui";
@@ -179,5 +179,173 @@ await emptyChannel.consumeRun({
 
 assert.equal(emptyChannel.getMessages().length, 1);
 assert.equal(emptyChannel.getMessages()[0].id, "assistant-deny");
+
+// ============================================================================
+// Summary stream via SummaryStreamHub (no UIMessage diff / emitStreamingChunk).
+// ============================================================================
+
+const summaryStreamId = "task-1";
+const summaryMsgId = "assistant-summary";
+const longText = "x".repeat(200);
+
+const summaryHub = new SummaryStreamHub();
+/** @type {import("../dist/dev.mjs").SummaryStreamEvent[]} */
+const summaryEvents = [];
+const unsubSummary = summaryHub.subscribe((event) => summaryEvents.push(event));
+
+const summaryChannel = new AgentUIChannel();
+await summaryChannel.consumeRun({
+  stream: (async function* () {
+    yield {
+      type: EventType.RUN_STARTED,
+      threadId: "thread-summary",
+      runId: "run-summary",
+      timestamp: Date.now(),
+    };
+    yield {
+      type: EventType.TEXT_MESSAGE_START,
+      messageId: summaryMsgId,
+      role: "assistant",
+      threadId: "thread-summary",
+      runId: "run-summary",
+    };
+    // Unlock summary phase via begin_summary
+    yield {
+      type: EventType.TOOL_CALL_START,
+      toolCallId: "tc-bs",
+      toolName: "begin_summary",
+      messageId: summaryMsgId,
+      threadId: "thread-summary",
+      runId: "run-summary",
+    };
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: summaryMsgId,
+      delta: longText.slice(0, 100),
+      threadId: "thread-summary",
+      runId: "run-summary",
+    };
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: summaryMsgId,
+      delta: longText.slice(100),
+      threadId: "thread-summary",
+      runId: "run-summary",
+    };
+    // Transient tool segment — must NOT reset or clear the summary hub stream.
+    yield {
+      type: EventType.TOOL_CALL_START,
+      toolCallId: "tc-2",
+      toolName: "read_file",
+      messageId: summaryMsgId,
+      threadId: "thread-summary",
+      runId: "run-summary",
+    };
+    yield {
+      type: EventType.RUN_FINISHED,
+      threadId: "thread-summary",
+      runId: "run-summary",
+      timestamp: Date.now(),
+      finishReason: "stop",
+      model: "mock",
+    };
+  })(),
+  parentTaskToolCallId: summaryStreamId,
+  streamingAgentId: "agent-parent",
+  summaryHub,
+});
+
+const summaryKey = summaryStreamKey("task", summaryStreamId);
+const summarySnap = summaryHub.getSnapshot(summaryKey);
+assert.ok(summarySnap, "expected summary snapshot");
+assert.equal(summarySnap.status, "ended");
+assert.equal(summarySnap.pendingLine, longText, "full text should accumulate in pendingLine (no newlines)");
+assert.equal(summaryEvents.filter((e) => e.type === "reset").length, 1, "exactly one reset (begin_summary)");
+assert.ok(
+  summaryEvents.some((e) => e.type === "append"),
+  "expected append events"
+);
+assert.equal(summaryEvents.filter((e) => e.type === "end").length, 1, "exactly one end");
+unsubSummary();
+
+// ============================================================================
+// Trailing-newline growth must stay monotonic (no shrink→clear→restream).
+// ============================================================================
+
+const monoHub = new SummaryStreamHub();
+/** @type {string[]} */
+const monoAppends = [];
+const unsubMono = monoHub.subscribe((event) => {
+  if (event.type === "append") monoAppends.push(event.chunk);
+});
+
+const monoBase = "B".repeat(80);
+const monoChannel = new AgentUIChannel();
+await monoChannel.consumeRun({
+  stream: (async function* () {
+    yield {
+      type: EventType.RUN_STARTED,
+      threadId: "thread-mono",
+      runId: "run-mono",
+      timestamp: Date.now(),
+    };
+    yield {
+      type: EventType.TEXT_MESSAGE_START,
+      messageId: "assistant-mono",
+      role: "assistant",
+      threadId: "thread-mono",
+      runId: "run-mono",
+    };
+    yield {
+      type: EventType.TOOL_CALL_START,
+      toolCallId: "tc-bs-mono",
+      toolName: "begin_summary",
+      messageId: "assistant-mono",
+      threadId: "thread-mono",
+      runId: "run-mono",
+    };
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "assistant-mono",
+      delta: monoBase,
+      threadId: "thread-mono",
+      runId: "run-mono",
+    };
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "assistant-mono",
+      delta: "\n",
+      threadId: "thread-mono",
+      runId: "run-mono",
+    };
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "assistant-mono",
+      delta: "line2\nline3\nline4\nline5\nline6",
+      threadId: "thread-mono",
+      runId: "run-mono",
+    };
+    yield {
+      type: EventType.RUN_FINISHED,
+      threadId: "thread-mono",
+      runId: "run-mono",
+      timestamp: Date.now(),
+      finishReason: "stop",
+      model: "mock",
+    };
+  })(),
+  parentTaskToolCallId: "task-mono",
+  streamingAgentId: "agent-mono",
+  summaryHub: monoHub,
+});
+
+const monoJoined = monoAppends.join("");
+assert.equal(monoJoined, monoBase + "\nline2\nline3\nline4\nline5\nline6");
+const monoSnap = monoHub.getSnapshot(summaryStreamKey("task", "task-mono"));
+assert.ok(monoSnap);
+assert.equal(monoSnap.status, "ended");
+assert.deepEqual(monoSnap.lines, [monoBase, "line2", "line3", "line4", "line5"]);
+assert.equal(monoSnap.pendingLine, "line6");
+unsubMono();
 
 console.log("agent-ui-channel validation passed");

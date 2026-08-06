@@ -89,7 +89,7 @@ initHighlighter()
       <AdapterProvider value={adapter}>
         <App />
       </AdapterProvider>,
-      { incrementalRendering: true, maxFps: 30, exitOnCtrlC: false, renderProcess: true }
+      { incrementalRendering: true, maxFps: 30, exitOnCtrlC: false, renderProcess: true, animatedScroll: true }
     );
   })
   .catch((err) => {

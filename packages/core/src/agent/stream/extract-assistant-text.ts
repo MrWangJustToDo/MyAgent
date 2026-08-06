@@ -30,6 +30,26 @@ function thinkingFromPart(part: MessagePart): string {
   return "";
 }
 
+/**
+ * Raw (untrimmed) text for streaming length tracking.
+ * Trim would drop trailing newlines mid-stream and make lengths non-monotonic,
+ * which previously cleared the parent task stdout window and flickered the
+ * "… N lines hidden above" indicator.
+ */
+function textFromPartRaw(part: MessagePart): string {
+  if (part.type === "text") {
+    return part.content ?? "";
+  }
+  return "";
+}
+
+function thinkingFromPartRaw(part: MessagePart): string {
+  if (part.type === "thinking") {
+    return part.content ?? "";
+  }
+  return "";
+}
+
 function joinSegmentText(parts: MessagePart[]): string {
   const text = parts
     .map((part) => textFromPart(part))
@@ -43,6 +63,20 @@ function joinSegmentText(parts: MessagePart[]): string {
     .filter(Boolean)
     .join("\n")
     .trim();
+}
+
+/** Join segment text without trim — lengths only grow as StreamProcessor appends. */
+function joinSegmentTextRaw(parts: MessagePart[]): string {
+  const text = parts
+    .map((part) => textFromPartRaw(part))
+    .filter((value) => value.length > 0)
+    .join("\n");
+  if (text.length > 0) return text;
+
+  return parts
+    .map((part) => thinkingFromPartRaw(part))
+    .filter((value) => value.length > 0)
+    .join("\n");
 }
 
 function splitByToolBoundaries(parts: MessagePart[]): MessagePart[][] {
@@ -178,7 +212,8 @@ export function getSummaryStreamText(
   const lastSegment = segments[segments.length - 1]!;
   if (segmentHasTool(lastSegment)) return null;
 
-  const text = joinTextParts(lastSegment);
+  // Use raw (untrimmed) text so streamed lengths stay monotonic as deltas arrive.
+  const text = joinSegmentTextRaw(lastSegment);
   if (text.length < SUMMARY_STREAM_MIN_CHARS) return null;
 
   return text;

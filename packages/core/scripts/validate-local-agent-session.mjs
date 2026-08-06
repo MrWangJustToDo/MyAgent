@@ -5,7 +5,13 @@
  */
 import assert from "node:assert/strict";
 
-import { TodoManager, UsageTracker, createLocalAgentSession, sessionForSubagent } from "../dist/dev.mjs";
+import {
+  SummaryStreamHub,
+  TodoManager,
+  UsageTracker,
+  createLocalAgentSession,
+  sessionForSubagent,
+} from "../dist/dev.mjs";
 
 function createFake(id, parentId) {
   const usage = new UsageTracker();
@@ -22,6 +28,7 @@ function createFake(id, parentId) {
     usage,
     log: null,
     todoManager,
+    summaryStreams: new SummaryStreamHub(),
     planMode: {
       on: () => () => {},
       getState: () => ({

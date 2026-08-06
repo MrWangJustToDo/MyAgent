@@ -86,6 +86,31 @@ export type { AgentL1State } from "./managers/managed-agent.js";
 export type { UsageChangeSnapshot, UsageSnapshot } from "./managers/usage-tracker.js";
 
 // ============================================================================
+// Summary streams (task / compact)
+// ============================================================================
+
+export {
+  SUMMARY_STREAM_SNAPSHOT_LINE_CAP,
+  SummaryStreamHub,
+  applyAppendToDisplayWindow,
+  applySummaryStreamAppend,
+  displayWindowFromSnapshot,
+  emptySummaryDisplayWindow,
+  emptySummaryLineBuffer,
+  renderSummaryDisplayRows,
+  summaryStreamKey,
+  compactSummaryStreamId,
+  type SummaryDisplayWindow,
+  type SummaryLineBuffer,
+  type SummaryStreamEvent,
+  type SummaryStreamListener,
+  type SummaryStreamResetInput,
+  type SummaryStreamSnapshot,
+  type SummaryStreamSource,
+  type SummaryStreamStatus,
+} from "./agent/summary-stream";
+
+// ============================================================================
 // Compaction (/compact command)
 // ============================================================================
 

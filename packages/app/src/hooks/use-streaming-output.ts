@@ -55,7 +55,7 @@ function acquireStreamingBridge(agentId: string): boolean {
   const session = createLocalAgentSession({ managed, manager: agentManager });
   const unsubscribe = session.subscribe(
     (event) => {
-      if (event.channel !== "streaming") return;
+      if (event.channel !== "tool") return;
       if (event.payload.kind === "chunk") {
         const { toolCallId, type, chunk } = event.payload.chunk;
         ingestStreamingChunk(toolCallId, type, chunk);
@@ -63,7 +63,7 @@ function acquireStreamingBridge(agentId: string): boolean {
       }
       clearStreamingIngest(event.payload.toolCallId);
     },
-    { channels: ["streaming"] }
+    { channels: ["tool"] }
   );
 
   bridges.set(agentId, {
@@ -129,13 +129,10 @@ export function useStreamingOutput(
     return registerStreamingThrottle(toolCallId, throttleMs);
   }, [enabled, toolCallId, throttleMs]);
 
-  useEffect(() => {
-    return () => {
-      if (toolCallId) {
-        clearStreamingIngest(toolCallId);
-      }
-    };
-  }, [toolCallId]);
+  // Do not clear ingest on unmount. MessageList rebuilds / task phase toggles can
+  // remount this view while the producer still tracks streamedSummaryLength —
+  // wiping the buffer leaves an empty window until the next delta (indicator flicker).
+  // Clears come from core `clearStreamingOutput` → streaming clear events only.
 
   return output;
 }

@@ -176,7 +176,7 @@ Observation is split into four layers (do not mix interception into the lifecycl
 |-------|-----------|------|
 | L1 Control plane | `AgentStatusController` + L1 Emitter → Session `state` | status / error / pendingApproval |
 | L2 Lifecycle bus | `AgentEventBus` → Event→Log (+ Session `lifecycle` / `agentManager.on`) | fire-and-forget notify |
-| L3 Data plane | `AgentUIChannel` + streaming registry → Session `messages` / `streaming` | UIMessages / tool stdout |
+| L3 Data plane | `AgentUIChannel` + tool-output registry → Session `messages` / `tool`; `SummaryStreamHub` → Session `summary` | UIMessages / tool stdout / task·compact summary |
 | L4 Interception | `ExtensionEventBus` only | skip / transform tool args |
 
 ### 2.4 Session bootstrap events (`session-bootstrap-events.ts`)
@@ -668,7 +668,7 @@ managed.emitEvent(type, data)
 |-------|----------|------|
 | L1 | Status controller + ManagedAgent Emitter `change` | Session `state` |
 | L2 | `AgentEventBus` (+ Event→Log) | Session `lifecycle` (filtered); `agentManager.on` for cross-agent / `"*"` |
-| L3 | UIChannel Emitter `messages` + streaming registry | Session `messages` / `streaming` |
+| L3 | UIChannel Emitter `messages` + tool-output registry + `SummaryStreamHub` | Session `messages` / `tool` / `summary` |
 | L4 | `ExtensionEventBus` / ExtensionUI | Not part of AgentSession |
 
 **Host observation API:** `AgentSession` only (`createLocalAgentSession` / HTTP client) — `getSnapshot` / `dispatch` / `subscribe(channels)`. Domain classes expose typed `.on(...)` for Session projection and package-internal use; there is no parallel `ManagedAgent.observe()` facade.
@@ -677,7 +677,8 @@ Internal domain updates use a typed `Emitter` (todos, usage, L1 state, queues, p
 
 **TODO(messages-incremental):** Session delivers full `UIMessage[]` on snapshot and the `messages` channel; JSON-patch / delta delivery is deferred.
 
-Streaming chunks are scoped by required `agentId`; Session `streaming` channel receives them.
+Tool process chunks (`run_command` stdout/stderr) are scoped by required `agentId`; Session `tool` channel receives them (`chunk` / `clear`).
+Task / compact summary text uses `ManagedAgent.summaryStreams` (`SummaryStreamHub`: `reset` / `append` / `end`) on Session `summary` — not the tool-output registry. Compact stream ids are stable (`compactSummaryStreamId(agentId)` → key `compact:${agentId}`).
 
 ### 8.3 Event types (summary)
 
@@ -809,6 +810,7 @@ pnpm --filter @my-agent/core run validate:suppress-replayed-tool-chunks
 pnpm --filter @my-agent/core run validate:early-tool-result-ui
 pnpm --filter @my-agent/core run validate:extension-prompt-hooks
 pnpm --filter @my-agent/core run validate:streaming-scope
+pnpm --filter @my-agent/core run validate:summary-stream
 pnpm --filter @my-agent/core run validate:local-agent-session
 pnpm --filter @my-agent/core run validate:run-agent-skeleton
 pnpm --filter @my-agent/core run validate:tanstack-tools

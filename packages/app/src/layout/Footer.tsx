@@ -16,7 +16,9 @@ import { useConfig } from "../hooks/use-config.js";
 import { useExtensionUI } from "../hooks/use-extension-ui.js";
 import { useInputMode } from "../hooks/use-input-mode.js";
 import { useSelect } from "../hooks/use-select.js";
+import { useActiveCompactSummaryStream } from "../hooks/use-summary-stream.js";
 import { useUserInput } from "../hooks/use-user-input.js";
+import { SummaryStreamView } from "../messages/SummaryStreamView.js";
 import { BG, COLORS } from "../theme/colors.js";
 import { formatStatusBarModeLabel } from "../utils/agent-mode-label.js";
 import { formatDuration } from "../utils/format.js";
@@ -172,6 +174,11 @@ const ContextBar = ({
   const lastRunDurationMs = agentTick >= 0 ? agent?.lastStreamDurationMs || 0 : 0;
   const _error = agent?.error || "";
 
+  const compactStream = useActiveCompactSummaryStream({
+    enabled: status === "compacting",
+    maxLines: 5,
+  });
+
   const inputError = useUserInput((s) => s.inputError);
   const inputFeedback = useUserInput((s) => s.inputFeedback);
   const extStatus = useExtensionUI((s) => s.statusText);
@@ -179,89 +186,94 @@ const ContextBar = ({
   const error = _error || inputError;
 
   return (
-    <Box paddingX={1} gap={2}>
-      <Box gap={2} flexShrink={0}>
-        {/* Status indicator */}
-        {status === "running" && <Spinner text="Running..." />}
-        {status === "thinking" && <Spinner text="Thinking..." />}
-        {status === "responding" && <Spinner text="Responding..." />}
-        {status === "awaiting_user" && (
-          <Text color={COLORS.primary} bold>
-            Waiting
-          </Text>
-        )}
-        {status === "compacting" && <Spinner text="Compacting..." />}
-        {status === "completed" && (
-          <Text color={COLORS.success}>
-            {`Completed${lastRunDurationMs > 0 ? ` in ${formatDuration(lastRunDurationMs)}` : ""}`}
-          </Text>
-        )}
-        {status === "aborted" && (
-          <Text color={COLORS.muted} dimColor>
-            Aborted
-          </Text>
-        )}
-        {status === "waiting" && (
-          <Text color={COLORS.warning} bold>
-            Waiting
-          </Text>
-        )}
-        {status === "idle" && (
-          <Text color={COLORS.muted} dimColor>
-            Ready
-          </Text>
-        )}
-        {status === "error" && <Text color={COLORS.danger}>{error}</Text>}
+    <Box flexDirection="column" paddingX={1} gap={0}>
+      {status === "compacting" && compactStream.status !== "missing" && compactStream.rows.length > 0 && (
+        <SummaryStreamView rows={compactStream.rows} height={5} />
+      )}
+      <Box gap={2}>
+        <Box gap={2} flexShrink={0}>
+          {/* Status indicator */}
+          {status === "running" && <Spinner text="Running..." />}
+          {status === "thinking" && <Spinner text="Thinking..." />}
+          {status === "responding" && <Spinner text="Responding..." />}
+          {status === "awaiting_user" && (
+            <Text color={COLORS.primary} bold>
+              Waiting
+            </Text>
+          )}
+          {status === "compacting" && <Spinner text="Compacting..." />}
+          {status === "completed" && (
+            <Text color={COLORS.success}>
+              {`Completed${lastRunDurationMs > 0 ? ` in ${formatDuration(lastRunDurationMs)}` : ""}`}
+            </Text>
+          )}
+          {status === "aborted" && (
+            <Text color={COLORS.muted} dimColor>
+              Aborted
+            </Text>
+          )}
+          {status === "waiting" && (
+            <Text color={COLORS.warning} bold>
+              Waiting
+            </Text>
+          )}
+          {status === "idle" && (
+            <Text color={COLORS.muted} dimColor>
+              Ready
+            </Text>
+          )}
+          {status === "error" && <Text color={COLORS.danger}>{error}</Text>}
 
-        {inputFeedback && status !== "error" && (
-          <Text
-            color={
-              inputFeedback.level === "error"
-                ? COLORS.danger
-                : inputFeedback.level === "success"
-                  ? COLORS.success
-                  : COLORS.primary
-            }
-            dimColor={inputFeedback.level === "info"}
-          >
-            {inputFeedback.message}
-          </Text>
-        )}
+          {inputFeedback && status !== "error" && (
+            <Text
+              color={
+                inputFeedback.level === "error"
+                  ? COLORS.danger
+                  : inputFeedback.level === "success"
+                    ? COLORS.success
+                    : COLORS.primary
+              }
+              dimColor={inputFeedback.level === "info"}
+            >
+              {inputFeedback.message}
+            </Text>
+          )}
 
-        {extStatus && status === "idle" && (
-          <Text color={COLORS.muted} dimColor>
-            {extStatus}
-          </Text>
-        )}
+          {extStatus && status === "idle" && (
+            <Text color={COLORS.muted} dimColor>
+              {extStatus}
+            </Text>
+          )}
 
-        {/* Contextual shortcuts */}
-        {isAgentBusy && !isPendingApproval && !showFreeformInput && !showSelectList && (
-          <Text color={COLORS.muted} dimColor>
-            {busyQueueHint(steerCount, followUpCount)}
-          </Text>
-        )}
-        {(steerCount > 0 || followUpCount > 0) && !isAgentBusy && !isPendingApproval && (
-          <Text color={COLORS.primary} dimColor>
-            Queued: {steerCount > 0 ? `${steerCount} steer` : ""}
-            {steerCount > 0 && followUpCount > 0 ? ", " : ""}
-            {followUpCount > 0 ? `${followUpCount} follow-up` : ""}
-          </Text>
-        )}
-        {isPendingApproval && !showFreeformInput && (
-          <Text color={COLORS.warning} dimColor>
-            {approvalKeysHint()}
-          </Text>
-        )}
-        {showFreeformInput && (
-          <Text color={COLORS.warning} dimColor>
-            {freeformSubmitHint()}
-          </Text>
-        )}
-        {showSelectList && (
-          <Text color={COLORS.primary} dimColor>
-            {selectListHint({ multiSelect: isMultiSelect, cursorOnFreeform })}
-          </Text>
-        )}
+          {/* Contextual shortcuts */}
+          {isAgentBusy && !isPendingApproval && !showFreeformInput && !showSelectList && (
+            <Text color={COLORS.muted} dimColor>
+              {busyQueueHint(steerCount, followUpCount)}
+            </Text>
+          )}
+          {(steerCount > 0 || followUpCount > 0) && !isAgentBusy && !isPendingApproval && (
+            <Text color={COLORS.primary} dimColor>
+              Queued: {steerCount > 0 ? `${steerCount} steer` : ""}
+              {steerCount > 0 && followUpCount > 0 ? ", " : ""}
+              {followUpCount > 0 ? `${followUpCount} follow-up` : ""}
+            </Text>
+          )}
+          {isPendingApproval && !showFreeformInput && (
+            <Text color={COLORS.warning} dimColor>
+              {approvalKeysHint()}
+            </Text>
+          )}
+          {showFreeformInput && (
+            <Text color={COLORS.warning} dimColor>
+              {freeformSubmitHint()}
+            </Text>
+          )}
+          {showSelectList && (
+            <Text color={COLORS.primary} dimColor>
+              {selectListHint({ multiSelect: isMultiSelect, cursorOnFreeform })}
+            </Text>
+          )}
+        </Box>
       </Box>
     </Box>
   );

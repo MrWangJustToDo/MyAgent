@@ -16,6 +16,7 @@
  */
 
 import { runSubagent } from "../subagent/run-subagent.js";
+import { compactSummaryStreamId } from "../summary-stream/types.js";
 
 import { buildCompactionPrompt, COMPACTION_SYSTEM_PROMPT } from "./compaction-prompt.js";
 import { formatCompactionSummaryContent } from "./compaction-summary.js";
@@ -166,6 +167,7 @@ async function summarizeConversationBatch(
   options?: SummarizeOptions
 ): Promise<string> {
   const fullPrompt = buildSummarizationUserPrompt(messages, options);
+  const compactId = compactSummaryStreamId(parentAgentId);
 
   const result = await runSubagent(
     {
@@ -179,6 +181,7 @@ async function summarizeConversationBatch(
       aggregateUsageToParent: true,
       description: "compaction",
       bridgeUI: false,
+      compactSummaryStream: { compactId },
     },
     { manager }
   );

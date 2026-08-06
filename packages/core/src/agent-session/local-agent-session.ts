@@ -215,6 +215,10 @@ class LocalAgentSessionImpl implements AgentSession {
     return readSnapshot(this.managed, this.manager);
   }
 
+  getSummaryStreamSnapshot(key: string) {
+    return this.managed.summaryStreams?.getSnapshot(key) ?? null;
+  }
+
   dispatch(command: AgentSessionCommand): Promise<AgentSessionCommandResult> {
     return dispatchCommand(this.managed, this.manager, command);
   }
@@ -297,11 +301,11 @@ class LocalAgentSessionImpl implements AgentSession {
       );
     }
 
-    if (channelAllowed("streaming", selected)) {
+    if (channelAllowed("tool", selected)) {
       unsubs.push(
         subscribeStreamingCallback(
           (chunk) => {
-            handler({ channel: "streaming", payload: { kind: "chunk", chunk }, ts: now() });
+            handler({ channel: "tool", payload: { kind: "chunk", chunk }, ts: now() });
           },
           { agentId: managed.id }
         )
@@ -309,10 +313,18 @@ class LocalAgentSessionImpl implements AgentSession {
       unsubs.push(
         subscribeStreamingClearCallback(
           (toolCallId) => {
-            handler({ channel: "streaming", payload: { kind: "clear", toolCallId }, ts: now() });
+            handler({ channel: "tool", payload: { kind: "clear", toolCallId }, ts: now() });
           },
           { agentId: managed.id }
         )
+      );
+    }
+
+    if (channelAllowed("summary", selected) && managed.summaryStreams) {
+      unsubs.push(
+        managed.summaryStreams.subscribe((payload) => {
+          handler({ channel: "summary", payload, ts: now() });
+        })
       );
     }
 

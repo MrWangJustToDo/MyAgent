@@ -125,7 +125,7 @@ Include: `agentId`, `parentId?`, `status`, `error`, `pendingApprovalCount`, `mes
 **Choice:** Every managed agent — root or subagent — is addressed as `AgentSession` with the same snapshot/command/subscribe shape.
 
 - Parent snapshot’s `subagents[]` is a **directory** (ids + status), updated via parent `lifecycle` (`subagent:*`) and/or a lightweight `subagents` refresh on those events.
-- Task panel / subagent preview opens **`sessionFor(subagentId)`** (Local: `createLocalAgentSession(child)`; HTTP: same `/api/agent/:id/*` with the child id) and subscribes to that child’s `messages` / `state` / `streaming` / `usage` as needed.
+- Task panel / subagent preview opens **`sessionFor(subagentId)`** (Local: `createLocalAgentSession(child)`; HTTP: same `/api/agent/:id/*` with the child id) and subscribes to that child’s `messages` / `state` / `tool` / `usage` as needed.
 - Subagent command surface may be a subset in practice (often read-only preview + stop); the **type** stays `AgentSession` — unsupported commands return typed errors, not a second interface.
 
 **Alternatives rejected:** subagent-only DTO stream; “detail later” nested protocol different from Session.
@@ -154,7 +154,8 @@ Unknown commands → typed error result (no throw across HTTP boundary).
 | `usage` | usage snapshot | UsageTracker Emitter `change` |
 | `todos` | todo list | TodoManager Emitter `change` |
 | `plan` | plan public state | PlanMode Emitter `change` |
-| `streaming` | chunk / clear | streaming Emitter (or registry wrap) |
+| `tool` | tool process chunk / clear | tool-output registry (`emitStreamingChunk`) |
+| `summary` | summary reset / append / end | `SummaryStreamHub` |
 | `log` (optional) | LogEntry | AgentLog Emitter `entry` |
 | `lifecycle` | filtered AgentEvent | AgentEventBus (`DEFAULT_SESSION_LIFECYCLE_EVENTS`; facts covered by dedicated channels omitted) |
 

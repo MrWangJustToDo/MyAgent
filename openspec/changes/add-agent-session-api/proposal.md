@@ -6,7 +6,7 @@ App 层仍通过 `ManagedAgent` / `AgentChatController` / `agentManager` / `Todo
 
 - **引入 `AgentSession` 统一面**：单一入口提供 `getSnapshot` / `dispatch(command)` / `subscribe(channels)`；本地实现可继续持有并调用 `ManagedAgent`，但 **app 只通过 Session API 读写**。
 - **内部先统一可订阅通知**：新增轻量 `Emitter`（或同名基类），接管 TodoManager / usage / status / queues / plan / UI messages 等「领域状态变更」的发事件与订阅；消灭「只有 todo 有 onChange、其它靠空 nudge + 读字段」的不一致。Agent 执行逻辑（run loop、tools、compaction）不改语义，只改通知出口。
-- **外层仍按 Session 频道投影**：`LocalAgentSession` 从内部 Emitter（+ 过滤后的 lifecycle bus）fan-in 到 `state` / `messages` / `queues` / `usage` / `todos` / `plan` / `streaming` / `lifecycle`；HTTP 同形。
+- **外层仍按 Session 频道投影**：`LocalAgentSession` 从内部 Emitter（+ 过滤后的 lifecycle bus）fan-in 到 `state` / `messages` / `queues` / `usage` / `todos` / `plan` / `tool` / `summary` / `lifecycle`；HTTP 同形。
 - **主 agent 与 subagent 共用同一套 Session**：每个 `ManagedAgent`（含 task subagent）对应一个 `AgentSession`；父快照只带子摘要，详情对子 id 开同一 Session。
 - **可序列化快照**：`status`、`error`、`messages`（全量）、`queues`、`usage`、`todos`、`plan`、`autoApprove`、`subagents` 摘要等；**BREAKING**（对 app）：hooks 不再以 `ManagedAgent` 为主要依赖。
 - **消息策略**：先保持 **全量 messages 快照**；留下增量/patch TODO。

@@ -5,3 +5,4 @@ export { ToolCallPartView, type ToolCallPartViewProps } from "./ToolCallPartView
 export { MessageView, type MessageViewProps } from "./MessageView.js";
 export { MessageDiffView, type MessageDiffViewProps } from "./MessageDiffView.js";
 export { StreamingOutputView, type StreamingOutputViewProps } from "./StreamingOutputView.js";
+export { SummaryStreamView, type SummaryStreamViewProps } from "./SummaryStreamView.js";

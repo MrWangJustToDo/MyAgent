@@ -15,7 +15,7 @@ The system SHALL expose a transport-agnostic `AgentSession` interface that provi
 - **THEN** `getSnapshot()` returns status idle (or equivalent), an empty or initial messages array, and serializable usage/todos/plan fields
 
 ### Requirement: Subagents use the same AgentSession contract
-A subagent `ManagedAgent` SHALL be exposed through the same `AgentSession` interface as the root agent (snapshot, dispatch, subscribe with the same channels). Parent snapshots MAY list child summaries only; detailed subagent messages, streaming, and usage MUST be obtained by opening a session for the child agent id, not via a separate subagent-only protocol.
+A subagent `ManagedAgent` SHALL be exposed through the same `AgentSession` interface as the root agent (snapshot, dispatch, subscribe with the same channels). Parent snapshots MAY list child summaries only; detailed subagent messages, tool output, summary streams, and usage MUST be obtained by opening a session for the child agent id, not via a separate subagent-only protocol.
 
 #### Scenario: Task panel opens child session
 - **WHEN** the UI needs a subagent preview for child id `S`
@@ -44,4 +44,4 @@ The LocalAgentSession implementation MAY hold a `ManagedAgent` reference interna
 
 #### Scenario: Single unsubscribe tears down fan-in
 - **WHEN** a host calls the unsubscribe function returned by `session.subscribe`
-- **THEN** state, messages, queues, usage, todos, plan, streaming, and lifecycle listeners registered by that subscribe call are all removed
+- **THEN** state, messages, queues, usage, todos, plan, tool, summary, and lifecycle listeners registered by that subscribe call are all removed

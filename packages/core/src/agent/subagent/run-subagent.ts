@@ -6,8 +6,8 @@
 import { ensureUIChannel, runAgentOnce } from "../run/run-agent-skeleton.js";
 import { extractAssistantText } from "../stream/extract-assistant-text.js";
 import { throwOnRunError } from "../stream/stream-errors.js";
-import { clearStreamingOutput } from "../tools/util/streaming-callback.js";
 import { generateId } from "../utils.js";
+import { getCurrentDate, getGitInfo } from "../turn-context/env-context.js";
 
 import { applySubagentCancelNotice, truncateSummary } from "./output.js";
 import { buildExploreSystemPrompt } from "./prompt.js";
@@ -58,6 +58,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     autoDestroy = true,
     aggregateUsageToParent = true,
     initialMessages,
+    compactSummaryStream,
   } = config;
 
   const bridgeUI = resolveSubagentBridgeUI(config);
@@ -85,7 +86,18 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     throw new Error(`Subagent not found: ${subagentId}`);
   }
 
-  const messages: ModelMessage[] = [...(initialMessages ?? []), { role: "user", content: prompt }];
+  // Build minimal turn context (date + git) for subagent's environmental awareness.
+  // Keeps subagent isolated while providing necessary time/workspace context.
+  const envContext = await buildSubagentTurnContext();
+  const tcMessages: ModelMessage[] = envContext
+    ? [{ role: "user", content: `<turn_context>\n${envContext}\n</turn_context>` }]
+    : [];
+
+  const messages: ModelMessage[] = [
+    ...tcMessages,
+    ...(initialMessages ?? []),
+    { role: "user", content: prompt },
+  ];
 
   const userUIMessage: TanStackUIMessage = {
     id: generateId("msg"),
@@ -94,12 +106,11 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     createdAt: new Date(),
   };
 
-  if (bridgeUI && parentTaskToolCallId) {
-    clearStreamingOutput(parentTaskToolCallId, { agentId: parentAgentId });
-  }
-
   // Always attach a channel (durable message SoT). bridgeUI only gates parent panel streaming.
   const channel = ensureUIChannel(subagentManaged, { initialMessages: [userUIMessage] });
+
+  const summaryHub = bridgeUI || compactSummaryStream ? parentManaged.summaryStreams : undefined;
+  const compactId = compactSummaryStream?.compactId;
 
   subagent.emitEvent("subagent:created", { subagentId }, { parentId: parentAgentId });
   subagent.emitEvent("subagent:started", { subagent_id: subagentId, description }, { parentId: parentAgentId });
@@ -120,6 +131,8 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       channel,
       parentTaskToolCallId: bridgeUI ? parentTaskToolCallId : undefined,
       streamingAgentId: bridgeUI ? parentAgentId : undefined,
+      summaryHub,
+      compactId,
       onUpdate: bridgeUI
         ? (updated) => {
             subagentManaged.emitEvent(
@@ -210,4 +223,35 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     incomplete: runStats.incomplete,
     aborted,
   };
+}
+
+/**
+ * Build minimal environment turn context for subagents.
+ *
+ * Only includes `<current_date>` and `<git_status>` — no memory, todo, plan,
+ * or extension context. This keeps subagents context-isolated while providing
+ * necessary time/workspace awareness (e.g., for `websearch` time-sensitive queries).
+ */
+async function buildSubagentTurnContext(): Promise<string | undefined> {
+  const currentDate = getCurrentDate();
+  const { branch: gitBranch, status: gitStatus } = await getGitInfo();
+
+  const parts: string[] = [];
+
+  if (currentDate) {
+    parts.push(["<current_date>", currentDate, "</current_date>"].join("\n"));
+  }
+
+  if (gitBranch || gitStatus) {
+    const gitParts: string[] = [];
+    if (gitBranch) {
+      gitParts.push(`Branch: ${gitBranch}`);
+    }
+    if (gitStatus) {
+      gitParts.push(`Status:\n${gitStatus}`);
+    }
+    parts.push(["<git_status>", ...gitParts, "</git_status>"].join("\n"));
+  }
+
+  return parts.length > 0 ? parts.join("\n\n") : undefined;
 }

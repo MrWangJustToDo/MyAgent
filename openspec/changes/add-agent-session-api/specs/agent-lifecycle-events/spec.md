@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Hosts use Agent Session for UI observation
-UI hosts (including `@my-agent/app`) SHALL use AgentSession subscription channels for status, messages, usage, todos, plan, queues, and streaming updates. There is no host-facing `ManagedAgent.observe()` facade; domain Emitters and AgentEventBus remain package-internal (plus curated advanced bus access where documented).
+UI hosts (including `@my-agent/app`) SHALL use AgentSession subscription channels for status, messages, usage, todos, plan, queues, tool process output, and summary streams. There is no host-facing `ManagedAgent.observe()` facade; domain Emitters and AgentEventBus remain package-internal (plus curated advanced bus access where documented).
 
 #### Scenario: Standard chat UI uses session subscribe
 - **WHEN** the app chat shell initializes observation after AgentSession migration

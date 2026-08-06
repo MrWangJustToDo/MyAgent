@@ -35,6 +35,7 @@ export const SelectList = () => {
     const isCursor = index === selectedIndex;
     const isChecked = selectedSet.includes(index);
     const cursor = isCursor ? ">" : " ";
+    const color = isCursor ? COLORS.primary : COLORS.muted;
 
     // For the free-form row, show the staged draft text instead of the placeholder
     // label once the user has typed something.
@@ -48,12 +49,22 @@ export const SelectList = () => {
       prefix = " ";
     }
 
+    // Cursor/prefix stay in a fixed column; label wraps in its own box so
+    // continuation lines hang under the label (not under `>`).
     return (
-      <Text color={isCursor ? COLORS.primary : COLORS.muted} bold={isCursor}>
-        {cursor}
-        {prefix}
-        {label}
-      </Text>
+      <Box flexDirection="row" width="100%">
+        <Box flexShrink={0}>
+          <Text color={color} bold={isCursor}>
+            {cursor}
+            {prefix}
+          </Text>
+        </Box>
+        <Box flexGrow={1} flexShrink={1}>
+          <Text color={color} bold={isCursor} wrap="wrap">
+            {label}
+          </Text>
+        </Box>
+      </Box>
     );
   };
 

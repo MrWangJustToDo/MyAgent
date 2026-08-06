@@ -65,10 +65,10 @@ The system SHALL support CLI local mode via `localConnect` (`ConnectConnectionAd
 
 ### Requirement: Task tool summary streaming
 
-The system SHALL stream subagent final summary text to the parent task tool's streaming output when summary text exceeds the configured threshold.
+The system SHALL stream subagent final summary text via `SummaryStreamHub` on the session `summary` channel (key `task:${parentTaskToolCallId}`) after `begin_summary`, not via `run_command` stdout / `emitStreamingChunk`.
 
 #### Scenario: Summary streams to task tool line
 
-- **WHEN** a subagent produces summary text during `consumeRun`
-- **THEN** incremental summary text is emitted to the parent task tool's stdout stream
-- **AND** only the final summary step text is used (not intermediate narration)
+- **WHEN** a subagent produces summary text during `consumeRun` after `begin_summary`
+- **THEN** incremental summary text is appended on the parent agent's summary stream for that task tool call id
+- **AND** only the final summary step text is returned to the parent as the task `summary` (not intermediate narration)

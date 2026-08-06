@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Fine-grained session channels
-AgentSession subscription SHALL support distinct channels at least for: `state`, `messages`, `queues`, `usage`, `todos`, `plan`, `streaming`, `lifecycle`, and optional `log`. A subscriber MUST be able to opt into a subset of channels so unrelated UI surfaces do not re-render on every event. When the channel filter is omitted, the default set MUST NOT include `log` unless the host explicitly lists it.
+AgentSession subscription SHALL support distinct channels at least for: `state`, `messages`, `queues`, `usage`, `todos`, `plan`, `tool`, `summary`, `lifecycle`, and optional `log`. A subscriber MUST be able to opt into a subset of channels so unrelated UI surfaces do not re-render on every event. When the channel filter is omitted, the default set MUST NOT include `log` unless the host explicitly lists it.
 
 #### Scenario: Default subscribe excludes log
 - **WHEN** a host calls `subscribe(handler)` with no channel filter

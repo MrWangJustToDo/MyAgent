@@ -11,3 +11,6 @@ export {
   findLatestTurnContextHash,
   insertTurnContextUIMessage,
 } from "./turn-context-message.js";
+
+export { getCurrentDate, getGitInfo } from "./env-context.js";
+export type { GitInfo } from "./env-context.js";

@@ -12,8 +12,12 @@ import {
 } from "../dist/dev.mjs";
 
 assert.ok(AGENT_SESSION_CHANNELS.includes("state"));
+assert.ok(AGENT_SESSION_CHANNELS.includes("tool"));
+assert.ok(AGENT_SESSION_CHANNELS.includes("summary"));
 assert.ok(AGENT_SESSION_CHANNELS.includes("log"));
 assert.ok(DEFAULT_AGENT_SESSION_CHANNELS.includes("lifecycle"));
+assert.ok(DEFAULT_AGENT_SESSION_CHANNELS.includes("tool"));
+assert.ok(DEFAULT_AGENT_SESSION_CHANNELS.includes("summary"));
 assert.ok(!DEFAULT_AGENT_SESSION_CHANNELS.includes("log"), "log must be opt-in");
 
 const commands = [

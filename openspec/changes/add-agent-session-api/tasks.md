@@ -20,7 +20,7 @@
 - [x] 3.1 Implement `createLocalAgentSession(managed, manager?)` wrapping any ManagedAgent (root or subagent) + chat controller when present
 - [x] 3.2 Implement `getSnapshot()` reading status/messages/queues/usage/todos/plan/auto/`subagents` summary (+ `parentId` when set)
 - [x] 3.3 Implement `dispatch()` for send/steer/followUp/stop/approvals/toolResult/clientToolWaiting/compact/clear/rename/plan.*/auto.set/session.resume; on subagent sessions allow stop/read-related commands and return typed unsupported for the rest
-- [x] 3.4 Implement `subscribe()` mapping domain Emitter events → channels (`state`/`messages`/`queues`/`usage`/`todos`/`plan`/`streaming`/`log`) and bus → `lifecycle`; omit `log` from default “all” unless explicitly requested
+- [x] 3.4 Implement `subscribe()` mapping domain Emitter events → channels (`state`/`messages`/`queues`/`usage`/`todos`/`plan`/`tool`/`summary`/`log`) and bus → `lifecycle`; omit `log` from default “all” unless explicitly requested
 - [x] 3.5 Define default lifecycle filter (dedupe vs dedicated channels); document authoritative channel per concern
 - [x] 3.6 Add helper to resolve/open a child session by subagent id (same Local factory); parent lifecycle/`subagents` summary stays on parent session
 - [x] 3.7 Add `validate:local-agent-session` covering snapshot, dispatch stop/send smoke, subscribe unsubscribe, and subagent session reuse (same interface / child snapshot)

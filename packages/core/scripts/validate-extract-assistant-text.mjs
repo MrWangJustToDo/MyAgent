@@ -80,6 +80,18 @@ const shortFinal = [
 ];
 assert.equal(getSummaryStreamText(shortFinal, unlocked), null);
 
+// Trailing newlines must not shrink stream text (trim would drop them and flicker UI).
+{
+  const base = "A".repeat(80);
+  const withNl = base + "\n";
+  const withMore = withNl + "next line";
+  assert.equal(getSummaryStreamText([{ type: "text", content: base }], unlocked), base);
+  assert.equal(getSummaryStreamText([{ type: "text", content: withNl }], unlocked), withNl);
+  assert.equal(getSummaryStreamText([{ type: "text", content: withMore }], unlocked), withMore);
+  assert.ok(withNl.length > base.length);
+  assert.ok(withMore.length > withNl.length);
+}
+
 const reasoningThenSummary = [
   {
     id: "assistant-2",

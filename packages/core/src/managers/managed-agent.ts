@@ -12,6 +12,7 @@ import {
   type SessionSaveReason,
   type SessionSyncTracker,
 } from "../agent/session/session-sync-tracker.js";
+import { SummaryStreamHub } from "../agent/summary-stream/summary-stream-hub.js";
 import { defineServerTool } from "../agent/tools/tanstack/define-tool.js";
 import {
   buildTurnContextPayload,
@@ -20,8 +21,8 @@ import {
   hashTurnContextPayload,
   insertTurnContextUIMessage,
 } from "../agent/turn-context/turn-context-message.js";
+import { getCurrentDate, getGitInfo } from "../agent/turn-context/env-context.js";
 import { generateId } from "../agent/utils.js";
-import { getEnv } from "../env.js";
 import { Emitter } from "../utils/emitter.js";
 
 import { AgentChatController } from "./agent-chat-controller.js";
@@ -143,21 +144,33 @@ export type AgentUIChannelRef = Pick<
  * hold only their own state; they never reference each other.
  */
 export class ManagedAgent {
+  // ============================================================================
+  // Identity
+  // ============================================================================
+
   readonly id: string;
   name: string;
   readonly config: ManagedAgentConfig;
+  private agentConfig: AgentConfig;
+
+  // ============================================================================
+  // L1 state + local emitter
+  // ============================================================================
 
   /** Lifecycle — hosts read via getter; mutate through {@link setStatus}. */
   private _status: AgentStatus = "idle";
   error = "";
   /** Tools awaiting user approval in the current run (set by approval middleware). */
   pendingApprovalCount = 0;
-
   private readonly stateEvents = new Emitter<{
     change: AgentL1State;
     /** Fired when {@link setUIChannel} attaches/clears the UI channel. */
     ui: AgentUIChannel | undefined;
   }>();
+
+  // ============================================================================
+  // Composed services / controllers
+  // ============================================================================
 
   /** Composed services — each owns only its domain state */
   readonly usage: UsageTracker;
@@ -165,55 +178,82 @@ export class ManagedAgent {
   readonly session: SessionService;
   readonly run: RunCoordinator;
   readonly statusController: AgentStatusController;
-
-  private _runBaselineCount = 0;
-  tools: ToolsRecord;
-  log: AgentLog;
-  todoManager: TodoManager | null;
   /** Plan mode (read-only planning → execute). Root agents only; subagents leave phase off. */
   readonly planMode: PlanModeController;
-
   /** Auto / YOLO mode — skip all tool approvals. Cleared on reset / `/clear`. */
   readonly autoApprove: AutoApproveController;
 
-  /** Package-internal TanStack runner wiring — not part of the host-facing surface. */
-  private runner?: AgentRunner;
-  private runnerConfigKey?: string;
-  private textAdapter?: TextAdapterConfig;
-  private _ui?: AgentUIChannel;
-  chatController?: AgentChatController;
+  // ============================================================================
+  // Tools / registries / extensions
+  // ============================================================================
+
+  tools: ToolsRecord;
+  private managedToolsProvider?: () => ToolsRecord;
+  log: AgentLog;
+  todoManager: TodoManager | null;
+  mcpManager: McpManager | null = null;
+  skillRegister: SkillRegistry | null = null;
+  extensionRunner: ExtensionRunner | null = null;
+  extensionLoader: ExtensionLoader | null = null;
+  /** Extension slash commands registered via {@link ExtensionContext.registerCommand}. */
+  private extensionCommands = new Map<string, ExtensionCommand>();
+
+  // ============================================================================
+  // Agent tree + timestamps
+  // ============================================================================
+
   parentId?: string;
   parentTaskId?: string;
   childIds: string[];
   createdAt: number;
   updatedAt: number;
 
+  // ============================================================================
+  // Run / UI / model wiring
+  // ============================================================================
+
+  /** Package-internal TanStack runner wiring — not part of the host-facing surface. */
+  private runner?: AgentRunner;
+  private runnerConfigKey?: string;
+  private textAdapter?: TextAdapterConfig;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
+  private _ui?: AgentUIChannel;
+  /** Task / compact summary streams for the session `summary` channel. */
+  readonly summaryStreams = new SummaryStreamHub();
+  chatController?: AgentChatController;
   /** Set by AgentManager to route events to listeners. */
   dispatchEvent?: (event: AgentEvent) => void;
   /** Owning manager — set when registered via {@link AgentManager.createManagedAgent}. */
   manager?: AgentManager;
+  modelInfo: ModelInfo | null = null;
 
-  private managedToolsProvider?: () => ToolsRecord;
-  private agentConfig: AgentConfig;
-  streamStartedAt = 0;
-  lastStreamDurationMs = 0;
+  // ============================================================================
+  // Compaction / session sync
+  // ============================================================================
+
+  compactionConfig: CompactionConfig | null = null;
+  readonly toolCompactCache = new ToolCompactCache();
+  readonly sessionSyncTracker: SessionSyncTracker = createSessionSyncTracker();
+  private _runBaselineCount = 0;
+
+  // ============================================================================
+  // Run lifecycle flags + timing
+  // ============================================================================
+
   /** When true, next {@link prepareForRun} skips memory prefetch / prompt:submit (steer / tool continue). */
   private prepareAsContinuation = false;
   /** Guards turn-level finalizeRun so stop() + pump outcome do not double-fire. */
   private turnLifecycleFinalized = false;
+  streamStartedAt = 0;
+  lastStreamDurationMs = 0;
+
+  // ============================================================================
+  // Prompt / turn context
+  // ============================================================================
+
   systemPrompt = "";
-  mcpManager: McpManager | null = null;
-  skillRegister: SkillRegistry | null = null;
-  compactionConfig: CompactionConfig | null = null;
-  readonly toolCompactCache = new ToolCompactCache();
-  readonly sessionSyncTracker: SessionSyncTracker = createSessionSyncTracker();
-  extensionRunner: ExtensionRunner | null = null;
-  extensionLoader: ExtensionLoader | null = null;
-  modelInfo: ModelInfo | null = null;
   agentDocContent = "";
   agentDocSource = "";
-
   private frozenSystemPrompt: string | undefined;
   private systemPromptFrozen = false;
   /** Stable dynamic turn context for the current user turn (payload snapshot). */
@@ -602,9 +642,6 @@ export class ManagedAgent {
     this.setRunnerConfigKey(undefined);
   }
 
-  /** Extension slash commands registered via {@link ExtensionContext.registerCommand}. */
-  private extensionCommands = new Map<string, ExtensionCommand>();
-
   registerCommand(cmd: ExtensionCommand): void {
     if (this.extensionCommands.has(cmd.name)) {
       this.log?.warn("system", `Command "/${cmd.name}" already registered, overwriting`);
@@ -748,39 +785,8 @@ export class ManagedAgent {
       });
     }
 
-    const env = getEnv();
-    // Day granularity keeps `<current_date>` stable within a session day (prefix-cache friendly).
-    const currentDate = new Date().toLocaleDateString("en-US", {
-      timeZoneName: "short",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-
-    let gitBranch: string | undefined;
-    let gitStatus: string | undefined;
-    try {
-      const branchResult = await env.runCommand("git branch --show-current", {
-        cwd: env.rootPath,
-        timeout: 2000,
-      });
-      if (branchResult.exitCode === 0) {
-        gitBranch = branchResult.stdout.trim();
-      }
-    } catch {
-      // Git not available or not a git repo — skip
-    }
-    try {
-      const statusResult = await env.runCommand("git status --short", {
-        cwd: env.rootPath,
-        timeout: 2000,
-      });
-      if (statusResult.exitCode === 0 && statusResult.stdout.trim()) {
-        gitStatus = statusResult.stdout.trim();
-      }
-    } catch {
-      // Git not available — skip
-    }
+    const currentDate = getCurrentDate();
+    const { branch: gitBranch, status: gitStatus } = await getGitInfo();
 
     const planState = this.planMode.getState();
     const planModeContent = buildPlanModePrompt(planState.phase, planState.planMarkdown, planState.planFilePath);

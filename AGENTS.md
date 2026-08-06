@@ -150,7 +150,7 @@ ConnectionGuard(/health) → createRemoteCoreEnv(url) → registerCoreEnv → in
 | UI / state | `AgentUIChannel`, `AgentLog`, `TodoManager`, `SessionStore` |
 | Compaction | `applyCompactionResult`, `autoCompact`, `estimateTokens` |
 | Bootstrap | `buildDefaultSystemPrompt`, `parseModelInfoFromEnv`, `resolveModelConfig` |
-| UI helpers | `previewEdit`, AgentSession `streaming` channel, tool output types |
+| UI helpers | `previewEdit`, AgentSession `tool` channel (run_command stdout/stderr), tool output types |
 | Adapters | `FileError`, `ExecutionError`, `generateId` |
 
 Internal modules (tools, middleware, subagent runner, hook registry, session-sync / tool-phase helpers, etc.) stay package-private. Core validation scripts import from `dist/dev.mjs` (`src/dev.ts`), which is not part of the published package export map. See `openspec/changes/harden-core-organization/API-REMOVALS.md` for the latest public-entry removals.
@@ -528,7 +528,9 @@ Task spawn ids are always auto-generated via `generateId("subagent", { exists })
 does not supply an `id` input.
 The default task tool row shows the current subagent exploration tool during analysis.
 After the subagent calls `begin_summary`, the UI switches to summary phase and streams final text
-via `emitStreamingChunk` into `StreamingOutputView` (current-turn parts only, like Vercel AI SDK).
+via `SummaryStreamHub` (`reset` / `append` / `end` on key `task:${toolCallId}`) into `useSummaryStream` /
+`SummaryStreamView` — not UIMessage diffs or `emitStreamingChunk` (those remain for `run_command`).
+Compact summarization uses the same hub with stable key `compact:${parentAgentId}` (one in-flight compact per agent).
 Only the last text-only step is returned to the parent as the task `summary`; `toModelOutput` also includes completion status (`reachedLimit` / `incomplete` / `aborted` / `truncated`) so the parent can judge whether findings are trustworthy to extend.
 
 
@@ -695,11 +697,15 @@ createNodeEnv({ rootPath: "/path", mode: "native" });   // No sandbox
 - Max 50KB for stdout and stderr each
 - Keeps the **end** of output (most relevant for errors)
 
-### Streaming UI throttle (`@my-agent/app`)
-- Core emits every chunk immediately via `emitStreamingChunk`; throttling is applied in the app layer.
-- `useStreamingOutput(toolCallId, { throttleMs })` and `StreamingOutputView` accept `throttleMs` (default `0` = every chunk).
-- `ToolCallPartView` defaults `run_command` streaming to 100ms; pass `streamingThrottleMs` to override.
-- Multiple subscribers for the same `toolCallId` use the minimum `throttleMs` among active consumers.
+### Streaming UI (`@my-agent/app`)
+- **`run_command`:** Core emits every chunk via `emitStreamingChunk` onto the session `tool` channel
+  (`chunk` / `clear` by `toolCallId`); throttling is applied in the app layer.
+  `useStreamingOutput(toolCallId, { throttleMs })` / `StreamingOutputView` (default `0` = every chunk).
+  `ToolCallPartView` defaults `run_command` to 100ms; pass `streamingThrottleMs` to override.
+- **Task / compact summary:** Core `SummaryStreamHub` multicasts `reset` / `append` / `end` on the session
+  `summary` channel. Task keys are `task:${toolCallId}`; compact keys are stable `compact:${agentId}`
+  (single-flight per agent). App `useSummaryStream` / `useActiveCompactSummaryStream` keep a fixed line window
+  (`pendingLine` + overflow indicator). Do not route summary text through `StreamingOutputView`.
 
 ## CLI Keyboard Shortcuts
 

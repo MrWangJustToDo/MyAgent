@@ -7,14 +7,13 @@ import { StreamProcessor } from "@tanstack/ai";
 import { Emitter } from "../utils/emitter.js";
 
 import {
-  getSummaryStreamText,
   resolveTaskRunPhase,
   type TaskRunPhase,
   type TaskSummaryStreamState,
 } from "./stream/extract-assistant-text.js";
 import { throwOnRunError } from "./stream/stream-errors.js";
 import { BEGIN_SUMMARY_TOOL_NAME } from "./subagent/begin-summary-tool.js";
-import { clearStreamingOutput, emitStreamingChunk } from "./tools/util/streaming-callback.js";
+import { summaryStreamKey, type SummaryStreamHub } from "./summary-stream";
 import { applyToolDenialReason } from "./utils/apply-tool-denial-reason.js";
 import { stripEmptyAssistantShells } from "./utils/empty-assistant-shell.js";
 import { shouldSuppressReplayedToolChunk } from "./utils/suppress-replayed-tool-chunks.js";
@@ -42,13 +41,20 @@ export interface AgentUIChannelOptions {
 
 export interface ConsumeRunOptions {
   stream: AsyncIterable<StreamChunk>;
-  /** Parent task tool call ID — summary text streams here like run_command stdout. */
+  /** Parent task tool call ID — summary text streams via {@link summaryHub}. */
   parentTaskToolCallId?: string;
   /**
    * Agent id that owns the parent task tool UI (usually the parent agent).
-   * Used to scope streaming emits for task summary.
+   * Kept for callers / events; summary emits go through {@link summaryHub}.
    */
   streamingAgentId?: string;
+  /**
+   * Parent agent's summary stream hub. When set with task or compact ids,
+   * TEXT deltas are appended after the stream is unlocked (begin_summary or compact).
+   */
+  summaryHub?: SummaryStreamHub;
+  /** Compact stream id when this run produces a compact summary. */
+  compactId?: string;
   onUpdate?: (messages: TanStackUIMessage[]) => void;
 }
 
@@ -67,6 +73,12 @@ function readTextMessageId(chunk: StreamChunk): string | undefined {
   return typeof record.messageId === "string" && record.messageId.length > 0 ? record.messageId : undefined;
 }
 
+function readTextDelta(chunk: StreamChunk): string | undefined {
+  if (chunk.type !== "TEXT_MESSAGE_CONTENT") return undefined;
+  const record = chunk as { delta?: unknown };
+  return typeof record.delta === "string" ? record.delta : undefined;
+}
+
 // ============================================================================
 // AgentUIChannel
 // ============================================================================
@@ -82,8 +94,10 @@ export class AgentUIChannel {
   private readonly customEventListeners = new Set<UICustomEventListener>();
   private parentTaskToolCallId?: string;
   private streamingAgentId?: string;
+  private summaryHub?: SummaryStreamHub;
+  private compactId?: string;
+  private activeSummaryKey?: string;
   private onUpdate?: (messages: TanStackUIMessage[]) => void;
-  private streamedSummaryLength = 0;
   private summaryStreamState: TaskSummaryStreamState = { summaryPhaseUnlocked: false };
   /** Active agent-loop turn assistant message (per-turn streaming scope). */
   private currentTurnMessageId?: string;
@@ -174,14 +188,11 @@ export class AgentUIChannel {
 
   /** Process a single stream chunk (for incremental bridge during `runAgent`). */
   processChunk(chunk: StreamChunk): void {
-    // TanStack approval continuation re-emits TOOL_CALL_START/ARGS with argsMap.
-    // StreamProcessor only dedupes within the active message, so a new chat() run
-    // would clone the same toolCallId onto a second assistant. Drop those replays;
-    // END/RESULT still update the existing part (and early-tool-result already may have).
     if (shouldSuppressReplayedToolChunk(this.getMessages(), chunk)) {
       return;
     }
     this.trackSummaryStreamPhase(chunk);
+    this.appendSummaryDelta(chunk);
     this.processor.processChunk(chunk);
   }
 
@@ -198,7 +209,7 @@ export class AgentUIChannel {
    * Consume a TanStack {@link StreamChunk} stream and return final messages.
    */
   async consumeRun(options: ConsumeRunOptions): Promise<TanStackUIMessage[]> {
-    this.beginSummaryStream(options.parentTaskToolCallId, options.onUpdate, options.streamingAgentId);
+    this.beginSummaryStream(options);
 
     try {
       for await (const chunk of throwOnRunError(options.stream)) {
@@ -211,87 +222,66 @@ export class AgentUIChannel {
     }
   }
 
-  private beginSummaryStream(
-    parentTaskToolCallId: string | undefined,
-    onUpdate: ConsumeRunOptions["onUpdate"],
-    streamingAgentId?: string
-  ): void {
-    this.parentTaskToolCallId = parentTaskToolCallId;
-    this.streamingAgentId = streamingAgentId;
-    this.onUpdate = onUpdate;
-    this.streamedSummaryLength = 0;
+  private beginSummaryStream(options: ConsumeRunOptions): void {
+    this.parentTaskToolCallId = options.parentTaskToolCallId;
+    this.streamingAgentId = options.streamingAgentId;
+    this.summaryHub = options.summaryHub;
+    this.compactId = options.compactId;
+    this.onUpdate = options.onUpdate;
     this.summaryStreamState = { summaryPhaseUnlocked: false };
     this.currentTurnMessageId = undefined;
+    this.activeSummaryKey = undefined;
 
-    if (parentTaskToolCallId && streamingAgentId) {
-      clearStreamingOutput(parentTaskToolCallId, { agentId: streamingAgentId });
+    // Compact summarizer: unlock immediately and reset the compact stream.
+    if (this.summaryHub && this.compactId) {
+      this.summaryStreamState = { summaryPhaseUnlocked: true };
+      this.summaryHub.reset({ source: "compact", compactId: this.compactId });
+      this.activeSummaryKey = summaryStreamKey("compact", this.compactId);
     }
   }
 
   private endSummaryStream(): void {
+    if (this.summaryHub && this.activeSummaryKey) {
+      this.summaryHub.end(this.activeSummaryKey);
+    }
     this.parentTaskToolCallId = undefined;
     this.streamingAgentId = undefined;
+    this.summaryHub = undefined;
+    this.compactId = undefined;
+    this.activeSummaryKey = undefined;
     this.onUpdate = undefined;
-    this.streamedSummaryLength = 0;
     this.summaryStreamState = { summaryPhaseUnlocked: false };
     this.currentTurnMessageId = undefined;
   }
 
-  private emitScopedChunk(toolCallId: string, type: "stdout" | "stderr", chunk: string): void {
-    if (!this.streamingAgentId) return;
-    emitStreamingChunk(toolCallId, type, chunk, { agentId: this.streamingAgentId });
-  }
-
-  private clearScopedOutput(toolCallId: string): void {
-    if (!this.streamingAgentId) return;
-    clearStreamingOutput(toolCallId, { agentId: this.streamingAgentId });
-  }
-
   private trackSummaryStreamPhase(chunk: StreamChunk): void {
-    if (!this.parentTaskToolCallId) return;
-
     const messageId = readTextMessageId(chunk);
     if (messageId) {
       this.currentTurnMessageId = messageId;
     }
 
+    if (!this.summaryHub || !this.parentTaskToolCallId || this.compactId) return;
+
     const toolName = readToolCallName(chunk);
-    if (toolName === BEGIN_SUMMARY_TOOL_NAME) {
-      this.summaryStreamState = { summaryPhaseUnlocked: true };
-      this.clearScopedOutput(this.parentTaskToolCallId);
-      this.streamedSummaryLength = 0;
-    }
+    if (toolName !== BEGIN_SUMMARY_TOOL_NAME) return;
+
+    this.summaryStreamState = { summaryPhaseUnlocked: true };
+    this.summaryHub.reset({ source: "task", toolCallId: this.parentTaskToolCallId });
+    this.activeSummaryKey = summaryStreamKey("task", this.parentTaskToolCallId);
   }
 
-  private getCurrentTurnParts(messages: TanStackUIMessage[]) {
-    if (this.currentTurnMessageId) {
-      const current = messages.find((message) => message.id === this.currentTurnMessageId);
-      if (current?.role === "assistant") return current.parts;
-    }
-
-    const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant");
-    return lastAssistant?.parts ?? [];
+  private appendSummaryDelta(chunk: StreamChunk): void {
+    if (!this.summaryHub || !this.activeSummaryKey) return;
+    if (!this.summaryStreamState.summaryPhaseUnlocked) return;
+    const delta = readTextDelta(chunk);
+    if (!delta) return;
+    this.summaryHub.append(this.activeSummaryKey, delta);
   }
 
   private handleMessagesChange(messages: TanStackUIMessage[]): void {
     this.onUpdate?.(messages);
     this.messageEvents.emit("messages", messages);
-
-    if (!this.parentTaskToolCallId) return;
-
-    const summaryText = getSummaryStreamText(this.getCurrentTurnParts(messages), this.summaryStreamState);
-    if (summaryText) {
-      if (summaryText.length < this.streamedSummaryLength) {
-        this.streamedSummaryLength = 0;
-      }
-      const delta = summaryText.slice(this.streamedSummaryLength);
-      if (delta) {
-        this.emitScopedChunk(this.parentTaskToolCallId, "stdout", delta);
-        this.streamedSummaryLength = summaryText.length;
-      }
-    } else if (this.streamedSummaryLength > 0) {
-      this.streamedSummaryLength = 0;
-      this.clearScopedOutput(this.parentTaskToolCallId);
-    }
+    // Summary streaming is driven by TEXT_MESSAGE_CONTENT chunks in processChunk —
+    // do not diff UIMessage snapshots (that caused mid-stream flicker).
   }
 }

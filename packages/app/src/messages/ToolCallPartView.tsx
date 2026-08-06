@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 
 import { useTranscriptDisplayMode } from "../context/transcript-display-context.js";
+import { useSummaryStream } from "../hooks/use-summary-stream.js";
 import { useTask } from "../hooks/use-task.js";
 import { useToolElapsed } from "../hooks/use-tool-elapsed.js";
 import { COLORS } from "../theme/colors.js";
@@ -19,6 +20,7 @@ import {
 import { getUiToolState, isToolExecuting, parseToolInput } from "../utils/tool-part.js";
 
 import { StreamingOutputView } from "./StreamingOutputView.js";
+import { SummaryStreamView } from "./SummaryStreamView.js";
 import { ToolInputView } from "./ToolInputView.js";
 import { ToolOutputView } from "./ToolOutputView.js";
 import { ToolStatusIcon } from "./ToolStatusIcon.js";
@@ -76,6 +78,12 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
     taskId: isTask ? part.id : "",
   });
   const showTaskSummaryStream = isTask && isExecuting && taskPhase === "summary";
+  const taskSummary = useSummaryStream({
+    source: "task",
+    toolCallId: isTask ? toolCallId : undefined,
+    enabled: showTaskSummaryStream,
+    maxLines: 5,
+  });
 
   const displayInput =
     toolInput === undefined || toolInput === null
@@ -139,13 +147,7 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
           throttleMs={streamingThrottleMs ?? RUN_COMMAND_STREAM_THROTTLE_MS}
         />
       )}
-      {showTaskSummaryStream && (
-        <StreamingOutputView
-          toolCallId={toolCallId}
-          enabled={showTaskSummaryStream}
-          throttleMs={streamingThrottleMs ?? 0}
-        />
-      )}
+      {showTaskSummaryStream && taskSummary.rows.length > 0 && <SummaryStreamView rows={taskSummary.rows} height={5} />}
 
       {needsApproval && (
         <Box paddingLeft={2}>

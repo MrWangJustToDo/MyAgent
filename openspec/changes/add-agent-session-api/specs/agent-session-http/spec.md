@@ -8,7 +8,7 @@ The HTTP agent plane SHALL expose snapshot, command, and event-stream endpoints 
 - **THEN** the server maps the command to the in-process session stop behavior and the client receives a structured command result
 
 ### Requirement: SSE delivers channel-tagged events
-The events endpoint SHALL stream session events as channel-tagged frames (SSE or equivalent) so that subscribers can demux `state`, `messages`, `queues`, `usage`, `todos`, `plan`, `streaming`, and `lifecycle` the same way as Local subscribe.
+The events endpoint SHALL stream session events as channel-tagged frames (SSE or equivalent) so that subscribers can demux `state`, `messages`, `queues`, `usage`, `todos`, `plan`, `tool`, `summary`, and `lifecycle` the same way as Local subscribe.
 
 #### Scenario: Messages frame on SSE
 - **WHEN** the remote agent UI messages change

@@ -8,6 +8,7 @@
 
 import type { LogEntry } from "../agent/agent-log/types.js";
 import type { PlanModeState } from "../agent/plan/plan-mode-controller.js";
+import type { SummaryStreamEvent, SummaryStreamSnapshot } from "../agent/summary-stream/types.js";
 import type { TodoItem } from "../agent/todo-manager/types.js";
 import type { StreamingChunk } from "../agent/tools/util/streaming-callback.js";
 import type { QueuedMessagesSnapshot } from "../managers/agent-chat-controller.js";
@@ -28,7 +29,8 @@ export const AGENT_SESSION_CHANNELS = [
   "usage",
   "todos",
   "plan",
-  "streaming",
+  "tool",
+  "summary",
   "lifecycle",
   "log",
 ] as const;
@@ -43,7 +45,8 @@ export const DEFAULT_AGENT_SESSION_CHANNELS: readonly AgentSessionChannel[] = [
   "usage",
   "todos",
   "plan",
-  "streaming",
+  "tool",
+  "summary",
   "lifecycle",
 ];
 
@@ -116,10 +119,11 @@ export type AgentSessionEvent =
   | { channel: "todos"; payload: { items: TodoItem[]; title: string | null }; ts: number }
   | { channel: "plan"; payload: PlanModeState; ts: number }
   | {
-      channel: "streaming";
+      channel: "tool";
       payload: { kind: "chunk"; chunk: StreamingChunk } | { kind: "clear"; toolCallId: string };
       ts: number;
     }
+  | { channel: "summary"; payload: SummaryStreamEvent; ts: number }
   | { channel: "lifecycle"; payload: AgentEvent; ts: number }
   | { channel: "log"; payload: LogEntry; ts: number };
 
@@ -136,6 +140,8 @@ export interface AgentSessionSubscribeOptions {
 export interface AgentSession {
   readonly id: string;
   getSnapshot(): AgentSessionSnapshot;
+  /** Authoritative summary-stream state for remount (subscribe first, then call). */
+  getSummaryStreamSnapshot(key: string): SummaryStreamSnapshot | null;
   dispatch(command: AgentSessionCommand): Promise<AgentSessionCommandResult>;
   subscribe(handler: AgentSessionSubscriber, options?: AgentSessionSubscribeOptions): () => void;
   close?(): Promise<void>;

@@ -8,7 +8,8 @@
  * - usage → `usage`
  * - todos → `todos`
  * - plan public state → `plan`
- * - tool streaming → `streaming`
+ * - tool process output (run_command stdout/stderr) → `tool`
+ * - task/compact summary streams → `summary`
  * - structured log lines → `log` (opt-in)
  *
  * Lifecycle keeps typed telemetry: stop/abort/errors, approvals, subagent directory,
