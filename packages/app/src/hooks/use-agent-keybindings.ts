@@ -177,12 +177,13 @@ export function useAgentKeybindings({
       if (Date.now() - panel.lastClosedAt < SUBAGENT_CLOSE_DEBOUNCE_MS) {
         return;
       }
+      if (isAutocompleteVisible) {
+        autocompleteActions.dismiss();
+        return;
+      }
       if (isLoading) {
         stop();
         return;
-      }
-      if (isAutocompleteVisible) {
-        autocompleteActions.dismiss();
       }
       commandOutputActions.dismiss();
     }

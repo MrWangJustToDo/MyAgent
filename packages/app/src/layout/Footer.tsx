@@ -16,9 +16,7 @@ import { useConfig } from "../hooks/use-config.js";
 import { useExtensionUI } from "../hooks/use-extension-ui.js";
 import { useInputMode } from "../hooks/use-input-mode.js";
 import { useSelect } from "../hooks/use-select.js";
-import { useActiveCompactSummaryStream } from "../hooks/use-summary-stream.js";
 import { useUserInput } from "../hooks/use-user-input.js";
-import { SummaryStreamView } from "../messages/SummaryStreamView.js";
 import { BG, COLORS } from "../theme/colors.js";
 import { formatStatusBarModeLabel } from "../utils/agent-mode-label.js";
 import { formatDuration } from "../utils/format.js";
@@ -174,11 +172,6 @@ const ContextBar = ({
   const lastRunDurationMs = agentTick >= 0 ? agent?.lastStreamDurationMs || 0 : 0;
   const _error = agent?.error || "";
 
-  const compactStream = useActiveCompactSummaryStream({
-    enabled: status === "compacting",
-    maxLines: 5,
-  });
-
   const inputError = useUserInput((s) => s.inputError);
   const inputFeedback = useUserInput((s) => s.inputFeedback);
   const extStatus = useExtensionUI((s) => s.statusText);
@@ -187,9 +180,6 @@ const ContextBar = ({
 
   return (
     <Box flexDirection="column" paddingX={1} gap={0}>
-      {status === "compacting" && compactStream.status !== "missing" && compactStream.rows.length > 0 && (
-        <SummaryStreamView rows={compactStream.rows} height={5} />
-      )}
       <Box gap={2}>
         <Box gap={2} flexShrink={0}>
           {/* Status indicator */}

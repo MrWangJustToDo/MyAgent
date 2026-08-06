@@ -7,6 +7,7 @@ import { useAdapter } from "../context/adapter-context.js";
 import { clearFlatMessageCache } from "../utils/message-flat-cache.js";
 import { isToolCallPart, isPendingToolApproval, parseToolInput } from "../utils/tool-part.js";
 
+import { useAgentStatus } from "./use-agent-status.js";
 import { useAgent } from "./use-agent.js";
 import { useCallbackRef } from "./use-callback-ref.js";
 import { useForceUpdate } from "./use-force-update.js";
@@ -152,6 +153,8 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   useEffect(() => {
     const currentInitId = ++initIdRef.current;
 
+    const setAgentStatus = useAgentStatus.getActions().setStatus;
+
     const init = async () => {
       setInitLoading(true);
       setInitError(null);
@@ -176,6 +179,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         setMessages(initial);
         setStatus(managed.status);
         setAgentError(managed.error);
+        setAgentStatus(managed.status);
         setQueuedMessages(controller.getQueuedMessages());
         managed.resetSessionSyncTracker(initial);
         managed.syncInteractionStateFromUIMessages(initial);
@@ -214,6 +218,8 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   useEffect(() => {
     if (!session || !agent) return;
 
+    const setAgentStatus = useAgentStatus.getActions().setStatus;
+
     // UI only — session disk writes are owned by core (user-message / pump-complete / force).
     const updateUi = throttle((next: UIMessage[]) => {
       setMessages(next);
@@ -232,6 +238,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         if (event.channel === "state") {
           setStatus(event.payload.status);
           setAgentError(event.payload.error);
+          setAgentStatus(event.payload.status);
           forceUpdate();
           return;
         }

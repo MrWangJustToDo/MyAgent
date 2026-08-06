@@ -125,26 +125,3 @@ export function useSummaryStream(options: UseSummaryStreamOptions): UseSummarySt
   }, [windowState, maxLines, status]);
 }
 
-/**
- * Track the compact summary stream for the root agent (live /compact UI).
- * Compact keys are stable: `compact:${agentId}` (one in-flight compact per agent).
- */
-export function useActiveCompactSummaryStream(options?: {
-  enabled?: boolean;
-  maxLines?: number;
-}): UseSummaryStreamResult & { compactId?: string } {
-  const enabled = options?.enabled ?? true;
-  const maxLines = options?.maxLines ?? 5;
-  const rootAgentId = useAgent((s) => s.agent?.id);
-  const compactId = rootAgentId;
-
-  const result = useSummaryStream({
-    source: "compact",
-    compactId,
-    enabled: enabled && Boolean(compactId),
-    maxLines,
-    agentId: rootAgentId,
-  });
-
-  return { ...result, compactId };
-}

@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 import { ExtensionConfirm } from "../components/ExtensionConfirm.js";
 import { ExtensionWidget } from "../components/ExtensionWidget.js";
 import { FullBox } from "../components/FullBox.js";
-import { MessageList } from "../components/MessageList.js";
+import { MessageViewWithCompact } from "../components/MessageListWithCompact.js";
 import { PlanReadyBanner } from "../components/PlanReadyBanner.js";
 import { Spinner } from "../components/Spinner.js";
 import { SubagentPanel } from "../components/SubagentPanel.js";
@@ -128,7 +128,7 @@ export const Agent = () => {
         <SubagentPanel />
       ) : (
         <>
-          <MessageList messages={messages} />
+          <MessageViewWithCompact messages={messages} />
           <Content />
           {confirm && <ExtensionConfirm confirm={confirm} />}
           {widgets.length > 0 && <ExtensionWidget widgets={widgets} />}

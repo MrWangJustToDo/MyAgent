@@ -122,6 +122,7 @@ export {
   estimateTokens,
   extractCompactionSummaryBody,
   extractTextFromContent,
+  formatCompactionSummaryContent,
   getModelVisibleMessages,
   isCompactionSummaryUIMessage,
   isCompactionSummaryText,

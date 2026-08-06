@@ -1,3 +1,4 @@
+import { extractCompactionSummaryBody } from "@my-agent/core";
 import { Box, Text } from "ink";
 import { StreamMarkdown } from "ink-stream-markdown";
 import { memo } from "react";
@@ -13,6 +14,10 @@ export const CompactionSummaryView = memo(function CompactionSummaryView({ messa
   const contentWidth = screenWidth - 2;
 
   const part = message.parts[0] as TextPart;
+  // Strip the outer [CONVERSATION SUMMARY] / [END SUMMARY] markers and
+  // "Continue if you have next steps..." instruction — we already have our
+  // own visual header (── compact checkpoint ──).
+  const displayContent = extractCompactionSummaryBody(part.content) ?? part.content;
 
   return (
     <Box
@@ -27,7 +32,7 @@ export const CompactionSummaryView = memo(function CompactionSummaryView({ messa
       <Box justifyContent="center" width={"100%"}>
         <Text>── compact checkpoint ──</Text>
       </Box>
-      <StreamMarkdown theme={{ ...markdownTheme, width: contentWidth - 2 }}>{part.content.trimEnd()}</StreamMarkdown>
+      <StreamMarkdown theme={{ ...markdownTheme, width: contentWidth - 2 }}>{displayContent.trimEnd()}</StreamMarkdown>
     </Box>
   );
 });

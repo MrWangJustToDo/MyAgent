@@ -29,7 +29,7 @@ export function isCompactionSummaryUIMessage(message: UIMessage): boolean {
 /**
  * Extract the summary body between markers.
  * - Wrapped text → body between {@link CONVERSATION_SUMMARY_START}/{@link CONVERSATION_SUMMARY_END}
- * - Incomplete markers → undefined
+ * - Streaming (no end marker) → text after start marker to end of string
  * - Unwrapped plain text → trimmed passthrough (e.g. reactive before re-wrap)
  */
 export function extractCompactionSummaryBody(text: string): string | undefined {
@@ -40,10 +40,12 @@ export function extractCompactionSummaryBody(text: string): string | undefined {
   }
 
   const endIndex = trimmed.indexOf(CONVERSATION_SUMMARY_END);
-  if (endIndex === -1) return undefined;
-
-  const summary = trimmed.slice(CONVERSATION_SUMMARY_START.length, endIndex).trim();
-  return summary || undefined;
+  const body =
+    endIndex === -1
+      ? trimmed.slice(CONVERSATION_SUMMARY_START.length)
+      : trimmed.slice(CONVERSATION_SUMMARY_START.length, endIndex);
+  const result = body.trim();
+  return result || undefined;
 }
 
 export function formatCompactionSummaryContent(summary: string): string {
