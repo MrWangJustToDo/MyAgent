@@ -14,6 +14,7 @@ import {
 } from "../agent/session/session-sync-tracker.js";
 import { SummaryStreamHub } from "../agent/summary-stream/summary-stream-hub.js";
 import { defineServerTool } from "../agent/tools/tanstack/define-tool.js";
+import { getCurrentDate, getGitInfo } from "../agent/turn-context/env-context.js";
 import {
   buildTurnContextPayload,
   findLatestTurnContextHash,
@@ -21,7 +22,6 @@ import {
   hashTurnContextPayload,
   insertTurnContextUIMessage,
 } from "../agent/turn-context/turn-context-message.js";
-import { getCurrentDate, getGitInfo } from "../agent/turn-context/env-context.js";
 import { generateId } from "../agent/utils.js";
 import { Emitter } from "../utils/emitter.js";
 
@@ -988,8 +988,8 @@ export class ManagedAgent {
     this.usage.reset();
     this.todoManager?.reset();
     this.turnLifecycleFinalized = false;
-    this.chatController = undefined;
-    this._ui = undefined;
+    // Keep chatController + _ui alive — /clear calls clearMessages() separately.
+    // Resetting these would break subsequent sendMessage() calls.
     this.lastAdmittedTurnContextHash = undefined;
     this.systemPromptFrozen = false;
     this.frozenSystemPrompt = undefined;

@@ -12,7 +12,7 @@ import {
   type TranscriptDisplayMode,
 } from "./project-transcript.js";
 
-import type { TextPart, UIMessage } from "@tanstack/ai";
+import type { ImagePart, TextPart, UIMessage } from "@tanstack/ai";
 
 export type GetMessagesOptions = {
   mode?: TranscriptDisplayMode;
@@ -126,3 +126,13 @@ export const getMessages = (messages: UIMessage[], options: GetMessagesOptions =
     toolCallsSignature: computeStaticRenderSignature(displayMessages, { mode }),
   };
 };
+
+export function getTextContent(part: TextPart): string {
+  return part.content?.trim() ?? "";
+}
+
+export function getImageUrl(part: ImagePart): string {
+  if (part.source.type === "url") return part.source.value;
+  if (part.source.type === "data") return part.source.value;
+  return "";
+}

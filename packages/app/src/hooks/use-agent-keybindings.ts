@@ -196,6 +196,7 @@ export function useAgentKeybindings({
 
       if (inputKey.tab && inputKey.shift) {
         // Shift+Tab toggles plan mode (Cursor-style). Do not treat as autocomplete accept.
+        // Still block during loading — toggling plan mode mid-run is not useful.
         if (isLoading) return;
         togglePlanModeWithFeedback(getAgent(), (message, level) => {
           inputActions.setInputFeedback(message, level);
@@ -217,9 +218,10 @@ export function useAgentKeybindings({
         }
       }
       if (inputKey.tab) {
+        // Accept autocomplete even during loading (session append/followUp is available).
+        if (acceptAutocomplete(true)) return;
         if (isLoading) return;
-        acceptAutocomplete(true);
-        return;
+        return; // prevent Tab from falling through to character input
       }
       if (inputKey.return || (inputKey.ctrl && inputChar === "\n")) {
         // While running: Enter = follow-up; Option/Ctrl+Enter = force-submit.
@@ -230,6 +232,8 @@ export function useAgentKeybindings({
         // Shift+Enter sends the same \r as plain Enter and cannot be
         // distinguished, so it will submit rather than insert a newline.
         if (isLoading) {
+          // When loading, accept autocomplete first if visible.
+          if (acceptAutocomplete(true)) return;
           if (isModifiedEnter(inputChar, inputKey)) {
             // Option+Enter: force-submit — abort current run, inject message, start new pump.
             handleNormalSubmit("forceSubmit");
@@ -249,9 +253,8 @@ export function useAgentKeybindings({
         handleNormalSubmit("send");
         return;
       }
-      if (isLoading && (inputKey.upArrow || inputKey.downArrow) && isAutocompleteVisible) {
-        return;
-      }
+      // Allow autocomplete navigation during loading — session append (followUp)
+      // queues the message for after the current turn, so full input is available.
       if (inputKey.backspace) {
         inputActions.backspace();
         autocompleteActions.update(useUserInput.getReadonlyState().value);
@@ -271,17 +274,15 @@ export function useAgentKeybindings({
         return;
       }
       if (inputKey.upArrow) {
-        if (isLoading) return;
         if (isAutocompleteVisible) autocompleteActions.selectPrev();
         else if (commandOutputActions.hasScroll()) commandOutputActions.scrollPrev();
-        else inputActions.historyPrev();
+        else if (!isLoading) inputActions.historyPrev();
         return;
       }
       if (inputKey.downArrow) {
-        if (isLoading) return;
         if (isAutocompleteVisible) autocompleteActions.selectNext();
         else if (commandOutputActions.hasScroll()) commandOutputActions.scrollNext();
-        else inputActions.historyNext();
+        else if (!isLoading) inputActions.historyNext();
         return;
       }
       if (inputChar && !inputKey.ctrl && !inputKey.meta) {
@@ -422,6 +423,9 @@ export function useAgentKeybindings({
         return;
       }
       if (inputKey.escape) {
+        // Don't close the ask_user select list — the agent is waiting for an answer.
+        // Closing it would leave the agent stuck with no way to respond.
+        if (pendingAskUser) return;
         selectActions.close();
       }
     },

@@ -35,6 +35,10 @@ registerCommand({
     usage.reset();
     bumpAgentUsage();
 
+    // Clear the chat controller's messages and queues (still alive after reset).
+    const chatController = agent.getChatController();
+    chatController?.clearMessages();
+
     const newSession = store.create({
       modelStyle: currentSession?.modelStyle ?? "openai",
       model: currentSession?.model ?? "unknown",
