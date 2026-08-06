@@ -6,8 +6,8 @@
 import { ensureUIChannel, runAgentOnce } from "../run/run-agent-skeleton.js";
 import { extractAssistantText } from "../stream/extract-assistant-text.js";
 import { throwOnRunError } from "../stream/stream-errors.js";
-import { generateId } from "../utils.js";
 import { getCurrentDate, getGitInfo } from "../turn-context/env-context.js";
+import { generateId } from "../utils.js";
 
 import { applySubagentCancelNotice, truncateSummary } from "./output.js";
 import { buildExploreSystemPrompt } from "./prompt.js";
@@ -93,11 +93,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     ? [{ role: "user", content: `<turn_context>\n${envContext}\n</turn_context>` }]
     : [];
 
-  const messages: ModelMessage[] = [
-    ...tcMessages,
-    ...(initialMessages ?? []),
-    { role: "user", content: prompt },
-  ];
+  const messages: ModelMessage[] = [...tcMessages, ...(initialMessages ?? []), { role: "user", content: prompt }];
 
   const userUIMessage: TanStackUIMessage = {
     id: generateId("msg"),
