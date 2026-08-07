@@ -106,7 +106,9 @@ function applyOptionsToState(
   const normalized = normalizeOptions(command, options);
   const filtered = filterOptions(normalized, optionPrefix);
   state.suggestions = filtered.map((o) => optionToSuggestion(o, command));
-  state.selectedIndex = Math.min(state.selectedIndex, Math.max(0, filtered.length - 1));
+  // Auto-select default — prefer option with defaultSelected, then first non-freeform
+  const defaultIndex = filtered.findIndex((o) => o.defaultSelected && !o.freeform);
+  state.selectedIndex = defaultIndex >= 0 ? defaultIndex : Math.min(0, filtered.length - 1);
   state.visible = filtered.length > 0;
 }
 

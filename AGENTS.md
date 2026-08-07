@@ -490,9 +490,9 @@ Cursor-like lifecycle: explore → review → Build → forced retro → complet
 
 **Core:** `ManagedAgent.planMode` (`PlanModeController`), tool filter in `run-agent`, `createPlanModeMiddleware`, prompts via turn context, `plan-verification` parse/gate helpers. See `packages/core/src/agent/plan/`. Validate: `pnpm --filter @my-agent/core run validate:plan-verification`.
 
-**Auto mode:** `/auto` (or `/auto on|off|status`) skips all tool approvals. Footer shows `auto` (can combine with plan: `auto · building 2/5`). Cleared on `/clear` / reset; persisted as `SessionData.autoApprove`.
+**Auto mode:** `/auto` (or `/auto on|off|status`) skips all tool approvals. Footer shows `Auto`. Mutually exclusive with plan mode (entering one clears the other). Cleared on `/clear` / reset; persisted as `SessionData.autoMode` (legacy sessions may still have `autoApprove`). While auto is on, turn context includes an `<auto_mode>` block.
 
-**Session / safety:** `/clear` and `ManagedAgent.reset()` always `planMode.disable()` and turn off auto mode. Resume restores `planMode` + `autoApprove`. Plan building auto-approve still requires `executing` **and** `todosSeeded` (separate from `/auto`).
+**Session / safety:** `/clear` and `ManagedAgent.reset()` always `planMode.disable()` and turn off auto mode. Resume restores `planMode` + `autoMode` with plan winning if both were somehow set. Plan building auto-approve still requires `executing` **and** `todosSeeded` (separate from `/auto`).
 
 ## Subagent System
 

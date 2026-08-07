@@ -1,7 +1,8 @@
 /* eslint-disable max-lines */
 import { type ModelMessage, type UIMessage as TanStackUIMessage, convertMessagesToModelMessages } from "@tanstack/ai";
 
-import { AutoApproveController } from "../agent/approval/auto-approve-controller.js";
+import { AutoModeController } from "../agent/approval/auto-mode-controller.js";
+import { buildAutoModePrompt } from "../agent/approval/auto-mode-prompt.js";
 import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
 import { getModelVisibleMessages } from "../agent/compaction/message-chain-projection.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
@@ -89,6 +90,9 @@ import type { ModelInfo } from "../models/types.js";
 // ============================================================================
 
 export type { RunFinalizeReason } from "./agent-types.js";
+
+/** Active agent mode — mutually exclusive modes for the agent. */
+export type AgentMode = "normal" | "auto" | "plan";
 
 /** L1 runtime status surface projected to AgentSession `state` channel. */
 export interface AgentL1State {
@@ -181,7 +185,7 @@ export class ManagedAgent {
   /** Plan mode (read-only planning → execute). Root agents only; subagents leave phase off. */
   readonly planMode: PlanModeController;
   /** Auto / YOLO mode — skip all tool approvals. Cleared on reset / `/clear`. */
-  readonly autoApprove: AutoApproveController;
+  readonly autoMode: AutoModeController;
 
   // ============================================================================
   // Tools / registries / extensions
@@ -318,7 +322,7 @@ export class ManagedAgent {
         }
       },
     });
-    this.autoApprove = new AutoApproveController(() => this.emitStateChange());
+    this.autoMode = new AutoModeController(() => this.emitStateChange());
 
     // ============================================================================
     // L1 state + local emitter (inline inits)
@@ -852,6 +856,8 @@ export class ManagedAgent {
 
     const planState = this.planMode.getState();
     const planModeContent = buildPlanModePrompt(planState.phase, planState.planMarkdown, planState.planFilePath);
+    // Plan turn-context wins when plan is active; auto prompt only in pure auto mode.
+    const autoModeContent = planState.phase === "off" && this.autoMode.isEnabled() ? buildAutoModePrompt() : undefined;
 
     return buildDynamicTurnContext({
       relevantMemoryContent: this.memory.getRelevantContent(),
@@ -860,6 +866,7 @@ export class ManagedAgent {
       gitBranch,
       gitStatus,
       planModeContent,
+      autoModeContent,
       extensionTurnContext: this.pendingExtensionTurnContext,
     });
   }
@@ -868,17 +875,26 @@ export class ManagedAgent {
   // Auto-approve mode (skip all tool approvals)
   // ============================================================================
 
-  isAutoApproveEnabled(): boolean {
-    return this.autoApprove.isEnabled();
+  isAutoModeEnabled(): boolean {
+    return this.autoMode.isEnabled();
   }
 
-  setAutoApproveEnabled(enabled: boolean): void {
-    this.autoApprove.setEnabled(enabled);
+  setAutoModeEnabled(enabled: boolean): void {
+    this.autoMode.setEnabled(enabled);
+    // Auto mode and plan mode are mutually exclusive — enabling auto disables plan
+    if (enabled && this.planMode.getPhase() !== "off") {
+      this.planMode.disable();
+    }
   }
 
   /** @returns new enabled state */
-  toggleAutoApprove(): boolean {
-    return this.autoApprove.toggle();
+  toggleAutoMode(): boolean {
+    const enabled = this.autoMode.toggle();
+    // Auto mode and plan mode are mutually exclusive — enabling auto disables plan
+    if (enabled && this.planMode.getPhase() !== "off") {
+      this.planMode.disable();
+    }
+    return enabled;
   }
 
   /**
@@ -886,7 +902,17 @@ export class ManagedAgent {
    * True when auto mode is on, or plan mode is building a seeded plan.
    */
   shouldAutoApprovePendingTools(): boolean {
-    return this.autoApprove.isEnabled() || this.planMode.shouldAutoApproveTools();
+    return this.autoMode.isEnabled() || this.planMode.shouldAutoApproveTools();
+  }
+
+  /**
+   * Return the current agent mode.
+   * Plan mode takes priority over auto mode; normal is the fallback.
+   */
+  getAgentMode(): AgentMode {
+    if (this.planMode.getPhase() !== "off") return "plan";
+    if (this.autoMode.isEnabled()) return "auto";
+    return "normal";
   }
 
   // ============================================================================
@@ -895,6 +921,10 @@ export class ManagedAgent {
 
   enablePlanMode(): void {
     enablePlanModeHelper(this);
+    // Plan mode and auto mode are mutually exclusive — enabling plan disables auto
+    if (this.autoMode.isEnabled()) {
+      this.autoMode.setEnabled(false);
+    }
   }
 
   disablePlanMode(): void {
@@ -902,7 +932,12 @@ export class ManagedAgent {
   }
 
   togglePlanMode(): PlanModePhase {
-    return togglePlanModeHelper(this);
+    const phase = togglePlanModeHelper(this);
+    // Plan mode and auto mode are mutually exclusive — entering plan disables auto
+    if (phase !== "off" && this.autoMode.isEnabled()) {
+      this.autoMode.setEnabled(false);
+    }
+    return phase;
   }
 
   getPlanModeState(): PlanModeState {
@@ -1036,7 +1071,7 @@ export class ManagedAgent {
     });
     // Exit plan / auto-approve first so approval bypass cannot stick across sessions.
     this.planMode.disable();
-    this.setAutoApproveEnabled(false);
+    this.setAutoModeEnabled(false);
     this.run.resetRunState();
     this.statusController.resetToIdle();
     this.setError("");

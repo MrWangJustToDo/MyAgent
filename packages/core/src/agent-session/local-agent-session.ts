@@ -73,7 +73,7 @@ function readSnapshot(managed: ManagedAgent, manager: AgentManager | null | unde
     todos: todos?.getItems() ?? [],
     todosTitle: todos?.getTitle() ?? null,
     plan: managed.getPlanModeState(),
-    autoApprove: managed.isAutoApproveEnabled(),
+    autoMode: managed.isAutoModeEnabled(),
     subagents: buildSubagentSummaries(managed, manager),
   };
 }
@@ -155,7 +155,7 @@ async function dispatchCommand(
         return { ok: true };
       }
       case "auto.set": {
-        managed.setAutoApproveEnabled(command.enabled);
+        managed.setAutoModeEnabled(command.enabled);
         return { ok: true };
       }
       case "plan.enable": {

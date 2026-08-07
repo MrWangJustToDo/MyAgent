@@ -45,6 +45,11 @@ export interface CommandOption {
    * after `/{command}` (custom input), not {@link value}.
    */
   freeform?: boolean;
+  /**
+   * When true, this option is pre-selected when the autocomplete options list opens.
+   * At most one option should have this set.
+   */
+  defaultSelected?: boolean;
 }
 
 /**

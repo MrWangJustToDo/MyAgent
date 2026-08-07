@@ -41,7 +41,7 @@ function createFake(id, parentId) {
         planFilePath: null,
       }),
     },
-    autoApproveEnabled: false,
+    autoModeEnabled: false,
     manager: null,
     ui: undefined,
     chatController: {
@@ -68,6 +68,12 @@ function createFake(id, parentId) {
         pendingApprovalCount: managed.pendingApprovalCount,
       };
     },
+    getError() {
+      return managed.error;
+    },
+    getPendingApprovalCount() {
+      return managed.pendingApprovalCount;
+    },
     on(type, listener) {
       if (type === "change") {
         listener(managed.getL1State());
@@ -80,11 +86,11 @@ function createFake(id, parentId) {
     getPlanModeState() {
       return managed.planMode.getState();
     },
-    isAutoApproveEnabled() {
-      return managed.autoApproveEnabled;
+    isAutoModeEnabled() {
+      return managed.autoModeEnabled;
     },
-    setAutoApproveEnabled(enabled) {
-      managed.autoApproveEnabled = enabled;
+    setAutoModeEnabled(enabled) {
+      managed.autoModeEnabled = enabled;
     },
     setClientToolWaiting() {},
     enablePlanMode() {},

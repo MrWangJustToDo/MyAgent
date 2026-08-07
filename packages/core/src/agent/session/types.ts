@@ -69,6 +69,11 @@ export interface SessionData {
    */
   planMode?: PlanModeState | null;
   /** When true, skip all tool approvals (auto / YOLO mode). Older sessions omit this. */
+  autoMode?: boolean;
+  /**
+   * @deprecated Legacy field renamed to `autoMode`. Kept for backward compatibility
+   * with sessions persisted before the rename. New sessions use `autoMode`.
+   */
   autoApprove?: boolean;
   /** Timestamp when session was created */
   createdAt: number;

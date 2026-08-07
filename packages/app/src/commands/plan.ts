@@ -1,6 +1,7 @@
 import { registerCommand } from "./utils/registry.js";
 
 import type { CommandOption } from "./utils/types.js";
+import type { AgentMode } from "@my-agent/core";
 
 registerCommand({
   name: "plan",
@@ -9,15 +10,34 @@ registerCommand({
   immediate: false,
   allowCustomInput: true,
   getOptions: async (): Promise<CommandOption[]> => {
-    const base: CommandOption[] = [
-      { label: "toggle", value: "", description: "Enter or leave plan mode" },
+    const base: CommandOption[] = [];
+
+    let mode: AgentMode = "normal";
+    try {
+      const { useAgent } = await import("../hooks/use-agent.js");
+      const agent = useAgent.getReadonlyState().agent;
+      if (agent) {
+        mode = agent.getAgentMode();
+      }
+    } catch {
+      // ignore
+    }
+
+    const isPlanMode = mode === "plan";
+    base.push({
+      label: "toggle",
+      value: "",
+      description: isPlanMode ? "Exit plan mode" : "Enter plan mode",
+      defaultSelected: true,
+    });
+    base.push(
       { label: "execute", value: "execute", description: "Build approved plan (from review)" },
       { label: "done", value: "done", description: "Finish retro and exit plan mode" },
       { label: "cancel", value: "cancel", description: "Pause building → review" },
       { label: "status", value: "status", description: "Show phase and progress" },
       { label: "list", value: "list", description: "List saved plans" },
-      { label: "save", value: "save", description: "Save/rename current plan (optional name)" },
-    ];
+      { label: "save", value: "save", description: "Save/rename current plan (optional name)" }
+    );
 
     try {
       const { useAgent } = await import("../hooks/use-agent.js");

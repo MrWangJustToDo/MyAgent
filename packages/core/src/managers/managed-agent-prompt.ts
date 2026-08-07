@@ -72,6 +72,8 @@ export interface DynamicTurnContextInput {
   gitStatus?: string;
   /** Plan-mode instructions (planning / ready / executing). */
   planModeContent?: string;
+  /** Auto / YOLO mode instructions (only when plan is off). */
+  autoModeContent?: string;
   /** Extension-contributed situational context (nested under `<extension_context>`). */
   extensionTurnContext?: string;
 }
@@ -97,6 +99,7 @@ export function buildDynamicTurnContext(input: DynamicTurnContextInput): string 
   if (input.relevantMemoryContent) parts.push(input.relevantMemoryContent);
   if (input.todoNagReminder) parts.push(input.todoNagReminder);
   if (input.planModeContent) parts.push(input.planModeContent);
+  else if (input.autoModeContent) parts.push(input.autoModeContent);
 
   if (input.extensionTurnContext?.trim()) {
     parts.push(["<extension_context>", input.extensionTurnContext.trim(), "</extension_context>"].join("\n"));

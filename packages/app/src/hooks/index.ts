@@ -30,11 +30,7 @@ export { useSubagentMessages } from "./use-subagent-messages.js";
 export { useSubagentPanel, type SubagentPanelView } from "./use-subagent-panel.js";
 export { useTerminalSize } from "./use-terminal-size.js";
 export { useStreamingOutput, type UseStreamingOutputOptions } from "./use-streaming-output.js";
-export {
-  useSummaryStream,
-  type UseSummaryStreamOptions,
-  type UseSummaryStreamResult,
-} from "./use-summary-stream.js";
+export { useSummaryStream, type UseSummaryStreamOptions, type UseSummaryStreamResult } from "./use-summary-stream.js";
 export { useCompactSummaryText } from "./use-compact-summary-text.js";
 export { useToolElapsed } from "./use-tool-elapsed.js";
 export { useTranscriptDisplay, type TranscriptDisplayMode } from "./use-transcript-display.js";

@@ -155,6 +155,7 @@ export {
   buildDynamicTurnContext,
   buildFrozenSystemPrompt,
 } from "./managers/managed-agent-prompt.js";
+export { buildAutoModePrompt } from "./agent/approval/auto-mode-prompt.js";
 export {
   TURN_CONTEXT_OPEN,
   TURN_CONTEXT_CLOSE,

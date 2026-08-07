@@ -21,8 +21,8 @@ export interface SessionHost {
   usage: UsageTracker;
   todoManager: TodoManager | null;
   planMode: PlanModeController;
-  isAutoApproveEnabled: () => boolean;
-  setAutoApproveEnabled: (enabled: boolean) => void;
+  isAutoModeEnabled: () => boolean;
+  setAutoModeEnabled: (enabled: boolean) => void;
   session: SessionService;
   sessionSyncTracker: SessionSyncTracker;
   toolCompactCache: ToolCompactCache;
@@ -32,11 +32,13 @@ export interface SessionHost {
 }
 
 export function getSessionPersistInput(host: SessionHost, uiMessages?: TanStackUIMessage[]): SessionPersistInput {
+  const planOn = host.planMode.getPhase() !== "off";
   return {
     usage: host.usage,
     todoManager: host.todoManager,
     planMode: host.planMode.getState(),
-    autoApprove: host.isAutoApproveEnabled(),
+    // Mutual exclusivity: never persist auto while plan is active.
+    autoMode: planOn ? false : host.isAutoModeEnabled(),
     resolveTextAdapter: host.resolveTextAdapter,
     emitEvent: (type, data) => host.emitEvent(type, data),
     uiMessages,
@@ -68,7 +70,10 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
     }
   }
   host.planMode.restoreState(planSnapshot);
-  host.setAutoApproveEnabled(Boolean(session.autoApprove));
+  // Mutual exclusivity: plan phase wins over auto on restore.
+  const planOn = host.planMode.getPhase() !== "off";
+  const wantAuto = Boolean(session.autoMode ?? session.autoApprove);
+  host.setAutoModeEnabled(planOn ? false : wantAuto);
 
   // Hydrate UI channel when present; hosts also apply uiMessages via resume APIs.
   if (host.ui) {
@@ -81,7 +86,7 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
     messageCount: session.uiMessages.length,
     tokenEstimate: session.contextTokens ?? host.usage.getWindowUsage().inputTokens ?? 0,
     planPhase: host.planMode.getPhase(),
-    autoApprove: host.isAutoApproveEnabled(),
+    autoMode: host.isAutoModeEnabled(),
   });
   return session;
 }

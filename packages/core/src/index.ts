@@ -28,7 +28,7 @@ export {
 
 export { agentManager, AgentManager } from "./managers/agent-manager.js";
 export type { AgentEvent, AgentEventListener, AgentEventType, RunAgentStreamInput } from "./managers/agent-manager.js";
-export { ManagedAgent, type ManagedAgentConfig } from "./managers/managed-agent.js";
+export { ManagedAgent, type ManagedAgentConfig, type AgentMode } from "./managers/managed-agent.js";
 export { isActiveStatus } from "./managers/agent-status.js";
 export type { AgentStatus } from "./runtime-types/agent-status.js";
 export { localConnect, createLocalConnect, type LocalConnectManager } from "./connect";

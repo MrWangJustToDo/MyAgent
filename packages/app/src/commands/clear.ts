@@ -29,7 +29,7 @@ registerCommand({
     // Drop plan lifecycle + auto mode before wiping the transcript so approval
     // bypass / read-only restrictions cannot carry into the new session.
     agent.planMode.disable();
-    agent.setAutoApproveEnabled(false);
+    agent.setAutoModeEnabled(false);
 
     agent.reset();
     usage.reset();

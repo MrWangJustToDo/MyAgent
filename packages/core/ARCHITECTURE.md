@@ -123,7 +123,7 @@ hosts / app  →  managers (orchestration)  →  agent/* (domain)  →  models /
 | Field / API | Host access |
 |-------------|-------------|
 | `status`, `context`, `ui` | Read-only getters |
-| `usage`, `planMode`, `autoApprove` | `readonly` service refs (mutate via methods) |
+| `usage`, `planMode`, `autoMode` | `readonly` service refs (mutate via methods); auto and plan are mutually exclusive |
 | `runner`, `textAdapter`, `runnerConfigKey` | **Private** — package-internal accessors only |
 | `setStatus` / `setContext` / `setUIChannel` | Mutation entry points (`setUIChannel` package-internal) |
 | `statusController.applyRunOutcome(...)` | Unified run finalization (chat + detached/subagent) |

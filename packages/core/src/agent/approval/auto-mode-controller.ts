@@ -2,7 +2,7 @@
  * Session-scoped switch to skip all `needsApproval` tool prompts (auto / YOLO mode).
  */
 
-export class AutoApproveController {
+export class AutoModeController {
   private enabled = false;
 
   constructor(private readonly onChange?: () => void) {}

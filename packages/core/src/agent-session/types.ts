@@ -73,7 +73,7 @@ export interface AgentSessionSnapshot {
   todos: TodoItem[];
   todosTitle: string | null;
   plan: PlanModeState;
-  autoApprove: boolean;
+  autoMode: boolean;
   subagents: AgentSessionSubagentSummary[];
 }
 

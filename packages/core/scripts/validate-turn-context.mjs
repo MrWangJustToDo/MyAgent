@@ -8,6 +8,8 @@ import assert from "node:assert/strict";
 
 import {
   SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
+  buildAutoModePrompt,
+  buildDynamicTurnContext,
   buildFrozenSystemPrompt,
   buildSystemPromptWithTurnContext,
   buildTurnContextPayload,
@@ -75,5 +77,19 @@ const modelMessages = [
 assert.ok(isTurnContextModelMessage(modelMessages[2]));
 assert.equal(findCutPoint(modelMessages, 2), 3, "skip turn_context; cut on Second");
 assert.equal(SYSTEM_PROMPT_DYNAMIC_BOUNDARY.includes("DYNAMIC"), true);
+
+const autoPrompt = buildAutoModePrompt();
+assert.match(autoPrompt, /<auto_mode>/);
+assert.match(autoPrompt, /\/plan/);
+
+const withAutoOnly = buildDynamicTurnContext({ autoModeContent: autoPrompt, currentDate: "2026-08-07" });
+assert.ok(withAutoOnly?.includes("<auto_mode>"));
+
+const planWins = buildDynamicTurnContext({
+  planModeContent: "<plan_mode>planning</plan_mode>",
+  autoModeContent: autoPrompt,
+});
+assert.ok(planWins?.includes("<plan_mode>"));
+assert.ok(!planWins?.includes("<auto_mode>"), "plan turn-context must win over auto");
 
 console.log("turn-context validation passed");

@@ -24,7 +24,7 @@ export interface SessionPersistInput {
   /** Current plan-mode snapshot; null/undefined when off. */
   planMode?: PlanModeState | null;
   /** Auto-approve (skip all tool approvals) flag. */
-  autoApprove?: boolean;
+  autoMode?: boolean;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   emitEvent?: EmitAgentEventFn;
   uiMessages?: UIMessage[];
@@ -96,7 +96,7 @@ export class SessionService {
    * before writing. The original uiMessages array is never mutated.
    */
   async persistSession(input: SessionPersistInput): Promise<void> {
-    const { usage, todoManager, planMode, autoApprove, resolveTextAdapter, emitEvent, uiMessages } = input;
+    const { usage, todoManager, planMode, autoMode, resolveTextAdapter, emitEvent, uiMessages } = input;
     if (!this.store) return;
     if (!this.data) {
       this.ensureSession();
@@ -118,8 +118,8 @@ export class SessionService {
       this.data.planMode = !planMode || planMode.phase === "off" ? null : { ...planMode, steps: [...planMode.steps] };
     }
 
-    if (autoApprove !== undefined) {
-      this.data.autoApprove = autoApprove;
+    if (autoMode !== undefined) {
+      this.data.autoMode = autoMode;
     }
 
     if (uiMessages !== undefined) {
