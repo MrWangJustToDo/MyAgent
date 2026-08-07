@@ -1,4 +1,5 @@
 import type { AgentAdapter, CommandResult } from "../../adapter/types.js";
+import type { UseAgentChatReturn } from "../../hooks/use-agent-chat.js";
 import type { useUserInput } from "../../hooks/use-user-input.js";
 import type { ManagedAgent } from "@my-agent/core";
 import type { UIMessage } from "@tanstack/ai";
@@ -23,6 +24,8 @@ export interface CommandContext {
   exit?: () => void;
   /** Agent adapter for platform-specific operations */
   adapter?: AgentAdapter;
+  /** Approve or deny a pending tool approval */
+  addToolApprovalResponse?: UseAgentChatReturn["addToolApprovalResponse"];
 }
 
 export type { CommandResult };

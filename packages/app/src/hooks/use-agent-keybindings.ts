@@ -8,6 +8,7 @@ import { isModifiedEnter } from "../utils/keyboard-labels.js";
 import { togglePlanModeWithFeedback } from "../utils/plan-mode-toggle.js";
 
 import { useAgent } from "./use-agent.js";
+import { useAutocomplete } from "./use-autocomplete.js";
 import { usePlanPreview } from "./use-plan-preview.js";
 import { useSelect } from "./use-select.js";
 import { useSubagentPanel, CLOSE_DEBOUNCE_MS as SUBAGENT_CLOSE_DEBOUNCE_MS } from "./use-subagent-panel.js";
@@ -17,7 +18,6 @@ import { CLOSE_DEBOUNCE_MS as WORKSPACE_CLOSE_DEBOUNCE_MS, useWorkspaceView } fr
 import type { AgentAdapter } from "../adapter/types.js";
 import type { CommandContext } from "../commands";
 import type { UseAgentChatReturn } from "./use-agent-chat.js";
-import type { useAutocomplete } from "./use-autocomplete.js";
 import type { useCommandOutput } from "./use-command-output.js";
 import type { InputMode, useInputMode } from "./use-input-mode.js";
 import type { AgentLog, ManagedAgent } from "@my-agent/core";
@@ -177,7 +177,7 @@ export function useAgentKeybindings({
       if (Date.now() - panel.lastClosedAt < SUBAGENT_CLOSE_DEBOUNCE_MS) {
         return;
       }
-      if (isAutocompleteVisible) {
+      if (useAutocomplete.getReadonlyState().visible) {
         autocompleteActions.dismiss();
         return;
       }

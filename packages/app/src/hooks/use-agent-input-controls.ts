@@ -169,6 +169,7 @@ export function useAgentInputControls({
       adapter.exit();
     },
     adapter,
+    addToolApprovalResponse,
   };
 
   const acceptAutocomplete = (triggerSubmit: boolean): boolean => {
