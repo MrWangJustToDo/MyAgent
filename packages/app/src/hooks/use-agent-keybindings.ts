@@ -9,6 +9,7 @@ import { cycleAgentMode } from "../utils/plan-mode-toggle.js";
 
 import { useAgent } from "./use-agent.js";
 import { useAutocomplete } from "./use-autocomplete.js";
+import { useCommandOutput } from "./use-command-output.js";
 import { usePlanPreview } from "./use-plan-preview.js";
 import { useSelect } from "./use-select.js";
 import { useSubagentPanel, CLOSE_DEBOUNCE_MS as SUBAGENT_CLOSE_DEBOUNCE_MS } from "./use-subagent-panel.js";
@@ -18,7 +19,6 @@ import { CLOSE_DEBOUNCE_MS as WORKSPACE_CLOSE_DEBOUNCE_MS, useWorkspaceView } fr
 import type { AgentAdapter } from "../adapter/types.js";
 import type { CommandContext } from "../commands";
 import type { UseAgentChatReturn } from "./use-agent-chat.js";
-import type { useCommandOutput } from "./use-command-output.js";
 import type { InputMode, useInputMode } from "./use-input-mode.js";
 import type { AgentLog, ManagedAgent } from "@my-agent/core";
 import type { MutableRefObject } from "react";
@@ -181,11 +181,15 @@ export function useAgentKeybindings({
         autocompleteActions.dismiss();
         return;
       }
+      // Command output panel (e.g. /help) open: dismiss it before aborting
+      if (useCommandOutput.getReadonlyState().lines) {
+        commandOutputActions.dismiss();
+        return;
+      }
       if (isLoading) {
         stop();
         return;
       }
-      commandOutputActions.dismiss();
     }
   });
 
