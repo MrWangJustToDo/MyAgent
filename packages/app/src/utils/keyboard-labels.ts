@@ -102,7 +102,7 @@ export function approveDenyLabel(): string {
 export function headerShortcutTips(): ReadonlyArray<{ key: string; desc: string }> {
   return [
     { key: KeyLabel.slash, desc: "for commands" },
-    { key: KeyLabel.shiftTab, desc: "plan mode" },
+    { key: KeyLabel.shiftTab, desc: "Cycle mode (normal → auto → plan)" },
     { key: KeyLabel.ctrlE, desc: "workspace" },
     { key: KeyLabel.ctrlT, desc: "task panel" },
     { key: KeyLabel.esc, desc: "to abort" },
@@ -136,7 +136,7 @@ export function getKeyboardShortcutSections(): ShortcutSection[] {
     {
       title: "Panels",
       lines: [
-        { key: KeyLabel.shiftTab, desc: "Toggle plan mode" },
+        { key: KeyLabel.shiftTab, desc: "Cycle mode (normal → auto → plan)" },
         { key: KeyLabel.p, desc: "Review plan markdown (when plan ready, input empty)" },
         { key: KeyLabel.ctrlE, desc: "Workspace panel" },
         { key: KeyLabel.ctrlT, desc: "Task / subagent panel" },
@@ -171,7 +171,7 @@ export function formatKeyboardShortcutsHelp(): string {
     }
     lines.push("");
   }
-  lines.push(`Tip: /theme, /display, /plan, /resume open option menus after Tab/Enter.`);
+  lines.push(`Tip: /theme, /display, /mode, /resume open option menus after Tab/Enter.`);
   return lines.join("\n").trimEnd();
 }
 

@@ -1,12 +1,11 @@
 // Import command files to trigger registration
-import "./auto.js";
 import "./clear.js";
 import "./compact.js";
 import "./display.js";
 import "./help.js";
 import "./mcp.js";
+import "./mode.js";
 import "./paste.js";
-import "./plan.js";
 import "./quit.js";
 import "./rename.js";
 import "./resume.js";

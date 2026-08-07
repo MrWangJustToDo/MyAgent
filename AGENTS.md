@@ -486,13 +486,13 @@ Cursor-like lifecycle: explore → review → Build → forced retro → complet
 | `retro` | retro | Full tools + `complete_plan` | Forced retrospective; `complete_plan` requires `verificationResults` covering every checklist item (all passed). `/plan done` force-exits without that gate. |
 | `off` | — | Plan authoring/completion tools hidden | Default |
 
-**App:** `Shift+Tab` or `/plan` toggles mode; when **review** (`ready`), press `p` (empty input) to toggle a bordered markdown plan preview in the banner (`Esc` closes). `/plan execute` Builds from review; `/plan cancel` pauses building → review; `/plan done` finishes retro (user force — no agent verification gate); `/plan status` reports phase; `/plan save` / `load` / `list` for named persistence (create/update already auto-save). Footer shows `planning` / `review · /plan execute` / `building n/m` / `retro`. `create_plan` / `update_plan` do not dump plan text into the tool transcript — review is via the banner preview.
+**App:** `Shift+Tab` cycles modes (normal → auto → plan → normal → …); `/mode` opens the unified mode menu. When **review** (`ready`), press `p` (empty input) to toggle a bordered markdown plan preview in the banner (`Esc` closes). `/mode plan execute` Builds from review; `/mode plan cancel` pauses building → review; `/mode plan done` finishes retro (user force — no agent verification gate); `/mode plan status` reports phase; `/mode plan save` / `load` / `list` for named persistence (create/update already auto-save). Footer shows mode name (`Normal` / `Auto` / `planning` / `review · /mode plan execute` / `building n/m` / `retro`). `create_plan` / `update_plan` do not dump plan text into the tool transcript — review is via the banner preview.
 
 **Core:** `ManagedAgent.planMode` (`PlanModeController`), tool filter in `run-agent`, `createPlanModeMiddleware`, prompts via turn context, `plan-verification` parse/gate helpers. See `packages/core/src/agent/plan/`. Validate: `pnpm --filter @my-agent/core run validate:plan-verification`.
 
-**Auto mode:** `/auto` (or `/auto on|off|status`) skips all tool approvals. Footer shows `Auto`. Mutually exclusive with plan mode (entering one clears the other). Cleared on `/clear` / reset; persisted as `SessionData.autoMode` (legacy sessions may still have `autoApprove`). While auto is on, turn context includes an `<auto_mode>` block.
+**Auto mode:** `/mode auto on` (or `/mode auto` to toggle) skips all tool approvals. Footer shows `Auto`. Mutually exclusive with plan mode (entering one clears the other). Cleared on `/clear` / reset; persisted as `SessionData.autoMode` (legacy sessions may still have `autoApprove`). While auto is on, turn context includes an `<auto_mode>` block.
 
-**Session / safety:** `/clear` and `ManagedAgent.reset()` always `planMode.disable()` and turn off auto mode. Resume restores `planMode` + `autoMode` with plan winning if both were somehow set. Plan building auto-approve still requires `executing` **and** `todosSeeded` (separate from `/auto`).
+**Session / safety:** `/clear` and `ManagedAgent.reset()` always `planMode.disable()` and turn off auto mode. Resume restores `planMode` + `autoMode` with plan winning if both were somehow set. Plan building auto-approve still requires `executing` **and** `todosSeeded` (separate from `/mode auto`).
 
 ## Subagent System
 

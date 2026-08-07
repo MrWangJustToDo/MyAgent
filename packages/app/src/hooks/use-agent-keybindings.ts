@@ -5,7 +5,7 @@ import { toRaw } from "reactivity-store";
 import { dispatchCommand } from "../commands";
 import { clipboardImageFilename } from "../utils/attachment-hash.js";
 import { isModifiedEnter } from "../utils/keyboard-labels.js";
-import { togglePlanModeWithFeedback } from "../utils/plan-mode-toggle.js";
+import { cycleAgentMode } from "../utils/plan-mode-toggle.js";
 
 import { useAgent } from "./use-agent.js";
 import { useAutocomplete } from "./use-autocomplete.js";
@@ -196,12 +196,10 @@ export function useAgentKeybindings({
       if (useWorkspaceView.getReadonlyState().view === "workspace") return;
 
       if (inputKey.tab && inputKey.shift) {
-        // Shift+Tab toggles plan mode (Cursor-style). Do not treat as autocomplete accept.
-        // Still block during loading — toggling plan mode mid-run is not useful.
+        // Shift+Tab cycles agent mode: normal → auto → plan → normal → …
+        // Still block during loading — toggling mode mid-run is not useful.
         if (isLoading) return;
-        togglePlanModeWithFeedback(getAgent(), (message, level) => {
-          inputActions.setInputFeedback(message, level);
-        });
+        cycleAgentMode(getAgent());
         return;
       }
       // Empty input + plan ready: `p` toggles full-plan markdown preview in the banner.
