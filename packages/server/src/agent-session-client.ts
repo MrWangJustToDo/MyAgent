@@ -11,6 +11,7 @@ import type {
   AgentSessionSnapshot,
   AgentSessionSubscribeOptions,
   AgentSessionSubscriber,
+  SummaryStreamSnapshot,
 } from "@my-agent/core";
 
 export interface HttpAgentSessionClientOptions {
@@ -113,6 +114,10 @@ export class HttpAgentSessionClient implements AgentSession {
 
   getSnapshot(): AgentSessionSnapshot {
     return this.snapshot;
+  }
+
+  getSummaryStreamSnapshot(_key: string): SummaryStreamSnapshot | null {
+    return null;
   }
 
   async dispatch(command: AgentSessionCommand): Promise<AgentSessionCommandResult> {

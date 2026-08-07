@@ -2,17 +2,56 @@
  * Prepare / finalize / abort run lifecycle for {@link ManagedAgent}.
  */
 
-import { convertMessagesToModelMessages, type ModelMessage, type UIMessage as TanStackUIMessage } from "@tanstack/ai";
+import { convertMessagesToModelMessages, type UIMessage as TanStackUIMessage, type ModelMessage } from "@tanstack/ai";
 
 import { getLatestUserMessage } from "../agent/compaction/message-utils.js";
 import { isToolContinuationPrepare } from "../agent/utils/tool-phase-utils.js";
 
 import type { AgentManager } from "./agent-manager.js";
-import type { RunFinalizeReason } from "./agent-types.js";
-import type { ManagedAgent } from "./managed-agent.js";
+import type { AgentStatus, RunFinalizeReason } from "./agent-types.js";
+import type { MemoryService } from "./memory-service.js";
+import type { RunCoordinator } from "./run-coordinator.js";
+import type { UsageTracker } from "./usage-tracker.js";
+import type { AgentLog } from "../agent/agent-log";
+import type { AgentUIChannel } from "../agent/ui-channel.js";
+import type { TextAdapterConfig } from "../models/adapter-factory.js";
+import type { AgentEventType } from "../runtime-types/agent-events.js";
 
-/** Lifecycle helpers operate on the full ManagedAgent surface (type-only import). */
-export type RunLifecycleHost = ManagedAgent;
+/**
+ * Narrow interface capturing only the methods/fields lifecycle helpers need.
+ * ManagedAgent structurally satisfies this via its public API surface.
+ * This prevents lifecycle helpers from depending on the full ManagedAgent class.
+ */
+export interface RunLifecycleHost {
+  readonly id: string;
+  parentId?: string;
+  status: AgentStatus;
+  setStatus: (status: AgentStatus) => void;
+  recordStreamDuration: () => void;
+  consumePrepareAsContinuation: () => boolean;
+  clearPrepareAsContinuation: () => void;
+  beginTurnFinalize: () => boolean;
+  setRunBaselineCount: (count: number) => void;
+  getStreamStartedAt: () => number;
+  setStreamStartedAt: (value: number) => void;
+  persistSession: () => void;
+  clearTurnContext: () => void;
+  getMessagesForLLM: (canon?: ModelMessage[]) => ModelMessage[];
+  collectExtensionPromptHooks: (prompt: string) => Promise<void>;
+  captureTurnContextSnapshot: () => Promise<void>;
+  admitTurnContextIfNeeded: () => boolean;
+  emitEvent: (
+    type: AgentEventType,
+    data?: Record<string, unknown>,
+    options?: { parentId?: string; agentId?: string }
+  ) => void;
+  resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
+  log: AgentLog | null;
+  usage: UsageTracker;
+  ui?: AgentUIChannel;
+  run: RunCoordinator;
+  memory: MemoryService;
+}
 
 export async function prepareManagedAgentForRun(
   host: RunLifecycleHost,
@@ -34,8 +73,8 @@ export async function prepareManagedAgentForRun(
   // Always consume the flag (avoid `||` short-circuit leaving a stale continuation mark).
   const flaggedContinuation = host.consumePrepareAsContinuation() === true;
   const isToolContinuation = isToolContinuationPrepare(host.status, options.messages) || flaggedContinuation;
-  if (!isToolContinuation || host.streamStartedAt === 0) {
-    host.streamStartedAt = Date.now();
+  if (!isToolContinuation || host.getStreamStartedAt() === 0) {
+    host.setStreamStartedAt(Date.now());
   }
 
   if (!isToolContinuation && !host.parentId) {

@@ -113,6 +113,9 @@ function getRecentKeepBoundary(
   messages: ModelMessage[],
   keepRecentToolResults: number
 ): number {
+  // Disabled — threshold compression affects cache hit rate.
+  return -1;
+
   if (keepRecentToolResults <= 0) {
     return Number.POSITIVE_INFINITY;
   }

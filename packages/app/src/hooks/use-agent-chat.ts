@@ -178,7 +178,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         const initial = controller.getMessages();
         setMessages(initial);
         setStatus(managed.status);
-        setAgentError(managed.error);
+        setAgentError(managed.getError());
         setAgentStatus(managed.status);
         setQueuedMessages(controller.getQueuedMessages());
         managed.resetSessionSyncTracker(initial);

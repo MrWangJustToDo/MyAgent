@@ -124,4 +124,3 @@ export function useSummaryStream(options: UseSummaryStreamOptions): UseSummarySt
     };
   }, [windowState, maxLines, status]);
 }
-

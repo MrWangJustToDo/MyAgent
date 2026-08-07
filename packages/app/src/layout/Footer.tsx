@@ -169,8 +169,8 @@ const ContextBar = ({
       { channels: ["state"] }
     );
   }, [session]);
-  const lastRunDurationMs = agentTick >= 0 ? agent?.lastStreamDurationMs || 0 : 0;
-  const _error = agent?.error || "";
+  const lastRunDurationMs = agentTick >= 0 ? agent?.getLastStreamDurationMs() || 0 : 0;
+  const _error = agent?.getError() || "";
 
   const inputError = useUserInput((s) => s.inputError);
   const inputFeedback = useUserInput((s) => s.inputFeedback);

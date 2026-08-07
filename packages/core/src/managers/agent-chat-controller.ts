@@ -377,7 +377,7 @@ export class AgentChatController {
           // Only supply a message when status is not already error (avoids duplicate stream-error).
           errorMessage:
             outcomeKind === "error" && this.managed.status !== "error"
-              ? this.managed.error || "Stream execution failed"
+              ? this.managed.getError() || "Stream execution failed"
               : undefined,
         });
         this.persistMessages("pump-complete");

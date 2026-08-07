@@ -158,15 +158,15 @@ export class ManagedAgent {
   // ============================================================================
 
   /** Lifecycle — hosts read via getter; mutate through {@link setStatus}. */
-  private _status: AgentStatus = "idle";
-  error = "";
+  private _status: AgentStatus;
+  private error: string;
   /** Tools awaiting user approval in the current run (set by approval middleware). */
-  pendingApprovalCount = 0;
-  private readonly stateEvents = new Emitter<{
+  private pendingApprovalCount: number;
+  private readonly stateEvents: Emitter<{
     change: AgentL1State;
     /** Fired when {@link setUIChannel} attaches/clears the UI channel. */
     ui: AgentUIChannel | undefined;
-  }>();
+  }>;
 
   // ============================================================================
   // Composed services / controllers
@@ -191,12 +191,12 @@ export class ManagedAgent {
   private managedToolsProvider?: () => ToolsRecord;
   log: AgentLog;
   todoManager: TodoManager | null;
-  mcpManager: McpManager | null = null;
-  skillRegister: SkillRegistry | null = null;
-  extensionRunner: ExtensionRunner | null = null;
-  extensionLoader: ExtensionLoader | null = null;
+  mcpManager: McpManager | null;
+  skillRegister: SkillRegistry | null;
+  extensionRunner: ExtensionRunner | null;
+  extensionLoader: ExtensionLoader | null;
   /** Extension slash commands registered via {@link ExtensionContext.registerCommand}. */
-  private extensionCommands = new Map<string, ExtensionCommand>();
+  private extensionCommands: Map<string, ExtensionCommand>;
 
   // ============================================================================
   // Agent tree + timestamps
@@ -219,43 +219,43 @@ export class ManagedAgent {
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   private _ui?: AgentUIChannel;
   /** Task / compact summary streams for the session `summary` channel. */
-  readonly summaryStreams = new SummaryStreamHub();
-  chatController?: AgentChatController;
+  readonly summaryStreams: SummaryStreamHub;
+  private _chatController?: AgentChatController;
   /** Set by AgentManager to route events to listeners. */
   dispatchEvent?: (event: AgentEvent) => void;
   /** Owning manager — set when registered via {@link AgentManager.createManagedAgent}. */
   manager?: AgentManager;
-  modelInfo: ModelInfo | null = null;
+  modelInfo: ModelInfo | null;
 
   // ============================================================================
   // Compaction / session sync
   // ============================================================================
 
-  compactionConfig: CompactionConfig | null = null;
-  readonly toolCompactCache = new ToolCompactCache();
-  readonly sessionSyncTracker: SessionSyncTracker = createSessionSyncTracker();
-  private _runBaselineCount = 0;
+  compactionConfig: CompactionConfig | null;
+  readonly toolCompactCache: ToolCompactCache;
+  readonly sessionSyncTracker: SessionSyncTracker;
+  private _runBaselineCount: number;
 
   // ============================================================================
   // Run lifecycle flags + timing
   // ============================================================================
 
   /** When true, next {@link prepareForRun} skips memory prefetch / prompt:submit (steer / tool continue). */
-  private prepareAsContinuation = false;
+  private prepareAsContinuation: boolean;
   /** Guards turn-level finalizeRun so stop() + pump outcome do not double-fire. */
-  private turnLifecycleFinalized = false;
-  streamStartedAt = 0;
-  lastStreamDurationMs = 0;
+  private turnLifecycleFinalized: boolean;
+  private streamStartedAt: number;
+  private lastStreamDurationMs: number;
 
   // ============================================================================
   // Prompt / turn context
   // ============================================================================
 
-  systemPrompt = "";
-  agentDocContent = "";
-  agentDocSource = "";
+  private systemPrompt: string;
+  agentDocContent: string;
+  agentDocSource: string;
   private frozenSystemPrompt: string | undefined;
-  private systemPromptFrozen = false;
+  private systemPromptFrozen: boolean;
   /** Stable dynamic turn context for the current user turn (payload snapshot). */
   private turnContextSnapshot: string | undefined;
   /** Extension append-only text for the current user turn (merged into turn_context message). */
@@ -313,12 +313,62 @@ export class ManagedAgent {
       },
       onEnterRetro: (state) => {
         const steer = buildPlanRetroSteerMessage(state.planFilePath);
-        if (this.chatController) {
-          void this.chatController.sendMessage(steer);
+        if (this._chatController) {
+          void this._chatController.sendMessage(steer);
         }
       },
     });
     this.autoApprove = new AutoApproveController(() => this.emitStateChange());
+
+    // ============================================================================
+    // L1 state + local emitter (inline inits)
+    // ============================================================================
+    this._status = "idle";
+    this.error = "";
+    this.pendingApprovalCount = 0;
+    this.stateEvents = new Emitter<{
+      change: AgentL1State;
+      ui: AgentUIChannel | undefined;
+    }>();
+
+    // ============================================================================
+    // Tools / registries / extensions (inline inits)
+    // ============================================================================
+    this.mcpManager = null;
+    this.skillRegister = null;
+    this.extensionRunner = null;
+    this.extensionLoader = null;
+    this.extensionCommands = new Map<string, ExtensionCommand>();
+
+    // ============================================================================
+    // Run / UI / model wiring (inline inits)
+    // ============================================================================
+    this.summaryStreams = new SummaryStreamHub();
+    this.modelInfo = null;
+
+    // ============================================================================
+    // Compaction / session sync (inline inits)
+    // ============================================================================
+    this.compactionConfig = null;
+    this.toolCompactCache = new ToolCompactCache();
+    this.sessionSyncTracker = createSessionSyncTracker();
+    this._runBaselineCount = 0;
+
+    // ============================================================================
+    // Run lifecycle flags + timing (inline inits)
+    // ============================================================================
+    this.prepareAsContinuation = false;
+    this.turnLifecycleFinalized = false;
+    this.streamStartedAt = 0;
+    this.lastStreamDurationMs = 0;
+
+    // ============================================================================
+    // Prompt / turn context (inline inits)
+    // ============================================================================
+    this.systemPrompt = "";
+    this.agentDocContent = "";
+    this.agentDocSource = "";
+    this.systemPromptFrozen = false;
 
     if (config.setUp) {
       return config.setUp(this);
@@ -339,6 +389,26 @@ export class ManagedAgent {
   /** Host-facing UI channel when present (read-only; package-internal {@link setUIChannel}). */
   get ui(): AgentUIChannel | undefined {
     return this._ui;
+  }
+
+  getError(): string {
+    return this.error;
+  }
+
+  getPendingApprovalCount(): number {
+    return this.pendingApprovalCount;
+  }
+
+  getStreamStartedAt(): number {
+    return this.streamStartedAt;
+  }
+
+  setStreamStartedAt(value: number): void {
+    this.streamStartedAt = value;
+  }
+
+  getLastStreamDurationMs(): number {
+    return this.lastStreamDurationMs;
   }
 
   setStatus(status: AgentStatus): void {
@@ -520,14 +590,6 @@ export class ManagedAgent {
     return this.memory.getContent();
   }
 
-  get memoryContent(): string {
-    return this.memory.getContent();
-  }
-
-  get relevantMemoryContent(): string {
-    return this.memory.getRelevantContent();
-  }
-
   setSessionStore(store: SessionStore, sessionConfig: { modelStyle: string; model: string }): void {
     this.session.setStore(store, sessionConfig);
   }
@@ -679,7 +741,7 @@ export class ManagedAgent {
       config: this.agentConfig,
       agentDocContent: this.agentDocContent,
       skillRegister: this.skillRegister,
-      memoryContent: this.memoryContent,
+      memoryContent: this.getMemoryContent(),
     });
     this.systemPromptFrozen = true;
     this.systemPrompt = this.frozenSystemPrompt ?? "";
@@ -792,7 +854,7 @@ export class ManagedAgent {
     const planModeContent = buildPlanModePrompt(planState.phase, planState.planMarkdown, planState.planFilePath);
 
     return buildDynamicTurnContext({
-      relevantMemoryContent: this.relevantMemoryContent,
+      relevantMemoryContent: this.memory.getRelevantContent(),
       todoNagReminder,
       currentDate,
       gitBranch,
@@ -957,13 +1019,13 @@ export class ManagedAgent {
 
   /** Create or replace the core-owned main chat session (StreamProcessor + run loop). */
   initChat(manager: AgentManager, initialMessages?: TanStackUIMessage[]): AgentChatController {
-    this.chatController = new AgentChatController(this, manager, initialMessages);
+    this._chatController = new AgentChatController(this, manager, initialMessages);
     this.resetSessionSyncTracker(initialMessages);
-    return this.chatController;
+    return this._chatController;
   }
 
   getChatController(): AgentChatController | undefined {
-    return this.chatController;
+    return this._chatController;
   }
 
   reset(): void {
