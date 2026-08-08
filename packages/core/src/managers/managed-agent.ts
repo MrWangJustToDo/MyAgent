@@ -89,6 +89,9 @@ import type { ModelInfo } from "../models/types.js";
 // Config
 // ============================================================================
 
+/** When the turn context payload hasn't changed, re-admit every N messages to keep context fresh. */
+const TURN_CONTEXT_REFRESH_MESSAGE_THRESHOLD = 100;
+
 export type { RunFinalizeReason } from "./agent-types.js";
 
 /** Active agent mode — mutually exclusive modes for the agent. */
@@ -268,6 +271,8 @@ export class ManagedAgent {
   private pendingExtensionTurnContext: string | undefined;
   /** Hash of the last turn_context payload admitted into UIMessage history. */
   private lastAdmittedTurnContextHash: string | undefined;
+  /** Message count at the last turn_context admit (for periodic refresh). */
+  private turnContextAdmitMessageCount: number;
 
   constructor(
     config: ManagedAgentConfig,
@@ -372,6 +377,8 @@ export class ManagedAgent {
     this.agentDocContent = "";
     this.agentDocSource = "";
     this.systemPromptFrozen = false;
+    this.lastAdmittedTurnContextHash = undefined;
+    this.turnContextAdmitMessageCount = 0;
 
     if (config.setUp) {
       return config.setUp(this);
@@ -793,6 +800,9 @@ export class ManagedAgent {
   /**
    * When the dynamic payload changed, insert a synthetic `<turn_context>` user message
    * into the UI channel (persisted, display-filtered). No-op when unchanged.
+   *
+   * Also re-admits periodically when messages grow beyond {@link TURN_CONTEXT_REFRESH_MESSAGE_THRESHOLD}
+   * to keep context fresh in long conversations, even if the payload hasn't changed.
    */
   admitTurnContextIfNeeded(): boolean {
     const payload = buildTurnContextPayload(this.turnContextSnapshot, this.extensionSystemAppendSnapshot);
@@ -803,7 +813,11 @@ export class ManagedAgent {
       const existing = findLatestTurnContextHash(this.ui?.getMessages() ?? []) ?? undefined;
       this.lastAdmittedTurnContextHash = existing;
     }
-    if (hash === this.lastAdmittedTurnContextHash) return false;
+
+    const messageCount = this.ui?.getMessages().length ?? 0;
+    const aboveThreshold = messageCount - this.turnContextAdmitMessageCount >= TURN_CONTEXT_REFRESH_MESSAGE_THRESHOLD;
+
+    if (hash === this.lastAdmittedTurnContextHash && !aboveThreshold) return false;
 
     const content = formatTurnContextUserContent(payload, {
       isUpdate: Boolean(this.lastAdmittedTurnContextHash),
@@ -820,12 +834,14 @@ export class ManagedAgent {
     this.maybeSaveSessionUIMessages(next, "user-message");
 
     this.lastAdmittedTurnContextHash = hash;
+    this.turnContextAdmitMessageCount = next.length;
     return true;
   }
 
   /** After compaction / clear — force the next turn to re-admit full dynamic context. */
   resetAdmittedTurnContext(): void {
     this.lastAdmittedTurnContextHash = undefined;
+    this.turnContextAdmitMessageCount = 0;
   }
 
   clearTurnContext(): void {

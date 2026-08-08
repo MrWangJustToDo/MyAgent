@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { getEnv } from "../../env.js";
+
 import { defineServerTool } from "./tanstack/define-tool.js";
 import { OUTPUT_LIMITS, withDuration } from "./util/helpers.js";
 import { DEFAULT_EXCLUDE_DIRS, runSearchCommand } from "./util/search-command.js";
@@ -33,6 +35,7 @@ function buildRgCommand(
     outputMode: string;
     context: number;
     fetchCount: number;
+    searchPathIsFile: boolean;
   }
 ): string {
   const args: string[] = ["--color=never"];
@@ -52,12 +55,16 @@ function buildRgCommand(
     }
   }
 
-  if (options.include) {
+  // --glob is only meaningful for directory searches; skip when searching a
+  // single file to avoid conflicts between the glob and the file path.
+  if (options.include && !options.searchPathIsFile) {
     args.push("--glob", `"${options.include}"`);
   }
 
-  for (const dir of DEFAULT_EXCLUDE_DIRS) {
-    args.push("--glob", `"!**/${dir}/**"`);
+  if (!options.searchPathIsFile) {
+    for (const dir of DEFAULT_EXCLUDE_DIRS) {
+      args.push("--glob", `"!**/${dir}/**"`);
+    }
   }
 
   const escapedPattern = pattern.replace(/"/g, '\\"');
@@ -75,9 +82,16 @@ function buildGrepCommand(
     outputMode: string;
     context: number;
     fetchCount: number;
+    searchPathIsFile: boolean;
   }
 ): string {
-  let command = "grep -r";
+  let command = "grep";
+
+  // Use -r (recursive) only when searching a directory; for a single file,
+  // plain grep avoids conflicts between --include and a direct file path.
+  if (!options.searchPathIsFile) {
+    command += " -r";
+  }
 
   if (options.ignoreCase) {
     command += "i";
@@ -98,12 +112,16 @@ function buildGrepCommand(
     command += ` -C ${options.context}`;
   }
 
-  if (options.include) {
+  // --include and --exclude-dir are only meaningful for directory searches;
+  // skip them when searching a single file to avoid conflicts.
+  if (options.include && !options.searchPathIsFile) {
     command += ` --include="${options.include}"`;
   }
 
-  for (const dir of DEFAULT_EXCLUDE_DIRS) {
-    command += ` --exclude-dir="${dir}"`;
+  if (!options.searchPathIsFile) {
+    for (const dir of DEFAULT_EXCLUDE_DIRS) {
+      command += ` --exclude-dir="${dir}"`;
+    }
   }
 
   const escapedPattern = pattern.replace(/"/g, '\\"');
@@ -240,12 +258,25 @@ export const createGrepTool = () => {
         const contextLines = context ?? 0;
         const fetchCount = skip + take + 1;
 
+        // Detect whether the search path is a single file (vs directory) so we
+        // can skip include/exclude flags that are only meaningful for directory
+        // searches. When stat fails (path doesn't exist), treat as a directory
+        // so the search still works for new/relative paths.
+        let searchPathIsFile = false;
+        try {
+          const stat = await getEnv().fs.stat(searchPath);
+          searchPathIsFile = stat.isFile;
+        } catch {
+          // Non-fatal — treat as directory for backward compatibility
+        }
+
         const searchOptions = {
           ignoreCase: ignoreCase ?? false,
           include,
           outputMode: mode,
           context: contextLines,
           fetchCount,
+          searchPathIsFile,
         };
 
         const rawOutput = await runSearchCommand(
