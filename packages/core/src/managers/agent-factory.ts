@@ -95,13 +95,15 @@ export async function buildManagedAgent({
       rootPath: fsRootPath,
       filenames: config.agentDocFilenames,
       loadOverride: config.agentDocLoadOverride !== false,
-      logger: log,
     });
     if (docResult.content) {
       const instructions = docResult.overrideContent
         ? `${docResult.content}\n\n## Local Override\n\n${docResult.overrideContent}`
         : docResult.content;
       managed.setAgentDocContent(instructions, docResult.source);
+    }
+    if (docResult.notice) {
+      log.debug("system", docResult.notice);
     }
   }
 
@@ -122,11 +124,12 @@ export async function buildManagedAgent({
   let mcpLoadResult: McpConfigLoadResult | null = null;
 
   if (!parentId) {
-    const skillRegistry = new SkillRegistry({ rootPath: fsRootPath, logger: log });
+    const skillRegistry = new SkillRegistry({ rootPath: fsRootPath });
     managed.setSkillRegister(skillRegistry);
 
     const dirsToLoad = skillDirs ?? (await getDefaultSkillDirs());
     await skillRegistry.loadFromDirectories(dirsToLoad);
+    log.info("skill", `Loaded ${skillRegistry.size} skills from ${dirsToLoad.length} directories`);
 
     toolsRecord.list_skills = createListSkillsTool({ skillRegistry });
     toolsRecord.load_skill = createLoadSkillTool({ skillRegistry });
@@ -147,15 +150,21 @@ export async function buildManagedAgent({
 
     const mcpManager = new McpManager();
     managed.setMcpManager(mcpManager);
-    mcpLoadResult = await loadMcpConfig(log, mcpConfigPath);
+    mcpLoadResult = await loadMcpConfig(mcpConfigPath);
     if (mcpLoadResult && Object.keys(mcpLoadResult.config.mcpServers).length > 0) {
       Object.assign(toolsRecord, await mcpManager.initialize(mcpLoadResult.config));
     }
+    if (mcpLoadResult?.loadErrors) {
+      for (const err of mcpLoadResult.loadErrors) {
+        log.warn("system", err);
+      }
+    }
 
-    const memoryManager = new MemoryManager({ rootPath: fsRootPath }, log);
+    const memoryManager = new MemoryManager({ rootPath: fsRootPath });
     await memoryManager.initialize();
     managed.setMemoryManager(memoryManager);
     managed.setMemoryContent(memoryManager.getIndexContent());
+    log.debug("memory", `Memory initialized, index: ${memoryManager.getIndexContent().length} bytes`);
   }
 
   if (!parentId) {

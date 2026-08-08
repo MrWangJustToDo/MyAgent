@@ -8,7 +8,7 @@
  *
  * @example
  * ```typescript
- * const manager = new MemoryManager({ rootPath: "/project" }, logger);
+ * const manager = new MemoryManager({ rootPath: "/project" });
  * await manager.initialize();
  *
  * await manager.writeMemory("user-prefers-tabs", "user", "Prefers tabs", "Details...");
@@ -30,7 +30,6 @@ import {
 } from "./types.js";
 
 import type { Memory, MemoryManagerConfig, MemoryMetadata, MemoryType } from "./types.js";
-import type { AgentLog } from "../agent-log/agent-log.js";
 
 // ============================================================================
 // Helpers
@@ -71,7 +70,6 @@ export class MemoryManager {
   private memoryDir: string;
   private memoryPath: string;
   private indexPath: string;
-  private logger?: AgentLog;
   private consolidateThreshold: number;
   private maxIndexLines: number;
   private maxIndexBytes: number;
@@ -82,13 +80,12 @@ export class MemoryManager {
   /** Debounce timeout for index refresh */
   private refreshTimeout?: ReturnType<typeof setTimeout>;
 
-  constructor(config: MemoryManagerConfig, logger?: AgentLog) {
+  constructor(config: MemoryManagerConfig) {
     this.rootPath = config.rootPath;
     this.memoryDir = config.memoryDir ?? DEFAULT_MEMORY_DIR;
     // placeholder
     this.memoryPath = this.memoryDir;
     this.indexPath = MEMORY_INDEX_FILENAME;
-    this.logger = logger;
     this.consolidateThreshold = config.consolidateThreshold ?? DEFAULT_CONSOLIDATE_THRESHOLD;
     this.maxIndexLines = config.maxIndexLines ?? DEFAULT_MAX_INDEX_LINES;
     this.maxIndexBytes = config.maxIndexBytes ?? DEFAULT_MAX_INDEX_BYTES;
@@ -105,7 +102,6 @@ export class MemoryManager {
     const exists = await getEnv().fs.exists(this.memoryPath);
     if (!exists) {
       await getEnv().fs.mkdir(this.memoryPath);
-      this.logger?.info("memory", `Created memory directory: ${this.memoryDir}`);
     }
 
     await this.refreshIndex();
@@ -165,16 +161,14 @@ export class MemoryManager {
             updatedAt: metadata?.updatedAt,
           });
         } catch {
-          this.logger?.warn("memory", `Failed to parse memory file: ${entry.name}`);
+          // Failed to parse memory file — skip
         }
       }
 
-      this.logger?.debug("memory", `Listed ${result.length} memories in ${this.memoryPath}`);
+      return result;
     } catch {
-      this.logger?.debug("memory", "Failed to list memory directory");
+      return [];
     }
-
-    return result;
   }
 
   /**
@@ -240,7 +234,6 @@ export class MemoryManager {
     ].join("\n");
 
     await getEnv().fs.writeFile(filePath, content);
-    this.logger?.info("memory", `Wrote memory: ${filename}`);
 
     this.scheduleRefreshIndex();
     return filename;
@@ -253,9 +246,8 @@ export class MemoryManager {
     const filePath = getEnv().path.join(this.memoryPath, filename);
     try {
       await getEnv().fs.remove(filePath);
-      this.logger?.info("memory", `Deleted memory: ${filename}`);
     } catch {
-      this.logger?.warn("memory", `Failed to delete memory: ${filename}`);
+      // Failed to delete memory
     }
     this.scheduleRefreshIndex();
   }
@@ -273,7 +265,7 @@ export class MemoryManager {
         }
       }
     } catch {
-      this.logger?.warn("memory", "Failed to delete all memory files");
+      // Failed to delete all memory files
     }
   }
 
@@ -306,8 +298,8 @@ export class MemoryManager {
     }
     this.refreshTimeout = setTimeout(() => {
       this.refreshTimeout = undefined;
-      this.refreshIndex().catch((err) => {
-        this.logger?.warn("memory", "Failed to refresh index", err);
+      this.refreshIndex().catch(() => {
+        // Failed to refresh index
       });
     }, 100);
   }
@@ -339,7 +331,7 @@ export class MemoryManager {
     try {
       await getEnv().fs.writeFile(this.indexPath, this.cachedIndex);
     } catch {
-      this.logger?.warn("memory", "Failed to write MEMORY.md index");
+      // Failed to write MEMORY.md index
     }
   }
 

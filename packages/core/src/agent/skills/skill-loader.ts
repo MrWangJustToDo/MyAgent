@@ -21,7 +21,6 @@ import { getEnv } from "../../env.js";
 import { skillMetadataSchema } from "./types.js";
 
 import type { Skill, SkillMetadata } from "./types.js";
-import type { AgentLog } from "../agent-log/agent-log.js";
 
 // ============================================================================
 // Types
@@ -30,8 +29,6 @@ import type { AgentLog } from "../agent-log/agent-log.js";
 export interface SkillLoaderConfig {
   /** Root path for resolving relative paths */
   rootPath: string;
-  /** Optional logger for warnings */
-  logger?: AgentLog;
 }
 
 export interface ParsedFrontmatter {
@@ -52,11 +49,9 @@ export interface ParsedFrontmatter {
  */
 export class SkillLoader {
   private rootPath: string;
-  private logger?: AgentLog;
 
   constructor(config: SkillLoaderConfig) {
     this.rootPath = config.rootPath;
-    this.logger = config.logger;
   }
 
   /**
@@ -191,7 +186,6 @@ export class SkillLoader {
 
     const dirExists = await this.directoryExists(dirPath);
     if (!dirExists) {
-      this.logger?.skill(`Skill directory does not exist: ${dirPath}`);
       return skills;
     }
 
@@ -203,7 +197,6 @@ export class SkillLoader {
         const { metadata, body, error } = this.parseFrontmatter(content);
 
         if (error) {
-          this.logger?.skill(`Skipping skill file with error: ${filePath}`, { error });
           continue;
         }
 
@@ -225,12 +218,10 @@ export class SkillLoader {
         };
 
         skills.set(name, skill);
-      } catch (error) {
-        this.logger?.skill(`Failed to load skill file: ${filePath}`, { error });
+      } catch {
+        // Failed to load skill file
       }
     }
-
-    this.logger?.skill(`Loaded skills from ${dirPath} success`, { skills });
 
     return skills;
   }

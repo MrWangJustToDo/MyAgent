@@ -15,8 +15,6 @@
 
 import { getEnv } from "../env.js";
 
-import type { AgentLog } from "./agent-log";
-
 // ============================================================================
 // Constants
 // ============================================================================
@@ -62,8 +60,6 @@ export interface AgentDocLoaderConfig {
    * Default: true
    */
   loadOverride?: boolean;
-  /** Optional logger for debug output */
-  logger?: AgentLog;
 }
 
 /** Result of loading agent documentation */
@@ -76,6 +72,11 @@ export interface AgentDocLoadResult {
   overrideContent?: string;
   /** Which override file was loaded */
   overrideSource?: string;
+  /**
+   * Informational notice about the loading process
+   * (e.g., which files were searched, errors encountered).
+   */
+  notice?: string;
 }
 
 /**
@@ -121,8 +122,6 @@ export function formatAgentDocResult(result: AgentDocLoadResult): string {
  * ```typescript
  * const result = await loadAgentDoc({
  *   rootPath: "/project",
- *   rootPath: "/project",
- *   logger: log,
  * });
  * // result.content contains the contents of AGENTS.md or CLAUDE.md
  * ```
@@ -134,7 +133,6 @@ export async function loadAgentDoc(config: AgentDocLoaderConfig): Promise<AgentD
     filenames = DEFAULT_AGENT_DOC_FILENAMES,
     maxBytes = DEFAULT_AGENT_DOC_MAX_BYTES,
     loadOverride = true,
-    logger,
   } = config;
 
   let result: AgentDocLoadResult = { content: "" };
@@ -159,13 +157,13 @@ export async function loadAgentDoc(config: AgentDocLoaderConfig): Promise<AgentD
         break;
       }
     } catch (err) {
-      logger?.debug("system", `Error checking file ${filename}`, { error: String(err) });
+      result.notice = `Error checking file ${filename}: ${String(err)}`;
       continue;
     }
   }
 
   if (!result.content) {
-    logger?.debug("system", "No agent documentation file found (searched: " + filenames.join(", ") + ")");
+    result.notice = `No agent documentation file found (searched: ${filenames.join(", ")})`;
   }
 
   return result;

@@ -24,7 +24,6 @@ import { isTerminalStatus, resolveFinishStatus } from "./agent-status.js";
 
 import type { AgentEventType } from "./agent-event-bus.js";
 import type { AgentStatus } from "./agent-types.js";
-import type { AgentLog } from "../agent/agent-log";
 import type { StreamChunk, ToolPhaseCompleteInfo, UIMessage } from "@tanstack/ai";
 
 export type { AgentRunOutcome, AgentRunOutcomeKind, AgentRunPath, StatusReconcilePolicy } from "./agent-run-outcome.js";
@@ -39,7 +38,6 @@ export interface AgentStatusControllerDeps {
   getError: () => string;
   setError: (error: string) => void;
   setPendingApprovalCount: (count: number) => void;
-  log?: AgentLog | null;
   emitEvent?: (type: AgentEventType, data?: Record<string, unknown>) => void;
 }
 

@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * const registry = new SkillRegistry({ rootPath: "/project", logger });
+ * const registry = new SkillRegistry({ rootPath: "/project" });
  * await registry.loadFromDirectories([".agents/skills"], "/project/root");
  *
  * // List available skills
@@ -20,7 +20,6 @@
 import { SkillLoader } from "./skill-loader.js";
 
 import type { Skill, SkillSummary } from "./types.js";
-import type { AgentLog } from "../agent-log/agent-log.js";
 
 // ============================================================================
 // Types
@@ -29,8 +28,6 @@ import type { AgentLog } from "../agent-log/agent-log.js";
 export interface SkillRegistryConfig {
   /** Root path for resolving relative paths */
   rootPath: string;
-  /** Optional logger for warnings and debug info */
-  logger?: AgentLog;
 }
 
 // ============================================================================
@@ -42,16 +39,13 @@ export interface SkillRegistryConfig {
  */
 export class SkillRegistry {
   private rootPath: string;
-  private logger?: AgentLog;
   private skills: Map<string, Skill> = new Map();
   private loader: SkillLoader;
 
   constructor(config: SkillRegistryConfig) {
     this.rootPath = config.rootPath;
-    this.logger = config.logger;
     this.loader = new SkillLoader({
       rootPath: config.rootPath,
-      logger: config.logger,
     });
   }
 
@@ -73,10 +67,6 @@ export class SkillRegistry {
       // Add skills to registry, first loaded wins
       for (const [name, skill] of dirSkills) {
         if (this.skills.has(name)) {
-          this.logger?.skill(`Duplicate skill name ignored: ${name}`, {
-            existing: this.skills.get(name)?.path,
-            duplicate: skill.path,
-          });
           continue;
         }
         this.skills.set(name, skill);

@@ -4,11 +4,12 @@ import { mcpConfigSchema } from "./types.js";
 
 import type { McpConfig } from "./types.js";
 import type { CoreEnvFs } from "../../env.js";
-import type { AgentLog } from "../agent-log/agent-log.js";
 
 export interface McpConfigLoadResult {
   config: McpConfig;
   sourcePath: string;
+  /** Error messages encountered during loading (e.g. parse failures). */
+  loadErrors?: string[];
 }
 
 // ============================================================================
@@ -36,12 +37,13 @@ const FALLBACK_MCP_CONFIG_PATHS = [".mcp.json"];
  *
  * Returns null if no config file is found or all are invalid (MCP disabled).
  */
-export async function loadMcpConfig(log: AgentLog, configPath?: string): Promise<McpConfigLoadResult | null> {
+export async function loadMcpConfig(configPath?: string): Promise<McpConfigLoadResult | null> {
   const fs = getEnv().fs;
+  const errors: string[] = [];
 
   // If an explicit path is given, only check that one
   if (configPath) {
-    return loadSingleConfig(log, fs, configPath);
+    return loadSingleConfig(fs, configPath, errors);
   }
 
   // Otherwise, try the primary default first, then fallbacks
@@ -54,9 +56,9 @@ export async function loadMcpConfig(log: AgentLog, configPath?: string): Promise
       const content = await fs.readFile(path);
       const parsed = JSON.parse(content);
       const result = mcpConfigSchema.parse(parsed);
-      return { config: result, sourcePath: path };
+      return { config: result, sourcePath: path, loadErrors: errors.length > 0 ? errors : undefined };
     } catch (e) {
-      log.error("agent", `Load mcp config failed: ${path}`, e as Error);
+      errors.push(`Load mcp config failed: ${path} — ${e instanceof Error ? e.message : String(e)}`);
       // Continue to next fallback
     }
   }
@@ -67,19 +69,23 @@ export async function loadMcpConfig(log: AgentLog, configPath?: string): Promise
 /**
  * Try loading MCP config from a single path.
  */
-async function loadSingleConfig(log: AgentLog, fs: CoreEnvFs, path: string): Promise<McpConfigLoadResult | null> {
+async function loadSingleConfig(fs: CoreEnvFs, path: string, errors: string[]): Promise<McpConfigLoadResult | null> {
   try {
     const exists = await fs.exists(path);
     if (!exists) {
-      log.warn("agent", `MCP config file not found: ${path}`);
+      errors.push(`MCP config file not found: ${path}`);
       return null;
     }
 
     const content = await fs.readFile(path);
     const parsed = JSON.parse(content);
-    return { config: mcpConfigSchema.parse(parsed), sourcePath: path };
+    return {
+      config: mcpConfigSchema.parse(parsed),
+      sourcePath: path,
+      loadErrors: errors.length > 0 ? errors : undefined,
+    };
   } catch (e) {
-    log.error("agent", `Load mcp config failed: ${path}`, e as Error);
+    errors.push(`Load mcp config failed: ${path} — ${e instanceof Error ? e.message : String(e)}`);
     return null;
   }
 }

@@ -304,7 +304,6 @@ export class ManagedAgent {
       getError: () => this.error,
       setError: (error) => this.setError(error),
       setPendingApprovalCount: (count) => this.setPendingApprovalCount(count),
-      log: this.log,
       emitEvent: (type, data) => this.emitEvent(type, data),
     });
 
