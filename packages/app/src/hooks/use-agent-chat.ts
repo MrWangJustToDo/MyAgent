@@ -11,6 +11,7 @@ import { useAgentStatus } from "./use-agent-status.js";
 import { useAgent } from "./use-agent.js";
 import { useCallbackRef } from "./use-callback-ref.js";
 import { useForceUpdate } from "./use-force-update.js";
+import { useThinkingLine } from "./use-thinking-line.js";
 import { useTodoManager } from "./use-todo-manager.js";
 import { handleToolLifecycleEvent } from "./use-tool-timing-store.js";
 import { getWorkSpaceInfo } from "./use-workspace-info.js";
@@ -253,6 +254,30 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       { channels: ["messages", "queues", "state", "todos", "lifecycle"] }
     );
   }, [session, agent, forceUpdate]);
+
+  // Extract latest thinking content from messages for footer display.
+  // Only keep the last non-empty line for compact footer display.
+  useEffect(() => {
+    let latestThinking = "";
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role !== "assistant") continue;
+      for (let j = msg.parts.length - 1; j >= 0; j--) {
+        const part = msg.parts[j];
+        if (part.type === "thinking") {
+          const content = part.content ?? "";
+          if (content.length > 0) {
+            // Only the last non-empty line for streaming display
+            const lines = content.split("\n").filter((l) => l.trim().length > 0);
+            latestThinking = lines.length > 0 ? lines[lines.length - 1] : "";
+          }
+          break;
+        }
+      }
+      if (latestThinking) break;
+    }
+    useThinkingLine.getActions().setContent(latestThinking);
+  }, [messages]);
 
   const error = agentError ? new Error(agentError) : null;
   const isLoading = isAgentLoading(status);

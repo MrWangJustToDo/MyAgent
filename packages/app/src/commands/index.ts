@@ -11,6 +11,7 @@ import "./rename.js";
 import "./resume.js";
 import "./shortcuts.js";
 import "./theme.js";
+import "./thinking.js";
 import "./usage.js";
 
 export {

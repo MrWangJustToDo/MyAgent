@@ -16,6 +16,7 @@ import { useConfig } from "../hooks/use-config.js";
 import { useExtensionUI } from "../hooks/use-extension-ui.js";
 import { useInputMode } from "../hooks/use-input-mode.js";
 import { useSelect } from "../hooks/use-select.js";
+import { useThinkingLine } from "../hooks/use-thinking-line.js";
 import { useUserInput } from "../hooks/use-user-input.js";
 import { BG, COLORS } from "../theme/colors.js";
 import { formatStatusBarModeLabel } from "../utils/agent-mode-label.js";
@@ -178,6 +179,9 @@ const ContextBar = ({
 
   const error = _error || inputError;
 
+  const thinkingEnabled = useThinkingLine((s) => s.enabled);
+  const thinkingContent = useThinkingLine((s) => s.content);
+
   return (
     <Box flexDirection="column" paddingX={1} gap={0}>
       <Box gap={2}>
@@ -213,6 +217,12 @@ const ContextBar = ({
             </Text>
           )}
           {status === "error" && <Text color={COLORS.danger}>{error}</Text>}
+
+          {thinkingEnabled && thinkingContent && (
+            <Text color={COLORS.muted} dimColor wrap="truncate-end">
+              {thinkingContent}
+            </Text>
+          )}
 
           {inputFeedback && status !== "error" && (
             <Text
