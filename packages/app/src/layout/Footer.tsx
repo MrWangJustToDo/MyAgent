@@ -70,7 +70,7 @@ export const Footer = ({
     <FullBox flexDirection="column" flexGrow={1} flexShrink={0} paddingY={1}>
       {/* Thinking line — above the border, outside the footer panel */}
       {thinkingEnabled && thinkingContent && (
-        <Box paddingX={1} paddingBottom={1}>
+        <Box paddingX={1}>
           <Text color={COLORS.muted} dimColor wrap="truncate-end">
             {thinkingContent}
           </Text>

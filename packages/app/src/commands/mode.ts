@@ -77,13 +77,6 @@ function getModeOptions(): CommandOption[] {
     description: "Save/rename current plan (optional name)",
     freeform: true,
   });
-  options.push({
-    label: "plan load",
-    value: "plan load",
-    description: "Load a plan from workspace",
-    freeform: true,
-  });
-
   return options;
 }
 
