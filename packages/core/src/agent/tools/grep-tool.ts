@@ -148,11 +148,15 @@ function parseLineNumber(value: string): number | null {
  * (non-greedy path), not the last, so colons in file content are not mistaken for a line.
  * Context lines use `path-line-content` (rg uses `-` instead of `:` around the line number).
  */
-function parseGrepLine(line: string): { file: string; lineNumber: number; content: string } | null {
+function parseGrepLine(
+  line: string,
+  defaultFile?: string
+): { file: string; lineNumber: number; content: string } | null {
   if (line === "--") {
     return null;
   }
 
+  // Match `path:line:content` format (from recursive directory search)
   const matchLine = line.match(/^(.+?):(\d+):(.*)$/s);
   if (matchLine) {
     const lineNumber = parseLineNumber(matchLine[2]);
@@ -166,6 +170,22 @@ function parseGrepLine(line: string): { file: string; lineNumber: number; conten
     };
   }
 
+  // Match `line:content` format (from single file search without -r)
+  // This happens when searching a specific file; use defaultFile as the path.
+  const singleFileMatch = line.match(/^(\d+):(.*)$/s);
+  if (singleFileMatch && defaultFile) {
+    const lineNumber = parseLineNumber(singleFileMatch[1]);
+    if (lineNumber === null) {
+      return null;
+    }
+    return {
+      file: defaultFile,
+      lineNumber,
+      content: singleFileMatch[2],
+    };
+  }
+
+  // Context lines use `path-line-content` (rg uses `-` around the line number)
   const contextLine = line.match(/^(.+?)-(\d+)-(.*)$/s);
   if (contextLine) {
     const lineNumber = parseLineNumber(contextLine[2]);
@@ -312,7 +332,9 @@ export const createGrepTool = () => {
           allMatches = lines.map((line) => parseCountLine(line));
         } else {
           for (const line of lines) {
-            const parsed = parseGrepLine(line);
+            // When searching a single file, grep outputs `line:content` (no path).
+            // Pass searchPath as defaultFile so the parser can handle this format.
+            const parsed = parseGrepLine(line, searchPathIsFile ? searchPath : undefined);
             if (!parsed) continue;
 
             if (parsed.content.length > MAX_CONTENT_LENGTH) {
