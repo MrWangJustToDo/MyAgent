@@ -63,8 +63,20 @@ export const Footer = ({
   const steerCount = queuedMessages?.steer.length ?? 0;
   const followUpCount = queuedMessages?.followUp.length ?? 0;
 
+  const thinkingEnabled = useThinkingLine((s) => s.enabled);
+  const thinkingContent = useThinkingLine((s) => s.content);
+
   return (
     <FullBox flexDirection="column" flexGrow={1} flexShrink={0} paddingY={1}>
+      {/* Thinking line — above the border, outside the footer panel */}
+      {thinkingEnabled && thinkingContent && (
+        <Box paddingX={1} paddingBottom={1}>
+          <Text color={COLORS.muted} dimColor wrap="truncate-end">
+            {thinkingContent}
+          </Text>
+        </Box>
+      )}
+
       <Box
         borderLeft={false}
         borderRight={false}
@@ -179,9 +191,6 @@ const ContextBar = ({
 
   const error = _error || inputError;
 
-  const thinkingEnabled = useThinkingLine((s) => s.enabled);
-  const thinkingContent = useThinkingLine((s) => s.content);
-
   return (
     <Box flexDirection="column" paddingX={1} gap={0}>
       <Box gap={2}>
@@ -217,12 +226,6 @@ const ContextBar = ({
             </Text>
           )}
           {status === "error" && <Text color={COLORS.danger}>{error}</Text>}
-
-          {thinkingEnabled && thinkingContent && (
-            <Text color={COLORS.muted} dimColor wrap="truncate-end">
-              {thinkingContent}
-            </Text>
-          )}
 
           {inputFeedback && status !== "error" && (
             <Text
