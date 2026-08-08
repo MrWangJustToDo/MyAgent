@@ -94,15 +94,15 @@ function buildGrepCommand(
   }
 
   if (options.ignoreCase) {
-    command += "i";
+    command += " -i";
   }
 
   if (options.outputMode === "files_with_matches") {
-    command += "l";
+    command += " -l";
   } else if (options.outputMode === "count") {
-    command += "c";
+    command += " -c";
   } else {
-    command += "n";
+    command += " -n";
   }
 
   command += " --color=never";
