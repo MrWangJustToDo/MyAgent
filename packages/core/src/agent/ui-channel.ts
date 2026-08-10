@@ -186,6 +186,18 @@ export class AgentUIChannel {
     };
   }
 
+  /**
+   * Clear channel history and reset summary streaming state after a failed run.
+   *
+   * Used by subagent runners so a failed (non-aborted) run does not leave stale
+   * partial tool rows / summary text in the preview, and so the task-tool phase
+   * rolls back out of `summary`. Aborted runs intentionally keep partial work.
+   */
+  failRun(): void {
+    this.clearMessages();
+    this.endSummaryStream();
+  }
+
   /** Process a single stream chunk (for incremental bridge during `runAgent`). */
   processChunk(chunk: StreamChunk): void {
     if (shouldSuppressReplayedToolChunk(this.getMessages(), chunk)) {

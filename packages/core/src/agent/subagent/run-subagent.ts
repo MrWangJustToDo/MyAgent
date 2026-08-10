@@ -156,6 +156,14 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       previewMessages = channel?.getMessages() ?? previewMessages;
       output = extractAssistantText(previewMessages)?.trim() || "(no summary)";
     } else {
+      // Non-abort failure: clear the subagent's partial history and roll the
+      // task-tool phase back out of `summary` so the preview does not linger on
+      // stale tool rows / summary text after a failed run.
+      try {
+        channel.failRun();
+      } catch {
+        // ignore cleanup errors while propagating the run failure
+      }
       try {
         subagentManaged.finalizeRun(manager, "error");
       } catch {
