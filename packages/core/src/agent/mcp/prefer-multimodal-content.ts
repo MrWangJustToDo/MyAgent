@@ -6,7 +6,7 @@
  * We resolve results ourselves so vision-capable parts reach the model.
  */
 
-import type { ServerTool } from "@tanstack/ai";
+import type { AnyServerTool } from "@tanstack/ai";
 import type { MCPClient } from "@tanstack/ai-mcp";
 
 // ============================================================================
@@ -110,7 +110,7 @@ export function resolveMcpToolExecuteResult(toolName: string, result: McpCallToo
   return mcpContentToTanstack(result.content);
 }
 
-function readServerToolName(tool: ServerTool): string | undefined {
+function readServerToolName(tool: AnyServerTool): string | undefined {
   const mcp = tool.metadata?.mcp;
   if (!mcp || typeof mcp !== "object") return undefined;
   const name = (mcp as { serverToolName?: unknown }).serverToolName;
@@ -120,7 +120,7 @@ function readServerToolName(tool: ServerTool): string | undefined {
 /**
  * Replace TanStack MCP tool execute so multimodal content[] is not discarded.
  */
-export function wrapMcpToolForMultimodalContent(tool: ServerTool, client: MCPClient): ServerTool {
+export function wrapMcpToolForMultimodalContent(tool: AnyServerTool, client: MCPClient): AnyServerTool {
   const serverToolName = readServerToolName(tool);
   if (!serverToolName || typeof tool.execute !== "function") {
     return tool;

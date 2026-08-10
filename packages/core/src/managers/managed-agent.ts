@@ -1064,7 +1064,7 @@ export class ManagedAgent {
   isToolNeedsApproval(toolName: string): boolean {
     const tools = this.managedToolsProvider?.() ?? {};
     const tool = tools[toolName];
-    return tool != null && "needsApproval" in tool && tool.needsApproval === true;
+    return tool != null && "needsApproval" in tool && (tool as { needsApproval?: boolean }).needsApproval === true;
   }
 
   /** Create or replace the core-owned main chat session (StreamProcessor + run loop). */

@@ -1,4 +1,4 @@
-import { toolDefinition, type ClientTool, type InferSchemaType, type SchemaInput, type ServerTool } from "@tanstack/ai";
+import { toolDefinition, type InferSchemaType, type SchemaInput, type ServerTool, type ClientTool } from "@tanstack/ai";
 
 import { toModelOutputRegistry, type ModelToolContent, type ToModelOutputContext } from "./to-model-output-registry.js";
 import { registerToUI } from "./to-ui-registry.js";
@@ -71,7 +71,7 @@ export function defineServerTool<
       abortSignal: ctx?.abortSignal,
       agentId: runContext?.agentId,
     });
-  });
+  }) as ServerTool<TInput, TOutput, TName>;
 }
 
 /**
@@ -94,5 +94,5 @@ export function defineClientTool<
     inputSchema: config.inputSchema,
     outputSchema: config.outputSchema,
     needsApproval: config.needsApproval,
-  }).client();
+  }).client() as ClientTool<TInput, TOutput, TName>;
 }

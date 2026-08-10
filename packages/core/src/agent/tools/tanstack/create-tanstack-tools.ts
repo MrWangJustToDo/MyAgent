@@ -4,7 +4,7 @@ import { createTools } from "../create-tools.js";
 import { toolsToArray, type ToolsRecord } from "./tools-record.js";
 
 import type { ManagedAgent, UsageTracker } from "../../../runtime-types/hosts.js";
-import type { ClientTool, ServerTool } from "@tanstack/ai";
+import type { AnyClientTool, AnyServerTool } from "@tanstack/ai";
 
 // ============================================================================
 // Constants
@@ -42,24 +42,24 @@ const SUBAGENT_TOOL_NAMES = ["read_file", "glob", "grep", "list_file", "tree", "
 export function resolveToolsRecord(
   record: ToolsRecord,
   options: { exclude?: ReadonlySet<string> } = {}
-): Array<ServerTool | ClientTool> {
+): Array<AnyServerTool | AnyClientTool> {
   return toolsToArray(record, options);
 }
 
 /**
- * Read-only exploration subagent tools as {@link ServerTool}[].
+ * Read-only exploration subagent tools as {@link AnyServerTool}[].
  */
-export function createTanStackSubagentTools(managed?: ManagedAgent): ServerTool[] {
+export function createTanStackSubagentTools(managed?: ManagedAgent): AnyServerTool[] {
   const toolRecord = createSubagentTools(managed ?? ({} as ManagedAgent));
-  return toolsToArray(toolRecord, { exclude: SUBAGENT_EXCLUDED_TOOL_NAMES }) as ServerTool[];
+  return toolsToArray(toolRecord, { exclude: SUBAGENT_EXCLUDED_TOOL_NAMES }) as AnyServerTool[];
 }
 
 /**
  * Default root-agent filesystem/shell tools (before task/skills/MCP extensions).
  */
-export async function createTanStackTools(options: { usage?: UsageTracker } = {}): Promise<ServerTool[]> {
+export async function createTanStackTools(options: { usage?: UsageTracker } = {}): Promise<AnyServerTool[]> {
   const toolRecord = await createTools({ usage: options.usage });
-  return toolsToArray(toolRecord) as ServerTool[];
+  return toolsToArray(toolRecord) as AnyServerTool[];
 }
 
 /** Names of tools included in the default exploration subagent set (excluding begin_summary). */

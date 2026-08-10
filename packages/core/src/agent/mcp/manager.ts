@@ -6,7 +6,7 @@ import { wrapMcpToolForMultimodalContent } from "./prefer-multimodal-content.js"
 
 import type { McpConfig, McpServerConfig } from "./types.js";
 import type { McpProcessHandle } from "../../env.js";
-import type { ServerTool } from "@tanstack/ai";
+import type { AnyServerTool } from "@tanstack/ai";
 import type { MCPClient, TransportInput } from "@tanstack/ai-mcp";
 
 // ============================================================================
@@ -24,7 +24,7 @@ export interface McpServerStatus {
   url?: string;
 }
 
-export type McpToolsRecord = Record<string, ServerTool>;
+export type McpToolsRecord = Record<string, AnyServerTool>;
 
 // ============================================================================
 // Transport Factory

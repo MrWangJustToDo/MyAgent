@@ -1,20 +1,23 @@
-import type { ClientTool, ServerTool } from "@tanstack/ai";
+import type { AnyClientTool, AnyServerTool } from "@tanstack/ai";
 
 // ============================================================================
 // Tools record
 // ============================================================================
 
 /** Named TanStack tools assembled for a managed agent. */
-export type ToolsRecord = Record<string, ServerTool | ClientTool>;
+export type ToolsRecord = Record<string, AnyServerTool | AnyClientTool>;
 
 export interface ToolsToArrayOptions {
   exclude?: ReadonlySet<string>;
 }
 
 /** Flatten a tools record to the array expected by `chat({ tools })`. */
-export function toolsToArray(tools: ToolsRecord, options: ToolsToArrayOptions = {}): Array<ServerTool | ClientTool> {
+export function toolsToArray(
+  tools: ToolsRecord,
+  options: ToolsToArrayOptions = {}
+): Array<AnyServerTool | AnyClientTool> {
   const exclude = options.exclude ?? new Set<string>();
-  const result: Array<ServerTool | ClientTool> = [];
+  const result: Array<AnyServerTool | AnyClientTool> = [];
 
   // Sort by name so tool-schema prefixes stay byte-stable across Map/object iteration.
   for (const name of Object.keys(tools).sort((a, b) => a.localeCompare(b))) {

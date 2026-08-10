@@ -1,6 +1,4 @@
-import { toolDefinition } from "@tanstack/ai";
-
-import type { ClientTool, SchemaInput, ServerTool } from "@tanstack/ai";
+import { toolDefinition, type AnyClientTool, type AnyServerTool, type SchemaInput } from "@tanstack/ai";
 
 // ============================================================================
 // Types
@@ -15,10 +13,10 @@ export type ExternalBridgedTool = {
 };
 
 /**
- * Bridge a non-TanStack external tool definition into {@link ServerTool}.
+ * Bridge a non-TanStack external tool definition into {@link AnyServerTool}.
  * Used by integrators; in-repo tools use {@link defineServerTool} directly.
  */
-export function bridgeExternalToolToServer(name: string, external: ExternalBridgedTool): ServerTool {
+export function bridgeExternalToolToServer(name: string, external: ExternalBridgedTool): AnyServerTool {
   const definition = toolDefinition({
     name,
     description: external.description ?? name,
@@ -42,9 +40,9 @@ export function bridgeExternalToolToServer(name: string, external: ExternalBridg
 }
 
 /**
- * Bridge a non-TanStack external tool definition into {@link ClientTool}.
+ * Bridge a non-TanStack external tool definition into {@link AnyClientTool}.
  */
-export function bridgeExternalToolToClient(name: string, external: ExternalBridgedTool): ClientTool {
+export function bridgeExternalToolToClient(name: string, external: ExternalBridgedTool): AnyClientTool {
   return toolDefinition({
     name,
     description: external.description ?? name,
