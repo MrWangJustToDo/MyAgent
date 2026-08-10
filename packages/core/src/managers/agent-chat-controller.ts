@@ -230,7 +230,9 @@ export class AgentChatController {
   }
 
   private shouldDeferQueue(): boolean {
-    if (this.pumpDepth > 0) return true;
+    // pumpDepth > 0 alone is not sufficient — the agent may have been aborted
+    // (pump finally block hasn't run yet), and queuing a message here would
+    // leave it stranded since the exiting pump never drains the queue.
     return isActiveStatus(this.managed.status);
   }
 
