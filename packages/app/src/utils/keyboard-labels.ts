@@ -58,6 +58,7 @@ export const KeyLabel = {
   ctrlT: "Ctrl+T",
   ctrlU: "Ctrl+U",
   ctrlV: "Ctrl+V",
+  ctrlY: "Ctrl+Y",
   shiftEnter: "Shift+Enter",
   shiftTab: "Shift+Tab",
 } as const;
@@ -105,6 +106,7 @@ export function headerShortcutTips(): ReadonlyArray<{ key: string; desc: string 
     { key: KeyLabel.shiftTab, desc: "Cycle mode (normal → auto → plan)" },
     { key: KeyLabel.ctrlE, desc: "workspace" },
     { key: KeyLabel.ctrlT, desc: "task panel" },
+    { key: KeyLabel.ctrlY, desc: "extensions panel" },
     { key: KeyLabel.esc, desc: "to abort" },
   ];
 }
@@ -140,6 +142,7 @@ export function getKeyboardShortcutSections(): ShortcutSection[] {
         { key: KeyLabel.p, desc: "Review plan markdown (when plan ready, input empty)" },
         { key: KeyLabel.ctrlE, desc: "Workspace panel" },
         { key: KeyLabel.ctrlT, desc: "Task / subagent panel" },
+        { key: KeyLabel.ctrlY, desc: "Extensions panel (view / toggle)" },
       ],
     },
     {

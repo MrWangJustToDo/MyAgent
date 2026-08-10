@@ -301,6 +301,15 @@ export class AgentManager {
       managedAgent.emitEvent("subagent:destroyed", { subagentId: id }, { parentId: managedAgent.parentId });
     }
 
+    // Teardown extensions: emit interceptable session:shutdown first (so extensions can
+    // release resources, e.g. kill LSP daemons), then deactivate/destroy all extensions.
+    // This fixes a pre-existing leak where extensionRunner.destroyAll() was never called.
+    const runner = managedAgent.extensionRunner;
+    if (runner) {
+      runner.emitSessionShutdown(id);
+      void runner.destroyAll();
+    }
+
     this.agents.delete(id);
   }
 

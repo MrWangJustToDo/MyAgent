@@ -10,6 +10,7 @@ import { cycleAgentMode } from "../utils/plan-mode-toggle.js";
 import { useAgent } from "./use-agent.js";
 import { useAutocomplete } from "./use-autocomplete.js";
 import { useCommandOutput } from "./use-command-output.js";
+import { useExtensionPanel, CLOSE_DEBOUNCE_MS as EXTENSION_CLOSE_DEBOUNCE_MS } from "./use-extension-panel.js";
 import { usePlanPreview } from "./use-plan-preview.js";
 import { useSelect } from "./use-select.js";
 import { useSubagentPanel, CLOSE_DEBOUNCE_MS as SUBAGENT_CLOSE_DEBOUNCE_MS } from "./use-subagent-panel.js";
@@ -105,6 +106,12 @@ export function useAgentKeybindings({
 
     if (handleExtensionConfirmKeys(inputChar, inputKey)) return;
 
+    // Extension panel open: let the panel handle non-Ctrl keys (Esc/Enter/↑↓);
+    // keep global Ctrl shortcuts (exit, toggle) working.
+    if (useExtensionPanel.getReadonlyState().view !== "closed" && !inputKey.ctrl && !inputKey.meta) {
+      return;
+    }
+
     if (inputKey.ctrl && inputChar === "c") {
       const agent = useAgent.getReadonlyState().agent;
       if (agent) agentManager.destroyAgent(agent.id);
@@ -148,6 +155,11 @@ export function useAgentKeybindings({
       return;
     }
 
+    if (inputKey.ctrl && inputChar === "y") {
+      useExtensionPanel.getActions().toggle();
+      return;
+    }
+
     if (inputKey.ctrl && inputChar === "e") {
       const ws = useWorkspaceView.getReadonlyState();
       if (ws.view === "workspace") {
@@ -165,6 +177,10 @@ export function useAgentKeybindings({
       if (panel.view !== "closed") {
         return;
       }
+      const extPanel = useExtensionPanel.getReadonlyState();
+      if (extPanel.view !== "closed") {
+        return;
+      }
       if (usePlanPreview.getReadonlyState().open) {
         usePlanPreview.getActions().hide();
         return;
@@ -175,6 +191,9 @@ export function useAgentKeybindings({
       }
       // Debounce: prevent ESC from calling stop() right after panel closes.
       if (Date.now() - panel.lastClosedAt < SUBAGENT_CLOSE_DEBOUNCE_MS) {
+        return;
+      }
+      if (Date.now() - extPanel.lastClosedAt < EXTENSION_CLOSE_DEBOUNCE_MS) {
         return;
       }
       if (useAutocomplete.getReadonlyState().visible) {
@@ -198,6 +217,8 @@ export function useAgentKeybindings({
       if (handleExtensionConfirmKeys(inputChar, inputKey)) return;
       // Workspace panel open: skip all normal-mode input handlers
       if (useWorkspaceView.getReadonlyState().view === "workspace") return;
+      // Extension panel open: let the panel handle its own keys
+      if (useExtensionPanel.getReadonlyState().view !== "closed") return;
 
       if (inputKey.tab && inputKey.shift) {
         // Shift+Tab cycles agent mode: normal → auto → plan → normal → …

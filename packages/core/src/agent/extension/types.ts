@@ -1,5 +1,6 @@
 import type { ExtensionZod } from "./extension-zod.js";
-import type { ZodType } from "zod";
+import type { CoreEnv } from "../../env.js";
+import type { SchemaInput } from "@tanstack/ai";
 
 export type { ExtensionZod } from "./extension-zod.js";
 
@@ -27,8 +28,12 @@ export type ExtensionLifecycleEvent = "bootstrap" | "activate" | "deactivate" | 
 export interface ExtensionToolDefinition {
   name: string;
   description: string;
-  inputSchema: ZodType;
-  outputSchema?: ZodType;
+  /**
+   * Any Standard-Schema / JSON-Schema compliant schema (Zod, ArkType, Valibot, or a plain JSON Schema object).
+   * Not locked to Zod — see {@link ExtensionContext.z} for the convenience Zod API.
+   */
+  inputSchema: SchemaInput;
+  outputSchema?: SchemaInput;
   execute: (input: unknown, options: ToolExecutionOptions) => Promise<ToolCallResult>;
   toUI?: (result: unknown) => string;
 }
@@ -84,6 +89,8 @@ export interface ToolAfterPayload {
   args: unknown;
   result: unknown;
   durationMs: number;
+  /** Set by an interceptor to replace the tool result returned to the model. */
+  modifiedResult?: unknown;
 }
 
 export interface ToolAfterEvent extends InterceptableEvent<ToolAfterPayload> {
@@ -138,6 +145,32 @@ export interface ExtensionPromptAppends {
 // Union type for tool lifecycle events
 // ============================================================================
 
+// ============================================================================
+// Session lifecycle events (per-agent ExtensionEventBus)
+// ============================================================================
+
+export interface SessionStartPayload {
+  /** Working directory (rootPath) of the agent session. */
+  cwd: string;
+  /** Root agent / session id. */
+  sessionId: string;
+}
+
+export interface SessionStartEvent extends InterceptableEvent<SessionStartPayload> {
+  type: "session:start";
+  payload: SessionStartPayload;
+}
+
+export interface SessionShutdownPayload {
+  /** Root agent / session id. */
+  sessionId: string;
+}
+
+export interface SessionShutdownEvent extends InterceptableEvent<SessionShutdownPayload> {
+  type: "session:shutdown";
+  payload: SessionShutdownPayload;
+}
+
 export type ToolLifecycleEvent = ToolBeforeEvent | ToolAfterEvent | ToolErrorEvent;
 
 export interface ExtensionEventBus {
@@ -153,6 +186,22 @@ export interface ExtensionEventBus {
 export interface ExtensionUI {
   notify(type: string, data: unknown): void;
   subscribe<T = unknown>(type: string, handler: (data: T) => void): () => void;
+  /**
+   * Set a status-bar entry for this extension (rendered by the host UI, e.g. footer).
+   * Degrades gracefully: publishes a `set-status` notification the host can render.
+   */
+  setStatus(key: string, text: string): void;
+  /**
+   * Read the current status entries (key → text) set via {@link setStatus}.
+   * Lets a host reconcile state that changed before it subscribed (e.g. during
+   * bootstrap, before the app's `set-status` subscription mounts).
+   */
+  getStatus(): Readonly<Record<string, string>>;
+  /**
+   * Minimal theme helper: colorize `text` for a given semantic color name.
+   * Returns a plain string (host decides whether/how to render ANSI color).
+   */
+  theme: { fg(color: string, text: string): string };
 }
 
 // ============================================================================
@@ -162,6 +211,14 @@ export interface ExtensionUI {
 export interface ExtensionContext {
   id: string;
   env: Record<string, string>;
+  /** Working directory (rootPath) of the agent session. */
+  cwd: string;
+  /**
+   * Runtime-agnostic environment: filesystem, shell, fetch, path utilities, env vars,
+   * and rootPath — the single source of truth for host capabilities. Lets extensions
+   * perform real I/O (read files, run commands, fetch) without importing host-specific APIs.
+   */
+  coreEnv: CoreEnv;
 
   /**
    * Host-provided Zod `z` API (same package version as core).
@@ -210,11 +267,42 @@ export interface ExtensionFactory {
 // Extension instance (internal)
 // ============================================================================
 
+/** Tracks everything an extension registered, so disabling can unregister it. */
+export interface ExtensionRegistrations {
+  /** Tool names registered by this extension. */
+  tools: string[];
+  /** Command names registered by this extension. */
+  commands: string[];
+  /** Unsubscribe callbacks for event-bus interceptors. */
+  unsubInterceptors: Array<() => void>;
+  /** Unsubscribe callbacks for turn-context providers. */
+  unsubTurnContext: Array<() => void>;
+}
+
 export interface ExtensionInstance {
   api: ExtensionAPI;
   context: ExtensionContext;
   state: "inactive" | "active" | "error";
   error?: Error;
+  /** Artifacts this extension registered (used by enable/disable). */
+  registrations: ExtensionRegistrations;
+}
+
+/** Public, read-only description of a loaded extension (for management commands). */
+export interface ExtensionInfo {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  /** Whether the extension is currently active (enabled) and running. */
+  enabled: boolean;
+  /** "active" | "error" | "inactive" */
+  state: ExtensionInstance["state"];
+  error?: string;
+  /** Tools this extension registered (when enabled). */
+  tools: string[];
+  /** Commands this extension registered (when enabled). */
+  commands: string[];
 }
 
 // ============================================================================

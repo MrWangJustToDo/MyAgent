@@ -1,3 +1,5 @@
+import { getEnv, hasCoreEnv } from "../../env.js";
+
 import { z } from "./extension-zod.js";
 import { joinExtensionAppendSegments } from "./join-append-segments.js";
 
@@ -15,7 +17,10 @@ import type {
   BeforeAgentStartEvent,
   ExtensionPromptAppends,
   TurnContextProvider,
+  ExtensionRegistrations,
+  ExtensionInfo,
 } from "./types.js";
+import type { CoreEnv } from "../../env.js";
 
 // ============================================================================
 // ExtensionEventBus implementation
@@ -66,6 +71,8 @@ class DefaultExtensionEventBus implements ExtensionEventBus {
 
 class DefaultExtensionUI implements ExtensionUI {
   private subscribers = new Map<string, Set<(data: unknown) => void>>();
+  /** Retained status state so late subscribers can reconcile (e.g. after bootstrap). */
+  private statusMap = new Map<string, string>();
 
   notify(type: string, data: unknown): void {
     const handlers = this.subscribers.get(type);
@@ -89,6 +96,21 @@ class DefaultExtensionUI implements ExtensionUI {
       this.subscribers.get(type)?.delete(handler as (data: unknown) => void);
     };
   }
+
+  setStatus(key: string, text: string): void {
+    // Retain the latest value so hosts that subscribe after the update can read it.
+    this.statusMap.set(key, text);
+    // Publish a `set-status` notification the host UI renders in its status bar.
+    this.notify("set-status", { key, text });
+  }
+
+  getStatus(): Readonly<Record<string, string>> {
+    return Object.fromEntries(this.statusMap);
+  }
+
+  theme = {
+    fg: (color: string, text: string): string => text,
+  };
 }
 
 // ============================================================================
@@ -99,12 +121,26 @@ export interface ExtensionRunnerOptions {
   getEnvVar: (key: string) => string | undefined;
   onRegisterTool?: (def: ExtensionToolDefinition) => void;
   onRegisterCommand?: (cmd: ExtensionCommand) => void;
+  /** Unregister a previously registered tool (used when disabling an extension). */
+  onUnregisterTool?: (name: string) => void;
+  /** Unregister a previously registered command (used when disabling an extension). */
+  onUnregisterCommand?: (name: string) => void;
+  /** Working directory (rootPath) injected into {@link ExtensionContext.cwd}. */
+  cwd?: string;
+  /**
+   * Resolve the runtime CoreEnv to inject into {@link ExtensionContext.coreEnv}.
+   * Defaults to the globally registered CoreEnv (`getEnv()`).
+   */
+  getCoreEnv?: () => CoreEnv;
 }
 
 export class ExtensionRunner {
   private extensions: ExtensionInstance[] = [];
   private toolRegistry = new Map<string, ExtensionToolDefinition>();
   private commandRegistry = new Map<string, ExtensionCommand>();
+  /** name → owning extension id, to unregister only the owner's artifact on disable. */
+  private toolOwners = new Map<string, string>();
+  private commandOwners = new Map<string, string>();
   private turnContextProviders = new Set<TurnContextProvider>();
   private eventBus: DefaultExtensionEventBus;
   private ui: DefaultExtensionUI;
@@ -122,6 +158,30 @@ export class ExtensionRunner {
 
   getUI(): ExtensionUI {
     return this.ui;
+  }
+
+  /**
+   * Emit `session:start` to registered interceptors (per-agent ExtensionEventBus).
+   * Distinct from the AgentEventBus telemetry `session:start` — this one is
+   * interceptable by extensions.
+   */
+  emitSessionStart(cwd: string, sessionId: string): void {
+    void this.eventBus.emit({
+      type: "session:start",
+      payload: { cwd, sessionId },
+      defaultReturn: undefined,
+    });
+  }
+
+  /**
+   * Emit `session:shutdown` to registered interceptors before teardown.
+   */
+  emitSessionShutdown(sessionId: string): void {
+    void this.eventBus.emit({
+      type: "session:shutdown",
+      payload: { sessionId },
+      defaultReturn: undefined,
+    });
   }
 
   getTools(): ExtensionToolDefinition[] {
@@ -179,12 +239,19 @@ export class ExtensionRunner {
   }
 
   async loadExtension(api: ExtensionAPI, config?: ExtensionConfig): Promise<ExtensionInstance> {
-    const ctx = this.createContext(api, config);
+    const registrations: ExtensionRegistrations = {
+      tools: [],
+      commands: [],
+      unsubInterceptors: [],
+      unsubTurnContext: [],
+    };
+    const ctx = this.createContext(api, config, registrations);
 
     const instance: ExtensionInstance = {
       api,
       context: ctx,
       state: "inactive",
+      registrations,
     };
 
     this.extensions.push(instance);
@@ -194,6 +261,9 @@ export class ExtensionRunner {
       instance.state = "active";
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
+      // Roll back any artifacts registered before the failure so a later re-enable
+      // starts clean (no duplicate registrations).
+      this.unregisterInstanceArtifacts(instance);
       instance.state = "error";
       instance.error = error;
       ctx.logger.error(`Failed to activate extension "${api.id}": ${error.message}`);
@@ -210,6 +280,7 @@ export class ExtensionRunner {
         // Swallow deactivation errors
       }
     }
+    this.unregisterInstanceArtifacts(instance);
     instance.state = "inactive";
   }
 
@@ -220,22 +291,117 @@ export class ExtensionRunner {
     this.extensions = [];
     this.toolRegistry.clear();
     this.commandRegistry.clear();
+    this.toolOwners.clear();
+    this.commandOwners.clear();
     this.turnContextProviders.clear();
   }
 
-  private createContext(api: ExtensionAPI, config?: ExtensionConfig): ExtensionContext {
+  /** Read-only snapshot of loaded extensions for management commands. */
+  getExtensionInfos(): ExtensionInfo[] {
+    return this.extensions.map((instance) => ({
+      id: instance.api.id,
+      name: instance.api.name,
+      version: instance.api.version,
+      description: instance.api.description,
+      enabled: instance.state === "active",
+      state: instance.state,
+      error: instance.error?.message,
+      tools: [...instance.registrations.tools],
+      commands: [...instance.registrations.commands],
+    }));
+  }
+
+  /**
+   * Enable or disable an extension at runtime. Disabling deactivates it and unregisters
+   * its tools/commands/interceptors/turn-context providers; enabling re-activates it.
+   * Returns a result describing what happened.
+   */
+  async setEnabled(id: string, enabled: boolean): Promise<{ ok: boolean; message: string }> {
+    const instance = this.extensions.find((e) => e.api.id === id);
+    if (!instance) return { ok: false, message: `Extension "${id}" not loaded` };
+
+    const already = instance.state === "active";
+    if (enabled && already) return { ok: true, message: `Extension "${id}" already enabled` };
+    if (!enabled && !already) return { ok: true, message: `Extension "${id}" already disabled` };
+
+    if (enabled) {
+      try {
+        await instance.api.activate(instance.context);
+        instance.state = "active";
+        instance.error = undefined;
+        return { ok: true, message: `Extension "${id}" enabled` };
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        // Roll back any artifacts registered before the failure.
+        this.unregisterInstanceArtifacts(instance);
+        instance.state = "error";
+        instance.error = error;
+        return { ok: false, message: `Failed to enable "${id}": ${error.message}` };
+      }
+    }
+
+    await this.destroyExtension(instance);
+    return { ok: true, message: `Extension "${id}" disabled` };
+  }
+
+  /**
+   * Unregister all artifacts an extension registered during activate().
+   * Tools/commands are removed from the registry and the host; interceptors and
+   * turn-context providers are unsubscribed.
+   */
+  private unregisterInstanceArtifacts(instance: ExtensionInstance): void {
+    for (const name of instance.registrations.tools) {
+      // Only unregister when this extension still owns the artifact — a later extension
+      // may have overwritten the same name, and we must not remove its registration.
+      if (this.toolOwners.get(name) !== instance.api.id) continue;
+      this.toolOwners.delete(name);
+      this.toolRegistry.delete(name);
+      this.options.onUnregisterTool?.(name);
+    }
+    for (const name of instance.registrations.commands) {
+      if (this.commandOwners.get(name) !== instance.api.id) continue;
+      this.commandOwners.delete(name);
+      this.commandRegistry.delete(name);
+      this.options.onUnregisterCommand?.(name);
+    }
+    for (const unsub of instance.registrations.unsubInterceptors) {
+      unsub();
+    }
+    for (const unsub of instance.registrations.unsubTurnContext) {
+      unsub();
+    }
+    // Clear in place (`.length = 0`) rather than reassigning: the `createContext`
+    // closures reference `registrations` and may read/capture these arrays at call
+    // time. Reassigning would silently desync re-enabled registrations from the
+    // instance, leaking them on a later disable.
+    instance.registrations.tools.length = 0;
+    instance.registrations.commands.length = 0;
+    instance.registrations.unsubInterceptors.length = 0;
+    instance.registrations.unsubTurnContext.length = 0;
+  }
+
+  private createContext(
+    api: ExtensionAPI,
+    config?: ExtensionConfig,
+    registrations?: ExtensionRegistrations
+  ): ExtensionContext {
     return {
       id: api.id,
       env: this.resolveEnv(api.id, config?.config),
       z,
-
+      cwd: this.options.cwd ?? "",
+      coreEnv: this.resolveCoreEnv(),
       registerTool: (def: ExtensionToolDefinition) => {
         this.toolRegistry.set(def.name, def);
+        this.toolOwners.set(def.name, api.id);
+        registrations?.tools.push(def.name);
         this.options.onRegisterTool?.(def);
       },
 
       registerCommand: (cmd: ExtensionCommand) => {
         this.commandRegistry.set(cmd.name, cmd);
+        this.commandOwners.set(cmd.name, api.id);
+        registrations?.commands.push(cmd.name);
         this.options.onRegisterCommand?.(cmd);
       },
 
@@ -243,14 +409,18 @@ export class ExtensionRunner {
         eventType: string,
         handler: EventInterceptor<T>
       ): (() => void) => {
-        return this.eventBus.on(eventType, handler);
+        const unsub = this.eventBus.on(eventType, handler);
+        registrations?.unsubInterceptors.push(unsub);
+        return unsub;
       },
 
       registerTurnContextProvider: (fn: TurnContextProvider): (() => void) => {
         this.turnContextProviders.add(fn);
-        return () => {
+        const unsub = () => {
           this.turnContextProviders.delete(fn);
         };
+        registrations?.unsubTurnContext.push(unsub);
+        return unsub;
       },
 
       events: this.eventBus,
@@ -260,6 +430,53 @@ export class ExtensionRunner {
         info: (msg: string) => console.log(`[extension:${api.id}] ${msg}`),
         warn: (msg: string) => console.warn(`[extension:${api.id}] ${msg}`),
         error: (msg: string) => console.error(`[extension:${api.id}] ${msg}`),
+      },
+    };
+  }
+
+  private resolveCoreEnv(): CoreEnv {
+    // Prefer the explicitly injected provider; else the globally registered CoreEnv if present;
+    // else a minimal non-throwing stub so extension construction never fails in hosts that
+    // build an ExtensionRunner standalone (e.g. validation scripts).
+    if (this.options.getCoreEnv) return this.options.getCoreEnv();
+    if (hasCoreEnv()) return getEnv();
+    return {
+      rootPath: this.options.cwd ?? "",
+      getPlatform: async () => "unknown",
+      getArch: async () => "unknown",
+      getEnv: async () => ({}),
+      homedir: async () => "",
+      fs: {
+        readFile: async () => {
+          throw new Error("CoreEnv not registered");
+        },
+        stat: async () => {
+          throw new Error("CoreEnv not registered");
+        },
+        readdir: async () => {
+          throw new Error("CoreEnv not registered");
+        },
+        writeFile: async () => {
+          throw new Error("CoreEnv not registered");
+        },
+        mkdir: async () => {
+          throw new Error("CoreEnv not registered");
+        },
+        exists: async () => {
+          throw new Error("CoreEnv not registered");
+        },
+        remove: async () => {
+          throw new Error("CoreEnv not registered");
+        },
+      },
+      runCommand: async () => {
+        throw new Error("CoreEnv not registered");
+      },
+      exec: async () => {
+        throw new Error("CoreEnv not registered");
+      },
+      fetch: async () => {
+        throw new Error("CoreEnv not registered");
       },
     };
   }

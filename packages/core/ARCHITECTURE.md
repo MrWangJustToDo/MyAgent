@@ -707,13 +707,15 @@ Task / compact summary text uses `ManagedAgent.summaryStreams` (`SummaryStreamHu
 
 `ExtensionEventBus` (`tool:before:*` / `tool:after:*` / `tool:error:*` / `before_agent_start`) is invoked from middleware and prepare-for-run. It does **not** replace AgentEventBus. There is **no** `.agent-hooks` / hook-script path — customize via `.agents/extension` modules or programmatic `config.extensions`.
 
+The ExtensionEventBus also carries **session lifecycle events** (distinct from the L2 `session:start` telemetry): `session:start` (emitted at the end of `emitSessionBootstrapEvents`, payload `{ cwd, sessionId }`) and `session:shutdown` (emitted in `AgentManager.destroyAgent()` before `extensionRunner.destroyAll()`, so extensions can release resources first).
+
 **Per-turn prompt hooks:** On each root user prompt (not tool continuations / subagents), `prepareForRun` calls `ExtensionRunner.collectBeforeAgentStart`, which:
 
 1. Runs `before_agent_start` interceptors (fresh event per handler; `appendTurnContext` / `appendSystemPrompt` are chained append-only).
 2. Runs `registerTurnContextProvider` callbacks.
 3. Merges turn-context text into `<extension_context>` inside the dynamic turn snapshot; `appendSystemPrompt` is merged into the same `<turn_context>` user message payload (frozen system stays cacheable).
 
-Repo demos live in `examples/extensions/` and are **opt-in** via `AGENT_EXTENSION_DIRS`, `ManagedAgentConfig.extensionDirs`, or CLI `--extension-dirs` (not in core defaults). Extension `registerCommand()` is mirrored onto `ManagedAgent` and synced into app slash commands after bootstrap (`syncExtensionCommands`). Built-in names (`/help`, …) win over extension conflicts. `registerTool()` converts definitions via `defineServerTool` before they enter the TanStack tool set. Tool schemas must use **`ctx.z`** (host Zod); filesystem extensions should not import `zod`.
+Repo demos live in `examples/extensions/` and are **opt-in** via `AGENT_EXTENSION_DIRS`, `ManagedAgentConfig.extensionDirs`, or CLI `--extension-dirs` (not in core defaults). Extension `registerCommand()` is mirrored onto `ManagedAgent` and synced into app slash commands after bootstrap (`syncExtensionCommands`). Built-in names (`/help`, …) win over extension conflicts. `registerTool()` converts definitions via `defineServerTool` before they enter the TanStack tool set. Tool schemas may use **`ctx.z`** (host Zod) or any Standard-Schema / JSON-Schema-compliant schema (the `inputSchema`/`outputSchema` type is the widened `SchemaInput`). `tool:after:*` interceptors can set `event.payload.modifiedResult` to replace the model-facing result. `ExtensionUI.setStatus(key, text)` publishes a `set-status` notification the app footer renders, and `ctx.ui.theme.fg(color, text)` returns a plain (host-rendered) colored string. Each `ExtensionContext` also exposes `ctx.coreEnv` (the runtime CoreEnv: `rootPath`, `fs`, `runCommand`, `exec`, `fetch`, `path`, `getEnv`) so extensions do real I/O without importing host-specific APIs — `agent-factory.ts` wires it from the global `getEnv()`. `ExtensionRunner.getExtensionInfos()` + `setEnabled(id, enabled)` power the app **Extensions panel** (`Ctrl+Y`, list / toggle enable-disable); disabling calls `deactivate()` and unregisters the extension's tools, commands, interceptors, and turn-context providers (wired via `onUnregisterTool`/`onUnregisterCommand` → `ManagedAgent.unregisterExtensionTool/Command`).
 ---
 
 ## 9. End-to-end run diagram
@@ -809,6 +811,7 @@ pnpm --filter @my-agent/core run validate:agent-ui-channel
 pnpm --filter @my-agent/core run validate:suppress-replayed-tool-chunks
 pnpm --filter @my-agent/core run validate:early-tool-result-ui
 pnpm --filter @my-agent/core run validate:extension-prompt-hooks
+pnpm --filter @my-agent/core run validate:extension-pi-like
 pnpm --filter @my-agent/core run validate:streaming-scope
 pnpm --filter @my-agent/core run validate:summary-stream
 pnpm --filter @my-agent/core run validate:local-agent-session

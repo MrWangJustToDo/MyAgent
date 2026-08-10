@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 
 import { ExtensionConfirm } from "../components/ExtensionConfirm.js";
+import { ExtensionPanel } from "../components/ExtensionPanel.js";
 import { ExtensionWidget } from "../components/ExtensionWidget.js";
 import { FullBox } from "../components/FullBox.js";
 import { MessageViewWithCompact } from "../components/MessageListWithCompact.js";
@@ -12,6 +13,7 @@ import { useAdapter } from "../context/adapter-context.js";
 import { useAgentChat } from "../hooks/use-agent-chat.js";
 import { useAgentInputControls } from "../hooks/use-agent-input-controls.js";
 import { useConfig } from "../hooks/use-config.js";
+import { useExtensionPanel } from "../hooks/use-extension-panel.js";
 import { useExtensionUI, useExtensionUIBridge } from "../hooks/use-extension-ui.js";
 import { useSize } from "../hooks/use-size.js";
 import { useStatic } from "../hooks/use-static.js";
@@ -66,6 +68,8 @@ export const Agent = () => {
   const subagentPanelOpen = subagentPanelView !== "closed";
   const workspaceView = useWorkspaceView((s) => s.view);
   const workspaceOpen = workspaceView === "workspace";
+  const extensionPanelView = useExtensionPanel((s) => s.view);
+  const extensionPanelOpen = extensionPanelView !== "closed";
 
   useExtensionUIBridge();
 
@@ -126,6 +130,8 @@ export const Agent = () => {
         </Box>
       ) : subagentPanelOpen ? (
         <SubagentPanel />
+      ) : extensionPanelOpen ? (
+        <ExtensionPanel />
       ) : (
         <>
           <MessageViewWithCompact messages={messages} />

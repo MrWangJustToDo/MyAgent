@@ -721,6 +721,19 @@ export class ManagedAgent {
     this.extensionCommands.set(cmd.name, cmd);
   }
 
+  /** Unregister a tool previously added by an extension (used when disabling). */
+  unregisterExtensionTool(name: string): void {
+    if (name in this.tools) {
+      delete (this.tools as Record<string, unknown>)[name];
+      this.setRunnerConfigKey(undefined);
+    }
+  }
+
+  /** Unregister a command previously added by an extension (used when disabling). */
+  unregisterExtensionCommand(name: string): void {
+    this.extensionCommands.delete(name);
+  }
+
   getExtensionCommands(): ExtensionCommand[] {
     if (this.extensionRunner) {
       return this.extensionRunner.getCommands();

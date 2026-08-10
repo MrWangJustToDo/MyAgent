@@ -62,6 +62,18 @@ export function useExtensionUIBridge(): void {
 
     useExtensionUI.getActions().setNotifyExtension((type, data) => ui.notify(type, data));
 
+    // Reconcile status that was set before this subscription mounted (e.g. during
+    // bootstrap, when `session:start` fired before the app subscribed). Pick the
+    // latest non-empty status so the footer reflects extension state immediately.
+    const snapshot = ui.getStatus();
+    let latest: string | undefined;
+    for (const text of Object.values(snapshot)) {
+      if (text && text.length > 0) latest = text;
+    }
+    if (latest) {
+      useExtensionUI.getActions().setStatusText(latest);
+    }
+
     const unsubs = [
       ui.subscribe<{ message: string; level?: "success" | "info" | "error" }>("notify", (data) => {
         useUserInput.getActions().setInputFeedback(data.message, data.level ?? "info");

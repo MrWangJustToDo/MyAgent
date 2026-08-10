@@ -169,9 +169,15 @@ export async function buildManagedAgent({
 
   if (!parentId) {
     const extensionRunner = new ExtensionRunner({
-      getEnvVar: (_key: string) => undefined,
+      // Extensions access the environment primarily via ctx.coreEnv.getEnv() (async).
+      // getEnvVar stays a sync best-effort hook for convenience fields like API keys.
+      getEnvVar: () => undefined,
       onRegisterTool: (def) => managed.registerTool(def),
       onRegisterCommand: (cmd) => managed.registerCommand(cmd),
+      onUnregisterTool: (name) => managed.unregisterExtensionTool(name),
+      onUnregisterCommand: (name) => managed.unregisterExtensionCommand(name),
+      cwd: fsRootPath,
+      getCoreEnv: () => getEnv(),
     });
     managed.extensionRunner = extensionRunner;
 

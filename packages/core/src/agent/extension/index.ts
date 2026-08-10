@@ -33,6 +33,11 @@ export type {
   ToolLifecycleEvent,
   BeforeAgentStartEvent,
   BeforeAgentStartPayload,
+  SessionStartEvent,
+  SessionStartPayload,
+  SessionShutdownEvent,
+  SessionShutdownPayload,
+  ExtensionInfo,
   ExtensionPromptAppends,
   TurnContextProvider,
 } from "./types.js";

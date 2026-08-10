@@ -207,6 +207,7 @@ export type {
   BeforeAgentStartPayload,
   ExtensionPromptAppends,
   TurnContextProvider,
+  ExtensionInfo,
 } from "./agent/extension";
 
 // ============================================================================

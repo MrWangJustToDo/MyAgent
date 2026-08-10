@@ -1,5 +1,5 @@
 import type { ExtensionRunner } from "../../agent/extension/runner.js";
-import type { ToolBeforeEvent } from "../../agent/extension/types.js";
+import type { ToolAfterEvent, ToolBeforeEvent } from "../../agent/extension/types.js";
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { TodoManager } from "../../agent/todo-manager";
 import type { AgentEventType } from "../../runtime-types";
@@ -13,6 +13,12 @@ export interface ExtensionsMiddlewareDeps {
 }
 
 export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): ChatMiddleware<ToolRunContext> {
+  // Collect modified results per toolCallId from tool:after interceptors during this run.
+  // Applied to the model-facing results in onToolPhaseComplete (which runs before TanStack
+  // builds the tool-result messages), because onAfterToolCall returns void and cannot
+  // rewrite the result back to the model (TanStack 0.43.1 API constraint).
+  const modifiedResults = new Map<string, unknown>();
+
   return {
     name: "extensions",
     onBeforeToolCall: async (_ctx, hookCtx) => {
@@ -84,7 +90,7 @@ export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): Chat
       const eventBus = runner.getEventBus();
 
       if (info.ok) {
-        await eventBus.emit({
+        const event: ToolAfterEvent = {
           type: `tool:after:${info.toolName}`,
           payload: {
             toolName: info.toolName,
@@ -93,7 +99,14 @@ export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): Chat
             durationMs: info.duration,
           },
           defaultReturn: undefined,
-        });
+        };
+        await eventBus.emit(event);
+
+        // If an interceptor set modifiedResult, stash it for onToolPhaseComplete (we cannot
+        // return it from onAfterToolCall — that hook returns void in TanStack 0.43.1).
+        if (event.payload.modifiedResult !== undefined) {
+          modifiedResults.set(info.toolCallId, event.payload.modifiedResult);
+        }
       } else {
         await eventBus.emit({
           type: `tool:error:${info.toolName}`,
@@ -105,6 +118,19 @@ export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): Chat
           defaultReturn: undefined,
         });
       }
+    },
+    // Runs before TanStack builds the tool-result messages for the model's next turn
+    // (buildToolResultChunks). Mutating info.results[].result here rewrites what the
+    // model sees. Clear the per-run stash afterwards.
+    onToolPhaseComplete: async (_ctx, info) => {
+      if (modifiedResults.size === 0) return;
+      for (const result of info.results) {
+        const modified = modifiedResults.get(result.toolCallId);
+        if (modified !== undefined) {
+          result.result = modified;
+        }
+      }
+      modifiedResults.clear();
     },
   };
 }
