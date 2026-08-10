@@ -37,6 +37,9 @@ export function cleanStepText(text: string): string {
 /**
  * Locate `## Plan` / `Plan:` section and numbered steps (`1.` / `1)`).
  * Returns null when no heading or fewer than one usable step.
+ *
+ * Only numbered items under the **Steps:** sub-section are counted — other
+ * numbered lists (Risks, Verification, etc.) are ignored.
  */
 export function extractPlan(message: string): ExtractedPlan | null {
   const headerRe = /(?:^|\n)[ \t]*(#{1,3}[ \t]*Plan\b|\*{0,2}Plan:\*{0,2})[ \t]*\n/i;
@@ -50,10 +53,14 @@ export function extractPlan(message: string): ExtractedPlan | null {
   const headingLine = headerMatch[1].trim();
   const planMarkdown = `${headingLine.startsWith("#") ? headingLine : "## Plan"}\n${body}`.trim();
 
+  // Locate the **Steps:** sub-section — only numbered items within it count as steps.
+  const stepsSection = /\*\*Steps:?\*\*\s*\n([\s\S]*?)(?=\n\*\*|$)/i.exec(body);
+  const stepsSource = stepsSection ? stepsSection[1] : body;
+
   const numberedPattern = /^\s*(\d+)[.)]\s+(.+)$/gm;
   const steps: PlanStep[] = [];
 
-  for (const match of body.matchAll(numberedPattern)) {
+  for (const match of stepsSource.matchAll(numberedPattern)) {
     const raw = match[2]
       .trim()
       .replace(/\*{1,2}$/, "")

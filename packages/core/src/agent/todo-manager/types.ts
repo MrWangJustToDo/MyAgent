@@ -59,7 +59,7 @@ export const todoToolInputSchema = z.object({
   todos: z
     .array(todoItemInputSchema)
     .min(1, { message: "todos: must contain at least 1 item" })
-    .max(50, { message: "todos: must contain at most 50 items" })
+    .max(20, { message: "todos: must contain at most 20 items" })
     .describe("The complete list of todos. This replaces all existing todos."),
 });
 
@@ -70,7 +70,7 @@ export type TodoToolInput = z.infer<typeof todoToolInputSchema>;
 // ============================================================================
 
 export interface TodoManagerConfig {
-  /** Maximum number of todos allowed (default: 50) */
+  /** Maximum number of todos allowed (default: 20) */
   maxTodos?: number;
   /** Number of rounds without todo update before nag reminder (default: 3) */
   nagReminderThreshold?: number;
@@ -80,7 +80,7 @@ export interface TodoManagerConfig {
 // Constants
 // ============================================================================
 
-export const DEFAULT_MAX_TODOS = 50;
+export const DEFAULT_MAX_TODOS = 20;
 export const DEFAULT_NAG_REMINDER_THRESHOLD = 3;
 
 // ============================================================================
