@@ -12,7 +12,7 @@ export {
   shouldPersistUIMessages,
 } from "./agent/session/session-sync-tracker.js";
 export type { SessionSaveReason, SessionSyncSnapshot } from "./agent/session/session-sync-tracker.js";
-export { buildCanonicalModelMessages } from "./agent/agent-context/build-canonical-model-messages.js";
+export { buildCanonicalModelMessages } from "./agent/compaction/build-canonical-model-messages.js";
 export { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, resolveFinishStatus } from "./managers/agent-status.js";
 export { AgentEventBus } from "./managers/agent-event-bus.js";
 export { attachEventLogBridge } from "./managers/event-log-bridge.js";

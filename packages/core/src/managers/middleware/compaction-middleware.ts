@@ -1,6 +1,6 @@
 import { convertMessagesToModelMessages, type ChatMiddleware, type ModelMessage } from "@tanstack/ai";
 
-import { buildCanonicalModelMessages } from "../../agent/agent-context/build-canonical-model-messages.js";
+import { buildCanonicalModelMessages } from "../../agent/compaction/build-canonical-model-messages.js";
 import { applyCompactionResult, autoCompact, getModelVisibleMessages } from "../../agent/compaction";
 
 import type { AgentLog } from "../../agent/agent-log";

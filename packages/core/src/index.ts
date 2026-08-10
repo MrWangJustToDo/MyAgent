@@ -50,7 +50,7 @@ export type { QueueMode } from "./agent/utils/pending-message-queue.js";
 // Agent state (hosts / UI)
 // ============================================================================
 
-export { buildCanonicalModelMessages, type TokenUsage } from "./agent/agent-context";
+export { buildCanonicalModelMessages, type TokenUsage } from "./agent/compaction";
 export { AgentLog } from "./agent/agent-log";
 export { TodoManager, type TodoItem, type TodoStatus, type TodoPriority } from "./agent/todo-manager";
 
