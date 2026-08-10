@@ -23,7 +23,7 @@ IMPORTANT RULES:
  - Only ONE task can be in_progress at a time
  - Update todos frequently - mark tasks complete immediately when done
  - Each call REPLACES all todos, so include the full updated list
- - Maximum 20 todos allowed`,
+ - Maximum 50 todos allowed`,
     inputSchema: todoToolInputSchema,
     outputSchema: todoOutputSchema,
     execute: async ({ todos, title }) => {

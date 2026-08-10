@@ -29,7 +29,7 @@ export const generateTodoManagerId = (): string => generateId("todo");
  * TodoManager manages a list of todo items for an agent session.
  *
  * Key features:
- * - Maximum 20 todos allowed (configurable)
+ * - Maximum 50 todos allowed (configurable)
  * - Only ONE task can be in_progress at a time (enforces sequential focus)
  * - Tracks rounds since last todo update for nag reminder
  * - Event subscription for UI updates

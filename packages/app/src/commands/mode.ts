@@ -242,16 +242,18 @@ registerCommand({
       }
 
       if (planSub === "save") {
-        const result = await agent.savePlanToWorkspace(nameArg || undefined);
+        const saveName = rest.slice(1).join(" ").trim() || undefined;
+        const result = await agent.savePlanToWorkspace(saveName);
         if (!result.ok) return { ok: false, error: result.error ?? "Save failed" };
         return { ok: true, message: `Plan saved to ${result.path}` };
       }
 
       if (planSub === "load") {
-        if (!nameArg) {
+        const loadName = rest.slice(1).join(" ").trim();
+        if (!loadName) {
           return { ok: false, error: "Usage: /mode plan load <name>" };
         }
-        const result = await agent.loadPlanFromWorkspace(nameArg);
+        const result = await agent.loadPlanFromWorkspace(loadName);
         if (!result.ok) return { ok: false, error: result.error ?? "Load failed" };
         return {
           ok: true,
