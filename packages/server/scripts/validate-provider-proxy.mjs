@@ -85,6 +85,7 @@ assert.equal(sawAuth, "Bearer sk-server-only", "server must inject its API_KEY")
 const body = await proxyRes.text();
 assert.ok(body.includes("hello"));
 assert.ok(body.includes("world"));
+assert.equal(proxyRes.headers.get("content-encoding"), null, "must not forward content-encoding after decode");
 
 const infoRes = await app.request("http://local/api/provider/info");
 assert.equal(infoRes.status, 200);

@@ -416,8 +416,8 @@ The `@my-agent/server` package exposes CoreEnv APIs over HTTP using Hono RPC for
 | `/api/command/exec` | POST | Execute a simple command |
 | `/api/fetch/proxy` | POST | HTTP fetch proxy (handles binary via base64; not for LLM SSE) |
 | `/api/provider/info` | GET | Remote model provider metadata (style, model, proxy basePath; no secrets) |
-| `/api/provider/openai/*` | ALL | Streaming OpenAI-compatible proxy (injects server `API_KEY`) |
-| `/api/provider/anthropic/*` | ALL | Streaming Anthropic proxy (injects server `x-api-key`) |
+| `/api/provider/openai/*` | ALL | Streaming OpenAI-compatible proxy (injects server `API_KEY`; strips `Content-Encoding` after undici decode) |
+| `/api/provider/anthropic/*` | ALL | Streaming Anthropic proxy (injects server `x-api-key`; same encoding strip) |
 | `/api/mcp/init` | POST | Create a new MCP stdio process session |
 | `/api/mcp/:id/message` | POST | Send a JSON-RPC message to an MCP session |
 | `/api/mcp/:id` | DELETE | Clean up an MCP stdio process session |

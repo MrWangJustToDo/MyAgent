@@ -26,6 +26,13 @@ const HOP_BY_HOP = new Set([
   "content-length",
 ]);
 
+/**
+ * Headers that must not be forwarded on the response when Node `fetch` has already
+ * decoded the body (undici auto-decompresses gzip/br). Passing Content-Encoding
+ * through causes clients (OpenAI SDK) to gunzip plain text → Z_DATA_ERROR / "terminated".
+ */
+const RESPONSE_STRIP = new Set([...HOP_BY_HOP, "content-encoding"]);
+
 // ============================================================================
 // Upstream resolution
 // ============================================================================
@@ -83,6 +90,8 @@ function filterRequestHeaders(source: Headers, inject: Record<string, string>): 
     const lower = key.toLowerCase();
     if (HOP_BY_HOP.has(lower)) return;
     if (lower === "authorization" || lower === "x-api-key") return;
+    // Avoid asking upstream for encodings we would mishandle after undici decode.
+    if (lower === "accept-encoding") return;
     out.set(key, value);
   });
   for (const [key, value] of Object.entries(inject)) {
@@ -94,7 +103,7 @@ function filterRequestHeaders(source: Headers, inject: Record<string, string>): 
 function filterResponseHeaders(source: Headers): Headers {
   const out = new Headers();
   source.forEach((value, key) => {
-    if (HOP_BY_HOP.has(key.toLowerCase())) return;
+    if (RESPONSE_STRIP.has(key.toLowerCase())) return;
     out.set(key, value);
   });
   return out;
