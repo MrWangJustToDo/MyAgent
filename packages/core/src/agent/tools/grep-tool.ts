@@ -376,7 +376,7 @@ export const createGrepTool = () => {
           type: "text" as const,
           content:
             `offset(current pagination): ${output.offset}; limit(Maximum number of items to return): ${output.limit}` +
-            (output.content || `${output.matches?.length} matches:\n${lines.join("\n")}`),
+            (output.content || `${output.matches?.length} matches:\n${lines?.join("\n")}`),
         },
       ];
     },
