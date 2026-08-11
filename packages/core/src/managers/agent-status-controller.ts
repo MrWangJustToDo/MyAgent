@@ -130,6 +130,17 @@ export class AgentStatusController {
     this.deps.emitEvent?.("agent:stream-error", { error: message });
   }
 
+  /**
+   * Clear error status while waiting to retry a recoverable stream failure.
+   * Keeps the panel on `running` during backoff instead of lingering on `error`.
+   */
+  onRecoveryRetry(): void {
+    this.deps.setError("");
+    if (this.deps.getStatus() === "error") {
+      this.deps.setStatus("running");
+    }
+  }
+
   onExternalError(message: string, isAbort: boolean): void {
     this.deps.setError(message);
     if (!isAbort) {

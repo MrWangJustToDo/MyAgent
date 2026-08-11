@@ -348,4 +348,155 @@ assert.deepEqual(monoSnap.lines, [monoBase, "line2", "line3", "line4", "line5"])
 assert.equal(monoSnap.pendingLine, "line6");
 unsubMono();
 
+// ============================================================================
+// resetForStreamRetry keeps user prompt, rolls summary phase back, clears hub text
+// ============================================================================
+
+const retryHub = new SummaryStreamHub();
+/** @type {Array<{ type: string }>} */
+const retryEvents = [];
+const unsubRetry = retryHub.subscribe((event) => {
+  retryEvents.push({ type: event.type });
+});
+
+const retryChannel = new AgentUIChannel({
+  initialMessages: [
+    {
+      id: "user-retry",
+      role: "user",
+      parts: [{ type: "text", content: "explore the repo" }],
+      createdAt: new Date(),
+    },
+  ],
+});
+
+await retryChannel.consumeRun({
+  stream: (async function* () {
+    yield {
+      type: EventType.RUN_STARTED,
+      threadId: "thread-retry",
+      runId: "run-retry-1",
+      timestamp: Date.now(),
+    };
+    yield {
+      type: EventType.TEXT_MESSAGE_START,
+      messageId: "assistant-retry",
+      role: "assistant",
+      threadId: "thread-retry",
+      runId: "run-retry-1",
+    };
+    yield {
+      type: EventType.TOOL_CALL_START,
+      toolCallId: "tc-grep",
+      toolName: "grep",
+      messageId: "assistant-retry",
+      threadId: "thread-retry",
+      runId: "run-retry-1",
+    };
+    yield {
+      type: EventType.TOOL_CALL_END,
+      toolCallId: "tc-grep",
+      threadId: "thread-retry",
+      runId: "run-retry-1",
+    };
+    yield {
+      type: EventType.TOOL_CALL_START,
+      toolCallId: "tc-bs-retry",
+      toolName: "begin_summary",
+      messageId: "assistant-retry",
+      threadId: "thread-retry",
+      runId: "run-retry-1",
+    };
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "assistant-retry",
+      delta: "partial summary before failure",
+      threadId: "thread-retry",
+      runId: "run-retry-1",
+    };
+    // Simulate mid-consume soft reset (as runStreamWithRecovery does before retry)
+    retryChannel.resetForStreamRetry();
+    assert.equal(retryChannel.getTaskRunPhase(), "tools");
+    assert.equal(retryChannel.getMessages().length, 1);
+    assert.equal(retryChannel.getMessages()[0].role, "user");
+    assert.ok(retryEvents.filter((e) => e.type === "reset").length >= 2, "begin_summary reset + soft-reset");
+
+    yield {
+      type: EventType.RUN_STARTED,
+      threadId: "thread-retry",
+      runId: "run-retry-2",
+      timestamp: Date.now(),
+    };
+    yield {
+      type: EventType.TEXT_MESSAGE_START,
+      messageId: "assistant-retry-2",
+      role: "assistant",
+      threadId: "thread-retry",
+      runId: "run-retry-2",
+    };
+    yield {
+      type: EventType.TOOL_CALL_START,
+      toolCallId: "tc-bs-retry-2",
+      toolName: "begin_summary",
+      messageId: "assistant-retry-2",
+      threadId: "thread-retry",
+      runId: "run-retry-2",
+    };
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "assistant-retry-2",
+      delta: "C".repeat(80),
+      threadId: "thread-retry",
+      runId: "run-retry-2",
+    };
+    yield {
+      type: EventType.RUN_FINISHED,
+      threadId: "thread-retry",
+      runId: "run-retry-2",
+      timestamp: Date.now(),
+      finishReason: "stop",
+      model: "mock",
+    };
+  })(),
+  parentTaskToolCallId: "task-retry",
+  streamingAgentId: "agent-retry",
+  summaryHub: retryHub,
+});
+
+assert.equal(
+  retryChannel.getMessages().some((m) => m.role === "assistant"),
+  true
+);
+const retrySnap = retryHub.getSnapshot(summaryStreamKey("task", "task-retry"));
+assert.ok(retrySnap);
+assert.equal(retrySnap.status, "ended");
+assert.equal(retrySnap.pendingLine, "C".repeat(80));
+// consumeRun finally ends the hub and unlocks phase; live phase is only meaningful mid-run
+assert.equal(retryChannel.getTaskRunPhase(), "tools");
+unsubRetry();
+
+// failRun clears everything including summary subscription state
+const failChannel = new AgentUIChannel({
+  initialMessages: [
+    {
+      id: "user-fail",
+      role: "user",
+      parts: [{ type: "text", content: "x" }],
+      createdAt: new Date(),
+    },
+  ],
+});
+failChannel.setMessages([
+  ...failChannel.getMessages(),
+  {
+    id: "assistant-fail",
+    role: "assistant",
+    parts: [{ type: "text", content: "partial" }],
+    createdAt: new Date(),
+  },
+]);
+failChannel.failRun();
+assert.equal(failChannel.getMessages().length, 0);
+assert.equal(failChannel.getTaskRunPhase(), "tools");
+
 console.log("agent-ui-channel validation passed");

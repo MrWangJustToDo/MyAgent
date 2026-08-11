@@ -97,4 +97,77 @@ for await (const chunk of runStreamWithRecovery({
 assert.equal(attempts, 2);
 assert.deepEqual(out, ["TEXT_MESSAGE_CONTENT", "RUN_FINISHED"]);
 
+// --- subagent restart-style retry soft-resets UI + clears error status ---
+
+attempts = 0;
+let resetCalls = 0;
+let recoveryRetryCalls = 0;
+let lastError = "stale";
+const subManaged = {
+  parentId: "parent-1",
+  usage: null,
+  log: { warn() {}, debug() {}, error() {} },
+  setError(error) {
+    lastError = error;
+  },
+  ui: {
+    resetForStreamRetry() {
+      resetCalls += 1;
+    },
+  },
+  statusController: {
+    onRecoveryRetry() {
+      recoveryRetryCalls += 1;
+    },
+  },
+};
+
+const subOut = [];
+for await (const chunk of runStreamWithRecovery({
+  managed: subManaged,
+  manager: {},
+  getMessages: () => msgs,
+  run: () => flakyThenOk(),
+})) {
+  subOut.push(chunk.type);
+}
+assert.equal(attempts, 2);
+assert.equal(resetCalls, 1, "subagent should soft-reset UI before restart retry");
+assert.equal(recoveryRetryCalls, 1, "subagent should clear error status before backoff");
+assert.equal(lastError, "");
+assert.deepEqual(subOut, ["TEXT_MESSAGE_CONTENT", "RUN_FINISHED"]);
+
+// --- root agent restart does not call resetForStreamRetry ---
+
+attempts = 0;
+resetCalls = 0;
+recoveryRetryCalls = 0;
+const rootManaged = {
+  usage: null,
+  log: { warn() {}, debug() {}, error() {} },
+  setError() {},
+  ui: {
+    resetForStreamRetry() {
+      resetCalls += 1;
+    },
+  },
+  statusController: {
+    onRecoveryRetry() {
+      recoveryRetryCalls += 1;
+    },
+  },
+};
+
+for await (const chunk of runStreamWithRecovery({
+  managed: rootManaged,
+  manager: {},
+  getMessages: () => msgs,
+  run: () => flakyThenOk(),
+})) {
+  void chunk;
+}
+assert.equal(attempts, 2);
+assert.equal(resetCalls, 0, "root agent must not wipe UI on transient retry");
+assert.equal(recoveryRetryCalls, 1, "root still clears error status via onRecoveryRetry");
+
 console.log("run-stream-recovery validation passed");

@@ -530,6 +530,9 @@ The default task tool row shows the current subagent exploration tool during ana
 After the subagent calls `begin_summary`, the UI switches to summary phase and streams final text
 via `SummaryStreamHub` (`reset` / `append` / `end` on key `task:${toolCallId}`) into `useSummaryStream` /
 `SummaryStreamView` — not UIMessage diffs or `emitStreamingChunk` (those remain for `run_command`).
+On restart-style stream recovery (429 / capability sanitize), `AgentUIChannel.resetForStreamRetry()`
+keeps the user prompt and clears tools/summary so the task panel does not keep stale state;
+terminal non-abort failures still call `failRun()`. Max-tokens continuation does not reset.
 Compact summarization uses the same hub with stable key `compact:${parentAgentId}` (one in-flight compact per agent).
 Only the last text-only step is returned to the parent as the task `summary`; `toModelOutput` also includes completion status (`reachedLimit` / `incomplete` / `aborted` / `truncated`) so the parent can judge whether findings are trustworthy to extend.
 

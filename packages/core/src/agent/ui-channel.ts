@@ -198,6 +198,38 @@ export class AgentUIChannel {
     this.endSummaryStream();
   }
 
+  /**
+   * Soft-reset UI before a restart-style stream recovery (transient / capability).
+   *
+   * Keeps the first user prompt, drops assistant/tool rows, and rolls the task
+   * phase out of `summary`. Unlike {@link failRun}, does **not** end the active
+   * summary hub subscription — {@link consumeRun} still owns that lifecycle.
+   *
+   * Call this when `runStreamWithRecovery` retries a subagent stream so the task
+   * panel does not keep stale tools / summary text while the model restarts.
+   */
+  resetForStreamRetry(): void {
+    const firstUser = this.getMessages().find((m) => m.role === "user");
+    this.setMessages(firstUser ? [firstUser] : []);
+    this.currentTurnMessageId = undefined;
+
+    if (this.summaryHub && this.parentTaskToolCallId && !this.compactId) {
+      this.summaryHub.reset({ source: "task", toolCallId: this.parentTaskToolCallId });
+      this.activeSummaryKey = summaryStreamKey("task", this.parentTaskToolCallId);
+      this.summaryStreamState = { summaryPhaseUnlocked: false };
+      return;
+    }
+
+    if (this.summaryHub && this.compactId) {
+      this.summaryHub.reset({ source: "compact", compactId: this.compactId });
+      this.activeSummaryKey = summaryStreamKey("compact", this.compactId);
+      this.summaryStreamState = { summaryPhaseUnlocked: true };
+      return;
+    }
+
+    this.summaryStreamState = { summaryPhaseUnlocked: false };
+  }
+
   /** Process a single stream chunk (for incremental bridge during `runAgent`). */
   processChunk(chunk: StreamChunk): void {
     if (shouldSuppressReplayedToolChunk(this.getMessages(), chunk)) {

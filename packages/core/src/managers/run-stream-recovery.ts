@@ -205,6 +205,13 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
 
     if (!shouldRetry) return;
 
+    // Restart-style recovery (transient / capability / reactive): clear subagent
+    // preview so the task panel does not keep stale tools/summary across retries.
+    // Max-tokens continuation appends to the same turn — do not reset UI.
+    if (!truncationDetected) {
+      prepareRestartStyleRetry(options);
+    }
+
     const delay = retryDelayMs(recoveryAttempts, retryAfterSeconds);
     options.managed.log?.debug("agent", "Backoff before retry", {
       attempt: recoveryAttempts,
@@ -215,4 +222,16 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
 
     recoveryAttempts++;
   }
+}
+
+/**
+ * Before a full stream restart: soft-reset subagent UI + clear error status.
+ * Wire `messages` stay as set by the recovery strategy (may be capability-stripped).
+ */
+function prepareRestartStyleRetry(options: RecoveryOptions): void {
+  if (options.managed.parentId && options.managed.ui) {
+    options.managed.ui.resetForStreamRetry();
+  }
+  options.managed.setError("");
+  options.managed.statusController?.onRecoveryRetry?.();
 }
