@@ -438,7 +438,7 @@ registerCoreEnv(env);
 ```
 
 ### Known Limitations
-- `runCommand` streaming is lost over HTTP — stdout/stderr only available in final result
+- `runCommand` mid-run streaming is lost over HTTP — chunks are not pushed live; the remote client delivers full stdout/stderr once when `/api/command/run` returns (UI/tool still get the final output)
 - Binary fetch responses are base64-encoded over the wire
 - Provider proxy assumes a trusted network (no extra auth on `/api/provider/*` in v1)
 - LLM adapters still use global `fetch` against the proxy `baseURL` (not `CoreEnv.fetch`)

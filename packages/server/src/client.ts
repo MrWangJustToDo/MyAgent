@@ -207,7 +207,13 @@ export async function createRemoteCoreEnv(serverUrl: string): Promise<CoreEnv> {
 
     runCommand: async (command: string, options?: RunCommandOptions): Promise<CommandResult> => {
       const res = await client.command.run.$post({ json: { command, options: serializeRunOptions(options) } });
-      return await unwrap<CommandResult>(res);
+      const result = await unwrap<CommandResult>(res);
+      // HTTP `/run` is request/response only — no chunk streaming. Deliver the full
+      // buffers once so callers that accumulate via onStdout/onStderr (run_command tool)
+      // still see output. Mid-run streaming remains unavailable over remote CoreEnv.
+      if (result.stdout) options?.onStdout?.(result.stdout);
+      if (result.stderr) options?.onStderr?.(result.stderr);
+      return result;
     },
 
     exec: async (command: string, options?): Promise<CoreEnvExecResult> => {

@@ -118,11 +118,13 @@ export const createRunCommandTool = () => {
       stdoutAccumulator.finish();
       stderrAccumulator.finish();
 
-      const stdoutSnapshot = stdoutAccumulator.snapshot();
-      const stderrSnapshot = stderrAccumulator.snapshot();
+      // Prefer streamed accumulation; fall back to CommandResult buffers when the
+      // CoreEnv implementation does not invoke onStdout/onStderr (e.g. older remotes).
+      const stdoutRaw = stdoutAccumulator.snapshot().content || result.stdout || "";
+      const stderrRaw = stderrAccumulator.snapshot().content || result.stderr || "";
 
-      const stdoutResult = await maybeCacheOutput(stdoutSnapshot.content, `${toolCallId}-stdout`);
-      const stderrResult = await maybeCacheOutput(stderrSnapshot.content, `${toolCallId}-stderr`);
+      const stdoutResult = await maybeCacheOutput(stdoutRaw, `${toolCallId}-stdout`);
+      const stderrResult = await maybeCacheOutput(stderrRaw, `${toolCallId}-stderr`);
 
       const cachedOutputPath = stdoutResult.cachedOutputPath ?? stderrResult.cachedOutputPath ?? null;
 
