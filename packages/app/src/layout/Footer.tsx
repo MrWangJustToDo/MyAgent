@@ -287,6 +287,7 @@ const ContextBar = ({
  */
 const StatusBar = () => {
   const model = useConfig((s) => s.config.model);
+  const providerMode = useConfig((s) => s.config.providerMode);
   const { version } = useAgentUsage();
   const agent = useAgent((s) => s.agent) as ManagedAgent | null;
   const session = toRaw(useAgent((s) => s.session));
@@ -321,7 +322,7 @@ const StatusBar = () => {
         <LLMUsage key={version} />
         {model && (
           <Text color={COLORS.muted} dimColor wrap="truncate">
-            {model}
+            {providerMode === "proxy" ? `${model} · remote` : model}
           </Text>
         )}
       </Box>

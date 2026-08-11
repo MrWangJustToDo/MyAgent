@@ -31,6 +31,11 @@ export interface AppConfig {
   agentRemote?: string;
   /** Optional model metadata override from MODEL_* env vars */
   modelInfo?: ModelInfo;
+  /**
+   * How LLM credentials are resolved for this session.
+   * `proxy` = CoreEnv server holds keys; UI should not treat apiKey as a local secret.
+   */
+  providerMode?: "direct" | "proxy";
 }
 
 // ============================================================================

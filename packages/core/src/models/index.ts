@@ -21,7 +21,7 @@ export {
   type ResolvedModelConfig,
 } from "./model-config.js";
 
-export { resolveModelConfigFromCoreEnv } from "./resolve-from-core-env.js";
+export { resolveModelConfigFromCoreEnv, type ResolvedModelConfigFromCoreEnv } from "./resolve-from-core-env.js";
 
 // models.dev metadata lookup
 export {

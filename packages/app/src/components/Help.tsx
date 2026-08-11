@@ -148,13 +148,22 @@ export const Help = () => {
             </Box>
             <Text>{config.baseURL || DEFAULT_BASE_URLS[config.style]}</Text>
           </Box>
-          {config.apiKey && (
+          {config.providerMode === "proxy" ? (
             <Box>
               <Box width={14}>
-                <Text color={COLORS.primary}>apiKey:</Text>
+                <Text color={COLORS.primary}>provider:</Text>
               </Box>
-              <Text>{`${config.apiKey.slice(0, 12)}...`}</Text>
+              <Text>remote (keys on CoreEnv server)</Text>
             </Box>
+          ) : (
+            config.apiKey && (
+              <Box>
+                <Box width={14}>
+                  <Text color={COLORS.primary}>apiKey:</Text>
+                </Box>
+                <Text>{`${config.apiKey.slice(0, 12)}...`}</Text>
+              </Box>
+            )
           )}
           <Box>
             <Box width={14}>

@@ -1,1 +1,3 @@
-import "@my-agent/server";
+import { createServer } from "@my-agent/server";
+
+createServer();

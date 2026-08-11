@@ -5,7 +5,7 @@
  * the provider so clients cannot bypass the remote key-holding proxy.
  */
 
-import { getEnv } from "../env.js";
+import { getEnv, type CoreEnvProviderMode } from "../env.js";
 
 import { resolveModelConfig, type ResolveModelConfigInput, type ResolvedModelConfig } from "./model-config.js";
 
@@ -16,11 +16,18 @@ function asStyle(value: string | undefined): ModelStyle | undefined {
   return undefined;
 }
 
+export interface ResolvedModelConfigFromCoreEnv extends ResolvedModelConfig {
+  /** Present when {@link CoreEnv.provider} supplied the connection defaults. */
+  providerMode?: CoreEnvProviderMode;
+}
+
 /**
  * Resolve connection + model metadata, merging AppConfig overrides with
  * {@link CoreEnv.provider} when registered.
  */
-export async function resolveModelConfigFromCoreEnv(input: ResolveModelConfigInput = {}): Promise<ResolvedModelConfig> {
+export async function resolveModelConfigFromCoreEnv(
+  input: ResolveModelConfigInput = {}
+): Promise<ResolvedModelConfigFromCoreEnv> {
   const env = getEnv();
   const providerConn = env.provider ? await env.provider.getConnection() : undefined;
 
@@ -42,5 +49,26 @@ export async function resolveModelConfigFromCoreEnv(input: ResolveModelConfigInp
     }
   }
 
-  return resolveModelConfig(merged);
+  const resolved = await resolveModelConfig(merged);
+
+  if (providerConn?.mode === "proxy") {
+    // resolveModelConfig may overwrite baseURL from models.dev / MODEL_* metadata —
+    // re-force the proxy endpoint so LLM traffic stays on the CoreEnv server.
+    return {
+      connection: {
+        ...resolved.connection,
+        style: providerConn.style,
+        baseURL: providerConn.baseURL,
+        apiKey: providerConn.apiKey,
+        model: resolved.connection.model?.trim() ? resolved.connection.model : providerConn.model,
+      },
+      modelInfo: resolved.modelInfo ? { ...resolved.modelInfo, baseURL: undefined } : undefined,
+      providerMode: "proxy",
+    };
+  }
+
+  return {
+    ...resolved,
+    ...(providerConn ? { providerMode: providerConn.mode } : {}),
+  };
 }

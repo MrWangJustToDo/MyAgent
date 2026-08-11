@@ -6,8 +6,7 @@ import { createNodeEnv } from "@my-agent/node";
 import "dotenv/config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { networkInterfaces } from "os";
 
 import { REMOTE_PROVIDER_API_KEY } from "./provider-constants.js";
 import { agentSessionRoutes } from "./routes/agent-session.js";
@@ -46,6 +45,18 @@ const SANDBOX_ENV = process.env.SANDBOX_ENV || "local";
 
 registerCoreEnv(createNodeEnv({ rootPath: ROOT_PATH, mode: SANDBOX_ENV === "native" ? "native" : "os" }));
 
+function getLocalIP() {
+  const nets = networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] ?? []) {
+      if (net.family === "IPv4" && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return "localhost";
+}
+
 // ============================================================================
 // RPC Routes (chained for AppType inference)
 // ============================================================================
@@ -78,7 +89,7 @@ app.use(
       return "";
     },
     allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Accept"],
+    allowHeaders: ["Content-Type", "Accept", "Authorization", "x-api-key", "anthropic-version", "anthropic-beta"],
   })
 );
 
@@ -90,16 +101,10 @@ app.route("/api", api);
 
 export { app, api };
 
-// ============================================================================
-// Start (only when this module is the process entry — not when imported by validates)
-// ============================================================================
-
-const isMain =
-  typeof process.argv[1] === "string" && path.resolve(fileURLToPath(import.meta.url)) === path.resolve(process.argv[1]);
-
-if (isMain) {
-  serve({ fetch: app.fetch, port: PORT }, (info) => {
+export const createServer = () => {
+  return serve({ fetch: app.fetch, port: PORT }, (info) => {
     console.log(`[server] CoreEnv HTTP server listening on http://localhost:${info.port}`);
+    console.log(`[server] CoreEnv HTTP server listening on http://${getLocalIP()}:${info.port}`);
     console.log(`[server] rootPath=${ROOT_PATH}, sandbox=${SANDBOX_ENV}`);
   });
-}
+};

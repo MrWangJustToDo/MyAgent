@@ -44,6 +44,22 @@ assert.equal(proxied.connection.model, "client-override-model");
 assert.equal(proxied.connection.style, "openai", "proxy forces provider style");
 assert.equal(proxied.connection.baseURL, "http://remote/api/provider/openai/v1");
 assert.equal(proxied.connection.apiKey, "remote-coreenv");
+assert.equal(proxied.providerMode, "proxy");
+
+// models.dev / MODEL_* metadata must not clobber the proxy baseURL
+const proxiedMeta = await resolveModelConfigFromCoreEnv({
+  model: "client-override-model",
+  modelInfo: {
+    id: "client-override-model",
+    name: "client-override-model",
+    style: "openai",
+    apiModel: "client-override-model",
+    capabilities: [],
+    baseURL: "https://api.openai.com/v1",
+  },
+});
+assert.equal(proxiedMeta.connection.baseURL, "http://remote/api/provider/openai/v1");
+assert.equal(proxiedMeta.modelInfo?.baseURL, undefined);
 
 clearCoreEnv();
 

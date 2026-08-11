@@ -145,7 +145,13 @@ export {
   parseModelInfoFromEnv,
   runSideTextQuery,
 } from "./models";
-export type { ModelInfo, ModelStyle, ModelConnection, ResolvedModelConfig } from "./models";
+export type {
+  ModelInfo,
+  ModelStyle,
+  ModelConnection,
+  ResolvedModelConfig,
+  ResolvedModelConfigFromCoreEnv,
+} from "./models";
 export { resolveTextAdapterForManaged } from "./managers/run-agent.js";
 export { buildDefaultSystemPrompt } from "./agent/default-prompt.js";
 

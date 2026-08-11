@@ -50,6 +50,7 @@ export const useConfig = createState(
         state.config.continueSession = config.continueSession ?? false;
         state.config.resumeSession = config.resumeSession || "";
         state.config.modelInfo = config.modelInfo;
+        state.config.providerMode = config.providerMode;
         state.initialized = true;
 
         const { model, baseURL, systemPrompt, style } = state.config;
@@ -81,6 +82,7 @@ export const useConfig = createState(
         state.config.extensionDirs = [];
         state.config.continueSession = false;
         state.config.resumeSession = "";
+        state.config.providerMode = undefined;
         state.helpRequested = false;
         state.initialized = false;
         state.key = "";

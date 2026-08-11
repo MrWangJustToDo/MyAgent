@@ -7,6 +7,7 @@ import { agentManager, buildDefaultSystemPrompt, resolveModelConfigFromCoreEnv }
 import { reactive, toRaw } from "reactivity-store";
 
 import { clearExtensionCommands, syncExtensionCommands } from "../commands";
+import { useConfig } from "../hooks/use-config.js";
 
 import type { AppConfig, InitResult } from "./types.js";
 import type { useAgentLog as useAgentLogType } from "../hooks/use-agent-log.js";
@@ -52,7 +53,7 @@ function patchInstance(instance: ManagedAgent & { ["$$symbol"]?: symbol }) {
  * Handles tool setup, hook wiring, and session restore.
  */
 export async function createAgentFromConfig({ config, name, hooks }: CreateAgentOptions): Promise<InitResult> {
-  const { connection, modelInfo } = await resolveModelConfigFromCoreEnv({
+  const { connection, modelInfo, providerMode } = await resolveModelConfigFromCoreEnv({
     model: config.model,
     style: config.style,
     baseURL: config.baseURL,
@@ -65,6 +66,17 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
       "No model configured. Set MODEL on the CoreEnv host (or use --model). With --remote, the server MODEL is used when local MODEL is empty."
     );
   }
+
+  // Keep Footer / Help in sync with the resolved connection (esp. remote provider).
+  useConfig.getActions().updateConfig({
+    model: connection.model,
+    style: connection.style,
+    baseURL: connection.baseURL,
+    // Proxy mode: keys stay on the server — do not surface the placeholder as a local key.
+    apiKey: providerMode === "proxy" ? "" : connection.apiKey,
+    modelInfo,
+    providerMode,
+  });
 
   const agent = await agentManager.createManagedAgent({
     modelInfo,

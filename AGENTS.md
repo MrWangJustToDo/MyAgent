@@ -108,7 +108,7 @@ hasCoreEnv();           // Check if registered
 - `createNodeEnv()` from `@my-agent/node` — local Node.js APIs, optional OS sandbox; `provider` mode `direct` from process env
 - `createRemoteCoreEnv(url)` from `@my-agent/server/client` — HTTP RPC proxy to a remote server; `provider` mode `proxy` points adapters at `/api/provider/*` so API keys stay on the server
 
-**Remote LLM keys:** With `--remote`, `createAgentFromConfig` uses `resolveModelConfigFromCoreEnv()` so the local agent loop streams through the server's provider proxy. `/api/env/vars` strips `API_KEY` / `*_API_KEY` (do not rely on shipping keys to the client).
+**Remote LLM keys:** With `--remote`, `createAgentFromConfig` uses `resolveModelConfigFromCoreEnv()` so the local agent loop streams through the server's provider proxy. `/api/env/vars` strips `API_KEY` / `*_API_KEY` (do not rely on shipping keys to the client). After resolve, the app config store is updated with the remote model / proxy `baseURL` (Footer shows `model · remote`; Help shows `provider: remote`). Proxy mode re-forces `baseURL` after models.dev metadata so upstream URLs cannot bypass the proxy.
 ### AgentAdapter — Host Abstraction
 
 Each host (CLI, extension) provides an `AgentAdapter` implementation:
