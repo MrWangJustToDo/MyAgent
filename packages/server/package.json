@@ -31,7 +31,8 @@
     "dev": "tsdown --watch",
     "start": "node dist/index.mjs",
     "typecheck": "tsc --noEmit",
-    "validate:agent-session-http": "pnpm run build && node scripts/validate-agent-session-http.mjs"
+    "validate:agent-session-http": "pnpm run build && node scripts/validate-agent-session-http.mjs",
+    "validate:provider-proxy": "pnpm run build && node scripts/validate-provider-proxy.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.14",

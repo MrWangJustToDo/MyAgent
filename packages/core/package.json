@@ -52,6 +52,7 @@
     "validate:message-chain-projection": "pnpm run build && node scripts/validate-message-chain-projection.mjs",
     "validate:canonical-model-messages": "pnpm run build && node scripts/validate-canonical-model-messages.mjs",
     "validate:model-config": "pnpm run build && node scripts/validate-model-config.mjs",
+    "validate:resolve-from-core-env": "pnpm run build && node scripts/validate-resolve-from-core-env.mjs",
     "validate:assert-async-iterable": "pnpm run build && node scripts/validate-assert-async-iterable.mjs",
     "validate:reasoning-echo": "pnpm run build && node scripts/validate-reasoning-echo.mjs",
     "validate:approval-middleware": "pnpm run build && node scripts/validate-status-middleware.mjs",

@@ -155,6 +155,32 @@ export interface McpProcessHandle {
 }
 
 // ============================================================================
+// Model Provider (optional — local keys or remote streaming proxy)
+// ============================================================================
+
+/** How the host should talk to the LLM for this CoreEnv. */
+export type CoreEnvProviderMode = "direct" | "proxy";
+
+/**
+ * Non-secret connection info for TanStack text adapters.
+ *
+ * In `proxy` mode, `apiKey` is a placeholder and `baseURL` points at the CoreEnv
+ * server's streaming provider proxy (real credentials stay on the server).
+ */
+export interface CoreEnvModelProviderConnection {
+  mode: CoreEnvProviderMode;
+  style: "openai" | "anthropic";
+  model: string;
+  baseURL: string;
+  apiKey: string;
+}
+
+/** Optional LLM provider bound to a CoreEnv implementation. */
+export interface CoreEnvModelProvider {
+  getConnection(): Promise<CoreEnvModelProviderConnection>;
+}
+
+// ============================================================================
 // CoreEnv Interface
 // ============================================================================
 
@@ -220,6 +246,12 @@ export interface CoreEnv {
 
   /** HTTP fetch (replaces global fetch for runtime agnosticism) */
   fetch(input: string | URL | Request, init?: RequestInit): Promise<Response>;
+
+  /**
+   * Optional LLM provider for this environment.
+   * Local node uses process env (`direct`); remote CoreEnv points at the server proxy (`proxy`).
+   */
+  provider?: CoreEnvModelProvider;
 
   /** Lifecycle cleanup */
   destroy?(): Promise<void>;

@@ -13,7 +13,7 @@
  * ```
  */
 
-import { destroyAllCommandJobs } from "@my-agent/core";
+import { destroyAllCommandJobs, resolveModelConnection } from "@my-agent/core";
 import { stdioTransport } from "@tanstack/ai-mcp/stdio";
 import mime from "mime-types";
 import { exec } from "node:child_process";
@@ -26,7 +26,7 @@ import { runNativeCommand, startNativeCommand } from "./environment/native-run.j
 import { resetOsSandbox } from "./environment/os-sandbox.js";
 
 import type { LocalEnvironmentConfig } from "./environment/local.js";
-import type { CoreEnv, CoreEnvExecResult } from "@my-agent/core";
+import type { CoreEnv, CoreEnvExecResult, CoreEnvModelProvider } from "@my-agent/core";
 import type { ChildProcess } from "node:child_process";
 
 // Re-export environment implementations
@@ -61,6 +61,21 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
     extraReadRoots: [homeAgents],
   });
 
+  const provider: CoreEnvModelProvider = {
+    getConnection: async () => {
+      const connection = resolveModelConnection({
+        env: process.env as Record<string, string | undefined>,
+      });
+      return {
+        mode: "direct",
+        style: connection.style,
+        model: connection.model,
+        baseURL: connection.baseURL,
+        apiKey: connection.apiKey,
+      };
+    },
+  };
+
   return {
     rootPath,
 
@@ -80,6 +95,8 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
     getArch: async () => process.arch,
     getEnv: async () => process.env as Record<string, string | undefined>,
     homedir: async () => os.homedir(),
+
+    provider,
 
     byteLength: (str: string, encoding?: string) => Buffer.byteLength(str, encoding as BufferEncoding),
 

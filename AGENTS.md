@@ -87,6 +87,8 @@ interface CoreEnv {
   runCommand(cmd, opts?): Promise<CommandResult>;
   exec(cmd, opts?): Promise<CoreEnvExecResult>;
   fetch(input, init?): Promise<Response>;
+  /** Optional LLM provider (`direct` local keys, or `proxy` via CoreEnv server) */
+  provider?: CoreEnvModelProvider;
   destroy?(): Promise<void>;       // Lifecycle cleanup
   // Optional: byteLength, base64Encode/Decode, getMimeType, createMCPStdioTransport
 }
@@ -103,9 +105,10 @@ hasCoreEnv();           // Check if registered
 ```
 
 **Implementations:**
-- `createNodeEnv()` from `@my-agent/node` — local Node.js APIs, optional OS sandbox
-- `createRemoteCoreEnv(url)` from `@my-agent/server/client` — HTTP RPC proxy to a remote server
+- `createNodeEnv()` from `@my-agent/node` — local Node.js APIs, optional OS sandbox; `provider` mode `direct` from process env
+- `createRemoteCoreEnv(url)` from `@my-agent/server/client` — HTTP RPC proxy to a remote server; `provider` mode `proxy` points adapters at `/api/provider/*` so API keys stay on the server
 
+**Remote LLM keys:** With `--remote`, `createAgentFromConfig` uses `resolveModelConfigFromCoreEnv()` so the local agent loop streams through the server's provider proxy. `/api/env/vars` strips `API_KEY` / `*_API_KEY` (do not rely on shipping keys to the client).
 ### AgentAdapter — Host Abstraction
 
 Each host (CLI, extension) provides an `AgentAdapter` implementation:
@@ -411,7 +414,10 @@ The `@my-agent/server` package exposes CoreEnv APIs over HTTP using Hono RPC for
 | `/api/fs/*` | POST | Filesystem operations (readFile, stat, writeFile, etc.) |
 | `/api/command/run` | POST | Run a shell command |
 | `/api/command/exec` | POST | Execute a simple command |
-| `/api/fetch/proxy` | POST | HTTP fetch proxy (handles binary via base64) |
+| `/api/fetch/proxy` | POST | HTTP fetch proxy (handles binary via base64; not for LLM SSE) |
+| `/api/provider/info` | GET | Remote model provider metadata (style, model, proxy basePath; no secrets) |
+| `/api/provider/openai/*` | ALL | Streaming OpenAI-compatible proxy (injects server `API_KEY`) |
+| `/api/provider/anthropic/*` | ALL | Streaming Anthropic proxy (injects server `x-api-key`) |
 | `/api/mcp/init` | POST | Create a new MCP stdio process session |
 | `/api/mcp/:id/message` | POST | Send a JSON-RPC message to an MCP session |
 | `/api/mcp/:id` | DELETE | Clean up an MCP stdio process session |
@@ -434,6 +440,8 @@ registerCoreEnv(env);
 ### Known Limitations
 - `runCommand` streaming is lost over HTTP — stdout/stderr only available in final result
 - Binary fetch responses are base64-encoded over the wire
+- Provider proxy assumes a trusted network (no extra auth on `/api/provider/*` in v1)
+- LLM adapters still use global `fetch` against the proxy `baseURL` (not `CoreEnv.fetch`)
 
 ## Agent Event System
 
@@ -820,8 +828,8 @@ packages/
 | Combination | CoreEnv | App Host | Status |
 |------------|---------|----------|--------|
 | Local CoreEnv + CLI | `createNodeEnv` | Ink terminal | Fully working |
-| Remote CoreEnv + CLI | `createRemoteCoreEnv` | Ink terminal | Working (no command streaming) |
-| Remote CoreEnv + Extension | `createRemoteCoreEnv` | WXT Chrome extension | Working (no command streaming, no stdio MCP) |
+| Remote CoreEnv + CLI | `createRemoteCoreEnv` | Ink terminal | Working; LLM via `/api/provider` proxy (keys on server); command streaming limited |
+| Remote CoreEnv + Extension | `createRemoteCoreEnv` | WXT Chrome extension | Working; LLM via provider proxy; no command streaming, no stdio MCP |
 | Local CoreEnv + Extension | N/A | N/A | Not supported (extension requires a server) |
 
 ## Task Completion Checklist

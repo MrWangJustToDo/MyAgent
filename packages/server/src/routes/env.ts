@@ -4,6 +4,9 @@ import { Hono } from "hono";
 import { destroyAllServerJobs } from "./command.js";
 
 const SENSITIVE_EXACT = new Set([
+  "API_KEY",
+  "OPENAI_API_KEY",
+  "ANTHROPIC_API_KEY",
   "AWS_SECRET_ACCESS_KEY",
   "AWS_SESSION_TOKEN",
   "GH_TOKEN",
@@ -14,9 +17,9 @@ const SENSITIVE_EXACT = new Set([
   "GOOGLE_APPLICATION_CREDENTIALS",
 ]);
 
-const SENSITIVE_PATTERNS = [/password/i, /secret/i, /credential/i, /private_key/i];
+const SENSITIVE_PATTERNS = [/password/i, /secret/i, /credential/i, /private_key/i, /_API_KEY$/i, /^API_KEY$/i];
 
-function filterSensitiveVars(vars: Record<string, string | undefined>): Record<string, string | undefined> {
+export function filterSensitiveVars(vars: Record<string, string | undefined>): Record<string, string | undefined> {
   const filtered: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(vars)) {
     if (SENSITIVE_EXACT.has(key)) continue;

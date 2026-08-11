@@ -18,6 +18,9 @@ export {
   type CoreEnvFsStat,
   type CoreEnvExecOptions,
   type CoreEnvExecResult,
+  type CoreEnvProviderMode,
+  type CoreEnvModelProviderConnection,
+  type CoreEnvModelProvider,
   type McpStdioTransportConfig,
   type McpProcessHandle,
 } from "./env.js";
@@ -137,6 +140,7 @@ export {
   DEFAULT_LOCAL_OPENAI_BASE_URL,
   parseModelStyle,
   resolveModelConfig,
+  resolveModelConfigFromCoreEnv,
   resolveModelConnection,
   parseModelInfoFromEnv,
   runSideTextQuery,

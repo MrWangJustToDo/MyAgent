@@ -72,12 +72,12 @@ packages/cli/src/index.tsx
 
 ```
 packages/app/src/adapter/create-agent.ts
-  resolveModelConfig({ model, style, baseURL, apiKey })
+  resolveModelConfigFromCoreEnv({ model, style, baseURL, apiKey })
+    // merges CoreEnv.provider (proxy forces baseURL/apiKey on remote)
   agentManager.createManagedAgent({ modelInfo, modelStyle, ... })
   wire React stores (useAgent, useAgentLog, useTodoManager)
   optional: continueLatestSession() / resumeSession() → initialMessages
 ```
-
 ### 1.3 Chat transport (in-process)
 
 | API | File | Use |

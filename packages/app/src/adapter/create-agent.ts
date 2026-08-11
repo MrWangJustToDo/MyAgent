@@ -3,7 +3,7 @@
  * Both adapters delegate to this helper to avoid duplicating ~80 lines of identical setup code.
  */
 
-import { agentManager, buildDefaultSystemPrompt, resolveModelConfig } from "@my-agent/core";
+import { agentManager, buildDefaultSystemPrompt, resolveModelConfigFromCoreEnv } from "@my-agent/core";
 import { reactive, toRaw } from "reactivity-store";
 
 import { clearExtensionCommands, syncExtensionCommands } from "../commands";
@@ -52,19 +52,19 @@ function patchInstance(instance: ManagedAgent & { ["$$symbol"]?: symbol }) {
  * Handles tool setup, hook wiring, and session restore.
  */
 export async function createAgentFromConfig({ config, name, hooks }: CreateAgentOptions): Promise<InitResult> {
-  if (!config.model) {
-    throw new Error(
-      "No model configured. Set the MODEL environment variable (or use --model) to specify the model id."
-    );
-  }
-
-  const { connection, modelInfo } = await resolveModelConfig({
+  const { connection, modelInfo } = await resolveModelConfigFromCoreEnv({
     model: config.model,
     style: config.style,
     baseURL: config.baseURL,
     apiKey: config.apiKey,
     modelInfo: config.modelInfo,
   });
+
+  if (!connection.model?.trim()) {
+    throw new Error(
+      "No model configured. Set MODEL on the CoreEnv host (or use --model). With --remote, the server MODEL is used when local MODEL is empty."
+    );
+  }
 
   const agent = await agentManager.createManagedAgent({
     modelInfo,

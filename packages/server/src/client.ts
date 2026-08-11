@@ -16,6 +16,8 @@
 import { ExecutionError, FileError, defaultPath } from "@my-agent/core";
 import { hc } from "hono/client";
 
+import { tryCreateRemoteModelProvider } from "./remote-provider.js";
+
 import type { AppType } from ".";
 import type {
   CommandJobStatus,
@@ -184,6 +186,8 @@ export async function createRemoteCoreEnv(serverUrl: string): Promise<CoreEnv> {
   // can issue a remote kill when the process manager cleans up.
   const transportSessions = new WeakMap<object, string>();
 
+  const provider = await tryCreateRemoteModelProvider(client, baseUrl);
+
   return {
     rootPath: info.rootPath,
 
@@ -196,6 +200,8 @@ export async function createRemoteCoreEnv(serverUrl: string): Promise<CoreEnv> {
       return await unwrap<Record<string, string | undefined>>(res);
     },
     homedir: async () => info.homedir,
+
+    ...(provider ? { provider } : {}),
 
     fs: createRemoteFs(client),
 
