@@ -1,53 +1,45 @@
 /**
- * Build a CoreEnv.provider that points TanStack adapters at the server proxy.
+ * Build a ModelProvider that points TanStack adapters at a remote provider proxy.
+ *
+ * Orthogonal to CoreEnv — pass any server base URL that exposes `/api/provider/*`.
  */
 
 import { REMOTE_PROVIDER_API_KEY } from "./provider-constants.js";
 
-import type { CoreEnvModelProvider } from "@my-agent/core";
+import type { ModelProvider } from "@my-agent/core";
 
-type ProviderInfoClient = {
-  provider: {
-    info: {
-      $get: () => Promise<Response>;
-    };
-  };
+type ProviderInfoResponse = {
+  mode: "proxy";
+  style: "openai" | "anthropic";
+  model: string;
+  basePath: string;
 };
 
-async function unwrapJson<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-  }
-  return (await response.json()) as T;
-}
-
 /**
- * Fetch `/api/provider/info` and return a proxy-mode provider, or `undefined`
- * when the server does not expose the route (older CoreEnv servers).
+ * Fetch `/api/provider/info` and return a proxy-mode {@link ModelProvider}.
+ *
+ * @throws if the server does not expose provider info or returns an error.
  */
-export async function tryCreateRemoteModelProvider(
-  client: ProviderInfoClient,
-  serverBaseUrl: string
-): Promise<CoreEnvModelProvider | undefined> {
-  try {
-    const infoRes = await client.provider.info.$get();
-    if (!infoRes.ok) return undefined;
-    const info = await unwrapJson<{
-      mode: "proxy";
-      style: "openai" | "anthropic";
-      model: string;
-      basePath: string;
-    }>(infoRes);
-    return {
-      getConnection: async () => ({
-        mode: "proxy",
-        style: info.style,
-        model: info.model,
-        baseURL: `${serverBaseUrl}${info.basePath}`,
-        apiKey: REMOTE_PROVIDER_API_KEY,
-      }),
-    };
-  } catch {
-    return undefined;
+export async function createProxyModelProvider(serverUrl: string): Promise<ModelProvider> {
+  const baseUrl = serverUrl.replace(/\/+$/, "");
+  const infoRes = await fetch(`${baseUrl}/api/provider/info`);
+  if (!infoRes.ok) {
+    throw new Error(
+      `Provider proxy unavailable at ${baseUrl}/api/provider/info (HTTP ${infoRes.status}). ` +
+        `Start a server that exposes /api/provider or omit --provider-remote for local keys.`
+    );
   }
+  const info = (await infoRes.json()) as ProviderInfoResponse;
+  if (info.mode !== "proxy" || !info.basePath || !info.style) {
+    throw new Error(`Invalid provider info from ${baseUrl}/api/provider/info`);
+  }
+  return {
+    getConnection: async () => ({
+      mode: "proxy",
+      style: info.style,
+      model: info.model ?? "",
+      baseURL: `${baseUrl}${info.basePath}`,
+      apiKey: REMOTE_PROVIDER_API_KEY,
+    }),
+  };
 }

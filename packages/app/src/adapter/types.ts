@@ -33,7 +33,7 @@ export interface AppConfig {
   modelInfo?: ModelInfo;
   /**
    * How LLM credentials are resolved for this session.
-   * `proxy` = CoreEnv server holds keys; UI should not treat apiKey as a local secret.
+   * `proxy` = provider server holds keys; UI should not treat apiKey as a local secret.
    */
   providerMode?: "direct" | "proxy";
 }

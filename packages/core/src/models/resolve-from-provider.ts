@@ -1,13 +1,12 @@
 /**
- * Resolve model connection using optional {@link CoreEnv.provider} defaults.
+ * Resolve model connection using the registered {@link ModelProvider}.
  *
  * When the provider reports `mode: "proxy"`, baseURL and apiKey are forced from
- * the provider so clients cannot bypass the remote key-holding proxy.
+ * the provider so clients cannot bypass the key-holding proxy.
  */
 
-import { getEnv, type CoreEnvProviderMode } from "../env.js";
-
 import { resolveModelConfig, type ResolveModelConfigInput, type ResolvedModelConfig } from "./model-config.js";
+import { getModelProvider, type ModelProviderMode } from "./model-provider.js";
 
 import type { ModelStyle } from "./types.js";
 
@@ -16,30 +15,29 @@ function asStyle(value: string | undefined): ModelStyle | undefined {
   return undefined;
 }
 
-export interface ResolvedModelConfigFromCoreEnv extends ResolvedModelConfig {
-  /** Present when {@link CoreEnv.provider} supplied the connection defaults. */
-  providerMode?: CoreEnvProviderMode;
+export interface ResolvedModelConfigFromProvider extends ResolvedModelConfig {
+  /** Mode reported by the registered {@link ModelProvider}. */
+  providerMode: ModelProviderMode;
 }
 
 /**
- * Resolve connection + model metadata, merging AppConfig overrides with
- * {@link CoreEnv.provider} when registered.
+ * Resolve connection + model metadata, merging AppConfig overrides with the
+ * registered {@link ModelProvider}.
  */
-export async function resolveModelConfigFromCoreEnv(
+export async function resolveModelConfigFromProvider(
   input: ResolveModelConfigInput = {}
-): Promise<ResolvedModelConfigFromCoreEnv> {
-  const env = getEnv();
-  const providerConn = env.provider ? await env.provider.getConnection() : undefined;
+): Promise<ResolvedModelConfigFromProvider> {
+  const providerConn = await getModelProvider().getConnection();
 
   const merged: ResolveModelConfigInput = {
     ...input,
-    model: input.model?.trim() ? input.model : providerConn?.model,
-    style: input.style ?? asStyle(providerConn?.style),
-    baseURL: input.baseURL ?? providerConn?.baseURL,
-    apiKey: input.apiKey ?? providerConn?.apiKey,
+    model: input.model?.trim() ? input.model : providerConn.model,
+    style: input.style ?? asStyle(providerConn.style),
+    baseURL: input.baseURL ?? providerConn.baseURL,
+    apiKey: input.apiKey ?? providerConn.apiKey,
   };
 
-  if (providerConn?.mode === "proxy") {
+  if (providerConn.mode === "proxy") {
     // Proxy mode: never allow client baseURL/apiKey (or mismatched style) to bypass the server.
     merged.baseURL = providerConn.baseURL;
     merged.apiKey = providerConn.apiKey;
@@ -51,9 +49,9 @@ export async function resolveModelConfigFromCoreEnv(
 
   const resolved = await resolveModelConfig(merged);
 
-  if (providerConn?.mode === "proxy") {
+  if (providerConn.mode === "proxy") {
     // resolveModelConfig may overwrite baseURL from models.dev / MODEL_* metadata —
-    // re-force the proxy endpoint so LLM traffic stays on the CoreEnv server.
+    // re-force the proxy endpoint so LLM traffic stays on the provider server.
     return {
       connection: {
         ...resolved.connection,
@@ -69,6 +67,6 @@ export async function resolveModelConfigFromCoreEnv(
 
   return {
     ...resolved,
-    ...(providerConn ? { providerMode: providerConn.mode } : {}),
+    providerMode: providerConn.mode,
   };
 }

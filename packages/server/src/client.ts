@@ -3,20 +3,21 @@
  *
  * Only imports `hono/client` and `@my-agent/core` types — no server dependencies.
  *
+ * LLM provider is orthogonal — use {@link createProxyModelProvider} separately when
+ * keys should stay on a remote provider server.
+ *
  * @example
  * ```typescript
- * import { registerCoreEnv } from "@my-agent/core";
- * import { createRemoteCoreEnv } from "@my-agent/server/client";
+ * import { registerCoreEnv, registerModelProvider } from "@my-agent/core";
+ * import { createRemoteCoreEnv, createProxyModelProvider } from "@my-agent/server/client";
  *
- * const env = await createRemoteCoreEnv("http://localhost:3100");
- * registerCoreEnv(env);
+ * registerCoreEnv(await createRemoteCoreEnv("http://localhost:3100"));
+ * registerModelProvider(await createProxyModelProvider("http://localhost:3100"));
  * ```
  */
 
 import { ExecutionError, FileError, defaultPath } from "@my-agent/core";
 import { hc } from "hono/client";
-
-import { tryCreateRemoteModelProvider } from "./remote-provider.js";
 
 import type { AppType } from ".";
 import type {
@@ -34,6 +35,8 @@ import type {
   StartCommandHandle,
   StartCommandOptions,
 } from "@my-agent/core";
+
+export { createProxyModelProvider } from "./remote-provider.js";
 
 type Client = ReturnType<typeof hc<AppType>>;
 
@@ -186,8 +189,6 @@ export async function createRemoteCoreEnv(serverUrl: string): Promise<CoreEnv> {
   // can issue a remote kill when the process manager cleans up.
   const transportSessions = new WeakMap<object, string>();
 
-  const provider = await tryCreateRemoteModelProvider(client, baseUrl);
-
   return {
     rootPath: info.rootPath,
 
@@ -200,8 +201,6 @@ export async function createRemoteCoreEnv(serverUrl: string): Promise<CoreEnv> {
       return await unwrap<Record<string, string | undefined>>(res);
     },
     homedir: async () => info.homedir,
-
-    ...(provider ? { provider } : {}),
 
     fs: createRemoteFs(client),
 

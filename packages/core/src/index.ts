@@ -18,12 +18,24 @@ export {
   type CoreEnvFsStat,
   type CoreEnvExecOptions,
   type CoreEnvExecResult,
-  type CoreEnvProviderMode,
-  type CoreEnvModelProviderConnection,
-  type CoreEnvModelProvider,
   type McpStdioTransportConfig,
   type McpProcessHandle,
 } from "./env.js";
+
+// ============================================================================
+// Model provider plane (orthogonal to CoreEnv)
+// ============================================================================
+
+export {
+  registerModelProvider,
+  clearModelProvider,
+  getModelProvider,
+  hasModelProvider,
+  createDirectModelProvider,
+  type ModelProviderMode,
+  type ModelProviderConnection,
+  type ModelProvider,
+} from "./models/model-provider.js";
 
 // ============================================================================
 // Runtime — agent manager & managed agent
@@ -140,7 +152,7 @@ export {
   DEFAULT_LOCAL_OPENAI_BASE_URL,
   parseModelStyle,
   resolveModelConfig,
-  resolveModelConfigFromCoreEnv,
+  resolveModelConfigFromProvider,
   resolveModelConnection,
   parseModelInfoFromEnv,
   runSideTextQuery,
@@ -150,7 +162,7 @@ export type {
   ModelStyle,
   ModelConnection,
   ResolvedModelConfig,
-  ResolvedModelConfigFromCoreEnv,
+  ResolvedModelConfigFromProvider,
 } from "./models";
 export { resolveTextAdapterForManaged } from "./managers/run-agent.js";
 export { buildDefaultSystemPrompt } from "./agent/default-prompt.js";

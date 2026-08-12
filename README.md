@@ -75,14 +75,18 @@ Designed with a runtime-agnostic core that decouples agent logic from execution 
 
 | Implementation | Package | Use Case |
 |:--------------|:--------|:---------|
-| `createNodeEnv()` | `@my-agent/node` | Local mode — backed by Node.js APIs with optional OS sandbox |
-| `createRemoteCoreEnv(url)` | `@my-agent/server` (client) | Remote mode — proxies all calls over Hono RPC to a server |
+| `createNodeEnv()` | `@my-agent/node` | Local workspace — Node.js APIs with optional OS sandbox |
+| `createRemoteCoreEnv(url)` | `@my-agent/server` (client) | Remote workspace — Hono RPC to a CoreEnv server |
+| `createDirectModelProvider()` | `@my-agent/core` | Local LLM keys / baseURL |
+| `createProxyModelProvider(url)` | `@my-agent/server` (client) | Remote LLM proxy (`/api/provider/*`; keys on server) |
 
-| Combination | CoreEnv | Host | Status |
-|------------|---------|------|--------|
-| Local + CLI | `createNodeEnv` | Terminal | Fully working |
-| Remote + CLI | `createRemoteCoreEnv` | Terminal | Working |
-| Remote + Extension | `createRemoteCoreEnv` | Chrome | Working |
+CoreEnv and ModelProvider are independent (`--remote` vs `--provider-remote`).
+
+| Combination | CoreEnv | Provider | Host | Status |
+|------------|---------|----------|------|--------|
+| Local + CLI | `createNodeEnv` | direct | Terminal | Fully working |
+| Remote workspace + remote keys | `createRemoteCoreEnv` | proxy | Terminal | Working |
+| Remote + Extension | `createRemoteCoreEnv` | proxy or direct | Chrome | Working |
 
 ### Package Overview
 

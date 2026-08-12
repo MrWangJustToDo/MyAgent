@@ -62,18 +62,19 @@ packages/cli/src/index.tsx
   loadEnv()
   parseCliArgs()
   registerCoreEnv(createNodeEnv(...) | createRemoteCoreEnv(url))
+  registerModelProvider(createDirectModelProvider(...) | createProxyModelProvider(url))
   initConfig()
   render(<App />)
 ```
 
-**Rule:** `registerCoreEnv()` must run before any `@my-agent/core` API that touches filesystem, shell, or platform.
+**Rule:** `registerCoreEnv()` must run before any `@my-agent/core` API that touches filesystem, shell, or platform. `registerModelProvider()` must run before agent creation / `resolveModelConfigFromProvider`.
 
 ### 1.2 App agent creation
 
 ```
 packages/app/src/adapter/create-agent.ts
-  resolveModelConfigFromCoreEnv({ model, style, baseURL, apiKey })
-    // merges CoreEnv.provider (proxy forces baseURL/apiKey on remote)
+  resolveModelConfigFromProvider({ model, style, baseURL, apiKey })
+    // merges ModelProvider (proxy forces baseURL/apiKey)
   agentManager.createManagedAgent({ modelInfo, modelStyle, ... })
   wire React stores (useAgent, useAgentLog, useTodoManager)
   optional: continueLatestSession() / resumeSession() → initialMessages

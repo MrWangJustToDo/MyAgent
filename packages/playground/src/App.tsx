@@ -8,7 +8,14 @@ import {
   useAgentLog,
   useTodoManager,
 } from "@my-agent/app";
-import { clearCoreEnv, hasCoreEnv, registerCoreEnv } from "@my-agent/core";
+import {
+  clearCoreEnv,
+  clearModelProvider,
+  createDirectModelProvider,
+  hasCoreEnv,
+  registerCoreEnv,
+  registerModelProvider,
+} from "@my-agent/core";
 import { InkTerminalBox } from "@my-react/react-terminal/web";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
@@ -69,6 +76,8 @@ const AgentBootstrap = memo(() => {
       await ensureCoreEnv();
       if (currentInitId !== initIdRef.current) return;
 
+      registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey }));
+
       setStatus("Initializing agent…");
       await initConfig({
         model,
@@ -105,6 +114,7 @@ const AgentBootstrap = memo(() => {
         void adapterRef.current.destroy();
         adapterRef.current = null;
       }
+      clearModelProvider();
       clearCoreEnv();
     };
   }, [runBootstrap]);

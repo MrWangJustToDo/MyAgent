@@ -57,7 +57,8 @@ Hosts (CLI / Extension)
 
 ```bash
 SANDBOX_ENV=local          # local (OS sandbox) | native (no sandbox)
-REMOTE=http://localhost:3100  # remote CoreEnv server URL (CLI --remote flag)
+REMOTE=http://localhost:3100           # remote CoreEnv (`--remote`)
+PROVIDER_REMOTE=http://localhost:3100  # remote LLM proxy (`--provider-remote`); orthogonal to REMOTE
 ```
 
 Workspace runtime data (sessions, memory, cache, plans, transcripts, skills, extensions, MCP) lives under gitignored `.agents/`. See [AGENTS.md](AGENTS.md) for the path layout.

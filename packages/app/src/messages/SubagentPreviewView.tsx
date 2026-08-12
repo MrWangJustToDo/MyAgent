@@ -33,8 +33,9 @@ function truncatePromptText(text: string, maxChars: number): string {
 }
 
 function collapseUserPrompts(messages: UIMessage[]): UIMessage[] {
-  return messages.map((message) => {
+  return messages.map((message, index) => {
     if (message.role !== "user") return message;
+    if (index === 0) return message;
     return {
       ...message,
       parts: message.parts.map((part) => {

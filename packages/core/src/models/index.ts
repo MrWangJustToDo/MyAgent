@@ -21,7 +21,18 @@ export {
   type ResolvedModelConfig,
 } from "./model-config.js";
 
-export { resolveModelConfigFromCoreEnv, type ResolvedModelConfigFromCoreEnv } from "./resolve-from-core-env.js";
+export { resolveModelConfigFromProvider, type ResolvedModelConfigFromProvider } from "./resolve-from-provider.js";
+
+export {
+  registerModelProvider,
+  clearModelProvider,
+  getModelProvider,
+  hasModelProvider,
+  createDirectModelProvider,
+  type ModelProviderMode,
+  type ModelProviderConnection,
+  type ModelProvider,
+} from "./model-provider.js";
 
 // models.dev metadata lookup
 export {

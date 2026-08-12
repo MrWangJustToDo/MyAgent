@@ -13,7 +13,7 @@
  * ```
  */
 
-import { destroyAllCommandJobs, resolveModelConnection } from "@my-agent/core";
+import { destroyAllCommandJobs } from "@my-agent/core";
 import { stdioTransport } from "@tanstack/ai-mcp/stdio";
 import mime from "mime-types";
 import { exec } from "node:child_process";
@@ -26,7 +26,7 @@ import { runNativeCommand, startNativeCommand } from "./environment/native-run.j
 import { resetOsSandbox } from "./environment/os-sandbox.js";
 
 import type { LocalEnvironmentConfig } from "./environment/local.js";
-import type { CoreEnv, CoreEnvExecResult, CoreEnvModelProvider } from "@my-agent/core";
+import type { CoreEnv, CoreEnvExecResult } from "@my-agent/core";
 import type { ChildProcess } from "node:child_process";
 
 // Re-export environment implementations
@@ -44,12 +44,16 @@ export interface CreateNodeEnvOptions extends LocalEnvironmentConfig {
 /**
  * Create a {@link CoreEnv} implementation backed by Node.js built-in APIs.
  *
+ * LLM credentials are not part of CoreEnv — register a {@link import("@my-agent/core").ModelProvider}
+ * separately via {@link import("@my-agent/core").registerModelProvider}.
+ *
  * @example
  * ```typescript
- * import { registerCoreEnv } from "@my-agent/core";
+ * import { registerCoreEnv, registerModelProvider, createDirectModelProvider } from "@my-agent/core";
  * import { createNodeEnv } from "@my-agent/node";
  *
  * registerCoreEnv(createNodeEnv({ rootPath: "/path/to/project" }));
+ * registerModelProvider(createDirectModelProvider({ env: process.env }));
  * ```
  */
 export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
@@ -60,21 +64,6 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
     // Allow reading user-global skills / extensions under ~/.agents
     extraReadRoots: [homeAgents],
   });
-
-  const provider: CoreEnvModelProvider = {
-    getConnection: async () => {
-      const connection = resolveModelConnection({
-        env: process.env as Record<string, string | undefined>,
-      });
-      return {
-        mode: "direct",
-        style: connection.style,
-        model: connection.model,
-        baseURL: connection.baseURL,
-        apiKey: connection.apiKey,
-      };
-    },
-  };
 
   return {
     rootPath,
@@ -95,8 +84,6 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
     getArch: async () => process.arch,
     getEnv: async () => process.env as Record<string, string | undefined>,
     homedir: async () => os.homedir(),
-
-    provider,
 
     byteLength: (str: string, encoding?: string) => Buffer.byteLength(str, encoding as BufferEncoding),
 

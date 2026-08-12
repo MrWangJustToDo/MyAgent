@@ -89,6 +89,8 @@ const getEnv = (key: string, fallback: string = ""): string => process.env[key] 
 export interface ParsedCliConfig extends Partial<AppConfig> {
   /** CoreEnv workspace remote URL (`--remote` / REMOTE). */
   remote?: string;
+  /** Model provider proxy URL (`--provider-remote` / PROVIDER_REMOTE). Orthogonal to CoreEnv. */
+  providerRemote?: string;
   /** Agent Session HTTP remote URL (`--agent-remote` / AGENT_REMOTE). */
   agentRemote?: string;
 }
@@ -130,6 +132,10 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
   const remoteFlag = getFlag(parsed, "remote", "R");
   const remote = typeof remoteFlag === "string" ? remoteFlag : envRemote || undefined;
 
+  const envProviderRemote = getEnv("PROVIDER_REMOTE") || getEnv("PROVIDER_REMOTE_URL");
+  const providerRemoteFlag = getFlag(parsed, "provider-remote");
+  const providerRemote = typeof providerRemoteFlag === "string" ? providerRemoteFlag : envProviderRemote || undefined;
+
   const envAgentRemote = getEnv("AGENT_REMOTE") || getEnv("AGENT_REMOTE_URL");
   const agentRemoteFlag = getFlag(parsed, "agent-remote");
   const agentRemote = typeof agentRemoteFlag === "string" ? agentRemoteFlag : envAgentRemote || undefined;
@@ -155,6 +161,7 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
     continueSession: getFlagBoolean(parsed, "continue", "c"),
     resumeSession,
     remote,
+    providerRemote,
     agentRemote,
     ...(modelInfo ? { modelInfo } : {}),
   };

@@ -11,7 +11,7 @@ import {
   useConfig,
   useTodoManager,
 } from "@my-agent/app";
-import { registerCoreEnv } from "@my-agent/core";
+import { createDirectModelProvider, registerCoreEnv, registerModelProvider } from "@my-agent/core";
 import { createNodeEnv } from "@my-agent/node";
 import { config as loadEnv } from "dotenv";
 import { render } from "ink";
@@ -29,7 +29,7 @@ if (isHelpRequested(process.argv.slice(2))) {
   useConfig.getActions().setHelpRequested(true);
 }
 
-// Switch between local and remote CoreEnv based on --remote flag / REMOTE env
+// CoreEnv plane — workspace fs/shell (`--remote` / REMOTE)
 const remote = appConfig.remote;
 if (remote) {
   try {
@@ -46,6 +46,30 @@ if (remote) {
 } else {
   const useOsSandbox = (process.env.SANDBOX_ENV || "local") !== "native";
   registerCoreEnv(createNodeEnv({ rootPath: process.cwd(), sandbox: useOsSandbox }));
+}
+
+// Provider plane — LLM keys (`--provider-remote` / PROVIDER_REMOTE); orthogonal to CoreEnv
+const providerRemote = appConfig.providerRemote;
+if (providerRemote) {
+  try {
+    const { createProxyModelProvider } = await import("@my-agent/server/client");
+    registerModelProvider(await createProxyModelProvider(providerRemote));
+    console.log(`[cli] Using remote model provider: ${providerRemote}`);
+  } catch (err) {
+    console.error(`[cli] Failed to connect to model provider at ${providerRemote}`);
+    console.error(`  ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+} else {
+  registerModelProvider(
+    createDirectModelProvider({
+      model: appConfig.model,
+      style: appConfig.style,
+      baseURL: appConfig.baseURL,
+      apiKey: appConfig.apiKey,
+      env: process.env,
+    })
+  );
 }
 
 if (appConfig.agentRemote) {

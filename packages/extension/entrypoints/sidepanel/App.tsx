@@ -8,8 +8,14 @@ import {
   useAgentLog,
   useTodoManager,
 } from "@my-agent/app";
-import { clearCoreEnv, registerCoreEnv } from "@my-agent/core";
-import { createRemoteCoreEnv } from "@my-agent/server/client";
+import {
+  clearCoreEnv,
+  clearModelProvider,
+  createDirectModelProvider,
+  registerCoreEnv,
+  registerModelProvider,
+} from "@my-agent/core";
+import { createProxyModelProvider, createRemoteCoreEnv } from "@my-agent/server/client";
 import { InkTerminalBox } from "@my-react/react-terminal/web";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -48,9 +54,20 @@ const AgentBootstrap = () => {
         setAdapter(null);
       }
 
+      clearModelProvider();
+      clearCoreEnv();
+
       const env = await createRemoteCoreEnv(url);
       if (currentInitId !== initIdRef.current) return;
       registerCoreEnv(env);
+
+      // Provider plane: local keys when apiKey is set; otherwise remote proxy on the same host.
+      if (apiKey.trim()) {
+        registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey }));
+      } else {
+        registerModelProvider(await createProxyModelProvider(url));
+      }
+      if (currentInitId !== initIdRef.current) return;
 
       await initConfig({
         model,
@@ -87,6 +104,7 @@ const AgentBootstrap = () => {
         void adapterRef.current.destroy();
         adapterRef.current = null;
       }
+      clearModelProvider();
       clearCoreEnv();
     };
   }, [runBootstrap]);

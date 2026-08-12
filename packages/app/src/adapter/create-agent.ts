@@ -3,7 +3,7 @@
  * Both adapters delegate to this helper to avoid duplicating ~80 lines of identical setup code.
  */
 
-import { agentManager, buildDefaultSystemPrompt, resolveModelConfigFromCoreEnv } from "@my-agent/core";
+import { agentManager, buildDefaultSystemPrompt, resolveModelConfigFromProvider } from "@my-agent/core";
 import { reactive, toRaw } from "reactivity-store";
 
 import { clearExtensionCommands, syncExtensionCommands } from "../commands";
@@ -53,7 +53,7 @@ function patchInstance(instance: ManagedAgent & { ["$$symbol"]?: symbol }) {
  * Handles tool setup, hook wiring, and session restore.
  */
 export async function createAgentFromConfig({ config, name, hooks }: CreateAgentOptions): Promise<InitResult> {
-  const { connection, modelInfo, providerMode } = await resolveModelConfigFromCoreEnv({
+  const { connection, modelInfo, providerMode } = await resolveModelConfigFromProvider({
     model: config.model,
     style: config.style,
     baseURL: config.baseURL,
@@ -63,7 +63,7 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
 
   if (!connection.model?.trim()) {
     throw new Error(
-      "No model configured. Set MODEL on the CoreEnv host (or use --model). With --remote, the server MODEL is used when local MODEL is empty."
+      "No model configured. Set MODEL / --model, or use --provider-remote so the provider server supplies MODEL."
     );
   }
 
@@ -72,7 +72,7 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
     model: connection.model,
     style: connection.style,
     baseURL: connection.baseURL,
-    // Proxy mode: keys stay on the server — do not surface the placeholder as a local key.
+    // Proxy mode: keys stay on the provider server — do not surface the placeholder as a local key.
     apiKey: providerMode === "proxy" ? "" : connection.apiKey,
     modelInfo,
     providerMode,
