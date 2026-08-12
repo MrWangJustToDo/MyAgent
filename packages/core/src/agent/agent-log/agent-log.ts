@@ -1,5 +1,5 @@
 import { Emitter } from "../../utils/emitter.js";
-import { createSequentialIdGenerator } from "../utils.js";
+import { createSequentialIdGenerator } from "../../utils/generate-id.js";
 
 import type { LogCategory, LogEntry, LogFilter, LogLevel } from "./types.js";
 

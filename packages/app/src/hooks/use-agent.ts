@@ -1,21 +1,19 @@
 import { createState } from "reactivity-store";
 
-import type { AgentSession, ManagedAgent } from "@my-agent/core";
+import type { AgentSession, AgentSessionHost } from "@my-agent/core";
 
 /**
- * Host store for the active agent.
- * Prefer {@link session} for UI data and commands; {@link agent} remains for
- * slash-command escape hatches not yet mapped to AgentSession.dispatch.
+ * Active Session + Host for the UI. No ManagedAgent.
  */
 export const useAgent = createState(
   () => ({
-    agent: null as ManagedAgent | null,
+    host: null as AgentSessionHost | null,
     session: null as AgentSession | null,
   }),
   {
     withActions: (s) => ({
-      setAgent: (c: ManagedAgent | null) => {
-        s.agent = c;
+      setHost: (host: AgentSessionHost | null) => {
+        s.host = host;
       },
       setSession: (session: AgentSession | null) => {
         s.session = session;

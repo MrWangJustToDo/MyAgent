@@ -1,4 +1,3 @@
-import { agentManager } from "@my-agent/core";
 import { useInput } from "ink";
 import { toRaw } from "reactivity-store";
 
@@ -21,7 +20,6 @@ import type { AgentAdapter } from "../adapter/types.js";
 import type { CommandContext } from "../commands";
 import type { UseAgentChatReturn } from "./use-agent-chat.js";
 import type { InputMode, useInputMode } from "./use-input-mode.js";
-import type { AgentLog, ManagedAgent } from "@my-agent/core";
 import type { MutableRefObject } from "react";
 
 export interface DenyingToolInfo {
@@ -79,7 +77,7 @@ export function useAgentKeybindings({
   extensionConfirm,
   onExtensionConfirmRespond,
 }: UseAgentKeybindingsOptions): void {
-  const getAgent = () => toRaw(useAgent.getReactiveState().agent) as ManagedAgent | null;
+  const getSession = () => toRaw(useAgent.getReactiveState().session);
 
   const handleExtensionConfirmKeys = (
     inputChar: string,
@@ -113,8 +111,10 @@ export function useAgentKeybindings({
     }
 
     if (inputKey.ctrl && inputChar === "c") {
-      const agent = useAgent.getReadonlyState().agent;
-      if (agent) agentManager.destroyAgent(agent.id);
+      const { host, session } = useAgent.getReadonlyState();
+      if (host && session) {
+        void host.destroy(session.id);
+      }
       adapter.exit();
       return;
     }
@@ -224,7 +224,7 @@ export function useAgentKeybindings({
         // Shift+Tab cycles agent mode: normal → auto → plan → normal → …
         // Still block during loading — toggling mode mid-run is not useful.
         if (isLoading) return;
-        cycleAgentMode(getAgent());
+        cycleAgentMode(getSession());
         return;
       }
       // Empty input + plan ready: `p` toggles full-plan markdown preview in the banner.
@@ -235,7 +235,7 @@ export function useAgentKeybindings({
         !inputKey.meta &&
         !useUserInput.getReadonlyState().value
       ) {
-        const phase = getAgent()?.getPlanModeState().phase;
+        const phase = getSession()?.getSnapshot().plan.phase;
         if (phase === "ready") {
           usePlanPreview.getActions().toggle();
           return;
@@ -327,8 +327,6 @@ export function useAgentKeybindings({
         const char = inputChar?.toLowerCase();
         if (char === "y") {
           if (!pendingApproval) return;
-          const agentLog = toRaw(getAgent()?.getLog()) as AgentLog | null;
-          agentLog?.approval(`user approve ${pendingApproval.id}`);
           addToolApprovalResponse({ id: pendingApproval.id, approved: true });
           return;
         }
@@ -506,8 +504,6 @@ export function useAgentKeybindings({
           const info = denyingRef.current;
           denyingRef.current = null;
           modeActions.setDenyMode(false);
-          const agentLog = toRaw(getAgent()?.getLog()) as AgentLog | null;
-          agentLog?.approval(`user denying ${info.id}: ${text || "(no reason)"}`);
           addToolApprovalResponse({
             id: info.id,
             approved: false,

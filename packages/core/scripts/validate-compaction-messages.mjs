@@ -85,14 +85,15 @@ assert.ok(beforeTokens > 100);
 const compacted = structuredClone(messages);
 const cache = new ToolCompactCache();
 await applyToolCompact(compacted, {
-  config: { keepRecentToolResults: 1, minToolResultSize: 100 },
+  config: {},
   registry: { get: () => undefined },
   cache,
 });
 
+// Without a toModelOutput registry, tool results stay as raw content.
 const firstTool = compacted.find((m) => m.role === "tool" && m.toolCallId === "call-1");
 assert.ok(firstTool);
-assert.match(String(firstTool.content), /\[Previous: used read_file\]/);
+assert.equal(String(firstTool.content), "x".repeat(500));
 
 const lastTool = compacted.find((m) => m.role === "tool" && m.toolCallId === "call-3");
 assert.ok(lastTool);

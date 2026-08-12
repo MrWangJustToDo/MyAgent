@@ -10,13 +10,13 @@ export {
   fingerprintUIMessage,
   isUIMessageStable,
   shouldPersistUIMessages,
-} from "./agent/session/session-sync-tracker.js";
-export type { SessionSaveReason, SessionSyncSnapshot } from "./agent/session/session-sync-tracker.js";
+} from "./agent/persistence/session-sync-tracker.js";
+export type { SessionSaveReason, SessionSyncSnapshot } from "./agent/persistence/session-sync-tracker.js";
 export { buildCanonicalModelMessages } from "./agent/compaction/build-canonical-model-messages.js";
 export { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, resolveFinishStatus } from "./managers/agent-status.js";
-export { AgentEventBus } from "./managers/agent-event-bus.js";
-export { attachEventLogBridge } from "./managers/event-log-bridge.js";
-export { emitAgentEvent } from "./managers/emit-agent-event.js";
+export { AgentTelemetryBus } from "./managers/agent-telemetry-bus.js";
+export { bridgeTelemetryToAgentLog } from "./managers/event-log-bridge.js";
+export { emitAgentTelemetry } from "./managers/emit-agent-telemetry.js";
 export { AgentLog } from "./agent/agent-log/agent-log.js";
 export { Emitter } from "./utils/emitter.js";
 export { UsageTracker } from "./managers/usage-tracker.js";
@@ -25,17 +25,20 @@ export {
   DEFAULT_AGENT_SESSION_CHANNELS,
   DEFAULT_SESSION_LIFECYCLE_EVENTS,
   createLocalAgentSession,
+  createLocalAgentSessionHost,
   sessionForSubagent,
 } from "./agent-session";
 export { AgentUIChannel } from "./agent/ui-channel.js";
-export { findToolCallPart, shouldSuppressReplayedToolChunk } from "./agent/utils/suppress-replayed-tool-chunks.js";
+export {
+  findToolCallPart,
+  shouldSuppressReplayedToolChunk,
+} from "./agent/run-helpers/suppress-replayed-tool-chunks.js";
 export { AgentChatController } from "./managers/agent-chat-controller.js";
 export { finalizeManagedAgentRun } from "./managers/managed-agent-run-lifecycle.js";
-export { PendingMessageQueue } from "./agent/utils/pending-message-queue.js";
-export type { QueueMode } from "./agent/utils/pending-message-queue.js";
+export { PendingMessageQueue } from "./agent/run-helpers/pending-message-queue.js";
+export type { QueueMode } from "./agent/run-helpers/pending-message-queue.js";
 export { ManagedAgent } from "./managers/managed-agent.js";
 export { RunCoordinator } from "./managers/run-coordinator.js";
-export { createLocalConnect } from "./connect/local-connect.js";
 export { createTextAdapter } from "./models/adapter-factory.js";
 export { liftToolMediaForChatCompletions } from "./models/lift-tool-media-for-chat-completions.js";
 export {
@@ -44,6 +47,10 @@ export {
   shouldEchoReasoningContent,
 } from "./models/reasoning-echo.js";
 export { runSideTextQuery } from "./models/side-text-query.js";
+export { resolveTextAdapterForManaged } from "./managers/run-agent.js";
+export { SessionStore } from "./agent/persistence/session-store.js";
+export { autoCompact } from "./agent/compaction/auto-compact.js";
+export { applyCompactionResult } from "./agent/compaction/apply-compaction-result.js";
 export { isPromptTooLongError } from "./agent/compaction/reactive-compact.js";
 export {
   extractRetryAfterSeconds,
@@ -59,7 +66,7 @@ export {
   estimateImageInputTokens,
   estimateImageTokensFromDimensions,
   tryReadImageDimensions,
-} from "./agent/utils/estimate-image-tokens.js";
+} from "./agent/run-helpers/estimate-image-tokens.js";
 export {
   applyResolvedEdit,
   expandMatchVariants,
@@ -90,9 +97,9 @@ export {
   runAgentOnce,
   type RunAgentOnceOutcome,
 } from "./agent/run/run-agent-skeleton.js";
-export { generateId, resetGeneratedIdsForTesting } from "./agent/utils.js";
+export { generateId, resetGeneratedIdsForTesting } from "./utils/generate-id.js";
 export { extractFileOpsFromMessages, formatFileOperations } from "./agent/compaction/file-ops-tracker.js";
-export { applyToolCompact, createToolPlaceholder, ToolCompactCache, toModelOutputRegistry } from "./agent/compaction";
+export { applyToolCompact, ToolCompactCache, toModelOutputRegistry } from "./agent/compaction";
 export {
   buildCompactArchiveMarkdown,
   buildCompactionPrompt,
@@ -182,7 +189,7 @@ export {
   sortToolsByName,
   splitSystemPromptAtDynamicBoundary,
 } from "./models/prompt-cache.js";
-export { toolsToArray } from "./agent/tools/tanstack/tools-record.js";
+export { toolsToArray } from "./agent/tools/runtime/tools-record.js";
 export { createPromptCacheMiddleware } from "./managers/middleware/prompt-cache-middleware.js";
 export { createAgentStatusController, AgentStatusController } from "./managers/agent-status-controller.js";
 export type {
@@ -193,23 +200,23 @@ export type {
 } from "./managers/agent-run-outcome.js";
 export { whenClearForReconcilePolicy } from "./managers/agent-run-outcome.js";
 export { AgentRunner } from "./agent/runner/agent-runner.js";
-export { assertAsyncIterable, formatAgentStreamError } from "./agent/utils/assert-async-iterable.js";
+export { assertAsyncIterable, formatAgentStreamError } from "./agent/run-helpers/assert-async-iterable.js";
 export {
   applyToolDenialReason,
   buildToolDenialResultContent,
   DEFAULT_TOOL_DENIAL_MESSAGE,
-} from "./agent/utils/apply-tool-denial-reason.js";
+} from "./agent/run-helpers/apply-tool-denial-reason.js";
 export {
   findLastMeaningfulAssistant,
   isEmptyAssistantShell,
   stripEmptyAssistantShells,
-} from "./agent/utils/empty-assistant-shell.js";
+} from "./agent/run-helpers/empty-assistant-shell.js";
 export {
   EMPTY_MODEL_STREAM_MESSAGE,
   assistantProgressSignature,
   didStreamProduceModelOutput,
   shouldFlagEmptyModelStream,
-} from "./agent/utils/empty-model-stream.js";
+} from "./agent/run-helpers/empty-model-stream.js";
 export { ReasoningContentCache } from "./models/reasoning-content-cache.js";
 export { resolveReasoningContentForAssistant } from "./models/resolve-reasoning-content.js";
 export {
@@ -218,23 +225,18 @@ export {
   hasCancellableIncompleteToolCalls,
   hasValidToolArguments,
   isCancellableIncompleteToolCall,
-} from "./agent/utils/incomplete-tool-calls.js";
+} from "./agent/run-helpers/incomplete-tool-calls.js";
 export {
-  IMAGE_OMITTED_PLACEHOLDER,
   MULTIMODAL_OMITTED_PLACEHOLDER,
   MULTIMODAL_PART_CAPABILITY,
-  chatMessagesHaveImages,
   chatMessagesHaveMultimodal,
   isMultimodalUnsupportedError,
-  isVisionUnsupportedError,
   sanitizeMessagesForCapabilities,
-  stripImagesFromChatMessages,
   stripMultimodalFromChatMessages,
   trySanitizeForMultimodalRetry,
-  tryStripImagesForVisionRetry,
   unsupportedMultimodalPartTypes,
-} from "./agent/utils/capability-message-utils.js";
-export type { CapabilityProbe, MultimodalPartType } from "./agent/utils/capability-message-utils.js";
+} from "./agent/run-helpers/capability-message-utils.js";
+export type { CapabilityProbe, MultimodalPartType } from "./agent/run-helpers/capability-message-utils.js";
 export {
   hasDeferredToolExecution,
   hasApprovedToolsPendingExecution,
@@ -244,8 +246,8 @@ export {
   shouldContinueAgentPump,
   isToolContinuationPrepare,
   countPendingToolApprovals,
-} from "./agent/utils/tool-phase-utils.js";
-export { createTanStackSubagentTools, createTanStackTools, getReadOnlyTanStackToolNames } from "./agent/tools/tanstack";
+} from "./agent/run-helpers/tool-phase-utils.js";
+export { createTanStackSubagentTools, createTanStackTools, getReadOnlyTanStackToolNames } from "./agent/tools/runtime";
 export {
   clearStreamingOutput,
   emitStreamingChunk,

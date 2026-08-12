@@ -162,7 +162,7 @@ export class ExtensionRunner {
 
   /**
    * Emit `session:start` to registered interceptors (per-agent ExtensionEventBus).
-   * Distinct from the AgentEventBus telemetry `session:start` — this one is
+   * Distinct from the AgentTelemetryBus telemetry `session:start` — this one is
    * interceptable by extensions.
    */
   emitSessionStart(cwd: string, sessionId: string): void {

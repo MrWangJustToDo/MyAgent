@@ -1,5 +1,5 @@
 import type { ReadFileOutput } from "../read-file-tool.js";
-import type { ModelToolContent } from "../tanstack/to-model-output-registry.js";
+import type { ModelToolContent } from "../runtime/to-model-output-registry.js";
 
 /**
  * Convert read_file execute output for the model via TanStack {@link normalizeToolResult}.

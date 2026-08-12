@@ -40,13 +40,13 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
   const trimmedBaseURL = baseURL?.trim();
   if (!trimmedBaseURL) {
     throw new Error(
-      `Model baseURL is required for style "${style}". Set BASE_URL (or MODEL_BASE_URL) in .env or pass modelBaseURL when creating the agent.`
+      `Model baseURL is required for style "${style}". Pass baseURL when registering the ModelProvider / creating the agent.`
     );
   }
 
   if (style === "anthropic") {
     if (!apiKey) {
-      throw new Error("Anthropic style requires an API key (API_KEY or ANTHROPIC_API_KEY)");
+      throw new Error("Anthropic style requires an API key (pass apiKey when registering the ModelProvider).");
     }
     return {
       adapter: createAnthropicChat(model as Parameters<typeof createAnthropicChat>[0], apiKey, {

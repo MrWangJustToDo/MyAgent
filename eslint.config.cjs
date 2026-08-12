@@ -64,13 +64,14 @@ module.exports = [
       },
     },
   },
-  // Node.js test files and core validation scripts use console/setTimeout from node environment
+  // Node.js test files and validation scripts use console/setTimeout from node environment
   {
-    files: ["packages/app/test/**", "packages/core/scripts/**"],
+    files: ["packages/app/test/**", "packages/app/scripts/**", "packages/core/scripts/**"],
     languageOptions: {
       globals: {
         console: "readonly",
         setTimeout: "readonly",
+        URL: "readonly",
       },
     },
   },

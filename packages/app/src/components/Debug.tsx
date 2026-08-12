@@ -2,20 +2,18 @@
 import { useUserInput } from "../hooks";
 import { useAgent } from "../hooks/use-agent";
 import { useAgentLog } from "../hooks/use-agent-log";
-import { useAgentManager } from "../hooks/use-agent-manager";
 import { useStatic } from "../hooks/use-static";
 
-import type { ManagedAgent, AgentLog } from "@my-agent/core";
-
+/**
+ * Dev-only reactivity touchpoints so Debug rebuilds when Session / log entries change.
+ */
 export const Debug = () => {
   // @ts-ignore
-  useAgent((s) => s.agent as ManagedAgent) as ManagedAgent;
-
+  useAgent((s) => s.session);
   // @ts-ignore
-  useAgentLog((s) => s.log as AgentLog);
-
+  useAgent((s) => s.host);
   // @ts-ignore
-  useAgentManager((s) => s.state);
+  useAgentLog((s) => s.version);
 
   // @ts-ignore
   useStatic();

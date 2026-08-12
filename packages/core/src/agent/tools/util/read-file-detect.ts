@@ -4,7 +4,7 @@
 
 import { getEnv } from "../../../env.js";
 
-import type { FileStat } from "../../../environment";
+import type { FileStat } from "../../../env-types.js";
 
 export type ReadFileType = "text" | "image" | "pdf" | "directory" | "binary";
 

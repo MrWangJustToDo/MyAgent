@@ -56,13 +56,13 @@ assert.equal(
   cleanup();
 }
 
-// Provider manager: report the provider that actually succeeded
+// Provider manager: without braveApiKey, duckduckgo is selected
 resetWebsearchProviders();
 registerCoreEnv({
   rootPath: "/tmp",
   getPlatform: async () => "linux",
   getArch: async () => "x64",
-  getEnv: async () => ({}), // no BRAVE_API_KEY → brave unavailable
+  getEnv: async () => ({}),
   homedir: async () => "/tmp",
   fs: {
     readFile: async () => "",
@@ -92,6 +92,10 @@ try {
   assert.equal(outcome.provider, "duckduckgo");
   assert.ok(outcome.results.length >= 1);
   assert.equal(outcome.results[0].url, "https://example.com");
+
+  // With braveApiKey configured, brave becomes available
+  pm.configure({ braveApiKey: "test-key" });
+  assert.equal(await (await pm.selectProvider()).name, "brave");
 } finally {
   clearCoreEnv();
   resetWebsearchProviders();

@@ -1,11 +1,11 @@
 /**
- * Bridge extension-registered commands into the app slash-command registry.
+ * Bridge extension-registered slash commands into the app registry via Session.dispatch.
  */
 
 import { clearExtensionCommands, registerExtensionCommand } from "./registry.js";
 
 import type { Command } from "./types.js";
-import type { ExtensionCommand, ManagedAgent } from "@my-agent/core";
+import type { AgentSession } from "@my-agent/core";
 
 /** Split `/cmd a b` args string into argv for extension handlers. */
 export function splitExtensionCommandArgs(args: string): string[] {
@@ -13,32 +13,33 @@ export function splitExtensionCommandArgs(args: string): string[] {
   return trimmed ? trimmed.split(/\s+/) : [];
 }
 
-/** Map a core {@link ExtensionCommand} to an app {@link Command}. */
-export function extensionCommandToSlashCommand(cmd: ExtensionCommand): Command {
+function extensionSlashCommand(session: AgentSession, name: string, description: string): Command {
   return {
-    name: cmd.name,
-    description: cmd.description,
-    usage: `/${cmd.name}`,
+    name,
+    description,
+    usage: `/${name}`,
     execute: async (args) => {
-      const argv = splitExtensionCommandArgs(args);
-      try {
-        const message = await cmd.execute(argv);
-        return message ? { ok: true, message } : { ok: true };
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        return { ok: false, error: err.message };
-      }
+      const result = await session.dispatch({
+        type: "extension.invokeCommand",
+        name,
+        args: splitExtensionCommandArgs(args),
+      });
+      if (!result.ok) return { ok: false, error: result.error };
+      const message = (result.data as { message?: string } | undefined)?.message;
+      return message ? { ok: true, message } : { ok: true };
     },
   };
 }
 
 /**
- * Replace the extension command layer with commands from the managed agent.
- * Built-in slash commands are never overwritten (conflicts are skipped with a warning).
+ * Replace extension slash commands from the Session extensions snapshot.
  */
-export function syncExtensionCommands(agent: ManagedAgent): void {
+export function syncExtensionCommands(session: AgentSession): void {
   clearExtensionCommands();
-  for (const cmd of agent.getExtensionCommands()) {
-    registerExtensionCommand(extensionCommandToSlashCommand(cmd));
+  for (const ext of session.getSnapshot().extensions.extensions) {
+    if (!ext.enabled) continue;
+    for (const name of ext.commands) {
+      registerExtensionCommand(extensionSlashCommand(session, name, `${ext.name}: /${name}`));
+    }
   }
 }

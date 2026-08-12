@@ -1,16 +1,16 @@
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
-import { estimateImageInputTokens, tryReadImageDimensions } from "../utils/estimate-image-tokens.js";
+import { estimateImageInputTokens, tryReadImageDimensions } from "../run-helpers/estimate-image-tokens.js";
 
-import { defineServerTool } from "./tanstack/define-tool.js";
+import { defineServerTool } from "./runtime/define-tool.js";
 import { extractPdfText } from "./util/extract-pdf-text.js";
 import { formatReadFileToolResult } from "./util/format-read-file-result.js";
 import { getFile, withDuration } from "./util/helpers.js";
 import { detectReadFileType, isBinaryContent } from "./util/read-file-detect.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 
-import type { FileStat } from "../../environment";
+import type { FileStat } from "../../env-types.js";
 import type { UsageTracker } from "../../runtime-types/hosts.js";
 
 // ============================================================================

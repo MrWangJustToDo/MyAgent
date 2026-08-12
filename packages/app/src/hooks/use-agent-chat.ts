@@ -1,4 +1,4 @@
-import { agentManager, createLocalAgentSession, isActiveStatus } from "@my-agent/core";
+import { isActiveStatus } from "@my-agent/core";
 import { throttle } from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -7,6 +7,7 @@ import { useAdapter } from "../context/adapter-context.js";
 import { clearFlatMessageCache } from "../utils/message-flat-cache.js";
 import { isToolCallPart, isPendingToolApproval, parseToolInput } from "../utils/tool-part.js";
 
+import { bindSessionLog } from "./use-agent-log.js";
 import { useAgentStatus } from "./use-agent-status.js";
 import { useAgent } from "./use-agent.js";
 import { useCallbackRef } from "./use-callback-ref.js";
@@ -18,13 +19,7 @@ import { getWorkSpaceInfo } from "./use-workspace-info.js";
 
 import type { AppConfig } from "../adapter/types.js";
 import type { Attachment } from "../types/attachment.js";
-import type {
-  AgentChatController,
-  AgentSession,
-  AgentStatus,
-  ManagedAgent,
-  QueuedMessagesSnapshot,
-} from "@my-agent/core";
+import type { AgentSession, AgentStatus, QueuedMessagesSnapshot } from "@my-agent/core";
 import type { ContentPart, UIMessage } from "@tanstack/ai";
 
 // ============================================================================
@@ -83,7 +78,10 @@ export interface UseAgentChatReturn {
   addToolOutput: (options: { tool: string; toolCallId: string; output: Record<string, unknown> }) => void;
   /** Pause/resume status while a client tool waits for user input (`ask_user`). */
   setClientToolWaiting: (active: boolean) => void;
-  /** Flush chat messages to session (single write path for `uiMessages`). */
+  /**
+   * Persistence is owned by core (user-message / pump-complete / force).
+   * Kept as a no-op for command-context compatibility until `/clear` migrates.
+   */
   saveSessionFromChat: () => void;
 }
 
@@ -134,9 +132,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   const [initLoading, setInitLoading] = useState(true);
   const [initError, setInitError] = useState<Error | null>(null);
-  const [agent, setAgent] = useState<ManagedAgent | null>(null);
   const [session, setSession] = useState<AgentSession | null>(null);
-  const [chat, setChat] = useState<AgentChatController | null>(null);
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessagesSnapshot>({ steer: [], followUp: [] });
   const [status, setStatus] = useState<AgentStatus>("idle");
@@ -144,12 +140,6 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   const forceUpdate = useForceUpdate({ time: 100 });
   const initIdRef = useRef(0);
-
-  useEffect(() => {
-    if (agent) {
-      useAgent.getActions().setAgent(agent);
-    }
-  }, [agent]);
 
   useEffect(() => {
     const currentInitId = ++initIdRef.current;
@@ -168,22 +158,16 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         const result = await adapter.initialize(config);
         if (currentInitId !== initIdRef.current) return;
 
-        const managed = result.agent;
-        const controller = managed.initChat(agentManager, (result.initialMessages as UIMessage[] | undefined) ?? []);
-        const localSession = createLocalAgentSession({ managed, manager: agentManager });
-        bindAgentSession(localSession, { useAgent });
+        bindAgentSession(result.session, { useAgent }, result.host);
 
-        setAgent(managed);
-        setChat(controller);
-        setSession(localSession);
-        const initial = controller.getMessages();
-        setMessages(initial);
-        setStatus(managed.status);
-        setAgentError(managed.getError());
-        setAgentStatus(managed.status);
-        setQueuedMessages(controller.getQueuedMessages());
-        managed.resetSessionSyncTracker(initial);
-        managed.syncInteractionStateFromUIMessages(initial);
+        const snap = result.session.getSnapshot();
+        setSession(result.session);
+        setMessages(snap.messages);
+        setStatus(snap.status);
+        setAgentError(snap.error);
+        setAgentStatus(snap.status);
+        setQueuedMessages(snap.queues);
+        useTodoManager.getActions().setFromSession(snap.todos, snap.todosTitle);
       } catch (e) {
         if (currentInitId !== initIdRef.current) return;
         setInitError(e as Error);
@@ -201,7 +185,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     void init();
 
     return () => {
-      bindAgentSession(null, { useAgent });
+      bindAgentSession(null, { useAgent }, null);
       void adapter.destroy();
     };
   }, [
@@ -217,16 +201,16 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   ]);
 
   useEffect(() => {
-    if (!session || !agent) return;
+    if (!session) return;
 
     const setAgentStatus = useAgentStatus.getActions().setStatus;
+    const unsubLog = bindSessionLog(session);
 
-    // UI only — session disk writes are owned by core (user-message / pump-complete / force).
     const updateUi = throttle((next: UIMessage[]) => {
       setMessages(next);
     }, 60);
 
-    return session.subscribe(
+    const unsub = session.subscribe(
       (event) => {
         if (event.channel === "messages") {
           updateUi(event.payload);
@@ -244,7 +228,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
           return;
         }
         if (event.channel === "todos") {
-          useTodoManager.getActions().refresh();
+          useTodoManager.getActions().setFromSession(event.payload.items, event.payload.title);
           return;
         }
         if (event.channel === "lifecycle") {
@@ -253,10 +237,13 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       },
       { channels: ["messages", "queues", "state", "todos", "lifecycle"] }
     );
-  }, [session, agent, forceUpdate]);
 
-  // Extract latest thinking content from messages for footer display.
-  // Only keep the last non-empty line for compact footer display.
+    return () => {
+      unsub();
+      unsubLog();
+    };
+  }, [session, forceUpdate]);
+
   useEffect(() => {
     let latestThinking = "";
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -267,7 +254,6 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         if (part.type === "thinking") {
           const content = part.content ?? "";
           if (content.length > 0) {
-            // Only the last non-empty line for streaming display
             const lines = content.split("\n").filter((l) => l.trim().length > 0);
             latestThinking = lines.length > 0 ? lines[lines.length - 1] : "";
           }
@@ -283,17 +269,16 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   const isLoading = isAgentLoading(status);
 
   const saveSessionFromChat = useCallbackRef(() => {
-    if (messages.length > 0 && agent) {
-      agent.saveSessionUIMessages(messages);
-    }
+    // Core owns session disk writes; slash `/clear` still calls this until §3.3.
   });
 
   const stop = useCallback(() => {
-    if (agent) {
-      const activeSubagents = agentManager.getActiveSubagents(agent.id);
-      if (activeSubagents.length > 0) {
-        for (const sub of activeSubagents) {
-          void createLocalAgentSession({ managed: sub, manager: agentManager }).dispatch({ type: "stop" });
+    const host = useAgent.getReadonlyState().host;
+    if (session && host) {
+      const activeChildren = session.getSnapshot().subagents.filter((child) => isActiveStatus(child.status));
+      if (activeChildren.length > 0) {
+        for (const child of activeChildren) {
+          void host.connect(child.id)?.dispatch({ type: "stop" });
         }
         forceUpdate();
         return;
@@ -301,7 +286,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     }
     void session?.dispatch({ type: "stop" });
     forceUpdate();
-  }, [agent, session, forceUpdate]);
+  }, [session, forceUpdate]);
 
   const sendMessage = useCallback(
     async (content: string | SendMessageContent) => {
@@ -313,9 +298,6 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   );
 
   const steer = useCallback(
-    // NOTE: Not the default keybinding anymore. Enter (running) → followUp;
-    // Option+Enter → forceSubmit. `steer` is kept for programmatic use where
-    // you want the message delivered within the same turn (before the next LLM call).
     (content: string | SendMessageContent) => {
       if (!session) return;
       void session.dispatch({ type: "steer", content: toChatContent(content) });
@@ -449,10 +431,12 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     stop,
     clearMessages,
     setMessages: (next) => {
-      chat?.setMessages(next);
-      if (next.length === 0) clearFlatMessageCache();
+      // Local UI mirror only until replaceMessages lands on Session; resume/clear use dispatch.
+      if (next.length === 0) {
+        void session?.dispatch({ type: "clear" });
+        clearFlatMessageCache();
+      }
       setMessages(next);
-      agent?.syncInteractionStateFromUIMessages(next);
     },
     error,
     initLoading,

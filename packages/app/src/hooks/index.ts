@@ -14,8 +14,7 @@ export { useTodoManager, type TodoStats } from "./use-todo-manager.js";
 
 export { useAgent } from "./use-agent.js";
 export { bumpAgentUsage, useAgentUsage } from "./use-agent-usage.js";
-export { useAgentLog } from "./use-agent-log.js";
-export { useAgentManager } from "./use-agent-manager.js";
+export { useAgentLog, bindSessionLog } from "./use-agent-log.js";
 export { useAutocomplete } from "./use-autocomplete.js";
 export { useCommandOutput } from "./use-command-output.js";
 export { useDiffFileCache } from "./use-diff-file-cache.js";

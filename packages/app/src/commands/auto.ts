@@ -10,9 +10,9 @@ registerCommand({
   description: "Toggle auto mode — skip all tool approvals (YOLO)",
   usage: "/auto [on|off|status]",
   getOptions: () => {
-    const agent = useAgent.getReadonlyState().agent;
-    const mode: AgentMode = agent?.getAgentMode() ?? "normal";
-    const current = agent?.isAutoModeEnabled() ? "on" : "off";
+    const snap = useAgent.getReadonlyState().session?.getSnapshot();
+    const mode: AgentMode = snap?.mode ?? "normal";
+    const current = snap?.autoMode ? "on" : "off";
     return [
       {
         label: "toggle",
@@ -35,14 +35,13 @@ registerCommand({
     ];
   },
   execute: async (args, ctx) => {
-    const agent = ctx.getAgent();
-    if (!agent) {
+    const session = ctx.getSession();
+    if (!session) {
       return { ok: false, error: "Agent not initialized" };
     }
 
     const sub = args.trim().toLowerCase();
 
-    // Approve all pending tool approvals when enabling auto mode
     const approveAllPending = async () => {
       if (!ctx.addToolApprovalResponse || !ctx.getMessages) return;
       const messages = ctx.getMessages();
@@ -59,17 +58,20 @@ registerCommand({
     };
 
     if (sub === "status") {
+      const enabled = session.getSnapshot().autoMode;
       return {
         ok: true,
-        message: agent.isAutoModeEnabled()
+        message: enabled
           ? "Auto mode on — tools run without approval"
           : "Auto mode off — tools require approval when configured",
       };
     }
 
     if (sub === "" || sub === "toggle") {
-      const wasEnabled = agent.isAutoModeEnabled();
-      const enabled = agent.toggleAutoMode();
+      const wasEnabled = session.getSnapshot().autoMode;
+      const result = await session.dispatch({ type: "auto.toggle" });
+      if (!result.ok) return { ok: false, error: result.error };
+      const enabled = Boolean((result.data as { enabled?: boolean } | undefined)?.enabled);
       if (enabled && !wasEnabled) {
         await approveAllPending();
       }
@@ -82,13 +84,13 @@ registerCommand({
     }
 
     if (sub === "on" || sub === "enable") {
-      agent.setAutoModeEnabled(true);
+      await session.dispatch({ type: "auto.set", enabled: true });
       await approveAllPending();
       return { ok: true, message: "Auto mode on — tools run without approval" };
     }
 
     if (sub === "off" || sub === "disable") {
-      agent.setAutoModeEnabled(false);
+      await session.dispatch({ type: "auto.set", enabled: false });
       return { ok: true, message: "Auto mode off — tools require approval when configured" };
     }
 

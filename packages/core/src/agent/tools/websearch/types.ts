@@ -59,10 +59,3 @@ export interface ProviderInfo {
   available: boolean;
   description: string;
 }
-
-// ============================================================================
-// Environment variable keys
-// ============================================================================
-
-export const ENV_BRAVE_API_KEY = "BRAVE_API_KEY";
-export const ENV_WEBSEARCH_PROVIDER = "WEBSEARCH_PROVIDER";

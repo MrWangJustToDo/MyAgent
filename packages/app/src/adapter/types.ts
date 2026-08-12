@@ -1,4 +1,4 @@
-import type { AgentSession, ManagedAgent, ModelInfo, ModelStyle } from "@my-agent/core";
+import type { AgentSession, AgentSessionHost, AgentToolConfig, ModelInfo, ModelStyle } from "@my-agent/core";
 import type { UIMessage } from "@tanstack/ai";
 
 // ============================================================================
@@ -29,13 +29,15 @@ export interface AppConfig {
    * When set, hosts may bind {@link AgentSession} via HttpAgentSessionClient.
    */
   agentRemote?: string;
-  /** Optional model metadata override from MODEL_* env vars */
+  /** Optional model metadata override (hosts may parse MODEL_* env vars) */
   modelInfo?: ModelInfo;
   /**
    * How LLM credentials are resolved for this session.
    * `proxy` = provider server holds keys; UI should not treat apiKey as a local secret.
    */
   providerMode?: "direct" | "proxy";
+  /** Explicit tool secrets / prefs (e.g. Brave websearch). Hosts parse env and pass here. */
+  toolConfig?: AgentToolConfig;
 }
 
 // ============================================================================
@@ -49,9 +51,10 @@ export type CommandResult = { ok: true; message?: string } | { ok: false; error:
 // ============================================================================
 
 export interface InitResult {
-  agent: ManagedAgent;
-  /** Set after chat init when LocalAgentSession is wired (see useAgentChat). */
-  session?: AgentSession;
+  /** Session catalog / factory for this process (or remote HTTP Host). */
+  host: AgentSessionHost;
+  /** Active AgentSession — UI control surface. */
+  session: AgentSession;
   initialMessages?: UIMessage[];
 }
 

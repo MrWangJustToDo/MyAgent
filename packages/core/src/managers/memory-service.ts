@@ -9,7 +9,7 @@ import { findRelevantMemories, formatRelevantMemories } from "../agent/memory/me
 import { getEnv } from "../env.js";
 
 import type { AgentManager } from "./agent-manager.js";
-import type { EmitAgentEventFn } from "./emit-agent-event.js";
+import type { EmitAgentTelemetryFn } from "./emit-agent-telemetry.js";
 import type { UsageTracker } from "./usage-tracker.js";
 import type { AgentLog } from "../agent/agent-log";
 import type { MemoryManager } from "../agent/memory/memory-manager.js";
@@ -21,7 +21,7 @@ export interface MemoryPrefetchInput {
   usage: UsageTracker;
   log: AgentLog | null;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
-  emitEvent?: EmitAgentEventFn;
+  emitEvent?: EmitAgentTelemetryFn;
 }
 
 export interface MemoryExtractionInput {
@@ -29,7 +29,7 @@ export interface MemoryExtractionInput {
   getMessagesForLLM: () => ModelMessage[];
   log: AgentLog | null;
   manager: AgentManager;
-  emitEvent?: EmitAgentEventFn;
+  emitEvent?: EmitAgentTelemetryFn;
 }
 
 export class MemoryService {

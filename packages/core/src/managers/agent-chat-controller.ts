@@ -1,23 +1,23 @@
 import { runAgentOnce } from "../agent/run/run-agent-skeleton.js";
-import { extractAssistantText } from "../agent/stream/extract-assistant-text.js";
-import { throwOnRunError } from "../agent/stream/stream-errors.js";
-import { AgentUIChannel } from "../agent/ui-channel.js";
-import { formatAgentStreamError } from "../agent/utils/assert-async-iterable.js";
-import { stripEmptyAssistantShells } from "../agent/utils/empty-assistant-shell.js";
-import { EMPTY_MODEL_STREAM_MESSAGE, shouldFlagEmptyModelStream } from "../agent/utils/empty-model-stream.js";
+import { formatAgentStreamError } from "../agent/run-helpers/assert-async-iterable.js";
+import { stripEmptyAssistantShells } from "../agent/run-helpers/empty-assistant-shell.js";
+import { EMPTY_MODEL_STREAM_MESSAGE, shouldFlagEmptyModelStream } from "../agent/run-helpers/empty-model-stream.js";
 import {
   cancelIncompleteToolCalls,
   hasCancellableIncompleteToolCalls,
   TOOL_CANCELLED_MESSAGE,
-} from "../agent/utils/incomplete-tool-calls.js";
-import { PendingMessageQueue, type QueueMode } from "../agent/utils/pending-message-queue.js";
+} from "../agent/run-helpers/incomplete-tool-calls.js";
+import { PendingMessageQueue, type QueueMode } from "../agent/run-helpers/pending-message-queue.js";
 import {
   hasPendingAskUser,
   hasPendingToolApprovals,
   needsAgentResponseAfterTools,
   needsToolPhaseContinue,
   shouldContinueAgentPump,
-} from "../agent/utils/tool-phase-utils.js";
+} from "../agent/run-helpers/tool-phase-utils.js";
+import { extractAssistantText } from "../agent/stream/extract-assistant-text.js";
+import { throwOnRunError } from "../agent/stream/stream-errors.js";
+import { AgentUIChannel } from "../agent/ui-channel.js";
 import { Emitter } from "../utils/emitter.js";
 
 import { isActiveStatus } from "./agent-status.js";

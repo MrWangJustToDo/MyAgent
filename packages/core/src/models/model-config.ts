@@ -1,14 +1,10 @@
 /**
- * Model configuration — single entry for connection + metadata resolution.
+ * Model configuration — explicit connection + optional models.dev metadata.
  *
- * Two API styles:
- * - `openai`    — OpenAI-compatible chat completions (OpenAI, Ollama, DeepSeek, gateways)
- * - `anthropic` — Anthropic Messages API
- *
- * Each style uses: model + baseURL + apiKey. Defaults are overridable via env or modelInfo.
+ * Hosts MUST pass model / style / baseURL / apiKey (and optional modelInfo).
+ * Core does not read environment-variable bags for LLM credentials.
  */
 
-import { parseModelInfoFromEnv } from "./model-env.js";
 import { lookupModelFromModelsDev } from "./models-dev.js";
 
 import type { ModelInfo, ModelStyle } from "./types.js";
@@ -40,7 +36,6 @@ export interface ResolveModelConfigInput {
   baseURL?: string;
   apiKey?: string;
   modelInfo?: ModelInfo;
-  env?: Record<string, string | undefined>;
 }
 
 export interface ResolvedModelConfig {
@@ -63,29 +58,14 @@ function trimBaseURL(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
-function resolveBaseURLFromEnv(env: Record<string, string | undefined>): string | undefined {
-  const direct = env.BASE_URL || env.MODEL_BASE_URL;
-  if (!direct) return undefined;
-  return trimBaseURL(direct);
-}
-
-function resolveApiKeyFromEnv(env: Record<string, string | undefined>): string {
-  return env.API_KEY ?? "";
-}
-
 /**
- * Resolve connection settings from env + optional overrides (no network).
+ * Resolve connection settings from explicit fields (no env bag, no network).
  */
 export function resolveModelConnection(input: ResolveModelConfigInput = {}): ModelConnection {
-  const env = input.env ?? {};
-  const style = input.style ?? parseModelStyle(env.MODEL_STYLE || env.STYLE);
-  const model = input.model || env.MODEL || "";
-  const baseURL =
-    input.baseURL ||
-    input.modelInfo?.baseURL ||
-    resolveBaseURLFromEnv(env) ||
-    (style === "openai" ? DEFAULT_BASE_URLS.openai : DEFAULT_BASE_URLS.anthropic);
-  const apiKey = input.apiKey ?? resolveApiKeyFromEnv(env);
+  const style = input.style ?? "openai";
+  const model = input.model?.trim() ?? "";
+  const baseURL = trimBaseURL(input.baseURL?.trim() || input.modelInfo?.baseURL?.trim() || DEFAULT_BASE_URLS[style]);
+  const apiKey = input.apiKey ?? "";
 
   return { style, model, baseURL, apiKey };
 }
@@ -105,15 +85,10 @@ function mergeModelInfo(base: ModelInfo | undefined, override: ModelInfo | undef
 }
 
 /**
- * Resolve connection + model metadata (models.dev lookup + MODEL_* env overrides).
+ * Resolve connection + model metadata (models.dev lookup + caller modelInfo).
  */
 export async function resolveModelConfig(input: ResolveModelConfigInput = {}): Promise<ResolvedModelConfig> {
-  const env = input.env ?? {};
   const connection = resolveModelConnection(input);
-
-  const envInfo = connection.model
-    ? parseModelInfoFromEnv(env, connection.model, connection.style === "anthropic" ? "anthropic" : "openai")
-    : undefined;
 
   let lookedUp: ModelInfo | undefined;
   if (connection.model) {
@@ -124,7 +99,7 @@ export async function resolveModelConfig(input: ResolveModelConfigInput = {}): P
     }
   }
 
-  const modelInfo = mergeModelInfo(lookedUp, mergeModelInfo(envInfo, input.modelInfo));
+  const modelInfo = mergeModelInfo(lookedUp, input.modelInfo);
 
   const finalConnection: ModelConnection = {
     ...connection,

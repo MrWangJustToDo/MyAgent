@@ -25,7 +25,6 @@ export * from "./hooks";
 export {
   clearExtensionCommands,
   dispatchCommand,
-  extensionCommandToSlashCommand,
   getAllCommands,
   getCommand,
   registerExtensionCommand,

@@ -1,7 +1,7 @@
 import { isSafeCommand } from "./safe-command.js";
 
 import type { PlanModeController } from "./plan-mode-controller.js";
-import type { ToolsRecord } from "../tools/tanstack/tools-record.js";
+import type { ToolsRecord } from "../tools/runtime/tools-record.js";
 
 /**
  * Mutating tools hidden while planning or ready.

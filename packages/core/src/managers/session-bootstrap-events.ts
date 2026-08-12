@@ -1,6 +1,6 @@
 import { formatAgentDocResult } from "../agent/agent-doc-loader.js";
 
-import { emitAgentEvent } from "./emit-agent-event.js";
+import { emitAgentTelemetry } from "./emit-agent-telemetry.js";
 
 import type { ManagedAgent } from "./managed-agent.js";
 
@@ -22,53 +22,45 @@ export async function emitSessionBootstrapEvents(
   const docSource = managed.agentDocSource;
 
   if (docContent) {
-    emitAgentEvent(managed, "session:doc", {
-      data: {
-        source: docSource,
-        length: docContent.length,
-        message: formatAgentDocResult({
-          content: docContent,
-          source: docSource || undefined,
-        }),
-      },
+    emitAgentTelemetry(managed, "session:doc", {
+      source: docSource,
+      length: docContent.length,
+      message: formatAgentDocResult({
+        content: docContent,
+        source: docSource || undefined,
+      }),
     });
   }
 
   const skillRegistry = managed.getSkillRegister();
   if (skillRegistry) {
-    emitAgentEvent(managed, "session:skill", {
-      data: {
-        count: skillRegistry.size,
-        names: skillRegistry.names(),
-      },
+    emitAgentTelemetry(managed, "session:skill", {
+      count: skillRegistry.size,
+      names: skillRegistry.names(),
     });
   }
 
   const mcpManager = managed.getMcpManager();
   const servers = mcpManager?.getServerStatuses() ?? [];
-  emitAgentEvent(managed, "session:mcp", {
-    data: {
-      configPath: context.mcpConfigPath,
-      configLoadedFrom: context.mcpConfigLoadedFrom,
-      servers,
-      toolCount: servers.reduce((sum, server) => sum + server.toolCount, 0),
-    },
+  emitAgentTelemetry(managed, "session:mcp", {
+    configPath: context.mcpConfigPath,
+    configLoadedFrom: context.mcpConfigLoadedFrom,
+    servers,
+    toolCount: servers.reduce((sum, server) => sum + server.toolCount, 0),
   });
 
   const memoryManager = managed.memory.getManager();
   if (memoryManager) {
     const memories = await memoryManager.listMemories();
-    emitAgentEvent(managed, "session:memory", {
-      data: {
-        memoryCount: memories.length,
-        indexLength: memoryManager.getIndexContent().length,
-      },
+    emitAgentTelemetry(managed, "session:memory", {
+      memoryCount: memories.length,
+      indexLength: memoryManager.getIndexContent().length,
     });
   }
 
-  emitAgentEvent(managed, "session:start", { data: { cwd: context.cwd } });
+  emitAgentTelemetry(managed, "session:start", { cwd: context.cwd });
 
   // Fire the interceptable per-agent session:start on the ExtensionEventBus.
-  // Distinct from the AgentEventBus telemetry above (fire-and-forget, not interceptable).
+  // Distinct from the AgentTelemetryBus telemetry above (fire-and-forget, not interceptable).
   managed.extensionRunner?.emitSessionStart(context.cwd, managed.id);
 }

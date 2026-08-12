@@ -3,7 +3,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:resolve-from-provider
  */
-/* eslint-disable no-undef */
+
 /* eslint-disable import/no-useless-path-segments */
 
 import assert from "node:assert/strict";

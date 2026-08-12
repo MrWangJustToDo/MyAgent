@@ -1,52 +1,51 @@
-import { agentManager } from "@my-agent/core";
 import { useEffect, useState } from "react";
 import { toRaw } from "reactivity-store";
 
 import { useAgent } from "./use-agent.js";
 
-import type { ManagedAgent } from "@my-agent/core";
+import type { AgentSessionSubagentSummary } from "@my-agent/core";
 
-/** Look up the subagent for a parent task tool call via `parentTaskId`. */
-const getManagerSubagent = (taskId: string): ManagedAgent | undefined => {
-  const parentId = useAgent.getReadonlyState().agent?.id;
-  if (!parentId || !taskId) return;
-
-  const fromSnapshot = useAgent
+function findSubagentByTask(taskId: string): AgentSessionSubagentSummary | undefined {
+  if (!taskId) return undefined;
+  return useAgent
     .getReadonlyState()
     .session?.getSnapshot()
     .subagents.find((entry) => entry.parentTaskToolCallId === taskId);
-  if (fromSnapshot) {
-    return agentManager.getAgent(fromSnapshot.id);
-  }
+}
 
-  return agentManager.getSubagents(parentId).find((managed) => managed.parentTaskId === taskId);
-};
-
+/** Resolve the subagent summary for a parent task tool call (Session snapshot). */
 export const useSubAgents = ({ taskId }: { taskId: string }) => {
   const parentSession = toRaw(useAgent((s) => s.session));
-  const [agent, setAgent] = useState<ManagedAgent | undefined>(() => getManagerSubagent(taskId));
+  const [subagent, setSubagent] = useState<AgentSessionSubagentSummary | undefined>(() => findSubagentByTask(taskId));
 
   useEffect(() => {
-    const existing = getManagerSubagent(taskId);
+    const existing = findSubagentByTask(taskId);
     if (existing) {
-      setAgent(existing);
-      return;
+      setSubagent(existing);
     }
 
     if (!parentSession) return;
 
     return parentSession.subscribe(
       (event) => {
-        if (event.channel !== "lifecycle") return;
-        if (event.payload.type !== "subagent:created") return;
-        const managed = agentManager.getAgent(event.payload.agentId);
-        if (managed?.parentTaskId === taskId) {
-          setAgent(managed);
+        if (event.channel === "lifecycle") {
+          if (
+            event.payload.type === "subagent:created" ||
+            event.payload.type === "subagent:started" ||
+            event.payload.type === "subagent:completed" ||
+            event.payload.type === "subagent:destroyed"
+          ) {
+            setSubagent(findSubagentByTask(taskId));
+          }
+          return;
+        }
+        if (event.channel === "state") {
+          setSubagent(findSubagentByTask(taskId));
         }
       },
-      { channels: ["lifecycle"] }
+      { channels: ["lifecycle", "state"] }
     );
   }, [taskId, parentSession]);
 
-  return agent;
+  return subagent;
 };

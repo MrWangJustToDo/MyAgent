@@ -5,8 +5,8 @@
  * Skipped by {@link findCutPoint} so compaction keepRecentFlows stays accurate.
  */
 
+import { generateId } from "../../utils/generate-id.js";
 import { extractTextFromContent } from "../compaction/message-utils.js";
-import { generateId } from "../utils.js";
 
 import type { ModelMessage, UIMessage } from "@tanstack/ai";
 

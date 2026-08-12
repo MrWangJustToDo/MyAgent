@@ -40,8 +40,12 @@ const RESPONSE_STRIP = new Set([...HOP_BY_HOP, "content-encoding"]);
 export function readServerModelEnv(
   env: Record<string, string | undefined> = process.env as Record<string, string | undefined>
 ) {
-  const connection = resolveModelConnection({ env });
-  return connection;
+  return resolveModelConnection({
+    model: env.MODEL || env.model || "",
+    style: parseModelStyle(env.MODEL_STYLE || env.STYLE),
+    baseURL: env.BASE_URL || env.MODEL_BASE_URL || undefined,
+    apiKey: env.API_KEY || "",
+  });
 }
 
 /** Relative adapter base path on this server (includes /v1 when upstream does). */

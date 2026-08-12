@@ -1,10 +1,12 @@
 /**
- * In-process AgentSession: fans domain Emitters + filtered AgentEventBus into channels.
+ * In-process AgentSession: fans domain Emitters + filtered AgentTelemetryBus into channels.
  */
 
 import { subscribeStreamingCallback, subscribeStreamingClearCallback } from "../agent/tools/util/streaming-callback.js";
 
 import { DEFAULT_SESSION_LIFECYCLE_EVENTS } from "./lifecycle-filter.js";
+import { dispatchLocalAgentSessionCommand } from "./local-session-dispatch.js";
+import { readLocalAgentSessionSnapshot } from "./local-session-snapshot.js";
 import {
   DEFAULT_AGENT_SESSION_CHANNELS,
   type AgentSession,
@@ -12,20 +14,23 @@ import {
   type AgentSessionCommand,
   type AgentSessionCommandResult,
   type AgentSessionSnapshot,
-  type AgentSessionSubagentSummary,
   type AgentSessionSubscribeOptions,
   type AgentSessionSubscriber,
 } from "./types.js";
 
 import type { AgentManager } from "../managers/agent-manager.js";
+import type { AgentEvent } from "../managers/agent-telemetry-bus.js";
 import type { ManagedAgent } from "../managers/managed-agent.js";
 import type { AgentEventType } from "../runtime-types/agent-events.js";
 
-const SUBAGENT_ALLOWED_COMMANDS = new Set<AgentSessionCommand["type"]>(["stop"]);
+/** Manager surface used by Local Session (AgentManager satisfies this). */
+export type LocalAgentSessionManager = Pick<AgentManager, "getAgent" | "getSubagents"> & {
+  on?: (type: AgentEventType, listener: (event: AgentEvent) => void) => () => void;
+};
 
 export interface CreateLocalAgentSessionOptions {
   managed: ManagedAgent;
-  manager?: AgentManager | null;
+  manager?: LocalAgentSessionManager | null;
   /** Override lifecycle event filter (default {@link DEFAULT_SESSION_LIFECYCLE_EVENTS}). */
   lifecycleEvents?: readonly AgentEventType[];
 }
@@ -45,163 +50,10 @@ function resolveChannels(options?: AgentSessionSubscribeOptions): Set<AgentSessi
   return new Set(DEFAULT_AGENT_SESSION_CHANNELS);
 }
 
-function buildSubagentSummaries(
-  managed: ManagedAgent,
-  manager: AgentManager | null | undefined
-): AgentSessionSubagentSummary[] {
-  if (!manager) return [];
-  return manager.getSubagents(managed.id).map((child) => ({
-    id: child.id,
-    status: child.status,
-    name: child.name,
-    ...(child.parentTaskId ? { parentTaskToolCallId: child.parentTaskId } : {}),
-  }));
-}
-
-function readSnapshot(managed: ManagedAgent, manager: AgentManager | null | undefined): AgentSessionSnapshot {
-  const chat = managed.getChatController();
-  const todos = managed.todoManager;
-  return {
-    agentId: managed.id,
-    ...(managed.parentId ? { parentId: managed.parentId } : {}),
-    status: managed.status,
-    error: managed.getError(),
-    pendingApprovalCount: managed.getPendingApprovalCount(),
-    messages: chat?.getMessages() ?? managed.ui?.getMessages() ?? [],
-    queues: chat?.getQueuedMessages() ?? { steer: [], followUp: [] },
-    usage: managed.usage.getChangeSnapshot(),
-    todos: todos?.getItems() ?? [],
-    todosTitle: todos?.getTitle() ?? null,
-    plan: managed.getPlanModeState(),
-    autoMode: managed.isAutoModeEnabled(),
-    subagents: buildSubagentSummaries(managed, manager),
-  };
-}
-
-async function dispatchCommand(
-  managed: ManagedAgent,
-  manager: AgentManager | null | undefined,
-  command: AgentSessionCommand
-): Promise<AgentSessionCommandResult> {
-  const isSubagent = Boolean(managed.parentId);
-  if (isSubagent && !SUBAGENT_ALLOWED_COMMANDS.has(command.type)) {
-    return {
-      ok: false,
-      code: "unsupported",
-      error: `Command "${command.type}" is not supported on subagent sessions`,
-    };
-  }
-
-  const chat = managed.getChatController();
-
-  try {
-    switch (command.type) {
-      case "send": {
-        if (!chat) return { ok: false, code: "failed", error: "Chat controller not initialized" };
-        await chat.sendMessage(command.content);
-        return { ok: true };
-      }
-      case "steer": {
-        if (!chat) return { ok: false, code: "failed", error: "Chat controller not initialized" };
-        chat.steer(command.content);
-        return { ok: true };
-      }
-      case "followUp": {
-        if (!chat) return { ok: false, code: "failed", error: "Chat controller not initialized" };
-        chat.followUp(command.content);
-        return { ok: true };
-      }
-      case "forceSubmit": {
-        if (!chat) return { ok: false, code: "failed", error: "Chat controller not initialized" };
-        chat.forceSubmit(command.content);
-        return { ok: true };
-      }
-      case "stop": {
-        if (chat) {
-          chat.stop();
-        } else {
-          managed.abort("user-cancelled");
-        }
-        return { ok: true };
-      }
-      case "clear": {
-        if (!chat) return { ok: false, code: "failed", error: "Chat controller not initialized" };
-        chat.clearMessages();
-        return { ok: true };
-      }
-      case "respondApproval": {
-        if (!chat) return { ok: false, code: "failed", error: "Chat controller not initialized" };
-        await chat.respondToToolApproval(command.approvalId, command.approved, command.reason);
-        return { ok: true };
-      }
-      case "addToolResult": {
-        if (!chat) return { ok: false, code: "failed", error: "Chat controller not initialized" };
-        await chat.addToolResult(command.toolCallId, command.output);
-        return { ok: true };
-      }
-      case "setClientToolWaiting": {
-        managed.setClientToolWaiting(command.active);
-        return { ok: true };
-      }
-      case "compact": {
-        return {
-          ok: false,
-          code: "unsupported",
-          error: "compact via AgentSession is not wired yet; use /compact command path",
-        };
-      }
-      case "rename": {
-        managed.name = command.name.trim();
-        return { ok: true };
-      }
-      case "auto.set": {
-        managed.setAutoModeEnabled(command.enabled);
-        return { ok: true };
-      }
-      case "plan.enable": {
-        managed.enablePlanMode();
-        return { ok: true };
-      }
-      case "plan.disable": {
-        managed.disablePlanMode();
-        return { ok: true };
-      }
-      case "plan.toggle": {
-        const phase = managed.togglePlanMode();
-        return { ok: true, data: { phase } };
-      }
-      case "plan.execute": {
-        const result = managed.beginPlanExecution({ sendSteer: command.sendSteer });
-        return result.ok
-          ? { ok: true, data: result }
-          : { ok: false, code: "failed", error: result.error ?? "plan execute failed" };
-      }
-      case "plan.cancel": {
-        const ok = managed.cancelPlanExecution();
-        return ok ? { ok: true } : { ok: false, code: "failed", error: "Cannot cancel plan execution" };
-      }
-      case "session.resume": {
-        if (!manager) {
-          return { ok: false, code: "failed", error: "AgentManager required for session.resume" };
-        }
-        const data = await managed.restoreSession(command.sessionId);
-        return { ok: true, data: { sessionId: data.id } };
-      }
-      default: {
-        const _exhaustive: never = command;
-        return { ok: false, code: "invalid", error: `Unknown command: ${JSON.stringify(_exhaustive)}` };
-      }
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, code: "failed", error: message };
-  }
-}
-
 class LocalAgentSessionImpl implements AgentSession {
   readonly id: string;
   private readonly managed: ManagedAgent;
-  private readonly manager: AgentManager | null | undefined;
+  private readonly manager: LocalAgentSessionManager | null | undefined;
   private readonly lifecycleEvents: readonly AgentEventType[];
 
   constructor(options: CreateLocalAgentSessionOptions) {
@@ -212,7 +64,7 @@ class LocalAgentSessionImpl implements AgentSession {
   }
 
   getSnapshot(): AgentSessionSnapshot {
-    return readSnapshot(this.managed, this.manager);
+    return readLocalAgentSessionSnapshot(this.managed, this.manager);
   }
 
   getSummaryStreamSnapshot(key: string) {
@@ -220,7 +72,7 @@ class LocalAgentSessionImpl implements AgentSession {
   }
 
   dispatch(command: AgentSessionCommand): Promise<AgentSessionCommandResult> {
-    return dispatchCommand(this.managed, this.manager, command);
+    return dispatchLocalAgentSessionCommand(this.managed, this.manager, command);
   }
 
   subscribe(handler: AgentSessionSubscriber, options?: AgentSessionSubscribeOptions): () => void {
@@ -336,11 +188,12 @@ class LocalAgentSessionImpl implements AgentSession {
       );
     }
 
-    if (channelAllowed("lifecycle", selected) && manager) {
+    if (channelAllowed("lifecycle", selected) && manager?.on) {
       const filter = new Set(this.lifecycleEvents);
+      const on = manager.on.bind(manager);
       for (const type of this.lifecycleEvents) {
         unsubs.push(
-          manager.on(type, (event) => {
+          on(type, (event) => {
             if (!filter.has(event.type)) return;
             if (event.agentId === managed.id || (event.parentId === managed.id && event.type.startsWith("subagent:"))) {
               handler({ channel: "lifecycle", payload: event, ts: now() });
@@ -376,7 +229,7 @@ export function createLocalAgentSession(options: CreateLocalAgentSessionOptions)
  * Open a child AgentSession by subagent id (same contract as the parent).
  */
 export function sessionForSubagent(
-  manager: AgentManager,
+  manager: LocalAgentSessionManager,
   subagentId: string,
   options?: Omit<CreateLocalAgentSessionOptions, "managed" | "manager">
 ): AgentSession | null {

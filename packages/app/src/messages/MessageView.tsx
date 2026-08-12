@@ -1,8 +1,8 @@
-import { isCompactionSummaryUIMessage } from "@my-agent/core";
 import { Box } from "ink";
 import { memo, useMemo } from "react";
 
 import { useTheme } from "../hooks/use-theme.js";
+import { isCompactionSummaryUIMessage } from "../utils/compaction-summary.js";
 import { getTextContent } from "../utils/get-messages.js";
 import { isActivitySummaryMessage } from "../utils/project-transcript.js";
 import { isImagePart, isToolCallPart } from "../utils/tool-part.js";

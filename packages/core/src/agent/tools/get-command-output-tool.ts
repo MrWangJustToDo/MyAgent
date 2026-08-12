@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { defineServerTool } from "./tanstack/define-tool.js";
+import { defineServerTool } from "./runtime/define-tool.js";
 import { commandJobRegistry } from "./util/command-job-registry.js";
 import { getCommandOutputSchema } from "./util/types.js";
 

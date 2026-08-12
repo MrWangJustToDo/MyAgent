@@ -2,14 +2,14 @@ import type { ExtensionRunner } from "../../agent/extension/runner.js";
 import type { ToolAfterEvent, ToolBeforeEvent } from "../../agent/extension/types.js";
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { TodoManager } from "../../agent/todo-manager";
-import type { AgentEventType } from "../../runtime-types";
+import type { EmitAgentTelemetryFn } from "../emit-agent-telemetry.js";
 import type { ChatMiddleware } from "@tanstack/ai";
 
 export interface ExtensionsMiddlewareDeps {
   getExtensionRunner: () => ExtensionRunner | null;
   getSessionId: () => string;
   getTodoManager?: () => TodoManager | null;
-  emitEvent?: (type: AgentEventType, data?: Record<string, unknown>) => void;
+  emitEvent?: EmitAgentTelemetryFn;
 }
 
 export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): ChatMiddleware<ToolRunContext> {

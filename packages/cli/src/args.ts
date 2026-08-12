@@ -1,4 +1,6 @@
-import { parseModelInfoFromEnv, parseModelStyle, resolveModelConnection } from "@my-agent/core";
+import { parseModelStyle, resolveModelConnection } from "@my-agent/core";
+
+import { parseModelInfoFromEnv } from "./model-env.js";
 
 import type { AppConfig } from "@my-agent/app";
 import type { ModelStyle } from "@my-agent/core";
@@ -107,17 +109,32 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
   const cliApiKey = getFlagString(parsed, "", "api-key", "k");
 
   const envModelId = getFlagString(parsed, envModel, "model", "m");
+  const envStyle = parseCliStyle(getEnv("MODEL_STYLE") || getEnv("STYLE") || undefined);
+  const envBaseURL = getEnv("BASE_URL") || getEnv("MODEL_BASE_URL") || undefined;
+  const envApiKey = getEnv("API_KEY") || undefined;
+
   const connection = resolveModelConnection({
     model: envModelId,
-    style: cliStyle,
-    baseURL: cliBaseURL || undefined,
-    apiKey: cliApiKey || undefined,
-    env: process.env,
+    style: cliStyle ?? envStyle,
+    baseURL: cliBaseURL || envBaseURL,
+    apiKey: cliApiKey || envApiKey,
   });
 
   const modelInfo = connection.model
     ? parseModelInfoFromEnv(process.env, connection.model, connection.style === "anthropic" ? "anthropic" : "openai")
     : undefined;
+
+  const braveApiKey = getEnv("BRAVE_API_KEY") || undefined;
+  const websearchProvider = getEnv("WEBSEARCH_PROVIDER") || undefined;
+  const toolConfig =
+    braveApiKey || websearchProvider
+      ? {
+          websearch: {
+            ...(braveApiKey ? { braveApiKey } : {}),
+            ...(websearchProvider ? { provider: websearchProvider } : {}),
+          },
+        }
+      : undefined;
 
   let resumeSession = "";
   const resumeFlag = getFlag(parsed, "resume", "r");
@@ -164,6 +181,7 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
     providerRemote,
     agentRemote,
     ...(modelInfo ? { modelInfo } : {}),
+    ...(toolConfig ? { toolConfig } : {}),
   };
 }
 

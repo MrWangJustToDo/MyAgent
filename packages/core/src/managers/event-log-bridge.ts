@@ -1,10 +1,15 @@
 import { DEFAULT_EVENT_LOG_RULES, type EventLogRule } from "./event-log-rules.js";
 
-import type { AgentEvent, AgentEventBus, AgentEventType } from "./agent-event-bus.js";
+import type { AgentEvent, AgentTelemetryBus, AgentEventType } from "./agent-telemetry-bus.js";
 import type { AgentLog } from "../agent/agent-log/agent-log.js";
 import type { McpServerStatus } from "../agent/mcp/manager.js";
 
 export type { EventLogRule } from "./event-log-rules.js";
+
+/** Read payload fields for logging formatters. */
+function p(event: AgentEvent): Record<string, unknown> {
+  return event.payload as Record<string, unknown>;
+}
 
 // ============================================================================
 // Policy
@@ -27,7 +32,7 @@ function resolveRule(type: AgentEventType, policy?: EventLogPolicy): EventLogRul
 }
 
 function writeLog(log: AgentLog, rule: EventLogRule, event: AgentEvent, message: string): void {
-  const data = event.data ? { ...event.data, eventType: event.type } : { eventType: event.type };
+  const data = { ...p(event), eventType: event.type };
 
   switch (rule.level) {
     case "debug":
@@ -40,7 +45,7 @@ function writeLog(log: AgentLog, rule: EventLogRule, event: AgentEvent, message:
       log.warn(rule.category, message, data);
       break;
     case "error": {
-      const errorMessage = (event.data?.error as string | undefined) ?? message;
+      const errorMessage = (p(event).error as string | undefined) ?? message;
       log.error(rule.category, message, new Error(errorMessage), data);
       break;
     }
@@ -52,12 +57,12 @@ function writeLog(log: AgentLog, rule: EventLogRule, event: AgentEvent, message:
 // ============================================================================
 
 function logSessionMcp(log: AgentLog, event: AgentEvent): void {
-  const configLoadedFrom = event.data?.configLoadedFrom as string | undefined;
+  const configLoadedFrom = p(event).configLoadedFrom as string | undefined;
   if (configLoadedFrom) {
     log.info("system", `MCP config: ${configLoadedFrom}`);
   }
 
-  const servers = (event.data?.servers as McpServerStatus[] | undefined) ?? [];
+  const servers = (p(event).servers as McpServerStatus[] | undefined) ?? [];
   if (servers.length === 0) {
     log.debug("system", "No MCP servers configured");
     return;
@@ -73,8 +78,8 @@ function logSessionMcp(log: AgentLog, event: AgentEvent): void {
 }
 
 function logMemoryPrefetch(log: AgentLog, event: AgentEvent): void {
-  const status = event.data?.status as string | undefined;
-  const count = event.data?.count as number | undefined;
+  const status = p(event).status as string | undefined;
+  const count = p(event).count as number | undefined;
   switch (status) {
     case "skip-no-manager":
     case "skip-no-query":
@@ -84,28 +89,28 @@ function logMemoryPrefetch(log: AgentLog, event: AgentEvent): void {
       break;
     case "selected":
     case "injected":
-      log.debug("memory", `Memory prefetch: ${count ?? 0} relevant memories (${event.data?.byteSize ?? "?"} bytes)`);
+      log.debug("memory", `Memory prefetch: ${count ?? 0} relevant memories (${p(event).byteSize ?? "?"} bytes)`);
       break;
     case "error":
-      log.warn("memory", `Memory prefetch failed: ${event.data?.error ?? "unknown"}`);
+      log.warn("memory", `Memory prefetch failed: ${p(event).error ?? "unknown"}`);
       break;
   }
 }
 
 function logMemoryExtract(log: AgentLog, event: AgentEvent): void {
-  const status = event.data?.status as string | undefined;
+  const status = p(event).status as string | undefined;
   switch (status) {
     case "start":
       log.debug("memory", "Memory extraction starting...");
       break;
     case "complete":
-      log.debug("memory", `Memory extraction: ${event.data?.count ?? 0} new memories`);
+      log.debug("memory", `Memory extraction: ${p(event).count ?? 0} new memories`);
       break;
     case "empty":
       log.debug("memory", "Memory extraction: no new memories");
       break;
     case "error":
-      log.warn("memory", `Memory extraction failed: ${event.data?.error ?? "unknown"}`);
+      log.warn("memory", `Memory extraction failed: ${p(event).error ?? "unknown"}`);
       break;
     default:
       break; // skip-in-progress, skip-short — silent
@@ -113,13 +118,13 @@ function logMemoryExtract(log: AgentLog, event: AgentEvent): void {
 }
 
 function logMemoryConsolidate(log: AgentLog, event: AgentEvent): void {
-  const status = event.data?.status as string | undefined;
+  const status = p(event).status as string | undefined;
   switch (status) {
     case "complete":
-      log.debug("memory", `Memory consolidated: ${event.data?.before ?? "?"}→${event.data?.after ?? "?"} entries`);
+      log.debug("memory", `Memory consolidated: ${p(event).before ?? "?"}→${p(event).after ?? "?"} entries`);
       break;
     case "error":
-      log.warn("memory", `Memory consolidation failed: ${event.data?.error ?? "unknown"}`);
+      log.warn("memory", `Memory consolidation failed: ${p(event).error ?? "unknown"}`);
       break;
     default:
       break; // start, skip — silent
@@ -132,14 +137,11 @@ function logCompactionAuto(log: AgentLog, event: AgentEvent): void {
       log.info("compaction", "Auto-compacting context...");
       break;
     case "compaction:auto-complete":
-      log.info(
-        "compaction",
-        `Auto-compact: ${event.data?.tokensBefore ?? "?"}→${event.data?.tokensAfter ?? "?"} tokens`
-      );
+      log.info("compaction", `Auto-compact: ${p(event).tokensBefore ?? "?"}→${p(event).tokensAfter ?? "?"} tokens`);
       break;
     case "compaction:auto-error": {
-      const phase = event.data?.phase as string | undefined;
-      const error = (event.data?.error as string | undefined) ?? "unknown";
+      const phase = p(event).phase as string | undefined;
+      const error = (p(event).error as string | undefined) ?? "unknown";
       if (phase === "cache-cleanup") {
         log.warn("compaction", "Auto-compact cache cleanup failed", { error });
         return;
@@ -151,11 +153,11 @@ function logCompactionAuto(log: AgentLog, event: AgentEvent): void {
 }
 
 /**
- * Bridge {@link AgentEventBus} events into per-agent {@link AgentLog} entries.
+ * Bridge {@link AgentTelemetryBus} events into per-agent {@link AgentLog} entries.
  * Centralizes lifecycle logging so emit sites do not duplicate log calls.
  */
-export function attachEventLogBridge(
-  bus: AgentEventBus,
+export function bridgeTelemetryToAgentLog(
+  bus: AgentTelemetryBus,
   resolveLog: EventLogResolver,
   policy?: EventLogPolicy
 ): () => void {

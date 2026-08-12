@@ -3,14 +3,14 @@ import {
   PLAN_AUTHORING_TOOL_NAMES,
   PLAN_COMPLETION_TOOL_NAMES,
 } from "../agent/plan/plan-tools.js";
+import { assertAsyncIterable } from "../agent/run-helpers/assert-async-iterable.js";
 import { AgentRunner } from "../agent/runner/agent-runner.js";
-import { resolveToolsRecord, SUBAGENT_EXCLUDED_TOOL_NAMES } from "../agent/tools/tanstack";
-import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
+import { resolveToolsRecord, SUBAGENT_EXCLUDED_TOOL_NAMES } from "../agent/tools/runtime";
 import { createTextAdapter } from "../models/adapter-factory.js";
 import { DEFAULT_BASE_URLS } from "../models/model-config.js";
 import { resolvePromptCacheKey } from "../models/prompt-cache.js";
 
-import { createEmitFn } from "./emit-agent-event.js";
+import { createEmitTelemetryFn } from "./emit-agent-telemetry.js";
 import { buildManagedAgentDeps } from "./managed-agent-deps.js";
 import {
   createCompactionMiddleware,
@@ -115,7 +115,7 @@ export function buildAgentRunner(
 ): AgentRunner {
   const deps = buildRunDeps(managed, manager);
   const systemPrompt = managed.getSystemPrompt();
-  const emitEvent = createEmitFn(managed);
+  const emitEvent = createEmitTelemetryFn(managed);
 
   const middleware = [
     createStatusMiddleware({

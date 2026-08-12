@@ -1,5 +1,5 @@
 import { Emitter } from "../../utils/emitter.js";
-import { generateId, generateShortId } from "../utils.js";
+import { generateId, generateShortId } from "../../utils/generate-id.js";
 
 import {
   DEFAULT_MAX_TODOS,

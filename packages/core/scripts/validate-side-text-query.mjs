@@ -3,11 +3,11 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:side-text-query
  */
-/* eslint-disable import/no-useless-path-segments */
+
 import { streamToText } from "@tanstack/ai";
 import assert from "node:assert/strict";
 
-import { runSideTextQuery } from "../dist/index.mjs";
+import { runSideTextQuery } from "../dist/dev.mjs";
 
 const chunks = [
   { type: "TEXT_MESSAGE_CONTENT", delta: "hello " },

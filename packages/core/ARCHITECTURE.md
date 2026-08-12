@@ -13,10 +13,11 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 | CoreEnv abstraction | **Done** | `registerCoreEnv` / `getEnv` |
 | Agent factory & manager | **Done** | Root vs subagent split |
 | TanStack agent loop | **Done** | `AgentRunner` + middleware stack |
-| Event protocol + Event→Log bridge | **Done** | `AgentEventBus`, `event-log-bridge.ts` |
+| Event protocol + Event→Log bridge | **Done** | `AgentTelemetryBus`, `event-log-bridge.ts` |
 | Model config (`openai` / `anthropic`) | **Done** | `resolveModelConfig`, `createTextAdapter` |
 | Session persistence | **Done** | Unified `persistSession`; `finalizeRun` + `applyRunOutcome` on finish/abort/error |
-| Compaction (micro / auto / reactive) | **Done** | + manual `/compact` in app |
+| Agent Session API | **In progress** | Snapshot/commands + Local Host; app cutover pending |
+| Compaction (micro / auto / reactive) | **Done** | + manual compact via ManagedAgent / Session `compact` |
 | Memory (prefetch / extract / consolidate) | **Done** | Post-run extraction only |
 | Tool approval | **Done in core** | `status` middleware + `needsApproval` on tools; app handles UI/keyboard only |
 | Extensions | **Done** | `ExtensionRunner` + `extensions-middleware` + per-turn `before_agent_start` / turn-context providers |
@@ -40,9 +41,9 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
                              │ getSnapshot / dispatch / subscribe
 ┌────────────────────────────▼────────────────────────────────────┐
 │ @my-agent/core                                                  │
-│  AgentSession ← Domain Emitters + filtered AgentEventBus         │
+│  AgentSession ← Domain Emitters + filtered AgentTelemetryBus         │
 │  AgentManager ──► ManagedAgent (run semantics unchanged)         │
-│  AgentEventBus ──► Event→Log (lifecycle telemetry)               │
+│  AgentTelemetryBus ──► Event→Log (lifecycle telemetry)               │
 └────────────────────────────┬────────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────────┐
@@ -86,7 +87,7 @@ packages/app/src/adapter/create-agent.ts
 | `ManagedAgent.initChat(manager, initialMessages?)` | `managers/agent-chat-controller.ts` | Main CLI chat session |
 | `AgentChatController.sendMessage` / `steer` / `followUp` / `respondToToolApproval` | same | User turns, mid-run queues, tool-phase continuation |
 | `agentManager.runAgentStream(agentId, input)` | `managers/run-agent.ts` | Core streaming entry |
-| `localConnect`, `createLocalConnect` | `connect/local-connect.ts` | Legacy / tests only |
+| `AgentSession` / `AgentSessionHost` | `agent-session/` | Preferred host/UI control surface |
 
 ### 1.4 Public vs internal APIs
 
@@ -95,10 +96,10 @@ packages/app/src/adapter/create-agent.ts
 | `agentManager`, `AgentManager` | Yes |
 | `ManagedAgent`, `ManagedAgentConfig` | Yes |
 | `AgentChatController`, `ManagedAgent.initChat` | Yes |
-| `localConnect`, `createLocalConnect` | Yes (legacy) |
+| `AgentSession`, `AgentSessionHost` | Yes |
 | `buildManagedAgent`, `getDefaultSkillDirs` | **No** — package-internal / `dev.ts` |
 | Session-sync tracker helpers, tool-phase pump helpers | **No** — `dev.ts` / package-private |
-| `attachEventLogBridge` | **No** — wired in `AgentManager` constructor |
+| `bridgeTelemetryToAgentLog` | **No** — wired in `AgentManager` constructor |
 
 See `openspec/changes/harden-core-organization/API-REMOVALS.md` for the full public-entry removal list.
 
@@ -151,7 +152,7 @@ agent-manager.ts
 |------|--------|
 | 1 | `AgentLog`, `TodoManager`, `ManagedAgent` (UI channel attached before LLM runs) |
 | 2 | `createTools()` → filesystem, grep, glob, tree, run_command, … |
-| 3 | `managed.dispatchEvent = emit` (routes to `AgentEventBus`) |
+| 3 | `managed.dispatchEvent = emit` (routes to `AgentTelemetryBus`) |
 | 4 | `loadAgentDoc()` → `setAgentDocContent` (AGENTS.md / CLAUDE.md) |
 | 5 | `todo`, `webfetch`, `websearch`, `ask_user` tools |
 | 6 | `SkillRegistry.loadFromDirectories` → `list_skills`, `load_skill`, `task` |
@@ -167,8 +168,8 @@ agent-manager.ts
 
 ```
 AgentManager constructor
-  new AgentEventBus()
-  attachEventLogBridge(bus, resolveLog)   // centralized lifecycle logging
+  new AgentTelemetryBus()
+  bridgeTelemetryToAgentLog(bus, resolveLog)   // centralized lifecycle logging
 ```
 
 Observation is split into four layers (do not mix interception into the lifecycle bus):
@@ -176,7 +177,7 @@ Observation is split into four layers (do not mix interception into the lifecycl
 | Layer | Mechanism | Role |
 |-------|-----------|------|
 | L1 Control plane | `AgentStatusController` + L1 Emitter → Session `state` | status / error / pendingApproval |
-| L2 Lifecycle bus | `AgentEventBus` → Event→Log (+ Session `lifecycle` / `agentManager.on`) | fire-and-forget notify |
+| L2 Lifecycle bus | `AgentTelemetryBus` → Event→Log (+ Session `lifecycle` / `agentManager.on`) | fire-and-forget notify |
 | L3 Data plane | `AgentUIChannel` + tool-output registry → Session `messages` / `tool`; `SummaryStreamHub` → Session `summary` | UIMessages / tool stdout / task·compact summary |
 | L4 Interception | `ExtensionEventBus` only | skip / transform tool args |
 
@@ -303,7 +304,7 @@ Core **declares** which tools need approval and **owns agent status** during the
 | `onToolPhaseComplete` | When `info.needsApproval.length > 0`: `waiting`, `setPendingApprovalCount`, emit `agent:tool-approval-request` per tool |
 | `onBeforeToolCall` | When status is `waiting`: clear count, `running` (approved tool executing) |
 
-Tools with approval required (`defineServerTool` in `tanstack/define-tool.ts`):
+Tools with approval required (`defineServerTool` in `runtime/define-tool.ts`):
 
 - `write_file`, `edit_file`, `delete_file`
 - `run_command`
@@ -365,7 +366,7 @@ No manual user text is required; each `y` only approves one tool when several `r
 | **User approval** | TanStack + app | Block destructive tools until user confirms |
 | **Extension deny/transform** | `extensions-middleware.ts` → `ExtensionEventBus` (`tool:before:*`) | Extension skip/transform before tool runs |
 
-Lifecycle tool events (`agent:tool-start` / `agent:tool-end` / `agent:tool-error`) always emit on AgentEventBus (L2), whether or not an extension runner is present. Extension bus traffic is L4 only.
+Lifecycle tool events (`agent:tool-start` / `agent:tool-end` / `agent:tool-error`) always emit on AgentTelemetryBus (L2), whether or not an extension runner is present. Extension bus traffic is L4 only.
 
 ---
 
@@ -379,11 +380,9 @@ Three proactive layers run on **every** LLM iteration (via `compaction-middlewar
 
 Runs **after** context auto-compact in the middleware stack.
 
-- **Recent window** (`keepRecentToolResults`): tools with `toModelOutput` on `defineServerTool` are transformed for the LLM; result cached per `toolCallId` in `ToolCompactCache`
+- Tools with `toModelOutput` on `defineServerTool` are transformed for the LLM; result cached per `toolCallId` in `ToolCompactCache`
 - **Skips** approval placeholders (`pendingExecution: true`) — tool-compact runs on `onConfig` before execution; transforming those messages would strip the marker and TanStack would skip the real tool run
-- **Preserves tool errors** (`{ error: string }` from TanStack `output-error`) — bypasses success-only `toModelOutput` formatters and keeps an explicit `Error: …` text result; error results are not replaced with `[Previous: used …]` placeholders
-- **Outside window**: `role: "tool"` content replaced with `"[Previous: used {tool_name}]"`; clears tool-output cache + compact cache for that call
-- Skips small results (`minToolResultSize`); protects `list_skills`, `load_skill`, `todo`, etc.
+- **Preserves tool errors** (`{ error: string }` from TanStack `output-error`) — bypasses success-only `toModelOutput` formatters and keeps an explicit `Error: …` text result
 - **UI** `UIMessage` history is unchanged; only the LLM `ModelMessage` path is shaped
 
 Large tool outputs at **execute** time still use `maybeCacheOutput` (`.agents/cache/tool-output/`) as a separate fallback — not part of compaction.
@@ -467,7 +466,7 @@ runStreamWithRecovery catches RUN_ERROR / thrown error
 
 Unhandled `RUN_ERROR` chunks (anything other than a successful recovery strategy) are **thrown** — never yielded. `AgentChatController` / `AgentUIChannel.consumeRun` also wrap streams with `throwOnRunError`, so failures surface as `status: error` + `agent:stream-error` instead of a silent `Completed` with no assistant message. Handled errors are recorded on the agent and **not** rethrown from the chat pump (avoids unhandled rejection crashing the CLI).
 
-**Empty stream guard:** Some OpenAI-compatible gateways return HTTP 200 HTML (e.g. SSO login) for `stream: true`; the SDK iterates zero chunks and does not throw. After each `chat()` consume, `AgentChatController` flags an error when messages show no model progress (no new/updated assistant text, tool calls, or tool results) via `shouldFlagEmptyModelStream` (`agent/utils/empty-model-stream.ts`).
+**Empty stream guard:** Some OpenAI-compatible gateways return HTTP 200 HTML (e.g. SSO login) for `stream: true`; the SDK iterates zero chunks and does not throw. After each `chat()` consume, `AgentChatController` flags an error when messages show no model progress (no new/updated assistant text, tool calls, or tool results) via `shouldFlagEmptyModelStream` (`agent/run-helpers/empty-model-stream.ts`).
 
 **Vision / multimodal:** Some text-only APIs (notably DeepSeek Chat Completions) reject multimodal parts with `unknown variant image_url, expected text`. `runStreamWithRecovery` uses capability-aware sanitization (`vision` / `audio` / `video` / `document`): unsupported parts are stripped from the **wire** copy (and all multimodal parts are stripped once on schema rejection); UI history keeps media for display.
 
@@ -483,9 +482,7 @@ Calls exported `autoCompact` + `applyCompactionResult` directly (same engine as 
 compaction: {
   tokenThreshold: 100_000,      // default from model contextWindow (capped)
   compactAtPercent: 80,         // trigger at 80% of threshold
-  keepRecentToolResults: 100,
-  keepRecentFlows: 4,
-  minToolResultSize: 100,
+  keepRecentFlows: 2,           // recent user turns kept after auto-compact
 }
 ```
 
@@ -501,7 +498,7 @@ Set via `ManagedAgentConfig.compaction` in `agent-factory.ts`.
 |------|-------|
 | Directory | `.agents/sessions/` |
 | File | `{sessionId}.session.json` |
-| Schema | `SessionData` v4 (`agent/session/types.ts`; older files omit `planMode` / inline base64 media) |
+| Schema | `SessionData` v4 (`agent/persistence/types.ts`; older files omit `planMode` / inline base64 media) |
 
 Fields: `uiMessages` (includes in-chain summaries), `usage`, `cost`, `contextTokens`, `todos`, `todoPlanBound`, `planMode` (phase/markdown/path/seeded), `modelStyle`, `model`, metadata.
 
@@ -662,7 +659,7 @@ flushIndex → update memory.content for next session
 ### 8.1 Emission
 
 ```typescript
-emitAgentEvent(emitter, type, { data })   // injects session_id
+emitAgentTelemetry(emitter, type, { data })   // injects session_id
 managed.emitEvent(type, data)
 ```
 
@@ -671,13 +668,13 @@ managed.emitEvent(type, data)
 | Layer | Internal | Host |
 |-------|----------|------|
 | L1 | Status controller + ManagedAgent Emitter `change` | Session `state` |
-| L2 | `AgentEventBus` (+ Event→Log) | Session `lifecycle` (filtered); `agentManager.on` for cross-agent / `"*"` |
+| L2 | `AgentTelemetryBus` (+ Event→Log) | Session `lifecycle` (filtered); `agentManager.on` for cross-agent / `"*"` |
 | L3 | UIChannel Emitter `messages` + tool-output registry + `SummaryStreamHub` | Session `messages` / `tool` / `summary` |
 | L4 | `ExtensionEventBus` / ExtensionUI | Not part of AgentSession |
 
 **Host observation API:** `AgentSession` only (`createLocalAgentSession` / HTTP client) — `getSnapshot` / `dispatch` / `subscribe(channels)`. Domain classes expose typed `.on(...)` for Session projection and package-internal use; there is no parallel `ManagedAgent.observe()` facade.
 
-Internal domain updates use a typed `Emitter` (todos, usage, L1 state, queues, plan, UI messages, log). Session channels project from those emitters; `lifecycle` projects a filtered `AgentEventBus` set. Structured `log` is an opt-in session channel (not in default subscribe).
+Internal domain updates use a typed `Emitter` (todos, usage, L1 state, queues, plan, UI messages, log). Session channels project from those emitters; `lifecycle` projects a filtered `AgentTelemetryBus` set. Structured `log` is an opt-in session channel (not in default subscribe).
 
 **TODO(messages-incremental):** Session delivers full `UIMessage[]` on snapshot and the `messages` channel; JSON-patch / delta delivery is deferred.
 
@@ -709,7 +706,7 @@ Task / compact summary text uses `ManagedAgent.summaryStreams` (`SummaryStreamHu
 
 ### 8.5 Extension interception (L4)
 
-`ExtensionEventBus` (`tool:before:*` / `tool:after:*` / `tool:error:*` / `before_agent_start`) is invoked from middleware and prepare-for-run. It does **not** replace AgentEventBus. There is **no** `.agent-hooks` / hook-script path — customize via `.agents/extension` modules or programmatic `config.extensions`.
+`ExtensionEventBus` (`tool:before:*` / `tool:after:*` / `tool:error:*` / `before_agent_start`) is invoked from middleware and prepare-for-run. It does **not** replace AgentTelemetryBus. There is **no** `.agent-hooks` / hook-script path — customize via `.agents/extension` modules or programmatic `config.extensions`.
 
 The ExtensionEventBus also carries **session lifecycle events** (distinct from the L2 `session:start` telemetry): `session:start` (emitted at the end of `emitSessionBootstrapEvents`, payload `{ cwd, sessionId }`) and `session:shutdown` (emitted in `AgentManager.destroyAgent()` before `extensionRunner.destroyAll()`, so extensions can release resources first).
 
@@ -772,9 +769,9 @@ executeManagedAgentRun
 | Concern | Location | Examples |
 |---------|----------|----------|
 | Plan **domain** (phase machine, prompts, safe-command, verification gate, middleware) | `agent/plan/` | `PlanModeController`, `plan-mode-middleware`, `plan-prompts`, `plan-verification` |
-| Plan **tool factories** (model-callable tools) | `agent/tools/` | `create-plan-tool` (`create_plan` / `update_plan` / `complete_plan`) |
+| Plan **tool factories** (model-callable tools) | `agent/plan/` | `create-plan-tool` (`create_plan` / `update_plan` / `complete_plan`) |
 
-Same pattern as skills: registry/domain under `agent/skills/`, discovery tools under `agent/tools/`. Do not move tool factories into `plan/` unless it clearly reduces confusion.
+Domain-owned tools live next to their domain (same pattern as `subagent/begin-summary-tool` and `subagent/task-tool`). Universal workspace tools stay under `agent/tools/`.
 
 **Verification contract:** `create_plan` / `update_plan` require a non-empty `verification` checklist (content quality is prompt guidance, not a hardcoded command blacklist). Plan markdown gets a `**Verification:**` section. In retro, `complete_plan` requires `verificationResults: { item, passed, evidence }[]` covering every parsed checklist item (all `passed: true`). Legacy plans with no Verification section accept a single passing smoke/N/A result. User `/plan done` bypasses the agent gate. Helpers: `parseVerificationItemsFrom*`, `gateCompletePlanVerification`. Validate: `pnpm --filter @my-agent/core run validate:plan-verification`.
 
@@ -784,7 +781,7 @@ Same pattern as skills: registry/domain under `agent/skills/`, discovery tools u
 
 | Area | Primary files |
 |------|---------------|
-| Entry / connect | `connect/local-connect.ts`, `index.ts` |
+| Entry / connect | `index.ts`, `agent-session/*` |
 | Manager | `managers/agent-manager.ts`, `managers/agent-factory.ts` |
 | Agent runtime | `managers/managed-agent.ts`, `managers/run-agent.ts`, `managers/agent-run-outcome.ts` |
 | Stream recovery | `managers/run-stream-recovery.ts`, `managers/stream-recovery/*` |
@@ -793,13 +790,15 @@ Same pattern as skills: registry/domain under `agent/skills/`, discovery tools u
 | Stream helpers | `agent/stream/*` |
 | UI channel | `agent/ui-channel.ts` |
 | Shared types | `runtime-types/*` |
-| Events | `managers/agent-event-bus.ts`, `managers/emit-agent-event.ts`, `managers/event-log-bridge.ts`, `managers/event-log-rules.ts` |
-| Session | `managers/session-service.ts`, `agent/session/session-store.ts` |
+| Telemetry | `managers/agent-telemetry-bus.ts`, `managers/emit-agent-telemetry.ts`, `managers/event-log-bridge.ts` |
+| Persistence | `managers/session-service.ts`, `agent/persistence/session-store.ts` |
+| Cross-cutting utils | `utils/emitter.ts`, `utils/generate-id.ts` |
+| Domain helpers | `agent/run-helpers/*` (tool-phase, empty-stream, pending queue — stay with chat/run) |
 | Memory | `managers/memory-service.ts`, `agent/memory/*.ts` |
 | Compaction | `agent/compaction/*.ts` |
-| Plan | `agent/plan/*` (domain); plan tools under `agent/tools/` |
-| Tools | `agent/tools/*.ts`, `agent/tools/tanstack/define-tool.ts` |
-| Subagent | `agent/subagent/run-subagent.ts`, `agent/tools/task-tool.ts` |
+| Plan | `agent/plan/*` (domain + plan tool factories) |
+| Tools | `agent/tools/*.ts` (universal), `agent/tools/runtime/define-tool.ts`; domain tools under `plan/` / `skills/` / `subagent/` / `todo-manager/` |
+| Subagent | `agent/subagent/run-subagent.ts`, `agent/subagent/task-tool.ts` |
 | Models | `models/model-config.ts`, `models/adapter-factory.ts`, `models/prompt-cache.ts` |
 | CoreEnv | `env.ts` (+ `@my-agent/node` / `@my-agent/server`) |
 

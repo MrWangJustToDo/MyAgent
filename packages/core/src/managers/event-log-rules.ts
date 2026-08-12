@@ -1,9 +1,14 @@
 /**
- * Default event → AgentLog mapping for {@link attachEventLogBridge}.
+ * Default event → AgentLog mapping for {@link bridgeTelemetryToAgentLog}.
  */
 
-import type { AgentEvent, AgentEventType } from "./agent-event-bus.js";
+import type { AgentEvent, AgentEventType } from "./agent-telemetry-bus.js";
 import type { LogCategory, LogLevel } from "../agent/agent-log/types.js";
+
+/** Read payload fields for logging formatters. */
+function p(event: AgentEvent): Record<string, unknown> {
+  return event.payload as Record<string, unknown>;
+}
 
 export interface EventLogRule {
   level: LogLevel;
@@ -18,24 +23,25 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
   "session:start": {
     level: "info",
     category: "system",
-    formatMessage: (event) => `Session started (cwd: ${event.data?.cwd ?? "unknown"})`,
+    formatMessage: (event) => `Session started (cwd: ${p(event).cwd ?? "unknown"})`,
   },
   "session:doc": {
     level: "info",
     category: "system",
-    formatMessage: (event) => (event.data?.message as string) ?? "Agent documentation loaded",
+    formatMessage: (event) => (p(event).message as string) ?? "Agent documentation loaded",
   },
   "session:skill": {
     level: "debug",
     category: "skill",
-    formatMessage: (event) => `Loaded ${event.data?.count ?? 0} skills`,
+    formatMessage: (event) => `Loaded ${p(event).count ?? 0} skills`,
   },
   "session:mcp": false,
   "session:memory": {
     level: "info",
     category: "memory",
     formatMessage: (event) => {
-      const count = typeof event.data?.memoryCount === "number" ? event.data.memoryCount : 0;
+      const memoryCount = p(event).memoryCount;
+      const count = typeof memoryCount === "number" ? memoryCount : 0;
       return count > 0 ? `Memory initialized (${count} memories)` : "Memory initialized (empty)";
     },
   },
@@ -43,13 +49,12 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
     level: "info",
     category: "system",
     formatMessage: (event) =>
-      `Session restored: ${event.data?.messageCount ?? "?"} messages, ${event.data?.tokenEstimate ?? "?"} tokens`,
+      `Session restored: ${p(event).messageCount ?? "?"} messages, ${p(event).tokenEstimate ?? "?"} tokens`,
   },
   "session:save-error": {
     level: "warn",
     category: "system",
-    formatMessage: (event) =>
-      `Failed to save session ${event.data?.target ?? "data"}: ${event.data?.error ?? "unknown"}`,
+    formatMessage: (event) => `Failed to save session ${p(event).target ?? "data"}: ${p(event).error ?? "unknown"}`,
   },
 
   // ============================================================================
@@ -59,9 +64,9 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
     level: "info",
     category: "chat",
     formatMessage: (event) => {
-      const prompt = event.data?.prompt as string | undefined;
+      const prompt = p(event).prompt as string | undefined;
       const preview = prompt ? (prompt.length > 80 ? prompt.slice(0, 80) + "..." : prompt) : "";
-      const msgCount = event.data?.contextMessageCount ?? "?";
+      const msgCount = p(event).contextMessageCount ?? "?";
       return `Prompt: ${preview}  (${msgCount} context messages)`;
     },
   },
@@ -69,8 +74,8 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
     level: "debug",
     category: "chat",
     formatMessage: (event) => {
-      const hasTurn = event.data?.hasTurnContext ? "turn+ctx" : "no-turn-ctx";
-      const hasSys = event.data?.hasSystemAppend ? "sys+append" : "no-sys-append";
+      const hasTurn = p(event).hasTurnContext ? "turn+ctx" : "no-turn-ctx";
+      const hasSys = p(event).hasSystemAppend ? "sys+append" : "no-sys-append";
       return `Extension prompt hooks (${hasTurn}, ${hasSys})`;
     },
   },
@@ -78,7 +83,7 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
     level: "info",
     category: "chat",
     formatMessage: (event) => {
-      const d = event.data ?? {};
+      const d = p(event);
       const llmCalls = d.llmCalls ?? "?";
       const toolCalls = d.toolCalls ?? "?";
       const inTokens = d.inputTokens ?? "?";
@@ -95,17 +100,17 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
   "agent:stop": {
     level: "info",
     category: "agent",
-    formatMessage: (event) => `Agent stop (${event.data?.reason ?? "unknown"})`,
+    formatMessage: (event) => `Agent stop (${p(event).reason ?? "unknown"})`,
   },
   "agent:abort": {
     level: "warn",
     category: "agent",
-    formatMessage: (event) => `Agent aborted (${event.data?.reason ?? "unknown"})`,
+    formatMessage: (event) => `Agent aborted (${p(event).reason ?? "unknown"})`,
   },
   "agent:stream-error": {
     level: "error",
     category: "agent",
-    formatMessage: (event) => `Stream error: ${event.data?.error ?? "unknown"}`,
+    formatMessage: (event) => `Stream error: ${p(event).error ?? "unknown"}`,
   },
 
   // ============================================================================
@@ -115,7 +120,7 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
     level: "debug",
     category: "llm",
     formatMessage: (event) => {
-      const d = event.data ?? {};
+      const d = p(event);
       return `LLM request: ${d.model ?? "?"} (${d.messagesCount ?? "?"} msgs, ${d.toolsCount ?? 0} tools)`;
     },
   },
@@ -123,7 +128,7 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
     level: "info",
     category: "llm",
     formatMessage: (event) => {
-      const d = event.data ?? {};
+      const d = p(event);
       const fr = d.finishReason ?? "?";
       const inT = d.inputTokens ?? "?";
       const outT = d.outputTokens ?? "?";
@@ -139,26 +144,26 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
   "agent:tool-start": {
     level: "debug",
     category: "tool",
-    formatMessage: (event) => `Tool start: ${event.data?.tool_name ?? "unknown"}`,
+    formatMessage: (event) => `Tool start: ${p(event).tool_name ?? "unknown"}`,
   },
   "agent:tool-approval-request": {
     level: "info",
     category: "approval",
-    formatMessage: (event) => `Approval requested: ${event.data?.tool_name ?? "unknown"}`,
+    formatMessage: (event) => `Approval requested: ${p(event).tool_name ?? "unknown"}`,
   },
   "agent:tool-end": {
     level: "debug",
     category: "tool",
     formatMessage: (event) => {
-      const name = event.data?.tool_name ?? "unknown";
-      const duration = event.data?.duration_ms;
+      const name = p(event).tool_name ?? "unknown";
+      const duration = p(event).duration_ms;
       return duration != null ? `Tool end: ${name} (${duration}ms)` : `Tool end: ${name}`;
     },
   },
   "agent:tool-error": {
     level: "warn",
     category: "tool",
-    formatMessage: (event) => `Tool error: ${event.data?.tool_name ?? "unknown"} — ${event.data?.error ?? "unknown"}`,
+    formatMessage: (event) => `Tool error: ${p(event).tool_name ?? "unknown"} — ${p(event).error ?? "unknown"}`,
   },
 
   // ============================================================================
@@ -178,19 +183,19 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
     level: "info",
     category: "compaction",
     formatMessage: (event) =>
-      `Reactive compact triggered (retry ${event.data?.retry ?? "?"}/${event.data?.maxRetries ?? "?"})`,
+      `Reactive compact triggered (retry ${p(event).retry ?? "?"}/${p(event).maxRetries ?? "?"})`,
   },
   "compaction:reactive-complete": {
     level: "info",
     category: "compaction",
     formatMessage: (event) =>
-      `Reactive compact: ${event.data?.originalCount ?? "?"}→${event.data?.compactedCount ?? "?"} messages` +
-      (event.data?.tokensBefore != null ? `, ${event.data.tokensBefore}→${event.data.tokensAfter ?? "?"} tokens` : ""),
+      `Reactive compact: ${p(event).originalCount ?? "?"}→${p(event).compactedCount ?? "?"} messages, ` +
+      `${p(event).tokensBefore ?? "?"}→${p(event).tokensAfter ?? "?"} tokens`,
   },
   "compaction:reactive-error": {
     level: "error",
     category: "compaction",
-    formatMessage: (event) => `Reactive compact failed: ${event.data?.error ?? "unknown"}`,
+    formatMessage: (event) => `Reactive compact failed: ${p(event).error ?? "unknown"}`,
   },
   "compaction:reactive-max-retries": {
     level: "error",
@@ -204,22 +209,22 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
   "subagent:created": {
     level: "info",
     category: "system",
-    formatMessage: (event) => `Subagent created: ${event.data?.subagentId ?? event.agentId}`,
+    formatMessage: (event) => `Subagent created: ${p(event).subagentId ?? event.agentId}`,
   },
   "subagent:started": {
     level: "info",
     category: "system",
-    formatMessage: (event) => `Subagent started: ${event.data?.description ?? event.agentId}`,
+    formatMessage: (event) => `Subagent started: ${p(event).description ?? event.agentId}`,
   },
   "subagent:completed": {
     level: "info",
     category: "system",
-    formatMessage: (event) => `Subagent completed: ${event.data?.summary ?? "(no summary)"}`,
+    formatMessage: (event) => `Subagent completed: ${p(event).summary ?? "(no summary)"}`,
   },
   "subagent:error": {
     level: "error",
     category: "system",
-    formatMessage: (event) => `Subagent error: ${event.data?.error ?? "unknown"}`,
+    formatMessage: (event) => `Subagent error: ${p(event).error ?? "unknown"}`,
   },
   "subagent:destroyed": false,
   "subagent:ui-update": false,
@@ -235,14 +240,14 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
   "plan:ready": {
     level: "info",
     category: "agent",
-    formatMessage: (event) => `Plan ready (${event.data?.stepCount ?? "?"} steps) — /plan execute to run`,
+    formatMessage: (event) => `Plan ready (${p(event).stepCount ?? "?"} steps) — /plan execute to run`,
   },
   "plan:execute": {
     level: "info",
     category: "agent",
     formatMessage: (event) => {
-      const steps = event.data?.stepCount ?? "?";
-      const replaced = event.data?.replacedExistingTodos ? " (replaced existing todos)" : "";
+      const steps = p(event).stepCount ?? "?";
+      const replaced = p(event).replacedExistingTodos ? " (replaced existing todos)" : "";
       return `Plan execution started (${steps} steps)${replaced}`;
     },
   },
@@ -254,7 +259,7 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
   "plan:todo-replaced": {
     level: "info",
     category: "agent",
-    formatMessage: (event) => `Plan todos replaced previous list (${event.data?.stepCount ?? "?"} steps)`,
+    formatMessage: (event) => `Plan todos replaced previous list (${p(event).stepCount ?? "?"} steps)`,
   },
   "plan:retro": {
     level: "info",

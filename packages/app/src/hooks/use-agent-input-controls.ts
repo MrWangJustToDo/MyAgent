@@ -1,4 +1,3 @@
-import { agentManager } from "@my-agent/core";
 import { useEffect, useMemo, useRef } from "react";
 import { toRaw } from "reactivity-store";
 
@@ -17,7 +16,6 @@ import type { AgentAdapter } from "../adapter/types.js";
 import type { CommandContext } from "../commands";
 import type { UseAgentChatReturn } from "./use-agent-chat.js";
 import type { DenyingToolInfo } from "./use-agent-keybindings.js";
-import type { ManagedAgent } from "@my-agent/core";
 import type { UIMessage } from "@tanstack/ai";
 
 interface UseAgentInputControlsOptions {
@@ -159,13 +157,16 @@ export function useAgentInputControls({
   const commandCtx: CommandContext = {
     inputActions,
     getInputState: () => useUserInput.getReadonlyState(),
-    getAgent: () => toRaw(useAgent.getReactiveState().agent) as ManagedAgent,
+    getSession: () => toRaw(useAgent.getReactiveState().session),
     getMessages: () => messages,
     saveSessionFromChat,
     setMessages: setMessages as (messages: UIMessage[]) => void,
     exit: () => {
-      const agent = useAgent.getReadonlyState().agent;
-      if (agent) agentManager.destroyAgent(agent.id);
+      const host = useAgent.getReadonlyState().host;
+      const session = useAgent.getReadonlyState().session;
+      if (host && session) {
+        void host.destroy(session.id);
+      }
       adapter.exit();
     },
     adapter,

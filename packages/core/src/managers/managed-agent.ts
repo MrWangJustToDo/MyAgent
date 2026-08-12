@@ -6,15 +6,15 @@ import { buildAutoModePrompt } from "../agent/approval/auto-mode-prompt.js";
 import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
 import { getModelVisibleMessages } from "../agent/compaction/message-chain-projection.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
-import { PlanModeController } from "../agent/plan/plan-mode-controller.js";
-import { buildPlanModePrompt, buildPlanRetroSteerMessage } from "../agent/plan/plan-prompts.js";
 import {
   createSessionSyncTracker,
   type SessionSaveReason,
   type SessionSyncTracker,
-} from "../agent/session/session-sync-tracker.js";
+} from "../agent/persistence/session-sync-tracker.js";
+import { PlanModeController } from "../agent/plan/plan-mode-controller.js";
+import { buildPlanModePrompt, buildPlanRetroSteerMessage } from "../agent/plan/plan-prompts.js";
 import { SummaryStreamHub } from "../agent/summary-stream/summary-stream-hub.js";
-import { defineServerTool } from "../agent/tools/tanstack/define-tool.js";
+import { defineServerTool } from "../agent/tools/runtime/define-tool.js";
 import { getCurrentDate, getGitInfo } from "../agent/turn-context/env-context.js";
 import {
   buildTurnContextPayload,
@@ -23,14 +23,14 @@ import {
   hashTurnContextPayload,
   insertTurnContextUIMessage,
 } from "../agent/turn-context/turn-context-message.js";
-import { generateId } from "../agent/utils.js";
 import { Emitter } from "../utils/emitter.js";
+import { generateId } from "../utils/generate-id.js";
 
 import { AgentChatController } from "./agent-chat-controller.js";
 import { createAgentStatusController, type AgentStatusController } from "./agent-status-controller.js";
 import { AgentConfigSchema } from "./agent-types.js";
-import { emitAgentEvent } from "./emit-agent-event.js";
-import { handleManagedReactiveCompact } from "./managed-agent-compact.js";
+import { emitAgentTelemetry } from "./emit-agent-telemetry.js";
+import { handleManagedReactiveCompact, runManualCompact } from "./managed-agent-compact.js";
 import {
   beginPlanExecution as beginPlanExecutionHelper,
   cancelPlanExecution as cancelPlanExecutionHelper,
@@ -59,8 +59,8 @@ import { RunCoordinator } from "./run-coordinator.js";
 import { SessionService } from "./session-service.js";
 import { UsageTracker } from "./usage-tracker.js";
 
-import type { AgentEvent, AgentEventType } from "./agent-event-bus.js";
 import type { AgentManager } from "./agent-manager.js";
+import type { AgentEvent, AgentEventType } from "./agent-telemetry-bus.js";
 import type { AgentConfig, AgentStatus, RunFinalizeReason } from "./agent-types.js";
 import type { AgentLog } from "../agent/agent-log";
 import type { CompactionConfig, CompactionConfigInput } from "../agent/compaction/types.js";
@@ -73,17 +73,19 @@ import type {
 } from "../agent/extension";
 import type { McpManager } from "../agent/mcp/manager.js";
 import type { MemoryManager } from "../agent/memory/memory-manager.js";
+import type { SessionStore } from "../agent/persistence/session-store.js";
+import type { SessionData } from "../agent/persistence/types.js";
 import type { BeginPlanExecutionResult, PlanModePhase, PlanModeState } from "../agent/plan/plan-mode-controller.js";
 import type { AgentRunner } from "../agent/runner/agent-runner.js";
-import type { SessionStore } from "../agent/session/session-store.js";
-import type { SessionData } from "../agent/session/types.js";
 import type { SkillRegistry } from "../agent/skills";
 import type { TodoManager } from "../agent/todo-manager";
-import type { ToolsRecord } from "../agent/tools/tanstack/tools-record.js";
+import type { ToolsRecord } from "../agent/tools/runtime/tools-record.js";
+import type { AgentToolConfig } from "../agent/tools/tool-config.js";
 import type { AgentUIChannel } from "../agent/ui-channel.js";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
 import type { ModelStyle } from "../models/model-config.js";
 import type { ModelInfo } from "../models/types.js";
+import type { AgentEventPayloadMap } from "../runtime-types/agent-event-payloads.js";
 
 // ============================================================================
 // Config
@@ -133,6 +135,8 @@ export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
    * Relative paths resolve against CoreEnv `rootPath`.
    */
   extensionDirs?: string[];
+  /** Explicit tool secrets / prefs (hosts pass; tools must not dig CoreEnv env bags). */
+  toolConfig?: AgentToolConfig;
 };
 
 /** Subagent preview / non-useChat UI channel (TanStack StreamProcessor). */
@@ -505,12 +509,12 @@ export class ManagedAgent {
     this.stateEvents.emit("change", this.getL1State());
   }
 
-  emitEvent(
-    type: AgentEventType,
-    data?: Record<string, unknown>,
+  emitEvent<T extends AgentEventType>(
+    type: T,
+    payload?: AgentEventPayloadMap[T],
     options?: { parentId?: string; agentId?: string }
   ): void {
-    emitAgentEvent(this, type, { data, ...options });
+    emitAgentTelemetry(this, type, payload, options);
   }
 
   getSessionData(): SessionData | null {
@@ -744,7 +748,7 @@ export class ManagedAgent {
   setCompactionConfig(config: CompactionConfig): void {
     this.log?.debug("agent", "Setting compaction config", {
       tokenThreshold: config.tokenThreshold,
-      keepRecentToolResults: config.keepRecentToolResults,
+      keepRecentFlows: config.keepRecentFlows,
     });
     this.compactionConfig = config;
     this.usage.setTokenLimit(config.tokenThreshold);
@@ -1068,6 +1072,44 @@ export class ManagedAgent {
 
   async handleReactiveCompact(error: unknown, manager: AgentManager): Promise<boolean> {
     return handleManagedReactiveCompact(this, error, manager);
+  }
+
+  /**
+   * Manual context compaction (AgentSession `compact` / `/compact`).
+   * Requires {@link manager} to be set (bootstrap always attaches it for root agents).
+   */
+  async compact(options?: { focus?: string; messages?: TanStackUIMessage[] }): Promise<
+    | {
+        ok: true;
+        message: string;
+        tokensBefore?: number;
+        tokensAfter?: number;
+      }
+    | { ok: false; error: string }
+  > {
+    const manager = this.manager;
+    if (!manager) {
+      return { ok: false, error: "AgentManager required for compact" };
+    }
+    return runManualCompact(
+      {
+        id: this.id,
+        status: this.status,
+        setStatus: (status) => this.setStatus(status),
+        ui: this.ui,
+        usage: this.usage,
+        todoManager: this.todoManager,
+        statusController: this.statusController,
+        compactionConfig: this.compactionConfig,
+        resetAdmittedTurnContext: () => this.resetAdmittedTurnContext(),
+        resetSystemPrompt: () => this.resetSystemPrompt(),
+        persistSession: () => this.persistSession(),
+        maybeSaveSessionUIMessages: (messages, reason) => this.maybeSaveSessionUIMessages(messages, reason),
+        getLog: () => this.log,
+      },
+      manager,
+      options
+    );
   }
 
   async restoreSession(sessionId: string): Promise<SessionData> {

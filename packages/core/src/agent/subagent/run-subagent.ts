@@ -3,11 +3,11 @@
  * Uses shared `runAgentOnce` for stream consume + detached outcome.
  */
 
+import { generateId } from "../../utils/generate-id.js";
 import { ensureUIChannel, runAgentOnce } from "../run/run-agent-skeleton.js";
 import { extractAssistantText } from "../stream/extract-assistant-text.js";
 import { throwOnRunError } from "../stream/stream-errors.js";
 import { getCurrentDate, getGitInfo } from "../turn-context/env-context.js";
-import { generateId } from "../utils.js";
 
 import { applySubagentCancelNotice, truncateSummary } from "./output.js";
 import { buildExploreSystemPrompt } from "./prompt.js";
@@ -109,7 +109,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
   const compactId = compactSummaryStream?.compactId;
 
   subagent.emitEvent("subagent:created", { subagentId }, { parentId: parentAgentId });
-  subagent.emitEvent("subagent:started", { subagent_id: subagentId, description }, { parentId: parentAgentId });
+  subagent.emitEvent("subagent:started", { subagentId, description }, { parentId: parentAgentId });
 
   subagentManaged.resetTurnLifecycle();
 

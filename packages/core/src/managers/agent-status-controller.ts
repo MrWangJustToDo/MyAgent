@@ -12,7 +12,7 @@ import {
   hasPendingAskUser,
   needsAgentResponseAfterTools,
   needsToolPhaseContinue,
-} from "../agent/utils/tool-phase-utils.js";
+} from "../agent/run-helpers/tool-phase-utils.js";
 
 import {
   whenClearForReconcilePolicy,
@@ -22,8 +22,8 @@ import {
 } from "./agent-run-outcome.js";
 import { isTerminalStatus, resolveFinishStatus } from "./agent-status.js";
 
-import type { AgentEventType } from "./agent-event-bus.js";
 import type { AgentStatus } from "./agent-types.js";
+import type { EmitAgentTelemetryFn } from "./emit-agent-telemetry.js";
 import type { StreamChunk, ToolPhaseCompleteInfo, UIMessage } from "@tanstack/ai";
 
 export type { AgentRunOutcome, AgentRunOutcomeKind, AgentRunPath, StatusReconcilePolicy } from "./agent-run-outcome.js";
@@ -38,7 +38,7 @@ export interface AgentStatusControllerDeps {
   getError: () => string;
   setError: (error: string) => void;
   setPendingApprovalCount: (count: number) => void;
-  emitEvent?: (type: AgentEventType, data?: Record<string, unknown>) => void;
+  emitEvent?: EmitAgentTelemetryFn;
 }
 
 export interface ReconcileFromUIMessagesOptions {
@@ -155,7 +155,10 @@ export class AgentStatusController {
     }
   }
 
-  beginCompaction(kind: "auto" | "reactive" = "auto", data?: Record<string, unknown>): void {
+  beginCompaction(
+    kind: "auto" | "reactive" = "auto",
+    data?: { retry?: number; maxRetries?: number; tokensBefore?: number }
+  ): void {
     this.deps.setStatus("compacting");
     if (kind === "reactive") {
       this.deps.emitEvent?.("compaction:reactive-start", data);

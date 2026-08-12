@@ -54,3 +54,4 @@ export {
   DEFAULT_MAX_TODOS,
   DEFAULT_NAG_REMINDER_THRESHOLD,
 } from "./types.js";
+export { createTodoTool } from "./todo-tool.js";

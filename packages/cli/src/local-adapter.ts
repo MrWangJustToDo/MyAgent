@@ -1,10 +1,9 @@
-import { agentManager } from "@my-agent/core";
-
 import type { AdapterHooks, AgentAdapter, AppConfig, ClipboardImageResult, InitResult } from "@my-agent/app";
-import type { ManagedAgent } from "@my-agent/core";
+import type { AgentSessionHost } from "@my-agent/core";
 
 export class LocalAgentAdapter implements AgentAdapter {
-  private agent: ManagedAgent | null = null;
+  private host: AgentSessionHost | null = null;
+  private agentId: string | null = null;
   private _exit: () => void;
   private _readClipboardImage: (() => Promise<ClipboardImageResult | null>) | null;
   private _hooks: AdapterHooks;
@@ -22,14 +21,16 @@ export class LocalAgentAdapter implements AgentAdapter {
   async initialize(config: AppConfig): Promise<InitResult> {
     const { createAgentFromConfig } = await import("@my-agent/app");
     const result = await createAgentFromConfig({ config, name: "local-chat", hooks: this._hooks });
-    this.agent = result.agent as ManagedAgent;
+    this.host = result.host;
+    this.agentId = result.session.id;
     return result;
   }
 
   async destroy(): Promise<void> {
-    if (this.agent) {
-      agentManager.destroyAgent(this.agent.id);
-      this.agent = null;
+    if (this.host && this.agentId) {
+      await this.host.destroy(this.agentId);
+      this.host = null;
+      this.agentId = null;
     }
     const { clearAdapterHooks } = await import("@my-agent/app");
     clearAdapterHooks(this._hooks);

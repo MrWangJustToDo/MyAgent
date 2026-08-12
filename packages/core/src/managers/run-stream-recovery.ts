@@ -1,5 +1,5 @@
+import { assertAsyncIterable } from "../agent/run-helpers/assert-async-iterable.js";
 import { extractRunErrorMessage } from "../agent/stream/stream-errors.js";
-import { assertAsyncIterable } from "../agent/utils/assert-async-iterable.js";
 
 import { messagesForModelCapabilities, tryCapabilitySanitizeRetry } from "./stream-recovery/capability-sanitize.js";
 import { createTruncationState, handleMaxTokensTruncation } from "./stream-recovery/max-tokens-continue.js";

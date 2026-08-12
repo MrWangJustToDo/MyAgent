@@ -1,3 +1,5 @@
+import { useConfig } from "../hooks/use-config.js";
+
 import { registerCommand } from "./utils/registry.js";
 
 function fmt(n: number): string {
@@ -24,36 +26,23 @@ registerCommand({
   usage: "/usage",
   immediate: true,
   execute: (_args, ctx) => {
-    const agent = ctx.getAgent();
-    if (!agent) {
+    const session = ctx.getSession();
+    if (!session) {
       return { ok: false, error: "Agent not initialized" };
     }
 
-    const usageTracker = agent.usage;
-    const totalUsage = usageTracker.getTotal();
-    const currentUsage = usageTracker.getWindowUsage();
-    const cost = usageTracker.getTotalCostUsd();
-    const tokenLimit = usageTracker.getTokenLimit();
-    const session = agent.getSessionData();
-    const modelInfo = agent.getModelInfo();
-    const pricing = usageTracker.getPricing();
-
-    const cacheHitRatio =
-      totalUsage.inputTokens > 0
-        ? (totalUsage.cacheReadTokens ?? 0) / totalUsage.inputTokens
-        : agent.getCacheHitRatio();
+    const snap = session.getSnapshot();
+    const usage = snap.usage;
+    const totalUsage = usage.total;
+    const currentUsage = usage.window;
+    const cost = usage.cost;
+    const tokenLimit = usage.tokenLimit;
+    const model = useConfig.getReadonlyState().config.model;
     const lines: string[] = [];
 
-    if (session) {
-      lines.push(`  Session:      ${session.name} (${session.id})`);
-    }
-    if (modelInfo) {
-      lines.push(`  Model:        ${modelInfo.name}`);
-    }
-
-    if (cacheHitRatio > 0) {
-      lines.push("");
-      lines.push(`  Cache hit:    ${(cacheHitRatio * 100).toFixed(1)}%`);
+    lines.push(`  Session:      ${snap.name} (${snap.agentId})`);
+    if (model) {
+      lines.push(`  Model:        ${model}`);
     }
 
     lines.push("");
@@ -93,14 +82,6 @@ registerCommand({
       if (contextCacheRead > 0 && totalCacheRead > 0) {
         lines.push(`    Cache read:   ${fmt(contextCacheRead)}${pct(contextCacheRead, contextInput)}`);
       }
-    }
-
-    if (pricing) {
-      lines.push("");
-      lines.push(
-        `  Pricing:      ${pricing.inputPerM}/M in, ${pricing.outputPerM}/M out` +
-          (pricing.cacheReadPerM ? `, ${pricing.cacheReadPerM}/M cache` : "")
-      );
     }
 
     lines.push(`  Session cost: ${formatCost(cost)}`);

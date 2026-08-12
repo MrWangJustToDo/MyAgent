@@ -50,7 +50,7 @@ export async function resolveModelConfigFromProvider(
   const resolved = await resolveModelConfig(merged);
 
   if (providerConn.mode === "proxy") {
-    // resolveModelConfig may overwrite baseURL from models.dev / MODEL_* metadata —
+    // resolveModelConfig may overwrite baseURL from models.dev metadata —
     // re-force the proxy endpoint so LLM traffic stays on the provider server.
     return {
       connection: {

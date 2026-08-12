@@ -32,7 +32,7 @@ Designed with a runtime-agnostic core that decouples agent logic from execution 
 | **Extensions** | Project/user modules under `.agents/extension` (tool before/after hooks, custom tools) |
 | **Sandbox** | Isolated command execution with OS-level sandboxing (`@anthropic-ai/sandbox-runtime`) |
 | **MCP Integration** | Connect to external MCP servers for additional tools |
-| **Web** | Multi-provider search (Brave if `BRAVE_API_KEY`, else DuckDuckGo) + page fetch |
+| **Web** | Multi-provider search (Brave when host passes `toolConfig.websearch.braveApiKey`, else DuckDuckGo) + page fetch |
 | **Devtools** | Built-in [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools) for debugging |
 
 ---

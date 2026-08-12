@@ -53,7 +53,7 @@ export interface CreateNodeEnvOptions extends LocalEnvironmentConfig {
  * import { createNodeEnv } from "@my-agent/node";
  *
  * registerCoreEnv(createNodeEnv({ rootPath: "/path/to/project" }));
- * registerModelProvider(createDirectModelProvider({ env: process.env }));
+ * registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey }));
  * ```
  */
 export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {

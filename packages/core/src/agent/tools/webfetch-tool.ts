@@ -14,11 +14,11 @@ import { z } from "zod";
 
 import { getEnv } from "../../env.js";
 
-import { defineServerTool } from "./tanstack/define-tool.js";
+import { defineServerTool } from "./runtime/define-tool.js";
 import { withDuration } from "./util/helpers.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { toolOutputBaseSchema } from "./util/types.js";
-import { convertHTMLToMarkdown, extractTextFromHTML } from "./webfetch-html.js";
+import { convertHTMLToMarkdown, extractTextFromHTML } from "./util/webfetch-html.js";
 
 import type { ManagedAgent } from "../../runtime-types/hosts.js";
 
@@ -89,7 +89,7 @@ export type WebfetchOutput = z.infer<typeof webfetchOutputSchema>;
  * const webfetchTool = createWebfetchTool();
  * ```
  */
-export const createWebfetchTool = ({ managed }: { managed: ManagedAgent }) => {
+export const createWebfetchTool = ({ managed }: { managed?: ManagedAgent } = {}) => {
   return defineServerTool({
     name: "webfetch",
     description: `Fetches content from a URL and returns it in the specified format.

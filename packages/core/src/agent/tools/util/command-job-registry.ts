@@ -2,7 +2,7 @@
  * In-memory registry for background shell jobs started via CoreEnv.startCommand.
  */
 
-import { generateId } from "../../utils.js";
+import { generateId } from "../../../utils/generate-id.js";
 
 export type CommandJobStatus = "running" | "exited" | "killed" | "failed";
 

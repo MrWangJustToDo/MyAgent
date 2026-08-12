@@ -1,0 +1,53 @@
+/**
+ * Compaction summary markers and UI detectors (presentation-only).
+ * Markers must stay in sync with `@my-agent/core` compaction writers.
+ */
+
+import type { UIMessage } from "@tanstack/ai";
+
+export const CONVERSATION_SUMMARY_START = "[CONVERSATION SUMMARY]";
+export const CONVERSATION_SUMMARY_END = "[END SUMMARY]";
+
+export function isCompactionSummaryText(text: string | undefined | null): boolean {
+  if (!text) return false;
+  return text.trimStart().startsWith(CONVERSATION_SUMMARY_START);
+}
+
+export function isCompactionSummaryUIMessage(message: UIMessage): boolean {
+  if (message.role !== "user") return false;
+  const textPart = message.parts.find((part) => part.type === "text");
+  if (!textPart || textPart.type !== "text") return false;
+  return isCompactionSummaryText(textPart.content);
+}
+
+/**
+ * Extract the summary body between markers.
+ * - Wrapped text → body between start/end markers
+ * - Streaming (no end marker) → text after start marker to end of string
+ * - Unwrapped plain text → trimmed passthrough
+ */
+export function extractCompactionSummaryBody(text: string): string | undefined {
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith(CONVERSATION_SUMMARY_START)) {
+    const plain = text.trim();
+    return plain || undefined;
+  }
+
+  const endIndex = trimmed.indexOf(CONVERSATION_SUMMARY_END);
+  const body =
+    endIndex === -1
+      ? trimmed.slice(CONVERSATION_SUMMARY_START.length)
+      : trimmed.slice(CONVERSATION_SUMMARY_START.length, endIndex);
+  const result = body.trim();
+  return result || undefined;
+}
+
+export function formatCompactionSummaryContent(summary: string): string {
+  return `${CONVERSATION_SUMMARY_START}
+
+${summary}
+
+${CONVERSATION_SUMMARY_END}
+
+Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.`;
+}

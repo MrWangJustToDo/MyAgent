@@ -67,7 +67,6 @@ if (providerRemote) {
       style: appConfig.style,
       baseURL: appConfig.baseURL,
       apiKey: appConfig.apiKey,
-      env: process.env,
     })
   );
 }

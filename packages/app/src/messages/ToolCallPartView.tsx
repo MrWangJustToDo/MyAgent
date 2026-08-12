@@ -108,7 +108,7 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
     isTask && hasOutput && part.output && typeof part.output === "object" && "usage" in part.output
       ? (part.output as { usage?: { inputTokens?: number; outputTokens?: number } }).usage
       : null;
-  // Completed tasks: prefer frozen tool-output usage over live ManagedAgent totals.
+  // Completed tasks: prefer frozen tool-output usage over live Session totals.
   const displayUsage = hasOutput ? (outputUsage ?? taskUsage) : taskUsage;
 
   const parenParts: string[] = [];

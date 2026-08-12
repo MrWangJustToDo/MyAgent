@@ -2,18 +2,18 @@
  * WebSearch Tool — Search the web using multiple search providers.
  *
  * Provider architecture:
- * - Brave Search API (if BRAVE_API_KEY is configured)
+ * - Brave Search API (when toolConfig.websearch.braveApiKey is set)
  * - DuckDuckGo HTML search (free, no API key required, fallback)
  *
- * Provider selection is automatic via the ProviderManager:
- * 1. WEBSEARCH_PROVIDER env var can override (e.g., "brave", "duckduckgo", "auto")
+ * Provider selection via ProviderManager:
+ * 1. toolConfig.websearch.provider can override (e.g., "brave", "duckduckgo", "auto")
  * 2. auto mode: Brave (if key available) → DuckDuckGo
  * 3. On failure, automatically falls back to the next available provider
  */
 
 import { z } from "zod";
 
-import { defineServerTool } from "./tanstack/define-tool.js";
+import { defineServerTool } from "./runtime/define-tool.js";
 import { withDuration } from "./util/helpers.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 import { filterResultsByDomain, getProviderManager, initializeProviders } from "./websearch";
@@ -63,21 +63,21 @@ export type WebsearchOutput = z.infer<typeof websearchOutputSchema>;
  * Creates a web search tool for searching the web via multiple providers.
  *
  * Features:
- * - Brave Search API (if BRAVE_API_KEY is configured)
+ * - Brave Search API (when toolConfig.websearch.braveApiKey is set)
  * - DuckDuckGo HTML search (free, no API key, fallback)
  * - Automatic provider selection and fallback
  * - Domain filtering (allow/block specific domains)
  * - Returns titles, snippets, and URLs
  */
-export const createWebsearchTool = ({ managed }: { managed: ManagedAgent }) => {
-  initializeProviders();
+export const createWebsearchTool = ({ managed }: { managed?: ManagedAgent }) => {
+  initializeProviders(managed?.config?.toolConfig?.websearch);
 
   return defineServerTool({
     name: "websearch",
     description: `Search the web and return titles, snippets, and URLs.
 
 Use when you need current information, docs, or to discover URLs (then webfetch). Prefer over webfetch when the URL is unknown.
-Supports domain allow/block filters. Provider is chosen automatically (Brave when BRAVE_API_KEY is set, else DuckDuckGo).
+Supports domain allow/block filters. Provider is chosen automatically (Brave when a key is configured, else DuckDuckGo).
 
 When answering from search results, include a Sources section with markdown links: [Title](URL).
 Use the current year from <current_date> in turn context for time-sensitive queries.`,
@@ -133,6 +133,7 @@ Use the current year from <current_date> in turn context for time-sensitive quer
 
         try {
           const pm = getProviderManager();
+          pm.configure(managed?.config?.toolConfig?.websearch);
           const { results: rawResults, provider } = await pm.search(query, {
             maxResults: limit,
             allowedDomains,

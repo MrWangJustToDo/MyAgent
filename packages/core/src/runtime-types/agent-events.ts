@@ -1,8 +1,10 @@
+import type { AgentEventPayloadMap } from "./agent-event-payloads.js";
+
 // ============================================================================
 // Event Types
 // ============================================================================
 
-/** Agent lifecycle event types (emitted via ManagedAgent.emitEvent / emitAgentEvent). */
+/** Agent lifecycle event types (emitted via ManagedAgent.emitEvent / emitAgentTelemetry). */
 export type AgentEventType =
   | "session:doc"
   | "session:memory"
@@ -48,3 +50,6 @@ export type AgentEventType =
   | "plan:retro"
   | "plan:complete"
   | "plan:exit";
+
+/** Callback shape for services/middleware that emit lifecycle telemetry. */
+export type EmitAgentTelemetryFn = <T extends AgentEventType>(type: T, payload?: AgentEventPayloadMap[T]) => void;

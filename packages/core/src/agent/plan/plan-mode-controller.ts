@@ -6,7 +6,7 @@ import { buildPlanExecuteSteerMessage } from "./plan-prompts.js";
 import { savePlanFile } from "./plan-store.js";
 import { extractGoalFromPlanMarkdown } from "./plan-summary.js";
 
-import type { AgentEventType } from "../../runtime-types/agent-events.js";
+import type { EmitAgentTelemetryFn } from "../../runtime-types/agent-events.js";
 import type { TodoManager } from "../todo-manager/todo-manager.js";
 
 export type PlanModePhase = "off" | "planning" | "ready" | "executing" | "retro";
@@ -32,7 +32,7 @@ type PlanModeEvents = {
 };
 
 export interface PlanModeControllerDeps {
-  emitEvent: (type: AgentEventType, data?: Record<string, unknown>) => void;
+  emitEvent: EmitAgentTelemetryFn;
   getTodoManager: () => TodoManager | null;
   /** Invalidate runner / notify UI when phase changes. */
   onPhaseChange?: () => void;

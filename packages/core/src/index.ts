@@ -38,42 +38,35 @@ export {
 } from "./models/model-provider.js";
 
 // ============================================================================
-// Runtime — agent manager & managed agent
+// Runtime — agent manager (host bootstrap; Session-only UI must not import ManagedAgent)
 // ============================================================================
 
 export { agentManager, AgentManager } from "./managers/agent-manager.js";
 export type { AgentEvent, AgentEventListener, AgentEventType, RunAgentStreamInput } from "./managers/agent-manager.js";
+export type {
+  AgentEventPayloadMap,
+  AgentEventPayload,
+  EmptyAgentEventPayload,
+} from "./runtime-types/agent-event-payloads.js";
 export { ManagedAgent, type ManagedAgentConfig, type AgentMode } from "./managers/managed-agent.js";
 export { isActiveStatus } from "./managers/agent-status.js";
 export type { AgentStatus } from "./runtime-types/agent-status.js";
-export { localConnect, createLocalConnect, type LocalConnectManager } from "./connect";
-export { AgentChatController } from "./managers/agent-chat-controller.js";
 export type {
   QueuedMessageContent,
   QueuedMessagesSnapshot,
   QueueUpdateListener,
 } from "./managers/agent-chat-controller.js";
 export type { PlanModePhase, PlanModeState, BeginPlanExecutionResult } from "./agent/plan/plan-mode-controller.js";
-export {
-  formatPlanModeFooterLabel,
-  todoProgressFromItems,
-  type PlanTodoProgress,
-} from "./agent/plan/plan-footer-label.js";
-export type { QueueMode } from "./agent/utils/pending-message-queue.js";
+export type { QueueMode } from "./agent/run-helpers/pending-message-queue.js";
 
 // ============================================================================
-// Agent state (hosts / UI)
+// Serializable agent state types (Session-safe)
 // ============================================================================
 
-export { buildCanonicalModelMessages, type TokenUsage } from "./agent/compaction";
-export { AgentLog } from "./agent/agent-log";
-export { TodoManager, type TodoItem, type TodoStatus, type TodoPriority } from "./agent/todo-manager";
-
-// ============================================================================
-// Session persistence
-// ============================================================================
-
-export { SessionStore, type SessionMeta, type SessionData, type ResumeResult } from "./agent/session";
+export type { TokenUsage } from "./agent/compaction";
+export type { LogEntry, LogCategory, LogLevel, LogFilter } from "./agent/agent-log";
+export type { TodoItem, TodoStatus, TodoPriority } from "./agent/todo-manager";
+export type { SessionMeta, SessionData, ResumeResult } from "./agent/persistence";
 
 // ============================================================================
 // Agent Session API (host-facing transport-agnostic surface)
@@ -84,18 +77,28 @@ export {
   DEFAULT_AGENT_SESSION_CHANNELS,
   DEFAULT_SESSION_LIFECYCLE_EVENTS,
   createLocalAgentSession,
+  createLocalAgentSessionHost,
   sessionForSubagent,
   type AgentSession,
   type AgentSessionChannel,
   type AgentSessionCommand,
   type AgentSessionCommandResult,
+  type AgentSessionCreateOptions,
+  type AgentSessionCreateResult,
   type AgentSessionEvent,
+  type AgentSessionExtensionsSummary,
+  type AgentSessionHost,
+  type AgentSessionListEntry,
+  type AgentSessionMcpSummary,
   type AgentSessionMessageContent,
   type AgentSessionSnapshot,
   type AgentSessionSubagentSummary,
   type AgentSessionSubscribeOptions,
   type AgentSessionSubscriber,
+  type CreateLocalAgentSessionHostOptions,
   type CreateLocalAgentSessionOptions,
+  type LocalAgentSessionHostManager,
+  type LocalAgentSessionManager,
 } from "./agent-session";
 export type { AgentL1State } from "./managers/managed-agent.js";
 export type { UsageChangeSnapshot, UsageSnapshot } from "./managers/usage-tracker.js";
@@ -126,24 +129,6 @@ export {
 } from "./agent/summary-stream";
 
 // ============================================================================
-// Compaction (/compact command)
-// ============================================================================
-
-export {
-  applyCompactionResult,
-  autoCompact,
-  CONVERSATION_SUMMARY_END,
-  CONVERSATION_SUMMARY_START,
-  estimateTokens,
-  extractCompactionSummaryBody,
-  extractTextFromContent,
-  formatCompactionSummaryContent,
-  getModelVisibleMessages,
-  isCompactionSummaryUIMessage,
-  isCompactionSummaryText,
-} from "./agent/compaction";
-
-// ============================================================================
 // Models & agent bootstrap helpers
 // ============================================================================
 
@@ -154,17 +139,18 @@ export {
   resolveModelConfig,
   resolveModelConfigFromProvider,
   resolveModelConnection,
-  parseModelInfoFromEnv,
-  runSideTextQuery,
 } from "./models";
 export type {
+  ModelCapability,
   ModelInfo,
+  ModelPricing,
   ModelStyle,
   ModelConnection,
+  ReasoningConfig,
   ResolvedModelConfig,
   ResolvedModelConfigFromProvider,
 } from "./models";
-export { resolveTextAdapterForManaged } from "./managers/run-agent.js";
+export type { AgentToolConfig, WebsearchToolConfig } from "./agent/tools/tool-config.js";
 export { buildDefaultSystemPrompt } from "./agent/default-prompt.js";
 
 // ============================================================================
@@ -172,7 +158,7 @@ export { buildDefaultSystemPrompt } from "./agent/default-prompt.js";
 // ============================================================================
 
 export { previewEdit, type PreviewEditResult } from "./agent/tools/util/preview-edit.js";
-export { registerToUI, getToUI, clearToUI } from "./agent/tools/tanstack/to-ui-registry.js";
+export { registerToUI, getToUI, clearToUI } from "./agent/tools/runtime/to-ui-registry.js";
 
 // ============================================================================
 // Tool output types (message formatting)
@@ -190,13 +176,13 @@ export type {
   WriteFileOutput,
 } from "./agent/tools/util/types.js";
 export type { ReadFileOutput } from "./agent/tools/read-file-tool.js";
-export type { TaskOutput } from "./agent/tools/task-tool.js";
+export type { TaskOutput } from "./agent/subagent/task-tool.js";
 
 // ============================================================================
-// Environment errors & types (node / server adapters)
+// CoreEnv errors & workspace I/O types (node / server adapters)
 // ============================================================================
 
-export { FileError, ExecutionError } from "./environment";
+export { FileError, ExecutionError } from "./env-types.js";
 export type {
   FileEntry,
   FileStat,
@@ -205,13 +191,12 @@ export type {
   CommandJobStatus,
   StartCommandOptions,
   StartCommandHandle,
-} from "./environment";
+} from "./env-types.js";
 
 // ============================================================================
-// Extension API
+// Extension types (Session-safe). Loaders/runners stay package-private / `dev.ts`.
 // ============================================================================
 
-export { ExtensionRunner, ExtensionLoader, DEFAULT_EXTENSION_DIR, getDefaultExtensionDirs } from "./agent/extension";
 export type {
   ExtensionAPI,
   ExtensionFactory,
@@ -236,6 +221,6 @@ export type {
 // Shared utilities
 // ============================================================================
 
-export { generateId } from "./agent/utils.js";
-export type { GenerateIdOptions } from "./agent/utils.js";
+export { generateId } from "./utils/generate-id.js";
+export type { GenerateIdOptions } from "./utils/generate-id.js";
 export { destroyAllCommandJobs } from "./agent/tools/util/command-job-registry.js";

@@ -15,6 +15,9 @@
  * Lifecycle keeps typed telemetry: stop/abort/errors, approvals, subagent directory,
  * turn summary. Plan phase transitions and subagent:ui-update are omitted by default
  * (covered by `plan` channel / child sessions).
+ *
+ * Projected `lifecycle` channel payloads are the typed {@link AgentEvent} envelope
+ * (`type`, `ts`, `agentId`, `parentId?`, `sessionId?`, `payload`) — same shape as the bus.
  */
 
 import type { AgentEventType } from "../runtime-types/agent-events.js";

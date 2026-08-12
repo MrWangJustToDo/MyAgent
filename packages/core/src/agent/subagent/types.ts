@@ -2,7 +2,7 @@
  * Subagent types, interfaces, and constants.
  */
 
-import type { ToolsRecord } from "../tools/tanstack/tools-record.js";
+import type { ToolsRecord } from "../tools/runtime/tools-record.js";
 import type { ModelMessage } from "@tanstack/ai";
 
 // ============================================================================

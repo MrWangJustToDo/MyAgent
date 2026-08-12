@@ -13,7 +13,7 @@
 import { getEnv } from "../../../../env.js";
 import { createTimeoutAbort } from "../abort-timeout.js";
 import { filterResultsByDomain } from "../domain-filter.js";
-import { ENV_BRAVE_API_KEY } from "../types.js";
+import { getProviderManager } from "../provider.js";
 
 import type { SearchProvider, SearchResult, SearchOptions } from "../types.js";
 
@@ -51,13 +51,15 @@ export const braveProvider: SearchProvider = {
   name: PROVIDER_NAME,
 
   async isAvailable(): Promise<boolean> {
-    return Boolean(await getBraveApiKey());
+    return Boolean(getBraveApiKey());
   },
 
   async search(query: string, options?: SearchOptions): Promise<SearchResult[]> {
-    const apiKey = await getBraveApiKey();
+    const apiKey = getBraveApiKey();
     if (!apiKey) {
-      throw new Error("Brave Search API key not configured. Set BRAVE_API_KEY environment variable.");
+      throw new Error(
+        "Brave Search API key not configured. Pass toolConfig.websearch.braveApiKey when creating the agent."
+      );
     }
 
     const maxResults = options?.maxResults ?? 10;
@@ -116,9 +118,6 @@ export const braveProvider: SearchProvider = {
 // Helpers
 // ============================================================================
 
-async function getBraveApiKey(): Promise<string | undefined> {
-  const env = await getEnv().getEnv();
-  const key = env[ENV_BRAVE_API_KEY];
-  if (key && key !== "") return key;
-  return undefined;
+function getBraveApiKey(): string | undefined {
+  return getProviderManager().getBraveApiKey();
 }

@@ -5,7 +5,7 @@ import type { Command, CommandContext, CommandResult } from "./types.js";
 /** Built-in slash commands (module-load registration). */
 const builtinCommands: Command[] = [];
 
-/** Extension slash commands (synced from ManagedAgent after bootstrap). */
+/** Extension slash commands (synced from Session extensions snapshot after bootstrap). */
 const extensionCommands = new Map<string, Command>();
 
 export function registerCommand(command: Command): void {

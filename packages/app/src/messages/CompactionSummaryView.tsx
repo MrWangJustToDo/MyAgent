@@ -1,4 +1,3 @@
-import { extractCompactionSummaryBody } from "@my-agent/core";
 import { Box, Text } from "ink";
 import { StreamMarkdown } from "ink-stream-markdown";
 import { memo } from "react";
@@ -6,6 +5,7 @@ import { memo } from "react";
 import { useSize } from "../hooks";
 import { BG } from "../theme/colors";
 import { markdownTheme } from "../theme/markdown-theme.js";
+import { extractCompactionSummaryBody } from "../utils/compaction-summary.js";
 
 import type { TextPart, UIMessage } from "../hooks";
 

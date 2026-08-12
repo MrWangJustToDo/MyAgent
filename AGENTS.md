@@ -30,7 +30,7 @@ A pnpm monorepo with seven packages organized in a layered architecture.
 | Package | Role |
 |---------|------|
 | `@my-agent/core` | Runtime-agnostic core: agent loop, tools, LLM model factory, CoreEnv interface |
-| `@my-agent/app` | Shared UI layer: React components, hooks, commands, AgentAdapter interface |
+| `@my-agent/app` | Shared UI layer: React components, hooks, commands, AgentAdapter interface. **Session-only** for agent control — see [`packages/app/README.md`](packages/app/README.md) import allowlist |
 | `@my-agent/cli` | Terminal host — thin shell that registers CoreEnv and renders `@my-agent/app` |
 | `@my-agent/node` | Node.js CoreEnv implementation: native filesystem, shell, OS sandbox |
 | `@my-agent/server` | CoreEnv HTTP server (Hono RPC) + remote client factory |
@@ -118,7 +118,7 @@ import {
 } from "@my-agent/core";
 import { createProxyModelProvider } from "@my-agent/server/client";
 
-registerModelProvider(createDirectModelProvider({ env: process.env }));
+registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey }));
 // or
 registerModelProvider(await createProxyModelProvider("http://localhost:3100"));
 ```
@@ -177,10 +177,10 @@ ConnectionGuard(/health) → createRemoteCoreEnv(url) → registerCoreEnv
 |----------|----------|
 | CoreEnv | `registerCoreEnv`, `getEnv`, `CoreEnv` types |
 | ModelProvider | `registerModelProvider`, `createDirectModelProvider`, `resolveModelConfigFromProvider` |
-| Runtime | `agentManager`, `AgentManager`, `ManagedAgent`, `localConnect` |
-| UI / state | `AgentUIChannel`, `AgentLog`, `TodoManager`, `SessionStore` |
-| Compaction | `applyCompactionResult`, `autoCompact`, `estimateTokens` |
-| Bootstrap | `buildDefaultSystemPrompt`, `parseModelInfoFromEnv`, `resolveModelConfig` |
+| Runtime | `agentManager`, `AgentManager`, `ManagedAgent`, `AgentSession` / `AgentSessionHost` |
+| UI / state | Session-safe types (`TodoItem`, `LogEntry`, …); `AgentLog`/`TodoManager`/`SessionStore` classes are package-private |
+| Compaction | Session `compact` command; executors (`autoCompact`, …) stay on `dev.ts` |
+| Bootstrap | `buildDefaultSystemPrompt`, `resolveModelConfig`, `resolveModelConfigFromProvider` |
 | UI helpers | `previewEdit`, AgentSession `tool` channel (run_command stdout/stderr), tool output types |
 | Adapters | `FileError`, `ExecutionError`, `generateId` |
 
@@ -197,7 +197,7 @@ Key integration points:
 - `core/src/agent/agent-context/` — Pure UI↔engine merge (`buildCanonicalModelMessages`); no durable store
 - `core/src/agent/ui-channel.ts` — Durable UIMessage chain (SoT); compaction appends SUMMARY here
 - `core/src/agent/mcp/` — MCP via `@tanstack/ai-mcp` (`McpManager` re-wraps tool execute so multimodal `content[]` is not dropped when `structuredContent` is present)
-- `app/src/hooks/use-agent-chat.ts` — React hook via TanStack `useChat` + `localConnect`
+- `app/src/hooks/use-agent-chat.ts` — React hook via Session `dispatch` / subscribe (no ManagedAgent)
 
 ## Build, Lint, Test Commands
 
@@ -392,7 +392,7 @@ Use section separators in large files:
 
 ### Core & App
 - **TanStack AI** (`@tanstack/ai`, `@tanstack/ai-client`, provider adapters) — LLM agent loop and streaming
-- **@tanstack/ai-client** — `useChat` + `localConnect` in the app layer
+- **@tanstack/ai-client** — used inside core chat controller / stream wiring; app talks Session
 - **Zod** (v4.x) — Schema validation
 - **pathe** — Cross-runtime POSIX path utilities
 - **reactivity-store** — State management (Zustand-like API)
@@ -423,7 +423,7 @@ Use section separators in large files:
 
 Hosts should prefer `AgentSession` (`getSnapshot` / `dispatch` / `subscribe`) over reading `ManagedAgent` fields. Local: `createLocalAgentSession`. HTTP: `@my-agent/server/agent-session` against `/api/agent/*`. Subagents reuse the same Session contract by id.
 
-Internal domain updates use a typed `Emitter` (todos, usage, state, queues, plan, messages, log). Hosts subscribe via `AgentSession` channels projected from those Emitters; `lifecycle` projects a filtered `AgentEventBus` set. Opt-in `log` channel is excluded from default subscribe. Domain classes expose `.on(...)` for internal Session projection — not a parallel host observation API.
+Internal domain updates use a typed `Emitter` (todos, usage, state, queues, plan, messages, log). Hosts subscribe via `AgentSession` channels projected from those Emitters; `lifecycle` projects a filtered `AgentTelemetryBus` set. Opt-in `log` channel is excluded from default subscribe. Domain classes expose `.on(...)` for internal Session projection — not a parallel host observation API.
 
 **TODO:** message channel currently delivers full `UIMessage[]` (incremental/patch later).
 
@@ -464,7 +464,7 @@ import { createRemoteCoreEnv, createProxyModelProvider } from "@my-agent/server/
 registerCoreEnv(await createRemoteCoreEnv("http://localhost:3100"));
 registerModelProvider(await createProxyModelProvider("http://localhost:3100"));
 // Or local keys with remote workspace:
-// registerModelProvider(createDirectModelProvider({ env: process.env }));
+// registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey }));
 ```
 
 ### Known Limitations
@@ -475,7 +475,7 @@ registerModelProvider(await createProxyModelProvider("http://localhost:3100"));
 
 ## Agent Event System
 
-`AgentManager` owns an `AgentEventBus` for lifecycle events. Emit via `emitAgentEvent()` / `ManagedAgent.emitEvent()`; subscribe with `agentManager.on(type, listener)`.
+`AgentManager` owns an `AgentTelemetryBus` for lifecycle telemetry. Emit via `emitAgentTelemetry()` / `ManagedAgent.emitEvent()`; subscribe with `agentManager.on(type, listener)`.
 
 | Event | When emitted |
 |-------|----------------|
@@ -496,7 +496,7 @@ registerModelProvider(await createProxyModelProvider("http://localhost:3100"));
 
 **Vision note:** On OpenAI-compatible Chat Completions, multimodal tool results are lifted to a synthetic user `image_url` message (`liftToolMediaForChatCompletions`) so base64 is not stringified into `role: "tool"`. Anthropic keeps native multimodal `tool_result` parts. Official DeepSeek Chat Completions may still reject `image_url` (text-only schema); capability sanitization strips unsupported `image` / `audio` / `video` / `document` parts on the wire and retries once — use a vision-capable provider for real media understanding.
 
-**Event → Log bridge:** `attachEventLogBridge()` in `AgentManager` maps events to `AgentLog` entries. Policy lives in `event-log-bridge.ts` (`DEFAULT_EVENT_LOG_RULES`); override per event type with `EventLogPolicy`. Emit sites should not duplicate lifecycle logs covered by events.
+**Event → Log bridge:** `bridgeTelemetryToAgentLog()` in `AgentManager` maps telemetry events to `AgentLog` entries. Policy lives in `event-log-bridge.ts` (`DEFAULT_EVENT_LOG_RULES`); override per event type with `EventLogPolicy`. Emit sites should not duplicate lifecycle logs covered by events.
 
 ## Prompt Cache (prefix)
 
@@ -594,10 +594,10 @@ packages/core/src/agent/
 ├── subagent/
 │   ├── run-subagent.ts # Worker profile: runSubagent(), getSubagent(), destroySubagent()
 │   ├── run-stats.ts    # Iteration/limit stats from UI messages + stream
-│   ├── tools.ts      # Read-only tool set for subagents
+│   ├── tools.ts        # Read-only tool set for subagents
+│   ├── task-tool.ts    # createTaskTool() for parent agents
 │   └── index.ts
-├── tools/
-│   └── task-tool.ts  # createTaskTool() for parent agents
+├── tools/              # Universal tools (fs/shell/web) + runtime glue
 ```
 
 ## Skill System
@@ -613,8 +613,10 @@ Skills are defined in `SKILL.md` files with YAML frontmatter and loaded from `.a
 
 ```
 packages/core/src/agent/skills/
-├── skill-loader.ts     # Parse SKILL.md files
-├── skill-registry.ts   # Manage loaded skills
+├── skill-loader.ts      # Parse SKILL.md files
+├── skill-registry.ts    # Manage loaded skills
+├── list-skills-tool.ts  # list_skills factory
+├── load-skill-tool.ts   # load_skill factory
 └── index.ts
 ```
 
@@ -624,7 +626,7 @@ Three-layer context compaction (plus reactive compaction) for infinite agent ses
 
 | Layer | Name | Trigger | Action |
 |-------|------|---------|--------|
-| Layer 1 | `tool_compact` | Every LLM call | `toModelOutput` transforms + recent-window placeholders |
+| Layer 1 | `tool_compact` | Every LLM call | `toModelOutput` transforms (cached per toolCallId) |
 | Layer 2 | `reasoning_stripping` | Every LLM call (DeepSeek models) | Strip reasoning content from history to optimize prefix cache |
 | Layer 3 | `auto_compact` | Token threshold exceeded | LLM summarization |
 | Reactive | `reactive_compact` | `prompt_too_long` API error | Emergency compaction, then retry |
@@ -638,9 +640,7 @@ const agent = await agentManager.createManagedAgent({
   modelBaseURL: "https://api.openai.com/v1",
   compaction: {
     tokenThreshold: 100000,
-    keepRecentToolResults: 100,
-    minToolResultSize: 100,
-    keepRecentFlows: 4,
+    keepRecentFlows: 2,
   },
 });
 ```
@@ -655,7 +655,7 @@ const agent = await agentManager.createManagedAgent({
 
 ```
 packages/core/src/agent/compaction/
-├── tool-compact/          # Layer 1 — toModelOutput + recent-window placeholders
+├── tool-compact/          # Layer 1 — toModelOutput transforms (cached per toolCallId)
 ├── auto-compact.ts        # Layer 3 — LLM summarization when token threshold exceeded
 ├── cut-point.ts           # findCutPoint + previous-summary extraction
 ├── reactive-compact.ts    # Reactive — emergency compaction on prompt_too_long errors
@@ -779,21 +779,25 @@ packages/
 │   │   ├── compaction/                # Append SUMMARY + summary-first wire projection
 │   │   ├── extension/                 # Extension API (loader, runner, EventBus interception)
 │   │   ├── memory/                    # Memory management
-│   │   ├── plan/                      # Plan domain (controller, prompts, middleware)
-│   │   ├── session/                   # Session persistence (SessionStore)
-│   │   ├── skills/                    # Skill loading (two-layer injection)
+│   │   ├── plan/                      # Plan domain + plan tool factories
+│   │   ├── persistence/               # Disk session persistence (SessionStore)
+│   │   ├── skills/                    # Skill loading + list/load skill tools
 │   │   ├── stream/                    # Package-wide stream helpers (errors, text extract)
-│   │   ├── subagent/                  # Subagent spawning
-│   │   ├── todo-manager/             # Todo tracking for agent tasks
-│   │   ├── tools/                     # AI tools (fs, bash, grep, glob, plan tools, etc.)
+│   │   ├── subagent/                  # Subagent spawning + task tool
+│   │   ├── todo-manager/              # Todo tracking + todo tool
+│   │   ├── tools/                     # Universal AI tools (fs, shell, web) + runtime/util
+│   │   ├── run-helpers/               # Chat/run helpers (tool-phase, empty-stream, pending queue)
 │   │   ├── ui-channel.ts              # AgentUIChannel (chat / subagent preview)
 │   │   ├── mcp/                       # MCP integration
 │   │   ├── default-prompt.ts          # System prompt builder
 │   │   └── agent-doc-loader.ts        # Agent documentation loader
-│   ├── environment/                   # Error types (FileError, ExecutionError), data types
+│   ├── env.ts                         # CoreEnv interface + registry
+│   ├── env-types.ts                   # FileError / ExecutionError / fs+command result types
+│   ├── agent-session/                 # Host-facing AgentSession / Host API
 │   ├── managers/                      # AgentManager, ManagedAgent, middleware, run pipeline
 │   ├── runtime-types/                 # Shared status / event / usage types (no manager deps)
 │   ├── models/                        # Model config (model-config.ts), adapters, models.dev lookup
+│   ├── utils/                         # Cross-cutting helpers (Emitter, generateId)
 │   ├── index.ts                       # Curated public API exports (hosts / adapters)
 │   └── dev.ts                         # Internal-only re-exports for `pnpm validate:*` scripts
 │

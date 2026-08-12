@@ -5,8 +5,9 @@
  * consumer via {@link UseStreamingOutputOptions.throttleMs}.
  */
 
-import { agentManager, createLocalAgentSession } from "@my-agent/core";
 import { useEffect } from "react";
+
+import { resolveAgentSession } from "../utils/session-resolve.js";
 
 import { clearStreamingIngest, ingestStreamingChunk, registerStreamingThrottle } from "./streaming-ingest.js";
 import { useAgent } from "./use-agent.js";
@@ -49,10 +50,9 @@ function acquireStreamingBridge(agentId: string): boolean {
     return true;
   }
 
-  const managed = agentManager.getAgent(agentId);
-  if (!managed) return false;
+  const session = resolveAgentSession(agentId);
+  if (!session) return false;
 
-  const session = createLocalAgentSession({ managed, manager: agentManager });
   const unsubscribe = session.subscribe(
     (event) => {
       if (event.channel !== "tool") return;
@@ -112,7 +112,7 @@ export function useStreamingOutput(
   options?: boolean | UseStreamingOutputOptions
 ): StreamingOutput | undefined {
   const { enabled, throttleMs, agentId: agentIdOption } = resolveOptions(options);
-  const rootAgentId = useAgent((s) => s.agent?.id);
+  const rootAgentId = useAgent((s) => s.session?.id);
   const agentId = agentIdOption || rootAgentId;
   const output = useStreamingStore((state) => (toolCallId ? state.outputs[toolCallId] : undefined));
 

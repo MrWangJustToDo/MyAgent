@@ -1,6 +1,6 @@
 import { chat, maxIterations } from "@tanstack/ai";
 
-import { assertAsyncIterable } from "../utils/assert-async-iterable.js";
+import { assertAsyncIterable } from "../run-helpers/assert-async-iterable.js";
 
 import { createToolRunContext, type ToolRunContext } from "./run-context.js";
 

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { getEnv } from "../../env.js";
 
-import { defineServerTool } from "./tanstack/define-tool.js";
+import { defineServerTool } from "./runtime/define-tool.js";
 import { withFileMutationQueue } from "./util/file-mutation-queue.js";
 import { applyResolvedEdit, isErrorResult, resolveEditMatch } from "./util/find-edit-match.js";
 import { normalizeForFuzzyMatch } from "./util/fuzzy-match.js";

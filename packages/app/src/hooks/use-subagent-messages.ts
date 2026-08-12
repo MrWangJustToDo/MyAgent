@@ -1,20 +1,19 @@
-import { agentManager, sessionForSubagent } from "@my-agent/core";
 import { throttle } from "lodash-es";
 import { useEffect, useState } from "react";
 import { toRaw } from "reactivity-store";
+
+import { resolveAgentSession } from "../utils/session-resolve.js";
 
 import { useAgent } from "./use-agent.js";
 
 import type { UIMessage } from "@tanstack/ai";
 
 function readSubagentMessages(subagentId: string): UIMessage[] {
-  const session = sessionForSubagent(agentManager, subagentId);
-  if (session) return session.getSnapshot().messages as UIMessage[];
-  return (agentManager.getAgent(subagentId)?.ui?.getMessages() ?? []) as UIMessage[];
+  return (resolveAgentSession(subagentId)?.getSnapshot().messages ?? []) as UIMessage[];
 }
 
 /**
- * Subscribe to live UIMessage snapshots for a subagent preview via AgentSession.
+ * Subscribe to live UIMessage snapshots for a subagent preview via Host.connect.
  */
 export function useSubagentMessages(subagentId: string | undefined): UIMessage[] {
   const rootSession = toRaw(useAgent((s) => s.session));
@@ -33,7 +32,7 @@ export function useSubagentMessages(subagentId: string | undefined): UIMessage[]
     const attachChild = () => {
       childUnsub?.();
       childUnsub = undefined;
-      const child = sessionForSubagent(agentManager, subagentId);
+      const child = resolveAgentSession(subagentId);
       if (!child) return;
       childUnsub = child.subscribe(
         (event) => {

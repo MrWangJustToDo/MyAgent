@@ -2,7 +2,7 @@
  * Compaction Module - Context compression for infinite agent sessions.
  *
  * Implements context compaction layers:
- * - Layer 1 (tool_compact): `toModelOutput` transforms + recent-window placeholders
+ * - Layer 1 (tool_compact): `toModelOutput` transforms (cached per toolCallId)
  * - Layer 2 (auto_compact): LLM summarization when threshold exceeded
  * - Reactive: emergency compaction on prompt_too_long errors
  * Manual: CLI `/compact` command (optional)
@@ -37,9 +37,9 @@ export {
   type CompactionTodoItem,
 } from "./compaction-prompt.js";
 
-export { applyToolCompact, createToolPlaceholder, type ApplyToolCompactOptions } from "./tool-compact";
+export { applyToolCompact, type ApplyToolCompactOptions } from "./tool-compact";
 export { ToolCompactCache } from "./tool-compact/tool-compact-cache.js";
-export { toModelOutputRegistry } from "../tools/tanstack/to-model-output-registry.js";
+export { toModelOutputRegistry } from "../tools/runtime/to-model-output-registry.js";
 
 // Message-chain projection (summary-first wire)
 export {

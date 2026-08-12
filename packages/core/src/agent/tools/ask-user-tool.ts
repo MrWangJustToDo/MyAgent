@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { defineClientTool } from "./tanstack/define-tool.js";
+import { defineClientTool } from "./runtime/define-tool.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 
 // ============================================================================

@@ -1,10 +1,13 @@
 /**
- * Shared agent initialization logic extracted from LocalAgentAdapter and ExtensionAgentAdapter.
- * Both adapters delegate to this helper to avoid duplicating ~80 lines of identical setup code.
+ * Shared agent initialization — Host + Session for the app (no ManagedAgent to UI).
  */
 
-import { agentManager, buildDefaultSystemPrompt, resolveModelConfigFromProvider } from "@my-agent/core";
-import { reactive, toRaw } from "reactivity-store";
+import {
+  agentManager,
+  buildDefaultSystemPrompt,
+  createLocalAgentSessionHost,
+  resolveModelConfigFromProvider,
+} from "@my-agent/core";
 
 import { clearExtensionCommands, syncExtensionCommands } from "../commands";
 import { useConfig } from "../hooks/use-config.js";
@@ -13,12 +16,18 @@ import type { AppConfig, InitResult } from "./types.js";
 import type { useAgentLog as useAgentLogType } from "../hooks/use-agent-log.js";
 import type { useAgent as useAgentType } from "../hooks/use-agent.js";
 import type { useTodoManager as useTodoManagerType } from "../hooks/use-todo-manager.js";
-import type { AgentSession, ManagedAgent } from "@my-agent/core";
-import type { UIMessage } from "@tanstack/ai";
+import type { AgentSession, AgentSessionHost } from "@my-agent/core";
 
-/** Wire LocalAgentSession into the app store (call after `initChat`). */
-export function bindAgentSession(session: AgentSession | null, hooks: Pick<AdapterHooks, "useAgent">): void {
+/** Wire AgentSession (+ Host) into the app store. */
+export function bindAgentSession(
+  session: AgentSession | null,
+  hooks: Pick<AdapterHooks, "useAgent">,
+  host?: AgentSessionHost | null
+): void {
   hooks.useAgent.getActions().setSession(session);
+  if (host !== undefined) {
+    hooks.useAgent.getActions().setHost(host);
+  }
 }
 
 export interface AdapterHooks {
@@ -33,25 +42,6 @@ export interface CreateAgentOptions {
   hooks: AdapterHooks;
 }
 
-function patchInstance(instance: ManagedAgent & { ["$$symbol"]?: symbol }) {
-  if (instance["$$symbol"]) return instance;
-  instance["$$symbol"] = Symbol.for("patch");
-  const pInstance = reactive(instance);
-  return new Proxy(pInstance, {
-    get(target, p, receiver) {
-      const key = p.toString()?.toLowerCase?.() || "";
-      if (key === "status" || key === "log") {
-        return Reflect.get(target, p, receiver);
-      }
-      return toRaw(Reflect.get(target, p, receiver));
-    },
-  }) as ManagedAgent;
-}
-
-/**
- * Create and configure a managed agent from app config.
- * Handles tool setup, hook wiring, and session restore.
- */
 export async function createAgentFromConfig({ config, name, hooks }: CreateAgentOptions): Promise<InitResult> {
   const { connection, modelInfo, providerMode } = await resolveModelConfigFromProvider({
     model: config.model,
@@ -67,21 +57,19 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
     );
   }
 
-  // Keep Footer / Help in sync with the resolved connection (esp. remote provider).
   useConfig.getActions().updateConfig({
     model: connection.model,
     style: connection.style,
     baseURL: connection.baseURL,
-    // Proxy mode: keys stay on the provider server — do not surface the placeholder as a local key.
     apiKey: providerMode === "proxy" ? "" : connection.apiKey,
     modelInfo,
     providerMode,
   });
 
-  const agent = await agentManager.createManagedAgent({
-    modelInfo,
-    model: connection.model,
+  const host = createLocalAgentSessionHost({ manager: agentManager });
+  const { session, initialMessages } = await host.create({
     name,
+    model: connection.model,
     systemPrompt: config.systemPrompt || (await buildDefaultSystemPrompt()),
     maxIterations: config.maxIterations,
     mcpConfigPath: config.mcpConfigPath || undefined,
@@ -89,40 +77,29 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
     modelStyle: connection.style,
     modelBaseURL: connection.baseURL,
     modelApiKey: connection.apiKey,
-    setUp: patchInstance,
+    modelInfo,
+    continueSession: config.continueSession || undefined,
+    resumeSessionId: config.resumeSession && config.resumeSession !== "__picker__" ? config.resumeSession : undefined,
+    ...(config.toolConfig ? { toolConfig: config.toolConfig } : {}),
   });
 
   const { useAgent, useAgentLog, useTodoManager } = hooks;
+  const snap = session.getSnapshot();
+  const initial = initialMessages ?? [];
 
-  const todoManager = agent.getTodoManager();
+  useAgent.getActions().setHost(host);
+  useAgent.getActions().setSession(session);
+  useAgentLog.getActions().clear();
+  useTodoManager.getActions().setFromSession(snap.todos, snap.todosTitle);
+  syncExtensionCommands(session);
 
-  useAgent.getActions().setAgent(agent);
-  useAgent.getActions().setSession(null);
-  useAgentLog.getActions().setLog(toRaw(agent.getLog()));
-  useTodoManager.getActions().setManager(toRaw(todoManager ?? null));
-
-  syncExtensionCommands(agent);
-
-  let initialMessages: UIMessage[] | undefined;
-  if (config.continueSession || config.resumeSession) {
-    const result = config.continueSession
-      ? await agentManager.continueLatestSession(agent.id)
-      : await agentManager.resumeSession(agent.id, config.resumeSession);
-    if (result) {
-      initialMessages = result.uiMessages;
-    }
-  }
-
-  return { agent, initialMessages };
+  return { host, session, ...(initial.length ? { initialMessages: initial } : {}) };
 }
 
-/**
- * Clear all hook stores (call in adapter.destroy()).
- */
 export function clearAdapterHooks(hooks: AdapterHooks): void {
   clearExtensionCommands();
-  hooks.useAgent.getActions().setAgent(null);
+  hooks.useAgent.getActions().setHost(null);
   hooks.useAgent.getActions().setSession(null);
-  hooks.useAgentLog.getActions().setLog(null);
-  hooks.useTodoManager.getActions().setManager(null);
+  hooks.useAgentLog.getActions().clear();
+  hooks.useTodoManager.getActions().clear();
 }

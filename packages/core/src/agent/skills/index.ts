@@ -6,3 +6,17 @@ export { SkillLoader } from "./skill-loader.js";
 
 // Skill registry
 export { SkillRegistry } from "./skill-registry.js";
+
+// Skill tools
+export {
+  createListSkillsTool,
+  listSkillsOutputSchema,
+  type ListSkillsOutput,
+  type ListSkillsToolConfig,
+} from "./list-skills-tool.js";
+export {
+  createLoadSkillTool,
+  loadSkillOutputSchema,
+  type LoadSkillOutput,
+  type LoadSkillToolConfig,
+} from "./load-skill-tool.js";

@@ -6,12 +6,14 @@ import { ExtensionWidget } from "../components/ExtensionWidget.js";
 import { FullBox } from "../components/FullBox.js";
 import { MessageViewWithCompact } from "../components/MessageListWithCompact.js";
 import { PlanReadyBanner } from "../components/PlanReadyBanner.js";
+import { SessionResumePicker } from "../components/SessionResumePicker.js";
 import { Spinner } from "../components/Spinner.js";
 import { SubagentPanel } from "../components/SubagentPanel.js";
 import { WorkspacePanel } from "../components/WorkspacePanel.js";
 import { useAdapter } from "../context/adapter-context.js";
 import { useAgentChat } from "../hooks/use-agent-chat.js";
 import { useAgentInputControls } from "../hooks/use-agent-input-controls.js";
+import { useAgent } from "../hooks/use-agent.js";
 import { useConfig } from "../hooks/use-config.js";
 import { useExtensionPanel } from "../hooks/use-extension-panel.js";
 import { useExtensionUI, useExtensionUIBridge } from "../hooks/use-extension-ui.js";
@@ -75,6 +77,8 @@ export const Agent = () => {
 
   const confirm = useExtensionUI((s) => s.confirm);
   const widgets = useExtensionUI((s) => s.widgets);
+  const activeSession = useAgent((s) => s.session);
+  const showResumePicker = config.resumeSession === "__picker__";
 
   useAgentInputControls({
     adapter,
@@ -119,6 +123,10 @@ export const Agent = () => {
         <Spinner text="Initializing sandbox..." />
       </Box>
     );
+  }
+
+  if (showResumePicker && activeSession) {
+    return <SessionResumePicker session={activeSession} setMessages={setMessages} />;
   }
 
   return (

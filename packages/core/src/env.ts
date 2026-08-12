@@ -24,7 +24,7 @@ import type {
   RunCommandOptions,
   StartCommandHandle,
   StartCommandOptions,
-} from "./environment/types.js";
+} from "./env-types.js";
 
 // ============================================================================
 // Path Utilities (synchronous — pure computation, no I/O)

@@ -56,3 +56,10 @@ export {
 } from "./plan-store.js";
 
 export { createPlanModeMiddleware, type PlanModeMiddlewareDeps } from "./plan-mode-middleware.js";
+
+export {
+  createCompletePlanTool,
+  createCreatePlanTool,
+  createUpdatePlanTool,
+  type CreatePlanToolDeps,
+} from "./create-plan-tool.js";

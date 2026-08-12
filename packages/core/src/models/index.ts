@@ -64,13 +64,3 @@ export {
 } from "./reasoning-chat-completions-adapter.js";
 
 export { runSideTextQuery, type SideTextQueryOptions, type SideTextQueryResult } from "./side-text-query.js";
-
-// Optional MODEL_* metadata overrides
-export {
-  MODEL_ENV_KEYS,
-  ModelEnvConfigSchema,
-  parseModelEnvConfig,
-  parseModelInfoFromEnv,
-  resolveModelInfoFromEnv,
-  type ModelEnvConfig,
-} from "./model-env.js";

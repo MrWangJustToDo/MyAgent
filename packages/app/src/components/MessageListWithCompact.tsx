@@ -1,8 +1,8 @@
-import { formatCompactionSummaryContent } from "@my-agent/core";
 import { useMemo } from "react";
 
 import { useAgentStatus } from "../hooks/use-agent-status";
 import { useCompactSummaryText } from "../hooks/use-compact-summary-text";
+import { formatCompactionSummaryContent } from "../utils/compaction-summary.js";
 
 import { MessageList } from "./MessageList";
 

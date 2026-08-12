@@ -7,17 +7,17 @@ import { createKillCommandTool } from "./kill-command-tool.js";
 import { createListFileTool } from "./list-file-tool.js";
 import { createReadFileTool } from "./read-file-tool.js";
 import { createRunCommandTool } from "./run-command-tool.js";
-import { type ToolsRecord } from "./tanstack/tools-record.js";
+import { type ToolsRecord } from "./runtime/tools-record.js";
 import { createTreeTool } from "./tree-tool.js";
 import { createWriteFileTool } from "./write-file-tool.js";
 
 import type { createAskUserTool } from "./ask-user-tool.js";
-import type { createCompletePlanTool, createCreatePlanTool, createUpdatePlanTool } from "./create-plan-tool.js";
-import type { createListSkillsTool } from "./list-skills-tool.js";
-import type { createLoadSkillTool } from "./load-skill-tool.js";
-import type { createTaskTool } from "./task-tool.js";
-import type { createTodoTool } from "./todo-tool.js";
 import type { UsageTracker } from "../../runtime-types/hosts.js";
+import type { createCompletePlanTool, createCreatePlanTool, createUpdatePlanTool } from "../plan/create-plan-tool.js";
+import type { createListSkillsTool } from "../skills/list-skills-tool.js";
+import type { createLoadSkillTool } from "../skills/load-skill-tool.js";
+import type { createTaskTool } from "../subagent/task-tool.js";
+import type { createTodoTool } from "../todo-manager/todo-tool.js";
 
 export type Tools = ToolsRecord & {
   delete_file: ReturnType<typeof createDeleteFileTool>;

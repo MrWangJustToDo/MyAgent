@@ -1,5 +1,6 @@
 import { bumpAgentUsage } from "../hooks/use-agent-usage.js";
 import { useDynamic } from "../hooks/use-dynamic.js";
+import { useTodoManager } from "../hooks/use-todo-manager.js";
 
 import { registerCommand } from "./utils/registry.js";
 
@@ -9,48 +10,19 @@ registerCommand({
   usage: "/clear",
   immediate: true,
   execute: async (_args, ctx) => {
-    const agent = ctx.getAgent();
-    if (!agent) {
+    const session = ctx.getSession();
+    if (!session) {
       return { ok: false, error: "Agent not initialized" };
     }
 
-    const store = agent.getSessionStore();
-    if (!store) {
-      return { ok: false, error: "Session store not available" };
+    ctx.saveSessionFromChat?.();
+    const result = await session.dispatch({ type: "session.new" });
+    if (!result.ok) {
+      return { ok: false, error: result.error };
     }
 
-    const usage = agent.usage;
-    const currentSession = agent.getSessionData();
-
-    if (currentSession) {
-      ctx.saveSessionFromChat?.();
-    }
-
-    // Drop plan lifecycle + auto mode before wiping the transcript so approval
-    // bypass / read-only restrictions cannot carry into the new session.
-    agent.planMode.disable();
-    agent.setAutoModeEnabled(false);
-
-    agent.reset();
-    usage.reset();
     bumpAgentUsage();
-
-    // Clear the chat controller's messages and queues (still alive after reset).
-    const chatController = agent.getChatController();
-    chatController?.clearMessages();
-
-    const newSession = store.create({
-      modelStyle: currentSession?.modelStyle ?? "openai",
-      model: currentSession?.model ?? "unknown",
-    });
-    agent.setSessionData(newSession);
-    agent.resetAdmittedTurnContext();
-    agent.resetSystemPrompt();
-
-    const todoManager = agent.getTodoManager();
-    if (todoManager) {
-      todoManager.reset();
-    }
+    useTodoManager.getActions().clear();
 
     if (ctx.setMessages) {
       ctx.setMessages([]);

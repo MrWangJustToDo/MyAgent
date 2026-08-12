@@ -6,7 +6,7 @@
  * projected array back into the channel.
  */
 
-import { generateId } from "../utils.js";
+import { generateId } from "../../utils/generate-id.js";
 
 import { formatCompactionSummaryContent, isCompactionSummaryModelMessage } from "./compaction-summary.js";
 import { findCutPoint } from "./cut-point.js";

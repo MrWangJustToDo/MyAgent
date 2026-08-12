@@ -82,10 +82,9 @@ export function getModelProvider(): ModelProvider {
 // ============================================================================
 
 /**
- * Create a direct-mode provider from local connection fields / env.
+ * Create a direct-mode provider from explicit connection fields.
  *
- * Does not read CoreEnv — callers pass process.env or UI config explicitly so
- * remote CoreEnv + local keys stay orthogonal.
+ * Does not read CoreEnv or process.env — hosts parse env/flags and pass fields.
  */
 export function createDirectModelProvider(input: ResolveModelConfigInput = {}): ModelProvider {
   return {

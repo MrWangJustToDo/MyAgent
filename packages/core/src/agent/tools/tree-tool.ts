@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { getEnv } from "../../env.js";
 
-import { defineServerTool } from "./tanstack/define-tool.js";
+import { defineServerTool } from "./runtime/define-tool.js";
 import { OUTPUT_LIMITS, truncateString, withDuration } from "./util/helpers.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { toolOutputBaseSchema } from "./util/types.js";

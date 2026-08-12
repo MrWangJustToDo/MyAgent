@@ -8,10 +8,8 @@ import assert from "node:assert/strict";
 
 import {
   MULTIMODAL_OMITTED_PLACEHOLDER,
-  chatMessagesHaveImages,
   chatMessagesHaveMultimodal,
   isMultimodalUnsupportedError,
-  isVisionUnsupportedError,
   sanitizeMessagesForCapabilities,
   stripMultimodalFromChatMessages,
   trySanitizeForMultimodalRetry,
@@ -28,7 +26,6 @@ assert.equal(
 );
 assert.equal(isMultimodalUnsupportedError(new Error("unsupported content part type for adapter: audio")), true);
 assert.equal(isMultimodalUnsupportedError(new Error("network timeout")), false);
-assert.equal(isVisionUnsupportedError(new Error("unknown variant `image_url`, expected `text`")), true);
 
 const withMedia = [
   {
@@ -48,7 +45,7 @@ const withMedia = [
   },
 ];
 
-assert.equal(chatMessagesHaveImages(withMedia), true);
+assert.equal(chatMessagesHaveMultimodal(withMedia, new Set(["image"])), true);
 assert.equal(chatMessagesHaveMultimodal(withMedia), true);
 
 const textOnly = {

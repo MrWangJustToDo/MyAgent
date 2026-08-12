@@ -10,7 +10,8 @@ import { extractTanStackUsage } from "../../runtime-types/token-usage.js";
 
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { ModelPricing } from "../../models/types.js";
-import type { AgentEventType, UsageTracker } from "../../runtime-types";
+import type { UsageTracker } from "../../runtime-types";
+import type { EmitAgentTelemetryFn } from "../emit-agent-telemetry.js";
 import type { ChatMiddleware } from "@tanstack/ai";
 
 // ============================================================================
@@ -22,7 +23,7 @@ export interface LifecycleMiddlewareDeps {
   getPricing: () => ModelPricing | null | undefined;
   onThinking?: () => void;
   onFirstModelOutput?: () => void;
-  emitEvent?: (type: AgentEventType, data?: Record<string, unknown>) => void;
+  emitEvent?: EmitAgentTelemetryFn;
 }
 
 export function createLifecycleMiddleware(deps: LifecycleMiddlewareDeps): ChatMiddleware<ToolRunContext> {
@@ -66,7 +67,7 @@ export function createLifecycleMiddleware(deps: LifecycleMiddlewareDeps): ChatMi
       const elapsed = Date.now() - startTime;
       const windowUsage = deps.usage.getWindowUsage();
       deps.emitEvent?.("llm:response", {
-        finishReason: info.finishReason,
+        finishReason: info.finishReason ?? undefined,
         inputTokens: windowUsage.inputTokens,
         outputTokens: windowUsage.outputTokens,
         cacheReadTokens: windowUsage.cacheReadTokens ?? 0,

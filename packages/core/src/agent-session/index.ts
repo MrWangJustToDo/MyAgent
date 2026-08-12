@@ -6,6 +6,8 @@ export {
   type AgentSessionCommand,
   type AgentSessionCommandResult,
   type AgentSessionEvent,
+  type AgentSessionExtensionsSummary,
+  type AgentSessionMcpSummary,
   type AgentSessionMessageContent,
   type AgentSessionSnapshot,
   type AgentSessionSubagentSummary,
@@ -13,10 +15,24 @@ export {
   type AgentSessionSubscriber,
 } from "./types.js";
 
+export type {
+  AgentSessionCreateOptions,
+  AgentSessionCreateResult,
+  AgentSessionHost,
+  AgentSessionListEntry,
+} from "./host-types.js";
+
 export { DEFAULT_SESSION_LIFECYCLE_EVENTS } from "./lifecycle-filter.js";
 
 export {
   createLocalAgentSession,
   sessionForSubagent,
   type CreateLocalAgentSessionOptions,
+  type LocalAgentSessionManager,
 } from "./local-agent-session.js";
+
+export {
+  createLocalAgentSessionHost,
+  type CreateLocalAgentSessionHostOptions,
+  type LocalAgentSessionHostManager,
+} from "./local-agent-session-host.js";

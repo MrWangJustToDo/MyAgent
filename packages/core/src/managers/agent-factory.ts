@@ -5,24 +5,24 @@ import { ExtensionLoader, ExtensionRunner, getDefaultExtensionDirs } from "../ag
 import { loadMcpConfig, type McpConfigLoadResult } from "../agent/mcp/config.js";
 import { McpManager } from "../agent/mcp/manager.js";
 import { MemoryManager } from "../agent/memory/memory-manager.js";
-import { SessionStore } from "../agent/session/session-store.js";
+import { SessionStore } from "../agent/persistence/session-store.js";
+import { createCompletePlanTool, createCreatePlanTool, createUpdatePlanTool } from "../agent/plan/create-plan-tool.js";
+import { createListSkillsTool } from "../agent/skills/list-skills-tool.js";
+import { createLoadSkillTool } from "../agent/skills/load-skill-tool.js";
 import { SkillRegistry } from "../agent/skills/skill-registry.js";
+import { createTaskTool } from "../agent/subagent/task-tool.js";
 import { TodoManager } from "../agent/todo-manager";
+import { createTodoTool } from "../agent/todo-manager/todo-tool.js";
 import { createTools, createWebfetchTool, createWebsearchTool } from "../agent/tools";
 import { createAskUserTool } from "../agent/tools/ask-user-tool.js";
-import { createCreatePlanTool, createUpdatePlanTool, createCompletePlanTool } from "../agent/tools/create-plan-tool.js";
-import { createListSkillsTool } from "../agent/tools/list-skills-tool.js";
-import { createLoadSkillTool } from "../agent/tools/load-skill-tool.js";
-import { type ToolsRecord } from "../agent/tools/tanstack/tools-record.js";
-import { createTaskTool } from "../agent/tools/task-tool.js";
-import { createTodoTool } from "../agent/tools/todo-tool.js";
+import { type ToolsRecord } from "../agent/tools/runtime/tools-record.js";
 import { getEnv } from "../env.js";
 
 import { ManagedAgent, type ManagedAgentConfig } from "./managed-agent.js";
 import { resolveTextAdapterForManaged } from "./run-agent.js";
 
-import type { AgentEvent } from "./agent-event-bus.js";
 import type { AgentManager } from "./agent-manager.js";
+import type { AgentEvent } from "./agent-telemetry-bus.js";
 import type { SessionBootstrapContext } from "./session-bootstrap-events.js";
 
 export interface BuildManagedAgentResult {

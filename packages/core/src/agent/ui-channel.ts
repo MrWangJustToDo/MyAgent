@@ -6,6 +6,9 @@ import { StreamProcessor } from "@tanstack/ai";
 
 import { Emitter } from "../utils/emitter.js";
 
+import { applyToolDenialReason } from "./run-helpers/apply-tool-denial-reason.js";
+import { stripEmptyAssistantShells } from "./run-helpers/empty-assistant-shell.js";
+import { shouldSuppressReplayedToolChunk } from "./run-helpers/suppress-replayed-tool-chunks.js";
 import {
   resolveTaskRunPhase,
   type TaskRunPhase,
@@ -14,9 +17,6 @@ import {
 import { throwOnRunError } from "./stream/stream-errors.js";
 import { BEGIN_SUMMARY_TOOL_NAME } from "./subagent/begin-summary-tool.js";
 import { summaryStreamKey, type SummaryStreamHub } from "./summary-stream";
-import { applyToolDenialReason } from "./utils/apply-tool-denial-reason.js";
-import { stripEmptyAssistantShells } from "./utils/empty-assistant-shell.js";
-import { shouldSuppressReplayedToolChunk } from "./utils/suppress-replayed-tool-chunks.js";
 
 import type { StreamChunk, StreamProcessorEvents, UIMessage as TanStackUIMessage, ContentPart } from "@tanstack/ai";
 

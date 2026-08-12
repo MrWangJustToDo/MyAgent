@@ -1,6 +1,5 @@
-import { agentManager } from "@my-agent/core";
-
 import { bumpAgentUsage } from "../hooks/use-agent-usage.js";
+import { useAgent } from "../hooks/use-agent.js";
 import { useDynamic } from "../hooks/use-dynamic.js";
 
 import { registerCommand } from "./utils/registry.js";
@@ -12,15 +11,17 @@ registerCommand({
   immediate: false,
   allowCustomInput: true,
   getOptions: async () => {
-    const { useAgent } = await import("../hooks/use-agent.js");
-    const agent = useAgent.getReadonlyState().agent;
-    if (!agent) return [];
+    const session = useAgent.getReadonlyState().session;
+    if (!session) return [];
 
-    const store = agent.getSessionStore();
-    if (!store) return [];
+    const listed = await session.dispatch({ type: "session.list" });
+    if (!listed.ok) return [];
+    const sessions =
+      (listed.data as { sessions?: Array<{ id: string; name: string; model: string; updatedAt: number }> } | undefined)
+        ?.sessions ?? [];
 
-    const sessions = await store.list();
     return sessions
+      .slice()
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, 20)
       .map((s) => ({
@@ -30,14 +31,9 @@ registerCommand({
       }));
   },
   execute: async (args, ctx) => {
-    const agent = ctx.getAgent();
-    if (!agent) {
+    const session = ctx.getSession();
+    if (!session) {
       return { ok: false, error: "Agent not initialized" };
-    }
-
-    const store = agent.getSessionStore();
-    if (!store) {
-      return { ok: false, error: "Session store not available" };
     }
 
     const query = args.trim();
@@ -45,37 +41,39 @@ registerCommand({
       return { ok: false, error: "Usage: /resume <session-id or name>" };
     }
 
-    try {
-      let sessionId = query;
+    const listed = await session.dispatch({ type: "session.list" });
+    if (!listed.ok) return { ok: false, error: listed.error };
+    const sessions =
+      (listed.data as { sessions?: Array<{ id: string; name: string; model: string }> } | undefined)?.sessions ?? [];
 
-      // Try loading by ID first, then fall back to name search
-      const directLoad = await store.load(query);
-      if (!directLoad) {
-        const matches = await store.findByName(query);
-        if (matches.length === 0) {
-          return { ok: false, error: `No session found matching "${query}"` };
-        }
-        sessionId = matches[0].id;
+    let sessionId = query;
+    const byId = sessions.find((s) => s.id === query);
+    if (!byId) {
+      const byName = sessions.find((s) => s.name === query || s.name.includes(query));
+      if (!byName) {
+        return { ok: false, error: `No session found matching "${query}"` };
       }
-
-      const result = await agentManager.resumeSession(agent.id, sessionId);
-
-      if (ctx.setMessages && result.uiMessages) {
-        ctx.setMessages(result.uiMessages);
-        agent.syncInteractionStateFromUIMessages(result.uiMessages);
-        bumpAgentUsage();
-        setTimeout(() => {
-          useDynamic.getActions().setDynamicKey(Date.now());
-        }, 200);
-      }
-
-      return {
-        ok: true,
-        message: `Resumed session: ${result.session.name} (${result.session.model})`,
-      };
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      return { ok: false, error: `Resume failed: ${err.message}` };
+      sessionId = byName.id;
     }
+
+    const result = await session.dispatch({ type: "session.resume", sessionId });
+    if (!result.ok) return { ok: false, error: result.error };
+
+    const data = result.data as
+      | { sessionId?: string; name?: string; model?: string; uiMessages?: unknown[] }
+      | undefined;
+
+    if (ctx.setMessages && Array.isArray(data?.uiMessages)) {
+      ctx.setMessages(data.uiMessages as Parameters<NonNullable<typeof ctx.setMessages>>[0]);
+      bumpAgentUsage();
+      setTimeout(() => {
+        useDynamic.getActions().setDynamicKey(Date.now());
+      }, 200);
+    }
+
+    return {
+      ok: true,
+      message: `Resumed session: ${data?.name ?? sessionId} (${data?.model ?? "unknown"})`,
+    };
   },
 });

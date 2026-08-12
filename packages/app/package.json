@@ -19,7 +19,10 @@
     "dev": "tsdown --watch",
     "test": "pnpm run build && node --test test/*.test.mjs",
     "typecheck": "tsc --noEmit",
-    "validate:theme-palettes": "node ./scripts/validate-theme-palettes.mjs"
+    "validate:theme-palettes": "node ./scripts/validate-theme-palettes.mjs",
+    "validate:core-imports": "node ./scripts/validate-core-imports.mjs",
+    "validate:presentation-helpers": "node ./scripts/validate-presentation-helpers.mjs",
+    "validate:session-only-smoke": "pnpm run build && pnpm --filter @my-agent/core build && pnpm --filter @my-agent/node build && node ./scripts/validate-session-only-smoke.mjs"
   },
   "dependencies": {
     "@git-diff-view/cli": "^0.1.10",

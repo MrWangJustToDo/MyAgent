@@ -4,11 +4,11 @@ import { useState } from "react";
 import { COLORS } from "../theme/colors.js";
 import { listNavHint } from "../utils/keyboard-labels.js";
 
-import type { SessionMeta } from "@my-agent/core";
+import type { SessionListItem } from "../utils/session-list-item.js";
 
 interface SessionPickerProps {
-  sessions: SessionMeta[];
-  onSelect: (session: SessionMeta) => void;
+  sessions: SessionListItem[];
+  onSelect: (session: SessionListItem) => void;
   onCancel: () => void;
 }
 
@@ -21,7 +21,7 @@ export const SessionPicker = ({ sessions, onSelect, onCancel }: SessionPickerPro
     } else if (key.downArrow) {
       setSelectedIndex((i) => Math.min(sessions.length - 1, i + 1));
     } else if (key.return) {
-      onSelect(sessions[selectedIndex]);
+      onSelect(sessions[selectedIndex]!);
     } else if (key.escape || input === "q") {
       onCancel();
     }

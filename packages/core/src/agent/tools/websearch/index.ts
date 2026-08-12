@@ -9,6 +9,7 @@ import { getProviderManager, resetProviderManager } from "./provider.js";
 import { braveProvider } from "./providers/brave.js";
 import { duckduckgoProvider } from "./providers/duckduckgo.js";
 
+import type { WebsearchToolConfig } from "../tool-config.js";
 import type { SearchProvider, SearchResult, SearchOptions, SearchOutcome, ProviderInfo } from "./types.js";
 
 export type { SearchProvider, SearchResult, SearchOptions, SearchOutcome, ProviderInfo };
@@ -29,16 +30,19 @@ let initialized = false;
  * Initialize the provider manager with all available providers.
  *
  * Registration order determines preference (first available wins):
- * 1. Brave (API-based, when BRAVE_API_KEY is set)
+ * 1. Brave (API-based, when braveApiKey is configured)
  * 2. DuckDuckGo (free, always available fallback)
+ *
+ * Pass {@link WebsearchToolConfig} so secrets come from the host, not CoreEnv.
  */
-export function initializeProviders(): void {
-  if (initialized) return;
-  initialized = true;
-
-  const pm = getProviderManager();
-  pm.register(braveProvider);
-  pm.register(duckduckgoProvider);
+export function initializeProviders(config?: WebsearchToolConfig): void {
+  if (!initialized) {
+    initialized = true;
+    const pm = getProviderManager();
+    pm.register(braveProvider);
+    pm.register(duckduckgoProvider);
+  }
+  getProviderManager().configure(config);
 }
 
 /**

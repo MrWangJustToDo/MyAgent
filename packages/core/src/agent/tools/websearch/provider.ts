@@ -2,10 +2,7 @@
  * ProviderManager — Manages search providers, auto-detection, and fallback.
  */
 
-import { getEnv } from "../../../env.js";
-
-import { ENV_WEBSEARCH_PROVIDER } from "./types.js";
-
+import type { WebsearchToolConfig } from "../tool-config.js";
 import type { SearchOutcome, SearchProvider, SearchOptions, ProviderInfo } from "./types.js";
 
 // ============================================================================
@@ -14,6 +11,23 @@ import type { SearchOutcome, SearchProvider, SearchOptions, ProviderInfo } from 
 
 export class ProviderManager {
   private providers: SearchProvider[] = [];
+  private preferredProvider?: string;
+  private braveApiKey?: string;
+
+  /**
+   * Apply host-supplied websearch config (secrets + preferred provider).
+   * Call before select/search so availability matches the active agent.
+   */
+  configure(config?: WebsearchToolConfig): void {
+    this.braveApiKey = config?.braveApiKey?.trim() || undefined;
+    const preferred = config?.provider?.trim();
+    this.preferredProvider = preferred && preferred !== "" ? preferred : undefined;
+  }
+
+  /** Brave API key from the last {@link configure} call (not CoreEnv). */
+  getBraveApiKey(): string | undefined {
+    return this.braveApiKey;
+  }
 
   /**
    * Register a provider. Earlier registrations are preferred in auto mode
@@ -26,18 +40,18 @@ export class ProviderManager {
   }
 
   /**
-   * Get the best available provider based on environment config.
+   * Get the best available provider based on configured preference.
    *
    * Selection logic:
-   * 1. If `WEBSEARCH_PROVIDER` is a specific name and that provider is available, use it
+   * 1. If preferred provider is a specific name and that provider is available, use it
    * 2. Otherwise auto-select: first available provider in registration order
    * 3. If none report available, use the last registered provider (DuckDuckGo)
    */
   async selectProvider(): Promise<SearchProvider> {
-    const envVar = await this.getEnvVar(ENV_WEBSEARCH_PROVIDER);
+    const preferred = this.preferredProvider;
 
-    if (envVar && envVar !== "auto") {
-      const explicit = this.providers.find((p) => p.name === envVar);
+    if (preferred && preferred !== "auto") {
+      const explicit = this.providers.find((p) => p.name === preferred);
       if (explicit && (await this.isProviderAvailable(explicit))) {
         return explicit;
       }
@@ -105,12 +119,6 @@ export class ProviderManager {
 
   private async isProviderAvailable(provider: SearchProvider): Promise<boolean> {
     return Boolean(await provider.isAvailable());
-  }
-
-  private async getEnvVar(key: string): Promise<string | undefined> {
-    const env = await getEnv().getEnv();
-    const value = env[key];
-    return value === "" ? undefined : value;
   }
 }
 

@@ -1,17 +1,26 @@
 /**
- * Reactive compaction helpers for {@link ManagedAgent}.
+ * Compaction helpers for {@link ManagedAgent} (reactive + manual `/compact`).
  */
 
-import { applyReactiveCompactionResult } from "../agent/compaction/apply-compaction-result.js";
-import { isPromptTooLongError, reactiveCompact } from "../agent/compaction/reactive-compact.js";
+import { convertMessagesToModelMessages } from "@tanstack/ai";
 
-import type { AgentEventType } from "./agent-event-bus.js";
+import { applyCompactionResult, applyReactiveCompactionResult } from "../agent/compaction/apply-compaction-result.js";
+import { autoCompact } from "../agent/compaction/auto-compact.js";
+import { getModelVisibleMessages } from "../agent/compaction/message-chain-projection.js";
+import { isPromptTooLongError, reactiveCompact } from "../agent/compaction/reactive-compact.js";
+import { estimateTokens } from "../agent/compaction/token-estimator.js";
+
 import type { AgentManager } from "./agent-manager.js";
 import type { AgentStatusController } from "./agent-status-controller.js";
+import type { EmitAgentTelemetryFn } from "./emit-agent-telemetry.js";
 import type { RunCoordinator } from "./run-coordinator.js";
 import type { UsageTracker } from "./usage-tracker.js";
+import type { AgentLog } from "../agent/agent-log/agent-log.js";
+import type { CompactionConfig } from "../agent/compaction/types.js";
+import type { TodoManager } from "../agent/todo-manager";
 import type { AgentUIChannel } from "../agent/ui-channel.js";
-import type { ModelMessage } from "@tanstack/ai";
+import type { AgentStatus } from "../runtime-types/agent-status.js";
+import type { ModelMessage, UIMessage as TanStackUIMessage } from "@tanstack/ai";
 
 export interface ReactiveCompactHost {
   id: string;
@@ -23,7 +32,7 @@ export interface ReactiveCompactHost {
   getCanonicalFromUI: () => ModelMessage[];
   getMessagesForLLM: (canon?: ModelMessage[]) => ModelMessage[];
   setRunBaselineCount: (count: number) => void;
-  emitEvent: (type: AgentEventType, data?: Record<string, unknown>) => void;
+  emitEvent: EmitAgentTelemetryFn;
   resetAdmittedTurnContext?: () => void;
   compactionConfig?: { keepRecentFlows?: number } | null;
 }
@@ -54,6 +63,9 @@ export async function handleManagedReactiveCompact(
     const llmMessages = host.getMessagesForLLM(canon);
     const compactedMessages = await reactiveCompact(llmMessages, host.id, manager);
 
+    // Capture window fill before apply (usage is reset by applyReactiveCompactionResult).
+    const tokensBefore = host.usage.getWindowUsage().inputTokens ?? 0;
+
     applyReactiveCompactionResult(canon, channel, host.usage, compactedMessages, {
       keepRecentFlows: host.compactionConfig?.keepRecentFlows ?? 2,
       onCacheCleanupError: (err) => {
@@ -71,7 +83,8 @@ export async function handleManagedReactiveCompact(
     host.emitEvent("compaction:reactive-complete", {
       originalCount: llmMessages.length,
       compactedCount: compactedMessages.length,
-      originalTokens: host.usage.getWindowUsage().inputTokens,
+      tokensBefore,
+      tokensAfter: host.usage.getWindowUsage().inputTokens ?? 0,
     });
 
     host.statusController.endCompaction();
@@ -80,5 +93,119 @@ export async function handleManagedReactiveCompact(
     const compactError = err instanceof Error ? err : new Error(String(err));
     host.emitEvent("compaction:reactive-error", { error: compactError.message });
     return false;
+  }
+}
+
+// ============================================================================
+// Manual compact (`/compact` / AgentSession `compact`)
+// ============================================================================
+
+export interface ManualCompactHost {
+  id: string;
+  status: AgentStatus;
+  setStatus: (status: AgentStatus) => void;
+  ui?: AgentUIChannel;
+  usage: UsageTracker;
+  todoManager: TodoManager | null;
+  statusController: AgentStatusController;
+  compactionConfig: CompactionConfig | null;
+  resetAdmittedTurnContext: () => void;
+  resetSystemPrompt: () => void;
+  persistSession: () => void;
+  maybeSaveSessionUIMessages: (messages: TanStackUIMessage[], reason: "force") => void;
+  getLog?: () => AgentLog | null;
+}
+
+export type ManualCompactResult =
+  | { ok: true; message: string; tokensBefore?: number; tokensAfter?: number }
+  | { ok: false; error: string };
+
+/**
+ * Run the same autoCompact path as the app `/compact` command.
+ */
+export async function runManualCompact(
+  host: ManualCompactHost,
+  manager: AgentManager,
+  options?: { focus?: string; messages?: TanStackUIMessage[] }
+): Promise<ManualCompactResult> {
+  const channel = host.ui;
+  if (!channel) {
+    return { ok: false, error: "Agent UI channel not available" };
+  }
+
+  if (options?.messages?.length) {
+    channel.setMessages(options.messages);
+  }
+
+  const allModelMessages = convertMessagesToModelMessages(channel.getMessages());
+  const keepRecentFlows = host.compactionConfig?.keepRecentFlows ?? 2;
+  const messages = getModelVisibleMessages(allModelMessages, { keepRecentFlows });
+  if (messages.length === 0) {
+    return { ok: false, error: "No messages to compact" };
+  }
+
+  const incompleteTodos = host.todoManager?.getIncompleteTodos() ?? [];
+  const todos = incompleteTodos.map((t) => ({
+    content: t.content,
+    status: t.status as "pending" | "in_progress" | "completed",
+    priority: t.priority as "high" | "medium" | "low",
+  }));
+
+  const previousStatus = host.status;
+  const tokensBeforeEstimate = estimateTokens(messages);
+  const actualTokens = host.usage.getWindowUsage().inputTokens ?? 0;
+
+  host.statusController.beginCompaction();
+
+  try {
+    const result = await autoCompact(messages, host.compactionConfig || {}, host.id, manager, {
+      focus: options?.focus,
+      todos: todos.length > 0 ? todos : undefined,
+      actualTokens: actualTokens || undefined,
+    });
+
+    const applied = applyCompactionResult(allModelMessages, channel, host.usage, result, {
+      keepRecentFlows,
+      onCacheCleanupError: (err) => {
+        host.getLog?.()?.warn("agent", "Failed to cleanup tool cache after compact", { error: err.message });
+      },
+    });
+
+    if (!applied) {
+      if (result.error) {
+        return { ok: false, error: result.error };
+      }
+      return {
+        ok: true,
+        message:
+          "Nothing to compact — not enough older conversation to summarize (increase keepRecentFlows or add more history).",
+      };
+    }
+
+    host.resetAdmittedTurnContext();
+    host.resetSystemPrompt();
+    host.persistSession();
+    host.maybeSaveSessionUIMessages(channel.getMessages(), "force");
+
+    const tokensBefore = result.tokensBefore ?? tokensBeforeEstimate;
+    const tokensAfter = result.tokensAfter;
+    const compressionRatio = tokensBefore > 0 ? Math.round((1 - tokensAfter / tokensBefore) * 100) : 0;
+    const todoNote = incompleteTodos.length > 0 ? ` (${incompleteTodos.length} todos preserved)` : "";
+
+    return {
+      ok: true,
+      message: `Compacted: ${tokensBefore} → ${tokensAfter} tokens (${compressionRatio}% reduction)${todoNote}`,
+      tokensBefore,
+      tokensAfter,
+    };
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    return { ok: false, error: `Compaction failed: ${err.message}` };
+  } finally {
+    if (previousStatus === "compacting") {
+      host.statusController.endCompaction();
+    } else {
+      host.setStatus(previousStatus);
+    }
   }
 }

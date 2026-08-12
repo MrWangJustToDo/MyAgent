@@ -9,11 +9,11 @@ import { getFirstUserInput } from "../agent/compaction/message-utils.js";
 import { dehydrateUIMessages, hydrateUIMessages } from "../agent/media/media-utils.js";
 import { runSideTextQuery } from "../models/side-text-query.js";
 
-import type { EmitAgentEventFn } from "./emit-agent-event.js";
+import type { EmitAgentTelemetryFn } from "./emit-agent-telemetry.js";
 import type { UsageTracker } from "./usage-tracker.js";
+import type { SessionStore } from "../agent/persistence/session-store.js";
+import type { SessionData } from "../agent/persistence/types.js";
 import type { PlanModeState } from "../agent/plan/plan-mode-controller.js";
-import type { SessionStore } from "../agent/session/session-store.js";
-import type { SessionData } from "../agent/session/types.js";
 import type { TodoManager } from "../agent/todo-manager";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
 import type { UIMessage } from "@tanstack/ai";
@@ -26,7 +26,7 @@ export interface SessionPersistInput {
   /** Auto-approve (skip all tool approvals) flag. */
   autoMode?: boolean;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
-  emitEvent?: EmitAgentEventFn;
+  emitEvent?: EmitAgentTelemetryFn;
   uiMessages?: UIMessage[];
 }
 

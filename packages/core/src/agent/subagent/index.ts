@@ -12,6 +12,8 @@ export { buildExploreSystemPrompt, SUBAGENT_EXPLORE_SYSTEM_PROMPT } from "./prom
 
 export { BEGIN_SUMMARY_TOOL_NAME, createBeginSummaryTool } from "./begin-summary-tool.js";
 
+export { createTaskTool, taskOutputSchema, type TaskOutput, type TaskToolConfig } from "./task-tool.js";
+
 // Tool creation
 export { createSubagentTools } from "./tools.js";
 

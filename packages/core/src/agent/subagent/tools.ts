@@ -6,7 +6,7 @@ import { createGlobTool } from "../tools/glob-tool.js";
 import { createGrepTool } from "../tools/grep-tool.js";
 import { createListFileTool } from "../tools/list-file-tool.js";
 import { createReadFileTool } from "../tools/read-file-tool.js";
-import { type ToolsRecord } from "../tools/tanstack/tools-record.js";
+import { type ToolsRecord } from "../tools/runtime/tools-record.js";
 import { createTreeTool } from "../tools/tree-tool.js";
 import { createWebfetchTool } from "../tools/webfetch-tool.js";
 import { createWebsearchTool } from "../tools/websearch-tool.js";
@@ -19,9 +19,9 @@ import type { ManagedAgent } from "../../runtime-types/hosts.js";
  * Creates the restricted read-only tool set for exploration subagents.
  * Includes local fs exploration plus websearch/webfetch for external docs.
  */
-export const createSubagentTools = (managed: ManagedAgent): ToolsRecord => {
+export const createSubagentTools = (managed?: ManagedAgent): ToolsRecord => {
   return {
-    read_file: createReadFileTool({ usage: managed.usage }),
+    read_file: createReadFileTool({ usage: managed?.usage }),
     glob: createGlobTool(),
     grep: createGrepTool(),
     list_file: createListFileTool(),

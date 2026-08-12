@@ -5,17 +5,17 @@
 import { convertMessagesToModelMessages, type UIMessage as TanStackUIMessage, type ModelMessage } from "@tanstack/ai";
 
 import { getLatestUserMessage } from "../agent/compaction/message-utils.js";
-import { isToolContinuationPrepare } from "../agent/utils/tool-phase-utils.js";
+import { isToolContinuationPrepare } from "../agent/run-helpers/tool-phase-utils.js";
 
 import type { AgentManager } from "./agent-manager.js";
 import type { AgentStatus, RunFinalizeReason } from "./agent-types.js";
+import type { EmitAgentTelemetryFn } from "./emit-agent-telemetry.js";
 import type { MemoryService } from "./memory-service.js";
 import type { RunCoordinator } from "./run-coordinator.js";
 import type { UsageTracker } from "./usage-tracker.js";
 import type { AgentLog } from "../agent/agent-log";
 import type { AgentUIChannel } from "../agent/ui-channel.js";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
-import type { AgentEventType } from "../runtime-types/agent-events.js";
 
 /**
  * Narrow interface capturing only the methods/fields lifecycle helpers need.
@@ -40,11 +40,7 @@ export interface RunLifecycleHost {
   collectExtensionPromptHooks: (prompt: string) => Promise<void>;
   captureTurnContextSnapshot: () => Promise<void>;
   admitTurnContextIfNeeded: () => boolean;
-  emitEvent: (
-    type: AgentEventType,
-    data?: Record<string, unknown>,
-    options?: { parentId?: string; agentId?: string }
-  ) => void;
+  emitEvent: EmitAgentTelemetryFn;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   log: AgentLog | null;
   usage: UsageTracker;

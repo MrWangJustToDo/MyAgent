@@ -1,5 +1,5 @@
 import { applyToolCompact } from "../../agent/compaction/tool-compact/apply-tool-compact.js";
-import { toModelOutputRegistry } from "../../agent/tools/tanstack/to-model-output-registry.js";
+import { toModelOutputRegistry } from "../../agent/tools/runtime/to-model-output-registry.js";
 
 import type { AgentLog } from "../../agent/agent-log";
 import type { ToolCompactCache } from "../../agent/compaction/tool-compact/tool-compact-cache.js";

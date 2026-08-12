@@ -4,13 +4,13 @@
 
 import { readPlanFileAtRelativePath } from "../agent/plan/plan-store.js";
 
-import type { AgentEventType } from "./agent-event-bus.js";
+import type { EmitAgentTelemetryFn } from "./emit-agent-telemetry.js";
 import type { SessionPersistInput, SessionService } from "./session-service.js";
 import type { UsageTracker } from "./usage-tracker.js";
 import type { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
+import type { SessionSyncTracker } from "../agent/persistence/session-sync-tracker.js";
+import type { SessionData } from "../agent/persistence/types.js";
 import type { PlanModeController } from "../agent/plan/plan-mode-controller.js";
-import type { SessionSyncTracker } from "../agent/session/session-sync-tracker.js";
-import type { SessionData } from "../agent/session/types.js";
 import type { TodoManager } from "../agent/todo-manager";
 import type { AgentUIChannel } from "../agent/ui-channel.js";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
@@ -27,7 +27,7 @@ export interface SessionHost {
   sessionSyncTracker: SessionSyncTracker;
   toolCompactCache: ToolCompactCache;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
-  emitEvent: (type: AgentEventType, data?: Record<string, unknown>) => void;
+  emitEvent: EmitAgentTelemetryFn;
   resetAdmittedTurnContext?: () => void;
 }
 

@@ -22,11 +22,7 @@ export {
   getCommand,
   registerExtensionCommand,
 } from "./utils/registry.js";
-export {
-  extensionCommandToSlashCommand,
-  splitExtensionCommandArgs,
-  syncExtensionCommands,
-} from "./utils/sync-extension-commands.js";
+export { splitExtensionCommandArgs, syncExtensionCommands } from "./utils/sync-extension-commands.js";
 export { COMMAND_FREEFORM_VALUE, typedArgsAfterCommand, withFreeformOption } from "./utils/command-options.js";
 
 export type { Command, CommandContext, CommandOption, CommandResult } from "./utils/types.js";

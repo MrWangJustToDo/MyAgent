@@ -6,13 +6,9 @@ import { syncExtensionCommands } from "../commands/utils/sync-extension-commands
 import { useAgent } from "../hooks/use-agent.js";
 import { useExtensionPanel } from "../hooks/use-extension-panel.js";
 import { COLORS } from "../theme/colors.js";
-import { KeyLabel, listNavHint, pressEscToReturnHint } from "../utils/keyboard-labels.js";
+import { listNavHint, pressEscToReturnHint } from "../utils/keyboard-labels.js";
 
-import type { ExtensionInfo, ManagedAgent } from "@my-agent/core";
-
-// ============================================================================
-// Extension list panel
-// ============================================================================
+import type { ExtensionInfo } from "@my-agent/core";
 
 const ExtensionPanelList = ({
   infos,
@@ -78,43 +74,22 @@ const ExtensionPanelList = ({
         const icon = info.enabled ? "✓" : "○";
         const iconColor = isSelected ? COLORS.primary : info.enabled ? COLORS.success : COLORS.muted;
         return (
-          <Box key={info.id} flexDirection="column">
-            <Box>
-              <Text color={isSelected ? COLORS.primary : iconColor} bold={isSelected}>
-                {isSelected ? "❯ " : "  "}
-                {icon} {info.id}
-              </Text>
-              <Text color={COLORS.muted} dimColor>
-                {" "}
-                v{info.version}
-              </Text>
-            </Box>
-            <Box marginLeft={4}>
-              <Text color={COLORS.muted} dimColor wrap="truncate">
-                {info.enabled ? "enabled" : "disabled"}
-                {info.error ? ` · error: ${info.error}` : ""}
-              </Text>
-            </Box>
-            {info.tools.length > 0 && (
-              <Box marginLeft={4}>
-                <Text color={COLORS.muted} dimColor wrap="truncate">
-                  tools: {info.tools.join(", ")}
-                </Text>
-              </Box>
-            )}
-            {info.commands.length > 0 && (
-              <Box marginLeft={4}>
-                <Text color={COLORS.muted} dimColor wrap="truncate">
-                  commands: /{info.commands.join(", /")}
-                </Text>
-              </Box>
-            )}
+          <Box key={info.id}>
+            <Text color={isSelected ? COLORS.primary : iconColor} bold={isSelected}>
+              {isSelected ? "❯ " : "  "}
+              {icon} {info.name}
+            </Text>
+            <Text color={COLORS.muted} dimColor>
+              {" "}
+              v{info.version}
+              {info.state === "error" && info.error ? ` · ${info.error}` : ""}
+            </Text>
           </Box>
         );
       })}
       <Box marginTop={1}>
         <Text color={COLORS.muted} dimColor>
-          {KeyLabel.enter}/{KeyLabel.space} toggle · {KeyLabel.esc} close
+          {pressEscToReturnHint()}
         </Text>
       </Box>
     </Box>
@@ -126,30 +101,24 @@ export const ExtensionPanel = () => {
   const view = useExtensionPanel((s) => s.view);
   const revision = useExtensionPanel((s) => s.revision);
   const { close, refresh } = useExtensionPanel.getActions();
-
-  const agent = toRaw(useAgent((s) => s.agent)) as ManagedAgent | null;
+  const session = toRaw(useAgent((s) => s.session));
   const [tick, setTick] = useState(0);
 
-  // Refresh when the panel opens or a toggle happens (revision bump) or when the
-  // agent changes — so enabled state and registered artifacts stay in sync.
   useEffect(() => {
     setTick((n) => n + 1);
-  }, [view, revision, agent]);
+  }, [view, revision, session]);
 
   const infos = useMemo(() => {
-    if (!agent?.extensionRunner) return [];
     void tick;
-    return agent.extensionRunner.getExtensionInfos();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agent, view, revision, tick]);
+    return session?.getSnapshot().extensions.extensions ?? [];
+  }, [session, view, revision, tick]);
 
   const handleToggle = async (id: string) => {
-    const runner = agent?.extensionRunner;
-    if (!runner) return;
-    const info = runner.getExtensionInfos().find((i) => i.id === id);
+    if (!session) return;
+    const info = session.getSnapshot().extensions.extensions.find((i) => i.id === id);
     if (!info) return;
-    await runner.setEnabled(id, !info.enabled);
-    if (agent) syncExtensionCommands(agent);
+    await session.dispatch({ type: "extension.toggle", id, enabled: !info.enabled });
+    syncExtensionCommands(session);
     refresh();
   };
 

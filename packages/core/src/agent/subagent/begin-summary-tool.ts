@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 
-import { defineServerTool } from "../tools/tanstack/define-tool.js";
+import { defineServerTool } from "../tools/runtime/define-tool.js";
 
 /** Tool name used to unlock task-tool summary streaming in the parent UI. */
 export const BEGIN_SUMMARY_TOOL_NAME = "begin_summary";

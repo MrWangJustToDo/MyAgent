@@ -92,8 +92,8 @@ export const useToolTimingStore = createState(
  */
 export function handleToolLifecycleEvent(payload: AgentEvent): void {
   if (payload.type === "agent:tool-start") {
-    const toolCallId = payload.data?.tool_call_id as string | undefined;
-    const toolName = payload.data?.tool_name as string | undefined;
+    const toolCallId = payload.payload.tool_call_id;
+    const toolName = payload.payload.tool_name;
     if (!toolCallId) return;
     if (typeof toolName === "string" && CLIENT_TOOL_NAMES.has(toolName)) return;
     useToolTimingStore.getActions().start(toolCallId);
@@ -101,15 +101,15 @@ export function handleToolLifecycleEvent(payload: AgentEvent): void {
   }
 
   if (payload.type === "agent:tool-end") {
-    const toolCallId = payload.data?.tool_call_id as string | undefined;
+    const toolCallId = payload.payload.tool_call_id;
     if (!toolCallId) return;
-    const durationMs = payload.data?.duration_ms as number | undefined;
+    const durationMs = payload.payload.duration_ms;
     useToolTimingStore.getActions().end(toolCallId, durationMs);
     return;
   }
 
   if (payload.type === "agent:tool-error") {
-    const toolCallId = payload.data?.tool_call_id as string | undefined;
+    const toolCallId = payload.payload.tool_call_id;
     if (!toolCallId) return;
     useToolTimingStore.getActions().end(toolCallId);
   }

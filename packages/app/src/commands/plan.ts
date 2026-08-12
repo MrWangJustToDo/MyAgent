@@ -1,3 +1,6 @@
+import { useAgent } from "../hooks/use-agent.js";
+import { useTodoManager } from "../hooks/use-todo-manager.js";
+
 import { registerCommand } from "./utils/registry.js";
 
 import type { CommandOption } from "./utils/types.js";
@@ -11,19 +14,10 @@ registerCommand({
   allowCustomInput: true,
   getOptions: async (): Promise<CommandOption[]> => {
     const base: CommandOption[] = [];
-
-    let mode: AgentMode = "normal";
-    try {
-      const { useAgent } = await import("../hooks/use-agent.js");
-      const agent = useAgent.getReadonlyState().agent;
-      if (agent) {
-        mode = agent.getAgentMode();
-      }
-    } catch {
-      // ignore
-    }
-
+    const session = useAgent.getReadonlyState().session;
+    const mode: AgentMode = session?.getSnapshot().mode ?? "normal";
     const isPlanMode = mode === "plan";
+
     base.push({
       label: "toggle",
       value: "",
@@ -39,12 +33,10 @@ registerCommand({
       { label: "save", value: "save", description: "Save/rename current plan (optional name)" }
     );
 
+    if (!session) return base;
     try {
-      const { useAgent } = await import("../hooks/use-agent.js");
-      const agent = useAgent.getReadonlyState().agent;
-      if (!agent) return base;
-
-      const files = await agent.listWorkspacePlans();
+      const listed = await session.dispatch({ type: "plan.list" });
+      const files = listed.ok ? ((listed.data as { files?: string[] } | undefined)?.files ?? []) : [];
       for (const file of files.slice(0, 15)) {
         const name = file.replace(/\.md$/i, "");
         base.push({
@@ -60,20 +52,19 @@ registerCommand({
     return base;
   },
   execute: async (args, ctx) => {
-    const agent = ctx.getAgent();
-    if (!agent) {
+    const session = ctx.getSession();
+    if (!session) {
       return { ok: false, error: "Agent not initialized" };
     }
 
     const trimmed = args.trim();
     const [subRaw = "", ...rest] = trimmed.split(/\s+/);
     const sub = subRaw.toLowerCase();
-    // Skip the sub-command token itself so autocomplete "load <name>" works.
     const nameArg = rest.slice(1).join(" ").trim();
 
     if (sub === "status") {
-      const state = agent.getPlanModeState();
-      const stats = agent.todoManager?.getStats();
+      const state = session.getSnapshot().plan;
+      const stats = useTodoManager.getReadonlyState().stats;
       const displayPhase =
         state.phase === "ready"
           ? "review"
@@ -83,7 +74,7 @@ registerCommand({
               ? "planning"
               : state.phase;
       const progress =
-        state.phase === "executing" && stats
+        state.phase === "executing" && stats.total > 0
           ? ` (${stats.completed}/${stats.total} todos)`
           : state.steps.length > 0
             ? ` (${state.steps.length} steps)`
@@ -110,58 +101,51 @@ registerCommand({
     }
 
     if (sub === "done" || sub === "complete") {
-      // User force-exit — does not require agent complete_plan verificationResults gate.
-      const result = agent.completePlan();
-      if (!result.ok) return { ok: false, error: result.error ?? "Cannot complete plan" };
+      const result = await session.dispatch({ type: "plan.complete" });
+      if (!result.ok) return { ok: false, error: result.error };
       return { ok: true, message: "Plan complete — plan mode off" };
     }
 
     if (sub === "cancel") {
-      if (!agent.cancelPlanExecution()) {
-        return { ok: false, error: "Not building a plan — nothing to cancel" };
-      }
+      const result = await session.dispatch({ type: "plan.cancel" });
+      if (!result.ok) return { ok: false, error: result.error || "Not building a plan — nothing to cancel" };
       return { ok: true, message: "Building paused — back to review (read-only). Run /plan execute to Build." };
     }
 
     if (sub === "execute" || sub === "run" || sub === "build") {
-      const result = agent.beginPlanExecution();
-      if (!result.ok) {
-        return { ok: false, error: result.error ?? "Cannot execute plan" };
-      }
+      const result = await session.dispatch({ type: "plan.execute" });
+      if (!result.ok) return { ok: false, error: result.error ?? "Cannot execute plan" };
+      const data = result.data as { queued?: boolean; replacedExistingTodos?: boolean } | undefined;
       const parts = ["Building approved plan…"];
-      if (result.queued) {
-        parts.push("(queued — starts after the current run finishes)");
-      }
-      if (result.replacedExistingTodos) {
-        parts.push("(replaced existing todos with plan steps)");
-      }
+      if (data?.queued) parts.push("(queued — starts after the current run finishes)");
+      if (data?.replacedExistingTodos) parts.push("(replaced existing todos with plan steps)");
       return { ok: true, message: parts.join(" ") };
     }
 
     if (sub === "save") {
       const saveName = rest.slice(1).join(" ").trim() || undefined;
-      const result = await agent.savePlanToWorkspace(saveName);
+      const result = await session.dispatch({ type: "plan.save", nameHint: saveName });
       if (!result.ok) return { ok: false, error: result.error ?? "Save failed" };
-      return { ok: true, message: `Plan saved to ${result.path}` };
+      const path = (result.data as { path?: string } | undefined)?.path;
+      return { ok: true, message: `Plan saved to ${path ?? "workspace"}` };
     }
 
     if (sub === "load") {
-      if (!nameArg) {
-        return { ok: false, error: "Usage: /plan load <name>" };
-      }
-      const result = await agent.loadPlanFromWorkspace(nameArg);
+      if (!nameArg) return { ok: false, error: "Usage: /plan load <name>" };
+      const result = await session.dispatch({ type: "plan.load", name: nameArg });
       if (!result.ok) return { ok: false, error: result.error ?? "Load failed" };
+      const data = result.data as { path?: string; stepCount?: number } | undefined;
       return {
         ok: true,
-        message: `Loaded ${result.path} (${result.stepCount ?? 0} steps) — review. Run /plan execute to Build.`,
+        message: `Loaded ${data?.path ?? nameArg} (${data?.stepCount ?? 0} steps) — review. Run /plan execute to Build.`,
       };
     }
 
     if (sub === "list") {
-      const files = await agent.listWorkspacePlans();
-      if (files.length === 0) {
-        return { ok: true, message: "No saved plans in .agents/plans/" };
-      }
+      const result = await session.dispatch({ type: "plan.list" });
+      if (!result.ok) return { ok: false, error: result.error };
+      const files = (result.data as { files?: string[] } | undefined)?.files ?? [];
+      if (files.length === 0) return { ok: true, message: "No saved plans in .agents/plans/" };
       return { ok: true, message: `Saved plans:\n${files.map((f) => `- ${f}`).join("\n")}` };
     }
 
@@ -174,18 +158,20 @@ registerCommand({
     }
 
     if (sub === "on") {
-      agent.enablePlanMode();
+      await session.dispatch({ type: "plan.enable" });
       return {
         ok: true,
         message: "Plan mode on — explore read-only (prefer task), then create_plan when ready",
       };
     }
     if (sub === "off") {
-      agent.disablePlanMode();
+      await session.dispatch({ type: "plan.disable" });
       return { ok: true, message: "Plan mode off (plan todos cleared if any)" };
     }
 
-    const phase = agent.togglePlanMode();
+    const result = await session.dispatch({ type: "plan.toggle" });
+    if (!result.ok) return { ok: false, error: result.error };
+    const phase = (result.data as { phase?: string } | undefined)?.phase;
     if (phase === "planning") {
       return {
         ok: true,

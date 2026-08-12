@@ -1,4 +1,3 @@
-import { agentManager, sessionForSubagent, type ManagedAgent } from "@my-agent/core";
 import { Box, Text, useInput } from "ink";
 import { useEffect, useMemo, useState } from "react";
 import { toRaw } from "reactivity-store";
@@ -9,10 +8,9 @@ import { SubagentPreviewView } from "../messages/SubagentPreviewView.js";
 import { COLORS } from "../theme/colors.js";
 import { formatUsageBrief } from "../utils/format-usage.js";
 import { KeyLabel, listNavHint, pressEscToReturnHint } from "../utils/keyboard-labels.js";
+import { resolveAgentSession } from "../utils/session-resolve.js";
 
-// ============================================================================
-// Status display helpers
-// ============================================================================
+import type { AgentSessionSubagentSummary } from "@my-agent/core";
 
 const STATUS_ICON: Record<string, string> = {
   running: ">",
@@ -43,10 +41,9 @@ function isActiveStatus(status: string): boolean {
   return ["running", "thinking", "responding", "compacting", "waiting", "awaiting_user"].includes(status);
 }
 
-type ActiveSubagent = ReturnType<typeof agentManager.getActiveSubagents>[number];
-
-function getTaskLabel(managed: ActiveSubagent | ManagedAgent): string {
-  const name = managed.name ?? managed.id;
+function getTaskLabel(task: AgentSessionSubagentSummary): string {
+  if (task.description) return task.description;
+  const name = task.name ?? task.id;
   return name.startsWith("subagent-") ? name.slice("subagent-".length) : name;
 }
 
@@ -55,13 +52,13 @@ const SubagentPanelList = ({
   onSelect,
   onClose,
 }: {
-  tasks: ManagedAgent[];
+  tasks: AgentSessionSubagentSummary[];
   onSelect: (id: string) => void;
   onClose: () => void;
 }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  useInput((input, key) => {
+  useInput((_input, key) => {
     if (key.upArrow) {
       setSelectedIndex((i) => Math.max(0, i - 1));
       return;
@@ -131,29 +128,32 @@ const SubagentPanelList = ({
 };
 
 const SubagentPanelDetail = ({ subagentId, onBack }: { subagentId: string; onBack: () => void }) => {
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
+  const childSession = resolveAgentSession(subagentId);
 
   useInput((_input, key) => {
     if (key.escape) onBack();
   });
 
   useEffect(() => {
-    const session = sessionForSubagent(agentManager, subagentId);
-    if (!session) return;
-    const bump = () => setTick((n) => n + 1);
-    return session.subscribe(
+    if (!childSession) return;
+    return childSession.subscribe(
       () => {
-        bump();
+        setTick((n) => n + 1);
       },
       { channels: ["messages", "usage", "state", "lifecycle"] }
     );
-  }, [subagentId]);
+  }, [childSession, subagentId]);
 
-  const managed = agentManager.getAgent(subagentId);
-  const childSession = sessionForSubagent(agentManager, subagentId);
-  const title = managed ? getTaskLabel(managed) : subagentId;
-  const status = managed?.status ?? childSession?.getSnapshot().status ?? "idle";
-  const usage = childSession?.getSnapshot().usage.total ?? managed?.usage.getTotal();
+  void tick;
+  const snap = childSession?.getSnapshot();
+  const displayTitle = snap
+    ? snap.name.startsWith("subagent-")
+      ? snap.name.slice("subagent-".length)
+      : snap.name
+    : subagentId;
+  const status = snap?.status ?? "idle";
+  const usage = snap?.usage.total;
   const usageLabel = usage && (usage.inputTokens > 0 || usage.outputTokens > 0) ? formatUsageBrief(usage) : null;
   const statusIcon = getStatusIcon(status);
   const statusColor = getStatusColor(status);
@@ -166,7 +166,7 @@ const SubagentPanelDetail = ({ subagentId, onBack }: { subagentId: string; onBac
             {statusIcon}{" "}
           </Text>
           <Text bold color={COLORS.primary} wrap="truncate">
-            {title}
+            {displayTitle}
           </Text>
         </Box>
         <Box>
@@ -195,19 +195,12 @@ const SubagentPanelDetail = ({ subagentId, onBack }: { subagentId: string; onBac
 /** Full-screen overlay for inspecting active subagent tasks. */
 export const SubagentPanel = () => {
   const [ready, setReady] = useState(false);
-
   const view = useSubagentPanel((s) => s.view);
-
   const selectedSubagentId = useSubagentPanel((s) => s.selectedSubagentId);
-
   const { openDetail, close, backToList } = useSubagentPanel.getActions();
-
-  const rootAgentId = useAgent((s) => (s.agent as { id?: string } | null)?.id);
   const rootSession = toRaw(useAgent((s) => s.session));
-
   const [listRevision, setListRevision] = useState(0);
 
-  // Clear terminal so parent-agent static renderings don't leak into the panel overlay
   useEffect(() => {
     if (typeof process === "object") {
       import("ansi-escapes").then((pkg) => {
@@ -216,11 +209,9 @@ export const SubagentPanel = () => {
     }
 
     setReady(true);
-
     if (view === "closed") return;
-
-    const refresh = () => setListRevision((n) => n + 1);
     if (!rootSession) return;
+
     return rootSession.subscribe(
       (event) => {
         if (event.channel !== "lifecycle") return;
@@ -232,22 +223,19 @@ export const SubagentPanel = () => {
           type === "subagent:destroyed" ||
           type === "agent:stop"
         ) {
-          refresh();
+          setListRevision((n) => n + 1);
         }
       },
       { channels: ["lifecycle"] }
     );
-  }, [view, rootAgentId, rootSession]);
+  }, [view, rootSession]);
 
   const allTasks = useMemo(() => {
-    if (!rootAgentId) return [];
-    return agentManager.getAllSubagents(rootAgentId);
-    // listRevision forces refresh when subagent lifecycle events fire
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rootAgentId, view, listRevision]);
+    void listRevision;
+    return rootSession?.getSnapshot().subagents ?? [];
+  }, [rootSession, view, listRevision]);
 
   if (view === "closed") return null;
-
   if (!ready) return null;
 
   if (view === "detail" && selectedSubagentId) {

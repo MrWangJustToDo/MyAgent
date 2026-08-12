@@ -23,7 +23,7 @@ import { formatStatusBarModeLabel } from "../utils/agent-mode-label.js";
 import { formatDuration } from "../utils/format.js";
 import { approvalKeysHint, busyQueueHint, freeformSubmitHint, selectListHint } from "../utils/keyboard-labels.js";
 
-import type { AgentStatus, ManagedAgent, QueuedMessagesSnapshot } from "@my-agent/core";
+import type { AgentStatus, QueuedMessagesSnapshot } from "@my-agent/core";
 
 export const Footer = ({
   status,
@@ -169,8 +169,7 @@ const ContextBar = ({
   steerCount: number;
   followUpCount: number;
 }) => {
-  // Prefer session `state` channel; duration still lives on ManagedAgent.
-  const agent = useAgent((s) => s.agent) as ManagedAgent | null;
+  // Prefer session snapshot for duration / error (no ManagedAgent).
   const session = toRaw(useAgent((s) => s.session));
   const [agentTick, setAgentTick] = useState(0);
   useEffect(() => {
@@ -182,8 +181,9 @@ const ContextBar = ({
       { channels: ["state"] }
     );
   }, [session]);
-  const lastRunDurationMs = agentTick >= 0 ? agent?.getLastStreamDurationMs() || 0 : 0;
-  const _error = agent?.getError() || "";
+  const snap = agentTick >= 0 ? session?.getSnapshot() : undefined;
+  const lastRunDurationMs = snap?.lastStreamDurationMs || 0;
+  const _error = snap?.error || "";
 
   const inputError = useUserInput((s) => s.inputError);
   const inputFeedback = useUserInput((s) => s.inputFeedback);
@@ -289,7 +289,6 @@ const StatusBar = () => {
   const model = useConfig((s) => s.config.model);
   const providerMode = useConfig((s) => s.config.providerMode);
   const { version } = useAgentUsage();
-  const agent = useAgent((s) => s.agent) as ManagedAgent | null;
   const session = toRaw(useAgent((s) => s.session));
   const [tick, setTick] = useState(0);
 
@@ -306,7 +305,7 @@ const StatusBar = () => {
   // tick forces re-read when plan phase / auto mode / todos change
   void tick;
 
-  const modeLabel = formatStatusBarModeLabel(agent);
+  const modeLabel = formatStatusBarModeLabel(session?.getSnapshot());
   const isDefault = modeLabel === "Normal";
   const modeColor = isDefault ? COLORS.muted : COLORS.accent;
 

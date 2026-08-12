@@ -49,26 +49,26 @@ async function getSession(id: string): Promise<SessionLike | undefined> {
 export const agentSessionRoutes = new Hono()
   .post("/", async (c) => {
     const body = createBodySchema.parse(await c.req.json());
-    const { agentManager, buildDefaultSystemPrompt, createLocalAgentSession, resolveModelConfig } = await loadCore();
+    const { agentManager, buildDefaultSystemPrompt, createLocalAgentSessionHost, resolveModelConfig } =
+      await loadCore();
     const { connection, modelInfo } = await resolveModelConfig({
       model: body.model,
       style: body.style as "openai" | "anthropic" | undefined,
       baseURL: body.baseURL,
       apiKey: body.apiKey,
     });
-    const managed = await agentManager.createManagedAgent({
-      modelInfo,
-      model: connection.model,
+    const host = createLocalAgentSessionHost({ manager: agentManager });
+    const { session } = await host.create({
       name: body.name || "remote",
+      model: connection.model,
       systemPrompt: body.systemPrompt || (await buildDefaultSystemPrompt()),
       maxIterations: 50,
       modelStyle: connection.style,
       modelBaseURL: connection.baseURL,
       modelApiKey: connection.apiKey,
+      modelInfo,
     });
-    managed.initChat(agentManager, []);
-    const session = createLocalAgentSession({ managed, manager: agentManager }) as SessionLike;
-    sessions.set(session.id, session);
+    sessions.set(session.id, session as SessionLike);
     return c.json({ id: session.id, snapshot: session.getSnapshot() });
   })
   .get("/:id/snapshot", async (c) => {

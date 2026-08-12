@@ -1,20 +1,20 @@
 import { createSubagentTools } from "../agent/subagent/tools.js";
 import { getEnv } from "../env.js";
 
-import { AgentEventBus } from "./agent-event-bus.js";
 import { buildManagedAgent } from "./agent-factory.js";
 import { ACTIVE_STATUSES } from "./agent-status.js";
-import { attachEventLogBridge } from "./event-log-bridge.js";
+import { AgentTelemetryBus } from "./agent-telemetry-bus.js";
+import { bridgeTelemetryToAgentLog } from "./event-log-bridge.js";
 import { runManagedAgent, runManagedAgentStream, type RunAgentStreamInput } from "./run-agent.js";
 import { emitSessionBootstrapEvents } from "./session-bootstrap-events.js";
 
-import type { AgentEvent, AgentEventListener, AgentEventType } from "./agent-event-bus.js";
+import type { AgentEvent, AgentEventListener, AgentEventType } from "./agent-telemetry-bus.js";
 import type { ManagedAgent, ManagedAgentConfig } from "./managed-agent.js";
-import type { ResumeResult, SessionData } from "../agent/session/types.js";
-import type { ToolsRecord } from "../agent/tools/tanstack/tools-record.js";
+import type { ResumeResult, SessionData } from "../agent/persistence/types.js";
+import type { ToolsRecord } from "../agent/tools/runtime/tools-record.js";
 import type { StreamChunk } from "@tanstack/ai";
 
-export type { AgentEvent, AgentEventListener, AgentEventType } from "./agent-event-bus.js";
+export type { AgentEvent, AgentEventListener, AgentEventType } from "./agent-telemetry-bus.js";
 export type { ManagedAgent, ManagedAgentConfig } from "./managed-agent.js";
 export type { RunAgentStreamInput } from "./run-agent.js";
 
@@ -68,12 +68,12 @@ export class AgentManager {
   private agents: Map<string, ManagedAgent> = new Map();
 
   /** Unified event bus for in-process listeners */
-  private eventBus = new AgentEventBus();
+  private eventBus = new AgentTelemetryBus();
 
   private readonly _detachEventLogBridge: () => void;
 
   constructor() {
-    this._detachEventLogBridge = attachEventLogBridge(this.eventBus, (event) => {
+    this._detachEventLogBridge = bridgeTelemetryToAgentLog(this.eventBus, (event) => {
       const managed = this.agents.get(event.agentId) ?? (event.parentId ? this.agents.get(event.parentId) : undefined);
       return managed?.log ?? null;
     });
@@ -106,7 +106,7 @@ export class AgentManager {
 
   /**
    * Emit an agent event.
-   * @internal Agent code should use `emitAgentEvent()` / `agent.emitEvent()` instead.
+   * @internal Agent code should use `emitAgentTelemetry()` / `agent.emitEvent()` instead.
    */
   emit(event: AgentEvent): void {
     this.eventBus.emit(event);

@@ -8,7 +8,8 @@ import type { CompactionConfig } from "../../agent/compaction/types.js";
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { TodoManager } from "../../agent/todo-manager";
 import type { AgentUIChannel } from "../../agent/ui-channel.js";
-import type { AgentEventType, AgentManager, AgentStatusController, UsageTracker } from "../../runtime-types";
+import type { AgentManager, AgentStatusController, UsageTracker } from "../../runtime-types";
+import type { EmitAgentTelemetryFn } from "../emit-agent-telemetry.js";
 
 export interface CompactionMiddlewareDeps {
   agentId: string;
@@ -23,7 +24,7 @@ export interface CompactionMiddlewareDeps {
   shouldTriggerAutoCompact: (messages?: ModelMessage[]) => boolean;
   status: AgentStatusController;
   log: AgentLog | null;
-  emitEvent?: (type: AgentEventType, data?: Record<string, unknown>) => void;
+  emitEvent?: EmitAgentTelemetryFn;
 }
 
 /** TanStack compaction via {@link ChatMiddleware.onConfig}. */

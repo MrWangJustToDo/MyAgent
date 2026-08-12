@@ -2,42 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { URL } from "node:url";
 
-const {
-  clearExtensionCommands,
-  extensionCommandToSlashCommand,
-  getAllCommands,
-  getCommand,
-  registerExtensionCommand,
-  splitExtensionCommandArgs,
-} = await import(new URL("../dist/index.mjs", import.meta.url).href);
+const { clearExtensionCommands, getAllCommands, getCommand, registerExtensionCommand, splitExtensionCommandArgs } =
+  await import(new URL("../dist/index.mjs", import.meta.url).href);
 
 test("splitExtensionCommandArgs trims and splits argv", () => {
   assert.deepEqual(splitExtensionCommandArgs(""), []);
   assert.deepEqual(splitExtensionCommandArgs("  a  b "), ["a", "b"]);
-});
-
-test("extensionCommandToSlashCommand maps execute result and errors", async () => {
-  const emptyCtx = {
-    inputActions: {},
-    getInputState: () => ({}),
-    getAgent: () => null,
-  };
-
-  const ok = extensionCommandToSlashCommand({
-    name: "ping",
-    description: "ping",
-    execute: async (args) => `pong:${args.join(",")}`,
-  });
-  assert.deepEqual(await ok.execute("x y", emptyCtx), { ok: true, message: "pong:x,y" });
-
-  const fail = extensionCommandToSlashCommand({
-    name: "boom",
-    description: "boom",
-    execute: async () => {
-      throw new Error("nope");
-    },
-  });
-  assert.deepEqual(await fail.execute("", emptyCtx), { ok: false, error: "nope" });
 });
 
 test("registerExtensionCommand skips built-in name conflicts and clears independently", () => {
