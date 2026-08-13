@@ -83,6 +83,7 @@ async function restoreInitialMessages(
 
 class LocalAgentSessionHostImpl implements AgentSessionHost {
   private readonly manager: LocalAgentSessionHostManager;
+  private readonly sessions = new Map<string, AgentSession>();
 
   constructor(options: CreateLocalAgentSessionHostOptions) {
     this.manager = options.manager;
@@ -101,17 +102,22 @@ class LocalAgentSessionHostImpl implements AgentSessionHost {
       managed,
       manager: this.manager,
     });
+    this.sessions.set(session.id, session);
 
     return { session, ...(initial.length ? { initialMessages: initial } : {}) };
   }
 
   connect(agentId: string): AgentSession | null {
+    const cached = this.sessions.get(agentId);
+    if (cached) return cached;
     const managed = this.manager.getAgent(agentId);
     if (!managed) return null;
-    return createLocalAgentSession({
+    const session = createLocalAgentSession({
       managed,
       manager: this.manager,
     });
+    this.sessions.set(agentId, session);
+    return session;
   }
 
   list(): AgentSessionListEntry[] {
@@ -119,6 +125,7 @@ class LocalAgentSessionHostImpl implements AgentSessionHost {
   }
 
   async destroy(agentId: string): Promise<void> {
+    this.sessions.delete(agentId);
     this.manager.destroyAgent(agentId);
   }
 }
