@@ -318,6 +318,9 @@ const StatusBar = () => {
       </Box>
 
       <Box gap={2} flexShrink={0}>
+        {/* key=version: remount only when session identity changes (resume/
+            clear/compact bump it), so AnimateNumber snaps to the new total
+            without animating across session boundaries. */}
         <LLMUsage key={version} />
         {model && (
           <Text color={COLORS.muted} dimColor wrap="truncate">

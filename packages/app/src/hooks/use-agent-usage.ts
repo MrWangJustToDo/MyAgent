@@ -55,8 +55,11 @@ export const useAgentUsage = (): AgentUsageView => {
     return session.subscribe(
       (event) => {
         if (event.channel !== "usage") return;
+        // Reactive update only — do NOT bump version here. `version` marks a
+        // session identity change (resume/clear/compact, via bumpAgentUsage),
+        // not every token increment; bumping here would remount AnimateNumber
+        // and kill the footer token animation.
         setUsage(toView(event.payload));
-        usageState.getActions().bump();
       },
       { channels: ["usage"] }
     );
