@@ -2,6 +2,8 @@
 
 Shared UI layer (CLI + extension). Agent control is **Session-only**: hooks, layout, and slash commands use `AgentSession` / `AgentSessionHost`, not `ManagedAgent` / `agentManager`.
 
+`useAgent` stores `session` / `host` with `markRaw`. reactivity-store selectors otherwise wrap those live handles as readonly proxies, and `subscribe` / `dispatch` silently no-op (Vue blocks `Set.add` on the proxy). Call `getActiveSession()`, `getActiveHost()`, or `resolveAgentSession()` (they `toRaw`) before using methods; in components `toRaw(useAgent((s) => s.session))` is equivalent.
+
 ## `@my-agent/core` import allowlist
 
 ### Allowed (session-safe / presentation / CoreEnv)
@@ -14,7 +16,7 @@ Shared UI layer (CLI + extension). Agent control is **Session-only**: hooks, lay
 | Presentation registry | `getToUI` / `registerToUI` / `clearToUI` (tools register in core; UI looks up) |
 | CoreEnv plane | `getEnv`, `hasCoreEnv`, `FileEntry`, … (workspace panels only) |
 | Model constants | `DEFAULT_BASE_URLS`, `DEFAULT_LOCAL_OPENAI_BASE_URL`, `ModelStyle` / `ModelInfo` types |
-| Summary stream protocol | `summaryStreamKey`, display-window helpers, `SummaryStreamEvent` types |
+| Summary stream protocol | `summaryStreamKey`, `compactSummaryStreamId`, display-window helpers, `SummaryStreamEvent` types |
 | Edit preview (CoreEnv) | `previewEdit` (workspace read; no ManagedAgent) |
 
 ### Allowed only in Local adapter bootstrap

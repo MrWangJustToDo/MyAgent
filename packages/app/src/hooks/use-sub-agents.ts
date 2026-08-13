@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { toRaw } from "reactivity-store";
 
+import { getActiveSession } from "../utils/session-resolve.js";
+
 import { useAgent } from "./use-agent.js";
 
 import type { AgentSessionSubagentSummary } from "@my-agent/core";
 
 function findSubagentByTask(taskId: string): AgentSessionSubagentSummary | undefined {
   if (!taskId) return undefined;
-  return useAgent
-    .getReadonlyState()
-    .session?.getSnapshot()
+  return getActiveSession()
+    ?.getSnapshot()
     .subagents.find((entry) => entry.parentTaskToolCallId === taskId);
 }
 

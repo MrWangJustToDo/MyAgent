@@ -1,23 +1,35 @@
 /**
  * Resolve an AgentSession for a root or child id via the active Host.
+ *
+ * reactivity-store selectors / getReadonlyState() wrap stored objects as
+ * readonly proxies. Session/Host are live handles (`subscribe`, `dispatch`,
+ * `connect`) — always unwrap with {@link toRaw} before calling methods.
  */
+
+import { toRaw } from "reactivity-store";
 
 import { useAgent } from "../hooks/use-agent.js";
 
-import type { AgentSession } from "@my-agent/core";
+import type { AgentSession, AgentSessionHost } from "@my-agent/core";
 
-export function getActiveSession(): AgentSession | null {
-  return useAgent.getReadonlyState().session;
+function unwrapHandle<T extends object>(value: T | null | undefined): T | null {
+  if (value == null) return null;
+  return toRaw(value);
 }
 
-export function getActiveHost() {
-  return useAgent.getReadonlyState().host;
+export function getActiveSession(): AgentSession | null {
+  return unwrapHandle(useAgent.getReadonlyState().session);
+}
+
+export function getActiveHost(): AgentSessionHost | null {
+  return unwrapHandle(useAgent.getReadonlyState().host);
 }
 
 /** Root session, or `host.connect(agentId)` for a child / other agent. */
 export function resolveAgentSession(agentId: string | null | undefined): AgentSession | null {
   if (!agentId) return null;
-  const { host, session } = useAgent.getReadonlyState();
+  const session = getActiveSession();
+  const host = getActiveHost();
   if (session?.id === agentId) return session;
-  return host?.connect(agentId) ?? null;
+  return unwrapHandle(host?.connect(agentId));
 }

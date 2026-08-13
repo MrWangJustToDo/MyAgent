@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
-import { toRaw } from "reactivity-store";
 
 import { dispatchCommand } from "../commands";
+import { getActiveHost, getActiveSession } from "../utils/session-resolve.js";
 
 import { useAgentKeybindings } from "./use-agent-keybindings.js";
-import { useAgent } from "./use-agent.js";
 import { useAutocomplete } from "./use-autocomplete.js";
 import { useCommandOutput } from "./use-command-output.js";
 import { useExtensionUI, useRespondToConfirm } from "./use-extension-ui.js";
@@ -157,13 +156,13 @@ export function useAgentInputControls({
   const commandCtx: CommandContext = {
     inputActions,
     getInputState: () => useUserInput.getReadonlyState(),
-    getSession: () => toRaw(useAgent.getReactiveState().session),
+    getSession: () => getActiveSession(),
     getMessages: () => messages,
     saveSessionFromChat,
     setMessages: setMessages as (messages: UIMessage[]) => void,
     exit: () => {
-      const host = useAgent.getReadonlyState().host;
-      const session = useAgent.getReadonlyState().session;
+      const host = getActiveHost();
+      const session = getActiveSession();
       if (host && session) {
         void host.destroy(session.id);
       }

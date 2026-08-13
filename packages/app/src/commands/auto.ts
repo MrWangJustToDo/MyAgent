@@ -1,4 +1,4 @@
-import { useAgent } from "../hooks/use-agent.js";
+import { getActiveSession } from "../utils/session-resolve.js";
 import { isPendingToolApproval, isToolCallPart } from "../utils/tool-part.js";
 
 import { registerCommand } from "./utils/registry.js";
@@ -10,7 +10,7 @@ registerCommand({
   description: "Toggle auto mode — skip all tool approvals (YOLO)",
   usage: "/auto [on|off|status]",
   getOptions: () => {
-    const snap = useAgent.getReadonlyState().session?.getSnapshot();
+    const snap = getActiveSession()?.getSnapshot();
     const mode: AgentMode = snap?.mode ?? "normal";
     const current = snap?.autoMode ? "on" : "off";
     return [

@@ -1,4 +1,4 @@
-import { useAgent } from "../hooks/use-agent.js";
+import { getActiveSession } from "../utils/session-resolve.js";
 
 import { registerCommand } from "./utils/registry.js";
 
@@ -8,7 +8,7 @@ registerCommand({
   usage: "/mcp",
   immediate: true,
   execute: async (_args, ctx) => {
-    const session = ctx.getSession() ?? useAgent.getReadonlyState().session;
+    const session = ctx.getSession() ?? getActiveSession();
     if (!session) {
       return { ok: false, error: "Agent not initialized" };
     }

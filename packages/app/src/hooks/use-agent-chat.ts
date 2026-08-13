@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { bindAgentSession } from "../adapter/create-agent.js";
 import { useAdapter } from "../context/adapter-context.js";
 import { clearFlatMessageCache } from "../utils/message-flat-cache.js";
+import { getActiveHost, resolveAgentSession } from "../utils/session-resolve.js";
 import { isToolCallPart, isPendingToolApproval, parseToolInput } from "../utils/tool-part.js";
 
 import { bindSessionLog } from "./use-agent-log.js";
@@ -273,12 +274,12 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   });
 
   const stop = useCallback(() => {
-    const host = useAgent.getReadonlyState().host;
+    const host = getActiveHost();
     if (session && host) {
       const activeChildren = session.getSnapshot().subagents.filter((child) => isActiveStatus(child.status));
       if (activeChildren.length > 0) {
         for (const child of activeChildren) {
-          void host.connect(child.id)?.dispatch({ type: "stop" });
+          void resolveAgentSession(child.id)?.dispatch({ type: "stop" });
         }
         forceUpdate();
         return;

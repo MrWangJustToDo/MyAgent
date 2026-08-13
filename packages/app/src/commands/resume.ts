@@ -1,6 +1,6 @@
 import { bumpAgentUsage } from "../hooks/use-agent-usage.js";
-import { useAgent } from "../hooks/use-agent.js";
 import { useDynamic } from "../hooks/use-dynamic.js";
+import { getActiveSession } from "../utils/session-resolve.js";
 
 import { registerCommand } from "./utils/registry.js";
 
@@ -11,7 +11,7 @@ registerCommand({
   immediate: false,
   allowCustomInput: true,
   getOptions: async () => {
-    const session = useAgent.getReadonlyState().session;
+    const session = getActiveSession();
     if (!session) return [];
 
     const listed = await session.dispatch({ type: "session.list" });

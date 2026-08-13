@@ -1,5 +1,5 @@
-import { useAgent } from "../hooks/use-agent.js";
 import { useTodoManager } from "../hooks/use-todo-manager.js";
+import { getActiveSession } from "../utils/session-resolve.js";
 
 import { registerCommand } from "./utils/registry.js";
 
@@ -14,7 +14,7 @@ registerCommand({
   allowCustomInput: true,
   getOptions: async (): Promise<CommandOption[]> => {
     const base: CommandOption[] = [];
-    const session = useAgent.getReadonlyState().session;
+    const session = getActiveSession();
     const mode: AgentMode = session?.getSnapshot().mode ?? "normal";
     const isPlanMode = mode === "plan";
 

@@ -1,9 +1,11 @@
 /**
  * Subscribe to the compact summary stream and accumulate raw text.
- * Active when status === "compacting".
+ *
+ * Subscribe whenever a root session exists so `reset` / early `append` are not
+ * missed while status is still catching up. Return "" unless `enabled`.
  */
 
-import { summaryStreamKey, type SummaryStreamEvent } from "@my-agent/core";
+import { compactSummaryStreamId, summaryStreamKey, type SummaryStreamEvent } from "@my-agent/core";
 import { useEffect, useRef, useState } from "react";
 
 import { resolveAgentSession } from "../utils/session-resolve.js";
@@ -21,7 +23,7 @@ export function useCompactSummaryText(options?: UseCompactSummaryTextOptions): s
   const textRef = useRef("");
 
   useEffect(() => {
-    if (!enabled || !rootAgentId) {
+    if (!rootAgentId) {
       textRef.current = "";
       setText("");
       return;
@@ -34,7 +36,7 @@ export function useCompactSummaryText(options?: UseCompactSummaryTextOptions): s
       return;
     }
 
-    const key = summaryStreamKey("compact", rootAgentId);
+    const key = summaryStreamKey("compact", compactSummaryStreamId(rootAgentId));
 
     const handleEvent = (event: SummaryStreamEvent) => {
       if (event.key !== key) return;
@@ -67,7 +69,8 @@ export function useCompactSummaryText(options?: UseCompactSummaryTextOptions): s
     return () => {
       unsub();
     };
-  }, [enabled, rootAgentId]);
+  }, [rootAgentId]);
 
+  if (!enabled) return "";
   return text;
 }

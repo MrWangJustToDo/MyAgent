@@ -1,12 +1,11 @@
 import { useInput } from "ink";
-import { toRaw } from "reactivity-store";
 
 import { dispatchCommand } from "../commands";
 import { clipboardImageFilename } from "../utils/attachment-hash.js";
 import { isModifiedEnter } from "../utils/keyboard-labels.js";
 import { cycleAgentMode } from "../utils/plan-mode-toggle.js";
+import { getActiveHost, getActiveSession } from "../utils/session-resolve.js";
 
-import { useAgent } from "./use-agent.js";
 import { useAutocomplete } from "./use-autocomplete.js";
 import { useCommandOutput } from "./use-command-output.js";
 import { useExtensionPanel, CLOSE_DEBOUNCE_MS as EXTENSION_CLOSE_DEBOUNCE_MS } from "./use-extension-panel.js";
@@ -77,7 +76,7 @@ export function useAgentKeybindings({
   extensionConfirm,
   onExtensionConfirmRespond,
 }: UseAgentKeybindingsOptions): void {
-  const getSession = () => toRaw(useAgent.getReactiveState().session);
+  const getSession = () => getActiveSession();
 
   const handleExtensionConfirmKeys = (
     inputChar: string,
@@ -111,7 +110,8 @@ export function useAgentKeybindings({
     }
 
     if (inputKey.ctrl && inputChar === "c") {
-      const { host, session } = useAgent.getReadonlyState();
+      const host = getActiveHost();
+      const session = getActiveSession();
       if (host && session) {
         void host.destroy(session.id);
       }
