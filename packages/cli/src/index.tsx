@@ -106,13 +106,30 @@ const adapter = new LocalAgentAdapter({
   hooks: { useAgent, useAgentLog, useTodoManager },
 });
 
+/** CSI hide — re-sent after every frame so the hardware cursor stays off. */
+const HIDE_NATIVE_CURSOR = "\x1b[?25l";
+
+function hideNativeCursor(): void {
+  const stdout = process.stdout;
+  if (stdout.isTTY) {
+    stdout.write(HIDE_NATIVE_CURSOR);
+  }
+}
+
 initHighlighter()
   .then(() => {
     render(
       <AdapterProvider value={adapter}>
         <App />
       </AdapterProvider>,
-      { incrementalRendering: true, maxFps: 30, exitOnCtrlC: false, renderProcess: true, animatedScroll: true }
+      {
+        incrementalRendering: true,
+        maxFps: 30,
+        exitOnCtrlC: false,
+        renderProcess: true,
+        animatedScroll: true,
+        onRender: hideNativeCursor,
+      }
     );
   })
   .catch((err) => {
