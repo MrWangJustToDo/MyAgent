@@ -90,6 +90,12 @@ export {
 } from "./agent/stream/extract-assistant-text.js";
 export { countSubagentIterations, deriveSubagentRunStats, hasBeginSummaryCall } from "./agent/subagent/run-stats.js";
 export { applySubagentCancelNotice, SUBAGENT_CANCELLED_NOTICE, truncateSummary } from "./agent/subagent/output.js";
+export {
+  buildProgressSummaryPrompt,
+  isProgressSummaryEligible,
+  PROGRESS_SUMMARY_MARKER,
+  summarizeProgress,
+} from "./agent/subagent/progress-summary.js";
 export { resolveSubagentBridgeUI } from "./agent/subagent/types.js";
 export {
   consumeAgentStream,

@@ -10,6 +10,7 @@ import { throwOnRunError } from "../stream/stream-errors.js";
 import { getCurrentDate, getGitInfo } from "../turn-context/env-context.js";
 
 import { applySubagentCancelNotice, truncateSummary } from "./output.js";
+import { isProgressSummaryEligible, summarizeProgress } from "./progress-summary.js";
 import { buildExploreSystemPrompt } from "./prompt.js";
 import { captureStreamFinishReason, deriveSubagentRunStats } from "./run-stats.js";
 import { resolveSubagentBridgeUI, SUBAGENT_DEFAULT_MAX_ITERATIONS } from "./types.js";
@@ -187,7 +188,45 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
   });
   subagentManaged.finalizeRun(manager, outcomeKind);
   const noticed = applySubagentCancelNotice(output, aborted);
-  const { summary: finalOutput, truncated } = truncateSummary(noticed, maxOutputLength);
+  let { summary: finalOutput, truncated } = truncateSummary(noticed, maxOutputLength);
+
+  const runStats = deriveSubagentRunStats({
+    messages: previewMessages,
+    maxIterations,
+    finishReason,
+    output: finalOutput,
+    aborted,
+    status: subagentManaged.status,
+  });
+
+  // Snapshot status flags BEFORE the progress-summary fallback. The fallback may
+  // replace the output text, but it must NEVER change the subagent's status
+  // semantics: a step-budget cutoff stays reachedLimit=true + incomplete=true
+  // even after a progress report replaces the empty output. Returning these
+  // snapshots (not re-read runStats) keeps the contract explicit.
+  const statusFlags = {
+    iterations: runStats.iterations,
+    reachedLimit: runStats.reachedLimit,
+    incomplete: runStats.incomplete,
+  };
+
+  // Fallback: when the subagent hit the iteration budget before writing a final
+  // answer (reachedLimit + incomplete + nothing usable in the output), spawn a
+  // parent-owned summarizer that distills the execution trace into a structured
+  // progress report. Failure is silent — the original output is kept unchanged.
+  //
+  // Gated to exploration subagents (default explore tools). Compaction / memory
+  // summarizer subagents pass `tools: {}` — never fall back for them, or the
+  // fallback would recursively spawn yet another summarizer.
+  if (!customTools && isProgressSummaryEligible(statusFlags.incomplete, statusFlags.reachedLimit, finalOutput)) {
+    const progressSummary = await summarizeProgress(previewMessages, parentAgentId, manager, prompt);
+    if (progressSummary) {
+      const truncatedResult = truncateSummary(progressSummary, maxOutputLength);
+      finalOutput = truncatedResult.summary;
+      truncated = truncatedResult.truncated;
+    }
+  }
+
   const usage = subagentManaged.usage.getTotal();
 
   if (aggregateUsageToParent && parentManaged) {
@@ -204,27 +243,18 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     manager.destroyAgent(subagentId);
   }
 
-  const runStats = deriveSubagentRunStats({
-    messages: previewMessages,
-    maxIterations,
-    finishReason,
-    output: finalOutput,
-    aborted,
-    status: subagentManaged.status,
-  });
-
   return {
     subagentId,
     output: finalOutput,
     truncated,
-    iterations: runStats.iterations,
+    iterations: statusFlags.iterations,
     usage: {
       inputTokens: usage.inputTokens ?? 0,
       outputTokens: usage.outputTokens ?? 0,
       totalTokens: usage.totalTokens ?? 0,
     },
-    reachedLimit: runStats.reachedLimit,
-    incomplete: runStats.incomplete,
+    reachedLimit: statusFlags.reachedLimit,
+    incomplete: statusFlags.incomplete,
     aborted,
   };
 }

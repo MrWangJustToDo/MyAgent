@@ -50,6 +50,7 @@
     "validate:run-coordinator": "pnpm run build && node scripts/validate-run-coordinator.mjs",
     "validate:subagent-run-stats": "pnpm run build && node scripts/validate-subagent-run-stats.mjs",
     "validate:subagent-cancel-notice": "pnpm run build && node scripts/validate-subagent-cancel-notice.mjs",
+    "validate:subagent-progress-summary": "pnpm run build && node scripts/validate-subagent-progress-summary.mjs",
     "validate:compaction-messages": "pnpm run build && node scripts/validate-compaction-messages.mjs",
     "validate:message-chain-projection": "pnpm run build && node scripts/validate-message-chain-projection.mjs",
     "validate:canonical-model-messages": "pnpm run build && node scripts/validate-canonical-model-messages.mjs",
