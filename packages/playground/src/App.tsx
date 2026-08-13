@@ -12,6 +12,7 @@ import {
   clearCoreEnv,
   clearModelProvider,
   createDirectModelProvider,
+  createProxyModelProvider,
   hasCoreEnv,
   registerCoreEnv,
   registerModelProvider,
@@ -39,6 +40,7 @@ const AgentBootstrap = memo(() => {
   const style = usePlaygroundConfig((s) => s.style);
   const baseURL = usePlaygroundConfig((s) => s.baseURL);
   const apiKey = usePlaygroundConfig((s) => s.apiKey);
+  const providerServerUrl = usePlaygroundConfig((s) => s.providerServerUrl);
   const fetchProxyUrl = usePlaygroundConfig((s) => s.fetchProxyUrl);
 
   const [adapter, setAdapter] = useState<AgentAdapter | null>(null);
@@ -76,16 +78,25 @@ const AgentBootstrap = memo(() => {
       await ensureCoreEnv();
       if (currentInitId !== initIdRef.current) return;
 
-      registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey }));
+      const serverUrl = providerServerUrl.trim();
+      const proxyMode = Boolean(serverUrl);
+      if (proxyMode) {
+        // Proxy mode: keys stay on the provider server; model/style/baseURL/apiKey come from /api/provider/info.
+        setStatus("Connecting to provider server…");
+        registerModelProvider(await createProxyModelProvider(serverUrl));
+      } else {
+        registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey }));
+      }
+      if (currentInitId !== initIdRef.current) return;
 
       setStatus("Initializing agent…");
-      await initConfig({
-        model,
-        style,
-        baseURL,
-        apiKey,
-        debug: false,
-      });
+      // Proxy mode ignores local model/style/baseURL/apiKey (server is the single source of truth),
+      // so only pass them in direct mode — otherwise the UI config would show the wrong model.
+      await initConfig(
+        proxyMode
+          ? { model: "", style, baseURL: "", apiKey: "", debug: false }
+          : { model, style, baseURL, apiKey, debug: false }
+      );
       if (currentInitId !== initIdRef.current) return;
 
       await initHighlighter();
@@ -105,7 +116,7 @@ const AgentBootstrap = memo(() => {
         setLoading(false);
       }
     }
-  }, [model, style, baseURL, apiKey, fetchProxyUrl, ensureCoreEnv]);
+  }, [model, style, baseURL, apiKey, providerServerUrl, fetchProxyUrl, ensureCoreEnv]);
 
   useEffect(() => {
     void runBootstrap();

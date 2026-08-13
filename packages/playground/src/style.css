@@ -1180,6 +1180,27 @@ body,
   font-size: 10.5px;
 }
 
+.config-panel__disabled {
+  opacity: 0.45;
+}
+
+.config-panel__disabled input,
+.config-panel__disabled select {
+  cursor: not-allowed;
+}
+
+.config-panel__mode {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.config-panel__mode--proxy {
+  color: #7f9cff;
+}
+
 .config-panel__checkbox {
   flex-direction: row !important;
   align-items: center !important;

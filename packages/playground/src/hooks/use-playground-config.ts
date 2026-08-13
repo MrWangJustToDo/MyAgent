@@ -9,6 +9,12 @@ export interface PlaygroundConfig {
   style: ModelStyle;
   baseURL: string;
   apiKey: string;
+  /**
+   * Provider proxy server URL (e.g. `http://localhost:3100`) exposing `/api/provider/*`.
+   * When set, the browser talks to that server with server-side API keys (`proxy` mode)
+   * and local model/style/baseURL/apiKey are ignored. Empty = direct mode.
+   */
+  providerServerUrl: string;
   /** Cloudflare Worker (or other) CORS proxy for webfetch/websearch. Empty = Vite `/__fetch_proxy` in dev. */
   fetchProxyUrl: string;
   /** Whether the workspace panel is visible. */
@@ -22,6 +28,7 @@ const defaults: PlaygroundConfig = {
   style: "openai",
   baseURL: "https://api.openai.com/v1",
   apiKey: "",
+  providerServerUrl: "",
   // Baked at build time when VITE_FETCH_PROXY_URL is set (e.g. GitHub Actions / .env).
   fetchProxyUrl: bakedFetchProxyUrl,
   workspaceVisible: false,
@@ -62,6 +69,7 @@ export const usePlaygroundConfig = createState(() => ({ ...initial }), {
         style: state.style,
         baseURL: state.baseURL,
         apiKey: state.apiKey,
+        providerServerUrl: state.providerServerUrl,
         fetchProxyUrl: state.fetchProxyUrl,
         workspaceVisible: state.workspaceVisible,
       });

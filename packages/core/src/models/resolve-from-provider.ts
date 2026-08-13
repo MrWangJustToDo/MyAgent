@@ -38,13 +38,13 @@ export async function resolveModelConfigFromProvider(
   };
 
   if (providerConn.mode === "proxy") {
-    // Proxy mode: never allow client baseURL/apiKey (or mismatched style) to bypass the server.
+    // Proxy mode: never allow client baseURL/apiKey (or mismatched style/model) to bypass the
+    // server. The server is the single source of truth for model too — otherwise a non-empty
+    // local model (e.g. a default like "gpt-4o-mini") leaks into the forwarded request body.
     merged.baseURL = providerConn.baseURL;
     merged.apiKey = providerConn.apiKey;
     merged.style = providerConn.style;
-    if (!merged.model?.trim()) {
-      merged.model = providerConn.model;
-    }
+    merged.model = providerConn.model;
   }
 
   const resolved = await resolveModelConfig(merged);
@@ -58,7 +58,8 @@ export async function resolveModelConfigFromProvider(
         style: providerConn.style,
         baseURL: providerConn.baseURL,
         apiKey: providerConn.apiKey,
-        model: resolved.connection.model?.trim() ? resolved.connection.model : providerConn.model,
+        // Server is the single source of truth for model in proxy mode.
+        model: providerConn.model,
       },
       modelInfo: resolved.modelInfo ? { ...resolved.modelInfo, baseURL: undefined } : undefined,
       providerMode: "proxy",

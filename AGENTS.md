@@ -471,6 +471,7 @@ registerModelProvider(await createProxyModelProvider("http://localhost:3100"));
 - `runCommand` mid-run streaming is lost over HTTP — chunks are not pushed live; the remote client delivers full stdout/stderr once when `/api/command/run` returns (UI/tool still get the final output)
 - Binary fetch responses are base64-encoded over the wire
 - Provider proxy assumes a trusted network (no extra auth on `/api/provider/*` in v1)
+- Provider proxy `/api/provider/*` fetch failures return OpenAI `{ error: { message, type, code } }` (not `{ error: true }`); the **server host** must be able to reach its `BASE_URL`
 - LLM adapters still use global `fetch` against the proxy `baseURL` (not `CoreEnv.fetch`)
 
 ## Agent Event System

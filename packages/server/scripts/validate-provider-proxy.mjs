@@ -57,11 +57,15 @@ assert.equal(filtered.BRAVE_API_KEY, undefined);
 
 const upstreamChunks = ["data: hello\n\n", "data: world\n\n"];
 let sawAuth = "";
+let sawBody = "";
 const upstream = createServer((req, res) => {
   sawAuth = String(req.headers.authorization || "");
-  res.writeHead(200, { "content-type": "text/event-stream" });
-  for (const chunk of upstreamChunks) res.write(chunk);
-  res.end();
+  req.on("data", (d) => (sawBody += d));
+  req.on("end", () => {
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    for (const chunk of upstreamChunks) res.write(chunk);
+    res.end();
+  });
 });
 
 await new Promise((resolve) => upstream.listen(0, "127.0.0.1", resolve));
@@ -77,7 +81,8 @@ const app = new Hono().route("/api/provider", providerRoutes);
 const proxyRes = await app.request("http://local/api/provider/openai/v1/chat/completions", {
   method: "POST",
   headers: { "content-type": "application/json", authorization: "Bearer client-should-not-win" },
-  body: JSON.stringify({ model: "mock-model", stream: true }),
+  // Client sends a different model — the server must rewrite it to its own MODEL.
+  body: JSON.stringify({ model: "client-wrong-model", stream: true }),
 });
 
 assert.equal(proxyRes.status, 200);
@@ -86,6 +91,10 @@ const body = await proxyRes.text();
 assert.ok(body.includes("hello"));
 assert.ok(body.includes("world"));
 assert.equal(proxyRes.headers.get("content-encoding"), null, "must not forward content-encoding after decode");
+
+// Server is the single source of truth for the model (proxy-mode request body rewrite).
+assert.ok(sawBody.includes('"model":"mock-model"'), "server must rewrite forwarded body model");
+assert.ok(!sawBody.includes("client-wrong-model"), "client model must not reach upstream");
 
 const infoRes = await app.request("http://local/api/provider/info");
 assert.equal(infoRes.status, 200);
@@ -96,5 +105,17 @@ assert.equal(info.model, "mock-model");
 assert.equal(info.basePath, "/api/provider/openai/v1");
 
 upstream.close();
+
+process.env.BASE_URL = "http://127.0.0.1:1/v1";
+const failRes = await app.request("http://local/api/provider/openai/v1/chat/completions", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ model: "mock-model", stream: false }),
+});
+assert.equal(failRes.status, 502);
+const failBody = await failRes.json();
+assert.equal(typeof failBody.error, "object");
+assert.equal(failBody.error.code, "upstream_fetch_failed");
+assert.match(String(failBody.error.message), /Upstream provider error:/);
 
 console.log("provider-proxy validation passed");

@@ -91,7 +91,25 @@ app.use(
       return "";
     },
     allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Accept", "Authorization", "x-api-key", "anthropic-version", "anthropic-beta"],
+    allowHeaders: [
+      "Content-Type",
+      "Accept",
+      "Authorization",
+      "x-api-key",
+      "anthropic-version",
+      "anthropic-beta",
+      // OpenAI SDK (browser env) sends these — see openai/internal/detect-platform.
+      "x-stainless-lang",
+      "x-stainless-package-version",
+      "x-stainless-os",
+      "x-stainless-arch",
+      "x-stainless-runtime",
+      "x-stainless-runtime-version",
+      "x-stainless-retry-count",
+      "x-stainless-timeout",
+      "openai-organization",
+      "openai-project",
+    ],
   })
 );
 

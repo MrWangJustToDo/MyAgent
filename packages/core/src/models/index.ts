@@ -34,6 +34,8 @@ export {
   type ModelProvider,
 } from "./model-provider.js";
 
+export { createProxyModelProvider, REMOTE_PROVIDER_API_KEY } from "./proxy-model-provider.js";
+
 // models.dev metadata lookup
 export {
   fetchModelsDev,

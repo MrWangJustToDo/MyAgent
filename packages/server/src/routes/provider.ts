@@ -113,22 +113,47 @@ function filterResponseHeaders(source: Headers): Headers {
   return out;
 }
 
+/** OpenAI-compatible error body so Chat Completions clients show `message`, not `502 true`. */
+function openaiErrorResponse(status: number, message: string, code: string): Response {
+  return Response.json(
+    {
+      error: {
+        message,
+        type: "proxy_error",
+        code,
+      },
+    },
+    { status }
+  );
+}
+
+function formatUnknownError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const parts = [err.message];
+  let cause: unknown = err.cause;
+  for (let depth = 0; cause instanceof Error && depth < 3; depth += 1) {
+    if (cause.message) parts.push(cause.message);
+    const code = (cause as Error & { code?: string }).code;
+    if (typeof code === "string" && code) parts.push(code);
+    cause = cause.cause;
+  }
+  return parts.join(": ");
+}
+
 async function proxyStream(
   c: { req: { raw: Request; url: string; path: string; method: string } },
   family: "openai" | "anthropic"
 ): Promise<Response> {
   const connection = readServerModelEnv();
   if (connection.style !== family) {
-    return Response.json(
-      {
-        error: true,
-        message: `Server MODEL_STYLE is "${connection.style}", but client requested ${family} proxy`,
-      },
-      { status: 400 }
+    return openaiErrorResponse(
+      400,
+      `Server MODEL_STYLE is "${connection.style}", but client requested ${family} proxy`,
+      "style_mismatch"
     );
   }
   if (!connection.apiKey) {
-    return Response.json({ error: true, message: "Server API_KEY is not configured" }, { status: 500 });
+    return openaiErrorResponse(500, "Server API_KEY is not configured", "missing_api_key");
   }
 
   const pathname = new URL(c.req.url).pathname;
@@ -150,18 +175,42 @@ async function proxyStream(
   const method = c.req.method;
   const hasBody = method !== "GET" && method !== "HEAD";
 
+  // The server is the single source of truth for the model: rewrite any JSON request
+  // body's `model` field to the server-configured model so clients cannot forward a
+  // different one (e.g. a leftover local default like "gpt-4o-mini").
+  let body: BodyInit | undefined = c.req.raw.body ?? undefined;
+  if (hasBody && connection.model && connection.baseURL) {
+    const contentType = headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const rawText = await c.req.raw.clone().text();
+      try {
+        const parsed = JSON.parse(rawText) as Record<string, unknown>;
+        if (parsed && typeof parsed === "object") {
+          if (parsed.model !== connection.model) {
+            parsed.model = connection.model;
+            body = JSON.stringify(parsed);
+          } else {
+            body = rawText;
+          }
+        }
+      } catch {
+        // Not JSON or unparseable — forward the original body unchanged.
+        body = c.req.raw.body ?? undefined;
+      }
+    }
+  }
+
   let upstream: Response;
   try {
     upstream = await fetch(targetUrl, {
       method,
       headers,
-      body: hasBody ? c.req.raw.body : undefined,
+      body: hasBody ? body : undefined,
       ...(hasBody ? ({ duplex: "half" } as RequestInit) : {}),
       signal: c.req.raw.signal,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return Response.json({ error: true, message: `Upstream provider error: ${message}` }, { status: 502 });
+    return openaiErrorResponse(502, `Upstream provider error: ${formatUnknownError(err)}`, "upstream_fetch_failed");
   }
 
   return new Response(upstream.body, {

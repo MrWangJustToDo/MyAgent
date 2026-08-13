@@ -37,6 +37,8 @@ export {
   type ModelProvider,
 } from "./models/model-provider.js";
 
+export { createProxyModelProvider, REMOTE_PROVIDER_API_KEY } from "./models/proxy-model-provider.js";
+
 // ============================================================================
 // Runtime — agent manager (host bootstrap; Session-only UI must not import ManagedAgent)
 // ============================================================================
