@@ -34,34 +34,32 @@ function handleFsError(err: unknown): { body: Record<string, unknown>; status: 4
 }
 
 export const fsRoutes = new Hono()
-  .post("/readFile", zValidator("json", z.object({ path: z.string(), encoding: z.string().optional() })), async (c) => {
-    try {
-      const { path, encoding } = c.req.valid("json");
-      const content = await getEnv().fs.readFile(path, encoding);
-      return c.json({ content });
-    } catch (err) {
-      const { body, status } = handleFsError(err);
-      return c.json(body, status);
-    }
-  })
-  .post("/readFileBuffer", zValidator("json", pathSchema), async (c) => {
-    try {
-      const { path } = c.req.valid("json");
-      const env = getEnv();
-      if (!env.fs.readFileBuffer) {
-        return c.json(
-          { error: true, name: "Error", code: "not_supported", message: "readFileBuffer not available" },
-          400
-        );
+  .post(
+    "/readFile",
+    zValidator(
+      "json",
+      z.object({
+        path: z.string(),
+        /** `"base64"` / `"buffer"` → binary as base64 string; otherwise UTF-8 text. */
+        encoding: z.enum(["utf8", "base64", "buffer"]).optional(),
+      })
+    ),
+    async (c) => {
+      try {
+        const { path, encoding } = c.req.valid("json");
+        const env = getEnv();
+        if (encoding === "base64" || encoding === "buffer") {
+          const bytes = await env.fs.readFile(path, "buffer");
+          return c.json({ content: env.base64Encode(bytes), encoding: "base64" as const });
+        }
+        const content = await env.fs.readFile(path);
+        return c.json({ content });
+      } catch (err) {
+        const { body, status } = handleFsError(err);
+        return c.json(body, status);
       }
-      const buffer = await env.fs.readFileBuffer(path);
-      const data = env.base64Encode(buffer);
-      return c.json({ data });
-    } catch (err) {
-      const { body, status } = handleFsError(err);
-      return c.json(body, status);
     }
-  })
+  )
   .post("/stat", zValidator("json", pathSchema), async (c) => {
     try {
       const { path } = c.req.valid("json");
@@ -94,16 +92,33 @@ export const fsRoutes = new Hono()
       return c.json(body, status);
     }
   })
-  .post("/writeFile", zValidator("json", z.object({ path: z.string(), content: z.string() })), async (c) => {
-    try {
-      const { path, content } = c.req.valid("json");
-      await getEnv().fs.writeFile(path, content);
-      return c.json({ ok: true });
-    } catch (err) {
-      const { body, status } = handleFsError(err);
-      return c.json(body, status);
+  .post(
+    "/writeFile",
+    zValidator(
+      "json",
+      z.object({
+        path: z.string(),
+        content: z.string(),
+        /** When `"base64"`, `content` is decoded to bytes before write. Default: UTF-8 text. */
+        encoding: z.enum(["utf8", "base64"]).optional(),
+      })
+    ),
+    async (c) => {
+      try {
+        const { path, content, encoding } = c.req.valid("json");
+        const env = getEnv();
+        if (encoding === "base64") {
+          await env.fs.writeFile(path, env.base64Decode(content));
+        } else {
+          await env.fs.writeFile(path, content);
+        }
+        return c.json({ ok: true });
+      } catch (err) {
+        const { body, status } = handleFsError(err);
+        return c.json(body, status);
+      }
     }
-  })
+  )
   .post("/mkdir", zValidator("json", pathSchema), async (c) => {
     try {
       const { path } = c.req.valid("json");

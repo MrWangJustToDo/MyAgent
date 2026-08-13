@@ -145,9 +145,9 @@ export class SessionService {
   }
 
   /**
-   * Restore usage and todos from a persisted session.
-   * Hydrates media:// refs on uiMessages for the return value.
-   * Obsolete compact fields in old files are ignored.
+   * Restore usage, todos, and uiMessages from a persisted session.
+   * Hydrates for the return value, then re-dehydrates into `this.data` and
+   * writes the canonical form back to disk (repairs stringified multimodal, etc.).
    */
   async restoreFromStore(sessionId: string, input: SessionRestoreInput): Promise<SessionData> {
     if (!this.store) throw new Error("Session store not available");
@@ -159,6 +159,9 @@ export class SessionService {
     usage.reset();
 
     const hydrated = await hydrateUIMessages(session.uiMessages);
+    // Canonicalize on disk: repair stringified multimodal + extract media:// refs.
+    const dehydrated = await dehydrateUIMessages(hydrated);
+    session.uiMessages = dehydrated;
 
     if (session.usage) {
       usage.addTotal(session.usage);
@@ -186,6 +189,7 @@ export class SessionService {
     }
 
     this.setSessionData(session);
+    await this.store.save(session);
 
     return {
       ...session,

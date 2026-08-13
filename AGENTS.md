@@ -144,7 +144,7 @@ interface AgentAdapter {
 }
 ```
 
-Shared initialization logic is in `createAgentFromConfig()` (`@my-agent/app/adapter/create-agent.ts`). Both `LocalAgentAdapter` (CLI) and `ExtensionAgentAdapter` delegate to this helper.
+Shared initialization logic is in `createAgentFromConfig()` (`@my-agent/app/adapter/create-agent.ts`). Both `LocalAgentAdapter` (CLI) and `ExtensionAgentAdapter` delegate to this helper. `initConfig` must keep host fields such as `toolConfig` (Brave / websearch) and `agentRemote` so they reach `Host.create`.
 
 ### Bootstrap Sequences
 
@@ -439,7 +439,7 @@ The `@my-agent/server` package exposes CoreEnv APIs over HTTP using Hono RPC for
 | `/api/env/info` | GET | Platform info: rootPath, platform, arch, homedir, sep |
 | `/api/env/vars` | GET | Environment variables (sensitive vars filtered) |
 | `/api/env/destroy` | POST | Lifecycle cleanup |
-| `/api/fs/*` | POST | Filesystem operations (readFile, stat, writeFile, etc.) |
+| `/api/fs/*` | POST | Filesystem operations (readFile / writeFile with optional base64 encoding for binary, etc.) |
 | `/api/command/run` | POST | Run a shell command |
 | `/api/command/exec` | POST | Execute a simple command |
 | `/api/fetch/proxy` | POST | HTTP fetch proxy (handles binary via base64; not for LLM SSE) |
@@ -494,7 +494,7 @@ registerModelProvider(await createProxyModelProvider("http://localhost:3100"));
 | `subagent:*` | Subagent lifecycle |
 | `plan:enter` / `plan:ready` / `plan:execute` / `plan:cancel-execution` / `plan:retro` / `plan:complete` / `plan:exit` | Plan mode phase transitions |
 
-**Vision note:** On OpenAI-compatible Chat Completions, multimodal tool results are lifted to a synthetic user `image_url` message (`liftToolMediaForChatCompletions`) so base64 is not stringified into `role: "tool"`. Anthropic keeps native multimodal `tool_result` parts. Official DeepSeek Chat Completions may still reject `image_url` (text-only schema); capability sanitization strips unsupported `image` / `audio` / `video` / `document` parts on the wire and retries once — use a vision-capable provider for real media understanding.
+**Vision note:** On OpenAI-compatible Chat Completions, multimodal tool results are lifted to a synthetic user `image_url` message (`liftToolMediaForChatCompletions`) so base64 is not stringified into `role: "tool"`. Anthropic keeps native multimodal `tool_result` parts. Official DeepSeek Chat Completions may still reject `image_url` (text-only schema); capability sanitization strips unsupported `image` / `audio` / `video` / `document` parts on the wire and retries once — use a vision-capable provider for real media understanding. Session/UI history always keeps structured image parts (and `.agents/media` binary files); wire stripping must not change persisted message shape.
 
 **Event → Log bridge:** `bridgeTelemetryToAgentLog()` in `AgentManager` maps telemetry events to `AgentLog` entries. Policy lives in `event-log-bridge.ts` (`DEFAULT_EVENT_LOG_RULES`); override per event type with `EventLogPolicy`. Emit sites should not duplicate lifecycle logs covered by events.
 

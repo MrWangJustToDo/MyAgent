@@ -98,7 +98,9 @@
     "validate:generate-id": "pnpm run build && node scripts/validate-generate-id.mjs",
     "validate:find-edit-match": "pnpm run build && node scripts/validate-find-edit-match.mjs",
     "validate:websearch-providers": "pnpm run build && node scripts/validate-websearch-providers.mjs",
-    "validate:media-store": "pnpm run build && node scripts/validate-media-store.mjs"
+    "validate:media-store": "pnpm run build && node scripts/validate-media-store.mjs",
+    "validate:repair-stringified-multimodal": "pnpm run build && node scripts/validate-repair-stringified-multimodal.mjs",
+    "validate:restore-session-chat-state": "pnpm run build && node scripts/validate-restore-session-chat-state.mjs"
   },
   "dependencies": {
     "@tanstack/ai": "^0.43.0",

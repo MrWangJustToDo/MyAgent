@@ -29,6 +29,13 @@ export interface SessionHost {
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   emitEvent: EmitAgentTelemetryFn;
   resetAdmittedTurnContext?: () => void;
+  /** Drop steer/follow-up queues without clearing the transcript (no-op before initChat). */
+  clearQueuedMessages: () => void;
+  /** Reconcile approval / ask_user pause from restored UIMessages. */
+  syncInteractionStateFromUIMessages: (
+    messages: TanStackUIMessage[],
+    options?: { whenClear?: "idle" | "running" | "completed" }
+  ) => void;
 }
 
 export function getSessionPersistInput(host: SessionHost, uiMessages?: TanStackUIMessage[]): SessionPersistInput {
@@ -79,6 +86,7 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
   if (host.ui) {
     host.ui.setMessages(session.uiMessages);
   }
+  applyRestoredSessionChatState(host, session.uiMessages);
   host.resetAdmittedTurnContext?.();
   host.sessionSyncTracker.reset(session.uiMessages);
   host.emitEvent("session:restore", {
@@ -89,4 +97,16 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
     autoMode: host.isAutoModeEnabled(),
   });
   return session;
+}
+
+/**
+ * Align mid-session restore with Host.create: drop leftover queues and
+ * reconcile approval / client-tool waiting from the restored transcript.
+ */
+export function applyRestoredSessionChatState(
+  host: Pick<SessionHost, "clearQueuedMessages" | "syncInteractionStateFromUIMessages">,
+  uiMessages: TanStackUIMessage[]
+): void {
+  host.clearQueuedMessages();
+  host.syncInteractionStateFromUIMessages(uiMessages);
 }

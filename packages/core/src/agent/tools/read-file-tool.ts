@@ -225,11 +225,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
             );
           }
 
-          if (!fsys.readFileBuffer) {
-            throw new Error("Image reading not supported in this environment");
-          }
-
-          const buffer = await fsys.readFileBuffer(filePath);
+          const buffer = await fsys.readFile(filePath, "buffer");
 
           // TODO(image-resize): optionally downscale/compress large screenshots before
           // base64 encode to cut vision tokens (see mcp-server screenshot tool). Deferred.
@@ -260,11 +256,7 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
         if (fileTypeInfo.type === "pdf") {
           // Completions cannot embed PDF binaries on the wire; we extract text for those
           // models. Anthropic (and similar) also receive the `document` part via toModelOutput.
-          if (!fsys.readFileBuffer) {
-            throw new Error("PDF reading not supported in this environment");
-          }
-
-          const buffer = await fsys.readFileBuffer(filePath);
+          const buffer = await fsys.readFile(filePath, "buffer");
 
           if (buffer.length > MAX_BINARY_SIZE) {
             throw new Error(
@@ -296,17 +288,15 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
           };
         }
 
-        // Handle text files
-        // Check for binary content if we can read buffer
-        if (fsys.readFileBuffer) {
-          try {
-            const buffer = await fsys.readFileBuffer(filePath);
-            if (isBinaryContent(buffer)) {
-              throw new Error(`File appears to be binary: ${filePath}. Cannot read binary file content.`);
-            }
-          } catch {
-            // If buffer read fails, try text read anyway
+        // Handle text files — probe for binary content before UTF-8 read
+        try {
+          const buffer = await fsys.readFile(filePath, "buffer");
+          if (isBinaryContent(buffer)) {
+            throw new Error(`File appears to be binary: ${filePath}. Cannot read binary file content.`);
           }
+        } catch (err) {
+          if (err instanceof Error && err.message.includes("appears to be binary")) throw err;
+          // If buffer read fails, try text read anyway
         }
 
         // Read text file

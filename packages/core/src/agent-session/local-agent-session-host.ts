@@ -59,7 +59,9 @@ function toManagedConfig(options: AgentSessionCreateOptions): ManagedAgentConfig
 }
 
 /**
- * Bootstrap-time disk restore. Same underlying API as `session.resume` dispatch.
+ * Bootstrap-time disk restore. Same `restoreSession` path as `session.resume`
+ * (queues cleared + approval/ask_user reconciled inside restore).
+ * `initChat` still runs after restore because the chat controller does not exist yet.
  */
 async function restoreInitialMessages(
   managed: ManagedAgent,

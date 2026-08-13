@@ -86,20 +86,20 @@ async function unwrap<T>(response: Response): Promise<T> {
 
 function createRemoteFs(client: Client): CoreEnvFs {
   return {
-    readFile: async (path: string, encoding?: string): Promise<string> => {
-      const res = await client.fs.readFile.$post({ json: { path, encoding } });
+    readFile: (async (path: string, encoding?: string) => {
+      if (encoding === "buffer") {
+        const res = await client.fs.readFile.$post({ json: { path, encoding: "base64" } });
+        const data = await unwrap<{ content: string }>(res);
+        const binary = atob(data.content);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+      }
+      const wireEncoding = encoding === "utf8" || encoding === "base64" ? encoding : undefined;
+      const res = await client.fs.readFile.$post({ json: { path, encoding: wireEncoding } });
       const data = await unwrap<{ content: string }>(res);
       return data.content;
-    },
-
-    readFileBuffer: async (path: string): Promise<Uint8Array> => {
-      const res = await client.fs.readFileBuffer.$post({ json: { path } });
-      const data = await unwrap<{ data: string }>(res);
-      const binary = atob(data.data);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      return bytes;
-    },
+    }) as CoreEnvFs["readFile"],
 
     stat: async (path: string): Promise<CoreEnvFsStat> => {
       const res = await client.fs.stat.$post({ json: { path } });
@@ -120,8 +120,17 @@ function createRemoteFs(client: Client): CoreEnvFs {
       }));
     },
 
-    writeFile: async (path: string, content: string): Promise<void> => {
-      const res = await client.fs.writeFile.$post({ json: { path, content } });
+    writeFile: async (path: string, content: string | Uint8Array): Promise<void> => {
+      if (typeof content === "string") {
+        const res = await client.fs.writeFile.$post({ json: { path, content } });
+        await unwrap(res);
+        return;
+      }
+      let binary = "";
+      for (let i = 0; i < content.length; i++) binary += String.fromCharCode(content[i]!);
+      const res = await client.fs.writeFile.$post({
+        json: { path, content: btoa(binary), encoding: "base64" },
+      });
       await unwrap(res);
     },
 

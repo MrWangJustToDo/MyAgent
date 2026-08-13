@@ -7,6 +7,7 @@
 /* eslint-disable no-undef */
 
 import assert from "node:assert/strict";
+import path from "node:path";
 
 import {
   getMediaStore,
@@ -16,6 +17,7 @@ import {
   mimeToExtension,
   parseMediaRefPath,
   buildMediaRefPath,
+  repairStringifiedMultimodalUIMessages,
   clearCoreEnv,
   registerCoreEnv,
 } from "../dist/dev.mjs";
@@ -63,16 +65,23 @@ function setupMockEnv() {
       dirname: (p) => path.dirname(p),
       basename: (p, ext) => path.basename(p, ext),
       extname: (p) => path.extname(p),
-      resolve: (...parts) => path.resolve(...parts),
-      normalize: (p) => path.normalize(p),
-      isAbsolute: (p) => path.isAbsolute(p),
-      getSep: () => path.sep,
-      parse: (p) => path.parse(p),
+      resolve: (...parts) => path.posix.resolve(...parts),
+      normalize: (p) => path.posix.normalize(p),
+      isAbsolute: (p) => path.posix.isAbsolute(p),
+      getSep: () => "/",
+      parse: (p) => path.posix.parse(p),
     },
     fs: {
-      async readFile(p) {
+      async readFile(p, encoding) {
         const content = inMemoryFs.get(p);
         if (content === undefined) throw new Error(`ENOENT: ${p}`);
+        if (encoding === "buffer") {
+          if (content instanceof Uint8Array) return content;
+          return new TextEncoder().encode(String(content));
+        }
+        if (content instanceof Uint8Array) {
+          return new TextDecoder().decode(content);
+        }
         return content;
       },
       async writeFile(p, content) {
@@ -87,10 +96,11 @@ function setupMockEnv() {
       async stat(p) {
         const entry = inMemoryFs.get(p);
         if (entry === undefined) throw new Error(`ENOENT: ${p}`);
+        const size = entry === "__dir__" ? 0 : (entry.length ?? entry.byteLength ?? 0);
         return {
           isDirectory: entry === "__dir__",
           isFile: entry !== "__dir__",
-          size: entry === "__dir__" ? 0 : entry.length,
+          size,
           mtime: new Date(),
         };
       },
@@ -219,21 +229,20 @@ async function testDehydrateHydrateRoundTrip() {
   console.log("  ✓ dehydrate/hydrate round-trip for url and data source types");
 }
 
-async function testOldSessionCompatibility() {
+async function testInlineDataUrlWithoutMediaRef() {
   resetMediaStore();
 
-  // Simulate old session — no mediaRef metadata, value is a data URL
-  const oldMessages = [makeMessage([makeImagePart("url", TINY_PNG_DATA_URL)])];
+  // Runtime / not-yet-dehydrated message — no mediaRef, value is a data URL
+  const messages = [makeMessage([makeImagePart("url", TINY_PNG_DATA_URL)])];
 
-  // Hydrate should leave it as-is (no mediaRef to hydrate from)
-  const hydrated = await hydrateUIMessages(oldMessages);
+  const hydrated = await hydrateUIMessages(messages);
   assert.equal(
     hydrated[0].parts[0].source.value,
     TINY_PNG_DATA_URL,
-    "old session without mediaRef should be unchanged"
+    "inline data URL without mediaRef should pass through"
   );
 
-  console.log("  ✓ old session compatibility (no mediaRef)");
+  console.log("  ✓ inline data URL without mediaRef passes through");
 }
 
 async function testTypesUtils() {
@@ -278,6 +287,52 @@ async function testDuplicateContent() {
   console.log("  ✓ duplicate content skips re-write");
 }
 
+async function testBinaryOnDisk() {
+  resetMediaStore();
+  const store = getMediaStore();
+  const ref = await store.save(TINY_PNG_BASE64, "image/png", "pixel.png", "url");
+  const filePath = `.agents/media/${ref.hash}.png`;
+  const stored = inMemoryFs.get(filePath);
+  assert.ok(stored instanceof Uint8Array, "media file should be binary Uint8Array");
+  assert.equal(stored[0], 0x89, "PNG magic byte 0");
+  assert.equal(stored[1], 0x50, "PNG magic byte 1");
+  assert.equal(ref.size, stored.byteLength, "size should match decoded byte length");
+
+  const loaded = await store.load(ref);
+  assert.equal(loaded, TINY_PNG_DATA_URL, "binary file should hydrate to data URL");
+
+  console.log("  ✓ media files stored as binary PNG bytes");
+}
+
+async function testRepairStringifiedMultimodalOnHydrate() {
+  resetMediaStore();
+
+  const parts = [
+    { type: "text", content: "[Image #1: clipboard-test.png] what is this?" },
+    {
+      type: "image",
+      source: { type: "url", value: TINY_PNG_DATA_URL },
+      metadata: { mediaType: "image/png", filename: "clipboard-test.png", imageIndex: 1 },
+    },
+  ];
+  const corrupted = [makeMessage([{ type: "text", content: JSON.stringify(parts) }])];
+
+  const repaired = repairStringifiedMultimodalUIMessages(corrupted);
+  assert.equal(repaired[0].parts.length, 2, "should restore text + image parts");
+  assert.equal(repaired[0].parts[0].type, "text");
+  assert.equal(repaired[0].parts[1].type, "image");
+
+  const hydrated = await hydrateUIMessages(corrupted);
+  assert.equal(hydrated[0].parts.length, 2, "hydrate should repair then process");
+  assert.equal(hydrated[0].parts[1].type, "image");
+
+  const dehydrated = await dehydrateUIMessages(corrupted);
+  assert.equal(dehydrated[0].parts[1].type, "image");
+  assert.ok(dehydrated[0].parts[1].source.value.startsWith("media://"), "dehydrate after repair");
+
+  console.log("  ✓ repair stringified multimodal on hydrate/dehydrate");
+}
+
 // ============================================================================
 // Run
 // ============================================================================
@@ -290,9 +345,11 @@ async function main() {
   await testRoundTrip();
   await testExtractBase64();
   await testDehydrateHydrateRoundTrip();
-  await testOldSessionCompatibility();
+  await testInlineDataUrlWithoutMediaRef();
   await testTypesUtils();
   await testDuplicateContent();
+  await testBinaryOnDisk();
+  await testRepairStringifiedMultimodalOnHydrate();
 
   cleanupMockEnv();
 

@@ -14,11 +14,13 @@
  *    `source.type: "data"` (raw base64) are handled.
  * 3. **Scope** — only ImagePart/AudioPart/VideoPart/DocumentPart `source.value`.
  *    Tool output parts with nested base64 fields (non-ContentPart) are NOT processed.
- * 4. **Old session compatibility** — parts without `metadata.mediaRef` are skipped
- *    during hydrate, leaving `source.value` as-is (assumed to be a valid data URL).
+ * 4. **Inline runtime values** — parts without `metadata.mediaRef` that still
+ *    carry a data URL / raw base64 (or `media://` path) are left or resolved
+ *    as appropriate; dehydrated sessions always carry `mediaRef`.
  */
 
 import { getMediaStore } from "./media-store.js";
+import { repairStringifiedMultimodalUIMessages } from "./repair-stringified-multimodal.js";
 import { MEDIA_PROTOCOL, buildMediaRefPath, parseMediaRefPath } from "./types.js";
 
 import type { MediaRef } from "./types.js";
@@ -91,7 +93,8 @@ function cloneMessages(messages: UIMessage[]): UIMessage[] {
  */
 export async function dehydrateUIMessages(messages: UIMessage[]): Promise<UIMessage[]> {
   const store = getMediaStore();
-  const cloned = cloneMessages(messages);
+  // Repair interrupt-snapshot corruption before extracting media (legacy sessions).
+  const cloned = cloneMessages(repairStringifiedMultimodalUIMessages(messages));
 
   for (const message of cloned) {
     for (const part of message.parts) {
@@ -138,7 +141,8 @@ function isMediaRefValue(value: string): boolean {
  */
 export async function hydrateUIMessages(messages: UIMessage[]): Promise<UIMessage[]> {
   const store = getMediaStore();
-  const cloned = cloneMessages(messages);
+  // Restore multimodal parts that were persisted as JSON.stringify(ContentPart[]).
+  const cloned = cloneMessages(repairStringifiedMultimodalUIMessages(messages));
 
   for (const message of cloned) {
     for (const part of message.parts) {

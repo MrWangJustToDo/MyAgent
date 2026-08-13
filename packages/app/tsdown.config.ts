@@ -16,6 +16,7 @@ export default defineConfig([
       "src/utils/project-transcript.ts",
       "src/utils/user-message-images.ts",
       "src/utils/attachment-hash.ts",
+      "src/utils/apply-app-config.ts",
       "src/utils/get-messages.ts",
       "src/hooks/user-input-helpers.ts",
 

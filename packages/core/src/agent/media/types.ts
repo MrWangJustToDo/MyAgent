@@ -2,7 +2,7 @@
  * Media types — content-addressed asset references for session persistence.
  *
  * Binary assets (images, audio, PDFs) are extracted from inline base64 in
- * {@link UIMessage} parts and stored as content-addressed files under
+ * {@link UIMessage} parts and stored as content-addressed **binary** files under
  * `.agents/media/<hash>.<ext>`. The session JSON stores only the
  * {@link MediaRef} metadata and a `media://<hash>` reference.
  *
@@ -23,7 +23,11 @@ export const MEDIA_PROTOCOL = "media://";
  * as a data URL (or raw base64, matching the original source type).
  */
 export interface MediaRef {
-  /** SHA-256 hex digest of the base64 string (not the decoded binary). */
+  /**
+   * SHA-256 hex digest of the base64 string (not the decoded binary).
+   * On-disk files are binary bytes; the hash stays base64-based for stable
+   * content addressing.
+   */
   hash: string;
   /** MIME type (e.g. "image/png", "application/pdf"). */
   mimeType: string;

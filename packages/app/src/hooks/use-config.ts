@@ -1,6 +1,8 @@
 import { DEFAULT_LOCAL_OPENAI_BASE_URL, buildDefaultSystemPrompt, type ModelStyle } from "@my-agent/core";
 import { createState } from "reactivity-store";
 
+import { applyOptionalAppConfig, clearOptionalAppConfig } from "../utils/apply-app-config.js";
+
 import type { AppConfig } from "../adapter/types.js";
 
 // ============================================================================
@@ -49,8 +51,7 @@ export const useConfig = createState(
         state.config.extensionDirs = config.extensionDirs ?? [];
         state.config.continueSession = config.continueSession ?? false;
         state.config.resumeSession = config.resumeSession || "";
-        state.config.modelInfo = config.modelInfo;
-        state.config.providerMode = config.providerMode;
+        applyOptionalAppConfig(state.config, config);
         state.initialized = true;
 
         const { model, baseURL, systemPrompt, style } = state.config;
@@ -82,7 +83,7 @@ export const useConfig = createState(
         state.config.extensionDirs = [];
         state.config.continueSession = false;
         state.config.resumeSession = "";
-        state.config.providerMode = undefined;
+        clearOptionalAppConfig(state.config);
         state.helpRequested = false;
         state.initialized = false;
         state.key = "";

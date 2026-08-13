@@ -502,7 +502,9 @@ Set via `ManagedAgentConfig.compaction` in `agent-factory.ts`.
 
 Fields: `uiMessages` (includes in-chain summaries), `usage`, `cost`, `contextTokens`, `todos`, `todoPlanBound`, `planMode` (phase/markdown/path/seeded), `modelStyle`, `model`, metadata.
 
-**Binary media (v4):** On persist with `uiMessages`, `SessionService` clones → dehydrates Image/Audio/Video/Document parts to content-addressed files under `.agents/media/<hash>.<ext>`, writing `media://` refs + `metadata.mediaRef` into the session JSON. Runtime messages stay hydrated (data URLs / raw base64). Restore hydrates before UI/context; `this.data.uiMessages` stays dehydrated so model-only saves do not re-inline blobs. See `agent/media/`.
+**Binary media (v4):** On persist with `uiMessages`, `SessionService` clones → dehydrates Image/Audio/Video/Document parts to content-addressed **binary** files under `.agents/media/<hash>.<ext>`, writing `media://` refs + `metadata.mediaRef` into the session JSON. Runtime messages stay hydrated (data URLs / raw base64). Restore hydrates for the UI, then re-dehydrates into `this.data` and rewrites the session file (so interrupt-snapshot repairs and media extraction stick). See `agent/media/`.
+
+**Interrupt snapshot repair:** TanStack `MESSAGES_SNAPSHOT` (tool-approval interrupts) JSON.stringifies multimodal `ContentPart[]` into a string `content` field. `AgentUIChannel` rewrites those chunks via `repairMessagesSnapshotChunk` so UI history keeps `text` + `image` parts regardless of model vision capability. Hydrate/dehydrate also repair stringified parts.
 
 ### 6.2 Write paths (unified persist)
 
@@ -544,12 +546,18 @@ AgentManager.resumeSession(agentId, sessionId)
       → usage.reset(); hydrate uiMessages
       → restore usage, todos (ignore obsolete compact fields)
     → UI channel.setMessages(uiMessages) when channel present
+    → clear steer/follow-up queues (no-op before initChat)
+    → syncInteractionStateFromUIMessages (approval / ask_user)
+
+Host.create `{ resumeSessionId | continueSession }` and Session `session.resume`
+share that restore path. Create then calls `initChat(initialMessages)` because
+the chat controller does not exist yet.
 
 AgentManager.continueLatestSession(agentId)
   → store.getLatest() → resumeSession
 ```
 
-App passes `initialMessages` from resume into `ManagedAgent.initChat()`.
+App bootstrap resume still passes `initialMessages` from Host.create into `ManagedAgent.initChat()`.
 
 ### 6.4 Channel ↔ wire projection
 

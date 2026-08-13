@@ -327,3 +327,10 @@ export { MediaStore } from "./agent/media/media-store.js";
 export type { MediaRef } from "./agent/media/types.js";
 export { MEDIA_DIR, mimeToExtension, parseMediaRefPath, buildMediaRefPath } from "./agent/media/types.js";
 export { dehydrateUIMessages, hydrateUIMessages } from "./agent/media/media-utils.js";
+export { applyRestoredSessionChatState } from "./managers/managed-agent-session.js";
+export {
+  repairMessagesSnapshotChunk,
+  repairStringifiedMultimodalUIMessages,
+  parseStringifiedMultimodalContent,
+  isStringifiedMultimodalContentParts,
+} from "./agent/media/repair-stringified-multimodal.js";

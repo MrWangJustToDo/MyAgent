@@ -6,6 +6,7 @@ import { StreamProcessor } from "@tanstack/ai";
 
 import { Emitter } from "../utils/emitter.js";
 
+import { repairMessagesSnapshotChunk } from "./media/repair-stringified-multimodal.js";
 import { applyToolDenialReason } from "./run-helpers/apply-tool-denial-reason.js";
 import { stripEmptyAssistantShells } from "./run-helpers/empty-assistant-shell.js";
 import { shouldSuppressReplayedToolChunk } from "./run-helpers/suppress-replayed-tool-chunks.js";
@@ -232,12 +233,14 @@ export class AgentUIChannel {
 
   /** Process a single stream chunk (for incremental bridge during `runAgent`). */
   processChunk(chunk: StreamChunk): void {
-    if (shouldSuppressReplayedToolChunk(this.getMessages(), chunk)) {
+    // TanStack interrupt snapshots JSON.stringify multimodal ContentPart[]; repair first.
+    const normalized = repairMessagesSnapshotChunk(chunk);
+    if (shouldSuppressReplayedToolChunk(this.getMessages(), normalized)) {
       return;
     }
-    this.trackSummaryStreamPhase(chunk);
-    this.appendSummaryDelta(chunk);
-    this.processor.processChunk(chunk);
+    this.trackSummaryStreamPhase(normalized);
+    this.appendSummaryDelta(normalized);
+    this.processor.processChunk(normalized);
   }
 
   /** Finalize an incrementally processed stream. */

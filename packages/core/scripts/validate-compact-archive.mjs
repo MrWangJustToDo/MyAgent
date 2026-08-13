@@ -77,15 +77,19 @@ registerCoreEnv({
   getEnv: async () => ({}),
   homedir: async () => rootPath,
   fs: {
-    readFile: async (p) => {
+    readFile: async (p, encoding) => {
       const content = files.get(p);
       if (content == null) throw new Error(`ENOENT: ${p}`);
-      return content;
+      if (encoding === "buffer") {
+        return typeof content === "string" ? new TextEncoder().encode(content) : content;
+      }
+      return typeof content === "string" ? content : new TextDecoder().decode(content);
     },
     writeFile: async (p, content) => {
-      files.set(p, content);
+      const text = typeof content === "string" ? content : new TextDecoder().decode(content);
+      files.set(p, text);
       await fs.mkdir(path.dirname(p), { recursive: true });
-      await fs.writeFile(p, content, "utf8");
+      await fs.writeFile(p, text, "utf8");
     },
     mkdir: async (p) => {
       await fs.mkdir(p, { recursive: true });

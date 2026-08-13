@@ -80,6 +80,7 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
     modelInfo,
     continueSession: config.continueSession || undefined,
     resumeSessionId: config.resumeSession && config.resumeSession !== "__picker__" ? config.resumeSession : undefined,
+    // Survives `initConfig` via applyOptionalAppConfig (CLI BRAVE_API_KEY / WEBSEARCH_PROVIDER).
     ...(config.toolConfig ? { toolConfig: config.toolConfig } : {}),
   });
 

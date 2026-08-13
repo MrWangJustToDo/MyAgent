@@ -136,8 +136,9 @@ export type AgentSessionCommand =
   | { type: "extension.invokeCommand"; name: string; args?: string[] }
   /**
    * Restore an on-disk session onto the current agent (mid-session switch).
-   * Bootstrap resume at create-time uses Host.create `{ resumeSessionId | continueSession }` —
-   * both call ManagedAgent.restoreSession.
+   * Same `ManagedAgent.restoreSession` path as Host.create `{ resumeSessionId | continueSession }`.
+   * Also clears steer/follow-up queues and reconciles approval / ask_user status
+   * from the restored messages.
    */
   | { type: "session.resume"; sessionId: string }
   /** List on-disk sessions for the resume picker. */

@@ -42,15 +42,13 @@ export function createNativeFilesystem(
   };
 
   const filesystem: CoreEnvFs = {
-    readFile: async (filePath: string) => {
+    readFile: (async (filePath: string, encoding?: string) => {
       const fullPath = resolvePath(filePath);
+      if (encoding === "buffer") {
+        return fs.readFile(fullPath);
+      }
       return fs.readFile(fullPath, "utf-8");
-    },
-
-    readFileBuffer: async (filePath: string) => {
-      const fullPath = resolvePath(filePath);
-      return fs.readFile(fullPath);
-    },
+    }) as CoreEnvFs["readFile"],
 
     stat: async (filePath: string) => {
       const fullPath = resolvePath(filePath);
@@ -63,10 +61,14 @@ export function createNativeFilesystem(
       };
     },
 
-    writeFile: async (filePath: string, content: string) => {
+    writeFile: async (filePath: string, content: string | Uint8Array) => {
       const fullPath = resolvePath(filePath);
       await fs.mkdir(path.dirname(fullPath), { recursive: true });
-      await fs.writeFile(fullPath, content, "utf-8");
+      if (typeof content === "string") {
+        await fs.writeFile(fullPath, content, "utf-8");
+      } else {
+        await fs.writeFile(fullPath, content);
+      }
     },
 
     readdir: async (dirPath: string) => {

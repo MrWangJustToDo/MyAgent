@@ -37,23 +37,17 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string, onChang
   const wd = (resolvedPath: string): string => toWorkdirPath(rootPath, resolvedPath);
 
   return {
-    readFile: async (filePath) => {
+    readFile: (async (filePath: string, encoding?: string) => {
       const fullPath = wd(resolve(filePath));
       try {
+        if (encoding === "buffer") {
+          return await fs.readFile(fullPath);
+        }
         return await fs.readFile(fullPath, "utf-8");
       } catch (err) {
         wrapFsError(err, filePath);
       }
-    },
-
-    readFileBuffer: async (filePath) => {
-      const fullPath = wd(resolve(filePath));
-      try {
-        return await fs.readFile(fullPath);
-      } catch (err) {
-        wrapFsError(err, filePath);
-      }
-    },
+    }) as CoreEnvFs["readFile"],
 
     stat: async (filePath) => {
       const fullPath = wd(resolve(filePath));

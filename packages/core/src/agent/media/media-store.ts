@@ -1,19 +1,15 @@
 /**
  * MediaStore — content-addressed binary asset persistence.
  *
- * Stores extracted base64 data (images, audio, PDFs) as text files under
- * {@link MEDIA_DIR} using the SHA-256 hash of the base64 string as
- * the filename. Duplicate content is only stored once.
- *
- * The file content is the raw base64 string (without data URL prefix).
- * The `CoreEnvFs.writeFile` interface writes strings as UTF-8, which is
- * exactly what we need for base64 text.
+ * Stores extracted base64 data (images, audio, PDFs) as decoded binary under
+ * {@link MEDIA_DIR}, using the SHA-256 hash of the base64 string as the
+ * filename. Duplicate content is only stored once.
  *
  * @example
  * ```ts
  * const store = new MediaStore();
  * const ref = await store.save("iVBORw0KGgo...", "image/png", "screenshot.png");
- * // File written to .agents/media/abc123...png
+ * // File written to .agents/media/abc123...png (binary PNG bytes)
  * const dataUrl = await store.load(ref);
  * // "data:image/png;base64,iVBORw0KGgo..."
  * ```
@@ -78,14 +74,8 @@ export class MediaStore {
    * Save a binary asset from a base64-encoded value.
    *
    * Accepts both data URLs (`data:image/png;base64,...`) and raw base64.
-   * Content is stored as a text file under {@link MEDIA_DIR} with the
-   * SHA-256 hash as filename. Same content is only written once.
-   *
-   * @param value - Base64-encoded data (with or without data URL prefix)
-   * @param mimeType - MIME type of the asset (e.g. "image/png")
-   * @param filename - Original filename (optional, for display)
-   * @param sourceType - Original source type ("url" or "data")
-   * @returns MediaRef describing the stored asset
+   * Content is stored as decoded binary under {@link MEDIA_DIR} with the
+   * SHA-256 hash of the base64 string as filename. Same content is only written once.
    */
   async save(
     value: string,
@@ -95,17 +85,16 @@ export class MediaStore {
   ): Promise<MediaRef> {
     const base64 = extractBase64Content(value);
     const hash = await sha256Stable(base64);
-    const size = Math.ceil((base64.length * 3) / 4); // Approximate byte size from base64 length
+    const env = getEnv();
+    const bytes = env.base64Decode(base64);
+    const size = bytes.byteLength;
     const ext = mimeToExtension(mimeType);
     const filePath = `${MEDIA_DIR}/${hash}.${ext}`;
 
-    const env = getEnv();
-
-    // Check if file already exists — skip write if it does
     const exists = await env.fs.exists(filePath).catch(() => false);
     if (!exists) {
       await env.fs.mkdir(MEDIA_DIR).catch(() => {});
-      await env.fs.writeFile(filePath, base64);
+      await env.fs.writeFile(filePath, bytes);
     }
 
     return { hash, mimeType, filename, size, sourceType };
@@ -116,27 +105,22 @@ export class MediaStore {
    *
    * For `sourceType: "url"`, returns a data URL (`data:{mimeType};base64,...`).
    * For `sourceType: "data"`, returns raw base64.
-   *
-   * @returns The reconstructed source.value (same format as the original)
-   * @throws If the media file cannot be read
    */
   async load(ref: MediaRef): Promise<string> {
     const ext = mimeToExtension(ref.mimeType);
     const filePath = `${MEDIA_DIR}/${ref.hash}.${ext}`;
     const env = getEnv();
-
-    const base64 = await env.fs.readFile(filePath);
+    const bytes = await env.fs.readFile(filePath, "buffer");
+    const base64 = env.base64Encode(bytes);
 
     if (ref.sourceType === "url") {
       return buildDataUrl(ref.mimeType, base64);
     }
-    // sourceType === "data" — return raw base64
     return base64;
   }
 
   /**
    * Try to load a media asset, returning `null` on failure.
-   * Useful for graceful degradation on missing/corrupted files.
    */
   async tryLoad(ref: MediaRef): Promise<string | null> {
     try {

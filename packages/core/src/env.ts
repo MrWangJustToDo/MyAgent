@@ -99,16 +99,17 @@ export interface CoreEnvFsStat {
 }
 
 export interface CoreEnvFs {
-  /** Read file as UTF-8 text */
-  readFile(path: string, encoding?: string): Promise<string>;
-  /** Read file as binary data (for images, PDFs, etc.) */
-  readFileBuffer?(path: string): Promise<Uint8Array>;
+  /** Read file as UTF-8 text (default). */
+  readFile(path: string): Promise<string>;
+  /** Read file as binary bytes. */
+  readFile(path: string, encoding: "buffer"): Promise<Uint8Array>;
+  readFile(path: string, encoding?: string): Promise<string | Uint8Array>;
   /** Get file/directory stats */
   stat(path: string): Promise<CoreEnvFsStat>;
   /** List direct children of a directory */
   readdir(path: string): Promise<FileEntry[]>;
-  /** Create or overwrite a file, creating parent directories when supported */
-  writeFile(path: string, content: string): Promise<void>;
+  /** Create or overwrite a file (UTF-8 string or binary bytes), creating parent dirs when supported */
+  writeFile(path: string, content: string | Uint8Array): Promise<void>;
   /** Create a directory (recursive by default) */
   mkdir(path: string): Promise<void>;
   /** Return whether a path exists */

@@ -1133,6 +1133,11 @@ export class ManagedAgent {
     return this._chatController;
   }
 
+  /** Drop steer/follow-up queues without clearing the transcript. */
+  clearQueuedMessages(): void {
+    this._chatController?.clearQueuedMessages();
+  }
+
   reset(): void {
     const prevStatus = this.status;
     this.log?.info("agent", "Resetting agent", {
