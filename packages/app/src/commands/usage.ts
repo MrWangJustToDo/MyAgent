@@ -45,6 +45,13 @@ registerCommand({
       lines.push(`  Model:        ${model}`);
     }
 
+    // Overall cache hit ratio across the session lifetime (cumulative).
+    const cacheHitRatio = totalUsage.inputTokens > 0 ? (totalUsage.cacheReadTokens ?? 0) / totalUsage.inputTokens : 0;
+    if (cacheHitRatio > 0) {
+      lines.push("");
+      lines.push(`  Cache hit:    ${(cacheHitRatio * 100).toFixed(1)}%`);
+    }
+
     lines.push("");
     lines.push(`  ── Session Lifetime ──`);
     lines.push(`  Input:        ${fmt(totalUsage.inputTokens)} tokens (cumulative)`);
