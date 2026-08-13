@@ -463,6 +463,28 @@ body,
   display: flex;
   flex: 1;
   min-height: 0;
+  position: relative;
+}
+
+.workspace-code-tab--drag {
+  outline: 2px dashed rgba(99, 130, 255, 0.6);
+  outline-offset: -2px;
+}
+
+.workspace-code-tab--drag::after {
+  content: "Drop files / folders to upload";
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(22, 22, 26, 0.72);
+  color: #8aa2ff;
+  font-size: 14px;
+  font-weight: 500;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
 }
 
 .workspace-code-tab__sidebar {
@@ -1003,6 +1025,30 @@ body,
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   animation: panelEnter 0.2s ease-out;
+}
+
+.config-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+
+.config-panel__body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.config-panel__body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.config-panel__body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 @keyframes panelEnter {

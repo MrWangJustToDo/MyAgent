@@ -58,76 +58,87 @@ export const ConfigPanel = () => {
               Close
             </button>
           </div>
-          <label className={proxyMode ? "config-panel__disabled" : undefined}>
-            Model
-            <input
-              value={draft.model}
-              disabled={proxyMode}
-              onChange={(e) => setDraft((d) => ({ ...d, model: e.target.value }))}
-            />
-          </label>
-          <label className={proxyMode ? "config-panel__disabled" : undefined}>
-            Style
-            <select
-              value={draft.style}
-              disabled={proxyMode}
-              onChange={(e) => setDraft((d) => ({ ...d, style: e.target.value as ModelStyle }))}
-            >
-              <option value="openai">openai</option>
-              <option value="anthropic">anthropic</option>
-            </select>
-          </label>
-          <label className={proxyMode ? "config-panel__disabled" : undefined}>
-            Base URL
-            <input
-              value={draft.baseURL}
-              disabled={proxyMode}
-              onChange={(e) => setDraft((d) => ({ ...d, baseURL: e.target.value }))}
-            />
-          </label>
-          <label className={proxyMode ? "config-panel__disabled" : undefined}>
-            API key
-            <input
-              type="password"
-              value={draft.apiKey}
-              disabled={proxyMode}
-              onChange={(e) => setDraft((d) => ({ ...d, apiKey: e.target.value }))}
-              placeholder="stored in localStorage"
-            />
-          </label>
-          <label>
-            Provider server URL
-            <input
-              value={draft.providerServerUrl}
-              onChange={(e) => setDraft((d) => ({ ...d, providerServerUrl: e.target.value }))}
-              placeholder="http://localhost:3100"
-            />
-          </label>
-          <span className={`config-panel__mode ${proxyMode ? "config-panel__mode--proxy" : ""}`}>
-            {proxyMode
-              ? "Proxy mode — local model / base URL / API key are ignored"
-              : "Direct mode — using local provider settings"}
-          </span>
-          <label>
-            Fetch proxy URL
-            <input
-              value={draft.fetchProxyUrl}
-              onChange={(e) => setDraft((d) => ({ ...d, fetchProxyUrl: e.target.value }))}
-              placeholder="https://….workers.dev (required on GitHub Pages)"
-            />
-          </label>
-          <label className="config-panel__toggle">
-            <span>Workspace panel</span>
-            <input
-              type="checkbox"
-              role="switch"
-              checked={workspaceVisible}
-              onChange={(e) => {
-                setConfig({ workspaceVisible: e.target.checked });
-                setDraft((d) => ({ ...d, workspaceVisible: e.target.checked }));
-              }}
-            />
-          </label>
+          <div className="config-panel__body">
+            <label className={proxyMode ? "config-panel__disabled" : undefined}>
+              Model
+              <input
+                value={draft.model}
+                disabled={proxyMode}
+                onChange={(e) => setDraft((d) => ({ ...d, model: e.target.value }))}
+              />
+            </label>
+            <label className={proxyMode ? "config-panel__disabled" : undefined}>
+              Style
+              <select
+                value={draft.style}
+                disabled={proxyMode}
+                onChange={(e) => setDraft((d) => ({ ...d, style: e.target.value as ModelStyle }))}
+              >
+                <option value="openai">openai</option>
+                <option value="anthropic">anthropic</option>
+              </select>
+            </label>
+            <label className={proxyMode ? "config-panel__disabled" : undefined}>
+              Base URL
+              <input
+                value={draft.baseURL}
+                disabled={proxyMode}
+                onChange={(e) => setDraft((d) => ({ ...d, baseURL: e.target.value }))}
+              />
+            </label>
+            <label className={proxyMode ? "config-panel__disabled" : undefined}>
+              API key
+              <input
+                type="password"
+                value={draft.apiKey}
+                disabled={proxyMode}
+                onChange={(e) => setDraft((d) => ({ ...d, apiKey: e.target.value }))}
+                placeholder="stored in localStorage"
+              />
+            </label>
+            <label>
+              Provider server URL
+              <input
+                value={draft.providerServerUrl}
+                onChange={(e) => setDraft((d) => ({ ...d, providerServerUrl: e.target.value }))}
+                placeholder="http://localhost:3100"
+              />
+            </label>
+            <span className={`config-panel__mode ${proxyMode ? "config-panel__mode--proxy" : ""}`}>
+              {proxyMode
+                ? "Proxy mode — local model / base URL / API key are ignored"
+                : "Direct mode — using local provider settings"}
+            </span>
+            <label>
+              Fetch proxy URL
+              <input
+                value={draft.fetchProxyUrl}
+                onChange={(e) => setDraft((d) => ({ ...d, fetchProxyUrl: e.target.value }))}
+                placeholder="https://….workers.dev (required on GitHub Pages)"
+              />
+            </label>
+            <label className="config-panel__toggle">
+              <span>Workspace panel</span>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={workspaceVisible}
+                onChange={(e) => {
+                  setConfig({ workspaceVisible: e.target.checked });
+                  setDraft((d) => ({ ...d, workspaceVisible: e.target.checked }));
+                }}
+              />
+            </label>
+            <p className="config-panel__hint">
+              <strong>Provider server URL</strong> switches to <em>proxy mode</em>: the server holds the API key (local
+              model / base URL / key are ignored). Only works if the server's CORS allows this origin.
+            </p>
+            <p className="config-panel__hint">
+              WebContainer cannot bypass CORS for webfetch/websearch. Locally Vite proxies at{" "}
+              <code>/__fetch_proxy</code>. On GitHub Pages, deploy <code>packages/playground/workers/fetch-proxy</code>{" "}
+              and paste the Worker URL here.
+            </p>
+          </div>
 
           <button
             type="button"
@@ -149,14 +160,6 @@ export const ConfigPanel = () => {
           >
             Export workspace…
           </button>
-          <p className="config-panel__hint">
-            <strong>Provider server URL</strong> switches to <em>proxy mode</em>: the server holds the API key (local
-            model / base URL / key are ignored). Only works if the server's CORS allows this origin.
-          </p>
-          <p className="config-panel__hint">
-            WebContainer cannot bypass CORS for webfetch/websearch. Locally Vite proxies at <code>/__fetch_proxy</code>.
-            On GitHub Pages, deploy <code>packages/playground/workers/fetch-proxy</code> and paste the Worker URL here.
-          </p>
         </div>
       )}
       {exportOpen && <ExportWorkspaceDialog onClose={() => setExportOpen(false)} />}

@@ -1,5 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 
+import { collectDropEntries, hasUsableDropItems, uploadEntryTree } from "../utils/upload-files.js";
+
 import { ExportWorkspaceDialog } from "./ExportWorkspaceDialog.js";
 import { FileTree } from "./FileTree.js";
 
@@ -88,7 +90,9 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
   const [exportOpen, setExportOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
+  const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
   const sidebarResizeRef = useRef(false);
   const sidebarLiveRef = useRef(sidebarWidth);
@@ -138,39 +142,100 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
     [modified, wc.fs, loadFile]
   );
 
-  const handleUpload = useCallback(
-    async (files: FileList) => {
-      setUploading(true);
-      setUploadStatus(`Uploading ${files.length} file${files.length > 1 ? "s" : ""}…`);
+  const finishUpload = useCallback((count: number) => {
+    setUploadStatus(`Uploaded ${count} file${count > 1 ? "s" : ""}`);
+    window.dispatchEvent(new CustomEvent("agent:action"));
+    setUploading(false);
+    setTimeout(() => setUploadStatus(""), 2000);
+  }, []);
+
+  const failUpload = useCallback((err?: unknown) => {
+    const detail = err instanceof Error ? err.message : typeof err === "string" ? err : String(err);
+    console.error("[workspace] upload failed", err);
+    setUploadStatus(`Upload failed: ${detail}`);
+    setUploading(false);
+    setTimeout(() => setUploadStatus(""), 6000);
+  }, []);
+
+  // Upload a FileList (from the file/folder pickers). Returns the count written.
+  const uploadFileList = useCallback(
+    async (files: FileList): Promise<number> => {
       let count = 0;
-      try {
-        for (const file of files) {
-          const relativePath = file.webkitRelativePath || file.name;
-          const parts = relativePath.split("/");
-          const destPath = "/" + parts.slice(parts[0] === "" ? 1 : 0).join("/");
-
-          const parentDir = destPath.slice(0, destPath.lastIndexOf("/"));
-          if (parentDir) {
-            await wc.fs.mkdir(parentDir, { recursive: true }).catch(() => {});
-          }
-
-          const content = await file.arrayBuffer();
-          await wc.fs.writeFile(destPath, new Uint8Array(content));
-          count++;
+      for (const file of files) {
+        const relativePath = file.webkitRelativePath || file.name;
+        const parts = relativePath.split("/");
+        const destPath = "/" + parts.slice(parts[0] === "" ? 1 : 0).join("/");
+        const content = new Uint8Array(await file.arrayBuffer());
+        // WebContainer's native writeFile does NOT create parent dirs — mkdir first.
+        const parentIdx = destPath.lastIndexOf("/");
+        if (parentIdx > 0) {
+          await wc.fs.mkdir(destPath.slice(0, parentIdx), { recursive: true }).catch(() => {});
         }
-        setUploadStatus(`Uploaded ${count} file${count > 1 ? "s" : ""}`);
-        window.dispatchEvent(new CustomEvent("agent:action"));
-      } catch {
-        setUploadStatus("Upload failed");
-      } finally {
-        setUploading(false);
-        setTimeout(() => setUploadStatus(""), 2000);
+        await wc.fs.writeFile(destPath, content);
+        count++;
       }
+      return count;
     },
     [wc.fs]
   );
 
+  const handleUpload = useCallback(
+    async (files: FileList) => {
+      setUploading(true);
+      setUploadStatus(`Uploading ${files.length} file${files.length > 1 ? "s" : ""}…`);
+      try {
+        const count = await uploadFileList(files);
+        finishUpload(count);
+      } catch (err) {
+        failUpload(err);
+      }
+    },
+    [uploadFileList, finishUpload, failUpload]
+  );
+
+  // Upload dropped files/folders by walking the entry tree.
+  const handleDrop = useCallback(
+    async (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      if (!e.dataTransfer.items || e.dataTransfer.items.length === 0) return;
+      setUploading(true);
+      setUploadStatus("Uploading…");
+      try {
+        const entries = collectDropEntries(e.dataTransfer.items);
+        let count = 0;
+        if (entries.length > 0) {
+          for (const entry of entries) {
+            count += await uploadEntryTree(wc, entry, "", () => {});
+          }
+        } else {
+          // Fallback: browsers without webkitGetAsEntry — upload plain FileList.
+          count = await uploadFileList(e.dataTransfer.files);
+        }
+        finishUpload(count);
+      } catch (err) {
+        failUpload(err);
+      }
+    },
+    [wc.fs, finishUpload, failUpload, uploadFileList]
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
   const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        void handleUpload(files);
+      }
+      e.target.value = "";
+    },
+    [handleUpload]
+  );
+
+  const handleFolderChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (files && files.length > 0) {
@@ -270,7 +335,22 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
   const filename = selectedPath?.split("/").pop() ?? "";
 
   return (
-    <div ref={containerRef} className="workspace-code-tab">
+    <div
+      ref={containerRef}
+      className={`workspace-code-tab${dragActive ? "workspace-code-tab--drag" : ""}`}
+      onDragOver={handleDragOver}
+      onDragEnter={(e) => {
+        e.preventDefault();
+        if (hasUsableDropItems(e.dataTransfer.items)) setDragActive(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false);
+      }}
+      onDrop={(e) => {
+        setDragActive(false);
+        void handleDrop(e);
+      }}
+    >
       <div className="workspace-code-tab__sidebar" style={{ width: sidebarWidth }}>
         <div className="workspace-code-tab__sidebar-header">Files</div>
         <FileTree
@@ -285,6 +365,14 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
       <div className="workspace-code-tab__editor">
         <div className="workspace-code-tab__editor-header">
           <input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={handleFileChange} />
+          <input
+            ref={folderInputRef}
+            type="file"
+            // @ts-expect-error webkitdirectory is a Chromium/WebKit extension
+            webkitdirectory=""
+            style={{ display: "none" }}
+            onChange={handleFolderChange}
+          />
           {selectedPath ? (
             <>
               <span className="workspace-code-tab__editor-filename">{filename}</span>
@@ -303,9 +391,18 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
             className="workspace-code-tab__header-btn"
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
-            title="Upload files or folders"
+            title="Upload files"
           >
-            {uploading ? "Uploading…" : "Upload"}
+            {uploading ? "Uploading…" : "Upload files"}
+          </button>
+          <button
+            type="button"
+            className="workspace-code-tab__header-btn"
+            disabled={uploading}
+            onClick={() => folderInputRef.current?.click()}
+            title="Upload a folder (directory picker)"
+          >
+            Upload folder
           </button>
           <button
             type="button"
