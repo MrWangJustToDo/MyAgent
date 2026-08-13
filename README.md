@@ -3,11 +3,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-22%2B-339933?logo=node.js)](https://nodejs.org)
 [![pnpm](https://img.shields.io/badge/pnpm-9%2B-F69220?logo=pnpm)](https://pnpm.io)
-[![TanStack AI](https://img.shields.io/badge/TanStack%20AI-0.40-000000?logo=vercel)](https://tanstack.com/ai)
+[![TanStack AI](https://img.shields.io/badge/TanStack%20AI-0.43-000000?logo=vercel)](https://tanstack.com/ai)
 
-An open-source AI coding agent built on [TanStack AI SDK](https://tanstack.com/ai) with a React-powered terminal UI and Chrome extension.
+An open-source AI coding agent built on [TanStack AI SDK](https://tanstack.com/ai) with a React-powered terminal UI, Chrome extension, and in-browser playground.
 
-Designed with a runtime-agnostic core that decouples agent logic from execution environment — run tools locally, proxy through an HTTP server, or embed in a browser extension.
+Designed with a runtime-agnostic core that decouples agent logic from the execution environment — run tools locally, proxy through an HTTP server, embed in a browser extension, or boot a WebContainer playground. Hosts talk to **AgentSession**; LLM keys and workspace I/O are independent planes.
 
 ---
 
@@ -19,17 +19,19 @@ Designed with a runtime-agnostic core that decouples agent logic from execution 
 | **Terminal UI** | React-powered TUI with Shiki syntax highlighting, scrollable diff views, streaming markdown, and theme support |
 | **Workspace Browser** | Full-screen file tree (`Ctrl+E`) with git status, Seti/Nerd Font icons, scrollable file preview, and HEAD diff view |
 | **Chrome Extension** | Full agent UI running in the browser via remote CoreEnv (WXT + HeroUI) |
-| **Local / Remote** | Run tools locally or proxy through an HTTP server — seamless switching via `--remote` |
-| **Tool Approval** | Review + approve/deny tool calls; scrollable diffs with Tab to switch when multiple edits are pending |
+| **Local / Remote** | Independent planes: workspace (`--remote`), LLM proxy (`--provider-remote`), Agent Session HTTP (`--agent-remote`) |
+| **Tool Approval** | Review + approve/deny tool calls; scrollable diffs with Tab when multiple edits are pending |
 | **Ask User** | Agent asks questions with selectable options or freeform answers |
-| **Subagents** | Context-isolated read-only tasks with 30-step limit for parallel exploration |
+| **Subagents** | Context-isolated read-only tasks (50-step cap) with live `Ctrl+T` preview |
 | **Skills** | On-demand domain knowledge injection (list → load workflow) |
-| **Context Compaction** | Tool-result compact + auto/reactive LLM summarization; cut-away transcripts archived under `.agents/transcripts/` for on-demand grep |
+| **Context Compaction** | `toModelOutput` tool shaping + auto/reactive LLM summarization; cut-away transcripts under `.agents/transcripts/` |
 | **Session Persistence** | Save/resume conversations under `.agents/sessions/` with auto-save |
 | **Memory** | Automatic cross-session knowledge extraction under `.agents/memory/` |
-| **Plan Mode** | Read-only planning → confirm → execute with todos (`/plan`, persisted under `.agents/plans/`) |
-| **Event System** | Full lifecycle event bus with logging bridge |
-| **Extensions** | Project/user modules under `.agents/extension` (tool before/after hooks, custom tools) |
+| **Modes** | `Shift+Tab` cycles Normal → Auto (skip approvals) → Plan; `/plan` and `/auto` for explicit control |
+| **Plan Mode** | Explore → review → Build → forced retro (`/plan`, persisted under `.agents/plans/`) |
+| **Background commands** | `run_command(run_in_background)` plus `get_command_output` / `kill_command` |
+| **Telemetry** | Lifecycle telemetry bus (bridged to agent log); hosts subscribe via AgentSession `lifecycle` |
+| **Extensions** | Project/user modules under `.agents/extension` (hooks, custom tools, slash commands; `Ctrl+Y` panel) |
 | **Sandbox** | Isolated command execution with OS-level sandboxing (`@anthropic-ai/sandbox-runtime`) |
 | **MCP Integration** | Connect to external MCP servers for additional tools |
 | **Web** | Multi-provider search (Brave when host passes `toolConfig.websearch.braveApiKey`, else DuckDuckGo) + page fetch |
@@ -42,30 +44,26 @@ Designed with a runtime-agnostic core that decouples agent logic from execution 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Runtime Hosts                                              │
-│  ┌──────────────────┐    ┌────────────────────────────┐     │
-│  │  @my-agent/cli   │    │  @my-agent/extension       │     │
-│  │  (Ink terminal)  │    │  (WXT Chrome extension)    │     │
-│  └────────┬─────────┘    └─────────────┬──────────────┘     │
-│           │      AgentAdapter           │                    │
-│  ┌────────┴────────────────────────────┴──────────────┐     │
-│  │  @my-agent/app  (shared UI, hooks, commands)       │     │
-│  └────────────────────────┬───────────────────────────┘     │
-│                           │  AgentManager / Tools           │
-│  ┌────────────────────────┴───────────────────────────┐     │
-│  │  @my-agent/core  (agent loop, tools, models, MCP)  │     │
-│  └────────────────────────┬───────────────────────────┘     │
-│                           │  CoreEnv interface               │
-│  ┌────────────────────────┴───────────────────────────┐     │
-│  │  CoreEnv Adapter Layer                              │     │
-│  │  ┌──────────────────┐  ┌────────────────────────┐  │     │
-│  │  │ @my-agent/node   │  │ @my-agent/server       │  │     │
-│  │  │ (local Node.js)  │  │ (remote HTTP client)   │  │     │
-│  │  └──────────────────┘  └───────────┬────────────┘  │     │
-│  └────────────────────────────────────┼───────────────┘     │
-│                                       │ Hono RPC            │
-│  ┌────────────────────────────────────┴───────────────┐     │
-│  │  @my-agent/server (HTTP server, uses node)         │     │
-│  └────────────────────────────────────────────────────┘     │
+│  ┌────────────┐  ┌──────────────────┐  ┌─────────────────┐  │
+│  │ cli (TUI)  │  │ extension (WXT)  │  │ playground      │  │
+│  └──────┬─────┘  └────────┬─────────┘  └────────┬────────┘  │
+│         │   AgentAdapter   │                     │          │
+│  ┌──────┴──────────────────┴─────────────────────┴───────┐  │
+│  │  @my-agent/app  (Session-only UI, hooks, commands)    │  │
+│  └──────────────────────────┬────────────────────────────┘  │
+│                             │  AgentSession                 │
+│  ┌──────────────────────────┴────────────────────────────┐  │
+│  │  @my-agent/core  (ManagedAgent, tools, models, MCP)   │  │
+│  └──────────────────────────┬────────────────────────────┘  │
+│                             │  CoreEnv  ·  ModelProvider    │
+│  ┌──────────────────────────┴────────────────────────────┐  │
+│  │  node (local)  │  server client (HTTP)  │  WebContainer│  │
+│  └──────────────────────────┬────────────────────────────┘  │
+│                             │ Hono RPC (`/api/env`,         │
+│                             │ `/api/provider`, `/api/agent`)│
+│  ┌──────────────────────────┴────────────────────────────┐  │
+│  │  @my-agent/server (uses @my-agent/node)               │  │
+│  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -86,18 +84,21 @@ CoreEnv and ModelProvider are independent (`--remote` vs `--provider-remote`).
 |------------|---------|----------|------|--------|
 | Local + CLI | `createNodeEnv` | direct | Terminal | Fully working |
 | Remote workspace + remote keys | `createRemoteCoreEnv` | proxy | Terminal | Working |
+| Local workspace + remote keys | `createNodeEnv` | proxy | Terminal | Working (`--provider-remote`) |
 | Remote + Extension | `createRemoteCoreEnv` | proxy or direct | Chrome | Working |
+| Playground | WebContainer | direct or proxy | Browser | Working (CORS / fetch proxy for web tools) |
 
 ### Package Overview
 
 | Package | Description |
 |---------|-------------|
-| `@my-agent/core` | Runtime-agnostic core: `ManagedAgent` runtime, 18 tools, LLM model factory, sessions, MCP, skills, memory, compaction, event bus |
-| `@my-agent/app` | Shared UI layer: React components, hooks, commands, `AgentAdapter` interface, theming |
+| `@my-agent/core` | Runtime-agnostic core: `ManagedAgent`, AgentSession, tools, models, MCP, skills, memory, compaction, telemetry |
+| `@my-agent/app` | Shared UI: React components, hooks, commands. **Session-only** for agent control |
 | `@my-agent/cli` | Terminal host using [@my-react/react-terminal](https://github.com/MrWangJustToDo/MyReact) |
-| `@my-agent/node` | Node.js CoreEnv implementation: native filesystem, shell execution, OS sandbox |
-| `@my-agent/server` | CoreEnv HTTP server (Hono RPC) + type-safe remote client factory |
-| `@my-agent/extension` | Chrome extension host using WXT framework |
+| `@my-agent/node` | Node.js CoreEnv: native filesystem, shell, OS sandbox |
+| `@my-agent/server` | CoreEnv HTTP + provider proxy + Agent Session routes + type-safe clients |
+| `@my-agent/extension` | Chrome extension host (WXT); requires a running server |
+| `@my-agent/playground` | In-browser WebContainer host (Vite); see [packages/playground/README.md](packages/playground/README.md) |
 | `@my-agent/mcp-server` | Standalone MCP server for external tool integration |
 
 > **Deep dive:** See [AGENTS.md](AGENTS.md) for full architecture, code conventions, and detailed guidelines. See [packages/core/ARCHITECTURE.md](packages/core/ARCHITECTURE.md) for the core runtime startup, initialization, session, memory, compaction, and approval flows.
@@ -108,14 +109,14 @@ CoreEnv and ModelProvider are independent (`--remote` vs `--provider-remote`).
 
 ### Welcome Screen
 
-Default and alternate theme on the idle screen. Header shortcuts: `/` commands, `Ctrl+E` workspace, `Ctrl+T` task panel, `Ctrl+V` paste image.
+Default and alternate theme on the idle screen. Header shortcuts: `/` commands, `Shift+Tab` cycle mode, `Ctrl+E` workspace, `Ctrl+T` task panel, `Ctrl+Y` extensions, `Esc` abort.
 
 ![Welcome — default theme](start-default.png)
 ![Welcome — alternate theme](start-theme.png)
 
 ### Slash Commands
 
-Type `/` to open the command palette with autocomplete (`/help`, `/compact`, `/resume`, `/usage`, …).
+Type `/` to open the command palette with autocomplete (`/help`, `/plan`, `/auto`, `/compact`, `/resume`, `/usage`, …).
 
 ![Slash commands](command.png)
 
@@ -191,17 +192,28 @@ pnpm build
 Create `.env` in the root:
 
 ```bash
-# Provider: openai | anthropic
+# Provider: openai | anthropic (or any OpenAI-compatible gateway)
 MODEL_STYLE=openai
 BASE_URL=https://api.deepseek.com
 API_KEY=sk-your-key-here
 MODEL=deepseek-v4-flash
 
+# Optional MODEL_* metadata overrides (name, context window, pricing, capabilities, …)
+# See packages/cli/src/model-env.ts
+
 # Sandbox: native (no sandbox) | local (OS sandbox)
 SANDBOX_ENV=native
 
-# Server port (for remote mode)
-SERVER_PORT=3200
+# Optional websearch
+# BRAVE_API_KEY=...
+# WEBSEARCH_PROVIDER=brave   # or duckduckgo / auto
+
+# Remote planes (orthogonal; default server port is 3100)
+# REMOTE=http://localhost:3100
+# PROVIDER_REMOTE=http://localhost:3100
+# AGENT_REMOTE=http://localhost:3100
+
+SERVER_PORT=3100
 ```
 
 Runtime data (sessions, memory, cache, plans, compaction transcripts, skills, extensions, MCP config) lives under a single gitignored **`.agents/`** directory. See [AGENTS.md — Workspace `.agents/` layout](AGENTS.md#workspace-agents-layout).
@@ -209,23 +221,30 @@ Runtime data (sessions, memory, cache, plans, compaction transcripts, skills, ex
 ### Running
 
 ```bash
-# Terminal CLI (local mode)
+# Terminal CLI (local workspace + local keys)
 pnpm start:cli
 
 # Start with a prompt
 pnpm start:cli -- "Explain this codebase"
 
-# Terminal CLI (remote mode — connect to a running server)
-pnpm start:cli -- --remote http://localhost:3200
+# Remote workspace (CoreEnv HTTP)
+pnpm start:cli -- --remote http://localhost:3100
 
-# Continue last session
+# Remote LLM keys only (local workspace)
+pnpm start:cli -- --provider-remote http://localhost:3100
+
+# Continue last session / pick a session
 pnpm start:cli -- --continue
+pnpm start:cli -- --resume
 
-# CoreEnv HTTP server (required for extension and remote CLI)
+# CoreEnv + provider + Agent Session HTTP server (required for extension / remote CLI)
 pnpm start:server
 
 # Browser extension dev server
 pnpm dev:extension
+
+# In-browser playground (WebContainer)
+pnpm dev:playground
 
 # MCP server
 pnpm start:mcp-server
@@ -238,9 +257,11 @@ pnpm start:mcp-server
 | Category | Tools |
 |----------|-------|
 | **File** | `read_file`, `write_file`, `edit_file`, `delete_file`, `glob`, `grep`, `tree`, `list_file` |
-| **System** | `run_command` |
-| **Web** | `websearch` (Brave / DuckDuckGo), `webfetch` (page fetch) |
-| **Agent** | `task` (subagents), `ask_user` (questions with multi-select), `todo` (task lists), `list_skills`, `load_skill` |
+| **System** | `run_command`, `get_command_output`, `kill_command` |
+| **Web** | `websearch` (Brave when host passes `toolConfig.websearch.braveApiKey`, else DuckDuckGo), `webfetch` |
+| **Agent** | `task` (subagents), `ask_user`, `todo` |
+| **Skills** | `list_skills`, `load_skill` |
+| **Plan** | `create_plan`, `update_plan`, `complete_plan` (offered only in the matching plan phase) |
 
 ---
 
@@ -268,8 +289,10 @@ Global shortcuts (from the header):
 | Key | Action |
 |-----|--------|
 | `/` | Open slash-command autocomplete |
+| `Shift+Tab` | Cycle mode: Normal → Auto → Plan |
 | `Ctrl+E` | Toggle workspace browser |
 | `Ctrl+T` | Open task / subagent panel |
+| `Ctrl+Y` | Open extensions panel |
 | `Ctrl+V` | Paste image from clipboard |
 | `Esc` | Abort run / dismiss panels (context-dependent) |
 
@@ -286,7 +309,7 @@ The CLI has **4 input modes** — shortcuts adapt to the current mode:
 | `Ctrl+V` | Paste image | — | — | — |
 | `Ctrl+C` | Exit | Exit | Exit | Exit |
 
-Slash commands: `/help`, `/compact`, `/plan`, `/clear`, `/rename`, `/resume`, `/mcp`, `/usage`, `/display`, `/theme`, `/paste`, `/quit`
+Slash commands: `/help`, `/shortcuts`, `/compact`, `/plan`, `/auto`, `/clear`, `/rename`, `/resume`, `/mcp`, `/usage`, `/display`, `/theme`, `/thinking`, `/paste`, `/quit`
 
 ---
 
@@ -301,11 +324,11 @@ pnpm build        # Production build (core → app → rest)
 pnpm clean        # Remove build artifacts
 ```
 
-> **Note:** No test framework is configured. Use `pnpm typecheck` and `pnpm build` for validation.
+> **Note:** There is no shared test runner. Packages use focused `validate:*` scripts plus `pnpm typecheck` and package builds. See [AGENTS.md — Task Completion Checklist](AGENTS.md#task-completion-checklist).
 
 ### Build Order
 
-`@my-agent/core` → `@my-agent/app` → `cli` / `server` / `extension`. Handled automatically by `pnpm build`.
+`@my-agent/core` → `@my-agent/app` → `cli` / `node` / `server` / `extension` / `playground`. Handled automatically by `pnpm build`.
 
 ### Code Style
 
@@ -322,7 +345,9 @@ pnpm clean        # Remove build artifacts
 |----------|-------------|
 | [CLAUDE.md](CLAUDE.md) | Quick reference for AI coding agents working in this repo |
 | [AGENTS.md](AGENTS.md) | Full architecture, code conventions, and detailed guidelines |
-| [packages/core/ARCHITECTURE.md](packages/core/ARCHITECTURE.md) | Core runtime deep-dive: startup, initialization, session, memory, compaction, approval |
+| [packages/core/ARCHITECTURE.md](packages/core/ARCHITECTURE.md) | Core runtime deep-dive: startup, session, compaction, approval |
+| [packages/app/README.md](packages/app/README.md) | App Session-only import allowlist |
+| [packages/playground/README.md](packages/playground/README.md) | WebContainer playground + GitHub Pages deploy |
 
 ---
 

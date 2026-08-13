@@ -23,7 +23,7 @@ This file provides guidelines for AI coding agents working in this repository.
 
 ## Project Overview
 
-A pnpm monorepo with seven packages organized in a layered architecture.
+A pnpm monorepo with eight packages organized in a layered architecture.
 
 **Core runtime deep-dive:** [packages/core/ARCHITECTURE.md](packages/core/ARCHITECTURE.md) — startup, initialization, session/memory/compaction/approval flows.
 
@@ -35,6 +35,7 @@ A pnpm monorepo with seven packages organized in a layered architecture.
 | `@my-agent/node` | Node.js CoreEnv implementation: native filesystem, shell, OS sandbox |
 | `@my-agent/server` | CoreEnv HTTP server (Hono RPC) + remote client factory |
 | `@my-agent/extension` | Chrome extension host using WXT framework |
+| `@my-agent/playground` | In-browser WebContainer host (Vite) |
 | `@my-agent/mcp-server` | MCP server for external tool integration |
 
 ## Architecture
@@ -49,10 +50,11 @@ A pnpm monorepo with seven packages organized in a layered architecture.
 │  │  (Ink terminal)  │  │  (WXT Chrome extension)    │   │
 │  └────────┬─────────┘  └─────────────┬──────────────┘   │
 │           │     AgentAdapter          │                  │
+│           │  (+ playground WebContainer host)            │
 │  ┌────────┴───────────────────────────┴──────────────┐   │
-│  │  @my-agent/app  (shared UI, hooks, commands)      │   │
+│  │  @my-agent/app  (Session-only UI, hooks, commands)│   │
 │  └────────────────────────┬──────────────────────────┘   │
-│                           │  AgentManager / Tools        │
+│                           │  AgentSession                │
 │  ┌────────────────────────┴──────────────────────────┐   │
 │  │  @my-agent/core  (agent loop, tools, CoreEnv)     │   │
 │  └────────────────────────┬──────────────────────────┘   │
@@ -525,13 +527,13 @@ Cursor-like lifecycle: explore → review → Build → forced retro → complet
 | `retro` | retro | Full tools + `complete_plan` | Forced retrospective; `complete_plan` requires `verificationResults` covering every checklist item (all passed). `/plan done` force-exits without that gate. |
 | `off` | — | Plan authoring/completion tools hidden | Default |
 
-**App:** `Shift+Tab` cycles modes (normal → auto → plan → normal → …); `/mode` opens the unified mode menu. When **review** (`ready`), press `p` (empty input) to toggle a bordered markdown plan preview in the banner (`Esc` closes). `/mode plan execute` Builds from review; `/mode plan cancel` pauses building → review; `/mode plan done` finishes retro (user force — no agent verification gate); `/mode plan status` reports phase; `/mode plan save` / `load` / `list` for named persistence (create/update already auto-save). Footer shows mode name (`Normal` / `Auto` / `planning` / `review · /mode plan execute` / `building n/m` / `retro`). `create_plan` / `update_plan` do not dump plan text into the tool transcript — review is via the banner preview.
+**App:** `Shift+Tab` cycles modes (normal → auto → plan → normal → …). `/plan` and `/auto` are the slash-command entry points (there is no `/mode` command). When **review** (`ready`), press `p` (empty input) to toggle a bordered markdown plan preview in the banner (`Esc` closes). `/plan execute` Builds from review; `/plan cancel` pauses building → review; `/plan done` finishes retro (user force — no agent verification gate); `/plan status` reports phase; `/plan save` / `load` / `list` for named persistence (create/update already auto-save). Footer shows mode name (`Normal` / `Auto` / `planning` / `review · /plan execute` / `building n/m` / `retro`). `create_plan` / `update_plan` do not dump plan text into the tool transcript — review is via the banner preview.
 
 **Core:** `ManagedAgent.planMode` (`PlanModeController`), tool filter in `run-agent`, `createPlanModeMiddleware`, prompts via turn context, `plan-verification` parse/gate helpers. See `packages/core/src/agent/plan/`. Validate: `pnpm --filter @my-agent/core run validate:plan-verification`.
 
-**Auto mode:** `/mode auto on` (or `/mode auto` to toggle) skips all tool approvals. Footer shows `Auto`. Mutually exclusive with plan mode (entering one clears the other). Cleared on `/clear` / reset; persisted as `SessionData.autoMode` (legacy sessions may still have `autoApprove`). While auto is on, turn context includes an `<auto_mode>` block.
+**Auto mode:** `/auto on` (or `/auto` to toggle) skips all tool approvals. Footer shows `Auto`. Mutually exclusive with plan mode (entering one clears the other). Cleared on `/clear` / reset; persisted as `SessionData.autoMode` (legacy sessions may still have `autoApprove`). While auto is on, turn context includes an `<auto_mode>` block.
 
-**Session / safety:** `/clear` and `ManagedAgent.reset()` always `planMode.disable()` and turn off auto mode. Resume restores `planMode` + `autoMode` with plan winning if both were somehow set. Plan building auto-approve still requires `executing` **and** `todosSeeded` (separate from `/mode auto`).
+**Session / safety:** `/clear` and `ManagedAgent.reset()` always `planMode.disable()` and turn off auto mode. Resume restores `planMode` + `autoMode` with plan winning if both were somehow set. Plan building auto-approve still requires `executing` **and** `todosSeeded` (separate from `/auto`).
 
 ## Subagent System
 
@@ -758,7 +760,10 @@ createNodeEnv({ rootPath: "/path", mode: "native" });   // No sandbox
 | `Ctrl+U` | Clear input | Clear input | - |
 | `Ctrl+A` | Select all | Select all | - |
 | `Ctrl+V` | Paste image | Paste image | - |
-| `Shift+Tab` | - | Toggle plan mode | - |
+| `Ctrl+E` | - | Toggle workspace browser | - |
+| `Ctrl+T` | - | Task / subagent panel | - |
+| `Ctrl+Y` | - | Extensions panel | - |
+| `Shift+Tab` | - | Cycle mode (normal → auto → plan) | - |
 | `y` | - | - | Approve (when input empty) |
 | `n` | - | - | Enter deny-reason mode |
 | `↑/↓` | - | Navigate history / autocomplete | Navigate autocomplete |
@@ -820,6 +825,7 @@ packages/
 ├── cli/src/                           # @my-agent/cli — terminal host (thin shell)
 │   ├── index.tsx                      # Entry point: arg parsing, CoreEnv registration, render
 │   ├── args.ts                        # CLI argument parser (sync, no CoreEnv dependency)
+│   ├── model-env.ts                   # MODEL_* env → ModelInfo (host-owned, not core)
 │   └── local-adapter.ts              # LocalAgentAdapter (delegates to createAgentFromConfig)
 │
 ├── node/src/                          # @my-agent/node — Node.js CoreEnv implementation
@@ -856,6 +862,8 @@ packages/
 │
 └── mcp-server/src/                    # @my-agent/mcp-server — MCP tool server
     └── index.ts
+
+playground/                            # @my-agent/playground — WebContainer host (Vite)
 ```
 
 ## Runtime Combinations
@@ -867,6 +875,7 @@ packages/
 | Remote workspace + local keys | `createRemoteCoreEnv` | `createDirectModelProvider` | Working (`--remote` without `--provider-remote`) |
 | Local workspace + remote keys | `createNodeEnv` | `createProxyModelProvider` | Working (`--provider-remote` without `--remote`) |
 | Remote CoreEnv + Extension | `createRemoteCoreEnv` | proxy (no local apiKey) or direct | Working; no command streaming, no stdio MCP |
+| Playground | WebContainer CoreEnv | direct or proxy | Working; web tools need fetch proxy; no stdio MCP |
 | Local CoreEnv + Extension | N/A | N/A | Not supported (extension requires a server) |
 
 ## Task Completion Checklist

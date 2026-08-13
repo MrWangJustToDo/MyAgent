@@ -8,12 +8,13 @@ See [AGENTS.md](AGENTS.md) for full architecture, code conventions, and detailed
 
 **Project:** "My Agent" — an AI coding agent built on TanStack AI. pnpm monorepo:
 
-- **`@my-agent/core`** — Runtime-agnostic core: ManagedAgent runtime, tools, models, CoreEnv interface
-- **`@my-agent/app`** — Shared UI layer: React components, hooks, adapter interface, commands
+- **`@my-agent/core`** — Runtime-agnostic core: ManagedAgent, AgentSession, tools, models, CoreEnv
+- **`@my-agent/app`** — Shared UI: React, hooks, commands. Session-only for agent control
 - **`@my-agent/cli`** — Terminal host using @my-react/react-terminal
 - **`@my-agent/node`** — Node.js CoreEnv implementation (filesystem, shell, OS sandbox)
-- **`@my-agent/server`** — CoreEnv HTTP server (Hono RPC) + remote client
-- **`@my-agent/extension`** — Chrome extension host using WXT framework
+- **`@my-agent/server`** — CoreEnv HTTP + provider proxy + Agent Session routes
+- **`@my-agent/extension`** — Chrome extension host using WXT (needs a server)
+- **`@my-agent/playground`** — In-browser WebContainer host
 - **`@my-agent/mcp-server`** — MCP server for external tool integration
 
 ## Commands
@@ -23,21 +24,22 @@ pnpm install              # Install dependencies
 pnpm build                # Build all (core → app → rest)
 pnpm dev                  # Watch mode for all packages
 pnpm start:cli            # Run CLI after build
-pnpm start:server         # Run CoreEnv HTTP server
+pnpm start:server         # Run CoreEnv HTTP server (default :3100)
+pnpm dev:playground       # WebContainer playground (Vite)
 pnpm typecheck            # Type check all packages
 pnpm lint                 # ESLint
 pnpm format               # Prettier
 ```
 
-No test framework is configured. Use `pnpm typecheck` and package builds for validation.
+No shared test runner. Use `pnpm typecheck`, package builds, and `validate:*` scripts. See [AGENTS.md](AGENTS.md) Task Completion Checklist.
 
-After completing a task, validate **once** (not after every edit): format/lint **changed files**, then `pnpm build:<affected>` (prefer package builds over full `pnpm build`). See [AGENTS.md](AGENTS.md) Task Completion Checklist.
+After completing a task, validate **once** (not after every edit): format/lint **changed files**, then `pnpm build:<affected>` (prefer package builds over full `pnpm build`).
 
 ## Key Rules
 
 - **ESM only** — all packages use `"type": "module"`. Use `.js` extensions in local imports.
 - **Double quotes**, semicolons required, 2-space indent, 120 char line width
-- **Build order**: core → app → cli/node/server/extension (handled by `pnpm build`)
+- **Build order**: core → app → cli/node/server/extension/playground (handled by `pnpm build`)
 - **Zod v4** for schemas
 - **Workspace deps**: use `workspace:*` for cross-package dependencies
 - **CoreEnv is the single source of truth** for `rootPath`, platform info, and environment variables
@@ -45,10 +47,10 @@ After completing a task, validate **once** (not after every edit): format/lint *
 ## Architecture Layers
 
 ```
-Hosts (CLI / Extension)
-  └─ App Layer (@my-agent/app) — shared UI, AgentAdapter interface
-      └─ Core Layer (@my-agent/core) — ManagedAgent, tools, CoreEnv registry
-          └─ CoreEnv Adapter Layer (@my-agent/node local | @my-agent/server remote)
+Hosts (CLI / Extension / Playground)
+  └─ App Layer (@my-agent/app) — Session-only UI, AgentAdapter
+      └─ Core Layer (@my-agent/core) — ManagedAgent, AgentSession, CoreEnv
+          └─ CoreEnv Adapter (node local | server remote | WebContainer)
 ```
 
 ## Environment Config
@@ -59,6 +61,7 @@ Hosts (CLI / Extension)
 SANDBOX_ENV=local          # local (OS sandbox) | native (no sandbox)
 REMOTE=http://localhost:3100           # remote CoreEnv (`--remote`)
 PROVIDER_REMOTE=http://localhost:3100  # remote LLM proxy (`--provider-remote`); orthogonal to REMOTE
+AGENT_REMOTE=http://localhost:3100     # Agent Session HTTP (`--agent-remote`)
 ```
 
 Workspace runtime data (sessions, memory, cache, plans, transcripts, skills, extensions, MCP) lives under gitignored `.agents/`. See [AGENTS.md](AGENTS.md) for the path layout.
