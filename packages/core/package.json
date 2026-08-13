@@ -43,6 +43,7 @@
     "validate:tanstack-tools": "pnpm run build && node scripts/validate-tanstack-tools.mjs",
     "validate:side-text-query": "pnpm run build && node scripts/validate-side-text-query.mjs",
     "validate:reactive-compact": "pnpm run build && node scripts/validate-reactive-compact.mjs",
+    "validate:auto-compact-noop": "pnpm run build && node scripts/validate-auto-compact-noop.mjs",
     "validate:run-stream-recovery": "pnpm run build && node scripts/validate-run-stream-recovery.mjs",
     "validate:stream-errors": "pnpm run build && node scripts/validate-stream-errors.mjs",
     "validate:capability-message-utils": "pnpm run build && node scripts/validate-capability-message-utils.mjs",

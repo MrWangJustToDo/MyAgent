@@ -271,6 +271,15 @@ export async function autoCompact(
   const toSummarize = messages.slice(summaryOffset, llmCutIndex);
   const keptMessages = messages.slice(llmCutIndex);
 
+  // Nothing older than the kept window to summarize (e.g. a single oversized
+  // LLM response filled the window right after a prior compact: [summary, user,
+  // llm, ...] with fewer than keepRecentFlows real user turns). Compacting here
+  // would run a wasteful no-op summary that barely shrinks context and appends a
+  // meaningless checkpoint. Bail out without calling the summarizer.
+  if (toSummarize.length === 0) {
+    return { compacted: false, tokensBefore, tokensAfter: tokensBefore, type: "auto" };
+  }
+
   // Convert cutIndex from "relative to llmMessages" to "relative to raw
   // context.messages" by subtracting the summary message offset. This makes
   // applyCompactionResult's `absoluteCut = oldCompactIndex + cutIndex` correct.
