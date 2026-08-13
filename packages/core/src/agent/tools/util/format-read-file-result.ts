@@ -1,3 +1,5 @@
+import { isContentPartArray } from "@tanstack/ai";
+
 import type { ReadFileOutput } from "../read-file-tool.js";
 import type { ModelToolContent } from "../runtime/to-model-output-registry.js";
 
@@ -10,6 +12,13 @@ import type { ModelToolContent } from "../runtime/to-model-output-registry.js";
  * Anthropic / other providers with native multimodal tool results.
  */
 export function formatReadFileToolResult(output: ReadFileOutput): ModelToolContent {
+  // Idempotency: on re-runs (resume / later turns) `toModelOutput` is fed the
+  // already-formatted ContentPart[] that the UI channel/session persists as a
+  // JSON string — not the raw ReadFileOutput. Detect it and pass through;
+  // the branches below would otherwise fall into `JSON.stringify(output)` and
+  // flatten image base64 back to plain text (breaking the image_url lift).
+  if (isContentPartArray(output)) return output;
+
   if (output.type === "image") {
     return [
       { type: "text", content: `Image read: ${output.path} (${Math.round(output.size / 1024)}KB)` },
