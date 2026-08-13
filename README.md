@@ -152,6 +152,20 @@ Spawn read-only subagents via the `task` tool. Open the task panel with `Ctrl+T`
 ![Task panel — live run](task-stream.png)
 ![Task panel — completed summary](task-view.png)
 
+### Task Panel
+
+Press `Ctrl+T` to open the task panel and inspect live subagent runs and completed summaries.
+
+![Task panel](task-panel.png)
+
+### Plan Mode
+
+Plan Mode (`/plan`, `Shift+Tab`) — explore → review → Build → forced retro. Preview plans before execution and track progress with the todo list.
+
+![Plan — review mode](plan-mode.png)
+![Plan — building](plan-build.png)
+![Plan — preview](plan-preview.png)
+
 ### Workspace Browser
 
 Press `Ctrl+E` for a full-screen workspace panel: file tree with git status badges, scrollable **Preview** (`CodeView`), and **Diff vs HEAD** (`DiffView`). **Tab** toggles preview/diff; **←→** moves focus; **↑↓** scrolls; **R** refreshes.
