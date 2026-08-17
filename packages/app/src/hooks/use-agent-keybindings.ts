@@ -360,7 +360,11 @@ export function useAgentKeybindings({
         return;
       }
       if (inputKey.return) {
-        acceptAutocomplete(false);
+        // Accept autocomplete first — matching normal mode. If an option was
+        // accepted, return here instead of re-submitting its text. "execute"
+        // options run immediately; "input" options (command → option list)
+        // only switch to the option list, requiring a second Enter to confirm.
+        if (acceptAutocomplete(true)) return;
         const { text: input } = inputActions.submit();
         if (input.startsWith("/")) {
           commandOutputActions.dismiss();
