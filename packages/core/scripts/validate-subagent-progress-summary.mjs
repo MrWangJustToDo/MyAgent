@@ -4,8 +4,8 @@
  * Covers:
  * (a) buildProgressSummaryPrompt serializes the subagent trace with
  *     `[Assistant tool calls]` and `[Tool result from]` segments.
- * (b) isProgressSummaryEligible trigger logic — true only for
- *     reachedLimit + incomplete + empty/(no summary)/cancel-notice output.
+ * (b) isProgressSummaryEligible trigger logic — true for reachedLimit +
+ *     incomplete + (empty output OR no begin_summary call).
  * (c) summarizeProgress silent failure — a throwing manager returns null and
  *     never changes the caller's output.
  * (d) deriveSubagentRunStats integration — a step-budget cutoff yields
@@ -19,6 +19,7 @@ import assert from "node:assert/strict";
 import {
   buildProgressSummaryPrompt,
   deriveSubagentRunStats,
+  hasBeginSummaryCall,
   isProgressSummaryEligible,
   PROGRESS_SUMMARY_MARKER,
   summarizeProgress,
@@ -85,16 +86,34 @@ assert.equal(
   "limit + incomplete + cancel notice"
 );
 
+// True: iteration limit + incomplete + non-empty exploration narration but NO
+// begin_summary call (the real-world cutoff: subagent was force-stopped mid
+// tool-loop, e.g. "Let me do a final check…"). Default calledBeginSummary=true
+// must NOT block this path when explicitly passed false.
+assert.equal(
+  isProgressSummaryEligible(true, true, "I now have a comprehensive picture. Let me do a final check…", false),
+  true,
+  "limit + incomplete + narration without begin_summary -> fallback"
+);
+
 // False: not incomplete (normal completion / aborted).
 assert.equal(isProgressSummaryEligible(false, false, "(no summary)"), false, "normal completion no fallback");
 assert.equal(isProgressSummaryEligible(false, true, "(no summary)"), false, "reachedLimit but not incomplete");
 assert.equal(isProgressSummaryEligible(true, false, "(no summary)"), false, "incomplete but not reachedLimit");
 
-// False: subagent produced usable partial content even at the limit.
+// False: subagent produced usable partial content AND called begin_summary at the limit.
 assert.equal(
-  isProgressSummaryEligible(true, true, "Found vitest in packages/core/package.json"),
+  isProgressSummaryEligible(true, true, "Found vitest in packages/core/package.json", true),
   false,
-  "limit + partial useful output no fallback"
+  "limit + partial useful output + begin_summary -> no fallback"
+);
+
+// False: called begin_summary (default) with non-empty output — old behavior
+// preserved for callers that don't pass the flag.
+assert.equal(
+  isProgressSummaryEligible(true, true, "I now have a comprehensive picture. Let me do a final check…"),
+  false,
+  "non-empty narration with default calledBeginSummary=true -> no fallback"
 );
 console.log("(b) isProgressSummaryEligible trigger matrix OK");
 
@@ -128,6 +147,34 @@ const cutOffStats = deriveSubagentRunStats({
 assert.equal(cutOffStats.reachedLimit, true, "step-budget cutoff marks reachedLimit");
 assert.equal(cutOffStats.incomplete, true, "step-budget cutoff marks incomplete");
 console.log("(d) deriveSubagentRunStats cutoff -> reachedLimit + incomplete OK");
+
+// Real-world integration (the bug this fallback fixes): a subagent force-stopped
+// mid tool-loop leaves exploration narration as output and never calls
+// begin_summary. isProgressSummaryEligible + hasBeginSummaryCall must agree the
+// run needs a progress summary even though the output is non-empty.
+assert.equal(hasBeginSummaryCall(traceMessages), false, "trace has no begin_summary");
+assert.equal(
+  isProgressSummaryEligible(
+    cutOffStats.incomplete,
+    cutOffStats.reachedLimit,
+    "I now have a comprehensive picture. Let me do a final check…",
+    hasBeginSummaryCall(traceMessages)
+  ),
+  true,
+  "mid-loop cutoff + narration + no begin_summary -> fallback fires"
+);
+
+// The old behavior (output non-empty -> skip) is wrong for the mid-loop cutoff.
+assert.equal(
+  isProgressSummaryEligible(
+    cutOffStats.incomplete,
+    cutOffStats.reachedLimit,
+    "I now have a comprehensive picture. Let me do a final check…"
+  ),
+  false,
+  "sanity: without the begin_summary flag this mid-loop case is NOT eligible"
+);
+console.log("(d) real mid-loop cutoff integration OK");
 
 // Marker constant exported for consumers.
 assert.equal(PROGRESS_SUMMARY_MARKER, "[progress summary from incomplete subagent]");

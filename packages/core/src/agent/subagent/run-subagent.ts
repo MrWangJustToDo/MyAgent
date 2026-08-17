@@ -12,7 +12,7 @@ import { getCurrentDate, getGitInfo } from "../turn-context/env-context.js";
 import { applySubagentCancelNotice, truncateSummary } from "./output.js";
 import { isProgressSummaryEligible, summarizeProgress } from "./progress-summary.js";
 import { buildExploreSystemPrompt } from "./prompt.js";
-import { captureStreamFinishReason, deriveSubagentRunStats } from "./run-stats.js";
+import { captureStreamFinishReason, deriveSubagentRunStats, hasBeginSummaryCall } from "./run-stats.js";
 import { resolveSubagentBridgeUI, SUBAGENT_DEFAULT_MAX_ITERATIONS } from "./types.js";
 
 import type { SubagentConfig, SubagentResult } from "./types.js";
@@ -211,14 +211,24 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
   };
 
   // Fallback: when the subagent hit the iteration budget before writing a final
-  // answer (reachedLimit + incomplete + nothing usable in the output), spawn a
-  // parent-owned summarizer that distills the execution trace into a structured
-  // progress report. Failure is silent — the original output is kept unchanged.
+  // answer (reachedLimit + incomplete), spawn a parent-owned summarizer that
+  // distills the execution trace into a structured progress report. This also
+  // covers the mid-tool-loop cutoff: output may hold exploration narration
+  // ("Let me do a final check…") but without a `begin_summary` call it is not a
+  // final answer. Failure is silent — the original output is kept unchanged.
   //
   // Gated to exploration subagents (default explore tools). Compaction / memory
   // summarizer subagents pass `tools: {}` — never fall back for them, or the
   // fallback would recursively spawn yet another summarizer.
-  if (!customTools && isProgressSummaryEligible(statusFlags.incomplete, statusFlags.reachedLimit, finalOutput)) {
+  if (
+    !customTools &&
+    isProgressSummaryEligible(
+      statusFlags.incomplete,
+      statusFlags.reachedLimit,
+      finalOutput,
+      hasBeginSummaryCall(previewMessages)
+    )
+  ) {
     const progressSummary = await summarizeProgress(previewMessages, parentAgentId, manager, prompt);
     if (progressSummary) {
       const truncatedResult = truncateSummary(progressSummary, maxOutputLength);

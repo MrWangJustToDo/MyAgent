@@ -137,13 +137,38 @@ export function buildProgressSummaryPrompt(messages: UIMessage[], taskPrompt?: s
 // Progress summary generation
 // ============================================================================
 
-/** Check whether a subagent's final output has no usable content (falls back to progress summary). */
-export function isProgressSummaryEligible(incomplete: boolean, reachedLimit: boolean, finalOutput: string): boolean {
+/**
+ * Check whether an iteration-limited subagent should fall back to a progress summary.
+ *
+ * Requires the subagent to have hit the step budget (`reachedLimit`) without a
+ * natural end (`incomplete`). On top of that, the fallback fires when:
+ * - the output is empty / `(no summary)` / a pure cancel notice (nothing usable), **or**
+ * - the subagent never called {@link BEGIN_SUMMARY_TOOL_NAME} — for explore
+ *   subagents that contract means even a non-empty output is only exploration
+ *   narration, not a final answer. A subagent force-stopped mid tool-loop (e.g.
+ *   "Let me do a final check...") would otherwise be treated as "has output" and
+ *   its wasted exploration would never be distilled.
+ *
+ * @param calledBeginSummary - Whether the subagent called `begin_summary`
+ *   (defaults to `true` so callers that don't know keep the old empty-output-only behavior).
+ */
+export function isProgressSummaryEligible(
+  incomplete: boolean,
+  reachedLimit: boolean,
+  finalOutput: string,
+  calledBeginSummary = true
+): boolean {
   if (!incomplete || !reachedLimit) return false;
 
   const trimmed = finalOutput.trim();
   // "(no summary)" or a pure cancel notice means the subagent produced nothing usable.
-  return trimmed.length === 0 || trimmed === "(no summary)" || trimmed.includes("[Task cancelled by user.]");
+  const emptyOutput =
+    trimmed.length === 0 || trimmed === "(no summary)" || trimmed.includes("[Task cancelled by user.]");
+  if (emptyOutput) return true;
+
+  // Non-empty output is only a final answer once `begin_summary` was called.
+  // Otherwise it's mid-exploration narration the parent can't trust as a result.
+  return !calledBeginSummary;
 }
 
 /**
