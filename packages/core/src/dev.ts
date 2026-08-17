@@ -162,6 +162,10 @@ export {
   DEFAULT_EXTENSION_DIR,
   getDefaultExtensionDirs,
   joinExtensionAppendSegments,
+  BUILTIN_INSTRUCTION_CONTEXT_ID,
+  INSTRUCTION_STATUS_KEY,
+  builtinInstructionContext,
+  formatInstructionStatusLabel,
 } from "./agent/extension";
 export {
   buildSystemPromptWithTurnContext,
@@ -182,6 +186,16 @@ export {
   findLatestTurnContextHash,
   insertTurnContextUIMessage,
 } from "./agent/turn-context";
+export {
+  INSTRUCTION_FILENAMES,
+  INSTRUCTION_MAX_BYTES,
+  diffInstructionStates,
+  formatInstructionContextSection,
+  instructionStateChanged,
+  loadLatestInstructionContent,
+  readInstructionContextState,
+} from "./agent/turn-context";
+export type { InstructionContextState, InstructionFile } from "./agent/turn-context";
 export {
   SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
   ANTHROPIC_CACHE_BREAKPOINT_CAP,

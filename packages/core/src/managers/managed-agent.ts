@@ -17,6 +17,13 @@ import { SummaryStreamHub } from "../agent/summary-stream/summary-stream-hub.js"
 import { defineServerTool } from "../agent/tools/runtime/define-tool.js";
 import { getCurrentDate, getGitInfo } from "../agent/turn-context/env-context.js";
 import {
+  formatInstructionContextSection,
+  instructionStateChanged,
+  loadLatestInstructionContent,
+  readInstructionContextState,
+  type InstructionContextState,
+} from "../agent/turn-context/instruction-context.js";
+import {
   buildTurnContextPayload,
   findLatestTurnContextHash,
   formatTurnContextUserContent,
@@ -277,6 +284,10 @@ export class ManagedAgent {
   private lastAdmittedTurnContextHash: string | undefined;
   /** Message count at the last turn_context admit (for periodic refresh). */
   private turnContextAdmitMessageCount: number;
+  /** Last-seen instruction file digest snapshot (for instruction change detection). */
+  private instructionContextState: InstructionContextState | undefined;
+  /** Once an instruction change is detected, keep re-injecting (stable payload). */
+  private instructionContextActive = false;
 
   constructor(
     config: ManagedAgentConfig,
@@ -383,6 +394,8 @@ export class ManagedAgent {
     this.systemPromptFrozen = false;
     this.lastAdmittedTurnContextHash = undefined;
     this.turnContextAdmitMessageCount = 0;
+    this.instructionContextState = undefined;
+    this.instructionContextActive = false;
 
     if (config.setUp) {
       return config.setUp(this);
@@ -859,6 +872,8 @@ export class ManagedAgent {
   resetAdmittedTurnContext(): void {
     this.lastAdmittedTurnContextHash = undefined;
     this.turnContextAdmitMessageCount = 0;
+    this.instructionContextState = undefined;
+    this.instructionContextActive = false;
   }
 
   clearTurnContext(): void {
@@ -866,6 +881,11 @@ export class ManagedAgent {
     this.turnContextSnapshot = undefined;
     this.extensionSystemAppendSnapshot = undefined;
     this.pendingExtensionTurnContext = undefined;
+    // NOTE: instructionContextState / instructionContextActive intentionally NOT
+    // reset here — like lastAdmittedTurnContextHash they must survive across user
+    // turns (clearTurnContext runs at every turn finalize). Otherwise every turn
+    // re-baselines and cross-turn instruction changes are never detected. Reset
+    // only on compact / full context reset (resetAdmittedTurnContext).
   }
 
   resetSystemPrompt(): void {
@@ -891,6 +911,13 @@ export class ManagedAgent {
     // Plan turn-context wins when plan is active; auto prompt only in pure auto mode.
     const autoModeContent = planState.phase === "off" && this.autoMode.isEnabled() ? buildAutoModePrompt() : undefined;
 
+    // Instruction files are frozen into the system prompt at startup; if the model
+    // edited AGENTS.md / CLAUDE.md since we last evaluated, re-inject the latest
+    // content. Only injected on change — unchanged keeps the payload byte-stable
+    // (prompt-cache friendly). First evaluation establishes the baseline (frozen
+    // system prompt already carries the initial content).
+    const instructionContext = await this.readChangedInstructionContext();
+
     return buildDynamicTurnContext({
       relevantMemoryContent: this.memory.getRelevantContent(),
       todoNagReminder,
@@ -900,7 +927,41 @@ export class ManagedAgent {
       planModeContent,
       autoModeContent,
       extensionTurnContext: this.pendingExtensionTurnContext,
+      instructionContext,
     });
+  }
+
+  /**
+   * Detect whether instruction files changed since the last evaluation and, when
+   * so, return the rendered `<instruction_context>` section with the latest content.
+   * Always refreshes the stored digest snapshot (baseline = first evaluation).
+   */
+  private async readChangedInstructionContext(): Promise<string | undefined> {
+    try {
+      const current = await readInstructionContextState();
+      // Baseline: the first evaluation only stores the snapshot without injecting —
+      // the frozen system prompt already carries the initial instructions. This also
+      // covers the restore-from-session case (fresh instance, no prior snapshot).
+      if (this.instructionContextState === undefined) {
+        this.instructionContextState = current;
+        return undefined;
+      }
+
+      const changed = instructionStateChanged(this.instructionContextState, current);
+      this.instructionContextState = current;
+      if (!this.instructionContextActive && !changed) return undefined;
+
+      // Sticky: once a change is detected we keep re-injecting the latest content so
+      // the payload stays stable across turns (prompt-cache friendly). A fresh
+      // change re-reads the newest file content into the section.
+      this.instructionContextActive = true;
+      const loaded = await loadLatestInstructionContent();
+      return formatInstructionContextSection(loaded);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log?.warn("agent", "Instruction-context detection failed", { error: message });
+      return undefined;
+    }
   }
 
   // ============================================================================

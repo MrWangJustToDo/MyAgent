@@ -76,9 +76,14 @@ export interface DynamicTurnContextInput {
   autoModeContent?: string;
   /** Extension-contributed situational context (nested under `<extension_context>`). */
   extensionTurnContext?: string;
+  /** Instruction-context re-injection (nested under `<instruction_context>`). */
+  instructionContext?: string;
 }
 
 export function buildDynamicTurnContext(input: DynamicTurnContextInput): string | undefined {
+  // Each section carries its own semantic tag so the model can distinguish
+  // purpose: <current_date> / <git_status> / <relevant_memories> / <reminder> /
+  // <plan_mode> or <auto_mode> / <instruction_context> / <extension_context>.
   const parts: string[] = [];
 
   if (input.currentDate) {
@@ -96,10 +101,14 @@ export function buildDynamicTurnContext(input: DynamicTurnContextInput): string 
     parts.push(["<git_status>", ...gitParts, "</git_status>"].join("\n"));
   }
 
-  if (input.relevantMemoryContent) parts.push(input.relevantMemoryContent);
-  if (input.todoNagReminder) parts.push(input.todoNagReminder);
-  if (input.planModeContent) parts.push(input.planModeContent);
-  else if (input.autoModeContent) parts.push(input.autoModeContent);
+  if (input.relevantMemoryContent) parts.push(input.relevantMemoryContent.trim());
+  if (input.todoNagReminder) parts.push(input.todoNagReminder.trim());
+  if (input.planModeContent) parts.push(input.planModeContent.trim());
+  else if (input.autoModeContent) parts.push(input.autoModeContent.trim());
+
+  if (input.instructionContext?.trim()) {
+    parts.push(input.instructionContext.trim());
+  }
 
   if (input.extensionTurnContext?.trim()) {
     parts.push(["<extension_context>", input.extensionTurnContext.trim(), "</extension_context>"].join("\n"));
