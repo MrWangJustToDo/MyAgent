@@ -5,8 +5,8 @@
 import { isTurnContextModelMessage } from "../turn-context/turn-context-message.js";
 
 import {
-  CONVERSATION_SUMMARY_END,
   extractCompactionSummaryBody,
+  hasOuterEndMarker,
   isCompactionSummaryModelMessage,
   isCompactionSummaryText,
 } from "./compaction-summary.js";
@@ -38,7 +38,11 @@ export function extractExistingSummary(messages: ModelMessage[]): {
   if (first.role !== "user") return { cleanMessages: messages };
 
   const text = extractTextFromContent(first.content);
-  if (!isCompactionSummaryText(text) || !text.includes(CONVERSATION_SUMMARY_END)) {
+  // Only treat it as a real compact checkpoint when the outer closing marker is
+  // present solo on its own line. This keeps summaries that merely quote the
+  // markers (or streamed bodies without a closing marker yet) from being
+  // mis-detected and swallowed.
+  if (!isCompactionSummaryText(text) || !hasOuterEndMarker(text)) {
     return { cleanMessages: messages };
   }
 

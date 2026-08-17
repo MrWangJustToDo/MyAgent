@@ -54,6 +54,15 @@ export {
   shouldFlattenPart,
 } from "./utils/dedupe-tool-calls.js";
 export { getUiToolState, isToolCallPart, isToolExecuting, parseToolInput } from "./utils/tool-part.js";
+export {
+  CONVERSATION_SUMMARY_START,
+  CONVERSATION_SUMMARY_END,
+  extractCompactionSummaryBody,
+  formatCompactionSummaryContent,
+  hasOuterEndMarker,
+  isCompactionSummaryText,
+  isCompactionSummaryUIMessage,
+} from "./utils/compaction-summary.js";
 
 // Types
 export type { Attachment } from "./types/attachment.js";
