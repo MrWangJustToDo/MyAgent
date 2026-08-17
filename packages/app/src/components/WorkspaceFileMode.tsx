@@ -293,6 +293,14 @@ export const WorkspaceFileMode = () => {
                 {gitInfo.shortSha}
               </Text>
             ) : null}
+            {(gitInfo.ahead > 0 || gitInfo.behind > 0) && (
+              <Text color={gitInfo.behind > 0 ? COLORS.warning : COLORS.muted} dimColor={gitInfo.behind === 0}>
+                {" "}
+                {gitInfo.behind > 0 ? `↓${gitInfo.behind}` : ""}
+                {gitInfo.ahead > 0 && gitInfo.behind > 0 ? " " : ""}
+                {gitInfo.ahead > 0 ? `↑${gitInfo.ahead}` : ""}
+              </Text>
+            )}
           </>
         )}
       </Box>

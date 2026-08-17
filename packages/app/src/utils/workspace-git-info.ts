@@ -9,6 +9,10 @@ export type WorkspaceGitInfo = {
   shortSha: string;
   /** Whether the worktree has uncommitted changes */
   dirty: boolean;
+  /** Commits ahead of the upstream (0 when no upstream / not computable) */
+  ahead: number;
+  /** Commits behind the upstream (0 when no upstream / not computable) */
+  behind: number;
 };
 
 /**
@@ -26,10 +30,11 @@ export async function fetchWorkspaceGitInfo(rootPath: string): Promise<Workspace
       return null;
     }
 
-    const [branchResult, shaResult, statusResult] = await Promise.all([
+    const [branchResult, shaResult, statusResult, aheadBehindResult] = await Promise.all([
       env.runCommand("git rev-parse --abbrev-ref HEAD", { cwd: rootPath }),
       env.runCommand("git rev-parse --short HEAD", { cwd: rootPath }),
       env.runCommand("git status --porcelain", { cwd: rootPath }),
+      env.runCommand("git status -sb --porcelain", { cwd: rootPath }),
     ]);
 
     const shortSha = shaResult.exitCode === 0 ? shaResult.stdout.trim() : "";
@@ -39,10 +44,40 @@ export async function fetchWorkspaceGitInfo(rootPath: string): Promise<Workspace
     }
 
     const dirty = statusResult.exitCode === 0 && statusResult.stdout.trim().length > 0;
-    return { branch, shortSha, dirty };
+    const { ahead, behind } = parseAheadBehind(aheadBehindResult.exitCode === 0 ? aheadBehindResult.stdout : "");
+    return { branch, shortSha, dirty, ahead, behind };
   } catch {
     return null;
   }
+}
+
+/**
+ * Parse ahead/behind counts from `git status -sb` branch line.
+ *
+ * Examples of the first line:
+ *   `## main`                       → 0/0 (no upstream)
+ *   `## main...origin/main [ahead 2]`
+ *   `## main...origin/main [behind 3]`
+ *   `## main...origin/main [ahead 1, behind 2]`
+ */
+export function parseAheadBehind(output: string): { ahead: number; behind: number } {
+  const result = { ahead: 0, behind: 0 };
+  const branchLine = output.split(/\n/)[0] ?? "";
+  const match = branchLine.match(/\[(ahead|behind)\s+(\d+)(?:,\s*(ahead|behind)\s+(\d+))?\]/);
+  if (!match) return result;
+
+  const firstKey = match[1];
+  const firstVal = Number(match[2]);
+  if (firstKey === "ahead") result.ahead = firstVal;
+  else result.behind = firstVal;
+
+  if (match[3] && match[4]) {
+    const secondKey = match[3];
+    const secondVal = Number(match[4]);
+    if (secondKey === "ahead") result.ahead = secondVal;
+    else result.behind = secondVal;
+  }
+  return result;
 }
 
 /** Compact single-line label, e.g. `main* abc1234`. */
