@@ -163,7 +163,7 @@ export function buildToolHeader(
   }
 
   if (parenText) {
-    header += chalk.gray.dim(parenText);
+    header += chalk.hex(COLORS.muted)(parenText);
   }
 
   return header;
