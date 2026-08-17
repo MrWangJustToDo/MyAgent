@@ -24,7 +24,7 @@
   "dependencies": {
     "@anthropic-ai/sandbox-runtime": "^0.0.52",
     "@my-agent/core": "workspace:*",
-    "@tanstack/ai-mcp": "^0.2.3",
+    "@tanstack/ai-mcp": "^0.3.0",
     "mime-types": "^3.0.2"
   },
   "devDependencies": {
