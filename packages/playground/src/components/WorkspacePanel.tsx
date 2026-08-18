@@ -4,13 +4,14 @@ import { usePlaygroundConfig } from "../hooks/use-playground-config.js";
 import { usePreviewPorts } from "../hooks/use-preview-ports.js";
 import { getBootedWebContainer } from "../webcontainer/create-env.js";
 
+import { VariantsPanel } from "./VariantsPanel.js";
 import { WorkspaceCodeTab } from "./WorkspaceCodeTab.js";
 
 import type { WebContainer } from "@webcontainer/api";
 
 const ROOT_PATH = "/";
 
-type TabId = "preview" | "code";
+type TabId = "preview" | "variants" | "code";
 
 export const WorkspacePanel = () => {
   const { setConfig } = usePlaygroundConfig.getActions();
@@ -98,6 +99,17 @@ export const WorkspacePanel = () => {
             onClick={() => setActiveTab("preview")}
           >
             Preview
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "variants"}
+            className={
+              activeTab === "variants" ? "workspace-panel__tab workspace-panel__tab--active" : "workspace-panel__tab"
+            }
+            onClick={() => setActiveTab("variants")}
+          >
+            Variants
           </button>
           <button
             type="button"
@@ -233,6 +245,12 @@ export const WorkspacePanel = () => {
             <div className="workspace-panel__placeholder-title">Booting workspace</div>
             <span>Waiting for WebContainer…</span>
           </div>
+        </div>
+      )}
+
+      {activeTab === "variants" && (
+        <div className="workspace-panel__body">
+          <VariantsPanel />
         </div>
       )}
     </aside>
