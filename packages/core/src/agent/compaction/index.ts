@@ -52,6 +52,7 @@ export {
   isCompactionSummaryModelMessage,
   isCompactionSummaryText,
   isCompactionSummaryUIMessage,
+  isLatestDurableMessageCompactionSummary,
   type GetModelVisibleMessagesOptions,
 } from "./message-chain-projection.js";
 export { extractCompactionSummaryBody } from "./compaction-summary.js";
@@ -92,6 +93,4 @@ export {
 export { isPromptTooLongError, reactiveCompact, getMaxReactiveRetries } from "./reactive-compact.js";
 export type { ReactiveCompactConfig } from "./reactive-compact.js";
 
-// Canonical model-message builder (used by compaction-middleware)
-export { buildCanonicalModelMessages } from "./build-canonical-model-messages.js";
 export type { TokenUsage } from "../../runtime-types/token-usage.js";

@@ -24,6 +24,5 @@ export interface AgentRunDeps {
   modelInfo: ModelInfo | null;
   getFrozenSystemPrompt: () => string | undefined;
   getUIChannel: () => AgentUIChannel | null;
-  getRunBaselineCount: () => number;
   shouldTriggerAutoCompact: (messages?: ModelMessage[]) => boolean;
 }

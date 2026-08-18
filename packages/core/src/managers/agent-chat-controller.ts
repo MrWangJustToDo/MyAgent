@@ -1,3 +1,4 @@
+import { findToolCallIdForApproval } from "../agent/approval/tool-approval-table.js";
 import { runAgentOnce } from "../agent/run/run-agent-skeleton.js";
 import { formatAgentStreamError } from "../agent/run-helpers/assert-async-iterable.js";
 import { stripEmptyAssistantShells } from "../agent/run-helpers/empty-assistant-shell.js";
@@ -220,7 +221,15 @@ export class AgentChatController {
 
   respondToToolApproval(approvalId: string, approved: boolean, reason?: string): Promise<void> {
     this.channel.addToolApprovalResponse(approvalId, approved, reason);
+    const toolCallId = findToolCallIdForApproval(this.channel.getMessages(), approvalId) ?? approvalId;
+    this.managed.approvals.upsert({
+      id: approvalId,
+      toolCallId,
+      status: approved ? "approved" : "denied",
+      reason: approved ? undefined : reason,
+    });
     this.managed.statusController.reconcileWithPolicy(this.channel.getMessages(), "during-run");
+    this.persistMessages("pump-complete");
     return this.enqueueRun();
   }
 
@@ -496,6 +505,11 @@ export class AgentChatController {
         const approvalId = toolCall.approval.id;
         if (approvalId) {
           this.channel.addToolApprovalResponse(approvalId, true);
+          this.managed.approvals.upsert({
+            id: approvalId,
+            toolCallId: toolCall.id,
+            status: "approved",
+          });
           didApprove = true;
         }
       }
@@ -503,6 +517,7 @@ export class AgentChatController {
 
     if (didApprove) {
       this.managed.statusController.reconcileWithPolicy(this.channel.getMessages(), "during-run");
+      this.persistMessages("pump-complete");
     }
   }
 }

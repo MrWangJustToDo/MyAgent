@@ -9,8 +9,8 @@ import { Emitter } from "../utils/emitter.js";
 import { repairMessagesSnapshotChunk } from "./media/repair-stringified-multimodal.js";
 import { applyToolDenialReason } from "./run-helpers/apply-tool-denial-reason.js";
 import { stripEmptyAssistantShells } from "./run-helpers/empty-assistant-shell.js";
+import { shouldSuppressMessagesSnapshot } from "./run-helpers/suppress-messages-snapshot.js";
 import { shouldSuppressReplayedToolChunk } from "./run-helpers/suppress-replayed-tool-chunks.js";
-import { shouldSuppressSummaryFirstSnapshot } from "./run-helpers/suppress-summary-first-snapshot.js";
 import {
   resolveTaskRunPhase,
   type TaskRunPhase,
@@ -234,15 +234,13 @@ export class AgentUIChannel {
 
   /** Process a single stream chunk (for incremental bridge during `runAgent`). */
   processChunk(chunk: StreamChunk): void {
-    // TanStack interrupt snapshots JSON.stringify multimodal ContentPart[]; repair first.
-    const normalized = repairMessagesSnapshotChunk(chunk);
-    if (shouldSuppressReplayedToolChunk(this.getMessages(), normalized)) {
+    // Engine snapshots must not replace the chronological channel (summary-first
+    // wire, or ordinary interrupt rebuilds that drop approval/state).
+    if (shouldSuppressMessagesSnapshot(chunk)) {
       return;
     }
-    // After compaction, an interrupt snapshot carries the summary-first wire
-    // projection (summary at index 0). Never overwrite the chronological channel
-    // with that — it would collapse pre-compact history and reorder the summary.
-    if (shouldSuppressSummaryFirstSnapshot(normalized)) {
+    const normalized = repairMessagesSnapshotChunk(chunk);
+    if (shouldSuppressReplayedToolChunk(this.getMessages(), normalized)) {
       return;
     }
     this.trackSummaryStreamPhase(normalized);

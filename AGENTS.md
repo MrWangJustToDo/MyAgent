@@ -196,7 +196,7 @@ Key integration points:
 - `core/src/models/model-config.ts` — connection resolution (`openai` | `anthropic` style, baseURL, apiKey, models.dev metadata)
 - `core/src/models/adapter-factory.ts` — TanStack text adapters (`createOpenaiChatCompletions`, `createAnthropicChat`)
 - `core/src/managers/run-agent.ts` — `AgentRunner` + `chat()` stream, compaction middleware
-- `core/src/agent/agent-context/` — Pure UI↔engine merge (`buildCanonicalModelMessages`); no durable store
+- `core/src/agent/compaction/` — Channel convert + summary-first wire projection (`getModelVisibleMessages`); engine messages are ephemeral
 - `core/src/agent/ui-channel.ts` — Durable UIMessage chain (SoT); compaction appends SUMMARY here
 - `core/src/agent/mcp/` — MCP via `@tanstack/ai-mcp` (`McpManager` re-wraps tool execute so multimodal `content[]` is not dropped when `structuredContent` is present)
 - `app/src/hooks/use-agent-chat.ts` — React hook via Session `dispatch` / subscribe (no ManagedAgent)
@@ -533,7 +533,7 @@ Cursor-like lifecycle: explore → review → Build → forced retro → complet
 
 **Auto mode:** `/auto on` (or `/auto` to toggle) skips all tool approvals. Footer shows `Auto`. Mutually exclusive with plan mode (entering one clears the other). Cleared on `/clear` / reset; persisted as `SessionData.autoMode` (legacy sessions may still have `autoApprove`). While auto is on, turn context includes an `<auto_mode>` block.
 
-**Session / safety:** `/clear` and `ManagedAgent.reset()` always `planMode.disable()` and turn off auto mode. Resume restores `planMode` + `autoMode` with plan winning if both were somehow set. Plan building auto-approve still requires `executing` **and** `todosSeeded` (separate from `/auto`).
+**Session / safety:** `/clear` and `ManagedAgent.reset()` always `planMode.disable()`, turn off auto mode, and clear the session `approvals` table. Resume restores `planMode` + `autoMode` with plan winning if both were somehow set, and restores `approvals` (or backfills from UIMessage parts when the field is missing). Chat `onConfig` rebuilds TanStack `resumeToolState.approvals` from that table so approved/denied tools do not re-prompt. Plan building auto-approve still requires `executing` **and** `todosSeeded` (separate from `/auto`).
 
 ## Subagent System
 
@@ -652,7 +652,7 @@ const agent = await agentManager.createManagedAgent({
 
 **Summarizer input:** The summarization subagent receives labeled segments — `<to_compress>` (pre-cut history) and `<still_in_context>` (kept turns) — plus optional `<previous-summary>` for incremental updates. Prompt rules tell the model to summarize the compressed segment thoroughly and use the kept segment only to align Goal/Next (no detailed restatement).
 
-**Post-compact (same request):** Append `[CONVERSATION SUMMARY]` onto the UI channel (chronological SoT). Compaction middleware then projects summary-first wire from the **channel** (not the pre-compact TanStack engine merge), sets `runBaselineCount` to a sentinel so later iterations prefer the projected engine (UI/engine index spaces diverge), and never writes the projection back. Recovery (`prompt_too_long` / retries) re-reads `managed.ui.getMessages()` live so mid-run appends are visible.
+**Post-compact (same request):** Append `[CONVERSATION SUMMARY]` onto the UI channel (chronological SoT). Compaction middleware then projects summary-first wire from the **live channel** and never writes the projection back. Auto-compact does not run again until a new durable message lands after that SUMMARY (window reset would otherwise re-trigger via `estimateTokens`). Recovery (`prompt_too_long` / retries) re-reads `managed.ui.getMessages()` live so mid-run appends are visible.
 
 **Transcript archive:** On successful auto, manual (`/compact`), or reactive compaction, the compressed slice is written as greppable markdown under `.agents/transcripts/<sessionId>/compact-<n>.md` (gitignored via `.agents`). The summary gets a runtime-managed `## Compact archives` list (merged across successive compactions). Search **newest → oldest** (`compact-N` first for recent details); prefer grep / small reads — not whole files. Prior archive sections are stripped before `<previous-summary>` so the summarizer does not restate path lists. Archive I/O failures are non-fatal; prior paths are still re-attached when known.
 
@@ -678,7 +678,7 @@ packages/core/src/agent/compaction/
 
 **Reasoning stripping (Layer 2)** is disabled in `compaction-middleware.ts` because DeepSeek thinking mode requires `reasoning_content` echo-back. DeepSeek endpoints use `ReasoningChatCompletionsTextAdapter`, which maps stream `reasoning_content` into `thinking` and writes it back on subsequent requests.
 
-**Reactive compaction** runs via `runStreamWithRecovery` (`managers/run-stream-recovery.ts`) — on `prompt_too_long` errors, `ManagedAgent.handleReactiveCompact()` appends a SUMMARY onto the live UI channel, realigns `runBaselineCount`, and retries (skipped for subagents). `getMessages` is a live channel read so the retry does not reuse a pre-run snapshot. The same shell also retries **transient** provider errors (429 / rate-limit / 502–504 / network) with exponential backoff for both main agent and subagents (honors Retry-After when available).
+**Reactive compaction** runs via `runStreamWithRecovery` (`managers/run-stream-recovery.ts`) — on `prompt_too_long` errors, `ManagedAgent.handleReactiveCompact()` appends a SUMMARY onto the live UI channel and retries (skipped for subagents). `getMessages` is a live channel read so the retry does not reuse a pre-run snapshot. The same shell also retries **transient** provider errors (429 / rate-limit / 502–504 / network) with exponential backoff for both main agent and subagents (honors Retry-After when available).
 
 ## Workspace `.agents/` layout
 
@@ -780,7 +780,6 @@ packages/
 ├── core/src/                          # @my-agent/core — runtime-agnostic core
 │   ├── env.ts                         # CoreEnv interface, registry (registerCoreEnv/getEnv/clearCoreEnv)
 │   ├── agent/
-│   │   ├── agent-context/             # buildCanonicalModelMessages (ephemeral UI↔engine merge)
 │   │   ├── agent-log/                 # AgentLog — structured logging
 │   │   ├── compaction/                # Append SUMMARY + summary-first wire projection
 │   │   ├── extension/                 # Extension API (loader, runner, EventBus interception)

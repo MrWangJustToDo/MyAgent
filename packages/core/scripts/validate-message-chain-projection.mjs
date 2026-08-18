@@ -3,9 +3,11 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:message-chain-projection
  */
+import { convertMessagesToModelMessages } from "@tanstack/ai";
 import assert from "node:assert/strict";
 
 import {
+  AgentUIChannel,
   createCompactionSummaryUIMessage,
   findCutPoint,
   findLatestSummaryIndex,
@@ -71,6 +73,33 @@ const assistant = (content) => ({ role: "assistant", content });
 {
   const ui = createCompactionSummaryUIMessage("hello");
   assert.ok(isCompactionSummaryUIMessage(ui));
+}
+
+// Post-compact same-request wire: convert the chronological channel, then
+// project. Channel order stays chronological; wire is summary-first. No
+// engine/baseline merge.
+{
+  const channel = new AgentUIChannel({
+    initialMessages: [
+      { id: "u1", role: "user", parts: [{ type: "text", content: "old1" }] },
+      { id: "a1", role: "assistant", parts: [{ type: "text", content: "r1" }] },
+      { id: "u2", role: "user", parts: [{ type: "text", content: "keep1" }] },
+      { id: "a2", role: "assistant", parts: [{ type: "text", content: "rk1" }] },
+      { id: "u3", role: "user", parts: [{ type: "text", content: "keep2" }] },
+      { id: "a3", role: "assistant", parts: [{ type: "text", content: "rk2" }] },
+    ],
+  });
+  channel.setMessages([...channel.getMessages(), createCompactionSummaryUIMessage("prior work done")]);
+
+  const afterAppend = channel.getMessages();
+  assert.equal(afterAppend[0].id, "u1", "channel must stay chronological after compact append");
+  assert.ok(isCompactionSummaryUIMessage(afterAppend[afterAppend.length - 1]));
+
+  const wire = getModelVisibleMessages(convertMessagesToModelMessages(afterAppend), { keepRecentFlows: 2 });
+  assert.ok(isCompactionSummaryModelMessage(wire[0]), "wire must start with the latest summary");
+  assert.equal(typeof wire[1]?.content === "string" ? wire[1].content : "", "keep1");
+  assert.ok(!wire.some((m) => typeof m.content === "string" && m.content === "old1"));
+  assert.equal(channel.getMessages()[0].id, "u1", "projection must not write wire order back to the channel");
 }
 
 console.log("validate:message-chain-projection OK");

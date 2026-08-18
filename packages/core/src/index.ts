@@ -68,7 +68,7 @@ export type { QueueMode } from "./agent/run-helpers/pending-message-queue.js";
 export type { TokenUsage } from "./agent/compaction";
 export type { LogEntry, LogCategory, LogLevel, LogFilter } from "./agent/agent-log";
 export type { TodoItem, TodoStatus, TodoPriority } from "./agent/todo-manager";
-export type { SessionMeta, SessionData, ResumeResult } from "./agent/persistence";
+export type { SessionMeta, SessionData, ResumeResult, ToolApprovalRecord } from "./agent/persistence";
 
 // ============================================================================
 // Agent Session API (host-facing transport-agnostic surface)

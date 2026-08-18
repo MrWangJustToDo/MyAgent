@@ -17,9 +17,10 @@
 
 import { runSubagent } from "../subagent/run-subagent.js";
 import { compactSummaryStreamId } from "../summary-stream/types.js";
+import { isTurnContextModelMessage } from "../turn-context/turn-context-message.js";
 
 import { buildCompactionPrompt, COMPACTION_SYSTEM_PROMPT } from "./compaction-prompt.js";
-import { formatCompactionSummaryContent } from "./compaction-summary.js";
+import { formatCompactionSummaryContent, isCompactionSummaryModelMessage } from "./compaction-summary.js";
 import { extractExistingSummary, findCutPoint } from "./cut-point.js";
 import { extractFileOpsFromMessages, formatFileOperations } from "./file-ops-tracker.js";
 import { buildSegmentedConversationText } from "./serialize-conversation.js";
@@ -215,10 +216,9 @@ export function createCompactedMessages(summary: string): ModelMessage[] {
 /**
  * Perform auto compaction on messages.
  *
- * `messages` is the chronological channel-derived list (may already include
- * prior `[CONVERSATION SUMMARY]` checkpoints mid-chain). After success the
- * caller appends a new SUMMARY onto the UI channel; middleware then projects
- * summary-first wire and realigns `runBaselineCount`.
+ * `messages` is the channel-derived list (chronological or already summary-first
+ * wire). After success the caller appends a new SUMMARY onto the UI channel;
+ * middleware then re-projects summary-first wire from the live channel.
  *
  * Algorithm:
  * 1. Detect a previous summary at index 0 when the input is already wire-ordered
@@ -277,6 +277,13 @@ export async function autoCompact(
   // would run a wasteful no-op summary that barely shrinks context and appends a
   // meaningless checkpoint. Bail out without calling the summarizer.
   if (toSummarize.length === 0) {
+    return { compacted: false, tokensBefore, tokensAfter: tokensBefore, type: "auto" };
+  }
+
+  // A previous SUMMARY sitting in the kept/cut window (or a just-appended
+  // checkpoint re-projected to the wire head) is not new history. Summarizing
+  // it would append a near-duplicate checkpoint without shrinking context.
+  if (toSummarize.every((message) => isCompactionSummaryModelMessage(message) || isTurnContextModelMessage(message))) {
     return { compacted: false, tokensBefore, tokensAfter: tokensBefore, type: "auto" };
   }
 

@@ -1,7 +1,11 @@
 import { convertMessagesToModelMessages, type ChatMiddleware, type ModelMessage } from "@tanstack/ai";
 
-import { applyCompactionResult, autoCompact, getModelVisibleMessages } from "../../agent/compaction";
-import { buildCanonicalModelMessages } from "../../agent/compaction/build-canonical-model-messages.js";
+import {
+  applyCompactionResult,
+  autoCompact,
+  getModelVisibleMessages,
+  isLatestDurableMessageCompactionSummary,
+} from "../../agent/compaction";
 
 import type { AgentLog } from "../../agent/agent-log";
 import type { CompactionConfig } from "../../agent/compaction/types.js";
@@ -16,15 +20,16 @@ export interface CompactionMiddlewareDeps {
   manager: AgentManager;
   getCompactionConfig: () => CompactionConfig | null;
   getUIChannel: () => AgentUIChannel | null;
-  getRunBaselineCount: () => number;
-  /** Update baseline after channel-mutating compact so later merges stay coherent. */
-  setRunBaselineCount?: (count: number) => void;
   getUsage: () => UsageTracker;
   getTodoManager: () => TodoManager | null;
   shouldTriggerAutoCompact: (messages?: ModelMessage[]) => boolean;
   status: AgentStatusController;
   log: AgentLog | null;
   emitEvent?: EmitAgentTelemetryFn;
+}
+
+function projectWireFromChannel(channel: AgentUIChannel, keepRecentFlows: number): ModelMessage[] {
+  return getModelVisibleMessages(convertMessagesToModelMessages(channel.getMessages()), { keepRecentFlows });
 }
 
 /** TanStack compaction via {@link ChatMiddleware.onConfig}. */
@@ -43,13 +48,15 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
       }
 
       const keepRecentFlows = deps.getCompactionConfig()?.keepRecentFlows ?? 2;
-      const canon = buildCanonicalModelMessages(channel.getMessages(), engineMessages, deps.getRunBaselineCount());
-      let llmMessages = getModelVisibleMessages(canon, { keepRecentFlows });
+      // Always project from the live channel. Early tool results and compact
+      // appends land on the channel before the next inner iteration.
+      let llmMessages = projectWireFromChannel(channel, keepRecentFlows);
 
       const managed = deps.manager.getAgent(deps.agentId);
       const isSubagent = Boolean(managed?.parentId);
 
-      if (!isSubagent && deps.shouldTriggerAutoCompact(llmMessages)) {
+      const alreadyCompacted = isLatestDurableMessageCompactionSummary(channel.getMessages());
+      if (!isSubagent && !alreadyCompacted && deps.shouldTriggerAutoCompact(llmMessages)) {
         try {
           deps.status.beginCompaction("auto");
 
@@ -62,13 +69,14 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
 
           const usage = deps.getUsage();
           const actualTokens = usage.getWindowUsage().inputTokens ?? 0;
+          const fromChannel = convertMessagesToModelMessages(channel.getMessages());
           const result = await autoCompact(llmMessages, deps.getCompactionConfig() ?? {}, deps.agentId, deps.manager, {
             todos: todos.length > 0 ? todos : undefined,
             actualTokens: actualTokens || undefined,
           });
 
           if (
-            applyCompactionResult(canon, channel, usage, result, {
+            applyCompactionResult(fromChannel, channel, usage, result, {
               keepRecentFlows,
               onCacheCleanupError: (err) => {
                 deps.emitEvent?.("compaction:auto-error", {
@@ -79,13 +87,7 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
             })
           ) {
             managed?.resetAdmittedTurnContext();
-            // Append grows the channel; TanStack then replaces engine with the
-            // summary-first wire (applyMiddlewareConfig). UI (chronological) and
-            // engine (projected) no longer share an index space — force the
-            // engine-prefer path until the next prepareForRun resets baseline.
-            const fromChannel = convertMessagesToModelMessages(channel.getMessages());
-            llmMessages = getModelVisibleMessages(fromChannel, { keepRecentFlows });
-            deps.setRunBaselineCount?.(Number.MAX_SAFE_INTEGER);
+            llmMessages = projectWireFromChannel(channel, keepRecentFlows);
           }
 
           if (result.compacted) {

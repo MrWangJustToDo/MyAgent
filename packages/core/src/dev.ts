@@ -12,7 +12,6 @@ export {
   shouldPersistUIMessages,
 } from "./agent/persistence/session-sync-tracker.js";
 export type { SessionSaveReason, SessionSyncSnapshot } from "./agent/persistence/session-sync-tracker.js";
-export { buildCanonicalModelMessages } from "./agent/compaction/build-canonical-model-messages.js";
 export { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, resolveFinishStatus } from "./managers/agent-status.js";
 export { AgentTelemetryBus } from "./managers/agent-telemetry-bus.js";
 export { bridgeTelemetryToAgentLog } from "./managers/event-log-bridge.js";
@@ -33,7 +32,7 @@ export {
   findToolCallPart,
   shouldSuppressReplayedToolChunk,
 } from "./agent/run-helpers/suppress-replayed-tool-chunks.js";
-export { shouldSuppressSummaryFirstSnapshot } from "./agent/run-helpers/suppress-summary-first-snapshot.js";
+export { shouldSuppressMessagesSnapshot } from "./agent/run-helpers/suppress-messages-snapshot.js";
 export { AgentChatController } from "./managers/agent-chat-controller.js";
 export { finalizeManagedAgentRun } from "./managers/managed-agent-run-lifecycle.js";
 export { PendingMessageQueue } from "./agent/run-helpers/pending-message-queue.js";
@@ -124,6 +123,7 @@ export {
   isCompactionSummaryModelMessage,
   isCompactionSummaryText,
   isCompactionSummaryUIMessage,
+  isLatestDurableMessageCompactionSummary,
   maybeAppendCompactArchive,
   parseCompactSequence,
   serializeConversation,
@@ -154,6 +154,13 @@ export {
   createLifecycleMiddleware,
 } from "./managers/middleware";
 export { createStatusMiddleware } from "./managers/middleware/status-middleware.js";
+export { createApprovalResumeMiddleware } from "./managers/middleware/approval-resume-middleware.js";
+export {
+  ToolApprovalTable,
+  approvalsToResumeMap,
+  backfillApprovalsFromUIMessages,
+  normalizeSessionApprovals,
+} from "./agent/approval/tool-approval-table.js";
 export {
   ExtensionLoader,
   ExtensionRunner,

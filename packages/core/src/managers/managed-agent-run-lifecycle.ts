@@ -2,7 +2,7 @@
  * Prepare / finalize / abort run lifecycle for {@link ManagedAgent}.
  */
 
-import { convertMessagesToModelMessages, type UIMessage as TanStackUIMessage, type ModelMessage } from "@tanstack/ai";
+import { type UIMessage as TanStackUIMessage, type ModelMessage } from "@tanstack/ai";
 
 import { getLatestUserMessage } from "../agent/compaction/message-utils.js";
 import { isToolContinuationPrepare } from "../agent/run-helpers/tool-phase-utils.js";
@@ -31,7 +31,6 @@ export interface RunLifecycleHost {
   consumePrepareAsContinuation: () => boolean;
   clearPrepareAsContinuation: () => void;
   beginTurnFinalize: () => boolean;
-  setRunBaselineCount: (count: number) => void;
   getStreamStartedAt: () => number;
   setStreamStartedAt: (value: number) => void;
   persistSession: () => void;
@@ -93,12 +92,6 @@ export async function prepareManagedAgentForRun(
       prompt: userMsg,
       contextMessageCount: (host.ui?.getMessages() ?? inputMessages).length,
     });
-  }
-
-  // Baseline after optional turn_context admission so engine/UI lengths stay aligned.
-  const baselineMessages = (host.ui?.getMessages() ?? options.messages) as TanStackUIMessage[] | undefined;
-  if (baselineMessages?.length) {
-    host.setRunBaselineCount(convertMessagesToModelMessages(baselineMessages).length);
   }
 }
 

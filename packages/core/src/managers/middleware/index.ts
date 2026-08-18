@@ -7,6 +7,7 @@ export {
   type EarlyToolResultUiMiddlewareDeps,
 } from "./early-tool-result-ui-middleware.js";
 export { createStatusMiddleware, type StatusMiddlewareDeps } from "./status-middleware.js";
+export { createApprovalResumeMiddleware, type ApprovalResumeMiddlewareDeps } from "./approval-resume-middleware.js";
 export { createTurnContextMiddleware, type TurnContextMiddlewareDeps } from "./turn-context-middleware.js";
 export { createPromptCacheMiddleware, type PromptCacheMiddlewareDeps } from "./prompt-cache-middleware.js";
 export { createPlanModeMiddleware, type PlanModeMiddlewareDeps } from "../../agent/plan/plan-mode-middleware.js";

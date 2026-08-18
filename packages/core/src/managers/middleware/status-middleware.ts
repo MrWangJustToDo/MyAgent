@@ -16,6 +16,7 @@ import type { ChatMiddleware } from "@tanstack/ai";
 
 export interface StatusMiddlewareDeps {
   status: AgentStatusController;
+  onApprovalRequested?: (approvalId: string, toolCallId: string) => void;
 }
 
 export function createStatusMiddleware(deps: StatusMiddlewareDeps): ChatMiddleware<ToolRunContext> {
@@ -37,6 +38,10 @@ export function createStatusMiddleware(deps: StatusMiddlewareDeps): ChatMiddlewa
     },
     onToolPhaseComplete: async (_ctx, info) => {
       deps.status.syncApprovals(info.needsApproval);
+      for (const approval of info.needsApproval) {
+        if (!approval.approvalId || !approval.toolCallId) continue;
+        deps.onApprovalRequested?.(approval.approvalId, approval.toolCallId);
+      }
     },
     onBeforeToolCall: async () => {
       deps.status.onBeforeToolCall();

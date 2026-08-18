@@ -1,18 +1,26 @@
 /**
- * Validates auto-compaction no-op guard for the oversized-response boundary.
+ * Validates auto-compaction no-op guards:
  *
- * When a single oversized LLM response fills the window right after a prior
- * compact ([summary, user, llm, user, llm, ...]) there may be fewer real user
- * turns than keepRecentFlows. autoCompact must bail out WITHOUT calling the
- * summarizer (no wasted LLM call, no meaningless checkpoint), even though the
- * token threshold is exceeded.
+ * - Oversized-response boundary: a single huge LLM reply after a prior compact
+ *   can leave fewer real user turns than keepRecentFlows. autoCompact must bail
+ *   WITHOUT calling the summarizer.
+ * - Trailing SUMMARY: after a successful compact the channel ends with a
+ *   checkpoint. The next onConfig must not stack another SUMMARY just because
+ *   window usage is 0 and estimateTokens(wire) is still over threshold.
+ * - toSummarize is only previous SUMMARY messages (the compact-6 duplicate).
  *
  * Run: pnpm --filter @my-agent/core run validate:auto-compact-noop
  */
-/* eslint-disable no-undef */
 import assert from "node:assert/strict";
 
-import { autoCompact, formatCompactionSummaryContent } from "../dist/dev.mjs";
+import {
+  autoCompact,
+  createCompactionSummaryUIMessage,
+  findCutPoint,
+  formatCompactionSummaryContent,
+  formatTurnContextUserContent,
+  isLatestDurableMessageCompactionSummary,
+} from "../dist/dev.mjs";
 
 /** Manager whose methods throw — proves the short-circuit never touches it. */
 const throwingManager = {
@@ -98,14 +106,9 @@ const scenarioC = [
 // summarizeConversation will run a subagent and fail without a real manager —
 // so this control simply proves the guard is NOT tripped by a rich history:
 // use findCutPoint directly for the boundary math instead.
-import { findCutPoint } from "../dist/dev.mjs";
-
 const controlCut = findCutPoint(scenarioC, 2, 0);
 assert.ok(controlCut > 1, `C: control history should cut past the summary (got ${controlCut})`);
-assert.ok(
-  scenarioC.slice(1, controlCut).length > 0,
-  "C: toSummarize must be non-empty for a rich history"
-);
+assert.ok(scenarioC.slice(1, controlCut).length > 0, "C: toSummarize must be non-empty for a rich history");
 console.log(`scenario C (rich history) -> cut at ${controlCut}, toSummarize non-empty OK`);
 
 // ============================================================================
@@ -121,5 +124,80 @@ const scenarioD = [
 const resultD = await autoCompact(scenarioD, { keepRecentFlows: 1 }, "agent-d", throwingManager);
 assert.equal(resultD.compacted, false, "D: single turn with summary must not compact");
 console.log("scenario D (summary + 1 turn) -> no-op OK");
+
+function uiUser(text) {
+  return { id: "u", role: "user", parts: [{ type: "text", content: text }] };
+}
+
+function uiTurnContext() {
+  return {
+    id: "tc",
+    role: "user",
+    parts: [{ type: "text", content: formatTurnContextUserContent("<current_date>\nnow\n</current_date>") }],
+  };
+}
+
+// ============================================================================
+// Scenario E: channel tail is already a SUMMARY (with optional trailing
+// turn_context). Middleware must skip auto-compact — this is the stacked
+// compact-5 + compact-6 failure mode.
+// ============================================================================
+assert.equal(
+  isLatestDurableMessageCompactionSummary([uiUser("继续"), createCompactionSummaryUIMessage("checkpoint 5")]),
+  true,
+  "E: last durable message is SUMMARY"
+);
+assert.equal(
+  isLatestDurableMessageCompactionSummary([
+    uiUser("继续"),
+    createCompactionSummaryUIMessage("checkpoint 5"),
+    createCompactionSummaryUIMessage("checkpoint 6"),
+  ]),
+  true,
+  "E: two stacked SUMMARYs still count as already compacted"
+);
+assert.equal(
+  isLatestDurableMessageCompactionSummary([createCompactionSummaryUIMessage("checkpoint 5"), uiTurnContext()]),
+  true,
+  "E: trailing turn_context is ignored"
+);
+assert.equal(
+  isLatestDurableMessageCompactionSummary([
+    createCompactionSummaryUIMessage("checkpoint 5"),
+    uiUser("继续"),
+    uiTurnContext(),
+  ]),
+  false,
+  "E: a new user turn after SUMMARY must allow compact"
+);
+assert.equal(isLatestDurableMessageCompactionSummary([]), false, "E: empty channel");
+console.log("scenario E (latest durable is SUMMARY) -> skip-trigger OK");
+
+// ============================================================================
+// Scenario F: summary-first wire whose toSummarize is only a previous SUMMARY
+// (compact-6: cutIndex 1, archive starts with [CONVERSATION SUMMARY]).
+// Must no-op without calling the summarizer.
+// ============================================================================
+const scenarioF = [
+  summaryMessage("checkpoint 5"),
+  summaryMessage("checkpoint 5 almost identical"),
+  userMessage("都提交并推送"),
+  assistantMessage("ok"),
+  userMessage("继续"),
+  assistantMessage("working"),
+];
+
+const cutF = findCutPoint(scenarioF, 2, 0);
+assert.equal(cutF, 2, `F: cut should land on the first real user (got ${cutF})`);
+assert.equal(scenarioF.slice(1, cutF).length, 1, "F: toSummarize is the leftover SUMMARY");
+assert.ok(
+  scenarioF.slice(1, cutF).every((m) => typeof m.content === "string" && m.content.includes("[CONVERSATION SUMMARY]")),
+  "F: toSummarize must be summary-only"
+);
+
+const resultF = await autoCompact(scenarioF, { keepRecentFlows: 2 }, "agent-f", throwingManager);
+assert.equal(resultF.compacted, false, "F: summary-only toSummarize must not compact");
+assert.equal(resultF.summary, undefined, "F: no summary should be produced");
+console.log("scenario F (toSummarize is previous SUMMARY) -> no-op OK");
 
 console.log("\nvalidate:auto-compact-noop passed");

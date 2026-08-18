@@ -31,7 +31,6 @@ export interface ReactiveCompactHost {
   statusController: AgentStatusController;
   getCanonicalFromUI: () => ModelMessage[];
   getMessagesForLLM: (canon?: ModelMessage[]) => ModelMessage[];
-  setRunBaselineCount: (count: number) => void;
   emitEvent: EmitAgentTelemetryFn;
   resetAdmittedTurnContext?: () => void;
   compactionConfig?: { keepRecentFlows?: number } | null;
@@ -76,9 +75,6 @@ export async function handleManagedReactiveCompact(
       },
     });
     host.resetAdmittedTurnContext?.();
-    // Recovery retries chat() without prepareForRun; UI stays chronological while
-    // the next onConfig projects summary-first onto the engine — prefer engine.
-    host.setRunBaselineCount(Number.MAX_SAFE_INTEGER);
 
     host.emitEvent("compaction:reactive-complete", {
       originalCount: llmMessages.length,

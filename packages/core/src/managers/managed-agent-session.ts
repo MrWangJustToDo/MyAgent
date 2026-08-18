@@ -7,6 +7,7 @@ import { readPlanFileAtRelativePath } from "../agent/plan/plan-store.js";
 import type { EmitAgentTelemetryFn } from "./emit-agent-telemetry.js";
 import type { SessionPersistInput, SessionService } from "./session-service.js";
 import type { UsageTracker } from "./usage-tracker.js";
+import type { ToolApprovalTable } from "../agent/approval/tool-approval-table.js";
 import type { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
 import type { SessionSyncTracker } from "../agent/persistence/session-sync-tracker.js";
 import type { SessionData } from "../agent/persistence/types.js";
@@ -25,6 +26,7 @@ export interface SessionHost {
   setAutoModeEnabled: (enabled: boolean) => void;
   session: SessionService;
   sessionSyncTracker: SessionSyncTracker;
+  approvals: ToolApprovalTable;
   toolCompactCache: ToolCompactCache;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   emitEvent: EmitAgentTelemetryFn;
@@ -46,6 +48,7 @@ export function getSessionPersistInput(host: SessionHost, uiMessages?: TanStackU
     planMode: host.planMode.getState(),
     // Mutual exclusivity: never persist auto while plan is active.
     autoMode: planOn ? false : host.isAutoModeEnabled(),
+    approvals: host.approvals.toArray(),
     resolveTextAdapter: host.resolveTextAdapter,
     emitEvent: (type, data) => host.emitEvent(type, data),
     uiMessages,
@@ -81,6 +84,7 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
   const planOn = host.planMode.getPhase() !== "off";
   const wantAuto = Boolean(session.autoMode ?? session.autoApprove);
   host.setAutoModeEnabled(planOn ? false : wantAuto);
+  host.approvals.restore(session.approvals ?? []);
 
   // Hydrate UI channel when present; hosts also apply uiMessages via resume APIs.
   if (host.ui) {

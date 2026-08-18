@@ -40,7 +40,7 @@
     "validate:read-file-model-output": "pnpm run build && node scripts/validate-read-file-model-output.mjs",
     "validate:agent-ui-channel": "pnpm run build && node scripts/validate-agent-ui-channel.mjs",
     "validate:suppress-replayed-tool-chunks": "pnpm run build && node scripts/validate-suppress-replayed-tool-chunks.mjs",
-    "validate:suppress-summary-first-snapshot": "pnpm run build && node scripts/validate-suppress-summary-first-snapshot.mjs",
+    "validate:suppress-messages-snapshot": "pnpm run build && node scripts/validate-suppress-messages-snapshot.mjs",
     "validate:tanstack-tools": "pnpm run build && node scripts/validate-tanstack-tools.mjs",
     "validate:side-text-query": "pnpm run build && node scripts/validate-side-text-query.mjs",
     "validate:reactive-compact": "pnpm run build && node scripts/validate-reactive-compact.mjs",
@@ -54,7 +54,6 @@
     "validate:subagent-progress-summary": "pnpm run build && node scripts/validate-subagent-progress-summary.mjs",
     "validate:compaction-messages": "pnpm run build && node scripts/validate-compaction-messages.mjs",
     "validate:message-chain-projection": "pnpm run build && node scripts/validate-message-chain-projection.mjs",
-    "validate:canonical-model-messages": "pnpm run build && node scripts/validate-canonical-model-messages.mjs",
     "validate:model-config": "pnpm run build && node scripts/validate-model-config.mjs",
     "validate:core-no-env-config": "node scripts/validate-core-no-env-config.mjs",
     "validate:core-public-exports": "pnpm run build && node scripts/validate-core-public-exports.mjs",
@@ -104,7 +103,8 @@
     "validate:websearch-providers": "pnpm run build && node scripts/validate-websearch-providers.mjs",
     "validate:media-store": "pnpm run build && node scripts/validate-media-store.mjs",
     "validate:repair-stringified-multimodal": "pnpm run build && node scripts/validate-repair-stringified-multimodal.mjs",
-    "validate:restore-session-chat-state": "pnpm run build && node scripts/validate-restore-session-chat-state.mjs"
+    "validate:restore-session-chat-state": "pnpm run build && node scripts/validate-restore-session-chat-state.mjs",
+    "validate:tool-approval-resume": "pnpm run build && node scripts/validate-tool-approval-resume.mjs"
   },
   "dependencies": {
     "@tanstack/ai": "^0.44.1",

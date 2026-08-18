@@ -38,6 +38,19 @@ export const sessionMetaSchema = z.object({
 
 export type SessionMeta = z.infer<typeof sessionMetaSchema>;
 
+export const toolApprovalStatusSchema = z.enum(["pending", "approved", "denied"]);
+
+export const toolApprovalRecordSchema = z.object({
+  id: z.string(),
+  toolCallId: z.string(),
+  status: toolApprovalStatusSchema,
+  reason: z.string().optional(),
+  updatedAt: z.number(),
+});
+
+export type ToolApprovalStatus = z.infer<typeof toolApprovalStatusSchema>;
+export type ToolApprovalRecord = z.infer<typeof toolApprovalRecordSchema>;
+
 export interface SessionData {
   /** Unique session identifier */
   id: string;
@@ -70,6 +83,11 @@ export interface SessionData {
   planMode?: PlanModeState | null;
   /** When true, skip all tool approvals (auto / YOLO mode). Older sessions omit this. */
   autoMode?: boolean;
+  /**
+   * Tool-approval interrupt table (pending / approved / denied).
+   * Older sessions omit this; runtime treats missing as `[]`.
+   */
+  approvals?: ToolApprovalRecord[];
   /**
    * @deprecated Legacy field renamed to `autoMode`. Kept for backward compatibility
    * with sessions persisted before the rename. New sessions use `autoMode`.

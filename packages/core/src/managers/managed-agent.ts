@@ -3,6 +3,7 @@ import { type ModelMessage, type UIMessage as TanStackUIMessage, convertMessages
 
 import { AutoModeController } from "../agent/approval/auto-mode-controller.js";
 import { buildAutoModePrompt } from "../agent/approval/auto-mode-prompt.js";
+import { ToolApprovalTable } from "../agent/approval/tool-approval-table.js";
 import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
 import { getModelVisibleMessages } from "../agent/compaction/message-chain-projection.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
@@ -200,6 +201,8 @@ export class ManagedAgent {
   readonly planMode: PlanModeController;
   /** Auto / YOLO mode — skip all tool approvals. Cleared on reset / `/clear`. */
   readonly autoMode: AutoModeController;
+  /** Session-backed tool-approval interrupt table. */
+  readonly approvals: ToolApprovalTable;
 
   // ============================================================================
   // Tools / registries / extensions
@@ -236,6 +239,7 @@ export class ManagedAgent {
   private textAdapter?: TextAdapterConfig;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   private _ui?: AgentUIChannel;
+  private approvalRequestUnsub?: () => void;
   /** Task / compact summary streams for the session `summary` channel. */
   readonly summaryStreams: SummaryStreamHub;
   private _chatController?: AgentChatController;
@@ -252,7 +256,6 @@ export class ManagedAgent {
   compactionConfig: CompactionConfig | null;
   readonly toolCompactCache: ToolCompactCache;
   readonly sessionSyncTracker: SessionSyncTracker;
-  private _runBaselineCount: number;
 
   // ============================================================================
   // Run lifecycle flags + timing
@@ -342,6 +345,7 @@ export class ManagedAgent {
       },
     });
     this.autoMode = new AutoModeController(() => this.emitStateChange());
+    this.approvals = new ToolApprovalTable();
 
     // ============================================================================
     // L1 state + local emitter (inline inits)
@@ -375,7 +379,6 @@ export class ManagedAgent {
     this.compactionConfig = null;
     this.toolCompactCache = new ToolCompactCache();
     this.sessionSyncTracker = createSessionSyncTracker();
-    this._runBaselineCount = 0;
 
     // ============================================================================
     // Run lifecycle flags + timing (inline inits)
@@ -557,15 +560,6 @@ export class ManagedAgent {
 
   getModelInfo(): ModelInfo | null {
     return this.modelInfo;
-  }
-
-  /** Model-message count at the start of the current `chat()` invocation. */
-  setRunBaselineCount(count: number): void {
-    this._runBaselineCount = Math.max(0, count);
-  }
-
-  getRunBaselineCount(): number {
-    return this._runBaselineCount;
   }
 
   /** Canonical model messages from the UI channel only. */
@@ -1208,6 +1202,7 @@ export class ManagedAgent {
     // Exit plan / auto-approve first so approval bypass cannot stick across sessions.
     this.planMode.disable();
     this.setAutoModeEnabled(false);
+    this.approvals.clear();
     this.run.resetRunState();
     this.statusController.resetToIdle();
     this.setError("");
@@ -1217,7 +1212,6 @@ export class ManagedAgent {
     this.extensionSystemAppendSnapshot = undefined;
     this.pendingExtensionTurnContext = undefined;
     this.log?.clear();
-    this._runBaselineCount = 0;
     this.usage.reset();
     this.todoManager?.reset();
     this.turnLifecycleFinalized = false;
@@ -1270,7 +1264,19 @@ export class ManagedAgent {
 
   /** @internal Wire chat / subagent UI channel (hosts read via {@link ui}). */
   setUIChannel(ui: AgentUIChannel | undefined): void {
+    this.approvalRequestUnsub?.();
+    this.approvalRequestUnsub = undefined;
     this._ui = ui;
+    if (ui) {
+      this.approvalRequestUnsub = ui.subscribeApprovalRequests((request) => {
+        if (!request.approvalId || !request.toolCallId) return;
+        this.approvals.upsert({
+          id: request.approvalId,
+          toolCallId: request.toolCallId,
+          status: "pending",
+        });
+      });
+    }
     this.stateEvents.emit("ui", ui);
   }
 }

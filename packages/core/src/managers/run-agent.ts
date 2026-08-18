@@ -13,6 +13,7 @@ import { resolvePromptCacheKey } from "../models/prompt-cache.js";
 import { createEmitTelemetryFn } from "./emit-agent-telemetry.js";
 import { buildManagedAgentDeps } from "./managed-agent-deps.js";
 import {
+  createApprovalResumeMiddleware,
   createCompactionMiddleware,
   createEarlyToolResultUiMiddleware,
   createExtensionsMiddleware,
@@ -120,6 +121,12 @@ export function buildAgentRunner(
   const middleware = [
     createStatusMiddleware({
       status: managed.statusController,
+      onApprovalRequested: (approvalId, toolCallId) => {
+        managed.approvals.upsert({ id: approvalId, toolCallId, status: "pending" });
+      },
+    }),
+    createApprovalResumeMiddleware({
+      getApprovals: () => managed.approvals.toArray(),
     }),
     createLifecycleMiddleware({
       usage: deps.usage,
@@ -133,8 +140,6 @@ export function buildAgentRunner(
       manager: deps.manager,
       getCompactionConfig: () => deps.compactionConfig,
       getUIChannel: () => deps.getUIChannel(),
-      getRunBaselineCount: () => deps.getRunBaselineCount(),
-      setRunBaselineCount: (count) => managed.setRunBaselineCount(count),
       getUsage: () => deps.usage,
       getTodoManager: () => deps.todoManager,
       shouldTriggerAutoCompact: deps.shouldTriggerAutoCompact,

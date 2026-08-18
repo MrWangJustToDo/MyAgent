@@ -20,6 +20,7 @@ export {
   isCompactionSummaryModelMessage,
   isCompactionSummaryText,
   isCompactionSummaryUIMessage,
+  isLatestDurableMessageCompactionSummary,
 } from "./compaction-summary.js";
 
 /** Index of the latest in-chain compaction summary, or -1. */

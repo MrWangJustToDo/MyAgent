@@ -407,7 +407,7 @@ Large tool outputs at **execute** time still use `maybeCacheOutput` (`.agents/ca
 
 **Files:** `agent/compaction/auto-compact.ts`, `apply-compaction-result.ts`
 
-**Trigger:** `shouldTriggerAutoCompact` when window input tokens ≥ `tokenThreshold × compactAtPercent / 100`
+**Trigger:** `shouldTriggerAutoCompact` when window input tokens ≥ `tokenThreshold × compactAtPercent / 100`. After a successful compact, `usage.resetWindow()` zeroes window tokens, so the next `onConfig` would otherwise fall through to `estimateTokens(projected wire)` and fire again immediately. Compaction middleware skips auto-compact when the latest durable channel message is already a SUMMARY (`isLatestDurableMessageCompactionSummary`, ignoring trailing `<turn_context>`). `autoCompact` also no-ops when `toSummarize` is only previous SUMMARY / turn-context messages.
 
 ```
 setStatus("compacting") via beginCompaction("auto")
@@ -420,15 +420,12 @@ applyCompactionResult(channel, usage, result)
   → append `[CONVERSATION SUMMARY]` UIMessage onto the UI channel, reset window usage
   → return chronological post-append messages (for orphan tool-cache cleanup)
 compaction middleware (same onConfig):
-  → convertMessages(channel) → getModelVisibleMessages → setMessages(wire)
-  → setRunBaselineCount(MAX_SAFE_INTEGER)  // UI/engine index spaces diverge after projection
+  → convertMessages(channel) → getModelVisibleMessages → { messages: wire }
 emit compaction:auto-complete | compaction:auto-error
 setStatus("running") via endCompaction
 ```
 
-**Why re-project from the channel:** After append, TanStack `engineMessages` still match the **pre-compact** length. Naively merging with `buildCanonicalModelMessages(ui, engine, baseline)` when `engine.length === runBaselineCount` would prefer that stale engine and **drop** the new SUMMARY for the immediate LLM call. Post-compact always rebuilds wire from the channel.
-
-**Why `MAX_SAFE_INTEGER` baseline:** TanStack `applyMiddlewareConfig` writes the projected (summary-first, shorter) array into the engine. Channel stays chronological. Those arrays no longer share indices — setting baseline to channel length still allows a later `engine.length > baseline` merge of `UI[0:baseline] + engine[baseline:]`, which can drop mid-run tool results. Sentinel baseline forces the engine-prefer path until the next `prepareForRun` resets it.
+**Why re-project from the channel:** After append, TanStack `engineMessages` still match the **pre-compact** length. Returning those would drop the new SUMMARY for the immediate LLM call. Post-compact always rebuilds wire from the live channel. Engine `this.messages` is ephemeral and is never merged back.
 
 `getModelVisibleMessages(chronological)` returns summary-first wire order:
 
@@ -438,7 +435,7 @@ setStatus("running") via endCompaction
 
 The durable channel stays chronological. Projection is never written back.
 The summarizer sees both the cut-away history and the kept tail (budget-aware) so Goal/Next stay aligned.
-On later iterations (no compact), `canon` is rebuilt via `buildCanonicalModelMessages(ui, engine, runBaselineCount)`.
+On later iterations (no compact), `onConfig` again converts the live channel and projects summary-first wire.
 
 ### 5.4 Reactive compact (emergency)
 
@@ -459,7 +456,6 @@ runStreamWithRecovery catches RUN_ERROR / thrown error
   → beginCompaction("reactive")  // emits compaction:reactive-start only (not auto-start)
   → reactiveCompact: summarize + keep tail messages
   → applyReactiveCompactionResult → append SUMMARY on channel
-  → setRunBaselineCount(MAX_SAFE_INTEGER)
   → endCompaction + emit compaction:reactive-complete | compaction:reactive-error
   → retry runner.run; next onConfig projects from live channel (shared MAX_RECOVERY_ATTEMPTS ≈ 3)
 ```
@@ -498,13 +494,13 @@ Set via `ManagedAgentConfig.compaction` in `agent-factory.ts`.
 |------|-------|
 | Directory | `.agents/sessions/` |
 | File | `{sessionId}.session.json` |
-| Schema | `SessionData` v4 (`agent/persistence/types.ts`; older files omit `planMode` / inline base64 media) |
+| Schema | `SessionData` v4 (`agent/persistence/types.ts`; older files omit `planMode` / `approvals` / inline base64 media) |
 
-Fields: `uiMessages` (includes in-chain summaries), `usage`, `cost`, `contextTokens`, `todos`, `todoPlanBound`, `planMode` (phase/markdown/path/seeded), `modelStyle`, `model`, metadata.
+Fields: `uiMessages` (includes in-chain summaries), `usage`, `cost`, `contextTokens`, `todos`, `todoPlanBound`, `planMode` (phase/markdown/path/seeded), `autoMode`, `approvals` (pending/approved/denied interrupt table), `modelStyle`, `model`, metadata.
 
 **Binary media (v4):** On persist with `uiMessages`, `SessionService` clones → dehydrates Image/Audio/Video/Document parts to content-addressed **binary** files under `.agents/media/<hash>.<ext>`, writing `media://` refs + `metadata.mediaRef` into the session JSON. Runtime messages stay hydrated (data URLs / raw base64). Restore hydrates for the UI, then re-dehydrates into `this.data` and rewrites the session file (so interrupt-snapshot repairs and media extraction stick). See `agent/media/`.
 
-**Interrupt snapshot repair:** TanStack `MESSAGES_SNAPSHOT` (tool-approval interrupts) JSON.stringifies multimodal `ContentPart[]` into a string `content` field. `AgentUIChannel` rewrites those chunks via `repairMessagesSnapshotChunk` so UI history keeps `text` + `image` parts regardless of model vision capability. Hydrate/dehydrate also repair stringified parts.
+**Interrupt snapshots:** TanStack `MESSAGES_SNAPSHOT` (tool-approval interrupts) is built from engine `this.messages` and would replace the chronological channel. `AgentUIChannel.processChunk` drops every snapshot. Incremental TEXT/TOOL chunks plus `addToolResult` / `addToolApprovalResponse` keep the channel current. Hydrate/dehydrate still repair stringified multimodal `ContentPart[]` in persisted JSON.
 
 ### 6.2 Write paths (unified persist)
 
@@ -515,7 +511,7 @@ Fields: `uiMessages` (includes in-chain summaries), `usage`, `cost`, `contextTok
 | **Pump idle (core)** | `AgentChatController.persistMessages` → `maybeSaveSessionUIMessages(..., "pump-complete")` | Same; also on Esc/abort after cancelling incomplete tools |
 | **Manual flush** | `saveSessionUIMessages` (`/clear`, slash commands) | Force full persist |
 
-App hosts subscribe to Session `messages`/`state` for UI only — they do **not** checkpoint to disk. Approval still mutates tool-call parts in memory; durable write waits until the next pump idle (or explicit flush). Format remains full JSON; `SessionSyncTracker` only skips duplicate fingerprints.
+App hosts subscribe to Session `messages`/`state` for UI only — they do **not** checkpoint to disk. Approval decisions are upserted into `SessionData.approvals` (`pending` on request, `approved`/`denied` on `y`/`n` or auto-approve) and written with the same persist triggers as `uiMessages`. Chat middleware rebuilds `resumeToolState.approvals` from that table (pending omitted). Format remains full JSON; `SessionSyncTracker` only skips duplicate fingerprints.
 
 On restore, `PlanModeController.restoreState` rehydrates phase (and reloads markdown from `planFilePath` when missing). `/clear` / `ManagedAgent.reset` always `planMode.disable()`.
 
@@ -544,7 +540,8 @@ AgentManager.resumeSession(agentId, sessionId)
   → managed.restoreSession(sessionId)
     → SessionService.restoreFromStore
       → usage.reset(); hydrate uiMessages
-      → restore usage, todos (ignore obsolete compact fields)
+      → restore usage, todos, approvals (missing/`[]` backfills from UIMessage approval parts)
+    → host.approvals.restore(session.approvals)
     → UI channel.setMessages(uiMessages) when channel present
     → clear steer/follow-up queues (no-op before initChat)
     → syncInteractionStateFromUIMessages (approval / ask_user)
@@ -565,18 +562,16 @@ App bootstrap resume still passes `initialMessages` from Host.create into `Manag
 
 ```
 uiMessages (source of truth on AgentUIChannel; chronological, including SUMMARY checkpoints)
-  → onConfig (normal):
-      buildCanonicalModelMessages(ui, engine, runBaselineCount)
-      → getModelVisibleMessages(canon) → summary-first LLM wire
-  → onConfig (just compacted):
-      convertMessages(channel) → getModelVisibleMessages → setMessages(wire)
-      → setRunBaselineCount(MAX_SAFE_INTEGER) // prefer projected engine for rest of chat()
+  → onConfig (every iteration, including post-compact):
+      convertMessages(channel) → getModelVisibleMessages → { messages: wire }
+      + resumeToolState.approvals from SessionData.approvals (pending omitted)
   → never write projected wire arrays back as durable channel state
+  → drop every engine MESSAGES_SNAPSHOT; TEXT/TOOL + addToolResult keep the channel live
 ```
 
 Recovery / continuation always re-reads `managed.ui.getMessages()` (not a closed-over snapshot from run start), so a mid-run compact is visible to the next attempt.
 
-- **Each run start** (`prepareForRun`): baseline from channel messages; turn_context may be admitted into the channel.
+- **Each run start** (`prepareForRun`): turn_context may be admitted into the channel; wire is always projected from the live channel on the next `onConfig`.
 - **User send** (`AgentChatController.sendMessage` / drained queues): `maybeSaveSessionUIMessages(messages, "user-message")`.
 - **After run idle** (`AgentChatController` after `pumpToolPhases`, including approval wait / abort cleanup): `maybeSaveSessionUIMessages(messages, "pump-complete")`.
 - **During runs / core**: `persistSession()` and `finalizeRun` write model fields only; they never pass `uiMessages`.
@@ -829,6 +824,8 @@ pnpm --filter @my-agent/core run validate:local-agent-session
 pnpm --filter @my-agent/core run validate:run-agent-skeleton
 pnpm --filter @my-agent/core run validate:tanstack-tools
 pnpm --filter @my-agent/core run validate:compaction-messages
+pnpm --filter @my-agent/core run validate:message-chain-projection
+pnpm --filter @my-agent/core run validate:suppress-messages-snapshot
 pnpm --filter @my-agent/core run validate:reactive-compact
 pnpm --filter @my-agent/core run validate:run-stream-recovery
 pnpm --filter @my-agent/core run validate:agent-run-finalization
@@ -838,10 +835,10 @@ pnpm --filter @my-agent/core run validate:agent-status
 pnpm --filter @my-agent/core run validate:prompt-cache
 pnpm --filter @my-agent/core run validate:subagent-run-stats
 pnpm --filter @my-agent/core run validate:model-config
-pnpm --filter @my-agent/core run validate:agent-context
 pnpm --filter @my-agent/core run validate:tool-phase-utils
 pnpm --filter @my-agent/core run validate:session-sync-tracker
-pnpm --filter @my-agent/core run validate:tool-resume-sentinel
+pnpm --filter @my-agent/core run validate:tool-approval-resume
+pnpm --filter @my-agent/core run validate:restore-session-chat-state
 ```
 
 Full package validation: `pnpm build:core` + `pnpm typecheck` (core tools typecheck clean as of recent fixes).

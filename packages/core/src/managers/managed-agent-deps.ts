@@ -17,7 +17,6 @@ export function buildManagedAgentDeps(managed: ManagedAgent, manager: AgentManag
     modelInfo: managed.getModelInfo(),
     getFrozenSystemPrompt: () => managed.getFrozenSystemPrompt(),
     getUIChannel: () => managed.ui ?? null,
-    getRunBaselineCount: () => managed.getRunBaselineCount(),
     shouldTriggerAutoCompact: (messages) => managed.shouldTriggerAutoCompact(messages),
   };
 }

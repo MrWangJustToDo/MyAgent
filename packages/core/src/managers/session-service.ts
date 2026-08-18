@@ -5,6 +5,7 @@
  * before writing to disk. Runtime (hydrated) messages are never mutated.
  */
 
+import { normalizeSessionApprovals } from "../agent/approval/tool-approval-table.js";
 import { getFirstUserInput } from "../agent/compaction/message-utils.js";
 import { dehydrateUIMessages, hydrateUIMessages } from "../agent/media/media-utils.js";
 import { runSideTextQuery } from "../models/side-text-query.js";
@@ -12,7 +13,7 @@ import { runSideTextQuery } from "../models/side-text-query.js";
 import type { EmitAgentTelemetryFn } from "./emit-agent-telemetry.js";
 import type { UsageTracker } from "./usage-tracker.js";
 import type { SessionStore } from "../agent/persistence/session-store.js";
-import type { SessionData } from "../agent/persistence/types.js";
+import type { SessionData, ToolApprovalRecord } from "../agent/persistence/types.js";
 import type { PlanModeState } from "../agent/plan/plan-mode-controller.js";
 import type { TodoManager } from "../agent/todo-manager";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
@@ -25,6 +26,8 @@ export interface SessionPersistInput {
   planMode?: PlanModeState | null;
   /** Auto-approve (skip all tool approvals) flag. */
   autoMode?: boolean;
+  /** Tool-approval interrupt table; omitted means leave existing / empty. */
+  approvals?: ToolApprovalRecord[];
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   emitEvent?: EmitAgentTelemetryFn;
   uiMessages?: UIMessage[];
@@ -96,7 +99,7 @@ export class SessionService {
    * before writing. The original uiMessages array is never mutated.
    */
   async persistSession(input: SessionPersistInput): Promise<void> {
-    const { usage, todoManager, planMode, autoMode, resolveTextAdapter, emitEvent, uiMessages } = input;
+    const { usage, todoManager, planMode, autoMode, approvals, resolveTextAdapter, emitEvent, uiMessages } = input;
     if (!this.store) return;
     if (!this.data) {
       this.ensureSession();
@@ -120,6 +123,10 @@ export class SessionService {
 
     if (autoMode !== undefined) {
       this.data.autoMode = autoMode;
+    }
+
+    if (approvals !== undefined) {
+      this.data.approvals = approvals;
     }
 
     if (uiMessages !== undefined) {
@@ -162,6 +169,10 @@ export class SessionService {
     // Canonicalize on disk: repair stringified multimodal + extract media:// refs.
     const dehydrated = await dehydrateUIMessages(hydrated);
     session.uiMessages = dehydrated;
+    session.approvals = normalizeSessionApprovals({
+      approvals: session.approvals,
+      uiMessages: hydrated,
+    });
 
     if (session.usage) {
       usage.addTotal(session.usage);
