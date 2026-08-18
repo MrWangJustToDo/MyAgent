@@ -162,10 +162,6 @@ export {
   DEFAULT_EXTENSION_DIR,
   getDefaultExtensionDirs,
   joinExtensionAppendSegments,
-  BUILTIN_INSTRUCTION_CONTEXT_ID,
-  INSTRUCTION_STATUS_KEY,
-  builtinInstructionContext,
-  formatInstructionStatusLabel,
 } from "./agent/extension";
 export {
   buildSystemPromptWithTurnContext,

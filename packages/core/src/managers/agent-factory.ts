@@ -1,12 +1,7 @@
 import { loadAgentDoc } from "../agent/agent-doc-loader.js";
 import { AgentLog } from "../agent/agent-log";
 import { createCompactionConfig } from "../agent/compaction/types.js";
-import {
-  builtinInstructionContext,
-  ExtensionLoader,
-  ExtensionRunner,
-  getDefaultExtensionDirs,
-} from "../agent/extension";
+import { ExtensionLoader, ExtensionRunner, getDefaultExtensionDirs } from "../agent/extension";
 import { loadMcpConfig, type McpConfigLoadResult } from "../agent/mcp/config.js";
 import { McpManager } from "../agent/mcp/manager.js";
 import { MemoryManager } from "../agent/memory/memory-manager.js";
@@ -188,15 +183,6 @@ export async function buildManagedAgent({
 
     const extensionLoader = new ExtensionLoader();
     managed.extensionLoader = extensionLoader;
-
-    // Built-in extension: instruction-context status/display layer. Loaded first
-    // so its per-turn status and turn-context provider are always available.
-    try {
-      await extensionRunner.loadExtension(builtinInstructionContext);
-      log.info("system", `Built-in extension loaded: ${builtinInstructionContext.id}`);
-    } catch (err) {
-      log.warn("system", `Failed to activate built-in extension "${builtinInstructionContext.id}": ${err}`);
-    }
 
     const extensionDirs = await getDefaultExtensionDirs(config.extensionDirs);
     log.debug("system", "Extension search directories", { dirs: extensionDirs });

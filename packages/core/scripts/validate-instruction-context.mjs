@@ -3,8 +3,7 @@
  *   1. Instruction file discovery (AGENTS.md / CLAUDE.md priority + override)
  *   2. Change detection via content digest (no change → stable; change → detected)
  *   3. formatInstructionContextSection renders latest content + supersede notice
- *   4. formatInstructionStatusLabel produces the status-bar label
- *   5. buildDynamicTurnContext includes the <instruction_context> section and
+ *   4. buildDynamicTurnContext includes the <instruction_context> section and
  *      keeps the other sections' existing semantic tags
  *
  * Run: pnpm --filter @my-agent/core run validate:instruction-context
@@ -19,7 +18,6 @@ import {
   buildDynamicTurnContext,
   diffInstructionStates,
   formatInstructionContextSection,
-  formatInstructionStatusLabel,
   instructionStateChanged,
   loadLatestInstructionContent,
   readInstructionContextState,
@@ -157,28 +155,7 @@ setFile("CLAUDE.override.md", "# personal override\n");
 }
 
 // ---------------------------------------------------------------------------
-// 5. Status label
-// ---------------------------------------------------------------------------
-{
-  assert.equal(
-    formatInstructionStatusLabel({ primaryChanged: true, overrideChanged: false }, "CLAUDE.md"),
-    "CLAUDE.md updated",
-    "primary-only label"
-  );
-  assert.equal(
-    formatInstructionStatusLabel({ primaryChanged: true, overrideChanged: true }, "CLAUDE.md"),
-    "CLAUDE.md, override updated",
-    "primary+override label"
-  );
-  assert.equal(
-    formatInstructionStatusLabel({ primaryChanged: false, overrideChanged: false }, "CLAUDE.md"),
-    "",
-    "no change → empty label"
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 6. buildDynamicTurnContext includes <instruction_context> + keeps tags
+// 5. buildDynamicTurnContext includes <instruction_context> + keeps tags
 // ---------------------------------------------------------------------------
 {
   const loaded = await loadLatestInstructionContent();
@@ -282,45 +259,7 @@ setFile("CLAUDE.override.md", "# personal override\n");
 }
 
 // ---------------------------------------------------------------------------
-// 9. Built-in extension: status bar + turn-context provider
-// ---------------------------------------------------------------------------
-{
-  const { ExtensionRunner, builtinInstructionContext, INSTRUCTION_STATUS_KEY } = await import("../dist/dev.mjs");
-
-  files.clear();
-  setFile("AGENTS.md", "# AGENTS\n- rule v1\n");
-
-  const runner = new ExtensionRunner({
-    getEnvVar: () => undefined,
-    cwd: ws,
-    onRegisterTool: () => {},
-    getCoreEnv: () => ({ rootPath: ws }),
-  });
-  const statusEvents = [];
-  runner.getUI().subscribe("set-status", (data) => statusEvents.push(data));
-
-  await runner.loadExtension(builtinInstructionContext);
-
-  // First turn: no change vs the fresh extension → no status, but provider summary present.
-  const turn1 = await runner.collectBeforeAgentStart("hi", "sess-1");
-  assert.ok(turn1.turnContext.includes("AGENTS.md"), "provider reports active instructions file");
-  assert.equal(statusEvents.length, 0, "no change → no status set");
-
-  // Edit AGENTS.md, then next turn: status bar shows "AGENTS.md updated".
-  setFile("AGENTS.md", "# AGENTS\n- rule v2\n");
-  await new Promise((r) => setTimeout(r, 5));
-  await runner.collectBeforeAgentStart("hi again", "sess-1");
-  await new Promise((r) => setTimeout(r, 5));
-
-  const status = runner.getUI().getStatus();
-  assert.ok(status[INSTRUCTION_STATUS_KEY], "status key set");
-  assert.equal(status[INSTRUCTION_STATUS_KEY], "AGENTS.md updated", "status shows updated label");
-
-  await runner.destroyAll();
-}
-
-// ---------------------------------------------------------------------------
-// 10. End-to-end admit flow: turn_context message injected with instruction
+// 9. End-to-end admit flow: turn_context message injected with instruction
 //     section after a change; hash/UI stable when nothing changes
 // ---------------------------------------------------------------------------
 {
