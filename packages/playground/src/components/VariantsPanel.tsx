@@ -153,19 +153,19 @@ export const VariantsPanel = () => {
       inherit: true,
       rules: [],
       colors: {
-        "editor.background": "#101013",
-        "editor.foreground": "#ededed",
-        "editorLineNumber.foreground": "#3f3f46",
-        "editorLineNumber.activeForeground": "#a1a1aa",
-        "editor.selectionBackground": "#8b8bff33",
-        "editor.inactiveSelectionBackground": "#8b8bff1a",
+        "editor.background": "#111116",
+        "editor.foreground": "#f5f5f7",
+        "editorLineNumber.foreground": "#3f3f48",
+        "editorLineNumber.activeForeground": "#a3a3ae",
+        "editor.selectionBackground": "#8f8dff33",
+        "editor.inactiveSelectionBackground": "#8f8dff1a",
         "editor.lineHighlightBackground": "#ffffff06",
-        "editorCursor.foreground": "#a8a8ff",
-        "editorWidget.background": "#17171b",
+        "editorCursor.foreground": "#cbc9ff",
+        "editorWidget.background": "#18181e",
         "editorWidget.border": "#ffffff12",
-        "dropdown.background": "#17171b",
-        "input.background": "#0d0d10",
-        focusBorder: "#8b8bff66",
+        "dropdown.background": "#18181e",
+        "input.background": "#0d0d11",
+        focusBorder: "#8f8dff66",
       },
     });
     monaco.editor.setTheme("playground-dark");
@@ -175,6 +175,17 @@ export const VariantsPanel = () => {
     <div className="variants-panel">
       {/* Composer */}
       <div className="variants-panel__composer">
+        <span className="variants-panel__composer-label">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path
+              d="M8 1.5l1.9 3.85 4.25.62-3.07 3 0.73 4.23L8 11.36l-3.8 2 .72-4.23-3.07-3 4.25-.62L8 1.5Z"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinejoin="round"
+            />
+          </svg>
+          Generate variants
+        </span>
         <textarea
           className="variants-panel__input"
           placeholder="Describe the UI you want to build…"
@@ -199,6 +210,15 @@ export const VariantsPanel = () => {
             onClick={generate}
             disabled={!session || !prompt.trim() || generating}
           >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M13 8a5 5 0 1 1-1.46-3.54M13 2.5V5h-2.5"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
             {generating ? "Generating…" : "Generate"}
           </button>
         </div>
@@ -340,6 +360,15 @@ export const VariantsPanel = () => {
               onClick={sendIterate}
               disabled={!iterate.trim() || busy}
             >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path
+                  d="M13 8a5 5 0 1 1-1.46-3.54M13 2.5V5h-2.5"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
               Iterate
             </button>
           </div>

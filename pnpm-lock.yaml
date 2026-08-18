@@ -198,7 +198,7 @@ importers:
         version: 0.23.2(@opentelemetry/api@1.9.1)(zod@4.4.3)
       '@tanstack/ai-mcp':
         specifier: ^0.3.0
-        version: 0.3.0(@opentelemetry/api@1.9.1)(zod@4.4.3)
+        version: 0.3.0(@opentelemetry/api@1.9.1)(supports-color@10.2.2)(zod@4.4.3)
       '@tanstack/ai-openai':
         specifier: ^0.19.0
         version: 0.19.0(@tanstack/ai@0.44.1(@opentelemetry/api@1.9.1)(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)
@@ -278,7 +278,7 @@ importers:
         version: 0.3.30(@my-react/react@0.3.30(react@19.2.7))
       '@my-react/react-vite':
         specifier: ^0.0.36
-        version: 0.0.36(@my-react/react-refresh@0.3.30(@my-react/react@0.3.30(react@19.2.7)))(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+        version: 0.0.36(@my-react/react-refresh@0.3.30(@my-react/react@0.3.30(react@19.2.7)))(supports-color@10.2.2)(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
       '@tailwindcss/postcss':
         specifier: ^4.2.4
         version: 4.3.1
@@ -348,7 +348,7 @@ importers:
         version: link:../core
       '@tanstack/ai-mcp':
         specifier: ^0.3.0
-        version: 0.3.0(@opentelemetry/api@1.9.1)(zod@4.4.3)
+        version: 0.3.0(@opentelemetry/api@1.9.1)(supports-color@10.2.2)(zod@4.4.3)
       mime-types:
         specifier: ^3.0.2
         version: 3.0.2
@@ -368,6 +368,12 @@ importers:
 
   packages/playground:
     dependencies:
+      '@fontsource-variable/geist':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/geist-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -413,7 +419,7 @@ importers:
         version: 0.3.30(@my-react/react@0.3.30(react@19.2.7))
       '@my-react/react-vite':
         specifier: ^0.0.36
-        version: 0.0.36(@my-react/react-refresh@0.3.30(@my-react/react@0.3.30(react@19.2.7)))(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+        version: 0.0.36(@my-react/react-refresh@0.3.30(@my-react/react@0.3.30(react@19.2.7)))(supports-color@10.2.2)(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.17
@@ -1050,6 +1056,12 @@ packages:
   '@eslint/plugin-kit@0.4.1':
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@fontsource-variable/geist-mono@5.3.0':
+    resolution: {integrity: sha512-vBbuwDEo9AkrqADMXOrlAR3DFcJi4/JxeuU43FoiQERnNwsfXNnvxvReZG02cQKmyk4DZkZdBZX3oTDvy2zBAw==}
+
+  '@fontsource-variable/geist@5.3.0':
+    resolution: {integrity: sha512-j0m+vLQuG5XAYoHtGCVu0spvlGreR3EzpECUVzkFmI1mTVnAO38l/NEPDCFgZ177JxzYJCLSmTQibIiYPilGrA==}
 
   '@git-diff-view/cli@0.1.10':
     resolution: {integrity: sha512-V5R0oLaKpczg73Kzm1vkwmKANqOBF0zzRT7QX1rNzt0VSsAZEtQMqLTDmoSid7SeyZ6v+WT3Hu28kCsw1p7LvA==}
@@ -6108,7 +6120,7 @@ snapshots:
 
   '@babel/compat-data@7.29.7': {}
 
-  '@babel/core@7.29.7':
+  '@babel/core@7.29.7(supports-color@10.2.2)':
     dependencies:
       '@babel/code-frame': 7.29.7
       '@babel/generator': 7.29.7
@@ -6117,7 +6129,7 @@ snapshots:
       '@babel/helpers': 7.29.7
       '@babel/parser': 7.29.7
       '@babel/template': 7.29.7
-      '@babel/traverse': 7.29.7
+      '@babel/traverse': 7.29.7(supports-color@10.2.2)
       '@babel/types': 7.29.7
       '@jridgewell/remapping': 2.3.5
       convert-source-map: 2.0.0
@@ -6157,17 +6169,17 @@ snapshots:
 
   '@babel/helper-module-imports@7.29.7':
     dependencies:
-      '@babel/traverse': 7.29.7
+      '@babel/traverse': 7.29.7(supports-color@10.2.2)
       '@babel/types': 7.29.7
     transitivePeerDependencies:
       - supports-color
 
   '@babel/helper-module-transforms@7.29.7(@babel/core@7.29.7)':
     dependencies:
-      '@babel/core': 7.29.7
+      '@babel/core': 7.29.7(supports-color@10.2.2)
       '@babel/helper-module-imports': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
-      '@babel/traverse': 7.29.7
+      '@babel/traverse': 7.29.7(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -6204,12 +6216,12 @@ snapshots:
 
   '@babel/plugin-transform-react-jsx-self@7.29.7(@babel/core@7.29.7)':
     dependencies:
-      '@babel/core': 7.29.7
+      '@babel/core': 7.29.7(supports-color@10.2.2)
       '@babel/helper-plugin-utils': 7.29.7
 
   '@babel/plugin-transform-react-jsx-source@7.29.7(@babel/core@7.29.7)':
     dependencies:
-      '@babel/core': 7.29.7
+      '@babel/core': 7.29.7(supports-color@10.2.2)
       '@babel/helper-plugin-utils': 7.29.7
 
   '@babel/runtime@7.28.2': {}
@@ -6220,7 +6232,7 @@ snapshots:
       '@babel/parser': 7.29.7
       '@babel/types': 7.29.7
 
-  '@babel/traverse@7.29.7':
+  '@babel/traverse@7.29.7(supports-color@10.2.2)':
     dependencies:
       '@babel/code-frame': 7.29.7
       '@babel/generator': 7.29.7
@@ -6313,7 +6325,7 @@ snapshots:
       '@hono/mcp': 0.3.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(hono-rate-limiter@0.5.3(hono@4.12.26))(hono@4.12.26)(zod@4.4.3)
       '@hono/node-server': 2.0.5(hono@4.12.26)
       '@modelcontextprotocol/ext-apps': 1.7.4(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@10.2.2)(zod@4.4.3)
       '@opentelemetry/api': 1.9.1
       dotenv: 17.4.2
       hono: 4.12.26
@@ -6494,6 +6506,10 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
+  '@fontsource-variable/geist-mono@5.3.0': {}
+
+  '@fontsource-variable/geist@5.3.0': {}
+
   '@git-diff-view/cli@0.1.10(@my-react/react-terminal@0.0.30(@my-react/react@0.3.30(@my-react/react@0.3.30))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.30)':
     dependencies:
       '@git-diff-view/core': 0.1.7
@@ -6531,7 +6547,7 @@ snapshots:
 
   '@hono/mcp@0.3.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(hono-rate-limiter@0.5.3(hono@4.12.26))(hono@4.12.26)(zod@4.4.3)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@10.2.2)(zod@4.4.3)
       hono: 4.12.26
       hono-rate-limiter: 0.5.3(hono@4.12.26)
       pkce-challenge: 5.0.1
@@ -6700,14 +6716,14 @@ snapshots:
 
   '@modelcontextprotocol/ext-apps@1.7.4(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@10.2.2)(zod@4.4.3)
       '@standard-schema/spec': 1.1.0
       zod: 4.4.3
     optionalDependencies:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
 
-  '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
+  '@modelcontextprotocol/sdk@1.29.0(supports-color@10.2.2)(zod@4.4.3)':
     dependencies:
       '@hono/node-server': 1.19.14(hono@4.12.26)
       ajv: 8.20.0
@@ -6717,7 +6733,7 @@ snapshots:
       cross-spawn: 7.0.6
       eventsource: 3.0.7
       eventsource-parser: 3.1.0
-      express: 5.2.1
+      express: 5.2.1(supports-color@10.2.2)
       express-rate-limit: 8.5.2(express@5.2.1)
       hono: 4.12.26
       jose: 6.2.3
@@ -6817,9 +6833,9 @@ snapshots:
       '@xterm/addon-fit': 0.11.0
       '@xterm/xterm': 6.0.0
 
-  '@my-react/react-vite@0.0.36(@my-react/react-refresh@0.3.30(@my-react/react@0.3.30(react@19.2.7)))(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))':
+  '@my-react/react-vite@0.0.36(@my-react/react-refresh@0.3.30(@my-react/react@0.3.30(react@19.2.7)))(supports-color@10.2.2)(vite@8.0.16(@types/node@22.19.21)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))':
     dependencies:
-      '@babel/core': 7.29.7
+      '@babel/core': 7.29.7(supports-color@10.2.2)
       '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7)
       '@babel/plugin-transform-react-jsx-source': 7.29.7(@babel/core@7.29.7)
       '@my-react/react-refresh': 0.3.30(@my-react/react@0.3.30(react@19.2.7))
@@ -7277,9 +7293,9 @@ snapshots:
     dependencies:
       '@tanstack/devtools-event-client': 0.4.4
 
-  '@tanstack/ai-mcp@0.3.0(@opentelemetry/api@1.9.1)(zod@4.4.3)':
+  '@tanstack/ai-mcp@0.3.0(@opentelemetry/api@1.9.1)(supports-color@10.2.2)(zod@4.4.3)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@10.2.2)(zod@4.4.3)
       '@tanstack/ai': 0.44.1(@opentelemetry/api@1.9.1)(zod@4.4.3)
     transitivePeerDependencies:
       - '@cfworker/json-schema'
@@ -7832,7 +7848,7 @@ snapshots:
 
   bluebird@3.7.2: {}
 
-  body-parser@2.3.0:
+  body-parser@2.3.0(supports-color@10.2.2):
     dependencies:
       bytes: 3.1.2
       content-type: 2.0.0
@@ -8597,7 +8613,7 @@ snapshots:
 
   eslint-plugin-react-hooks@7.1.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2)):
     dependencies:
-      '@babel/core': 7.29.7
+      '@babel/core': 7.29.7(supports-color@10.2.2)
       '@babel/parser': 7.29.7
       eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       hermes-parser: 0.25.1
@@ -8716,13 +8732,13 @@ snapshots:
 
   express-rate-limit@8.5.2(express@5.2.1):
     dependencies:
-      express: 5.2.1
+      express: 5.2.1(supports-color@10.2.2)
       ip-address: 10.2.0
 
-  express@5.2.1:
+  express@5.2.1(supports-color@10.2.2):
     dependencies:
       accepts: 2.0.0
-      body-parser: 2.3.0
+      body-parser: 2.3.0(supports-color@10.2.2)
       content-disposition: 1.1.0
       content-type: 1.0.5
       cookie: 0.7.2
@@ -8732,7 +8748,7 @@ snapshots:
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
-      finalhandler: 2.1.1
+      finalhandler: 2.1.1(supports-color@10.2.2)
       fresh: 2.0.0
       http-errors: 2.0.1
       merge-descriptors: 2.0.0
@@ -8743,8 +8759,8 @@ snapshots:
       proxy-addr: 2.0.7
       qs: 6.15.2
       range-parser: 1.2.1
-      router: 2.2.0
-      send: 1.2.1
+      router: 2.2.0(supports-color@10.2.2)
+      send: 1.2.1(supports-color@10.2.2)
       serve-static: 2.2.1
       statuses: 2.0.2
       type-is: 2.1.0
@@ -8810,7 +8826,7 @@ snapshots:
     dependencies:
       to-regex-range: 5.0.1
 
-  finalhandler@2.1.1:
+  finalhandler@2.1.1(supports-color@10.2.2):
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
       encodeurl: 2.0.0
@@ -10580,7 +10596,7 @@ snapshots:
       '@rollup/rollup-win32-x64-msvc': 4.62.2
       fsevents: 2.3.3
 
-  router@2.2.0:
+  router@2.2.0(supports-color@10.2.2):
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
       depd: 2.0.0
@@ -10641,7 +10657,7 @@ snapshots:
 
   semver@7.8.5: {}
 
-  send@1.2.1:
+  send@1.2.1(supports-color@10.2.2):
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
       encodeurl: 2.0.0
@@ -10666,7 +10682,7 @@ snapshots:
       encodeurl: 2.0.0
       escape-html: 1.0.3
       parseurl: 1.3.3
-      send: 1.2.1
+      send: 1.2.1(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 

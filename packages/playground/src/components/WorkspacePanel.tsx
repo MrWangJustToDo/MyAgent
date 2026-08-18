@@ -98,6 +98,12 @@ export const WorkspacePanel = () => {
             }
             onClick={() => setActiveTab("preview")}
           >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="1.5" y="2.5" width="13" height="11" rx="2" stroke="currentColor" strokeWidth="1.3" />
+              <path d="M1.5 5.5h13" stroke="currentColor" strokeWidth="1.3" />
+              <circle cx="3.5" cy="4" r="0.5" fill="currentColor" />
+              <circle cx="5.5" cy="4" r="0.5" fill="currentColor" />
+            </svg>
             Preview
           </button>
           <button
@@ -109,6 +115,12 @@ export const WorkspacePanel = () => {
             }
             onClick={() => setActiveTab("variants")}
           >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.3" stroke="currentColor" strokeWidth="1.3" />
+              <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.3" stroke="currentColor" strokeWidth="1.3" />
+              <rect x="1.5" y="9" width="5.5" height="5.5" rx="1.3" stroke="currentColor" strokeWidth="1.3" />
+              <rect x="9" y="9" width="5.5" height="5.5" rx="1.3" stroke="currentColor" strokeWidth="1.3" />
+            </svg>
             Variants
           </button>
           <button
@@ -120,6 +132,22 @@ export const WorkspacePanel = () => {
             }
             onClick={() => setActiveTab("code")}
           >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M6 4.5 2.5 8 6 11.5"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M10 4.5 13.5 8 10 11.5"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
             Code
           </button>
         </div>
@@ -156,6 +184,10 @@ export const WorkspacePanel = () => {
                     }
                     onClick={() => setActive(p.port)}
                   >
+                    <span
+                      className={`workspace-panel__preview-dot ${p.ready ? "workspace-panel__preview-dot--ready" : "workspace-panel__preview-dot--pending"}`}
+                      aria-hidden="true"
+                    />
                     :{p.port}
                     {p.ready ? "" : "…"}
                   </button>

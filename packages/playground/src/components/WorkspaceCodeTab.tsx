@@ -255,21 +255,21 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
         inherit: true,
         rules: [],
         colors: {
-          "editor.background": "#141418",
-          "editor.foreground": "#e4e4e7",
-          "editorLineNumber.foreground": "#3f3f46",
-          "editorLineNumber.activeForeground": "#a1a1aa",
-          "editor.selectionBackground": "#6b8cff33",
-          "editor.inactiveSelectionBackground": "#6b8cff1a",
+          "editor.background": "#111116",
+          "editor.foreground": "#f5f5f7",
+          "editorLineNumber.foreground": "#3f3f48",
+          "editorLineNumber.activeForeground": "#a3a3ae",
+          "editor.selectionBackground": "#8f8dff33",
+          "editor.inactiveSelectionBackground": "#8f8dff1a",
           "editor.lineHighlightBackground": "#ffffff06",
-          "editorCursor.foreground": "#8fa4ff",
+          "editorCursor.foreground": "#cbc9ff",
           "editorIndentGuide.background1": "#ffffff0a",
           "editorIndentGuide.activeBackground1": "#ffffff18",
-          "editorWidget.background": "#1a1a20",
+          "editorWidget.background": "#18181e",
           "editorWidget.border": "#ffffff12",
-          "dropdown.background": "#1a1a20",
-          "input.background": "#121216",
-          focusBorder: "#6b8cff66",
+          "dropdown.background": "#18181e",
+          "input.background": "#0d0d11",
+          focusBorder: "#8f8dff66",
         },
       });
       monaco.editor.setTheme("playground-dark");
@@ -393,6 +393,21 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
             onClick={() => fileInputRef.current?.click()}
             title="Upload files"
           >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M8 10V2.5m0 0L5 5.5M8 2.5l3 3"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M2.5 10.5v2a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-2"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+              />
+            </svg>
             {uploading ? "Uploading…" : "Upload files"}
           </button>
           <button
@@ -402,6 +417,13 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
             onClick={() => folderInputRef.current?.click()}
             title="Upload a folder (directory picker)"
           >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6a1.5 1.5 0 0 1 1.06.44L8.5 4.8h4A1.5 1.5 0 0 1 14 6.3v5.2a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5v-7Z"
+                stroke="currentColor"
+                strokeWidth="1.3"
+              />
+            </svg>
             Upload folder
           </button>
           <button
@@ -409,6 +431,21 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
             className="workspace-code-tab__header-btn workspace-code-tab__header-btn--primary"
             onClick={() => setExportOpen(true)}
           >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M8 2.5v7m0 0 3-3M8 9.5l-3-3"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M2.5 10.5v2a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-2"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+              />
+            </svg>
             Export
           </button>
         </div>
