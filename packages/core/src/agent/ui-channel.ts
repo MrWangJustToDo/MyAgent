@@ -10,6 +10,7 @@ import { repairMessagesSnapshotChunk } from "./media/repair-stringified-multimod
 import { applyToolDenialReason } from "./run-helpers/apply-tool-denial-reason.js";
 import { stripEmptyAssistantShells } from "./run-helpers/empty-assistant-shell.js";
 import { shouldSuppressReplayedToolChunk } from "./run-helpers/suppress-replayed-tool-chunks.js";
+import { shouldSuppressSummaryFirstSnapshot } from "./run-helpers/suppress-summary-first-snapshot.js";
 import {
   resolveTaskRunPhase,
   type TaskRunPhase,
@@ -236,6 +237,12 @@ export class AgentUIChannel {
     // TanStack interrupt snapshots JSON.stringify multimodal ContentPart[]; repair first.
     const normalized = repairMessagesSnapshotChunk(chunk);
     if (shouldSuppressReplayedToolChunk(this.getMessages(), normalized)) {
+      return;
+    }
+    // After compaction, an interrupt snapshot carries the summary-first wire
+    // projection (summary at index 0). Never overwrite the chronological channel
+    // with that — it would collapse pre-compact history and reorder the summary.
+    if (shouldSuppressSummaryFirstSnapshot(normalized)) {
       return;
     }
     this.trackSummaryStreamPhase(normalized);

@@ -33,6 +33,7 @@ export {
   findToolCallPart,
   shouldSuppressReplayedToolChunk,
 } from "./agent/run-helpers/suppress-replayed-tool-chunks.js";
+export { shouldSuppressSummaryFirstSnapshot } from "./agent/run-helpers/suppress-summary-first-snapshot.js";
 export { AgentChatController } from "./managers/agent-chat-controller.js";
 export { finalizeManagedAgentRun } from "./managers/managed-agent-run-lifecycle.js";
 export { PendingMessageQueue } from "./agent/run-helpers/pending-message-queue.js";

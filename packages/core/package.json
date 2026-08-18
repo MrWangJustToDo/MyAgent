@@ -40,6 +40,7 @@
     "validate:read-file-model-output": "pnpm run build && node scripts/validate-read-file-model-output.mjs",
     "validate:agent-ui-channel": "pnpm run build && node scripts/validate-agent-ui-channel.mjs",
     "validate:suppress-replayed-tool-chunks": "pnpm run build && node scripts/validate-suppress-replayed-tool-chunks.mjs",
+    "validate:suppress-summary-first-snapshot": "pnpm run build && node scripts/validate-suppress-summary-first-snapshot.mjs",
     "validate:tanstack-tools": "pnpm run build && node scripts/validate-tanstack-tools.mjs",
     "validate:side-text-query": "pnpm run build && node scripts/validate-side-text-query.mjs",
     "validate:reactive-compact": "pnpm run build && node scripts/validate-reactive-compact.mjs",
