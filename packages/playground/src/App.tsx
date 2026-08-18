@@ -154,6 +154,7 @@ const AgentBootstrap = memo(() => {
   return (
     <InkTerminalBox
       style={{ height: "100%" }}
+      termOptions={{ fontSize: 14 }}
       inkRenderOptions={{ exitOnCtrlC: false }}
       onReady={(api) => {
         api.term.loadAddon(new WebglAddon());
