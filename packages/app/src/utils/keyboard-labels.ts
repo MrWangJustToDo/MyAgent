@@ -107,7 +107,6 @@ export function headerShortcutTips(): ReadonlyArray<{ key: string; desc: string 
     { key: KeyLabel.ctrlE, desc: "workspace" },
     { key: KeyLabel.ctrlT, desc: "task panel" },
     { key: KeyLabel.ctrlY, desc: "extensions panel" },
-    { key: KeyLabel.esc, desc: "to abort" },
   ];
 }
 
