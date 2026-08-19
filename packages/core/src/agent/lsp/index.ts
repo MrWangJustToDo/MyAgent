@@ -14,6 +14,7 @@
  */
 
 import { defaultPath } from "../../env.js";
+import { toModelOutputRegistry } from "../tools/runtime/to-model-output-registry.js";
 
 import { FileSync, DIAGNOSTIC_SETTLE_DELAY_MS } from "./file-sync.js";
 import { getLanguageIdFromPath } from "./language-map.js";
@@ -73,6 +74,28 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
   // Feature-detect: if the host has no process/stdio runtime, LSP tools degrade.
   if (!createConnection) {
     ctx.logger.warn("LSP: host has no createLspConnection — LSP tools will be unavailable");
+  }
+
+  // ---- Auto-diagnostics passthrough decorator (Phase 6 hardening) ----
+  // `maybeInjectDiagnostics` appends `_lspDiagnostics` to write/edit tool results.
+  // Those tools' own `toModelOutput` rebuild the model-facing text from a few
+  // fields, which would drop the summary on the next turn. Decorate the base
+  // handlers so the summary survives the `onConfig` / tool-compact rewrite.
+  const AUTO_DIAG_TOOLS = ["write_file", "edit_file"] as const;
+  for (const toolName of AUTO_DIAG_TOOLS) {
+    toModelOutputRegistry.registerDecorator(toolName, async (ctx, next) => {
+      const base = await next(ctx);
+      const output = ctx.output as Record<string, unknown> | undefined;
+      const diag = output?._lspDiagnostics;
+      if (typeof diag !== "string" || diag.length === 0) return base;
+
+      const suffix = `\n\n${diag}`;
+      if (typeof base === "string") return base + suffix;
+      if (Array.isArray(base)) {
+        return [...base, { type: "text" as const, content: suffix }];
+      }
+      return base;
+    });
   }
 
   // ---- Runtime access from CoreEnv ----
