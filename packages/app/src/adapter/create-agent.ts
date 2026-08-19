@@ -66,6 +66,20 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
     providerMode,
   });
 
+  // ── Session-only bootstrap (TEMP): the only place app still wires a core host ──
+  //
+  // Status: `agentManager` (core process-global singleton `new AgentManager()`)
+  // and `createLocalAgentSessionHost` are the last direct core class/instance
+  // deps in app — everything else goes through AgentSession/AgentSessionHost
+  // (dispatch / getSnapshot / subscribe). This couples host construction (which
+  // needs core's manager) with config resolution in the app layer.
+  //
+  // Direction: move host construction up to the host process (CLI/extension) and
+  // have app consume an injected AgentSessionHost/AgentSession (local via
+  // `--agent-remote`/HttpAgentSessionClient, or local host factory passed in).
+  // After that, drop `agentManager` / `createLocalAgentSessionHost` /
+  // `resolveModelConfigFromProvider` from app and remove the `BOOTSTRAP_ALLOW`
+  // whitelist in scripts/validate-core-imports.mjs.
   const host = createLocalAgentSessionHost({ manager: agentManager });
   const { session, initialMessages } = await host.create({
     name,
