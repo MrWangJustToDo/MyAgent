@@ -16,12 +16,7 @@ export const createListFileTool = () => {
     description:
       "Lists one directory level with name, type, size, and modification date. Prefer tree for hierarchical overview; glob for pattern matching across the tree. Supports pagination with offset/limit.",
     inputSchema: z.object({
-      path: z
-        .string()
-        .optional()
-        .describe(
-          "The path to the directory to list, relative to the project directory. Defaults to current directory."
-        ),
+      path: z.string().optional().describe("Directory to list, relative to project root (default: current)."),
       offset: z
         .number()
         .int({ message: "offset: must be an integer" })

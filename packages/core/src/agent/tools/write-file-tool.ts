@@ -17,7 +17,7 @@ export const createWriteFileTool = () => {
       "Creating a new file: omit overwrite (or set false). Overwriting an existing file: pass overwrite: true. " +
       "Parent directories are created by default. Concurrent writes to the same path are serialized.",
     inputSchema: z.object({
-      path: z.string().describe("The path to the file to write, relative to the project directory."),
+      path: z.string().describe("The path to the file to write, relative to the project root."),
       content: z.string().describe("The full content to write to the file."),
       overwrite: z
         .boolean()

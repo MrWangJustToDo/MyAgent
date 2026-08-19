@@ -231,7 +231,7 @@ export const createGrepTool = () => {
       path: z
         .string()
         .optional()
-        .describe("The directory to search in, relative to the project directory. Defaults to current directory."),
+        .describe("Search directory or single file, relative to project root (default: current)."),
       include: z
         .string()
         .optional()

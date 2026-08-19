@@ -83,7 +83,10 @@ When answering from search results, include a Sources section with markdown link
 Use the current year from <current_date> in turn context for time-sensitive queries.`,
 
     inputSchema: z.object({
-      query: z.string().min(2, { message: "query: must be at least 2 characters" }).describe("The search query to use"),
+      query: z
+        .string()
+        .min(2, { message: "query: must be at least 2 characters" })
+        .describe("Search query — be specific and concise."),
       maxResults: z
         .number()
         .int({ message: "maxResults: must be an integer" })

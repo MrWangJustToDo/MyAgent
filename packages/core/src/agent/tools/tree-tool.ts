@@ -25,7 +25,7 @@ export const createTreeTool = () => {
     description:
       "Shows a hierarchical directory tree (structure overview). Prefer over list_file when you need depth/layout; use list_file for one-level detail with sizes/dates; use glob to find paths by pattern.",
     inputSchema: z.object({
-      path: z.string().optional().describe("The root directory to display tree from. Defaults to current directory."),
+      path: z.string().optional().describe("Root directory to display tree from (default: current)."),
       maxDepth: z
         .number()
         .int({ message: "maxDepth: must be an integer" })
@@ -38,7 +38,10 @@ export const createTreeTool = () => {
         .optional()
         .describe("Whether to show hidden files (starting with dot). Defaults to false."),
       dirsOnly: z.boolean().optional().describe("Only show directories, not files. Defaults to false."),
-      pattern: z.string().optional().describe("Only show files matching this pattern (e.g., '*.ts', '*.js')."),
+      pattern: z
+        .string()
+        .optional()
+        .describe("Only show files matching this pattern, relative to `path` (e.g. '*.ts', '*.js')."),
       ignore: z.array(z.string()).optional().describe("Patterns to ignore (e.g., ['node_modules', '.git', 'dist'])."),
     }),
     outputSchema: z.object({

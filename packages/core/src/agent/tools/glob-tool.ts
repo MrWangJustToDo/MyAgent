@@ -119,11 +119,10 @@ export const createGlobTool = () => {
       "Uses `fd` when available (respects .gitignore), falls back to `find`. " +
       "Supports pagination, type filtering (file/directory), and automatic exclusion of common non-source directories.",
     inputSchema: z.object({
-      pattern: z.string().describe("The glob pattern to match files against (e.g., '**/*.js', 'src/**/*.ts')."),
-      path: z
+      pattern: z
         .string()
-        .optional()
-        .describe("The directory to search in, relative to the project directory. Defaults to current directory."),
+        .describe("Glob pattern, relative to `path` (e.g. '**/*.js', 'src/**/*.ts'); use `**/` prefix for any depth."),
+      path: z.string().optional().describe("Search directory, relative to project root (default: current)."),
       type: z
         .enum(["file", "directory", "all"])
         .optional()

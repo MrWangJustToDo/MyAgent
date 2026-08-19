@@ -55,7 +55,7 @@ export const createEditFileTool = () => {
 - Matching tolerates common LLM over-escapes (\\\\n, over-escaped backticks) and smart-quote Unicode differences.
 - If a match fails, the error includes a nearest similar line — re-read there and widen oldString.`,
     inputSchema: z.object({
-      path: z.string().describe("The path to the file to edit, relative to the project directory."),
+      path: z.string().describe("The path to the file to edit, relative to the project root."),
       edits: z
         .array(
           z.object({
