@@ -270,6 +270,16 @@ export class LspManager {
         command: config.command,
         diagnostics: new Map(),
       };
+      // If a shutdown began while we were initializing, do not register the
+      // client — tear the freshly-started connection down immediately instead.
+      // Otherwise it would leak as a live child process until the next
+      // session:shutdown (which may never come).
+      if (this.shuttingDown) {
+        connection.shutdown().catch(() => {});
+        this.startingServers.delete(languageId);
+        this.callbacks.onServerError?.(languageId, `LSP server for ${languageId} shut down during startup`);
+        return;
+      }
       this.clients.set(languageId, client);
       this.startingServers.delete(languageId);
       this.callbacks.onServerReady?.(languageId);
@@ -357,11 +367,20 @@ export class LspManager {
     }, backoff);
   }
 
-  /** Shut down all clients. */
+  /** Shut down all clients AND any servers still mid-startup. */
   async shutdownAll(): Promise<void> {
     this.shuttingDown = true;
+
+    // Shut down fully-registered clients.
     const shutdowns = [...this.clients.values()].map((client) => client.connection.shutdown().catch(() => {}));
-    await Promise.all(shutdowns);
+
+    // Servers still in `startingServers` are not yet in `clients`; if a startup
+    // was mid-handshake, `startServer` will detect `shuttingDown` once the
+    // handshake resolves and tear itself down. Wait for those promises so no
+    // child process is left behind.
+    const startingPromises = [...this.startingServers.values()].map((p) => p.catch(() => {}));
+
+    await Promise.all([...shutdowns, ...startingPromises]);
     this.clients.clear();
     this.startingServers.clear();
     this.shuttingDown = false;

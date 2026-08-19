@@ -358,3 +358,9 @@ export {
   parseStringifiedMultimodalContent,
   isStringifiedMultimodalContentParts,
 } from "./agent/media/repair-stringified-multimodal.js";
+
+// ============================================================================
+// Built-in LSP extension (internal validation exports — not part of public API)
+// ============================================================================
+export { createLspExtension, lspExtension } from "./agent/lsp";
+export { EXT_TO_LANGUAGE, getLanguageIdFromPath } from "./agent/lsp/language-map.js";

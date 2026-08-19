@@ -7,7 +7,7 @@
  * - 4 commands: /lsp, /lsp-restart, /lsp-config, /lsp-lombok
  * - Auto file-sync (didOpen/didChange) after read/write/edit
  * - Auto-diagnostics injection into write/edit tool results
- * - 3 tree-sitter tools: code_overview, code_search, code_rewrite (Phase 7)
+ * - 3 tree-sitter tools: code_overview, ast_search, code_rewrite (Phase 7)
  *
  * Runtime-agnostic: the JSON-RPC transport comes from `CoreEnv.createLspConnection`
  * (Node-only). When absent, LSP tools degrade gracefully.
