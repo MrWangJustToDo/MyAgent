@@ -24,6 +24,8 @@ import { resolveLocalEnvironmentMode } from "./environment/local.js";
 import { createNativeFilesystem } from "./environment/native-fs.js";
 import { runNativeCommand, startNativeCommand } from "./environment/native-run.js";
 import { resetOsSandbox } from "./environment/os-sandbox.js";
+import { locateTreeSitterGrammar } from "./lsp/grammar.js";
+import { createLspConnection as createNodeLspConnection } from "./lsp/transport.js";
 
 import type { LocalEnvironmentConfig } from "./environment/local.js";
 import type { CoreEnv, CoreEnvExecResult } from "@my-agent/core";
@@ -155,5 +157,8 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
         kill: (signal?: string) => child.kill(signal as NodeJS.Signals),
       };
     },
+
+    createLspConnection: (config) => createNodeLspConnection(config),
+    locateTreeSitterGrammar,
   };
 }

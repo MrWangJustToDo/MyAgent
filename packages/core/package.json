@@ -121,9 +121,13 @@
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
+  "optionalDependencies": {
+    "web-tree-sitter": "^0.25.10"
+  },
   "devDependencies": {
     "@types/turndown": "^5.0.6",
     "tsdown": "^0.21.10",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vscode-languageserver-protocol": "^3.18.2"
   }
 }
