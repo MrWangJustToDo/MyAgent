@@ -29,7 +29,10 @@ const proxied = await resolveModelConfigFromProvider({
   apiKey: "sk-client",
 });
 
-assert.equal(proxied.connection.model, "client-override-model");
+// Proxy mode: the provider is the single source of truth for model, style,
+// baseURL and apiKey — a local client model must NOT leak into forwarded
+// requests (security: server-configured model wins).
+assert.equal(proxied.connection.model, "server-model");
 assert.equal(proxied.connection.style, "openai", "proxy forces provider style");
 assert.equal(proxied.connection.baseURL, "http://remote/api/provider/openai/v1");
 assert.equal(proxied.connection.apiKey, "remote-coreenv");

@@ -125,7 +125,15 @@ class LocalAgentSessionHostImpl implements AgentSessionHost {
   }
 
   async destroy(agentId: string): Promise<void> {
-    this.sessions.delete(agentId);
+    // Cascade: drop cached sessions for the agent and any children (the manager
+    // already removes them from its registry). Child sessions expose their
+    // parent via snapshot.parentId.
+    for (const [id, entry] of [...this.sessions.entries()]) {
+      const parentId = entry.getSnapshot().parentId;
+      if (id === agentId || parentId === agentId) {
+        this.sessions.delete(id);
+      }
+    }
     this.manager.destroyAgent(agentId);
   }
 }
