@@ -124,8 +124,8 @@ export function getKeyboardShortcutSections(): ShortcutSection[] {
       title: "Chat",
       lines: [
         { key: KeyLabel.enter, desc: "Submit prompt (while running: queue follow-up)" },
-        { key: newline, desc: "Insert newline when idle" },
-        { key: modifiedEnter, desc: "Force-submit while running (abort + new turn)" },
+        { key: `${newline} (idle)`, desc: "Insert newline when idle" },
+        { key: `${modifiedEnter} (running)`, desc: "Force-submit while running (abort + new turn)" },
         { key: KeyLabel.esc, desc: "Abort current run / dismiss UI" },
         { key: KeyLabel.ctrlC, desc: "Exit the app" },
         { key: KeyLabel.ctrlU, desc: "Clear input" },

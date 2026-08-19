@@ -3,20 +3,11 @@ import { Box, Text } from "ink";
 
 import { useConfig } from "../hooks/use-config.js";
 import { COLORS } from "../theme/colors.js";
-import {
-  approveDenyLabel,
-  exitAbortLabel,
-  KeyLabel,
-  modifiedEnterLabel,
-  newlineEnterLabel,
-} from "../utils/keyboard-labels.js";
+import { getKeyboardShortcutSections } from "../utils/keyboard-labels.js";
 
 export const Help = () => {
   const config = useConfig((s) => s.config);
-  const modifiedEnter = modifiedEnterLabel();
-  const newlineChord = newlineEnterLabel();
-  const yn = approveDenyLabel();
-  const exitAbort = exitAbortLabel();
+  const shortcutSections = getKeyboardShortcutSections();
 
   return (
     <Box flexDirection="column" padding={1}>
@@ -213,119 +204,25 @@ export const Help = () => {
           KEYBOARD
         </Text>
         <Box flexDirection="column" paddingLeft={2}>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>{KeyLabel.enter}</Text>
+          {shortcutSections.map((section) => (
+            <Box key={section.title} flexDirection="column" marginBottom={1}>
+              <Text bold color={COLORS.primary}>
+                {section.title}
+              </Text>
+              {section.lines.map((row) => (
+                <Box key={row.key}>
+                  <Box width={28}>
+                    <Text color={COLORS.success}>{row.key}</Text>
+                  </Box>
+                  <Text>{row.desc}</Text>
+                </Box>
+              ))}
             </Box>
-            <Text>Submit prompt (while running: queue follow-up)</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>{newlineChord}</Text>
-            </Box>
-            <Text>Insert newline when idle</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>{modifiedEnter}</Text>
-            </Box>
-            <Text>Force-submit while running (abort + new turn)</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>{yn}</Text>
-            </Box>
-            <Text>Approve / Deny tool execution</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>{exitAbort}</Text>
-            </Box>
-            <Text>Exit / abort</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>{KeyLabel.shiftTab}</Text>
-            </Box>
-            <Text>Toggle plan mode</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>{KeyLabel.ctrlV}</Text>
-            </Box>
-            <Text>Paste image from clipboard</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>/shortcuts</Text>
-            </Box>
-            <Text>List all keyboard shortcuts</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>/display</Text>
-            </Box>
-            <Text>Transcript density (option menu: compact / full)</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>/theme</Text>
-            </Box>
-            <Text>Color theme (option menu: gemini / claude)</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>{KeyLabel.p}</Text>
-            </Box>
-            <Text>Review full plan (markdown preview when plan is ready)</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>/auto</Text>
-            </Box>
-            <Text>Toggle auto mode — skip all tool approvals</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>/plan</Text>
-            </Box>
-            <Text>Toggle plan mode (planning → review → Build → retro)</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>/plan execute</Text>
-            </Box>
-            <Text>Build the approved plan (from review)</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>/plan done</Text>
-            </Box>
-            <Text>Finish retro and exit plan mode</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>/plan cancel</Text>
-            </Box>
-            <Text>Pause building (back to review, read-only)</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>/plan save</Text>
-            </Box>
-            <Text>Save/rename plan under .agents/plans/ (create auto-saves)</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>/plan load</Text>
-            </Box>
-            <Text>Load a saved plan into review</Text>
-          </Box>
-          <Box>
-            <Box width={28}>
-              <Text color={COLORS.success}>/plan list</Text>
-            </Box>
-            <Text>List saved plans</Text>
+          ))}
+          <Box marginTop={1}>
+            <Text color={COLORS.muted}>
+              Tip: type /help to list all commands, /shortcuts for all keyboard shortcuts.
+            </Text>
           </Box>
         </Box>
       </Box>
