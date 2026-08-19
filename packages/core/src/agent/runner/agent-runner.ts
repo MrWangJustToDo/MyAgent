@@ -4,6 +4,8 @@ import { assertAsyncIterable } from "../run-helpers/assert-async-iterable.js";
 
 import { createToolRunContext, type ToolRunContext } from "./run-context.js";
 
+import type { ModelStyle } from "../../models/model-config.js";
+import type { ReasoningEffort } from "../../models/types.js";
 import type {
   AnyTextAdapter,
   ChatMiddleware,
@@ -28,6 +30,14 @@ export interface AgentRunnerConfig {
   middleware?: ChatMiddleware<ToolRunContext>[];
   temperature?: number;
   maxOutputTokens?: number;
+  /**
+   * Reasoning effort level to send on every request.
+   * OpenAI-compatible adapters get `reasoning_effort`; Anthropic gets `effort`.
+   * Undefined → model default.
+   */
+  reasoningEffort?: ReasoningEffort;
+  /** API style — determines the reasoning-effort wire key. */
+  modelStyle?: ModelStyle;
 }
 
 export interface AgentRunnerRunInput {
@@ -106,6 +116,11 @@ export class AgentRunner {
       modelOptions: {
         ...(this.config.temperature != null ? { temperature: this.config.temperature } : {}),
         ...(this.config.maxOutputTokens != null ? { maxTokens: this.config.maxOutputTokens } : {}),
+        ...(this.config.reasoningEffort
+          ? this.config.modelStyle === "anthropic"
+            ? { effort: this.config.reasoningEffort }
+            : { reasoning_effort: this.config.reasoningEffort }
+          : {}),
       },
     });
 

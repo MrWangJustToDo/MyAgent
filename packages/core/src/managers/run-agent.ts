@@ -187,6 +187,8 @@ export function buildAgentRunner(
     middleware,
     temperature: managed.config.temperature,
     maxOutputTokens,
+    reasoningEffort: managed.config.reasoningEffort,
+    modelStyle: managed.config.modelStyle,
   });
 }
 
@@ -198,6 +200,7 @@ function runnerConfigKey(managed: ManagedAgent): string {
     temperature: managed.config.temperature,
     modelStyle: managed.config.modelStyle,
     modelBaseURL: managed.config.modelBaseURL,
+    reasoningEffort: managed.config.reasoningEffort,
     // Rebuild when plan mode hides/restores tools
     planPhase: managed.planMode.getPhase(),
   });

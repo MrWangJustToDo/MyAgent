@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 
-import type { ModelStyle } from "../../models/types.js";
+import type { ModelStyle, ReasoningEffort } from "../../models/types.js";
 import type { TokenUsage } from "../../runtime-types/token-usage.js";
 import type { PlanModeState } from "../plan/plan-mode-controller.js";
 import type { TodoItem } from "../todo-manager";
@@ -76,6 +76,8 @@ export interface SessionData {
   todoTitle?: string | null;
   /** Whether todos are bound to plan building (optional; older sessions omit this). */
   todoPlanBound?: boolean;
+  /** Reasoning effort level for this session (OpenAI `reasoning_effort` / Anthropic `effort`). */
+  reasoningEffort?: ReasoningEffort;
   /**
    * Plan-mode lifecycle snapshot (phase, markdown, path, seeded flags).
    * Omitted or null when plan mode is off. Older sessions omit this field.

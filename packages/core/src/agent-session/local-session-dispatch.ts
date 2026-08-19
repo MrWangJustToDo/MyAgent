@@ -210,6 +210,10 @@ export async function dispatchLocalAgentSessionCommand(
           ? { ok: true, data: { sessionId: result.sessionId } }
           : { ok: false, code: "failed", error: result.error };
       }
+      case "effort.set": {
+        managed.setReasoningEffort(command.effort);
+        return { ok: true, data: { effort: managed.getReasoningEffort() } };
+      }
       default: {
         const _exhaustive: never = command;
         return { ok: false, code: "invalid", error: `Unknown command: ${JSON.stringify(_exhaustive)}` };

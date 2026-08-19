@@ -31,6 +31,9 @@ export type ModelCapability =
   | "json_output"
   | "computer_use";
 
+/** Reasoning effort values a model may accept. */
+export type ReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh" | "max" | "minimal";
+
 /**
  * Reasoning-specific configuration for models that support thinking/CoT.
  */
@@ -38,7 +41,14 @@ export interface ReasoningConfig {
   /** Tag name used to extract reasoning (e.g. "think" for DeepSeek R1, Qwen3) */
   tagName?: string;
   /** Default reasoning effort level */
-  defaultEffort?: "low" | "medium" | "high";
+  defaultEffort?: ReasoningEffort;
+  /**
+   * All effort values the model accepts, from models.dev `reasoning_options`
+   * (e.g. `["none","low","medium","high"]`). Used by the UI to offer only
+   * valid choices. Empty/undefined means the model does not advertise effort
+   * levels — effort configuration is unavailable.
+   */
+  effortValues?: ReasoningEffort[];
   /** Max thinking budget in tokens (if supported) */
   maxBudget?: number;
 }

@@ -4,7 +4,14 @@
 
 import { z } from "zod";
 
-import type { ModelCapability, ModelInfo, ModelPricing, ModelStyle, ReasoningConfig } from "@my-agent/core";
+import type {
+  ModelCapability,
+  ModelInfo,
+  ModelPricing,
+  ModelStyle,
+  ReasoningConfig,
+  ReasoningEffort,
+} from "@my-agent/core";
 
 /**
  * Zod schema for a single capability string.
@@ -67,7 +74,9 @@ export const ModelEnvConfigSchema = z.object({
   /** Tag name used to extract reasoning (e.g. "think"). */
   reasoningTagName: z.string().optional(),
   /** Default reasoning effort. */
-  reasoningEffort: z.enum(["low", "medium", "high"]).optional(),
+  reasoningEffort: z.enum(["none", "low", "medium", "high", "xhigh", "max", "minimal"]).optional(),
+  /** Comma-separated effort values the model accepts (from models.dev). */
+  reasoningEffortValues: z.array(z.enum(["none", "low", "medium", "high", "xhigh", "max", "minimal"])).optional(),
   /** Max thinking budget in tokens. */
   reasoningMaxBudget: z.number().int().positive().optional(),
   /** Whether this should be the default model for its provider. */
@@ -93,6 +102,7 @@ export const MODEL_ENV_KEYS = [
   "MODEL_CAPABILITIES",
   "MODEL_REASONING_TAG",
   "MODEL_REASONING_EFFORT",
+  "MODEL_REASONING_EFFORT_VALUES",
   "MODEL_REASONING_BUDGET",
   "MODEL_IS_DEFAULT",
 ] as const;
@@ -105,6 +115,16 @@ function parseCapabilitiesList(raw: string): ModelCapability[] {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean) as ModelCapability[];
+}
+
+/**
+ * Parse a comma-separated reasoning-effort list like "low,medium,high".
+ */
+function parseEffortList(raw: string): ReasoningEffort[] {
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean) as ReasoningEffort[];
 }
 
 /**
@@ -175,7 +195,10 @@ export function parseModelEnvConfig(env: Record<string, string | undefined>): Mo
     ...(pricing ? { pricing } : {}),
     ...(capabilities ? { capabilities } : {}),
     ...(env.MODEL_REASONING_TAG ? { reasoningTagName: env.MODEL_REASONING_TAG } : {}),
-    ...(env.MODEL_REASONING_EFFORT ? { reasoningEffort: env.MODEL_REASONING_EFFORT as "low" | "medium" | "high" } : {}),
+    ...(env.MODEL_REASONING_EFFORT ? { reasoningEffort: env.MODEL_REASONING_EFFORT as ReasoningEffort } : {}),
+    ...(env.MODEL_REASONING_EFFORT_VALUES
+      ? { reasoningEffortValues: parseEffortList(env.MODEL_REASONING_EFFORT_VALUES) }
+      : {}),
     ...(parseNumber(env.MODEL_REASONING_BUDGET) !== undefined
       ? { reasoningMaxBudget: parseNumber(env.MODEL_REASONING_BUDGET) }
       : {}),
@@ -232,10 +255,16 @@ export function resolveModelInfoFromEnv(
   }
 
   let reasoningConfig: ReasoningConfig | undefined;
-  if (envConfig.reasoningTagName || envConfig.reasoningEffort || envConfig.reasoningMaxBudget !== undefined) {
+  if (
+    envConfig.reasoningTagName ||
+    envConfig.reasoningEffort ||
+    envConfig.reasoningEffortValues ||
+    envConfig.reasoningMaxBudget !== undefined
+  ) {
     reasoningConfig = {
       ...(envConfig.reasoningTagName ? { tagName: envConfig.reasoningTagName } : {}),
       ...(envConfig.reasoningEffort ? { defaultEffort: envConfig.reasoningEffort } : {}),
+      ...(envConfig.reasoningEffortValues ? { effortValues: envConfig.reasoningEffortValues } : {}),
       ...(envConfig.reasoningMaxBudget !== undefined ? { maxBudget: envConfig.reasoningMaxBudget } : {}),
     };
   }

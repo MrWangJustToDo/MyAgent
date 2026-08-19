@@ -149,6 +149,7 @@ export type {
   ModelStyle,
   ModelConnection,
   ReasoningConfig,
+  ReasoningEffort,
   ResolvedModelConfig,
   ResolvedModelConfigFromProvider,
 } from "./models";

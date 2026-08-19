@@ -48,6 +48,11 @@ export function readLocalAgentSessionSnapshot(
     pendingApprovalCount: managed.getPendingApprovalCount(),
     mode: managed.getAgentMode(),
     lastStreamDurationMs: managed.getLastStreamDurationMs(),
+    ...(managed.config?.model ? { model: managed.config.model } : {}),
+    ...(managed.modelInfo ? { modelInfo: managed.modelInfo } : {}),
+    ...(typeof managed.getReasoningEffort === "function" && managed.getReasoningEffort()
+      ? { reasoningEffort: managed.getReasoningEffort() }
+      : {}),
     messages: chat?.getMessages() ?? managed.ui?.getMessages() ?? [],
     queues: chat?.getQueuedMessages() ?? { steer: [], followUp: [] },
     usage: managed.usage.getChangeSnapshot(),

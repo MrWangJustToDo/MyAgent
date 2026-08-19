@@ -1,10 +1,21 @@
 import { z } from "zod";
 
+import type { ReasoningEffort } from "../models/types.js";
 import type { ModelMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Agent Config
 // ============================================================================
+
+export const REASONING_EFFORT_VALUES: readonly ReasoningEffort[] = [
+  "none",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+  "minimal",
+];
 
 export const AgentConfigSchema = z.object({
   model: z.string().min(1).describe("Model name to use"),
@@ -15,6 +26,10 @@ export const AgentConfigSchema = z.object({
   maxIterations: z.number().int().min(1).max(100).optional().default(10).describe("Maximum agentic loop iterations"),
   maxTokens: z.number().int().min(1).optional().describe("Maximum tokens per response"),
   temperature: z.number().min(0).max(2).optional().describe("Sampling temperature"),
+  reasoningEffort: z
+    .enum(REASONING_EFFORT_VALUES)
+    .optional()
+    .describe("Reasoning effort level for reasoning-capable models"),
 });
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;

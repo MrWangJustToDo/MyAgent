@@ -15,6 +15,7 @@ import type { PlanModeController } from "../agent/plan/plan-mode-controller.js";
 import type { TodoManager } from "../agent/todo-manager";
 import type { AgentUIChannel } from "../agent/ui-channel.js";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
+import type { ReasoningEffort } from "../models/types.js";
 import type { UIMessage as TanStackUIMessage } from "@tanstack/ai";
 
 export interface SessionHost {
@@ -24,6 +25,10 @@ export interface SessionHost {
   planMode: PlanModeController;
   isAutoModeEnabled: () => boolean;
   setAutoModeEnabled: (enabled: boolean) => void;
+  /** Read the agent's current reasoning-effort config (for persistence). */
+  getReasoningEffort: () => ReasoningEffort | undefined;
+  /** Set reasoning-effort config (restore path). Optional — older hosts may omit. */
+  setReasoningEffort?: (effort: ReasoningEffort | undefined) => void;
   session: SessionService;
   sessionSyncTracker: SessionSyncTracker;
   approvals: ToolApprovalTable;
@@ -49,6 +54,7 @@ export function getSessionPersistInput(host: SessionHost, uiMessages?: TanStackU
     // Mutual exclusivity: never persist auto while plan is active.
     autoMode: planOn ? false : host.isAutoModeEnabled(),
     approvals: host.approvals.toArray(),
+    reasoningEffort: host.getReasoningEffort(),
     resolveTextAdapter: host.resolveTextAdapter,
     emitEvent: (type, data) => host.emitEvent(type, data),
     uiMessages,
@@ -85,6 +91,10 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
   const wantAuto = Boolean(session.autoMode ?? session.autoApprove);
   host.setAutoModeEnabled(planOn ? false : wantAuto);
   host.approvals.restore(session.approvals ?? []);
+
+  // Restore the persisted reasoning-effort level so resumed sessions keep their
+  // configured thinking depth. `setReasoningEffort` also invalidates the runner.
+  host.setReasoningEffort?.(session.reasoningEffort);
 
   // Hydrate UI channel when present; hosts also apply uiMessages via resume APIs.
   if (host.ui) {

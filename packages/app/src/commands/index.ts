@@ -3,6 +3,7 @@ import "./auto.js";
 import "./clear.js";
 import "./compact.js";
 import "./display.js";
+import "./effort.js";
 import "./help.js";
 import "./mcp.js";
 import "./paste.js";
@@ -12,7 +13,6 @@ import "./rename.js";
 import "./resume.js";
 import "./shortcuts.js";
 import "./theme.js";
-import "./thinking.js";
 import "./usage.js";
 
 export {

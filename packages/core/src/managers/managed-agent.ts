@@ -549,6 +549,22 @@ export class ManagedAgent {
     this.agentConfig = AgentConfigSchema.parse({ ...this.agentConfig, ...updates });
   }
 
+  /** Current reasoning-effort level, or undefined when unset (model default). */
+  getReasoningEffort(): AgentConfig["reasoningEffort"] {
+    return this.agentConfig.reasoningEffort;
+  }
+
+  /**
+   * Set the reasoning-effort level and invalidate the cached runner so the next
+   * run rebuilds {@link AgentRunner} with the new `modelOptions`.
+   */
+  setReasoningEffort(effort: AgentConfig["reasoningEffort"]): void {
+    this.updateConfig({ reasoningEffort: effort });
+    this.invalidateRunner();
+    this.persistSession();
+    this.emitStateChange();
+  }
+
   setModelInfo(info: ModelInfo): void {
     this.log?.debug("agent", "Setting model info", {
       id: info.id,

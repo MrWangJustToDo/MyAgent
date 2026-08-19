@@ -7,6 +7,7 @@ export type {
   ModelPricing,
   ModelStyle,
   ReasoningConfig,
+  ReasoningEffort,
 } from "./types.js";
 
 // Connection + env resolution (primary entry)

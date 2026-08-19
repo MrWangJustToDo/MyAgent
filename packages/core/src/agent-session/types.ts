@@ -21,6 +21,7 @@ import type { QueuedMessagesSnapshot } from "../managers/agent-chat-controller.j
 import type { AgentEvent } from "../managers/agent-telemetry-bus.js";
 import type { AgentL1State, AgentMode } from "../managers/managed-agent.js";
 import type { UsageChangeSnapshot } from "../managers/usage-tracker.js";
+import type { ModelInfo, ReasoningEffort } from "../models/types.js";
 import type { AgentStatus } from "../runtime-types/agent-status.js";
 import type { ContentPart, UIMessage } from "@tanstack/ai";
 
@@ -87,6 +88,12 @@ export interface AgentSessionSnapshot {
   pendingApprovalCount: number;
   mode: AgentMode;
   lastStreamDurationMs: number;
+  /** Model name (informational). */
+  model?: string;
+  /** Model metadata (incl. reasoningConfig / effortValues) for UI display. */
+  modelInfo?: ModelInfo;
+  /** Current reasoning-effort level for this session (undefined = model default). */
+  reasoningEffort?: ReasoningEffort;
   messages: UIMessage[];
   queues: QueuedMessagesSnapshot;
   usage: UsageChangeSnapshot;
@@ -143,6 +150,8 @@ export type AgentSessionCommand =
   | { type: "session.resume"; sessionId: string }
   /** List on-disk sessions for the resume picker. */
   | { type: "session.list" }
+  /** Set reasoning-effort level for the current session (`/effort`). */
+  | { type: "effort.set"; effort?: ReasoningEffort }
   /**
    * Start a fresh on-disk session (slash `/clear`): persist current if needed, reset
    * transcript/plan/auto/todos, create a new SessionData. Prefer Host.create for a

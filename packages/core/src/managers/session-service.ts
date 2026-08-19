@@ -17,6 +17,7 @@ import type { SessionData, ToolApprovalRecord } from "../agent/persistence/types
 import type { PlanModeState } from "../agent/plan/plan-mode-controller.js";
 import type { TodoManager } from "../agent/todo-manager";
 import type { TextAdapterConfig } from "../models/adapter-factory.js";
+import type { ReasoningEffort } from "../models/types.js";
 import type { UIMessage } from "@tanstack/ai";
 
 export interface SessionPersistInput {
@@ -28,6 +29,8 @@ export interface SessionPersistInput {
   autoMode?: boolean;
   /** Tool-approval interrupt table; omitted means leave existing / empty. */
   approvals?: ToolApprovalRecord[];
+  /** Reasoning effort level to persist with this session. */
+  reasoningEffort?: ReasoningEffort;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   emitEvent?: EmitAgentTelemetryFn;
   uiMessages?: UIMessage[];
@@ -99,7 +102,17 @@ export class SessionService {
    * before writing. The original uiMessages array is never mutated.
    */
   async persistSession(input: SessionPersistInput): Promise<void> {
-    const { usage, todoManager, planMode, autoMode, approvals, resolveTextAdapter, emitEvent, uiMessages } = input;
+    const {
+      usage,
+      todoManager,
+      planMode,
+      autoMode,
+      approvals,
+      reasoningEffort,
+      resolveTextAdapter,
+      emitEvent,
+      uiMessages,
+    } = input;
     if (!this.store) return;
     if (!this.data) {
       this.ensureSession();
@@ -127,6 +140,11 @@ export class SessionService {
 
     if (approvals !== undefined) {
       this.data.approvals = approvals;
+    }
+
+    // `in` check: explicit undefined (e.g. `/effort off`) also clears the field.
+    if ("reasoningEffort" in input) {
+      this.data.reasoningEffort = reasoningEffort;
     }
 
     if (uiMessages !== undefined) {

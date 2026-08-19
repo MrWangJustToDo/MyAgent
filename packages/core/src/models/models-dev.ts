@@ -13,13 +13,16 @@
 
 import { getEnv } from "../env.js";
 
-import type { ModelCapability, ModelInfo, ModelStyle } from "./types.js";
+import type { ModelCapability, ModelInfo, ModelStyle, ReasoningEffort } from "./types.js";
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 export const MODELS_DEV_URL = "https://models.dev/api.json";
+
+/** Effort values we recognize from models.dev `reasoning_options`. */
+const REASONING_EFFORTS = new Set<ReasoningEffort>(["none", "low", "medium", "high", "xhigh", "max", "minimal"]);
 
 /** Disk cache TTL in milliseconds (24 hours). */
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -210,9 +213,13 @@ function parseModelsDevModel(vendorId: string, modelId: string, data: ModelsDevM
     const effortOpt = data.reasoning_options.find(
       (o) => typeof o === "object" && o !== null && (o as { type?: string }).type === "effort"
     ) as { values?: string[] } | undefined;
-    const hasMedium = effortOpt?.values?.includes("medium");
+    const effortValues = (effortOpt?.values ?? []).filter(
+      (v): v is ReasoningEffort => typeof v === "string" && REASONING_EFFORTS.has(v as ReasoningEffort)
+    );
+    const hasMedium = effortValues.includes("medium");
     reasoningConfig = {
-      defaultEffort: hasMedium ? "medium" : "low",
+      ...(effortValues.length > 0 ? { effortValues } : {}),
+      ...(hasMedium ? { defaultEffort: "medium" } : effortValues.length > 0 ? { defaultEffort: effortValues[0] } : {}),
     };
   }
 
