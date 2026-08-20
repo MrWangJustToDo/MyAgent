@@ -67,6 +67,7 @@ Rules:
 - Return a JSON object: { "selected_memories": ["filename1.md", "filename2.md"] }
 - Select at most 5 memories
 - Only select memories whose description clearly relates to the query
+- Prefer memories with a higher importance score (shown as [imp:N]) when relevance is comparable
 - If none are relevant, return { "selected_memories": [] }`;
 
 // ============================================================================
@@ -75,16 +76,46 @@ Rules:
 
 /**
  * Format a memory catalog for the LLM selector.
- * Each line: `[type] filename (timestamp): description`
+ * Each line: `[type] filename (timestamp) [importance]: description`
  */
 function formatManifest(memories: Memory[]): string {
   return memories
     .map((m) => {
       const ts = m.updatedAt ?? m.createdAt ?? "";
       const tsLabel = ts ? ` (${ts})` : "";
-      return `[${m.type}] ${m.filename}${tsLabel}: ${m.description}`;
+      const imp = typeof m.importance === "number" ? ` [imp:${m.importance}]` : "";
+      return `[${m.type}] ${m.filename}${tsLabel}${imp}: ${m.description}`;
     })
     .join("\n");
+}
+
+// ============================================================================
+// Expiry Filtering
+// ============================================================================
+
+/**
+ * Filter out memories whose `expiresAt` is in the past or unparseable.
+ * Memories without an expiry are always kept.
+ */
+function filterExpired(memories: Memory[], logger?: AgentLog): Memory[] {
+  const now = Date.now();
+  const live: Memory[] = [];
+  let expired = 0;
+  for (const m of memories) {
+    if (m.expiresAt) {
+      const t = Date.parse(m.expiresAt);
+      if (Number.isNaN(t) || t <= now) {
+        expired++;
+        logger?.debug("memory", `Skipping expired memory ${m.filename} (expiresAt=${m.expiresAt})`);
+        continue;
+      }
+    }
+    live.push(m);
+  }
+  if (expired > 0) {
+    logger?.info("memory", `Filtered ${expired} expired memories from retrieval`);
+  }
+  return live;
 }
 
 // ============================================================================
@@ -279,8 +310,14 @@ export async function findRelevantMemories(
   const allMemories = await memoryManager.listMemories();
   logger?.debug("memory", `Found ${allMemories.length} total memories`);
 
+  // Drop expired memories (expiresAt in the past) before any selection work.
+  const live = filterExpired(allMemories, logger);
+  if (live.length !== allMemories.length) {
+    logger?.debug("memory", `Filtered ${allMemories.length - live.length} expired memories`);
+  }
+
   // Pre-filter already-surfaced before LLM call (don't waste slots on repeats)
-  const candidates = allMemories.filter((m) => !alreadySurfaced.has(m.filename));
+  const candidates = live.filter((m) => !alreadySurfaced.has(m.filename));
   logger?.debug(
     "memory",
     `After filtering already-surfaced (${alreadySurfaced.size}): ${candidates.length} candidates`

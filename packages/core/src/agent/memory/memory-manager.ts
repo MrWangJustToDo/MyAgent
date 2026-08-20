@@ -35,6 +35,14 @@ import type { Memory, MemoryManagerConfig, MemoryMetadata, MemoryType } from "./
 // Helpers
 // ============================================================================
 
+/** Extra write options for {@link MemoryManager.writeMemory}. */
+export interface WriteMemoryOptions {
+  /** Relevance weight (0–1) used to prioritize during retrieval/eviction. */
+  importance?: number;
+  /** ISO timestamp after which this memory should no longer be surfaced. */
+  expiresAt?: string;
+}
+
 /**
  * Unicode-safe slugify: keeps CJK characters, latin alphanumerics, and hyphens.
  * Falls back to a timestamp-based slug if the result would be empty.
@@ -59,6 +67,13 @@ function yamlQuote(value: string): string {
     return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
   }
   return value;
+}
+
+/** True when the memory has an `expiresAt` in the past (or unparseable). */
+function isExpired(mem: Memory): boolean {
+  if (!mem.expiresAt) return false;
+  const t = Date.parse(mem.expiresAt);
+  return Number.isNaN(t) || t <= Date.now();
 }
 
 // ============================================================================
@@ -159,6 +174,8 @@ export class MemoryManager {
             filename: entry.name,
             createdAt: metadata?.createdAt,
             updatedAt: metadata?.updatedAt,
+            importance: metadata?.importance,
+            expiresAt: metadata?.expiresAt,
           });
         } catch {
           // Failed to parse memory file — skip
@@ -198,7 +215,13 @@ export class MemoryManager {
   /**
    * Write a memory file with YAML frontmatter, then rebuild the index.
    */
-  async writeMemory(name: string, type: MemoryType, description: string, body: string): Promise<string> {
+  async writeMemory(
+    name: string,
+    type: MemoryType,
+    description: string,
+    body: string,
+    options: WriteMemoryOptions = {}
+  ): Promise<string> {
     const slug = slugify(name);
     const filename = `${slug}.md`;
     const filePath = getEnv().path.join(this.memoryPath, filename);
@@ -207,6 +230,8 @@ export class MemoryManager {
 
     // Check if file already exists to preserve createdAt
     let createdAt = now;
+    let existingImportance: number | undefined;
+    let existingExpiresAt: string | undefined;
     try {
       const existing = await getEnv().fs.exists(filePath);
       if (existing) {
@@ -215,23 +240,34 @@ export class MemoryManager {
         if (metadata?.createdAt) {
           createdAt = metadata.createdAt;
         }
+        existingImportance = metadata?.importance;
+        existingExpiresAt = metadata?.expiresAt;
       }
     } catch {
       // New file
     }
 
-    const content = [
+    // Prefer explicit option, else preserve existing value on update.
+    const importance = options.importance !== undefined ? options.importance : existingImportance;
+    const expiresAt = options.expiresAt !== undefined ? options.expiresAt : existingExpiresAt;
+
+    const lines = [
       "---",
       `name: ${yamlQuote(name)}`,
       `type: ${type}`,
       `description: ${yamlQuote(description)}`,
       `createdAt: "${createdAt}"`,
       `updatedAt: "${now}"`,
-      "---",
-      "",
-      body,
-      "",
-    ].join("\n");
+    ];
+    if (importance !== undefined) {
+      lines.push(`importance: ${importance}`);
+    }
+    if (expiresAt) {
+      lines.push(`expiresAt: "${expiresAt}"`);
+    }
+    lines.push("---", "", body, "");
+
+    const content = lines.join("\n");
 
     await getEnv().fs.writeFile(filePath, content);
 
@@ -308,7 +344,7 @@ export class MemoryManager {
    * Rebuild the MEMORY.md index from all memory files, then update the cache.
    */
   async refreshIndex(): Promise<void> {
-    const memories = await this.listMemories();
+    const memories = (await this.listMemories()).filter((m) => !isExpired(m));
     const lines: string[] = [];
 
     for (const mem of memories) {

@@ -142,6 +142,10 @@ export {
   resetWebsearchProviders,
 } from "./agent/tools/websearch";
 export { resolveSelectedMemoryFilename } from "./agent/memory/memory-retrieval.js";
+export { MemoryManager } from "./agent/memory/memory-manager.js";
+export { extractMemories, consolidateMemories } from "./agent/memory/memory-extractor.js";
+export { findRelevantMemories, formatRelevantMemories } from "./agent/memory/memory-retrieval.js";
+export type { RelevantMemory } from "./agent/memory/memory-retrieval.js";
 export {
   DEFAULT_SUMMARIZATION_CONTEXT_WINDOW,
   resolveSummarizationInputBudget,

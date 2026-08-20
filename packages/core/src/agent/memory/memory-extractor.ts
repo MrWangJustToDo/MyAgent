@@ -70,13 +70,16 @@ Return a JSON object:
 {
   "merged": [
     { "name": "...", "type": "user|feedback|project|reference", "description": "...", "body": "...",
-      "replaces": ["filename1.md", "filename2.md"] }
+      "replaces": ["filename1.md", "filename2.md"],
+      "importance": 0.9, "expiresAt": "2026-12-31T00:00:00.000Z" }
   ],
   "deleted": ["filename3.md", "filename4.md"]
 }
 
 - "merged": new memories that replace 2+ source files listed in "replaces".
   Write the full merged body yourself based on the descriptions.
+- "importance" (optional): 0–1 weight for the merged entry; omit to keep default.
+- "expiresAt" (optional): ISO expiry; omit unless the merged topic is time-bound.
 - "deleted": files to remove outright (outdated/contradicted).
 - Files not mentioned in either list are kept as-is.
 - If no changes needed, return { "merged": [], "deleted": [] }.`;
@@ -119,6 +122,10 @@ interface ExtractedMemory {
   type: MemoryType;
   description: string;
   body: string;
+  /** Optional relevance weight (0–1) set by the extractor. */
+  importance?: number;
+  /** Optional ISO expiry timestamp set by the extractor. */
+  expiresAt?: string;
 }
 
 /**
@@ -152,11 +159,16 @@ export async function extractMemories(
 
   const prompt = [
     "Extract user preferences, constraints, or project facts from this dialogue.",
-    `Return a JSON array. Each item: {name, type, description, body}.`,
+    `Return a JSON array. Each item: {name, type, description, body, importance?, expiresAt?}.`,
     `- name: short kebab-case identifier (e.g. "user-preference-tabs")`,
     `- type: one of ${validTypes}`,
     "- description: one-line summary for index lookup",
     "- body: full detail in markdown",
+    "- importance (optional): number 0–1 rating how valuable this memory is across",
+    "  future sessions. Prefer 0.7–1.0 for durable user preferences / core project",
+    "  facts; 0.3–0.6 for moderately useful details; omit for typical entries.",
+    "- expiresAt (optional): ISO timestamp when this memory stops being relevant",
+    "  (e.g. a temporary constraint or a deprecation date). Omit for durable memories.",
     "If nothing new or already covered by existing memories, return [].",
     "",
     `Existing memories:\n${existingDesc}`,
@@ -193,7 +205,10 @@ export async function extractMemories(
     const body = typeof mem.body === "string" ? mem.body : "";
 
     if (name && description && body) {
-      await memoryManager.writeMemory(name, type, description, body);
+      await memoryManager.writeMemory(name, type, description, body, {
+        importance: parseImportance(mem.importance),
+        expiresAt: parseExpiresAt(mem.expiresAt),
+      });
       count++;
     }
   }
@@ -301,7 +316,10 @@ async function llmConsolidate(
   // Write merged memories
   for (const merge of decisions.merged) {
     if (!merge.name || !merge.description || !merge.body) continue;
-    await memoryManager.writeMemory(merge.name, merge.type, merge.description, merge.body);
+    await memoryManager.writeMemory(merge.name, merge.type, merge.description, merge.body, {
+      importance: merge.importance,
+      expiresAt: merge.expiresAt,
+    });
     for (const f of merge.replaces) {
       allReplaced.add(f);
     }
@@ -328,13 +346,33 @@ async function llmConsolidate(
 /**
  * Phase 2: Evict oldest memories (by updatedAt) until under the hard cap.
  *
+ * Eviction order (cheapest to keep):
+ * 1. Expired memories (expiresAt in the past) — no longer relevant at all.
+ * 2. Lowest importance (explicit importance sorts before unset).
+ * 3. Oldest by updatedAt (fall back to createdAt, then filename).
+ *
  * Returns the number of evicted files.
  */
 async function evictOldest(memories: Memory[], memoryManager: MemoryManager): Promise<number> {
   if (memories.length <= DEFAULT_HARD_MAX_MEMORIES) return 0;
 
-  // Sort by updatedAt (oldest first). Fall back to createdAt, then filename.
+  const now = Date.now();
+  const isExpired = (m: Memory): boolean => {
+    if (!m.expiresAt) return false;
+    const t = Date.parse(m.expiresAt);
+    return !Number.isNaN(t) && t <= now;
+  };
+
+  // Sort: expired first, then by importance (ascending, unset treated as 0.5), then oldest.
   const sorted = [...memories].sort((a, b) => {
+    const aExpired = isExpired(a) ? 1 : 0;
+    const bExpired = isExpired(b) ? 1 : 0;
+    if (aExpired !== bExpired) return bExpired - aExpired;
+
+    const ia = typeof a.importance === "number" ? a.importance : 0.5;
+    const ib = typeof b.importance === "number" ? b.importance : 0.5;
+    if (ia !== ib) return ia - ib;
+
     const ta = a.updatedAt ?? a.createdAt ?? "";
     const tb = b.updatedAt ?? b.createdAt ?? "";
     return ta.localeCompare(tb);
@@ -358,6 +396,10 @@ interface ConsolidationDecisions {
     description: string;
     body: string;
     replaces: string[];
+    /** Optional importance (0–1) for the merged memory. */
+    importance?: number;
+    /** Optional ISO expiry timestamp for the merged memory. */
+    expiresAt?: string;
   }>;
   deleted: string[];
 }
@@ -387,6 +429,8 @@ function parseConsolidationResponse(text: string): ConsolidationDecisions | null
           description: typeof m.description === "string" ? m.description.trim() : "",
           body: typeof m.body === "string" ? m.body.trim() : "",
           replaces: Array.isArray(m.replaces) ? m.replaces.filter((f): f is string => typeof f === "string") : [],
+          importance: parseImportance((m as { importance?: unknown }).importance),
+          expiresAt: parseExpiresAt((m as { expiresAt?: unknown }).expiresAt),
         }))
         .filter((m) => m.name && m.description && m.body),
       deleted: deleted.filter((f): f is string => typeof f === "string"),
@@ -398,6 +442,27 @@ function parseConsolidationResponse(text: string): ConsolidationDecisions | null
 
 function isValidMemoryType(value: unknown): value is MemoryType {
   return typeof value === "string" && (MEMORY_TYPES as readonly string[]).includes(value);
+}
+
+/**
+ * Parse an optional importance (0–1) from LLM output, clamping to valid range.
+ * Returns undefined for missing / non-numeric / out-of-range values.
+ */
+function parseImportance(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  if (value < 0 || value > 1) return undefined;
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * Parse an optional ISO expiry timestamp from LLM output.
+ * Returns undefined for missing / non-string / invalid dates.
+ */
+function parseExpiresAt(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const t = Date.parse(value);
+  if (Number.isNaN(t)) return undefined;
+  return new Date(t).toISOString();
 }
 
 /**

@@ -84,6 +84,7 @@
     "validate:instruction-context": "pnpm run build && node scripts/validate-instruction-context.mjs",
     "validate:extension-loader": "pnpm run build && node scripts/validate-extension-loader.mjs",
     "validate:memory-service": "pnpm run build && node scripts/validate-memory-service.mjs",
+    "validate:memory-lifecycle": "pnpm run build && node scripts/validate-memory-lifecycle.mjs",
     "validate:summarization-budget": "pnpm run build && node scripts/validate-summarization-budget.mjs",
     "validate:summarization-segments": "pnpm run build && node scripts/validate-summarization-segments.mjs",
     "validate:compact-archive": "pnpm run build && node scripts/validate-compact-archive.mjs",

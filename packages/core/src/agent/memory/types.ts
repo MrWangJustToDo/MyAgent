@@ -52,6 +52,10 @@ export const memoryMetadataSchema = z.object({
   description: z.string(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
+  /** Relevance weight (0–1) used to prioritize during retrieval/eviction. Optional. */
+  importance: z.number().min(0).max(1).optional(),
+  /** ISO timestamp after which this memory should no longer be surfaced. Optional. */
+  expiresAt: z.string().optional(),
 });
 
 export const memorySchema = z.object({
@@ -62,6 +66,8 @@ export const memorySchema = z.object({
   filename: z.string(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
+  importance: z.number().min(0).max(1).optional(),
+  expiresAt: z.string().optional(),
 });
 
 // ============================================================================
