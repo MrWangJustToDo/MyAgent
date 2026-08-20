@@ -3,16 +3,16 @@
  *
  * Only imports `hono/client` and `@my-agent/core` types — no server dependencies.
  *
- * LLM provider is orthogonal — use {@link createProxyModelProvider} separately when
+ * LLM provider is orthogonal — use {@link createRemoteProvider} separately when
  * keys should stay on a remote provider server.
  *
  * @example
  * ```typescript
  * import { registerCoreEnv, registerModelProvider } from "@my-agent/core";
- * import { createRemoteCoreEnv, createProxyModelProvider } from "@my-agent/server/client";
+ * import { createRemoteEnv, createRemoteProvider } from "@my-agent/server/client";
  *
- * registerCoreEnv(await createRemoteCoreEnv("http://localhost:3100"));
- * registerModelProvider(await createProxyModelProvider("http://localhost:3100"));
+ * registerCoreEnv(await createRemoteEnv("http://localhost:3100"));
+ * registerModelProvider(await createRemoteProvider("http://localhost:3100"));
  * ```
  */
 
@@ -36,7 +36,7 @@ import type {
   StartCommandOptions,
 } from "@my-agent/core";
 
-export { createProxyModelProvider } from "./remote-provider.js";
+export { createRemoteProvider } from "./remote-provider.js";
 
 type Client = ReturnType<typeof hc<AppType>>;
 
@@ -158,7 +158,7 @@ function createRemoteFs(client: Client): CoreEnvFs {
 }
 
 // ============================================================================
-// createRemoteCoreEnv
+// createRemoteEnv
 // ============================================================================
 
 function serializeRunOptions(options?: RunCommandOptions) {
@@ -175,7 +175,7 @@ function serializeRunOptions(options?: RunCommandOptions) {
  *
  * @param serverUrl - Base URL of the CoreEnv server (e.g. `"http://localhost:3100"`)
  */
-export async function createRemoteCoreEnv(serverUrl: string): Promise<CoreEnv> {
+export async function createRemoteEnv(serverUrl: string): Promise<CoreEnv> {
   const baseUrl = serverUrl.replace(/\/+$/, "");
   const client = hc<AppType>(`${baseUrl}/api`);
 

@@ -225,7 +225,7 @@ async function proxyStream(
 // ============================================================================
 
 export interface ProviderInfoResponse {
-  mode: "proxy";
+  mode: "remote";
   style: "openai" | "anthropic";
   model: string;
   /** Absolute-path adapter baseURL on this server (no host). */
@@ -239,7 +239,7 @@ export const providerRoutes = new Hono()
     const basePath =
       style === "anthropic" ? anthropicProxyBasePath(connection.baseURL) : openaiProxyBasePath(connection.baseURL);
     const body: ProviderInfoResponse = {
-      mode: "proxy",
+      mode: "remote",
       style,
       model: connection.model,
       basePath,

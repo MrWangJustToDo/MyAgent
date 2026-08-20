@@ -39,6 +39,8 @@ assert.equal(leaked.length, 0, `Forbidden public exports found: ${leaked.join(",
 for (const name of [
   "agentManager",
   "createLocalAgentSessionHost",
+  "createRemoteProvider",
+  "REMOTE_PROVIDER_API_KEY",
   "resolveModelConfigFromProvider",
   "buildDefaultSystemPrompt",
   "isActiveStatus",

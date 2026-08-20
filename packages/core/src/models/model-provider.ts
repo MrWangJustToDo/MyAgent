@@ -3,7 +3,7 @@
  *
  * Hosts register a {@link ModelProvider} before creating agents:
  * - {@link createDirectModelProvider} — local keys / baseURL
- * - remote proxy factory lives in `@my-agent/server` (`createProxyModelProvider`)
+ * - {@link createRemoteProvider} — keys stay on a remote provider server
  */
 
 import { resolveModelConnection, type ResolveModelConfigInput } from "./model-config.js";
@@ -13,12 +13,12 @@ import { resolveModelConnection, type ResolveModelConfigInput } from "./model-co
 // ============================================================================
 
 /** How the host talks to the LLM. */
-export type ModelProviderMode = "direct" | "proxy";
+export type ModelProviderMode = "direct" | "remote";
 
 /**
  * Connection info for TanStack text adapters.
  *
- * In `proxy` mode, `apiKey` is a placeholder and `baseURL` points at a streaming
+ * In `remote` mode, `apiKey` is a placeholder and `baseURL` points at a streaming
  * provider proxy (real credentials stay on that server).
  */
 export interface ModelProviderConnection {
@@ -71,7 +71,7 @@ export function getModelProvider(): ModelProvider {
   if (!_provider) {
     throw new Error(
       "ModelProvider not registered. Call registerModelProvider() before resolving models. " +
-        "Use createDirectModelProvider() or createProxyModelProvider() from the host."
+        "Use createDirectModelProvider() or createRemoteProvider() from the host."
     );
   }
   return _provider;

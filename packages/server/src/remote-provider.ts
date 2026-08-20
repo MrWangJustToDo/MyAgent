@@ -1,11 +1,11 @@
 /**
- * Remote provider proxy — re-exported from `@my-agent/core`.
+ * Remote provider — re-exported from `@my-agent/core`.
  *
  * The implementation lives in core so the browser playground (which must not
- * depend on `@my-agent/server`) can register a proxy-mode provider too.
- * `createProxyModelProvider` is exported from `@my-agent/core` and re-exported
+ * depend on `@my-agent/server`) can register a remote-mode provider too.
+ * `createRemoteProvider` is exported from `@my-agent/core` and re-exported
  * here to keep the existing `@my-agent/server` / `@my-agent/server/client`
- * surface unchanged.
+ * surface consistent.
  */
 
-export { createProxyModelProvider, REMOTE_PROVIDER_API_KEY } from "@my-agent/core";
+export { createRemoteProvider, REMOTE_PROVIDER_API_KEY } from "@my-agent/core";
