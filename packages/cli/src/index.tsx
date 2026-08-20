@@ -29,16 +29,16 @@ if (isHelpRequested(process.argv.slice(2))) {
   useConfig.getActions().setHelpRequested(true);
 }
 
-// CoreEnv plane — workspace fs/shell (`--remote` / REMOTE)
-const remote = appConfig.remote;
-if (remote) {
+// CoreEnv plane — workspace fs/shell (`--remote-env` / REMOTE_ENV)
+const remoteEnv = appConfig.remoteEnv;
+if (remoteEnv) {
   try {
-    const { createRemoteCoreEnv } = await import("@my-agent/server/client");
-    const remoteEnv = await createRemoteCoreEnv(remote);
-    registerCoreEnv(remoteEnv);
-    console.log(`[cli] Connected to remote CoreEnv: ${remote} (rootPath=${remoteEnv.rootPath})`);
+    const { createRemoteEnv } = await import("@my-agent/server/client");
+    const remoteEnvInstance = await createRemoteEnv(remoteEnv);
+    registerCoreEnv(remoteEnvInstance);
+    console.log(`[cli] Connected to remote CoreEnv: ${remoteEnv} (rootPath=${remoteEnvInstance.rootPath})`);
   } catch (err) {
-    console.error(`[cli] Failed to connect to remote CoreEnv at ${remote}`);
+    console.error(`[cli] Failed to connect to remote CoreEnv at ${remoteEnv}`);
     console.error(`  ${err instanceof Error ? err.message : String(err)}`);
     console.error(`  Make sure the server is running: pnpm start:server`);
     process.exit(1);
@@ -48,15 +48,15 @@ if (remote) {
   registerCoreEnv(createNodeEnv({ rootPath: process.cwd(), sandbox: useOsSandbox }));
 }
 
-// Provider plane — LLM keys (`--provider-remote` / PROVIDER_REMOTE); orthogonal to CoreEnv
-const providerRemote = appConfig.providerRemote;
-if (providerRemote) {
+// Provider plane — LLM keys (`--remote-provider` / REMOTE_PROVIDER); orthogonal to CoreEnv
+const remoteProvider = appConfig.remoteProvider;
+if (remoteProvider) {
   try {
-    const { createProxyModelProvider } = await import("@my-agent/server/client");
-    registerModelProvider(await createProxyModelProvider(providerRemote));
-    console.log(`[cli] Using remote model provider: ${providerRemote}`);
+    const { createRemoteProvider } = await import("@my-agent/server/client");
+    registerModelProvider(await createRemoteProvider(remoteProvider));
+    console.log(`[cli] Using remote model provider: ${remoteProvider}`);
   } catch (err) {
-    console.error(`[cli] Failed to connect to model provider at ${providerRemote}`);
+    console.error(`[cli] Failed to connect to remote model provider at ${remoteProvider}`);
     console.error(`  ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
@@ -71,10 +71,10 @@ if (providerRemote) {
   );
 }
 
-if (appConfig.agentRemote) {
-  // Agent plane remote is distinct from CoreEnv `--remote`. Full HttpAgentSessionClient
+if (appConfig.remoteSession) {
+  // Remote session plane is distinct from CoreEnv `--remote-env`. Full RemoteSessionClient
   // chat wiring can bind via `@my-agent/server/agent-session` when hosts opt in.
-  console.log(`[cli] Agent Session remote configured: ${appConfig.agentRemote}`);
+  console.log(`[cli] Remote Agent Session configured: ${appConfig.remoteSession}`);
 }
 
 configureEnv({ allowNonBrowserUpdates: true });

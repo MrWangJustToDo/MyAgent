@@ -324,7 +324,7 @@ const StatusBar = () => {
         <LLMUsage key={version} />
         {model && (
           <Text color={COLORS.muted} dimColor wrap="truncate">
-            {providerMode === "proxy" ? `${model} · remote` : model}
+            {providerMode === "remote" ? `${model} · remote` : model}
           </Text>
         )}
       </Box>

@@ -25,17 +25,27 @@ export interface AppConfig {
   continueSession: boolean;
   resumeSession: string;
   /**
-   * Optional Agent Session HTTP base URL (distinct from CoreEnv `--remote`).
-   * When set, hosts may bind {@link AgentSession} via HttpAgentSessionClient.
+   * Optional remote CoreEnv (workspace) base URL (`--remote-env` / REMOTE_ENV).
+   * When set, hosts register a remote CoreEnv instead of the local Node env.
    */
-  agentRemote?: string;
+  remoteEnv?: string;
+  /**
+   * Optional remote model provider base URL (`--remote-provider` / REMOTE_PROVIDER).
+   * Keys stay on the provider server; API key is not a local secret.
+   */
+  remoteProvider?: string;
+  /**
+   * Optional remote Agent Session base URL (`--remote-session` / REMOTE_SESSION).
+   * When set, hosts may bind {@link AgentSession} via RemoteSessionClient.
+   */
+  remoteSession?: string;
   /** Optional model metadata override (hosts may parse MODEL_* env vars) */
   modelInfo?: ModelInfo;
   /**
    * How LLM credentials are resolved for this session.
-   * `proxy` = provider server holds keys; UI should not treat apiKey as a local secret.
+   * `remote` = provider server holds keys; UI should not treat apiKey as a local secret.
    */
-  providerMode?: "direct" | "proxy";
+  providerMode?: "direct" | "remote";
   /** Explicit tool secrets / prefs (e.g. Brave websearch). Hosts parse env and pass here. */
   toolConfig?: AgentToolConfig;
 }

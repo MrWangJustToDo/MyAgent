@@ -74,15 +74,21 @@ export const Help = () => {
           </Box>
           <Box>
             <Box width={24}>
-              <Text color={COLORS.success}>-R, --remote</Text>
+              <Text color={COLORS.success}>-R, --remote-env</Text>
             </Box>
             <Text>Remote CoreEnv server URL (workspace)</Text>
           </Box>
           <Box>
             <Box width={24}>
-              <Text color={COLORS.success}>--provider-remote</Text>
+              <Text color={COLORS.success}>--remote-provider</Text>
             </Box>
-            <Text>Remote LLM provider proxy URL (orthogonal to --remote)</Text>
+            <Text>Remote LLM provider URL (orthogonal to --remote-env)</Text>
+          </Box>
+          <Box>
+            <Box width={24}>
+              <Text color={COLORS.success}>--remote-session</Text>
+            </Box>
+            <Text>Remote Agent Session URL (orthogonal to --remote-env)</Text>
           </Box>
           <Box>
             <Box width={24}>
@@ -112,8 +118,9 @@ export const Help = () => {
             <Text color={COLORS.primary}>BASE_URL=https://openrouter.ai/api/v1</Text>
             <Text color={COLORS.primary}>API_KEY=sk-or-v1-xxx</Text>
             <Text color={COLORS.primary}>maxIterations=30</Text>
-            <Text color={COLORS.primary}>REMOTE=http://localhost:3100</Text>
-            <Text color={COLORS.primary}>PROVIDER_REMOTE=http://localhost:3100</Text>
+            <Text color={COLORS.primary}>REMOTE_ENV=http://localhost:3100</Text>
+            <Text color={COLORS.primary}>REMOTE_PROVIDER=http://localhost:3100</Text>
+            <Text color={COLORS.primary}>REMOTE_SESSION=http://localhost:3100</Text>
           </Box>
           <Box marginTop={1}>
             <Text color={COLORS.muted}>
@@ -147,7 +154,7 @@ export const Help = () => {
             </Box>
             <Text>{config.baseURL || DEFAULT_BASE_URLS[config.style]}</Text>
           </Box>
-          {config.providerMode === "proxy" ? (
+          {config.providerMode === "remote" ? (
             <Box>
               <Box width={14}>
                 <Text color={COLORS.primary}>provider:</Text>
@@ -191,9 +198,9 @@ export const Help = () => {
               '$ my-agent --style openai --base-url https://openrouter.ai/api/v1 -m anthropic/claude-3.5-sonnet -k sk-or-... "Review code"'
             }
           </Text>
-          <Text color={COLORS.muted}>{'$ my-agent --remote http://localhost:3100 "Fix the bug"'}</Text>
+          <Text color={COLORS.muted}>{'$ my-agent --remote-env http://localhost:3100 "Fix the bug"'}</Text>
           <Text color={COLORS.muted}>
-            {'$ my-agent --remote http://localhost:3100 --provider-remote http://localhost:3100 "Fix the bug"'}
+            {'$ my-agent --remote-env http://localhost:3100 --remote-provider http://localhost:3100 "Fix the bug"'}
           </Text>
         </Box>
       </Box>

@@ -53,7 +53,7 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
 
   if (!connection.model?.trim()) {
     throw new Error(
-      "No model configured. Set MODEL / --model, or use --provider-remote so the provider server supplies MODEL."
+      "No model configured. Set MODEL / --model, or use --remote-provider so the provider server supplies MODEL."
     );
   }
 
@@ -61,7 +61,7 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
     model: connection.model,
     style: connection.style,
     baseURL: connection.baseURL,
-    apiKey: providerMode === "proxy" ? "" : connection.apiKey,
+    apiKey: providerMode === "remote" ? "" : connection.apiKey,
     modelInfo,
     providerMode,
   });
@@ -76,7 +76,7 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
   //
   // Direction: move host construction up to the host process (CLI/extension) and
   // have app consume an injected AgentSessionHost/AgentSession (local via
-  // `--agent-remote`/HttpAgentSessionClient, or local host factory passed in).
+  // `--remote-session`/RemoteSessionClient, or local host factory passed in).
   // After that, drop `agentManager` / `createLocalAgentSessionHost` /
   // `resolveModelConfigFromProvider` from app and remove the `BOOTSTRAP_ALLOW`
   // whitelist in scripts/validate-core-imports.mjs.
