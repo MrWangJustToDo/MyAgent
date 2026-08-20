@@ -335,7 +335,7 @@ managed.isToolNeedsApproval(toolName)  // managed-agent.ts
 
 **Mixed tool batches** (e.g. `tree` + `run_command`): TanStack defers non-approval tools while approvals are pending. Core `pumpToolPhases()` loops `runAgentStream()` until `shouldContinueAgentPump()` is false — no `ChatClient.shouldAutoSend()`.
 
-**Steering / follow-up queues:** While a pump (or active status including approval wait) is in progress, `steer()` / `followUp()` enqueue user content without aborting. Drain points in `pumpToolPhases`:
+**Steering / follow-up queues:** While a pump is executing (`pumpDepth > 0`) or status is `waiting` / `awaiting_user`, `steer()` / `followUp()` enqueue user content without aborting. A finished pump that left status `running` because tool-phase work remains (`shouldContinueAgentPump`) does **not** defer — `sendMessage` starts a fresh pump (and the controller auto-chains another pump when the phase cap is hit). Drain points in `pumpToolPhases`:
 
 | API | When delivered |
 |-----|----------------|

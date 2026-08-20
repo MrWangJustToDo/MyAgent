@@ -271,6 +271,7 @@ export {
   isToolContinuationPrepare,
   countPendingToolApprovals,
 } from "./agent/run-helpers/tool-phase-utils.js";
+export { isStaleActiveRunStatus, shouldDeferMidRunQueue } from "./agent/run-helpers/defer-mid-run-queue.js";
 export { createTanStackSubagentTools, createTanStackTools, getReadOnlyTanStackToolNames } from "./agent/tools/runtime";
 export {
   clearStreamingOutput,
