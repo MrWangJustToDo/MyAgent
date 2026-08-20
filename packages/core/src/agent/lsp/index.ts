@@ -17,7 +17,7 @@ import { defaultPath } from "../../env.js";
 import { toModelOutputRegistry } from "../tools/runtime/to-model-output-registry.js";
 
 import { FileSync } from "./file-sync.js";
-import { getLanguageIdFromPath } from "./language-map.js";
+import { EXT_TO_LANGUAGE, getLanguageIdFromPath } from "./language-map.js";
 import { LspManager, type LspServerConfigRecord } from "./lsp-manager.js";
 import { applyDiagnosticsToToolAfterPayload } from "./shared/apply-tool-diagnostics.js";
 import { MAX_AUTO_DIAGNOSTIC_LINES } from "./shared/constants.js";
@@ -196,7 +196,8 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
         ctx.ui.setStatus("lsp", restarting ? `LSP: restarting ${languageId}...` : `LSP: ${languageId} crashed`);
       },
     },
-    getEnvVar
+    getEnvVar,
+    env.commandExists
   );
 
   const fileSync = new FileSync(manager, fsHelpers);
@@ -320,13 +321,28 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
     execute: async () => {
       const statuses = getManager().getStatus();
       if (statuses.length === 0) return "No LSP servers configured.";
-      return statuses
-        .map((s) => {
-          const icon = s.running ? "🟢" : "⚪";
-          const diags = s.diagnosticsCount > 0 ? ` (${s.diagnosticsCount} diagnostics)` : "";
-          return `${icon} ${s.languageId}: ${s.command}${diags}`;
-        })
-        .join("\n");
+
+      const lines = statuses.map((s) => {
+        let icon = "⚪";
+        if (s.running) icon = "🟢";
+        else if (s.available === false) icon = "🔴";
+        const diags = s.diagnosticsCount > 0 ? ` (${s.diagnosticsCount} diagnostics)` : "";
+        const hint = s.available === false ? ` — ${s.unavailableReason ?? `'${s.command}' not found on PATH`}` : "";
+        return `${icon} ${s.languageId}: ${s.command}${diags}${hint}`;
+      });
+
+      // Languages with an extension mapping but no configured server.
+      const configured = new Set(statuses.map((s) => s.languageId));
+      const mappedOnly = [...new Set(Object.values(EXT_TO_LANGUAGE))].filter((lang) => !configured.has(lang)).sort();
+      if (mappedOnly.length > 0) {
+        lines.push("");
+        lines.push("🔵 Mapped languages without a server (add to .lsp.json `servers` to enable):");
+        lines.push(`   ${mappedOnly.join(", ")}`);
+      }
+
+      lines.push("");
+      lines.push("Legend: 🟢 running · ⚪ configured but idle · 🔴 command not found · 🔵 mapped-only (no server)");
+      return lines.join("\n");
     },
   });
 
@@ -504,7 +520,8 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
         onServerCrash: (l, restarting) =>
           ctx.ui.setStatus("lsp", restarting ? `LSP: restarting ${l}...` : `LSP: ${l} crashed`),
       },
-      getEnvVar
+      getEnvVar,
+      env.commandExists
     );
     activeManager = newManager;
     fileSync.setManager(newManager);

@@ -365,6 +365,13 @@ export {
 // ============================================================================
 export { createLspExtension, lspExtension } from "./agent/lsp";
 export { EXT_TO_LANGUAGE, getLanguageIdFromPath } from "./agent/lsp/language-map.js";
+export {
+  LspManager,
+  type LspServerConfigRecord,
+  type ServerStatus,
+  type LspClient,
+  type LspManagerCallbacks,
+} from "./agent/lsp/lsp-manager.js";
 export { findLombokJar } from "./agent/lsp/lombok.js";
 export { applyDiagnosticsToToolAfterPayload } from "./agent/lsp/shared/apply-tool-diagnostics.js";
 export { extractToolPath, parseToolCallArgs } from "./agent/lsp/shared/parse-tool-args.js";

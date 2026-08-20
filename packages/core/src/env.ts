@@ -257,6 +257,14 @@ export interface CoreEnv {
   createLspConnection?: LspConnectionFactory;
 
   /**
+   * Probe whether a command is available on the host's PATH (optional).
+   * Implemented by Node hosts; omitted by hosts without a process runtime.
+   * Used by the LSP extension to skip servers whose binary is not installed
+   * (probe-before-spawn) instead of failing after an ENOENT spawn error.
+   */
+  commandExists?(command: string): Promise<boolean>;
+
+  /**
    * Locate a tree-sitter grammar WASM file and return its bytes or a URL to load.
    * Optional — implemented by hosts that bundle `tree-sitter-wasms` (Node) or serve
    * grammar files (browser). When omitted, tree-sitter tools degrade gracefully.

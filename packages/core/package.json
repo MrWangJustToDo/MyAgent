@@ -107,7 +107,8 @@
     "validate:restore-session-chat-state": "pnpm run build && node scripts/validate-restore-session-chat-state.mjs",
     "validate:tool-approval-resume": "pnpm run build && node scripts/validate-tool-approval-resume.mjs",
     "validate:lsp-parity": "pnpm run build && node scripts/validate-lsp-parity.mjs",
-    "validate:lsp-interceptor": "pnpm run build && node scripts/validate-lsp-interceptor.mjs"
+    "validate:lsp-interceptor": "pnpm run build && node scripts/validate-lsp-interceptor.mjs",
+    "validate:lsp-server-probe": "pnpm run build && node scripts/validate-lsp-server-probe.mjs"
   },
   "dependencies": {
     "@tanstack/ai": "^0.44.1",

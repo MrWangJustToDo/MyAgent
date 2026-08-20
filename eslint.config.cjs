@@ -66,13 +66,19 @@ module.exports = [
   },
   // Node.js test files and validation scripts use console/setTimeout from node environment
   {
-    files: ["packages/app/test/**", "packages/app/scripts/**", "packages/core/scripts/**"],
+    files: ["packages/app/test/**", "packages/app/scripts/**", "packages/core/scripts/**", "packages/node/scripts/**"],
     languageOptions: {
       globals: {
         console: "readonly",
         setTimeout: "readonly",
         URL: "readonly",
+        process: "readonly",
       },
+    },
+    // validate scripts import their package's dist entry (e.g. ../dist/index.mjs);
+    // the index.mjs segment is required for ESM resolution but trips the rule.
+    rules: {
+      "import/no-useless-path-segments": "off",
     },
   },
   // Relax rules for packages/app — uses reactivity-store patterns where:
