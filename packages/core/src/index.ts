@@ -28,6 +28,13 @@ export {
 
 export type { LspServerConfig, LspConnection, LspMessage } from "./agent/lsp/lsp-transport.js";
 export type { LspConnectionFactory } from "./env.js";
+export {
+  LspManager,
+  type LspServerConfigRecord,
+  type ServerStatus,
+  type LspClient,
+  type LspManagerCallbacks,
+} from "./agent/lsp/lsp-manager.js";
 
 // ============================================================================
 // Model provider plane (orthogonal to CoreEnv)

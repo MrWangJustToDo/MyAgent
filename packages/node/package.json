@@ -19,7 +19,8 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "validate:lsp-command-exists": "pnpm run build && node scripts/validate-lsp-command-exists.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sandbox-runtime": "^0.0.52",

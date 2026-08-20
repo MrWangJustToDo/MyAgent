@@ -614,6 +614,40 @@ CLI local mode enables the built-in LSP extension when `ManagedAgentConfig.lsp !
 
 **Config:** workspace `.lsp.json` (`autoStart`, `servers`, `lombokJar`, `autoInjectDiagnostics`). Commands: `/lsp`, `/lsp-restart`, `/lsp-config`, `/lsp-lombok`.
 
+#### `.lsp.json` — LSP server configuration
+
+Workspace-root `.lsp.json` customizes which language servers run and how. All fields are optional.
+
+```jsonc
+{
+  // Languages whose servers should start immediately on session open
+  // (otherwise they start lazily on first LSP tool call).
+  "autoStart": ["typescript", "python"],
+
+  // Server configs — keyed by language ID (see EXT_TO_LANGUAGE in
+  // packages/core/src/agent/lsp/language-map.ts for valid IDs).
+  // Merges over (and overrides) built-in defaults.
+  "servers": {
+    "python": { "command": "basedpyright-langserver", "args": ["--stdio"] },
+    "php":   { "command": "phpactor", "args": ["language-server"] },
+    "elixir": { "command": "elixir-ls", "args": ["--stdio"] }
+  },
+
+  // Explicit Lombok jar path for Java ("auto" = env LOMBOK_JAR + auto-detect).
+  "lombokJar": "auto",
+
+  // Auto-inject diagnostics into write/edit tool results: true, false, or a
+  // whitelist of language IDs.
+  "autoInjectDiagnostics": true
+}
+```
+
+**Server entry fields** (`LspServerConfigRecord`): `command` (required), `args` (string[], default `[]`), `env` (extra env vars), `initializationOptions` (LSP `initialize` handshake options), `settings` (returned for `workspace/configuration` requests, keyed by section).
+
+**Built-in defaults** (`DEFAULT_SERVERS` in `lsp-manager.ts`): typescript/javascript/react via `typescript-language-server`, rust via `rust-analyzer`, python via `pyright-langserver`, go via `gopls`, java via `jdtls` (+Lombok), plus clangd (c/cpp), bash-language-server, vscode-{json,css,html}-languageserver, omnisharp (csharp), lua-language-server, phpactor, solargraph (ruby), elixir-ls, sourcekit-lsp (swift). On Node hosts the LSP extension **probes each server binary on PATH before spawning** (`CoreEnv.commandExists`) and skips missing ones with a clear hint — so listing extra defaults is harmless when the tool isn't installed.
+
+**`/lsp` status legend:** 🟢 running · ⚪ configured but idle · 🔴 configured but command not found · 🔵 language mapped in `EXT_TO_LANGUAGE` but no server configured (add one to `.lsp.json` `servers` to enable).
+
 **Parity notes (vs pi-lsp-extension):** Java jdtls gets Lombok via `findLombokJar()` (`LOMBOK_JAR`, explicit path, or `env/Lombok-*` auto-detect). `lsp_symbols` and `lsp_definition` fall back to `WorkspaceIndex` / `findDefinition`. `lsp_completions` supports synthetic-dot member completion with `FileSync` version coordination. Auto-injected write/edit diagnostics poll after file-sync (`tool:after:*` interceptors parse JSON-string args and set `modifiedResult` for the extensions middleware). LSP tool results use plain-text `toModelOutput` (`output.text`).
 
 Validate: `pnpm --filter @my-agent/core run validate:lsp-parity` and `validate:lsp-interceptor`.

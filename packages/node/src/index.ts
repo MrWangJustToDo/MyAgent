@@ -128,6 +128,15 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
       });
     },
 
+    commandExists: async (command: string): Promise<boolean> => {
+      const probe = `command -v "${command}" >/dev/null 2>&1`;
+      return new Promise<boolean>((resolve) => {
+        exec(probe, (err) => {
+          resolve(!err);
+        });
+      });
+    },
+
     destroy: async () => {
       await destroyAllCommandJobs();
       if (useOsSandbox) {

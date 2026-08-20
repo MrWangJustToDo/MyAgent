@@ -60,6 +60,18 @@ const DEFAULT_SERVERS: Record<string, LspServerConfigRecord> = {
   python: { command: "pyright-langserver", args: ["--stdio"] },
   go: { command: "gopls", args: ["serve"] },
   java: { command: "jdtls", args: [] },
+  c: { command: "clangd", args: [] },
+  cpp: { command: "clangd", args: [] },
+  bash: { command: "bash-language-server", args: ["start"] },
+  json: { command: "vscode-json-languageserver", args: ["--stdio"] },
+  css: { command: "vscode-css-languageserver", args: ["--stdio"] },
+  html: { command: "vscode-html-languageserver", args: ["--stdio"] },
+  csharp: { command: "omnisharp", args: ["-lsp"] },
+  lua: { command: "lua-language-server", args: [] },
+  php: { command: "phpactor", args: ["language-server"] },
+  ruby: { command: "solargraph", args: ["stdio"] },
+  elixir: { command: "elixir-ls", args: ["--stdio"] },
+  swift: { command: "sourcekit-lsp", args: [] },
 };
 
 export interface ServerStatus {
@@ -67,6 +79,10 @@ export interface ServerStatus {
   command: string;
   running: boolean;
   diagnosticsCount: number;
+  /** Whether the server binary was found on PATH (unknown when probing is unavailable). */
+  available: boolean | null;
+  /** Human-readable reason when the server is unavailable. */
+  unavailableReason?: string;
 }
 
 /** A connected LSP client bound to one language. */
@@ -92,6 +108,10 @@ export class LspManager {
   private path: LspPathHelpers;
   private fs: LspFsHelpers;
   private getEnvVar: (key: string) => string | undefined;
+  /** Optional command-existence probe (Node hosts); null when unavailable. */
+  private commandExists: ((command: string) => Promise<boolean>) | null;
+  /** Cache of probed commands (command → exists). */
+  private commandProbeCache = new Map<string, boolean>();
 
   constructor(
     rootDir: string,
@@ -100,13 +120,15 @@ export class LspManager {
     fsHelpers: LspFsHelpers,
     customConfigs?: Record<string, LspServerConfigRecord>,
     callbacks?: LspManagerCallbacks,
-    getEnvVar?: (key: string) => string | undefined
+    getEnvVar?: (key: string) => string | undefined,
+    commandExists?: (command: string) => Promise<boolean>
   ) {
     this.rootDir = rootDir;
     this.getConnection = getConnection;
     this.path = pathHelpers;
     this.fs = fsHelpers;
     this.getEnvVar = getEnvVar ?? (() => undefined);
+    this.commandExists = commandExists ?? null;
     this.serverConfigs = new Map(Object.entries({ ...DEFAULT_SERVERS, ...customConfigs }));
     this.callbacks = callbacks ?? {};
   }
@@ -119,6 +141,21 @@ export class LspManager {
   /** Update or add a server configuration. */
   setServerConfig(languageId: string, config: LspServerConfigRecord): void {
     this.serverConfigs.set(languageId, config);
+    // Invalidate any cached probe for this config's command.
+    this.commandProbeCache.delete(config.command);
+  }
+
+  /**
+   * Probe whether a command exists on PATH. Caches the result; returns `null`
+   * when no probe capability is available (non-Node hosts).
+   */
+  async probeCommand(command: string): Promise<boolean | null> {
+    if (!this.commandExists) return null;
+    const cached = this.commandProbeCache.get(command);
+    if (cached !== undefined) return cached;
+    const exists = await this.commandExists(command).catch(() => false);
+    this.commandProbeCache.set(command, exists);
+    return exists;
   }
 
   /** All configured languages. */
@@ -313,6 +350,17 @@ export class LspManager {
   }
 
   private async startServer(languageId: string, config: LspServerConfigRecord): Promise<void> {
+    // Probe-before-spawn: skip starting when the binary is missing so we fail
+    // fast with a clear reason instead of an ENOENT after spawn. No-op when the
+    // host provides no probe (browser/WebContainer hosts degrade gracefully).
+    const available = await this.probeCommand(config.command);
+    if (available === false) {
+      this.startingServers.delete(languageId);
+      const reason = `LSP server '${config.command}' was not found on PATH. Install it or configure a different command in .lsp.json (or /lsp-config).`;
+      this.callbacks.onServerError?.(languageId, reason);
+      return;
+    }
+
     const connConfig = await this.buildConnectionConfig(languageId, config);
     const onUnexpectedExit = (code: number | null) => this.handleUnexpectedExit(languageId, code);
 
@@ -354,10 +402,12 @@ export class LspManager {
     } catch (err) {
       this.startingServers.delete(languageId);
       const message = err instanceof Error ? err.message : String(err);
-      this.callbacks.onServerError?.(
-        languageId,
-        `Failed to start LSP server for ${languageId} (${config.command}): ${message}`
-      );
+      // Spawn ENOENT means the server binary isn't on PATH — translate to a
+      // clear, actionable hint instead of a raw "spawn ... ENOENT" error.
+      const reason = /ENOENT|not found|No such file/i.test(message)
+        ? `Failed to start LSP server for ${languageId}: command '${config.command}' was not found on PATH. Install it or configure a different command in .lsp.json (or /lsp-config).`
+        : `Failed to start LSP server for ${languageId} (${config.command}): ${message}`;
+      this.callbacks.onServerError?.(languageId, reason);
       throw err instanceof Error ? err : new Error(message);
     }
   }
@@ -383,12 +433,22 @@ export class LspManager {
           diagnosticsCount += diags.length;
         }
       }
+      const available = this.commandProbeCache.get(config.command) ?? null;
       statuses.push({
         languageId,
         command: config.command,
         running: client?.connection.initialized === true && !client.connection.disposed,
         diagnosticsCount,
+        available,
+        unavailableReason:
+          available === false
+            ? `'${config.command}' not found on PATH — install it or configure a different command in .lsp.json`
+            : undefined,
       });
+      // Kick off background probing so the next /lsp call shows availability.
+      if (available === null && this.commandExists) {
+        void this.probeCommand(config.command).catch(() => {});
+      }
     }
     return statuses;
   }
