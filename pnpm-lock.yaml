@@ -50,6 +50,9 @@ importers:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+      typescript-language-server:
+        specifier: 5.3.0
+        version: 5.3.0
 
   packages/app:
     dependencies:
@@ -5695,6 +5698,11 @@ packages:
       eslint: ^8.57.0 || ^9.0.0 || ^10.0.0
       typescript: '>=4.8.4 <6.1.0'
 
+  typescript-language-server@5.3.0:
+    resolution: {integrity: sha512-5puofxZHgFdAYtfNpmwCAvgtaYgg8wrUnH30m7Ze3QuguId5RNRadKASpOpyDxTyUdAF51FjhTdjntLw/EuWcQ==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
@@ -5874,6 +5882,10 @@ packages:
         optional: true
       yaml:
         optional: true
+
+  vscode-jsonrpc@5.0.1:
+    resolution: {integrity: sha512-JvONPptw3GAQGXlVV2utDcHx0BiY34FupW/kI6mZ5x06ER5DdPG/tXWMVHjTNULF5uKPOUUD0SaXg5QaubJL0A==}
+    engines: {node: '>=8.0.0 || >=10.0.0'}
 
   vscode-jsonrpc@9.0.1:
     resolution: {integrity: sha512-rfuA6T75H6m5EkbhtEPzre9pT0HPcDI2MMy4+nPFIBks5J8JBAUHD4tRYSgaBOijIEC7SRkC1kKyXTLqbmh9jw==}
@@ -11365,6 +11377,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  typescript-language-server@5.3.0:
+    dependencies:
+      vscode-jsonrpc: 5.0.1
+      vscode-languageserver-protocol: 3.18.2
+
   typescript@5.9.3: {}
 
   uc.micro@2.1.0: {}
@@ -11568,6 +11585,8 @@ snapshots:
       jiti: 2.7.0
       terser: 5.48.0
       yaml: 2.9.0
+
+  vscode-jsonrpc@5.0.1: {}
 
   vscode-jsonrpc@9.0.1: {}
 
