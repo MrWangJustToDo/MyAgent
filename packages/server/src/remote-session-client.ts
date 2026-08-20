@@ -14,7 +14,7 @@ import type {
   SummaryStreamSnapshot,
 } from "@my-agent/core";
 
-export interface HttpAgentSessionClientOptions {
+export interface RemoteSessionClientOptions {
   baseUrl: string;
   agentId: string;
   initialSnapshot: AgentSessionSnapshot;
@@ -60,20 +60,20 @@ function applyEvent(snapshot: AgentSessionSnapshot, event: AgentSessionEvent): A
 /**
  * Bind to an existing remote agent id (fetches initial snapshot).
  */
-export async function connectHttpAgentSession(
+export async function connectRemoteSession(
   baseUrl: string,
   agentId: string,
   fetchImpl: typeof fetch = fetch
-): Promise<HttpAgentSessionClient> {
+): Promise<RemoteSessionClient> {
   const response = await fetchImpl(joinUrl(baseUrl, `/api/agent/${agentId}/snapshot`));
   const initialSnapshot = await readJson<AgentSessionSnapshot>(response);
-  return new HttpAgentSessionClient({ baseUrl, agentId, initialSnapshot, fetchImpl });
+  return new RemoteSessionClient({ baseUrl, agentId, initialSnapshot, fetchImpl });
 }
 
 /**
  * Create a remote agent session and return a client bound to its id.
  */
-export async function createRemoteAgentSession(
+export async function createRemoteSession(
   baseUrl: string,
   body: {
     model: string;
@@ -84,14 +84,14 @@ export async function createRemoteAgentSession(
     systemPrompt?: string;
   },
   fetchImpl: typeof fetch = fetch
-): Promise<HttpAgentSessionClient> {
+): Promise<RemoteSessionClient> {
   const response = await fetchImpl(joinUrl(baseUrl, "/api/agent"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   const data = await readJson<{ id: string; snapshot: AgentSessionSnapshot }>(response);
-  return new HttpAgentSessionClient({
+  return new RemoteSessionClient({
     baseUrl,
     agentId: data.id,
     initialSnapshot: data.snapshot,
@@ -99,13 +99,13 @@ export async function createRemoteAgentSession(
   });
 }
 
-export class HttpAgentSessionClient implements AgentSession {
+export class RemoteSessionClient implements AgentSession {
   readonly id: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
   private snapshot: AgentSessionSnapshot;
 
-  constructor(options: HttpAgentSessionClientOptions) {
+  constructor(options: RemoteSessionClientOptions) {
     this.id = options.agentId;
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.fetchImpl = options.fetchImpl ?? fetch;
@@ -165,7 +165,7 @@ export class HttpAgentSessionClient implements AgentSession {
         }
       } catch (error) {
         if (controller.signal.aborted) return;
-        console.error("[HttpAgentSessionClient] SSE error", error);
+        console.error("[RemoteSessionClient] SSE error", error);
       }
     })();
 

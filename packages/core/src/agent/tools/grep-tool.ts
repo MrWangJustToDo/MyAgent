@@ -26,6 +26,36 @@ function truncateContent(content: string, maxLength: number): string {
   return content.slice(0, maxLength) + "...[truncated]";
 }
 
+/**
+ * Expand brace groups in a glob include pattern into individual globs.
+ *
+ * grep `--include` and rg `--glob` do not perform brace expansion, so a pattern
+ * like `*.{ts,tsx}` is treated literally and matches nothing. Expand it into one
+ * glob per alternative (e.g. `*.ts`, `*.tsx`) so callers can pass each as a
+ * separate `--include` / `--glob` flag. Patterns without braces are returned as-is.
+ */
+function expandBraceGlobs(include: string): string[] {
+  const groupRe = /\{([^{}]+)\}/;
+  let current: string[] = [include];
+  let match: RegExpExecArray | null;
+  while ((match = groupRe.exec(current[0] ?? ""))) {
+    const full = match[0];
+    const alternatives = match[1].split(",");
+    const next: string[] = [];
+    for (const prefix of current) {
+      const idx = prefix.indexOf(full);
+      for (const alt of alternatives) {
+        next.push(prefix.slice(0, idx) + alt + prefix.slice(idx + full.length));
+      }
+    }
+    current = next;
+    if (current.length === 0) {
+      break;
+    }
+  }
+  return current;
+}
+
 function buildRgCommand(
   pattern: string,
   searchPath: string,
@@ -57,8 +87,12 @@ function buildRgCommand(
 
   // --glob is only meaningful for directory searches; skip when searching a
   // single file to avoid conflicts between the glob and the file path.
+  // Brace groups like `*.{ts,tsx}` are expanded to one --glob per alternative
+  // since rg does not brace-expand its own --glob values.
   if (options.include && !options.searchPathIsFile) {
-    args.push("--glob", `"${options.include}"`);
+    for (const glob of expandBraceGlobs(options.include)) {
+      args.push("--glob", `"${glob}"`);
+    }
   }
 
   if (!options.searchPathIsFile) {
@@ -114,8 +148,12 @@ function buildGrepCommand(
 
   // --include and --exclude-dir are only meaningful for directory searches;
   // skip them when searching a single file to avoid conflicts.
+  // Brace groups like `*.{ts,tsx}` are expanded to one --include per alternative
+  // since grep does not brace-expand its own --include values.
   if (options.include && !options.searchPathIsFile) {
-    command += ` --include="${options.include}"`;
+    for (const glob of expandBraceGlobs(options.include)) {
+      command += ` --include="${glob}"`;
+    }
   }
 
   if (!options.searchPathIsFile) {
@@ -236,7 +274,8 @@ export const createGrepTool = () => {
         .string()
         .optional()
         .describe(
-          "File pattern to include in the search (e.g., '*.js', '*.{ts,tsx}'). If not specified, searches all files."
+          "File pattern to include in the search (e.g., '*.js'). Brace groups such as '*.{ts,tsx}' " +
+            "are expanded into one include glob per alternative. If not specified, searches all files."
         ),
       ignoreCase: z.boolean().optional().describe("If true, perform case-insensitive matching. Defaults to false."),
       offset: z

@@ -89,12 +89,12 @@ const getEnv = (key: string, fallback: string = ""): string => process.env[key] 
 // ============================================================================
 
 export interface ParsedCliConfig extends Partial<AppConfig> {
-  /** CoreEnv workspace remote URL (`--remote` / REMOTE). */
-  remote?: string;
-  /** Model provider proxy URL (`--provider-remote` / PROVIDER_REMOTE). Orthogonal to CoreEnv. */
-  providerRemote?: string;
-  /** Agent Session HTTP remote URL (`--agent-remote` / AGENT_REMOTE). */
-  agentRemote?: string;
+  /** CoreEnv workspace remote URL (`--remote-env` / REMOTE_ENV). */
+  remoteEnv?: string;
+  /** Remote model provider URL (`--remote-provider` / REMOTE_PROVIDER). Orthogonal to CoreEnv. */
+  remoteProvider?: string;
+  /** Remote Agent Session URL (`--remote-session` / REMOTE_SESSION). */
+  remoteSession?: string;
 }
 
 export function parseCliArgs(argv: string[]): ParsedCliConfig {
@@ -145,17 +145,17 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
   }
 
   const envMcpConfig = getEnv("MCP_CONFIG_PATH");
-  const envRemote = getEnv("REMOTE") || getEnv("REMOTE_URL");
-  const remoteFlag = getFlag(parsed, "remote", "R");
-  const remote = typeof remoteFlag === "string" ? remoteFlag : envRemote || undefined;
+  const envRemote = getEnv("REMOTE_ENV");
+  const remoteEnvFlag = getFlag(parsed, "remote-env", "R");
+  const remoteEnv = typeof remoteEnvFlag === "string" ? remoteEnvFlag : envRemote || undefined;
 
-  const envProviderRemote = getEnv("PROVIDER_REMOTE") || getEnv("PROVIDER_REMOTE_URL");
-  const providerRemoteFlag = getFlag(parsed, "provider-remote");
-  const providerRemote = typeof providerRemoteFlag === "string" ? providerRemoteFlag : envProviderRemote || undefined;
+  const envRemoteProvider = getEnv("REMOTE_PROVIDER");
+  const remoteProviderFlag = getFlag(parsed, "remote-provider");
+  const remoteProvider = typeof remoteProviderFlag === "string" ? remoteProviderFlag : envRemoteProvider || undefined;
 
-  const envAgentRemote = getEnv("AGENT_REMOTE") || getEnv("AGENT_REMOTE_URL");
-  const agentRemoteFlag = getFlag(parsed, "agent-remote");
-  const agentRemote = typeof agentRemoteFlag === "string" ? agentRemoteFlag : envAgentRemote || undefined;
+  const envRemoteSession = getEnv("REMOTE_SESSION");
+  const remoteSessionFlag = getFlag(parsed, "remote-session");
+  const remoteSession = typeof remoteSessionFlag === "string" ? remoteSessionFlag : envRemoteSession || undefined;
 
   // Extra dirs from CLI only; `AGENT_EXTENSION_DIRS` is read in core `getDefaultExtensionDirs`.
   const extensionDirsRaw = getFlagString(parsed, "", "extension-dirs", "extension-dir");
@@ -177,9 +177,9 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
     extensionDirs,
     continueSession: getFlagBoolean(parsed, "continue", "c"),
     resumeSession,
-    remote,
-    providerRemote,
-    agentRemote,
+    remoteEnv,
+    remoteProvider,
+    remoteSession,
     ...(modelInfo ? { modelInfo } : {}),
     ...(toolConfig ? { toolConfig } : {}),
   };

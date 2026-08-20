@@ -1,8 +1,8 @@
 /**
  * Resolve model connection using the registered {@link ModelProvider}.
  *
- * When the provider reports `mode: "proxy"`, baseURL and apiKey are forced from
- * the provider so clients cannot bypass the key-holding proxy.
+ * When the provider reports `mode: "remote"`, baseURL and apiKey are forced from
+ * the provider so clients cannot bypass the key-holding remote provider.
  */
 
 import { resolveModelConfig, type ResolveModelConfigInput, type ResolvedModelConfig } from "./model-config.js";
@@ -37,8 +37,8 @@ export async function resolveModelConfigFromProvider(
     apiKey: input.apiKey ?? providerConn.apiKey,
   };
 
-  if (providerConn.mode === "proxy") {
-    // Proxy mode: never allow client baseURL/apiKey (or mismatched style/model) to bypass the
+  if (providerConn.mode === "remote") {
+    // Remote mode: never allow client baseURL/apiKey (or mismatched style/model) to bypass the
     // server. The server is the single source of truth for model too — otherwise a non-empty
     // local model (e.g. a default like "gpt-4o-mini") leaks into the forwarded request body.
     merged.baseURL = providerConn.baseURL;
@@ -49,20 +49,20 @@ export async function resolveModelConfigFromProvider(
 
   const resolved = await resolveModelConfig(merged);
 
-  if (providerConn.mode === "proxy") {
+  if (providerConn.mode === "remote") {
     // resolveModelConfig may overwrite baseURL from models.dev metadata —
-    // re-force the proxy endpoint so LLM traffic stays on the provider server.
+    // re-force the remote endpoint so LLM traffic stays on the provider server.
     return {
       connection: {
         ...resolved.connection,
         style: providerConn.style,
         baseURL: providerConn.baseURL,
         apiKey: providerConn.apiKey,
-        // Server is the single source of truth for model in proxy mode.
+        // Server is the single source of truth for model in remote mode.
         model: providerConn.model,
       },
       modelInfo: resolved.modelInfo ? { ...resolved.modelInfo, baseURL: undefined } : undefined,
-      providerMode: "proxy",
+      providerMode: "remote",
     };
   }
 

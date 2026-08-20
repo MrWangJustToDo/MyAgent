@@ -6,7 +6,7 @@
 /* eslint-disable no-undef */
 import assert from "node:assert/strict";
 
-import { parseAgentSessionSseBlockForTests } from "../dist/agent-session-client.mjs";
+import { parseAgentSessionSseBlockForTests } from "../dist/remote-session-client.mjs";
 
 const block = [
   "event: usage",

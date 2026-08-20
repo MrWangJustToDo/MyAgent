@@ -15,8 +15,8 @@
       "import": "./dist/client.mjs"
     },
     "./agent-session": {
-      "types": "./dist/agent-session-client.d.mts",
-      "import": "./dist/agent-session-client.mjs"
+      "types": "./dist/remote-session-client.d.mts",
+      "import": "./dist/remote-session-client.mjs"
     }
   },
   "bin": {

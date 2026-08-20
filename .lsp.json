@@ -1,0 +1,4 @@
+{
+  "autoStart": ["typescript", "javascript", "typescriptreact", "javascriptreact"],
+  "autoInjectDiagnostics": true
+}

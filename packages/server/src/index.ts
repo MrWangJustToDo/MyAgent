@@ -35,7 +35,7 @@ export {
   readServerModelEnv,
 };
 
-export { createProxyModelProvider } from "./remote-provider.js";
+export { createRemoteProvider } from "./remote-provider.js";
 
 // ============================================================================
 // Configuration

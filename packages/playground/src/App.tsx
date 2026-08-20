@@ -12,7 +12,7 @@ import {
   clearCoreEnv,
   clearModelProvider,
   createDirectModelProvider,
-  createProxyModelProvider,
+  createRemoteProvider,
   hasCoreEnv,
   registerCoreEnv,
   registerModelProvider,
@@ -79,21 +79,21 @@ const AgentBootstrap = memo(() => {
       if (currentInitId !== initIdRef.current) return;
 
       const serverUrl = providerServerUrl.trim();
-      const proxyMode = Boolean(serverUrl);
-      if (proxyMode) {
-        // Proxy mode: keys stay on the provider server; model/style/baseURL/apiKey come from /api/provider/info.
+      const remoteMode = Boolean(serverUrl);
+      if (remoteMode) {
+        // Remote mode: keys stay on the provider server; model/style/baseURL/apiKey come from /api/provider/info.
         setStatus("Connecting to provider server…");
-        registerModelProvider(await createProxyModelProvider(serverUrl));
+        registerModelProvider(await createRemoteProvider(serverUrl));
       } else {
         registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey }));
       }
       if (currentInitId !== initIdRef.current) return;
 
       setStatus("Initializing agent…");
-      // Proxy mode ignores local model/style/baseURL/apiKey (server is the single source of truth),
+      // Remote mode ignores local model/style/baseURL/apiKey (server is the single source of truth),
       // so only pass them in direct mode — otherwise the UI config would show the wrong model.
       await initConfig(
-        proxyMode
+        remoteMode
           ? { model: "", style, baseURL: "", apiKey: "", debug: false }
           : { model, style, baseURL, apiKey, debug: false }
       );

@@ -23,6 +23,13 @@ export {
 } from "./env.js";
 
 // ============================================================================
+// LSP transport (optional, Node.js only — feature-detected by LSP extension)
+// ============================================================================
+
+export type { LspServerConfig, LspConnection, LspMessage } from "./agent/lsp/lsp-transport.js";
+export type { LspConnectionFactory } from "./env.js";
+
+// ============================================================================
 // Model provider plane (orthogonal to CoreEnv)
 // ============================================================================
 
@@ -37,7 +44,7 @@ export {
   type ModelProvider,
 } from "./models/model-provider.js";
 
-export { createProxyModelProvider, REMOTE_PROVIDER_API_KEY } from "./models/proxy-model-provider.js";
+export { createRemoteProvider, REMOTE_PROVIDER_API_KEY } from "./models/remote-model-provider.js";
 
 // ============================================================================
 // Runtime — agent manager (host bootstrap; Session-only UI must not import ManagedAgent)

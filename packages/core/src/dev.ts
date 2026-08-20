@@ -271,6 +271,7 @@ export {
   isToolContinuationPrepare,
   countPendingToolApprovals,
 } from "./agent/run-helpers/tool-phase-utils.js";
+export { isStaleActiveRunStatus, shouldDeferMidRunQueue } from "./agent/run-helpers/defer-mid-run-queue.js";
 export { createTanStackSubagentTools, createTanStackTools, getReadOnlyTanStackToolNames } from "./agent/tools/runtime";
 export {
   clearStreamingOutput,
@@ -358,3 +359,13 @@ export {
   parseStringifiedMultimodalContent,
   isStringifiedMultimodalContentParts,
 } from "./agent/media/repair-stringified-multimodal.js";
+
+// ============================================================================
+// Built-in LSP extension (internal validation exports — not part of public API)
+// ============================================================================
+export { createLspExtension, lspExtension } from "./agent/lsp";
+export { EXT_TO_LANGUAGE, getLanguageIdFromPath } from "./agent/lsp/language-map.js";
+export { findLombokJar } from "./agent/lsp/lombok.js";
+export { insertDot, shouldSyntheticTrigger, syntheticDotLocks } from "./agent/lsp/shared/synthetic-dot.js";
+export { DIAGNOSTIC_SETTLE_DELAY_MS, SYNTHETIC_DOT_SETTLE_DELAY_MS } from "./agent/lsp/shared/timing.js";
+export { lspTextToModelOutput } from "./agent/lsp/shared/tool-output.js";

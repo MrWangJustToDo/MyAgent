@@ -1,5 +1,6 @@
 import type { ExtensionZod } from "./extension-zod.js";
 import type { CoreEnv } from "../../env.js";
+import type { ModelToolContent, ToModelOutputContext } from "../tools/runtime/to-model-output-registry.js";
 import type { SchemaInput } from "@tanstack/ai";
 
 export type { ExtensionZod } from "./extension-zod.js";
@@ -36,6 +37,8 @@ export interface ExtensionToolDefinition {
   outputSchema?: SchemaInput;
   execute: (input: unknown, options: ToolExecutionOptions) => Promise<ToolCallResult>;
   toUI?: (result: unknown) => string;
+  /** Optional model-facing output transform (registered on the TanStack tool). */
+  toModelOutput?: (ctx: ToModelOutputContext) => Promise<ModelToolContent> | ModelToolContent;
 }
 
 // ============================================================================

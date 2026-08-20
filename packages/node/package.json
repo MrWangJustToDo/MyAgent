@@ -25,7 +25,10 @@
     "@anthropic-ai/sandbox-runtime": "^0.0.52",
     "@my-agent/core": "workspace:*",
     "@tanstack/ai-mcp": "^0.3.0",
-    "mime-types": "^3.0.2"
+    "mime-types": "^3.0.2",
+    "tree-sitter-wasms": "^0.1.13",
+    "vscode-languageserver-protocol": "^3.18.2",
+    "web-tree-sitter": "^0.25.10"
   },
   "devDependencies": {
     "@types/mime-types": "^3.0.1",

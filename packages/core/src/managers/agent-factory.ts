@@ -2,6 +2,7 @@ import { loadAgentDoc } from "../agent/agent-doc-loader.js";
 import { AgentLog } from "../agent/agent-log";
 import { createCompactionConfig } from "../agent/compaction/types.js";
 import { ExtensionLoader, ExtensionRunner, getDefaultExtensionDirs } from "../agent/extension";
+import { createLspExtension } from "../agent/lsp";
 import { loadMcpConfig, type McpConfigLoadResult } from "../agent/mcp/config.js";
 import { McpManager } from "../agent/mcp/manager.js";
 import { MemoryManager } from "../agent/memory/memory-manager.js";
@@ -209,6 +210,17 @@ export async function buildManagedAgent({
         } catch (err) {
           log.warn("system", `Failed to load extension from config: ${err}`);
         }
+      }
+    }
+
+    // Built-in LSP extension (enabled unless explicitly disabled).
+    if (config.lsp !== false) {
+      try {
+        const api = await createLspExtension();
+        await extensionRunner.loadExtension(api);
+        log.info("system", `Built-in extension loaded: ${api.id}`);
+      } catch (err) {
+        log.warn("system", `Failed to load built-in LSP extension: ${err}`);
       }
     }
   }

@@ -13,10 +13,10 @@ pnpm dev:playground
 
 Open http://localhost:5177 — set model / base URL / API key in **Settings**, then chat. The agent workspace is an in-browser Linux-like env (same FS for tools and shell).
 
-### Remote provider (proxy mode)
+### Remote provider
 
 Instead of entering an API key, set **Settings → Provider server URL** to a running `@my-agent/server`
-(or any server exposing `/api/provider/*`). The browser then talks to that server in **proxy mode**: the
+(or any server exposing `/api/provider/*`). The browser then talks to that server in **remote mode**: the
 real API key stays on the server, and model / style / base URL are taken from `GET /api/provider/info`.
 Local model / base URL / API key fields are ignored while the URL is set.
 
@@ -29,7 +29,7 @@ pnpm dev:playground
 ```
 
 The provider server's CORS only allows `localhost` / `127.0.0.1` / `chrome-extension://` origins, so the
-proxy mode works from the local playground but needs an origin allow-list update to be used from a public
+remote mode works from the local playground but needs an origin allow-list update to be used from a public
 GitHub Pages deployment.
 
 ## Architecture

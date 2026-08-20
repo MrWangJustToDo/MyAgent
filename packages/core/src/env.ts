@@ -18,6 +18,7 @@ import * as pathe from "pathe";
 
 import { commandJobRegistry } from "./agent/tools/util/command-job-registry.js";
 
+import type { LspServerConfig, LspConnection } from "./agent/lsp/lsp-transport.js";
 import type {
   CommandResult,
   FileEntry,
@@ -156,6 +157,20 @@ export interface McpProcessHandle {
 }
 
 // ============================================================================
+// LSP Connection (optional, Node.js only)
+// ============================================================================
+
+/**
+ * Runtime host hook for creating a Language Server connection.
+ * Implemented by Node hosts (`@my-agent/node`); omitted by hosts without a
+ * process/stdio runtime (browser, WebContainer). LSP tools feature-detect this
+ * and degrade gracefully when absent.
+ */
+export interface LspConnectionFactory {
+  (config: LspServerConfig): LspConnection;
+}
+
+// ============================================================================
 // CoreEnv Interface
 // ============================================================================
 
@@ -233,6 +248,21 @@ export interface CoreEnv {
    * Returns an object compatible with `MCPClientConfig["transport"]`.
    */
   createMCPStdioTransport?(config: McpStdioTransportConfig): unknown;
+
+  /**
+   * Create a Language Server (LSP) connection (optional, Node.js only).
+   * Implemented by Node hosts; omitted by hosts without a process/stdio runtime
+   * (browser, WebContainer). LSP tools feature-detect and degrade gracefully.
+   */
+  createLspConnection?: LspConnectionFactory;
+
+  /**
+   * Locate a tree-sitter grammar WASM file and return its bytes or a URL to load.
+   * Optional — implemented by hosts that bundle `tree-sitter-wasms` (Node) or serve
+   * grammar files (browser). When omitted, tree-sitter tools degrade gracefully.
+   * Returns `null` when the grammar file cannot be found.
+   */
+  locateTreeSitterGrammar?(grammarFile: string): Promise<Uint8Array | string | null>;
 
   /**
    * Extract the child process handle from an MCP stdio transport (optional).

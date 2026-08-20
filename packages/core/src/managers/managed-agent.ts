@@ -139,6 +139,11 @@ export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
    */
   extensions?: Array<ExtensionFactory>;
   /**
+   * Enable the built-in LSP extension (default: true). Set to `false` to disable
+   * LSP tools (lsp_diagnostics, lsp_hover, ...) and slash commands.
+   */
+  lsp?: boolean;
+  /**
    * Extra filesystem directories to scan for extensions (before env / defaults).
    * Relative paths resolve against CoreEnv `rootPath`.
    */
@@ -736,6 +741,7 @@ export class ManagedAgent {
           abortSignal: ctx.abortSignal,
         }),
       toUI: def.toUI,
+      toModelOutput: def.toModelOutput,
     });
     (this.tools as Record<string, unknown>)[def.name] = serverTool;
     this.setRunnerConfigKey(undefined);

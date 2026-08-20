@@ -36,7 +36,7 @@ assert.equal(
 );
 assert.equal(normalizeProviderRequestPath("/openai/v1/x"), "/api/provider/openai/v1/x");
 
-assert.equal(REMOTE_PROVIDER_API_KEY, "remote-coreenv");
+assert.equal(REMOTE_PROVIDER_API_KEY, "remote-provider");
 
 // --- env secret filter ---
 
@@ -92,14 +92,14 @@ assert.ok(body.includes("hello"));
 assert.ok(body.includes("world"));
 assert.equal(proxyRes.headers.get("content-encoding"), null, "must not forward content-encoding after decode");
 
-// Server is the single source of truth for the model (proxy-mode request body rewrite).
+// Server is the single source of truth for the model (remote-mode request body rewrite).
 assert.ok(sawBody.includes('"model":"mock-model"'), "server must rewrite forwarded body model");
 assert.ok(!sawBody.includes("client-wrong-model"), "client model must not reach upstream");
 
 const infoRes = await app.request("http://local/api/provider/info");
 assert.equal(infoRes.status, 200);
 const info = await infoRes.json();
-assert.equal(info.mode, "proxy");
+assert.equal(info.mode, "remote");
 assert.equal(info.style, "openai");
 assert.equal(info.model, "mock-model");
 assert.equal(info.basePath, "/api/provider/openai/v1");

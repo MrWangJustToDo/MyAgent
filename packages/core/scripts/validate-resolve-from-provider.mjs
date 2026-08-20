@@ -1,5 +1,5 @@
 /**
- * Validates resolveModelConfigFromProvider proxy vs direct merge rules.
+ * Validates resolveModelConfigFromProvider remote vs direct merge rules.
  *
  * Run: pnpm --filter @my-agent/core run validate:resolve-from-provider
  */
@@ -14,11 +14,11 @@ clearModelProvider();
 
 registerModelProvider({
   getConnection: async () => ({
-    mode: "proxy",
+    mode: "remote",
     style: "openai",
     model: "server-model",
     baseURL: "http://remote/api/provider/openai/v1",
-    apiKey: "remote-coreenv",
+    apiKey: "remote-provider",
   }),
 });
 
@@ -29,14 +29,14 @@ const proxied = await resolveModelConfigFromProvider({
   apiKey: "sk-client",
 });
 
-// Proxy mode: the provider is the single source of truth for model, style,
+// Remote mode: the provider is the single source of truth for model, style,
 // baseURL and apiKey — a local client model must NOT leak into forwarded
 // requests (security: server-configured model wins).
 assert.equal(proxied.connection.model, "server-model");
-assert.equal(proxied.connection.style, "openai", "proxy forces provider style");
+assert.equal(proxied.connection.style, "openai", "remote forces provider style");
 assert.equal(proxied.connection.baseURL, "http://remote/api/provider/openai/v1");
-assert.equal(proxied.connection.apiKey, "remote-coreenv");
-assert.equal(proxied.providerMode, "proxy");
+assert.equal(proxied.connection.apiKey, "remote-provider");
+assert.equal(proxied.providerMode, "remote");
 
 // models.dev / MODEL_* metadata must not clobber the proxy baseURL
 const proxiedMeta = await resolveModelConfigFromProvider({

@@ -1,6 +1,7 @@
 import { findToolCallIdForApproval } from "../agent/approval/tool-approval-table.js";
 import { runAgentOnce } from "../agent/run/run-agent-skeleton.js";
 import { formatAgentStreamError } from "../agent/run-helpers/assert-async-iterable.js";
+import { shouldDeferMidRunQueue } from "../agent/run-helpers/defer-mid-run-queue.js";
 import { stripEmptyAssistantShells } from "../agent/run-helpers/empty-assistant-shell.js";
 import { EMPTY_MODEL_STREAM_MESSAGE, shouldFlagEmptyModelStream } from "../agent/run-helpers/empty-model-stream.js";
 import {
@@ -20,8 +21,6 @@ import { extractAssistantText } from "../agent/stream/extract-assistant-text.js"
 import { throwOnRunError } from "../agent/stream/stream-errors.js";
 import { AgentUIChannel } from "../agent/ui-channel.js";
 import { Emitter } from "../utils/emitter.js";
-
-import { isActiveStatus } from "./agent-status.js";
 
 import type { AgentManager } from "./agent-manager.js";
 import type { ManagedAgent } from "./managed-agent.js";
@@ -239,10 +238,7 @@ export class AgentChatController {
   }
 
   private shouldDeferQueue(): boolean {
-    // pumpDepth > 0 alone is not sufficient — the agent may have been aborted
-    // (pump finally block hasn't run yet), and queuing a message here would
-    // leave it stranded since the exiting pump never drains the queue.
-    return isActiveStatus(this.managed.status);
+    return shouldDeferMidRunQueue({ pumpDepth: this.pumpDepth, status: this.managed.status });
   }
 
   private notifyQueueListeners(): void {
@@ -372,15 +368,27 @@ export class AgentChatController {
       if (generation === this.runGeneration) {
         this.syncPlanModeFromMessages();
         const messages = this.channel.getMessages();
+        const waitingForUser = hasPendingToolApprovals(messages) || hasPendingAskUser(messages);
+        const keepPumping = !waitingForUser && this.shouldKeepPumping(messages);
         // Prefer status already set by executeStream (error/abort) over message-derived waits.
         const outcomeKind =
           this.managed.status === "aborted"
             ? "aborted"
             : hasError || this.managed.status === "error"
               ? "error"
-              : hasPendingToolApprovals(messages) || hasPendingAskUser(messages)
+              : waitingForUser
                 ? "waiting"
                 : "finished";
+
+        // Phase cap or early stream end while tools/model still need work — chain
+        // another pump without finalizing the turn (avoids stale "running" + trapped queues).
+        if (keepPumping && outcomeKind === "finished") {
+          this.managed.statusController.reconcileWithPolicy(messages, "during-run");
+          this.persistMessages("pump-complete");
+          void this.enqueueRun();
+          return;
+        }
+
         this.managed.statusController.applyRunOutcome({
           kind: outcomeKind,
           messages,
