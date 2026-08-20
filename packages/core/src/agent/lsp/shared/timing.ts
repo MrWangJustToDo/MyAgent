@@ -3,6 +3,12 @@
 /** How long to wait after a write/edit for the LSP to publish updated diagnostics. */
 export const DIAGNOSTIC_SETTLE_DELAY_MS = 1500;
 
+/**
+ * How long auto-diagnostics waits for a lazily-started server to become ready
+ * before giving up (first write that triggers startup must not skip injection).
+ */
+export const AUTO_DIAG_SERVER_WAIT_MS = 15000;
+
 /** Server restart: initial backoff, max backoff, max attempts per session. */
 export const RESTART_INITIAL_BACKOFF_MS = 1000;
 export const RESTART_MAX_BACKOFF_MS = 30000;

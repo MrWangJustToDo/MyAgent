@@ -11,6 +11,7 @@
 
 import { MAX_TRACKED_DOCUMENTS } from "./shared/constants.js";
 import { syntheticDotLocks } from "./shared/synthetic-dot.js";
+import { AUTO_DIAG_SERVER_WAIT_MS } from "./shared/timing.js";
 
 import type { LspManager } from "./lsp-manager.js";
 
@@ -103,7 +104,10 @@ export class FileSync {
 
     if (!languageId) return;
 
-    const client = await this.manager.getClientForFile(absPath).catch(() => null);
+    // Wait for the server to become ready (kicks off lazy startup if needed) so
+    // the very first write/edit in a session still syncs the file and produces
+    // diagnostics, instead of silently dropping didOpen/didChange.
+    const client = await this.manager.waitForClient(languageId, AUTO_DIAG_SERVER_WAIT_MS).catch(() => null);
     if (!client) return;
 
     try {

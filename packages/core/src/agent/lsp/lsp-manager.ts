@@ -153,6 +153,34 @@ export class LspManager {
     return null;
   }
 
+  /**
+   * Wait for a language's server to be ready (kicking off startup if needed).
+   *
+   * Resolves with the running client once `initialize` completes, or `null` if
+   * the server fails to start or the timeout elapses. Used by auto-diagnostics
+   * so a first write that lazily starts the server still gets diagnostics
+   * instead of silently skipping the injection.
+   */
+  async waitForClient(languageId: string, timeoutMs = 15000): Promise<LspClient | null> {
+    const ready = this.getRunningClient(languageId);
+    if (ready) return ready;
+
+    // Kick off startup if no server is starting yet.
+    if (!this.startingServers.has(languageId)) {
+      await this.getClientForLanguage(languageId).catch(() => null);
+    }
+
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const client = this.getRunningClient(languageId);
+      if (client) return client;
+      // Startup finished but no client registered — failed or shut down.
+      if (!this.startingServers.has(languageId) && !this.clients.has(languageId)) return null;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return null;
+  }
+
   /** Get the client for a file, starting the server if needed. */
   async getClientForFile(filePath: string): Promise<LspClient | null> {
     const languageId = this.getLanguageId(filePath);

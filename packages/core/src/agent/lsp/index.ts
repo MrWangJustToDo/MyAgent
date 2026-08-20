@@ -20,7 +20,7 @@ import { FileSync } from "./file-sync.js";
 import { getLanguageIdFromPath } from "./language-map.js";
 import { LspManager, type LspServerConfigRecord } from "./lsp-manager.js";
 import { MAX_AUTO_DIAGNOSTIC_LINES } from "./shared/constants.js";
-import { DIAGNOSTIC_SETTLE_DELAY_MS } from "./shared/timing.js";
+import { DIAGNOSTIC_SETTLE_DELAY_MS, AUTO_DIAG_SERVER_WAIT_MS } from "./shared/timing.js";
 import { lspTextToModelOutput } from "./shared/tool-output.js";
 import { createCodeActionsTool } from "./tools/code-actions.js";
 import { createCodeOverviewTool } from "./tools/code-overview.js";
@@ -440,7 +440,7 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
     if (inject === false) return;
     if (Array.isArray(inject) && !inject.includes(languageId)) return;
 
-    const client = mgr.getRunningClient(languageId);
+    const client = await mgr.waitForClient(languageId, AUTO_DIAG_SERVER_WAIT_MS);
     if (!client) return;
 
     // Wait briefly for the LSP to publish updated diagnostics.
