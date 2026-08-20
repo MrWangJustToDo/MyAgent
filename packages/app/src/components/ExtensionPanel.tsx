@@ -73,17 +73,33 @@ const ExtensionPanelList = ({
         const isSelected = i === selectedIndex;
         const icon = info.enabled ? "✓" : "○";
         const iconColor = isSelected ? COLORS.primary : info.enabled ? COLORS.success : COLORS.muted;
-        return (
-          <Box key={info.id}>
-            <Text color={isSelected ? COLORS.primary : iconColor} bold={isSelected}>
-              {isSelected ? "❯ " : "  "}
-              {icon} {info.name}
-            </Text>
+        const detail = isSelected ? (
+          <Box flexDirection="column" paddingLeft={3} marginBottom={1}>
+            {info.description ? (
+              <Text color={COLORS.muted} dimColor>
+                {info.description.length > 80 ? `${info.description.slice(0, 80)}…` : info.description}
+              </Text>
+            ) : null}
             <Text color={COLORS.muted} dimColor>
-              {" "}
-              v{info.version}
-              {info.state === "error" && info.error ? ` · ${info.error}` : ""}
+              tools: {info.tools.length} · commands: {info.commands.length}
+              {info.state === "inactive" ? " · disabled" : ""}
             </Text>
+          </Box>
+        ) : null;
+        return (
+          <Box key={info.id} flexDirection="column">
+            <Box>
+              <Text color={isSelected ? COLORS.primary : iconColor} bold={isSelected}>
+                {isSelected ? "❯ " : "  "}
+                {icon} {info.name}
+              </Text>
+              <Text color={COLORS.muted} dimColor>
+                {" "}
+                v{info.version}
+                {info.state === "error" && info.error ? ` · ${info.error}` : ""}
+              </Text>
+            </Box>
+            {detail}
           </Box>
         );
       })}
