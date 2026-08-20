@@ -3,8 +3,8 @@
 Three orthogonal remotes already exist:
 
 1. **CoreEnv** — workspace fs/shell (`--remote`)
-2. **ModelProvider** — LLM keys (`--provider-remote`)
-3. **AgentSession** — agent control plane (`--agent-remote`) — Local + HTTP exist but app still holds `ManagedAgent` / `agentManager`
+2. **ModelProvider** — LLM keys (`--remote-provider`)
+3. **AgentSession** — agent control plane (`--remote-session`) — Local + Remote exist but app still holds `ManagedAgent` / `agentManager`
 
 Prior change `add-agent-session-api` introduced Session as the outer host API. App partially adopted it for chat I/O, usage, plan banner, tool/summary streams. Gaps remain: bootstrap, slash commands (compact/clear/plan files/MCP/extensions), session catalog, subagent directory richness, HTTP remount parity, and dual stores (`useAgent.agent` + `session`).
 
@@ -79,7 +79,7 @@ interface AgentSessionHost {
 ```
 
 - **Local:** `createLocalAgentSessionHost({ manager })` wraps `agentManager` + `SessionStore`
-- **Remote:** `createHttpAgentSessionHost(baseUrl)` maps to `/api/agent` catalog routes
+- **Remote:** `createRemoteSessionHost(baseUrl)` maps to `/api/agent` catalog routes
 
 App adapter holds `AgentSessionHost` + active `AgentSession`, never `ManagedAgent`.
 
@@ -128,7 +128,7 @@ Bootstrap moves to host packages (CLI/extension):
 ```
 registerCoreEnv(...)
 registerModelProvider(...)
-const host = local ? createLocalAgentSessionHost(...) : createHttpAgentSessionHost(url)
+const host = local ? createLocalAgentSessionHost(...) : createRemoteSessionHost(url)
 const session = await host.create({ model, ... })
 adapter.initialize({ session, host })
 ```
@@ -151,7 +151,7 @@ adapter.initialize({ session, host })
 0. **Event envelope** — typed AgentEvent + Session lifecycle alignment + Event→Log update
 1. **Session completeness (Local)** — commands/snapshot for all app escapes; LocalHost catalog
 2. **App cutover** — remove ManagedAgent from hooks/commands; Local only still works
-3. **HTTP parity + wire `--agent-remote`** — extension/CLI remote agent
+3. **Remote parity + wire `--remote-session`** — extension/CLI remote agent
 
 Do not ship remote before Local Session-only app. Prefer envelope before relying on remote `lifecycle`.
 
@@ -173,7 +173,7 @@ Do not ship remote before Local Session-only app. Prefer envelope before relying
 3. Add `AgentSessionHost` Local; migrate `create-agent` / chat init
 4. Migrate app hooks/commands file-by-file off ManagedAgent
 5. HTTP parity + catalog routes; validate script live smoke
-6. CLI `--agent-remote` path; extension optional remote agent URL
+6. CLI `--remote-session` path; extension optional remote agent URL
 7. Update AGENTS.md / ARCHITECTURE; archive when done
 
 Rollback: keep Local Host wrapping ManagedAgent internally forever; only the app boundary is hard.

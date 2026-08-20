@@ -106,7 +106,7 @@ hasCoreEnv();           // Check if registered
 
 **Implementations:**
 - `createNodeEnv()` from `@my-agent/node` — local Node.js APIs, optional OS sandbox
-- `createRemoteCoreEnv(url)` from `@my-agent/server/client` — HTTP RPC proxy to a remote server
+- `createRemoteEnv(url)` from `@my-agent/server/client` — HTTP RPC to a remote CoreEnv server
 
 ### ModelProvider — LLM plane (orthogonal to CoreEnv)
 
@@ -118,20 +118,20 @@ import {
   createDirectModelProvider,
   resolveModelConfigFromProvider,
 } from "@my-agent/core";
-import { createProxyModelProvider } from "@my-agent/server/client";
+import { createRemoteProvider } from "@my-agent/server/client";
 
 registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey }));
 // or
-registerModelProvider(await createProxyModelProvider("http://localhost:3100"));
+registerModelProvider(await createRemoteProvider("http://localhost:3100"));
 ```
 
 | Flag / Env | Plane |
 |------------|--------|
-| `--remote` / `REMOTE` | CoreEnv workspace |
-| `--provider-remote` / `PROVIDER_REMOTE` | Model provider proxy |
-| `--agent-remote` / `AGENT_REMOTE` | Agent Session HTTP |
+| `--remote-env` / `REMOTE_ENV` | CoreEnv workspace |
+| `--remote-provider` / `REMOTE_PROVIDER` | Remote model provider |
+| `--remote-session` / `REMOTE_SESSION` | Remote Agent Session |
 
-`createAgentFromConfig` uses `resolveModelConfigFromProvider()`. Proxy mode forces `baseURL`/`apiKey` from the provider (re-forced after models.dev so upstream URLs cannot bypass). `/api/env/vars` strips `API_KEY` / `*_API_KEY`. Footer shows `model · remote` when `providerMode === "proxy"`.
+`createAgentFromConfig` uses `resolveModelConfigFromProvider()`. Remote mode forces `baseURL`/`apiKey` from the provider (re-forced after models.dev so upstream URLs cannot bypass). `/api/env/vars` strips `API_KEY` / `*_API_KEY`. Footer shows `model · remote` when `providerMode === "remote"`.
 ### AgentAdapter — Host Abstraction
 
 Each host (CLI, extension) provides an `AgentAdapter` implementation:
@@ -146,7 +146,7 @@ interface AgentAdapter {
 }
 ```
 
-Shared initialization logic is in `createAgentFromConfig()` (`@my-agent/app/adapter/create-agent.ts`). Both `LocalAgentAdapter` (CLI) and `ExtensionAgentAdapter` delegate to this helper. `initConfig` must keep host fields such as `toolConfig` (Brave / websearch) and `agentRemote` so they reach `Host.create`.
+Shared initialization logic is in `createAgentFromConfig()` (`@my-agent/app/adapter/create-agent.ts`). Both `LocalAgentAdapter` (CLI) and `ExtensionAgentAdapter` delegate to this helper. `initConfig` must keep host fields such as `toolConfig` (Brave / websearch) and `remoteSession` so they reach `Host.create`.
 
 ### Bootstrap Sequences
 
@@ -158,16 +158,16 @@ loadEnv → parseCliArgs → registerCoreEnv(createNodeEnv) → registerModelPro
 **CLI (remote planes, independently):**
 ```
 loadEnv → parseCliArgs
-  → [--remote] createRemoteCoreEnv → registerCoreEnv
-  → [--provider-remote] createProxyModelProvider → registerModelProvider
+  → [--remote-env] createRemoteEnv → registerCoreEnv
+  → [--remote-provider] createRemoteProvider → registerModelProvider
   → else createDirectModelProvider → registerModelProvider
   → initConfig → render(App)
 ```
 
 **Extension:**
 ```
-ConnectionGuard(/health) → createRemoteCoreEnv(url) → registerCoreEnv
-  → apiKey ? direct : createProxyModelProvider(url) → registerModelProvider
+ConnectionGuard(/health) → createRemoteEnv(url) → registerCoreEnv
+  → apiKey ? direct : createRemoteProvider(url) → registerModelProvider
   → initConfig → render(App)
 ```
 
@@ -461,10 +461,10 @@ The `@my-agent/server` package exposes CoreEnv APIs over HTTP using Hono RPC for
 
 ```typescript
 import { registerCoreEnv, registerModelProvider, createDirectModelProvider } from "@my-agent/core";
-import { createRemoteCoreEnv, createProxyModelProvider } from "@my-agent/server/client";
+import { createRemoteEnv, createRemoteProvider } from "@my-agent/server/client";
 
-registerCoreEnv(await createRemoteCoreEnv("http://localhost:3100"));
-registerModelProvider(await createProxyModelProvider("http://localhost:3100"));
+registerCoreEnv(await createRemoteEnv("http://localhost:3100"));
+registerModelProvider(await createRemoteProvider("http://localhost:3100"));
 // Or local keys with remote workspace:
 // registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey }));
 ```
@@ -853,7 +853,7 @@ packages/
 │
 ├── server/src/                        # @my-agent/server — CoreEnv HTTP server + client
 │   ├── index.ts                       # Hono server entry point
-│   ├── client.ts                      # createRemoteCoreEnv() — RPC client factory
+│   ├── client.ts                      # createRemoteEnv() — RPC client factory
 │   └── routes/
 │       ├── env.ts                     # /api/env/* (info, vars, destroy)
 │       ├── fs.ts                      # /api/fs/* (readFile, stat, writeFile, etc.)
@@ -885,11 +885,11 @@ playground/                            # @my-agent/playground — WebContainer h
 | Combination | CoreEnv | Provider | Status |
 |------------|---------|----------|--------|
 | Local + CLI | `createNodeEnv` | `createDirectModelProvider` | Fully working |
-| Remote workspace + remote keys | `createRemoteCoreEnv` | `createProxyModelProvider` | Working; command streaming limited |
-| Remote workspace + local keys | `createRemoteCoreEnv` | `createDirectModelProvider` | Working (`--remote` without `--provider-remote`) |
-| Local workspace + remote keys | `createNodeEnv` | `createProxyModelProvider` | Working (`--provider-remote` without `--remote`) |
-| Remote CoreEnv + Extension | `createRemoteCoreEnv` | proxy (no local apiKey) or direct | Working; no command streaming, no stdio MCP |
-| Playground | WebContainer CoreEnv | direct or proxy | Working; web tools need fetch proxy; no stdio MCP |
+| Remote workspace + remote keys | `createRemoteEnv` | `createRemoteProvider` | Working; command streaming limited |
+| Remote workspace + local keys | `createRemoteEnv` | `createDirectModelProvider` | Working (`--remote-env` without `--remote-provider`) |
+| Local workspace + remote keys | `createNodeEnv` | `createRemoteProvider` | Working (`--remote-provider` without `--remote-env`) |
+| Remote CoreEnv + Extension | `createRemoteEnv` | remote (no local apiKey) or direct | Working; no command streaming, no stdio MCP |
+| Playground | WebContainer CoreEnv | direct or remote | Working; web tools need fetch proxy; no stdio MCP |
 | Local CoreEnv + Extension | N/A | N/A | Not supported (extension requires a server) |
 
 ## Task Completion Checklist

@@ -8,7 +8,7 @@
 - **BREAKING (app):** Remove `ManagedAgent` / `agentManager` / live `TodoManager` / `AgentLog` object holds from app hooks and commands; adapters return/bind `AgentSession` only.
 - **Unify internal AgentEvent envelope:** replace loosely typed `data?: Record<string, unknown>` with a shared serializable envelope (`ts`, `agentId`, `parentId?`, typed `payload` per `type`) so Session `lifecycle` and HTTP/SSE stay stable; keep Domain Emitters and AgentEventBus as separate layers (projection, not collapse).
 - Complete HTTP Session parity with Local (including `tool` / `summary` remount, child sessions, create/list/destroy).
-- Wire CLI/extension/playground to choose Local vs Remote Session (`--agent-remote` / `AGENT_REMOTE`) without importing core runtime into the UI layer.
+- Wire CLI/extension/playground to choose Local vs Remote Session (`--remote-session` / `REMOTE_SESSION`) without importing core runtime into the UI layer.
 - Keep CoreEnv and ModelProvider as separate planes; app may still talk to CoreEnv for workspace panels, but not for agent loop control.
 - Pure presentation helpers (`getToUI`, compaction message formatters, model defaults) either move into app or become a small `@my-agent/session-types` / session-safe export surface — not `ManagedAgent` APIs.
 

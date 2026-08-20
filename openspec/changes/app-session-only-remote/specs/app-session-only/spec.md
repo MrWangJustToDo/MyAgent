@@ -16,12 +16,12 @@
 `AgentAdapter.initialize` / shared create helpers SHALL return `{ session, host?, initialMessages? }` (or equivalent) and MUST NOT require callers to receive a ManagedAgent.
 
 #### Scenario: Local bootstrap
-- **WHEN** the CLI starts without `--agent-remote`
+- **WHEN** the CLI starts without `--remote-session`
 - **THEN** the host process SHALL create a Local AgentSessionHost, create a session, and pass that session into the app
 
 #### Scenario: Remote bootstrap
-- **WHEN** the CLI starts with `--agent-remote <url>`
-- **THEN** the UI process SHALL create an HTTP AgentSessionHost against that URL and MUST NOT call `agentManager.createManagedAgent` in the UI process
+- **WHEN** the CLI starts with `--remote-session <url>`
+- **THEN** the UI process SHALL create a Remote AgentSessionHost against that URL and MUST NOT call `agentManager.createManagedAgent` in the UI process
 
 ### Requirement: Allowed residual core imports
 The app MAY import serializable types and pure presentation helpers from core (or a future session-types package), and MAY use CoreEnv for workspace UI. The app MUST NOT import agent runtime control APIs (`agentManager`, `createManagedAgent`, compaction executors, side-LLM runners that need ManagedAgent).

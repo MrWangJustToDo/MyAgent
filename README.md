@@ -19,7 +19,7 @@ Designed with a runtime-agnostic core that decouples agent logic from the execut
 | **Terminal UI** | React-powered TUI with Shiki syntax highlighting, scrollable diff views, streaming markdown, and theme support |
 | **Workspace Browser** | Full-screen file tree (`Ctrl+E`) with git status, Seti/Nerd Font icons, scrollable file preview, and HEAD diff view |
 | **Chrome Extension** | Full agent UI running in the browser via remote CoreEnv (WXT + HeroUI) |
-| **Local / Remote** | Independent planes: workspace (`--remote`), LLM proxy (`--provider-remote`), Agent Session HTTP (`--agent-remote`) |
+| **Local / Remote** | Independent planes: workspace (`--remote-env`), LLM provider (`--remote-provider`), Agent Session (`--remote-session`) |
 | **Tool Approval** | Review + approve/deny tool calls; scrollable diffs with Tab when multiple edits are pending |
 | **Ask User** | Agent asks questions with selectable options or freeform answers |
 | **Subagents** | Context-isolated read-only tasks (50-step cap) with live `Ctrl+T` preview |
@@ -74,19 +74,19 @@ Designed with a runtime-agnostic core that decouples agent logic from the execut
 | Implementation | Package | Use Case |
 |:--------------|:--------|:---------|
 | `createNodeEnv()` | `@my-agent/node` | Local workspace — Node.js APIs with optional OS sandbox |
-| `createRemoteCoreEnv(url)` | `@my-agent/server` (client) | Remote workspace — Hono RPC to a CoreEnv server |
+| `createRemoteEnv(url)` | `@my-agent/server` (client) | Remote workspace — Hono RPC to a CoreEnv server |
 | `createDirectModelProvider()` | `@my-agent/core` | Local LLM keys / baseURL |
-| `createProxyModelProvider(url)` | `@my-agent/server` (client) | Remote LLM proxy (`/api/provider/*`; keys on server) |
+| `createRemoteProvider(url)` | `@my-agent/server` (client) | Remote LLM provider (`/api/provider/*`; keys on server) |
 
-CoreEnv and ModelProvider are independent (`--remote` vs `--provider-remote`).
+CoreEnv and ModelProvider are independent (`--remote-env` vs `--remote-provider`).
 
 | Combination | CoreEnv | Provider | Host | Status |
 |------------|---------|----------|------|--------|
 | Local + CLI | `createNodeEnv` | direct | Terminal | Fully working |
-| Remote workspace + remote keys | `createRemoteCoreEnv` | proxy | Terminal | Working |
-| Local workspace + remote keys | `createNodeEnv` | proxy | Terminal | Working (`--provider-remote`) |
-| Remote + Extension | `createRemoteCoreEnv` | proxy or direct | Chrome | Working |
-| Playground | WebContainer | direct or proxy | Browser | Working (CORS / fetch proxy for web tools) |
+| Remote workspace + remote keys | `createRemoteEnv` | remote | Terminal | Working |
+| Local workspace + remote keys | `createNodeEnv` | remote | Terminal | Working (`--remote-provider`) |
+| Remote + Extension | `createRemoteEnv` | remote or direct | Chrome | Working |
+| Playground | WebContainer | direct or remote | Browser | Working (CORS / fetch proxy for web tools) |
 
 ### Package Overview
 
@@ -223,9 +223,9 @@ SANDBOX_ENV=native
 # WEBSEARCH_PROVIDER=brave   # or duckduckgo / auto
 
 # Remote planes (orthogonal; default server port is 3100)
-# REMOTE=http://localhost:3100
-# PROVIDER_REMOTE=http://localhost:3100
-# AGENT_REMOTE=http://localhost:3100
+# REMOTE_ENV=http://localhost:3100
+# REMOTE_PROVIDER=http://localhost:3100
+# REMOTE_SESSION=http://localhost:3100
 
 SERVER_PORT=3100
 ```
@@ -242,10 +242,10 @@ pnpm start:cli
 pnpm start:cli -- "Explain this codebase"
 
 # Remote workspace (CoreEnv HTTP)
-pnpm start:cli -- --remote http://localhost:3100
+pnpm start:cli -- --remote-env http://localhost:3100
 
 # Remote LLM keys only (local workspace)
-pnpm start:cli -- --provider-remote http://localhost:3100
+pnpm start:cli -- --remote-provider http://localhost:3100
 
 # Continue last session / pick a session
 pnpm start:cli -- --continue

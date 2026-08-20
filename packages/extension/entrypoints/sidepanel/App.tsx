@@ -15,7 +15,7 @@ import {
   registerCoreEnv,
   registerModelProvider,
 } from "@my-agent/core";
-import { createProxyModelProvider, createRemoteCoreEnv } from "@my-agent/server/client";
+import { createRemoteEnv, createRemoteProvider } from "@my-agent/server/client";
 import { InkTerminalBox } from "@my-react/react-terminal/web";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -57,15 +57,15 @@ const AgentBootstrap = () => {
       clearModelProvider();
       clearCoreEnv();
 
-      const env = await createRemoteCoreEnv(url);
+      const env = await createRemoteEnv(url);
       if (currentInitId !== initIdRef.current) return;
       registerCoreEnv(env);
 
-      // Provider plane: local keys when apiKey is set; otherwise remote proxy on the same host.
+      // Provider plane: local keys when apiKey is set; otherwise remote provider on the same host.
       if (apiKey.trim()) {
         registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey }));
       } else {
-        registerModelProvider(await createProxyModelProvider(url));
+        registerModelProvider(await createRemoteProvider(url));
       }
       if (currentInitId !== initIdRef.current) return;
 

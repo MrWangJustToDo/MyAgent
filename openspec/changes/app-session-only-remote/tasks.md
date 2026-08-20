@@ -36,12 +36,12 @@
 - [ ] 4.1 Server: persist/serve tool buffer + summary snapshots for remount
 - [ ] 4.2 Http client: implement `getSummaryStreamSnapshot`; cache tool/summary SSE for remount
 - [ ] 4.3 Catalog routes: list + align create/destroy with Host
-- [ ] 4.4 Implement `createHttpAgentSessionHost`
-- [ ] 4.5 Upgrade `validate:agent-session-http` to live Local-vs-HTTP parity smoke (include typed lifecycle)
+- [ ] 4.4 Implement `createRemoteSessionHost`
+- [ ] 4.5 Upgrade `validate:agent-session-http` to live Local-vs-Remote parity smoke (include typed lifecycle)
 
 ## 5. Host wiring and docs
 
-- [ ] 5.1 CLI: `--agent-remote` creates HTTP Host; Local path uses Local Host
+- [ ] 5.1 CLI: `--remote-session` creates remote Host; Local path uses Local Host
 - [ ] 5.2 Extension/playground: Session-only bootstrap (remote Host when configured)
 - [ ] 5.3 Update AGENTS.md / ARCHITECTURE / Help for three planes + Session-only app + event envelope
 - [ ] 5.4 Final lint/format/build for affected packages

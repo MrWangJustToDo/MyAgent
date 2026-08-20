@@ -35,7 +35,7 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ Hosts: CLI / Extension                                           │
-│   AgentSession (Local or HTTP) ← preferred host API              │
+│   AgentSession (Local or Remote) ← preferred host API              │
 │   registerCoreEnv(node|remote) — workspace plane (separate)      │
 └────────────────────────────┬────────────────────────────────────┘
                              │ getSnapshot / dispatch / subscribe
@@ -62,8 +62,8 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 packages/cli/src/index.tsx
   loadEnv()
   parseCliArgs()
-  registerCoreEnv(createNodeEnv(...) | createRemoteCoreEnv(url))
-  registerModelProvider(createDirectModelProvider(...) | createProxyModelProvider(url))
+  registerCoreEnv(createNodeEnv(...) | createRemoteEnv(url))
+  registerModelProvider(createDirectModelProvider(...) | createRemoteProvider(url))
   initConfig()
   render(<App />)
 ```
@@ -75,7 +75,7 @@ packages/cli/src/index.tsx
 ```
 packages/app/src/adapter/create-agent.ts
   resolveModelConfigFromProvider({ model, style, baseURL, apiKey })
-    // merges ModelProvider (proxy forces baseURL/apiKey)
+    // merges ModelProvider (remote forces baseURL/apiKey)
   agentManager.createManagedAgent({ modelInfo, modelStyle, ... })
   wire React stores (useAgent, useAgentLog, useTodoManager)
   optional: continueLatestSession() / resumeSession() → initialMessages

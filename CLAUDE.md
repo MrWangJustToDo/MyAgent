@@ -58,10 +58,10 @@ Hosts (CLI / Extension / Playground)
 `.env` at repo root configures the provider, model, API key, and sandbox type.
 
 ```bash
-SANDBOX_ENV=local          # local (OS sandbox) | native (no sandbox)
-REMOTE=http://localhost:3100           # remote CoreEnv (`--remote`)
-PROVIDER_REMOTE=http://localhost:3100  # remote LLM proxy (`--provider-remote`); orthogonal to REMOTE
-AGENT_REMOTE=http://localhost:3100     # Agent Session HTTP (`--agent-remote`)
+SANDBOX_ENV=local              # local (OS sandbox) | native (no sandbox)
+REMOTE_ENV=http://localhost:3100      # remote CoreEnv (`--remote-env`)
+REMOTE_PROVIDER=http://localhost:3100 # remote LLM provider (`--remote-provider`); orthogonal to REMOTE_ENV
+REMOTE_SESSION=http://localhost:3100  # remote Agent Session (`--remote-session`); orthogonal to REMOTE_ENV
 ```
 
 Workspace runtime data (sessions, memory, cache, plans, transcripts, skills, extensions, MCP) lives under gitignored `.agents/`. See [AGENTS.md](AGENTS.md) for the path layout.
