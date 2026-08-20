@@ -19,7 +19,9 @@ import { toModelOutputRegistry } from "../tools/runtime/to-model-output-registry
 import { FileSync } from "./file-sync.js";
 import { getLanguageIdFromPath } from "./language-map.js";
 import { LspManager, type LspServerConfigRecord } from "./lsp-manager.js";
+import { applyDiagnosticsToToolAfterPayload } from "./shared/apply-tool-diagnostics.js";
 import { MAX_AUTO_DIAGNOSTIC_LINES } from "./shared/constants.js";
+import { extractToolPath } from "./shared/parse-tool-args.js";
 import { AUTO_DIAG_SERVER_WAIT_MS, AUTO_DIAG_SETTLE_POLL_MS, AUTO_DIAG_SETTLE_TIMEOUT_MS } from "./shared/timing.js";
 import { lspTextToModelOutput } from "./shared/tool-output.js";
 import { createCodeActionsTool } from "./tools/code-actions.js";
@@ -37,7 +39,7 @@ import { TreeSitterManager, type TreeSitterEnv } from "./tree-sitter/parser-mana
 import { getSyntaxErrors } from "./tree-sitter/symbol-extractor.js";
 import { WorkspaceIndex } from "./tree-sitter/workspace-index.js";
 
-import type { ExtensionAPI, ExtensionContext, ExtensionToolDefinition } from "../extension/types.js";
+import type { ExtensionAPI, ExtensionContext, ExtensionToolDefinition, ToolAfterEvent } from "../extension/types.js";
 
 /** Project-level LSP config — loaded from `.lsp.json` in the workspace root. */
 interface ProjectLspConfig {
@@ -385,14 +387,12 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
   });
 
   // ---- File-sync + auto-diagnostics interceptors ----
-  const handleAfter = async (toolName: string, args: unknown): Promise<void> => {
-    const path = (args as { path?: string } | null)?.path;
-    if (!path) return;
+  const handleAfter = async (toolName: string, filePath: string): Promise<void> => {
     try {
       if (toolName === "read_file") {
-        await fileSync.handleFileRead(path);
+        await fileSync.handleFileRead(filePath);
       } else if (toolName === "write_file" || toolName === "edit_file") {
-        await fileSync.handleFileWrite(path);
+        await fileSync.handleFileWrite(filePath);
       }
     } catch {
       // File-sync errors are non-fatal
@@ -403,34 +403,32 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
   const unsubs: Array<() => void> = [];
 
   unsubs.push(
-    ctx.registerInterceptor("tool:after:read_file", async (event) => {
-      await handleAfter("read_file", (event as { payload?: { args?: unknown } }).payload?.args);
+    ctx.registerInterceptor<ToolAfterEvent>("tool:after:read_file", async (event) => {
+      const path = extractToolPath(event.payload.args);
+      if (path) await handleAfter("read_file", path);
     })
   );
 
   unsubs.push(
-    ctx.registerInterceptor("tool:after:write_file", async (event) => {
-      const payload = (event as { payload?: { args?: unknown; result?: unknown } }).payload;
-      await handleAfter("write_file", payload?.args);
-      await maybeInjectDiagnostics(payload?.args as { path?: string } | undefined, event);
+    ctx.registerInterceptor<ToolAfterEvent>("tool:after:write_file", async (event) => {
+      const path = extractToolPath(event.payload.args);
+      if (path) await handleAfter("write_file", path);
+      await maybeInjectDiagnostics(path, event);
     })
   );
 
   unsubs.push(
-    ctx.registerInterceptor("tool:after:edit_file", async (event) => {
-      const payload = (event as { payload?: { args?: unknown; result?: unknown } }).payload;
-      await handleAfter("edit_file", payload?.args);
-      await maybeInjectDiagnostics(payload?.args as { path?: string } | undefined, event);
+    ctx.registerInterceptor<ToolAfterEvent>("tool:after:edit_file", async (event) => {
+      const path = extractToolPath(event.payload.args);
+      if (path) await handleAfter("edit_file", path);
+      await maybeInjectDiagnostics(path, event);
     })
   );
 
-  /** Auto-inject LSP error diagnostics into write/edit results (modifiedResult). */
-  async function maybeInjectDiagnostics(
-    params: { path?: string } | undefined,
-    event: { payload?: unknown }
-  ): Promise<void> {
-    const path = params?.path;
+  /** Auto-inject LSP error diagnostics into write/edit results via modifiedResult. */
+  async function maybeInjectDiagnostics(path: string | undefined, event: ToolAfterEvent): Promise<void> {
     if (!path) return;
+
     const mgr = getManager();
 
     const languageId = mgr.getLanguageId(path);
@@ -475,17 +473,7 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
     }
 
     const summary = `\n\n⚠ LSP: ${errors.length} error(s) in ${relPath}:\n${lines.join("\n")}`;
-
-    // Inject into the tool result so the model sees errors right after writing.
-    // The existing result may be a structured object ({ text, ... }) or a string.
-    const payload = event.payload as { result?: unknown } | undefined;
-    const result = payload?.result;
-    if (result != null && typeof result === "object") {
-      (result as Record<string, unknown>)._lspDiagnostics = summary.trim();
-    } else if (typeof result === "string") {
-      payload!.result = result + summary;
-    }
-
+    applyDiagnosticsToToolAfterPayload(event.payload, summary);
     ctx.ui.setStatus("lsp", `LSP: ${errors.length} error(s) in ${relPath}`);
   }
 

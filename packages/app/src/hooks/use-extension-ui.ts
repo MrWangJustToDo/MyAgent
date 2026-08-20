@@ -1,11 +1,15 @@
 /**
- * Extension UI store. Live ExtensionRunner bridge removed (Session-only); keep
- * confirm/status slots for future Session channels. Confirm respond is a no-op
- * until a Session extension-ui channel exists.
+ * Extension UI store. Extension → UI notifications are bridged from the session's
+ * `extension-ui` channel (see {@link useExtensionUIBridge}); the UI → extension
+ * direction (confirm responses) is still a no-op until a Session → extension
+ * channel exists.
  */
 
-import { useCallback } from "react";
-import { createState } from "reactivity-store";
+import { useCallback, useEffect } from "react";
+import { createState, toRaw } from "reactivity-store";
+
+import { useAgent } from "./use-agent.js";
+import { useUserInput } from "./use-user-input.js";
 
 interface ConfirmState {
   id: string;
@@ -49,8 +53,47 @@ export const useExtensionUI = createState(
   }
 );
 
-/** No-op until extension UI is projected over Session. */
-export function useExtensionUIBridge(): void {}
+/**
+ * Bridge extension UI notifications from the active session into the UI store.
+ *
+ * Session-only cutover removed the direct ExtensionRunner bridge (app no longer
+ * touches ManagedAgent). This hook reconnects the extension → UI path through
+ * the session's `extension-ui` channel: the core session forwards events published
+ * via `ExtensionUI` (set-status / notify / set-widget / confirm) and this hook
+ * projects them into {@link useExtensionUI} for the footer, widgets, and confirms.
+ *
+ * Confirm responses are still a no-op until a Session → extension channel exists.
+ */
+export function useExtensionUIBridge(): void {
+  const session = toRaw(useAgent((s) => s.session));
+
+  useEffect(() => {
+    if (!session) return;
+
+    return session.subscribe(
+      (event) => {
+        if (event.channel !== "extension-ui") return;
+        const ui = useExtensionUI.getActions();
+        const payload = event.payload;
+        switch (payload.type) {
+          case "set-status":
+            ui.setStatusText(payload.text);
+            break;
+          case "notify":
+            useUserInput.getActions().setInputFeedback(payload.message, payload.level ?? "info");
+            break;
+          case "set-widget":
+            ui.addWidget({ id: payload.id, component: payload.component, props: payload.props });
+            break;
+          case "confirm":
+            ui.setConfirm({ id: payload.id, question: payload.question });
+            break;
+        }
+      },
+      { channels: ["extension-ui"] }
+    );
+  }, [session]);
+}
 
 export function useRespondToConfirm(): (id: string, ok: boolean) => void {
   return useCallback((_id: string, _ok: boolean) => {

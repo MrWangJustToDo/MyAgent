@@ -2,6 +2,8 @@
  * lsp_diagnostics — compilation errors and warnings for a file (or whole workspace).
  */
 
+import { AUTO_DIAG_SERVER_WAIT_MS } from "../shared/timing.js";
+
 import type { LspManager } from "../lsp-manager.js";
 import type { Diagnostic } from "vscode-languageserver-protocol";
 
@@ -85,7 +87,18 @@ export function createDiagnosticsTool(deps: DiagnosticsToolDeps) {
         return workspaceDiagnostics(deps.manager);
       }
 
-      const client = await deps.manager.getClientForFile(filePath).catch(() => null);
+      const languageId = deps.manager.getLanguageId(filePath);
+      if (!languageId) {
+        if (deps.fallback) {
+          const fallbackText = await deps.fallback(filePath);
+          if (fallbackText != null) {
+            return { text: fallbackText, count: 0, errors: 0, warnings: 0, source: "fallback" };
+          }
+        }
+        return { text: deps.manager.getUnavailableReason(filePath), count: 0, errors: 0, warnings: 0 };
+      }
+
+      const client = await deps.manager.waitForClient(languageId, AUTO_DIAG_SERVER_WAIT_MS);
 
       if (client) {
         const uri = deps.manager.getFileUri(filePath);

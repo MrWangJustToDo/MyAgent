@@ -40,6 +40,7 @@ export const AGENT_SESSION_CHANNELS = [
   "summary",
   "lifecycle",
   "log",
+  "extension-ui",
 ] as const;
 
 export type AgentSessionChannel = (typeof AGENT_SESSION_CHANNELS)[number];
@@ -167,6 +168,18 @@ export type AgentSessionCommandResult =
 // Subscribe payloads
 // ============================================================================
 
+/**
+ * Extension UI notification forwarded from the extension runner to session
+ * subscribers on the `extension-ui` channel. Mirrors the events published via
+ * {@link ExtensionUI} (`setStatus`, `notify`, …) so hosts can render extension
+ * status bars, widgets, and confirmations without touching ManagedAgent.
+ */
+export type ExtensionUIEvent =
+  | { type: "set-status"; key: string; text: string }
+  | { type: "notify"; message: string; level?: "success" | "info" | "error" }
+  | { type: "set-widget"; id: string; component: string; props: Record<string, unknown> }
+  | { type: "confirm"; id: string; question: string };
+
 export type AgentSessionEvent =
   | { channel: "state"; payload: AgentL1State; ts: number }
   | { channel: "messages"; payload: UIMessage[]; ts: number }
@@ -181,7 +194,8 @@ export type AgentSessionEvent =
     }
   | { channel: "summary"; payload: SummaryStreamEvent; ts: number }
   | { channel: "lifecycle"; payload: AgentEvent; ts: number }
-  | { channel: "log"; payload: LogEntry; ts: number };
+  | { channel: "log"; payload: LogEntry; ts: number }
+  | { channel: "extension-ui"; payload: ExtensionUIEvent; ts: number };
 
 export type AgentSessionSubscriber = (event: AgentSessionEvent) => void;
 

@@ -614,9 +614,9 @@ CLI local mode enables the built-in LSP extension when `ManagedAgentConfig.lsp !
 
 **Config:** workspace `.lsp.json` (`autoStart`, `servers`, `lombokJar`, `autoInjectDiagnostics`). Commands: `/lsp`, `/lsp-restart`, `/lsp-config`, `/lsp-lombok`.
 
-**Parity notes (vs pi-lsp-extension):** Java jdtls gets Lombok via `findLombokJar()` (`LOMBOK_JAR`, explicit path, or `env/Lombok-*` auto-detect). `lsp_symbols` and `lsp_definition` fall back to `WorkspaceIndex` / `findDefinition`. `lsp_completions` supports synthetic-dot member completion with `FileSync` version coordination. Auto-injected write/edit diagnostics wait **1500ms** (`DIAGNOSTIC_SETTLE_DELAY_MS`). LSP tool results use plain-text `toModelOutput` (`output.text`).
+**Parity notes (vs pi-lsp-extension):** Java jdtls gets Lombok via `findLombokJar()` (`LOMBOK_JAR`, explicit path, or `env/Lombok-*` auto-detect). `lsp_symbols` and `lsp_definition` fall back to `WorkspaceIndex` / `findDefinition`. `lsp_completions` supports synthetic-dot member completion with `FileSync` version coordination. Auto-injected write/edit diagnostics poll after file-sync (`tool:after:*` interceptors parse JSON-string args and set `modifiedResult` for the extensions middleware). LSP tool results use plain-text `toModelOutput` (`output.text`).
 
-Validate: `pnpm --filter @my-agent/core run validate:lsp-parity`.
+Validate: `pnpm --filter @my-agent/core run validate:lsp-parity` and `validate:lsp-interceptor`.
 
 ## Skill System
 

@@ -188,6 +188,33 @@ class LocalAgentSessionImpl implements AgentSession {
       );
     }
 
+    if (channelAllowed("extension-ui", selected)) {
+      const ui = managed.extensionRunner?.getUI();
+      if (ui) {
+        unsubs.push(
+          ui.subscribe<{ key: string; text: string }>("set-status", (data) => {
+            handler({ channel: "extension-ui", payload: { type: "set-status", ...data }, ts: now() });
+          }),
+          ui.subscribe<{ message: string; level?: "success" | "info" | "error" }>("notify", (data) => {
+            handler({ channel: "extension-ui", payload: { type: "notify", ...data }, ts: now() });
+          }),
+          ui.subscribe<{ id: string; component: string; props: Record<string, unknown> }>("set-widget", (data) => {
+            handler({ channel: "extension-ui", payload: { type: "set-widget", ...data }, ts: now() });
+          }),
+          ui.subscribe<{ id: string; question: string }>("confirm", (data) => {
+            handler({ channel: "extension-ui", payload: { type: "confirm", ...data }, ts: now() });
+          })
+        );
+        // Reconcile status set before this subscription mounted (e.g. during
+        // bootstrap, before the host's extension-ui subscription attaches).
+        for (const [key, text] of Object.entries(ui.getStatus())) {
+          if (text) {
+            handler({ channel: "extension-ui", payload: { type: "set-status", key, text }, ts: now() });
+          }
+        }
+      }
+    }
+
     if (channelAllowed("lifecycle", selected) && manager?.on) {
       const filter = new Set(this.lifecycleEvents);
       const on = manager.on.bind(manager);
