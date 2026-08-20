@@ -1,7 +1,7 @@
 /** LSP extension timing constants. */
 
 /** How long to wait after a write/edit for the LSP to publish updated diagnostics. */
-export const DIAGNOSTIC_SETTLE_DELAY_MS = 300;
+export const DIAGNOSTIC_SETTLE_DELAY_MS = 1500;
 
 /** Server restart: initial backoff, max backoff, max attempts per session. */
 export const RESTART_INITIAL_BACKOFF_MS = 1000;
@@ -10,6 +10,9 @@ export const RESTART_MAX_ATTEMPTS = 3;
 
 /** Graceful shutdown timeout for an LSP server. */
 export const SHUTDOWN_TIMEOUT_MS = 3000;
+
+/** Delay after synthetic didChange before requesting member completions. */
+export const SYNTHETIC_DOT_SETTLE_DELAY_MS = 100;
 
 /** Timeout when connecting to a shared daemon socket. */
 export const SOCKET_CONNECT_TIMEOUT_MS = 10_000;

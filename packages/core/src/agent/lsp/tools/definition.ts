@@ -3,17 +3,83 @@
  */
 
 import { formatLocation, formatLocationLink } from "../shared/format.js";
+import { findDefinition, getNodeAtPosition } from "../tree-sitter/symbol-extractor.js";
 
 import { resolvePosition, withResolved } from "./shared.js";
 
 import type { LspManager } from "../lsp-manager.js";
+import type { TreeSitterManager } from "../tree-sitter/parser-manager.js";
+import type { WorkspaceIndex } from "../tree-sitter/workspace-index.js";
 import type { Location, LocationLink } from "vscode-languageserver-protocol";
 
 type DefinitionResult = Location | Location[] | LocationLink[] | null;
 
 export interface DefinitionToolDeps {
   manager: LspManager;
-  fallback?: (filePath: string, line: number, character: number) => Promise<string | null>;
+  treeSitter?: TreeSitterManager | null;
+  workspaceIndex?: WorkspaceIndex | null;
+  readFile?: (absPath: string) => Promise<string>;
+}
+
+async function treeSitterDefinitionFallback(
+  deps: DefinitionToolDeps,
+  filePath: string,
+  line: number,
+  character: number,
+  resolvedFrom?: string
+): Promise<{ text: string; count: number; source?: string } | null> {
+  if (!deps.treeSitter?.available()) return null;
+
+  const absPath = deps.manager.resolvePath(filePath);
+  const readFile = deps.readFile ?? ((p) => deps.manager.readFileIfPossible(p).then((c) => c ?? ""));
+  const languageId = deps.manager.getLanguageId(filePath);
+  if (!languageId) return null;
+
+  try {
+    const content = await readFile(absPath);
+    if (!content) return null;
+    const tree = await deps.treeSitter.parse(absPath, content);
+    if (!tree) return null;
+
+    const node = getNodeAtPosition(tree, line - 1, character - 1);
+    if (!node) return null;
+
+    const symbolName = node.text;
+    const relPath = deps.manager.pathRelative(filePath);
+
+    const localDefs = findDefinition(tree, symbolName, languageId);
+    if (localDefs.length > 0) {
+      const locs = localDefs.map((d) => `${relPath}:${d.line}:1`);
+      const body =
+        locs.length === 1
+          ? `Definition [tree-sitter]: ${locs[0]}`
+          : `Definitions [tree-sitter]:\n${locs.map((l) => `  ${l}`).join("\n")}`;
+      return { text: withResolved(resolvedFrom, body), count: locs.length, source: "fallback" };
+    }
+
+    if (deps.workspaceIndex) {
+      await deps.workspaceIndex.build();
+      const entries = deps.workspaceIndex.search(symbolName);
+      const exact = entries.filter((e) => e.name === symbolName);
+      if (exact.length > 0) {
+        const rootDir = deps.manager.resolvePath(".");
+        const locs = exact.slice(0, 10).map((e) => {
+          const rel = e.file.startsWith(rootDir) ? e.file.slice(rootDir.length).replace(/^[/\\]/, "") || "." : e.file;
+          return `${rel}:${e.line}:1`;
+        });
+        const body =
+          locs.length === 1
+            ? `Definition [tree-sitter]: ${locs[0]}`
+            : `Definitions [tree-sitter]:\n${locs.map((l) => `  ${l}`).join("\n")}`;
+        return { text: withResolved(resolvedFrom, body), count: locs.length, source: "fallback" };
+      }
+    }
+
+    const msg = `No definition found for "${symbolName}" [tree-sitter]`;
+    return { text: withResolved(resolvedFrom, msg), count: 0, source: "fallback" };
+  } catch {
+    return null;
+  }
 }
 
 export function createDefinitionTool(deps: DefinitionToolDeps) {
@@ -52,6 +118,8 @@ export function createDefinitionTool(deps: DefinitionToolDeps) {
           });
 
           if (!result || (Array.isArray(result) && result.length === 0)) {
+            const fallback = await treeSitterDefinitionFallback(deps, filePath, line, character, resolvedFrom);
+            if (fallback) return fallback;
             return { text: withResolved(resolvedFrom, "No definition found."), count: 0 };
           }
 
@@ -79,12 +147,8 @@ export function createDefinitionTool(deps: DefinitionToolDeps) {
         }
       }
 
-      if (deps.fallback) {
-        const fallbackText = await deps.fallback(filePath, line, character);
-        if (fallbackText != null) {
-          return { text: withResolved(resolvedFrom, fallbackText), count: 0, source: "fallback" };
-        }
-      }
+      const fallback = await treeSitterDefinitionFallback(deps, filePath, line, character, resolvedFrom);
+      if (fallback) return fallback;
 
       return { text: deps.manager.getUnavailableReason(filePath), count: 0 };
     },

@@ -10,6 +10,7 @@
  */
 
 import { MAX_TRACKED_DOCUMENTS } from "./shared/constants.js";
+import { syntheticDotLocks } from "./shared/synthetic-dot.js";
 
 import type { LspManager } from "./lsp-manager.js";
 
@@ -18,9 +19,6 @@ interface TrackedDocument {
   languageId: string;
   version: number;
 }
-
-/** How long to wait after a write for the LSP to publish updated diagnostics. */
-export const DIAGNOSTIC_SETTLE_DELAY_MS = 300;
 
 export class FileSync {
   /** LRU map: most-recently-used documents are at the end (Map preserves insertion order). */
@@ -113,6 +111,10 @@ export class FileSync {
       const existing = this.tracked.get(uri);
 
       if (existing) {
+        if (syntheticDotLocks.has(uri)) {
+          this.touchAndEvict(uri);
+          return;
+        }
         existing.version++;
         client.connection.didChange(uri, existing.version, content);
       } else {
@@ -130,6 +132,17 @@ export class FileSync {
   getTrackedVersion(uri: string): number | null {
     const doc = this.tracked.get(uri);
     return doc ? doc.version : null;
+  }
+
+  /** Override tracked version (used by synthetic-dot completion coordination). */
+  setTrackedVersion(uri: string, version: number): void {
+    const doc = this.tracked.get(uri);
+    if (doc) doc.version = version;
+  }
+
+  /** True while a synthetic-dot completion temporarily mutates document text. */
+  isSyntheticDotActive(uri: string): boolean {
+    return syntheticDotLocks.has(uri);
   }
 
   /** Get the number of tracked documents. */

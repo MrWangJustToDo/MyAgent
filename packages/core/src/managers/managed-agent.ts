@@ -741,6 +741,7 @@ export class ManagedAgent {
           abortSignal: ctx.abortSignal,
         }),
       toUI: def.toUI,
+      toModelOutput: def.toModelOutput,
     });
     (this.tools as Record<string, unknown>)[def.name] = serverTool;
     this.setRunnerConfigKey(undefined);

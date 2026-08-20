@@ -7,6 +7,7 @@
  */
 
 import { getLanguageIdFromPath } from "./language-map.js";
+import { findLombokJar } from "./lombok.js";
 import { pathToFileUri } from "./shared/format.js";
 import { RESTART_INITIAL_BACKOFF_MS, RESTART_MAX_BACKOFF_MS, RESTART_MAX_ATTEMPTS } from "./shared/timing.js";
 
@@ -18,10 +19,17 @@ export interface LspPathHelpers {
   resolve(...parts: string[]): string;
 }
 
+export interface LspDirEntry {
+  name: string;
+  isDirectory: boolean;
+  isFile: boolean;
+}
+
 /** Minimal fs helpers LspManager needs from the runtime host. */
 export interface LspFsHelpers {
   existsSync(p: string): boolean | Promise<boolean>;
   readFile(p: string, encoding: "utf-8"): Promise<string>;
+  readdir?: (p: string) => Promise<LspDirEntry[]>;
 }
 
 export interface LspServerConfigRecord {
@@ -83,6 +91,7 @@ export class LspManager {
   private _lombokJarPath: string | null = null;
   private path: LspPathHelpers;
   private fs: LspFsHelpers;
+  private getEnvVar: (key: string) => string | undefined;
 
   constructor(
     rootDir: string,
@@ -90,12 +99,14 @@ export class LspManager {
     pathHelpers: LspPathHelpers,
     fsHelpers: LspFsHelpers,
     customConfigs?: Record<string, LspServerConfigRecord>,
-    callbacks?: LspManagerCallbacks
+    callbacks?: LspManagerCallbacks,
+    getEnvVar?: (key: string) => string | undefined
   ) {
     this.rootDir = rootDir;
     this.getConnection = getConnection;
     this.path = pathHelpers;
     this.fs = fsHelpers;
+    this.getEnvVar = getEnvVar ?? (() => undefined);
     this.serverConfigs = new Map(Object.entries({ ...DEFAULT_SERVERS, ...customConfigs }));
     this.callbacks = callbacks ?? {};
   }
@@ -236,19 +247,45 @@ export class LspManager {
   }
 
   /** Build the config for creating a connection. */
-  private buildConnectionConfig(languageId: string, config: LspServerConfigRecord): LspServerConfig {
+  private async buildConnectionConfig(languageId: string, config: LspServerConfigRecord): Promise<LspServerConfig> {
+    let args = [...config.args];
+    let initializationOptions = config.initializationOptions;
+
+    if (languageId === "java") {
+      const lombokJar = await this.findLombokJarPath();
+      if (lombokJar) {
+        args = [`--jvm-arg=-javaagent:${lombokJar}`, ...args];
+        if (!initializationOptions) {
+          initializationOptions = {
+            settings: { "java.jdt.ls.vmargs": `-javaagent:${lombokJar}` },
+          };
+        }
+      }
+    }
+
     return {
       command: config.command,
-      args: config.args,
+      args,
       env: config.env,
       cwd: this.rootDir,
-      initializationOptions: config.initializationOptions,
+      initializationOptions,
       settings: config.settings,
     };
   }
 
+  private async findLombokJarPath(): Promise<string | null> {
+    return findLombokJar({
+      rootDir: this.rootDir,
+      path: this.path,
+      exists: async (p) => Boolean(await this.fs.existsSync(p)),
+      readdir: this.fs.readdir ?? (async () => []),
+      getEnvVar: this.getEnvVar,
+      explicitJar: this._lombokJarPath,
+    });
+  }
+
   private async startServer(languageId: string, config: LspServerConfigRecord): Promise<void> {
-    const connConfig = this.buildConnectionConfig(languageId, config);
+    const connConfig = await this.buildConnectionConfig(languageId, config);
     const onUnexpectedExit = (code: number | null) => this.handleUnexpectedExit(languageId, code);
 
     this.callbacks.onServerStart?.(languageId, config.command);
@@ -411,11 +448,9 @@ export class LspManager {
     this._lombokJarPath = jarPath;
   }
 
-  /** Get the currently configured Lombok jar path (if any). */
+  /** Get the resolved Lombok jar path (explicit, env, or auto-detected). */
   async getLombokJar(): Promise<string | null> {
-    if (!this._lombokJarPath) return null;
-    const ok = await this.fs.existsSync(this._lombokJarPath);
-    return ok ? this._lombokJarPath : null;
+    return this.findLombokJarPath();
   }
 
   /** Read a file's text content if it exists and is readable; null otherwise. */

@@ -3,7 +3,10 @@
  */
 
 import { resolveSymbolPosition } from "../shared/resolve-position.js";
+import { insertDot, shouldSyntheticTrigger, syntheticDotLocks } from "../shared/synthetic-dot.js";
+import { SYNTHETIC_DOT_SETTLE_DELAY_MS } from "../shared/timing.js";
 
+import type { FileSync } from "../file-sync.js";
 import type { LspManager } from "../lsp-manager.js";
 import type { CompletionItem, CompletionList, CompletionItemKind, MarkupContent } from "vscode-languageserver-protocol";
 
@@ -70,13 +73,15 @@ type CompletionResponse = CompletionList | CompletionItem[] | null;
 
 export interface CompletionsToolDeps {
   manager: LspManager;
+  versionTracker?: FileSync;
+  readFile?: (absPath: string) => Promise<string>;
 }
 
 export function createCompletionsTool(deps: CompletionsToolDeps) {
   return {
     name: "lsp_completions",
     description:
-      "Get completion suggestions at a position (1-indexed line/character, or query). Returns methods, properties, and symbols available at that point — useful for discovering APIs and verifying method names.",
+      'Get completion suggestions at a position (1-indexed line/character, or query). Returns methods, properties, and symbols available at that point. When trigger is "auto" (default), a dot is temporarily inserted at the end of identifiers to enable member completion.',
     inputSchema: {
       type: "object",
       properties: {
@@ -85,14 +90,28 @@ export function createCompletionsTool(deps: CompletionsToolDeps) {
         character: { type: "number", description: "Column number (1-indexed). Required unless query is provided." },
         query: { type: "string", description: "Symbol name to find in the file (alternative to line/character)." },
         limit: { type: "number", description: "Max results to return (default: 20)." },
+        trigger: {
+          type: "string",
+          enum: ["auto", "none"],
+          description:
+            'Synthetic trigger mode (default: "auto"). When "auto", temporarily inserts a dot at the end of identifiers for member completion.',
+        },
       },
       required: ["path"],
       additionalProperties: false,
     },
     execute: async (input: unknown) => {
-      const params = input as { path?: string; line?: number; character?: number; query?: string; limit?: number };
+      const params = input as {
+        path?: string;
+        line?: number;
+        character?: number;
+        query?: string;
+        limit?: number;
+        trigger?: "auto" | "none";
+      };
       const filePath = (params.path ?? "").replace(/^@/, "");
       const limit = params.limit ?? 20;
+      const trigger = params.trigger ?? "auto";
       let line = params.line;
       let character = params.character;
       let resolvedFrom: string | undefined;
@@ -127,11 +146,68 @@ export function createCompletionsTool(deps: CompletionsToolDeps) {
       const uri = deps.manager.getFileUri(filePath);
       const position = { line: line - 1, character: character - 1 };
 
+      let syntheticDot = false;
+      let originalContent: string | null = null;
+      let revertVersion = 99991;
+      let completionPosition = position;
+
+      if (trigger === "auto" && !syntheticDotLocks.has(uri)) {
+        syntheticDotLocks.add(uri);
+        try {
+          const absPath = deps.manager.resolvePath(filePath);
+          const readFile = deps.readFile ?? ((p) => deps.manager.readFileIfPossible(p).then((c) => c ?? ""));
+          const fileContent = await readFile(absPath);
+          const triggerPos = fileContent
+            ? shouldSyntheticTrigger(fileContent, position.line, position.character)
+            : null;
+
+          if (triggerPos && fileContent) {
+            originalContent = fileContent;
+            const modifiedContent = insertDot(fileContent, triggerPos.insertLine, triggerPos.insertChar);
+
+            const currentVersion = deps.versionTracker?.getTrackedVersion(uri);
+            const insertVersion = currentVersion != null ? currentVersion + 1 : 99990;
+            revertVersion = currentVersion != null ? currentVersion + 2 : 99991;
+
+            client.connection.didChange(uri, insertVersion, modifiedContent);
+            if (deps.versionTracker && currentVersion != null) {
+              deps.versionTracker.setTrackedVersion(uri, insertVersion);
+            }
+
+            completionPosition = {
+              line: triggerPos.insertLine,
+              character: triggerPos.insertChar + 1,
+            };
+            syntheticDot = true;
+
+            await new Promise((r) => setTimeout(r, SYNTHETIC_DOT_SETTLE_DELAY_MS));
+          }
+        } catch {
+          // fall through to normal completion
+        } finally {
+          syntheticDotLocks.delete(uri);
+        }
+      }
+
       try {
-        const response = await client.connection.sendRequest<CompletionResponse>("textDocument/completion", {
-          textDocument: { uri },
-          position,
-        });
+        let response: CompletionResponse;
+        try {
+          response = await client.connection.sendRequest<CompletionResponse>("textDocument/completion", {
+            textDocument: { uri },
+            position: completionPosition,
+          });
+        } finally {
+          if (syntheticDot && originalContent !== null) {
+            try {
+              client.connection.didChange(uri, revertVersion, originalContent);
+              if (deps.versionTracker) {
+                deps.versionTracker.setTrackedVersion(uri, revertVersion);
+              }
+            } catch {
+              // best effort revert
+            }
+          }
+        }
 
         if (!response) {
           return { text: "No completions available at this position.", count: 0, total: 0 };

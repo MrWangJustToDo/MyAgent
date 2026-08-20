@@ -5,6 +5,7 @@
 import { fileUriToPath } from "../shared/format.js";
 
 import type { LspManager } from "../lsp-manager.js";
+import type { WorkspaceIndex } from "../tree-sitter/workspace-index.js";
 import type { DocumentSymbol, SymbolInformation } from "vscode-languageserver-protocol";
 
 const SYMBOL_KIND_NAMES: Record<number, string> = {
@@ -63,7 +64,7 @@ function truncateLines(
 export interface SymbolsToolDeps {
   manager: LspManager;
   /** Workspace symbol fallback via tree-sitter index (optional). */
-  workspaceSearch?: (query: string) => Promise<string | null>;
+  workspaceIndex?: WorkspaceIndex | null;
 }
 
 export function createSymbolsTool(deps: SymbolsToolDeps) {
@@ -161,11 +162,22 @@ export function createSymbolsTool(deps: SymbolsToolDeps) {
       }
 
       // Tree-sitter workspace fallback
-      if (deps.workspaceSearch && query) {
-        const fallbackText = await deps.workspaceSearch(query);
-        if (fallbackText != null) {
-          return { text: fallbackText, count: 0, source: "fallback" };
+      if (deps.workspaceIndex && query) {
+        await deps.workspaceIndex.build();
+        const results = deps.workspaceIndex.search(query);
+        if (results.length > 0) {
+          const rootDir = deps.manager.resolvePath(".");
+          const lines = results.slice(0, 50).map((e) => {
+            const rel = e.file.startsWith(rootDir) ? e.file.slice(rootDir.length).replace(/^[/\\]/, "") || "." : e.file;
+            return `${e.kind} ${e.name} ${rel}:${e.line}`;
+          });
+          const output = lines.join("\n");
+          const trunc = truncateLines(output);
+          let text = `${results.length} symbol(s) found [tree-sitter]:\n\n${trunc.content}`;
+          if (trunc.truncated) text += `\n\n[Truncated: showing ${trunc.outputLines} of ${trunc.totalLines} lines]`;
+          return { text, count: results.length, source: "fallback" };
         }
+        return { text: `No workspace symbols found for query: "${query}" [tree-sitter]`, count: 0, source: "fallback" };
       }
 
       return {

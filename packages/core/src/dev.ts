@@ -364,3 +364,7 @@ export {
 // ============================================================================
 export { createLspExtension, lspExtension } from "./agent/lsp";
 export { EXT_TO_LANGUAGE, getLanguageIdFromPath } from "./agent/lsp/language-map.js";
+export { findLombokJar } from "./agent/lsp/lombok.js";
+export { insertDot, shouldSyntheticTrigger, syntheticDotLocks } from "./agent/lsp/shared/synthetic-dot.js";
+export { DIAGNOSTIC_SETTLE_DELAY_MS, SYNTHETIC_DOT_SETTLE_DELAY_MS } from "./agent/lsp/shared/timing.js";
+export { lspTextToModelOutput } from "./agent/lsp/shared/tool-output.js";

@@ -603,6 +603,21 @@ packages/core/src/agent/
 ├── tools/              # Universal tools (fs/shell/web) + runtime glue
 ```
 
+## Built-in LSP Extension
+
+CLI local mode enables the built-in LSP extension when `ManagedAgentConfig.lsp !== false` (`createLspExtension()` in `agent-factory.ts`). Requires `@my-agent/node` (`CoreEnv.createLspConnection`); remote/extension hosts degrade gracefully.
+
+| Tool | Purpose |
+|------|---------|
+| `lsp_diagnostics` / `lsp_hover` / `lsp_definition` / `lsp_references` / `lsp_symbols` / `lsp_rename` / `lsp_completions` / `lsp_code_actions` | Standard LSP queries |
+| `code_overview` / `ast_search` / `code_rewrite` | Tree-sitter fallbacks when grammars are available |
+
+**Config:** workspace `.lsp.json` (`autoStart`, `servers`, `lombokJar`, `autoInjectDiagnostics`). Commands: `/lsp`, `/lsp-restart`, `/lsp-config`, `/lsp-lombok`.
+
+**Parity notes (vs pi-lsp-extension):** Java jdtls gets Lombok via `findLombokJar()` (`LOMBOK_JAR`, explicit path, or `env/Lombok-*` auto-detect). `lsp_symbols` and `lsp_definition` fall back to `WorkspaceIndex` / `findDefinition`. `lsp_completions` supports synthetic-dot member completion with `FileSync` version coordination. Auto-injected write/edit diagnostics wait **1500ms** (`DIAGNOSTIC_SETTLE_DELAY_MS`). LSP tool results use plain-text `toModelOutput` (`output.text`).
+
+Validate: `pnpm --filter @my-agent/core run validate:lsp-parity`.
+
 ## Skill System
 
 Skills provide on-demand domain knowledge via a two-layer injection pattern.

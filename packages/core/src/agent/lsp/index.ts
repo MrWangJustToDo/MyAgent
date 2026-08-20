@@ -16,10 +16,12 @@
 import { defaultPath } from "../../env.js";
 import { toModelOutputRegistry } from "../tools/runtime/to-model-output-registry.js";
 
-import { FileSync, DIAGNOSTIC_SETTLE_DELAY_MS } from "./file-sync.js";
+import { FileSync } from "./file-sync.js";
 import { getLanguageIdFromPath } from "./language-map.js";
 import { LspManager, type LspServerConfigRecord } from "./lsp-manager.js";
 import { MAX_AUTO_DIAGNOSTIC_LINES } from "./shared/constants.js";
+import { DIAGNOSTIC_SETTLE_DELAY_MS } from "./shared/timing.js";
+import { lspTextToModelOutput } from "./shared/tool-output.js";
 import { createCodeActionsTool } from "./tools/code-actions.js";
 import { createCodeOverviewTool } from "./tools/code-overview.js";
 import { createCodeRewriteTool } from "./tools/code-rewrite.js";
@@ -35,7 +37,7 @@ import { TreeSitterManager, type TreeSitterEnv } from "./tree-sitter/parser-mana
 import { getSyntaxErrors } from "./tree-sitter/symbol-extractor.js";
 import { WorkspaceIndex } from "./tree-sitter/workspace-index.js";
 
-import type { ExtensionContext, ExtensionAPI } from "../extension/types.js";
+import type { ExtensionAPI, ExtensionContext, ExtensionToolDefinition } from "../extension/types.js";
 
 /** Project-level LSP config — loaded from `.lsp.json` in the workspace root. */
 interface ProjectLspConfig {
@@ -131,7 +133,18 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
       }
     },
     readFile: (p: string) => env.fs.readFile(p, "utf-8") as Promise<string>,
+    readdir: async (p: string) => {
+      const entries = await env.fs.readdir(p);
+      return entries.map((e) => ({
+        name: e.name,
+        isDirectory: e.type === "directory",
+        isFile: e.type === "file",
+      }));
+    },
   };
+
+  const runtimeEnv = await env.getEnv().catch(() => ({}) as Record<string, string | undefined>);
+  const getEnvVar = (key: string) => runtimeEnv[key];
 
   // ---- Tree-sitter layer (runtime-agnostic via injected env) ----
   const treeSitterEnv: TreeSitterEnv = {
@@ -180,7 +193,8 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
       onServerCrash: (languageId, restarting) => {
         ctx.ui.setStatus("lsp", restarting ? `LSP: restarting ${languageId}...` : `LSP: ${languageId} crashed`);
       },
-    }
+    },
+    getEnvVar
   );
 
   const fileSync = new FileSync(manager, fsHelpers);
@@ -238,36 +252,63 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
     }
   };
 
-  ctx.registerTool(createDiagnosticsTool({ manager: proxyManager(getManager), fallback: tsDiagnosticsFallback }));
-  ctx.registerTool(createHoverTool({ manager: proxyManager(getManager), fallback: tsHoverFallback }));
-  ctx.registerTool(createDefinitionTool({ manager: proxyManager(getManager), fallback: tsHoverFallback }));
-  ctx.registerTool(createReferencesTool({ manager: proxyManager(getManager) }));
-  ctx.registerTool(createSymbolsTool({ manager: proxyManager(getManager) }));
-  ctx.registerTool(createRenameTool({ manager: proxyManager(getManager) }));
-  ctx.registerTool(createCodeActionsTool({ manager: proxyManager(getManager) }));
-  ctx.registerTool(createCompletionsTool({ manager: proxyManager(getManager) }));
+  ctx.registerTool(
+    withLspTextOutput(createDiagnosticsTool({ manager: proxyManager(getManager), fallback: tsDiagnosticsFallback }))
+  );
+  ctx.registerTool(
+    withLspTextOutput(createHoverTool({ manager: proxyManager(getManager), fallback: tsHoverFallback }))
+  );
+  ctx.registerTool(
+    withLspTextOutput(
+      createDefinitionTool({
+        manager: proxyManager(getManager),
+        treeSitter,
+        workspaceIndex,
+        readFile: (p) => treeSitterEnv.readFile(p),
+      })
+    )
+  );
+  ctx.registerTool(withLspTextOutput(createReferencesTool({ manager: proxyManager(getManager) })));
+  ctx.registerTool(withLspTextOutput(createSymbolsTool({ manager: proxyManager(getManager), workspaceIndex })));
+  ctx.registerTool(withLspTextOutput(createRenameTool({ manager: proxyManager(getManager) })));
+  ctx.registerTool(withLspTextOutput(createCodeActionsTool({ manager: proxyManager(getManager) })));
+  ctx.registerTool(
+    withLspTextOutput(
+      createCompletionsTool({
+        manager: proxyManager(getManager),
+        versionTracker: fileSync,
+        readFile: (p) => treeSitterEnv.readFile(p),
+      })
+    )
+  );
 
   // ---- Tree-sitter tools (degrade when grammar locator is absent) ----
   ctx.registerTool(
-    createCodeSearchTool({ rootDir: () => getManager().resolvePath("."), treeSitter, env: treeSitterEnv })
+    withLspTextOutput(
+      createCodeSearchTool({ rootDir: () => getManager().resolvePath("."), treeSitter, env: treeSitterEnv })
+    )
   );
   ctx.registerTool(
-    createCodeRewriteTool({
-      rootDir: () => getManager().resolvePath("."),
-      treeSitter,
-      env: treeSitterEnv,
-      onFileModified: (filePath) => {
-        fileSync.handleFileWrite(filePath).catch(() => {});
-      },
-    })
+    withLspTextOutput(
+      createCodeRewriteTool({
+        rootDir: () => getManager().resolvePath("."),
+        treeSitter,
+        env: treeSitterEnv,
+        onFileModified: (filePath) => {
+          fileSync.handleFileWrite(filePath).catch(() => {});
+        },
+      })
+    )
   );
   ctx.registerTool(
-    createCodeOverviewTool({
-      rootDir: () => getManager().resolvePath("."),
-      treeSitter,
-      env: treeSitterEnv,
-      workspaceIndex,
-    })
+    withLspTextOutput(
+      createCodeOverviewTool({
+        rootDir: () => getManager().resolvePath("."),
+        treeSitter,
+        env: treeSitterEnv,
+        workspaceIndex,
+      })
+    )
   );
 
   // ---- Commands ----
@@ -468,7 +509,8 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
         onServerError: (l) => ctx.ui.setStatus("lsp", `LSP: ${l} failed`),
         onServerCrash: (l, restarting) =>
           ctx.ui.setStatus("lsp", restarting ? `LSP: restarting ${l}...` : `LSP: ${l} crashed`),
-      }
+      },
+      getEnvVar
     );
     activeManager = newManager;
     fileSync.setManager(newManager);
@@ -498,6 +540,10 @@ function proxyManager(getManager: () => LspManager): LspManager {
       return (getManager() as unknown as Record<string, unknown>)[prop as string];
     },
   });
+}
+
+function withLspTextOutput(def: ExtensionToolDefinition): ExtensionToolDefinition {
+  return { ...def, toModelOutput: lspTextToModelOutput };
 }
 
 /** Load `.lsp.json` from the project root (best-effort, never throws). */
