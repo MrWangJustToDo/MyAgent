@@ -56,6 +56,31 @@ function expandBraceGlobs(include: string): string[] {
   return current;
 }
 
+/**
+ * Strip a single pair of matching outer quotes from a pattern.
+ *
+ * Agents sometimes wrap a regex in quotes (e.g. `"extensions"` or `'extensions'`)
+ * treating the pattern as a literal string. grep/rg see those quote chars as
+ * ordinary characters, so `"extensions"` matches nothing when the source only
+ * has bare `extensions` — a silent empty result that is easy to misread as a
+ * tool bug. When the whole pattern is wrapped in one matching quote pair, drop
+ * the quotes so the search behaves as the caller intended.
+ *
+ * Returns the possibly-stripped pattern plus whether quotes were present at all
+ * (stripped or embedded), so the caller can attach a hint on empty results.
+ */
+function stripOuterQuotes(pattern: string): { pattern: string; hadQuotes: boolean } {
+  const hadQuotes = /["']/.test(pattern);
+  if (pattern.length >= 2) {
+    const first = pattern[0];
+    const last = pattern[pattern.length - 1];
+    if ((first === '"' || first === "'") && first === last) {
+      return { pattern: pattern.slice(1, -1), hadQuotes };
+    }
+  }
+  return { pattern, hadQuotes };
+}
+
 function buildRgCommand(
   pattern: string,
   searchPath: string,
@@ -310,6 +335,12 @@ export const createGrepTool = () => {
     outputSchema: grepOutputSchema,
     execute: async ({ pattern, path, include, ignoreCase, offset, limit, outputMode, context }, { toolCallId }) => {
       return withDuration(async () => {
+        // Agents sometimes wrap the regex in quotes (e.g. `"extensions"`), which
+        // grep treats as literal quote chars and matches nothing. Strip one pair
+        // of matching outer quotes so the search behaves as the caller intended.
+        const normalized = stripOuterQuotes(pattern);
+        const searchPattern = normalized.pattern;
+
         const searchPath = path ?? ".";
         const skip = offset ?? 0;
         const take = limit ?? DEFAULT_LIMIT;
@@ -339,8 +370,8 @@ export const createGrepTool = () => {
         };
 
         const rawOutput = await runSearchCommand(
-          buildRgCommand(pattern, searchPath, searchOptions),
-          buildGrepCommand(pattern, searchPath, searchOptions)
+          buildRgCommand(searchPattern, searchPath, searchOptions),
+          buildGrepCommand(searchPattern, searchPath, searchOptions)
         );
 
         const lines = rawOutput
@@ -349,9 +380,13 @@ export const createGrepTool = () => {
           .filter((line) => line.length > 0);
 
         if (lines.length === 0) {
+          const hint = normalized.hadQuotes
+            ? `
+(no matches) — note: pattern contained quote characters (" or '); grep matches them literally, so a quoted pattern like "extensions" will not match bare extensions. Retry without the surrounding quotes if you meant a plain word.`
+            : "";
           return {
             matches: [] as { file: string; lineNumber: number; content: string }[],
-            content: "",
+            content: hint.trim(),
             offset: skip,
             limit: take,
             cachedOutputPath: null,
