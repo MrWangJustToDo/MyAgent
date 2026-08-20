@@ -20,7 +20,7 @@ import { FileSync } from "./file-sync.js";
 import { getLanguageIdFromPath } from "./language-map.js";
 import { LspManager, type LspServerConfigRecord } from "./lsp-manager.js";
 import { MAX_AUTO_DIAGNOSTIC_LINES } from "./shared/constants.js";
-import { DIAGNOSTIC_SETTLE_DELAY_MS, AUTO_DIAG_SERVER_WAIT_MS } from "./shared/timing.js";
+import { AUTO_DIAG_SERVER_WAIT_MS, AUTO_DIAG_SETTLE_POLL_MS, AUTO_DIAG_SETTLE_TIMEOUT_MS } from "./shared/timing.js";
 import { lspTextToModelOutput } from "./shared/tool-output.js";
 import { createCodeActionsTool } from "./tools/code-actions.js";
 import { createCodeOverviewTool } from "./tools/code-overview.js";
@@ -443,12 +443,18 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
     const client = await mgr.waitForClient(languageId, AUTO_DIAG_SERVER_WAIT_MS);
     if (!client) return;
 
-    // Wait briefly for the LSP to publish updated diagnostics.
-    await new Promise((r) => setTimeout(r, DIAGNOSTIC_SETTLE_DELAY_MS));
-
+    // Wait for the LSP to publish updated diagnostics. Analysis latency grows
+    // with project size (monorepo roots are slower than isolated dirs), so poll
+    // until errors appear or the timeout elapses instead of a single fixed wait.
     const uri = mgr.getFileUri(path);
-    const diagnostics = mgr.getDiagnostics(uri);
-    const errors = (diagnostics as { severity?: number }[]).filter((d) => d.severity === 1);
+    const deadline = Date.now() + AUTO_DIAG_SETTLE_TIMEOUT_MS;
+    let errors: { severity?: number }[] = [];
+    for (;;) {
+      const diagnostics = mgr.getDiagnostics(uri);
+      errors = (diagnostics as { severity?: number }[]).filter((d) => d.severity === 1);
+      if (errors.length > 0 || Date.now() >= deadline) break;
+      await new Promise((r) => setTimeout(r, AUTO_DIAG_SETTLE_POLL_MS));
+    }
 
     if (errors.length === 0) return;
 
