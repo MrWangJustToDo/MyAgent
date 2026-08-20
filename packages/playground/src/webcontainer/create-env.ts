@@ -3,6 +3,7 @@ import { WebContainer } from "@webcontainer/api";
 
 import { createWebContainerFs } from "./create-fs.js";
 import { createProxiedFetch, resolveFetchProxyUrl, setFetchProxyUrl } from "./create-proxy-fetch.js";
+import { locateTreeSitterGrammar } from "./locate-grammar.js";
 import { mimeFromPath } from "./mime.js";
 import { execWebContainerCommand, runWebContainerCommand, startWebContainerCommand } from "./run-command.js";
 
@@ -186,6 +187,7 @@ export async function createWebContainerEnv(options: CreateWebContainerEnvOption
     // Must be a real server proxy — WebContainer outbound is still CORS-limited.
     fetch: createProxiedFetch(),
     getMimeType: async (filePath) => mimeFromPath(filePath),
+    locateTreeSitterGrammar,
     destroy: async () => {
       await destroyAllCommandJobs();
       // WebContainer API does not expose a stable teardown; drop references.

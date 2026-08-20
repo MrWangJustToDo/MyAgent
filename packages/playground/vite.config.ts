@@ -6,6 +6,7 @@ import { fetchProxyPlugin } from "./vite-plugins/fetch-proxy.js";
 import { stubNodeBuiltins } from "./vite-plugins/stub-node-builtins.js";
 
 const nodePathShim = fileURLToPath(new URL("./shims/node-path.ts", import.meta.url));
+const treeSitterWasms = fileURLToPath(new URL("./node_modules/tree-sitter-wasms", import.meta.url));
 
 /**
  * WebContainers need SharedArrayBuffer → cross-origin isolation.
@@ -24,6 +25,7 @@ export default defineConfig({
       // keep path alias for packages that resolve without the plugin first
       "node:path": nodePathShim,
       path: nodePathShim,
+      "tree-sitter-wasms": treeSitterWasms,
     },
     // One chalk instance so force-chalk-color covers Ink + @my-agent/app
     dedupe: ["ink", "@my-react/react-terminal", "ink-stream-markdown", "chalk"],
