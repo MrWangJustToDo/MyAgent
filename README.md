@@ -166,6 +166,12 @@ Plan Mode (`/plan`, `Shift+Tab`) — explore → review → Build → forced ret
 ![Plan — building](plan-build.png)
 ![Plan — preview](plan-preview.png)
 
+### Context Compaction
+
+Auto/reactive LLM summarization compresses the conversation into a streaming summary — cut-away transcripts are archived under `.agents/transcripts/` for later inspection.
+
+![Compact — summary stream](compact.png)
+
 ### Workspace Browser
 
 Press `Ctrl+E` for a full-screen workspace panel: file tree with git status badges, scrollable **Preview** (`CodeView`), and **Diff vs HEAD** (`DiffView`). **Tab** toggles preview/diff; **←→** moves focus; **↑↓** scrolls; **R** refreshes.
