@@ -73,6 +73,8 @@ class DefaultExtensionUI implements ExtensionUI {
   private subscribers = new Map<string, Set<(data: unknown) => void>>();
   /** Retained status state so late subscribers can reconcile (e.g. after bootstrap). */
   private statusMap = new Map<string, string>();
+  /** status key → owning extension id, so a disabled extension's status can be removed. */
+  private statusOwners = new Map<string, string>();
 
   notify(type: string, data: unknown): void {
     const handlers = this.subscribers.get(type);
@@ -102,6 +104,38 @@ class DefaultExtensionUI implements ExtensionUI {
     this.statusMap.set(key, text);
     // Publish a `set-status` notification the host UI renders in its status bar.
     this.notify("set-status", { key, text });
+  }
+
+  /**
+   * Record which extension owns a status key, then set it. Used by the runner
+   * wrapper so a disabled extension's status can be cleared on teardown.
+   */
+  setStatusWithOwner(key: string, text: string, ownerId: string): void {
+    this.statusOwners.set(key, ownerId);
+    this.setStatus(key, text);
+  }
+
+  /**
+   * Remove every status key owned by `ownerId` and notify the host, so a
+   * disabled extension's footer state does not linger.
+   */
+  clearStatusByOwner(ownerId: string): void {
+    for (const [key, owner] of this.statusOwners) {
+      if (owner !== ownerId) continue;
+      this.statusOwners.delete(key);
+      this.statusMap.delete(key);
+      // Empty text signals the host to remove the status entry.
+      this.notify("set-status", { key, text: "" });
+    }
+  }
+
+  /** Remove all status entries and notify the host. */
+  clearAllStatus(): void {
+    for (const key of this.statusMap.keys()) {
+      this.statusMap.delete(key);
+      this.notify("set-status", { key, text: "" });
+    }
+    this.statusOwners.clear();
   }
 
   getStatus(): Readonly<Record<string, string>> {
@@ -158,6 +192,21 @@ export class ExtensionRunner {
 
   getUI(): ExtensionUI {
     return this.ui;
+  }
+
+  /**
+   * Wrap the shared UI for a single extension so status writes are attributed
+   * to that extension (used to clear its footer state when it is disabled).
+   * All other UI surface (notify / subscribe / getStatus / theme) is shared.
+   */
+  private wrapUi(ownerId: string): ExtensionUI {
+    return {
+      notify: (type, data) => this.ui.notify(type, data),
+      subscribe: (type, handler) => this.ui.subscribe(type, handler),
+      setStatus: (key, text) => this.ui.setStatusWithOwner(key, text, ownerId),
+      getStatus: () => this.ui.getStatus(),
+      theme: this.ui.theme,
+    };
   }
 
   /**
@@ -281,6 +330,9 @@ export class ExtensionRunner {
       }
     }
     this.unregisterInstanceArtifacts(instance);
+    // Clear any footer/status entries this extension wrote so they do not
+    // linger after the extension is disabled (e.g. `LSP: typescript ready`).
+    this.ui.clearStatusByOwner(instance.api.id);
     instance.state = "inactive";
   }
 
@@ -294,6 +346,7 @@ export class ExtensionRunner {
     this.toolOwners.clear();
     this.commandOwners.clear();
     this.turnContextProviders.clear();
+    this.ui.clearAllStatus();
   }
 
   /** Read-only snapshot of loaded extensions for management commands. */
@@ -424,7 +477,7 @@ export class ExtensionRunner {
       },
 
       events: this.eventBus,
-      ui: this.ui,
+      ui: this.wrapUi(api.id),
 
       logger: {
         info: (msg: string) => console.log(`[extension:${api.id}] ${msg}`),

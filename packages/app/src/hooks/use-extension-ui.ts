@@ -77,7 +77,10 @@ export function useExtensionUIBridge(): void {
         const payload = event.payload;
         switch (payload.type) {
           case "set-status":
-            ui.setStatusText(payload.text);
+            // Empty text from the extension runner means "remove this status entry"
+            // (a disabled extension had its footer state cleared). Normalize to null
+            // so the footer treats it as absent rather than a blank string.
+            ui.setStatusText(payload.text ? payload.text : null);
             break;
           case "notify":
             useUserInput.getActions().setInputFeedback(payload.message, payload.level ?? "info");
