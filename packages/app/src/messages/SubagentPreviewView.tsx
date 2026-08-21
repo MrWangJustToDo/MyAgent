@@ -3,10 +3,12 @@ import { useMemo } from "react";
 
 import { Spinner } from "../components/Spinner.js";
 import { TranscriptDisplayContext } from "../context/transcript-display-context.js";
+import { useSize } from "../hooks";
 import { useSubagentMessages } from "../hooks/use-subagent-messages.js";
 import { useTranscriptDisplay } from "../hooks/use-transcript-display.js";
 import { COLORS } from "../theme/colors.js";
 import { getMessages } from "../utils/get-messages.js";
+import { truncateTextToMaxLines } from "../utils/user-message-lines.js";
 
 import { MessageView } from "./MessageView.js";
 
@@ -22,6 +24,9 @@ const PANEL_PROMPT_MAX_CHARS = 280;
 
 /** Max flattened rows after the prompt (tools / text) to keep the overlay usable. */
 const PANEL_ACTIVITY_TAIL = 48;
+
+/** Max physical rows for the first user message (the task prompt), which can be huge when a task analysis fails. */
+const PANEL_PROMPT_MAX_LINES = 60;
 
 function truncatePromptText(text: string, maxChars: number): string {
   const trimmed = text.trim();
@@ -49,7 +54,8 @@ function collapseUserPrompts(messages: UIMessage[]): UIMessage[] {
 
 function selectPanelPreviewMessages(
   messages: UIMessage[],
-  mode: TranscriptDisplayMode
+  mode: TranscriptDisplayMode,
+  textWidth: number
 ): {
   prompt: UIMessage | null;
   activity: UIMessage[];
@@ -60,7 +66,22 @@ function selectPanelPreviewMessages(
   const all = [...staticMessages, ...dynamicMessages];
 
   const firstUserIndex = all.findIndex((m) => m.role === "user");
-  const prompt = firstUserIndex >= 0 ? all[firstUserIndex]! : null;
+  let prompt = firstUserIndex >= 0 ? all[firstUserIndex]! : null;
+  if (prompt) {
+    // Cap the first user message (the task prompt) to a bounded height so a
+    // huge prompt (e.g. a failed task analysis echoing the full context) cannot
+    // overflow the panel. Rendering goes through UserMessageView whose text
+    // column is screenWidth - 6, so truncate at that exact width.
+    prompt = {
+      ...prompt,
+      parts: prompt.parts.map((part) => {
+        if (part.type !== "text") return part;
+        const content = (part as TextPart).content ?? "";
+        const { text } = truncateTextToMaxLines(content, textWidth, PANEL_PROMPT_MAX_LINES);
+        return { ...part, content: text };
+      }),
+    };
+  }
   const rest = all.filter((_, i) => i !== firstUserIndex);
   const omittedEarlier = rest.length > PANEL_ACTIVITY_TAIL;
 
@@ -80,9 +101,14 @@ export const SubagentPreviewView = ({ subagentId }: SubagentPreviewViewProps) =>
 
   const mode = useTranscriptDisplay((s) => s.mode);
 
+  const screenWidth = useSize((s) => s.state.screenWidth);
+  // Align with UserMessageView: contentWidth = screenWidth - 2, text column
+  // subtracts the 4-wide "> " prefix, so text width is screenWidth - 6.
+  const promptTextWidth = Math.max(1, screenWidth - 6);
+
   const { prompt, activity, omittedEarlier } = useMemo(
-    () => selectPanelPreviewMessages(messages, mode),
-    [messages, mode]
+    () => selectPanelPreviewMessages(messages, mode, promptTextWidth),
+    [messages, mode, promptTextWidth]
   );
 
   if (!prompt && activity.length === 0) {
