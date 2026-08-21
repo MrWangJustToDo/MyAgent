@@ -662,23 +662,35 @@ Validate: `pnpm --filter @my-agent/core run validate:lsp-parity` and `validate:l
 
 ## Skill System
 
-Skills provide on-demand domain knowledge via a two-layer injection pattern.
+Skills provide on-demand domain knowledge via progressive disclosure — only the skill
+**index** (name + description) is always visible; full instructions load on demand.
 
-| Layer | Purpose | Tokens |
-|-------|---------|--------|
-| Layer 1 | `list_skills` tool for discovery | ~100/skill |
-| Layer 2 | `load_skill` tool for full content | ~2000+/skill |
+| Layer | Mechanism | Tokens |
+|-------|-----------|--------|
+| Index | `<skills>` injected into per-turn `<extension_context>` by `my-agent-skills` | ~100/skill |
+| Discovery | `list_skills` tool | ~100/skill |
+| Content | `load_skill` tool for full SKILL.md | ~2000+/skill |
 
-Skills are defined in `SKILL.md` files with YAML frontmatter and loaded from `.agents/skills/` by default.
+Skills are defined in `SKILL.md` files with YAML frontmatter (name + description required).
+The built-in **`my-agent-skills` extension** (`config.skills`, default on) registers the
+`list_skills`/`load_skill` tools and injects the available-skills index into each turn's
+`<extension_context>` — it no longer lives in the frozen system prompt.
 
 ```
 packages/core/src/agent/skills/
+├── extension.ts         # Built-in Skills extension (my-agent-skills)
 ├── skill-loader.ts      # Parse SKILL.md files
 ├── skill-registry.ts    # Manage loaded skills
-├── list-skills-tool.ts  # list_skills factory
-├── load-skill-tool.ts   # load_skill factory
+├── list-skills-tool.ts  # list_skills factory (legacy, kept for interop)
+├── load-skill-tool.ts   # load_skill factory (legacy, kept for interop)
 └── index.ts
 ```
+
+**Config:** `ManagedAgentConfig.skills` accepts `boolean` (default `true`) or
+`{ toolsDisabled?, indexDisabled? }`. `skillDirs` adds scan directories (defaults to
+`AGENT_SKILL_DIRS`, `~/.agents/skills`, `.agents/skills`) — e.g. add `.cursor/skills` or
+`.opencode/skills` to reuse skills written for other harnesses. Validate:
+`pnpm --filter @my-agent/core run validate:skills-extension`.
 
 ## Context Compaction System
 
@@ -843,7 +855,7 @@ packages/
 │   │   ├── memory/                    # Memory management
 │   │   ├── plan/                      # Plan domain + plan tool factories
 │   │   ├── persistence/               # Disk session persistence (SessionStore)
-│   │   ├── skills/                    # Skill loading + list/load skill tools
+│   │   ├── skills/                    # Skill loading + built-in Skills extension (my-agent-skills)
 │   │   ├── stream/                    # Package-wide stream helpers (errors, text extract)
 │   │   ├── subagent/                  # Subagent spawning + task tool
 │   │   ├── todo-manager/              # Todo tracking + todo tool

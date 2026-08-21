@@ -14,8 +14,6 @@ import { createWriteFileTool } from "./write-file-tool.js";
 import type { createAskUserTool } from "./ask-user-tool.js";
 import type { UsageTracker } from "../../runtime-types/hosts.js";
 import type { createCompletePlanTool, createCreatePlanTool, createUpdatePlanTool } from "../plan/create-plan-tool.js";
-import type { createListSkillsTool } from "../skills/list-skills-tool.js";
-import type { createLoadSkillTool } from "../skills/load-skill-tool.js";
 import type { createTaskTool } from "../subagent/task-tool.js";
 import type { createTodoTool } from "../todo-manager/todo-tool.js";
 
@@ -34,8 +32,6 @@ export type Tools = ToolsRecord & {
 
   todo?: ReturnType<typeof createTodoTool>;
   task?: ReturnType<typeof createTaskTool>;
-  list_skills?: ReturnType<typeof createListSkillsTool>;
-  load_skill?: ReturnType<typeof createLoadSkillTool>;
   ask_user?: ReturnType<typeof createAskUserTool>;
   create_plan?: ReturnType<typeof createCreatePlanTool>;
   update_plan?: ReturnType<typeof createUpdatePlanTool>;

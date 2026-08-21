@@ -384,3 +384,16 @@ export { extractToolPath, parseToolCallArgs } from "./agent/lsp/shared/parse-too
 export { insertDot, shouldSyntheticTrigger, syntheticDotLocks } from "./agent/lsp/shared/synthetic-dot.js";
 export { DIAGNOSTIC_SETTLE_DELAY_MS, SYNTHETIC_DOT_SETTLE_DELAY_MS } from "./agent/lsp/shared/timing.js";
 export { lspTextToModelOutput } from "./agent/lsp/shared/tool-output.js";
+
+// ============================================================================
+// Built-in Skills extension (internal validation exports — not part of public API)
+// ============================================================================
+export {
+  SkillRegistry,
+  SkillLoader,
+  createSkillsExtension,
+  skillsExtension,
+  type SkillsExtensionConfig,
+  type CreateSkillsExtensionOptions,
+} from "./agent/skills";
+export { SKILL_DIRS_ENV_VAR, getDefaultSkillDirs } from "./managers/agent-manager.js";

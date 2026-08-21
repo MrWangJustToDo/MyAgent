@@ -86,7 +86,7 @@ import type { SessionStore } from "../agent/persistence/session-store.js";
 import type { SessionData } from "../agent/persistence/types.js";
 import type { BeginPlanExecutionResult, PlanModePhase, PlanModeState } from "../agent/plan/plan-mode-controller.js";
 import type { AgentRunner } from "../agent/runner/agent-runner.js";
-import type { SkillRegistry } from "../agent/skills";
+import type { SkillRegistry, SkillsExtensionConfig } from "../agent/skills";
 import type { TodoManager } from "../agent/todo-manager";
 import type { ToolsRecord } from "../agent/tools/runtime/tools-record.js";
 import type { AgentToolConfig } from "../agent/tools/tool-config.js";
@@ -123,6 +123,12 @@ export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
   modelBaseURL?: string;
   modelApiKey?: string;
   setUp?: (instance: T) => T;
+  /**
+   * Additional skill directories to scan (before defaults). Relative paths resolve
+   * against CoreEnv `rootPath`. When unset, defaults to `AGENT_SKILL_DIRS`,
+   * `~/.agents/skills`, and `.agents/skills`. e.g. add `.cursor/skills` or
+   * `.opencode/skills` to reuse skills written for other harnesses.
+   */
   skillDirs?: string[];
   compaction?: CompactionConfigInput;
   mcpConfigPath?: string;
@@ -145,6 +151,12 @@ export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
    * object to fine-tune which tools are registered (see {@link LspExtensionConfig}).
    */
   lsp?: boolean | LspExtensionConfig;
+  /**
+   * Enable the built-in Skills extension (default: true). Set to `false` to disable
+   * skill tools (list_skills, load_skill) and the available-skills index in turn
+   * context. Pass an object to fine-tune behavior (see {@link SkillsExtensionConfig}).
+   */
+  skills?: boolean | SkillsExtensionConfig;
   /**
    * Extra filesystem directories to scan for extensions (before env / defaults).
    * Relative paths resolve against CoreEnv `rootPath`.
@@ -798,7 +810,6 @@ export class ManagedAgent {
     this.frozenSystemPrompt = buildFrozenSystemPrompt({
       config: this.agentConfig,
       agentDocContent: this.agentDocContent,
-      skillRegister: this.skillRegister,
       memoryContent: this.getMemoryContent(),
     });
     this.systemPromptFrozen = true;

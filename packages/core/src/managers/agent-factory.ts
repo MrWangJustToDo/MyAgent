@@ -8,8 +8,7 @@ import { McpManager } from "../agent/mcp/manager.js";
 import { MemoryManager } from "../agent/memory/memory-manager.js";
 import { SessionStore } from "../agent/persistence/session-store.js";
 import { createCompletePlanTool, createCreatePlanTool, createUpdatePlanTool } from "../agent/plan/create-plan-tool.js";
-import { createListSkillsTool } from "../agent/skills/list-skills-tool.js";
-import { createLoadSkillTool } from "../agent/skills/load-skill-tool.js";
+import { createSkillsExtension } from "../agent/skills/extension.js";
 import { SkillRegistry } from "../agent/skills/skill-registry.js";
 import { createTaskTool } from "../agent/subagent/task-tool.js";
 import { TodoManager } from "../agent/todo-manager";
@@ -124,16 +123,18 @@ export async function buildManagedAgent({
 
   let mcpLoadResult: McpConfigLoadResult | null = null;
 
+  // Shared across bootstrap blocks: populated in the skill-loading block, consumed
+  // by the built-in Skills extension in the extension-loading block.
+  let skillRegistry: SkillRegistry | null = null;
+
   if (!parentId) {
-    const skillRegistry = new SkillRegistry({ rootPath: fsRootPath });
+    skillRegistry = new SkillRegistry({ rootPath: fsRootPath });
     managed.setSkillRegister(skillRegistry);
 
     const dirsToLoad = skillDirs ?? (await getDefaultSkillDirs());
     await skillRegistry.loadFromDirectories(dirsToLoad);
     log.info("skill", `Loaded ${skillRegistry.size} skills from ${dirsToLoad.length} directories`);
 
-    toolsRecord.list_skills = createListSkillsTool({ skillRegistry });
-    toolsRecord.load_skill = createLoadSkillTool({ skillRegistry });
     toolsRecord.task = createTaskTool({ parentAgentId: managed.id, manager });
 
     const compactionInput = { ...compaction };
@@ -224,6 +225,20 @@ export async function buildManagedAgent({
         log.info("system", `Built-in extension loaded: ${api.id}`);
       } catch (err) {
         log.warn("system", `Failed to load built-in LSP extension: ${err}`);
+      }
+    }
+
+    // Built-in Skills extension (enabled unless explicitly disabled).
+    // `config.skills` may be `true`/undefined (defaults) or a fine-grained
+    // SkillsExtensionConfig object ({ toolsDisabled, indexDisabled }).
+    if (config.skills !== false && skillRegistry) {
+      try {
+        const skillsConfig = typeof config.skills === "object" && config.skills !== null ? config.skills : undefined;
+        const api = createSkillsExtension({ skillRegistry, config: skillsConfig });
+        await extensionRunner.loadExtension(api);
+        log.info("system", `Built-in extension loaded: ${api.id}`);
+      } catch (err) {
+        log.warn("system", `Failed to load built-in Skills extension: ${err}`);
       }
     }
   }

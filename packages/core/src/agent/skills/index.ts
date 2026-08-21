@@ -7,6 +7,14 @@ export { SkillLoader } from "./skill-loader.js";
 // Skill registry
 export { SkillRegistry } from "./skill-registry.js";
 
+// Built-in skills extension
+export {
+  createSkillsExtension,
+  skillsExtension,
+  type SkillsExtensionConfig,
+  type CreateSkillsExtensionOptions,
+} from "./extension.js";
+
 // Skill tools
 export {
   createListSkillsTool,

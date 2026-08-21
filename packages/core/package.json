@@ -110,7 +110,8 @@
     "validate:lsp-parity": "pnpm run build && node scripts/validate-lsp-parity.mjs",
     "validate:lsp-tool-toggle": "pnpm run build && node scripts/validate-lsp-tool-toggle.mjs",
     "validate:lsp-interceptor": "pnpm run build && node scripts/validate-lsp-interceptor.mjs",
-    "validate:lsp-server-probe": "pnpm run build && node scripts/validate-lsp-server-probe.mjs"
+    "validate:lsp-server-probe": "pnpm run build && node scripts/validate-lsp-server-probe.mjs",
+    "validate:skills-extension": "pnpm run build && node scripts/validate-skills-extension.mjs"
   },
   "dependencies": {
     "@tanstack/ai": "^0.44.1",

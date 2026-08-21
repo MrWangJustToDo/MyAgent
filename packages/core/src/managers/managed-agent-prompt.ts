@@ -1,14 +1,12 @@
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/prompt-cache.js";
 
 import type { AgentConfig } from "./agent-types.js";
-import type { SkillRegistry } from "../agent/skills";
 
 export { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/prompt-cache.js";
 
 export interface SystemPromptInput {
   config: AgentConfig;
   agentDocContent: string;
-  skillRegister: SkillRegistry | null;
   memoryContent: string;
 }
 
@@ -28,18 +26,6 @@ export function buildFrozenSystemPrompt(input: SystemPromptInput): string | unde
         "",
         input.agentDocContent,
         "</project_instructions>",
-      ].join("\n")
-    );
-  }
-
-  if (input.skillRegister && input.skillRegister.size > 0) {
-    parts.push(
-      [
-        "<skills>",
-        "Use `load_skill` to load any of these skills when relevant to the user's task:",
-        "",
-        input.skillRegister.getDescriptions(),
-        "</skills>",
       ].join("\n")
     );
   }
