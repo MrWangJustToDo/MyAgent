@@ -147,7 +147,8 @@ that help you complete specific types of tasks.`,
       const lines = skillRegistry.list().map((s) => `- ${s.name}: ${s.description}`);
       return [
         "<skills>",
-        "Use `load_skill` to load any of these skills when relevant to the user's task:",
+        "Use `load_skill` to load any of these skills when relevant to the user's task.",
+        "The index lists name + description summaries only — do not infer or follow a skill's instructions until its full content has been loaded via `load_skill`.",
         "",
         ...lines,
         "</skills>",
