@@ -221,6 +221,16 @@ export const useAutocomplete = createState(() => ({ ...initialState }), {
         }
 
         const value = selected.optionValue ?? selected.label;
+        // `insertOnSelect` commands keep the input editable after selecting an
+        // option (fill `/cmd <option> `) so the user can append follow-up text
+        // before submitting — e.g. /skill <name> + instructions. Other commands
+        // (e.g. /resume) execute immediately on selection.
+        if (command.insertOnSelect) {
+          return {
+            type: "input",
+            value: `/${command.name} ${value} `,
+          };
+        }
         return {
           type: "execute",
           value: value ? `/${command.name} ${value}` : `/${command.name}`,

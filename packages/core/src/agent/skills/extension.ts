@@ -184,12 +184,17 @@ that help you complete specific types of tasks.`,
     },
     // Inject the full skill body into the session so the agent sees the
     // workflow and acts on it (matches opencode's skill-as-command template).
+    // Any text appended after /skill <name> is merged into the injected message
+    // so the user can specify what they want done with the skill.
     injectMessage: async (args) => {
       const name = args[0]?.trim();
       if (!name) return undefined;
       const skill = skillRegistry.get(name);
       if (!skill) return undefined;
-      return `<skill name="${skill.name}">\n${skill.body}\n</skill>`;
+      const followup = args.slice(1).join(" ").trim();
+      const body = `<skill name="${skill.name}">\n${skill.body}\n</skill>`;
+      if (!followup) return body;
+      return `${body}\n\nUser request with this skill:\n${followup}`;
     },
   });
 

@@ -179,6 +179,11 @@ assert.ok(injected.includes("<memory"), "/memory injects <memory>-wrapped conten
 assert.ok(injected.includes("user-prefers-tabs"), "/memory injects the memory name");
 assert.ok(injected.includes("Always use tabs"), "/memory injects the full memory body");
 
+// Follow-up text after /memory <name> is merged into the injected message.
+const injectedWithFollowup = await memoryCmd.injectMessage(["user-prefers-tabs", "apply this rule"], confirm);
+assert.ok(injectedWithFollowup.includes("Always use tabs"), "follow-up inject still includes the memory body");
+assert.ok(injectedWithFollowup.includes("apply this rule"), "follow-up text is merged into the injected message");
+
 // Unknown memory -> error message, no injection.
 const unknownMsg = await memoryCmd.execute(["does-not-exist"]);
 assert.ok(unknownMsg.includes("Unknown memory"), "/memory <unknown> returns an error message");

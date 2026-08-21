@@ -21,6 +21,11 @@ function extensionSlashCommand(session: AgentSession, name: string, description:
     // Extensions may expose browseable secondary-menu options (e.g. /skill <name>,
     // /memory <name>) fetched via dispatch — mirrors built-in /resume's getOptions.
     allowCustomInput: true,
+    // Selecting an option fills `/cmd <option> ` so the user can append follow-up
+    // text (e.g. /skill <name> + instructions) before sending. Extension commands
+    // are content-loading by nature (skill/memory bodies), so a follow-up prompt
+    // is the common intent — unlike /resume which acts immediately on selection.
+    insertOnSelect: true,
     getOptions: async () => {
       const result = await session.dispatch({
         type: "extension.getCommandOptions",

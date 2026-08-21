@@ -244,6 +244,8 @@ creating a duplicate (check memory_list first).`,
       return `Loaded memory '${match.name}'. Agent will now act on it.`;
     },
     // Inject the full memory body into the session so the agent sees it.
+    // Any text appended after /memory <name> is merged into the injected message
+    // so the user can specify what they want done with the memory.
     injectMessage: async (args) => {
       const name = args[0]?.trim();
       if (!name) return undefined;
@@ -253,7 +255,10 @@ creating a duplicate (check memory_list first).`,
         memories.find((m) => m.filename === name) ??
         memories.find((m) => m.filename.replace(/\.md$/, "") === name);
       if (!match) return undefined;
-      return `<memory name="${match.name.replace(/"/g, "&quot;")}" type="${match.type}">\n${match.description}\n\n${match.body}\n</memory>`;
+      const followup = args.slice(1).join(" ").trim();
+      const body = `<memory name="${match.name.replace(/"/g, "&quot;")}" type="${match.type}">\n${match.description}\n\n${match.body}\n</memory>`;
+      if (!followup) return body;
+      return `${body}\n\nUser request with this memory:\n${followup}`;
     },
   });
 

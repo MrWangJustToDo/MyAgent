@@ -37,4 +37,11 @@ export interface Command {
   immediate?: boolean;
   getOptions?: (ctx?: CommandContext) => CommandOption[] | Promise<CommandOption[]>;
   allowCustomInput?: boolean;
+  /**
+   * Selecting a secondary-menu option fills `/cmd <option> ` into the input
+   * (instead of executing immediately), letting the user append text before
+   * submitting. Use for commands where an option is a prefix for a larger
+   * request (e.g. /skill <name> + follow-up instructions).
+   */
+  insertOnSelect?: boolean;
 }

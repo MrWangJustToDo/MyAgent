@@ -154,6 +154,11 @@ assert.ok(injected.includes("<skill"), "/skill injects <skill>-wrapped content")
 assert.ok(injected.includes(first.name), "/skill injects the skill name");
 assert.ok(injected.includes(loaded.body), "/skill injects the full skill body");
 
+// Follow-up text after /skill <name> is merged into the injected message.
+const injectedWithFollowup = await skillCmd.injectMessage([first.name, "refactor the loader"], confirm);
+assert.ok(injectedWithFollowup.includes(loaded.body), "follow-up inject still includes the skill body");
+assert.ok(injectedWithFollowup.includes("refactor the loader"), "follow-up text is merged into the injected message");
+
 // Unknown skill -> error message, no injection.
 const unknownMsg = await skillCmd.execute(["does-not-exist"]);
 assert.ok(unknownMsg.includes("Unknown skill"), "/skill <unknown> returns an error message");
