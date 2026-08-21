@@ -169,7 +169,17 @@ export async function dispatchLocalAgentSessionCommand(
         if (!cmd) {
           return { ok: false, code: "not_found", error: `Extension command "/${command.name}" not found` };
         }
-        const message = await cmd.execute(command.args ?? []);
+        const args = command.args ?? [];
+        const message = await cmd.execute(args);
+        // Commands may opt into injecting a user message into the session,
+        // driving the agent to act on the command (e.g. /skill <name>).
+        if (cmd.injectMessage) {
+          const inject = await cmd.injectMessage(args, message);
+          if (inject && inject.trim().length > 0) {
+            if (!chat) return { ok: false, code: "failed", error: "Chat controller not initialized" };
+            await chat.sendMessage(inject);
+          }
+        }
         return { ok: true, data: message ? { message } : undefined };
       }
       case "session.resume": {

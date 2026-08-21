@@ -155,5 +155,36 @@ that help you complete specific types of tasks.`,
     });
   }
 
+  // `/skill <name>` — load a skill by expanding its full body into the session as a
+  // user message, driving the agent to act on the skill (opencode-style command).
+  ctx.registerCommand({
+    name: "skill",
+    description: "Load a skill and let the agent act on it: /skill <name>. With no name, lists available skills.",
+    execute: async (args) => {
+      const name = args[0]?.trim();
+      if (!name) {
+        const available = skillRegistry.names();
+        return available.length > 0 ? `Available skills: ${available.join(", ")}` : "No skills are currently loaded.";
+      }
+      const skill = skillRegistry.get(name);
+      if (!skill) {
+        const available = skillRegistry.names();
+        const availableList =
+          available.length > 0 ? `Available skills: ${available.join(", ")}` : "No skills are currently loaded.";
+        return `Unknown skill '${name}'. ${availableList}`;
+      }
+      return `Loaded skill '${skill.name}'. Agent will now act on it.`;
+    },
+    // Inject the full skill body into the session so the agent sees the
+    // workflow and acts on it (matches opencode's skill-as-command template).
+    injectMessage: async (args) => {
+      const name = args[0]?.trim();
+      if (!name) return undefined;
+      const skill = skillRegistry.get(name);
+      if (!skill) return undefined;
+      return `<skill name="${skill.name}">\n${skill.body}\n</skill>`;
+    },
+  });
+
   ctx.logger.info(`Skills extension activated (${skillRegistry.size} skills)`);
 }

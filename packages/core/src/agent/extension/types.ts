@@ -49,6 +49,14 @@ export interface ExtensionCommand {
   name: string;
   description: string;
   execute: (args: string[]) => Promise<string | void>;
+  /**
+   * Optional: when set, the dispatch layer injects the returned text as a user
+   * message into the session (via chat.sendMessage) after `execute` resolves,
+   * triggering a model turn. Use this to have a slash command drive the agent
+   * (e.g. `/skill <name>` expanding the skill body into the conversation).
+   * Returning undefined (or an empty string) skips injection.
+   */
+  injectMessage?: (args: string[], result: string | void) => string | undefined | Promise<string | undefined>;
 }
 
 // ============================================================================

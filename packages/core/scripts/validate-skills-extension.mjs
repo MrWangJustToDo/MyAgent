@@ -6,6 +6,7 @@
  * - createSkillsExtension / skillsExtension are exported and produce an extension API
  * - activation registers list_skills / load_skill tools (ExtensionToolDefinition)
  * - activation registers a turn-context provider that emits the <skills> index
+ * - activation registers a /skill command that injects the full skill body
  * - skillsExtension config can disable tools / index independently
  * - ManagedAgentConfig.skills accepts boolean | SkillsExtensionConfig (typecheck)
  *
@@ -81,12 +82,13 @@ assert.equal(apiFromFactory.id, "my-agent-skills", "skillsExtension factory id i
 // 3. Activation registers tools + turn-context provider
 // ---------------------------------------------------------------------------
 const registeredTools = [];
+const registeredCommands = [];
 let turnContextProvider = null;
 
 const mockCtx = {
   z: (await import("zod")).z,
   registerTool: (def) => registeredTools.push(def),
-  registerCommand: () => {},
+  registerCommand: (cmd) => registeredCommands.push(cmd),
   registerInterceptor: () => () => {},
   registerTurnContextProvider: (fn) => {
     turnContextProvider = fn;
@@ -121,15 +123,41 @@ assert.ok(loadResult.content.includes(first.name), "load_skill content includes 
 await assert.rejects(() => loadTool.execute({ name: "does-not-exist" }, { toolCallId: "t3" }), /Unknown skill/);
 
 // ---------------------------------------------------------------------------
+// 3b. /skill command registration + injection semantics
+// ---------------------------------------------------------------------------
+const skillCmd = registeredCommands.find((c) => c.name === "skill");
+assert.ok(skillCmd, "registers /skill command");
+assert.equal(typeof skillCmd.injectMessage, "function", "/skill command has injectMessage");
+
+// No args -> lists available skills in the UI message, no injection.
+const listMsg = await skillCmd.execute([]);
+assert.ok(listMsg.includes(first.name), "/skill with no args lists available skills");
+assert.equal(await skillCmd.injectMessage([], listMsg), undefined, "/skill with no args injects nothing");
+
+// With a known name -> UI confirmation + injects the full skill body.
+const confirm = await skillCmd.execute([first.name]);
+assert.ok(confirm.includes(first.name), "/skill <name> returns a confirmation");
+const injected = await skillCmd.injectMessage([first.name], confirm);
+assert.ok(injected.includes("<skill"), "/skill injects <skill>-wrapped content");
+assert.ok(injected.includes(first.name), "/skill injects the skill name");
+assert.ok(injected.includes(loaded.body), "/skill injects the full skill body");
+
+// Unknown skill -> error message, no injection.
+const unknownMsg = await skillCmd.execute(["does-not-exist"]);
+assert.ok(unknownMsg.includes("Unknown skill"), "/skill <unknown> returns an error message");
+assert.equal(await skillCmd.injectMessage(["does-not-exist"], unknownMsg), undefined, "unknown skill injects nothing");
+
+// ---------------------------------------------------------------------------
 // 4. Config semantics
 // ---------------------------------------------------------------------------
 const toolsOnlyApi = createSkillsExtension({ skillRegistry: registry, config: { indexDisabled: true } });
 let toolsOnlyProvider = null;
 const toolsOnlyTools = [];
+const toolsOnlyCommands = [];
 await toolsOnlyApi.activate({
   z: (await import("zod")).z,
   registerTool: (def) => toolsOnlyTools.push(def),
-  registerCommand: () => {},
+  registerCommand: (cmd) => toolsOnlyCommands.push(cmd),
   registerInterceptor: () => () => {},
   registerTurnContextProvider: (fn) => {
     toolsOnlyProvider = fn;
@@ -140,18 +168,27 @@ assert.ok(
   toolsOnlyTools.some((t) => t.name === "list_skills"),
   "indexDisabled still registers tools"
 );
+assert.ok(
+  toolsOnlyCommands.some((c) => c.name === "skill"),
+  "indexDisabled still registers /skill command"
+);
 assert.equal(toolsOnlyProvider, null, "indexDisabled removes turn-context provider");
 
 const indexOnlyApi = createSkillsExtension({ skillRegistry: registry, config: { toolsDisabled: true } });
 const indexOnlyTools = [];
+const indexOnlyCommands = [];
 await indexOnlyApi.activate({
   z: (await import("zod")).z,
   registerTool: (def) => indexOnlyTools.push(def),
-  registerCommand: () => {},
+  registerCommand: (cmd) => indexOnlyCommands.push(cmd),
   registerInterceptor: () => () => {},
   registerTurnContextProvider: () => () => {},
   logger: { info: () => {}, warn: () => {}, error: () => {} },
 });
 assert.equal(indexOnlyTools.length, 0, "toolsDisabled removes both tools");
+assert.ok(
+  indexOnlyCommands.some((c) => c.name === "skill"),
+  "toolsDisabled still registers /skill command"
+);
 
 console.log("skills-extension validation passed");
