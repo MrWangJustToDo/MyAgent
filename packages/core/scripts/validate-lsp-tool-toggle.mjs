@@ -17,28 +17,21 @@ import assert from "node:assert/strict";
 import { DEFAULT_DISABLED_LSP_TOOLS, createLspExtension, lspExtension } from "../dist/dev.mjs";
 
 // Default disabled set = the low-usage tools we skip to save per-turn context.
-assert.ok(
-  Array.isArray(DEFAULT_DISABLED_LSP_TOOLS),
-  "DEFAULT_DISABLED_LSP_TOOLS is an array"
-);
+assert.ok(Array.isArray(DEFAULT_DISABLED_LSP_TOOLS), "DEFAULT_DISABLED_LSP_TOOLS is an array");
 for (const name of DEFAULT_DISABLED_LSP_TOOLS) {
   assert.equal(typeof name, "string", "disabled tool names are strings");
 }
 
 // Must include the zero-usage tools identified from session telemetry.
-for (const tool of ["lsp_rename", "lsp_code_actions", "ast_search", "code_rewrite"]) {
-  assert.ok(
-    DEFAULT_DISABLED_LSP_TOOLS.includes(tool),
-    `default disabled set includes ${tool}`
-  );
+// ast_search/code_rewrite/code_overview are structural tree-sitter tools that
+// overlap with universal tools (grep/glob/tree) and lsp_symbols.
+for (const tool of ["lsp_rename", "lsp_code_actions", "ast_search", "code_rewrite", "code_overview"]) {
+  assert.ok(DEFAULT_DISABLED_LSP_TOOLS.includes(tool), `default disabled set includes ${tool}`);
 }
 
 // High-value tools must NOT be in the default disabled set.
-for (const tool of ["lsp_diagnostics", "lsp_hover", "lsp_definition", "lsp_references", "lsp_symbols", "code_overview"]) {
-  assert.ok(
-    !DEFAULT_DISABLED_LSP_TOOLS.includes(tool),
-    `default disabled set excludes ${tool}`
-  );
+for (const tool of ["lsp_diagnostics", "lsp_hover", "lsp_definition", "lsp_references", "lsp_symbols"]) {
+  assert.ok(!DEFAULT_DISABLED_LSP_TOOLS.includes(tool), `default disabled set excludes ${tool}`);
 }
 
 // createLspExtension / lspExtension produce an ExtensionAPI (accept optional config).

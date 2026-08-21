@@ -611,15 +611,14 @@ CLI local mode enables the built-in LSP extension when `ManagedAgentConfig.lsp !
 |------|---------|
 | `lsp_diagnostics` / `lsp_hover` / `lsp_definition` / `lsp_references` / `lsp_symbols` / `lsp_completions` | Standard LSP queries (always registered) |
 | `lsp_rename` / `lsp_code_actions` | LSP queries skipped by default (`DEFAULT_DISABLED_LSP_TOOLS`) to save per-turn context — re-enable via `lsp: { enableAll: true }` or omit them from `disabledTools` |
-| `code_overview` | Tree-sitter fallback (always registered) |
-| `ast_search` / `code_rewrite` | Tree-sitter tools skipped by default — re-enable via `lsp: { enableAll: true }` |
+| `ast_search` / `code_rewrite` / `code_overview` | Structural tree-sitter tools skipped by default — re-enable via `lsp: { enableAll: true }`. `ast_search`/`code_rewrite` are structure search/rewrite (no LSP equivalent); `code_overview` overlaps `lsp_symbols` |
 
 **Config:** workspace `.lsp.json` (`autoStart`, `servers`, `lombokJar`, `autoInjectDiagnostics`). Commands: `/lsp`, `/lsp-restart`, `/lsp-config`, `/lsp-lombok`.
 
 #### Per-tool toggle — `ManagedAgentConfig.lsp`
 
 `lsp` accepts `boolean` (existing) or an object: `{ disabledTools?: string[], enableAll?: boolean }`.
-- Default: low-usage tools are skipped (`DEFAULT_DISABLED_LSP_TOOLS`: `lsp_rename`, `lsp_code_actions`, `ast_search`, `code_rewrite`).
+- Default: low-usage tools are skipped (`DEFAULT_DISABLED_LSP_TOOLS`: `lsp_rename`, `lsp_code_actions`, `ast_search`, `code_rewrite`, `code_overview`).
 - `enableAll: true` re-enables every tool.
 - `disabledTools` replaces the default set (no merge). Example: `lsp: { disabledTools: [] }` registers everything; `lsp: { disabledTools: ["lsp_hover"] }` disables hover only.
 

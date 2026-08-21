@@ -76,6 +76,7 @@ export const DEFAULT_DISABLED_LSP_TOOLS: readonly string[] = [
   "lsp_code_actions",
   "ast_search",
   "code_rewrite",
+  "code_overview",
 ];
 
 /** Create the built-in LSP extension (default export kept for interop). */
@@ -349,16 +350,18 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
       )
     );
   }
-  ctx.registerTool(
-    withLspTextOutput(
-      createCodeOverviewTool({
-        rootDir: () => getManager().resolvePath("."),
-        treeSitter,
-        env: treeSitterEnv,
-        workspaceIndex,
-      })
-    )
-  );
+  if (shouldRegister("code_overview")) {
+    ctx.registerTool(
+      withLspTextOutput(
+        createCodeOverviewTool({
+          rootDir: () => getManager().resolvePath("."),
+          treeSitter,
+          env: treeSitterEnv,
+          workspaceIndex,
+        })
+      )
+    );
+  }
 
   // ---- Commands ----
   ctx.registerCommand({
