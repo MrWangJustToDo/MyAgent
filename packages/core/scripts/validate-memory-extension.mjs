@@ -151,6 +151,20 @@ assert.equal(allAfterWrite.length, 2, "memory_write persists a new memory");
 const memoryCmd = registeredCommands.find((c) => c.name === "memory");
 assert.ok(memoryCmd, "registers /memory command");
 assert.equal(typeof memoryCmd.injectMessage, "function", "/memory command has injectMessage");
+assert.equal(typeof memoryCmd.getOptions, "function", "/memory command has getOptions for the secondary menu");
+
+// getOptions returns the stored memories as browseable menu options.
+const memoryOptions = await memoryCmd.getOptions([]);
+assert.ok(Array.isArray(memoryOptions), "getOptions returns an array");
+assert.equal(memoryOptions.length, 2, "getOptions lists all stored memories");
+assert.ok(
+  memoryOptions.some((o) => o.label === "user-prefers-tabs"),
+  "options include written memory"
+);
+assert.ok(
+  memoryOptions.some((o) => o.description),
+  "options carry descriptions"
+);
 
 // No args -> lists all memories in the UI message, no injection.
 const listMsg = await memoryCmd.execute([]);

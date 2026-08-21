@@ -142,6 +142,7 @@ export type AgentSessionCommand =
   | { type: "mcp.refresh" }
   | { type: "extension.toggle"; id: string; enabled: boolean }
   | { type: "extension.invokeCommand"; name: string; args?: string[] }
+  | { type: "extension.getCommandOptions"; name: string; args?: string[] }
   /**
    * Restore an on-disk session onto the current agent (mid-session switch).
    * Same `ManagedAgent.restoreSession` path as Host.create `{ resumeSessionId | continueSession }`.

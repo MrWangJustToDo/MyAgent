@@ -217,6 +217,14 @@ creating a duplicate (check memory_list first).`,
   ctx.registerCommand({
     name: "memory",
     description: "List memories, or load one by name: /memory [<name>]. With no name, lists all memories.",
+    getOptions: async () => {
+      const memories = await memoryManager.listMemories();
+      return memories.map((m) => ({
+        label: m.name,
+        value: m.name,
+        description: m.description,
+      }));
+    },
     execute: async (args) => {
       const name = args[0]?.trim();
       const memories = await memoryManager.listMemories();

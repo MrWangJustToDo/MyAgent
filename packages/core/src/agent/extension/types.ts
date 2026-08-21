@@ -45,10 +45,23 @@ export interface ExtensionToolDefinition {
 // Command registration (slash commands)
 // ============================================================================
 
+export interface ExtensionCommandOption {
+  label: string;
+  value: string;
+  description?: string;
+}
+
 export interface ExtensionCommand {
   name: string;
   description: string;
   execute: (args: string[]) => Promise<string | void>;
+  /**
+   * Optional: provide secondary-menu options for this command (e.g. `/resume`
+   * lists recent sessions). The app's autocomplete shows these as a browseable
+   * list when the user types `/name ` (after selecting the command). Each option
+   * is executed as `/name <value>`.
+   */
+  getOptions?: (args: string[]) => ExtensionCommandOption[] | Promise<ExtensionCommandOption[]>;
   /**
    * Optional: when set, the dispatch layer injects the returned text as a user
    * message into the session (via chat.sendMessage) after `execute` resolves,

@@ -160,6 +160,12 @@ that help you complete specific types of tasks.`,
   ctx.registerCommand({
     name: "skill",
     description: "Load a skill and let the agent act on it: /skill <name>. With no name, lists available skills.",
+    getOptions: () =>
+      skillRegistry.list().map((s) => ({
+        label: s.name,
+        value: s.name,
+        description: s.description,
+      })),
     execute: async (args) => {
       const name = args[0]?.trim();
       if (!name) {

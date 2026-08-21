@@ -128,6 +128,18 @@ await assert.rejects(() => loadTool.execute({ name: "does-not-exist" }, { toolCa
 const skillCmd = registeredCommands.find((c) => c.name === "skill");
 assert.ok(skillCmd, "registers /skill command");
 assert.equal(typeof skillCmd.injectMessage, "function", "/skill command has injectMessage");
+assert.equal(typeof skillCmd.getOptions, "function", "/skill command has getOptions for the secondary menu");
+
+// getOptions returns the available skills as browseable menu options.
+const skillOptions = await skillCmd.getOptions([]);
+assert.ok(Array.isArray(skillOptions), "getOptions returns an array");
+assert.ok(skillOptions.length >= 1, "getOptions lists available skills");
+assert.equal(skillOptions[0].label, summaries[0].name, "option label is the skill name");
+assert.equal(skillOptions[0].value, summaries[0].name, "option value is the skill name");
+assert.ok(
+  skillOptions.some((o) => o.description),
+  "options carry descriptions"
+);
 
 // No args -> lists available skills in the UI message, no injection.
 const listMsg = await skillCmd.execute([]);

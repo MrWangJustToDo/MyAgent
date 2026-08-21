@@ -17,7 +17,20 @@ function extensionSlashCommand(session: AgentSession, name: string, description:
   return {
     name,
     description,
-    usage: `/${name}`,
+    usage: `/${name} [option]`,
+    // Extensions may expose browseable secondary-menu options (e.g. /skill <name>,
+    // /memory <name>) fetched via dispatch — mirrors built-in /resume's getOptions.
+    allowCustomInput: true,
+    getOptions: async () => {
+      const result = await session.dispatch({
+        type: "extension.getCommandOptions",
+        name,
+      });
+      if (!result.ok) return [];
+      const options = (result.data as { options?: Array<{ label: string; value: string; description?: string }> })
+        ?.options;
+      return (options ?? []).map((o) => ({ label: o.label, value: o.value, description: o.description }));
+    },
     execute: async (args) => {
       const result = await session.dispatch({
         type: "extension.invokeCommand",

@@ -182,6 +182,14 @@ export async function dispatchLocalAgentSessionCommand(
         }
         return { ok: true, data: message ? { message } : undefined };
       }
+      case "extension.getCommandOptions": {
+        const cmd = managed.getExtensionCommands().find((c) => c.name === command.name);
+        if (!cmd) {
+          return { ok: false, code: "not_found", error: `Extension command "/${command.name}" not found` };
+        }
+        const options = cmd.getOptions ? await cmd.getOptions(command.args ?? []) : [];
+        return { ok: true, data: { options } };
+      }
       case "session.resume": {
         const data = await managed.restoreSession(command.sessionId);
         return {

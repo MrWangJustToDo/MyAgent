@@ -9,8 +9,15 @@ import { ScrollableList } from "./ScrollableList.js";
  * Render a single content line. Empty strings are replaced with a space to
  * ensure they still occupy one line of terminal height -- otherwise Ink
  * collapses them to zero height, causing visible height changes on scroll.
+ * Long lines are truncated (wrap="truncate") so every line stays exactly one
+ * row high -- wrapping would make a line 2+ rows tall and cause the visible
+ * height to jump while scrolling.
  */
-const renderLine = (line: string) => <Text color={COLORS.muted}>{line || " "}</Text>;
+const renderLine = (line: string) => (
+  <Text color={COLORS.muted} wrap="truncate">
+    {line || " "}
+  </Text>
+);
 
 export const CommandOutput = () => {
   const lines = useCommandOutput((s) => s.lines);
