@@ -14,17 +14,3 @@ export {
   type SkillsExtensionConfig,
   type CreateSkillsExtensionOptions,
 } from "./extension.js";
-
-// Skill tools
-export {
-  createListSkillsTool,
-  listSkillsOutputSchema,
-  type ListSkillsOutput,
-  type ListSkillsToolConfig,
-} from "./list-skills-tool.js";
-export {
-  createLoadSkillTool,
-  loadSkillOutputSchema,
-  type LoadSkillOutput,
-  type LoadSkillToolConfig,
-} from "./load-skill-tool.js";

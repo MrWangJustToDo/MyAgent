@@ -681,8 +681,6 @@ packages/core/src/agent/skills/
 ├── extension.ts         # Built-in Skills extension (my-agent-skills)
 ├── skill-loader.ts      # Parse SKILL.md files
 ├── skill-registry.ts    # Manage loaded skills
-├── list-skills-tool.ts  # list_skills factory (legacy, kept for interop)
-├── load-skill-tool.ts   # load_skill factory (legacy, kept for interop)
 └── index.ts
 ```
 
