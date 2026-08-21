@@ -49,13 +49,42 @@ interface ProjectLspConfig {
   autoInjectDiagnostics?: boolean | string[];
 }
 
+/**
+ * Fine-grained configuration for the built-in LSP extension.
+ *
+ * By default the extension registers all tools except the low-usage set in
+ * {@link DEFAULT_DISABLED_LSP_TOOLS} (opt-in). `enableAll` re-enables every tool.
+ */
+export interface LspExtensionConfig {
+  /**
+   * Tool names to skip registering (e.g. `"lsp_rename"`, `"ast_search"`).
+   * Defaults to {@link DEFAULT_DISABLED_LSP_TOOLS}. Setting this replaces the
+   * default (no automatic merge).
+   */
+  disabledTools?: string[];
+  /** Re-enable all tools (overrides `disabledTools`). */
+  enableAll?: boolean;
+}
+
+/**
+ * LSP / tree-sitter tools that are skipped by default to save per-turn context.
+ * These are the lowest-usage tools — re-enable with `enableAll: true` or by
+ * listing them in `disabledTools` (i.e. not disabling them).
+ */
+export const DEFAULT_DISABLED_LSP_TOOLS: readonly string[] = [
+  "lsp_rename",
+  "lsp_code_actions",
+  "ast_search",
+  "code_rewrite",
+];
+
 /** Create the built-in LSP extension (default export kept for interop). */
-export function createLspExtension(): ExtensionAPI {
-  return lspExtension();
+export function createLspExtension(options?: LspExtensionConfig): ExtensionAPI {
+  return lspExtension(options);
 }
 
 /** The built-in LSP extension factory (matches ExtensionFactory shape). */
-export function lspExtension(): ExtensionAPI {
+export function lspExtension(options?: LspExtensionConfig): ExtensionAPI {
   return {
     id: "my-agent-lsp",
     name: "LSP Integration",
@@ -63,17 +92,23 @@ export function lspExtension(): ExtensionAPI {
     description:
       "Language Server Protocol tools: diagnostics, hover, definition, references, symbols, rename, completions, code actions + auto file-sync",
     async activate(ctx) {
-      await activateLsp(ctx);
+      await activateLsp(ctx, options);
     },
   };
 }
 
 export default lspExtension;
 
-async function activateLsp(ctx: ExtensionContext): Promise<void> {
+async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig): Promise<void> {
   const env = ctx.coreEnv;
   const corePath = env.path ?? defaultPath;
   const createConnection = env.createLspConnection;
+
+  // Resolve the set of tools to skip registering (saves per-turn context).
+  const enableAll = options?.enableAll === true;
+  const disabledTools = enableAll
+    ? new Set<string>()
+    : new Set<string>(options?.disabledTools ?? DEFAULT_DISABLED_LSP_TOOLS);
 
   // Feature-detect: if the host has no process/stdio runtime, LSP tools degrade.
   if (!createConnection) {
@@ -255,6 +290,9 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
     }
   };
 
+  /** True when a tool should be registered (not in the disabled set). */
+  const shouldRegister = (name: string): boolean => !disabledTools.has(name);
+
   ctx.registerTool(
     withLspTextOutput(createDiagnosticsTool({ manager: proxyManager(getManager), fallback: tsDiagnosticsFallback }))
   );
@@ -273,8 +311,12 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
   );
   ctx.registerTool(withLspTextOutput(createReferencesTool({ manager: proxyManager(getManager) })));
   ctx.registerTool(withLspTextOutput(createSymbolsTool({ manager: proxyManager(getManager), workspaceIndex })));
-  ctx.registerTool(withLspTextOutput(createRenameTool({ manager: proxyManager(getManager) })));
-  ctx.registerTool(withLspTextOutput(createCodeActionsTool({ manager: proxyManager(getManager) })));
+  if (shouldRegister("lsp_rename")) {
+    ctx.registerTool(withLspTextOutput(createRenameTool({ manager: proxyManager(getManager) })));
+  }
+  if (shouldRegister("lsp_code_actions")) {
+    ctx.registerTool(withLspTextOutput(createCodeActionsTool({ manager: proxyManager(getManager) })));
+  }
   ctx.registerTool(
     withLspTextOutput(
       createCompletionsTool({
@@ -286,23 +328,27 @@ async function activateLsp(ctx: ExtensionContext): Promise<void> {
   );
 
   // ---- Tree-sitter tools (degrade when grammar locator is absent) ----
-  ctx.registerTool(
-    withLspTextOutput(
-      createCodeSearchTool({ rootDir: () => getManager().resolvePath("."), treeSitter, env: treeSitterEnv })
-    )
-  );
-  ctx.registerTool(
-    withLspTextOutput(
-      createCodeRewriteTool({
-        rootDir: () => getManager().resolvePath("."),
-        treeSitter,
-        env: treeSitterEnv,
-        onFileModified: (filePath) => {
-          fileSync.handleFileWrite(filePath).catch(() => {});
-        },
-      })
-    )
-  );
+  if (shouldRegister("ast_search")) {
+    ctx.registerTool(
+      withLspTextOutput(
+        createCodeSearchTool({ rootDir: () => getManager().resolvePath("."), treeSitter, env: treeSitterEnv })
+      )
+    );
+  }
+  if (shouldRegister("code_rewrite")) {
+    ctx.registerTool(
+      withLspTextOutput(
+        createCodeRewriteTool({
+          rootDir: () => getManager().resolvePath("."),
+          treeSitter,
+          env: treeSitterEnv,
+          onFileModified: (filePath) => {
+            fileSync.handleFileWrite(filePath).catch(() => {});
+          },
+        })
+      )
+    );
+  }
   ctx.registerTool(
     withLspTextOutput(
       createCodeOverviewTool({

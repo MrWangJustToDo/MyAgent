@@ -79,6 +79,7 @@ import type {
   ExtensionRunner,
   ExtensionToolDefinition,
 } from "../agent/extension";
+import type { LspExtensionConfig } from "../agent/lsp";
 import type { McpManager } from "../agent/mcp/manager.js";
 import type { MemoryManager } from "../agent/memory/memory-manager.js";
 import type { SessionStore } from "../agent/persistence/session-store.js";
@@ -140,9 +141,10 @@ export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
   extensions?: Array<ExtensionFactory>;
   /**
    * Enable the built-in LSP extension (default: true). Set to `false` to disable
-   * LSP tools (lsp_diagnostics, lsp_hover, ...) and slash commands.
+   * LSP tools (lsp_diagnostics, lsp_hover, ...) and slash commands. Pass an
+   * object to fine-tune which tools are registered (see {@link LspExtensionConfig}).
    */
-  lsp?: boolean;
+  lsp?: boolean | LspExtensionConfig;
   /**
    * Extra filesystem directories to scan for extensions (before env / defaults).
    * Relative paths resolve against CoreEnv `rootPath`.

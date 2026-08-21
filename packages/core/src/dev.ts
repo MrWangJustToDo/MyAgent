@@ -368,6 +368,8 @@ export {
 // Built-in LSP extension (internal validation exports — not part of public API)
 // ============================================================================
 export { createLspExtension, lspExtension } from "./agent/lsp";
+export { DEFAULT_DISABLED_LSP_TOOLS } from "./agent/lsp";
+export type { LspExtensionConfig } from "./agent/lsp";
 export { EXT_TO_LANGUAGE, getLanguageIdFromPath } from "./agent/lsp/language-map.js";
 export {
   LspManager,

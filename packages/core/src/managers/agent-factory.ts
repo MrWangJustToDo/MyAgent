@@ -216,7 +216,10 @@ export async function buildManagedAgent({
     // Built-in LSP extension (enabled unless explicitly disabled).
     if (config.lsp !== false) {
       try {
-        const api = await createLspExtension();
+        // `config.lsp` may be `true`/undefined (defaults) or a fine-grained
+        // LspExtensionConfig object ({ disabledTools, enableAll }).
+        const lspOptions = typeof config.lsp === "object" && config.lsp !== null ? config.lsp : undefined;
+        const api = createLspExtension(lspOptions);
         await extensionRunner.loadExtension(api);
         log.info("system", `Built-in extension loaded: ${api.id}`);
       } catch (err) {
