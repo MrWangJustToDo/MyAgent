@@ -7,7 +7,6 @@ export { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/prompt-cache.js";
 export interface SystemPromptInput {
   config: AgentConfig;
   agentDocContent: string;
-  memoryContent: string;
 }
 
 export function buildFrozenSystemPrompt(input: SystemPromptInput): string | undefined {
@@ -30,18 +29,9 @@ export function buildFrozenSystemPrompt(input: SystemPromptInput): string | unde
     );
   }
 
-  if (input.memoryContent) {
-    parts.push(
-      [
-        "<memory_index>",
-        "These are memories from previous sessions. Respect user preferences from memory.",
-        "When the user says 'remember' or expresses a clear preference, it will be automatically extracted.",
-        "",
-        input.memoryContent,
-        "</memory_index>",
-      ].join("\n")
-    );
-  }
+  // NOTE: the memory index (<memory_index>) is no longer frozen here — it is
+  // injected per-turn by the built-in Memory extension via `registerTurnContextProvider`
+  // so freshly extracted memories surface without waiting for compaction.
 
   const joined = parts.length > 0 ? parts.join("\n\n") : undefined;
   if (joined) {

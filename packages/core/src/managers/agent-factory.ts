@@ -5,6 +5,7 @@ import { ExtensionLoader, ExtensionRunner, getDefaultExtensionDirs } from "../ag
 import { createLspExtension } from "../agent/lsp";
 import { loadMcpConfig, type McpConfigLoadResult } from "../agent/mcp/config.js";
 import { McpManager } from "../agent/mcp/manager.js";
+import { createMemoryExtension } from "../agent/memory/extension.js";
 import { MemoryManager } from "../agent/memory/memory-manager.js";
 import { SessionStore } from "../agent/persistence/session-store.js";
 import { createCompletePlanTool, createCreatePlanTool, createUpdatePlanTool } from "../agent/plan/create-plan-tool.js";
@@ -162,11 +163,15 @@ export async function buildManagedAgent({
       }
     }
 
-    const memoryManager = new MemoryManager({ rootPath: fsRootPath });
-    await memoryManager.initialize();
-    managed.setMemoryManager(memoryManager);
-    managed.setMemoryContent(memoryManager.getIndexContent());
-    log.debug("memory", `Memory initialized, index: ${memoryManager.getIndexContent().length} bytes`);
+    // Memory manager is always created when enabled (drives the per-turn
+    // relevance query + extraction in MemoryService). The built-in Memory
+    // extension (loaded below) wraps it for presentation: tools, index injection.
+    if (config.memory !== false) {
+      const memoryManager = new MemoryManager({ rootPath: fsRootPath });
+      await memoryManager.initialize();
+      managed.setMemoryManager(memoryManager);
+      log.debug("memory", `Memory initialized, index: ${memoryManager.getIndexContent().length} bytes`);
+    }
   }
 
   if (!parentId) {
@@ -239,6 +244,24 @@ export async function buildManagedAgent({
         log.info("system", `Built-in extension loaded: ${api.id}`);
       } catch (err) {
         log.warn("system", `Failed to load built-in Skills extension: ${err}`);
+      }
+    }
+
+    // Built-in Memory extension (enabled unless explicitly disabled).
+    // `config.memory` may be `true`/undefined (defaults) or a fine-grained
+    // MemoryExtensionConfig object ({ toolsDisabled, indexDisabled }).
+    // The memory manager must be enabled too (MemoryService query depends on it).
+    if (config.memory !== false) {
+      try {
+        const memoryManager = managed.getMemoryManager();
+        if (memoryManager) {
+          const memoryConfig = typeof config.memory === "object" && config.memory !== null ? config.memory : undefined;
+          const api = createMemoryExtension({ memoryManager, config: memoryConfig });
+          await extensionRunner.loadExtension(api);
+          log.info("system", `Built-in extension loaded: ${api.id}`);
+        }
+      } catch (err) {
+        log.warn("system", `Failed to load built-in Memory extension: ${err}`);
       }
     }
   }

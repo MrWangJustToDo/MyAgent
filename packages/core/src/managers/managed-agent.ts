@@ -81,6 +81,7 @@ import type {
 } from "../agent/extension";
 import type { LspExtensionConfig } from "../agent/lsp";
 import type { McpManager } from "../agent/mcp/manager.js";
+import type { MemoryExtensionConfig } from "../agent/memory";
 import type { MemoryManager } from "../agent/memory/memory-manager.js";
 import type { SessionStore } from "../agent/persistence/session-store.js";
 import type { SessionData } from "../agent/persistence/types.js";
@@ -157,6 +158,12 @@ export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
    * context. Pass an object to fine-tune behavior (see {@link SkillsExtensionConfig}).
    */
   skills?: boolean | SkillsExtensionConfig;
+  /**
+   * Enable the built-in Memory extension (default: true). Set to `false` to disable
+   * memory tools (memory_list, memory_read, memory_write) and the memory index in
+   * turn context. Pass an object to fine-tune behavior (see {@link MemoryExtensionConfig}).
+   */
+  memory?: boolean | MemoryExtensionConfig;
   /**
    * Extra filesystem directories to scan for extensions (before env / defaults).
    * Relative paths resolve against CoreEnv `rootPath`.
@@ -638,14 +645,6 @@ export class ManagedAgent {
     return this.memory.getManager();
   }
 
-  setMemoryContent(content: string): void {
-    this.memory.setContent(content);
-  }
-
-  getMemoryContent(): string {
-    return this.memory.getContent();
-  }
-
   setSessionStore(store: SessionStore, sessionConfig: { modelStyle: string; model: string }): void {
     this.session.setStore(store, sessionConfig);
   }
@@ -810,7 +809,6 @@ export class ManagedAgent {
     this.frozenSystemPrompt = buildFrozenSystemPrompt({
       config: this.agentConfig,
       agentDocContent: this.agentDocContent,
-      memoryContent: this.getMemoryContent(),
     });
     this.systemPromptFrozen = true;
     this.systemPrompt = this.frozenSystemPrompt ?? "";

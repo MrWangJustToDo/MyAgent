@@ -27,8 +27,6 @@ const dynamic = "<current_date>\nJuly 22, 2026\n</current_date>";
 const frozen = buildFrozenSystemPrompt({
   config: { systemPrompt: "You are helpful." },
   agentDocContent: "",
-  skillRegister: null,
-  memoryContent: "",
 });
 assert.ok(frozen?.includes("<SYSTEM_PROMPT_DYNAMIC_BOUNDARY>"));
 

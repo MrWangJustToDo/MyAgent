@@ -54,8 +54,6 @@ assert.deepEqual(
 const frozen = buildFrozenSystemPrompt({
   config: { systemPrompt: "You are helpful." },
   agentDocContent: "",
-  skillRegister: null,
-  memoryContent: "",
 });
 const dynamic = "<current_date>\nJuly 22, 2026\n</current_date>";
 const system = buildSystemPromptWithTurnContext(frozen, dynamic);

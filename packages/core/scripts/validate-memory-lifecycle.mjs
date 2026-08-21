@@ -16,12 +16,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/
 import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, normalize, parse, resolve, sep } from "node:path";
 
-import {
-  MemoryManager,
-  findRelevantMemories,
-  formatRelevantMemories,
-  registerCoreEnv,
-} from "../dist/dev.mjs";
+import { MemoryManager, findRelevantMemories, formatRelevantMemories, registerCoreEnv } from "../dist/dev.mjs";
 
 const root = await mkdtemp(join(tmpdir(), "myagent-memory-lifecycle-"));
 

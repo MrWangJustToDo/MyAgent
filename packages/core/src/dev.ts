@@ -386,6 +386,16 @@ export { DIAGNOSTIC_SETTLE_DELAY_MS, SYNTHETIC_DOT_SETTLE_DELAY_MS } from "./age
 export { lspTextToModelOutput } from "./agent/lsp/shared/tool-output.js";
 
 // ============================================================================
+// Built-in Memory extension (internal validation exports — not part of public API)
+// ============================================================================
+export {
+  createMemoryExtension,
+  memoryExtension,
+  type MemoryExtensionConfig,
+  type CreateMemoryExtensionOptions,
+} from "./agent/memory";
+
+// ============================================================================
 // Built-in Skills extension (internal validation exports — not part of public API)
 // ============================================================================
 export {

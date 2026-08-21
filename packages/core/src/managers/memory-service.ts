@@ -34,7 +34,6 @@ export interface MemoryExtractionInput {
 
 export class MemoryService {
   private manager: MemoryManager | null = null;
-  private content = "";
   private relevantContent = "";
   private alreadySurfaced = new Set<string>();
   private extractionInProgress = false;
@@ -46,14 +45,6 @@ export class MemoryService {
 
   getManager(): MemoryManager | null {
     return this.manager;
-  }
-
-  setContent(content: string): void {
-    this.content = content;
-  }
-
-  getContent(): string {
-    return this.content;
   }
 
   getRelevantContent(): string {
@@ -158,7 +149,6 @@ export class MemoryService {
         const count = await extractMemories(messages, memoryManager, agentId, agentManager);
         if (count > 0) {
           await memoryManager.flushIndex();
-          this.setContent(memoryManager.getIndexContent());
           emitEvent?.("memory:extract", { status: "complete", count });
         } else {
           emitEvent?.("memory:extract", { status: "empty" });
@@ -170,7 +160,6 @@ export class MemoryService {
           const result = await consolidateMemories(memoryManager, agentId, agentManager);
           if (result.changed) {
             await memoryManager.flushIndex();
-            this.setContent(memoryManager.getIndexContent());
             emitEvent?.("memory:consolidate", {
               status: "complete",
               before: memoryCount,

@@ -281,6 +281,7 @@ pnpm start:mcp-server
 | **Web** | `websearch` (Brave when host passes `toolConfig.websearch.braveApiKey`, else DuckDuckGo), `webfetch` |
 | **Agent** | `task` (subagents), `ask_user`, `todo` |
 | **Skills** | `list_skills`, `load_skill` |
+| **Memory** | `memory_list`, `memory_read`, `memory_write` |
 | **Plan** | `create_plan`, `update_plan`, `complete_plan` (offered only in the matching plan phase) |
 
 ---
