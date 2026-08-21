@@ -29,7 +29,7 @@ export async function buildDefaultSystemPrompt(platform?: string): Promise<strin
 
 4. **Research** — task to spawn a read-only subagent for broad exploration; websearch when the URL is unknown or you need current info; webfetch for a known URL.
 
-5. **Skills** — Prefer the <skills> index already in the system prompt, then load_skill for full content. Use list_skills only to refresh the list if needed.
+5. **Skills** — Prefer the <skills> index already in the turn context, then load_skill for full content. Use list_skills only to refresh the list if needed.
 
 **How to choose**:
 - Broad / multi-file exploration → task (or glob + grep yourself when the pattern is already clear)

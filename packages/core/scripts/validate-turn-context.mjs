@@ -63,6 +63,21 @@ assert.ok(isTurnContextUIMessage(withTc[1]));
 assert.equal(withTc[0].parts[0].content, "hello");
 assert.equal(findLatestTurnContextHash(withTc), hashTurnContextPayload(payload));
 
+// Guard contract (ManagedAgent.admitTurnContextIfNeeded): a turn_context must
+// never be admitted before the first real user message — the insert helper skips
+// synthetic TC messages when locating the insertion point, so a pre-TC (empty
+// channel) admission would land at index 0 and produce a malformed [TC, user…]
+// transcript. Callers must skip admission when no real user message exists.
+const empty = [];
+const onEmpty = insertTurnContextUIMessage(empty, first);
+assert.equal(onEmpty.length, 1);
+assert.ok(isTurnContextUIMessage(onEmpty[0]), "primitive appends on empty; guard lives in caller");
+const onlyTc = [{ id: "tc0", role: "user", parts: [{ type: "text", content: first }] }];
+const noRealUser = insertTurnContextUIMessage(onlyTc, update);
+assert.equal(noRealUser.length, 2, "no real user msg -> TC goes after the existing TC");
+assert.ok(isTurnContextUIMessage(noRealUser[0]));
+assert.ok(isTurnContextUIMessage(noRealUser[1]));
+
 // findCutPoint skips synthetic turn_context when counting user turns.
 const modelMessages = [
   { role: "user", content: "First" },

@@ -30,6 +30,7 @@ import {
   formatTurnContextUserContent,
   hashTurnContextPayload,
   insertTurnContextUIMessage,
+  isTurnContextUIMessage,
 } from "../agent/turn-context/turn-context-message.js";
 import { Emitter } from "../utils/emitter.js";
 import { generateId } from "../utils/generate-id.js";
@@ -865,13 +866,23 @@ export class ManagedAgent {
     const payload = buildTurnContextPayload(this.turnContextSnapshot, this.extensionSystemAppendSnapshot);
     if (!payload) return false;
 
+    // Only admit turn-context once at least one real user message exists in the
+    // channel. Without this, a run that prepares before any user message lands
+    // (e.g. a stray/early run) would insert the synthetic TC at position 0,
+    // producing a malformed `[TC, user, ...]` transcript instead of the
+    // expected `[user, TC, ...]` epoch ordering.
+    const uiMessages = this.ui?.getMessages() ?? [];
+    if (!uiMessages.some((m) => m.role === "user" && !isTurnContextUIMessage(m))) {
+      return false;
+    }
+
     const hash = hashTurnContextPayload(payload);
     if (this.lastAdmittedTurnContextHash === undefined) {
-      const existing = findLatestTurnContextHash(this.ui?.getMessages() ?? []) ?? undefined;
+      const existing = findLatestTurnContextHash(uiMessages) ?? undefined;
       this.lastAdmittedTurnContextHash = existing;
     }
 
-    const messageCount = this.ui?.getMessages().length ?? 0;
+    const messageCount = uiMessages.length;
     const aboveThreshold = messageCount - this.turnContextAdmitMessageCount >= TURN_CONTEXT_REFRESH_MESSAGE_THRESHOLD;
 
     if (hash === this.lastAdmittedTurnContextHash && !aboveThreshold) return false;

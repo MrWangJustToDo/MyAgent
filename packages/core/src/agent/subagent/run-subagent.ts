@@ -89,6 +89,8 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
 
   // Build minimal turn context (date + git) for subagent's environmental awareness.
   // Keeps subagent isolated while providing necessary time/workspace context.
+  // NOTE: these must live in the UI channel (durable SoT) — executeManagedAgentRun
+  // reads the model wire messages from the channel, not the `messages` argument.
   const envContext = await buildSubagentTurnContext();
   const tcMessages: ModelMessage[] = envContext
     ? [{ role: "user", content: `<turn_context>\n${envContext}\n</turn_context>` }]
@@ -104,7 +106,18 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
   };
 
   // Always attach a channel (durable message SoT). bridgeUI only gates parent panel streaming.
-  const channel = ensureUIChannel(subagentManaged, { initialMessages: [userUIMessage] });
+  // Seed the channel with the turn-context messages too so the model actually receives them
+  // (the runner projects wire messages from the channel).
+  const channel = ensureUIChannel(subagentManaged, {
+    initialMessages: [
+      ...tcMessages.map((m) => ({
+        id: generateId("tc"),
+        role: "user" as const,
+        parts: [{ type: "text" as const, content: typeof m.content === "string" ? m.content : "" }],
+      })),
+      userUIMessage,
+    ],
+  });
 
   const summaryHub = bridgeUI || compactSummaryStream ? parentManaged.summaryStreams : undefined;
   const compactId = compactSummaryStream?.compactId;
