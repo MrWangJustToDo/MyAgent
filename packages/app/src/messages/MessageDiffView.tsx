@@ -27,7 +27,7 @@ export const MessageDiffView = memo(function MessageDiffView({
   startLine,
 }: MessageDiffViewProps) {
   return (
-    <HalfLinePaddedBox backgroundColor={BG.toolResult} width={width}>
+    <HalfLinePaddedBox backgroundColor={BG.toolResult} transparentBody width={width}>
       <EditDiff
         id={diffId}
         width={width}
