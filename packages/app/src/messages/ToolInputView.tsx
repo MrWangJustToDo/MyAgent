@@ -26,7 +26,9 @@ export const ToolInputView = ({
   const mode = useTranscriptDisplayMode();
   const toolName = part.name;
   const width = useSize((s) => s.state.screenWidth);
-  const bodyWidth = width - 6;
+  // Align diff boxes with the tool-output halfbox: both sit directly in
+  // ToolCallPartView's padded column (x=3) and span to the shared right edge.
+  const bodyWidth = width - 4;
   const isExecuting = isToolExecuting(part);
   const isTask = toolName === "task";
   const taskInput = toolInput as { prompt?: string; description?: string };
@@ -48,16 +50,14 @@ export const ToolInputView = ({
     if (!content || uiState === "input-streaming") return null;
 
     return (
-      <Box paddingLeft={2}>
-        <MessageDiffView
-          diffId={part.id}
-          width={bodyWidth}
-          oldPath=""
-          oldFile=""
-          newPath={content.path || ""}
-          newFile={content.content || ""}
-        />
-      </Box>
+      <MessageDiffView
+        diffId={part.id}
+        width={bodyWidth}
+        oldPath=""
+        oldFile=""
+        newPath={content.path || ""}
+        newFile={content.content || ""}
+      />
     );
   }
 

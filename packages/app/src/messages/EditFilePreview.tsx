@@ -39,7 +39,7 @@ export const EditFilePreview = memo(function EditFilePreview({
   bodyWidth: number;
   output?: { oldFile?: string; newFile?: string };
 }) {
-  const width = useSize((s) => s.state.screenWidth) - 6;
+  const width = useSize((s) => s.state.screenWidth) - 4;
 
   // Authoritative source once the tool has run: prefer output over preview.
   const hasOutput = output && typeof output.oldFile === "string" && typeof output.newFile === "string";
@@ -54,7 +54,7 @@ export const EditFilePreview = memo(function EditFilePreview({
   const hasFullPreview = oldFile !== undefined && newFile !== undefined;
 
   return (
-    <Box paddingLeft={2} flexDirection="column">
+    <Box flexDirection="column">
       {hasFullPreview ? (
         /* Full-file diff: original file → file after all edits applied */
         <MessageDiffView
