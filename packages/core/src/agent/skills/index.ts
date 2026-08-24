@@ -8,9 +8,4 @@ export { SkillLoader } from "./skill-loader.js";
 export { SkillRegistry } from "./skill-registry.js";
 
 // Built-in skills extension
-export {
-  createSkillsExtension,
-  skillsExtension,
-  type SkillsExtensionConfig,
-  type CreateSkillsExtensionOptions,
-} from "./extension.js";
+export { createSkillsExtension, type SkillsExtensionConfig, type CreateSkillsExtensionOptions } from "./extension.js";

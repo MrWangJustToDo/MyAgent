@@ -4,7 +4,7 @@
 
 import { fileUriToPath } from "../shared/format.js";
 
-import { resolvePosition, withResolved } from "./shared.js";
+import { resolvePosition, withResolved } from "./tool-shared.js";
 
 import type { LspManager } from "../lsp-manager.js";
 import type { CodeAction, Command, Diagnostic, TextEdit, WorkspaceEdit } from "vscode-languageserver-protocol";

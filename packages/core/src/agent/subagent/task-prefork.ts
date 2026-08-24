@@ -14,8 +14,8 @@
  * the 5th+ task starts as soon as an earlier one finishes, not serially.
  */
 
-import type { ManagedAgent } from "../../runtime-types/hosts.js";
 import type { SubagentResult } from "./types.js";
+import type { ManagedAgent } from "../../runtime-types/hosts.js";
 
 /** Max subagent runs executing LLM loops concurrently per parent. */
 export const MAX_ACTIVE_TASK_PREFORKS = 4;

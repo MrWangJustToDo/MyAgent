@@ -2,7 +2,7 @@
  * Validation for the built-in Memory extension (`my-agent-memory`).
  *
  * Covers:
- * - createMemoryExtension / memoryExtension are exported and produce an extension API
+ * - createMemoryExtension is exported and produces an extension API
  * - activation registers memory_list / memory_read / memory_write tools
  * - activation registers a turn-context provider that emits the <memory_index>
  * - activation registers a /memory command that injects the full memory body
@@ -18,7 +18,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/
 import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, normalize, parse, resolve, sep } from "node:path";
 
-import { registerCoreEnv, MemoryManager, createMemoryExtension, memoryExtension } from "../dist/dev.mjs";
+import { registerCoreEnv, MemoryManager, createMemoryExtension } from "../dist/dev.mjs";
 
 const root = await mkdtemp(join(tmpdir(), "myagent-memory-ext-"));
 
@@ -80,9 +80,6 @@ await manager.flushIndex(); // writeMemory debounces index refresh — flush syn
 const api = createMemoryExtension({ memoryManager: manager });
 assert.equal(api.id, "my-agent-memory", "extension id is my-agent-memory");
 assert.equal(typeof api.activate, "function", "extension has activate");
-
-const apiFromFactory = memoryExtension({ memoryManager: manager });
-assert.equal(apiFromFactory.id, "my-agent-memory", "memoryExtension factory id is my-agent-memory");
 
 // ---------------------------------------------------------------------------
 // 2. Activation registers tools + turn-context provider

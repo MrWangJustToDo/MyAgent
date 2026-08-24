@@ -208,7 +208,7 @@ export class ManagedAgent {
   // ============================================================================
 
   /** Lifecycle — hosts read via getter; mutate through {@link setStatus}. */
-  private _status: AgentStatus;
+  private currentStatus: AgentStatus;
   private error: string;
   /** Tools awaiting user approval in the current run (set by approval middleware). */
   private pendingApprovalCount: number;
@@ -271,11 +271,11 @@ export class ManagedAgent {
   private runnerConfigKey?: string;
   private textAdapter?: TextAdapterConfig;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
-  private _ui?: AgentUIChannel;
+  private uiChannel?: AgentUIChannel;
   private approvalRequestUnsub?: () => void;
   /** Task / compact summary streams for the session `summary` channel. */
   readonly summaryStreams: SummaryStreamHub;
-  private _chatController?: AgentChatController;
+  private chatController?: AgentChatController;
   /** Set by AgentManager to route events to listeners. */
   dispatchEvent?: (event: AgentEvent) => void;
   /** Owning manager — set when registered via {@link AgentManager.createManagedAgent}. */
@@ -372,8 +372,8 @@ export class ManagedAgent {
       },
       onEnterRetro: (state) => {
         const steer = buildPlanRetroSteerMessage(state.planFilePath);
-        if (this._chatController) {
-          void this._chatController.sendMessage(steer);
+        if (this.chatController) {
+          void this.chatController.sendMessage(steer);
         }
       },
     });
@@ -383,7 +383,7 @@ export class ManagedAgent {
     // ============================================================================
     // L1 state + local emitter (inline inits)
     // ============================================================================
-    this._status = "idle";
+    this.currentStatus = "idle";
     this.error = "";
     this.pendingApprovalCount = 0;
     this.stateEvents = new Emitter<{
@@ -446,12 +446,12 @@ export class ManagedAgent {
 
   /** Host-facing status (read-only; use {@link setStatus} to mutate). */
   get status(): AgentStatus {
-    return this._status;
+    return this.currentStatus;
   }
 
   /** Host-facing UI channel when present (read-only; package-internal {@link setUIChannel}). */
   get ui(): AgentUIChannel | undefined {
-    return this._ui;
+    return this.uiChannel;
   }
 
   getError(): string {
@@ -480,7 +480,7 @@ export class ManagedAgent {
       // Terminal — any in-flight retry visibility is over.
       this.retryInfo = null;
     }
-    this._status = status;
+    this.currentStatus = status;
     this.emitStateChange();
   }
 
@@ -542,7 +542,7 @@ export class ManagedAgent {
   /** L1 status snapshot for Emitter / Session projection. */
   getL1State(): AgentL1State {
     return {
-      status: this._status,
+      status: this.currentStatus,
       error: this.error,
       pendingApprovalCount: this.pendingApprovalCount,
       ...(this.retryInfo ? { retry: this.retryInfo } : {}),
@@ -743,12 +743,12 @@ export class ManagedAgent {
     return this.agentDocContent;
   }
 
-  setSkillRegister(t: SkillRegistry): void {
+  setSkillRegistry(t: SkillRegistry): void {
     if (this.skillRegister) return;
     this.skillRegister = t;
   }
 
-  getSkillRegister(): SkillRegistry | null {
+  getSkillRegistry(): SkillRegistry | null {
     return this.skillRegister;
   }
 
@@ -1274,18 +1274,18 @@ export class ManagedAgent {
 
   /** Create or replace the core-owned main chat session (StreamProcessor + run loop). */
   initChat(manager: AgentManager, initialMessages?: TanStackUIMessage[]): AgentChatController {
-    this._chatController = new AgentChatController(this, manager, initialMessages);
+    this.chatController = new AgentChatController(this, manager, initialMessages);
     this.resetSessionSyncTracker(initialMessages);
-    return this._chatController;
+    return this.chatController;
   }
 
   getChatController(): AgentChatController | undefined {
-    return this._chatController;
+    return this.chatController;
   }
 
   /** Drop steer/follow-up queues without clearing the transcript. */
   clearQueuedMessages(): void {
-    this._chatController?.clearQueuedMessages();
+    this.chatController?.clearQueuedMessages();
   }
 
   reset(): void {
@@ -1311,7 +1311,7 @@ export class ManagedAgent {
     this.usage.reset();
     this.todoManager?.reset();
     this.turnLifecycleFinalized = false;
-    // Keep chatController + _ui alive — /clear calls clearMessages() separately.
+    // Keep chatController + uiChannel alive — /clear calls clearMessages() separately.
     // Resetting these would break subsequent sendMessage() calls.
     this.lastAdmittedTurnContextHash = undefined;
     this.systemPromptFrozen = false;
@@ -1362,7 +1362,7 @@ export class ManagedAgent {
   setUIChannel(ui: AgentUIChannel | undefined): void {
     this.approvalRequestUnsub?.();
     this.approvalRequestUnsub = undefined;
-    this._ui = ui;
+    this.uiChannel = ui;
     if (ui) {
       this.approvalRequestUnsub = ui.subscribeApprovalRequests((request) => {
         if (!request.approvalId || !request.toolCallId) return;

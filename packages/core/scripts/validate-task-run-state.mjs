@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 
 import { TaskRunState } from "../dist/dev.mjs";
+
 const { beginTaskRun, clearTaskRuns, enterTaskSummaryPhase, getTaskRunState, readTaskRunPhase } =
   await import("../dist/dev.mjs");
 

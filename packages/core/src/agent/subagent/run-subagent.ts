@@ -5,15 +5,15 @@
 
 import { generateId } from "../../utils/generate-id.js";
 import { ensureUIChannel, runAgentOnce } from "../run/run-agent-skeleton.js";
-import { summaryStreamKey } from "../summary-stream";
 import { extractAssistantText } from "../stream/extract-assistant-text.js";
 import { throwOnRunError } from "../stream/stream-errors.js";
+import { summaryStreamKey } from "../summary-stream";
 import { getCurrentDate, getGitInfo } from "../turn-context/env-context.js";
 
-import { applySubagentCancelNotice, truncateSummary } from "./output.js";
+import { buildExploreSystemPrompt } from "./explore-prompt.js";
 import { isProgressSummaryEligible, summarizeProgress } from "./progress-summary.js";
-import { buildExploreSystemPrompt } from "./prompt.js";
 import { captureStreamFinishReason, deriveSubagentRunStats, hasBeginSummaryCall } from "./run-stats.js";
+import { applySubagentCancelNotice, truncateSummary } from "./subagent-output.js";
 import { beginTaskRun, enterTaskSummaryPhase } from "./task-run-state.js";
 import { resolveSubagentBridgeUI, SUBAGENT_DEFAULT_MAX_ITERATIONS } from "./types.js";
 

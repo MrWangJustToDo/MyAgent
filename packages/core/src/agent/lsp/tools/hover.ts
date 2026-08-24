@@ -2,7 +2,7 @@
  * lsp_hover — type info and docs at a position.
  */
 
-import { resolvePosition, withResolved } from "./shared.js";
+import { resolvePosition, withResolved } from "./tool-shared.js";
 
 import type { LspManager } from "../lsp-manager.js";
 import type { Hover, MarkupContent } from "vscode-languageserver-protocol";

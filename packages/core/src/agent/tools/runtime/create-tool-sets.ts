@@ -1,4 +1,4 @@
-import { createSubagentTools } from "../../subagent/tools.js";
+import { createSubagentTools } from "../../subagent/subagent-tools.js";
 import { createTools } from "../create-tools.js";
 
 import { toolsToArray, type ToolsRecord } from "./tools-record.js";

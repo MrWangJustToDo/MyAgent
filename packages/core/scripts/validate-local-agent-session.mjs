@@ -25,6 +25,7 @@ function createFake(id, parentId) {
     error: "",
     pendingApprovalCount: 0,
     lastStreamDurationMs: 0,
+    getRetry: () => null,
     childIds: [],
     usage,
     log: null,

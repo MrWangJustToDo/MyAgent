@@ -49,13 +49,8 @@ export interface CreateSkillsExtensionOptions {
   config?: SkillsExtensionConfig;
 }
 
-/** Create the built-in Skills extension (default export kept for interop). */
+/** Create the built-in Skills extension. */
 export function createSkillsExtension(options: CreateSkillsExtensionOptions): ExtensionAPI {
-  return skillsExtension(options);
-}
-
-/** The built-in Skills extension factory (matches ExtensionFactory shape). */
-export function skillsExtension(options: CreateSkillsExtensionOptions): ExtensionAPI {
   const { skillRegistry, config } = options;
   return {
     id: "my-agent-skills",
@@ -68,8 +63,6 @@ export function skillsExtension(options: CreateSkillsExtensionOptions): Extensio
     },
   };
 }
-
-export default skillsExtension;
 
 async function activateSkills(
   ctx: ExtensionContext,

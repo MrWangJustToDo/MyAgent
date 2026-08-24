@@ -5,7 +5,7 @@
 import { formatLocation, formatLocationLink } from "../shared/format.js";
 import { findDefinition, getNodeAtPosition } from "../tree-sitter/symbol-extractor.js";
 
-import { resolvePosition, withResolved } from "./shared.js";
+import { resolvePosition, withResolved } from "./tool-shared.js";
 
 import type { LspManager } from "../lsp-manager.js";
 import type { TreeSitterManager } from "../tree-sitter/parser-manager.js";

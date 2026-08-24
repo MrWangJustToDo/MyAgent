@@ -3,11 +3,11 @@
  *
  * Covers:
  * - SkillRegistry loads SKILL.md files from `.agents/skills` (progressive disclosure)
- * - createSkillsExtension / skillsExtension are exported and produce an extension API
+ * - createSkillsExtension is exported and produces an extension API
  * - activation registers list_skills / load_skill tools (ExtensionToolDefinition)
  * - activation registers a turn-context provider that emits the <skills> index
  * - activation registers a /skill command that injects the full skill body
- * - skillsExtension config can disable tools / index independently
+ * - createSkillsExtension config can disable tools / index independently
  * - ManagedAgentConfig.skills accepts boolean | SkillsExtensionConfig (typecheck)
  *
  * Run: pnpm --filter @my-agent/core run validate:skills-extension
@@ -18,7 +18,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { registerCoreEnv, SkillRegistry, createSkillsExtension, skillsExtension } from "../dist/dev.mjs";
+import { registerCoreEnv, SkillRegistry, createSkillsExtension } from "../dist/dev.mjs";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 
@@ -74,9 +74,6 @@ assert.ok(loaded.body.length > 0, "skill body is non-empty");
 const api = createSkillsExtension({ skillRegistry: registry });
 assert.equal(api.id, "my-agent-skills", "extension id is my-agent-skills");
 assert.equal(typeof api.activate, "function", "extension has activate");
-
-const apiFromFactory = skillsExtension({ skillRegistry: registry });
-assert.equal(apiFromFactory.id, "my-agent-skills", "skillsExtension factory id is my-agent-skills");
 
 // ---------------------------------------------------------------------------
 // 3. Activation registers tools + turn-context provider

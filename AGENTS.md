@@ -288,6 +288,41 @@ import type { LanguageModel, ToolSet } from "ai";
 | Zod schemas | camelCase + Schema | `agentConfigSchema` |
 | Constants | SCREAMING_SNAKE_CASE | `DEFAULT_LOCAL_OPENAI_BASE_URL` |
 
+| Constants | SCREAMING_SNAKE_CASE | `DEFAULT_LOCAL_OPENAI_BASE_URL` |
+
+### Core Naming Conventions (packages/core)
+
+Rules that keep `packages/core` internally consistent. Deviations need a reason in the PR.
+
+**Files**
+
+- kebab-case, and the name must state the module's responsibility — avoid generic
+  placeholders (`helpers.ts`, `output.ts`, `prompt.ts`, `tools.ts`) for non-trivial modules.
+- Built-in extensions live at `<domain>/extension.ts` (e.g. `agent/skills/extension.ts`,
+  `agent/lsp/extension.ts`). The extension *framework* itself lives in `agent/extension/`.
+
+**Exports**
+
+- Built-in extension factories: exactly one canonical export `createXxxExtension`. No bare-name aliases, no default exports.
+- Internal renames land directly — no old-path re-exports, deprecated aliases, or staged dual exports; call sites switch in the same change.
+
+**Class members / accessors**
+
+- No underscore-prefixed members (`_status` ✗ → `currentStatus` ✓). Getter backing fields use descriptive names.
+- Read accessors: property-like hot reads may be getters (`get status`); everything else uses `getXxx()` / `setXxx()` methods. Pick one form per feature area and stay consistent.
+
+**Barrels**
+
+- Domain directories expose `index.ts`; import from the directory root when consuming 2+
+  symbols from it. The top-level `src/agent/` namespace is intentionally barrel-free —
+  cross-domain imports use direct module paths there.
+
+**File size**
+
+- Keep files ≤ 400 lines where a cohesive boundary exists (`.cursor/rules/040`). Files that
+  legitimately exceed it (`managed-agent.ts` as composition root) document the trade-off
+  instead of being cut arbitrarily.
+
 ### Error Handling
 ```typescript
 try {
@@ -854,32 +889,38 @@ Note: In the TUI, modifier chords use **Ctrl** (not Cmd/⌘). On macOS, prefer `
 packages/
 ├── core/src/                          # @my-agent/core — runtime-agnostic core
 │   ├── env.ts                         # CoreEnv interface, registry (registerCoreEnv/getEnv/clearCoreEnv)
+│   ├── env-types.ts                   # FileError / ExecutionError / fs+command result types
 │   ├── agent/
 │   │   ├── agent-log/                 # AgentLog — structured logging
+│   │   ├── approval/                  # Auto-mode controller + tool-approval table
 │   │   ├── compaction/                # Append SUMMARY + summary-first wire projection
 │   │   ├── extension/                 # Extension API (loader, runner, EventBus interception)
-│   │   ├── memory/                    # Memory management
+│   │   ├── lsp/                       # Built-in LSP extension (extension.ts) + LSP/tree-sitter tools
+│   │   ├── mcp/                       # MCP integration
+│   │   ├── media/                     # Multimodal media store (media:// refs) + repair helpers
+│   │   ├── memory/                    # Memory management + built-in Memory extension
 │   │   ├── plan/                      # Plan domain + plan tool factories
 │   │   ├── persistence/               # Disk session persistence (SessionStore)
-│   │   ├── skills/                    # Skill loading + built-in Skills extension (my-agent-skills)
-│   │   ├── stream/                    # Package-wide stream helpers (errors, text extract)
-│   │   ├── subagent/                  # Subagent spawning + task tool
+│   │   ├── run-helpers/               # Chat/run helpers (tool-phase, empty-stream, pending queue)
+│   │   ├── run/                       # runAgentOnce / consumeAgentStream (run skeleton)
+│   │   ├── runner/                    # AgentRunner + run context
+│   │   ├── skills/                    # Skill loading + built-in Skills extension
+│   │   ├── stream/                    # Stream helpers (errors, assistant-text extract)
+│   │   ├── subagent/                  # Subagent spawning + task tool (+ prefork / phase state)
+│   │   ├── summary-stream/            # SummaryStreamHub (task / compact summary streams)
 │   │   ├── todo-manager/              # Todo tracking + todo tool
 │   │   ├── tools/                     # Universal AI tools (fs, shell, web) + runtime/util
-│   │   ├── run-helpers/               # Chat/run helpers (tool-phase, empty-stream, pending queue)
+│   │   ├── turn-context/              # Per-turn dynamic context (<turn_context> payload)
 │   │   ├── ui-channel.ts              # AgentUIChannel (chat / subagent preview)
-│   │   ├── mcp/                       # MCP integration
 │   │   ├── default-prompt.ts          # System prompt builder
 │   │   └── agent-doc-loader.ts        # Agent documentation loader
-│   ├── env.ts                         # CoreEnv interface + registry
-│   ├── env-types.ts                   # FileError / ExecutionError / fs+command result types
 │   ├── agent-session/                 # Host-facing AgentSession / Host API
 │   ├── managers/                      # AgentManager, ManagedAgent, middleware, run pipeline
-│   ├── runtime-types/                 # Shared status / event / usage types (no manager deps)
 │   ├── models/                        # Model config (model-config.ts), adapters, models.dev lookup
+│   ├── runtime-types/                 # Shared status / event / usage types (no manager deps)
 │   ├── utils/                         # Cross-cutting helpers (Emitter, generateId)
 │   ├── index.ts                       # Curated public API exports (hosts / adapters)
-│   └── dev.ts                         # Internal-only re-exports for `pnpm validate:*` scripts
+│   └── dev*.ts                        # Internal-only re-exports for `pnpm validate:*` scripts
 │
 ├── app/src/                           # @my-agent/app — shared UI layer
 │   ├── adapter/

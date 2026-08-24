@@ -5,12 +5,7 @@ export type { ConsolidationResult } from "./memory-extractor.js";
 export { findRelevantMemories, formatRelevantMemories, resolveSelectedMemoryFilename } from "./memory-retrieval.js";
 
 // Built-in memory extension
-export {
-  createMemoryExtension,
-  memoryExtension,
-  type MemoryExtensionConfig,
-  type CreateMemoryExtensionOptions,
-} from "./extension.js";
+export { createMemoryExtension, type MemoryExtensionConfig, type CreateMemoryExtensionOptions } from "./extension.js";
 export {
   MEMORY_TYPES,
   DEFAULT_MEMORY_DIR,

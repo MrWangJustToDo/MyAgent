@@ -32,7 +32,7 @@ export async function emitSessionBootstrapEvents(
     });
   }
 
-  const skillRegistry = managed.getSkillRegister();
+  const skillRegistry = managed.getSkillRegistry();
   if (skillRegistry) {
     emitAgentTelemetry(managed, "session:skill", {
       count: skillRegistry.size,

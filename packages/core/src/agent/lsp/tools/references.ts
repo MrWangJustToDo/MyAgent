@@ -4,7 +4,7 @@
 
 import { formatLocation } from "../shared/format.js";
 
-import { resolvePosition, withResolved } from "./shared.js";
+import { resolvePosition, withResolved } from "./tool-shared.js";
 
 import type { LspManager } from "../lsp-manager.js";
 import type { Location } from "vscode-languageserver-protocol";

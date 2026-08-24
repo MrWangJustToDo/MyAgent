@@ -130,7 +130,7 @@ export async function buildManagedAgent({
 
   if (!parentId) {
     skillRegistry = new SkillRegistry({ rootPath: fsRootPath });
-    managed.setSkillRegister(skillRegistry);
+    managed.setSkillRegistry(skillRegistry);
 
     const dirsToLoad = skillDirs ?? (await getDefaultSkillDirs());
     await skillRegistry.loadFromDirectories(dirsToLoad);

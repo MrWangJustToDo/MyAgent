@@ -51,13 +51,8 @@ export interface CreateMemoryExtensionOptions {
   config?: MemoryExtensionConfig;
 }
 
-/** Create the built-in Memory extension (default export kept for interop). */
+/** Create the built-in Memory extension. */
 export function createMemoryExtension(options: CreateMemoryExtensionOptions): ExtensionAPI {
-  return memoryExtension(options);
-}
-
-/** The built-in Memory extension factory (matches ExtensionFactory shape). */
-export function memoryExtension(options: CreateMemoryExtensionOptions): ExtensionAPI {
   const { memoryManager, config } = options;
   return {
     id: "my-agent-memory",
@@ -70,8 +65,6 @@ export function memoryExtension(options: CreateMemoryExtensionOptions): Extensio
     },
   };
 }
-
-export default memoryExtension;
 
 async function activateMemory(
   ctx: ExtensionContext,

@@ -1,4 +1,4 @@
-import { createSubagentTools } from "../agent/subagent/tools.js";
+import { createSubagentTools } from "../agent/subagent/subagent-tools.js";
 import { getEnv } from "../env.js";
 
 import { buildManagedAgent } from "./agent-factory.js";

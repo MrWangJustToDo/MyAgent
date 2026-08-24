@@ -3,7 +3,7 @@
  *
  * Covers:
  * - DEFAULT_DISABLED_LSP_TOOLS contains the low-usage tool names
- * - createLspExtension / lspExtension are exported and produce an extension API
+ * - createLspExtension is exported and produces an extension API
  *
  * The tool-registration gating itself lives in `activateLsp` (registerTool is
  * only called when the tool is not in the disabled set); that path is covered
@@ -14,7 +14,7 @@
 
 import assert from "node:assert/strict";
 
-import { DEFAULT_DISABLED_LSP_TOOLS, createLspExtension, lspExtension } from "../dist/dev.mjs";
+import { DEFAULT_DISABLED_LSP_TOOLS, createLspExtension } from "../dist/dev.mjs";
 
 // Default disabled set = the low-usage tools we skip to save per-turn context.
 assert.ok(Array.isArray(DEFAULT_DISABLED_LSP_TOOLS), "DEFAULT_DISABLED_LSP_TOOLS is an array");
@@ -34,7 +34,7 @@ for (const tool of ["lsp_diagnostics", "lsp_hover", "lsp_definition", "lsp_refer
   assert.ok(!DEFAULT_DISABLED_LSP_TOOLS.includes(tool), `default disabled set excludes ${tool}`);
 }
 
-// createLspExtension / lspExtension produce an ExtensionAPI (accept optional config).
+// createLspExtension produces an ExtensionAPI (accepts optional config).
 const apiNoConfig = createLspExtension();
 assert.equal(apiNoConfig.id, "my-agent-lsp", "extension id is my-agent-lsp");
 assert.equal(typeof apiNoConfig.activate, "function", "extension has activate");
@@ -42,7 +42,7 @@ assert.equal(typeof apiNoConfig.activate, "function", "extension has activate");
 const apiWithConfig = createLspExtension({ enableAll: true });
 assert.equal(apiWithConfig.id, "my-agent-lsp", "createLspExtension accepts config");
 
-const apiFromFactory = lspExtension({ disabledTools: ["lsp_rename"] });
-assert.equal(apiFromFactory.id, "my-agent-lsp", "lspExtension accepts config");
+const apiWithDisabledTools = createLspExtension({ disabledTools: ["lsp_rename"] });
+assert.equal(apiWithDisabledTools.id, "my-agent-lsp", "createLspExtension accepts disabledTools config");
 
 console.log("lsp-tool-toggle validation passed");

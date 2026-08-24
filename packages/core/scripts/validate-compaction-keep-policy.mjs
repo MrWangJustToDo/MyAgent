@@ -8,6 +8,7 @@
  * Run: pnpm --filter @my-agent/core run validate:compaction-keep-policy
  */
 
+import { convertMessagesToModelMessages } from "@tanstack/ai";
 import assert from "node:assert/strict";
 
 import {
@@ -20,7 +21,6 @@ import {
   resolveKeepPolicy,
   createCompactionSummaryUIMessage,
 } from "../dist/dev.mjs";
-import { convertMessagesToModelMessages } from "@tanstack/ai";
 
 // ============================================================================
 // Helpers — build TanStack model messages with realistic sizes
