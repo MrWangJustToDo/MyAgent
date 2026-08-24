@@ -64,7 +64,7 @@ export const GRADIENT = {
  * Terminal base background — deep warm brown-black.
  * Background colors for input/messages are interpolated from this.
  */
-export const TERMINAL_BG = "#1A1816";
+const TERMINAL_BG = "#1A1816";
 /** Warm gray used for interpolating subtle background tints. */
 const GRAY = "#9B8B7A";
 
@@ -94,8 +94,6 @@ export const COLORS = {
 // ============================================================================
 
 export const BG = {
-  /** The assumed terminal background — used to paint invisible spacing bars. */
-  terminal: TERMINAL_BG,
   /**
    * Input box background — warm brown-black blended ~15% toward warm gray.
    * Subtle enough to distinguish from the main background without

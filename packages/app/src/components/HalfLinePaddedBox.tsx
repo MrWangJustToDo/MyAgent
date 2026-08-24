@@ -1,16 +1,15 @@
 import { Box, Text } from "ink";
 
 import { useSize } from "../hooks";
-import { BG } from "../theme/colors.js";
 
 import type { ReactNode } from "react";
 
 export interface HalfLinePaddedBoxProps {
   /** Background color for the padded box (hex or named color) */
   backgroundColor: string;
-  /** Keep the half-line spacing bars but paint them with the terminal
-   *  background (invisible) and drop the solid body fill — for content
-   *  that paints its own backgrounds (e.g. diffs). */
+  /** Skip the tinted ▄/▀ bars and solid fill entirely — spacing becomes
+   *  plain empty rows so content that paints its own backgrounds (e.g.
+   *  diffs) sits on the untouched terminal background. */
   transparentBody?: boolean;
   /** Content width override (defaults to screenWidth) */
   width?: number;
@@ -29,15 +28,24 @@ export const HalfLinePaddedBox = ({
 }: HalfLinePaddedBoxProps) => {
   const screenWidth = useSize((s) => s.state.screenWidth);
   const w = widthOverride ?? screenWidth;
-  const barColor = transparentBody ? BG.terminal : backgroundColor;
+
+  if (transparentBody) {
+    return (
+      <Box flexDirection="column" width={w}>
+        <Box height={1} />
+        {children}
+        <Box height={1} />
+      </Box>
+    );
+  }
 
   return (
     <Box flexDirection="column" width={w}>
-      <Text color={barColor}>{"▄".repeat(w)}</Text>
-      <Box width={w} backgroundColor={transparentBody ? undefined : backgroundColor}>
+      <Text color={backgroundColor}>{"▄".repeat(w)}</Text>
+      <Box width={w} backgroundColor={backgroundColor}>
         {children}
       </Box>
-      <Text color={barColor}>{"▀".repeat(w)}</Text>
+      <Text color={backgroundColor}>{"▀".repeat(w)}</Text>
     </Box>
   );
 };
