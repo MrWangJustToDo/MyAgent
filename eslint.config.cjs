@@ -16,6 +16,7 @@ module.exports = [
       "eslint.config.cjs",
       "tmp",
       "examples/extensions/**",
+      ".agents/**",
     ],
   },
   {

@@ -6,7 +6,6 @@
  * Run: node packages/app/test/session-handle-raw.test.mjs
  */
 import assert from "node:assert/strict";
-
 import { createState, markRaw, toRaw } from "reactivity-store";
 
 function makeHandle() {

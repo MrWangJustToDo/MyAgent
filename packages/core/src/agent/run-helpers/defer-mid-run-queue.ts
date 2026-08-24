@@ -1,6 +1,4 @@
-import { isActiveStatus } from "../../";
-
-import type { AgentStatus } from "../../runtime-types/agent-status.js";
+import { isActiveStatus, type AgentStatus } from "../../runtime-types";
 
 /**
  * Whether mid-run user input should be queued (steer/followUp) instead of

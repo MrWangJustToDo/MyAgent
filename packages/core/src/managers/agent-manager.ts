@@ -1,8 +1,8 @@
 import { createSubagentTools } from "../agent/subagent/subagent-tools.js";
 import { getEnv } from "../env.js";
+import { ACTIVE_STATUSES } from "../runtime-types/agent-status.js";
 
 import { buildManagedAgent } from "./agent-factory.js";
-import { ACTIVE_STATUSES } from "../runtime-types/agent-status.js";
 import { AgentTelemetryBus } from "./agent-telemetry-bus.js";
 import { bridgeTelemetryToAgentLog } from "./event-log-bridge.js";
 import { runManagedAgent, runManagedAgentStream, type RunAgentStreamInput } from "./run-agent.js";

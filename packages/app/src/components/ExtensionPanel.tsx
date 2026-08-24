@@ -126,6 +126,8 @@ export const ExtensionPanel = () => {
 
   const infos = useMemo(() => {
     void tick;
+    void view;
+    void revision;
     return session?.getSnapshot().extensions.extensions ?? [];
   }, [session, view, revision, tick]);
 

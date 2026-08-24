@@ -18,7 +18,7 @@ export function shouldSyntheticTrigger(
 
   const charBefore = character > 0 ? lineText[character - 1] : "";
   if (!charBefore) return null;
-  if (/[\w\d_\)\]]/.test(charBefore)) {
+  if (/[\w\d_\])]/.test(charBefore)) {
     return { insertLine: line, insertChar: character };
   }
   return null;
