@@ -22,6 +22,7 @@ import { BG, COLORS } from "../theme/colors.js";
 import { formatStatusBarModeLabel } from "../utils/agent-mode-label.js";
 import { formatDuration } from "../utils/format.js";
 import { approvalKeysHint, busyQueueHint, freeformSubmitHint, selectListHint } from "../utils/keyboard-labels.js";
+import { formatRetryStatus } from "../utils/retry-status.js";
 
 import type { AgentRetryState, AgentStatus, QueuedMessagesSnapshot } from "@my-agent/core";
 
@@ -148,22 +149,10 @@ export const Footer = ({
 /**
  * Context info bar above the input — shows status, shortcuts, todos.
  */
-const RETRY_STRATEGY_LABEL: Record<AgentRetryState["strategy"], string> = {
-  transient: "provider busy",
-  capability: "content stripped",
-  reactive_compact: "context compacted",
-  max_tokens: "output limit",
-};
 
 /** Live LLM-retry visibility — single compact line (attempt counts + wait). */
 const RetryStatus = ({ retry }: { retry: AgentRetryState }) => {
-  const waitSeconds = retry.delayMs != null ? Math.max(1, Math.round(retry.delayMs / 1000)) : undefined;
-  const wait = waitSeconds != null ? ` ~${waitSeconds}s` : "";
-  return (
-    <Spinner
-      text={`Retrying (${retry.attempt}/${retry.maxAttempts})${wait} · ${RETRY_STRATEGY_LABEL[retry.strategy]}`}
-    />
-  );
+  return <Spinner text={formatRetryStatus(retry)} />;
 };
 
 const ContextBar = ({

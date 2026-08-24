@@ -50,9 +50,10 @@ const getTaskToolsFromMessages = (messages: UIMessage[]): TaskToolCall[] => {
 };
 
 const readTaskInfo = (session: AgentSession | null, taskPhase?: "running" | "summary") => {
-  const messages = session?.getSnapshot().messages ?? [];
+  const snapshot = session?.getSnapshot();
+  const messages = snapshot?.messages ?? [];
   const allTools = getTaskToolsFromMessages(messages);
-  const usage: TokenUsage | null = session ? { ...session.getSnapshot().usage.total } : null;
+  const usage: TokenUsage | null = snapshot ? { ...snapshot.usage.total } : null;
   return {
     allTools,
     total: allTools.length,
@@ -60,6 +61,8 @@ const readTaskInfo = (session: AgentSession | null, taskPhase?: "running" | "sum
     // Authoritative phase machine first; message scan is a fallback for
     // transcripts that predate live phase tracking.
     phase: taskPhase ?? getTaskPhaseFromMessages(messages),
+    // Live LLM-retry state from the child agent (null when not retrying).
+    retry: snapshot?.retry ?? null,
   };
 };
 

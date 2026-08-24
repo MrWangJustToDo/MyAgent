@@ -5,8 +5,10 @@ import { SubagentPreviewView } from "../messages/SubagentPreviewView.js";
 import { COLORS } from "../theme/colors.js";
 import { formatUsageBrief } from "../utils/format-usage.js";
 import { KeyLabel } from "../utils/keyboard-labels.js";
+import { formatRetryStatus } from "../utils/retry-status.js";
 import { resolveAgentSession } from "../utils/session-resolve.js";
 
+import { Spinner } from "./Spinner.js";
 import { getStatusColor, getStatusIcon } from "./subagent-status.js";
 
 export const SubagentDetailPanel = ({ subagentId, onBack }: { subagentId: string; onBack: () => void }) => {
@@ -77,6 +79,11 @@ export const SubagentDetailPanel = ({ subagentId, onBack }: { subagentId: string
             · ({KeyLabel.esc} back to task list)
           </Text>
         </Box>
+        {snap?.retry && (
+          <Box>
+            <Spinner text={formatRetryStatus(snap.retry)} />
+          </Box>
+        )}
       </Box>
       <Box flexDirection="column" flexGrow={1}>
         <SubagentPreviewView subagentId={subagentId} />
