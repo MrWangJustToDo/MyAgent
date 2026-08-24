@@ -69,11 +69,6 @@ export const MessageList = ({ messages }: MessageListProps) => {
     mode,
   });
 
-  // ── Turn grouping: consecutive flattened assistant parts sit tight; turn
-  // boundaries (user message / list start) keep a blank line. ──
-  const tightMargin = (prevRole: string | undefined, role: string) =>
-    prevRole === "assistant" && role === "assistant" ? 0 : 1;
-
   // ── Truncate static list to bounded size ──
   const hiddenPartCount = staticMessages.length > MAX_STATIC_PARTS ? staticMessages.length - MAX_STATIC_PARTS : 0;
   const visibleStaticMessages = hiddenPartCount > 0 ? staticMessages.slice(-MAX_STATIC_PARTS) : staticMessages;
@@ -109,12 +104,8 @@ export const MessageList = ({ messages }: MessageListProps) => {
     lastHiddenCountRef.current = hiddenPartCount;
     lastModeRef.current = mode;
 
-    const elements = visibleStaticMessages.map((item, index) => (
-      <Box
-        key={item.id}
-        paddingX={1}
-        marginTop={index > 0 ? tightMargin(visibleStaticMessages[index - 1]?.role, item.role) : 1}
-      >
+    const elements = visibleStaticMessages.map((item) => (
+      <Box key={item.id} paddingX={1} marginTop={1}>
         <TranscriptDisplayContext value={mode}>
           <CollapsedToolsContext value={collapsedToolCallIds}>
             <StaticContext value={{ staticMessage: true }}>
@@ -149,12 +140,8 @@ export const MessageList = ({ messages }: MessageListProps) => {
     lastDynamicModeRef.current = mode;
 
     dynamicListRef.current = dynamicMessages.length ? (
-      dynamicMessages.map((message, index) => (
-        <Box
-          key={message.id}
-          paddingX={1}
-          marginTop={index > 0 ? tightMargin(dynamicMessages[index - 1]?.role, message.role) : 1}
-        >
+      dynamicMessages.map((message) => (
+        <Box key={message.id} paddingX={1} marginTop={1}>
           <TranscriptDisplayContext value={mode}>
             <CollapsedToolsContext value={collapsedToolCallIds}>
               <StaticContext value={{ staticMessage: false }}>
