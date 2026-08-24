@@ -136,10 +136,13 @@ export function getCompactOutput(part: ToolCallPart, toolName: string): string |
       return `Background job ${String(output.jobId)} started`;
     }
     const success = output.success as boolean | undefined;
+    // Success is already visible from the header icon (and the duration once
+    // it exceeds the threshold) — only failures need an explicit line.
+    if (success !== false) return null;
     const exitCode = output.exitCode as number | undefined;
     const durationMs = output.durationMs as number | undefined;
     const dur = typeof durationMs === "number" ? ` in ${durationMs}ms` : "";
-    return success ? `Command executed successfully${dur}` : `Command failed with exit code ${exitCode ?? "?"}${dur}`;
+    return `Command failed with exit code ${exitCode ?? "?"}${dur}`;
   }
   return null;
 }
