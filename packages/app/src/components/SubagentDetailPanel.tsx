@@ -20,11 +20,14 @@ export const SubagentDetailPanel = ({ subagentId, onBack }: { subagentId: string
 
   useEffect(() => {
     if (!childSession) return;
+    // No `messages` channel: the transcript lives in SubagentPreviewView
+    // (throttled via useSubagentMessages). Re-rendering this whole panel per
+    // stream chunk would re-run the preview pipeline for every token.
     return childSession.subscribe(
       () => {
         setTick((n) => n + 1);
       },
-      { channels: ["messages", "usage", "state", "lifecycle"] }
+      { channels: ["usage", "state", "lifecycle"] }
     );
   }, [childSession, subagentId]);
 
