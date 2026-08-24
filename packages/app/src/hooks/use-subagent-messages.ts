@@ -25,8 +25,13 @@ export function useSubagentMessages(subagentId: string | undefined): UIMessage[]
       return;
     }
 
-    const refresh = throttle(() => setMessages(readSubagentMessages(subagentId)), 200);
-    refresh();
+    // `messages` events fire per stream chunk (often >50/s). Rendering a huge
+    // transcript that often freezes the UI, so all channels go through one
+    // trailing throttle: state/lifecycle refreshes coalesce into it, and the
+    // chunk path only forces an earlier flush (never bypasses the interval).
+    let pendingMessages: UIMessage[] | null = null;
+    const flush = () => setMessages(pendingMessages ?? readSubagentMessages(subagentId));
+    const throttledFlush = throttle(flush, 200, { leading: false, trailing: true });
 
     let childUnsub: (() => void) | undefined;
     const attachChild = () => {
@@ -37,17 +42,19 @@ export function useSubagentMessages(subagentId: string | undefined): UIMessage[]
       childUnsub = child.subscribe(
         (event) => {
           if (event.channel === "messages") {
-            refresh.cancel();
-            setMessages(event.payload as UIMessage[]);
+            pendingMessages = event.payload as UIMessage[];
+            throttledFlush();
             return;
           }
-          refresh();
+          pendingMessages = null;
+          throttledFlush();
         },
         { channels: ["messages", "state", "lifecycle"] }
       );
     };
 
     attachChild();
+    setMessages(readSubagentMessages(subagentId));
 
     let rootUnsub: (() => void) | undefined;
     if (rootSession) {
@@ -61,7 +68,8 @@ export function useSubagentMessages(subagentId: string | undefined): UIMessage[]
             event.payload.type === "subagent:ui-update"
           ) {
             attachChild();
-            refresh();
+            pendingMessages = null;
+            throttledFlush();
           }
         },
         { channels: ["lifecycle"] }
@@ -71,7 +79,7 @@ export function useSubagentMessages(subagentId: string | undefined): UIMessage[]
     return () => {
       childUnsub?.();
       rootUnsub?.();
-      refresh.cancel();
+      throttledFlush.cancel();
     };
   }, [subagentId, rootSession]);
 
