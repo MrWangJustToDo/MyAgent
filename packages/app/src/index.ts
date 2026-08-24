@@ -54,6 +54,7 @@ export {
   shouldFlattenPart,
 } from "./utils/dedupe-tool-calls.js";
 export { getUiToolState, isToolCallPart, isToolExecuting, parseToolInput } from "./utils/tool-part.js";
+export { truncateTextToMaxLines, wrapTextToLines } from "./utils/user-message-lines.js";
 export {
   CONVERSATION_SUMMARY_START,
   CONVERSATION_SUMMARY_END,
