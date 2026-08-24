@@ -30,7 +30,7 @@ assert.equal(extractRetryAfterSeconds({ retryAfter: 3, message: "429" }), 3);
 assert.equal(extractRetryAfterSeconds(new Error("no hint")), undefined);
 
 const delay0 = retryDelayMs(0);
-assert.ok(delay0 >= 500 && delay0 <= 500 * 1.25);
+assert.ok(delay0 >= 2000 && delay0 <= 2000 * 1.25);
 assert.equal(retryDelayMs(0, 2), 2000);
 
 // --- non-retryable RUN_ERROR still throws ---

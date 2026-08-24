@@ -32,8 +32,8 @@ export {
 
 /** Max bytes for backoff delay calculation. */
 const MAX_RETRY_BACKOFF_MS = 32000;
-/** Base delay for exponential backoff. */
-const BASE_RETRY_DELAY_MS = 500;
+/** Base delay for exponential backoff (kept high enough that attempt gaps are perceptible). */
+const BASE_RETRY_DELAY_MS = 2000;
 /** Max number of overall recovery attempts (reactive compact, multimodal strip, truncation, backoff). */
 const MAX_RECOVERY_ATTEMPTS = 3;
 

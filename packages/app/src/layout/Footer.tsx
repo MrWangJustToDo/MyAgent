@@ -150,25 +150,19 @@ export const Footer = ({
  */
 const RETRY_STRATEGY_LABEL: Record<AgentRetryState["strategy"], string> = {
   transient: "provider busy",
-  capability: "unsupported content stripped",
+  capability: "content stripped",
   reactive_compact: "context compacted",
   max_tokens: "output limit",
 };
 
-/** Live LLM-retry visibility (attempt counts + triggering error). */
+/** Live LLM-retry visibility — single compact line (attempt counts + wait). */
 const RetryStatus = ({ retry }: { retry: AgentRetryState }) => {
   const waitSeconds = retry.delayMs != null ? Math.max(1, Math.round(retry.delayMs / 1000)) : undefined;
+  const wait = waitSeconds != null ? ` ~${waitSeconds}s` : "";
   return (
-    <>
-      <Spinner text={`Retrying (${retry.attempt}/${retry.maxAttempts})...`} />
-      {(retry.error || waitSeconds) && (
-        <Text color={COLORS.warning} dimColor wrap="truncate-end">
-          {RETRY_STRATEGY_LABEL[retry.strategy]}
-          {retry.error ? ` · ${retry.error}` : ""}
-          {!retry.error && waitSeconds ? ` · next in ~${waitSeconds}s` : ""}
-        </Text>
-      )}
-    </>
+    <Spinner
+      text={`Retrying (${retry.attempt}/${retry.maxAttempts})${wait} · ${RETRY_STRATEGY_LABEL[retry.strategy]}`}
+    />
   );
 };
 
