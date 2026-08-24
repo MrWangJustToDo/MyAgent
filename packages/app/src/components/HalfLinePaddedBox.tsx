@@ -34,7 +34,7 @@ export const HalfLinePaddedBox = ({
       <Box flexDirection="column" width={w}>
         <Box height={1} />
         {children}
-        <Box height={1} />
+        {/* <Box height={1} /> */}
       </Box>
     );
   }

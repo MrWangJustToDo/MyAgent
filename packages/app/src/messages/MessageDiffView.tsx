@@ -1,7 +1,7 @@
 import { memo } from "react";
 
-import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
 import { EditDiff } from "../components/EditDiff.js";
+import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
 import { BG } from "../theme/colors.js";
 
 export type MessageDiffViewProps = {

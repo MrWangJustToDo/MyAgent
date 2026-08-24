@@ -43,7 +43,7 @@ export const UserMessageView = memo(
       return map;
     }, [fileParts, fileIndexMap]);
 
-    const prefixWidth = 4;
+    const prefixWidth = 3;
 
     return (
       <HalfLinePaddedBox backgroundColor={BG.message} width={contentWidth}>
