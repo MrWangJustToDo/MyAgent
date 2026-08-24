@@ -211,8 +211,15 @@ export class AgentUIChannel {
    * panel does not keep stale tools / summary text while the model restarts.
    */
   resetForStreamRetry(): void {
-    const firstUser = this.getMessages().find((m) => m.role === "user");
-    this.setMessages(firstUser ? [firstUser] : []);
+    // Keep ALL leading user messages — subagent channels are seeded with a
+    // synthetic <turn_context> user message before the real task prompt, so
+    // keeping only the first user message would drop the prompt itself.
+    const kept: TanStackUIMessage[] = [];
+    for (const message of this.getMessages()) {
+      if (message.role !== "user") break;
+      kept.push(message);
+    }
+    this.setMessages(kept);
     this.currentTurnMessageId = undefined;
 
     if (this.summaryHub && this.parentTaskToolCallId && !this.compactId) {

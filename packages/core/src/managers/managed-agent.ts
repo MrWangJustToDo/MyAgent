@@ -98,6 +98,7 @@ import type { TextAdapterConfig } from "../models/adapter-factory.js";
 import type { ModelStyle } from "../models/model-config.js";
 import type { ModelInfo } from "../models/types.js";
 import type { AgentEventPayloadMap } from "../runtime-types/agent-event-payloads.js";
+import type { AgentRetryState } from "../runtime-types/agent-retry.js";
 
 // ============================================================================
 // Config
@@ -116,6 +117,8 @@ export interface AgentL1State {
   status: AgentStatus;
   error: string;
   pendingApprovalCount: number;
+  /** Present while a recoverable LLM failure is being retried (cleared once the stream recovers). */
+  retry?: AgentRetryState | null;
 }
 
 export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
@@ -209,6 +212,8 @@ export class ManagedAgent {
   private error: string;
   /** Tools awaiting user approval in the current run (set by approval middleware). */
   private pendingApprovalCount: number;
+  /** Live LLM retry visibility (set by stream recovery; cleared when the stream recovers). */
+  private retryInfo: AgentRetryState | null = null;
   private readonly stateEvents: Emitter<{
     change: AgentL1State;
     /** Fired when {@link setUIChannel} attaches/clears the UI channel. */
@@ -472,6 +477,8 @@ export class ManagedAgent {
   setStatus(status: AgentStatus): void {
     if (status === "completed" || status === "aborted" || status === "error") {
       this.recordStreamDuration();
+      // Terminal — any in-flight retry visibility is over.
+      this.retryInfo = null;
     }
     this._status = status;
     this.emitStateChange();
@@ -490,6 +497,16 @@ export class ManagedAgent {
 
   setPendingApprovalCount(count: number): void {
     this.pendingApprovalCount = count;
+    this.emitStateChange();
+  }
+
+  getRetry(): AgentRetryState | null {
+    return this.retryInfo;
+  }
+
+  /** @internal Used by stream recovery to surface retry progress to hosts. */
+  setRetry(retry: AgentRetryState | null): void {
+    this.retryInfo = retry;
     this.emitStateChange();
   }
 
@@ -528,6 +545,7 @@ export class ManagedAgent {
       status: this._status,
       error: this.error,
       pendingApprovalCount: this.pendingApprovalCount,
+      ...(this.retryInfo ? { retry: this.retryInfo } : {}),
     };
   }
 
@@ -1167,6 +1185,30 @@ export class ManagedAgent {
    */
   abort(reason?: string): void {
     abortManagedAgentRun(this, reason);
+    this.cascadeAbortToChildren(reason);
+  }
+
+  /**
+   * Abort actively running child subagents so a parent stop (server/extension
+   * hosts dispatching stop directly, force-submit) does not leave detached
+   * tasks streaming in the background. Idle/completed children are untouched.
+   */
+  private cascadeAbortToChildren(reason?: string): void {
+    const manager = this.manager;
+    if (!manager || this.childIds.length === 0) return;
+    for (const childId of [...this.childIds]) {
+      const child = manager.getAgent(childId);
+      if (!child) continue;
+      const status = child.status;
+      if (status !== "running" && status !== "compacting" && status !== "thinking" && status !== "responding") {
+        continue;
+      }
+      try {
+        child.abort(reason ?? "parent-aborted");
+      } catch {
+        // Never let a cascade failure break the parent's own abort path.
+      }
+    }
   }
 
   isAbortError(err: unknown): boolean {
@@ -1259,6 +1301,7 @@ export class ManagedAgent {
     this.run.resetRunState();
     this.statusController.resetToIdle();
     this.setError("");
+    this.retryInfo = null;
     this.pendingApprovalCount = 0;
     this.memory.resetState();
     this.turnContextSnapshot = undefined;

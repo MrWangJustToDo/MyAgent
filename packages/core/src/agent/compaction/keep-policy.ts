@@ -57,10 +57,20 @@ export function resolveReserveTokens(config?: Partial<CompactionConfig>): number
 }
 
 /**
+ * Clamp the reserve to a fraction of the context window. A fixed reserve
+ * larger than ~25% of a small window would push the trigger point into
+ * constant-compaction territory (or below zero usable space).
+ */
+function effectiveReserveTokens(reserveTokens: number, contextWindow: number): number {
+  const cap = Math.max(1, Math.floor(contextWindow * 0.25));
+  return Math.min(Math.max(0, reserveTokens), cap);
+}
+
+/**
  * Derive a keep budget from the model context window.
  */
 export function deriveKeepRecentTokens(contextWindow: number, reserveTokens = DEFAULT_RESERVE_TOKENS): number {
-  const usable = Math.max(0, contextWindow - reserveTokens);
+  const usable = Math.max(0, contextWindow - effectiveReserveTokens(reserveTokens, contextWindow));
   if (usable <= 0) return KEEP_RECENT_WINDOW_MIN;
   return Math.min(
     KEEP_RECENT_WINDOW_CAP,
@@ -121,8 +131,10 @@ export function resolveAutoCompactTrigger(
   contextWindow?: number
 ): { triggerAt: number; windowRelative: boolean } {
   const compactAtPercent = config.compactAtPercent ?? DEFAULT_COMPACTION_CONFIG.compactAtPercent;
-  const reserveTokens = resolveReserveTokens(config);
   if (contextWindow && contextWindow > 0) {
+    // Reserve is clamped to a window fraction so small-window models keep a
+    // proportional working set instead of tripping into constant compaction.
+    const reserveTokens = effectiveReserveTokens(resolveReserveTokens(config), contextWindow);
     const effectiveThreshold = Math.max(1_000, contextWindow - reserveTokens);
     return { triggerAt: Math.floor((effectiveThreshold * compactAtPercent) / 100), windowRelative: true };
   }

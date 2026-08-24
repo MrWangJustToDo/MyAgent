@@ -369,9 +369,14 @@ export async function autoCompact(
         asTurnPrefix: true,
         instruction: TURN_PREFIX_INSTRUCTION,
       });
+      // When the split turn starts right after the head SUMMARY (no history to
+      // compress), prevSummary must still survive — otherwise the new checkpoint
+      // would silently drop all pre-split context.
       summary = historySummary
         ? `${historySummary}\n\n---\n\n## Turn Context (split turn)\n\n${prefixSummary}`
-        : prefixSummary;
+        : prevSummary
+          ? `${prevSummary}\n\n---\n\n## Turn Context (split turn)\n\n${prefixSummary}`
+          : prefixSummary;
     } else {
       summary = await summarizeConversation(historyToSummarize, parentAgentId, manager, {
         ...options,

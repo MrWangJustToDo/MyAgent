@@ -139,7 +139,9 @@ export function buildAgentRunner(
       agentId: deps.agentId,
       manager: deps.manager,
       getCompactionConfig: () => deps.compactionConfig,
-      getContextWindow: () => deps.modelInfo?.contextWindow,
+      // Read live so late-arriving ModelInfo (models.dev lookup) stays in sync
+      // with ManagedAgent.getMessagesForLLM's keep-policy resolution.
+      getContextWindow: () => managed.getModelInfo()?.contextWindow,
       getUIChannel: () => deps.getUIChannel(),
       getUsage: () => deps.usage,
       getTodoManager: () => deps.todoManager,

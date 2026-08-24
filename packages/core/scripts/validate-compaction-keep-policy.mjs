@@ -92,10 +92,18 @@ assert.deepEqual(keepPolicyProjectionOptions({ kind: "turns", keepRecentFlows: 2
 // Window-relative trigger
 // ============================================================================
 
+// Reserve is clamped to 25% of the window: min(16384, 32k*0.25=8k) = 8k.
 assert.deepEqual(resolveAutoCompactTrigger({ compactAtPercent: 80 }, 32_000), {
-  triggerAt: Math.floor(((32_000 - 16_384) * 80) / 100),
+  triggerAt: Math.floor(((32_000 - 8_000) * 80) / 100),
   windowRelative: true,
 });
+// Tiny window: reserve clamps to a fraction — no constant-compaction collapse.
+{
+  const tiny = resolveAutoCompactTrigger({}, 8_000);
+  assert.equal(tiny.windowRelative, true);
+  // reserve = min(16384, 2000) = 2000 → (8000-2000)*0.8 = 4800
+  assert.equal(tiny.triggerAt, 4_800);
+}
 // Legacy absolute path.
 {
   const r = resolveAutoCompactTrigger({ tokenThreshold: 100_000, compactAtPercent: 50 });

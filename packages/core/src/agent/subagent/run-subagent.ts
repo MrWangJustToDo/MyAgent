@@ -87,199 +87,213 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     throw new Error(`Subagent not found: ${subagentId}`);
   }
 
-  // Build minimal turn context (date + git) for subagent's environmental awareness.
-  // Keeps subagent isolated while providing necessary time/workspace context.
-  // NOTE: these must live in the UI channel (durable SoT) — executeManagedAgentRun
-  // reads the model wire messages from the channel, not the `messages` argument.
-  const envContext = await buildSubagentTurnContext();
-  const tcMessages: ModelMessage[] = envContext
-    ? [{ role: "user", content: `<turn_context>\n${envContext}\n</turn_context>` }]
-    : [];
-
-  const messages: ModelMessage[] = [...tcMessages, ...(initialMessages ?? []), { role: "user", content: prompt }];
-
-  const userUIMessage: TanStackUIMessage = {
-    id: generateId("msg"),
-    role: "user",
-    parts: [{ type: "text", content: prompt }],
-    createdAt: new Date(),
-  };
-
-  // Always attach a channel (durable message SoT). bridgeUI only gates parent panel streaming.
-  // Seed the channel with the turn-context messages too so the model actually receives them
-  // (the runner projects wire messages from the channel).
-  const channel = ensureUIChannel(subagentManaged, {
-    initialMessages: [
-      ...tcMessages.map((m) => ({
-        id: generateId("tc"),
-        role: "user" as const,
-        parts: [{ type: "text" as const, content: typeof m.content === "string" ? m.content : "" }],
-      })),
-      userUIMessage,
-    ],
-  });
-
-  const summaryHub = bridgeUI || compactSummaryStream ? parentManaged.summaryStreams : undefined;
-  const compactId = compactSummaryStream?.compactId;
-
-  subagent.emitEvent("subagent:created", { subagentId }, { parentId: parentAgentId });
-  subagent.emitEvent("subagent:started", { subagentId, description }, { parentId: parentAgentId });
-
-  subagentManaged.resetTurnLifecycle();
-
-  let output = "(no summary)";
-  let aborted = false;
-  let finishReason: string | null = null;
-  let previewMessages: UIMessage[] = [];
-
+  // Any throw after spawn (stream failure, finalize error, summarizer crash) must
+  // not leave the subagent registered when autoDestroy was requested.
+  let subagentRunCompleted = false;
   try {
-    const result = await runAgentOnce({
-      manager,
-      agentId: subagentId,
-      messages,
-      abortSignal,
-      channel,
-      parentTaskToolCallId: bridgeUI ? parentTaskToolCallId : undefined,
-      streamingAgentId: bridgeUI ? parentAgentId : undefined,
-      summaryHub,
-      compactId,
-      onUpdate: bridgeUI
-        ? (updated) => {
-            subagentManaged.emitEvent(
-              "subagent:ui-update",
-              { subagentId, messageCount: updated.length },
-              { parentId: parentAgentId }
-            );
-          }
-        : undefined,
-      transformStream: (stream) =>
-        throwOnRunError(
-          captureStreamFinishReason(stream, (reason) => {
-            finishReason = reason;
-          })
-        ),
-      // Outcome applied below — abort ends the stream without throwing, so we must
-      // not hardcode `finished` (that would clobber `aborted` / skip cancel notice).
+    // Build minimal turn context (date + git) for subagent's environmental awareness.
+    // Keeps subagent isolated while providing necessary time/workspace context.
+    // NOTE: these must live in the UI channel (durable SoT) — executeManagedAgentRun
+    // reads the model wire messages from the channel, not the `messages` argument.
+    const envContext = await buildSubagentTurnContext();
+    const tcMessages: ModelMessage[] = envContext
+      ? [{ role: "user", content: `<turn_context>\n${envContext}\n</turn_context>` }]
+      : [];
+
+    const messages: ModelMessage[] = [...tcMessages, ...(initialMessages ?? []), { role: "user", content: prompt }];
+
+    const userUIMessage: TanStackUIMessage = {
+      id: generateId("msg"),
+      role: "user",
+      parts: [{ type: "text", content: prompt }],
+      createdAt: new Date(),
+    };
+
+    // Always attach a channel (durable message SoT). bridgeUI only gates parent panel streaming.
+    // Seed the channel with the turn-context messages too so the model actually receives them
+    // (the runner projects wire messages from the channel).
+    const channel = ensureUIChannel(subagentManaged, {
+      initialMessages: [
+        ...tcMessages.map((m) => ({
+          id: generateId("tc"),
+          role: "user" as const,
+          parts: [{ type: "text" as const, content: typeof m.content === "string" ? m.content : "" }],
+        })),
+        userUIMessage,
+      ],
     });
-    previewMessages = result.messages;
-    output = extractAssistantText(previewMessages)?.trim() || "(no summary)";
-  } catch (err) {
-    const managed = manager.getAgent(subagentId);
-    if (managed?.status === "aborted" || managed?.isAbortError(err)) {
-      aborted = true;
-      previewMessages = channel?.getMessages() ?? previewMessages;
+
+    const summaryHub = bridgeUI || compactSummaryStream ? parentManaged.summaryStreams : undefined;
+    const compactId = compactSummaryStream?.compactId;
+
+    subagent.emitEvent("subagent:created", { subagentId }, { parentId: parentAgentId });
+    subagent.emitEvent("subagent:started", { subagentId, description }, { parentId: parentAgentId });
+
+    subagentManaged.resetTurnLifecycle();
+
+    let output = "(no summary)";
+    let aborted = false;
+    let finishReason: string | null = null;
+    let previewMessages: UIMessage[] = [];
+
+    try {
+      const result = await runAgentOnce({
+        manager,
+        agentId: subagentId,
+        messages,
+        abortSignal,
+        channel,
+        parentTaskToolCallId: bridgeUI ? parentTaskToolCallId : undefined,
+        streamingAgentId: bridgeUI ? parentAgentId : undefined,
+        summaryHub,
+        compactId,
+        onUpdate: bridgeUI
+          ? (updated) => {
+              subagentManaged.emitEvent(
+                "subagent:ui-update",
+                { subagentId, messageCount: updated.length },
+                { parentId: parentAgentId }
+              );
+            }
+          : undefined,
+        transformStream: (stream) =>
+          throwOnRunError(
+            captureStreamFinishReason(stream, (reason) => {
+              finishReason = reason;
+            })
+          ),
+        // Outcome applied below — abort ends the stream without throwing, so we must
+        // not hardcode `finished` (that would clobber `aborted` / skip cancel notice).
+      });
+      previewMessages = result.messages;
       output = extractAssistantText(previewMessages)?.trim() || "(no summary)";
-    } else {
-      // Non-abort failure: clear the subagent's partial history and roll the
-      // task-tool phase back out of `summary` so the preview does not linger on
-      // stale tool rows / summary text after a failed run.
-      try {
-        channel.failRun();
-      } catch {
-        // ignore cleanup errors while propagating the run failure
+    } catch (err) {
+      const managed = manager.getAgent(subagentId);
+      if (managed?.status === "aborted" || managed?.isAbortError(err)) {
+        aborted = true;
+        previewMessages = channel?.getMessages() ?? previewMessages;
+        output = extractAssistantText(previewMessages)?.trim() || "(no summary)";
+      } else {
+        // Non-abort failure: clear the subagent's partial history and roll the
+        // task-tool phase back out of `summary` so the preview does not linger on
+        // stale tool rows / summary text after a failed run.
+        try {
+          channel.failRun();
+        } catch {
+          // ignore cleanup errors while propagating the run failure
+        }
+        try {
+          subagentManaged.finalizeRun(manager, "error");
+        } catch {
+          // ignore finalize errors while propagating the run failure
+        }
+        throw err;
       }
-      try {
-        subagentManaged.finalizeRun(manager, "error");
-      } catch {
-        // ignore finalize errors while propagating the run failure
+    }
+
+    // Esc → managed.abort() sets status during consume; stream often completes without throw.
+    aborted =
+      aborted ||
+      subagentManaged.status === "aborted" ||
+      Boolean(subagentManaged.run.currentAbortController?.signal.aborted);
+
+    const outcomeKind = aborted ? "aborted" : "finished";
+    subagentManaged.statusController.applyRunOutcome({
+      kind: outcomeKind,
+      messages: previewMessages,
+      path: "detached",
+    });
+    subagentManaged.finalizeRun(manager, outcomeKind);
+    const noticed = applySubagentCancelNotice(output, aborted);
+    let { summary: finalOutput, truncated } = truncateSummary(noticed, maxOutputLength);
+
+    const runStats = deriveSubagentRunStats({
+      messages: previewMessages,
+      maxIterations,
+      finishReason,
+      output: finalOutput,
+      aborted,
+      status: subagentManaged.status,
+    });
+
+    // Snapshot status flags BEFORE the progress-summary fallback. The fallback may
+    // replace the output text, but it must NEVER change the subagent's status
+    // semantics: a step-budget cutoff stays reachedLimit=true + incomplete=true
+    // even after a progress report replaces the empty output. Returning these
+    // snapshots (not re-read runStats) keeps the contract explicit.
+    const statusFlags = {
+      iterations: runStats.iterations,
+      reachedLimit: runStats.reachedLimit,
+      incomplete: runStats.incomplete,
+    };
+
+    // Fallback: when the subagent hit the iteration budget before writing a final
+    // answer (reachedLimit + incomplete), spawn a parent-owned summarizer that
+    // distills the execution trace into a structured progress report. This also
+    // covers the mid-tool-loop cutoff: output may hold exploration narration
+    // ("Let me do a final check…") but without a `begin_summary` call it is not a
+    // final answer. Failure is silent — the original output is kept unchanged.
+    //
+    // Gated to exploration subagents (default explore tools). Compaction / memory
+    // summarizer subagents pass `tools: {}` — never fall back for them, or the
+    // fallback would recursively spawn yet another summarizer.
+    if (
+      !customTools &&
+      isProgressSummaryEligible(
+        statusFlags.incomplete,
+        statusFlags.reachedLimit,
+        finalOutput,
+        hasBeginSummaryCall(previewMessages)
+      )
+    ) {
+      const progressSummary = await summarizeProgress(previewMessages, parentAgentId, manager, prompt);
+      if (progressSummary) {
+        const truncatedResult = truncateSummary(progressSummary, maxOutputLength);
+        finalOutput = truncatedResult.summary;
+        truncated = truncatedResult.truncated;
       }
-      throw err;
+    }
+
+    const usage = subagentManaged.usage.getTotal();
+
+    if (aggregateUsageToParent && parentManaged) {
+      parentManaged.usage.addTotal(usage);
+    }
+
+    subagent.emitEvent(
+      aborted ? "subagent:error" : "subagent:completed",
+      aborted ? { subagentId, error: finalOutput } : { subagentId, summary: finalOutput },
+      { parentId: parentAgentId }
+    );
+
+    if (autoDestroy) {
+      manager.destroyAgent(subagentId);
+    }
+
+    subagentRunCompleted = true;
+    return {
+      subagentId,
+      output: finalOutput,
+      truncated,
+      iterations: statusFlags.iterations,
+      usage: {
+        inputTokens: usage.inputTokens ?? 0,
+        outputTokens: usage.outputTokens ?? 0,
+        totalTokens: usage.totalTokens ?? 0,
+      },
+      reachedLimit: statusFlags.reachedLimit,
+      incomplete: statusFlags.incomplete,
+      aborted,
+    };
+  } finally {
+    if (!subagentRunCompleted && autoDestroy) {
+      try {
+        manager.destroyAgent(subagentId);
+      } catch {
+        // Cleanup must never mask the original failure.
+      }
     }
   }
-
-  // Esc → managed.abort() sets status during consume; stream often completes without throw.
-  aborted =
-    aborted ||
-    subagentManaged.status === "aborted" ||
-    Boolean(subagentManaged.run.currentAbortController?.signal.aborted);
-
-  const outcomeKind = aborted ? "aborted" : "finished";
-  subagentManaged.statusController.applyRunOutcome({
-    kind: outcomeKind,
-    messages: previewMessages,
-    path: "detached",
-  });
-  subagentManaged.finalizeRun(manager, outcomeKind);
-  const noticed = applySubagentCancelNotice(output, aborted);
-  let { summary: finalOutput, truncated } = truncateSummary(noticed, maxOutputLength);
-
-  const runStats = deriveSubagentRunStats({
-    messages: previewMessages,
-    maxIterations,
-    finishReason,
-    output: finalOutput,
-    aborted,
-    status: subagentManaged.status,
-  });
-
-  // Snapshot status flags BEFORE the progress-summary fallback. The fallback may
-  // replace the output text, but it must NEVER change the subagent's status
-  // semantics: a step-budget cutoff stays reachedLimit=true + incomplete=true
-  // even after a progress report replaces the empty output. Returning these
-  // snapshots (not re-read runStats) keeps the contract explicit.
-  const statusFlags = {
-    iterations: runStats.iterations,
-    reachedLimit: runStats.reachedLimit,
-    incomplete: runStats.incomplete,
-  };
-
-  // Fallback: when the subagent hit the iteration budget before writing a final
-  // answer (reachedLimit + incomplete), spawn a parent-owned summarizer that
-  // distills the execution trace into a structured progress report. This also
-  // covers the mid-tool-loop cutoff: output may hold exploration narration
-  // ("Let me do a final check…") but without a `begin_summary` call it is not a
-  // final answer. Failure is silent — the original output is kept unchanged.
-  //
-  // Gated to exploration subagents (default explore tools). Compaction / memory
-  // summarizer subagents pass `tools: {}` — never fall back for them, or the
-  // fallback would recursively spawn yet another summarizer.
-  if (
-    !customTools &&
-    isProgressSummaryEligible(
-      statusFlags.incomplete,
-      statusFlags.reachedLimit,
-      finalOutput,
-      hasBeginSummaryCall(previewMessages)
-    )
-  ) {
-    const progressSummary = await summarizeProgress(previewMessages, parentAgentId, manager, prompt);
-    if (progressSummary) {
-      const truncatedResult = truncateSummary(progressSummary, maxOutputLength);
-      finalOutput = truncatedResult.summary;
-      truncated = truncatedResult.truncated;
-    }
-  }
-
-  const usage = subagentManaged.usage.getTotal();
-
-  if (aggregateUsageToParent && parentManaged) {
-    parentManaged.usage.addTotal(usage);
-  }
-
-  subagent.emitEvent(
-    aborted ? "subagent:error" : "subagent:completed",
-    aborted ? { subagentId, error: finalOutput } : { subagentId, summary: finalOutput },
-    { parentId: parentAgentId }
-  );
-
-  if (autoDestroy) {
-    manager.destroyAgent(subagentId);
-  }
-
-  return {
-    subagentId,
-    output: finalOutput,
-    truncated,
-    iterations: statusFlags.iterations,
-    usage: {
-      inputTokens: usage.inputTokens ?? 0,
-      outputTokens: usage.outputTokens ?? 0,
-      totalTokens: usage.totalTokens ?? 0,
-    },
-    reachedLimit: statusFlags.reachedLimit,
-    incomplete: statusFlags.incomplete,
-    aborted,
-  };
 }
 
 /**

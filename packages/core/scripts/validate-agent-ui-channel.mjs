@@ -420,7 +420,6 @@ await retryChannel.consumeRun({
     assert.equal(retryChannel.getMessages().length, 1);
     assert.equal(retryChannel.getMessages()[0].role, "user");
     assert.ok(retryEvents.filter((e) => e.type === "reset").length >= 2, "begin_summary reset + soft-reset");
-
     yield {
       type: EventType.RUN_STARTED,
       threadId: "thread-retry",
@@ -474,6 +473,35 @@ assert.equal(retrySnap.pendingLine, "C".repeat(80));
 // consumeRun finally ends the hub and unlocks phase; live phase is only meaningful mid-run
 assert.equal(retryChannel.getTaskRunPhase(), "tools");
 unsubRetry();
+
+// resetForStreamRetry keeps ALL leading user messages (turn_context + prompt),
+// not just the first — subagent channels seed <turn_context> before the prompt.
+const tcRetryChannel = new AgentUIChannel({
+  initialMessages: [
+    {
+      id: "tc-msg",
+      role: "user",
+      parts: [{ type: "text", content: "<turn_context>...</turn_context>" }],
+      createdAt: new Date(),
+    },
+    {
+      id: "prompt-msg",
+      role: "user",
+      parts: [{ type: "text", content: "find the test framework" }],
+      createdAt: new Date(),
+    },
+    {
+      id: "assistant-tc",
+      role: "assistant",
+      parts: [{ type: "text", content: "partial work" }],
+      createdAt: new Date(),
+    },
+  ],
+});
+tcRetryChannel.resetForStreamRetry();
+assert.equal(tcRetryChannel.getMessages().length, 2, "leading user messages survive soft reset");
+assert.equal(tcRetryChannel.getMessages()[0].parts[0].content, "<turn_context>...</turn_context>");
+assert.equal(tcRetryChannel.getMessages()[1].parts[0].content, "find the test framework");
 
 // failRun clears everything including summary subscription state
 const failChannel = new AgentUIChannel({
