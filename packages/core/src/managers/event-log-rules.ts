@@ -107,6 +107,17 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
     category: "agent",
     formatMessage: (event) => `Agent aborted (${p(event).reason ?? "unknown"})`,
   },
+  "agent:retry": {
+    level: "warn",
+    category: "llm",
+    formatMessage: (event) => {
+      const d = p(event);
+      const head = `Retry ${d.attempt ?? "?"}/${d.maxAttempts ?? "?"} (${d.strategy ?? "unknown"})`;
+      const wait = typeof d.delayMs === "number" ? ` in ${Math.round(d.delayMs / 1000)}s` : "";
+      const err = d.error ? `: ${String(d.error).slice(0, 120)}` : "";
+      return `${head}${wait}${err}`;
+    },
+  },
   "agent:stream-error": {
     level: "error",
     category: "agent",

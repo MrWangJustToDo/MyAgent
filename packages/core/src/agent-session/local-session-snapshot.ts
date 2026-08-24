@@ -46,6 +46,7 @@ export function readLocalAgentSessionSnapshot(
     status: managed.status,
     error: managed.getError(),
     pendingApprovalCount: managed.getPendingApprovalCount(),
+    ...(managed.getRetry() ? { retry: managed.getRetry() } : {}),
     mode: managed.getAgentMode(),
     lastStreamDurationMs: managed.getLastStreamDurationMs(),
     ...(managed.config?.model ? { model: managed.config.model } : {}),

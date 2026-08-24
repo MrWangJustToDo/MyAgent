@@ -76,11 +76,19 @@ async function* flakyThenOk() {
   yield { type: "RUN_FINISHED", finishReason: "stop" };
 }
 
+const retryStates = [];
+const retryEvents = [];
 const managed = {
   parentId: "sub-agent",
   usage: null,
   log: { warn() {}, debug() {}, error() {} },
   setError() {},
+  setRetry(state) {
+    retryStates.push(state);
+  },
+  emitEvent(type, payload) {
+    if (type === "agent:retry") retryEvents.push(payload);
+  },
 };
 const msgs = [{ role: "user", content: "hi" }];
 assert.equal(messagesForModelCapabilities(managed, msgs), msgs);
@@ -96,6 +104,18 @@ for await (const chunk of runStreamWithRecovery({
 }
 assert.equal(attempts, 2);
 assert.deepEqual(out, ["TEXT_MESSAGE_CONTENT", "RUN_FINISHED"]);
+
+// Retry visibility: one recorded retry, cleared once the stream recovers
+assert.equal(retryStates.length, 2, "retry set on failure + cleared on recovery");
+assert.equal(retryStates[0].attempt, 1);
+assert.equal(retryStates[0].maxAttempts >= 1, true);
+assert.equal(retryStates[0].strategy, "transient");
+assert.match(retryStates[0].error, /429/);
+assert.equal(typeof retryStates[0].delayMs, "number");
+assert.equal(retryStates[1], null);
+assert.equal(retryEvents.length, 1);
+assert.equal(retryEvents[0].strategy, "transient");
+assert.equal(retryEvents[0].attempt, 1);
 
 // --- subagent restart-style retry soft-resets UI + clears error status ---
 

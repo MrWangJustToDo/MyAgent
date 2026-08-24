@@ -41,6 +41,7 @@ function applyEvent(snapshot: AgentSessionSnapshot, event: AgentSessionEvent): A
         status: event.payload.status,
         error: event.payload.error,
         pendingApprovalCount: event.payload.pendingApprovalCount,
+        retry: event.payload.retry ?? undefined,
       };
     case "messages":
       return { ...snapshot, messages: event.payload };

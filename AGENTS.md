@@ -488,6 +488,7 @@ registerModelProvider(await createRemoteProvider("http://localhost:3100"));
 | `prompt:before` | Extension `before_agent_start` / turn-context providers collected |
 | `agent:thinking` | Model reasoning stream starts |
 | `agent:tool-start` / `agent:tool-end` / `agent:tool-error` | Tool lifecycle (extensions middleware) |
+| `agent:retry` | Recoverable LLM failure being retried (429/gateway backoff, capability strip, reactive compact, max_tokens continuation); payload carries `attempt`/`maxAttempts`/`strategy`/`error`/`delayMs`. Retry state also lives on the Session snapshot + `state` channel (`AgentRetryState`) and is cleared once the stream recovers or the run reaches a terminal status |
 | `agent:abort` / `agent:stream-error` | User abort / stream failure (`RUN_ERROR`, empty-stream guard, and other pump failures; main chat records error without crashing the host) |
 | `agent:stop` | Run finished or aborted |
 | `memory:prefetch` | Relevant memory injection before run |

@@ -21,6 +21,7 @@ export type AgentEventType =
   | "agent:tool-end"
   | "agent:tool-error"
   | "agent:abort"
+  | "agent:retry"
   | "agent:stream-error"
   | "agent:stop"
   | "memory:prefetch"

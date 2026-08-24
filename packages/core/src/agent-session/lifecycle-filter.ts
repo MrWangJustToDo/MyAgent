@@ -26,6 +26,7 @@ export const DEFAULT_SESSION_LIFECYCLE_EVENTS: readonly AgentEventType[] = [
   "prompt:submit",
   "agent:stop",
   "agent:abort",
+  "agent:retry",
   "agent:stream-error",
   "agent:tool-start",
   "agent:tool-end",

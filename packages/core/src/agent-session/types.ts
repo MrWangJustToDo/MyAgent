@@ -22,6 +22,7 @@ import type { AgentEvent } from "../managers/agent-telemetry-bus.js";
 import type { AgentL1State, AgentMode } from "../managers/managed-agent.js";
 import type { UsageChangeSnapshot } from "../managers/usage-tracker.js";
 import type { ModelInfo, ReasoningEffort } from "../models/types.js";
+import type { AgentRetryState } from "../runtime-types/agent-retry.js";
 import type { AgentStatus } from "../runtime-types/agent-status.js";
 import type { ContentPart, UIMessage } from "@tanstack/ai";
 
@@ -87,6 +88,8 @@ export interface AgentSessionSnapshot {
   status: AgentStatus;
   error: string;
   pendingApprovalCount: number;
+  /** Present while a recoverable LLM failure is being retried (see {@link AgentRetryState}). */
+  retry?: AgentRetryState | null;
   mode: AgentMode;
   lastStreamDurationMs: number;
   /** Model name (informational). */

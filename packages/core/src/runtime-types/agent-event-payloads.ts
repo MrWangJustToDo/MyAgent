@@ -6,6 +6,7 @@
  */
 
 import type { AgentEventType } from "./agent-events.js";
+import type { AgentRetryStrategy } from "./agent-retry.js";
 import type { McpServerStatus } from "../agent/mcp/manager.js";
 
 /** Explicit empty object for events with no fields. */
@@ -84,6 +85,14 @@ export type AgentEventPayloadMap = {
   };
   "agent:abort": {
     reason?: string;
+  };
+  "agent:retry": {
+    attempt?: number;
+    maxAttempts?: number;
+    strategy?: AgentRetryStrategy;
+    error?: string;
+    delayMs?: number;
+    retryAfterSeconds?: number;
   };
   "agent:stream-error": {
     error?: string;

@@ -23,7 +23,7 @@ import { formatStatusBarModeLabel } from "../utils/agent-mode-label.js";
 import { formatDuration } from "../utils/format.js";
 import { approvalKeysHint, busyQueueHint, freeformSubmitHint, selectListHint } from "../utils/keyboard-labels.js";
 
-import type { AgentStatus, QueuedMessagesSnapshot } from "@my-agent/core";
+import type { AgentRetryState, AgentStatus, QueuedMessagesSnapshot } from "@my-agent/core";
 
 export const Footer = ({
   status,
@@ -148,6 +148,30 @@ export const Footer = ({
 /**
  * Context info bar above the input — shows status, shortcuts, todos.
  */
+const RETRY_STRATEGY_LABEL: Record<AgentRetryState["strategy"], string> = {
+  transient: "provider busy",
+  capability: "unsupported content stripped",
+  reactive_compact: "context compacted",
+  max_tokens: "output limit",
+};
+
+/** Live LLM-retry visibility (attempt counts + triggering error). */
+const RetryStatus = ({ retry }: { retry: AgentRetryState }) => {
+  const waitSeconds = retry.delayMs != null ? Math.max(1, Math.round(retry.delayMs / 1000)) : undefined;
+  return (
+    <>
+      <Spinner text={`Retrying (${retry.attempt}/${retry.maxAttempts})...`} />
+      {(retry.error || waitSeconds) && (
+        <Text color={COLORS.warning} dimColor wrap="truncate-end">
+          {RETRY_STRATEGY_LABEL[retry.strategy]}
+          {retry.error ? ` · ${retry.error}` : ""}
+          {!retry.error && waitSeconds ? ` · next in ~${waitSeconds}s` : ""}
+        </Text>
+      )}
+    </>
+  );
+};
+
 const ContextBar = ({
   status,
   isPendingApproval,
@@ -184,6 +208,7 @@ const ContextBar = ({
   const snap = agentTick >= 0 ? session?.getSnapshot() : undefined;
   const lastRunDurationMs = snap?.lastStreamDurationMs || 0;
   const _error = snap?.error || "";
+  const retry = snap?.retry;
 
   const inputError = useUserInput((s) => s.inputError);
   const inputFeedback = useUserInput((s) => s.inputFeedback);
@@ -196,9 +221,11 @@ const ContextBar = ({
       <Box gap={2}>
         <Box gap={2} flexShrink={0}>
           {/* Status indicator */}
-          {status === "running" && <Spinner text="Running..." />}
-          {status === "thinking" && <Spinner text="Thinking..." />}
-          {status === "responding" && <Spinner text="Responding..." />}
+          {status === "running" && (!retry || retry.strategy === "reactive_compact") && <Spinner text="Running..." />}
+          {status === "thinking" && (!retry || retry.strategy === "reactive_compact") && <Spinner text="Thinking..." />}
+          {status === "responding" && (!retry || retry.strategy === "reactive_compact") && (
+            <Spinner text="Responding..." />
+          )}
           {status === "awaiting_user" && (
             <Text color={COLORS.primary} bold>
               Waiting
@@ -226,6 +253,11 @@ const ContextBar = ({
             </Text>
           )}
           {status === "error" && <Text color={COLORS.danger}>{error}</Text>}
+
+          {/* LLM retry visibility — attempt counts + triggering error */}
+          {retry && status !== "error" && status !== "aborted" && status !== "completed" && status !== "idle" && (
+            <RetryStatus retry={retry} />
+          )}
 
           {inputFeedback && status !== "error" && (
             <Text
