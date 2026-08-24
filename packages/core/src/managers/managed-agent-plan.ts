@@ -4,7 +4,7 @@
 
 import { listPlanFiles, loadPlanFile, savePlanFile } from "../agent/plan/plan-store.js";
 
-import { isActiveStatus } from "./agent-status.js";
+import { isActiveStatus } from "../runtime-types/agent-status.js";
 
 import type { AgentChatController } from "./agent-chat-controller.js";
 import type { AgentStatus } from "./agent-types.js";

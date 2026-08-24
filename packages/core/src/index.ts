@@ -65,7 +65,7 @@ export type {
   EmptyAgentEventPayload,
 } from "./runtime-types/agent-event-payloads.js";
 export { ManagedAgent, type ManagedAgentConfig, type AgentMode } from "./managers/managed-agent.js";
-export { isActiveStatus } from "./managers/agent-status.js";
+export { isActiveStatus } from "./runtime-types/agent-status.js";
 export type { AgentStatus } from "./runtime-types/agent-status.js";
 export type {
   QueuedMessageContent,

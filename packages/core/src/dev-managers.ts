@@ -3,7 +3,12 @@
  * Aggregated by `dev.ts`; not part of the public API.
  */
 
-export { ACTIVE_STATUSES, isActiveStatus, isTerminalStatus, resolveFinishStatus } from "./managers/agent-status.js";
+export {
+  ACTIVE_STATUSES,
+  isActiveStatus,
+  isTerminalStatus,
+  resolveFinishStatus,
+} from "./runtime-types/agent-status.js";
 export { AgentTelemetryBus } from "./managers/agent-telemetry-bus.js";
 export { bridgeTelemetryToAgentLog } from "./managers/event-log-bridge.js";
 export { emitAgentTelemetry } from "./managers/emit-agent-telemetry.js";

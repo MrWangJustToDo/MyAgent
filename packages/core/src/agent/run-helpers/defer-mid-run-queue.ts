@@ -1,4 +1,4 @@
-import { isActiveStatus } from "../../managers/agent-status.js";
+import { isActiveStatus } from "../../";
 
 import type { AgentStatus } from "../../runtime-types/agent-status.js";
 

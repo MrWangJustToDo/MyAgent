@@ -71,6 +71,23 @@ function readToolCallName(chunk: StreamChunk): string | undefined {
   return typeof record.toolName === "string" ? record.toolName : undefined;
 }
 
+/**
+ * Some adapters emit the `toolName` alias on `TOOL_CALL_START`; TanStack's
+ * processor only reads `toolCallName`, so the created tool-call part would
+ * end up nameless. Copy the alias over before feeding the processor.
+ */
+function normalizeToolCallName(chunk: StreamChunk): StreamChunk {
+  if (
+    chunk.type === "TOOL_CALL_START" &&
+    !chunk.toolCallName &&
+    typeof chunk.toolName === "string" &&
+    chunk.toolName.length > 0
+  ) {
+    return { ...chunk, toolCallName: chunk.toolName };
+  }
+  return chunk;
+}
+
 function readTextMessageId(chunk: StreamChunk): string | undefined {
   if (chunk.type !== "TEXT_MESSAGE_START") return undefined;
   const record = chunk as { messageId?: string };
@@ -248,7 +265,7 @@ export class AgentUIChannel {
     if (shouldSuppressMessagesSnapshot(chunk)) {
       return;
     }
-    const normalized = repairMessagesSnapshotChunk(chunk);
+    const normalized = normalizeToolCallName(repairMessagesSnapshotChunk(chunk));
     if (shouldSuppressReplayedToolChunk(this.getMessages(), normalized)) {
       return;
     }

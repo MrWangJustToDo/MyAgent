@@ -287,13 +287,17 @@ setFile("CLAUDE.override.md", "# personal override\n");
   const channel = new AgentUIChannel();
   managed.setUIChannel(channel);
 
+  // A real user message must exist before turn_context admission (the guard
+  // keeps the synthetic TC after the user epoch instead of at position 0).
+  channel.setMessages([{ id: "u1", role: "user", parts: [{ type: "text", content: "hello" }] }]);
+
   // Baseline turn — snapshot + admit (no instruction section yet).
   await managed.captureTurnContextSnapshot();
   const admittedBaseline = managed.admitTurnContextIfNeeded();
   assert.equal(admittedBaseline, true, "baseline turn_context admitted");
   const baselineUIMessages = channel.getMessages();
-  assert.equal(baselineUIMessages.length, 1, "one turn_context message in UI");
-  const baselineContent = baselineUIMessages[0].parts.map((p) => p.content).join("\n");
+  assert.equal(baselineUIMessages.length, 2, "user message + one turn_context message in UI");
+  const baselineContent = baselineUIMessages[baselineUIMessages.length - 1].parts.map((p) => p.content).join("\n");
   assert.ok(baselineContent.startsWith("<turn_context>"), "UI message is turn_context");
   assert.ok(!baselineContent.includes("<instruction_context>"), "baseline has no instruction section");
 
@@ -301,14 +305,20 @@ setFile("CLAUDE.override.md", "# personal override\n");
   await managed.captureTurnContextSnapshot();
   const admittedAgain = managed.admitTurnContextIfNeeded();
   assert.equal(admittedAgain, false, "no change → no re-admit");
-  assert.equal(channel.getMessages().length, 1, "UI unchanged (cache stable)");
+  assert.equal(channel.getMessages().length, 2, "UI unchanged (cache stable)");
 
   // Edit AGENTS.md → next turn snapshot detects change → new admit with section.
+  // A new user message arrives first (real next-turn traffic): admission inserts
+  // the fresh TC right after the latest real user message, so it becomes last.
   setFile("AGENTS.md", "# AGENTS\n- rule baseline\n- rule NEW-ADMIT\n");
+  channel.setMessages([
+    ...channel.getMessages(),
+    { id: "u2", role: "user", parts: [{ type: "text", content: "next" }] },
+  ]);
   await managed.captureTurnContextSnapshot();
   const admittedChanged = managed.admitTurnContextIfNeeded();
   assert.equal(admittedChanged, true, "change → re-admit");
-  assert.equal(channel.getMessages().length, 2, "second turn_context message inserted");
+  assert.equal(channel.getMessages().length, 4, "second turn_context message inserted after newest user message");
   const changedMessages = channel.getMessages();
   const lastContent = changedMessages[changedMessages.length - 1].parts.map((p) => p.content).join("\n");
   assert.ok(lastContent.startsWith("<turn_context>"), "newest message is turn_context");

@@ -20,7 +20,7 @@ import {
   type StatusReconcilePolicy,
   type WhenClearStatus,
 } from "./agent-run-outcome.js";
-import { isTerminalStatus, resolveFinishStatus } from "./agent-status.js";
+import { isTerminalStatus, resolveFinishStatus } from "../runtime-types/agent-status.js";
 
 import type { AgentStatus } from "./agent-types.js";
 import type { EmitAgentTelemetryFn } from "./emit-agent-telemetry.js";
