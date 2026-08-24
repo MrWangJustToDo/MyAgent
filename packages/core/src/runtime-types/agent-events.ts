@@ -42,6 +42,7 @@ export type AgentEventType =
   | "subagent:completed"
   | "subagent:error"
   | "subagent:destroyed"
+  | "subagent:phase"
   | "subagent:ui-update"
   | "plan:enter"
   | "plan:ready"

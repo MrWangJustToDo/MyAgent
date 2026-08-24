@@ -118,6 +118,7 @@ export {
 } from "./agent-session";
 export type { AgentL1State } from "./managers/managed-agent.js";
 export type { AgentRetryState, AgentRetryStrategy } from "./runtime-types/agent-retry.js";
+export { TaskRunState, type TaskRunPhase } from "./agent/subagent/task-run-state.js";
 export type { UsageChangeSnapshot, UsageSnapshot } from "./managers/usage-tracker.js";
 
 // ============================================================================

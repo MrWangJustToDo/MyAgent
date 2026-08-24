@@ -38,5 +38,6 @@ export const DEFAULT_SESSION_LIFECYCLE_EVENTS: readonly AgentEventType[] = [
   "subagent:completed",
   "subagent:error",
   "subagent:destroyed",
+  "subagent:phase",
   "turn:summary",
 ] as const;

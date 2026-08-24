@@ -74,13 +74,13 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
   const isTask = toolName === "task";
   const isExecuting = isToolExecuting(part);
   const liveElapsedMs = useToolElapsed(toolCallId, isExecuting, LIVE_DURATION_THRESHOLD_MS);
-  const { usage: taskUsage } = useTask({
+  const { phase: taskPhase, usage: taskUsage } = useTask({
     taskId: isTask ? part.id : "",
   });
-  // Stream visibility is driven by actual hub content (rows), not the inferred
-  // phase — the progress-summary fallback never emits `begin_summary`, yet its
-  // report streams into the same `task:${toolCallId}` key.
-  const showTaskSummaryStream = isTask && isExecuting;
+  // Authoritative per-task phase machine (running → summary): `begin_summary`
+  // and the progress-summary fallback both transition it, so the panel view
+  // no longer depends on message inference.
+  const showTaskSummaryStream = isTask && isExecuting && taskPhase === "summary";
   const taskSummary = useSummaryStream({
     source: "task",
     toolCallId: isTask ? toolCallId : undefined,

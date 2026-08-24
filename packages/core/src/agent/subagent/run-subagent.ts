@@ -14,6 +14,7 @@ import { applySubagentCancelNotice, truncateSummary } from "./output.js";
 import { isProgressSummaryEligible, summarizeProgress } from "./progress-summary.js";
 import { buildExploreSystemPrompt } from "./prompt.js";
 import { captureStreamFinishReason, deriveSubagentRunStats, hasBeginSummaryCall } from "./run-stats.js";
+import { beginTaskRun, enterTaskSummaryPhase } from "./task-run-state.js";
 import { resolveSubagentBridgeUI, SUBAGENT_DEFAULT_MAX_ITERATIONS } from "./types.js";
 
 import type { SubagentConfig, SubagentResult } from "./types.js";
@@ -102,6 +103,11 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
   // link task to agent, for unstable input
   subagent.parentTaskId = parentTaskToolCallId;
 
+  // Task-level phase machine: authoritative running → summary transitions.
+  if (parentTaskToolCallId) {
+    beginTaskRun(parentManaged, parentTaskToolCallId);
+  }
+
   const subagentManaged = manager.getAgent(subagentId);
   if (!subagentManaged) {
     throw new Error(`Subagent not found: ${subagentId}`);
@@ -147,6 +153,18 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     const summaryHub = bridgeUI || compactSummaryStream ? parentManaged.summaryStreams : undefined;
     const compactId = compactSummaryStream?.compactId;
 
+    /** One-way running → summary transition + telemetry (no-op once in summary). */
+    const enterSummaryPhase = () => {
+      if (!parentTaskToolCallId) return;
+      if (enterTaskSummaryPhase(parentManaged, parentTaskToolCallId)) {
+        subagent.emitEvent(
+          "subagent:phase",
+          { subagentId, phase: "summary", parentTaskToolCallId },
+          { parentId: parentAgentId }
+        );
+      }
+    };
+
     subagent.emitEvent("subagent:created", { subagentId }, { parentId: parentAgentId });
     subagent.emitEvent("subagent:started", { subagentId, description }, { parentId: parentAgentId });
 
@@ -179,9 +197,15 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
           : undefined,
         transformStream: (stream) =>
           throwOnRunError(
-            captureStreamFinishReason(tapTextDeltas(stream, config.onTextDelta), (reason) => {
-              finishReason = reason;
-            })
+            captureStreamFinishReason(
+              tapTextDeltas(
+                tapBeginSummary(stream, parentTaskToolCallId ? () => enterSummaryPhase() : undefined),
+                config.onTextDelta
+              ),
+              (reason) => {
+                finishReason = reason;
+              }
+            )
           ),
         // Outcome applied below — abort ends the stream without throwing, so we must
         // not hardcode `finished` (that would clobber `aborted` / skip cancel notice).
@@ -267,9 +291,11 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
         hasBeginSummaryCall(previewMessages)
       )
     ) {
-      // Mirror generation into the task summary UI: reset flips the panel to
-      // summary phase, deltas stream live, end settles the view. Without this
-      // the report would only appear after the whole side-LLM pass finishes.
+      // Mirror generation into the task summary UI: the phase machine flips to
+      // `summary` and the hub reset switches the panel to its summary view;
+      // deltas stream live; end settles the view. Without this the report
+      // would only appear after the whole side-LLM pass finishes.
+      enterSummaryPhase();
       const hub = parentTaskToolCallId ? parentManaged.summaryStreams : undefined;
       if (hub && parentTaskToolCallId) {
         hub.reset({ source: "task", toolCallId: parentTaskToolCallId });
@@ -352,6 +378,26 @@ async function* tapTextDeltas(
   for await (const chunk of stream) {
     if (chunk.type === "TEXT_MESSAGE_CONTENT" && typeof chunk.delta === "string") {
       onTextDelta(chunk.delta);
+    }
+    yield chunk;
+  }
+}
+
+/**
+ * Flip the task phase machine to `summary` when the subagent calls
+ * `begin_summary` — one-way, authoritative, no message re-scanning.
+ */
+async function* tapBeginSummary(
+  stream: AsyncIterable<StreamChunk>,
+  onBeginSummary?: () => void
+): AsyncIterable<StreamChunk> {
+  if (!onBeginSummary) {
+    yield* stream;
+    return;
+  }
+  for await (const chunk of stream) {
+    if (chunk.type === "TOOL_CALL_START" && (chunk.toolName ?? chunk.toolCallName) === "begin_summary") {
+      onBeginSummary();
     }
     yield chunk;
   }

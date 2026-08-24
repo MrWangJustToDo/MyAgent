@@ -78,6 +78,8 @@ export interface AgentSessionSubagentSummary {
   /** Display label derived from spawn description when available. */
   description?: string;
   parentTaskToolCallId?: string;
+  /** Task-level phase machine (running → summary); see TaskRunState. */
+  taskPhase: "running" | "summary";
   usage?: UsageChangeSnapshot;
 }
 

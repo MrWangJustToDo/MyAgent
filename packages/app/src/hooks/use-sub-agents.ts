@@ -33,6 +33,7 @@ export const useSubAgents = ({ taskId }: { taskId: string }) => {
           if (
             event.payload.type === "subagent:created" ||
             event.payload.type === "subagent:started" ||
+            event.payload.type === "subagent:phase" ||
             event.payload.type === "subagent:completed" ||
             event.payload.type === "subagent:destroyed"
           ) {

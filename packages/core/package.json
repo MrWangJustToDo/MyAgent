@@ -115,7 +115,8 @@
     "validate:skills-extension": "pnpm run build && node scripts/validate-skills-extension.mjs",
     "validate:memory-extension": "pnpm run build && node scripts/validate-memory-extension.mjs",
     "validate:extension-status-owner": "pnpm run build && node scripts/validate-extension-status-owner.mjs",
-    "validate:task-prefork": "pnpm run build && node scripts/validate-task-prefork.mjs"
+    "validate:task-prefork": "pnpm run build && node scripts/validate-task-prefork.mjs",
+    "validate:task-run-state": "pnpm run build && node scripts/validate-task-run-state.mjs"
   },
   "dependencies": {
     "@tanstack/ai": "^0.48.0",

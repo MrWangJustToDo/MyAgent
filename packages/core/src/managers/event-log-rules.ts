@@ -238,6 +238,11 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
     formatMessage: (event) => `Subagent error: ${p(event).error ?? "unknown"}`,
   },
   "subagent:destroyed": false,
+  "subagent:phase": {
+    level: "debug",
+    category: "agent",
+    formatMessage: (event) => `Subagent phase → ${p(event).phase ?? "?"}`,
+  },
   "subagent:ui-update": false,
 
   // ============================================================================

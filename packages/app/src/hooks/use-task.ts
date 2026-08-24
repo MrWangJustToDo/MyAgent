@@ -49,7 +49,7 @@ const getTaskToolsFromMessages = (messages: UIMessage[]): TaskToolCall[] => {
   return tools;
 };
 
-const readTaskInfo = (session: AgentSession | null) => {
+const readTaskInfo = (session: AgentSession | null, taskPhase?: "running" | "summary") => {
   const messages = session?.getSnapshot().messages ?? [];
   const allTools = getTaskToolsFromMessages(messages);
   const usage: TokenUsage | null = session ? { ...session.getSnapshot().usage.total } : null;
@@ -57,7 +57,9 @@ const readTaskInfo = (session: AgentSession | null) => {
     allTools,
     total: allTools.length,
     usage,
-    phase: getTaskPhaseFromMessages(messages),
+    // Authoritative phase machine first; message scan is a fallback for
+    // transcripts that predate live phase tracking.
+    phase: taskPhase ?? getTaskPhaseFromMessages(messages),
   };
 };
 
@@ -72,7 +74,7 @@ export const useTask = ({ taskId }: { taskId: string }) => {
     if (!childSession) return;
 
     const refresh = () => {
-      setInfo(readTaskInfo(childSession));
+      setInfo(readTaskInfo(childSession, subagent.taskPhase));
     };
 
     refresh();
@@ -82,7 +84,7 @@ export const useTask = ({ taskId }: { taskId: string }) => {
       },
       { channels: ["messages", "usage", "state", "lifecycle"] }
     );
-  }, [subagent, subagent?.id]);
+  }, [subagent, subagent?.id, subagent?.taskPhase]);
 
   return { ...info, agent: subagent, phase: taskId ? info.phase : ("tools" as const) };
 };

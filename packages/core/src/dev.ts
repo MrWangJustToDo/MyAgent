@@ -98,6 +98,14 @@ export {
 } from "./agent/subagent/progress-summary.js";
 export { resolveSubagentBridgeUI } from "./agent/subagent/types.js";
 export { MAX_ACTIVE_TASK_PREFORKS, TaskPreforkCoordinator } from "./agent/subagent/task-prefork.js";
+export {
+  beginTaskRun,
+  clearTaskRuns,
+  enterTaskSummaryPhase,
+  getTaskRunState,
+  readTaskRunPhase,
+  TaskRunState,
+} from "./agent/subagent/task-run-state.js";
 export { createTaskPreforkMiddleware } from "./managers/middleware/task-prefork-middleware.js";
 export {
   consumeAgentStream,

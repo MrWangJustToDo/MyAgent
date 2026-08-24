@@ -185,6 +185,12 @@ export type AgentEventPayloadMap = {
   "subagent:destroyed": {
     subagentId?: string;
   };
+  "subagent:phase": {
+    subagentId?: string;
+    /** Task-level phase: running (exploring) or summary (report streaming). */
+    phase?: "running" | "summary";
+    parentTaskToolCallId?: string;
+  };
   "subagent:ui-update": {
     subagentId?: string;
     messageCount?: number;

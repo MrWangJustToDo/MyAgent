@@ -43,6 +43,25 @@ function applyEvent(snapshot: AgentSessionSnapshot, event: AgentSessionEvent): A
         pendingApprovalCount: event.payload.pendingApprovalCount,
         retry: event.payload.retry ?? undefined,
       };
+    case "lifecycle": {
+      // Keep task phases fresh between snapshot refetches — subagent summaries
+      // otherwise only update on commands.
+      if (event.payload.type === "subagent:phase") {
+        const phase = event.payload.payload.phase;
+        const subagentId = event.payload.payload.subagentId;
+        const parentTaskToolCallId = event.payload.payload.parentTaskToolCallId;
+        if (!phase) return snapshot;
+        return {
+          ...snapshot,
+          subagents: snapshot.subagents.map((entry) =>
+            entry.id === subagentId || (parentTaskToolCallId && entry.parentTaskToolCallId === parentTaskToolCallId)
+              ? { ...entry, taskPhase: phase }
+              : entry
+          ),
+        };
+      }
+      return snapshot;
+    }
     case "messages":
       return { ...snapshot, messages: event.payload };
     case "queues":

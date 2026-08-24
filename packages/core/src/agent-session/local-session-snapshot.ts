@@ -2,6 +2,7 @@
  * Project ManagedAgent → AgentSessionSnapshot (serializable, no live handles).
  */
 
+import { readTaskRunPhase } from "../agent/subagent/task-run-state.js";
 import type { AgentSessionSnapshot, AgentSessionSubagentSummary } from "./types.js";
 import type { ManagedAgent } from "../managers/managed-agent.js";
 
@@ -27,6 +28,7 @@ export function buildSubagentSummaries(
     id: child.id,
     status: child.status,
     name: child.name,
+    taskPhase: readTaskRunPhase(managed, child.parentTaskId),
     ...(subagentDescription(child.name) ? { description: subagentDescription(child.name) } : {}),
     ...(child.parentTaskId ? { parentTaskToolCallId: child.parentTaskId } : {}),
     usage: child.usage.getChangeSnapshot(),
