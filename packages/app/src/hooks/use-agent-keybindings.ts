@@ -28,6 +28,21 @@ export interface DenyingToolInfo {
   toolName?: string;
 }
 
+/**
+ * Any overlay panel (workspace browser / task / extensions) is open. While a
+ * panel is up, its own `useInput` owns the keyboard — Ink broadcasts every
+ * keystroke to ALL registered handlers, so the central handlers below must
+ * early-return or panel navigation leaks into chat input / approvals
+ * (arrows mutating history, Enter submitting, `y` approving a tool, …).
+ */
+function isAnyPanelOpen(): boolean {
+  return (
+    useWorkspaceView.getReadonlyState().view === "workspace" ||
+    useSubagentPanel.getReadonlyState().view !== "closed" ||
+    useExtensionPanel.getReadonlyState().view !== "closed"
+  );
+}
+
 interface UseAgentKeybindingsOptions {
   adapter: AgentAdapter;
   mode: InputMode;
@@ -103,9 +118,9 @@ export function useAgentKeybindings({
 
     if (handleExtensionConfirmKeys(inputChar, inputKey)) return;
 
-    // Extension panel open: let the panel handle non-Ctrl keys (Esc/Enter/↑↓);
-    // keep global Ctrl shortcuts (exit, toggle) working.
-    if (useExtensionPanel.getReadonlyState().view !== "closed" && !inputKey.ctrl && !inputKey.meta) {
+    // Panel open: let the panel's own handlers process plain keys
+    // (Esc/Enter/↑↓); keep global Ctrl/meta shortcuts (exit, toggles) working.
+    if (isAnyPanelOpen() && !inputKey.ctrl && !inputKey.meta) {
       return;
     }
 
@@ -215,10 +230,8 @@ export function useAgentKeybindings({
   useInput(
     (inputChar, inputKey) => {
       if (handleExtensionConfirmKeys(inputChar, inputKey)) return;
-      // Workspace panel open: skip all normal-mode input handlers
-      if (useWorkspaceView.getReadonlyState().view === "workspace") return;
-      // Extension panel open: let the panel handle its own keys
-      if (useExtensionPanel.getReadonlyState().view !== "closed") return;
+      // Panel open: the panel's own useInput owns the keyboard.
+      if (isAnyPanelOpen()) return;
 
       if (inputKey.tab && inputKey.shift) {
         // Shift+Tab cycles agent mode: normal → auto → plan → normal → …
@@ -321,6 +334,9 @@ export function useAgentKeybindings({
   useInput(
     (inputChar, inputKey) => {
       if (handleExtensionConfirmKeys(inputChar, inputKey)) return;
+      // Panel open: the panel's own useInput owns the keyboard — never let
+      // panel navigation approve/deny a pending tool.
+      if (isAnyPanelOpen()) return;
       const currentValue = useUserInput.getReadonlyState().value;
 
       if (!currentValue) {
@@ -409,6 +425,9 @@ export function useAgentKeybindings({
   useInput(
     (inputChar, inputKey) => {
       if (handleExtensionConfirmKeys(inputChar, inputKey)) return;
+      // Panel open: the panel's own useInput owns the keyboard — never let
+      // panel navigation toggle options / submit an ask_user answer.
+      if (isAnyPanelOpen()) return;
       if (inputKey.upArrow) {
         selectActions.selectPrev();
         return;
@@ -461,6 +480,9 @@ export function useAgentKeybindings({
   useInput(
     (inputChar, inputKey) => {
       if (handleExtensionConfirmKeys(inputChar, inputKey)) return;
+      // Panel open: the panel's own useInput owns the keyboard — never leak
+      // typed characters into the hidden deny/ask_user draft.
+      if (isAnyPanelOpen()) return;
       if (inputKey.escape) {
         inputActions.clear();
         modeActions.setDenyMode(false);

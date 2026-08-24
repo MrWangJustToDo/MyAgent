@@ -1,4 +1,3 @@
-import { computeCollapsedToolOutputs } from "./collapse-complex-outputs.js";
 import {
   computeToolCallsRenderSignature,
   dedupeToolCallsInMessages,
@@ -125,7 +124,6 @@ export const getMessages = (messages: UIMessage[], options: GetMessagesOptions =
     staticMessages: staticMessages.filter(filterValidMessage),
     dynamicMessages: dynamicMessages.filter(filterValidMessage),
     toolCallsSignature: computeStaticRenderSignature(displayMessages, { mode }),
-    collapsedToolCallIds: computeCollapsedToolOutputs(displayMessages),
   };
 };
 

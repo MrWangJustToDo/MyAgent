@@ -1,9 +1,10 @@
 import { getToUI } from "@my-agent/core";
 import { Box, Text } from "ink";
 
-import { useToolOutputCollapsed } from "../context/collapsed-tools-context.js";
+import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
 import { useTranscriptDisplayMode } from "../context/transcript-display-context.js";
-import { COLORS } from "../theme/colors.js";
+import { useSize } from "../hooks";
+import { BG, COLORS } from "../theme/colors.js";
 import { formatToolOutput } from "../utils/format";
 import { splitStreamingLines } from "../utils/streaming-output-lines.js";
 
@@ -29,22 +30,28 @@ const COMPACT_DETAILED_OUTPUT_TOOLS = new Set(["ask_user", "todo"]);
 
 export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState: UiToolState }) => {
   const mode = useTranscriptDisplayMode();
+  const screenWidth = useSize((s) => s.state.screenWidth);
   const toolName = part.name;
-  const collapsed = useToolOutputCollapsed(part.id);
 
   if (uiState !== "output-available" && uiState !== "output-error") return null;
-
-  // Superseded complex block (older todo list / command run): header summary only.
-  if (collapsed) return null;
 
   if (mode === "compact" && !COMPACT_DETAILED_OUTPUT_TOOLS.has(toolName)) {
     return null;
   }
 
+  // Rich block background: message container paddingX=1 + tool column
+  // paddingLeft=2 → width compensates so the right edge aligns with user
+  // message boxes (screenWidth - 2).
+  const boxWidth = Math.max(screenWidth - 4, 1);
+
   if (toolName === "todo") {
     const output = part.output as { items?: TodoItem[]; title?: string; source?: "plan" | "agent" };
     if (!output.items) return null;
-    return <TodoToolOutputView items={output.items} title={output.title} source={output.source} />;
+    return (
+      <HalfLinePaddedBox backgroundColor={BG.toolResult} width={boxWidth}>
+        <TodoToolOutputView items={output.items} title={output.title} source={output.source} />
+      </HalfLinePaddedBox>
+    );
   }
 
   const isBuiltinDetailed = DETAILED_OUTPUT_TOOLS.has(toolName);
@@ -60,12 +67,14 @@ export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState:
   const lineColor = failed ? COLORS.danger : COLORS.muted;
 
   return (
-    <Box flexDirection="column" paddingLeft={2}>
-      {lines.map((line, i) => (
-        <Text key={i} color={lineColor} dimColor={!failed}>
-          {line.length > 0 ? line : " "}
-        </Text>
-      ))}
-    </Box>
+    <HalfLinePaddedBox backgroundColor={BG.toolResult} width={boxWidth}>
+      <Box flexDirection="column" paddingLeft={2}>
+        {lines.map((line, i) => (
+          <Text key={i} color={lineColor} dimColor={!failed}>
+            {line.length > 0 ? line : " "}
+          </Text>
+        ))}
+      </Box>
+    </HalfLinePaddedBox>
   );
 };

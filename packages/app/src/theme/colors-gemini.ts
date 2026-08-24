@@ -101,6 +101,12 @@ export const BG = {
    * (~20%) so user messages stand out marginally from the input prompt.
    */
   message: interpolateColor(TERMINAL_BG, GRAY, 0.2),
+  /**
+   * Rich tool-result block background — same gray family but fainter than
+   * the user message (~10%) so structured tool output reads as a grouped
+   * block without competing with user messages.
+   */
+  toolResult: interpolateColor(TERMINAL_BG, GRAY, 0.1),
   /** Default border / divider color — dark gray blended ~25% toward gray. */
   border: interpolateColor(TERMINAL_BG, GRAY, 0.25),
   /** Border for approved state */

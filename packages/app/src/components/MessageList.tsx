@@ -8,7 +8,6 @@
 import { Box, Text } from "ink";
 import { useEffect, useRef } from "react";
 
-import { CollapsedToolsContext } from "../context/collapsed-tools-context.js";
 import { StaticContext } from "../context/static-context.js";
 import { TranscriptDisplayContext } from "../context/transcript-display-context.js";
 import { useDynamic } from "../hooks/use-dynamic";
@@ -65,7 +64,7 @@ function computeDynamicListSignature(messages: UIMessage[]): string {
 
 export const MessageList = ({ messages }: MessageListProps) => {
   const mode = useTranscriptDisplay((s) => s.mode);
-  const { staticMessages, dynamicMessages, toolCallsSignature, collapsedToolCallIds } = getMessages(messages, {
+  const { staticMessages, dynamicMessages, toolCallsSignature } = getMessages(messages, {
     mode,
   });
 
@@ -107,11 +106,9 @@ export const MessageList = ({ messages }: MessageListProps) => {
     const elements = visibleStaticMessages.map((item) => (
       <Box key={item.id} paddingX={1} marginTop={1}>
         <TranscriptDisplayContext value={mode}>
-          <CollapsedToolsContext value={collapsedToolCallIds}>
-            <StaticContext value={{ staticMessage: true }}>
-              <MessageView message={item} />
-            </StaticContext>
-          </CollapsedToolsContext>
+          <StaticContext value={{ staticMessage: true }}>
+            <MessageView message={item} />
+          </StaticContext>
         </TranscriptDisplayContext>
       </Box>
     ));
@@ -143,11 +140,9 @@ export const MessageList = ({ messages }: MessageListProps) => {
       dynamicMessages.map((message) => (
         <Box key={message.id} paddingX={1} marginTop={1}>
           <TranscriptDisplayContext value={mode}>
-            <CollapsedToolsContext value={collapsedToolCallIds}>
-              <StaticContext value={{ staticMessage: false }}>
-                <MessageView message={message} />
-              </StaticContext>
-            </CollapsedToolsContext>
+            <StaticContext value={{ staticMessage: false }}>
+              <MessageView message={message} />
+            </StaticContext>
           </TranscriptDisplayContext>
         </Box>
       ))
