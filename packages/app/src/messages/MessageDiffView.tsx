@@ -1,8 +1,6 @@
-import { Box } from "ink";
 import { memo } from "react";
 
 import { EditDiff } from "../components/EditDiff.js";
-import { BG } from "../theme/colors.js";
 
 export type MessageDiffViewProps = {
   diffId: string;
@@ -14,8 +12,6 @@ export type MessageDiffViewProps = {
   oldPath: string;
   newPath: string;
   startLine?: number;
-  /** Approval / status frame color (defaults to {@link BG.border}). */
-  frameColor?: string;
 };
 
 export const MessageDiffView = memo(function MessageDiffView({
@@ -27,20 +23,17 @@ export const MessageDiffView = memo(function MessageDiffView({
   oldPath,
   newPath,
   startLine,
-  frameColor,
 }: MessageDiffViewProps) {
   return (
-    <Box borderStyle="single" borderColor={frameColor ?? BG.border}>
-      <EditDiff
-        id={diffId}
-        width={width}
-        height={height}
-        oldPath={oldPath}
-        oldFile={oldFile}
-        newPath={newPath}
-        newFile={newFile}
-        startLine={startLine}
-      />
-    </Box>
+    <EditDiff
+      id={diffId}
+      width={width}
+      height={height}
+      oldPath={oldPath}
+      oldFile={oldFile}
+      newPath={newPath}
+      newFile={newFile}
+      startLine={startLine}
+    />
   );
 });

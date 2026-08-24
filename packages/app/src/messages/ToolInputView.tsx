@@ -3,7 +3,6 @@ import { Box } from "ink";
 import { useTranscriptDisplayMode } from "../context/transcript-display-context.js";
 import { useSize } from "../hooks";
 import { useTask } from "../hooks/use-task.js";
-import { approvalFrameColor } from "../utils/diff-frame.js";
 import { isToolExecuting } from "../utils/tool-part.js";
 
 import { EditFilePreview } from "./EditFilePreview.js";
@@ -27,7 +26,7 @@ export const ToolInputView = ({
   const mode = useTranscriptDisplayMode();
   const toolName = part.name;
   const width = useSize((s) => s.state.screenWidth);
-  const bodyWidth = width - 8;
+  const bodyWidth = width - 6;
   const isExecuting = isToolExecuting(part);
   const isTask = toolName === "task";
   const taskInput = toolInput as { prompt?: string; description?: string };
@@ -57,7 +56,6 @@ export const ToolInputView = ({
           oldFile=""
           newPath={content.path || ""}
           newFile={content.content || ""}
-          frameColor={approvalFrameColor(part.approval?.approved)}
         />
       </Box>
     );
@@ -79,7 +77,6 @@ export const ToolInputView = ({
           _approvalId={part.approval?.id}
           path={content.path}
           edits={content.edits}
-          approved={part.approval?.approved}
           bodyWidth={bodyWidth}
           output={
             uiState === "output-available"

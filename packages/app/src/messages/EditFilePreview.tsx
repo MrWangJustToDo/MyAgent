@@ -2,7 +2,6 @@ import { Box } from "ink";
 import { Fragment, memo } from "react";
 
 import { usePreviewEdit, useSize } from "../hooks";
-import { approvalFrameColor } from "../utils/diff-frame.js";
 
 import { MessageDiffView } from "./MessageDiffView.js";
 
@@ -31,18 +30,16 @@ export const EditFilePreview = memo(function EditFilePreview({
   _approvalId,
   path,
   edits,
-  approved,
   output,
 }: {
   toolCallId: string;
   _approvalId?: string;
   path: string;
   edits: Array<{ oldString: string; newString: string; startLine?: number; replaceAll?: boolean }>;
-  approved: boolean | undefined;
   bodyWidth: number;
   output?: { oldFile?: string; newFile?: string };
 }) {
-  const width = useSize((s) => s.state.screenWidth) - 8;
+  const width = useSize((s) => s.state.screenWidth) - 6;
 
   // Authoritative source once the tool has run: prefer output over preview.
   const hasOutput = output && typeof output.oldFile === "string" && typeof output.newFile === "string";
@@ -67,7 +64,6 @@ export const EditFilePreview = memo(function EditFilePreview({
           oldFile={oldFile}
           newPath={path}
           newFile={newFile}
-          frameColor={approvalFrameColor(approved)}
         />
       ) : (
         /* Fallback: per-edit fragment diffs when full-file preview is unavailable */
@@ -82,7 +78,6 @@ export const EditFilePreview = memo(function EditFilePreview({
                 newPath={path}
                 newFile={edit.newString}
                 startLine={edit.startLine}
-                frameColor={approvalFrameColor(approved)}
               />
             )}
           </Fragment>
