@@ -1,5 +1,5 @@
 /**
- * Validates the task pre-fork coordinator (parallel subagent spawning).
+ * Validates the task pre-fork coordinator (rolling-window parallel spawning).
  *
  * Run: pnpm --filter @my-agent/core run validate:task-prefork
  */
@@ -51,53 +51,119 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   assert.equal(await coordinator.join("missing"), null);
 }
 
-// --- concurrency cap ---
+// --- rolling window: over-cap runs queue and start as slots free ---
+
+{
+  const coordinator = new TaskPreforkCoordinator();
+  const TOTAL = MAX_ACTIVE_TASK_PREFORKS + 3;
+  const startedOrder = [];
+  const finished = [];
+  for (let i = 0; i < TOTAL; i++) {
+    coordinator.start(
+      `call-${i}`,
+      () => {},
+      async () => {
+        startedOrder.push(i);
+        await sleep(15);
+        finished.push(i);
+        return { subagentId: `s${i}` };
+      }
+    );
+  }
+  assert.equal(coordinator.size, TOTAL, "all runs are registered");
+  assert.ok(
+    coordinator.activeCount <= MAX_ACTIVE_TASK_PREFORKS,
+    `concurrency must be capped (${coordinator.activeCount})`
+  );
+
+  // Let the first wave finish; queued runs must roll forward automatically.
+  const results = await Promise.all(Array.from({ length: TOTAL }, (_, i) => coordinator.join(`call-${i}`)));
+  assert.equal(finished.length, TOTAL, "every run completed");
+  assert.deepEqual(startedOrder, [...Array(TOTAL).keys()], "runs start in FIFO order as slots free");
+  assert.ok(results.every((r) => r && r.subagentId));
+}
+
+// --- onRunStart fires on slot acquisition, not registration ---
+
+{
+  const coordinator = new TaskPreforkCoordinator();
+  const starts = [];
+  for (let i = 0; i < MAX_ACTIVE_TASK_PREFORKS + 2; i++) {
+    coordinator.start(
+      `q-${i}`,
+      () => {},
+      async () => {
+        await sleep(20);
+        return {};
+      },
+      () => starts.push(i)
+    );
+  }
+  await sleep(5);
+  assert.equal(starts.length, MAX_ACTIVE_TASK_PREFORKS, "only admitted runs fire onRunStart");
+  await Promise.all(Array.from({ length: MAX_ACTIVE_TASK_PREFORKS + 2 }, (_, i) => coordinator.join(`q-${i}`)));
+  assert.equal(starts.length, MAX_ACTIVE_TASK_PREFORKS + 2, "queued runs fire onRunStart once admitted");
+}
+
+// --- abortAll cancels running runs and drops bookkeeping ---
 
 {
   const coordinator = new TaskPreforkCoordinator();
   const aborts = [];
-  for (let i = 0; i < MAX_ACTIVE_TASK_PREFORKS; i++) {
-    const ok = coordinator.start(
-      `call-${i}`,
-      () => aborts.push(i),
-      async () => ({})
-    );
-    assert.equal(ok, true);
-  }
-  const overflowAborts = [];
-  assert.equal(
-    coordinator.start(
-      "overflow",
-      () => overflowAborts.push("x"),
-      async () => ({})
-    ),
-    false,
-    "cap must reject additional pre-forks"
-  );
-  assert.equal(overflowAborts.length, 0, "rejected spawn must not arm its abort handle");
-
-  coordinator.abortAll();
-  assert.equal(aborts.length > 0 || MAX_ACTIVE_TASK_PREFORKS === 0, true);
-}
-
-// --- abortAll clears entries and invokes handles ---
-
-{
-  const coordinator = new TaskPreforkCoordinator();
-  let aborted = 0;
   coordinator.start(
     "a",
-    () => aborted++,
-    async () => new Promise(() => {})
+    () => aborts.push("a"),
+    () => new Promise(() => {})
   );
   coordinator.start(
     "b",
-    () => aborted++,
-    async () => new Promise(() => {})
+    () => aborts.push("b"),
+    () => new Promise(() => {})
   );
+  for (let i = 0; i < MAX_ACTIVE_TASK_PREFORKS; i++) {
+    coordinator.start(
+      `q${i}`,
+      () => aborts.push(`q${i}`),
+      () => new Promise(() => {})
+    );
+  }
+
   coordinator.abortAll();
-  assert.equal(aborted, 2);
-  assert.equal(coordinator.size, 0);
+  assert.equal(coordinator.size, 0, "entries are dropped after abortAll");
+  assert.equal(aborts.length, MAX_ACTIVE_TASK_PREFORKS + 2, "every run's cancel handle fired");
+}
+
+// --- queued run aborted before admission never runs ---
+
+{
+  const coordinator = new TaskPreforkCoordinator();
+  // Fill all slots with never-resolving runs.
+  for (let i = 0; i < MAX_ACTIVE_TASK_PREFORKS; i++) {
+    coordinator.start(
+      `blocker-${i}`,
+      () => {},
+      () => new Promise(() => {})
+    );
+  }
+  let factoryRan = false;
+  let runStarted = false;
+  coordinator.start(
+    "queued",
+    () => {},
+    async () => {
+      factoryRan = true;
+      return {};
+    },
+    () => {
+      runStarted = true;
+    }
+  );
+  assert.equal(runStarted, false, "queued run has not acquired a slot");
+
+  coordinator.abortAll();
+  await sleep(10);
+  assert.equal(factoryRan, false, "cancelled-while-queued run must never execute");
+  assert.equal(runStarted, false, "cancelled-while-queued run must never fire onRunStart");
 }
 
 // --- parallel timing: two runs overlap ---

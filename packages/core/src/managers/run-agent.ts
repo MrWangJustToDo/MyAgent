@@ -175,6 +175,7 @@ export function buildAgentRunner(
       getManagedAgent: () => managed,
       manager,
       emitEvent,
+      getUIChannel: () => managed.ui,
     }),
     createPlanModeMiddleware({
       getPlanMode: () => managed.planMode,

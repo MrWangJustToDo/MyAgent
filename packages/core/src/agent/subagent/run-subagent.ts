@@ -38,6 +38,25 @@ export function getSubagent(manager: AgentManager, subagentId: string) {
 }
 
 /**
+ * Map a {@link SubagentResult} to the `task` tool output shape (summary field).
+ * Used by the pre-fork middleware to mirror finished runs into the UI early.
+ */
+export function subagentResultToTaskOutput(result: SubagentResult) {
+  return {
+    subagentId: result.subagentId,
+    summary: result.output,
+    truncated: result.truncated,
+    iterations: result.iterations,
+    durationMs: result.durationMs,
+    usage: result.usage,
+    reachedLimit: result.reachedLimit,
+    incomplete: result.incomplete,
+    aborted: result.aborted,
+    success: !result.aborted && !result.incomplete,
+  };
+}
+
+/**
  * Destroy a subagent by ID.
  */
 export function destroySubagent(manager: AgentManager, subagentId: string) {
