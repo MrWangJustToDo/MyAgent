@@ -54,6 +54,7 @@
     "validate:subagent-progress-summary": "pnpm run build && node scripts/validate-subagent-progress-summary.mjs",
     "validate:compaction-messages": "pnpm run build && node scripts/validate-compaction-messages.mjs",
     "validate:message-chain-projection": "pnpm run build && node scripts/validate-message-chain-projection.mjs",
+    "validate:compaction-keep-policy": "pnpm run build && node scripts/validate-compaction-keep-policy.mjs",
     "validate:model-config": "pnpm run build && node scripts/validate-model-config.mjs",
     "validate:core-no-env-config": "node scripts/validate-core-no-env-config.mjs",
     "validate:core-public-exports": "pnpm run build && node scripts/validate-core-public-exports.mjs",

@@ -20,8 +20,16 @@ export const compactionConfigSchema = z.object({
   tokenThreshold: z.number().int().positive().default(100000),
   /** Percentage of tokenThreshold at which compaction triggers (default: 80) */
   compactAtPercent: z.number().min(50).max(99).default(80),
-  /** Number of recent user turns (inclusive) to keep after compaction (default: 2) */
+  /** Number of recent user turns (inclusive) to keep after compaction (default: 2; legacy fallback) */
   keepRecentFlows: z.number().int().positive().default(2),
+  /**
+   * Token budget for the kept window after compaction. When set, overrides
+   * `keepRecentFlows`; when unset, derived from the model context window
+   * (see keep-policy.ts) with `keepRecentFlows` as final fallback.
+   */
+  keepRecentTokens: z.number().int().positive().optional(),
+  /** Tokens reserved for summary + next turn in window-relative derivation (default: 16384) */
+  reserveTokens: z.number().int().positive().optional(),
 });
 
 /**

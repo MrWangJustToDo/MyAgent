@@ -5,6 +5,7 @@ import { AutoModeController } from "../agent/approval/auto-mode-controller.js";
 import { buildAutoModePrompt } from "../agent/approval/auto-mode-prompt.js";
 import { ToolApprovalTable } from "../agent/approval/tool-approval-table.js";
 import { shouldTriggerAutoCompact } from "../agent/compaction/auto-compact.js";
+import { keepPolicyProjectionOptions, resolveKeepPolicy } from "../agent/compaction/keep-policy.js";
 import { getModelVisibleMessages } from "../agent/compaction/message-chain-projection.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
 import {
@@ -617,8 +618,10 @@ export class ManagedAgent {
    */
   getMessagesForLLM(canon?: ModelMessage[]): ModelMessage[] {
     const base = canon ?? this.getCanonicalFromUI();
-    const keepRecentFlows = this.compactionConfig?.keepRecentFlows ?? 2;
-    return getModelVisibleMessages(base, { keepRecentFlows });
+    const policy = keepPolicyProjectionOptions(
+      resolveKeepPolicy(this.compactionConfig ?? {}, this.modelInfo?.contextWindow)
+    );
+    return getModelVisibleMessages(base, policy);
   }
 
   setLog(c: AgentLog): void {
@@ -1135,6 +1138,7 @@ export class ManagedAgent {
     return shouldTriggerAutoCompact(config, {
       windowInputTokens: this.usage.getWindowUsage().inputTokens,
       messages,
+      contextWindow: this.modelInfo?.contextWindow,
     });
   }
 
@@ -1173,6 +1177,10 @@ export class ManagedAgent {
     return handleManagedReactiveCompact(this, error, manager);
   }
 
+  /** Model input context window in tokens, if known (compaction keep policy). */
+  get contextWindow(): number | undefined {
+    return this.modelInfo?.contextWindow ?? undefined;
+  }
   /**
    * Manual context compaction (AgentSession `compact` / `/compact`).
    * Requires {@link manager} to be set (bootstrap always attaches it for root agents).
@@ -1200,6 +1208,7 @@ export class ManagedAgent {
         todoManager: this.todoManager,
         statusController: this.statusController,
         compactionConfig: this.compactionConfig,
+        contextWindow: this.modelInfo?.contextWindow,
         resetAdmittedTurnContext: () => this.resetAdmittedTurnContext(),
         resetSystemPrompt: () => this.resetSystemPrompt(),
         persistSession: () => this.persistSession(),

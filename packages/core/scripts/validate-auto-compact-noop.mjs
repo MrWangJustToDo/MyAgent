@@ -200,4 +200,34 @@ assert.equal(resultF.compacted, false, "F: summary-only toSummarize must not com
 assert.equal(resultF.summary, undefined, "F: no summary should be produced");
 console.log("scenario F (toSummarize is previous SUMMARY) -> no-op OK");
 
+// ============================================================================
+// Scenario G (token-budget fix): the SAME oversized single-turn shape as D,
+// but with a token-budget keep policy. The budget walk cuts INSIDE the turn
+// (split turn), so the empty-toSummarize guard must NOT trip — compaction
+// proceeds to the summarizer (which fails on the throwing manager, proving it
+// was reached) instead of silently no-oping.
+// ============================================================================
+const scenarioG = [
+  summaryMessage("Prior summary."),
+  userMessage("Only turn — but a huge one."),
+  ...Array.from({ length: 4 }, (_, i) => assistantMessage(`step ${i}: ${"s".repeat(20_000)}`)),
+];
+
+const resultG = await autoCompact(
+  scenarioG,
+  { keepRecentTokens: 8_000 },
+  "agent-g",
+  throwingManager /* getAgent throws → summarizer fails */
+);
+assert.equal(resultG.error !== undefined, true, "G: must reach the summarizer, not short-circuit as a no-op");
+assert.equal(resultG.compacted, false, "G: summarizer failure still reports compacted:false");
+assert.match(resultG.error ?? "", /Compaction failed/, "G: error comes from the attempted summary call");
+
+// Control: identical input WITHOUT a budget falls back to legacy turns policy
+// and keeps the old no-op behavior.
+const resultGLegacy = await autoCompact(scenarioG, { keepRecentFlows: 1 }, "agent-g-legacy", throwingManager);
+assert.equal(resultGLegacy.compacted, false, "G-legacy: without budget the legacy guard still applies");
+assert.equal(resultGLegacy.error, undefined, "G-legacy: silent no-op, summarizer never called");
+console.log("scenario G (split-turn via token budget reaches summarizer; legacy still no-ops) OK");
+
 console.log("\nvalidate:auto-compact-noop passed");

@@ -139,6 +139,7 @@ export function buildAgentRunner(
       agentId: deps.agentId,
       manager: deps.manager,
       getCompactionConfig: () => deps.compactionConfig,
+      getContextWindow: () => deps.modelInfo?.contextWindow,
       getUIChannel: () => deps.getUIChannel(),
       getUsage: () => deps.usage,
       getTodoManager: () => deps.todoManager,

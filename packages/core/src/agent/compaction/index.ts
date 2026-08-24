@@ -33,9 +33,24 @@ export {
   UPDATE_COMPACTION_PROMPT,
   COMPACTION_SYSTEM_PROMPT,
   STILL_IN_CONTEXT_RULES,
+  TURN_PREFIX_INSTRUCTION,
   buildCompactionPrompt,
   type CompactionTodoItem,
 } from "./compaction-prompt.js";
+
+// Keep policy (token-budget vs legacy turn counting)
+export {
+  DEFAULT_RESERVE_TOKENS,
+  KEEP_RECENT_WINDOW_CAP,
+  KEEP_RECENT_WINDOW_MIN,
+  KEEP_RECENT_WINDOW_RATIO,
+  deriveKeepRecentTokens,
+  keepPolicyProjectionOptions,
+  resolveAutoCompactTrigger,
+  resolveKeepPolicy,
+  resolveReserveTokens,
+  type KeepPolicy,
+} from "./keep-policy.js";
 
 export { applyToolCompact, type ApplyToolCompactOptions } from "./tool-compact";
 export { ToolCompactCache } from "./tool-compact/tool-compact-cache.js";
@@ -65,7 +80,9 @@ export {
   createCompactedMessages,
   buildSummarizationUserPrompt,
   findCutPoint,
+  findCutPointByBudget,
   extractExistingSummary,
+  type BudgetedCutPointResult,
   type SummarizeOptions,
 } from "./auto-compact.js";
 export { buildSegmentedConversationText, serializeConversation } from "./serialize-conversation.js";

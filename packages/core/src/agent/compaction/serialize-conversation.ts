@@ -68,12 +68,25 @@ export function serializeConversation(messages: ModelMessage[]): string {
 }
 
 /**
- * Build labeled summarizer input: history to compress vs turns that remain after cut.
+ * Build labeled summarizer input: history to compress, an optional split-turn
+ * prefix (discarded head of an oversized turn), and turns that remain after cut.
  *
- * When `stillInContext` is omitted/empty, only `<to_compress>` is emitted.
+ * Segments are emitted in order; empty segments are omitted.
  */
-export function buildSegmentedConversationText(toCompress: ModelMessage[], stillInContext?: ModelMessage[]): string {
-  const parts: string[] = [`<to_compress>\n${serializeConversation(toCompress)}\n</to_compress>`];
+export function buildSegmentedConversationText(
+  toCompress: ModelMessage[],
+  stillInContext?: ModelMessage[],
+  turnPrefix?: ModelMessage[]
+): string {
+  const parts: string[] = [];
+
+  if (toCompress.length > 0) {
+    parts.push(`<to_compress>\n${serializeConversation(toCompress)}\n</to_compress>`);
+  }
+
+  if (turnPrefix && turnPrefix.length > 0) {
+    parts.push(`<turn_prefix>\n${serializeConversation(turnPrefix)}\n</turn_prefix>`);
+  }
 
   if (stillInContext && stillInContext.length > 0) {
     parts.push(`<still_in_context>\n${serializeConversation(stillInContext)}\n</still_in_context>`);

@@ -18,8 +18,10 @@ import type { ModelMessage } from "@tanstack/ai";
 export interface ApplyCompactionResultOptions {
   /** Called if orphaned tool-cache cleanup fails (non-fatal). */
   onCacheCleanupError?: (error: Error) => void;
-  /** keepRecentFlows used for post-append visible window / cache cleanup (default: 2). */
+  /** Legacy keepRecentFlows used for post-append visible window / cache cleanup (default: 2). */
   keepRecentFlows?: number;
+  /** Token-budget keep policy; overrides keepRecentFlows when set. */
+  keepRecentTokens?: number;
 }
 
 /**
@@ -46,7 +48,10 @@ export function applyCompactionResult(
 
   // Orphan cleanup must use post-append chronology (summary at end changes the wire window).
   const chronologic = convertMessagesToModelMessages(channel.getMessages());
-  const visible = getModelVisibleMessages(chronologic, { keepRecentFlows });
+  const visible = getModelVisibleMessages(chronologic, {
+    keepRecentFlows,
+    ...(options?.keepRecentTokens != null ? { keepRecentTokens: options.keepRecentTokens } : {}),
+  });
   const visibleToolIds = collectToolCallIds(visible);
   const orphanCut = firstOrphanToolIndex(chronologic, visibleToolIds);
   if (orphanCut > 0) {

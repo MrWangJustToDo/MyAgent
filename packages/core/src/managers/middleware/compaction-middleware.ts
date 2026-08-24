@@ -5,6 +5,8 @@ import {
   autoCompact,
   getModelVisibleMessages,
   isLatestDurableMessageCompactionSummary,
+  keepPolicyProjectionOptions,
+  resolveKeepPolicy,
 } from "../../agent/compaction";
 
 import type { AgentLog } from "../../agent/agent-log";
@@ -19,6 +21,8 @@ export interface CompactionMiddlewareDeps {
   agentId: string;
   manager: AgentManager;
   getCompactionConfig: () => CompactionConfig | null;
+  /** Model input context window in tokens, if known (drives keep policy + trigger). */
+  getContextWindow?: () => number | undefined;
   getUIChannel: () => AgentUIChannel | null;
   getUsage: () => UsageTracker;
   getTodoManager: () => TodoManager | null;
@@ -28,8 +32,13 @@ export interface CompactionMiddlewareDeps {
   emitEvent?: EmitAgentTelemetryFn;
 }
 
-function projectWireFromChannel(channel: AgentUIChannel, keepRecentFlows: number): ModelMessage[] {
-  return getModelVisibleMessages(convertMessagesToModelMessages(channel.getMessages()), { keepRecentFlows });
+function projectWireFromChannel(
+  channel: AgentUIChannel,
+  config: CompactionConfig | null,
+  contextWindow?: number
+): ModelMessage[] {
+  const policyOptions = keepPolicyProjectionOptions(resolveKeepPolicy(config ?? {}, contextWindow));
+  return getModelVisibleMessages(convertMessagesToModelMessages(channel.getMessages()), policyOptions);
 }
 
 /** TanStack compaction via {@link ChatMiddleware.onConfig}. */
@@ -47,10 +56,11 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
         return { messages: engineMessages };
       }
 
-      const keepRecentFlows = deps.getCompactionConfig()?.keepRecentFlows ?? 2;
+      const compactionConfig = deps.getCompactionConfig();
+      const contextWindow = deps.getContextWindow?.();
       // Always project from the live channel. Early tool results and compact
       // appends land on the channel before the next inner iteration.
-      let llmMessages = projectWireFromChannel(channel, keepRecentFlows);
+      let llmMessages = projectWireFromChannel(channel, compactionConfig, contextWindow);
 
       const managed = deps.manager.getAgent(deps.agentId);
       const isSubagent = Boolean(managed?.parentId);
@@ -70,14 +80,15 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
           const usage = deps.getUsage();
           const actualTokens = usage.getWindowUsage().inputTokens ?? 0;
           const fromChannel = convertMessagesToModelMessages(channel.getMessages());
-          const result = await autoCompact(llmMessages, deps.getCompactionConfig() ?? {}, deps.agentId, deps.manager, {
+          const result = await autoCompact(llmMessages, compactionConfig ?? {}, deps.agentId, deps.manager, {
             todos: todos.length > 0 ? todos : undefined,
             actualTokens: actualTokens || undefined,
+            contextWindow,
           });
 
           if (
             applyCompactionResult(fromChannel, channel, usage, result, {
-              keepRecentFlows,
+              ...keepPolicyProjectionOptions(resolveKeepPolicy(compactionConfig ?? {}, contextWindow)),
               onCacheCleanupError: (err) => {
                 deps.emitEvent?.("compaction:auto-error", {
                   phase: "cache-cleanup",
@@ -87,7 +98,7 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
             })
           ) {
             managed?.resetAdmittedTurnContext();
-            llmMessages = projectWireFromChannel(channel, keepRecentFlows);
+            llmMessages = projectWireFromChannel(channel, compactionConfig, contextWindow);
           }
 
           if (result.compacted) {

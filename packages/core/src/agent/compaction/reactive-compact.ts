@@ -14,7 +14,8 @@
  */
 
 import { createCompactedMessages, summarizeConversation } from "./auto-compact.js";
-import { extractExistingSummary } from "./cut-point.js";
+import { extractExistingSummary, findCutPointByBudget } from "./cut-point.js";
+import { deriveKeepRecentTokens } from "./keep-policy.js";
 import { maybeAppendCompactArchive } from "./write-compact-archive.js";
 
 import type { AgentManager } from "../../runtime-types/hosts.js";
@@ -27,8 +28,8 @@ import type { ModelMessage } from "@tanstack/ai";
 /** Default maximum reactive retries */
 const DEFAULT_MAX_REACTIVE_RETRIES = 1;
 
-/** Default number of recent messages to keep in reactive compact */
-const DEFAULT_REACTIVE_KEEP_TAIL = 5;
+/** Default token budget for the kept tail when no window/config is available */
+const DEFAULT_REACTIVE_KEEP_TOKENS = 16_000;
 
 // ============================================================================
 // Helper Functions
@@ -61,8 +62,48 @@ export function isPromptTooLongError(error: unknown): boolean {
 export interface ReactiveCompactConfig {
   /** Maximum reactive retry attempts (default: 1) */
   maxReactiveRetries?: number;
-  /** Number of recent messages to keep in reactive compact (default: 5) */
-  keepTail?: number;
+  /** Token budget for the kept tail (overrides context-window derivation) */
+  keepRecentTokens?: number;
+  /** Model input context window in tokens, if known (derives the tail budget) */
+  contextWindow?: number;
+}
+
+/**
+ * Resolve the tail token budget and split `messages` into summary + kept
+ * portions at a pairing-safe boundary.
+ *
+ * The cut never orphans a tool result from its tool call. Because this is an
+ * emergency path, progress is guaranteed: when the whole input fits the budget
+ * (cut index 0), the cut degrades to the latest valid boundary so at least one
+ * message gets summarized.
+ */
+function selectReactiveTail(
+  messages: ModelMessage[],
+  config: ReactiveCompactConfig
+): { summaryMessages: ModelMessage[]; tailMessages: ModelMessage[] } {
+  const budget =
+    config.keepRecentTokens && config.keepRecentTokens > 0
+      ? config.keepRecentTokens
+      : config.contextWindow && config.contextWindow > 0
+        ? deriveKeepRecentTokens(config.contextWindow)
+        : DEFAULT_REACTIVE_KEEP_TOKENS;
+
+  let cutIndex = findCutPointByBudget(messages, budget).cutIndex;
+  if (cutIndex <= 0) {
+    // Whole input fits the budget, but a prompt_too_long error means we must
+    // shrink anyway — fall back to keeping only the latest valid boundary.
+    for (let i = messages.length - 1; i >= 1; i--) {
+      const message = messages[i]!;
+      if (message.role !== "user" && message.role !== "assistant") continue;
+      cutIndex = i;
+      break;
+    }
+  }
+
+  return {
+    summaryMessages: messages.slice(0, cutIndex),
+    tailMessages: messages.slice(cutIndex),
+  };
 }
 
 /**
@@ -71,7 +112,7 @@ export interface ReactiveCompactConfig {
  *
  * Steps:
  * 1. Summarize the conversation using the LLM (via summarizeConversation)
- * 2. Keep only the summary + the last N messages
+ * 2. Keep only the summary + a token-budgeted tail (pairing-safe boundary)
  *
  * Session recovery is handled by the session store (JSONL), so no separate
  * transcript is needed — the session already captures full history.
@@ -79,6 +120,7 @@ export interface ReactiveCompactConfig {
  * @param messages - Current messages that caused the prompt_too_long error
  * @param parentAgentId - Parent agent ID for spawning summarization subagent
  * @param compactionConfig - Regular compaction config (passed to summarizer)
+ * @param config - Reactive-specific options (tail budget, context window)
  * @returns Compacted messages array (summary + tail)
  *
  * @example
@@ -93,14 +135,11 @@ export async function reactiveCompact(
   manager: AgentManager,
   config: ReactiveCompactConfig = {}
 ): Promise<ModelMessage[]> {
-  const { keepTail = DEFAULT_REACTIVE_KEEP_TAIL } = config;
-
   if (messages.length === 0) return messages;
 
-  // Split into summary portion and tail
-  const keepCount = Math.min(keepTail, messages.length - 1);
-  const tailMessages = messages.slice(-keepCount);
-  const summaryMessages = messages.slice(0, -keepCount);
+  // Split into summary portion and pairing-safe token-budgeted tail
+  const { summaryMessages, tailMessages } = selectReactiveTail(messages, config);
+  if (summaryMessages.length === 0) return messages;
 
   let summary: string;
 
@@ -118,8 +157,14 @@ export async function reactiveCompact(
   const { existingSummary, cleanMessages } = extractExistingSummary(summaryMessages);
   const archiveMessages = cleanMessages.length > 0 ? cleanMessages : summaryMessages;
 
-  const managed = manager.getAgent(parentAgentId);
-  const sessionId = managed?.getSessionData()?.id ?? parentAgentId;
+  // Archive path lookup must not break emergency compaction when the agent
+  // registry is unavailable.
+  let sessionId = parentAgentId;
+  try {
+    sessionId = manager.getAgent(parentAgentId)?.getSessionData()?.id ?? parentAgentId;
+  } catch {
+    // Fall through with the agent id as session id.
+  }
   summary = await maybeAppendCompactArchive(
     summary,
     {

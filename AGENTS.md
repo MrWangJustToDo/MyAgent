@@ -506,7 +506,7 @@ registerModelProvider(await createRemoteProvider("http://localhost:3100"));
 Frozen system text ends with `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` and stays byte-stable across turns.
 Per-turn dynamic context is admitted as a synthetic `<turn_context>` user message when its payload hash changes (persisted in `uiMessages`, hidden in the transcript UI).
 `<current_date>` uses **day** granularity (not hour/minute) so the payload stays stable within a calendar day.
-`findCutPoint` / `keepRecentFlows` skip `<turn_context>` messages when counting user turns.
+`findCutPoint` / `findCutPointByBudget` skip `<turn_context>` messages (turn counting / budget walk respectively).
 `prompt-cache-middleware` then:
 
 - **Anthropic** — `cache_control: { type: "ephemeral" }` on frozen system, last tool definition, and latest user message (tool-loop friendly)
@@ -709,15 +709,21 @@ const agent = await agentManager.createManagedAgent({
   modelStyle: "openai",
   modelBaseURL: "https://api.openai.com/v1",
   compaction: {
-    tokenThreshold: 100000,
-    keepRecentFlows: 2,
+    tokenThreshold: 100000,   // legacy absolute trigger (fallback when model window unknown)
+    keepRecentFlows: 2,       // legacy keep policy (fallback when model window unknown)
+    // keepRecentTokens: 24000,  // explicit kept-window token budget (optional)
+    // reserveTokens: 16384,     // headroom for summary + next turn (window-relative paths)
   },
 });
 ```
 
-**Auto-compact cut-point strategy:** `findCutPoint()` counts recent *user turns* from the end and keeps the latest N (default: 2 via `keepRecentFlows`). Everything before the cut is summarized; the kept turns remain in the main agent context.
+**Keep policy — token budget first:** The kept window is decided by `resolveKeepPolicy()` (`keep-policy.ts`): explicit `keepRecentTokens` > derived from the model context window (`min((window - reserveTokens) * 0.25, 32k)`) > legacy `keepRecentFlows` turn counting when no window is known. Compact-time and wire-projection-time always share the same resolved policy.
 
-**Summarizer input:** The summarization subagent receives labeled segments — `<to_compress>` (pre-cut history) and `<still_in_context>` (kept turns) — plus optional `<previous-summary>` for incremental updates. Prompt rules tell the model to summarize the compressed segment thoroughly and use the kept segment only to align Goal/Next (no detailed restatement).
+**Auto-compact trigger:** When the model context window is known and real usage tokens are available, the trigger is window-relative: `(contextWindow - reserveTokens) * compactAtPercent / 100`. The absolute `tokenThreshold` path remains the fallback (`shouldTriggerAutoCompact`, `resolveAutoCompactTrigger`). This makes small-window models compact before overflowing instead of never reaching an absolute threshold designed for 200k+ windows.
+
+**Auto-compact cut-point strategy:** With a token-budget policy, `findCutPointByBudget()` walks backward accumulating estimated tokens until the budget is reached and cuts at the nearest pairing-safe boundary (user/assistant only — never on a tool result, so call/result pairs stay intact). If the cut lands inside a turn (**split turn**), the discarded turn prefix is summarized separately under `<turn_prefix>` and merged into the SUMMARY; the suffix stays intact. Legacy `findCutPoint()` counts recent *user turns* from the end and keeps the latest N (default: 2 via `keepRecentFlows`). Both skip in-chain summaries and synthetic `<turn_context>` messages. Everything before the cut is summarized; the kept portion remains in the main agent context.
+
+**Summarizer input:** The summarization subagent receives labeled segments — `<to_compress>` (pre-cut history), `<turn_prefix>` (split-turn prefix, dedicated prompt), and `<still_in_context>` (kept turns) — plus optional `<previous-summary>` for incremental updates. Prompt rules tell the model to summarize the compressed segment thoroughly and use the kept segment only to align Goal/Next (no detailed restatement).
 
 **Post-compact (same request):** Append `[CONVERSATION SUMMARY]` onto the UI channel (chronological SoT). Compaction middleware then projects summary-first wire from the **live channel** and never writes the projection back. Auto-compact does not run again until a new durable message lands after that SUMMARY (window reset would otherwise re-trigger via `estimateTokens`). Recovery (`prompt_too_long` / retries) re-reads `managed.ui.getMessages()` live so mid-run appends are visible.
 
@@ -727,7 +733,8 @@ const agent = await agentManager.createManagedAgent({
 packages/core/src/agent/compaction/
 ├── tool-compact/          # Layer 1 — toModelOutput transforms (cached per toolCallId)
 ├── auto-compact.ts        # Layer 3 — LLM summarization when token threshold exceeded
-├── cut-point.ts           # findCutPoint + previous-summary extraction
+├── keep-policy.ts         # resolveKeepPolicy (token budget vs legacy turns) + trigger
+├── cut-point.ts           # findCutPoint (legacy) / findCutPointByBudget + previous-summary extraction
 ├── reactive-compact.ts    # Reactive — emergency compaction on prompt_too_long errors
 ├── apply-compaction-result.ts
 ├── compaction-summary.ts  # SUMMARY markers, detectors, createCompactionSummaryUIMessage
@@ -745,7 +752,7 @@ packages/core/src/agent/compaction/
 
 **Reasoning stripping (Layer 2)** is disabled in `compaction-middleware.ts` because DeepSeek thinking mode requires `reasoning_content` echo-back. DeepSeek endpoints use `ReasoningChatCompletionsTextAdapter`, which maps stream `reasoning_content` into `thinking` and writes it back on subsequent requests.
 
-**Reactive compaction** runs via `runStreamWithRecovery` (`managers/run-stream-recovery.ts`) — on `prompt_too_long` errors, `ManagedAgent.handleReactiveCompact()` appends a SUMMARY onto the live UI channel and retries (skipped for subagents). `getMessages` is a live channel read so the retry does not reuse a pre-run snapshot. The same shell also retries **transient** provider errors (429 / rate-limit / 502–504 / network) with exponential backoff for both main agent and subagents (honors Retry-After when available).
+**Reactive compaction** runs via `runStreamWithRecovery` (`managers/run-stream-recovery.ts`) — on `prompt_too_long` errors, `ManagedAgent.handleReactiveCompact()` appends a SUMMARY onto the live UI channel and retries (skipped for subagents). The retained tail is selected by token budget at a pairing-safe boundary (`selectReactiveTail`), degrading to the latest valid boundary when everything fits the budget — progress is always guaranteed. `getMessages` is a live channel read so the retry does not reuse a pre-run snapshot. The same shell also retries **transient** provider errors (429 / rate-limit / 502–504 / network) with exponential backoff for both main agent and subagents (honors Retry-After when available).
 
 ## Workspace `.agents/` layout
 

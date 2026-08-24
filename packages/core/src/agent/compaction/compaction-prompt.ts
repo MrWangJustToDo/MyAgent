@@ -94,9 +94,33 @@ export const STILL_IN_CONTEXT_RULES = `## Segment rules
 
 The conversation is split into labeled segments:
 - \`<to_compress>\`: history that will leave the main agent's context — summarize this thoroughly.
+- \`<turn_prefix>\` (when present): the discarded head of a single oversized turn — summarize per the split-turn rules below.
 - \`<still_in_context>\`: recent turns that remain after compaction — use only to align Goal / Next / Accomplished with what is still visible.
 
 Do NOT restate the \`<still_in_context>\` turns in detail; they will still be in the agent's context after compaction. Prefer capturing decisions, discoveries, and unfinished work from \`<to_compress>\`.`;
+
+/**
+ * Instruction used when summarizing ONLY the prefix of an oversized turn
+ * (split-turn compaction). Modeled on pi's TURN_PREFIX_SUMMARIZATION_PROMPT.
+ */
+export const TURN_PREFIX_INSTRUCTION = `The conversation above is the PREFIX of a single oversized turn. The SUFFIX (recent work from the same turn) is retained in the agent's context — it is not shown here and must NOT be restated.
+
+Summarize the prefix to provide context for the retained suffix, using this EXACT template:
+---
+## Original Request
+
+[What did the user ask for in this turn?]
+
+## Early Progress
+
+- [Key decisions, discoveries, and work done in the prefix]
+
+## Context for Retained Work
+
+- [Information needed to understand and continue the retained recent work: file paths, function names, error messages, partial results]
+---
+
+Be concise. Focus on what's needed to understand the kept suffix.`;
 
 /**
  * UPDATE compaction prompt template — used when a previous summary already exists.

@@ -19,11 +19,12 @@ import { runSubagent } from "../subagent/run-subagent.js";
 import { compactSummaryStreamId } from "../summary-stream/types.js";
 import { isTurnContextModelMessage } from "../turn-context/turn-context-message.js";
 
-import { buildCompactionPrompt, COMPACTION_SYSTEM_PROMPT } from "./compaction-prompt.js";
+import { buildCompactionPrompt, COMPACTION_SYSTEM_PROMPT, TURN_PREFIX_INSTRUCTION } from "./compaction-prompt.js";
 import { formatCompactionSummaryContent, isCompactionSummaryModelMessage } from "./compaction-summary.js";
-import { extractExistingSummary, findCutPoint } from "./cut-point.js";
+import { extractExistingSummary, findCutPoint, findCutPointByBudget } from "./cut-point.js";
 import { extractFileOpsFromMessages, formatFileOperations } from "./file-ops-tracker.js";
-import { buildSegmentedConversationText } from "./serialize-conversation.js";
+import { resolveAutoCompactTrigger, resolveKeepPolicy } from "./keep-policy.js";
+import { buildSegmentedConversationText, serializeConversation } from "./serialize-conversation.js";
 import { resolveSummarizationInputBudget, splitMessagesByTokenBudget } from "./summarization-budget.js";
 import { estimateTokens } from "./token-estimator.js";
 import { maybeAppendCompactArchive } from "./write-compact-archive.js";
@@ -33,7 +34,12 @@ import type { CompactionConfig, CompactionResult } from "./types.js";
 import type { AgentManager } from "../../runtime-types/hosts.js";
 import type { ModelMessage } from "@tanstack/ai";
 
-export { extractExistingSummary, findCutPoint } from "./cut-point.js";
+export {
+  extractExistingSummary,
+  findCutPoint,
+  findCutPointByBudget,
+  type BudgetedCutPointResult,
+} from "./cut-point.js";
 
 // ============================================================================
 // Public API
@@ -41,14 +47,16 @@ export { extractExistingSummary, findCutPoint } from "./cut-point.js";
 
 /**
  * Check if auto compaction should be triggered (respects compactAtPercent).
+ *
+ * When the model context window is known, the trigger is window-relative:
+ * `(contextWindow - reserveTokens) * compactAtPercent / 100`. Otherwise the
+ * legacy absolute `tokenThreshold` path applies.
  */
 export function shouldTriggerAutoCompact(
   config: Partial<CompactionConfig>,
-  options: { windowInputTokens?: number; messages?: ModelMessage[] } = {}
+  options: { windowInputTokens?: number; messages?: ModelMessage[]; contextWindow?: number } = {}
 ): boolean {
-  const tokenThreshold = config.tokenThreshold ?? 100_000;
-  const compactAtPercent = config.compactAtPercent ?? 80;
-  const triggerAt = Math.floor(tokenThreshold * (compactAtPercent / 100));
+  const { triggerAt } = resolveAutoCompactTrigger(config, options.contextWindow);
   const { windowInputTokens = 0, messages } = options;
 
   if (windowInputTokens > 0) return windowInputTokens >= triggerAt;
@@ -69,6 +77,16 @@ export interface SummarizeOptions {
    * under `<still_in_context>` for alignment; not applied as part of the cut.
    */
   stillInContext?: ModelMessage[];
+  /**
+   * Label the input as a discarded turn prefix (`<turn_prefix>`) instead of
+   * regular history (`<to_compress>`). Used by split-turn compaction.
+   */
+  asTurnPrefix?: boolean;
+  /**
+   * Custom instruction prompt replacing `buildCompactionPrompt`. Used
+   * internally for the split-turn prefix summary.
+   */
+  instruction?: string;
 }
 
 /**
@@ -76,14 +94,19 @@ export interface SummarizeOptions {
  * Exported for validation scripts.
  */
 export function buildSummarizationUserPrompt(toCompress: ModelMessage[], options?: SummarizeOptions): string {
-  const { focus, todos, existingSummary, stillInContext } = options ?? {};
-  const conversationText = buildSegmentedConversationText(toCompress, stillInContext);
-  const instructionPrompt = buildCompactionPrompt({
-    focus,
-    todos,
-    existingSummary,
-    hasStillInContext: Boolean(stillInContext?.length),
-  });
+  const { focus, todos, existingSummary, stillInContext, asTurnPrefix, instruction } = options ?? {};
+  const conversationText =
+    asTurnPrefix && !stillInContext?.length
+      ? `<turn_prefix>\n${serializeConversation(toCompress)}\n</turn_prefix>`
+      : buildSegmentedConversationText(toCompress, stillInContext);
+  const instructionPrompt =
+    instruction ??
+    buildCompactionPrompt({
+      focus,
+      todos,
+      existingSummary,
+      hasStillInContext: Boolean(stillInContext?.length),
+    });
   return `${conversationText}\n\n${instructionPrompt}`;
 }
 
@@ -120,6 +143,8 @@ export async function summarizeConversation(
   }
 
   const stillInContext = options?.stillInContext;
+  const instruction = options?.instruction;
+  const asTurnPrefix = options?.asTurnPrefix ?? false;
   const inputBudget = resolveSummarizationInputBudget(manager, parentAgentId);
   // Prefer keeping still_in_context in budget; batch only the to-compress slice.
   const stillTokens = stillInContext?.length ? estimateTokens(stillInContext) : 0;
@@ -132,14 +157,17 @@ export async function summarizeConversation(
       todos,
       existingSummary,
       stillInContext,
+      asTurnPrefix,
+      instruction,
     });
   }
 
   const partialSummaries: string[] = [];
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i]!;
-    const batchFocus =
-      focus != null
+    const batchFocus = instruction
+      ? instruction
+      : focus != null
         ? `${focus} (segment ${i + 1} of ${batches.length})`
         : `Summarize segment ${i + 1} of ${batches.length} of the conversation`;
     partialSummaries.push(
@@ -148,16 +176,22 @@ export async function summarizeConversation(
         todos: i === batches.length - 1 ? todos : undefined,
         existingSummary: i === 0 ? existingSummary : undefined,
         // Align with kept turns only on the final merge step.
+        asTurnPrefix,
+        instruction,
       })
     );
   }
 
   const mergedInput = partialSummaries.map((summary, index) => `## Segment ${index + 1}\n\n${summary}`).join("\n\n");
   return summarizeConversationBatch([{ role: "user", content: mergedInput }], parentAgentId, manager, {
-    focus: focus ?? "Merge the segment summaries into one cohesive continuation prompt for the next agent",
+    focus: instruction
+      ? undefined
+      : (focus ?? "Merge the segment summaries into one cohesive continuation prompt for the next agent"),
     todos,
     existingSummary,
     stillInContext,
+    asTurnPrefix,
+    instruction,
   });
 }
 
@@ -226,12 +260,16 @@ export function createCompactedMessages(summary: string): ModelMessage[] {
  * 2. Find the cut point = the Nth real user message from the end (inclusive).
  * 3. Summarize with segmented input: `<to_compress>` (pre-cut) + `<still_in_context>`
  *    (kept turns). Previous summary is fed as `existingSummary` for incremental updates.
+ *    When the cut lands inside a turn (token-budget policy), the discarded turn
+ *    prefix is summarized separately under `<turn_prefix>` and merged into the
+ *    final SUMMARY.
  * 4. Optionally archive the compressed slice and append a pointer to the summary.
  * 5. Return `cutIndex` relative to the input `messages` array (including any
  *    summary-first offset). The caller maps that onto the chronological channel.
  *
  * @param messages - Chronological or summary-first model-visible messages
- * @param config - Compaction configuration (uses keepRecentFlows as keepRecentUserTurns)
+ * @param config - Compaction configuration (keepRecentTokens budget with
+ *   legacy keepRecentFlows fallback; see keep-policy.ts)
  * @param parentAgentId - Parent agent ID for spawning summarization subagent
  * @param options - Optional summarization options (focus, todos)
  * @returns Compaction result with summary and cutIndex (relative to input messages)
@@ -241,9 +279,8 @@ export async function autoCompact(
   config: Partial<CompactionConfig>,
   parentAgentId: string,
   manager: AgentManager,
-  options?: SummarizeOptions & { actualTokens?: number }
+  options?: SummarizeOptions & { actualTokens?: number; contextWindow?: number }
 ): Promise<CompactionResult> {
-  const { keepRecentFlows = 2 } = config;
   const estimated = estimateTokens(messages);
   const tokensBefore = options?.actualTokens ?? estimated;
 
@@ -252,14 +289,31 @@ export async function autoCompact(
   }
 
   // Detect previous summary message at index 0 (if any). It is excluded from
-  // user-turn counting and from the slice sent to the summarizer — instead it
+  // cut counting and from the slice sent to the summarizer — instead it
   // is passed via `existingSummary` for incremental update.
   const hasPrevSummary = messages[0].role === "user" && extractExistingSummary([messages[0]]).existingSummary;
   const summaryOffset = hasPrevSummary ? 1 : 0;
 
-  // Find cut point relative to the input `messages` array.
-  // Pass summaryMessageIndex so findCutPoint skips it when counting user turns.
-  const llmCutIndex = findCutPoint(messages, keepRecentFlows, hasPrevSummary ? 0 : -1);
+  // Find cut point relative to the input `messages` array. Token-budget policy
+  // when resolvable, legacy user-turn counting otherwise.
+  let contextWindow = options?.contextWindow;
+  if (!contextWindow) {
+    try {
+      contextWindow = manager.getAgent(parentAgentId)?.getModelInfo()?.contextWindow ?? undefined;
+    } catch {
+      // Host without agent-registry access — fall back to the legacy policy.
+    }
+  }
+  const policy = resolveKeepPolicy(config, contextWindow);
+  let llmCutIndex: number;
+  let turnStartIndex = -1;
+  if (policy.kind === "tokens") {
+    const cut = findCutPointByBudget(messages, policy.keepRecentTokens!, hasPrevSummary ? 0 : -1);
+    llmCutIndex = cut.cutIndex;
+    turnStartIndex = cut.turnStartIndex;
+  } else {
+    llmCutIndex = findCutPoint(messages, policy.keepRecentFlows!, hasPrevSummary ? 0 : -1);
+  }
 
   if (llmCutIndex === 0) {
     return { compacted: false, tokensBefore, tokensAfter: tokensBefore, type: "auto" };
@@ -268,21 +322,23 @@ export async function autoCompact(
   // Slice to summarize: everything before llmCutIndex, excluding the previous
   // summary message (it's passed as existingSummary instead). Kept turns are
   // passed as stillInContext for summarizer alignment only.
-  const toSummarize = messages.slice(summaryOffset, llmCutIndex);
+  const splitTurn = turnStartIndex >= 0 && turnStartIndex < llmCutIndex;
+  const historyEnd = splitTurn ? turnStartIndex : llmCutIndex;
+  const historyToSummarize = messages.slice(summaryOffset, historyEnd);
+  const turnPrefixMessages = splitTurn ? messages.slice(turnStartIndex, llmCutIndex) : [];
   const keptMessages = messages.slice(llmCutIndex);
 
-  // Nothing older than the kept window to summarize (e.g. a single oversized
-  // LLM response filled the window right after a prior compact: [summary, user,
-  // llm, ...] with fewer than keepRecentFlows real user turns). Compacting here
-  // would run a wasteful no-op summary that barely shrinks context and appends a
-  // meaningless checkpoint. Bail out without calling the summarizer.
-  if (toSummarize.length === 0) {
+  // Nothing older than the kept window to summarize and no oversized turn to
+  // split — compacting here would run a wasteful no-op summary that barely
+  // shrinks context. Bail out without calling the summarizer.
+  if (historyToSummarize.length === 0 && turnPrefixMessages.length === 0) {
     return { compacted: false, tokensBefore, tokensAfter: tokensBefore, type: "auto" };
   }
 
   // A previous SUMMARY sitting in the kept/cut window (or a just-appended
   // checkpoint re-projected to the wire head) is not new history. Summarizing
   // it would append a near-duplicate checkpoint without shrinking context.
+  const toSummarize = [...historyToSummarize, ...turnPrefixMessages];
   if (toSummarize.every((message) => isCompactionSummaryModelMessage(message) || isTurnContextModelMessage(message))) {
     return { compacted: false, tokensBefore, tokensAfter: tokensBefore, type: "auto" };
   }
@@ -296,11 +352,33 @@ export async function autoCompact(
     // If there's a previous summary, pass it for incremental update.
     const prevSummary = hasPrevSummary ? extractExistingSummary([messages[0]]).existingSummary : undefined;
 
-    const summary = await summarizeConversation(toSummarize, parentAgentId, manager, {
-      ...options,
-      ...(prevSummary ? { existingSummary: prevSummary } : {}),
-      stillInContext: keptMessages,
-    });
+    let summary: string;
+    if (splitTurn && turnPrefixMessages.length > 0) {
+      // Split-turn compaction: summarize pre-history and the discarded turn
+      // prefix separately, then merge (pi-style). The prefix gets a dedicated
+      // prompt focused on what the retained suffix needs.
+      const historySummary =
+        historyToSummarize.length > 0
+          ? await summarizeConversation(historyToSummarize, parentAgentId, manager, {
+              ...options,
+              ...(prevSummary ? { existingSummary: prevSummary } : {}),
+              stillInContext: keptMessages,
+            })
+          : undefined;
+      const prefixSummary = await summarizeConversation(turnPrefixMessages, parentAgentId, manager, {
+        asTurnPrefix: true,
+        instruction: TURN_PREFIX_INSTRUCTION,
+      });
+      summary = historySummary
+        ? `${historySummary}\n\n---\n\n## Turn Context (split turn)\n\n${prefixSummary}`
+        : prefixSummary;
+    } else {
+      summary = await summarizeConversation(historyToSummarize, parentAgentId, manager, {
+        ...options,
+        ...(prevSummary ? { existingSummary: prevSummary } : {}),
+        stillInContext: keptMessages,
+      });
+    }
 
     const fileOps = extractFileOpsFromMessages(toSummarize);
     let summaryWithFileOps = summary + formatFileOperations(fileOps);

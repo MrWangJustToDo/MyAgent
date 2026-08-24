@@ -9,7 +9,7 @@
 import { generateId } from "../../utils/generate-id.js";
 
 import { formatCompactionSummaryContent, isCompactionSummaryModelMessage } from "./compaction-summary.js";
-import { findCutPoint } from "./cut-point.js";
+import { findCutPoint, findCutPointByBudget } from "./cut-point.js";
 
 import type { ModelMessage, UIMessage } from "@tanstack/ai";
 
@@ -41,8 +41,13 @@ export function createCompactionSummaryUIMessage(summary: string, id?: string): 
 }
 
 export interface GetModelVisibleMessagesOptions {
-  /** Recent real user turns to keep before the latest summary (default: 2). */
+  /** Recent real user turns to keep before the latest summary (default: 2; legacy fallback). */
   keepRecentFlows?: number;
+  /**
+   * Token budget for the kept window. When set, the kept window is derived by
+   * a pairing-safe token walk instead of counting user turns.
+   */
+  keepRecentTokens?: number;
 }
 
 /**
@@ -55,7 +60,7 @@ export function getModelVisibleMessages(
   messages: ModelMessage[],
   options: GetModelVisibleMessagesOptions = {}
 ): ModelMessage[] {
-  const keepRecentFlows = options.keepRecentFlows ?? 2;
+  const { keepRecentFlows = 2, keepRecentTokens } = options;
   const summaryIdx = findLatestSummaryIndex(messages);
   if (summaryIdx < 0) {
     return messages;
@@ -64,7 +69,12 @@ export function getModelVisibleMessages(
   const summary = messages[summaryIdx]!;
   const before = messages.slice(0, summaryIdx);
   const after = messages.slice(summaryIdx + 1);
-  const keptStart = findCutPoint(before, keepRecentFlows);
+  // Deterministic over the frozen pre-summary slice: same content + policy
+  // always yields the same kept window (see design notes in keep-policy.ts).
+  const keptStart =
+    keepRecentTokens != null
+      ? findCutPointByBudget(before, keepRecentTokens).cutIndex
+      : findCutPoint(before, keepRecentFlows);
   const kept = before.slice(keptStart);
   return [summary, ...kept, ...after];
 }

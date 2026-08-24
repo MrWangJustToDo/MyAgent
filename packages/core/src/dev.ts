@@ -51,7 +51,7 @@ export { resolveTextAdapterForManaged } from "./managers/run-agent.js";
 export { SessionStore } from "./agent/persistence/session-store.js";
 export { autoCompact } from "./agent/compaction/auto-compact.js";
 export { applyCompactionResult } from "./agent/compaction/apply-compaction-result.js";
-export { isPromptTooLongError } from "./agent/compaction/reactive-compact.js";
+export { isPromptTooLongError, reactiveCompact } from "./agent/compaction/reactive-compact.js";
 export {
   extractRetryAfterSeconds,
   isTransientRetryableError,
@@ -112,8 +112,10 @@ export {
   buildSegmentedConversationText,
   buildSummarizationUserPrompt,
   COMPACT_TRANSCRIPT_ROOT,
+  deriveKeepRecentTokens,
   extractCompactArchivePaths,
   findCutPoint,
+  findCutPointByBudget,
   formatCompactArchivesSection,
   createCompactionSummaryUIMessage,
   findLatestSummaryIndex,
@@ -124,11 +126,15 @@ export {
   isCompactionSummaryText,
   isCompactionSummaryUIMessage,
   isLatestDurableMessageCompactionSummary,
+  keepPolicyProjectionOptions,
   maybeAppendCompactArchive,
   parseCompactSequence,
+  resolveAutoCompactTrigger,
+  resolveKeepPolicy,
   serializeConversation,
   STILL_IN_CONTEXT_RULES,
   stripCompactArchiveSections,
+  TURN_PREFIX_INSTRUCTION,
   writeCompactArchive,
 } from "./agent/compaction";
 export { extractTextFromContent } from "./agent/compaction/message-utils.js";

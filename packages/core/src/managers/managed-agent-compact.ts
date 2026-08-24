@@ -6,6 +6,7 @@ import { convertMessagesToModelMessages } from "@tanstack/ai";
 
 import { applyCompactionResult, applyReactiveCompactionResult } from "../agent/compaction/apply-compaction-result.js";
 import { autoCompact } from "../agent/compaction/auto-compact.js";
+import { keepPolicyProjectionOptions, resolveKeepPolicy } from "../agent/compaction/keep-policy.js";
 import { getModelVisibleMessages } from "../agent/compaction/message-chain-projection.js";
 import { isPromptTooLongError, reactiveCompact } from "../agent/compaction/reactive-compact.js";
 import { estimateTokens } from "../agent/compaction/token-estimator.js";
@@ -33,7 +34,9 @@ export interface ReactiveCompactHost {
   getMessagesForLLM: (canon?: ModelMessage[]) => ModelMessage[];
   emitEvent: EmitAgentTelemetryFn;
   resetAdmittedTurnContext?: () => void;
-  compactionConfig?: { keepRecentFlows?: number } | null;
+  compactionConfig?: { keepRecentFlows?: number; keepRecentTokens?: number } | null;
+  /** Model input context window in tokens, if known (drives the reactive tail budget). */
+  contextWindow?: number;
 }
 
 export async function handleManagedReactiveCompact(
@@ -60,13 +63,18 @@ export async function handleManagedReactiveCompact(
     });
     const canon = host.getCanonicalFromUI();
     const llmMessages = host.getMessagesForLLM(canon);
-    const compactedMessages = await reactiveCompact(llmMessages, host.id, manager);
+    const compactedMessages = await reactiveCompact(llmMessages, host.id, manager, {
+      ...(host.compactionConfig?.keepRecentTokens != null
+        ? { keepRecentTokens: host.compactionConfig.keepRecentTokens }
+        : {}),
+      ...(host.contextWindow && host.contextWindow > 0 ? { contextWindow: host.contextWindow } : {}),
+    });
 
     // Capture window fill before apply (usage is reset by applyReactiveCompactionResult).
     const tokensBefore = host.usage.getWindowUsage().inputTokens ?? 0;
 
     applyReactiveCompactionResult(canon, channel, host.usage, compactedMessages, {
-      keepRecentFlows: host.compactionConfig?.keepRecentFlows ?? 2,
+      ...keepPolicyProjectionOptions(resolveKeepPolicy(host.compactionConfig ?? {}, host.contextWindow)),
       onCacheCleanupError: (err) => {
         host.emitEvent("compaction:reactive-error", {
           phase: "cache-cleanup",
@@ -105,6 +113,8 @@ export interface ManualCompactHost {
   todoManager: TodoManager | null;
   statusController: AgentStatusController;
   compactionConfig: CompactionConfig | null;
+  /** Model input context window in tokens, if known (drives the keep policy). */
+  contextWindow?: number;
   resetAdmittedTurnContext: () => void;
   resetSystemPrompt: () => void;
   persistSession: () => void;
@@ -134,8 +144,8 @@ export async function runManualCompact(
   }
 
   const allModelMessages = convertMessagesToModelMessages(channel.getMessages());
-  const keepRecentFlows = host.compactionConfig?.keepRecentFlows ?? 2;
-  const messages = getModelVisibleMessages(allModelMessages, { keepRecentFlows });
+  const keepOptions = keepPolicyProjectionOptions(resolveKeepPolicy(host.compactionConfig ?? {}, host.contextWindow));
+  const messages = getModelVisibleMessages(allModelMessages, keepOptions);
   if (messages.length === 0) {
     return { ok: false, error: "No messages to compact" };
   }
@@ -158,10 +168,11 @@ export async function runManualCompact(
       focus: options?.focus,
       todos: todos.length > 0 ? todos : undefined,
       actualTokens: actualTokens || undefined,
+      contextWindow: host.contextWindow,
     });
 
     const applied = applyCompactionResult(allModelMessages, channel, host.usage, result, {
-      keepRecentFlows,
+      ...keepOptions,
       onCacheCleanupError: (err) => {
         host.getLog?.()?.warn("agent", "Failed to cleanup tool cache after compact", { error: err.message });
       },
