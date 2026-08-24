@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-22%2B-339933?logo=node.js)](https://nodejs.org)
 [![pnpm](https://img.shields.io/badge/pnpm-9%2B-F69220?logo=pnpm)](https://pnpm.io)
-[![TanStack AI](https://img.shields.io/badge/TanStack%20AI-0.44-000000?logo=vercel)](https://tanstack.com/ai)
+[![TanStack AI](https://img.shields.io/badge/TanStack%20AI-0.48-000000?logo=vercel)](https://tanstack.com/ai)
 
 An open-source AI coding agent built on [TanStack AI SDK](https://tanstack.com/ai) with a React-powered terminal UI, Chrome extension, and in-browser playground.
 

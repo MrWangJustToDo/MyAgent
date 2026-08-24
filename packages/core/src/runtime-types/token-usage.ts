@@ -33,14 +33,52 @@ export function calculateCost(usage: TokenUsage, pricing: ModelPricing): number 
 
 /**
  * Map TanStack usage from `@tanstack/ai` RUN_FINISHED to core TokenUsage.
+ *
+ * TanStack 0.48+ allows `usage` to be either a single `TokenUsage` or an
+ * AG-UI `SpecTokenUsage[]` array (one entry per model iteration). Arrays are
+ * summed into one TokenUsage so multi-iteration runs report cumulative tokens.
  */
-export function extractTanStackUsage(usage: {
-  promptTokens?: number;
-  completionTokens?: number;
-  totalTokens?: number;
-  promptTokensDetails?: { cachedTokens?: number };
-  completionTokensDetails?: { reasoningTokens?: number };
-}): TokenUsage {
+export function extractTanStackUsage(
+  usage:
+    | {
+        promptTokens?: number;
+        completionTokens?: number;
+        totalTokens?: number;
+        promptTokensDetails?: { cachedTokens?: number };
+        completionTokensDetails?: { reasoningTokens?: number };
+      }
+    | Array<{
+        provider?: string;
+        model?: string;
+        inputTokens?: number;
+        outputTokens?: number;
+        totalTokens?: number;
+        reasoningTokens?: number;
+        cachedInputTokens?: number;
+      }>
+): TokenUsage {
+  if (Array.isArray(usage)) {
+    let input = 0;
+    let output = 0;
+    let total = 0;
+    let cacheRead = 0;
+    let reasoning = 0;
+    for (const entry of usage) {
+      input += entry.inputTokens ?? 0;
+      output += entry.outputTokens ?? 0;
+      total += entry.totalTokens ?? 0;
+      cacheRead += entry.cachedInputTokens ?? 0;
+      reasoning += entry.reasoningTokens ?? 0;
+    }
+    return {
+      inputTokens: input,
+      outputTokens: output,
+      totalTokens: total || input + output,
+      cacheReadTokens: cacheRead || undefined,
+      reasoningTokens: reasoning || undefined,
+    };
+  }
+
   const input = usage.promptTokens ?? 0;
   const output = usage.completionTokens ?? 0;
   return {
