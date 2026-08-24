@@ -130,7 +130,7 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
   const headerText = buildToolHeader(toolName, displayInput, parenText, stateColor);
 
   return (
-    <Box flexDirection="column" paddingLeft={2}>
+    <Box flexDirection="column">
       <Box flexDirection="row">
         <Box flexShrink={0} width={2}>
           <ToolStatusIcon state={uiState} toolName={toolName} />

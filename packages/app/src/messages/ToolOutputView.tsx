@@ -1,6 +1,7 @@
 import { getToUI } from "@my-agent/core";
 import { Box, Text } from "ink";
 
+import { useToolOutputCollapsed } from "../context/collapsed-tools-context.js";
 import { useTranscriptDisplayMode } from "../context/transcript-display-context.js";
 import { COLORS } from "../theme/colors.js";
 import { formatToolOutput } from "../utils/format";
@@ -29,8 +30,12 @@ const COMPACT_DETAILED_OUTPUT_TOOLS = new Set(["ask_user", "todo"]);
 export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState: UiToolState }) => {
   const mode = useTranscriptDisplayMode();
   const toolName = part.name;
+  const collapsed = useToolOutputCollapsed(part.id);
 
   if (uiState !== "output-available" && uiState !== "output-error") return null;
+
+  // Superseded complex block (older todo list / command run): header summary only.
+  if (collapsed) return null;
 
   if (mode === "compact" && !COMPACT_DETAILED_OUTPUT_TOOLS.has(toolName)) {
     return null;
