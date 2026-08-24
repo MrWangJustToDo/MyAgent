@@ -21,6 +21,7 @@ import {
   createPlanModeMiddleware,
   createPromptCacheMiddleware,
   createStatusMiddleware,
+  createTaskPreforkMiddleware,
   createToolCompactMiddleware,
   createTurnContextMiddleware,
 } from "./middleware";
@@ -168,6 +169,11 @@ export function buildAgentRunner(
     // TanStack batches TOOL_CALL_END until all tools finish; mirror each result into UI early.
     createEarlyToolResultUiMiddleware({
       getUIChannel: () => managed.ui,
+    }),
+    // Pre-start task subagents while args stream so parallel task calls run concurrently.
+    createTaskPreforkMiddleware({
+      getManagedAgent: () => managed,
+      manager,
     }),
     createPlanModeMiddleware({
       getPlanMode: () => managed.planMode,

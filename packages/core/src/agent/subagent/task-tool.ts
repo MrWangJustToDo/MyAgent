@@ -26,6 +26,7 @@ import { maybeCacheOutput } from "../tools/util/tool-output-cache.js";
 import { toolOutputBaseSchema } from "../tools/util/types.js";
 
 import { runSubagent } from "./run-subagent.js";
+import { getTaskPreforkCoordinator } from "./task-prefork.js";
 
 import type { AgentManager } from "../../runtime-types/hosts.js";
 
@@ -105,6 +106,10 @@ Use this tool when you need to:
 - Look up current external docs or web information without polluting your context
 - Perform complex multi-step exploration without polluting your context
 
+Parallelism: independent tasks SHOULD be emitted together as multiple tool calls
+in the same message — they run concurrently and the results arrive as one batch.
+Only sequence tasks when one depends on another's findings.
+
 The subagent:
 - Starts with fresh context (doesn't see your conversation history)
 - Has read-only tools: read_file, glob, grep, list_file, tree, websearch, webfetch
@@ -136,6 +141,12 @@ Example use cases:
 
     execute: async ({ prompt, description }, { toolCallId }) => {
       return withDuration(async () => {
+        // Join a pre-forked run when the task-prefork middleware already
+        // started this subagent while args were streaming (parallel task
+        // calls). Falls back to a serial spawn for uncapped/unseen calls.
+        const parentManaged = manager.getAgent(parentAgentId);
+        const preforked = parentManaged ? await getTaskPreforkCoordinator(parentManaged).join(toolCallId) : null;
+
         // Subagent owns its RunCoordinator AbortController (created in prepareForRun
         // and passed into TanStack chat). We do NOT register it on the parent's
         // pendingAbortControllers — parent cancel must not cascade to the subagent
@@ -143,20 +154,22 @@ Example use cases:
         //
         // No external abortSignal is passed here; runAgent wires the subagent's
         // currentAbortController into chat so sub.abort() actually stops the stream.
-        const result = await runSubagent(
-          {
-            subagentId: generateId("subagent", {
-              exists: (id) => manager.getAgent(id) != null,
-            }),
-            prompt,
-            description,
-            parentAgentId,
-            parentTaskToolCallId: toolCallId,
-            autoDestroy: false,
-            maxOutputLength: Infinity,
-          },
-          { manager }
-        );
+        const result =
+          preforked ??
+          (await runSubagent(
+            {
+              subagentId: generateId("subagent", {
+                exists: (id) => manager.getAgent(id) != null,
+              }),
+              prompt,
+              description,
+              parentAgentId,
+              parentTaskToolCallId: toolCallId,
+              autoDestroy: false,
+              maxOutputLength: Infinity,
+            },
+            { manager }
+          ));
 
         let summary = result.output;
         // Length truncation from subagent (maxOutputLength). Separate from disk-cache preview below.
