@@ -18,11 +18,14 @@ import { generateId } from "../../utils/generate-id.js";
 
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { ManagedAgent, AgentManager } from "../../runtime-types/hosts.js";
+import type { EmitAgentTelemetryFn } from "../emit-agent-telemetry.js";
 import type { ChatMiddleware } from "@tanstack/ai";
 
 export interface TaskPreforkMiddlewareDeps {
   getManagedAgent: () => ManagedAgent | undefined;
   manager: AgentManager;
+  /** Emits `agent:tool-start` at fork time so UI timers cover the full run. */
+  emitEvent?: EmitAgentTelemetryFn;
 }
 
 interface PendingTaskCall {
@@ -133,7 +136,16 @@ function trySpawn(
   if (!started) {
     // Cap reached — the task tool runs this call serially at execute time.
     parentSignal?.removeEventListener("abort", onParentAbort);
+    return;
   }
+  // Start the UI clock now — extensions middleware's duplicate `agent:tool-start`
+  // at execute time is ignored by the timing store (first start wins).
+  deps.emitEvent?.("agent:tool-start", {
+    tool_name: "task",
+    tool_call_id: toolCallId,
+    tool_input: { prompt, description },
+    timestamp: Date.now(),
+  });
 }
 
 async function runPreForked(

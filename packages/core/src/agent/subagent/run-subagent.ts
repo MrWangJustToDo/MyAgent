@@ -90,6 +90,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
   // Any throw after spawn (stream failure, finalize error, summarizer crash) must
   // not leave the subagent registered when autoDestroy was requested.
   let subagentRunCompleted = false;
+  const runStartedAt = Date.now();
   try {
     // Build minimal turn context (date + git) for subagent's environmental awareness.
     // Keeps subagent isolated while providing necessary time/workspace context.
@@ -276,6 +277,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       output: finalOutput,
       truncated,
       iterations: statusFlags.iterations,
+      durationMs: Math.max(0, Date.now() - runStartedAt),
       usage: {
         inputTokens: usage.inputTokens ?? 0,
         outputTokens: usage.outputTokens ?? 0,

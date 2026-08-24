@@ -174,6 +174,7 @@ export function buildAgentRunner(
     createTaskPreforkMiddleware({
       getManagedAgent: () => managed,
       manager,
+      emitEvent,
     }),
     createPlanModeMiddleware({
       getPlanMode: () => managed.planMode,

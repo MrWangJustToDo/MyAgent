@@ -46,8 +46,14 @@ export const useToolTimingStore = createState(
   }),
   {
     withActions: (state) => ({
-      /** Record the client-local start time for a tool call. */
+      /**
+       * Record the client-local start time for a tool call.
+       * First start wins: pre-forked `task` calls emit an early start at spawn
+       * time, and the executor's duplicate start must not reset that clock.
+       */
       start(toolCallId: string): void {
+        const existing = state.timings[toolCallId];
+        if (existing && existing.durationMs === undefined) return;
         state.timings[toolCallId] = { startedAt: Date.now() };
       },
 

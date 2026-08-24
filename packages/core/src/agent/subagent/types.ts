@@ -86,6 +86,9 @@ export interface SubagentResult {
   truncated: boolean;
   /** Number of iterations used */
   iterations: number;
+  /** Wall-clock duration of the subagent run itself (ms) — authoritative for
+   * pre-forked tasks where the caller's join wait would undercount. */
+  durationMs: number;
   /** Token usage */
   usage: {
     inputTokens: number;

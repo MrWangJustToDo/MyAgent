@@ -140,7 +140,10 @@ Example use cases:
     outputSchema: taskOutputSchema,
 
     execute: async ({ prompt, description }, { toolCallId }) => {
-      return withDuration(async () => {
+      // Prefer the subagent's own wall-clock run duration — for pre-forked
+      // tasks the join wait would undercount (or be ~0 when already done).
+      let runDurationMs: number | undefined;
+      const output = await withDuration(async () => {
         // Join a pre-forked run when the task-prefork middleware already
         // started this subagent while args were streaming (parallel task
         // calls). Falls back to a serial spawn for uncapped/unseen calls.
@@ -170,6 +173,7 @@ Example use cases:
             },
             { manager }
           ));
+        runDurationMs = result.durationMs;
 
         let summary = result.output;
         // Length truncation from subagent (maxOutputLength). Separate from disk-cache preview below.
@@ -195,7 +199,11 @@ Example use cases:
           usage: result.usage,
           cachedOutputPath,
         };
+      }).then((output) => {
+        if (runDurationMs != null) output.durationMs = runDurationMs;
+        return output;
       });
+      return output;
     },
 
     // Summary + completion status for the model (usage stays UI-only).
