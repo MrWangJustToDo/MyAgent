@@ -171,6 +171,12 @@ export function isProgressSummaryEligible(
   return !calledBeginSummary;
 }
 
+/** Streaming hooks for mirroring the report into the task summary UI. */
+export interface ProgressSummaryStream {
+  /** Assistant text deltas from the summarizer subagent(s), in order. */
+  onDelta: (delta: string) => void;
+}
+
 /**
  * Summarize an interrupted subagent's execution trace into a structured
  * progress report using a parent-spawned summarizer subagent.
@@ -179,13 +185,15 @@ export function isProgressSummaryEligible(
  * @param parentAgentId - Parent agent ID (spawns the summarizer)
  * @param manager - Agent manager
  * @param taskPrompt - Optional original task prompt, included for context
+ * @param stream - Optional hooks to observe the report while it generates
  * @returns The progress summary (already truncated), or `null` if summarization failed
  */
 export async function summarizeProgress(
   messages: UIMessage[],
   parentAgentId: string,
   manager: AgentManager,
-  taskPrompt?: string
+  taskPrompt?: string,
+  stream?: ProgressSummaryStream
 ): Promise<string | null> {
   try {
     const modelMessages: ModelMessage[] = convertMessagesToModelMessages(messages);
@@ -197,9 +205,9 @@ export async function summarizeProgress(
 
     let summary: string;
     if (batches.length <= 1) {
-      summary = await summarizeProgressBatch(modelMessages, parentAgentId, manager, taskPrompt);
+      summary = await summarizeProgressBatch(modelMessages, parentAgentId, manager, taskPrompt, stream);
     } else {
-      summary = await summarizeProgressBatched(batches, parentAgentId, manager, taskPrompt);
+      summary = await summarizeProgressBatched(batches, parentAgentId, manager, taskPrompt, stream);
     }
 
     const trimmed = summary.trim();
@@ -218,12 +226,13 @@ async function summarizeProgressBatch(
   messages: ModelMessage[],
   parentAgentId: string,
   manager: AgentManager,
-  taskPrompt?: string
+  taskPrompt?: string,
+  stream?: ProgressSummaryStream
 ): Promise<string> {
   // Rebuild UIMessage-free prompt: the batch is already ModelMessage[], but
   // buildProgressSummaryPrompt takes UIMessage[]. We serialize directly.
   const prompt = buildProgressSummaryPromptFromModel(messages, taskPrompt);
-  return runSummarizerSubagent(prompt, parentAgentId, manager);
+  return runSummarizerSubagent(prompt, parentAgentId, manager, stream);
 }
 
 /** Summarize multiple batches, then merge partial reports with a final pass. */
@@ -231,7 +240,8 @@ async function summarizeProgressBatched(
   batches: ModelMessage[][],
   parentAgentId: string,
   manager: AgentManager,
-  taskPrompt?: string
+  taskPrompt?: string,
+  stream?: ProgressSummaryStream
 ): Promise<string> {
   const partials: string[] = [];
   for (let i = 0; i < batches.length; i++) {
@@ -240,12 +250,12 @@ async function summarizeProgressBatched(
       taskPrompt != null
         ? `${taskPrompt} (segment ${i + 1} of ${batches.length})`
         : `Segment ${i + 1} of ${batches.length} of the subagent's execution trace`;
-    const partial = await summarizeProgressBatch(batch, parentAgentId, manager, batchLabel);
+    const partial = await summarizeProgressBatch(batch, parentAgentId, manager, batchLabel, stream);
     partials.push(partial);
   }
 
   const mergedInput = partials.map((text, index) => `## Segment ${index + 1}\n\n${text}`).join("\n\n");
-  return runSummarizerSubagent(`${mergedInput}\n\n${PROGRESS_MERGE_PROMPT}`, parentAgentId, manager);
+  return runSummarizerSubagent(`${mergedInput}\n\n${PROGRESS_MERGE_PROMPT}`, parentAgentId, manager, stream);
 }
 
 /** Serialize a ModelMessage[] batch directly (avoids a UIMessage round-trip). */
@@ -257,7 +267,12 @@ function buildProgressSummaryPromptFromModel(messages: ModelMessage[], taskPromp
 }
 
 /** Spawn the read-only summarizer subagent and return its output. */
-async function runSummarizerSubagent(prompt: string, parentAgentId: string, manager: AgentManager): Promise<string> {
+async function runSummarizerSubagent(
+  prompt: string,
+  parentAgentId: string,
+  manager: AgentManager,
+  stream?: ProgressSummaryStream
+): Promise<string> {
   const result = await runSubagent(
     {
       prompt,
@@ -270,6 +285,7 @@ async function runSummarizerSubagent(prompt: string, parentAgentId: string, mana
       aggregateUsageToParent: true,
       description: "progress-summary",
       bridgeUI: false,
+      onTextDelta: stream?.onDelta,
     },
     { manager }
   );

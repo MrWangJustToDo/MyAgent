@@ -5,6 +5,7 @@
 
 import { generateId } from "../../utils/generate-id.js";
 import { ensureUIChannel, runAgentOnce } from "../run/run-agent-skeleton.js";
+import { summaryStreamKey } from "../summary-stream";
 import { extractAssistantText } from "../stream/extract-assistant-text.js";
 import { throwOnRunError } from "../stream/stream-errors.js";
 import { getCurrentDate, getGitInfo } from "../turn-context/env-context.js";
@@ -17,7 +18,7 @@ import { resolveSubagentBridgeUI, SUBAGENT_DEFAULT_MAX_ITERATIONS } from "./type
 
 import type { SubagentConfig, SubagentResult } from "./types.js";
 import type { AgentManager } from "../../runtime-types/hosts.js";
-import type { ModelMessage, UIMessage as TanStackUIMessage, UIMessage } from "@tanstack/ai";
+import type { ModelMessage, StreamChunk, UIMessage as TanStackUIMessage, UIMessage } from "@tanstack/ai";
 
 export interface SubagentRunDeps {
   manager: AgentManager;
@@ -178,7 +179,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
           : undefined,
         transformStream: (stream) =>
           throwOnRunError(
-            captureStreamFinishReason(stream, (reason) => {
+            captureStreamFinishReason(tapTextDeltas(stream, config.onTextDelta), (reason) => {
               finishReason = reason;
             })
           ),
@@ -266,7 +267,25 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
         hasBeginSummaryCall(previewMessages)
       )
     ) {
-      const progressSummary = await summarizeProgress(previewMessages, parentAgentId, manager, prompt);
+      // Mirror generation into the task summary UI: reset flips the panel to
+      // summary phase, deltas stream live, end settles the view. Without this
+      // the report would only appear after the whole side-LLM pass finishes.
+      const hub = parentTaskToolCallId ? parentManaged.summaryStreams : undefined;
+      if (hub && parentTaskToolCallId) {
+        hub.reset({ source: "task", toolCallId: parentTaskToolCallId });
+      }
+      const summaryKey = parentTaskToolCallId ? summaryStreamKey("task", parentTaskToolCallId) : "";
+      const onDelta = hub ? (delta: string) => hub.append(summaryKey, delta) : undefined;
+      const progressSummary = await summarizeProgress(
+        previewMessages,
+        parentAgentId,
+        manager,
+        prompt,
+        onDelta ? { onDelta } : undefined
+      );
+      if (hub && parentTaskToolCallId) {
+        hub.end(summaryKey);
+      }
       if (progressSummary) {
         const truncatedResult = truncateSummary(progressSummary, maxOutputLength);
         finalOutput = truncatedResult.summary;
@@ -314,6 +333,27 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
         // Cleanup must never mask the original failure.
       }
     }
+  }
+}
+
+/**
+ * Forward assistant text deltas to an observer while passing chunks through.
+ * Used by the progress-summary fallback to mirror side-LLM output into the
+ * task summary UI while it generates.
+ */
+async function* tapTextDeltas(
+  stream: AsyncIterable<StreamChunk>,
+  onTextDelta?: (delta: string) => void
+): AsyncIterable<StreamChunk> {
+  if (!onTextDelta) {
+    yield* stream;
+    return;
+  }
+  for await (const chunk of stream) {
+    if (chunk.type === "TEXT_MESSAGE_CONTENT" && typeof chunk.delta === "string") {
+      onTextDelta(chunk.delta);
+    }
+    yield chunk;
   }
 }
 

@@ -70,6 +70,12 @@ export interface SubagentConfig {
    * (`source: "compact"`). Used by compaction summarizer subagents.
    */
   compactSummaryStream?: { compactId: string };
+  /**
+   * Observe assistant text deltas as the subagent streams (all phases).
+   * Used by the progress-summary fallback to mirror the side-LLM report
+   * into the task summary UI while it generates.
+   */
+  onTextDelta?: (delta: string) => void;
 }
 
 /** Resolve whether a subagent run should bridge through {@link AgentUIChannel}. */
