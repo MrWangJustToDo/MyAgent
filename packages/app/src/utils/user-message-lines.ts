@@ -21,8 +21,12 @@ function displayWidth(char: string): number {
   return WIDE_CHAR_RE.test(char) ? 2 : 1;
 }
 
-/** Wrap one logical line (no newlines) into physical rows, mirroring Ink. */
-function wrapLogicalLine(line: string, width: number): string[] {
+/** Wrap one logical line (no newlines) into physical rows, mirroring Ink.
+ *
+ * `rowLimit` stops wrapping once the limit is reached (the rest of the line is
+ * dropped) so callers that only need the first N rows never pay for the rest.
+ */
+function wrapLogicalLine(line: string, width: number, rowLimit = Number.POSITIVE_INFINITY): string[] {
   const rows: string[] = [];
   let currentRow = "";
   let currentRowWidth = 0;
@@ -57,6 +61,7 @@ function wrapLogicalLine(line: string, width: number): string[] {
       }
       // Wrap: finish the current row and start a new one.
       rows.push(currentRow);
+      if (rows.length >= rowLimit) return rows;
       currentRow = "";
       currentRowWidth = 0;
       continue;
@@ -71,6 +76,7 @@ function wrapLogicalLine(line: string, width: number): string[] {
         const cw = displayWidth(word[k]!);
         if (chunkWidth + cw > width && chunkWidth > 0) {
           rows.push(chunk);
+          if (rows.length >= rowLimit) return rows;
           chunk = "";
           chunkWidth = 0;
         }
@@ -98,15 +104,23 @@ function wrapLogicalLine(line: string, width: number): string[] {
   return rows;
 }
 
-/** Wrap text into physical rows at the given terminal width (blank lines preserved). */
-export function wrapTextToLines(text: string, width: number): string[] {
+/**
+ * Wrap text into physical rows at the given terminal width (blank lines preserved).
+ *
+ * `maxRows` stops wrapping as soon as the budget is reached — callers that only
+ * render the first N rows pass the budget so a huge input never gets fully wrapped.
+ */
+export function wrapTextToLines(text: string, width: number, maxRows?: number): string[] {
   const safeWidth = Math.max(1, width);
+  const limit = maxRows != null && maxRows > 0 ? maxRows : Number.POSITIVE_INFINITY;
   const lines: string[] = [];
   for (const logicalLine of text.split("\n")) {
+    if (lines.length >= limit) break;
     if (logicalLine === "") {
       lines.push("");
     } else {
-      lines.push(...wrapLogicalLine(logicalLine, safeWidth));
+      const wrapped = wrapLogicalLine(logicalLine, safeWidth, limit - lines.length);
+      for (const row of wrapped) lines.push(row);
     }
   }
   return lines;
@@ -116,29 +130,42 @@ export interface TruncateToLinesResult {
   /** The (possibly truncated) text; when truncated the last row is a hint line. */
   text: string;
   truncated: boolean;
-  /** Number of rows that were dropped (excludes the hint line). */
+  /** Rows dropped (excludes the hint line). Exact for normal inputs; a lower bound past {@link EXACT_COUNT_MAX_CHARS}. */
   hiddenLines: number;
 }
+
+/** Above this size the drop count is not computed exactly (early-exit wrap). */
+const EXACT_COUNT_MAX_CHARS = 20_000;
 
 /**
  * Cap `text` to at most `maxLines` physical rows at the given width.
  * When overflowing, the last row becomes `… (N lines truncated)` and the
  * returned text renders to exactly `maxLines` rows under Ink's `wrap="wrap"`.
+ *
+ * Inputs larger than {@link EXACT_COUNT_MAX_CHARS} take an O(row-budget)
+ * early-exit wrap; the hint then omits the exact drop count (computing it
+ * would require wrapping the whole input).
  */
 export function truncateTextToMaxLines(text: string, width: number, maxLines: number): TruncateToLinesResult {
   if (maxLines <= 1) {
     return { text, truncated: false, hiddenLines: 0 };
   }
-  const lines = wrapTextToLines(text, width);
+  const exact = text.length <= EXACT_COUNT_MAX_CHARS;
+  // Early-exit wrap: stop as soon as the budget is exceeded so a huge input
+  // (e.g. a failed task analysis echoing the full context) costs O(budget),
+  // not O(text). One extra row is enough to know it overflowed.
+  const lines = wrapTextToLines(text, width, exact ? undefined : maxLines + 1);
   if (lines.length <= maxLines) {
     return { text, truncated: false, hiddenLines: 0 };
   }
   const contentLines = lines.slice(0, maxLines - 1);
   const hiddenLines = lines.length - contentLines.length;
-  let hint = `\n… (${hiddenLines} lines truncated)`;
+  let hint = exact ? `\n… (${hiddenLines} lines truncated)` : "\n… (truncated)";
   // At very narrow widths the hint could wrap to 2+ rows and blow the budget;
   // fall back to a bare ellipsis so the result still fits `maxLines` rows.
-  if (wrapTextToLines(hint, width).length > 1) {
+  // (Measure without the joining newline — counting the blank first row would
+  // always trip the fallback and hide the count entirely.)
+  if (wrapTextToLines(hint.slice(1), width).length > 1) {
     hint = "\n…";
   }
   return { text: contentLines.join("\n") + hint, truncated: true, hiddenLines };
