@@ -579,9 +579,33 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
   });
 
   // ---- Turn-context provider (Phase 8): light LSP guidance ----
-  ctx.registerTurnContextProvider(() => {
-    return "LSP tools available (lsp_diagnostics, lsp_hover, lsp_definition, lsp_completions). After editing code, call lsp_diagnostics to check for compile errors.";
-  });
+  // Advertise code-intelligence tools only when usable in this host. Diagnostics /
+  // hover / definition degrade to syntax-level tree-sitter fallbacks when no LSP
+  // runtime exists; completions has no fallback, so it requires `createLspConnection`.
+  // Disabled tools (disabledTools) are never advertised. When nothing is usable we
+  // register no provider, so the model is not misled into calling dead tools.
+  const lspRuntimeAvailable = Boolean(createConnection);
+  const tsFallbackAvailable = treeSitter.available();
+  const advertisedTools: string[] = [];
+  if (shouldRegister("lsp_diagnostics") && (lspRuntimeAvailable || tsFallbackAvailable)) {
+    advertisedTools.push("lsp_diagnostics");
+  }
+  if (shouldRegister("lsp_hover") && (lspRuntimeAvailable || tsFallbackAvailable)) {
+    advertisedTools.push("lsp_hover");
+  }
+  if (shouldRegister("lsp_definition") && (lspRuntimeAvailable || tsFallbackAvailable)) {
+    advertisedTools.push("lsp_definition");
+  }
+  if (shouldRegister("lsp_completions") && lspRuntimeAvailable) {
+    advertisedTools.push("lsp_completions");
+  }
+
+  if (advertisedTools.length > 0) {
+    const guidance = lspRuntimeAvailable
+      ? `LSP tools available (${advertisedTools.join(", ")}). After editing code, call lsp_diagnostics to check for compile errors.`
+      : `Code tools available via tree-sitter fallback (${advertisedTools.join(", ")}). After editing code, call lsp_diagnostics to check for syntax errors.`;
+    ctx.registerTurnContextProvider(() => guidance);
+  }
 
   ctx.logger.info("LSP extension activated");
 }
