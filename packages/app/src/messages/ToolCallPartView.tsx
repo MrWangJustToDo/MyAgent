@@ -64,13 +64,12 @@ export interface ToolCallPartViewProps {
 const RUN_COMMAND_STREAM_THROTTLE_MS = 100;
 
 /** Render a tool invocation part — unified compact style for all tools */
-export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }: ToolCallPartViewProps) => {
+export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartViewProps) => {
   const displayMode = useTranscriptDisplayMode();
   const uiState = getUiToolState(part);
   const toolName = part.name;
   const toolCallId = part.id;
   const toolInput = parseToolInput(part);
-  const needsApproval = !readOnly && uiState === "approval-requested" && part.approval;
 
   const isRunCommand = toolName === "run_command";
   const isTask = toolName === "task";
@@ -159,14 +158,6 @@ export const ToolCallPartView = ({ part, readOnly = false, streamingThrottleMs }
         />
       )}
       {showTaskSummaryStream && taskSummary.rows.length > 0 && <SummaryStreamView rows={taskSummary.rows} height={5} />}
-
-      {needsApproval && (
-        <Box paddingLeft={2}>
-          <Text color={COLORS.warning}>
-            Approval required: Press <Text bold>y</Text> to approve, <Text bold>n</Text> to deny
-          </Text>
-        </Box>
-      )}
 
       {hasOutput && <ToolOutputView part={part} uiState={uiState} />}
 
