@@ -46,4 +46,4 @@
 - [x] 5.1 CLI: `--remote-session` creates remote Host; Local path uses Local Host
 - [x] 5.2 Extension/playground: Session-only bootstrap (remote Host when configured)
 - [x] 5.3 Update AGENTS.md / ARCHITECTURE / Help for three planes + Session-only app + event envelope
-- [ ] 5.4 Final lint/format/build for affected packages
+- [x] 5.4 Final lint/format/build for affected packages

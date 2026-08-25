@@ -2,7 +2,7 @@
   "name": "@my-agent/playground",
   "version": "0.0.1",
   "private": true,
-  "description": "Browser playground — WebContainer CoreEnv + shared @my-agent/app",
+  "description": "Browser playground \u2014 WebContainer CoreEnv + shared @my-agent/app",
   "type": "module",
   "scripts": {
     "dev": "vite --force",
@@ -20,6 +20,7 @@
     "@monaco-editor/react": "^4.7.0",
     "@my-agent/app": "workspace:*",
     "@my-agent/core": "workspace:*",
+    "@my-agent/server": "workspace:*",
     "@my-react/react": "^0.3.30",
     "@my-react/react-dom": "^0.3.30",
     "@my-react/react-terminal": "^0.0.30",
