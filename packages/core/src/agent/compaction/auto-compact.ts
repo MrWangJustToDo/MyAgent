@@ -24,6 +24,7 @@ import { formatCompactionSummaryContent, isCompactionSummaryModelMessage } from 
 import { extractExistingSummary, findCutPoint, findCutPointByBudget } from "./cut-point.js";
 import { extractFileOpsFromMessages, formatFileOperations } from "./file-ops-tracker.js";
 import { resolveAutoCompactTrigger, resolveKeepPolicy } from "./keep-policy.js";
+import { generateId } from "../../utils/generate-id.js";
 import { buildSegmentedConversationText, serializeConversation } from "./serialize-conversation.js";
 import { resolveSummarizationInputBudget, splitMessagesByTokenBudget } from "./summarization-budget.js";
 import { estimateTokens } from "./token-estimator.js";
@@ -85,6 +86,11 @@ export interface SummarizeOptions {
   asTurnPrefix?: boolean;
   /** Phase label shown on the compact banner while this pass streams. */
   streamLabel?: string;
+  /**
+   * Compaction run identity shared by every pass of one auto/manual compaction:
+   * same-epoch passes append to the banner instead of resetting it.
+   */
+  streamEpoch?: string;
   /**
    * Custom instruction prompt replacing `buildCompactionPrompt`. Used
    * internally for the split-turn prefix summary.
@@ -148,6 +154,7 @@ export async function summarizeConversation(
   const stillInContext = options?.stillInContext;
   const instruction = options?.instruction;
   const asTurnPrefix = options?.asTurnPrefix ?? false;
+  const streamEpoch = options?.streamEpoch ?? generateId("cmpepoch");
   const inputBudget = resolveSummarizationInputBudget(manager, parentAgentId);
   // Prefer keeping still_in_context in budget; batch only the to-compress slice.
   const stillTokens = stillInContext?.length ? estimateTokens(stillInContext) : 0;
@@ -182,6 +189,7 @@ export async function summarizeConversation(
         asTurnPrefix,
         instruction,
         streamLabel: `Segment ${i + 1}/${batches.length}`,
+        streamEpoch,
       })
     );
   }
@@ -197,6 +205,7 @@ export async function summarizeConversation(
     asTurnPrefix,
     instruction,
     streamLabel: "Merging segment summaries",
+    streamEpoch,
   });
 }
 
@@ -224,6 +233,7 @@ async function summarizeConversationBatch(
       compactSummaryStream: {
         compactId,
         label: options?.streamLabel ?? "Summarizing conversation",
+        epoch: options?.streamEpoch ?? generateId("cmpepoch"),
       },
     },
     { manager }
@@ -295,6 +305,10 @@ export async function autoCompact(
   if (messages.length === 0) {
     return { compacted: false, tokensBefore, tokensAfter: tokensBefore, type: "auto" };
   }
+
+  // One compaction run = one continuous banner stream: every summarizer pass
+  // shares this epoch so follow-up passes append instead of resetting.
+  const streamEpoch = options?.streamEpoch ?? generateId("cmpepoch");
 
   // Detect previous summary message at index 0 (if any). It is excluded from
   // cut counting and from the slice sent to the summarizer — instead it
@@ -372,12 +386,14 @@ export async function autoCompact(
               ...(prevSummary ? { existingSummary: prevSummary } : {}),
               stillInContext: keptMessages,
               streamLabel: "Summarizing earlier conversation",
+              streamEpoch,
             })
           : undefined;
       const prefixSummary = await summarizeConversation(turnPrefixMessages, parentAgentId, manager, {
         asTurnPrefix: true,
         instruction: TURN_PREFIX_INSTRUCTION,
         streamLabel: "Summarizing discarded turn context",
+        streamEpoch,
       });
       // When the split turn starts right after the head SUMMARY (no history to
       // compress), prevSummary must still survive — otherwise the new checkpoint
@@ -392,6 +408,7 @@ export async function autoCompact(
         ...options,
         ...(prevSummary ? { existingSummary: prevSummary } : {}),
         stillInContext: keptMessages,
+        streamEpoch,
       });
     }
 

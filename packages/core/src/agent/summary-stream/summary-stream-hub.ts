@@ -18,6 +18,7 @@ interface StreamEntry {
   toolCallId?: string;
   compactId?: string;
   label?: string;
+  epoch?: string;
   seq: number;
   lines: string[];
   pendingLine: string;
@@ -36,6 +37,8 @@ export interface SummaryStreamResetInput {
   compactId?: string;
   /** Optional phase label shown by UI consumers (e.g. multi-pass compaction). */
   label?: string;
+  /** Compaction run identity — same-epoch resets become appends upstream. */
+  epoch?: string;
 }
 
 function resolveId(input: SummaryStreamResetInput): string {
@@ -76,6 +79,7 @@ export class SummaryStreamHub {
       ...(input.toolCallId ? { toolCallId: input.toolCallId } : {}),
       ...(input.compactId ? { compactId: input.compactId } : {}),
       ...(input.label ? { label: input.label } : {}),
+      ...(input.epoch ? { epoch: input.epoch } : {}),
       seq: 1,
       ...emptySummaryLineBuffer(),
       status: "active",
@@ -88,6 +92,7 @@ export class SummaryStreamHub {
       ...(input.toolCallId ? { toolCallId: input.toolCallId } : {}),
       ...(input.compactId ? { compactId: input.compactId } : {}),
       ...(input.label ? { label: input.label } : {}),
+      ...(input.epoch ? { epoch: input.epoch } : {}),
       seq: entry.seq,
     });
     return this.toSnapshot(key, entry);
@@ -132,6 +137,7 @@ export class SummaryStreamHub {
       ...(entry.toolCallId ? { toolCallId: entry.toolCallId } : {}),
       ...(entry.compactId ? { compactId: entry.compactId } : {}),
       ...(entry.label ? { label: entry.label } : {}),
+      ...(entry.epoch ? { epoch: entry.epoch } : {}),
       seq: entry.seq,
       lines: entry.lines.slice(),
       pendingLine: entry.pendingLine,

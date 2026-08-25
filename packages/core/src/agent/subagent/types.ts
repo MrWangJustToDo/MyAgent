@@ -73,6 +73,13 @@ export interface SubagentConfig {
     compactId: string;
     /** Phase label surfaced on the compact banner (multi-pass compaction). */
     label?: string;
+    /**
+     * Compaction run identity. When the hub already holds a live snapshot for
+     * the same epoch, the new pass APPENDS (with a `[label]` separator) instead
+     * of resetting the banner — sequential passes of one compaction read as one
+     * continuous stream.
+     */
+    epoch?: string;
   };
   /**
    * Observe assistant text deltas as the subagent streams (all phases).

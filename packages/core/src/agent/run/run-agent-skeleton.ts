@@ -90,6 +90,7 @@ export interface RunAgentOnceOptions {
   summaryHub?: SummaryStreamHub;
   compactId?: string;
   compactLabel?: string;
+  compactEpoch?: string;
   onUpdate?: (messages: UIMessage[]) => void;
   /** Optional wrapper (e.g. finish-reason capture). Applied before consume. */
   transformStream?: (stream: AsyncIterable<StreamChunk>) => AsyncIterable<StreamChunk>;

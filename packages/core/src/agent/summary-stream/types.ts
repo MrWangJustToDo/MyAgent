@@ -31,6 +31,8 @@ export interface SummaryStreamSnapshot {
   seq: number;
   /** Optional phase label (multi-pass compaction) surfaced by UI consumers. */
   label?: string;
+  /** Compaction run identity — passes sharing an epoch append instead of resetting. */
+  epoch?: string;
   /** Closed complete lines (ring-capped on the producer). */
   lines: string[];
   /** Incomplete trailing line (may be empty). */
@@ -46,6 +48,7 @@ export type SummaryStreamEvent =
       toolCallId?: string;
       compactId?: string;
       label?: string;
+      epoch?: string;
       seq: number;
     }
   | { type: "append"; key: string; chunk: string; seq: number }

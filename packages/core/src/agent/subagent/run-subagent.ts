@@ -153,6 +153,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     const summaryHub = bridgeUI || compactSummaryStream ? parentManaged.summaryStreams : undefined;
     const compactId = compactSummaryStream?.compactId;
     const compactLabel = compactSummaryStream?.label;
+    const compactEpoch = compactSummaryStream?.epoch;
 
     /** One-way running → summary transition + telemetry (no-op once in summary). */
     const enterSummaryPhase = () => {
@@ -177,6 +178,15 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     let previewMessages: UIMessage[] = [];
 
     try {
+      // Same-epoch follow-up pass: continue the banner with a phase separator
+      // instead of resetting it (the channel skips its reset for same epochs).
+      if (summaryHub && compactId && compactEpoch) {
+        const key = summaryStreamKey("compact", compactId);
+        if (summaryHub.getSnapshot(key)?.epoch === compactEpoch) {
+          summaryHub.append(key, compactLabel ? `\n\n[${compactLabel}]\n` : "\n\n");
+        }
+      }
+
       const result = await runAgentOnce({
         manager,
         agentId: subagentId,
@@ -188,6 +198,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
         summaryHub,
         compactId,
         compactLabel,
+        compactEpoch,
         onUpdate: bridgeUI
           ? (updated) => {
               subagentManaged.emitEvent(

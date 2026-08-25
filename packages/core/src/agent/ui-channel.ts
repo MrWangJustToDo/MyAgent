@@ -61,6 +61,11 @@ export interface ConsumeRunOptions {
   compactId?: string;
   /** Phase label for the compact banner (multi-pass compaction). */
   compactLabel?: string;
+  /**
+   * Compaction run identity. When set and the hub snapshot already carries the
+   * same epoch, this pass APPENDS to the existing stream instead of resetting.
+   */
+  compactEpoch?: string;
   onUpdate?: (messages: TanStackUIMessage[]) => void;
 }
 
@@ -119,6 +124,8 @@ export class AgentUIChannel {
   private streamingAgentId?: string;
   private summaryHub?: SummaryStreamHub;
   private compactId?: string;
+  private compactLabel?: string;
+  private compactEpoch?: string;
   private activeSummaryKey?: string;
   private onUpdate?: (messages: TanStackUIMessage[]) => void;
   private summaryStreamState: TaskSummaryStreamState = { summaryPhaseUnlocked: false };
@@ -251,7 +258,14 @@ export class AgentUIChannel {
     }
 
     if (this.summaryHub && this.compactId) {
-      this.summaryHub.reset({ source: "compact", compactId: this.compactId });
+      // Stream restart within a pass: always reset (the retried LLM stream
+      // re-emits from scratch), keeping epoch/label so later passes append.
+      this.summaryHub.reset({
+        source: "compact",
+        compactId: this.compactId,
+        ...(this.compactLabel ? { label: this.compactLabel } : {}),
+        ...(this.compactEpoch ? { epoch: this.compactEpoch } : {}),
+      });
       this.activeSummaryKey = summaryStreamKey("compact", this.compactId);
       this.summaryStreamState = { summaryPhaseUnlocked: true };
       return;
@@ -307,16 +321,30 @@ export class AgentUIChannel {
     this.streamingAgentId = options.streamingAgentId;
     this.summaryHub = options.summaryHub;
     this.compactId = options.compactId;
+    this.compactLabel = options.compactLabel;
+    this.compactEpoch = options.compactEpoch;
     this.onUpdate = options.onUpdate;
     this.summaryStreamState = { summaryPhaseUnlocked: false };
     this.currentTurnMessageId = undefined;
     this.activeSummaryKey = undefined;
 
-    // Compact summarizer: unlock immediately and reset the compact stream.
+    // Compact summarizer: unlock immediately. First pass of a compaction run
+    // resets the banner; same-epoch follow-up passes APPEND so sequential
+    // phases read as one continuous stream (run-subagent injects [label]
+    // separators between them).
     if (this.summaryHub && this.compactId) {
       this.summaryStreamState = { summaryPhaseUnlocked: true };
-      this.summaryHub.reset({ source: "compact", compactId: this.compactId });
-      this.activeSummaryKey = summaryStreamKey("compact", this.compactId);
+      const key = summaryStreamKey("compact", this.compactId);
+      const continuing = Boolean(this.compactEpoch) && this.summaryHub.getSnapshot(key)?.epoch === this.compactEpoch;
+      if (!continuing) {
+        this.summaryHub.reset({
+          source: "compact",
+          compactId: this.compactId,
+          ...(this.compactLabel ? { label: this.compactLabel } : {}),
+          ...(this.compactEpoch ? { epoch: this.compactEpoch } : {}),
+        });
+      }
+      this.activeSummaryKey = key;
     }
   }
 
@@ -328,6 +356,8 @@ export class AgentUIChannel {
     this.streamingAgentId = undefined;
     this.summaryHub = undefined;
     this.compactId = undefined;
+    this.compactLabel = undefined;
+    this.compactEpoch = undefined;
     this.activeSummaryKey = undefined;
     this.onUpdate = undefined;
     this.summaryStreamState = { summaryPhaseUnlocked: false };
