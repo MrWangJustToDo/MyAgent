@@ -98,13 +98,17 @@ export class SummaryStreamHub {
     return this.toSnapshot(key, entry);
   }
 
-  append(key: string, chunk: string): void {
+  append(key: string, chunk: string, options?: { epoch?: string }): void {
     if (!chunk) return;
     const entry = this.streams.get(key);
     if (!entry || entry.status === "idle") return;
     if (entry.status === "ended") {
-      // Late chunks after end are ignored.
-      return;
+      // Late chunks after end are ignored — unless the append belongs to the
+      // same compaction epoch, which reopens the ended stream (follow-up pass
+      // of a multi-pass summarization continues the banner instead of resetting).
+      const sameEpoch = options?.epoch !== undefined && options.epoch === entry.epoch;
+      if (!sameEpoch) return;
+      entry.status = "active";
     }
 
     const next = applySummaryStreamAppend({ lines: entry.lines, pendingLine: entry.pendingLine }, chunk, {

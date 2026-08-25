@@ -169,6 +169,7 @@ export async function summarizeConversation(
       stillInContext,
       asTurnPrefix,
       instruction,
+      streamEpoch,
     });
   }
 

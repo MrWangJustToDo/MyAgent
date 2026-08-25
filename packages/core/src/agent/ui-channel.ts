@@ -385,7 +385,7 @@ export class AgentUIChannel {
     if (!this.summaryStreamState.summaryPhaseUnlocked) return;
     const delta = readTextDelta(chunk);
     if (!delta) return;
-    this.summaryHub.append(this.activeSummaryKey, delta);
+    this.summaryHub.append(this.activeSummaryKey, delta, { epoch: this.compactEpoch });
   }
 
   private handleMessagesChange(messages: TanStackUIMessage[]): void {

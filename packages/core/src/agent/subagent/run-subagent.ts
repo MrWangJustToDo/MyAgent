@@ -183,7 +183,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       if (summaryHub && compactId && compactEpoch) {
         const key = summaryStreamKey("compact", compactId);
         if (summaryHub.getSnapshot(key)?.epoch === compactEpoch) {
-          summaryHub.append(key, compactLabel ? `\n\n[${compactLabel}]\n` : "\n\n");
+          summaryHub.append(key, compactLabel ? `\n\n[${compactLabel}]\n` : "\n\n", { epoch: compactEpoch });
         }
       }
 

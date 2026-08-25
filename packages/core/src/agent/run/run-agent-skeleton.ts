@@ -42,6 +42,7 @@ export interface ConsumeAgentStreamOptions {
   summaryHub?: SummaryStreamHub;
   compactId?: string;
   compactLabel?: string;
+  compactEpoch?: string;
   onUpdate?: (messages: UIMessage[]) => void;
 }
 
@@ -49,8 +50,17 @@ export interface ConsumeAgentStreamOptions {
  * Consume one agent stream into UIMessage snapshots via the UI channel.
  */
 export async function consumeAgentStream(options: ConsumeAgentStreamOptions): Promise<UIMessage[]> {
-  const { stream, channel, parentTaskToolCallId, streamingAgentId, summaryHub, compactId, compactLabel, onUpdate } =
-    options;
+  const {
+    stream,
+    channel,
+    parentTaskToolCallId,
+    streamingAgentId,
+    summaryHub,
+    compactId,
+    compactLabel,
+    compactEpoch,
+    onUpdate,
+  } = options;
 
   if (!channel) {
     throw new Error("AgentUIChannel is required to consume an agent stream");
@@ -63,6 +73,7 @@ export async function consumeAgentStream(options: ConsumeAgentStreamOptions): Pr
     summaryHub,
     compactId,
     compactLabel,
+    compactEpoch,
     onUpdate,
   })) as UIMessage[];
 }
@@ -124,6 +135,7 @@ export async function runAgentOnce(options: RunAgentOnceOptions): Promise<RunAge
     summaryHub,
     compactId,
     compactLabel,
+    compactEpoch,
     onUpdate,
     transformStream,
     outcome,
@@ -154,6 +166,7 @@ export async function runAgentOnce(options: RunAgentOnceOptions): Promise<RunAge
     summaryHub,
     compactId,
     compactLabel,
+    compactEpoch,
     onUpdate,
   });
 
