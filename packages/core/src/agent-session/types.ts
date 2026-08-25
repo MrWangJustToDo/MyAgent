@@ -218,6 +218,8 @@ export interface AgentSession {
   getSnapshot(): AgentSessionSnapshot;
   /** Authoritative summary-stream state for remount (subscribe first, then call). */
   getSummaryStreamSnapshot(key: string): SummaryStreamSnapshot | null;
+  /** All live summary streams (client cache seeding / remount over HTTP). */
+  listSummaryStreamSnapshots?(): SummaryStreamSnapshot[];
   dispatch(command: AgentSessionCommand): Promise<AgentSessionCommandResult>;
   subscribe(handler: AgentSessionSubscriber, options?: AgentSessionSubscribeOptions): () => void;
   close?(): Promise<void>;

@@ -115,6 +115,8 @@ export type AgentMode = "normal" | "auto" | "plan";
 /** L1 runtime status surface projected to AgentSession `state` channel. */
 export interface AgentL1State {
   status: AgentStatus;
+  /** Agent display name (lets remote clients track renames via the state channel). */
+  name: string;
   error: string;
   pendingApprovalCount: number;
   /** Present while a recoverable LLM failure is being retried (cleared once the stream recovers). */
@@ -540,9 +542,16 @@ export class ManagedAgent {
   }
 
   /** L1 status snapshot for Emitter / Session projection. */
+  /** Rename the display name and notify state-channel subscribers (session rename command). */
+  setDisplayName(name: string): void {
+    this.name = name;
+    this.emitStateChange();
+  }
+
   getL1State(): AgentL1State {
     return {
       status: this.currentStatus,
+      name: this.name,
       error: this.error,
       pendingApprovalCount: this.pendingApprovalCount,
       ...(this.retryInfo ? { retry: this.retryInfo } : {}),

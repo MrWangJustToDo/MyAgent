@@ -71,7 +71,7 @@ export async function applySessionRename(
   }
   const session = managed.getSessionData();
   const store = managed.getSessionStore();
-  managed.name = trimmed;
+  managed.setDisplayName(trimmed);
   if (session && store) {
     session.name = trimmed;
     await store.save(session);

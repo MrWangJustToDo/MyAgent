@@ -458,7 +458,9 @@ Use section separators in large files:
 
 ## Agent Session API (host-facing)
 
-Hosts should prefer `AgentSession` (`getSnapshot` / `dispatch` / `subscribe`) over reading `ManagedAgent` fields. Local: `createLocalAgentSession`. HTTP: `@my-agent/server/agent-session` against `/api/agent/*`. Subagents reuse the same Session contract by id.
+Hosts should prefer `AgentSession` (`getSnapshot` / `dispatch` / `subscribe`) over reading `ManagedAgent` fields. Local: `createLocalAgentSession`. HTTP: `@my-agent/server/agent-session` / `@my-agent/server/client`'s `createRemoteAgentSessionHost` against `/api/agent/*`. Subagents reuse the same Session contract by id.
+
+**Host-owned session plane:** hosts construct the `AgentSessionHost` (local manager, or remote HTTP when `--remote-session`) and inject it into `createAgentFromConfig`; the UI layer never imports core runtime singletons (enforced by app's `validate:core-imports`). Remote client features: SSE auto-reconnect with exponential backoff, server heartbeat ping + client watchdog, remount seeds (`/tool-buffers`, `/summary-streams`) so in-flight tool output and summary streams survive reconnects; state channel carries `name`, so commands sync without full-snapshot refetch.
 
 Internal domain updates use a typed `Emitter` (todos, usage, state, queues, plan, messages, log). Hosts subscribe via `AgentSession` channels projected from those Emitters; `lifecycle` projects a filtered `AgentTelemetryBus` set. Opt-in `log` channel is excluded from default subscribe. Domain classes expose `.on(...)` for internal Session projection — not a parallel host observation API.
 
@@ -486,10 +488,13 @@ The `@my-agent/server` package exposes CoreEnv APIs over HTTP using Hono RPC for
 | `/api/mcp/init` | POST | Create a new MCP stdio process session |
 | `/api/mcp/:id/message` | POST | Send a JSON-RPC message to an MCP session |
 | `/api/mcp/:id` | DELETE | Clean up an MCP stdio process session |
-| `/api/agent` | POST | Create/bind AgentSession |
+| `/api/agent` | GET | Catalog list (mirrors `AgentSessionHost.list()`) |
+| `/api/agent` | POST | Create/bind AgentSession (full create options incl. maxIterations/mcp/toolConfig/resume) |
 | `/api/agent/:id/snapshot` | GET | AgentSession snapshot (root or subagent id) |
 | `/api/agent/:id/command` | POST | `dispatch(command)` |
-| `/api/agent/:id/events` | GET | SSE session channels |
+| `/api/agent/:id/events` | GET | SSE session channels (+ 15s heartbeat ping frames) |
+| `/api/agent/:id/tool-buffers` | GET | Buffered tool stdout/stderr per toolCallId (remount) |
+| `/api/agent/:id/summary-streams` | GET | Live SummaryStreamHub snapshots (remount/cache seed) |
 | `/api/agent/:id` | DELETE | Close session |
 
 ### Client Usage

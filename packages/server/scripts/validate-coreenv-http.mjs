@@ -7,6 +7,7 @@
  * Run: pnpm --filter @my-agent/server run validate:coreenv-http
  */
 /* eslint-disable no-undef */
+/* eslint-disable import/no-useless-path-segments */
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
@@ -19,7 +20,7 @@ process.env.ROOT_PATH = ws;
 process.env.SERVER_PORT = "0";
 process.env.SANDBOX_ENV = "native";
 
-const { createServer } = await import("../dist");
+const { createServer } = await import("../dist/index.mjs");
 const { createRemoteEnv } = await import("../dist/client.mjs");
 
 const server = createServer();

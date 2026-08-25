@@ -14,8 +14,11 @@ export class PlaygroundAgentAdapter implements AgentAdapter {
   }
 
   async initialize(config: AppConfig): Promise<InitResult> {
-    // WebContainer host: agent loop runs in-browser against the remote env.
-    const host = createLocalAgentSessionHost({ manager: agentManager });
+    // Session plane: remote HTTP host when configured, else the in-browser
+    // local manager running against the WebContainer CoreEnv.
+    const host = config.remoteSession
+      ? (await import("@my-agent/server/client")).createRemoteAgentSessionHost({ baseUrl: config.remoteSession })
+      : createLocalAgentSessionHost({ manager: agentManager });
     const result = await createAgentFromConfig({ config, name: "playground-chat", hooks: this._hooks, host });
     this.host = host;
     this.agentId = result.session.id;

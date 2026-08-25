@@ -71,6 +71,10 @@ class LocalAgentSessionImpl implements AgentSession {
     return this.managed.summaryStreams?.getSnapshot(key) ?? null;
   }
 
+  listSummaryStreamSnapshots() {
+    return this.managed.summaryStreams?.listSnapshots() ?? [];
+  }
+
   dispatch(command: AgentSessionCommand): Promise<AgentSessionCommandResult> {
     return dispatchLocalAgentSessionCommand(this.managed, this.manager, command);
   }

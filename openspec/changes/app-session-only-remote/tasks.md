@@ -33,15 +33,17 @@
 
 ## 4. HTTP parity
 
-- [ ] 4.1 Server: persist/serve tool buffer + summary snapshots for remount
-- [ ] 4.2 Http client: implement `getSummaryStreamSnapshot`; cache tool/summary SSE for remount
-- [ ] 4.3 Catalog routes: list + align create/destroy with Host
-- [ ] 4.4 Implement `createRemoteSessionHost`
-- [ ] 4.5 Upgrade `validate:agent-session-http` to live Local-vs-Remote parity smoke (include typed lifecycle)
+- [x] 4.1 Server: persist/serve tool buffer + summary snapshots for remount
+- [x] 4.2 Http client: implement `getSummaryStreamSnapshot`; cache tool/summary SSE for remount
+- [x] 4.3 Catalog routes: list + align create/destroy with Host
+- [x] 4.4 Implement `createRemoteSessionHost`
+- [x] 4.5 Upgrade `validate:agent-session-http` to live Local-vs-Remote parity smoke (include typed lifecycle)
+- [x] 4.6 SSE resilience: client reconnect with exponential backoff, server heartbeat ping, watchdog-driven resync (snapshot + remount seeds)
+- [x] 4.7 Drop per-command full-snapshot refetch; state channel carries `name` so rename syncs over the wire
 
 ## 5. Host wiring and docs
 
-- [ ] 5.1 CLI: `--remote-session` creates remote Host; Local path uses Local Host
-- [ ] 5.2 Extension/playground: Session-only bootstrap (remote Host when configured)
-- [ ] 5.3 Update AGENTS.md / ARCHITECTURE / Help for three planes + Session-only app + event envelope
+- [x] 5.1 CLI: `--remote-session` creates remote Host; Local path uses Local Host
+- [x] 5.2 Extension/playground: Session-only bootstrap (remote Host when configured)
+- [x] 5.3 Update AGENTS.md / ARCHITECTURE / Help for three planes + Session-only app + event envelope
 - [ ] 5.4 Final lint/format/build for affected packages

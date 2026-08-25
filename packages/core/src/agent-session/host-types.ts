@@ -67,7 +67,7 @@ export interface AgentSessionHost {
   /** Bind an AgentSession to an existing agent id (root or subagent). */
   connect(agentId: string): AgentSession | null;
   /** List live agents currently owned by this host (roots and children). */
-  list(): AgentSessionListEntry[];
+  list(): AgentSessionListEntry[] | Promise<AgentSessionListEntry[]>;
   /** Destroy an agent (cascades to children) and drop its session handle. */
   destroy(agentId: string): Promise<void>;
 }

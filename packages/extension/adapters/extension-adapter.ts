@@ -14,9 +14,11 @@ export class ExtensionAgentAdapter implements AgentAdapter {
   }
 
   async initialize(config: AppConfig): Promise<InitResult> {
-    // The extension currently runs the agent loop in-page against a remote
-    // CoreEnv / provider; a remote session host can replace this later.
-    const host = createLocalAgentSessionHost({ manager: agentManager });
+    // Session plane: remote HTTP host when configured, else the in-page local
+    // manager (agent loop runs against the registered CoreEnv / provider).
+    const host = config.remoteSession
+      ? (await import("@my-agent/server/client")).createRemoteAgentSessionHost({ baseUrl: config.remoteSession })
+      : createLocalAgentSessionHost({ manager: agentManager });
     const result = await createAgentFromConfig({ config, name: "extension-chat", hooks: this._hooks, host });
     this.host = host;
     this.agentId = result.session.id;

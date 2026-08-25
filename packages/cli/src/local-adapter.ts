@@ -22,9 +22,11 @@ export class LocalAgentAdapter implements AgentAdapter {
 
   async initialize(config: AppConfig): Promise<InitResult> {
     const { createAgentFromConfig } = await import("@my-agent/app");
-    // Session-plane wiring is host-process owned: local manager today, a
-    // remote HTTP host (`--remote-session`) can replace this line later.
-    const host = createLocalAgentSessionHost({ manager: agentManager });
+    // Session-plane wiring is host-process owned: local manager, or a remote
+    // HTTP host when --remote-session is configured (agent loop runs server-side).
+    const host = config.remoteSession
+      ? (await import("@my-agent/server/client")).createRemoteAgentSessionHost({ baseUrl: config.remoteSession })
+      : createLocalAgentSessionHost({ manager: agentManager });
     const result = await createAgentFromConfig({ config, name: "local-chat", hooks: this._hooks, host });
     this.host = host;
     this.agentId = result.session.id;

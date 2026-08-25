@@ -67,9 +67,13 @@ function createFake(id, parentId) {
         return () => {};
       },
     },
+    setDisplayName(name) {
+      managed.name = name;
+    },
     getL1State() {
       return {
         status: managed.status,
+        name: managed.name,
         error: managed.error,
         pendingApprovalCount: managed.pendingApprovalCount,
       };

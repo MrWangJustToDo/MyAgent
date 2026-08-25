@@ -37,6 +37,7 @@ import type {
 } from "@my-agent/core";
 
 export { createRemoteProvider } from "./remote-provider.js";
+export { createRemoteAgentSessionHost } from "./remote-session-host.js";
 
 type Client = ReturnType<typeof hc<AppType>>;
 
