@@ -132,6 +132,7 @@ registerModelProvider(await createRemoteProvider("http://localhost:3100"));
 | `--remote-session` / `REMOTE_SESSION` | Remote Agent Session |
 
 `createAgentFromConfig` uses `resolveModelConfigFromProvider()`. Remote mode forces `baseURL`/`apiKey` from the provider (re-forced after models.dev so upstream URLs cannot bypass). `/api/env/vars` strips `API_KEY` / `*_API_KEY`. Footer shows `model · remote` when `providerMode === "remote"`.
+
 ### AgentAdapter — Host Abstraction
 
 Each host (CLI, extension) provides an `AgentAdapter` implementation:
@@ -203,23 +204,16 @@ Key integration points:
 
 ## Build, Lint, Test Commands
 
-### Package Manager
 ```bash
 pnpm install          # Install dependencies
-```
 
-### Build Commands
-```bash
 pnpm build            # Build all packages (core → app → rest)
 pnpm build:core       # Build core package only
 pnpm build:app        # Build app package only
 pnpm build:cli        # Build CLI package only
 pnpm build:server     # Build server package only
 pnpm build:extension  # Build extension only
-```
 
-### Development
-```bash
 pnpm dev              # Run all packages in watch mode (parallel)
 pnpm dev:core         # Watch core package
 pnpm dev:app          # Watch app package
@@ -228,21 +222,13 @@ pnpm dev:server       # Watch server package
 pnpm dev:extension    # Run extension dev server
 pnpm start:cli        # Run CLI after build
 pnpm start:server     # Run CoreEnv HTTP server
-```
 
-### Type Checking & Linting
-```bash
 pnpm typecheck        # Type check all packages
 pnpm lint             # Run ESLint
 pnpm format           # Format with Prettier
 ```
 
-### Per-Package Commands
-```bash
-cd packages/core && pnpm tsc --noEmit   # Type check core only
-cd packages/app && pnpm tsc --noEmit    # Type check app only
-cd packages/cli && pnpm tsc --noEmit    # Type check CLI only
-```
+Per-package type check: `cd packages/<pkg> && pnpm tsc --noEmit` (e.g. `core`, `app`, `cli`).
 
 ## Code Style Guidelines
 
@@ -261,17 +247,12 @@ cd packages/cli && pnpm tsc --noEmit    # Type check CLI only
 
 ### Import Order & Style
 ```typescript
-// 1. External packages (no extension)
-import { tool } from "ai";
+import { tool } from "ai";                     // 1. External (no extension)
 import { z } from "zod";
 
-// 2. Local files (with .js extension)
-import { resolveModelConfig } from "./models/model-config.js";
-import { DEFAULT_LOCAL_OPENAI_BASE_URL } from "./types.js";
+import { resolveModelConfig } from "./models/model-config.js";  // 2. Local (.js)
 
-// 3. Type-only imports (local first, then external, alphabetical within each group)
-import type { AppConfig } from "./adapter/types.js";
-import type { ManagedAgent } from "@my-agent/core";
+import type { AppConfig } from "./adapter/types.js";  // 3. Type-only (local first, then external, alphabetical)
 import type { LanguageModel, ToolSet } from "ai";
 ```
 
@@ -286,8 +267,6 @@ import type { LanguageModel, ToolSet } from "ai";
 | Hooks | `use*` prefix | `useAgent`, `useConfig` |
 | Types/Interfaces | PascalCase | `AgentConfig`, `ToolCallInfo` |
 | Zod schemas | camelCase + Schema | `agentConfigSchema` |
-| Constants | SCREAMING_SNAKE_CASE | `DEFAULT_LOCAL_OPENAI_BASE_URL` |
-
 | Constants | SCREAMING_SNAKE_CASE | `DEFAULT_LOCAL_OPENAI_BASE_URL` |
 
 ### Core Naming Conventions (packages/core)
@@ -335,18 +314,11 @@ try {
 }
 ```
 
-**Typed errors:** Use `FileError` and `ExecutionError` (from `@my-agent/core`) for structured error handling across local/remote boundaries. These serialize/deserialize correctly over HTTP.
-
+**Typed errors:** Use `FileError` / `ExecutionError` (from `@my-agent/core`) for structured errors across local/remote boundaries — they serialize/deserialize over HTTP.
 ```typescript
 import { FileError, ExecutionError } from "@my-agent/core";
-
-// Filesystem errors
-throw new FileError("not_found", "File not found", "/path/to/file");
-throw new FileError("permission_denied", "Path traversal blocked", inputPath);
-
-// Execution errors
-throw new ExecutionError("timeout", "Command timed out after 30s");
-throw new ExecutionError("aborted", "Command was aborted");
+throw new FileError("not_found", "File not found", "/path/to/file");          // fs
+throw new ExecutionError("timeout", "Command timed out after 30s");            // exec
 ```
 
 ### State Management (reactivity-store)
@@ -405,16 +377,7 @@ Use JSDoc with examples for public APIs:
 ```typescript
 /**
  * Create a new agent instance
- *
- * @example
- * ```typescript
- * const agent = await agentManager.createManagedAgent({
- *   name: "main",
- *   model: "gpt-4o",
- *   modelStyle: "openai",
- *   modelBaseURL: "https://api.openai.com/v1",
- * });
- * ```
+ * @example const agent = await agentManager.createManagedAgent({ name: "main", model: "gpt-4o" });
  */
 ```
 
@@ -618,6 +581,27 @@ terminal non-abort failures still call `failRun()`. Max-tokens continuation does
 Compact summarization uses the same hub with stable key `compact:${parentAgentId}` (one in-flight compact per agent).
 Only the last text-only step is returned to the parent as the task `summary`; `toModelOutput` also includes completion status (`reachedLimit` / `incomplete` / `aborted` / `truncated`) so the parent can judge whether findings are trustworthy to extend.
 
+### Per-task phase machine & parallel pre-fork
+
+Each `task` tool call owns a one-way phase state machine (`TaskRunState` in `subagent/task-run-state.ts`):
+`running` (subagent exploring — its running/thinking/responding statuses fold into this single phase)
+→ `summary` (the subagent called `begin_summary`, OR the iteration-limit progress-summary fallback started
+its report). Phases are authoritative — never inferred from messages. Registered per parent via `WeakMap`,
+keyed by `parentTaskToolCallId`; `readTaskRunPhase` defaults to `running` for unknown tasks.
+
+Parallelism: `subagent/task-prefork.ts` pre-forks subagents eagerly — once all tool args finish streaming
+(`TOOL_CALL_END`), each `task` call starts its subagent immediately, so N parallel tasks in one turn run
+concurrently (wall-clock ≈ the slowest one). Scheduling is a rolling FIFO window capped at
+`MAX_ACTIVE_TASK_PREFORKS = 4`; extra runs queue until a slot frees instead of running serially. The task
+loop's own `execute` just joins the already-running promise.
+
+When a subagent hits its iteration limit before `begin_summary`, the **progress-summary fallback**
+(`subagent/progress-summary.ts`) spawns a side-LLM summarizer (parent-spawned, no tools) that turns the
+partial exploration into a report streamed through the same `SummaryStreamHub`, so the task UI always
+shows a readable outcome instead of a bare cutoff. Subagent LLM retries (429/gateway backoff, capability
+strip) are surfaced in the task UI via `AgentRetryState` on the session `state` channel, mirroring the
+main-chat footer.
+
 
 ```typescript
 {
@@ -636,10 +620,16 @@ packages/core/src/agent/
 ├── run/
 │   └── run-agent-skeleton.ts  # runAgentOnce / consumeAgentStream / ensureUIChannel
 ├── subagent/
-│   ├── run-subagent.ts # Worker profile: runSubagent(), getSubagent(), destroySubagent()
-│   ├── run-stats.ts    # Iteration/limit stats from UI messages + stream
-│   ├── tools.ts        # Read-only tool set for subagents
-│   ├── task-tool.ts    # createTaskTool() for parent agents
+│   ├── run-subagent.ts        # Worker profile: runSubagent(), getSubagent(), destroySubagent()
+│   ├── run-stats.ts           # Iteration/limit stats from UI messages + stream
+│   ├── subagent-tools.ts      # Read-only tool set for subagents
+│   ├── subagent-output.ts     # Cancel notice + summary truncation
+│   ├── explore-prompt.ts      # Explore system prompt
+│   ├── begin-summary-tool.ts  # begin_summary marker tool
+│   ├── progress-summary.ts    # Iteration-limit progress-summary fallback (side-LLM)
+│   ├── task-prefork.ts        # Eager parallel pre-fork (rolling window, MAX_ACTIVE_TASK_PREFORKS=4)
+│   ├── task-run-state.ts      # Per-task phase machine (running → summary)
+│   ├── task-tool.ts           # createTaskTool() for parent agents
 │   └── index.ts
 ├── tools/              # Universal tools (fs/shell/web) + runtime glue
 ```
@@ -669,25 +659,13 @@ Workspace-root `.lsp.json` customizes which language servers run and how. All fi
 
 ```jsonc
 {
-  // Languages whose servers should start immediately on session open
-  // (otherwise they start lazily on first LSP tool call).
-  "autoStart": ["typescript", "python"],
-
-  // Server configs — keyed by language ID (see EXT_TO_LANGUAGE in
-  // packages/core/src/agent/lsp/language-map.ts for valid IDs).
-  // Merges over (and overrides) built-in defaults.
-  "servers": {
+  "autoStart": ["typescript", "python"],     // languages starting immediately on session open
+  "servers": {                                 // keyed by language ID (see EXT_TO_LANGUAGE in lsp/language-map.ts)
     "python": { "command": "basedpyright-langserver", "args": ["--stdio"] },
-    "php":   { "command": "phpactor", "args": ["language-server"] },
-    "elixir": { "command": "elixir-ls", "args": ["--stdio"] }
+    "php":   { "command": "phpactor", "args": ["language-server"] }
   },
-
-  // Explicit Lombok jar path for Java ("auto" = env LOMBOK_JAR + auto-detect).
-  "lombokJar": "auto",
-
-  // Auto-inject diagnostics into write/edit tool results: true, false, or a
-  // whitelist of language IDs.
-  "autoInjectDiagnostics": true
+  "lombokJar": "auto",                         // "auto" = env LOMBOK_JAR + auto-detect
+  "autoInjectDiagnostics": true                 // inject diagnostics into write/edit results: true | false | [langIDs]
 }
 ```
 
@@ -717,19 +695,12 @@ The built-in **`my-agent-skills` extension** (`config.skills`, default on) regis
 `list_skills`/`load_skill` tools and injects the available-skills index into each turn's
 `<extension_context>` — it no longer lives in the frozen system prompt.
 
-```
-packages/core/src/agent/skills/
-├── extension.ts         # Built-in Skills extension (my-agent-skills)
-├── skill-loader.ts      # Parse SKILL.md files
-├── skill-registry.ts    # Manage loaded skills
-└── index.ts
-```
-
 **Config:** `ManagedAgentConfig.skills` accepts `boolean` (default `true`) or
 `{ toolsDisabled?, indexDisabled? }`. `skillDirs` adds scan directories (defaults to
 `AGENT_SKILL_DIRS`, `~/.agents/skills`, `.agents/skills`) — e.g. add `.cursor/skills` or
-`.opencode/skills` to reuse skills written for other harnesses. Validate:
-`pnpm --filter @my-agent/core run validate:skills-extension`.
+`.opencode/skills` to reuse skills written for other harnesses. Module map:
+`packages/core/src/agent/skills/` (`extension.ts`, `skill-loader.ts`, `skill-registry.ts`, `index.ts`).
+Validate: `pnpm --filter @my-agent/core run validate:skills-extension`.
 
 ## Context Compaction System
 
@@ -742,20 +713,14 @@ Three-layer context compaction (plus reactive compaction) for infinite agent ses
 | Layer 3 | `auto_compact` | Token threshold exceeded | LLM summarization |
 | Reactive | `reactive_compact` | `prompt_too_long` API error | Emergency compaction, then retry |
 
-**Configuration:**
+**Configuration:** `compaction` option on `createManagedAgent`:
 ```typescript
-const agent = await agentManager.createManagedAgent({
-  name: "my-agent",
-  model: "gpt-4o",
-  modelStyle: "openai",
-  modelBaseURL: "https://api.openai.com/v1",
-  compaction: {
-    tokenThreshold: 100000,   // legacy absolute trigger (fallback when model window unknown)
-    keepRecentFlows: 2,       // legacy keep policy (fallback when model window unknown)
-    // keepRecentTokens: 24000,  // explicit kept-window token budget (optional)
-    // reserveTokens: 16384,     // headroom for summary + next turn (window-relative paths)
-  },
-});
+compaction: {
+  tokenThreshold: 100000,   // legacy absolute trigger (fallback when model window unknown)
+  keepRecentFlows: 2,       // legacy keep policy (fallback when model window unknown)
+  // keepRecentTokens: 24000,  // explicit kept-window token budget (optional)
+  // reserveTokens: 16384,     // headroom for summary + next turn (window-relative paths)
+}
 ```
 
 **Keep policy — token budget first:** The kept window is decided by `resolveKeepPolicy()` (`keep-policy.ts`): explicit `keepRecentTokens` > derived from the model context window (`min((window - reserveTokens) * 0.25, 32k)`) > legacy `keepRecentFlows` turn counting when no window is known. Compact-time and wire-projection-time always share the same resolved policy.
@@ -770,26 +735,7 @@ const agent = await agentManager.createManagedAgent({
 
 **Transcript archive:** On successful auto, manual (`/compact`), or reactive compaction, the compressed slice is written as greppable markdown under `.agents/transcripts/<sessionId>/compact-<n>.md` (gitignored via `.agents`). The summary gets a runtime-managed `## Compact archives` list (merged across successive compactions). Search **newest → oldest** (`compact-N` first for recent details); prefer grep / small reads — not whole files. Prior archive sections are stripped before `<previous-summary>` so the summarizer does not restate path lists. Archive I/O failures are non-fatal; prior paths are still re-attached when known.
 
-```
-packages/core/src/agent/compaction/
-├── tool-compact/          # Layer 1 — toModelOutput transforms (cached per toolCallId)
-├── auto-compact.ts        # Layer 3 — LLM summarization when token threshold exceeded
-├── keep-policy.ts         # resolveKeepPolicy (token budget vs legacy turns) + trigger
-├── cut-point.ts           # findCutPoint (legacy) / findCutPointByBudget + previous-summary extraction
-├── reactive-compact.ts    # Reactive — emergency compaction on prompt_too_long errors
-├── apply-compaction-result.ts
-├── compaction-summary.ts  # SUMMARY markers, detectors, createCompactionSummaryUIMessage
-├── message-chain-projection.ts  # getModelVisibleMessages (summary-first wire)
-├── compaction-prompt.ts
-├── write-compact-archive.ts  # Persist searchable pre-cut transcripts
-├── file-ops-tracker.ts    # Track file operation tool calls for compaction decisions
-├── message-utils.ts       # Shared message manipulation helpers
-├── serialize-conversation.ts  # Serialize conversation for compaction input
-├── summarization-budget.ts
-├── token-estimator.ts
-├── types.ts
-└── index.ts
-```
+> Module map: `packages/core/src/agent/compaction/` — `tool-compact/` (Layer 1 transforms), `auto-compact.ts` (Layer 3), `keep-policy.ts` (`resolveKeepPolicy`), `cut-point.ts` (`findCutPoint` / `findCutPointByBudget`), `reactive-compact.ts`, `apply-compaction-result.ts`, `compaction-summary.ts`, `message-chain-projection.ts` (`getModelVisibleMessages`), `compaction-prompt.ts`, `write-compact-archive.ts`, `serialize-conversation.ts`, `token-estimator.ts`, `index.ts`.
 
 **Reasoning stripping (Layer 2)** is disabled in `compaction-middleware.ts` because DeepSeek thinking mode requires `reasoning_content` echo-back. DeepSeek endpoints use `ReasoningChatCompletionsTextAdapter`, which maps stream `reasoning_content` into `thinking` and writes it back on subsequent requests.
 
@@ -820,17 +766,7 @@ Configure via `SANDBOX_ENV` environment variable or programmatically.
 | `local` | (default) Real bash + OS sandbox via `@anthropic-ai/sandbox-runtime` |
 | `native` | Real bash and Node.js fs, no OS sandbox |
 
-```bash
-# .env
-SANDBOX_ENV=local   # or 'native'
-```
-
-```typescript
-import { createNodeEnv } from "@my-agent/node";
-
-createNodeEnv({ rootPath: "/path", mode: "os" });      // OS sandbox
-createNodeEnv({ rootPath: "/path", mode: "native" });   // No sandbox
-```
+Programmatic equivalent: `createNodeEnv({ rootPath, mode: "os" | "native" })`. Env var: `SANDBOX_ENV=local` in `.env` (see README).
 
 ## Tool Output Truncation
 
@@ -936,6 +872,7 @@ packages/
 │   ├── components/                    # React components (UserInput, EditDiff, Help, etc.)
 │   ├── context/                       # React contexts (AdapterProvider)
 │   ├── hooks/                         # Shared hooks (useAgentChat, useConfig, useAgent, etc.)
+│   │   └── keybindings/               # Per-mode keybinding controllers (global/normal/approval/select/freeform/context)
 │   ├── layout/                        # Layout components (Header, Footer, Content)
 │   ├── messages/                      # Message rendering (ToolCallPartView, TextPartView, etc.)
 │   ├── types/                         # Attachment types
@@ -959,13 +896,18 @@ packages/
 │
 ├── server/src/                        # @my-agent/server — CoreEnv HTTP server + client
 │   ├── index.ts                       # Hono server entry point
-│   ├── client.ts                      # createRemoteEnv() — RPC client factory
+│   ├── client.ts                      # createRemoteEnv() — RPC client factory (+ createRemoteAgentSessionHost re-export)
+│   ├── remote-provider.ts             # createRemoteProvider()
+│   ├── remote-session-host.ts         # createRemoteAgentSessionHost() (AgentSessionHost over HTTP)
+│   ├── remote-session-client.ts       # RemoteSessionClient (SSE auto-reconnect, remount seeds)
 │   └── routes/
 │       ├── env.ts                     # /api/env/* (info, vars, destroy)
 │       ├── fs.ts                      # /api/fs/* (readFile, stat, writeFile, etc.)
 │       ├── command.ts                 # /api/command/* (run, exec)
 │       ├── fetch.ts                   # /api/fetch/proxy (HTTP proxy with binary support)
-│       └── mcp.ts                     # /api/mcp/* (stdio process init, message, delete)
+│       ├── mcp.ts                     # /api/mcp/* (stdio process init, message, delete)
+│       ├── provider.ts                # /api/provider/* (OpenAI/Anthropic streaming proxy)
+│       └── agent-session.ts           # /api/agent/* (catalog, snapshot, command, events, remount seeds)
 │
 ├── extension/                         # @my-agent/extension — Chrome extension host
 │   ├── adapters/

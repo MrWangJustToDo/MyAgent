@@ -19,10 +19,10 @@ Designed with a runtime-agnostic core that decouples agent logic from the execut
 | **Terminal UI** | React-powered TUI with Shiki syntax highlighting, scrollable diff views, streaming markdown, and theme support |
 | **Workspace Browser** | Full-screen file tree (`Ctrl+E`) with git status, Seti/Nerd Font icons, scrollable file preview, and HEAD diff view |
 | **Chrome Extension** | Full agent UI running in the browser via remote CoreEnv (WXT + HeroUI) |
-| **Local / Remote** | Independent planes: workspace (`--remote-env`), LLM provider (`--remote-provider`), Agent Session (`--remote-session`) |
+| **Local / Remote** | Independent planes: workspace (`--remote-env`), LLM provider (`--remote-provider`), Agent Session (`--remote-session`) — all three support HTTP remoting with SSE auto-reconnect |
 | **Tool Approval** | Review + approve/deny tool calls; scrollable diffs with Tab when multiple edits are pending |
 | **Ask User** | Agent asks questions with selectable options or freeform answers |
-| **Subagents** | Context-isolated read-only tasks (50-step cap) with live `Ctrl+T` preview |
+| **Subagents** | Context-isolated read-only tasks (50-step cap) with live `Ctrl+T` preview; eager pre-fork runs parallel tasks concurrently (rolling window), per-task phase machine (`running` → `summary`), streaming progress summaries, and LLM retry status surfaced in the task UI |
 | **Skills** | On-demand domain knowledge injection (list → load workflow) |
 | **Context Compaction** | `toModelOutput` tool shaping + auto/reactive LLM summarization; cut-away transcripts under `.agents/transcripts/` |
 | **Session Persistence** | Save/resume conversations under `.agents/sessions/` with auto-save |
@@ -34,6 +34,7 @@ Designed with a runtime-agnostic core that decouples agent logic from the execut
 | **Extensions** | Project/user modules under `.agents/extension` (hooks, custom tools, slash commands; `Ctrl+Y` panel) |
 | **Sandbox** | Isolated command execution with OS-level sandboxing (`@anthropic-ai/sandbox-runtime`) |
 | **MCP Integration** | Connect to external MCP servers for additional tools |
+| **LSP / Tree-sitter** | Built-in LSP extension: diagnostics, hover, definition, references, symbols, completions, rename, code actions + structural tree-sitter search/rewrite (`.lsp.json` config) |
 | **Web** | Multi-provider search (Brave when host passes `toolConfig.websearch.braveApiKey`, else DuckDuckGo) + page fetch |
 | **Devtools** | Built-in [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools) for debugging |
 
@@ -253,6 +254,9 @@ pnpm start:cli -- --remote-env http://localhost:3100
 # Remote LLM keys only (local workspace)
 pnpm start:cli -- --remote-provider http://localhost:3100
 
+# Remote Agent Session (agent loop runs server-side; SSE auto-reconnect)
+pnpm start:cli -- --remote-session http://localhost:3100
+
 # Continue last session / pick a session
 pnpm start:cli -- --continue
 pnpm start:cli -- --resume
@@ -282,6 +286,7 @@ pnpm start:mcp-server
 | **Agent** | `task` (subagents), `ask_user`, `todo` |
 | **Skills** | `list_skills`, `load_skill` |
 | **Memory** | `memory_list`, `memory_read`, `memory_write` |
+| **LSP** | `lsp_diagnostics`, `lsp_hover`, `lsp_definition`, `lsp_references`, `lsp_symbols`, `lsp_completions` (plus `lsp_rename` / `lsp_code_actions` / `ast_search` / `code_rewrite` / `code_overview` when enabled) |
 | **Plan** | `create_plan`, `update_plan`, `complete_plan` (offered only in the matching plan phase) |
 
 ---
@@ -330,7 +335,7 @@ The CLI has **4 input modes** — shortcuts adapt to the current mode:
 | `Ctrl+V` | Paste image | — | — | — |
 | `Ctrl+C` | Exit | Exit | Exit | Exit |
 
-Slash commands: `/help`, `/shortcuts`, `/compact`, `/plan`, `/auto`, `/clear`, `/rename`, `/resume`, `/mcp`, `/usage`, `/display`, `/theme`, `/thinking`, `/paste`, `/quit`
+Slash commands: `/help`, `/shortcuts`, `/compact`, `/plan`, `/auto`, `/clear`, `/rename`, `/resume`, `/mcp`, `/usage`, `/display`, `/theme`, `/effort`, `/paste`, `/quit` — plus extension commands: `/skill [name]`, `/memory [name]`, `/lsp`, `/lsp-restart`, `/lsp-config`, `/lsp-lombok`
 
 ---
 
@@ -351,12 +356,7 @@ pnpm clean        # Remove build artifacts
 
 `@my-agent/core` → `@my-agent/app` → `cli` / `node` / `server` / `extension` / `playground`. Handled automatically by `pnpm build`.
 
-### Code Style
-
-- **ESM only** — all packages use `"type": "module"`. Use `.js` extensions in local imports.
-- **Double quotes**, semicolons required, 2-space indent, 120 char line width
-- **Zod v4** for all schemas
-- **Workspace deps** use `workspace:*`
+> **Code style:** ESM-only with `.js` imports, double quotes, semicolons, 2-space indent, 120-char width, Zod v4 schemas, `workspace:*` deps — see [CLAUDE.md](CLAUDE.md).
 
 ---
 
