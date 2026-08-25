@@ -145,6 +145,13 @@ export async function hydrateUIMessages(messages: UIMessage[]): Promise<UIMessag
   const cloned = cloneMessages(repairStringifiedMultimodalUIMessages(messages));
 
   for (const message of cloned) {
+    // JSON persistence turns the Date-typed `createdAt` into an ISO string;
+    // TanStack's wire conversion calls `createdAt.toISOString()` and would
+    // crash on the string form.
+    if (typeof message.createdAt === "string") {
+      const revived = new Date(message.createdAt);
+      if (!Number.isNaN(revived.getTime())) message.createdAt = revived;
+    }
     for (const part of message.parts) {
       if (!isBinaryMediaPart(part)) continue;
 

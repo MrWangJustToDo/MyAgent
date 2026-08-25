@@ -105,6 +105,23 @@ function applySummaryEvent(cache: Map<string, SummaryStreamSnapshot>, payload: u
   cache.set(event.key, current);
 }
 
+/**
+ * JSON transport turns the Date-typed UIMessage `createdAt` into an ISO
+ * string; TanStack's wire conversion calls `createdAt.toISOString()` and
+ * would crash on the string form. Revive before caching.
+ */
+function reviveMessageTimestamps(messages: AgentSessionSnapshot["messages"]): void {
+  for (const message of messages) {
+    const raw = (message as { createdAt?: unknown }).createdAt;
+    if (typeof raw === "string") {
+      const revived = new Date(raw);
+      if (!Number.isNaN(revived.getTime())) {
+        (message as { createdAt?: Date }).createdAt = revived;
+      }
+    }
+  }
+}
+
 function applyToolEvent(buffers: ToolBufferMap, payload: unknown): void {
   const event = payload as
     | { kind: "chunk"; chunk: { toolCallId: string; type: "stdout" | "stderr"; chunk: string } }
@@ -154,8 +171,10 @@ function applyEvent(
       }
       return snapshot;
     }
-    case "messages":
+    case "messages": {
+      reviveMessageTimestamps(event.payload);
       return { ...snapshot, messages: event.payload };
+    }
     case "queues":
       return { ...snapshot, queues: event.payload };
     case "usage":
@@ -230,6 +249,7 @@ export class RemoteSessionClient implements AgentSession {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.snapshot = options.initialSnapshot ?? emptySnapshot(options.agentId);
+    reviveMessageTimestamps(this.snapshot.messages);
   }
 
   /** Refetch full snapshot + remount seeds. Used for lazy connect and manual resync. */
@@ -265,6 +285,7 @@ export class RemoteSessionClient implements AgentSession {
   private async resync(): Promise<void> {
     const snapRes = await this.fetchImpl(joinUrl(this.baseUrl, `/api/agent/${this.id}/snapshot`));
     this.snapshot = await readJson<AgentSessionSnapshot>(snapRes);
+    reviveMessageTimestamps(this.snapshot.messages);
 
     try {
       const sumRes = await this.fetchImpl(joinUrl(this.baseUrl, `/api/agent/${this.id}/summary-streams`));

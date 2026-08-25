@@ -350,10 +350,32 @@ async function main() {
   await testDuplicateContent();
   await testBinaryOnDisk();
   await testRepairStringifiedMultimodalOnHydrate();
+  await testCreatedAtRevival();
 
   cleanupMockEnv();
 
   console.log("\n✓ All media-store validation tests passed");
+}
+
+// JSON persistence serializes the Date-typed UIMessage `createdAt` into an ISO
+// string; TanStack's wire conversion calls `.toISOString()` and would crash on
+// the string form. Hydration must revive it back to a Date.
+async function testCreatedAtRevival() {
+  const { hydrateUIMessages } = await import("../dist/dev.mjs");
+  const messages = [
+    {
+      id: "msg_created",
+      role: "user",
+      parts: [{ type: "text", content: "hello" }],
+      createdAt: "2026-08-25T08:00:00.000Z",
+    },
+    { id: "msg_plain", role: "assistant", parts: [{ type: "text", content: "hi" }] },
+  ];
+  const revivedMessages = await hydrateUIMessages(messages);
+  assert.equal(revivedMessages[0].createdAt instanceof Date, true, "createdAt string must revive to Date");
+  assert.equal(revivedMessages[0].createdAt.toISOString(), "2026-08-25T08:00:00.000Z");
+  assert.ok(!("createdAt" in revivedMessages[1]) || !(revivedMessages[1].createdAt instanceof Date), "absent createdAt stays absent");
+  console.log("  ✓ createdAt revival on hydrate");
 }
 
 main().catch((err) => {
