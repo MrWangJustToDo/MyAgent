@@ -374,7 +374,10 @@ async function testCreatedAtRevival() {
   const revivedMessages = await hydrateUIMessages(messages);
   assert.equal(revivedMessages[0].createdAt instanceof Date, true, "createdAt string must revive to Date");
   assert.equal(revivedMessages[0].createdAt.toISOString(), "2026-08-25T08:00:00.000Z");
-  assert.ok(!("createdAt" in revivedMessages[1]) || !(revivedMessages[1].createdAt instanceof Date), "absent createdAt stays absent");
+  assert.ok(
+    !("createdAt" in revivedMessages[1]) || !(revivedMessages[1].createdAt instanceof Date),
+    "absent createdAt stays absent"
+  );
   console.log("  ✓ createdAt revival on hydrate");
 }
 
