@@ -53,7 +53,7 @@ jobs:
           else
             echo "::warning::VITE_FETCH_PROXY_URL is empty — webfetch/websearch will fail on GitHub Pages. Add a Repository Variable or Secret named VITE_FETCH_PROXY_URL, then re-run this workflow."
           fi
-          pnpm build:core && pnpm build:app && pnpm build:playground
+          pnpm build:core && pnpm --filter @my-agent/node build && pnpm build:server && pnpm build:app && pnpm build:playground
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
