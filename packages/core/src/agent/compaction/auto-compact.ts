@@ -15,6 +15,7 @@
  * - No retry on empty (the prompt is explicit about output format)
  */
 
+import { generateId } from "../../utils/generate-id.js";
 import { runSubagent } from "../subagent/run-subagent.js";
 import { compactSummaryStreamId } from "../summary-stream/types.js";
 import { isTurnContextModelMessage } from "../turn-context/turn-context-message.js";
@@ -24,7 +25,6 @@ import { formatCompactionSummaryContent, isCompactionSummaryModelMessage } from 
 import { extractExistingSummary, findCutPoint, findCutPointByBudget } from "./cut-point.js";
 import { extractFileOpsFromMessages, formatFileOperations } from "./file-ops-tracker.js";
 import { resolveAutoCompactTrigger, resolveKeepPolicy } from "./keep-policy.js";
-import { generateId } from "../../utils/generate-id.js";
 import { buildSegmentedConversationText, serializeConversation } from "./serialize-conversation.js";
 import { resolveSummarizationInputBudget, splitMessagesByTokenBudget } from "./summarization-budget.js";
 import { estimateTokens } from "./token-estimator.js";
