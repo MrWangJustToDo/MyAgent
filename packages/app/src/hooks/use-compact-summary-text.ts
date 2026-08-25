@@ -16,10 +16,17 @@ export interface UseCompactSummaryTextOptions {
   enabled?: boolean;
 }
 
-export function useCompactSummaryText(options?: UseCompactSummaryTextOptions): string {
+export interface CompactSummaryTextResult {
+  text: string;
+  /** Phase label from the latest reset (multi-pass compaction); "" when absent. */
+  label: string;
+}
+
+export function useCompactSummaryText(options?: UseCompactSummaryTextOptions): CompactSummaryTextResult {
   const enabled = options?.enabled ?? true;
   const rootAgentId = useAgent((s) => s.session?.id);
   const [text, setText] = useState("");
+  const [label, setLabel] = useState("");
   const textRef = useRef("");
 
   useEffect(() => {
@@ -43,6 +50,7 @@ export function useCompactSummaryText(options?: UseCompactSummaryTextOptions): s
       if (event.type === "reset") {
         textRef.current = "";
         setText("");
+        setLabel(event.label ?? "");
         return;
       }
       if (event.type === "append") {
@@ -64,6 +72,7 @@ export function useCompactSummaryText(options?: UseCompactSummaryTextOptions): s
       const raw = [...snap.lines, snap.pendingLine].filter(Boolean).join("");
       textRef.current = raw;
       setText(raw);
+      setLabel(snap.label ?? "");
     }
 
     return () => {
@@ -71,6 +80,6 @@ export function useCompactSummaryText(options?: UseCompactSummaryTextOptions): s
     };
   }, [rootAgentId]);
 
-  if (!enabled) return "";
-  return text;
+  if (!enabled) return { text: "", label: "" };
+  return { text, label };
 }

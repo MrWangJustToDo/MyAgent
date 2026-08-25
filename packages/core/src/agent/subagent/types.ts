@@ -69,7 +69,11 @@ export interface SubagentConfig {
    * When set, stream assistant text into the parent's compact summary stream
    * (`source: "compact"`). Used by compaction summarizer subagents.
    */
-  compactSummaryStream?: { compactId: string };
+  compactSummaryStream?: {
+    compactId: string;
+    /** Phase label surfaced on the compact banner (multi-pass compaction). */
+    label?: string;
+  };
   /**
    * Observe assistant text deltas as the subagent streams (all phases).
    * Used by the progress-summary fallback to mirror the side-LLM report

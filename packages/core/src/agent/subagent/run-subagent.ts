@@ -152,6 +152,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
 
     const summaryHub = bridgeUI || compactSummaryStream ? parentManaged.summaryStreams : undefined;
     const compactId = compactSummaryStream?.compactId;
+    const compactLabel = compactSummaryStream?.label;
 
     /** One-way running → summary transition + telemetry (no-op once in summary). */
     const enterSummaryPhase = () => {
@@ -186,6 +187,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
         streamingAgentId: bridgeUI ? parentAgentId : undefined,
         summaryHub,
         compactId,
+        compactLabel,
         onUpdate: bridgeUI
           ? (updated) => {
               subagentManaged.emitEvent(

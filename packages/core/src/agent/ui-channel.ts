@@ -59,6 +59,8 @@ export interface ConsumeRunOptions {
   summaryHub?: SummaryStreamHub;
   /** Compact stream id when this run produces a compact summary. */
   compactId?: string;
+  /** Phase label for the compact banner (multi-pass compaction). */
+  compactLabel?: string;
   onUpdate?: (messages: TanStackUIMessage[]) => void;
 }
 

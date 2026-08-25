@@ -29,6 +29,8 @@ export interface SummaryStreamSnapshot {
   /** Present when source is compact. */
   compactId?: string;
   seq: number;
+  /** Optional phase label (multi-pass compaction) surfaced by UI consumers. */
+  label?: string;
   /** Closed complete lines (ring-capped on the producer). */
   lines: string[];
   /** Incomplete trailing line (may be empty). */
@@ -43,6 +45,7 @@ export type SummaryStreamEvent =
       source: SummaryStreamSource;
       toolCallId?: string;
       compactId?: string;
+      label?: string;
       seq: number;
     }
   | { type: "append"; key: string; chunk: string; seq: number }

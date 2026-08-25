@@ -83,6 +83,8 @@ export interface SummarizeOptions {
    * regular history (`<to_compress>`). Used by split-turn compaction.
    */
   asTurnPrefix?: boolean;
+  /** Phase label shown on the compact banner while this pass streams. */
+  streamLabel?: string;
   /**
    * Custom instruction prompt replacing `buildCompactionPrompt`. Used
    * internally for the split-turn prefix summary.
@@ -179,6 +181,7 @@ export async function summarizeConversation(
         // Align with kept turns only on the final merge step.
         asTurnPrefix,
         instruction,
+        streamLabel: `Segment ${i + 1}/${batches.length}`,
       })
     );
   }
@@ -193,6 +196,7 @@ export async function summarizeConversation(
     stillInContext,
     asTurnPrefix,
     instruction,
+    streamLabel: "Merging segment summaries",
   });
 }
 
@@ -217,7 +221,10 @@ async function summarizeConversationBatch(
       aggregateUsageToParent: true,
       description: "compaction",
       bridgeUI: false,
-      compactSummaryStream: { compactId },
+      compactSummaryStream: {
+        compactId,
+        label: options?.streamLabel ?? "Summarizing conversation",
+      },
     },
     { manager }
   );
@@ -364,11 +371,13 @@ export async function autoCompact(
               ...options,
               ...(prevSummary ? { existingSummary: prevSummary } : {}),
               stillInContext: keptMessages,
+              streamLabel: "Summarizing earlier conversation",
             })
           : undefined;
       const prefixSummary = await summarizeConversation(turnPrefixMessages, parentAgentId, manager, {
         asTurnPrefix: true,
         instruction: TURN_PREFIX_INSTRUCTION,
+        streamLabel: "Summarizing discarded turn context",
       });
       // When the split turn starts right after the head SUMMARY (no history to
       // compress), prevSummary must still survive — otherwise the new checkpoint
