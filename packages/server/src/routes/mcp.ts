@@ -114,6 +114,14 @@ export const mcpRoutes = new Hono()
         stdio: ["pipe", "pipe", "pipe"],
       });
 
+      // Fail fast when the binary does not exist / cannot execute — spawn
+      // errors arrive asynchronously (ENOENT), so wait for either the
+      // successful 'spawn' event or the 'error' event before answering.
+      await new Promise<void>((resolve, reject) => {
+        child.once("spawn", resolve);
+        child.once("error", reject);
+      });
+
       // Clean up on error/exit
       child.on("error", () => cleanupSession(id));
       child.on("exit", () => cleanupSession(id));

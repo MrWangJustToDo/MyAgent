@@ -7,6 +7,7 @@ import "dotenv/config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { networkInterfaces } from "os";
+import { pathToFileURL } from "url";
 
 import { REMOTE_PROVIDER_API_KEY } from "./provider-constants.js";
 import { agentSessionRoutes } from "./routes/agent-session.js";
@@ -128,3 +129,17 @@ export const createServer = () => {
     console.log(`[server] rootPath=${ROOT_PATH}, sandbox=${SANDBOX_ENV}`);
   });
 };
+
+// Auto-start only when this module is the node entry (`node dist/index.mjs`) —
+// plain imports (validation scripts, tests) must not bind a port.
+const isMainEntry = (() => {
+  try {
+    return import.meta.url === pathToFileURL(process.argv[1] ?? "").href;
+  } catch {
+    return false;
+  }
+})();
+
+if (isMainEntry) {
+  createServer();
+}
