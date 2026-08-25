@@ -46,11 +46,12 @@ export {
 // ============================================================================
 
 /**
- * Check if auto compaction should be triggered (respects compactAtPercent).
+ * Check if auto compaction should be triggered.
  *
- * When the model context window is known, the trigger is window-relative:
- * `(contextWindow - reserveTokens) * compactAtPercent / 100`. Otherwise the
- * legacy absolute `tokenThreshold` path applies.
+ * The trigger point is `workingBudget * compactAtPercent / 100`, where the
+ * working budget is `tokenThreshold` (auto-filled by the agent factory as
+ * `min(contextWindow, MAX_THRESHOLD)`), clamped to the real context window.
+ * This keeps the trigger consistent with the UI percentage base.
  */
 export function shouldTriggerAutoCompact(
   config: Partial<CompactionConfig>,

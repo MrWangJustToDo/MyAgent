@@ -89,25 +89,26 @@ assert.deepEqual(keepPolicyProjectionOptions({ kind: "tokens", keepRecentTokens:
 assert.deepEqual(keepPolicyProjectionOptions({ kind: "turns", keepRecentFlows: 2 }), { keepRecentFlows: 2 });
 
 // ============================================================================
-// Window-relative trigger
+// Trigger base — working budget (tokenThreshold), clamped to the real window
 // ============================================================================
 
-// Reserve is clamped to 25% of the window: min(16384, 32k*0.25=8k) = 8k.
-assert.deepEqual(resolveAutoCompactTrigger({ compactAtPercent: 80 }, 32_000), {
-  triggerAt: Math.floor(((32_000 - 8_000) * 80) / 100),
-  windowRelative: true,
+// Threshold-first: the trigger shares the UI percentage base. A huge real
+// window (e.g. models.dev reports 1M) must NOT defer compaction past the
+// auto-filled working budget (min(window, MAX_THRESHOLD)=200k → 80% = 160k).
+assert.deepEqual(resolveAutoCompactTrigger({ tokenThreshold: 200_000, compactAtPercent: 80 }, 1_000_000), {
+  triggerAt: 160_000,
 });
-// Tiny window: reserve clamps to a fraction — no constant-compaction collapse.
-{
-  const tiny = resolveAutoCompactTrigger({}, 8_000);
-  assert.equal(tiny.windowRelative, true);
-  // reserve = min(16384, 2000) = 2000 → (8000-2000)*0.8 = 4800
-  assert.equal(tiny.triggerAt, 4_800);
-}
-// Legacy absolute path.
+// Oversized threshold is clamped to the real window so compaction can still fire.
+assert.deepEqual(resolveAutoCompactTrigger({ tokenThreshold: 500_000, compactAtPercent: 80 }, 128_000), {
+  triggerAt: Math.floor((128_000 * 80) / 100),
+});
+// Small window below the threshold: same clamp, 80% of the window.
+assert.deepEqual(resolveAutoCompactTrigger({ compactAtPercent: 80 }, 32_000), {
+  triggerAt: Math.floor((32_000 * 80) / 100),
+});
+// No window info: pure absolute path.
 {
   const r = resolveAutoCompactTrigger({ tokenThreshold: 100_000, compactAtPercent: 50 });
-  assert.equal(r.windowRelative, false);
   assert.equal(r.triggerAt, 50_000);
 }
 

@@ -719,13 +719,13 @@ compaction: {
   tokenThreshold: 100000,   // legacy absolute trigger (fallback when model window unknown)
   keepRecentFlows: 2,       // legacy keep policy (fallback when model window unknown)
   // keepRecentTokens: 24000,  // explicit kept-window token budget (optional)
-  // reserveTokens: 16384,     // headroom for summary + next turn (window-relative paths)
+  // reserveTokens: 16384,     // headroom for summary + next turn (kept-window derivation)
 }
 ```
 
 **Keep policy — token budget first:** The kept window is decided by `resolveKeepPolicy()` (`keep-policy.ts`): explicit `keepRecentTokens` > derived from the model context window (`min((window - reserveTokens) * 0.25, 32k)`) > legacy `keepRecentFlows` turn counting when no window is known. Compact-time and wire-projection-time always share the same resolved policy.
 
-**Auto-compact trigger:** When the model context window is known and real usage tokens are available, the trigger is window-relative: `(contextWindow - reserveTokens) * compactAtPercent / 100`. The absolute `tokenThreshold` path remains the fallback (`shouldTriggerAutoCompact`, `resolveAutoCompactTrigger`). This makes small-window models compact before overflowing instead of never reaching an absolute threshold designed for 200k+ windows.
+**Auto-compact trigger:** The trigger base is the **working budget** — `tokenThreshold`, the same number the UI percentage uses. The agent factory auto-fills it as `min(contextWindow, MAX_THRESHOLD=200k)` when unset, so a huge models.dev window (e.g. 1M) never defers compaction past the displayed budget; the threshold is clamped to the real window so an oversized config cannot defer past what the model accepts (`shouldTriggerAutoCompact`, `resolveAutoCompactTrigger`). Trigger point = `min(tokenThreshold, contextWindow) * compactAtPercent / 100`.
 
 **Auto-compact cut-point strategy:** With a token-budget policy, `findCutPointByBudget()` walks backward accumulating estimated tokens until the budget is reached and cuts at the nearest pairing-safe boundary (user/assistant only — never on a tool result, so call/result pairs stay intact). If the cut lands inside a turn (**split turn**), the discarded turn prefix is summarized separately under `<turn_prefix>` and merged into the SUMMARY; the suffix stays intact. Legacy `findCutPoint()` counts recent *user turns* from the end and keeps the latest N (default: 2 via `keepRecentFlows`). Both skip in-chain summaries and synthetic `<turn_context>` messages. Everything before the cut is summarized; the kept portion remains in the main agent context.
 

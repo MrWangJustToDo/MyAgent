@@ -120,24 +120,21 @@ export function keepPolicyProjectionOptions(policy: KeepPolicy): {
 /**
  * Resolve the absolute token count at which auto-compaction triggers.
  *
- * When the model context window is known the threshold is window-relative:
- * `(contextWindow - reserveTokens) * compactAtPercent / 100`. Otherwise the
- * legacy absolute `tokenThreshold` path applies.
+ * The trigger base is the **working budget** (`tokenThreshold`) — the same
+ * number the UI shows as 100%. The agent factory auto-fills it as
+ * `min(contextWindow, MAX_THRESHOLD)` when unset, so a huge models.dev window
+ * (e.g. 1M) never defers compaction past the displayed budget; the threshold
+ * is still clamped to the real window so an oversized config cannot defer
+ * compaction past what the model accepts.
  *
- * @returns `{ triggerAt, windowRelative }`
+ * @returns absolute trigger point in input tokens
  */
 export function resolveAutoCompactTrigger(
   config: Partial<CompactionConfig>,
   contextWindow?: number
-): { triggerAt: number; windowRelative: boolean } {
+): { triggerAt: number } {
   const compactAtPercent = config.compactAtPercent ?? DEFAULT_COMPACTION_CONFIG.compactAtPercent;
-  if (contextWindow && contextWindow > 0) {
-    // Reserve is clamped to a window fraction so small-window models keep a
-    // proportional working set instead of tripping into constant compaction.
-    const reserveTokens = effectiveReserveTokens(resolveReserveTokens(config), contextWindow);
-    const effectiveThreshold = Math.max(1_000, contextWindow - reserveTokens);
-    return { triggerAt: Math.floor((effectiveThreshold * compactAtPercent) / 100), windowRelative: true };
-  }
   const tokenThreshold = config.tokenThreshold ?? DEFAULT_COMPACTION_CONFIG.tokenThreshold;
-  return { triggerAt: Math.floor((tokenThreshold * compactAtPercent) / 100), windowRelative: false };
+  const limit = contextWindow && contextWindow > 0 ? Math.min(tokenThreshold, contextWindow) : tokenThreshold;
+  return { triggerAt: Math.floor((limit * compactAtPercent) / 100) };
 }

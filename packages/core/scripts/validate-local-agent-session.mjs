@@ -221,6 +221,7 @@ assert.ok(channels.includes("todos"));
 unsub();
 
 const child = createFake("agent_child", "agent_root");
+child.parentTaskId = "task_fixture_1"; // task-tool binding → visible in the session catalog
 const childSession = createLocalAgentSession({ managed: child, manager: null });
 const sendDenied = await childSession.dispatch({ type: "send", content: "nope" });
 assert.equal(sendDenied.ok, false);

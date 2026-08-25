@@ -25,15 +25,21 @@ export function buildSubagentSummaries(
   manager: SubagentCatalog | null | undefined
 ): AgentSessionSubagentSummary[] {
   if (!manager) return [];
-  return manager.getSubagents(managed.id).map((child) => ({
-    id: child.id,
-    status: child.status,
-    name: child.name,
-    taskPhase: readTaskRunPhase(managed, child.parentTaskId),
-    ...(subagentDescription(child.name) ? { description: subagentDescription(child.name) } : {}),
-    ...(child.parentTaskId ? { parentTaskToolCallId: child.parentTaskId } : {}),
-    usage: child.usage.getChangeSnapshot(),
-  }));
+  // Internal workers (compaction / memory summarizers) have no task-tool
+  // binding — keep them out of the host-facing catalog so their internal
+  // channels (summarizer prompts, segment batches) never surface in the UI.
+  return manager
+    .getSubagents(managed.id)
+    .filter((child) => Boolean(child.parentTaskId))
+    .map((child) => ({
+      id: child.id,
+      status: child.status,
+      name: child.name,
+      taskPhase: readTaskRunPhase(managed, child.parentTaskId),
+      ...(subagentDescription(child.name) ? { description: subagentDescription(child.name) } : {}),
+      ...(child.parentTaskId ? { parentTaskToolCallId: child.parentTaskId } : {}),
+      usage: child.usage.getChangeSnapshot(),
+    }));
 }
 
 export function readLocalAgentSessionSnapshot(
