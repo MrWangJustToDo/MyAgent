@@ -19,7 +19,7 @@ process.env.ROOT_PATH = ws;
 process.env.SERVER_PORT = "0";
 process.env.SANDBOX_ENV = "native";
 
-const { createServer } = await import("../dist/index.mjs");
+const { createServer } = await import("../dist");
 const { createRemoteEnv } = await import("../dist/client.mjs");
 
 const server = createServer();

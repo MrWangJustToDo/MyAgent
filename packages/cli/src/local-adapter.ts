@@ -1,3 +1,5 @@
+import { agentManager, createLocalAgentSessionHost } from "@my-agent/core";
+
 import type { AdapterHooks, AgentAdapter, AppConfig, ClipboardImageResult, InitResult } from "@my-agent/app";
 import type { AgentSessionHost } from "@my-agent/core";
 
@@ -20,8 +22,11 @@ export class LocalAgentAdapter implements AgentAdapter {
 
   async initialize(config: AppConfig): Promise<InitResult> {
     const { createAgentFromConfig } = await import("@my-agent/app");
-    const result = await createAgentFromConfig({ config, name: "local-chat", hooks: this._hooks });
-    this.host = result.host;
+    // Session-plane wiring is host-process owned: local manager today, a
+    // remote HTTP host (`--remote-session`) can replace this line later.
+    const host = createLocalAgentSessionHost({ manager: agentManager });
+    const result = await createAgentFromConfig({ config, name: "local-chat", hooks: this._hooks, host });
+    this.host = host;
     this.agentId = result.session.id;
     return result;
   }

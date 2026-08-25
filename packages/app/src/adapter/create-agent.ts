@@ -1,13 +1,15 @@
 /**
- * Shared agent initialization — Host + Session for the app (no ManagedAgent to UI).
+ * Shared agent initialization — binds an {@link AgentSession} into the app.
+ *
+ * The host process owns session-plane wiring: it constructs the
+ * {@link AgentSessionHost} (local via `@my-agent/core`'s
+ * `createLocalAgentSessionHost`, or remote via `@my-agent/server`'s
+ * `createRemoteAgentSessionHost`) and injects it here. CoreEnv / model
+ * provider registration likewise happens in the host process before render —
+ * this module stays free of core runtime singletons.
  */
 
-import {
-  agentManager,
-  buildDefaultSystemPrompt,
-  createLocalAgentSessionHost,
-  resolveModelConfigFromProvider,
-} from "@my-agent/core";
+import { buildDefaultSystemPrompt, resolveModelConfigFromProvider } from "@my-agent/core";
 
 import { clearExtensionCommands, syncExtensionCommands } from "../commands";
 import { useConfig } from "../hooks/use-config.js";
@@ -40,9 +42,15 @@ export interface CreateAgentOptions {
   config: AppConfig;
   name: string;
   hooks: AdapterHooks;
+  /**
+   * Session plane owner, constructed by the host process (required).
+   * Local: `createLocalAgentSessionHost({ manager: agentManager })`.
+   * Remote: `createRemoteAgentSessionHost(baseUrl)` (`@my-agent/server`).
+   */
+  host: AgentSessionHost;
 }
 
-export async function createAgentFromConfig({ config, name, hooks }: CreateAgentOptions): Promise<InitResult> {
+export async function createAgentFromConfig({ config, name, hooks, host }: CreateAgentOptions): Promise<InitResult> {
   const { connection, modelInfo, providerMode } = await resolveModelConfigFromProvider({
     model: config.model,
     style: config.style,
@@ -66,21 +74,6 @@ export async function createAgentFromConfig({ config, name, hooks }: CreateAgent
     providerMode,
   });
 
-  // ── Session-only bootstrap (TEMP): the only place app still wires a core host ──
-  //
-  // Status: `agentManager` (core process-global singleton `new AgentManager()`)
-  // and `createLocalAgentSessionHost` are the last direct core class/instance
-  // deps in app — everything else goes through AgentSession/AgentSessionHost
-  // (dispatch / getSnapshot / subscribe). This couples host construction (which
-  // needs core's manager) with config resolution in the app layer.
-  //
-  // Direction: move host construction up to the host process (CLI/extension) and
-  // have app consume an injected AgentSessionHost/AgentSession (local via
-  // `--remote-session`/RemoteSessionClient, or local host factory passed in).
-  // After that, drop `agentManager` / `createLocalAgentSessionHost` /
-  // `resolveModelConfigFromProvider` from app and remove the `BOOTSTRAP_ALLOW`
-  // whitelist in scripts/validate-core-imports.mjs.
-  const host = createLocalAgentSessionHost({ manager: agentManager });
   const { session, initialMessages } = await host.create({
     name,
     model: connection.model,

@@ -1,4 +1,5 @@
 import { clearAdapterHooks, createAgentFromConfig } from "@my-agent/app";
+import { agentManager, createLocalAgentSessionHost } from "@my-agent/core";
 
 import type { AdapterHooks, AgentAdapter, AppConfig, ClipboardImageResult, InitResult } from "@my-agent/app";
 import type { AgentSessionHost } from "@my-agent/core";
@@ -13,8 +14,10 @@ export class PlaygroundAgentAdapter implements AgentAdapter {
   }
 
   async initialize(config: AppConfig): Promise<InitResult> {
-    const result = await createAgentFromConfig({ config, name: "playground-chat", hooks: this._hooks });
-    this.host = result.host;
+    // WebContainer host: agent loop runs in-browser against the remote env.
+    const host = createLocalAgentSessionHost({ manager: agentManager });
+    const result = await createAgentFromConfig({ config, name: "playground-chat", hooks: this._hooks, host });
+    this.host = host;
     this.agentId = result.session.id;
     return result;
   }

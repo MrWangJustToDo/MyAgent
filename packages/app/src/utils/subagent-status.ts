@@ -27,7 +27,8 @@ export function getStatusColor(status: string): string {
   return COLORS.muted;
 }
 
-export function isActiveStatus(status: string): boolean {
+/** Display-level activity check for subagent panel rows (distinct from core's AgentStatus predicate). */
+export function isSubagentActiveStatus(status: string): boolean {
   return ["running", "thinking", "responding", "compacting", "waiting", "awaiting_user"].includes(status);
 }
 

@@ -13,8 +13,8 @@ import { useUserInput } from "./use-user-input.js";
 
 import type { AgentAdapter } from "../adapter/types.js";
 import type { CommandContext } from "../commands";
+import type { DenyingToolInfo } from "./keybindings/context.js";
 import type { UseAgentChatReturn } from "./use-agent-chat.js";
-import type { DenyingToolInfo } from "./use-agent-keybindings.js";
 import type { UIMessage } from "@tanstack/ai";
 
 interface UseAgentInputControlsOptions {

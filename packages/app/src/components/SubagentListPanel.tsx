@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { COLORS } from "../theme/colors.js";
 import { listNavHint, pressEscToReturnHint } from "../utils/keyboard-labels.js";
 import { resolveAgentSession } from "../utils/session-resolve.js";
-
-import { getStatusColor, getStatusIcon, getTaskLabel, isActiveStatus } from "./subagent-status.js";
+import { getStatusColor, getStatusIcon, getTaskLabel, isSubagentActiveStatus } from "../utils/subagent-status.js";
 
 import type { AgentSessionSubagentSummary } from "@my-agent/core";
 
@@ -39,7 +38,7 @@ const SubagentTaskRow = ({ task }: { task: AgentSessionSubagentSummary }) => {
 
   return (
     <>
-      <Text color={iconColor} bold={isActiveStatus(status)}>
+      <Text color={iconColor} bold={isSubagentActiveStatus(status)}>
         {icon} {getTaskLabel(task)}
       </Text>
       <Text color={COLORS.muted} dimColor>
@@ -95,7 +94,7 @@ export const SubagentListPanel = ({
     );
   }
 
-  const activeCount = tasks.filter((t) => isActiveStatus(t.status)).length;
+  const activeCount = tasks.filter((t) => isSubagentActiveStatus(t.status)).length;
 
   return (
     <Box flexDirection="column" paddingX={1} paddingY={1}>

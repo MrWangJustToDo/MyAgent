@@ -7,9 +7,9 @@ import { formatUsageBrief } from "../utils/format-usage.js";
 import { KeyLabel } from "../utils/keyboard-labels.js";
 import { formatRetryStatus } from "../utils/retry-status.js";
 import { resolveAgentSession } from "../utils/session-resolve.js";
+import { getStatusColor, getStatusIcon } from "../utils/subagent-status.js";
 
 import { Spinner } from "./Spinner.js";
-import { getStatusColor, getStatusIcon } from "./subagent-status.js";
 
 export const SubagentDetailPanel = ({ subagentId, onBack }: { subagentId: string; onBack: () => void }) => {
   const [tick, setTick] = useState(0);

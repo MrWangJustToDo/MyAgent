@@ -1,5 +1,3 @@
-import { Box } from "ink";
-
 import { useTranscriptDisplayMode } from "../context/transcript-display-context.js";
 import { useSize } from "../hooks";
 import { useTask } from "../hooks/use-task.js";

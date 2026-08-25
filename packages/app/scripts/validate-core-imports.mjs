@@ -12,17 +12,17 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const srcRoot = join(scriptDir, "../src");
 
-/** Local bootstrap may still wire Local Host until §5 moves this to CLI/extension. */
-const BOOTSTRAP_ALLOW = new Set(["adapter/create-agent.ts", "hooks/use-config.ts"]);
-
+/**
+ * Runtime singletons / stateful classes stay forbidden — the host process owns
+ * them. Pure resolvers (`resolveModelConfigFromProvider`,
+ * `buildDefaultSystemPrompt`) are allowed: no runtime state crosses the seam.
+ */
 const FORBIDDEN_IDENTIFIERS = [
   "agentManager",
   "AgentManager",
   "ManagedAgent",
   "createManagedAgent",
   "createLocalAgentSessionHost",
-  "resolveModelConfigFromProvider",
-  "buildDefaultSystemPrompt",
   "SessionStore",
   "TodoManager",
   "AgentLog",
@@ -87,11 +87,10 @@ for (const file of walkTsFiles(srcRoot)) {
     for (const name of names) {
       if (!FORBIDDEN_IDENTIFIERS.includes(name)) continue;
       if (
-        BOOTSTRAP_ALLOW.has(rel) &&
-        (name === "agentManager" ||
-          name === "buildDefaultSystemPrompt" ||
-          name === "createLocalAgentSessionHost" ||
-          name === "resolveModelConfigFromProvider")
+        name === "agentManager" ||
+        name === "buildDefaultSystemPrompt" ||
+        name === "createLocalAgentSessionHost" ||
+        name === "resolveModelConfigFromProvider"
       ) {
         continue;
       }
