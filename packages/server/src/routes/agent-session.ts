@@ -165,10 +165,16 @@ export const agentSessionRoutes = new Hono()
     });
     sessions.set(session.id, session as unknown as SessionLike);
     attachToolBuffer(session.id, session as unknown as SessionLike);
+    console.log(
+      `[agent-diag] POST /api/agent body=${JSON.stringify(body)} -> id=${session.id} sessions.size=${sessions.size} ` +
+        `inManager=${agentManager.getAgent(session.id)?.id ?? "NONE"}`
+    );
     return c.json({ id: session.id, snapshot: (session as SessionLike).getSnapshot() });
   })
   .get("/:id/snapshot", async (c) => {
-    const session = await getSession(c.req.param("id"));
+    const id = c.req.param("id");
+    const session = await getSession(id);
+    console.log(`[agent-diag] GET /:id/snapshot id=${id} inSessions=${sessions.has(id)} inManager=${session ? "yes" : "no"}`);
     if (!session) return c.json({ error: true, message: "Session not found" }, 404);
     return c.json(session.getSnapshot());
   })
@@ -184,7 +190,9 @@ export const agentSessionRoutes = new Hono()
     return c.json({ buffers: Object.fromEntries(toolBuffers.get(id) ?? []) });
   })
   .post("/:id/command", async (c) => {
-    const session = await getSession(c.req.param("id"));
+    const id = c.req.param("id");
+    const session = await getSession(id);
+    console.log(`[agent-diag] POST /:id/command id=${id} inSessions=${sessions.has(id)} inManager=${session ? "yes" : "no"}`);
     if (!session) return c.json({ error: true, message: "Session not found" }, 404);
     const command = await c.req.json();
     const result = await session.dispatch(command);
