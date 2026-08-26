@@ -174,7 +174,9 @@ export const agentSessionRoutes = new Hono()
   .get("/:id/snapshot", async (c) => {
     const id = c.req.param("id");
     const session = await getSession(id);
-    console.log(`[agent-diag] GET /:id/snapshot id=${id} inSessions=${sessions.has(id)} inManager=${session ? "yes" : "no"}`);
+    console.log(
+      `[agent-diag] GET /:id/snapshot id=${id} inSessions=${sessions.has(id)} inManager=${session ? "yes" : "no"}`
+    );
     if (!session) return c.json({ error: true, message: "Session not found" }, 404);
     return c.json(session.getSnapshot());
   })
@@ -192,7 +194,9 @@ export const agentSessionRoutes = new Hono()
   .post("/:id/command", async (c) => {
     const id = c.req.param("id");
     const session = await getSession(id);
-    console.log(`[agent-diag] POST /:id/command id=${id} inSessions=${sessions.has(id)} inManager=${session ? "yes" : "no"}`);
+    console.log(
+      `[agent-diag] POST /:id/command id=${id} inSessions=${sessions.has(id)} inManager=${session ? "yes" : "no"}`
+    );
     if (!session) return c.json({ error: true, message: "Session not found" }, 404);
     const command = await c.req.json();
     const result = await session.dispatch(command);

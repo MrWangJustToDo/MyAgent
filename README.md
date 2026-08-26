@@ -5,9 +5,18 @@
 [![pnpm](https://img.shields.io/badge/pnpm-9%2B-F69220?logo=pnpm)](https://pnpm.io)
 [![TanStack AI](https://img.shields.io/badge/TanStack%20AI-0.48-000000?logo=vercel)](https://tanstack.com/ai)
 
-An open-source AI coding agent built on [TanStack AI SDK](https://tanstack.com/ai) with a React-powered terminal UI, Chrome extension, and in-browser playground.
+A **runtime-agnostic** AI coding agent — same core logic, runs in terminal, Chrome extension, or WebContainer playground. Workspace, LLM provider, and agent session are three orthogonal planes; mix local/remote however you want. Built on [TanStack AI SDK](https://tanstack.com/ai).
 
-Designed with a runtime-agnostic core that decouples agent logic from the execution environment — run tools locally, proxy through an HTTP server, embed in a browser extension, or boot a WebContainer playground. Hosts talk to **AgentSession**; the workspace (CoreEnv), LLM provider, and agent session are three independent, optionally-remote planes.
+---
+
+## Why MyAgent?
+
+| Traditional AI IDEs | MyAgent |
+|---------------------|---------|
+| Tied to specific editors | Works with any editor + terminal |
+| Cloud black box | Fully local, or remote only what you choose |
+| Single interaction mode | Terminal / browser / extension — switch freely |
+| Fixed toolset | Skills + Extensions + MCP — extend on demand |
 
 ---
 
