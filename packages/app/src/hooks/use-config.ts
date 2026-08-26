@@ -51,6 +51,7 @@ export const useConfig = createState(
         state.config.extensionDirs = config.extensionDirs ?? [];
         state.config.continueSession = config.continueSession ?? false;
         state.config.resumeSession = config.resumeSession || "";
+        state.config.serverModel = "";
         applyOptionalAppConfig(state.config, config);
         state.initialized = true;
 
@@ -83,6 +84,7 @@ export const useConfig = createState(
         state.config.extensionDirs = [];
         state.config.continueSession = false;
         state.config.resumeSession = "";
+        state.config.serverModel = "";
         clearOptionalAppConfig(state.config);
         state.helpRequested = false;
         state.initialized = false;

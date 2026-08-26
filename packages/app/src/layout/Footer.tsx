@@ -301,7 +301,7 @@ const ContextBar = ({
  * Bottom status bar — mode, usage, model.
  */
 const StatusBar = () => {
-  const model = useConfig((s) => s.config.model);
+  const model = useConfig((s) => s.config.serverModel || s.config.model);
   const { version } = useAgentUsage();
   const session = toRaw(useAgent((s) => s.session));
   const [tick, setTick] = useState(0);

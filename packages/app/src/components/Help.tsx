@@ -146,7 +146,7 @@ export const Help = () => {
             <Box width={14}>
               <Text color={COLORS.primary}>model:</Text>
             </Box>
-            <Text>{config.model}</Text>
+            <Text>{config.serverModel || config.model}</Text>
           </Box>
           <Box>
             <Box width={14}>

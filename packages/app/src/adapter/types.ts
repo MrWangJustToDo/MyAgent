@@ -42,6 +42,12 @@ export interface AppConfig {
   /** Optional model metadata override (hosts may parse MODEL_* env vars) */
   modelInfo?: ModelInfo;
   /**
+   * Server-resolved model (e.g. `--remote-session` defers model to the server's
+   * `.env`). Display-only: kept out of the agent-chat effect deps so the
+   * initialization-time update does not tear down the just-created session.
+   */
+  serverModel?: string;
+  /**
    * How LLM credentials are resolved for this session.
    * `remote` = provider server holds keys; UI should not treat apiKey as a local secret.
    */

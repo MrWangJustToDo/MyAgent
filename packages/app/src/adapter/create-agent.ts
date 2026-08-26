@@ -100,7 +100,10 @@ export async function createAgentFromConfig({ config, name, hooks, host }: Creat
   // resolves the model from its own `.env`. Surface that resolved model so the
   // UI shows the real model name instead of a blank one.
   if (!connection.model?.trim() && snap.model) {
-    useConfig.getActions().updateConfig({ model: snap.model });
+    // Display-only: writing `model` here would flip useAgentChat's effect dep and
+    // tear down (DELETE) the remote session we just created via adapter.destroy().
+    // Keep it out of the session-rebuild deps (see use-agent-chat effect).
+    useConfig.getActions().updateConfig({ serverModel: snap.model });
   }
 
   useAgent.getActions().setHost(host);

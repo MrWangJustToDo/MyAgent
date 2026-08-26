@@ -37,12 +37,13 @@ registerCommand({
     const currentUsage = usage.window;
     const cost = usage.cost;
     const tokenLimit = usage.tokenLimit;
-    const model = useConfig.getReadonlyState().config.model;
+    const { serverModel, model } = useConfig.getReadonlyState().config;
+    const displayModel = serverModel || model;
     const lines: string[] = [];
 
     lines.push(`  Session:      ${snap.name} (${snap.agentId})`);
-    if (model) {
-      lines.push(`  Model:        ${model}`);
+    if (displayModel) {
+      lines.push(`  Model:        ${displayModel}`);
     }
 
     // Overall cache hit ratio across the session lifetime (cumulative).
