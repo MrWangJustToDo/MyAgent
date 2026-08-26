@@ -14,6 +14,8 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 
+import { readServerModelEnv } from "./provider.js";
+
 interface SummarySnapshotLike {
   key: string;
   [field: string]: unknown;
@@ -77,7 +79,9 @@ function dropToolBuffer(id: string): void {
 
 const createBodySchema = z.object({
   name: z.string().optional(),
-  model: z.string().min(1),
+  // Optional: when omitted (or empty), the server falls back to its own `.env`
+  // provider so a `--remote-session` client needs no local keys or model.
+  model: z.string().optional(),
   style: z.string().optional(),
   baseURL: z.string().optional(),
   apiKey: z.string().optional(),
@@ -123,12 +127,27 @@ export const agentSessionRoutes = new Hono()
     const body = createBodySchema.parse(await c.req.json());
     const { agentManager, buildDefaultSystemPrompt, createLocalAgentSessionHost, resolveModelConfig } =
       await loadCore();
-    const { connection, modelInfo } = await resolveModelConfig({
-      model: body.model,
-      style: body.style as "openai" | "anthropic" | undefined,
-      baseURL: body.baseURL,
-      apiKey: body.apiKey,
-    });
+    // Explicit client model wins; otherwise use the server's own `.env` provider
+    // so a `--remote-session` client can leave model configuration on the server.
+    const explicitModel = body.model?.trim();
+    const { connection, modelInfo } = explicitModel
+      ? await resolveModelConfig({
+          model: body.model,
+          style: body.style as "openai" | "anthropic" | undefined,
+          baseURL: body.baseURL,
+          apiKey: body.apiKey,
+        })
+      : await resolveModelConfig(readServerModelEnv());
+    if (!connection.model?.trim()) {
+      return c.json(
+        {
+          error: true,
+          message:
+            "No model configured: pass `model` in the request body, or set MODEL / API_KEY / BASE_URL in the server .env (see --remote-session).",
+        },
+        400
+      );
+    }
     const host = createLocalAgentSessionHost({ manager: agentManager });
     const { session } = await host.create({
       name: body.name || "remote",

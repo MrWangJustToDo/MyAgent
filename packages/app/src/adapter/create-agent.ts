@@ -59,9 +59,10 @@ export async function createAgentFromConfig({ config, name, hooks, host }: Creat
     modelInfo: config.modelInfo,
   });
 
-  if (!connection.model?.trim()) {
+  if (!connection.model?.trim() && !config.remoteSession) {
     throw new Error(
-      "No model configured. Set MODEL / --model, or use --remote-provider so the provider server supplies MODEL."
+      "No model configured. Set MODEL / --model, use --remote-provider so the provider server supplies MODEL, " +
+        "or use --remote-session so the agent server's provider supplies MODEL."
     );
   }
 

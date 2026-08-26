@@ -95,6 +95,11 @@ export interface ParsedCliConfig extends Partial<AppConfig> {
   remoteProvider?: string;
   /** Remote Agent Session URL (`--remote-session` / REMOTE_SESSION). */
   remoteSession?: string;
+  /** Whether any model-related flag was passed explicitly on the CLI
+   *  (`--model` / `--style` / `--base-url` / `--api-key`), as opposed to
+   *  only `.env` defaults. Lets a `--remote-session` host defer model
+   *  resolution to the server when nothing was given explicitly. */
+  modelExplicit?: boolean;
 }
 
 export function parseCliArgs(argv: string[]): ParsedCliConfig {
@@ -109,9 +114,14 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
   const cliApiKey = getFlagString(parsed, "", "api-key", "k");
 
   const envModelId = getFlagString(parsed, envModel, "model", "m");
+  const cliModel = getFlagString(parsed, "", "model", "m");
   const envStyle = parseCliStyle(getEnv("MODEL_STYLE") || getEnv("STYLE") || undefined);
   const envBaseURL = getEnv("BASE_URL") || getEnv("MODEL_BASE_URL") || undefined;
   const envApiKey = getEnv("API_KEY") || undefined;
+
+  // Any explicit model-related flag overrides the "defer to server" default for
+  // remote sessions (`.env`-only values are treated as host defaults).
+  const modelExplicit = Boolean(cliModel || cliStyle || cliBaseURL || cliApiKey);
 
   const connection = resolveModelConnection({
     model: envModelId,
@@ -180,6 +190,7 @@ export function parseCliArgs(argv: string[]): ParsedCliConfig {
     remoteEnv,
     remoteProvider,
     remoteSession,
+    modelExplicit,
     ...(modelInfo ? { modelInfo } : {}),
     ...(toolConfig ? { toolConfig } : {}),
   };

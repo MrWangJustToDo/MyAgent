@@ -48,6 +48,20 @@ if (remoteEnv) {
 
 // Provider plane — LLM keys (`--remote-provider` / REMOTE_PROVIDER); orthogonal to CoreEnv
 const remoteProvider = appConfig.remoteProvider;
+
+// Remote session + no explicit `--model*` flag + no `--remote-provider`: defer
+// model resolution to the server's own `.env` provider instead of shipping local
+// defaults across the wire. Pass an explicit `--model` (or `--remote-provider`)
+// to keep model control client-side.
+if (appConfig.remoteSession && !remoteProvider && !appConfig.modelExplicit) {
+  appConfig.model = "";
+  appConfig.style = undefined;
+  appConfig.baseURL = undefined;
+  appConfig.apiKey = undefined;
+  appConfig.modelInfo = undefined;
+  console.log("[cli] Remote session: no explicit --model, deferring model to the server provider.");
+}
+
 if (remoteProvider) {
   try {
     const { createRemoteProvider } = await import("@my-agent/server/client");
