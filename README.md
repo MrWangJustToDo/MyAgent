@@ -7,7 +7,7 @@
 
 An open-source AI coding agent built on [TanStack AI SDK](https://tanstack.com/ai) with a React-powered terminal UI, Chrome extension, and in-browser playground.
 
-Designed with a runtime-agnostic core that decouples agent logic from the execution environment — run tools locally, proxy through an HTTP server, embed in a browser extension, or boot a WebContainer playground. Hosts talk to **AgentSession**; LLM keys and workspace I/O are independent planes.
+Designed with a runtime-agnostic core that decouples agent logic from the execution environment — run tools locally, proxy through an HTTP server, embed in a browser extension, or boot a WebContainer playground. Hosts talk to **AgentSession**; the workspace (CoreEnv), LLM provider, and agent session are three independent, optionally-remote planes.
 
 ---
 
@@ -54,40 +54,73 @@ Designed with a runtime-agnostic core that decouples agent logic from the execut
 │  └──────────────────────────┬────────────────────────────┘  │
 │                             │  AgentSession                 │
 │  ┌──────────────────────────┴────────────────────────────┐  │
-│  │  @my-agent/core  (ManagedAgent, tools, models, MCP)   │  │
+│  │  @my-agent/core  (agent loop, tools, models, MCP)     │  │
 │  └──────────────────────────┬────────────────────────────┘  │
-│                             │  CoreEnv  ·  ModelProvider    │
-│  ┌──────────────────────────┴────────────────────────────┐  │
-│  │  node (local)  │  server client (HTTP)  │  WebContainer│  │
-│  └──────────────────────────┬────────────────────────────┘  │
-│                             │ Hono RPC (`/api/env`,         │
-│                             │ `/api/provider`, `/api/agent`)│
-│  ┌──────────────────────────┴────────────────────────────┐  │
-│  │  @my-agent/server (uses @my-agent/node)               │  │
-│  └───────────────────────────────────────────────────────┘  │
+│                             │                              │
+│   ┌─────────────┐  ┌────────┴───────┐  ┌───────────────┐   │
+│   │  CoreEnv    │  │  ModelProvider │  │  AgentSession │   │
+│   │  workspace  │  │  LLM plane     │  │  agent plane  │   │
+│   │ (node/http) │  │ (direct/http)  │  │ (local/http)  │   │
+│   └──────┬──────┘  └────────┬───────┘  └───────┬───────┘   │
+│          └──────────────────┴──────────────────┘           │
+│                            │ Hono RPC                      │
+│  ┌─────────────────────────┴────────────────────────────┐  │
+│  │  @my-agent/server (uses @my-agent/node)              │  │
+│  │  /api/env · /api/fs · /api/command · /api/fetch ·    │  │
+│  │  /api/provider · /api/agent                          │  │
+│  └──────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### CoreEnv — Runtime Abstraction
+### Three Planes — Workspace · LLM · Agent Session
+
+Hosts talk to the agent through three **independent, orthogonal planes**. Each can run locally or be proxied through `@my-agent/server` (`pnpm start:server`, default `:3100`) — combine any mix via `--remote-env` / `--remote-provider` / `--remote-session` (or the `REMOTE_*` env vars).
+
+| Plane | Local | Remote (HTTP) |
+|-------|-------|---------------|
+| **Workspace** — CoreEnv (fs, shell, fetch, platform) | `createNodeEnv()` (`@my-agent/node`) | `createRemoteEnv(url)` → `/api/env · /api/fs · /api/command · /api/fetch` |
+| **LLM** — ModelProvider (model keys / baseURL) | `createDirectModelProvider()` (host-held keys) | `createRemoteProvider(url)` → `/api/provider/*` (keys on server) |
+| **Agent** — AgentSession (messages, todos, approvals, plan) | `createLocalAgentSessionHost()` (in-process) | `createRemoteAgentSessionHost(url)` → `/api/agent` (REST + SSE) |
+
+### CoreEnv — Workspace Plane
 
 `CoreEnv` is the central interface that decouples `@my-agent/core` from any specific runtime. All filesystem, shell, fetch, and platform APIs go through it — making the core truly runtime-agnostic.
 
 | Implementation | Package | Use Case |
 |:--------------|:--------|:---------|
 | `createNodeEnv()` | `@my-agent/node` | Local workspace — Node.js APIs with optional OS sandbox |
-| `createRemoteEnv(url)` | `@my-agent/server` (client) | Remote workspace — Hono RPC to a CoreEnv server |
-| `createDirectModelProvider()` | `@my-agent/core` | Local LLM keys / baseURL |
-| `createRemoteProvider(url)` | `@my-agent/server` (client) | Remote LLM provider (`/api/provider/*`; keys on server) |
+| `createRemoteEnv(url)` | `@my-agent/server` (client) | Remote workspace (`--remote-env` / `REMOTE_ENV`) — Hono RPC to a CoreEnv server |
 
-CoreEnv and ModelProvider are independent (`--remote-env` vs `--remote-provider`).
+### ModelProvider — LLM Plane (orthogonal to CoreEnv)
 
-| Combination | CoreEnv | Provider | Host | Status |
-|------------|---------|----------|------|--------|
-| Local + CLI | `createNodeEnv` | direct | Terminal | Fully working |
-| Remote workspace + remote keys | `createRemoteEnv` | remote | Terminal | Working |
-| Local workspace + remote keys | `createNodeEnv` | remote | Terminal | Working (`--remote-provider`) |
-| Remote + Extension | `createRemoteEnv` | remote or direct | Chrome | Working |
-| Playground | WebContainer | direct or remote | Browser | Working (CORS / fetch proxy for web tools) |
+LLM credentials are **not** part of CoreEnv — the workspace and the model keys are separate planes, so local/remote workspace and local/remote keys combine freely. Remote mode re-forces `baseURL`/`apiKey` from the server (so upstream URLs cannot bypass) and `/api/env/vars` strips `API_KEY` / `*_API_KEY`.
+
+| Implementation | Package | Use Case |
+|:--------------|:--------|:---------|
+| `createDirectModelProvider()` | `@my-agent/core` | Local LLM keys / baseURL (default) |
+| `createRemoteProvider(url)` | `@my-agent/server` (client) | Remote LLM provider (`--remote-provider` / `REMOTE_PROVIDER`) — keys live on the server, requests proxied through `/api/provider/*` |
+
+### AgentSession — Agent Loop Plane
+
+The agent loop and its full session state (messages, queued messages, todos, approvals, plan, usage) can run in-process or on the server. The UI stays **Session-only** either way — hosts talk to an `AgentSession` interface and never touch the loop directly.
+
+- **Local (default):** `createLocalAgentSessionHost()` — an in-process `AgentManager` + `ManagedAgent` running against the registered CoreEnv and provider.
+- **Remote (`--remote-session` / `REMOTE_SESSION`):** `createRemoteAgentSessionHost(url)` — commands go over REST (`POST /api/agent/:id/command`) and the loop streams back via SSE (`/api/agent/:id/events`) with a snapshot cache and auto-reconnect (plus tool-buffer and summary-stream remounting). The loop then runs server-side against the server's own registered workspace/keys.
+
+Remote-session is orthogonal to the other two planes — you can remote just the session while keeping a local workspace and local keys, or remote all three.
+
+### Combinations
+
+The three planes combine freely; every row below is a working configuration:
+
+| CoreEnv | Provider | Agent Session | Host | Notes |
+|---------|----------|---------------|------|-------|
+| local (`createNodeEnv`) | direct | local | CLI | Fully working (default) |
+| remote (`--remote-env`) | remote | local | CLI | Workspace + keys on server |
+| local | remote (`--remote-provider`) | local | CLI | Local workspace, keys on server |
+| local or remote | direct or remote | remote (`--remote-session`) | CLI | Agent loop on server; SSE auto-reconnect |
+| remote | remote or direct | local or remote | Chrome | Extension requires a running server |
+| WebContainer | direct or remote | local | Browser | Playground (CORS / fetch proxy for web tools) |
 
 ### Package Overview
 
