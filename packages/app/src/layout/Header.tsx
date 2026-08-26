@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import { useEffect, useMemo } from "react";
 
 import { FullBox } from "../components/FullBox";
+import { useConfig } from "../hooks/use-config";
 import { useSize } from "../hooks/use-size.js";
 import { useStatic } from "../hooks/use-static";
 import { useWorkspaceInfo } from "../hooks/use-workspace-info";
@@ -59,7 +60,16 @@ const GradientLine = ({
 // Logo Component
 // ============================================================================
 
-const Logo = () => {
+/** Remote planes active for this session (rendered as a badge under the logo title). */
+export function remotePlanesFromConfig(remoteEnv?: string, remoteProvider?: string, remoteSession?: string): string[] {
+  return [
+    ...(remoteEnv ? ["remote-env"] : []),
+    ...(remoteProvider ? ["remote-provider"] : []),
+    ...(remoteSession ? ["remote-session"] : []),
+  ];
+}
+
+const Logo = ({ remotePlanes }: { remotePlanes: string[] }) => {
   return (
     <Box flexDirection="column" alignItems="center" width="100%">
       <Box flexDirection="column">
@@ -73,6 +83,14 @@ const Logo = () => {
           AI-Powered Coding Agent
         </Text>
       </Box>
+
+      {remotePlanes.length > 0 && (
+        <Box marginTop={1}>
+          <Text color={COLORS.warning} dimColor>
+            {remotePlanes.join(" · ")}
+          </Text>
+        </Box>
+      )}
     </Box>
   );
 };
@@ -124,10 +142,10 @@ const GitInfoLine = ({ git, workspacePath }: { git: WorkspaceGitInfo | null; wor
   );
 };
 
-function buildHeader(git: WorkspaceGitInfo | null, workspacePath: string, showMeta: boolean) {
+function buildHeader(git: WorkspaceGitInfo | null, workspacePath: string, showMeta: boolean, remotePlanes: string[]) {
   return (
     <FullBox flexDirection="column" key="header" marginBottom={1} paddingX={3} paddingY={1}>
-      <Logo />
+      <Logo remotePlanes={remotePlanes} />
       {showMeta && (workspacePath || git) && <GitInfoLine git={git} workspacePath={workspacePath} />}
 
       {showMeta && (
@@ -158,12 +176,20 @@ function buildHeader(git: WorkspaceGitInfo | null, workspacePath: string, showMe
 export const Header = () => {
   const screenWidth = useSize((s) => s.state.screenWidth);
   const { git, path: workspacePath } = useWorkspaceInfo((s) => s.workspaceInfo);
+  const remoteEnv = useConfig((s) => s.config.remoteEnv);
+  const remoteProvider = useConfig((s) => s.config.remoteProvider);
+  const remoteSession = useConfig((s) => s.config.remoteSession);
+
+  const remotePlanes = useMemo(
+    () => remotePlanesFromConfig(remoteEnv, remoteProvider, remoteSession),
+    [remoteEnv, remoteProvider, remoteSession]
+  );
 
   useEffect(() => {
     if (!workspacePath) return;
     const showMeta = screenWidth >= HEADER_META_MIN_WIDTH;
-    useStatic.getActions().setStaticHeader(buildHeader(git || null, workspacePath, showMeta));
-  }, [git, workspacePath, screenWidth]);
+    useStatic.getActions().setStaticHeader(buildHeader(git || null, workspacePath, showMeta, remotePlanes));
+  }, [git, workspacePath, screenWidth, remotePlanes]);
 
   return null;
 };

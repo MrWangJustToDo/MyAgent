@@ -96,6 +96,13 @@ export async function createAgentFromConfig({ config, name, hooks, host }: Creat
   const snap = session.getSnapshot();
   const initial = initialMessages ?? [];
 
+  // Remote Agent Session without an explicit local model: the agent server
+  // resolves the model from its own `.env`. Surface that resolved model so the
+  // UI shows the real model name instead of a blank one.
+  if (!connection.model?.trim() && snap.model) {
+    useConfig.getActions().updateConfig({ model: snap.model });
+  }
+
   useAgent.getActions().setHost(host);
   useAgent.getActions().setSession(session);
   useAgentLog.getActions().clear();
