@@ -1,11 +1,13 @@
 import { Box, Text } from "ink";
 
+import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
 import { Spinner } from "../components/Spinner.js";
 import { useTranscriptDisplayMode } from "../context/transcript-display-context.js";
+import { useSize } from "../hooks";
 import { useSummaryStream } from "../hooks/use-summary-stream.js";
 import { useTask } from "../hooks/use-task.js";
 import { useToolElapsed } from "../hooks/use-tool-elapsed.js";
-import { COLORS } from "../theme/colors.js";
+import { BG, COLORS } from "../theme/colors.js";
 import { formatUsageBrief } from "../utils/format-usage.js";
 import {
   buildToolHeader,
@@ -74,6 +76,11 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
   const isRunCommand = toolName === "run_command";
   const isTask = toolName === "task";
   const isExecuting = isToolExecuting(part);
+  const screenWidth = useSize((s) => s.state.screenWidth);
+  // Same box metrics as ToolOutputView: message container paddingX=1 + tool
+  // column paddingLeft=2 → width compensates so the right edge aligns with
+  // user message boxes (screenWidth - 2).
+  const boxWidth = Math.max(screenWidth - 4, 1);
   const liveElapsedMs = useToolElapsed(toolCallId, isExecuting, LIVE_DURATION_THRESHOLD_MS);
   const {
     phase: taskPhase,
@@ -157,7 +164,11 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
           throttleMs={streamingThrottleMs ?? RUN_COMMAND_STREAM_THROTTLE_MS}
         />
       )}
-      {showTaskSummaryStream && taskSummary.rows.length > 0 && <SummaryStreamView rows={taskSummary.rows} height={5} />}
+      {showTaskSummaryStream && taskSummary.rows.length > 0 && (
+        <HalfLinePaddedBox backgroundColor={BG.toolResult} width={boxWidth}>
+          <SummaryStreamView rows={taskSummary.rows} height={5} />
+        </HalfLinePaddedBox>
+      )}
 
       {hasOutput && <ToolOutputView part={part} uiState={uiState} />}
 

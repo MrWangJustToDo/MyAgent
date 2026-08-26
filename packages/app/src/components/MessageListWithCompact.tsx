@@ -13,21 +13,22 @@ export const MessageViewWithCompact = ({ messages }: { messages: UIMessage[] }) 
 
   const isCompacting = status === "compacting";
 
-  const { text: compactSummaryText, label: compactLabel } = useCompactSummaryText({ enabled: isCompacting });
+  const { text: compactSummaryText } = useCompactSummaryText({ enabled: isCompacting });
 
   const displayMessages = useMemo(() => {
     if (!isCompacting || !compactSummaryText) return messages;
-    // Inject a synthetic user message to render the streaming compact summary.
-    // The phase label distinguishes sequential summarizer passes (history /
-    // discarded-turn / segment merges) that reuse the same stream key.
-    const header = compactLabel ? `[${compactLabel}]\n\n` : "";
+    // Inject a synthetic user message to render the streaming compact summary
+    // identically to the final checkpoint: wrapped with the same markers so it
+    // matches isCompactionSummaryUIMessage and renders as CompactionSummaryView
+    // (previously a leading phase label broke the startsWith match and the
+    // streaming phase was misrendered as a plain user message).
     const synthetic: UIMessage = {
       id: "compact-streaming",
       role: "user",
-      parts: [{ type: "text", content: `${header}${formatCompactionSummaryContent(compactSummaryText)}` }],
+      parts: [{ type: "text", content: formatCompactionSummaryContent(compactSummaryText) }],
     };
     return [...messages, synthetic];
-  }, [messages, isCompacting, compactSummaryText, compactLabel]);
+  }, [messages, isCompacting, compactSummaryText]);
 
   return <MessageList messages={displayMessages} />;
 };

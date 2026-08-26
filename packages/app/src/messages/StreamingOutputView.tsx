@@ -4,8 +4,10 @@
 
 import { Box, Text } from "ink";
 
+import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
+import { useSize } from "../hooks";
 import { useStreamingOutput } from "../hooks/use-streaming-output.js";
-import { COLORS } from "../theme/colors.js";
+import { BG, COLORS } from "../theme/colors.js";
 import { buildFixedStreamingWindow } from "../utils/streaming-output-lines.js";
 
 // ============================================================================
@@ -55,6 +57,11 @@ export const StreamingOutputView = ({
   emptyMessage = "",
 }: StreamingOutputViewProps) => {
   const output = useStreamingOutput(toolCallId, { enabled, throttleMs });
+  const screenWidth = useSize((s) => s.state.screenWidth);
+  // Same box metrics as ToolOutputView: message container paddingX=1 + tool
+  // column paddingLeft=2 → width compensates so the right edge aligns with
+  // user message boxes (screenWidth - 2).
+  const boxWidth = Math.max(screenWidth - 4, 1);
 
   const stdoutText = output?.stdout ?? "";
   const stderrText = output?.stderr ?? "";
@@ -79,25 +86,27 @@ export const StreamingOutputView = ({
   }
 
   return (
-    <Box flexDirection="column" paddingLeft={2}>
-      {stdoutWindow.lines.length > 0 && (
-        <Box flexDirection="column" height={stdoutWindow.lines.length} flexShrink={0}>
-          {stdoutWindow.lines.map((line, i) => (
-            <Text key={`stdout-${i}`} color={COLORS.muted} dimColor>
-              {line.length > 0 ? line : " "}
-            </Text>
-          ))}
-        </Box>
-      )}
-      {stderrWindow.lines.length > 0 && (
-        <Box flexDirection="column" height={stderrWindow.lines.length} flexShrink={0}>
-          {stderrWindow.lines.map((line, i) => (
-            <Text key={`stderr-${i}`} color={COLORS.danger} dimColor>
-              {line.length > 0 ? line : " "}
-            </Text>
-          ))}
-        </Box>
-      )}
-    </Box>
+    <HalfLinePaddedBox backgroundColor={BG.toolResult} width={boxWidth}>
+      <Box flexDirection="column" paddingLeft={2}>
+        {stdoutWindow.lines.length > 0 && (
+          <Box flexDirection="column" height={stdoutWindow.lines.length} flexShrink={0}>
+            {stdoutWindow.lines.map((line, i) => (
+              <Text key={`stdout-${i}`} color={COLORS.muted} dimColor>
+                {line.length > 0 ? line : " "}
+              </Text>
+            ))}
+          </Box>
+        )}
+        {stderrWindow.lines.length > 0 && (
+          <Box flexDirection="column" height={stderrWindow.lines.length} flexShrink={0}>
+            {stderrWindow.lines.map((line, i) => (
+              <Text key={`stderr-${i}`} color={COLORS.danger} dimColor>
+                {line.length > 0 ? line : " "}
+              </Text>
+            ))}
+          </Box>
+        )}
+      </Box>
+    </HalfLinePaddedBox>
   );
 };
