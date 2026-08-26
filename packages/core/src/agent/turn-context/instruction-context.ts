@@ -124,8 +124,21 @@ function digestContent(content: string): string {
 
 /** Truncate content to the byte budget (matches agent-doc-loader's max-bytes rule). */
 function truncateContent(content: string): string {
+  return truncateContentWithFlag(content).content;
+}
+
+/**
+ * Truncate content to the byte budget and report whether truncation occurred.
+ *
+ * Used by the re-injection path so an oversized instruction file is surfaced
+ * to the model instead of being silently cut off.
+ */
+function truncateContentWithFlag(content: string): { content: string; truncated: boolean } {
   const env = getEnv();
-  return env.byteLength(content, "utf-8") > INSTRUCTION_MAX_BYTES ? content.slice(0, INSTRUCTION_MAX_BYTES) : content;
+  if (env.byteLength(content, "utf-8") <= INSTRUCTION_MAX_BYTES) {
+    return { content, truncated: false };
+  }
+  return { content: content.slice(0, INSTRUCTION_MAX_BYTES), truncated: true };
 }
 
 // ============================================================================
@@ -163,8 +176,8 @@ export function instructionStateChanged(
  * on the state object; it is fetched on demand at injection time.
  */
 export async function loadLatestInstructionContent(): Promise<{
-  primary: { name: string; content: string } | undefined;
-  override: { name: string; content: string } | undefined;
+  primary: { name: string; content: string; truncated: boolean } | undefined;
+  override: { name: string; content: string; truncated: boolean } | undefined;
 }> {
   const env = getEnv();
 
@@ -178,7 +191,8 @@ export async function loadLatestInstructionContent(): Promise<{
       const overridePath = env.path.join(env.path.dirname(filePath), overrideFilename(filename));
       const override = await loadOverrideContent(overridePath);
 
-      return { primary: { name: filename, content: truncateContent(content) }, override };
+      const primary = truncateContentWithFlag(content);
+      return { primary: { name: filename, ...primary }, override };
     } catch {
       continue;
     }
@@ -188,13 +202,15 @@ export async function loadLatestInstructionContent(): Promise<{
 }
 
 /** Load override file content if present. */
-async function loadOverrideContent(overridePath: string): Promise<{ name: string; content: string } | undefined> {
+async function loadOverrideContent(
+  overridePath: string
+): Promise<{ name: string; content: string; truncated: boolean } | undefined> {
   const env = getEnv();
   try {
     const exists = await env.fs.exists(overridePath);
     if (!exists) return undefined;
     const content = await env.fs.readFile(overridePath);
-    return { name: env.path.basename(overridePath), content: truncateContent(content) };
+    return { name: env.path.basename(overridePath), ...truncateContentWithFlag(content) };
   } catch {
     return undefined;
   }
@@ -219,10 +235,20 @@ export function formatInstructionContextSection(
       "and ignore the older <project_instructions> content."
   );
 
+  if (loaded.primary.truncated) {
+    parts.push(
+      `NOTE: ${loaded.primary.name} exceeds the ${INSTRUCTION_MAX_BYTES}-byte instruction budget and was truncated.`
+    );
+  }
   parts.push(`# ${loaded.primary.name}`);
   parts.push(loaded.primary.content);
 
   if (loaded.override) {
+    if (loaded.override.truncated) {
+      parts.push(
+        `NOTE: ${loaded.override.name} exceeds the ${INSTRUCTION_MAX_BYTES}-byte instruction budget and was truncated.`
+      );
+    }
     parts.push(`## Local Override (${loaded.override.name})`);
     parts.push(loaded.override.content);
   }

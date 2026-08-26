@@ -41,6 +41,7 @@ export {
   unescapeCommonEscapes,
 } from "./agent/tools/util/find-edit-match.js";
 export { BEGIN_SUMMARY_TOOL_NAME } from "./agent/subagent/begin-summary-tool.js";
+export { buildExploreSystemPrompt, SUBAGENT_EXPLORE_SYSTEM_PROMPT } from "./agent/subagent/explore-prompt.js";
 export {
   mcpContentHasMultimodal,
   mcpContentToTanstack,
@@ -82,6 +83,8 @@ export {
   type RunAgentOnceOutcome,
 } from "./agent/run/run-agent-skeleton.js";
 export { extractFileOpsFromMessages, formatFileOperations } from "./agent/compaction/file-ops-tracker.js";
+export { buildDefaultSystemPrompt } from "./agent/default-prompt.js";
+export { PR_SUMMARY_SYSTEM_PROMPT, TITLE_SYSTEM_PROMPT } from "./agent/summary/session-summary-prompt.js";
 export { applyToolCompact, ToolCompactCache, toModelOutputRegistry } from "./agent/compaction";
 export {
   buildCompactArchiveMarkdown,
@@ -89,6 +92,8 @@ export {
   buildSegmentedConversationText,
   buildSummarizationUserPrompt,
   COMPACT_TRANSCRIPT_ROOT,
+  COMPACTION_PROMPT,
+  COMPACTION_SYSTEM_PROMPT,
   deriveKeepRecentTokens,
   extractCompactArchivePaths,
   findCutPoint,
@@ -112,6 +117,7 @@ export {
   STILL_IN_CONTEXT_RULES,
   stripCompactArchiveSections,
   TURN_PREFIX_INSTRUCTION,
+  UPDATE_COMPACTION_PROMPT,
   writeCompactArchive,
 } from "./agent/compaction";
 export { extractTextFromContent } from "./agent/compaction/message-utils.js";

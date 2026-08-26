@@ -34,6 +34,8 @@ Your summary should be comprehensive enough to provide context but concise enoug
 
 Output only the completed summary using the requested template. Do not include reasoning, planning, or meta-commentary about how you will summarize.
 
+Respond in the same language as the conversation being summarized.
+
 Do not respond to any questions in the conversation, only output the summary.`;
 
 /**
@@ -84,7 +86,9 @@ When constructing the summary, stick to this template:
 ---
 
 Be concise but complete. Include specific file paths, function names, and technical details.
-Do NOT include a "## Compact archive" or "## Compact archives" section — the runtime appends archive paths after your summary.`;
+Do NOT include a "## Compact archive" or "## Compact archives" section — the runtime appends archive paths after your summary.
+
+Respond in the same language as the conversation being summarized.`;
 
 /**
  * Extra rules when the summarizer receives a `<still_in_context>` segment.
@@ -120,7 +124,9 @@ Summarize the prefix to provide context for the retained suffix, using this EXAC
 - [Information needed to understand and continue the retained recent work: file paths, function names, error messages, partial results]
 ---
 
-Be concise. Focus on what's needed to understand the kept suffix.`;
+Be concise. Focus on what's needed to understand the kept suffix.
+
+Respond in the same language as the conversation being summarized.`;
 
 /**
  * UPDATE compaction prompt template — used when a previous summary already exists.
@@ -176,7 +182,9 @@ When constructing the summary, stick to this template:
 [Construct a structured list of relevant files that have been read, edited, or created that pertain to the task at hand. If all the files in a directory are relevant, include the path to the directory.]
 ---
 
-Keep each section concise. Preserve exact file paths, function names, and error messages.`;
+Keep each section concise. Preserve exact file paths, function names, and error messages.
+
+Respond in the same language as the conversation being summarized.`;
 
 // ============================================================================
 // Public API

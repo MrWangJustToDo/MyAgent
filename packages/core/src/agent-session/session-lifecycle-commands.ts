@@ -3,6 +3,7 @@
  */
 
 import { extractTextFromContent } from "../agent/compaction/message-utils.js";
+import { PR_SUMMARY_SYSTEM_PROMPT, TITLE_SYSTEM_PROMPT } from "../agent/summary/session-summary-prompt.js";
 import { resolveTextAdapterForManaged } from "../managers/run-agent.js";
 import { runSideTextQuery } from "../models/side-text-query.js";
 
@@ -38,8 +39,7 @@ export async function generateAndApplySessionTitle(
   try {
     managed.getLog()?.info("chat", "Generating title...", { recentText });
     const { text, usage } = await runSideTextQuery(textAdapter, {
-      systemPrompt:
-        "Generate a concise title (3-8 words) for the following conversation. Return ONLY the title, no quotes or punctuation.",
+      systemPrompt: TITLE_SYSTEM_PROMPT,
       userPrompt: recentText,
       maxOutputTokens: 60,
     });
@@ -58,6 +58,56 @@ export async function generateAndApplySessionTitle(
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
     return { ok: false, error: `Title generation failed: ${err.message}` };
+  }
+}
+
+/**
+ * Generate a PR-style summary of the current session (side query, no agent loop).
+ *
+ * The summary is returned to the caller — it is NOT stored on the session.
+ * Use for PR descriptions, commit messages, or hand-off notes.
+ */
+export async function generateSessionSummary(
+  managed: ManagedAgent
+): Promise<{ ok: true; summary: string } | { ok: false; error: string }> {
+  const textAdapter = await resolveTextAdapterForManaged(managed);
+  if (!textAdapter) {
+    return { ok: false, error: "No text adapter available for summary generation" };
+  }
+
+  const messages = managed.getCanonicalFromUI();
+  const conversationText = messages
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => extractTextFromContent(m.content))
+    .filter(Boolean)
+    .join("\n")
+    .slice(-8000);
+
+  if (!conversationText) {
+    return { ok: false, error: "No conversation content to summarize" };
+  }
+
+  try {
+    managed.getLog()?.info("chat", "Generating PR-style summary...", {
+      conversationLength: conversationText.length,
+    });
+    const { text, usage } = await runSideTextQuery(textAdapter, {
+      systemPrompt: PR_SUMMARY_SYSTEM_PROMPT,
+      userPrompt: conversationText,
+      maxOutputTokens: 500,
+    });
+    if (usage) {
+      managed.usage.addTotal(usage);
+    }
+    const summary = text.trim();
+    if (!summary) {
+      return { ok: false, error: "Failed to generate summary" };
+    }
+    managed.getLog()?.info("chat", "PR-style summary generated", { summaryLength: summary.length });
+    return { ok: true, summary };
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    return { ok: false, error: `Summary generation failed: ${err.message}` };
   }
 }
 

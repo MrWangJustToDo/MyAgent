@@ -122,7 +122,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     // Keeps subagent isolated while providing necessary time/workspace context.
     // NOTE: these must live in the UI channel (durable SoT) — executeManagedAgentRun
     // reads the model wire messages from the channel, not the `messages` argument.
-    const envContext = await buildSubagentTurnContext();
+    const envContext = await buildSubagentTurnContext(parentManaged);
     const tcMessages: ModelMessage[] = envContext
       ? [{ role: "user", content: `<turn_context>\n${envContext}\n</turn_context>` }]
       : [];
@@ -419,11 +419,13 @@ async function* tapBeginSummary(
 /**
  * Build minimal environment turn context for subagents.
  *
- * Only includes `<current_date>` and `<git_status>` — no memory, todo, plan,
- * or extension context. This keeps subagents context-isolated while providing
- * necessary time/workspace awareness (e.g., for `websearch` time-sensitive queries).
+ * Includes `<current_date>`, `<git_status>`, and — when a parent agent is
+ * available — the parent's `<project_instructions>` (AGENTS.md / CLAUDE.md
+ * content) so the subagent follows the same project conventions. No memory,
+ * todo, plan, or extension context — keeps subagents context-isolated while
+ * providing necessary time/workspace + project awareness.
  */
-async function buildSubagentTurnContext(): Promise<string | undefined> {
+async function buildSubagentTurnContext(parentManaged?: { getAgentDocContent(): string }): Promise<string | undefined> {
   const currentDate = getCurrentDate();
   const { branch: gitBranch, status: gitStatus } = await getGitInfo();
 
@@ -442,6 +444,19 @@ async function buildSubagentTurnContext(): Promise<string | undefined> {
       gitParts.push(`Status:\n${gitStatus}`);
     }
     parts.push(["<git_status>", ...gitParts, "</git_status>"].join("\n"));
+  }
+
+  const projectInstructions = parentManaged?.getAgentDocContent();
+  if (projectInstructions) {
+    parts.push(
+      [
+        "<project_instructions>",
+        "Below are the project-specific instructions loaded from the repository. Follow these conventions, rules, and guidelines when working in this codebase.",
+        "",
+        projectInstructions,
+        "</project_instructions>",
+      ].join("\n")
+    );
   }
 
   return parts.length > 0 ? parts.join("\n\n") : undefined;
