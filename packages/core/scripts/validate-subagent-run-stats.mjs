@@ -127,6 +127,68 @@ const lengthCut = deriveSubagentRunStats({
 assert.equal(lengthCut.reachedLimit, false);
 assert.equal(lengthCut.incomplete, true);
 
+// Step-budget cutoff that ends on a TEXT narration step (finishReason "stop"):
+// at/over maxIterations without begin_summary must still count as reachedLimit
+// so the progress-summary fallback triggers (regression: deepseek-harness task
+// ran 50 rounds, ended on "Let me read descriptor.ts briefly.", and the
+// fallback was skipped because reachedLimit stayed false).
+{
+  const narration = [];
+  for (let i = 1; i <= 50; i++) {
+    narration.push({
+      id: `assistant-${i}`,
+      role: "assistant",
+      parts: [
+        { type: "text", content: `Step ${i} note.` },
+        { type: "tool-call", id: `tc${i}`, name: "grep", arguments: "{}", state: "complete", output: "{}" },
+        { type: "tool-result", toolCallId: `tc${i}`, content: "[]" },
+      ],
+    });
+  }
+  // Final cut step: text-only narration, no tool calls, finishReason "stop".
+  narration.push({
+    id: "assistant-final",
+    role: "assistant",
+    parts: [{ type: "text", content: "Let me read descriptor.ts briefly." }],
+  });
+
+  const stats = deriveSubagentRunStats({
+    messages: narration,
+    maxIterations: 50,
+    finishReason: "stop",
+    output: "Let me read descriptor.ts briefly.",
+    aborted: false,
+  });
+  assert.equal(stats.iterations, 50);
+  assert.equal(stats.reachedLimit, true, "budget exhausted + no begin_summary = limit reached");
+  assert.equal(stats.incomplete, true);
+}
+
+// Control: same shape but begin_summary WAS called and budget not reached — natural end.
+{
+  const done = [
+    {
+      id: "assistant-1",
+      role: "assistant",
+      parts: [
+        { type: "text", content: "Working." },
+        { type: "tool-call", id: "tc1", name: "begin_summary", arguments: "{}", state: "complete", output: "{}" },
+        { type: "tool-result", toolCallId: "tc1", content: '{"ready":true}' },
+        { type: "text", content: "## Summary\nDone." },
+      ],
+    },
+  ];
+  const stats = deriveSubagentRunStats({
+    messages: done,
+    maxIterations: 50,
+    finishReason: "stop",
+    output: "## Summary\nDone.",
+    aborted: false,
+  });
+  assert.equal(stats.reachedLimit, false);
+  assert.equal(stats.incomplete, false);
+}
+
 // Parallel tool calls in one model turn = 1 iteration round.
 const parallel = [
   {

@@ -112,7 +112,16 @@ export function deriveSubagentRunStats(
 
   // TanStack `maxIterations(n)` stops the loop without rewriting finishReason.
   // When the step budget cuts off mid-tooling, the last model reason is typically `tool_calls`.
-  const reachedLimit = input.maxIterations > 0 && finishReason === "tool_calls";
+  // Fallback: an explore subagent that exhausted the budget WITHOUT ever calling
+  // `begin_summary` cannot have finished naturally — some cutoffs end on a text
+  // narration step (finishReason "stop"), which would otherwise hide the limit.
+  const hitStepBudget =
+    input.maxIterations > 0 &&
+    (finishReason === "tool_calls" ||
+      (!calledBeginSummary &&
+        countSubagentToolCalls(input.messages) > 0 &&
+        countSubagentIterations(input.messages) >= input.maxIterations));
+  const reachedLimit = hitStepBudget;
 
   const hasSummary = input.output.trim().length > 0 && input.output !== "(no summary)";
   const hitOutputLimit = finishReason != null && OUTPUT_LIMIT_FINISH_REASONS.has(finishReason);
