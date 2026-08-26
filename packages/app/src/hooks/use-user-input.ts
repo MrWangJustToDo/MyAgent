@@ -13,6 +13,7 @@ import {
   isImagePlaceholder,
   isLargePaste,
   isPastePlaceholder,
+  PASTE_MERGE_WINDOW_MS,
   removeAttachmentAtIndex,
   removePasteAtIndex,
 } from "./user-input-helpers.js";
@@ -71,6 +72,9 @@ export interface UserInputState {
   nextPasteIndex: number;
   /** Currently expanded paste placeholder index (null = all collapsed) */
   expandedPasteIndex: number | null;
+  /** Timestamp of the last `paste` action (-1 = none), used to merge stdin
+   *  chunks of a single bracketed paste into one placeholder. */
+  lastPasteAt: number;
   /** Transient input error message */
   inputError: string | null;
   /** Transient input feedback message */
@@ -111,6 +115,7 @@ const initialState: UserInputState = {
   pendingPastes: [],
   nextPasteIndex: 0,
   expandedPasteIndex: null,
+  lastPasteAt: -1,
   inputError: null,
   inputFeedback: null,
 };
@@ -206,6 +211,7 @@ function restoreDraft(state: UserInputState): void {
   state.pendingPastes = draft.pendingPastes;
   state.nextPasteIndex = draft.nextPasteIndex;
   state.expandedPasteIndex = draft.expandedPasteIndex;
+  state.lastPasteAt = -1;
 }
 
 /**
@@ -216,6 +222,7 @@ function restoreDraft(state: UserInputState): void {
 function restoreHistoryEntry(state: UserInputState): void {
   state.value = state.history[state.historyIndex] ?? "";
   state.cursorPosition = state.value.length;
+  state.lastPasteAt = -1;
   resetInputPlaceholders(state);
 }
 
@@ -324,7 +331,31 @@ export const useUserInput = createState(() => ({ ...initialState }), {
     paste: (text: string) => {
       // Convert \r\n and \r to \n for proper newline handling
       text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const now = Date.now();
+      const isContinuation = state.lastPasteAt >= 0 && now - state.lastPasteAt <= PASTE_MERGE_WINDOW_MS;
+      state.lastPasteAt = now;
       clearDraft(state);
+
+      // react-terminal forwards each stdin chunk as a separate input event, so a
+      // single large bracketed paste can arrive split across several consecutive
+      // `paste` calls. Merge chunks that land right after a placeholder we just
+      // created within the merge window so one paste collapses into a single
+      // placeholder (no duplicate placeholders or stray trailing text).
+      if (isContinuation && !state.selectAll && state.nextPasteIndex > 0) {
+        const lastIndex = state.nextPasteIndex - 1;
+        const pos = state.cursorPosition;
+        if (state.value[pos - 1] === createPastePlaceholder(lastIndex)) {
+          const lastPaste = state.pendingPastes[lastIndex];
+          if (lastPaste) {
+            const mergedText = lastPaste.text + text;
+            const newPastes = [...state.pendingPastes];
+            newPastes[lastIndex] = { text: mergedText, lineCount: mergedText.split("\n").length };
+            state.pendingPastes = newPastes;
+            state.historyIndex = -1;
+            return;
+          }
+        }
+      }
 
       if (!isLargePaste(text)) {
         insertCharsAtCursor(state, text);
@@ -460,6 +491,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.value = "";
       state.cursorPosition = 0;
       state.historyIndex = -1;
+      state.lastPasteAt = -1;
       resetInputPlaceholders(state);
     },
 
@@ -482,6 +514,7 @@ export const useUserInput = createState(() => ({ ...initialState }), {
       state.cursorPosition = 0;
       state.historyIndex = -1;
       state.selectedAttachment = -1;
+      state.lastPasteAt = -1;
       resetInputPlaceholders(state);
       clearDraft(state);
       return { text, attachments };

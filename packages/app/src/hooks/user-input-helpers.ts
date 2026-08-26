@@ -43,6 +43,16 @@ export const PASTE_PLACEHOLDER_END = 0xe1ff;
 export const LARGE_PASTE_LINE_THRESHOLD = 5;
 export const LARGE_PASTE_CHAR_THRESHOLD = 500;
 
+/**
+ * Max gap (ms) between consecutive `paste` events to treat them as chunks of a
+ * single paste. react-terminal forwards each stdin chunk as a separate input
+ * event, so one large bracketed paste can arrive split across several events;
+ * chunks that land right after a placeholder we just created within this window
+ * are merged back into that placeholder instead of becoming extra placeholders
+ * or stray text.
+ */
+export const PASTE_MERGE_WINDOW_MS = 200;
+
 /** A collapsed large paste: full text + line count for the display label. */
 export interface PendingPaste {
   text: string;
