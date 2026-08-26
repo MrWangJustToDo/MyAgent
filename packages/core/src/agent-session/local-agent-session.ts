@@ -3,6 +3,7 @@
  */
 
 import { subscribeStreamingCallback, subscribeStreamingClearCallback } from "../agent/tools/util/streaming-callback.js";
+import { Emitter } from "../utils/emitter.js";
 
 import { DEFAULT_SESSION_LIFECYCLE_EVENTS } from "./lifecycle-filter.js";
 import { dispatchLocalAgentSessionCommand } from "./local-session-dispatch.js";
@@ -56,11 +57,8 @@ class LocalAgentSessionImpl implements AgentSession {
   private readonly managed: ManagedAgent;
   private readonly manager: LocalAgentSessionManager | null | undefined;
   private readonly lifecycleEvents: readonly AgentEventType[];
-  /** Subscribers registered via `subscribe` (used to fan out post-command events). */
-  private readonly listeners = new Set<{
-    handler: AgentSessionSubscriber;
-    channels: ReadonlySet<AgentSessionChannel>;
-  }>();
+  /** Multicast bus for session events; all channels fan out through here. */
+  private readonly events = new Emitter<Record<AgentSessionChannel, AgentSessionEvent>>();
 
   constructor(options: CreateLocalAgentSessionOptions) {
     this.managed = options.managed;
@@ -83,16 +81,17 @@ class LocalAgentSessionImpl implements AgentSession {
 
   subscribe(handler: AgentSessionSubscriber, options?: AgentSessionSubscribeOptions): () => void {
     const selected = resolveChannels(options);
-    const entry = { handler, channels: selected };
-    this.listeners.add(entry);
     const unsubs: Array<() => void> = [];
+    for (const channel of selected) {
+      unsubs.push(this.events.on(channel, handler));
+    }
     const managed = this.managed;
     const manager = this.manager;
 
     if (channelAllowed("state", selected)) {
       unsubs.push(
         managed.on("change", (payload) => {
-          handler({ channel: "state", payload, ts: now() });
+          this.events.emit("state", { channel: "state", payload, ts: now() });
         })
       );
     }
@@ -105,7 +104,7 @@ class LocalAgentSessionImpl implements AgentSession {
         const ui = managed.ui;
         if (!ui) return;
         messagesUnsub = ui.on("messages", (payload) => {
-          handler({ channel: "messages", payload, ts: now() });
+          this.events.emit("messages", { channel: "messages", payload, ts: now() });
         });
       };
       wireMessages();
@@ -124,7 +123,7 @@ class LocalAgentSessionImpl implements AgentSession {
       if (chat) {
         unsubs.push(
           chat.on("change", (payload) => {
-            handler({ channel: "queues", payload, ts: now() });
+            this.events.emit("queues", { channel: "queues", payload, ts: now() });
           })
         );
       }
@@ -133,7 +132,7 @@ class LocalAgentSessionImpl implements AgentSession {
     if (channelAllowed("usage", selected)) {
       unsubs.push(
         managed.usage.on("change", (payload) => {
-          handler({ channel: "usage", payload, ts: now() });
+          this.events.emit("usage", { channel: "usage", payload, ts: now() });
         })
       );
     }
@@ -143,7 +142,7 @@ class LocalAgentSessionImpl implements AgentSession {
       if (todos) {
         unsubs.push(
           todos.on("change", (items) => {
-            handler({
+            this.events.emit("todos", {
               channel: "todos",
               payload: { items, title: todos.getTitle() },
               ts: now(),
@@ -156,12 +155,12 @@ class LocalAgentSessionImpl implements AgentSession {
     if (channelAllowed("plan", selected)) {
       unsubs.push(
         managed.planMode.on("change", (payload) => {
-          handler({ channel: "plan", payload, ts: now() });
+          this.events.emit("plan", { channel: "plan", payload, ts: now() });
           // Agent mode is derived from plan phase (+ auto mode) — keep remote
           // snapshot.mode fresh when plan phase changes outside a dispatch
           // (e.g. plan auto-execution after seeding).
           if (channelAllowed("mode", selected)) {
-            handler({
+            this.events.emit("mode", {
               channel: "mode",
               payload: { mode: managed.getAgentMode(), autoMode: managed.isAutoModeEnabled() },
               ts: now(),
@@ -175,7 +174,7 @@ class LocalAgentSessionImpl implements AgentSession {
       unsubs.push(
         subscribeStreamingCallback(
           (chunk) => {
-            handler({ channel: "tool", payload: { kind: "chunk", chunk }, ts: now() });
+            this.events.emit("tool", { channel: "tool", payload: { kind: "chunk", chunk }, ts: now() });
           },
           { agentId: managed.id }
         )
@@ -183,7 +182,7 @@ class LocalAgentSessionImpl implements AgentSession {
       unsubs.push(
         subscribeStreamingClearCallback(
           (toolCallId) => {
-            handler({ channel: "tool", payload: { kind: "clear", toolCallId }, ts: now() });
+            this.events.emit("tool", { channel: "tool", payload: { kind: "clear", toolCallId }, ts: now() });
           },
           { agentId: managed.id }
         )
@@ -193,7 +192,7 @@ class LocalAgentSessionImpl implements AgentSession {
     if (channelAllowed("summary", selected) && managed.summaryStreams) {
       unsubs.push(
         managed.summaryStreams.subscribe((payload) => {
-          handler({ channel: "summary", payload, ts: now() });
+          this.events.emit("summary", { channel: "summary", payload, ts: now() });
         })
       );
     }
@@ -201,7 +200,7 @@ class LocalAgentSessionImpl implements AgentSession {
     if (channelAllowed("log", selected) && managed.log) {
       unsubs.push(
         managed.log.on("entry", (payload) => {
-          handler({ channel: "log", payload, ts: now() });
+          this.events.emit("log", { channel: "log", payload, ts: now() });
         })
       );
     }
@@ -211,23 +210,43 @@ class LocalAgentSessionImpl implements AgentSession {
       if (ui) {
         unsubs.push(
           ui.subscribe<{ key: string; text: string }>("set-status", (data) => {
-            handler({ channel: "extension-ui", payload: { type: "set-status", ...data }, ts: now() });
+            this.events.emit("extension-ui", {
+              channel: "extension-ui",
+              payload: { type: "set-status", ...data },
+              ts: now(),
+            });
           }),
           ui.subscribe<{ message: string; level?: "success" | "info" | "error" }>("notify", (data) => {
-            handler({ channel: "extension-ui", payload: { type: "notify", ...data }, ts: now() });
+            this.events.emit("extension-ui", {
+              channel: "extension-ui",
+              payload: { type: "notify", ...data },
+              ts: now(),
+            });
           }),
           ui.subscribe<{ id: string; component: string; props: Record<string, unknown> }>("set-widget", (data) => {
-            handler({ channel: "extension-ui", payload: { type: "set-widget", ...data }, ts: now() });
+            this.events.emit("extension-ui", {
+              channel: "extension-ui",
+              payload: { type: "set-widget", ...data },
+              ts: now(),
+            });
           }),
           ui.subscribe<{ id: string; question: string }>("confirm", (data) => {
-            handler({ channel: "extension-ui", payload: { type: "confirm", ...data }, ts: now() });
+            this.events.emit("extension-ui", {
+              channel: "extension-ui",
+              payload: { type: "confirm", ...data },
+              ts: now(),
+            });
           })
         );
         // Reconcile status set before this subscription mounted (e.g. during
         // bootstrap, before the host's extension-ui subscription attaches).
         for (const [key, text] of Object.entries(ui.getStatus())) {
           if (text) {
-            handler({ channel: "extension-ui", payload: { type: "set-status", key, text }, ts: now() });
+            this.events.emit("extension-ui", {
+              channel: "extension-ui",
+              payload: { type: "set-status", key, text },
+              ts: now(),
+            });
           }
         }
       }
@@ -241,7 +260,7 @@ class LocalAgentSessionImpl implements AgentSession {
           on(type, (event) => {
             if (!filter.has(event.type)) return;
             if (event.agentId === managed.id || (event.parentId === managed.id && event.type.startsWith("subagent:"))) {
-              handler({ channel: "lifecycle", payload: event, ts: now() });
+              this.events.emit("lifecycle", { channel: "lifecycle", payload: event, ts: now() });
             }
           })
         );
@@ -252,7 +271,6 @@ class LocalAgentSessionImpl implements AgentSession {
     return () => {
       if (!active) return;
       active = false;
-      this.listeners.delete(entry);
       for (const unsub of unsubs) {
         try {
           unsub();
@@ -309,15 +327,7 @@ class LocalAgentSessionImpl implements AgentSession {
       default:
         return;
     }
-    for (const { handler, channels } of this.listeners) {
-      if (channels.has(event.channel)) {
-        try {
-          handler(event);
-        } catch {
-          // Silently handle subscriber errors
-        }
-      }
-    }
+    this.events.emit(event.channel, event);
   }
 }
 
