@@ -54,6 +54,20 @@ export function createRemoteAgentSessionHost(options: RemoteAgentSessionHostOpti
           resumeSessionId: createOptions.resumeSessionId,
         }),
       });
+      if (!response.ok) {
+        // Surface the server's real error (e.g. 400 "No model configured")
+        // instead of silently reading `data.id` as undefined, which would turn
+        // every later call into a misleading 404 "Session not found".
+        const text = await response.text().catch(() => "");
+        let detail = text || response.statusText;
+        try {
+          const body = JSON.parse(text) as { message?: string };
+          if (body.message) detail = body.message;
+        } catch {
+          // keep raw text
+        }
+        throw new Error(`Failed to create remote agent session (HTTP ${response.status}): ${detail}`);
+      }
       const data = (await response.json()) as { id: string; snapshot: AgentSessionSnapshot };
       return {
         session: new RemoteSessionClient({
