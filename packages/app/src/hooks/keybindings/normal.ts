@@ -90,6 +90,11 @@ export function useNormalModeKeybindings(ctx: KeybindingContext): void {
         autocompleteActions.update(useUserInput.getReadonlyState().value);
         return;
       }
+      // Ctrl+O toggles expand/collapse of the paste placeholder under the cursor.
+      if (inputKey.ctrl && inputChar === "o") {
+        inputActions.togglePasteExpansion();
+        return;
+      }
       if (inputKey.delete) {
         inputActions.deleteForward();
         autocompleteActions.update(useUserInput.getReadonlyState().value);
@@ -117,7 +122,14 @@ export function useNormalModeKeybindings(ctx: KeybindingContext): void {
       }
       if (inputChar && !inputKey.ctrl && !inputKey.meta) {
         commandOutputActions.dismiss();
-        inputActions.append(inputChar);
+        if (inputChar.length > 1) {
+          // Bracketed paste: react-terminal delivers the whole pasted payload
+          // as a single input. Route through paste so large pastes collapse
+          // into a placeholder instead of blowing up the input height.
+          inputActions.paste(inputChar);
+        } else {
+          inputActions.append(inputChar);
+        }
         autocompleteActions.update(useUserInput.getReadonlyState().value);
       }
     },

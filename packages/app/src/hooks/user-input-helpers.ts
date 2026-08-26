@@ -31,6 +31,58 @@ export function formatImageRef(displayIndex: number, filename: string): string {
   return `[Image #${displayIndex}: ${filename}]`;
 }
 
+/**
+ * Unicode Private Use Area characters for large-paste placeholders.
+ * Distinct range from image placeholders so a paste behaves like a single
+ * input character while staying unambiguous.
+ */
+export const PASTE_PLACEHOLDER_START = 0xe100;
+export const PASTE_PLACEHOLDER_END = 0xe1ff;
+
+/** Large-paste collapse thresholds (mirror gemini-cli). */
+export const LARGE_PASTE_LINE_THRESHOLD = 5;
+export const LARGE_PASTE_CHAR_THRESHOLD = 500;
+
+/** A collapsed large paste: full text + line count for the display label. */
+export interface PendingPaste {
+  text: string;
+  lineCount: number;
+}
+
+/** Check if a character is a large-paste placeholder. */
+export function isPastePlaceholder(char: string): boolean {
+  const code = char.charCodeAt(0);
+  return code >= PASTE_PLACEHOLDER_START && code <= PASTE_PLACEHOLDER_END;
+}
+
+/** Get the paste index from a placeholder character. */
+export function getPasteIndex(char: string): number {
+  return char.charCodeAt(0) - PASTE_PLACEHOLDER_START;
+}
+
+/** Create a placeholder character for a paste index. */
+export function createPastePlaceholder(index: number): string {
+  return String.fromCharCode(PASTE_PLACEHOLDER_START + index);
+}
+
+/** True when pasted text is large enough to collapse into a placeholder. */
+export function isLargePaste(text: string): boolean {
+  return text.split("\n").length > LARGE_PASTE_LINE_THRESHOLD || text.length > LARGE_PASTE_CHAR_THRESHOLD;
+}
+
+/** Display label for a collapsed paste placeholder. */
+export function formatPastePlaceholder(lineCount: number): string {
+  return `[Pasted Text: ${lineCount} lines]`;
+}
+
+/** Remove the paste entry at an index from a sparse pendingPastes array. */
+export function removePasteAtIndex(
+  pendingPastes: (PendingPaste | undefined)[],
+  pasteIndex: number
+): (PendingPaste | undefined)[] {
+  return pendingPastes.map((paste, index) => (index === pasteIndex ? undefined : paste));
+}
+
 export function removeAttachmentAtIndex(attachments: Attachment[], imageIndex: number): Attachment[] {
   return attachments
     .map((attachment, index) => (index === imageIndex ? null : attachment))
@@ -38,12 +90,15 @@ export function removeAttachmentAtIndex(attachments: Attachment[], imageIndex: n
 }
 
 /**
- * Convert input value + sparse attachments into submitted text (with image refs) and
- * attachments ordered by placeholder appearance.
+ * Convert input value + sparse attachments into submitted text (with image refs)
+ * and attachments ordered by placeholder appearance. Large-paste placeholders are
+ * expanded back to their real content on submit (mirrors gemini-cli
+ * expandPastePlaceholders).
  */
 export function extractSubmittedInput(
   rawValue: string,
-  attachments: Attachment[]
+  attachments: Attachment[],
+  pendingPastes?: (PendingPaste | undefined)[]
 ): { text: string; attachments: Attachment[] } {
   let text = "";
   const orderedAttachments: Attachment[] = [];
@@ -56,6 +111,11 @@ export function extractSubmittedInput(
         text += formatImageRef(displayNum, attachment.filename);
         orderedAttachments.push(attachment);
         displayNum++;
+      }
+    } else if (isPastePlaceholder(char)) {
+      const paste = pendingPastes?.[getPasteIndex(char)];
+      if (paste) {
+        text += paste.text;
       }
     } else {
       text += char;

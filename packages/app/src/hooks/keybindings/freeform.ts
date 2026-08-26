@@ -93,7 +93,12 @@ export function useFreeformModeKeybindings(ctx: KeybindingContext): void {
         return;
       }
       if (inputChar && !inputKey.ctrl && !inputKey.meta) {
-        inputActions.append(inputChar);
+        if (inputChar.length > 1) {
+          // Bracketed paste: collapse large pastes into a placeholder (same as normal mode).
+          inputActions.paste(inputChar);
+        } else {
+          inputActions.append(inputChar);
+        }
       }
     },
     { isActive: ctx.mode === "freeform" }
