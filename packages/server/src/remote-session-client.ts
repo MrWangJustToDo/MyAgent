@@ -189,6 +189,12 @@ function applyEvent(
     case "tool":
       applyToolEvent(toolBuffers, event.payload);
       return snapshot;
+    case "extensions":
+      return { ...snapshot, extensions: event.payload };
+    case "mcp":
+      return { ...snapshot, mcp: event.payload };
+    case "mode":
+      return { ...snapshot, mode: event.payload.mode, autoMode: event.payload.autoMode };
     default:
       return snapshot;
   }

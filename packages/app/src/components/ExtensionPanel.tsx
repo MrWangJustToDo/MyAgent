@@ -124,6 +124,20 @@ export const ExtensionPanel = () => {
     setTick((n) => n + 1);
   }, [view, revision, session]);
 
+  // Remote sessions only refresh `snapshot.extensions` via the protocol-level
+  // `extensions` channel (no live getSnapshot()) — re-read the panel when it
+  // arrives so toggles from any host propagate here. Local sessions re-read
+  // live, so this is a harmless extra refresh.
+  useEffect(() => {
+    if (!session) return;
+    return session.subscribe(
+      (event) => {
+        if (event.channel === "extensions") refresh();
+      },
+      { channels: ["extensions"] }
+    );
+  }, [session, refresh]);
+
   const infos = useMemo(() => {
     void tick;
     void view;

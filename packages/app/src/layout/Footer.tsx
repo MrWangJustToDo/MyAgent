@@ -312,7 +312,9 @@ const StatusBar = () => {
       () => {
         setTick((n) => n + 1);
       },
-      { channels: ["state", "plan", "todos"] }
+      // `mode` keeps remote snapshot.mode/autoMode fresh (local sessions re-read
+      // getSnapshot() live; remote caches only update via the mode channel).
+      { channels: ["state", "plan", "todos", "mode"] }
     );
   }, [session]);
 

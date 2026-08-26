@@ -13,6 +13,7 @@ import {
   type AgentSessionChannel,
   type AgentSessionCommand,
   type AgentSessionCommandResult,
+  type AgentSessionEvent,
   type AgentSessionSnapshot,
   type AgentSessionSubscribeOptions,
   type AgentSessionSubscriber,
@@ -55,6 +56,11 @@ class LocalAgentSessionImpl implements AgentSession {
   private readonly managed: ManagedAgent;
   private readonly manager: LocalAgentSessionManager | null | undefined;
   private readonly lifecycleEvents: readonly AgentEventType[];
+  /** Subscribers registered via `subscribe` (used to fan out post-command events). */
+  private readonly listeners = new Set<{
+    handler: AgentSessionSubscriber;
+    channels: ReadonlySet<AgentSessionChannel>;
+  }>();
 
   constructor(options: CreateLocalAgentSessionOptions) {
     this.managed = options.managed;
@@ -75,12 +81,10 @@ class LocalAgentSessionImpl implements AgentSession {
     return this.managed.summaryStreams?.listSnapshots() ?? [];
   }
 
-  dispatch(command: AgentSessionCommand): Promise<AgentSessionCommandResult> {
-    return dispatchLocalAgentSessionCommand(this.managed, this.manager, command);
-  }
-
   subscribe(handler: AgentSessionSubscriber, options?: AgentSessionSubscribeOptions): () => void {
     const selected = resolveChannels(options);
+    const entry = { handler, channels: selected };
+    this.listeners.add(entry);
     const unsubs: Array<() => void> = [];
     const managed = this.managed;
     const manager = this.manager;
@@ -153,6 +157,16 @@ class LocalAgentSessionImpl implements AgentSession {
       unsubs.push(
         managed.planMode.on("change", (payload) => {
           handler({ channel: "plan", payload, ts: now() });
+          // Agent mode is derived from plan phase (+ auto mode) — keep remote
+          // snapshot.mode fresh when plan phase changes outside a dispatch
+          // (e.g. plan auto-execution after seeding).
+          if (channelAllowed("mode", selected)) {
+            handler({
+              channel: "mode",
+              payload: { mode: managed.getAgentMode(), autoMode: managed.isAutoModeEnabled() },
+              ts: now(),
+            });
+          }
         })
       );
     }
@@ -238,6 +252,7 @@ class LocalAgentSessionImpl implements AgentSession {
     return () => {
       if (!active) return;
       active = false;
+      this.listeners.delete(entry);
       for (const unsub of unsubs) {
         try {
           unsub();
@@ -246,6 +261,63 @@ class LocalAgentSessionImpl implements AgentSession {
         }
       }
     };
+  }
+
+  async dispatch(command: AgentSessionCommand): Promise<AgentSessionCommandResult> {
+    const result = await dispatchLocalAgentSessionCommand(this.managed, this.manager, command);
+    if (result.ok) {
+      // Post-command incremental events keep remote caches (RemoteSessionClient)
+      // fresh for state that has no dedicated event source (extension list, MCP
+      // servers, agent mode). Local sessions re-read getSnapshot() live, so this
+      // is a no-op refresh there; over the wire it is the only path that updates
+      // the cached snapshot fields.
+      this.broadcastPostCommand(command);
+    }
+    return result;
+  }
+
+  /** Broadcast a protocol-level incremental event after a state-mutating command. */
+  private broadcastPostCommand(command: AgentSessionCommand): void {
+    const ts = now();
+    let event: AgentSessionEvent | undefined;
+    switch (command.type) {
+      case "extension.toggle":
+        event = {
+          channel: "extensions",
+          payload: { extensions: this.managed.extensionRunner?.getExtensionInfos() ?? [] },
+          ts,
+        };
+        break;
+      case "mcp.refresh":
+        event = {
+          channel: "mcp",
+          payload: { servers: this.managed.getMcpManager()?.getServerStatuses() ?? [] },
+          ts,
+        };
+        break;
+      case "auto.set":
+      case "auto.toggle":
+      case "plan.enable":
+      case "plan.disable":
+      case "plan.toggle":
+        event = {
+          channel: "mode",
+          payload: { mode: this.managed.getAgentMode(), autoMode: this.managed.isAutoModeEnabled() },
+          ts,
+        };
+        break;
+      default:
+        return;
+    }
+    for (const { handler, channels } of this.listeners) {
+      if (channels.has(event.channel)) {
+        try {
+          handler(event);
+        } catch {
+          // Silently handle subscriber errors
+        }
+      }
+    }
   }
 }
 

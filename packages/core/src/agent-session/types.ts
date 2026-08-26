@@ -42,6 +42,9 @@ export const AGENT_SESSION_CHANNELS = [
   "lifecycle",
   "log",
   "extension-ui",
+  "extensions",
+  "mcp",
+  "mode",
 ] as const;
 
 export type AgentSessionChannel = (typeof AGENT_SESSION_CHANNELS)[number];
@@ -201,7 +204,10 @@ export type AgentSessionEvent =
   | { channel: "summary"; payload: SummaryStreamEvent; ts: number }
   | { channel: "lifecycle"; payload: AgentEvent; ts: number }
   | { channel: "log"; payload: LogEntry; ts: number }
-  | { channel: "extension-ui"; payload: ExtensionUIEvent; ts: number };
+  | { channel: "extension-ui"; payload: ExtensionUIEvent; ts: number }
+  | { channel: "extensions"; payload: AgentSessionExtensionsSummary; ts: number }
+  | { channel: "mcp"; payload: AgentSessionMcpSummary; ts: number }
+  | { channel: "mode"; payload: { mode: AgentMode; autoMode: boolean }; ts: number };
 
 export type AgentSessionSubscriber = (event: AgentSessionEvent) => void;
 
