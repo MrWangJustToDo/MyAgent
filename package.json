@@ -31,7 +31,6 @@
     "purge": "pnpm -p -r -c exec rm -rf node_modules && rm -rf node_modules"
   },
   "devDependencies": {
-    "@crosscopy/clipboard-linux-arm64-gnu": "0.2.8",
     "@my-agent/app": "workspace:*",
     "@my-agent/cli": "workspace:*",
     "@my-agent/core": "workspace:*",
