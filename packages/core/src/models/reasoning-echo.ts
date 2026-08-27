@@ -1,13 +1,14 @@
+import type { ModelInfo } from "./types.js";
 import type { ModelMessage } from "@tanstack/ai";
 
-/** Join TanStack assistant `thinking` blocks into DeepSeek `reasoning_content`. */
+/** Join TanStack assistant `thinking` blocks into `reasoning_content`. */
 export function buildReasoningContentFromThinking(thinking: ModelMessage["thinking"] | undefined): string | undefined {
   if (!thinking?.length) return undefined;
   const content = thinking.map((entry) => entry.content).join("");
   return content.length > 0 ? content : undefined;
 }
 
-/** Read `reasoning_content` from a Chat Completions stream chunk (DeepSeek thinking mode). */
+/** Read `reasoning_content` from a Chat Completions stream chunk (thinking mode). */
 export function extractReasoningContentFromStreamChunk(chunk: unknown): string | undefined {
   if (!chunk || typeof chunk !== "object") return undefined;
 
@@ -19,8 +20,16 @@ export function extractReasoningContentFromStreamChunk(chunk: unknown): string |
   return typeof reasoning === "string" && reasoning.length > 0 ? reasoning : undefined;
 }
 
-/** Whether this endpoint/model likely requires `reasoning_content` echo-back. */
-export function shouldEchoReasoningContent(baseURL: string, model: string): boolean {
-  const haystack = `${baseURL} ${model}`.toLowerCase();
-  return haystack.includes("deepseek");
+/**
+ * Whether this endpoint/model requires `reasoning_content` echo-back.
+ *
+ * A resolved model whose metadata advertises the `reasoning` capability
+ * (models.dev `reasoning: true`) routes through the reasoning adapter. When
+ * metadata is missing (offline, models.dev-unknown models, hosts that don't
+ * pass modelInfo) we conservatively default to the reasoning adapter — it is a
+ * no-op superset of the plain adapter, so unknown thinking models never
+ * silently drop their reasoning.
+ */
+export function shouldEchoReasoningContent(modelInfo?: Pick<ModelInfo, "capabilities"> | null): boolean {
+  return modelInfo?.capabilities?.includes("reasoning") ?? true;
 }

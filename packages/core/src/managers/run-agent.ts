@@ -73,6 +73,7 @@ export async function resolveTextAdapterForManaged(managed: ManagedAgent): Promi
     model: config.model,
     baseURL: config.modelBaseURL ?? DEFAULT_BASE_URLS[style],
     apiKey: config.modelApiKey,
+    modelInfo: managed.getModelInfo(),
   });
   managed.setTextAdapter(adapter);
   return adapter;

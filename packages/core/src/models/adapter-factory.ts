@@ -4,7 +4,7 @@ import { createChatCompletions } from "./chat-completions-text-adapter.js";
 import { createReasoningChatCompletions } from "./reasoning-chat-completions-adapter.js";
 import { shouldEchoReasoningContent } from "./reasoning-echo.js";
 
-import type { ModelStyle } from "./types.js";
+import type { ModelInfo, ModelStyle } from "./types.js";
 import type { AnyTextAdapter } from "@tanstack/ai";
 
 // ============================================================================
@@ -22,6 +22,12 @@ export interface ModelAdapterConfig {
   model: string;
   baseURL: string;
   apiKey?: string;
+  /**
+   * Resolved model metadata (models.dev). The advertised `reasoning` capability
+   * routes thinking-enabled models through the reasoning adapter without a
+   * brand-name allow-list.
+   */
+  modelInfo?: ModelInfo | null;
 }
 
 // ============================================================================
@@ -60,7 +66,7 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
   const key = apiKey || "not-needed";
   const openaiConfig = { baseURL: trimmedBaseURL, maxRetries: 0 };
 
-  if (shouldEchoReasoningContent(trimmedBaseURL, model)) {
+  if (shouldEchoReasoningContent(config.modelInfo)) {
     return {
       adapter: createReasoningChatCompletions(model, key, {
         ...openaiConfig,

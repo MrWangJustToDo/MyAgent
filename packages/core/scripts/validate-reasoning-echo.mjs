@@ -29,9 +29,14 @@ assert.equal(
 );
 assert.equal(extractReasoningContentFromStreamChunk({ choices: [{ delta: { content: "hi" } }] }), undefined);
 
-assert.equal(shouldEchoReasoningContent("https://api.deepseek.com", "deepseek-chat"), true);
-assert.equal(shouldEchoReasoningContent("https://proxy.example.com/v1", "deepseek-v4-flash"), true);
-assert.equal(shouldEchoReasoningContent("http://localhost:11434/v1", "qwen3"), false);
+assert.equal(shouldEchoReasoningContent({ capabilities: ["streaming", "reasoning"] }), true);
+assert.equal(shouldEchoReasoningContent({ capabilities: ["streaming", "tool_calling"] }), false);
+assert.equal(shouldEchoReasoningContent({ capabilities: [] }), false);
+
+// Unknown / missing metadata conservatively uses the reasoning adapter
+// (a no-op superset of the plain adapter) so reasoning is never silently dropped.
+assert.equal(shouldEchoReasoningContent(null), true);
+assert.equal(shouldEchoReasoningContent(undefined), true);
 
 // Adapter-local cache: restore reasoning when TanStack dropped message.thinking.
 const cache = new ReasoningContentCache();
