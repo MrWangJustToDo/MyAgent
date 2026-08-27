@@ -391,6 +391,16 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
   ctx.registerCommand({
     name: "lsp-restart",
     description: "Restart an LSP server: /lsp-restart <language> (e.g. java, typescript)",
+    // Secondary options: every configured language (idle / running / failed), so
+    // the user can pick without typing — mirrors /skill and /memory options.
+    getOptions: () =>
+      getManager()
+        .getStatus()
+        .map((s) => ({
+          label: s.languageId,
+          value: s.languageId,
+          description: s.command,
+        })),
     execute: async (args) => {
       const languageId = args[0]?.trim().toLowerCase();
       if (!languageId) {
@@ -415,6 +425,14 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
   ctx.registerCommand({
     name: "lsp-config",
     description: "Configure an LSP server: /lsp-config <language> <command> [args...]",
+    // Secondary options: all languages the extension can map plus any already
+    // configured one. Selecting fills `/lsp-config <lang> ` (append-only), so the
+    // user then types the server command.
+    getOptions: () => {
+      const langs = new Set(Object.values(EXT_TO_LANGUAGE));
+      for (const s of getManager().getStatus()) langs.add(s.languageId);
+      return [...langs].sort().map((lang) => ({ label: lang, value: lang, description: "Configure an LSP server" }));
+    },
     execute: async (args) => {
       if (args.length < 2) {
         return "Usage: /lsp-config <language> <command> [args...]\nExample: /lsp-config python pylsp";
