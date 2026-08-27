@@ -38,13 +38,14 @@ export async function generateAndApplySessionTitle(
 
   try {
     managed.getLog()?.info("chat", "Generating title...", { recentText });
-    const { text, usage } = await runSideTextQuery(textAdapter, {
+    const { text, usage, durationMs } = await runSideTextQuery(textAdapter, {
       systemPrompt: TITLE_SYSTEM_PROMPT,
       userPrompt: recentText,
       maxOutputTokens: 60,
     });
     if (usage) {
       managed.usage.addTotal(usage);
+      managed.usage.addLlmCall(durationMs, usage.outputTokens);
     }
     const generated = text.trim().slice(0, 80);
     if (!generated) {
@@ -91,13 +92,14 @@ export async function generateSessionSummary(
     managed.getLog()?.info("chat", "Generating PR-style summary...", {
       conversationLength: conversationText.length,
     });
-    const { text, usage } = await runSideTextQuery(textAdapter, {
+    const { text, usage, durationMs } = await runSideTextQuery(textAdapter, {
       systemPrompt: PR_SUMMARY_SYSTEM_PROMPT,
       userPrompt: conversationText,
       maxOutputTokens: 500,
     });
     if (usage) {
       managed.usage.addTotal(usage);
+      managed.usage.addLlmCall(durationMs, usage.outputTokens);
     }
     const summary = text.trim();
     if (!summary) {

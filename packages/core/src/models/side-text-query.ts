@@ -18,6 +18,8 @@ export interface SideTextQueryOptions {
 export interface SideTextQueryResult {
   text: string;
   usage?: TokenUsage;
+  /** Wall-clock duration of the underlying LLM call (ms). */
+  durationMs: number;
 }
 
 // ============================================================================
@@ -43,6 +45,7 @@ export async function runSideTextQuery(
     }
   }
 
+  const startTime = Date.now();
   const stream = chat({
     adapter: textAdapter.adapter,
     messages: [{ role: "user", content: options.userPrompt }],
@@ -69,5 +72,5 @@ export async function runSideTextQuery(
     }
   }
 
-  return { text: text.trim(), usage };
+  return { text: text.trim(), usage, durationMs: Date.now() - startTime };
 }

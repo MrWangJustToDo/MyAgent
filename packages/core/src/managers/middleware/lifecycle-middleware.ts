@@ -30,12 +30,14 @@ export function createLifecycleMiddleware(deps: LifecycleMiddlewareDeps): ChatMi
   let memoryCommitted = false;
   let thinkingEmitted = false;
   let startTime = 0;
+  let callOutputTokens = 0;
 
   return {
     name: "lifecycle",
     onStart: (ctx) => {
       memoryCommitted = false;
       thinkingEmitted = false;
+      callOutputTokens = 0;
       startTime = Date.now();
 
       deps.emitEvent?.("llm:request", {
@@ -61,10 +63,16 @@ export function createLifecycleMiddleware(deps: LifecycleMiddlewareDeps): ChatMi
       return chunk;
     },
     onUsage: (_ctx, usage) => {
-      deps.usage.updateWindowUsage(extractTanStackUsage(usage), deps.getPricing());
+      const parsed = extractTanStackUsage(usage);
+      // Per-call output tokens (this request only), used for the tok/s basis.
+      callOutputTokens = parsed.outputTokens;
+      deps.usage.updateWindowUsage(parsed, deps.getPricing());
     },
     onFinish: (_ctx, info) => {
       const elapsed = Date.now() - startTime;
+      // Feed measured LLM duration + output tokens into the usage tracker so
+      // `/usage` can show an average generation rate (tok/s).
+      deps.usage.addLlmCall(elapsed, callOutputTokens);
       const windowUsage = deps.usage.getWindowUsage();
       deps.emitEvent?.("llm:response", {
         finishReason: info.finishReason ?? undefined,

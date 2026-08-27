@@ -79,7 +79,11 @@ export class SessionService {
     const textAdapter = (await resolveTextAdapter?.()) ?? null;
     if (!textAdapter) return userMessage.slice(0, 50);
     try {
-      const { text, usage: queryUsage } = await runSideTextQuery(textAdapter, {
+      const {
+        text,
+        usage: queryUsage,
+        durationMs,
+      } = await runSideTextQuery(textAdapter, {
         systemPrompt:
           "Generate a concise title (3-8 words) for a conversation that starts with the following message. Return ONLY the title, no quotes or punctuation.",
         userPrompt: userMessage.slice(0, 500),
@@ -88,6 +92,7 @@ export class SessionService {
 
       if (queryUsage) {
         usage.addTotal(queryUsage);
+        usage.addLlmCall(durationMs, queryUsage.outputTokens);
       }
 
       return text.slice(0, 80) || userMessage.slice(0, 50);
