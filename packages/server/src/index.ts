@@ -45,8 +45,26 @@ export { createRemoteProvider } from "./remote-provider.js";
 const PORT = parseInt(process.env.SERVER_PORT || "3100", 10);
 const ROOT_PATH = process.env.ROOT_PATH || process.cwd();
 const SANDBOX_ENV = process.env.SANDBOX_ENV || "local";
+const REMOTE_ENV = process.env.REMOTE_ENV;
 
-registerCoreEnv(createNodeEnv({ rootPath: ROOT_PATH, mode: SANDBOX_ENV === "native" ? "native" : "os" }));
+if (REMOTE_ENV) {
+  // Boundary: the server itself may register a remote CoreEnv (`REMOTE_ENV`),
+  // e.g. when it hosts a remote-session whose workspace should be an even
+  // further server's filesystem. The local node env is skipped in that case.
+  // (A server-side REMOTE_PROVIDER proxy is planned but not implemented yet.)
+  try {
+    const { createRemoteEnv } = await import("./client.js");
+    const remoteEnvInstance = await createRemoteEnv(REMOTE_ENV);
+    registerCoreEnv(remoteEnvInstance);
+    console.log(`[server] Registered remote CoreEnv: ${REMOTE_ENV} (rootPath=${remoteEnvInstance.rootPath})`);
+  } catch (err) {
+    console.error(`[server] Failed to connect to remote CoreEnv at ${REMOTE_ENV}`);
+    console.error(`  ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+} else {
+  registerCoreEnv(createNodeEnv({ rootPath: ROOT_PATH, mode: SANDBOX_ENV === "native" ? "native" : "os" }));
+}
 
 function getLocalIP() {
   const nets = networkInterfaces();

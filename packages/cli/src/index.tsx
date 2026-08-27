@@ -27,6 +27,23 @@ if (isHelpRequested(process.argv.slice(2))) {
   useConfig.getActions().setHelpRequested(true);
 }
 
+// Boundary guard — the three remote planes are orthogonal on the client EXCEPT
+// `--remote-session`, which runs the whole agent loop server-side and therefore
+// cannot be combined with `--remote-env` / `--remote-provider` on the same
+// client. Local LLM settings travel to the server via `--model`; the server
+// itself may still register its own REMOTE_ENV / REMOTE_PROVIDER.
+if (appConfig.remoteSession && (appConfig.remoteEnv || appConfig.remoteProvider)) {
+  const conflicts = [appConfig.remoteEnv ? "--remote-env" : "", appConfig.remoteProvider ? "--remote-provider" : ""]
+    .filter(Boolean)
+    .join(" / ");
+  console.error(
+    `[cli] --remote-session cannot be combined with ${conflicts}: the agent loop runs server-side, so this client cannot also proxy its workspace or LLM keys.`
+  );
+  console.error(`  Use --model <id> to push local LLM settings to the server, or configure`);
+  console.error(`  REMOTE_ENV / REMOTE_PROVIDER on the remote server itself.`);
+  process.exit(1);
+}
+
 // CoreEnv plane — workspace fs/shell (`--remote-env` / REMOTE_ENV)
 const remoteEnv = appConfig.remoteEnv;
 if (remoteEnv) {
