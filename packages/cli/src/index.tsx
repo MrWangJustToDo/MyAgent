@@ -41,6 +41,24 @@ if (remoteEnv) {
     console.error(`  Make sure the server is running: pnpm start:server`);
     process.exit(1);
   }
+} else if (appConfig.remoteSession) {
+  // Remote session: the agent runs on the server's CoreEnv, so the workspace
+  // panel (file tree / preview / diff / git) must show the server's filesystem
+  // too, not the CLI's local one. Reuse the same remote CoreEnv client as
+  // `--remote-env`; a explicit `--remote-env` above still takes precedence.
+  try {
+    const { createRemoteEnv } = await import("@my-agent/server/client");
+    const remoteEnvInstance = await createRemoteEnv(appConfig.remoteSession);
+    registerCoreEnv(remoteEnvInstance);
+    console.log(
+      `[cli] Remote session: workspace CoreEnv from server ${appConfig.remoteSession} (rootPath=${remoteEnvInstance.rootPath})`
+    );
+  } catch (err) {
+    console.error(`[cli] Failed to connect to remote CoreEnv at ${appConfig.remoteSession}`);
+    console.error(`  ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`  Make sure the server is running: pnpm start:server`);
+    process.exit(1);
+  }
 } else {
   const useOsSandbox = (process.env.SANDBOX_ENV || "local") !== "native";
   registerCoreEnv(createNodeEnv({ rootPath: process.cwd(), sandbox: useOsSandbox }));

@@ -22,6 +22,14 @@ let cachedPlatform: string | undefined;
  * Call after `registerCoreEnv` (e.g. during workspace / agent bootstrap).
  */
 export async function refreshKeyboardPlatform(): Promise<string | undefined> {
+  // Keyboard shortcuts reflect the physical terminal the user types in, not the
+  // (possibly remote) CoreEnv the agent runs on — a macOS CLI attached to a
+  // Linux server must still show ⌘ labels. Node hosts report the local platform
+  // directly; other hosts (e.g. the browser playground) fall back to CoreEnv.
+  if (typeof process !== "undefined" && typeof process.platform === "string") {
+    cachedPlatform = process.platform;
+    return cachedPlatform;
+  }
   if (!hasCoreEnv()) {
     cachedPlatform = undefined;
     return undefined;
