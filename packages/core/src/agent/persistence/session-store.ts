@@ -1,10 +1,12 @@
 /**
- * SessionStore - Single-file JSON session persistence.
+ * SessionStore - Journal + snapshot session persistence.
  *
- * Stores sessions as `.session.json` files in `.agents/sessions/` directory.
- * Each file contains a single JSON object with the full SessionData.
- * Writes are full overwrites — simple, correct, and produces exactly
- * one copy of uiMessages regardless of how many saves occur.
+ * Stores each session as an append-only JSONL journal
+ * `.agents/sessions/{id}.session.log` (source of truth) plus a materialized
+ * snapshot `.agents/sessions/{id}.session.json` (cache). save() appends a
+ * durable whole-state checkpoint first, then writes the snapshot, then
+ * truncates the journal to records newer than the snapshot — a crash between
+ * append and snapshot is recovered on load by replaying the journal tail.
  *
  * Binary assets (images, audio, PDFs) are extracted from inline base64 and
  * stored as content-addressed files under `.agents/media/<hash>.<ext>`. The
@@ -16,7 +18,8 @@
 import { getEnv } from "../../env.js";
 import { generateId } from "../../utils/generate-id.js";
 
-import { SESSION_DIR, SESSION_FILE_SUFFIX, SESSION_VERSION } from "./types.js";
+import { appendCheckpoint, lastRecord, readJournal, truncateAfter } from "./session-journal.js";
+import { SESSION_DIR, SESSION_FILE_SUFFIX, SESSION_LOG_SUFFIX, SESSION_VERSION } from "./types.js";
 
 import type { SessionData, SessionMeta } from "./types.js";
 
@@ -74,9 +77,11 @@ export class SessionStore {
   }
 
   /**
-   * Save a session to disk as a single JSON file (full overwrite).
-   * Skips the write if the content hasn't changed since the last save.
-   * Serializes concurrent saves per session to prevent race conditions.
+   * Save a session: append a durable whole-state checkpoint to the journal
+   * (source of truth), then write the snapshot (cache), then truncate the
+   * journal to records newer than the snapshot. Skips both when the content
+   * hasn't changed since the last save. Serializes concurrent saves per
+   * session to prevent race conditions.
    */
   async save(session: SessionData): Promise<void> {
     const prev = this.saveLocks.get(session.id) ?? Promise.resolve();
@@ -86,16 +91,34 @@ export class SessionStore {
   }
 
   /**
-   * Load a full session by ID from disk.
+   * Load a full session by ID: read the snapshot, then replay any journal
+   * record newer than the snapshot (crash between append and snapshot, or a
+   * corrupt/missing snapshot with a valid journal). v4 snapshot-only files
+   * load unchanged.
    */
   async load(id: string): Promise<SessionData | null> {
-    const session = await this.tryLoadJson(this.getFilePath(id));
-    if (!session) return null;
+    const filePath = this.getFilePath(id);
+    const snapshot = await this.tryLoadJson(filePath);
 
-    if (session.id !== id && id.startsWith("ses_")) {
-      session.id = id;
+    const logPath = this.getLogPath(id);
+    const journal = (await this.fs.exists(logPath)) ? await readJournal(this.fs, logPath) : [];
+    const latest = lastRecord(journal);
+
+    // The journal is canonical when it is ahead of the snapshot.
+    if (latest && (!snapshot || latest.seq > (snapshot.journalSeq ?? 0))) {
+      const session = latest.data as SessionData;
+      if (session.id !== id && id.startsWith("ses_")) {
+        session.id = id;
+      }
+      return session;
     }
-    return session;
+
+    if (!snapshot) return null;
+
+    if (snapshot.id !== id && id.startsWith("ses_")) {
+      snapshot.id = id;
+    }
+    return snapshot;
   }
 
   /**
@@ -159,6 +182,10 @@ export class SessionStore {
     const filePath = this.getFilePath(id);
     if (await this.fs.exists(filePath)) {
       await this.fs.remove(filePath);
+      const logPath = this.getLogPath(id);
+      if (await this.fs.exists(logPath)) {
+        await this.fs.remove(logPath);
+      }
       this.lastSavedHash.delete(id);
       return true;
     }
@@ -198,8 +225,28 @@ export class SessionStore {
     if (lastHash === json) return;
 
     const filePath = this.getFilePath(session.id);
-    await this.fs.writeFile(filePath, json);
-    this.lastSavedHash.set(session.id, json);
+
+    // 1. Durable append to the journal (source of truth) before the snapshot.
+    //    A crash between this and the snapshot write is recovered on load by
+    //    replaying the journal tail.
+    session.journalSeq = (session.journalSeq ?? 0) + 1;
+    const appended = await appendCheckpoint(this.fs, this.getLogPath(session.id), session.journalSeq, session);
+
+    // 2. Snapshot (materialized cache) captures the PREVIOUS durable state, so
+    //    the journal's newest checkpoint stays strictly ahead of it and is the
+    //    load-time source of truth. On the first save the snapshot seq is 0.
+    const snapshotSeq = session.journalSeq - 1;
+    const snapshot = { ...session, journalSeq: snapshotSeq };
+    const snapshotJson = JSON.stringify(snapshot);
+    await this.fs.writeFile(filePath, snapshotJson);
+    // Hash the live session (which carries the current journalSeq) so a no-op
+    // save is detected even though the on-disk snapshot lags one seq behind.
+    this.lastSavedHash.set(session.id, JSON.stringify(session));
+
+    // 3. Bound the journal to records newer than the snapshot seq.
+    if (appended) {
+      await truncateAfter(this.fs, this.getLogPath(session.id), snapshotSeq);
+    }
   }
 
   private async tryLoadJson(filePath: string): Promise<SessionData | null> {
@@ -214,6 +261,10 @@ export class SessionStore {
 
   private getFilePath(id: string): string {
     return `${SESSION_DIR}/${id}${SESSION_FILE_SUFFIX}`;
+  }
+
+  private getLogPath(id: string): string {
+    return `${SESSION_DIR}/${id}${SESSION_LOG_SUFFIX}`;
   }
 
   private async ensureDir(): Promise<void> {

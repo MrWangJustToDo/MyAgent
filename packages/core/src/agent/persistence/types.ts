@@ -1,8 +1,9 @@
 /**
  * Session Types - Type definitions for session persistence and resume.
  *
- * Uses a single JSON file per session. Each session is stored as
- * `.agents/sessions/{id}.session.json` containing the full SessionData object.
+ * Each session is persisted as an append-only JSONL journal
+ * `.agents/sessions/{id}.session.log` (source of truth) plus a materialized
+ * snapshot `.agents/sessions/{id}.session.json` (cache).
  */
 
 import { z } from "zod";
@@ -17,10 +18,15 @@ import type { UIMessage } from "@tanstack/ai";
 // Constants
 // ============================================================================
 
-/** v4: base64 binary assets extracted to .agents/media/ with mediaRef in metadata. */
-export const SESSION_VERSION = 4;
+/** v5: writes are journaled to {id}.session.log (JSONL, source of truth) and the
+ * .session.json becomes a materialized snapshot. v4 files (snapshot only) still load. */
+export const SESSION_VERSION = 5;
 export const SESSION_DIR = ".agents/sessions";
 export const SESSION_FILE_SUFFIX = ".session.json";
+/** Append-only JSONL journal recording whole-state checkpoints; crash-safe source of truth. */
+export const SESSION_LOG_SUFFIX = ".session.log";
+/** Journal record `kind` for whole-state checkpoints (slice 1). Future slices add semantic kinds. */
+export const SESSION_JOURNAL_KIND = "checkpoint";
 
 // ============================================================================
 // Session Data Schema
@@ -50,6 +56,30 @@ export const toolApprovalRecordSchema = z.object({
 
 export type ToolApprovalStatus = z.infer<typeof toolApprovalStatusSchema>;
 export type ToolApprovalRecord = z.infer<typeof toolApprovalRecordSchema>;
+
+// ============================================================================
+// Journal Record Schema
+// ============================================================================
+
+/**
+ * One line of the append-only session journal (`{id}.session.log`).
+ * `kind: "checkpoint"` carries a full SessionData payload (slice 1); the field is
+ * reserved so future slices can add semantic per-mutation events to the same log.
+ */
+export const sessionJournalRecordSchema = z.object({
+  /** Journal format version. */
+  v: z.number().int().positive(),
+  /** Monotonically increasing per-session sequence. */
+  seq: z.number().int().positive(),
+  /** Record kind; readers ignore unknown kinds. */
+  kind: z.string(),
+  /** Epoch ms when the record was appended. */
+  ts: z.number(),
+  /** Record payload; for checkpoints, the full SessionData. */
+  data: z.unknown(),
+});
+
+export type SessionJournalRecord = z.infer<typeof sessionJournalRecordSchema>;
 
 export interface SessionData {
   /** Unique session identifier */
@@ -90,6 +120,12 @@ export interface SessionData {
    * Older sessions omit this; runtime treats missing as `[]`.
    */
   approvals?: ToolApprovalRecord[];
+  /**
+   * Seq of the newest journal record this state reflects. Internal persistence
+   * metadata: anchors the next append (seq+1) and lets load() replay journal
+   * records newer than the snapshot. Not surfaced to hosts; older sessions omit it.
+   */
+  journalSeq?: number;
   /**
    * @deprecated Legacy field renamed to `autoMode`. Kept for backward compatibility
    * with sessions persisted before the rename. New sessions use `autoMode`.
