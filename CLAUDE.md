@@ -60,8 +60,8 @@ Hosts (CLI / Extension / Playground)
 ```bash
 SANDBOX_ENV=local              # local (OS sandbox) | native (no sandbox)
 REMOTE_ENV=http://localhost:3100      # remote CoreEnv (`--remote-env`)
-REMOTE_PROVIDER=http://localhost:3100 # remote LLM provider (`--remote-provider`); orthogonal to REMOTE_ENV
-REMOTE_SESSION=http://localhost:3100  # remote Agent Session (`--remote-session`); orthogonal to REMOTE_ENV
+REMOTE_PROVIDER=http://localhost:3100 # remote LLM provider (`--remote-provider`); combines freely with REMOTE_ENV
+REMOTE_SESSION=http://localhost:3100  # remote Agent Session (`--remote-session`); exclusive on the CLI — cannot combine with REMOTE_ENV/REMOTE_PROVIDER (server may register its own)
 ```
 
 Workspace runtime data (sessions, memory, cache, plans, transcripts, skills, extensions, MCP) lives under gitignored `.agents/`. See [AGENTS.md](AGENTS.md) for the path layout.

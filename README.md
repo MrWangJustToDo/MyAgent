@@ -83,7 +83,7 @@ A **runtime-agnostic** AI coding agent — same core logic, runs in terminal, Ch
 
 ### Three Planes — Workspace · LLM · Agent Session
 
-Hosts talk to the agent through three **independent, orthogonal planes**. Each can run locally or be proxied through `@my-agent/server` (`pnpm start:server`, default `:3100`) — combine any mix via `--remote-env` / `--remote-provider` / `--remote-session` (or the `REMOTE_*` env vars).
+Hosts talk to the agent through three **independent, orthogonal planes**. Each can run locally or be proxied through `@my-agent/server` (`pnpm start:server`, default `:3100`). On the CLI client, `--remote-env` and `--remote-provider` combine freely, but `--remote-session` is **exclusive** — see [Combinations](#combinations) for the boundary rules.
 
 | Plane | Local | Remote (HTTP) |
 |-------|-------|---------------|
@@ -116,20 +116,23 @@ The agent loop and its full session state (messages, queued messages, todos, app
 - **Local (default):** `createLocalAgentSessionHost()` — an in-process `AgentManager` + `ManagedAgent` running against the registered CoreEnv and provider.
 - **Remote (`--remote-session` / `REMOTE_SESSION`):** `createRemoteAgentSessionHost(url)` — commands go over REST (`POST /api/agent/:id/command`) and the loop streams back via SSE (`/api/agent/:id/events`) with a snapshot cache and auto-reconnect (plus tool-buffer and summary-stream remounting). The loop then runs server-side against the server's own registered workspace/keys.
 
-Remote-session is orthogonal to the other two planes — you can remote just the session while keeping a local workspace and local keys, or remote all three.
+`--remote-session` is **exclusive on the client**: the agent loop runs server-side, so a single CLI cannot also proxy a remote workspace (`--remote-env`) or remote keys (`--remote-provider`). To use local LLM settings on the remote server, pass them with `--model <id>`; the **server** itself may register its own `REMOTE_ENV` / `REMOTE_PROVIDER` to run against an even further workspace/provider.
 
 ### Combinations
 
-The three planes combine freely; every row below is a working configuration:
+Client planes combine per the boundary rules below; every row is a working configuration. `--remote-session` cannot be combined with `--remote-env` / `--remote-provider` on the same CLI:
 
 | CoreEnv | Provider | Agent Session | Host | Notes |
 |---------|----------|---------------|------|-------|
 | local (`createNodeEnv`) | direct | local | CLI | Fully working (default) |
 | remote (`--remote-env`) | remote | local | CLI | Workspace + keys on server |
 | local | remote (`--remote-provider`) | local | CLI | Local workspace, keys on server |
-| local or remote | direct or remote | remote (`--remote-session`) | CLI | Agent loop on server; SSE auto-reconnect |
+| remote (`--remote-env`) | direct | local | CLI | Workspace on server, local keys |
+| local | direct | remote (`--remote-session`) | CLI | Agent loop on server; push local LLM settings with `--model`; SSE auto-reconnect |
 | remote | remote or direct | local or remote | Chrome | Extension requires a running server |
 | WebContainer | direct or remote | local | Browser | Playground (CORS / fetch proxy for web tools) |
+
+> The boundary is on the **CLI client**. A server (`pnpm start:server`) may itself register `REMOTE_ENV` / `REMOTE_PROVIDER` to front an even further workspace/provider — this is how a `--remote-session` server chains remote planes without violating client exclusivity.
 
 ### Package Overview
 
@@ -271,7 +274,9 @@ SANDBOX_ENV=native
 # BRAVE_API_KEY=...
 # WEBSEARCH_PROVIDER=brave   # or duckduckgo / auto
 
-# Remote planes (orthogonal; default server port is 3100)
+# Remote planes (CLI: --remote-env and --remote-provider combine freely;
+# --remote-session is exclusive — cannot be combined with the other two.
+# A server may register its own REMOTE_ENV / REMOTE_PROVIDER.)
 # REMOTE_ENV=http://localhost:3100
 # REMOTE_PROVIDER=http://localhost:3100
 # REMOTE_SESSION=http://localhost:3100
@@ -296,8 +301,15 @@ pnpm start:cli -- --remote-env http://localhost:3100
 # Remote LLM keys only (local workspace)
 pnpm start:cli -- --remote-provider http://localhost:3100
 
-# Remote Agent Session (agent loop runs server-side; SSE auto-reconnect)
+# Remote Agent Session (agent loop runs server-side; SSE auto-reconnect).
+# Exclusive on the client: do NOT combine with --remote-env / --remote-provider.
+# Push local LLM settings to the server with --model <id> instead.
 pnpm start:cli -- --remote-session http://localhost:3100
+
+# Server-side remote planes: a server may itself register a remote CoreEnv
+# (REMOTE_ENV) to front an even further workspace (server-side REMOTE_PROVIDER
+# forwarding is planned).
+REMOTE_ENV=http://localhost:3200 pnpm start:server
 
 # Continue last session / pick a session
 pnpm start:cli -- --continue

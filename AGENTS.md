@@ -125,11 +125,13 @@ registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey 
 registerModelProvider(await createRemoteProvider("http://localhost:3100"));
 ```
 
-| Flag / Env | Plane |
-|------------|--------|
-| `--remote-env` / `REMOTE_ENV` | CoreEnv workspace |
-| `--remote-provider` / `REMOTE_PROVIDER` | Remote model provider |
-| `--remote-session` / `REMOTE_SESSION` | Remote Agent Session |
+| Flag / Env | Plane | Client boundary |
+|------------|--------|-----------------|
+| `--remote-env` / `REMOTE_ENV` | CoreEnv workspace | combines freely with `--remote-provider` |
+| `--remote-provider` / `REMOTE_PROVIDER` | Remote model provider | combines freely with `--remote-env` |
+| `--remote-session` / `REMOTE_SESSION` | Remote Agent Session | **exclusive** — cannot combine with the other two on one client; use `--model <id>` to push local LLM settings to the server |
+
+The exclusivity is a **client** rule: a server (`pnpm start:server`) may itself register `REMOTE_ENV` (remote workspace; `REMOTE_PROVIDER` forwarding planned) so a `--remote-session` server chains further remote planes.
 
 `createAgentFromConfig` uses `resolveModelConfigFromProvider()`. Remote mode forces `baseURL`/`apiKey` from the provider (re-forced after models.dev so upstream URLs cannot bypass). `/api/env/vars` strips `API_KEY` / `*_API_KEY`. Footer shows `model · remote` when `providerMode === "remote"`.
 
@@ -156,11 +158,15 @@ Shared initialization logic is in `createAgentFromConfig()` (`@my-agent/app/adap
 loadEnv → parseCliArgs → registerCoreEnv(createNodeEnv) → registerModelProvider(direct) → initConfig → render(App)
 ```
 
-**CLI (remote planes, independently):**
+**CLI (remote planes):**
 ```
 loadEnv → parseCliArgs
+  → [guard] --remote-session + (--remote-env | --remote-provider) → error + exit(1) (exclusive)
   → [--remote-env] createRemoteEnv → registerCoreEnv
+  → [--remote-session] createRemoteEnv(server URL) → registerCoreEnv  (workspace panel = server fs)
+  → else createNodeEnv → registerCoreEnv
   → [--remote-provider] createRemoteProvider → registerModelProvider
+  → [--remote-session w/o explicit model] defer model resolution to server
   → else createDirectModelProvider → registerModelProvider
   → initConfig → render(App)
 ```
