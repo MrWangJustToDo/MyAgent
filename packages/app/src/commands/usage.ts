@@ -77,6 +77,12 @@ registerCommand({
 
     lines.push(`  Total:        ${fmt(totalUsage.totalTokens)} tokens`);
 
+    // Average LLM generation rate across measured calls (output tokens / LLM time).
+    if (usage.llmDurationMs > 0) {
+      const rate = usage.llmOutputTokens / (usage.llmDurationMs / 1000);
+      lines.push(`  Speed:        ${rate.toFixed(1)} tok/s (output)`);
+    }
+
     const contextInput = currentUsage.inputTokens;
     if (contextInput > 0) {
       const contextCacheRead = currentUsage.cacheReadTokens ?? 0;
