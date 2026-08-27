@@ -29,7 +29,7 @@ A **runtime-agnostic** AI coding agent — same core logic, runs in terminal, Ch
 | **Workspace Browser** | Full-screen file tree (`Ctrl+E`) with git status, Seti/Nerd Font icons, scrollable file preview, and HEAD diff view |
 | **Chrome Extension** | Full agent UI running in the browser via remote CoreEnv (WXT + HeroUI) |
 | **Local / Remote** | Independent planes: workspace (`--remote-env`), LLM provider (`--remote-provider`), Agent Session (`--remote-session`) — all three support HTTP remoting with SSE auto-reconnect |
-| **Tool Approval** | Review + approve/deny tool calls; scrollable diffs with Tab when multiple edits are pending |
+| **Tool Approval** | Review + approve/deny tool calls (`y` / `n`) with inline diff previews |
 | **Ask User** | Agent asks questions with selectable options or freeform answers |
 | **Subagents** | Context-isolated read-only tasks (50-step cap) with live `Ctrl+T` preview; eager pre-fork runs parallel tasks concurrently (rolling window), per-task phase machine (`running` → `summary`), streaming progress summaries, and LLM retry status surfaced in the task UI |
 | **Skills** | On-demand domain knowledge injection (list → load workflow) |
@@ -180,7 +180,7 @@ Interactive questions with arrow-key selection, multi-select toggles, and option
 
 ### Code Edits with Diff View
 
-Side-by-side diff for `edit_file` / `write_file` tool previews. Long diffs use a scrollable viewport (`max(2/3 terminal height, 28 rows)`). When several diffs are pending, **Tab** switches focus and **↑↓** scrolls the selected diff; **y** / **n** apply to the focused one.
+Side-by-side diff for `edit_file` / `write_file` tool previews, rendered inline at full content height in the message stream. Approve / deny a pending edit with **y** / **n**. For interactive diff scrolling, open the workspace browser (`Ctrl+E`) and use the **Diff vs HEAD** view (**↑↓** scrolls when the right pane is focused).
 
 ![Edit diff view](edit-diff.png)
 
@@ -382,10 +382,10 @@ The CLI has **4 input modes** — shortcuts adapt to the current mode:
 |-----|--------|----------|-------------------|----------|
 | `Enter` | Submit | Submit command | Confirm selection | Submit |
 | `Esc` | Dismiss autocomplete / Abort | Cancel deny reason | Close list | Go back |
-| `y` / `n` | — | Approve / Deny focused diff | — | — |
-| `↑` `↓` | History / Autocomplete | Scroll focused diff / Autocomplete | Navigate options | — |
+| `y` / `n` | — | Approve / Deny pending tool call | — | — |
+| `↑` `↓` | History / Autocomplete | Autocomplete / Command-output scroll | Navigate options | — |
 | `Space` | — | — | Toggle (multi-select) | — |
-| `Tab` | Accept autocomplete | Switch focused diff (multi) / Accept autocomplete | — | — |
+| `Tab` | Accept autocomplete | Accept autocomplete | — | — |
 | `Ctrl+V` | Paste image | — | — | — |
 | `Ctrl+C` | Exit | Exit | Exit | Exit |
 
