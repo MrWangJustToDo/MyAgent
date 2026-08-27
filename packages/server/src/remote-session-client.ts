@@ -31,6 +31,14 @@ export interface RemoteSessionClientOptions {
 }
 
 function emptySnapshot(agentId: string): AgentSessionSnapshot {
+  const emptyTokens = {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    reasoningTokens: 0,
+  };
   return {
     agentId,
     name: "",
@@ -41,7 +49,8 @@ function emptySnapshot(agentId: string): AgentSessionSnapshot {
     lastStreamDurationMs: 0,
     messages: [],
     queues: { steer: [], followUp: [] },
-    usage: { total: { inputTokens: 0, outputTokens: 0, totalTokens: 0, cost: 0 } },
+    // UsageChangeSnapshot shape — the shell must stay valid before first resync.
+    usage: { total: { ...emptyTokens }, window: { ...emptyTokens }, percent: 0, tokenLimit: 0, cost: 0 },
     todos: [],
     todosTitle: null,
     plan: { phase: "off" },
@@ -122,6 +131,65 @@ function reviveMessageTimestamps(messages: AgentSessionSnapshot["messages"]): vo
   }
 }
 
+/** Wire form of a `messages` payload (server encoding: messages-delta.ts). */
+type MessagesEnvelope =
+  | { kind: "full"; messages: AgentSessionSnapshot["messages"] }
+  | {
+      kind: "patch";
+      upserted: Array<{ index: number; message: AgentSessionSnapshot["messages"][number] }>;
+      removed: string[];
+    };
+
+/**
+ * Merge a `messages` wire payload into the cached array.
+ *
+ * - `{kind:"full"}` — baseline (re)build; revives timestamps.
+ * - `{kind:"patch"}` — remove `removed` ids, then splice `upserted` at their
+ *   indices (ascending; replace-in-place when the id already occupies a slot).
+ * - plain array — legacy form from pre-envelope servers.
+ *
+ * Unknown kinds report `unknownKind` so the caller can resync. Exported under
+ * the ForTests alias for validation scripts (same convention as
+ * parseAgentSessionSseBlockForTests).
+ */
+export function applyMessagesPayloadForTests(
+  current: AgentSessionSnapshot["messages"],
+  payload: unknown
+): { messages: AgentSessionSnapshot["messages"]; unknownKind: boolean } {
+  if (Array.isArray(payload)) {
+    reviveMessageTimestamps(payload);
+    return { messages: payload, unknownKind: false };
+  }
+  if (!payload || typeof payload !== "object") {
+    return { messages: current, unknownKind: true };
+  }
+  const kind = (payload as { kind?: unknown }).kind;
+  if (kind === "full") {
+    const messages = (payload as Extract<MessagesEnvelope, { kind: "full" }>).messages;
+    reviveMessageTimestamps(messages);
+    return { messages, unknownKind: false };
+  }
+  if (kind === "patch") {
+    let messages = current;
+    const { upserted = [], removed = [] } = payload as Partial<Extract<MessagesEnvelope, { kind: "patch" }>>;
+    if (removed.length > 0) {
+      const gone = new Set(removed);
+      messages = messages.filter((message) => !gone.has(message.id));
+    }
+    const ordered = [...upserted].sort((a, b) => a.index - b.index);
+    for (const { index, message } of ordered) {
+      reviveMessageTimestamps([message]);
+      const next = [...messages];
+      const existing = next.findIndex((candidate) => candidate.id === message.id);
+      if (existing >= 0) next[existing] = message;
+      else next.splice(Math.min(Math.max(index, 0), next.length), 0, message);
+      messages = next;
+    }
+    return { messages, unknownKind: false };
+  }
+  return { messages: current, unknownKind: true };
+}
+
 function applyToolEvent(buffers: ToolBufferMap, payload: unknown): void {
   const event = payload as
     | { kind: "chunk"; chunk: { toolCallId: string; type: "stdout" | "stderr"; chunk: string } }
@@ -170,10 +238,6 @@ function applyEvent(
         };
       }
       return snapshot;
-    }
-    case "messages": {
-      reviveMessageTimestamps(event.payload);
-      return { ...snapshot, messages: event.payload };
     }
     case "queues":
       return { ...snapshot, queues: event.payload };
@@ -362,6 +426,22 @@ export class RemoteSessionClient implements AgentSession {
               for (const part of parts) {
                 const event = parseSseBlock(part);
                 if (!event) continue; // heartbeat comments / keep-alives land here
+                if (event.channel === "messages") {
+                  // Wire encoding is a full/patch envelope (messages-delta.ts);
+                  // merge into the cached array and hand subscribers the full
+                  // merged list — same contract as LocalAgentSession.
+                  const result = applyMessagesPayloadForTests(this.snapshot.messages, event.payload);
+                  if (result.unknownKind) {
+                    // Unrecognized envelope — rebuild from snapshot + seeds.
+                    void this.resync().catch(() => {});
+                    continue;
+                  }
+                  if (result.messages !== this.snapshot.messages) {
+                    this.snapshot = { ...this.snapshot, messages: result.messages };
+                  }
+                  handler({ ...event, payload: this.snapshot.messages });
+                  continue;
+                }
                 this.snapshot = applyEvent(this.snapshot, event, this.summaryCache, this.toolBufferCache);
                 handler(event);
               }

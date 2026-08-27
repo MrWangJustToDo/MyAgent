@@ -9,7 +9,6 @@
  * Run: pnpm --filter @my-agent/server run validate:agent-session-http
  */
 /* eslint-disable no-undef */
-/* eslint-disable import/no-useless-path-segments */
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -57,6 +56,51 @@ assert.deepEqual((await summaryRes.json()).snapshots ?? [], []);
 const bufferRes = await fetch(`${baseUrl}/api/agent/${snap.agentId}/tool-buffers`);
 assert.equal(bufferRes.status, 200);
 assert.deepEqual((await bufferRes.json()).buffers, {});
+
+// ── 2b. REST snapshots are gzip-compressed (bodies stay transparent JSON) ──
+const gzipRes = await fetch(`${baseUrl}/api/agent/${snap.agentId}/snapshot`, {
+  headers: { "accept-encoding": "gzip" },
+});
+assert.equal(gzipRes.status, 200);
+assert.equal(gzipRes.headers.get("content-encoding"), "gzip", "snapshot route must compress");
+assert.equal((await gzipRes.json()).name, "parity-agent");
+
+// ── 2c. Raw SSE frame contract: {channel, payload, ts} wrapper survives ──
+{
+  const controller = new AbortController();
+  const sse = await fetch(`${baseUrl}/api/agent/${snap.agentId}/events?channels=state`, {
+    signal: controller.signal,
+  });
+  assert.equal(sse.status, 200);
+  await session.dispatch({ type: "rename", name: "raw-frame-check" });
+  const reader = sse.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let frame = null;
+  for (let i = 0; i < 50 && !frame; i++) {
+    const chunk = await Promise.race([
+      reader.read(),
+      new Promise((resolve) => setTimeout(() => resolve({ done: true, value: undefined }), 3000)),
+    ]);
+    if (chunk.done) break;
+    buffer += decoder.decode(chunk.value, { stream: true });
+    let idx;
+    while ((idx = buffer.indexOf("\n\n")) >= 0) {
+      const block = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      const parsed = parseAgentSessionSseBlockForTests(block);
+      // Skip the initial-state frame; wait for the post-rename one.
+      if (parsed && parsed.channel === "state" && parsed.payload?.name === "raw-frame-check") {
+        frame = parsed;
+        break;
+      }
+    }
+  }
+  controller.abort();
+  assert.ok(frame, "state event must arrive as an SSE frame");
+  assert.equal(frame.payload.name, "raw-frame-check");
+  assert.equal(typeof frame.ts, "number");
+}
 
 // ── 3. State-channel sync: rename propagates without a snapshot refetch ──
 const stateUnsub = session.subscribe(() => {}, { channels: ["state"] });

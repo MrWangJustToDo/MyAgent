@@ -1,7 +1,13 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/client.ts", "src/remote-session-client.ts", "src/remote-session-host.ts"],
+  entry: [
+    "src/index.ts",
+    "src/client.ts",
+    "src/messages-delta.ts",
+    "src/remote-session-client.ts",
+    "src/remote-session-host.ts",
+  ],
   format: ["esm"],
   dts: true,
   sourcemap: true,

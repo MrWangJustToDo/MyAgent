@@ -67,7 +67,13 @@ module.exports = [
   },
   // Node.js test files and validation scripts use console/setTimeout from node environment
   {
-    files: ["packages/app/test/**", "packages/app/scripts/**", "packages/core/scripts/**", "packages/node/scripts/**"],
+    files: [
+      "packages/app/test/**",
+      "packages/app/scripts/**",
+      "packages/core/scripts/**",
+      "packages/node/scripts/**",
+      "packages/server/scripts/**",
+    ],
     languageOptions: {
       globals: {
         console: "readonly",

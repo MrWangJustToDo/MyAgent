@@ -11,8 +11,11 @@
  */
 
 import { Hono } from "hono";
+import { compress } from "hono/compress";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
+
+import { createMessagesDeltaWriter } from "../messages-delta.js";
 
 import { readServerModelEnv } from "./provider.js";
 
@@ -35,20 +38,44 @@ interface SessionLike {
 
 const sessions = new Map<string, SessionLike>();
 
+/** Verbose per-request diagnostics — enable with AGENT_SESSION_DEBUG=1. */
+const AGENT_SESSION_DEBUG = process.env.AGENT_SESSION_DEBUG === "1";
+
+function diag(message: string): void {
+  if (AGENT_SESSION_DEBUG) console.log(`[agent-diag] ${message}`);
+}
+
 /** Per-agent tool output buffers for client remount (cap per stream). */
 const TOOL_BUFFER_CAP_BYTES = 256 * 1024;
-type ToolBuffer = { stdout: string; stderr: string };
-const toolBuffers = new Map<string, Map<string, ToolBuffer>>();
+interface ToolBufferEntry {
+  stdout: string[];
+  stderr: string[];
+  stdoutBytes: number;
+  stderrBytes: number;
+}
+const toolBuffers = new Map<string, Map<string, ToolBufferEntry>>();
 const toolUnsubs = new Map<string, () => void>();
 
-function appendCapped(current: string, chunk: string): string {
-  const next = current + chunk;
-  return next.length > TOOL_BUFFER_CAP_BYTES ? next.slice(next.length - TOOL_BUFFER_CAP_BYTES) : next;
+/**
+ * Append a chunk under the byte cap by dropping oldest chunks. Storage is a
+ * chunk array with lazy join — per-chunk cost stays independent of the
+ * accumulated size (a plain `current + chunk` would re-copy the whole string).
+ */
+function appendCapped(chunks: string[], bytes: number, chunk: string): { chunks: string[]; bytes: number } {
+  chunks.push(chunk);
+  let total = bytes + chunk.length;
+  while (total > TOOL_BUFFER_CAP_BYTES && chunks.length > 1) {
+    const oldest = chunks[0];
+    if (oldest === undefined) break;
+    total -= oldest.length;
+    chunks.shift();
+  }
+  return { chunks, bytes: total };
 }
 
 function attachToolBuffer(id: string, session: SessionLike): void {
   if (toolUnsubs.has(id)) return;
-  const buffers = new Map<string, ToolBuffer>();
+  const buffers = new Map<string, ToolBufferEntry>();
   toolBuffers.set(id, buffers);
   toolUnsubs.set(
     id,
@@ -63,9 +90,21 @@ function attachToolBuffer(id: string, session: SessionLike): void {
         buffers.delete(payload.toolCallId);
         return;
       }
-      const entry = buffers.get(payload.chunk.toolCallId) ?? { stdout: "", stderr: "" };
-      if (payload.chunk.type === "stdout") entry.stdout = appendCapped(entry.stdout, payload.chunk.chunk);
-      else entry.stderr = appendCapped(entry.stderr, payload.chunk.chunk);
+      const entry = buffers.get(payload.chunk.toolCallId) ?? {
+        stdout: [],
+        stderr: [],
+        stdoutBytes: 0,
+        stderrBytes: 0,
+      };
+      if (payload.chunk.type === "stdout") {
+        const next = appendCapped(entry.stdout, entry.stdoutBytes, payload.chunk.chunk);
+        entry.stdout = next.chunks;
+        entry.stdoutBytes = next.bytes;
+      } else {
+        const next = appendCapped(entry.stderr, entry.stderrBytes, payload.chunk.chunk);
+        entry.stderr = next.chunks;
+        entry.stderrBytes = next.bytes;
+      }
       buffers.set(payload.chunk.toolCallId, entry);
     })
   );
@@ -165,38 +204,38 @@ export const agentSessionRoutes = new Hono()
     });
     sessions.set(session.id, session as unknown as SessionLike);
     attachToolBuffer(session.id, session as unknown as SessionLike);
-    console.log(
-      `[agent-diag] POST /api/agent body=${JSON.stringify(body)} -> id=${session.id} sessions.size=${sessions.size} ` +
+    diag(
+      `POST /api/agent body=${JSON.stringify(body)} -> id=${session.id} sessions.size=${sessions.size} ` +
         `inManager=${agentManager.getAgent(session.id)?.id ?? "NONE"}`
     );
     return c.json({ id: session.id, snapshot: (session as SessionLike).getSnapshot() });
   })
-  .get("/:id/snapshot", async (c) => {
+  .get("/:id/snapshot", compress(), async (c) => {
     const id = c.req.param("id");
     const session = await getSession(id);
-    console.log(
-      `[agent-diag] GET /:id/snapshot id=${id} inSessions=${sessions.has(id)} inManager=${session ? "yes" : "no"}`
-    );
+    diag(`GET /:id/snapshot id=${id} inSessions=${sessions.has(id)} inManager=${session ? "yes" : "no"}`);
     if (!session) return c.json({ error: true, message: "Session not found" }, 404);
     return c.json(session.getSnapshot());
   })
-  .get("/:id/summary-streams", async (c) => {
+  .get("/:id/summary-streams", compress(), async (c) => {
     const session = await getSession(c.req.param("id"));
     if (!session) return c.json({ error: true, message: "Session not found" }, 404);
     return c.json({ snapshots: session.listSummaryStreamSnapshots?.() ?? [] });
   })
-  .get("/:id/tool-buffers", async (c) => {
+  .get("/:id/tool-buffers", compress(), async (c) => {
     const id = c.req.param("id");
     const session = await getSession(id);
     if (!session) return c.json({ error: true, message: "Session not found" }, 404);
-    return c.json({ buffers: Object.fromEntries(toolBuffers.get(id) ?? []) });
+    const buffers: Record<string, { stdout: string; stderr: string }> = {};
+    for (const [toolCallId, entry] of toolBuffers.get(id) ?? []) {
+      buffers[toolCallId] = { stdout: entry.stdout.join(""), stderr: entry.stderr.join("") };
+    }
+    return c.json({ buffers });
   })
   .post("/:id/command", async (c) => {
     const id = c.req.param("id");
     const session = await getSession(id);
-    console.log(
-      `[agent-diag] POST /:id/command id=${id} inSessions=${sessions.has(id)} inManager=${session ? "yes" : "no"}`
-    );
+    diag(`POST /:id/command id=${id} inSessions=${sessions.has(id)} inManager=${session ? "yes" : "no"}`);
     if (!session) return c.json({ error: true, message: "Session not found" }, 404);
     const command = await c.req.json();
     const result = await session.dispatch(command);
@@ -216,19 +255,35 @@ export const agentSessionRoutes = new Hono()
 
     return streamSSE(c, async (stream) => {
       let closed = false;
+      const writeFrame = async (channel: string, payload: unknown): Promise<void> => {
+        if (closed) return;
+        await stream.writeSSE({
+          event: channel,
+          data: JSON.stringify({ channel, payload, ts: Date.now() }),
+        });
+      };
+      // `messages` payloads are delta-encoded by default: full arrays only as
+      // baselines and safety nets, sparse patches in between (messages-delta.ts).
+      // The writer runs in-process, so it diffs by message-object identity —
+      // only changed messages are serialized per event.
+      const delta = createMessagesDeltaWriter((payload) => {
+        void writeFrame("messages", payload).catch(() => {});
+      });
       const unsub = session.subscribe(
         async (event) => {
           if (closed) return;
-          await stream.writeSSE({
-            event: event.channel,
-            data: JSON.stringify(event),
-          });
+          if (event.channel === "messages") {
+            delta.push(event.payload as unknown[]);
+            return;
+          }
+          await writeFrame(event.channel, event.payload);
         },
         channels ? { channels } : undefined
       );
 
       stream.onAbort(() => {
         closed = true;
+        delta.close();
         unsub();
       });
 
