@@ -5,6 +5,7 @@ import { forwardRef, memo } from "react";
 
 import { useDiffFileCache } from "../hooks/use-diff-file-cache.js";
 import { COLORS } from "../theme/colors.js";
+import { MIN_SPLIT_DIFF_WIDTH } from "../utils/diff-layout.js";
 
 const { getDiffFile, setDiffFile } = useDiffFileCache.getActions();
 
@@ -53,7 +54,7 @@ export const EditDiff = memo(
           ref={ref}
           width={finalWidth}
           {...(height != null ? { height } : {})}
-          diffViewMode={finalWidth > 20 && oldFile ? DiffModeEnum.Split : DiffModeEnum.Unified}
+          diffViewMode={finalWidth >= MIN_SPLIT_DIFF_WIDTH && oldFile ? DiffModeEnum.Split : DiffModeEnum.Unified}
           diffFile={diffFile}
           diffViewHideOperator
           diffViewHighlight

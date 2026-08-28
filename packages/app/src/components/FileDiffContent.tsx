@@ -4,6 +4,7 @@ import { Box, Text } from "ink";
 import { forwardRef, useEffect, useMemo, useState } from "react";
 
 import { COLORS } from "../theme/colors.js";
+import { MIN_SPLIT_DIFF_WIDTH } from "../utils/diff-layout.js";
 import { isLikelyBinaryPath } from "../utils/file-icons.js";
 import { fetchWorkspaceFileDiff } from "../utils/workspace-git-diff.js";
 
@@ -104,7 +105,7 @@ export const FileDiffContent = forwardRef<DiffViewRef, FileDiffContentProps>(fun
 
   if (!diffFile) return null;
 
-  const diffMode = width > 40 && diffPayload?.oldContent ? DiffModeEnum.Split : DiffModeEnum.Unified;
+  const diffMode = width >= MIN_SPLIT_DIFF_WIDTH && diffPayload?.oldContent ? DiffModeEnum.Split : DiffModeEnum.Unified;
 
   return (
     <Box flexDirection="column" flexShrink={0}>
