@@ -40,12 +40,28 @@ A **runtime-agnostic** AI coding agent — same core logic, runs in terminal, Ch
 | **Plan Mode** | Explore → review → Build → forced retro (`/plan`, persisted under `.agents/plans/`) |
 | **Background commands** | `run_command(run_in_background)` plus `get_command_output` / `kill_command` |
 | **Telemetry** | Lifecycle telemetry bus (bridged to agent log); hosts subscribe via AgentSession `lifecycle` |
-| **Extensions** | Project/user modules under `.agents/extension` (hooks, custom tools, slash commands; `Ctrl+Y` panel) |
+| **Extensions** | Capability model like [Pi](https://pi.dev) — declarative extension modules (tools / commands / hooks); built-ins (LSP, Memory, Skills) + third-party modules under `.agents/extension` (`Ctrl+Y` panel). See [Extensions](#extensions) |
 | **Sandbox** | Isolated command execution with OS-level sandboxing (`@anthropic-ai/sandbox-runtime`) |
 | **MCP Integration** | Connect to external MCP servers for additional tools |
 | **LSP / Tree-sitter** | Built-in LSP extension: diagnostics, hover, definition, references, symbols, completions, rename, code actions + structural tree-sitter search/rewrite (`.lsp.json` config) |
 | **Web** | Multi-provider search (Brave when host passes `toolConfig.websearch.braveApiKey`, else DuckDuckGo) + page fetch |
 | **Devtools** | Built-in [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools) for debugging |
+
+---
+
+## Extensions
+
+MyAgent's extension model works like [Pi](https://pi.dev) (the `pi-lsp` / `pi-*` extension ecosystem): capabilities are delivered as **declarative extension modules** rather than hard-coded feature flags. Each extension registers tools, slash commands, and lifecycle hooks through one `ExtensionAPI` surface, so the same model powers both the built-ins below and third-party modules under `.agents/extension` (browse with `Ctrl+Y`).
+
+### Built-in extensions
+
+| Extension | ID | What it provides | Data / config |
+|-----------|----|------------------|---------------|
+| **LSP Integration** | `my-agent-lsp` | 8 LSP tools (`lsp_diagnostics`, `lsp_hover`, `lsp_definition`, `lsp_references`, `lsp_symbols`, `lsp_rename`, `lsp_completions`, `lsp_code_actions`) + 3 tree-sitter tools (`code_overview`, `ast_search`, `code_rewrite`) + commands `/lsp`, `/lsp-restart`, `/lsp-config`, `/lsp-lombok`; auto file-sync and diagnostics injection | `.lsp.json` |
+| **Memory** | `my-agent-memory` | `memory_list`, `memory_read`, `memory_write`; MEMORY.md index injected into turn context | `.agents/memory/` |
+| **Skills** | `my-agent-skills` | `list_skills`, `load_skill`; available-skills index injected into turn context | `.agents/skills/` |
+
+Beyond the built-ins, connect external **MCP** servers for more tools, or drop your own extension modules into `.agents/extension` (hooks, custom tools, slash commands).
 
 ---
 
