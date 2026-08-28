@@ -1,5 +1,3 @@
-import { isSafeCommand } from "./safe-command.js";
-
 import type { PlanModeController } from "./plan-mode-controller.js";
 import type { ToolsRecord } from "../tools/runtime/tools-record.js";
 
@@ -48,19 +46,10 @@ export function getPlanModeToolBlockReason(
   }
 
   if (toolName === "run_command") {
-    const command =
-      args &&
-      typeof args === "object" &&
-      "command" in args &&
-      typeof (args as { command: unknown }).command === "string"
-        ? (args as { command: string }).command
-        : "";
-    if (!isSafeCommand(command)) {
-      return (
-        "Plan mode: run_command only allows read-only shell commands (e.g. ls, cat, git status/log/diff). " +
-        "Mutating or unsafe commands are blocked until /plan execute."
-      );
-    }
+    // run_command itself is NOT blocked here — it goes through the unified
+    // needsApproval + command-safety approval rules (read-only auto-approve,
+    // write/external paths ask the user y/n). Only background jobs are still
+    // blocked while planning (no UI to control an unattended background job).
     if (
       args &&
       typeof args === "object" &&

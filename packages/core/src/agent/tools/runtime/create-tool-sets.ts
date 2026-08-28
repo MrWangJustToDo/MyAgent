@@ -15,7 +15,6 @@ export const CLIENT_TOOL_NAMES = new Set(["ask_user"]);
 
 /** Tools excluded from exploration subagents (read-only subset). */
 export const SUBAGENT_EXCLUDED_TOOL_NAMES = new Set([
-  "run_command",
   "write_file",
   "edit_file",
   "delete_file",

@@ -255,7 +255,6 @@ export {
   cleanStepText,
   extractDoneSteps,
   extractPlan,
-  isSafeCommand,
   getPlanModeToolExcludeSet,
   getPlanModeToolBlockReason,
   isMcpToolName,

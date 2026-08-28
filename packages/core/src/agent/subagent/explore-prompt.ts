@@ -10,11 +10,12 @@ export function buildExploreSystemPrompt(maxIterations: number = SUBAGENT_DEFAUL
 
 **Available Tools**:
 1. **File Exploration** — read_file, glob, grep, list_file, tree to navigate and examine the codebase.
-2. **Web Research** — websearch to find current information, webfetch to retrieve documentation from URLs.
-3. **Reporting** — begin_summary to signal completion and provide your final output.
+2. **Command Execution** — run_command for read-only commands inside the project (e.g. ls, cat, git status/log/diff).
+3. **Web Research** — websearch to find current information, webfetch to retrieve documentation from URLs.
+4. **Reporting** — begin_summary to signal completion and provide your final output.
 
 **Delegation boundary**:
-- You have read-only access — no modifications, no command execution, no subagents.
+- You are read-only: no file modifications. You may run read-only shell commands within the project; write, background, or external-path commands are denied — you do not have the permission.
 - If the task requires changes, report what needs to change back to the parent agent instead of acting.
 - Do not expand the task scope beyond what was asked.
 - Use up to ${maxIterations} steps as a safety cap, but finish as soon as the task is complete.

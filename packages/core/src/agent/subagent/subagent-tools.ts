@@ -6,6 +6,7 @@ import { createGlobTool } from "../tools/glob-tool.js";
 import { createGrepTool } from "../tools/grep-tool.js";
 import { createListFileTool } from "../tools/list-file-tool.js";
 import { createReadFileTool } from "../tools/read-file-tool.js";
+import { createRunCommandTool } from "../tools/run-command-tool.js";
 import { type ToolsRecord } from "../tools/runtime/tools-record.js";
 import { createTreeTool } from "../tools/tree-tool.js";
 import { createWebfetchTool } from "../tools/webfetch-tool.js";
@@ -28,6 +29,7 @@ export const createSubagentTools = (managed?: ManagedAgent): ToolsRecord => {
     tree: createTreeTool(),
     webfetch: createWebfetchTool({ managed }),
     websearch: createWebsearchTool({ managed }),
+    run_command: createRunCommandTool({ subagentSafe: true }),
     begin_summary: createBeginSummaryTool(),
   };
 };

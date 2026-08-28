@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { getEnv } from "../../env.js";
 
+import { analyzeCommand, createAnalysisContext } from "./command-safety/command-analyzer.js";
+import { evaluateCommandApproval } from "./command-safety/command-approval-policy.js";
 import { defineServerTool } from "./runtime/define-tool.js";
 import { commandJobRegistry } from "./util/command-job-registry.js";
 import { OutputAccumulator } from "./util/output-accumulator.js";
@@ -11,13 +13,17 @@ import { runCommandOutputSchema } from "./util/types.js";
 
 import type { RunCommandOutput } from "./util/types.js";
 
-export const createRunCommandTool = () => {
+export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
+  const subagentSafe = options?.subagentSafe ?? false;
   return defineServerTool({
     name: "run_command",
     description:
       "Executes a shell command in the workspace environment. Returns stdout, stderr, exit code, and execution duration. " +
       "Set run_in_background=true for long-lived processes (dev servers, watchers); then poll with get_command_output and stop with kill_command. " +
-      "Large outputs are saved to disk — use read_file with the cachedOutputPath to read specific sections.",
+      "Large outputs are saved to disk — use read_file with the cachedOutputPath to read specific sections. " +
+      (subagentSafe
+        ? "Subagent commands are restricted: only read-only, project-internal commands are allowed; write or external-path commands are denied."
+        : "Commands are safety-checked before approval: read-only commands run automatically, while write or external-path commands require user approval."),
     inputSchema: z.object({
       command: z.string().describe("The shell command to execute."),
       cwd: z
@@ -44,8 +50,21 @@ export const createRunCommandTool = () => {
         ),
     }),
     outputSchema: runCommandOutputSchema,
-    needsApproval: true,
+    needsApproval: !subagentSafe,
     execute: async ({ command, cwd, env, timeout, run_in_background }, { toolCallId, agentId }) => {
+      // Hard safety policy for subagents (no approval UI): only read-only,
+      // project-internal commands execute; anything else is denied with a
+      // reason surfaced to the model (insufficient permissions).
+      if (subagentSafe) {
+        const ctx = await createAnalysisContext();
+        const absoluteCwd = cwd ? ctx.path.resolve(ctx.rootPath, cwd) : ctx.cwd;
+        const report = await analyzeCommand(command, { ...ctx, cwd: absoluteCwd });
+        const decision = evaluateCommandApproval(report, { agentKind: "subagent" });
+        if (decision.action !== "allow") {
+          throw new Error(decision.reason ?? "Command denied by safety policy.");
+        }
+      }
+
       if (run_in_background) {
         const coreEnv = getEnv();
         if (!coreEnv.startCommand) {

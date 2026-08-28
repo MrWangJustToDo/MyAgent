@@ -12,7 +12,7 @@ export function buildPlanModePlanningPrompt(): string {
     "",
     "Exploration:",
     "- Prefer the `task` tool for read-only research (prefer focused prompts; avoid burning the full iteration budget).",
-    "- You may also use read tools (`read_file`, `grep`, `glob`, `list_file`, `tree`) and allowlisted `run_command` (e.g. git status/log/diff, ls, cat).",
+    "- You may also use read tools (`read_file`, `grep`, `glob`, `list_file`, `tree`) and `run_command` for read-only commands (e.g. git status/log/diff, ls, cat) — read-only commands run automatically, while write or external-path commands will ask the user for approval.",
     "- After each `task`, read `[task status: …]` (`reachedLimit`, `incomplete`, `aborted`, `truncated`). Only treat findings as trustworthy/extendable when the run completed cleanly; otherwise re-run narrower research before `create_plan`.",
     "- If requirements are ambiguous, call `ask_user` with a short clarifying question (prefer numbered options) before finalizing the plan.",
     "- Skipping answers is fine if the user continues without answering — do not block forever.",

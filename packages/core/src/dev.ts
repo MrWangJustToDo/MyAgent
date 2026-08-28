@@ -7,6 +7,14 @@ export * from "./dev-agent.js";
 export * from "./dev-managers.js";
 export * from "./dev-models.js";
 
+// Command safety (internal validation exports — not part of public API)
+export { analyzeCommand, createAnalysisContext } from "./agent/tools/command-safety/command-analyzer.js";
+export {
+  evaluateCommandApproval,
+  SUBAGENT_DENY_MESSAGE,
+} from "./agent/tools/command-safety/command-approval-policy.js";
+export { commandPrefix, normalizedCommand } from "./agent/tools/command-safety/command-arity.js";
+
 // Root-level modules
 export { Emitter } from "./utils/emitter.js";
 export {

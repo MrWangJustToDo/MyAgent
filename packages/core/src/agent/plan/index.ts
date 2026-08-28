@@ -1,4 +1,3 @@
-export { isSafeCommand } from "./safe-command.js";
 export { cleanStepText, extractDoneSteps, extractPlan, type ExtractedPlan, type PlanStep } from "./extract-plan.js";
 export {
   PlanModeController,
