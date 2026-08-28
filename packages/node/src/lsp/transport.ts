@@ -140,22 +140,35 @@ class NodeLspConnection implements LspConnection {
     // Discard stderr to prevent blocking.
     this.process.stderr?.resume();
 
-    // Patch stdin.write to silently drop writes when the stream is destroyed —
-    // the server may exit while a notification is in flight (EPIPE / ERR_STREAM_DESTROYED).
+    // Patch stdin.write to silently drop writes when the stream is destroyed or
+    // the peer (LSP server) has exited — the server may exit while a
+    // notification is in flight (EPIPE / ERR_STREAM_DESTROYED). vscode-jsonrpc
+    // wraps this call in a Promise (ril WritableStreamWrapper.write), so an
+    // EPIPE surfaces through the write callback as an unhandled rejection
+    // unless filtered here; 'error' events only fire for callback-less writes.
     const stdin = this.process.stdin!;
     const originalWrite = stdin.write;
     stdin.write = function (this: typeof stdin, ...args: any[]): boolean {
+      const hasCallback = typeof args[args.length - 1] === "function";
+      const userCb = hasCallback ? (args.pop() as (...a: any[]) => void) : undefined;
+      // Wrap the callback so a peer-gone error resolves instead of rejecting.
+      const safeCb = (err?: Error | null) => {
+        const code = (err as { code?: string } | null)?.code;
+        if (code === "EPIPE" || code === "ERR_STREAM_DESTROYED" || code === "ERR_STREAM_WRITE_AFTER_END") {
+          userCb?.(null);
+          return;
+        }
+        userCb?.(err as Error);
+      };
       if (this.destroyed || this.writableEnded || this.writableFinished) {
-        const cb = args[args.length - 1];
-        if (typeof cb === "function") process.nextTick(cb);
+        if (userCb) process.nextTick(() => userCb(null));
         return false;
       }
       try {
-        return originalWrite.apply(this, args as any);
+        return originalWrite.apply(this, (hasCallback ? [...args, safeCb] : args) as any);
       } catch (err: any) {
         if (err?.code === "EPIPE" || err?.code === "ERR_STREAM_DESTROYED") {
-          const cb = args[args.length - 1];
-          if (typeof cb === "function") process.nextTick(cb);
+          if (userCb) process.nextTick(() => userCb(null));
           return false;
         }
         throw err;
