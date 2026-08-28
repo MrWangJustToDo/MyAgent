@@ -77,7 +77,9 @@ registerCommand({
 
     lines.push(`  Total:        ${fmt(totalUsage.totalTokens)} tokens`);
 
-    // Average LLM generation rate across measured calls (output tokens / LLM time).
+    // Average LLM generation rate across main-loop calls (cumulative output tokens /
+    // cumulative model time). Side queries (titles, summaries, memory selection) are
+    // intentionally excluded so this reflects the agent's own generation speed.
     if (usage.llmDurationMs > 0) {
       const rate = usage.llmOutputTokens / (usage.llmDurationMs / 1000);
       lines.push(`  Speed:        ${rate.toFixed(1)} tok/s (output)`);

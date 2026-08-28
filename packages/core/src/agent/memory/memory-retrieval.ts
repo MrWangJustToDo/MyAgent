@@ -172,11 +172,7 @@ async function selectWithLLM(
   usage?: UsageTracker | null,
   logger?: AgentLog
 ): Promise<string[]> {
-  const {
-    text,
-    usage: queryUsage,
-    durationMs,
-  } = await runSideTextQuery(textAdapter, {
+  const { text, usage: queryUsage } = await runSideTextQuery(textAdapter, {
     systemPrompt: SELECT_MEMORIES_SYSTEM_PROMPT,
     userPrompt: `Query: ${query}\n\nAvailable memories:\n${manifest}`,
     maxOutputTokens: 256,
@@ -184,7 +180,6 @@ async function selectWithLLM(
 
   if (usage && queryUsage) {
     usage.addTotal(queryUsage);
-    usage.addLlmCall(durationMs, queryUsage.outputTokens);
   }
 
   const match = /\{[\s\S]*?\}/.exec(text);
