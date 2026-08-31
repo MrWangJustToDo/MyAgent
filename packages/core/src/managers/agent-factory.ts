@@ -3,7 +3,7 @@ import { AgentLog } from "../agent/agent-log";
 import { createCompactionConfig } from "../agent/compaction/types.js";
 import { ExtensionLoader, ExtensionRunner, getDefaultExtensionDirs } from "../agent/extension";
 import { createLspExtension } from "../agent/lsp";
-import { loadMcpConfig, type McpConfigLoadResult } from "../agent/mcp/config.js";
+import { createMcpExtension, type McpExtensionConfig } from "../agent/mcp";
 import { McpManager } from "../agent/mcp/manager.js";
 import { createMemoryExtension } from "../agent/memory/extension.js";
 import { MemoryManager } from "../agent/memory/memory-manager.js";
@@ -122,10 +122,6 @@ export async function buildManagedAgent({
     toolsRecord.complete_plan = createCompletePlanTool({ getPlanMode: () => managed.planMode });
   }
 
-  let mcpLoadResult: McpConfigLoadResult | null = null;
-
-  // Shared across bootstrap blocks: populated in the skill-loading block, consumed
-  // by the built-in Skills extension in the extension-loading block.
   let skillRegistry: SkillRegistry | null = null;
 
   if (!parentId) {
@@ -151,17 +147,11 @@ export async function buildManagedAgent({
     }
     managed.setCompactionConfig(createCompactionConfig(compactionInput));
 
+    // MCP data layer: created (but not connected) here — connection + tool
+    // registration happens in the built-in MCP extension (loaded below), so MCP
+    // participates in the unified extension lifecycle (enable/disable, activate/deactivate).
     const mcpManager = new McpManager();
     managed.setMcpManager(mcpManager);
-    mcpLoadResult = await loadMcpConfig(mcpConfigPath);
-    if (mcpLoadResult && Object.keys(mcpLoadResult.config.mcpServers).length > 0) {
-      Object.assign(toolsRecord, await mcpManager.initialize(mcpLoadResult.config));
-    }
-    if (mcpLoadResult?.loadErrors) {
-      for (const err of mcpLoadResult.loadErrors) {
-        log.warn("system", err);
-      }
-    }
 
     // Memory manager is always created when enabled (drives the per-turn
     // relevance query + extraction in MemoryService). The built-in Memory
@@ -264,6 +254,24 @@ export async function buildManagedAgent({
         log.warn("system", `Failed to load built-in Memory extension: ${err}`);
       }
     }
+
+    // Built-in MCP extension (enabled unless explicitly disabled).
+    // `config.mcp` may be `true`/undefined (defaults) or a fine-grained
+    // McpExtensionConfig object ({ configPath }).
+    if (config.mcp !== false) {
+      try {
+        const mcpManager = managed.getMcpManager();
+        if (mcpManager) {
+          const mcpConfig: McpExtensionConfig | undefined =
+            typeof config.mcp === "object" && config.mcp !== null ? config.mcp : undefined;
+          const api = createMcpExtension({ mcpManager, configPath: mcpConfig?.configPath ?? mcpConfigPath });
+          await extensionRunner.loadExtension(api);
+          log.info("system", `Built-in extension loaded: ${api.id}`);
+        }
+      } catch (err) {
+        log.warn("system", `Failed to load built-in MCP extension: ${err}`);
+      }
+    }
   }
 
   if (!parentId) {
@@ -278,11 +286,7 @@ export async function buildManagedAgent({
 
   let bootstrap: SessionBootstrapContext | undefined;
   if (!parentId) {
-    bootstrap = {
-      cwd: fsRootPath,
-      mcpConfigPath,
-      mcpConfigLoadedFrom: mcpLoadResult?.sourcePath,
-    };
+    bootstrap = { cwd: fsRootPath };
   }
 
   return { managed, bootstrap };

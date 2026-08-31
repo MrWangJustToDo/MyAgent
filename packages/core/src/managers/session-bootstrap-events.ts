@@ -6,8 +6,6 @@ import type { ManagedAgent } from "./managed-agent.js";
 
 export interface SessionBootstrapContext {
   cwd: string;
-  mcpConfigPath?: string;
-  mcpConfigLoadedFrom?: string;
 }
 
 /**
@@ -41,13 +39,15 @@ export async function emitSessionBootstrapEvents(
   }
 
   const mcpManager = managed.getMcpManager();
-  const servers = mcpManager?.getServerStatuses() ?? [];
-  emitAgentTelemetry(managed, "session:mcp", {
-    configPath: context.mcpConfigPath,
-    configLoadedFrom: context.mcpConfigLoadedFrom,
-    servers,
-    toolCount: servers.reduce((sum, server) => sum + server.toolCount, 0),
-  });
+  if (mcpManager) {
+    const servers = mcpManager.getServerStatuses() ?? [];
+    emitAgentTelemetry(managed, "session:mcp", {
+      configPath: mcpManager.configPath,
+      configLoadedFrom: mcpManager.configLoadedFrom,
+      servers,
+      toolCount: servers.reduce((sum, server) => sum + server.toolCount, 0),
+    });
+  }
 
   const memoryManager = managed.memory.getManager();
   if (memoryManager) {

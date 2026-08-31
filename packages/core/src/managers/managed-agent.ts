@@ -82,6 +82,7 @@ import type {
   ExtensionToolDefinition,
 } from "../agent/extension";
 import type { LspExtensionConfig } from "../agent/lsp";
+import type { McpExtensionConfig } from "../agent/mcp";
 import type { McpManager } from "../agent/mcp/manager.js";
 import type { MemoryExtensionConfig } from "../agent/memory";
 import type { MemoryManager } from "../agent/memory/memory-manager.js";
@@ -171,6 +172,12 @@ export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
    * turn context. Pass an object to fine-tune behavior (see {@link MemoryExtensionConfig}).
    */
   memory?: boolean | MemoryExtensionConfig;
+  /**
+   * Enable the built-in MCP extension (default: true). Set to `false` to disable
+   * MCP servers and their `mcp__<server>_<tool>` tools. Pass an object to fine-tune
+   * behavior (see {@link McpExtensionConfig}).
+   */
+  mcp?: boolean | McpExtensionConfig;
   /**
    * Extra filesystem directories to scan for extensions (before env / defaults).
    * Relative paths resolve against CoreEnv `rootPath`.

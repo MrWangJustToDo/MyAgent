@@ -5,7 +5,6 @@ import "./compact.js";
 import "./display.js";
 import "./effort.js";
 import "./help.js";
-import "./mcp.js";
 import "./paste.js";
 import "./plan.js";
 import "./quit.js";

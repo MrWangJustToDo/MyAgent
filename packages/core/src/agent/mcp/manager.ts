@@ -63,6 +63,31 @@ export class McpManager {
   private serverStatuses: Map<string, McpServerStatus> = new Map();
 
   /**
+   * Config file path (explicit or resolved default) used to load MCP servers,
+   * and the actual source path that was loaded. Recorded by the MCP extension
+   * (or any loader) so session-bootstrap telemetry can report where config came
+   * from without re-deriving it in the factory.
+   */
+  private configPathValue?: string;
+  private configLoadedFromValue?: string;
+
+  /** Explicit path passed by the caller (may be a default lookup). */
+  get configPath(): string | undefined {
+    return this.configPathValue;
+  }
+
+  /** Actual file that was loaded (differs from configPath when defaults are used). */
+  get configLoadedFrom(): string | undefined {
+    return this.configLoadedFromValue;
+  }
+
+  /** Record the config source for session-bootstrap telemetry. */
+  setConfigSource(configPath: string | undefined, loadedFrom: string | undefined): void {
+    this.configPathValue = configPath;
+    this.configLoadedFromValue = loadedFrom;
+  }
+
+  /**
    * Connect to all configured MCP servers and return TanStack {@link ServerTool} records.
    * Failed connections are logged but do not block other servers.
    */
