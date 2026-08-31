@@ -18,6 +18,7 @@ import { render } from "ink";
 import { isHelpRequested, parseCliArgs } from "./args.js";
 import { readClipboardImage } from "./clipboard.js";
 import { LocalAgentAdapter } from "./local-adapter.js";
+import { TerminalTitle } from "./terminal-title.js";
 
 loadEnv();
 
@@ -150,6 +151,7 @@ initHighlighter()
   .then(() => {
     render(
       <AdapterProvider value={adapter}>
+        <TerminalTitle />
         <App />
       </AdapterProvider>,
       {
