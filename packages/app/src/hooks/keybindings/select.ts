@@ -38,8 +38,10 @@ export function useSelectModeKeybindings(ctx: KeybindingContext): void {
           return;
         }
         const result = selectActions.getResult();
+        const selected = selectActions.getSelectedLabels();
+        const draft = selectActions.getFreeformDraft();
         selectActions.close();
-        submitAskUserAnswer(result);
+        submitAskUserAnswer(result, { selected, draft });
         return;
       }
       // Right arrow: enter the answer-editing mode when the cursor is on the

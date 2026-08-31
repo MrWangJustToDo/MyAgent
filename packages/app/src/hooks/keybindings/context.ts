@@ -51,7 +51,12 @@ export interface KeybindingContext {
   stop: UseAgentChatReturn["stop"];
   acceptAutocomplete: (triggerSubmit: boolean) => boolean;
   handleNormalSubmit: (behavior?: "send" | "steer" | "followUp" | "forceSubmit") => void;
-  submitAskUserAnswer: (answer: string) => void;
+  /**
+   * Submit an ask_user answer. `meta` carries structured multi-select info
+   * (selected option labels + free-form draft) so the UI and the model-facing
+   * result can clearly represent a multi-choice answer.
+   */
+  submitAskUserAnswer: (answer: string, meta?: { selected?: string[]; draft?: string }) => void;
   addToolApprovalResponse: UseAgentChatReturn["addToolApprovalResponse"];
   extensionConfirm: ExtensionConfirmDialog | null;
   onExtensionConfirmRespond: (id: string, ok: boolean) => void;

@@ -103,7 +103,7 @@ export function useAgentInputControls({
     setClientToolWaiting(!!pendingAskUser);
   }, [pendingAskUser, setClientToolWaiting]);
 
-  const submitAskUserAnswer = (answer: string) => {
+  const submitAskUserAnswer = (answer: string, meta?: { selected?: string[]; draft?: string }) => {
     if (!pendingAskUser) return;
     // setClientToolWaiting(false);
     const durationMs = askUserStartTimeRef.current ? Date.now() - askUserStartTimeRef.current : 0;
@@ -114,6 +114,12 @@ export function useAgentInputControls({
         question: pendingAskUser.question,
         answer,
         hasOptions: !!pendingAskUser.options?.length,
+        // Structured multi-select info: lets the UI echo and the model-facing
+        // result clearly represent a multi-choice answer instead of an ambiguous
+        // comma-joined string (option text may itself contain commas).
+        multiSelect: !!pendingAskUser.multiSelect,
+        selected: meta?.selected && meta.selected.length > 0 ? meta.selected : undefined,
+        draft: meta?.draft || undefined,
         durationMs,
         cachedOutputPath: null,
       },

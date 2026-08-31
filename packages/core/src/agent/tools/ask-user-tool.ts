@@ -11,6 +11,12 @@ export const askUserOutputSchema = z.object({
   question: z.string().describe("The question that was asked."),
   answer: z.string().describe("The user's response."),
   hasOptions: z.boolean().describe("Whether predefined options were provided."),
+  // Structured multi-select info: present when the user picked multiple options.
+  // Lets the model-facing result clearly represent a multi-choice answer instead
+  // of an ambiguous comma-joined string (option text may itself contain commas).
+  multiSelect: z.boolean().optional().describe("Whether the user selected multiple options (true) or a single one."),
+  selected: z.array(z.string()).optional().describe("The selected option labels, one per entry (multi-select)."),
+  draft: z.string().optional().describe("Free-form custom answer typed by the user, if any."),
   durationMs: z.number().describe("Execution duration in milliseconds."),
   ...toolOutputBaseSchema.shape,
 });

@@ -189,14 +189,35 @@ function formatTodoOutput(output: TodoOutput): string {
   return `Updated ${stats.total} todos${tag}: ${stats.completed} completed, ${stats.inProgress} in progress, ${stats.pending} pending`;
 }
 
-function formatAskUserOutput(output: { question?: string; answer?: string; hasOptions?: boolean }): string {
-  const { answer, hasOptions } = output;
-  if (!answer) return "";
+function formatAskUserOutput(output: {
+  question?: string;
+  answer?: string;
+  hasOptions?: boolean;
+  multiSelect?: boolean;
+  selected?: string[];
+  draft?: string;
+}): string {
+  const { answer, hasOptions, multiSelect, selected, draft } = output;
+  if (!answer && !(selected && selected.length > 0)) return "";
 
   const lines: string[] = [];
-  // Label distinguishes a picked option from a free-form typed answer,
-  // mirroring how the question itself is shown in the tool header.
-  lines.push(hasOptions ? `Selected: ${truncateLine(answer)}` : `Answer: ${truncateLine(answer)}`);
+  // Multi-select: echo the picked options as an explicit list (one per line) so
+  // it's clear these are option choices rather than an ambiguous comma-joined
+  // string — option text may itself contain commas.
+  if (multiSelect && selected && selected.length > 0) {
+    lines.push(`Selected ${selected.length} item${selected.length !== 1 ? "s" : ""}:`);
+    for (const item of selected) {
+      lines.push(`  - ${truncateLine(item)}`);
+    }
+    if (draft) {
+      lines.push(`  - ${truncateLine(draft)} (custom answer)`);
+    }
+    return lines.join("\n");
+  }
+  // Single-select / no options: label distinguishes a picked option from a
+  // free-form typed answer, mirroring how the question itself is shown in the
+  // tool header.
+  lines.push(hasOptions ? `Selected: ${truncateLine(answer ?? "")}` : `Answer: ${truncateLine(answer ?? "")}`);
   return lines.join("\n");
 }
 
@@ -290,7 +311,14 @@ export function formatToolOutput(output: unknown, toolName?: string): string {
       }
       case "ask_user":
         return formatAskUserOutput(
-          out as unknown as { question?: string; answer?: string; hasOptions?: boolean; message?: string }
+          out as unknown as {
+            question?: string;
+            answer?: string;
+            hasOptions?: boolean;
+            multiSelect?: boolean;
+            selected?: string[];
+            draft?: string;
+          }
         );
       default:
         // No generic fallback to output.message (removed in phase 2).

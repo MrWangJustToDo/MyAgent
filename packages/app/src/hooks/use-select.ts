@@ -123,6 +123,21 @@ export const useSelect = createState(() => ({ ...initialState }), {
       }
       return state.options[state.selectedIndex]?.value ?? "";
     },
+
+    /**
+     * Get the selected option labels as an array (multi-select only).
+     * Returns [] for single-select or when nothing is toggled (single-select
+     * uses {@link getResult} which resolves the cursor row).
+     */
+    getSelectedLabels: (): string[] => {
+      if (!state.multiSelect) return [];
+      const indices = state.selectedSet.length > 0 ? state.selectedSet : [state.selectedIndex];
+      return indices
+        .sort((a, b) => a - b)
+        .filter((i) => !(state.freeformEnabled && i === state.options.length - 1))
+        .map((i) => state.options[i]?.label ?? "")
+        .filter(Boolean);
+    },
   }),
 
   withDeepSelector: false,
