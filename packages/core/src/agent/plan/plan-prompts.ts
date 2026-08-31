@@ -18,7 +18,8 @@ export function buildPlanModePlanningPrompt(): string {
     "- Skipping answers is fine if the user continues without answering — do not block forever.",
     "",
     "When ready, call the `create_plan` tool with:",
-    "- goal, ordered steps, key_files, risks, **verification** (required), optional mermaid.",
+    "- goal, ordered steps, **key_files (required, aim for 3-5)**, risks, **verification** (required), optional mermaid.",
+    "- **key_files** MUST be a non-empty list of the key files the plan will touch or rely on (aim for 3-5) so execution starts from concrete file anchors.",
     "- **verification** MUST be a concrete checklist that proves the plan outcome (observable behavior, acceptance checks, or focused project scripts).",
     "The plan is auto-saved under `.agents/plans/`. The user reviews it in the ready banner (markdown preview) — do not dump a long plan overview in chat.",
     "You may also output a `## Plan` markdown section as a fallback; prefer `create_plan`.",
@@ -32,10 +33,12 @@ export function buildPlanModeExecutingPrompt(planMarkdown: string | null, planFi
   const parts = [
     '<plan_mode phase="executing">',
     "You are **building** the approved plan (Cursor Build). Execute step-by-step. Update the todo list as you progress.",
+    "First read the plan's **Key files** — they are your file anchors; start there before editing.",
     "Do not expand scope without asking the user.",
     "Mark completed steps via the `todo` tool (preferred) or `[DONE:n]` markers (1-based).",
+    "The plan's **Verification** items are seeded as todos (prefixed `[verify]`) — run each check and mark it when it passes, keeping evidence.",
     "Before treating the build as done, run the plan **Verification** checklist and keep evidence (commands, scripts, or observed behavior).",
-    "When all plan todos are done, you will enter a forced retrospective — do not skip ahead to unrelated work.",
+    "When all plan todos (steps and `[verify]` items) are done, you will enter a forced retrospective — do not skip ahead to unrelated work.",
   ];
   if (planFilePath?.trim()) {
     parts.push(`Plan file: \`${planFilePath.trim()}\``);
@@ -50,7 +53,7 @@ export function buildPlanModeExecutingPrompt(planMarkdown: string | null, planFi
 /** Short user steer when `/plan execute` starts a run. */
 export function buildPlanExecuteSteerMessage(planMarkdown: string | null, planFilePath?: string | null): string {
   const header = [
-    "Build the approved plan step-by-step (you are now in building phase). Update todos as you go. Do not expand scope without asking. Run Verification items with evidence before finishing.",
+    "Build the approved plan step-by-step (you are now in building phase). Start by reading the plan's Key files. Update todos as you go — Verification items are seeded as `[verify]` todos; run and mark each one. Do not expand scope without asking. In retro, report Verification pass/fail with evidence before finishing.",
   ];
   if (planFilePath?.trim()) {
     header.push(`Plan file: \`${planFilePath.trim()}\``);

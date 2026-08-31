@@ -5,6 +5,7 @@ import { formatStructuredPlanMarkdown, stepsFromTexts, type StructuredPlanInput 
 import { buildPlanExecuteSteerMessage } from "./plan-prompts.js";
 import { savePlanFile } from "./plan-store.js";
 import { extractGoalFromPlanMarkdown } from "./plan-summary.js";
+import { parseVerificationItemsFromPlanMarkdown } from "./plan-verification.js";
 
 import type { EmitAgentTelemetryFn } from "../../runtime-types/agent-events.js";
 import type { TodoManager } from "../todo-manager/todo-manager.js";
@@ -282,6 +283,9 @@ export class PlanModeController {
     if (!input.goal.trim()) {
       return { ok: false, error: "Plan goal is required" };
     }
+    if (!input.keyFiles || input.keyFiles.length === 0) {
+      return { ok: false, error: "Plan must include at least one key file" };
+    }
 
     const planMarkdown = formatStructuredPlanMarkdown({ ...input, steps: steps.map((s) => s.text) });
     return this.applyPlanArtifact(planMarkdown, steps, { nameHint: input.goal });
@@ -403,12 +407,21 @@ export class PlanModeController {
 
     const replacedExisting = options.force && todoManager.hasTodos() && todoManager.getTitle() !== PLAN_TODO_TITLE;
 
+    const verificationItems = parseVerificationItemsFromPlanMarkdown(this.planMarkdown);
+
     todoManager.update(
-      this.steps.map((s) => ({
-        content: s.text,
-        status: "pending" as const,
-        priority: "medium" as const,
-      })),
+      [
+        ...this.steps.map((s) => ({
+          content: s.text,
+          status: "pending" as const,
+          priority: "medium" as const,
+        })),
+        ...verificationItems.map((v) => ({
+          content: `[verify] ${v}`,
+          status: "pending" as const,
+          priority: "medium" as const,
+        })),
+      ],
       PLAN_TODO_TITLE
     );
     todoManager.setPlanBound(true);
@@ -431,10 +444,12 @@ export class PlanModeController {
 
     const title = todoManager.getTitle() ?? PLAN_TODO_TITLE;
     const doneSet = new Set(done);
+    const stepCount = this.steps.length;
     todoManager.update(
       items.map((item, index) => {
         const stepNum = index + 1;
-        const completed = item.status === "completed" || doneSet.has(stepNum);
+        // [DONE:n] maps to steps only; verification todos are tracked via the todo tool.
+        const completed = item.status === "completed" || (stepNum <= stepCount && doneSet.has(stepNum));
         return {
           content: item.content,
           status: completed ? ("completed" as const) : item.status,

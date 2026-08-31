@@ -21,7 +21,7 @@ const structuredPlanInputSchema = z.object({
     .describe(
       "Ordered implementation steps as plain text (do not prefix with 1. 2. — numbering is added automatically)"
     ),
-  key_files: z.array(z.string()).optional().describe("Important file paths the plan will touch or rely on"),
+  key_files: z.array(z.string()).min(1).describe("Required: file paths the plan will touch or rely on (at least one)"),
   risks: z.string().optional().describe("Brief risks or trade-offs"),
   verification: z.string().min(1).describe(VERIFICATION_DESCRIBE),
   mermaid: z.string().optional().describe("Optional mermaid diagram body (without fences)"),
