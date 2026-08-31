@@ -157,9 +157,9 @@ agent-manager.ts
 | 5 | `todo`, `webfetch`, `websearch`, `ask_user` tools |
 | 6 | `SkillRegistry.loadFromDirectories` → `list_skills`, `load_skill`, `task` |
 | 7 | `setCompactionConfig` from model context window |
-| 8 | `McpManager.initialize` → merge MCP tools (execute wrapped to keep multimodal `content[]`) |
-| 9 | `MemoryManager.initialize` → `setMemoryContent` (MEMORY.md index) |
-| 10 | `ExtensionLoader` / `ExtensionRunner` — scan `.agents/extension` then `~/.agents/extension` (plus `AGENT_EXTENSION_DIRS` / `config.extensionDirs` / `--extension-dirs`); programmatic `config.extensions` last |
+| 8 | Create `McpManager` + `MemoryManager` data layers (connected / registered later by the built-in extensions below) |
+| 9 | `ExtensionLoader` / `ExtensionRunner` — scan `.agents/extension` then `~/.agents/extension` (plus `AGENT_EXTENSION_DIRS` / `config.extensionDirs` / `--extension-dirs`); programmatic `config.extensions` last |
+| 10 | Built-in extensions through the runner — LSP (`my-agent-lsp`), Skills (`my-agent-skills`), Memory (`my-agent-memory`), MCP (`my-agent-mcp`: `McpManager.initialize` on activate, tools kept as `mcp__<server>_<tool>` with multimodal `content[]`, `/mcp` command; deactivate → `shutdown`) |
 | 11 | `SessionStore` → `setSessionStore({ modelStyle, model })` |
 
 **Subagent** (`parentId` set): inherits parent config via `spawnSubagent`; skips docs, skills, MCP, memory, extensions, session, and most root-only tools.

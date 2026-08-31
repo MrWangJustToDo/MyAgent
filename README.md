@@ -40,7 +40,7 @@ A **runtime-agnostic** AI coding agent — same core logic, runs in terminal, Ch
 | **Plan Mode** | Explore → review → Build → forced retro (`/plan`, persisted under `.agents/plans/`) |
 | **Background commands** | `run_command(run_in_background)` plus `get_command_output` / `kill_command` |
 | **Telemetry** | Lifecycle telemetry bus (bridged to agent log); hosts subscribe via AgentSession `lifecycle` |
-| **Extensions** | Capability model like [Pi](https://pi.dev) — declarative extension modules (tools / commands / hooks); built-ins (LSP, Memory, Skills) + third-party modules under `.agents/extension` (`Ctrl+Y` panel). See [Extensions](#extensions) |
+| **Extensions** | Capability model like [Pi](https://pi.dev) — declarative extension modules (tools / commands / hooks); built-ins (LSP, Memory, Skills, MCP) + third-party modules under `.agents/extension` (`Ctrl+Y` panel). See [Extensions](#extensions) |
 | **Sandbox** | Isolated command execution with OS-level sandboxing (`@anthropic-ai/sandbox-runtime`) |
 | **MCP Integration** | Connect to external MCP servers for additional tools |
 | **LSP / Tree-sitter** | Built-in LSP extension: diagnostics, hover, definition, references, symbols, completions, rename, code actions + structural tree-sitter search/rewrite (`.lsp.json` config) |
@@ -60,8 +60,9 @@ MyAgent's extension model works like [Pi](https://pi.dev) (the `pi-lsp` / `pi-*`
 | **LSP Integration** | `my-agent-lsp` | 8 LSP tools (`lsp_diagnostics`, `lsp_hover`, `lsp_definition`, `lsp_references`, `lsp_symbols`, `lsp_rename`, `lsp_completions`, `lsp_code_actions`) + 3 tree-sitter tools (`code_overview`, `ast_search`, `code_rewrite`) + commands `/lsp`, `/lsp-restart`, `/lsp-config`, `/lsp-lombok`; auto file-sync and diagnostics injection | `.lsp.json` |
 | **Memory** | `my-agent-memory` | `memory_list`, `memory_read`, `memory_write`; MEMORY.md index injected into turn context | `.agents/memory/` |
 | **Skills** | `my-agent-skills` | `list_skills`, `load_skill`; available-skills index injected into turn context | `.agents/skills/` |
+| **MCP** | `my-agent-mcp` | Connect external MCP servers (stdio/SSE/HTTP); each tool exposed as `mcp__<server>_<tool>` + `/mcp` status command; per-server failure isolation | `.agents/mcp.json` (fallback `.mcp.json`) |
 
-Beyond the built-ins, connect external **MCP** servers for more tools, or drop your own extension modules into `.agents/extension` (hooks, custom tools, slash commands).
+Beyond the built-ins, drop your own extension modules into `.agents/extension` (hooks, custom tools, slash commands), or point the `my-agent-mcp` built-in at external MCP servers for more tools.
 
 ---
 
