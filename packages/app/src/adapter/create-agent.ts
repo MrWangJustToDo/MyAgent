@@ -78,7 +78,7 @@ export async function createAgentFromConfig({ config, name, hooks, host }: Creat
   const { session, initialMessages } = await host.create({
     name,
     model: connection.model,
-    systemPrompt: config.systemPrompt || (await buildDefaultSystemPrompt()),
+    systemPrompt: config.systemPrompt || (config.remoteSession ? undefined : await buildDefaultSystemPrompt()),
     maxIterations: config.maxIterations,
     mcpConfigPath: config.mcpConfigPath || undefined,
     extensionDirs: config.extensionDirs?.length ? config.extensionDirs : undefined,

@@ -42,7 +42,8 @@ export const useConfig = createState(
         state.config.model = config.model || "";
         state.config.style = config.style || DEFAULT_STYLE;
         state.config.baseURL = config.baseURL || DEFAULT_LOCAL_OPENAI_BASE_URL;
-        state.config.systemPrompt = config.systemPrompt || (await buildDefaultSystemPrompt());
+        state.config.systemPrompt =
+          config.systemPrompt || (config.remoteSession ? "" : await buildDefaultSystemPrompt());
         state.config.initialPrompt = config.initialPrompt || "";
         state.config.maxIterations = config.maxIterations ?? DEFAULT_MAX_ITERATIONS;
         state.config.debug = config.debug ?? false;
