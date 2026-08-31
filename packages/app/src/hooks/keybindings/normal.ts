@@ -36,17 +36,36 @@ export function useNormalModeKeybindings(ctx: KeybindingContext): void {
         cycleAgentMode(getSession());
         return;
       }
-      // Empty input + plan ready: `p` toggles full-plan markdown preview in the banner.
+      // Empty input + plan ready: Ctrl+P toggles full-plan markdown preview in the banner.
+      // Combo key avoids accidental triggers while typing a prompt.
       if (
         !isLoading &&
+        inputKey.ctrl &&
         inputChar?.toLowerCase() === "p" &&
-        !inputKey.ctrl &&
         !inputKey.meta &&
         !useUserInput.getReadonlyState().value
       ) {
         const phase = getSession()?.getSnapshot().plan.phase;
         if (phase === "ready") {
           usePlanPreview.getActions().toggle();
+          return;
+        }
+      }
+      // Preview open + plan ready + empty input: Enter approves the plan → build, closing the preview.
+      if (
+        !isLoading &&
+        inputKey.return &&
+        !inputKey.ctrl &&
+        !inputKey.meta &&
+        !inputKey.shift &&
+        usePlanPreview.getReadonlyState().open &&
+        !useUserInput.getReadonlyState().value
+      ) {
+        const session = getSession();
+        const phase = session?.getSnapshot().plan.phase;
+        if (session && phase === "ready") {
+          usePlanPreview.getActions().hide();
+          void session.dispatch({ type: "plan.execute" });
           return;
         }
       }

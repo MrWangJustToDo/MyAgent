@@ -64,6 +64,7 @@ export const KeyLabel = {
   ctrlC: "Ctrl+C",
   ctrlE: "Ctrl+E",
   ctrlO: "Ctrl+O",
+  ctrlP: "Ctrl+P",
   ctrlT: "Ctrl+T",
   ctrlU: "Ctrl+U",
   ctrlV: "Ctrl+V",
@@ -148,7 +149,8 @@ export function getKeyboardShortcutSections(): ShortcutSection[] {
       title: "Panels",
       lines: [
         { key: KeyLabel.shiftTab, desc: "Cycle mode" },
-        { key: KeyLabel.p, desc: "Review plan markdown (when plan ready, input empty)" },
+        { key: KeyLabel.ctrlP, desc: "Review plan markdown (when plan ready, input empty)" },
+        { key: KeyLabel.enter, desc: "Build approved plan (when plan preview is open)" },
         { key: KeyLabel.ctrlE, desc: "Workspace panel" },
         { key: KeyLabel.ctrlT, desc: "Task / subagent panel" },
         { key: KeyLabel.ctrlY, desc: "Extensions panel (view / toggle)" },

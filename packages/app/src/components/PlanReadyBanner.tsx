@@ -14,7 +14,8 @@ import type { PlanModeState } from "@my-agent/core";
 
 /**
  * Ready-state banner: Build/revise hints + optional full-plan markdown preview.
- * Toggle preview with {@link KeyLabel.p} when the chat input is empty (wired in keybindings).
+ * Toggle preview with {@link KeyLabel.ctrlP} when the chat input is empty (wired in keybindings);
+ * with the preview open, Enter builds the approved plan.
  */
 export const PlanReadyBanner = () => {
   const session = toRaw(useAgent((s) => s.session));
@@ -62,8 +63,8 @@ export const PlanReadyBanner = () => {
           {preserved}
         </Text>
         <Text color={COLORS.muted} dimColor>
-          {KeyLabel.p} review plan · /plan execute to Build · /plan save · revise in chat · /plan to exit
-          {previewOpen ? ` · ${KeyLabel.esc} close preview` : ""}
+          {KeyLabel.ctrlP} review plan · /plan save · revise in chat · /plan to exit
+          {previewOpen ? ` · ${KeyLabel.enter} build · ${KeyLabel.esc} close preview` : ""}
         </Text>
       </Box>
 
