@@ -100,6 +100,11 @@ export type AgentEventPayloadMap = {
   "agent:stop": {
     reason?: string;
   };
+  "agent:extension-error": {
+    extensionId?: string;
+    phase?: string;
+    error?: string;
+  };
   "memory:prefetch": {
     status?: string;
     count?: number;
@@ -194,6 +199,11 @@ export type AgentEventPayloadMap = {
   "subagent:ui-update": {
     subagentId?: string;
     messageCount?: number;
+  };
+  "subagent:progress-summary-error": {
+    subagentId?: string;
+    parentAgentId?: string;
+    error?: string;
   };
   "plan:enter": {
     phase?: PlanPhase;

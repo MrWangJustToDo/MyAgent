@@ -13,7 +13,8 @@
  * - structured log lines → `log` (opt-in)
  *
  * Lifecycle keeps typed telemetry: stop/abort/errors, approvals, subagent directory,
- * turn summary. Plan phase transitions and subagent:ui-update are omitted by default
+ * turn summary, persistence failures (session:save-error). Plan phase transitions and
+ * subagent:ui-update are omitted by default
  * (covered by `plan` channel / child sessions).
  *
  * Projected `lifecycle` channel payloads are the typed {@link AgentEvent} envelope
@@ -40,4 +41,5 @@ export const DEFAULT_SESSION_LIFECYCLE_EVENTS: readonly AgentEventType[] = [
   "subagent:destroyed",
   "subagent:phase",
   "turn:summary",
+  "session:save-error",
 ] as const;

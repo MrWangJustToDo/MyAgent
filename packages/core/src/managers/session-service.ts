@@ -97,6 +97,20 @@ export class SessionService {
   }
 
   /**
+   * Single save + error-emit path used by both the main persist and the
+   * async title save, so a failure is always surfaced (never silently dropped).
+   */
+  private async saveToStore(emitEvent: EmitAgentTelemetryFn | undefined, target: string): Promise<void> {
+    if (!this.store || !this.data) return;
+    try {
+      await this.store.save(this.data);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      emitEvent?.("session:save-error", { target, error: errorMsg });
+    }
+  }
+
+  /**
    * Persist session model state. Pass `uiMessages` only from the app `useChat` layer.
    * When uiMessages are provided, they are dehydrated (clone → extract base64 → media:// refs)
    * before writing. The original uiMessages array is never mutated.
@@ -155,12 +169,11 @@ export class SessionService {
     if (this.data.name === "New Session") {
       const firstUserText = getFirstUserInput(uiMessages || []);
       this.generateSessionTitle(firstUserText, { usage, resolveTextAdapter }).then((title) => {
-        if (this.data && this.store) {
+        if (this.data) {
           this.data.name = title;
-          this.store.save(this.data).catch((err) => {
-            const errorMsg = err instanceof Error ? err.message : String(err);
-            emitEvent?.("session:save-error", { target: "session-title", error: errorMsg });
-          });
+          // Reuse the unified save path so a title-write failure also emits
+          // `session:save-error` (target "session-title").
+          void this.saveToStore(emitEvent, "session-title");
         }
       });
     }
@@ -168,12 +181,7 @@ export class SessionService {
     const saveTarget = uiMessages !== undefined ? "session+uiMessages" : "session";
     // Await so callers that `await persistSession` observe durability; emit on
     // failure (do not rethrow — persist remains best-effort for fire-and-forget hosts).
-    try {
-      await this.store.save(this.data);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      emitEvent?.("session:save-error", { target: saveTarget, error: errorMsg });
-    }
+    await this.saveToStore(emitEvent, saveTarget);
   }
 
   /**

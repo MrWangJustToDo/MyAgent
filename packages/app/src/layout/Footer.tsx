@@ -29,9 +29,12 @@ import type { AgentRetryState, AgentStatus, QueuedMessagesSnapshot } from "@my-a
 export const Footer = ({
   status,
   queuedMessages,
+  saveError,
 }: {
   status: AgentStatus;
   queuedMessages?: QueuedMessagesSnapshot;
+  /** Last session persistence failure (empty when none). */
+  saveError?: string;
 }) => {
   const { mode, denyMode, freeformContext } = useInputMode((s) => ({
     mode: s.mode,
@@ -100,6 +103,7 @@ export const Footer = ({
         isAgentBusy={isAgentBusy}
         steerCount={steerCount}
         followUpCount={followUpCount}
+        saveError={saveError}
       />
 
       {/* Input */}
@@ -165,6 +169,7 @@ const ContextBar = ({
   isAgentBusy,
   steerCount,
   followUpCount,
+  saveError,
 }: {
   status: AgentStatus;
   isPendingApproval: boolean;
@@ -175,6 +180,7 @@ const ContextBar = ({
   isAgentBusy: boolean;
   steerCount: number;
   followUpCount: number;
+  saveError?: string;
 }) => {
   // Prefer session snapshot for duration / error (no ManagedAgent).
   const session = toRaw(useAgent((s) => s.session));
@@ -198,6 +204,8 @@ const ContextBar = ({
   const extStatus = useExtensionUI((s) => s.statusText);
 
   const error = _error || inputError;
+
+  const showSaveError = saveError && status !== "error" && status !== "aborted" && status !== "completed";
 
   return (
     <Box flexDirection="column" paddingX={1} gap={0}>
@@ -256,6 +264,8 @@ const ContextBar = ({
               {inputFeedback.message}
             </Text>
           )}
+
+          {showSaveError && <Text color={COLORS.warning}>Save failed: {saveError}</Text>}
 
           {extStatus && status === "idle" && (
             <Text color={COLORS.muted} dimColor>

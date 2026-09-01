@@ -80,6 +80,12 @@ export interface UseAgentChatReturn {
   /** Pause/resume status while a client tool waits for user input (`ask_user`). */
   setClientToolWaiting: (active: boolean) => void;
   /**
+   * Last session persistence failure message (from `session:save-error`),
+   * or empty string when none has occurred. Lets the UI surface disk-write
+   * failures instead of silently dropping them.
+   */
+  saveError: string;
+  /**
    * Persistence is owned by core (user-message / pump-complete / force).
    * Kept as a no-op for command-context compatibility until `/clear` migrates.
    */
@@ -138,6 +144,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessagesSnapshot>({ steer: [], followUp: [] });
   const [status, setStatus] = useState<AgentStatus>("idle");
   const [agentError, setAgentError] = useState("");
+  const [saveError, setSaveError] = useState("");
 
   const forceUpdate = useForceUpdate({ time: 100 });
   const initIdRef = useRef(0);
@@ -233,7 +240,12 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
           return;
         }
         if (event.channel === "lifecycle") {
-          handleToolLifecycleEvent(event.payload);
+          const payload = event.payload;
+          if (payload.type === "session:save-error") {
+            setSaveError(payload.payload?.error ?? "Session save failed");
+            return;
+          }
+          handleToolLifecycleEvent(payload);
         }
       },
       { channels: ["messages", "queues", "state", "todos", "lifecycle"] }
@@ -444,5 +456,6 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     initError,
     addToolApprovalResponse,
     saveSessionFromChat,
+    saveError,
   };
 }

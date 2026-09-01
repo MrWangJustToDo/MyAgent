@@ -102,6 +102,12 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
     category: "agent",
     formatMessage: (event) => `Agent stop (${p(event).reason ?? "unknown"})`,
   },
+  "agent:extension-error": {
+    level: "error",
+    category: "system",
+    formatMessage: (event) =>
+      `Extension ${p(event).phase ?? ""} failed "${p(event).extensionId ?? event.agentId}": ${p(event).error ?? "unknown"}`.trim(),
+  },
   "agent:abort": {
     level: "warn",
     category: "agent",
@@ -236,6 +242,12 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
     level: "error",
     category: "system",
     formatMessage: (event) => `Subagent error: ${p(event).error ?? "unknown"}`,
+  },
+  "subagent:progress-summary-error": {
+    level: "warn",
+    category: "system",
+    formatMessage: (event) =>
+      `Progress summary failed for subagent ${p(event).subagentId ?? event.agentId}: ${p(event).error ?? "unknown"}`,
   },
   "subagent:destroyed": false,
   "subagent:phase": {

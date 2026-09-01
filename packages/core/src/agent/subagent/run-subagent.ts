@@ -320,7 +320,13 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
         parentAgentId,
         manager,
         prompt,
-        onDelta ? { onDelta } : undefined
+        onDelta ? { onDelta } : undefined,
+        (error) =>
+          subagent.emitEvent(
+            "subagent:progress-summary-error",
+            { subagentId, parentAgentId, error },
+            { parentId: parentAgentId }
+          )
       );
       if (hub && parentTaskToolCallId) {
         hub.end(summaryKey);

@@ -64,6 +64,7 @@ export const Agent = () => {
     allPendingAskUser,
     setMessages,
     saveSessionFromChat,
+    saveError,
   } = useAgentChat(config);
 
   const subagentPanelView = useSubagentPanel((s) => s.view);
@@ -147,7 +148,7 @@ export const Agent = () => {
           {confirm && <ExtensionConfirm confirm={confirm} />}
           {widgets.length > 0 && <ExtensionWidget widgets={widgets} />}
           <PlanReadyBanner />
-          <Footer status={status} queuedMessages={queuedMessages} />
+          <Footer status={status} queuedMessages={queuedMessages} saveError={saveError} />
         </>
       )}
     </FullBox>

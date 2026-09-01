@@ -175,6 +175,7 @@ export async function buildManagedAgent({
       onUnregisterCommand: (name) => managed.unregisterExtensionCommand(name),
       cwd: fsRootPath,
       getCoreEnv: () => getEnv(),
+      emitEvent: (type, data) => managed.emitEvent(type, data),
     });
     managed.extensionRunner = extensionRunner;
 
@@ -189,11 +190,16 @@ export async function buildManagedAgent({
       log.warn("system", err.message);
     }
     for (const api of fromDisk.loaded) {
-      try {
-        await extensionRunner.loadExtension(api);
+      const instance = await extensionRunner.loadExtension(api);
+      // loadExtension is fail-open (state: "error" on activate failure);
+      // log the real outcome instead of always claiming "loaded".
+      if (instance.state === "active") {
         log.info("system", `Extension loaded from disk: ${api.id}`);
-      } catch (err) {
-        log.warn("system", `Failed to activate extension from disk "${api.id}": ${err}`);
+      } else {
+        log.warn(
+          "system",
+          `Extension failed to activate from disk "${api.id}": ${instance.error?.message ?? "unknown"}`
+        );
       }
     }
 
@@ -247,8 +253,15 @@ export async function buildManagedAgent({
         if (memoryManager) {
           const memoryConfig = typeof config.memory === "object" && config.memory !== null ? config.memory : undefined;
           const api = createMemoryExtension({ memoryManager, config: memoryConfig });
-          await extensionRunner.loadExtension(api);
-          log.info("system", `Built-in extension loaded: ${api.id}`);
+          const instance = await extensionRunner.loadExtension(api);
+          if (instance.state === "active") {
+            log.info("system", `Built-in extension loaded: ${api.id}`);
+          } else {
+            log.warn(
+              "system",
+              `Built-in extension failed to activate "${api.id}": ${instance.error?.message ?? "unknown"}`
+            );
+          }
         }
       } catch (err) {
         log.warn("system", `Failed to load built-in Memory extension: ${err}`);
@@ -265,8 +278,15 @@ export async function buildManagedAgent({
           const mcpConfig: McpExtensionConfig | undefined =
             typeof config.mcp === "object" && config.mcp !== null ? config.mcp : undefined;
           const api = createMcpExtension({ mcpManager, configPath: mcpConfig?.configPath ?? mcpConfigPath });
-          await extensionRunner.loadExtension(api);
-          log.info("system", `Built-in extension loaded: ${api.id}`);
+          const instance = await extensionRunner.loadExtension(api);
+          if (instance.state === "active") {
+            log.info("system", `Built-in extension loaded: ${api.id}`);
+          } else {
+            log.warn(
+              "system",
+              `Built-in extension failed to activate "${api.id}": ${instance.error?.message ?? "unknown"}`
+            );
+          }
         }
       } catch (err) {
         log.warn("system", `Failed to load built-in MCP extension: ${err}`);

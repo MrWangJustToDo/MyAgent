@@ -21,6 +21,7 @@ import type {
   ExtensionInfo,
 } from "./types.js";
 import type { CoreEnv } from "../../env.js";
+import type { EmitAgentTelemetryFn } from "../../runtime-types/agent-events.js";
 
 // ============================================================================
 // ExtensionEventBus implementation
@@ -166,6 +167,12 @@ export interface ExtensionRunnerOptions {
    * Defaults to the globally registered CoreEnv (`getEnv()`).
    */
   getCoreEnv?: () => CoreEnv;
+  /**
+   * Optional telemetry emitter. When provided, extension lifecycle failures
+   * (activate / deactivate) are emitted as `agent:extension-error` so they
+   * surface in AgentLog / lifecycle channels instead of being swallowed.
+   */
+  emitEvent?: EmitAgentTelemetryFn;
 }
 
 export class ExtensionRunner {
@@ -316,6 +323,11 @@ export class ExtensionRunner {
       instance.state = "error";
       instance.error = error;
       ctx.logger.error(`Failed to activate extension "${api.id}": ${error.message}`);
+      this.options.emitEvent?.("agent:extension-error", {
+        extensionId: api.id,
+        phase: "activate",
+        error: error.message,
+      });
     }
 
     return instance;
@@ -325,8 +337,14 @@ export class ExtensionRunner {
     if (instance.api.deactivate) {
       try {
         await instance.api.deactivate();
-      } catch {
-        // Swallow deactivation errors
+      } catch (err) {
+        // Do not swallow: surface deactivation failures for observability.
+        const error = err instanceof Error ? err : new Error(String(err));
+        this.options.emitEvent?.("agent:extension-error", {
+          extensionId: instance.api.id,
+          phase: "deactivate",
+          error: error.message,
+        });
       }
     }
     this.unregisterInstanceArtifacts(instance);

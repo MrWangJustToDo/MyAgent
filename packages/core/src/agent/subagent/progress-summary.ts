@@ -193,7 +193,8 @@ export async function summarizeProgress(
   parentAgentId: string,
   manager: AgentManager,
   taskPrompt?: string,
-  stream?: ProgressSummaryStream
+  stream?: ProgressSummaryStream,
+  emitError?: (error: string) => void
 ): Promise<string | null> {
   try {
     const modelMessages: ModelMessage[] = convertMessagesToModelMessages(messages);
@@ -214,9 +215,11 @@ export async function summarizeProgress(
     if (!trimmed || trimmed === "(no summary)") return null;
 
     return `${trimmed}\n\n${PROGRESS_SUMMARY_MARKER}`;
-  } catch {
-    // Silent fallback: never let progress summarization change the original
-    // subagent failure behavior.
+  } catch (err) {
+    // Fallback stays silent for callers (return null never changes the original
+    // subagent failure behavior), but surface an error event for observability.
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    emitError?.(errorMessage);
     return null;
   }
 }
