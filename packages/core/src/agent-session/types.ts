@@ -15,7 +15,7 @@ import type { ExtensionInfo } from "../agent/extension/types.js";
 import type { McpServerStatus } from "../agent/mcp/manager.js";
 import type { PlanModeState } from "../agent/plan/plan-mode-controller.js";
 import type { SummaryStreamEvent, SummaryStreamSnapshot } from "../agent/summary-stream/types.js";
-import type { TodoItem } from "../agent/todo-manager/types.js";
+import type { TodoItem } from "../agent/todo/types.js";
 import type { StreamingChunk } from "../agent/tools/util/streaming-callback.js";
 import type { QueuedMessagesSnapshot } from "../managers/controllers/agent-chat-controller.js";
 import type { AgentL1State, AgentMode } from "../managers/managed-agent.js";

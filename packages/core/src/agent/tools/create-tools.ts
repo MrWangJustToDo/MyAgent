@@ -15,7 +15,7 @@ import type { createAskUserTool } from "./ask-user-tool.js";
 import type { UsageTracker } from "../../runtime-types/hosts.js";
 import type { createCompletePlanTool, createCreatePlanTool, createUpdatePlanTool } from "../plan/create-plan-tool.js";
 import type { createTaskTool } from "../subagent/task-tool.js";
-import type { createTodoTool } from "../todo-manager/todo-tool.js";
+import type { createTodoTool } from "../todo/todo-tool.js";
 
 export type Tools = ToolsRecord & {
   delete_file: ReturnType<typeof createDeleteFileTool>;

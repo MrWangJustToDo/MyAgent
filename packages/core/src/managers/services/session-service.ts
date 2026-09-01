@@ -13,7 +13,7 @@ import { runSideTextQuery } from "../../models/adapter/side-text-query.js";
 import type { SessionStore } from "../../agent/persistence/session-store.js";
 import type { SessionData, ToolApprovalRecord } from "../../agent/persistence/types.js";
 import type { PlanModeState } from "../../agent/plan/plan-mode-controller.js";
-import type { TodoManager } from "../../agent/todo-manager";
+import type { TodoManager } from "../../agent/todo";
 import type { TextAdapterConfig } from "../../models/adapter/adapter-factory.js";
 import type { ReasoningEffort } from "../../models/types.js";
 import type { EmitAgentTelemetryFn } from "../telemetry/emit-agent-telemetry.js";

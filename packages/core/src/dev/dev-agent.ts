@@ -298,7 +298,7 @@ export type {
   StructuredPlanInput,
   VerificationResultItem,
 } from "../agent/plan";
-export { TodoManager } from "../agent/todo-manager";
+export { TodoManager } from "../agent/todo";
 export {
   getMediaStore,
   resetMediaStore,

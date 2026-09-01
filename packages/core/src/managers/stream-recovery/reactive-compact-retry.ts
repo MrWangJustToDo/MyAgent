@@ -1,3 +1,10 @@
+/**
+ * Reactive compact retry orchestration — the emergency-compaction retry shell
+ * that delegates to the core implementation in `agent/compaction/reactive-compact.ts`.
+ *
+ * Kept as a separate file (distinct name from the core implementation) so
+ * "reactive-compact" unambiguously refers to the compaction layer.
+ */
 import { isPromptTooLongError } from "../../agent/compaction/reactive-compact.js";
 
 import type { AgentManager } from "../agent-manager.js";

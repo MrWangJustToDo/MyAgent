@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { TODO_PRIORITIES, TODO_STATUSES } from "../../todo-manager/types.js";
+import { TODO_PRIORITIES, TODO_STATUSES } from "../../todo/types.js";
 
 // ============================================================================
 // Tool Output Base Schema (common fields shared by all tool outputs)

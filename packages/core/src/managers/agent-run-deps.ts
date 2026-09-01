@@ -5,7 +5,7 @@ import type { UsageTracker } from "./telemetry/usage-tracker.js";
 import type { AgentLog } from "../agent/agent-log";
 import type { CompactionConfig } from "../agent/compaction/types.js";
 import type { ExtensionRunner } from "../agent/extension/runner.js";
-import type { TodoManager } from "../agent/todo-manager";
+import type { TodoManager } from "../agent/todo";
 import type { AgentUIChannel } from "../agent/ui-channel.js";
 import type { ModelInfo } from "../models/types.js";
 import type { ModelMessage } from "@tanstack/ai";

@@ -12,7 +12,7 @@ import type { ToolCompactCache } from "../agent/compaction/tool-compact/tool-com
 import type { SessionSyncTracker } from "../agent/persistence/session-sync-tracker.js";
 import type { SessionData } from "../agent/persistence/types.js";
 import type { PlanModeController } from "../agent/plan/plan-mode-controller.js";
-import type { TodoManager } from "../agent/todo-manager";
+import type { TodoManager } from "../agent/todo";
 import type { AgentUIChannel } from "../agent/ui-channel.js";
 import type { TextAdapterConfig } from "../models/adapter/adapter-factory.js";
 import type { ReasoningEffort } from "../models/types.js";

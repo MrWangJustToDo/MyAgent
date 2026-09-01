@@ -8,7 +8,7 @@ import { extractGoalFromPlanMarkdown } from "./plan-summary.js";
 import { parseVerificationItemsFromPlanMarkdown } from "./plan-verification.js";
 
 import type { EmitAgentTelemetryFn } from "../../runtime-types/agent-events.js";
-import type { TodoManager } from "../todo-manager/todo-manager.js";
+import type { TodoManager } from "../todo/todo-manager.js";
 
 export type PlanModePhase = "off" | "planning" | "ready" | "executing" | "retro";
 

@@ -7,7 +7,7 @@ import {
   handleMaxTokensTruncation,
   MAX_TRUNCATION_CONTINUATIONS,
 } from "./stream-recovery/max-tokens-continue.js";
-import { tryReactiveCompactRetry } from "./stream-recovery/reactive-compact.js";
+import { tryReactiveCompactRetry } from "./stream-recovery/reactive-compact-retry.js";
 import { extractRetryAfterSeconds, isTransientRetryableError } from "./stream-recovery/transient-retry.js";
 
 import type { AgentManager } from "./agent-manager.js";
@@ -17,7 +17,7 @@ import type { AgentRetryStrategy, AgentRetryState } from "../runtime-types/agent
 import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai";
 
 export { messagesForModelCapabilities } from "./stream-recovery/capability-sanitize.js";
-export { tryReactiveCompactRetry } from "./stream-recovery/reactive-compact.js";
+export { tryReactiveCompactRetry } from "./stream-recovery/reactive-compact-retry.js";
 export { extractRetryAfterSeconds, isTransientRetryableError } from "./stream-recovery/transient-retry.js";
 export {
   CONTINUATION_PROMPT,
