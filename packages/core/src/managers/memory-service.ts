@@ -37,6 +37,8 @@ export class MemoryService {
   private relevantContent = "";
   private alreadySurfaced = new Set<string>();
   private extractionInProgress = false;
+  /** Latest extract request while one is running (coalesce; do not drop turns). */
+  private pendingExtraction: MemoryExtractionInput | null = null;
   private pendingSurfacedFilenames: string[] = [];
 
   setManager(manager: MemoryManager): void {
@@ -122,24 +124,25 @@ export class MemoryService {
   }
 
   runExtraction(input: MemoryExtractionInput): void {
-    const { agentId, getMessagesForLLM, manager: agentManager, emitEvent } = input;
     if (!this.manager) return;
     if (this.extractionInProgress) {
-      emitEvent?.("memory:extract", { status: "skip-in-progress" });
+      // Keep only the latest request — rapid turns should not drop the newest extract.
+      this.pendingExtraction = input;
+      input.emitEvent?.("memory:extract", { status: "queued" });
       return;
     }
 
-    const llmMessages = getMessagesForLLM();
+    const llmMessages = input.getMessagesForLLM();
     // Prefer projected LLM view; fall back to a longer tail if projection is short.
     const MIN_MESSAGES_FOR_EXTRACT = 8;
     if (llmMessages.length < MIN_MESSAGES_FOR_EXTRACT) {
-      emitEvent?.("memory:extract", { status: "skip-short", count: llmMessages.length });
+      input.emitEvent?.("memory:extract", { status: "skip-short", count: llmMessages.length });
       return;
     }
 
     const messages = llmMessages.slice(-80);
-
     const memoryManager = this.manager;
+    const { agentId, manager: agentManager, emitEvent } = input;
 
     this.extractionInProgress = true;
     emitEvent?.("memory:extract", { status: "start" });
@@ -174,6 +177,11 @@ export class MemoryService {
         emitEvent?.("memory:extract", { status: "error", error: errorMsg });
       } finally {
         this.extractionInProgress = false;
+        const pending = this.pendingExtraction;
+        this.pendingExtraction = null;
+        if (pending) {
+          this.runExtraction(pending);
+        }
       }
     })();
   }
@@ -182,5 +190,6 @@ export class MemoryService {
     this.relevantContent = "";
     this.pendingSurfacedFilenames = [];
     this.alreadySurfaced.clear();
+    this.pendingExtraction = null;
   }
 }

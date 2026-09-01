@@ -113,7 +113,7 @@ function logMemoryExtract(log: AgentLog, event: AgentEvent): void {
       log.warn("memory", `Memory extraction failed: ${p(event).error ?? "unknown"}`);
       break;
     default:
-      break; // skip-in-progress, skip-short — silent
+      break; // queued, skip-short — silent
   }
 }
 

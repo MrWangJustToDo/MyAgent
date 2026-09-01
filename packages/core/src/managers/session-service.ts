@@ -157,16 +157,23 @@ export class SessionService {
       this.generateSessionTitle(firstUserText, { usage, resolveTextAdapter }).then((title) => {
         if (this.data && this.store) {
           this.data.name = title;
-          this.store.save(this.data).catch(() => {});
+          this.store.save(this.data).catch((err) => {
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            emitEvent?.("session:save-error", { target: "session-title", error: errorMsg });
+          });
         }
       });
     }
 
     const saveTarget = uiMessages !== undefined ? "session+uiMessages" : "session";
-    this.store.save(this.data).catch((err) => {
+    // Await so callers that `await persistSession` observe durability; emit on
+    // failure (do not rethrow — persist remains best-effort for fire-and-forget hosts).
+    try {
+      await this.store.save(this.data);
+    } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       emitEvent?.("session:save-error", { target: saveTarget, error: errorMsg });
-    });
+    }
   }
 
   /**

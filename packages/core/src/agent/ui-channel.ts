@@ -131,10 +131,17 @@ export class AgentUIChannel {
   private summaryStreamState: TaskSummaryStreamState = { summaryPhaseUnlocked: false };
   /** Active agent-loop turn assistant message (per-turn streaming scope). */
   private currentTurnMessageId?: string;
+  /** Monotonic revision bumped on every messages change (wire projection cache). */
+  private revision = 0;
 
   /** Current task run phase for parent task tool UI (`tools` vs `summary`). */
   getTaskRunPhase(): TaskRunPhase {
     return resolveTaskRunPhase(this.getMessages(), this.summaryStreamState);
+  }
+
+  /** Channel generation for cheap wire-projection fingerprints. */
+  getRevision(): number {
+    return this.revision;
   }
 
   constructor(options: AgentUIChannelOptions = {}) {
@@ -389,6 +396,7 @@ export class AgentUIChannel {
   }
 
   private handleMessagesChange(messages: TanStackUIMessage[]): void {
+    this.revision += 1;
     this.onUpdate?.(messages);
     this.messageEvents.emit("messages", messages);
     // Summary streaming is driven by TEXT_MESSAGE_CONTENT chunks in processChunk —

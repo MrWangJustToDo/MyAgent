@@ -85,9 +85,18 @@ export class SessionStore {
    */
   async save(session: SessionData): Promise<void> {
     const prev = this.saveLocks.get(session.id) ?? Promise.resolve();
-    const current = prev.then(() => this.doSave(session)).catch(() => {});
-    this.saveLocks.set(session.id, current);
-    return current;
+    // Run doSave after the previous lock; return the rejecting promise to callers
+    // so failures surface (session:save-error). Keep the stored lock chain
+    // non-rejecting so one failure does not permanently stall later saves.
+    const run = prev.then(() => this.doSave(session));
+    this.saveLocks.set(
+      session.id,
+      run.then(
+        () => undefined,
+        () => undefined
+      )
+    );
+    return run;
   }
 
   /**

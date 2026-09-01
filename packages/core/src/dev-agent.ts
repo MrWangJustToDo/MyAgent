@@ -109,8 +109,10 @@ export {
   isCompactionSummaryUIMessage,
   isLatestDurableMessageCompactionSummary,
   keepPolicyProjectionOptions,
+  lastMessageContentLen,
   maybeAppendCompactArchive,
   parseCompactSequence,
+  policyKeyFromOptions,
   resolveAutoCompactTrigger,
   resolveKeepPolicy,
   serializeConversation,
@@ -118,6 +120,8 @@ export {
   stripCompactArchiveSections,
   TURN_PREFIX_INSTRUCTION,
   UPDATE_COMPACTION_PROMPT,
+  WireProjectionCache,
+  wireSourceFingerprint,
   writeCompactArchive,
 } from "./agent/compaction";
 export { extractTextFromContent } from "./agent/compaction/message-utils.js";

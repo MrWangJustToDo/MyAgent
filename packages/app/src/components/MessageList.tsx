@@ -15,6 +15,7 @@ import { useStatic } from "../hooks/use-static";
 import { useTranscriptDisplay } from "../hooks/use-transcript-display.js";
 import { MessageView } from "../messages";
 import { COLORS } from "../theme/colors.js";
+import { encodeToolCallState } from "../utils/dedupe-tool-calls";
 import { getMessages } from "../utils/get-messages";
 
 import { CursorFlush } from "./CursorFlush";
@@ -44,10 +45,7 @@ function computeDynamicListSignature(messages: UIMessage[]): string {
       if (!part) return m.id;
       if (part.type === "tool-call") {
         const tool = part as { id?: string; state?: string; output?: unknown; approval?: { approved?: boolean } };
-        const hasOutput = tool.output !== undefined ? "1" : "0";
-        const approval =
-          tool.approval?.approved === true ? "a" : tool.approval?.approved === false ? "d" : tool.approval ? "p" : "-";
-        return `${m.id}:${tool.id ?? ""}:${tool.state ?? ""}:${hasOutput}:${approval}`;
+        return `${m.id}:${encodeToolCallState(tool)}`;
       }
       if (part.type === "text") {
         const content = (part as { content?: string }).content ?? "";

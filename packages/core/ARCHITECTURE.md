@@ -6,27 +6,28 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 
 ---
 
-## Completion status (as of 2026-07)
+## Completion status (as of 2026-09)
 
-| Area | Status | Notes |
-|------|--------|-------|
-| CoreEnv abstraction | **Done** | `registerCoreEnv` / `getEnv` |
-| Agent factory & manager | **Done** | Root vs subagent split |
-| TanStack agent loop | **Done** | `AgentRunner` + middleware stack |
-| Event protocol + Event→Log bridge | **Done** | `AgentTelemetryBus`, `event-log-bridge.ts` |
-| Model config (`openai` / `anthropic`) | **Done** | `resolveModelConfig`, `createTextAdapter` |
-| Session persistence | **Done** | Unified `persistSession`; `finalizeRun` + `applyRunOutcome` on finish/abort/error |
-| Agent Session API | **In progress** | Snapshot/commands + Local Host; app cutover pending |
-| Compaction (micro / auto / reactive) | **Done** | + manual compact via ManagedAgent / Session `compact` |
-| Memory (prefetch / extract / consolidate) | **Done** | Post-run extraction only |
-| Tool approval | **Done in core** | `status` middleware + `needsApproval` on tools; app handles UI/keyboard only |
-| Extensions | **Done** | `ExtensionRunner` + `extensions-middleware` + per-turn `before_agent_start` / turn-context providers |
-| Plan mode | **Done** | `PlanModeController` + tool filter + `/plan`; session `planMode` restore; executing auto-approve gated on `todosSeeded` |
+| Area                                      | Status           | Notes                                                                                                                   |
+| ----------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| CoreEnv abstraction                       | **Done**         | `registerCoreEnv` / `getEnv`                                                                                            |
+| Agent factory & manager                   | **Done**         | Root vs subagent split                                                                                                  |
+| TanStack agent loop                       | **Done**         | `AgentRunner` + middleware stack                                                                                        |
+| Event protocol + Event→Log bridge         | **Done**         | `AgentTelemetryBus`, `event-log-bridge.ts`                                                                              |
+| Model config (`openai` / `anthropic`)     | **Done**         | `resolveModelConfig`, `createTextAdapter`                                                                               |
+| Session persistence                       | **Done**         | Unified `persistSession`; save failures reject + emit `session:save-error`                                              |
+| Agent Session API                         | **Done**         | Snapshot/commands + Local/Remote Host; **app is Session-only** (no ManagedAgent in UI)                                  |
+| Compaction (micro / auto / reactive)      | **Done**         | + manual compact via ManagedAgent / Session `compact`                                                                   |
+| Memory (prefetch / extract / consolidate) | **Done**         | Post-run extraction; in-flight extracts coalesce to latest (`queued`)                                                   |
+| Tool approval                             | **Done in core** | `status` middleware + `needsApproval` on tools; app handles UI/keyboard only                                            |
+| Extensions                                | **Done**         | `ExtensionRunner` + `extensions-middleware` + per-turn `before_agent_start` / turn-context providers                    |
+| Plan mode                                 | **Done**         | `PlanModeController` + tool filter + `/plan`; session `planMode` restore; executing auto-approve gated on `todosSeeded` |
 
 **Known gaps**
 
-1. **Tool approval** — core `AgentChatController` owns tool-phase continuation; app handles UI/keyboard only.
+1. **Tool approval UX** — core `AgentChatController` owns tool-phase continuation (package-internal); app handles UI/keyboard only.
 2. **Subagents** — no session store, memory, MCP, or extensions (by design).
+3. **`reasoningConfig`** — parsed onto `ModelInfo` but not yet applied to adapter requests.
 
 ---
 
@@ -80,28 +81,31 @@ packages/app/src/adapter/create-agent.ts
   wire React stores (useAgent, useAgentLog, useTodoManager)
   optional: continueLatestSession() / resumeSession() → initialMessages
 ```
+
 ### 1.3 Chat transport (in-process)
 
-| API | File | Use |
-|-----|------|-----|
-| `ManagedAgent.initChat(manager, initialMessages?)` | `managers/agent-chat-controller.ts` | Main CLI chat session |
-| `AgentChatController.sendMessage` / `steer` / `followUp` / `respondToToolApproval` | same | User turns, mid-run queues, tool-phase continuation |
-| `agentManager.runAgentStream(agentId, input)` | `managers/run-agent.ts` | Core streaming entry |
-| `AgentSession` / `AgentSessionHost` | `agent-session/` | Preferred host/UI control surface |
+| API                                                                                | File                                | Use                                                 |
+| ---------------------------------------------------------------------------------- | ----------------------------------- | --------------------------------------------------- |
+| `ManagedAgent.initChat(manager, initialMessages?)`                                 | `managers/agent-chat-controller.ts` | Main CLI chat session                               |
+| `AgentChatController.sendMessage` / `steer` / `followUp` / `respondToToolApproval` | same                                | User turns, mid-run queues, tool-phase continuation |
+| `agentManager.runAgentStream(agentId, input)`                                      | `managers/run-agent.ts`             | Core streaming entry                                |
+| `AgentSession` / `AgentSessionHost`                                                | `agent-session/`                    | Preferred host/UI control surface                   |
 
 ### 1.4 Public vs internal APIs
 
-| Symbol | Exported from `@my-agent/core`? |
-|--------|----------------------------------|
-| `agentManager`, `AgentManager` | Yes |
-| `ManagedAgent`, `ManagedAgentConfig` | Yes |
-| `AgentChatController`, `ManagedAgent.initChat` | Yes |
-| `AgentSession`, `AgentSessionHost` | Yes |
-| `buildManagedAgent`, `getDefaultSkillDirs` | **No** — package-internal / `dev.ts` |
-| Session-sync tracker helpers, tool-phase pump helpers | **No** — `dev.ts` / package-private |
-| `bridgeTelemetryToAgentLog` | **No** — wired in `AgentManager` constructor |
+| Symbol                                                            | Exported from `@my-agent/core`?                                                     |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `agentManager`, `AgentManager`                                    | Yes — bootstrap / CLI; **UI hosts must use AgentSession**                           |
+| `ManagedAgent`, `ManagedAgentConfig`                              | Yes — bootstrap only; app forbids importing ManagedAgent                            |
+| `AgentChatController`                                             | **No** — package-internal (`dev.ts` / validate); reached via ManagedAgent bootstrap |
+| `ManagedAgent.initChat`                                           | Yes (bootstrap helper)                                                              |
+| `AgentSession`, `AgentSessionHost`, `createLocalAgentSessionHost` | Yes — **preferred host/UI control surface**                                         |
+| `buildManagedAgent`, `getDefaultSkillDirs`                        | **No** — package-internal / `dev.ts`                                                |
+| Session-sync tracker helpers, tool-phase pump helpers             | **No** — `dev.ts` / package-private                                                 |
+| `bridgeTelemetryToAgentLog`                                       | **No** — wired in `AgentManager` constructor                                        |
+| `SessionStore`                                                    | **No** — DENY list; use Session / SessionService                                    |
 
-See `openspec/changes/harden-core-organization/API-REMOVALS.md` for the full public-entry removal list.
+See `scripts/validate-core-public-exports.mjs` for the authoritative DENY/EXPECT lists.
 
 ### 1.5 Module layering
 
@@ -122,13 +126,13 @@ hosts / app  →  managers (orchestration)  →  agent/* (domain)  →  models /
 
 ### 1.6 ManagedAgent host surface
 
-| Field / API | Host access |
-|-------------|-------------|
-| `status`, `context`, `ui` | Read-only getters |
-| `usage`, `planMode`, `autoMode` | `readonly` service refs (mutate via methods); auto and plan are mutually exclusive |
-| `runner`, `textAdapter`, `runnerConfigKey` | **Private** — package-internal accessors only |
-| `setStatus` / `setContext` / `setUIChannel` | Mutation entry points (`setUIChannel` package-internal) |
-| `statusController.applyRunOutcome(...)` | Unified run finalization (chat + detached/subagent) |
+| Field / API                                 | Host access                                                                        |
+| ------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `status`, `context`, `ui`                   | Read-only getters                                                                  |
+| `usage`, `planMode`, `autoMode`             | `readonly` service refs (mutate via methods); auto and plan are mutually exclusive |
+| `runner`, `textAdapter`, `runnerConfigKey`  | **Private** — package-internal accessors only                                      |
+| `setStatus` / `setContext` / `setUIChannel` | Mutation entry points (`setUIChannel` package-internal)                            |
+| `statusController.applyRunOutcome(...)`     | Unified run finalization (chat + detached/subagent)                                |
 
 ---
 
@@ -148,19 +152,19 @@ agent-manager.ts
 
 **Root agent** (`!parentId`):
 
-| Step | Action |
-|------|--------|
-| 1 | `AgentLog`, `TodoManager`, `ManagedAgent` (UI channel attached before LLM runs) |
-| 2 | `createTools()` → filesystem, grep, glob, tree, run_command, … |
-| 3 | `managed.dispatchEvent = emit` (routes to `AgentTelemetryBus`) |
-| 4 | `loadAgentDoc()` → `setAgentDocContent` (AGENTS.md / CLAUDE.md) |
-| 5 | `todo`, `webfetch`, `websearch`, `ask_user` tools |
-| 6 | `SkillRegistry.loadFromDirectories` → `list_skills`, `load_skill`, `task` |
-| 7 | `setCompactionConfig` from model context window |
-| 8 | Create `McpManager` + `MemoryManager` data layers (connected / registered later by the built-in extensions below) |
-| 9 | `ExtensionLoader` / `ExtensionRunner` — scan `.agents/extension` then `~/.agents/extension` (plus `AGENT_EXTENSION_DIRS` / `config.extensionDirs` / `--extension-dirs`); programmatic `config.extensions` last |
-| 10 | Built-in extensions through the runner — LSP (`my-agent-lsp`), Skills (`my-agent-skills`), Memory (`my-agent-memory`), MCP (`my-agent-mcp`: `McpManager.initialize` on activate, tools kept as `mcp__<server>_<tool>` with multimodal `content[]`, `/mcp` command; deactivate → `shutdown`) |
-| 11 | `SessionStore` → `setSessionStore({ modelStyle, model })` |
+| Step | Action                                                                                                                                                                                                                                                                                      |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `AgentLog`, `TodoManager`, `ManagedAgent` (UI channel attached before LLM runs)                                                                                                                                                                                                             |
+| 2    | `createTools()` → filesystem, grep, glob, tree, run_command, …                                                                                                                                                                                                                              |
+| 3    | `managed.dispatchEvent = emit` (routes to `AgentTelemetryBus`)                                                                                                                                                                                                                              |
+| 4    | `loadAgentDoc()` → `setAgentDocContent` (AGENTS.md / CLAUDE.md)                                                                                                                                                                                                                             |
+| 5    | `todo`, `webfetch`, `websearch`, `ask_user` tools                                                                                                                                                                                                                                           |
+| 6    | `SkillRegistry.loadFromDirectories` → `list_skills`, `load_skill`, `task`                                                                                                                                                                                                                   |
+| 7    | `setCompactionConfig` from model context window                                                                                                                                                                                                                                             |
+| 8    | Create `McpManager` + `MemoryManager` data layers (connected / registered later by the built-in extensions below)                                                                                                                                                                           |
+| 9    | `ExtensionLoader` / `ExtensionRunner` — scan `.agents/extension` then `~/.agents/extension` (plus `AGENT_EXTENSION_DIRS` / `config.extensionDirs` / `--extension-dirs`); programmatic `config.extensions` last                                                                              |
+| 10   | Built-in extensions through the runner — LSP (`my-agent-lsp`), Skills (`my-agent-skills`), Memory (`my-agent-memory`), MCP (`my-agent-mcp`: `McpManager.initialize` on activate, tools kept as `mcp__<server>_<tool>` with multimodal `content[]`, `/mcp` command; deactivate → `shutdown`) |
+| 11   | `SessionStore` → `setSessionStore({ modelStyle, model })`                                                                                                                                                                                                                                   |
 
 **Subagent** (`parentId` set): inherits parent config via `spawnSubagent`; skips docs, skills, MCP, memory, extensions, session, and most root-only tools.
 
@@ -174,24 +178,24 @@ AgentManager constructor
 
 Observation is split into four layers (do not mix interception into the lifecycle bus):
 
-| Layer | Mechanism | Role |
-|-------|-----------|------|
-| L1 Control plane | `AgentStatusController` + L1 Emitter → Session `state` | status / error / pendingApproval |
-| L2 Lifecycle bus | `AgentTelemetryBus` → Event→Log (+ Session `lifecycle` / `agentManager.on`) | fire-and-forget notify |
-| L3 Data plane | `AgentUIChannel` + tool-output registry → Session `messages` / `tool`; `SummaryStreamHub` → Session `summary` | UIMessages / tool stdout / task·compact summary |
-| L4 Interception | `ExtensionEventBus` only | skip / transform tool args |
+| Layer            | Mechanism                                                                                                     | Role                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| L1 Control plane | `AgentStatusController` + L1 Emitter → Session `state`                                                        | status / error / pendingApproval                |
+| L2 Lifecycle bus | `AgentTelemetryBus` → Event→Log (+ Session `lifecycle` / `agentManager.on`)                                   | fire-and-forget notify                          |
+| L3 Data plane    | `AgentUIChannel` + tool-output registry → Session `messages` / `tool`; `SummaryStreamHub` → Session `summary` | UIMessages / tool stdout / task·compact summary |
+| L4 Interception  | `ExtensionEventBus` only                                                                                      | skip / transform tool args                      |
 
 ### 2.4 Session bootstrap events (`session-bootstrap-events.ts`)
 
 Emitted **after** the agent is registered (so Event→Log bridge can resolve `managed.log`):
 
-| Event | When |
-|-------|------|
-| `session:doc` | Agent doc loaded |
-| `session:skill` | Skills registered |
-| `session:mcp` | MCP servers connected |
-| `session:memory` | Memory index ready |
-| `session:start` | Bootstrap complete (`cwd`) |
+| Event            | When                       |
+| ---------------- | -------------------------- |
+| `session:doc`    | Agent doc loaded           |
+| `session:skill`  | Skills registered          |
+| `session:mcp`    | MCP servers connected      |
+| `session:memory` | Memory index ready         |
+| `session:start`  | Bootstrap complete (`cwd`) |
 
 These also map to hook scripts where applicable (`SessionStart`, `Notification`, etc.) via `agent-event-bus.ts`.
 
@@ -247,6 +251,7 @@ if !isToolContinuationPrepare(agent.status, messages):
 On user cancel, `cancelIncompleteToolCalls` marks truncated / never-executed tool calls (`input-streaming`, orphan `input-complete`, etc.) as `error` with a synthetic tool-result. That stops the UI spinner and prevents the next `chat()` from re-entering TanStack `executeToolCalls` with invalid JSON arguments.
 
 `isToolContinuationPrepare` uses existing state — no extra run-phase field:
+
 - `status === "waiting"` (approval pause), or
 - last message is not `user` (tool-phase / approval continuation within the same turn).
 
@@ -274,20 +279,20 @@ Status logic is centralized in `AgentStatusController` (`managers/agent-status-c
 
 ### 3.5 Lifecycle status transitions
 
-| Phase | Status | Trigger |
-|-------|--------|---------|
-| Run starts | `running` | `status.onRunStart` / `prepareRunPhase` |
-| Model reasoning | `thinking` | `REASONING_MESSAGE_*` chunk |
-| Text output | `responding` | `TEXT_MESSAGE_CONTENT` |
-| Tool call | `running` | `TOOL_CALL_START` |
-| Tool approval pending | `waiting` | `status.syncApprovals` on `onToolPhaseComplete` |
-| Client tool (`ask_user`) | `awaiting_user` | App host calls `ManagedAgent.setClientToolWaiting(true)` |
-| Auto-compact | `compacting` | `status.beginCompaction("auto")` |
-| Reactive compact | `compacting` | `status.beginCompaction("reactive")` |
-| Success | `completed` / `idle` | `onRunFinish` (preserves `waiting` / `awaiting_user` if set) |
-| Stream ended, tools waiting | `completed` / `waiting` | `statusController.reconcileAfterRun` after `pumpToolPhases` |
-| User abort | `aborted` | `onRunAbort` / `onUserCancel` / `RunCoordinator` |
-| Error | `error` | `onRunError` / `onExternalError` |
+| Phase                       | Status                  | Trigger                                                      |
+| --------------------------- | ----------------------- | ------------------------------------------------------------ |
+| Run starts                  | `running`               | `status.onRunStart` / `prepareRunPhase`                      |
+| Model reasoning             | `thinking`              | `REASONING_MESSAGE_*` chunk                                  |
+| Text output                 | `responding`            | `TEXT_MESSAGE_CONTENT`                                       |
+| Tool call                   | `running`               | `TOOL_CALL_START`                                            |
+| Tool approval pending       | `waiting`               | `status.syncApprovals` on `onToolPhaseComplete`              |
+| Client tool (`ask_user`)    | `awaiting_user`         | App host calls `ManagedAgent.setClientToolWaiting(true)`     |
+| Auto-compact                | `compacting`            | `status.beginCompaction("auto")`                             |
+| Reactive compact            | `compacting`            | `status.beginCompaction("reactive")`                         |
+| Success                     | `completed` / `idle`    | `onRunFinish` (preserves `waiting` / `awaiting_user` if set) |
+| Stream ended, tools waiting | `completed` / `waiting` | `statusController.reconcileAfterRun` after `pumpToolPhases`  |
+| User abort                  | `aborted`               | `onRunAbort` / `onUserCancel` / `RunCoordinator`             |
+| Error                       | `error`                 | `onRunError` / `onExternalError`                             |
 
 ---
 
@@ -299,10 +304,10 @@ Core **declares** which tools need approval and **owns agent status** during the
 
 `createStatusMiddleware` (`managers/middleware/status-middleware.ts`) delegates approval transitions to `AgentStatusController`:
 
-| Hook | Action |
-|------|--------|
+| Hook                  | Action                                                                                                                  |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `onToolPhaseComplete` | When `info.needsApproval.length > 0`: `waiting`, `setPendingApprovalCount`, emit `agent:tool-approval-request` per tool |
-| `onBeforeToolCall` | When status is `waiting`: clear count, `running` (approved tool executing) |
+| `onBeforeToolCall`    | When status is `waiting`: clear count, `running` (approved tool executing)                                              |
 
 Tools with approval required (`defineServerTool` in `runtime/define-tool.ts`):
 
@@ -312,7 +317,7 @@ Tools with approval required (`defineServerTool` in `runtime/define-tool.ts`):
 Helper (available but not used by app today):
 
 ```typescript
-managed.isToolNeedsApproval(toolName)  // managed-agent.ts
+managed.isToolNeedsApproval(toolName); // managed-agent.ts
 ```
 
 ### 4.2 TanStack protocol
@@ -321,26 +326,26 @@ managed.isToolNeedsApproval(toolName)  // managed-agent.ts
 
 ### 4.3 App layer (not in core)
 
-| Step | Location |
-|------|----------|
-| Chat session | **core** `AgentChatController` — `StreamProcessor` + `pumpToolPhases()` |
-| App hook | `use-agent-chat.ts` — `AgentSession` dispatch + subscribe (`messages` / `queues` / `state`) |
-| Detect pending approval (UI) | `use-agent-chat.ts` — `isPendingToolApproval()` for keyboard / input mode |
-| Agent status | **core** `approval` middleware — not app |
-| UI | `ToolCallPartView.tsx`, `Footer.tsx` |
-| Keyboard | `use-agent-keybindings.ts` — `y` approves **one** pending tool per press; `n` enters freeform deny-reason input |
-| Deny reason | App collects reason in freeform mode; `respondToToolApproval(id, false, reason)` stores it on `part.approval.reason` and adds a `tool-result` part for the LLM |
-| Empty model turn | TanStack may leave a `parts: []` assistant shell after `TEXT_MESSAGE_START` with no content; `AgentUIChannel.finalizeStream()` strips trailing shells; `needsAgentResponseAfterTools()` skips shells when deciding pump continuation |
-| Resume | `respondToToolApproval()` — core re-runs while `shouldContinueAgentPump()` (approved execution or model follow-up after denial) |
+| Step                         | Location                                                                                                                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Chat session                 | **core** `AgentChatController` — `StreamProcessor` + `pumpToolPhases()`                                                                                                                                                              |
+| App hook                     | `use-agent-chat.ts` — `AgentSession` dispatch + subscribe (`messages` / `queues` / `state`)                                                                                                                                          |
+| Detect pending approval (UI) | `use-agent-chat.ts` — `isPendingToolApproval()` for keyboard / input mode                                                                                                                                                            |
+| Agent status                 | **core** `approval` middleware — not app                                                                                                                                                                                             |
+| UI                           | `ToolCallPartView.tsx`, `Footer.tsx`                                                                                                                                                                                                 |
+| Keyboard                     | `use-agent-keybindings.ts` — `y` approves **one** pending tool per press; `n` enters freeform deny-reason input                                                                                                                      |
+| Deny reason                  | App collects reason in freeform mode; `respondToToolApproval(id, false, reason)` stores it on `part.approval.reason` and adds a `tool-result` part for the LLM                                                                       |
+| Empty model turn             | TanStack may leave a `parts: []` assistant shell after `TEXT_MESSAGE_START` with no content; `AgentUIChannel.finalizeStream()` strips trailing shells; `needsAgentResponseAfterTools()` skips shells when deciding pump continuation |
+| Resume                       | `respondToToolApproval()` — core re-runs while `shouldContinueAgentPump()` (approved execution or model follow-up after denial)                                                                                                      |
 
 **Mixed tool batches** (e.g. `tree` + `run_command`): TanStack defers non-approval tools while approvals are pending. Core `pumpToolPhases()` loops `runAgentStream()` until `shouldContinueAgentPump()` is false — no `ChatClient.shouldAutoSend()`.
 
 **Steering / follow-up queues:** While a pump is executing (`pumpDepth > 0`) or status is `waiting` / `awaiting_user`, `steer()` / `followUp()` enqueue user content without aborting. A finished pump that left status `running` because tool-phase work remains (`shouldContinueAgentPump`) does **not** defer — `sendMessage` starts a fresh pump (and the controller auto-chains another pump when the phase cap is hit). Drain points in `pumpToolPhases`:
 
-| API | When delivered |
-|-----|----------------|
-| `steer` | After tool execution finishes for the current batch, before the next LLM call |
-| `followUp` | Only when the agent would otherwise stop (no tool continuation) |
+| API        | When delivered                                                                |
+| ---------- | ----------------------------------------------------------------------------- |
+| `steer`    | After tool execution finishes for the current batch, before the next LLM call |
+| `followUp` | Only when the agent would otherwise stop (no tool continuation)               |
 
 Default drain mode is `one-at-a-time`. `stop()` / `clearMessages()` clear both queues. Mid-run injects call `markNextPrepareAsContinuation()` so prepare skips memory prefetch / `prompt:submit`.
 
@@ -348,10 +353,10 @@ Default drain mode is `one-at-a-time`. `stop()` / `clearMessages()` clear both q
 
 Client tools pause the run until the host supplies output via `addToolResult`. Core does **not** infer UI status from message parts — the app sets it explicitly:
 
-| API | When |
-|-----|------|
-| `ManagedAgent.setClientToolWaiting(true)` | App detects pending `ask_user` (select list or freeform) |
-| `ManagedAgent.setClientToolWaiting(false)` | User submits answer, before `addToolResult` |
+| API                                        | When                                                     |
+| ------------------------------------------ | -------------------------------------------------------- |
+| `ManagedAgent.setClientToolWaiting(true)`  | App detects pending `ask_user` (select list or freeform) |
+| `ManagedAgent.setClientToolWaiting(false)` | User submits answer, before `addToolResult`              |
 
 Status becomes `awaiting_user` (distinct from approval `waiting`). Exposed in CLI via `useAgentChat().setClientToolWaiting`.
 
@@ -361,10 +366,10 @@ No manual user text is required; each `y` only approves one tool when several `r
 
 ### 4.4 Extensions vs user approval (different mechanisms)
 
-| Mechanism | File | Purpose |
-|-----------|------|---------|
-| **User approval** | TanStack + app | Block destructive tools until user confirms |
-| **Extension deny/transform** | `extensions-middleware.ts` → `ExtensionEventBus` (`tool:before:*`) | Extension skip/transform before tool runs |
+| Mechanism                    | File                                                               | Purpose                                     |
+| ---------------------------- | ------------------------------------------------------------------ | ------------------------------------------- |
+| **User approval**            | TanStack + app                                                     | Block destructive tools until user confirms |
+| **Extension deny/transform** | `extensions-middleware.ts` → `ExtensionEventBus` (`tool:before:*`) | Extension skip/transform before tool runs   |
 
 Lifecycle tool events (`agent:tool-start` / `agent:tool-end` / `agent:tool-error`) always emit on AgentTelemetryBus (L2), whether or not an extension runner is present. Extension bus traffic is L4 only.
 
@@ -391,11 +396,11 @@ Large tool outputs at **execute** time still use `maybeCacheOutput` (`.agents/ca
 
 **Rule:** provider wire-protocol quirks belong under `packages/core/src/models/` (`createTextAdapter` and subclasses). Middleware / tools / UI must not branch on vendor names (`deepseek`, etc.).
 
-| Kind | Where | Examples |
-|------|--------|----------|
-| **Adapter-specific** | `models/adapter-factory.ts`, `*-adapter.ts` | DeepSeek `reasoning_content` echo (`ReasoningChatCompletionsTextAdapter`); Chat Completions tool-image lift (`liftToolMediaForChatCompletions` — tool text stays string, images become a synthetic user `image_url` message); PDF text extract in `read_file` for Completions; Anthropic vs OpenAI Chat Completions style selection |
-| **Capability-generic** | middleware / reactive retry | Multimodal strip via `vision`/`audio`/`video`/`document` (`capability-message-utils`); `prompt_too_long` reactive compact |
-| **Config / metadata** | `model-config`, `models.dev`, session | `modelStyle`, pricing, `capabilities[]`, unused-for-now `reasoningConfig` (tag/effort/budget — not yet mapped to request options) |
+| Kind                   | Where                                       | Examples                                                                                                                                                                                                                                                                                                                            |
+| ---------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Adapter-specific**   | `models/adapter-factory.ts`, `*-adapter.ts` | DeepSeek `reasoning_content` echo (`ReasoningChatCompletionsTextAdapter`); Chat Completions tool-image lift (`liftToolMediaForChatCompletions` — tool text stays string, images become a synthetic user `image_url` message); PDF text extract in `read_file` for Completions; Anthropic vs OpenAI Chat Completions style selection |
+| **Capability-generic** | middleware / reactive retry                 | Multimodal strip via `vision`/`audio`/`video`/`document` (`capability-message-utils`); `prompt_too_long` reactive compact                                                                                                                                                                                                           |
+| **Config / metadata**  | `model-config`, `models.dev`, session       | `modelStyle`, pricing, `capabilities[]`, unused-for-now `reasoningConfig` (tag/effort/budget — not yet mapped to request options)                                                                                                                                                                                                   |
 
 **DeepSeek reasoning echo** (`reasoning-chat-completions-adapter.ts` + `reasoning-content-cache.ts`):
 
@@ -490,11 +495,11 @@ Set via `ManagedAgentConfig.compaction` in `agent-factory.ts`.
 
 ### 6.1 Storage
 
-| Item | Value |
-|------|-------|
-| Directory | `.agents/sessions/` |
-| File | `{sessionId}.session.json` |
-| Schema | `SessionData` v4 (`agent/persistence/types.ts`; older files omit `planMode` / `approvals` / inline base64 media) |
+| Item      | Value                                                                                                            |
+| --------- | ---------------------------------------------------------------------------------------------------------------- |
+| Directory | `.agents/sessions/`                                                                                              |
+| File      | `{sessionId}.session.json`                                                                                       |
+| Schema    | `SessionData` v4 (`agent/persistence/types.ts`; older files omit `planMode` / `approvals` / inline base64 media) |
 
 Fields: `uiMessages` (includes in-chain summaries), `usage`, `cost`, `contextTokens`, `todos`, `todoPlanBound`, `planMode` (phase/markdown/path/seeded), `autoMode`, `approvals` (pending/approved/denied interrupt table), `modelStyle`, `model`, metadata.
 
@@ -504,12 +509,12 @@ Fields: `uiMessages` (includes in-chain summaries), `usage`, `cost`, `contextTok
 
 ### 6.2 Write paths (unified persist)
 
-| Trigger | Function | What is saved |
-|---------|----------|---------------|
-| **Run finalizes** (finish / abort / error) | `ManagedAgent.finalizeRun` → `SessionService.persistSession` | Model fields: `usage`, `cost`, `contextTokens`, `todos`, `planMode`; auto-title if `"New Session"` |
-| **User message (core)** | `AgentChatController` after `addUserMessage` (send / drained steer|follow-up) → `maybeSaveSessionUIMessages(..., "user-message")` | Model fields **plus** `uiMessages` when fingerprint changed |
-| **Pump idle (core)** | `AgentChatController.persistMessages` → `maybeSaveSessionUIMessages(..., "pump-complete")` | Same; also on Esc/abort after cancelling incomplete tools |
-| **Manual flush** | `saveSessionUIMessages` (`/clear`, slash commands) | Force full persist |
+| Trigger                                    | Function                                                                                   | What is saved                                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **Run finalizes** (finish / abort / error) | `ManagedAgent.finalizeRun` → `SessionService.persistSession`                               | Model fields: `usage`, `cost`, `contextTokens`, `todos`, `planMode`; auto-title if `"New Session"` |
+| **User message (core)**                    | `AgentChatController` after `addUserMessage` (send / drained steer                         | follow-up) → `maybeSaveSessionUIMessages(..., "user-message")`                                     | Model fields **plus** `uiMessages` when fingerprint changed |
+| **Pump idle (core)**                       | `AgentChatController.persistMessages` → `maybeSaveSessionUIMessages(..., "pump-complete")` | Same; also on Esc/abort after cancelling incomplete tools                                          |
+| **Manual flush**                           | `saveSessionUIMessages` (`/clear`, slash commands)                                         | Force full persist                                                                                 |
 
 App hosts subscribe to Session `messages`/`state` for UI only — they do **not** checkpoint to disk. Approval decisions are upserted into `SessionData.approvals` (`pending` on request, `approved`/`denied` on `y`/`n` or auto-approve) and written with the same persist triggers as `uiMessages`. Chat middleware rebuilds `resumeToolState.approvals` from that table (pending omitted). Format remains full JSON; `SessionSyncTracker` only skips duplicate fingerprints.
 
@@ -519,11 +524,11 @@ On restore, `PlanModeController.restoreState` rehydrates phase (and reloads mark
 
 **Run finalization** (`finalizeRun`):
 
-| Reason | Session persist | Memory extraction | `agent:stop` |
-|--------|-----------------|-------------------|--------------|
-| `finished` | Yes | Yes (async) | `{ reason: "finished" }` |
-| `aborted` | Yes | No | `{ reason: "aborted" }` |
-| `error` | Yes | No | `{ reason: "error" }` |
+| Reason     | Session persist | Memory extraction | `agent:stop`             |
+| ---------- | --------------- | ----------------- | ------------------------ |
+| `finished` | Yes             | Yes (async)       | `{ reason: "finished" }` |
+| `aborted`  | Yes             | No                | `{ reason: "aborted" }`  |
+| `error`    | Yes             | No                | `{ reason: "error" }`    |
 
 Owned by the **chat pump** / detached runners — not per-`chat()` lifecycle middleware:
 
@@ -580,9 +585,9 @@ Recovery / continuation always re-reads `managed.ui.getMessages()` (not a closed
 
 ### 6.5 Session events
 
-| Event | When |
-|-------|------|
-| `session:restore` | `ManagedAgent.restoreSession` succeeds (`messageCount`, `tokenEstimate`) |
+| Event                | When                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| `session:restore`    | `ManagedAgent.restoreSession` succeeds (`messageCount`, `tokenEstimate`)             |
 | `session:save-error` | `SessionStore.save` fails (target: `session`, `uiMessages`, or `session+uiMessages`) |
 
 ---
@@ -627,11 +632,11 @@ After compaction / clear, `resetAdmittedTurnContext()` forces a fresh admission.
 
 **Provider cache wiring** (`prompt-cache-middleware`, `models/prompt-cache.ts`):
 
-| Style | Behavior |
-|-------|----------|
-| `anthropic` | Split system at the boundary; `cache_control: ephemeral` on frozen system, last tool, and latest user message (≤3 of Anthropic's 4 breakpoints) |
-| `openai` (and other Chat Completions) | `prompt_cache_key` = session id (or agent id), merged into `modelOptions` |
-| all | Tools sorted by name before each request (`toolsToArray` + middleware) |
+| Style                                 | Behavior                                                                                                                                        |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `anthropic`                           | Split system at the boundary; `cache_control: ephemeral` on frozen system, last tool, and latest user message (≤3 of Anthropic's 4 breakpoints) |
+| `openai` (and other Chat Completions) | `prompt_cache_key` = session id (or agent id), merged into `modelOptions`                                                                       |
+| all                                   | Tools sorted by name before each request (`toolsToArray` + middleware)                                                                          |
 
 ### 7.4 Commit surfaced memories
 
@@ -646,7 +651,7 @@ After compaction / clear, `resetAdmittedTurnContext()` forces a fresh admission.
 ```
 Guard: manager exists, ≥8 messages, not already in progress
 extractMemories → runSubagent → write .agents/memory/*.md files
-  → emit memory:extract { status: start | complete | empty | skip-short | error }
+  → emit memory:extract { status: start | complete | empty | queued | skip-short | error }
 If count >= consolidateThreshold (default 25):
   consolidateMemories → merge/delete via subagent
   → emit memory:consolidate
@@ -662,41 +667,41 @@ flushIndex → update memory.content for next session
 ### 8.1 Emission
 
 ```typescript
-emitAgentTelemetry(emitter, type, { data })   // injects session_id
-managed.emitEvent(type, data)
+emitAgentTelemetry(emitter, type, { data }); // injects session_id
+managed.emitEvent(type, data);
 ```
 
 ### 8.2 Observation layers (L1–L4)
 
-| Layer | Internal | Host |
-|-------|----------|------|
-| L1 | Status controller + ManagedAgent Emitter `change` | Session `state` |
-| L2 | `AgentTelemetryBus` (+ Event→Log) | Session `lifecycle` (filtered); `agentManager.on` for cross-agent / `"*"` |
-| L3 | UIChannel Emitter `messages` + tool-output registry + `SummaryStreamHub` | Session `messages` / `tool` / `summary` |
-| L4 | `ExtensionEventBus` / ExtensionUI | Not part of AgentSession |
+| Layer | Internal                                                                 | Host                                                                      |
+| ----- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| L1    | Status controller + ManagedAgent Emitter `change`                        | Session `state`                                                           |
+| L2    | `AgentTelemetryBus` (+ Event→Log)                                        | Session `lifecycle` (filtered); `agentManager.on` for cross-agent / `"*"` |
+| L3    | UIChannel Emitter `messages` + tool-output registry + `SummaryStreamHub` | Session `messages` / `tool` / `summary`                                   |
+| L4    | `ExtensionEventBus` / ExtensionUI                                        | Not part of AgentSession                                                  |
 
 **Host observation API:** `AgentSession` only (`createLocalAgentSession` / HTTP client) — `getSnapshot` / `dispatch` / `subscribe(channels)`. Domain classes expose typed `.on(...)` for Session projection and package-internal use; there is no parallel `ManagedAgent.observe()` facade.
 
 Internal domain updates use a typed `Emitter` (todos, usage, L1 state, queues, plan, UI messages, log). Session channels project from those emitters; `lifecycle` projects a filtered `AgentTelemetryBus` set. Structured `log` is an opt-in session channel (not in default subscribe).
 
-**TODO(messages-incremental):** Session delivers full `UIMessage[]` on snapshot and the `messages` channel; JSON-patch / delta delivery is deferred.
+**Messages channel:** Session snapshots always carry a full `UIMessage[]`; the `messages` channel delivers the same full array (JSON-patch / delta delivery is deferred). Wire projection for the model loop is cached by channel revision + last-message fingerprint (`WireProjectionCache`).
 
 Tool process chunks (`run_command` stdout/stderr) are scoped by required `agentId`; Session `tool` channel receives them (`chunk` / `clear`).
 Task / compact summary text uses `ManagedAgent.summaryStreams` (`SummaryStreamHub`: `reset` / `append` / `end`) on Session `summary` — not the tool-output registry. Compact stream ids are stable (`compactSummaryStreamId(agentId)` → key `compact:${agentId}`).
 
 ### 8.3 Event types (summary)
 
-| Category | Events |
-|----------|--------|
-| Session bootstrap | `session:doc`, `session:skill`, `session:mcp`, `session:memory`, `session:start` |
-| Session I/O | `session:restore`, `session:save-error` |
-| Run lifecycle | `prompt:submit`, `agent:thinking`, `agent:abort`, `agent:stream-error`, `agent:stop` |
-| LLM iteration | `llm:request`, `llm:response` — **per TanStack iteration**, not per user turn |
-| Turn rollup | `turn:summary` — end of `AgentChatController.pumpToolPhases` |
-| Tools | `agent:tool-start`, `agent:tool-approval-request`, `agent:tool-end`, `agent:tool-error` |
-| Memory | `memory:prefetch`, `memory:extract`, `memory:consolidate` |
-| Compaction | `compaction:auto-*`, `compaction:reactive-*` (start kind matches path) |
-| Subagent | `subagent:created`, `subagent:started`, `subagent:completed` (`summary`), `subagent:error`, `subagent:destroyed`, `subagent:ui-update` |
+| Category          | Events                                                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Session bootstrap | `session:doc`, `session:skill`, `session:mcp`, `session:memory`, `session:start`                                                       |
+| Session I/O       | `session:restore`, `session:save-error`                                                                                                |
+| Run lifecycle     | `prompt:submit`, `agent:thinking`, `agent:abort`, `agent:stream-error`, `agent:stop`                                                   |
+| LLM iteration     | `llm:request`, `llm:response` — **per TanStack iteration**, not per user turn                                                          |
+| Turn rollup       | `turn:summary` — end of `AgentChatController.pumpToolPhases`                                                                           |
+| Tools             | `agent:tool-start`, `agent:tool-approval-request`, `agent:tool-end`, `agent:tool-error`                                                |
+| Memory            | `memory:prefetch`, `memory:extract`, `memory:consolidate`                                                                              |
+| Compaction        | `compaction:auto-*`, `compaction:reactive-*` (start kind matches path)                                                                 |
+| Subagent          | `subagent:created`, `subagent:started`, `subagent:completed` (`summary`), `subagent:error`, `subagent:destroyed`, `subagent:ui-update` |
 
 ### 8.4 Event → Log bridge
 
@@ -719,8 +724,7 @@ The ExtensionEventBus also carries **session lifecycle events** (distinct from t
 2. Runs `registerTurnContextProvider` callbacks.
 3. Merges turn-context text into `<extension_context>` inside the dynamic turn snapshot; `appendSystemPrompt` is merged into the same `<turn_context>` user message payload (frozen system stays cacheable).
 
-Repo demos live in `examples/extensions/` and are **opt-in** via `AGENT_EXTENSION_DIRS`, `ManagedAgentConfig.extensionDirs`, or CLI `--extension-dirs` (not in core defaults). Extension `registerCommand()` is mirrored onto `ManagedAgent` and synced into app slash commands after bootstrap (`syncExtensionCommands`). Built-in names (`/help`, …) win over extension conflicts. `registerTool()` converts definitions via `defineServerTool` before they enter the TanStack tool set. Tool schemas may use **`ctx.z`** (host Zod) or any Standard-Schema / JSON-Schema-compliant schema (the `inputSchema`/`outputSchema` type is the widened `SchemaInput`). `tool:after:*` interceptors can set `event.payload.modifiedResult` to replace the model-facing result. `ExtensionUI.setStatus(key, text)` publishes a `set-status` notification the app footer renders, and `ctx.ui.theme.fg(color, text)` returns a plain (host-rendered) colored string. Each `ExtensionContext` also exposes `ctx.coreEnv` (the runtime CoreEnv: `rootPath`, `fs`, `runCommand`, `exec`, `fetch`, `path`, `getEnv`) so extensions do real I/O without importing host-specific APIs — `agent-factory.ts` wires it from the global `getEnv()`. `ExtensionRunner.getExtensionInfos()` + `setEnabled(id, enabled)` power the app **Extensions panel** (`Ctrl+Y`, list / toggle enable-disable); disabling calls `deactivate()` and unregisters the extension's tools, commands, interceptors, and turn-context providers (wired via `onUnregisterTool`/`onUnregisterCommand` → `ManagedAgent.unregisterExtensionTool/Command`).
----
+## Repo demos live in `examples/extensions/` and are **opt-in** via `AGENT_EXTENSION_DIRS`, `ManagedAgentConfig.extensionDirs`, or CLI `--extension-dirs` (not in core defaults). Extension `registerCommand()` is mirrored onto `ManagedAgent` and synced into app slash commands after bootstrap (`syncExtensionCommands`). Built-in names (`/help`, …) win over extension conflicts. `registerTool()` converts definitions via `defineServerTool` before they enter the TanStack tool set. Tool schemas may use **`ctx.z`** (host Zod) or any Standard-Schema / JSON-Schema-compliant schema (the `inputSchema`/`outputSchema` type is the widened `SchemaInput`). `tool:after:*` interceptors can set `event.payload.modifiedResult` to replace the model-facing result. `ExtensionUI.setStatus(key, text)` publishes a `set-status` notification the app footer renders, and `ctx.ui.theme.fg(color, text)` returns a plain (host-rendered) colored string. Each `ExtensionContext` also exposes `ctx.coreEnv` (the runtime CoreEnv: `rootPath`, `fs`, `runCommand`, `exec`, `fetch`, `path`, `getEnv`) so extensions do real I/O without importing host-specific APIs — `agent-factory.ts` wires it from the global `getEnv()`. `ExtensionRunner.getExtensionInfos()` + `setEnabled(id, enabled)` power the app **Extensions panel** (`Ctrl+Y`, list / toggle enable-disable); disabling calls `deactivate()` and unregisters the extension's tools, commands, interceptors, and turn-context providers (wired via `onUnregisterTool`/`onUnregisterCommand` → `ManagedAgent.unregisterExtensionTool/Command`).
 
 ## 9. End-to-end run diagram
 
@@ -769,10 +773,10 @@ executeManagedAgentRun
 
 ## 10. Plan domain vs tool factories
 
-| Concern | Location | Examples |
-|---------|----------|----------|
+| Concern                                                                               | Location      | Examples                                                                          |
+| ------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------- |
 | Plan **domain** (phase machine, prompts, safe-command, verification gate, middleware) | `agent/plan/` | `PlanModeController`, `plan-mode-middleware`, `plan-prompts`, `plan-verification` |
-| Plan **tool factories** (model-callable tools) | `agent/plan/` | `create-plan-tool` (`create_plan` / `update_plan` / `complete_plan`) |
+| Plan **tool factories** (model-callable tools)                                        | `agent/plan/` | `create-plan-tool` (`create_plan` / `update_plan` / `complete_plan`)              |
 
 Domain-owned tools live next to their domain (same pattern as `subagent/begin-summary-tool` and `subagent/task-tool`). Universal workspace tools stay under `agent/tools/`.
 
@@ -782,28 +786,28 @@ Domain-owned tools live next to their domain (same pattern as `subagent/begin-su
 
 ## 11. Key file index
 
-| Area | Primary files |
-|------|---------------|
-| Entry / connect | `index.ts`, `agent-session/*` |
-| Manager | `managers/agent-manager.ts`, `managers/agent-factory.ts` |
-| Agent runtime | `managers/managed-agent.ts`, `managers/run-agent.ts`, `managers/agent-run-outcome.ts` |
-| Stream recovery | `managers/run-stream-recovery.ts`, `managers/stream-recovery/*` |
-| Runner | `agent/runner/agent-runner.ts` |
-| Middleware | `managers/middleware/*.ts` (+ `agent/plan/plan-mode-middleware.ts`) |
-| Stream helpers | `agent/stream/*` |
-| UI channel | `agent/ui-channel.ts` |
-| Shared types | `runtime-types/*` |
-| Telemetry | `managers/agent-telemetry-bus.ts`, `managers/emit-agent-telemetry.ts`, `managers/event-log-bridge.ts` |
-| Persistence | `managers/session-service.ts`, `agent/persistence/session-store.ts` |
-| Cross-cutting utils | `utils/emitter.ts`, `utils/generate-id.ts` |
-| Domain helpers | `agent/run-helpers/*` (tool-phase, empty-stream, pending queue — stay with chat/run) |
-| Memory | `managers/memory-service.ts`, `agent/memory/*.ts` |
-| Compaction | `agent/compaction/*.ts` |
-| Plan | `agent/plan/*` (domain + plan tool factories) |
-| Tools | `agent/tools/*.ts` (universal), `agent/tools/runtime/define-tool.ts`; domain tools under `plan/` / `skills/` / `subagent/` / `todo-manager/` |
-| Subagent | `agent/subagent/run-subagent.ts`, `agent/subagent/task-tool.ts` |
-| Models | `models/model-config.ts`, `models/adapter-factory.ts`, `models/prompt-cache.ts` |
-| CoreEnv | `env.ts` (+ `@my-agent/node` / `@my-agent/server`) |
+| Area                | Primary files                                                                                                                                |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Entry / connect     | `index.ts`, `agent-session/*`                                                                                                                |
+| Manager             | `managers/agent-manager.ts`, `managers/agent-factory.ts`                                                                                     |
+| Agent runtime       | `managers/managed-agent.ts`, `managers/run-agent.ts`, `managers/agent-run-outcome.ts`                                                        |
+| Stream recovery     | `managers/run-stream-recovery.ts`, `managers/stream-recovery/*`                                                                              |
+| Runner              | `agent/runner/agent-runner.ts`                                                                                                               |
+| Middleware          | `managers/middleware/*.ts` (+ `agent/plan/plan-mode-middleware.ts`)                                                                          |
+| Stream helpers      | `agent/stream/*`                                                                                                                             |
+| UI channel          | `agent/ui-channel.ts`                                                                                                                        |
+| Shared types        | `runtime-types/*`                                                                                                                            |
+| Telemetry           | `managers/agent-telemetry-bus.ts`, `managers/emit-agent-telemetry.ts`, `managers/event-log-bridge.ts`                                        |
+| Persistence         | `managers/session-service.ts`, `agent/persistence/session-store.ts`                                                                          |
+| Cross-cutting utils | `utils/emitter.ts`, `utils/generate-id.ts`                                                                                                   |
+| Domain helpers      | `agent/run-helpers/*` (tool-phase, empty-stream, pending queue — stay with chat/run)                                                         |
+| Memory              | `managers/memory-service.ts`, `agent/memory/*.ts`                                                                                            |
+| Compaction          | `agent/compaction/*.ts`                                                                                                                      |
+| Plan                | `agent/plan/*` (domain + plan tool factories)                                                                                                |
+| Tools               | `agent/tools/*.ts` (universal), `agent/tools/runtime/define-tool.ts`; domain tools under `plan/` / `skills/` / `subagent/` / `todo-manager/` |
+| Subagent            | `agent/subagent/run-subagent.ts`, `agent/subagent/task-tool.ts`                                                                              |
+| Models              | `models/model-config.ts`, `models/adapter-factory.ts`, `models/prompt-cache.ts`                                                              |
+| CoreEnv             | `env.ts` (+ `@my-agent/node` / `@my-agent/server`)                                                                                           |
 
 ---
 

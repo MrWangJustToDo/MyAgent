@@ -180,18 +180,25 @@ export function dedupeToolCallsInMessages(messages: UIMessage[]): UIMessage[] {
   return result.filter((msg) => msg.parts.length > 0);
 }
 
+/** Encode one tool-call's render-relevant state for signature comparisons. */
+export function encodeToolCallState(tool: {
+  id?: string;
+  state?: string;
+  output?: unknown;
+  approval?: { approved?: boolean };
+}): string {
+  const hasOutput = tool.output !== undefined ? "1" : "0";
+  const approval =
+    tool.approval?.approved === true ? "a" : tool.approval?.approved === false ? "d" : tool.approval ? "p" : "-";
+  return `${tool.id ?? ""}:${tool.state ?? ""}:${hasOutput}:${approval}`;
+}
+
 /** Fingerprint tool-call state for static list invalidation when merges update earlier rows. */
 export function computeToolCallsRenderSignature(messages: UIMessage[]): string {
   return messages
     .flatMap((message) => message.parts)
     .filter((part) => part?.type === "tool-call")
-    .map((part) => {
-      const tool = part as ToolCallPart;
-      const hasOutput = tool.output !== undefined ? "1" : "0";
-      const approval =
-        tool.approval?.approved === true ? "a" : tool.approval?.approved === false ? "d" : tool.approval ? "p" : "-";
-      return `${tool.id}:${tool.state}:${hasOutput}:${approval}`;
-    })
+    .map((part) => encodeToolCallState(part as ToolCallPart))
     .join("|");
 }
 

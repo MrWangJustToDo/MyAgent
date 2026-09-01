@@ -6,7 +6,10 @@ import {
   getModelVisibleMessages,
   isLatestDurableMessageCompactionSummary,
   keepPolicyProjectionOptions,
+  policyKeyFromOptions,
   resolveKeepPolicy,
+  WireProjectionCache,
+  wireSourceFingerprint,
 } from "../../agent/compaction";
 
 import type { AgentLog } from "../../agent/agent-log";
@@ -35,14 +38,20 @@ export interface CompactionMiddlewareDeps {
 function projectWireFromChannel(
   channel: AgentUIChannel,
   config: CompactionConfig | null,
-  contextWindow?: number
+  contextWindow: number | undefined,
+  cache: WireProjectionCache
 ): ModelMessage[] {
   const policyOptions = keepPolicyProjectionOptions(resolveKeepPolicy(config ?? {}, contextWindow));
-  return getModelVisibleMessages(convertMessagesToModelMessages(channel.getMessages()), policyOptions);
+  const messages = channel.getMessages();
+  const fingerprint = wireSourceFingerprint(channel.getRevision(), messages, policyKeyFromOptions(policyOptions));
+  return cache.getOrCompute(fingerprint, () =>
+    getModelVisibleMessages(convertMessagesToModelMessages(messages), policyOptions)
+  );
 }
 
 /** TanStack compaction via {@link ChatMiddleware.onConfig}. */
 export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): ChatMiddleware<ToolRunContext> {
+  const wireCache = new WireProjectionCache();
   return {
     name: "compaction",
     onIteration: () => {
@@ -60,7 +69,7 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
       const contextWindow = deps.getContextWindow?.();
       // Always project from the live channel. Early tool results and compact
       // appends land on the channel before the next inner iteration.
-      let llmMessages = projectWireFromChannel(channel, compactionConfig, contextWindow);
+      let llmMessages = projectWireFromChannel(channel, compactionConfig, contextWindow, wireCache);
 
       const managed = deps.manager.getAgent(deps.agentId);
       const isSubagent = Boolean(managed?.parentId);
@@ -98,7 +107,8 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
             })
           ) {
             managed?.resetAdmittedTurnContext();
-            llmMessages = projectWireFromChannel(channel, compactionConfig, contextWindow);
+            wireCache.invalidate();
+            llmMessages = projectWireFromChannel(channel, compactionConfig, contextWindow, wireCache);
           }
 
           if (result.compacted) {

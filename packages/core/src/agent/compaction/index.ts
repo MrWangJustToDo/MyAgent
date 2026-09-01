@@ -72,6 +72,15 @@ export {
 } from "./message-chain-projection.js";
 export { extractCompactionSummaryBody } from "./compaction-summary.js";
 
+// Wire projection cache (onConfig reuse)
+export {
+  WireProjectionCache,
+  lastMessageContentLen,
+  policyKeyFromOptions,
+  wireSourceFingerprint,
+  type WireProjectionCacheEntry,
+} from "./wire-projection-cache.js";
+
 // Auto compaction (Layer 2)
 export {
   shouldTriggerAutoCompact,
