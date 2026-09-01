@@ -170,12 +170,14 @@ async function selectWithLLM(
   manifest: string,
   textAdapter: TextAdapterConfig,
   usage?: UsageTracker | null,
-  logger?: AgentLog
+  logger?: AgentLog,
+  abortSignal?: AbortSignal
 ): Promise<string[]> {
   const { text, usage: queryUsage } = await runSideTextQuery(textAdapter, {
     systemPrompt: SELECT_MEMORIES_SYSTEM_PROMPT,
     userPrompt: `Query: ${query}\n\nAvailable memories:\n${manifest}`,
     maxOutputTokens: 256,
+    abortSignal,
   });
 
   if (usage && queryUsage) {
@@ -298,7 +300,8 @@ export async function findRelevantMemories(
   alreadySurfaced: ReadonlySet<string> = new Set(),
   options: FindRelevantMemoriesOptions = {},
   usage?: UsageTracker | null,
-  logger?: AgentLog
+  logger?: AgentLog,
+  abortSignal?: AbortSignal
 ): Promise<RelevantMemory[]> {
   const {
     maxItems = DEFAULT_MAX_RELEVANT_MEMORIES,
@@ -334,7 +337,7 @@ export async function findRelevantMemories(
   let selectionMethod: "llm" | "keyword" | "keyword-fallback" = "keyword";
   if (textAdapter) {
     try {
-      selectedFilenames = await selectWithLLM(query, manifest, textAdapter, usage, logger);
+      selectedFilenames = await selectWithLLM(query, manifest, textAdapter, usage, logger, abortSignal);
       selectionMethod = "llm";
       if (selectedFilenames.length === 0) {
         selectedFilenames = selectWithKeywords(query, candidates, maxItems);

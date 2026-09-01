@@ -104,6 +104,10 @@ export class AgentChatController {
     this.managed.statusController.onUserCancel();
     this.managed.abort(reason);
     this.runGeneration += 1;
+    // Reset pumpDepth so a subsequent sendMessage/forceSubmit is not deferred into
+    // the steer/followUp queue by the stale in-flight pump (still unwinding). The
+    // old pump's finally is guarded with Math.max(0, ...) so this never drifts negative.
+    this.pumpDepth = 0;
     // Immediately clear loading tool rows; stream teardown may still finalize later.
     this.applyCancelledIncompleteTools();
     // App no longer checkpoints on status — persist cancelled tools on abort.
@@ -425,7 +429,7 @@ export class AgentChatController {
         });
       }
     } finally {
-      this.pumpDepth -= 1;
+      this.pumpDepth = Math.max(0, this.pumpDepth - 1);
     }
   }
 

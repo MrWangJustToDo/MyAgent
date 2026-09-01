@@ -22,6 +22,8 @@ export interface MemoryPrefetchInput {
   log: AgentLog | null;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   emitEvent?: EmitAgentTelemetryFn;
+  /** Abort signal from the owning run — lets abort interrupt the selection LLM call. */
+  abortSignal?: AbortSignal;
 }
 
 export interface MemoryExtractionInput {
@@ -67,7 +69,7 @@ export class MemoryService {
   }
 
   async prefetchRelevantMemories(input: MemoryPrefetchInput): Promise<void> {
-    const { messages, usage, log, resolveTextAdapter, emitEvent } = input;
+    const { messages, usage, log, resolveTextAdapter, emitEvent, abortSignal } = input;
     if (!this.manager) {
       emitEvent?.("memory:prefetch", { status: "skip-no-manager" });
       return;
@@ -88,6 +90,13 @@ export class MemoryService {
       return;
     }
 
+    if (abortSignal?.aborted) {
+      this.relevantContent = "";
+      this.pendingSurfacedFilenames = [];
+      emitEvent?.("memory:prefetch", { status: "aborted" });
+      return;
+    }
+
     try {
       const textAdapter = (await resolveTextAdapter?.()) ?? null;
       const relevant = await findRelevantMemories(
@@ -97,7 +106,8 @@ export class MemoryService {
         this.alreadySurfaced,
         {},
         usage,
-        log ?? undefined
+        log ?? undefined,
+        abortSignal
       );
 
       if (relevant.length > 0) {

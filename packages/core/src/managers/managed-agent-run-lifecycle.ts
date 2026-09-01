@@ -80,6 +80,8 @@ export async function prepareManagedAgentForRun(
       log: host.log,
       resolveTextAdapter: host.resolveTextAdapter,
       emitEvent: (type, data) => host.emitEvent(type, data),
+      // Let abort interrupt the memory-selection LLM side-query during prerun.
+      abortSignal: host.run.currentAbortController?.signal,
     });
 
     // Snapshot once per user turn — admit into UI when payload changes (epoch-style).
