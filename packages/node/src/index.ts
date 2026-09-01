@@ -169,5 +169,18 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
 
     createLspConnection: (config) => createNodeLspConnection(config),
     locateTreeSitterGrammar,
+
+    resizeImage: async (buffer, { maxWidth = 1024, quality = 80 } = {}) => {
+      try {
+        const sharp = (await import("sharp")).default;
+        const resized = await sharp(buffer)
+          .resize({ width: maxWidth, withoutEnlargement: true })
+          .jpeg({ quality })
+          .toBuffer();
+        return new Uint8Array(resized);
+      } catch {
+        return null;
+      }
+    },
   };
 }

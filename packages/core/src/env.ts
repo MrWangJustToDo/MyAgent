@@ -273,6 +273,17 @@ export interface CoreEnv {
   locateTreeSitterGrammar?(grammarFile: string): Promise<Uint8Array | string | null>;
 
   /**
+   * Downscale/compress an image buffer to fit a vision-token budget (optional).
+   * Implemented by Node hosts via `sharp`; omitted by hosts without an image
+   * codec (browser, WebContainer). Tools feature-detect and degrade gracefully
+   * (oversized images are rejected instead of resized when unsupported).
+   *
+   * Returns a JPEG-encoded buffer of at most `maxWidth` pixels (aspect kept),
+   * or `null` when the input cannot be decoded / the host cannot process it.
+   */
+  resizeImage?(buffer: Uint8Array, options: { maxWidth?: number; quality?: number }): Promise<Uint8Array | null>;
+
+  /**
    * Extract the child process handle from an MCP stdio transport (optional).
    * Used for force-killing MCP servers on shutdown.
    */

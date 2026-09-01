@@ -227,13 +227,26 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
 
           const buffer = await fsys.readFile(filePath, "buffer");
 
-          // TODO(image-resize): optionally downscale/compress large screenshots before
-          // base64 encode to cut vision tokens (see mcp-server screenshot tool). Deferred.
-
           // Budget against vision-token estimate (not base64-as-text).
-          const dimensions = tryReadImageDimensions(buffer);
-          const estimatedTokens = estimateImageInputTokens(buffer.length, dimensions);
+          let data = buffer;
+          let mimeType = fileTypeInfo.mimeType || "image/png";
+          let dimensions = tryReadImageDimensions(data);
+          let estimatedTokens = estimateImageInputTokens(data.length, dimensions);
           const remainingTokens = getRemainingTokenBudget();
+
+          // Downscale/compress oversized images to fit the vision-token budget
+          // instead of rejecting outright (optional CoreEnv capability — Node
+          // hosts implement it via sharp; browsers/WebContainer degrade to reject).
+          if (estimatedTokens > remainingTokens) {
+            const resized = await getEnv().resizeImage?.(data, { maxWidth: 1024, quality: 80 });
+            if (resized && resized.length > 0 && resized.length < data.length) {
+              data = resized;
+              mimeType = "image/jpeg";
+              dimensions = tryReadImageDimensions(data);
+              estimatedTokens = estimateImageInputTokens(data.length, dimensions);
+            }
+          }
+
           if (estimatedTokens > remainingTokens) {
             const dimLabel = dimensions ? `${dimensions.width}x${dimensions.height}` : "unknown size";
             throw new Error(
@@ -241,14 +254,14 @@ IMPORTANT: Reading images adds significant data to context. Avoid reading more t
             );
           }
 
-          const base64 = getEnv().base64Encode(buffer);
+          const base64 = getEnv().base64Encode(data);
 
           return {
             type: "image" as const,
             path: filePath,
-            mimeType: fileTypeInfo.mimeType || "image/png",
+            mimeType,
             base64,
-            size: buffer.length,
+            size: data.length,
           };
         }
 

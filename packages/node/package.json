@@ -27,6 +27,7 @@
     "@my-agent/core": "workspace:*",
     "@tanstack/ai-mcp": "^0.3.4",
     "mime-types": "^3.0.2",
+    "sharp": "^0.34.5",
     "tree-sitter-wasms": "^0.1.13",
     "vscode-languageserver-protocol": "^3.18.2",
     "web-tree-sitter": "^0.25.10"
