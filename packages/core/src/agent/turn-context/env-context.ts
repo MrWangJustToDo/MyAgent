@@ -28,8 +28,19 @@ export function getCurrentDate(): string {
 /**
  * Fetch git branch and status from the workspace.
  * Both calls are best-effort — failures are silently ignored.
+ * Results are cached for a short TTL (git info is stable within a few
+ * seconds) so repeated lookups per turn (root turn-context + subagent runs)
+ * don't spawn two shell calls each time.
  */
+const GIT_INFO_TTL_MS = 2000;
+let gitInfoCache: { at: number; info: GitInfo } | null = null;
+
 export async function getGitInfo(): Promise<GitInfo> {
+  const now = Date.now();
+  if (gitInfoCache && now - gitInfoCache.at < GIT_INFO_TTL_MS) {
+    return { ...gitInfoCache.info };
+  }
+
   const env = getEnv();
   const info: GitInfo = {};
 
@@ -57,5 +68,6 @@ export async function getGitInfo(): Promise<GitInfo> {
     // Git not available — skip
   }
 
+  gitInfoCache = { at: now, info };
   return info;
 }

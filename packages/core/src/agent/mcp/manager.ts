@@ -93,55 +93,60 @@ export class McpManager {
    */
   async initialize(config: McpConfig): Promise<McpToolsRecord> {
     const allTools: McpToolsRecord = {};
-    const servers = config.mcpServers;
+    const servers = Object.entries(config.mcpServers) as [string, McpServerConfig][];
 
-    for (const [name, serverConfig] of Object.entries(servers) as [string, McpServerConfig][]) {
-      try {
-        const transport = createTransportInput(serverConfig);
+    // Connect to all servers in parallel (serial per-server awaits slow down
+    // startup and hide slow servers behind fast ones). Each server keeps its
+    // own error signal in `serverStatuses` and a failure never blocks others.
+    await Promise.allSettled(
+      servers.map(async ([name, serverConfig]) => {
+        try {
+          const transport = createTransportInput(serverConfig);
 
-        if (serverConfig.transport === "stdio") {
-          this.stdioTransports.push(transport);
+          if (serverConfig.transport === "stdio") {
+            this.stdioTransports.push(transport);
+          }
+
+          const client = await createMCPClient({
+            transport,
+            name: `my-agent-mcp-${name}`,
+            prefix: `mcp__${name}_`,
+          });
+
+          const tools = await client.tools();
+
+          for (const tool of tools) {
+            // TanStack prefers structuredContent and drops content[] images; re-wrap execute.
+            allTools[tool.name] = wrapMcpToolForMultimodalContent(tool, client);
+          }
+
+          this.clients.set(name, client);
+
+          this.serverStatuses.set(name, {
+            name,
+            transport: serverConfig.transport,
+            toolCount: tools.length,
+            status: "connected",
+            command: serverConfig.transport === "stdio" ? serverConfig.command : undefined,
+            args: serverConfig.transport === "stdio" ? serverConfig.args : undefined,
+            url: serverConfig.transport !== "stdio" ? serverConfig.url : undefined,
+          });
+        } catch (err) {
+          const error = err instanceof Error ? err : new Error(String(err));
+
+          this.serverStatuses.set(name, {
+            name,
+            transport: serverConfig.transport,
+            toolCount: 0,
+            status: "failed",
+            error: error.message,
+            command: serverConfig.transport === "stdio" ? serverConfig.command : undefined,
+            args: serverConfig.transport === "stdio" ? serverConfig.args : undefined,
+            url: serverConfig.transport !== "stdio" ? serverConfig.url : undefined,
+          });
         }
-
-        const client = await createMCPClient({
-          transport,
-          name: `my-agent-mcp-${name}`,
-          prefix: `mcp__${name}_`,
-        });
-
-        const tools = await client.tools();
-
-        for (const tool of tools) {
-          // TanStack prefers structuredContent and drops content[] images; re-wrap execute.
-          allTools[tool.name] = wrapMcpToolForMultimodalContent(tool, client);
-        }
-
-        this.clients.set(name, client);
-
-        this.serverStatuses.set(name, {
-          name,
-          transport: serverConfig.transport,
-          toolCount: tools.length,
-          status: "connected",
-          command: serverConfig.transport === "stdio" ? serverConfig.command : undefined,
-          args: serverConfig.transport === "stdio" ? serverConfig.args : undefined,
-          url: serverConfig.transport !== "stdio" ? serverConfig.url : undefined,
-        });
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
-
-        this.serverStatuses.set(name, {
-          name,
-          transport: serverConfig.transport,
-          toolCount: 0,
-          status: "failed",
-          error: error.message,
-          command: serverConfig.transport === "stdio" ? serverConfig.command : undefined,
-          args: serverConfig.transport === "stdio" ? serverConfig.args : undefined,
-          url: serverConfig.transport !== "stdio" ? serverConfig.url : undefined,
-        });
-      }
-    }
+      })
+    );
 
     return allTools;
   }
