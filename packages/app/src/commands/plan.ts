@@ -60,7 +60,7 @@ registerCommand({
     const trimmed = args.trim();
     const [subRaw = "", ...rest] = trimmed.split(/\s+/);
     const sub = subRaw.toLowerCase();
-    const nameArg = rest.slice(1).join(" ").trim();
+    const nameArg = rest.join(" ").trim();
 
     if (sub === "status") {
       const state = session.getSnapshot().plan;
@@ -123,7 +123,7 @@ registerCommand({
     }
 
     if (sub === "save") {
-      const saveName = rest.slice(1).join(" ").trim() || undefined;
+      const saveName = rest.join(" ").trim() || undefined;
       const result = await session.dispatch({ type: "plan.save", nameHint: saveName });
       if (!result.ok) return { ok: false, error: result.error ?? "Save failed" };
       const path = (result.data as { path?: string } | undefined)?.path;
