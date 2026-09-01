@@ -3,14 +3,13 @@ import {
   PLAN_AUTHORING_TOOL_NAMES,
   PLAN_COMPLETION_TOOL_NAMES,
 } from "../agent/plan/plan-tools.js";
-import { assertAsyncIterable } from "../agent/run-helpers/assert-async-iterable.js";
 import { AgentRunner } from "../agent/runner/agent-runner.js";
+import { assertAsyncIterable } from "../agent/stream/assert-async-iterable.js";
 import { resolveToolsRecord, SUBAGENT_EXCLUDED_TOOL_NAMES } from "../agent/tools/runtime";
-import { createTextAdapter } from "../models/adapter-factory.js";
-import { DEFAULT_BASE_URLS } from "../models/model-config.js";
-import { resolvePromptCacheKey } from "../models/prompt-cache.js";
+import { createTextAdapter } from "../models/adapter/adapter-factory.js";
+import { resolvePromptCacheKey } from "../models/cache/prompt-cache.js";
+import { DEFAULT_BASE_URLS } from "../models/config/model-config.js";
 
-import { createEmitTelemetryFn } from "./emit-agent-telemetry.js";
 import { buildManagedAgentDeps } from "./managed-agent-deps.js";
 import {
   createApprovalResumeMiddleware,
@@ -26,11 +25,12 @@ import {
   createTurnContextMiddleware,
 } from "./middleware";
 import { runStreamWithRecovery } from "./run-stream-recovery.js";
+import { createEmitTelemetryFn } from "./telemetry/emit-agent-telemetry.js";
 
 import type { AgentManager } from "./agent-manager.js";
 import type { AgentRunDeps } from "./agent-run-deps.js";
 import type { ManagedAgent } from "./managed-agent.js";
-import type { TextAdapterConfig } from "../models/adapter-factory.js";
+import type { TextAdapterConfig } from "../models/adapter/adapter-factory.js";
 import type { ModelMessage, ServerTool, StreamChunk, UIMessage } from "@tanstack/ai";
 
 // ============================================================================

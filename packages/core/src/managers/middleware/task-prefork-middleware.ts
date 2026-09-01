@@ -18,7 +18,7 @@ import { generateId } from "../../utils/generate-id.js";
 
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { AgentUIChannel, ManagedAgent, AgentManager } from "../../runtime-types";
-import type { EmitAgentTelemetryFn } from "../emit-agent-telemetry.js";
+import type { EmitAgentTelemetryFn } from "../telemetry/emit-agent-telemetry.js";
 import type { ChatMiddleware } from "@tanstack/ai";
 
 export interface TaskPreforkMiddlewareDeps {

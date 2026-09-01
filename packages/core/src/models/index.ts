@@ -20,9 +20,12 @@ export {
   type ModelConnection,
   type ResolveModelConfigInput,
   type ResolvedModelConfig,
-} from "./model-config.js";
+} from "./config/model-config.js";
 
-export { resolveModelConfigFromProvider, type ResolvedModelConfigFromProvider } from "./resolve-from-provider.js";
+export {
+  resolveModelConfigFromProvider,
+  type ResolvedModelConfigFromProvider,
+} from "./provider/resolve-from-provider.js";
 
 export {
   registerModelProvider,
@@ -33,9 +36,9 @@ export {
   type ModelProviderMode,
   type ModelProviderConnection,
   type ModelProvider,
-} from "./model-provider.js";
+} from "./provider/model-provider.js";
 
-export { createRemoteProvider, REMOTE_PROVIDER_API_KEY } from "./remote-model-provider.js";
+export { createRemoteProvider, REMOTE_PROVIDER_API_KEY } from "./provider/remote-model-provider.js";
 
 // models.dev metadata lookup
 export {
@@ -43,27 +46,27 @@ export {
   getModelsByProviderFromModelsDev,
   lookupModelFromModelsDev,
   MODELS_DEV_URL,
-} from "./models-dev.js";
+} from "./provider/models-dev.js";
 
 // TanStack text adapter (+ provider-specific protocol quirks live here only)
-export { createTextAdapter, type TextAdapterConfig, type ModelAdapterConfig } from "./adapter-factory.js";
+export { createTextAdapter, type TextAdapterConfig, type ModelAdapterConfig } from "./adapter/adapter-factory.js";
 export {
   createChatCompletions,
   ChatCompletionsTextAdapter,
   type ChatCompletionsTextAdapterConfig,
-} from "./chat-completions-text-adapter.js";
-export { liftToolMediaForChatCompletions } from "./lift-tool-media-for-chat-completions.js";
+} from "./adapter/chat-completions-text-adapter.js";
+export { liftToolMediaForChatCompletions } from "./adapter/lift-tool-media-for-chat-completions.js";
 export {
   buildReasoningContentFromThinking,
   extractReasoningContentFromStreamChunk,
   shouldEchoReasoningContent,
-} from "./reasoning-echo.js";
-export { ReasoningContentCache } from "./reasoning-content-cache.js";
-export { resolveReasoningContentForAssistant } from "./resolve-reasoning-content.js";
+} from "./adapter/reasoning-echo.js";
+export { ReasoningContentCache } from "./cache/reasoning-content-cache.js";
+export { resolveReasoningContentForAssistant } from "./adapter/resolve-reasoning-content.js";
 export {
   createReasoningChatCompletions,
   ReasoningChatCompletionsTextAdapter,
   type ReasoningChatCompletionsConfig,
-} from "./reasoning-chat-completions-adapter.js";
+} from "./adapter/reasoning-chat-completions-adapter.js";
 
-export { runSideTextQuery, type SideTextQueryOptions, type SideTextQueryResult } from "./side-text-query.js";
+export { runSideTextQuery, type SideTextQueryOptions, type SideTextQueryResult } from "./adapter/side-text-query.js";

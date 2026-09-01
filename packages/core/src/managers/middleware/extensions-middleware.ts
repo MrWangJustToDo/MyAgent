@@ -2,7 +2,7 @@ import type { ExtensionRunner } from "../../agent/extension/runner.js";
 import type { ToolAfterEvent, ToolBeforeEvent } from "../../agent/extension/types.js";
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { TodoManager } from "../../agent/todo-manager";
-import type { EmitAgentTelemetryFn } from "../emit-agent-telemetry.js";
+import type { EmitAgentTelemetryFn } from "../telemetry/emit-agent-telemetry.js";
 import type { ChatMiddleware } from "@tanstack/ai";
 
 export interface ExtensionsMiddlewareDeps {

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
-import { estimateImageInputTokens, tryReadImageDimensions } from "../run-helpers/estimate-image-tokens.js";
+import { estimateImageInputTokens, tryReadImageDimensions } from "../../models/estimate-image-tokens.js";
 
 import { defineServerTool } from "./runtime/define-tool.js";
 import { extractPdfText } from "./util/extract-pdf-text.js";

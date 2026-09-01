@@ -1,4 +1,3 @@
-import { loadAgentDoc } from "../agent/agent-doc-loader.js";
 import { AgentLog } from "../agent/agent-log";
 import { createCompactionConfig } from "../agent/compaction/types.js";
 import { ExtensionLoader, ExtensionRunner, getDefaultExtensionDirs } from "../agent/extension";
@@ -9,6 +8,7 @@ import { createMemoryExtension } from "../agent/memory/extension.js";
 import { MemoryManager } from "../agent/memory/memory-manager.js";
 import { SessionStore } from "../agent/persistence/session-store.js";
 import { createCompletePlanTool, createCreatePlanTool, createUpdatePlanTool } from "../agent/plan/create-plan-tool.js";
+import { loadAgentDoc } from "../agent/prompt/agent-doc-loader.js";
 import { createSkillsExtension } from "../agent/skills/extension.js";
 import { SkillRegistry } from "../agent/skills/skill-registry.js";
 import { createTaskTool } from "../agent/subagent/task-tool.js";
@@ -23,8 +23,8 @@ import { ManagedAgent, type ManagedAgentConfig } from "./managed-agent.js";
 import { resolveTextAdapterForManaged } from "./run-agent.js";
 
 import type { AgentManager } from "./agent-manager.js";
-import type { AgentEvent } from "./agent-telemetry-bus.js";
 import type { SessionBootstrapContext } from "./session-bootstrap-events.js";
+import type { AgentEvent } from "./telemetry/agent-telemetry-bus.js";
 
 export interface BuildManagedAgentResult {
   managed: ManagedAgent;

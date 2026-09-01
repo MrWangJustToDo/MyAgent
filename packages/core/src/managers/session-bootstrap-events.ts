@@ -1,6 +1,6 @@
-import { formatAgentDocResult } from "../agent/agent-doc-loader.js";
+import { formatAgentDocResult } from "../agent/prompt/agent-doc-loader.js";
 
-import { emitAgentTelemetry } from "./emit-agent-telemetry.js";
+import { emitAgentTelemetry } from "./telemetry/emit-agent-telemetry.js";
 
 import type { ManagedAgent } from "./managed-agent.js";
 

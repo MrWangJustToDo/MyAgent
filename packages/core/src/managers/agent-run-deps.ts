@@ -1,7 +1,7 @@
 import type { AgentManager } from "./agent-manager.js";
-import type { MemoryService } from "./memory-service.js";
-import type { SessionService } from "./session-service.js";
-import type { UsageTracker } from "./usage-tracker.js";
+import type { MemoryService } from "./services/memory-service.js";
+import type { SessionService } from "./services/session-service.js";
+import type { UsageTracker } from "./telemetry/usage-tracker.js";
 import type { AgentLog } from "../agent/agent-log";
 import type { CompactionConfig } from "../agent/compaction/types.js";
 import type { ExtensionRunner } from "../agent/extension/runner.js";

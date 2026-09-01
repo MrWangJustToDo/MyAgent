@@ -3,9 +3,9 @@
  * Not part of the public `@my-agent/core` package API.
  */
 
-export * from "./dev-agent.js";
-export * from "./dev-managers.js";
-export * from "./dev-models.js";
+export * from "./dev/dev-agent.js";
+export * from "./dev/dev-managers.js";
+export * from "./dev/dev-models.js";
 
 // Command safety (internal validation exports — not part of public API)
 export { analyzeCommand, createAnalysisContext } from "./agent/tools/command-safety/command-analyzer.js";

@@ -3,18 +3,18 @@ import { getEnv } from "../env.js";
 import { ACTIVE_STATUSES } from "../runtime-types/agent-status.js";
 
 import { buildManagedAgent } from "./agent-factory.js";
-import { AgentTelemetryBus } from "./agent-telemetry-bus.js";
-import { bridgeTelemetryToAgentLog } from "./event-log-bridge.js";
 import { runManagedAgent, runManagedAgentStream, type RunAgentStreamInput } from "./run-agent.js";
 import { emitSessionBootstrapEvents } from "./session-bootstrap-events.js";
+import { AgentTelemetryBus } from "./telemetry/agent-telemetry-bus.js";
+import { bridgeTelemetryToAgentLog } from "./telemetry/event-log-bridge.js";
 
-import type { AgentEvent, AgentEventListener, AgentEventType } from "./agent-telemetry-bus.js";
 import type { ManagedAgent, ManagedAgentConfig } from "./managed-agent.js";
+import type { AgentEvent, AgentEventListener, AgentEventType } from "./telemetry/agent-telemetry-bus.js";
 import type { ResumeResult, SessionData } from "../agent/persistence/types.js";
 import type { ToolsRecord } from "../agent/tools/runtime/tools-record.js";
 import type { StreamChunk } from "@tanstack/ai";
 
-export type { AgentEvent, AgentEventListener, AgentEventType } from "./agent-telemetry-bus.js";
+export type { AgentEvent, AgentEventListener, AgentEventType } from "./telemetry/agent-telemetry-bus.js";
 export type { ManagedAgent, ManagedAgentConfig } from "./managed-agent.js";
 export type { RunAgentStreamInput } from "./run-agent.js";
 

@@ -5,7 +5,7 @@ import {
   shouldApplyAnthropicCacheBreakpoints,
   shouldApplyOpenAIPromptCacheKey,
   sortToolsByName,
-} from "../../models/prompt-cache.js";
+} from "../../models/cache/prompt-cache.js";
 
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { ModelStyle } from "../../models/types.js";

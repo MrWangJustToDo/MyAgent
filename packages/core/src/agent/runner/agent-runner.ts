@@ -1,10 +1,10 @@
 import { chat, maxIterations } from "@tanstack/ai";
 
-import { assertAsyncIterable } from "../run-helpers/assert-async-iterable.js";
+import { assertAsyncIterable } from "../stream/assert-async-iterable.js";
 
 import { createToolRunContext, type ToolRunContext } from "./run-context.js";
 
-import type { ModelStyle } from "../../models/model-config.js";
+import type { ModelStyle } from "../../models/config/model-config.js";
 import type { ReasoningEffort } from "../../models/types.js";
 import type {
   AnyTextAdapter,

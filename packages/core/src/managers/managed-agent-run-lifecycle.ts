@@ -5,17 +5,17 @@
 import { type UIMessage as TanStackUIMessage, type ModelMessage } from "@tanstack/ai";
 
 import { getLatestUserMessage } from "../agent/compaction/message-utils.js";
-import { isToolContinuationPrepare } from "../agent/run-helpers/tool-phase-utils.js";
+import { isToolContinuationPrepare } from "../agent/stream/tool-phase-utils.js";
 
 import type { AgentManager } from "./agent-manager.js";
 import type { AgentStatus, RunFinalizeReason } from "./agent-types.js";
-import type { EmitAgentTelemetryFn } from "./emit-agent-telemetry.js";
-import type { MemoryService } from "./memory-service.js";
 import type { RunCoordinator } from "./run-coordinator.js";
-import type { UsageTracker } from "./usage-tracker.js";
+import type { MemoryService } from "./services/memory-service.js";
+import type { EmitAgentTelemetryFn } from "./telemetry/emit-agent-telemetry.js";
+import type { UsageTracker } from "./telemetry/usage-tracker.js";
 import type { AgentLog } from "../agent/agent-log";
 import type { AgentUIChannel } from "../agent/ui-channel.js";
-import type { TextAdapterConfig } from "../models/adapter-factory.js";
+import type { TextAdapterConfig } from "../models/adapter/adapter-factory.js";
 
 /**
  * Narrow interface capturing only the methods/fields lifecycle helpers need.

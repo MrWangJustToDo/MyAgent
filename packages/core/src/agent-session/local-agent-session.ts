@@ -21,8 +21,8 @@ import {
 } from "./types.js";
 
 import type { AgentManager } from "../managers/agent-manager.js";
-import type { AgentEvent } from "../managers/agent-telemetry-bus.js";
 import type { ManagedAgent } from "../managers/managed-agent.js";
+import type { AgentEvent } from "../managers/telemetry/agent-telemetry-bus.js";
 import type { AgentEventType } from "../runtime-types/agent-events.js";
 
 /** Manager surface used by Local Session (AgentManager satisfies this). */

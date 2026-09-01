@@ -4,9 +4,9 @@
 
 import { readPlanFileAtRelativePath } from "../agent/plan/plan-store.js";
 
-import type { EmitAgentTelemetryFn } from "./emit-agent-telemetry.js";
-import type { SessionPersistInput, SessionService } from "./session-service.js";
-import type { UsageTracker } from "./usage-tracker.js";
+import type { SessionPersistInput, SessionService } from "./services/session-service.js";
+import type { EmitAgentTelemetryFn } from "./telemetry/emit-agent-telemetry.js";
+import type { UsageTracker } from "./telemetry/usage-tracker.js";
 import type { ToolApprovalTable } from "../agent/approval/tool-approval-table.js";
 import type { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
 import type { SessionSyncTracker } from "../agent/persistence/session-sync-tracker.js";
@@ -14,7 +14,7 @@ import type { SessionData } from "../agent/persistence/types.js";
 import type { PlanModeController } from "../agent/plan/plan-mode-controller.js";
 import type { TodoManager } from "../agent/todo-manager";
 import type { AgentUIChannel } from "../agent/ui-channel.js";
-import type { TextAdapterConfig } from "../models/adapter-factory.js";
+import type { TextAdapterConfig } from "../models/adapter/adapter-factory.js";
 import type { ReasoningEffort } from "../models/types.js";
 import type { UIMessage as TanStackUIMessage } from "@tanstack/ai";
 

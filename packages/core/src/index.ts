@@ -49,9 +49,9 @@ export {
   type ModelProviderMode,
   type ModelProviderConnection,
   type ModelProvider,
-} from "./models/model-provider.js";
+} from "./models/provider/model-provider.js";
 
-export { createRemoteProvider, REMOTE_PROVIDER_API_KEY } from "./models/remote-model-provider.js";
+export { createRemoteProvider, REMOTE_PROVIDER_API_KEY } from "./models/provider/remote-model-provider.js";
 
 // ============================================================================
 // Runtime — agent manager (host bootstrap; Session-only UI must not import ManagedAgent)
@@ -71,9 +71,9 @@ export type {
   QueuedMessageContent,
   QueuedMessagesSnapshot,
   QueueUpdateListener,
-} from "./managers/agent-chat-controller.js";
+} from "./managers/controllers/agent-chat-controller.js";
 export type { PlanModePhase, PlanModeState, BeginPlanExecutionResult } from "./agent/plan/plan-mode-controller.js";
-export type { QueueMode } from "./agent/run-helpers/pending-message-queue.js";
+export type { QueueMode } from "./agent/queue/pending-message-queue.js";
 
 // ============================================================================
 // Serializable agent state types (Session-safe)
@@ -119,7 +119,7 @@ export {
 export type { AgentL1State } from "./managers/managed-agent.js";
 export type { AgentRetryState, AgentRetryStrategy } from "./runtime-types/agent-retry.js";
 export { TaskRunState, type TaskRunPhase } from "./agent/subagent/task-run-state.js";
-export type { UsageChangeSnapshot, UsageSnapshot } from "./managers/usage-tracker.js";
+export type { UsageChangeSnapshot, UsageSnapshot } from "./managers/telemetry/usage-tracker.js";
 
 // ============================================================================
 // Summary streams (task / compact)
@@ -170,7 +170,7 @@ export type {
   ResolvedModelConfigFromProvider,
 } from "./models";
 export type { AgentToolConfig, WebsearchToolConfig } from "./agent/tools/tool-config.js";
-export { buildDefaultSystemPrompt } from "./agent/default-prompt.js";
+export { buildDefaultSystemPrompt } from "./agent/prompt/default-prompt.js";
 
 // ============================================================================
 // UI utilities

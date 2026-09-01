@@ -2,7 +2,7 @@ import {
   sanitizeMessagesForCapabilities,
   trySanitizeForMultimodalRetry,
   unsupportedMultimodalPartTypes,
-} from "../../agent/run-helpers/capability-message-utils.js";
+} from "../../models/adapter/capability-message-utils.js";
 
 import type { ManagedAgent } from "../managed-agent.js";
 import type { ModelMessage, UIMessage } from "@tanstack/ai";

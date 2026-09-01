@@ -36,10 +36,9 @@ import {
 import { Emitter } from "../utils/emitter.js";
 import { generateId } from "../utils/generate-id.js";
 
-import { AgentChatController } from "./agent-chat-controller.js";
-import { createAgentStatusController, type AgentStatusController } from "./agent-status-controller.js";
 import { AgentConfigSchema } from "./agent-types.js";
-import { emitAgentTelemetry } from "./emit-agent-telemetry.js";
+import { AgentChatController } from "./controllers/agent-chat-controller.js";
+import { createAgentStatusController, type AgentStatusController } from "./controllers/agent-status-controller.js";
 import { handleManagedReactiveCompact, runManualCompact } from "./managed-agent-compact.js";
 import {
   beginPlanExecution as beginPlanExecutionHelper,
@@ -64,14 +63,15 @@ import {
   restoreManagedSession,
   saveSessionUIMessages as saveSessionUIMessagesHelper,
 } from "./managed-agent-session.js";
-import { MemoryService } from "./memory-service.js";
 import { RunCoordinator } from "./run-coordinator.js";
-import { SessionService } from "./session-service.js";
-import { UsageTracker } from "./usage-tracker.js";
+import { MemoryService } from "./services/memory-service.js";
+import { SessionService } from "./services/session-service.js";
+import { emitAgentTelemetry } from "./telemetry/emit-agent-telemetry.js";
+import { UsageTracker } from "./telemetry/usage-tracker.js";
 
 import type { AgentManager } from "./agent-manager.js";
-import type { AgentEvent, AgentEventType } from "./agent-telemetry-bus.js";
 import type { AgentConfig, AgentStatus, RunFinalizeReason } from "./agent-types.js";
+import type { AgentEvent, AgentEventType } from "./telemetry/agent-telemetry-bus.js";
 import type { AgentLog } from "../agent/agent-log";
 import type { CompactionConfig, CompactionConfigInput } from "../agent/compaction/types.js";
 import type {
@@ -95,8 +95,8 @@ import type { TodoManager } from "../agent/todo-manager";
 import type { ToolsRecord } from "../agent/tools/runtime/tools-record.js";
 import type { AgentToolConfig } from "../agent/tools/tool-config.js";
 import type { AgentUIChannel } from "../agent/ui-channel.js";
-import type { TextAdapterConfig } from "../models/adapter-factory.js";
-import type { ModelStyle } from "../models/model-config.js";
+import type { TextAdapterConfig } from "../models/adapter/adapter-factory.js";
+import type { ModelStyle } from "../models/config/model-config.js";
 import type { ModelInfo } from "../models/types.js";
 import type { AgentEventPayloadMap } from "../runtime-types/agent-event-payloads.js";
 import type { AgentRetryState } from "../runtime-types/agent-retry.js";

@@ -1,4 +1,4 @@
-import { assertAsyncIterable } from "../agent/run-helpers/assert-async-iterable.js";
+import { assertAsyncIterable } from "../agent/stream/assert-async-iterable.js";
 import { extractRunErrorMessage } from "../agent/stream/stream-errors.js";
 
 import { messagesForModelCapabilities, tryCapabilitySanitizeRetry } from "./stream-recovery/capability-sanitize.js";

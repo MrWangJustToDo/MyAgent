@@ -18,7 +18,7 @@ import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { TodoManager } from "../../agent/todo-manager";
 import type { AgentUIChannel } from "../../agent/ui-channel.js";
 import type { AgentManager, AgentStatusController, UsageTracker } from "../../runtime-types";
-import type { EmitAgentTelemetryFn } from "../emit-agent-telemetry.js";
+import type { EmitAgentTelemetryFn } from "../telemetry/emit-agent-telemetry.js";
 
 export interface CompactionMiddlewareDeps {
   agentId: string;

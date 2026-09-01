@@ -7,18 +7,16 @@ import { StreamProcessor } from "@tanstack/ai";
 import { Emitter } from "../utils/emitter.js";
 
 import { repairMessagesSnapshotChunk } from "./media/repair-stringified-multimodal.js";
-import {
-  applyToolDenialReason,
-  shouldSuppressMessagesSnapshot,
-  shouldSuppressReplayedToolChunk,
-  stripEmptyAssistantShells,
-} from "./run-helpers";
+import { applyToolDenialReason } from "./stream/apply-tool-denial-reason.js";
+import { stripEmptyAssistantShells } from "./stream/empty-assistant-shell.js";
 import {
   resolveTaskRunPhase,
   type TaskRunPhase,
   type TaskSummaryStreamState,
 } from "./stream/extract-assistant-text.js";
 import { throwOnRunError } from "./stream/stream-errors.js";
+import { shouldSuppressMessagesSnapshot } from "./stream/suppress-messages-snapshot.js";
+import { shouldSuppressReplayedToolChunk } from "./stream/suppress-replayed-tool-chunks.js";
 import { BEGIN_SUMMARY_TOOL_NAME } from "./subagent/begin-summary-tool.js";
 import { summaryStreamKey, type SummaryStreamHub } from "./summary-stream";
 

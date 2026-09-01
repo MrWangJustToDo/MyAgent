@@ -1,8 +1,8 @@
-import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/prompt-cache.js";
+import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/cache/prompt-cache.js";
 
 import type { AgentConfig } from "./agent-types.js";
 
-export { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/prompt-cache.js";
+export { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/cache/prompt-cache.js";
 
 export interface SystemPromptInput {
   config: AgentConfig;

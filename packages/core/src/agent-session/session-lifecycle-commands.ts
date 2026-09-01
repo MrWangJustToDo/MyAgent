@@ -3,9 +3,10 @@
  */
 
 import { extractTextFromContent } from "../agent/compaction/message-utils.js";
-import { PR_SUMMARY_SYSTEM_PROMPT, TITLE_SYSTEM_PROMPT } from "../agent/summary/session-summary-prompt.js";
 import { resolveTextAdapterForManaged } from "../managers/run-agent.js";
-import { runSideTextQuery } from "../models/side-text-query.js";
+import { runSideTextQuery } from "../models/adapter/side-text-query.js";
+
+import { PR_SUMMARY_SYSTEM_PROMPT, TITLE_SYSTEM_PROMPT } from "./session-summary-prompt.js";
 
 import type { ManagedAgent } from "../managers/managed-agent.js";
 

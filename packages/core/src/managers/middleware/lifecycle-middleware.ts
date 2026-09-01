@@ -11,7 +11,7 @@ import { extractTanStackUsage } from "../../runtime-types/token-usage.js";
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { ModelPricing } from "../../models/types.js";
 import type { UsageTracker } from "../../runtime-types";
-import type { EmitAgentTelemetryFn } from "../emit-agent-telemetry.js";
+import type { EmitAgentTelemetryFn } from "../telemetry/emit-agent-telemetry.js";
 import type { ChatMiddleware } from "@tanstack/ai";
 
 // ============================================================================

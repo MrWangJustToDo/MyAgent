@@ -5,6 +5,6 @@
 
 export type { ManagedAgent } from "../managers/managed-agent.js";
 export type { AgentManager } from "../managers/agent-manager.js";
-export type { UsageTracker } from "../managers/usage-tracker.js";
+export type { UsageTracker } from "../managers/telemetry/usage-tracker.js";
 export type { AgentUIChannel } from "../agent/ui-channel.js";
-export type { AgentStatusController } from "../managers/agent-status-controller.js";
+export type { AgentStatusController } from "../managers/controllers/agent-status-controller.js";

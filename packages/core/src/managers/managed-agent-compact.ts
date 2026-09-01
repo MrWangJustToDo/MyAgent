@@ -12,10 +12,10 @@ import { isPromptTooLongError, reactiveCompact } from "../agent/compaction/react
 import { estimateTokens } from "../agent/compaction/token-estimator.js";
 
 import type { AgentManager } from "./agent-manager.js";
-import type { AgentStatusController } from "./agent-status-controller.js";
-import type { EmitAgentTelemetryFn } from "./emit-agent-telemetry.js";
+import type { AgentStatusController } from "./controllers/agent-status-controller.js";
 import type { RunCoordinator } from "./run-coordinator.js";
-import type { UsageTracker } from "./usage-tracker.js";
+import type { EmitAgentTelemetryFn } from "./telemetry/emit-agent-telemetry.js";
+import type { UsageTracker } from "./telemetry/usage-tracker.js";
 import type { AgentLog } from "../agent/agent-log/agent-log.js";
 import type { CompactionConfig } from "../agent/compaction/types.js";
 import type { TodoManager } from "../agent/todo-manager";

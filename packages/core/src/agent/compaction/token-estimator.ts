@@ -5,7 +5,7 @@
  * Handles TanStack {@link ModelMessage} shape including `toolCalls` and tool messages.
  */
 
-import { estimateImageInputTokens } from "../run-helpers/estimate-image-tokens.js";
+import { estimateImageInputTokens } from "../../models/estimate-image-tokens.js";
 
 import { getToolMessageContentSize } from "./message-utils.js";
 

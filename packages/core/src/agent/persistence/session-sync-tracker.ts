@@ -1,4 +1,4 @@
-import { isEmptyAssistantShell } from "../run-helpers/empty-assistant-shell.js";
+import { isEmptyAssistantShell } from "../stream/empty-assistant-shell.js";
 
 import type { ToolCallPart, UIMessage } from "@tanstack/ai";
 

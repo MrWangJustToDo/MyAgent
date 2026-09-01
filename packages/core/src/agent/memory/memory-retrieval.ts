@@ -21,7 +21,7 @@
  */
 
 import { getEnv } from "../../env.js";
-import { runSideTextQuery } from "../../models/side-text-query.js";
+import { runSideTextQuery } from "../../models/adapter/side-text-query.js";
 
 import {
   DEFAULT_MAX_MEMORY_BYTES_PER_FILE,
@@ -32,7 +32,7 @@ import {
 
 import type { MemoryManager } from "./memory-manager.js";
 import type { Memory } from "./types.js";
-import type { TextAdapterConfig } from "../../models/adapter-factory.js";
+import type { TextAdapterConfig } from "../../models/adapter/adapter-factory.js";
 import type { UsageTracker } from "../../runtime-types/hosts.js";
 import type { AgentLog } from "../agent-log/agent-log.js";
 
