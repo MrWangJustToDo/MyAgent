@@ -378,7 +378,12 @@ export class ExtensionRunner {
       state: instance.state,
       error: instance.error?.message,
       tools: [...instance.registrations.tools],
-      commands: [...instance.registrations.commands],
+      // Expose whether each command has a secondary menu (getOptions) so the app
+      // can treat pure-display commands (e.g. /lsp, /mcp) without an options menu.
+      commands: instance.registrations.commands.map((name) => ({
+        name,
+        hasOptions: Boolean(this.commandRegistry.get(name)?.getOptions),
+      })),
     }));
   }
 

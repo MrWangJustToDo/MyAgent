@@ -13,29 +13,11 @@ export function splitExtensionCommandArgs(args: string): string[] {
   return trimmed ? trimmed.split(/\s+/) : [];
 }
 
-function extensionSlashCommand(session: AgentSession, name: string, description: string): Command {
-  return {
+function extensionSlashCommand(session: AgentSession, name: string, description: string, hasOptions: boolean): Command {
+  const command: Command = {
     name,
     description,
-    usage: `/${name} [option]`,
-    // Extensions may expose browseable secondary-menu options (e.g. /skill <name>,
-    // /memory <name>) fetched via dispatch — mirrors built-in /resume's getOptions.
-    allowCustomInput: true,
-    // Selecting an option fills `/cmd <option> ` so the user can append follow-up
-    // text (e.g. /skill <name> + instructions) before sending. Extension commands
-    // are content-loading by nature (skill/memory bodies), so a follow-up prompt
-    // is the common intent — unlike /resume which acts immediately on selection.
-    insertOnSelect: true,
-    getOptions: async () => {
-      const result = await session.dispatch({
-        type: "extension.getCommandOptions",
-        name,
-      });
-      if (!result.ok) return [];
-      const options = (result.data as { options?: Array<{ label: string; value: string; description?: string }> })
-        ?.options;
-      return (options ?? []).map((o) => ({ label: o.label, value: o.value, description: o.description }));
-    },
+    usage: `/${name}`,
     execute: async (args) => {
       const result = await session.dispatch({
         type: "extension.invokeCommand",
@@ -47,6 +29,33 @@ function extensionSlashCommand(session: AgentSession, name: string, description:
       return message ? { ok: true, message } : { ok: true };
     },
   };
+
+  // Only commands that expose secondary-menu options (e.g. /skill <name>,
+  // /memory <name>) get a browseable options menu. Pure-display commands
+  // (e.g. /lsp, /mcp) have no secondary menu and run on submit.
+  if (hasOptions) {
+    command.usage = `/${name} [option]`;
+    // Extensions may expose browseable secondary-menu options (e.g. /skill <name>,
+    // /memory <name>) fetched via dispatch — mirrors built-in /resume's getOptions.
+    command.allowCustomInput = true;
+    // Selecting an option fills `/cmd <option> ` so the user can append follow-up
+    // text (e.g. /skill <name> + instructions) before sending. Extension commands
+    // are content-loading by nature (skill/memory bodies), so a follow-up prompt
+    // is the common intent — unlike /resume which acts immediately on selection.
+    command.insertOnSelect = true;
+    command.getOptions = async () => {
+      const result = await session.dispatch({
+        type: "extension.getCommandOptions",
+        name,
+      });
+      if (!result.ok) return [];
+      const options = (result.data as { options?: Array<{ label: string; value: string; description?: string }> })
+        ?.options;
+      return (options ?? []).map((o) => ({ label: o.label, value: o.value, description: o.description }));
+    };
+  }
+
+  return command;
 }
 
 /**
@@ -56,8 +65,8 @@ export function syncExtensionCommands(session: AgentSession): void {
   clearExtensionCommands();
   for (const ext of session.getSnapshot().extensions.extensions) {
     if (!ext.enabled) continue;
-    for (const name of ext.commands) {
-      registerExtensionCommand(extensionSlashCommand(session, name, `${ext.name}: /${name}`));
+    for (const { name, hasOptions } of ext.commands) {
+      registerExtensionCommand(extensionSlashCommand(session, name, `${ext.name}: /${name}`, hasOptions));
     }
   }
 }

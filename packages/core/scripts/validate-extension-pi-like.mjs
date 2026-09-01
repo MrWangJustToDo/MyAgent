@@ -213,7 +213,7 @@ registerCoreEnv({
   assert.equal(infos.length, 1, "one extension loaded");
   assert.equal(infos[0].enabled, true, "extension starts enabled");
   assert.deepEqual(infos[0].tools, ["mgmt_tool"]);
-  assert.deepEqual(infos[0].commands, ["mgmt-cmd"]);
+  assert.deepEqual(infos[0].commands, [{ name: "mgmt-cmd", hasOptions: false }]);
 
   // Disable: deactivate() + unregister tool/command/interceptor artifacts.
   let res = await runner.setEnabled("mgmt", false);

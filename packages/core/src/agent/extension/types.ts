@@ -325,8 +325,8 @@ export interface ExtensionInfo {
   error?: string;
   /** Tools this extension registered (when enabled). */
   tools: string[];
-  /** Commands this extension registered (when enabled). */
-  commands: string[];
+  /** Commands this extension registered (when enabled), with whether each exposes secondary-menu options. */
+  commands: Array<{ name: string; hasOptions: boolean }>;
 }
 
 // ============================================================================
