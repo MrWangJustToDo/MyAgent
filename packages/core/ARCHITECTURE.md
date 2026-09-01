@@ -27,7 +27,7 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 
 1. **Tool approval UX** — core `AgentChatController` owns tool-phase continuation (package-internal); app handles UI/keyboard only.
 2. **Subagents** — no session store, memory, MCP, or extensions (by design).
-3. **`reasoningConfig`** — parsed onto `ModelInfo` but not yet applied to adapter requests.
+3. **`reasoningConfig`** — `defaultEffort` is wired as the runner's default when no explicit `reasoningEffort` is configured (`run-agent.ts`); `effortValues` remain advisory (adapter picks closest supported effort).
 
 ---
 

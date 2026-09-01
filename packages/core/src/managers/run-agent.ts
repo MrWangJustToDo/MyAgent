@@ -199,7 +199,7 @@ export function buildAgentRunner(
     middleware,
     temperature: managed.config.temperature,
     maxOutputTokens,
-    reasoningEffort: managed.config.reasoningEffort,
+    reasoningEffort: managed.config.reasoningEffort ?? deps.modelInfo?.reasoningConfig?.defaultEffort,
     modelStyle: managed.config.modelStyle,
   });
 }
