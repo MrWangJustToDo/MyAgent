@@ -23,6 +23,7 @@ assert.equal(controller.shouldAutoApproveTools(), false);
 await controller.applyStructuredPlan({
   goal: "Session restore demo",
   steps: ["Explore", "Implement", "Verify"],
+  keyFiles: ["src/index.ts"],
 });
 assert.equal(controller.getPhase(), "ready");
 assert.equal(controller.shouldAutoApproveTools(), false);

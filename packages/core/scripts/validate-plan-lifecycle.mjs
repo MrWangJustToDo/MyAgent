@@ -59,6 +59,7 @@ assert.equal(controller.getPhase(), "planning");
 await controller.applyStructuredPlan({
   goal: "Lifecycle demo",
   steps: ["One", "Two", "Three"],
+  keyFiles: ["src/index.ts"],
 });
 assert.equal(controller.getPhase(), "ready");
 assert.equal(controller.getState().steps.length, 3);
@@ -95,7 +96,11 @@ const c2 = new PlanModeController({
   getTodoManager: () => todo2,
 });
 c2.enable();
-await c2.applyStructuredPlan({ goal: "Source check", steps: ["A step here", "B step here"] });
+await c2.applyStructuredPlan({
+  goal: "Source check",
+  steps: ["A step here", "B step here"],
+  keyFiles: ["src/index.ts"],
+});
 c2.beginExecution();
 assert.equal(todo2.isPlanBound(), true);
 assert.equal(todo2.getSource(), "plan");

@@ -19,6 +19,7 @@ const middleware = createLifecycleMiddleware({
     updateWindowUsage: () => {
       usageUpdated = true;
     },
+    addLlmCall: () => {},
     getWindowUsage: () => ({
       inputTokens: 1,
       outputTokens: 2,

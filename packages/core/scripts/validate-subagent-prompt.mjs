@@ -19,8 +19,11 @@ import { buildExploreSystemPrompt } from "../dist/dev.mjs";
   assert.match(prompt, /read-only subagent/);
   assert.match(prompt, /begin_summary/);
 
-  // Delegation boundary.
-  assert.match(prompt, /no modifications, no command execution, no subagents/);
+  // Delegation boundary: read-only, no file modifications; only read-only
+  // shell commands allowed inside the project (write/external denied).
+  assert.match(prompt, /read-only: no file modifications/);
+  assert.match(prompt, /read-only shell commands/);
+  assert.match(prompt, /write, background, or external-path commands are denied/);
   assert.match(prompt, /report what needs to change back to the parent agent instead of acting/);
   assert.match(prompt, /Do not expand the task scope beyond what was asked/);
   assert.match(prompt, /5 steps/);

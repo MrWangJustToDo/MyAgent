@@ -57,10 +57,7 @@ test("formatToolOutput echoes ask_user multi-select as one item per line", () =>
 test("formatToolOutput echoes single-select ask_user with Selected:", () => {
   // Single-select (hasOptions but no multiSelect): keeps the compact label.
   assert.equal(
-    formatToolOutput(
-      { question: "Proceed?", answer: "yes", hasOptions: true, multiSelect: false },
-      "ask_user"
-    ),
+    formatToolOutput({ question: "Proceed?", answer: "yes", hasOptions: true, multiSelect: false }, "ask_user"),
     "Selected: yes"
   );
 

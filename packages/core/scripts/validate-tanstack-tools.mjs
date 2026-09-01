@@ -29,8 +29,15 @@ for (const name of readOnlyNames) {
 }
 assert.ok(subagentNames.has("webfetch"), "missing subagent tool: webfetch");
 assert.ok(subagentNames.has("websearch"), "missing subagent tool: websearch");
-assert.ok(!subagentNames.has("run_command"));
+// run_command is present for subagents but restricted to the read-only safety
+// policy (subagentSafe => needsApproval false); write/edit/delete and task
+// delegation remain excluded.
+const subagentRunCommand = subagentTools.find((t) => t.name === "run_command");
+assert.ok(subagentRunCommand, "missing subagent tool: run_command");
+assert.equal(subagentRunCommand.needsApproval, false, "subagent run_command must be subagentSafe");
 assert.ok(!subagentNames.has("write_file"));
+assert.ok(!subagentNames.has("edit_file"));
+assert.ok(!subagentNames.has("delete_file"));
 assert.ok(!subagentNames.has("task"));
 
 const runCommand = baseTools.find((t) => t.name === "run_command");
