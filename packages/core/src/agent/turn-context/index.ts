@@ -1,16 +1,17 @@
 export {
-  TURN_CONTEXT_OPEN,
-  TURN_CONTEXT_CLOSE,
+  CONTEXT_CLOSE,
+  CONTEXT_OPEN_PREFIX,
   hashTurnContextPayload,
-  buildTurnContextPayload,
-  formatTurnContextUserContent,
-  isTurnContextText,
-  isTurnContextModelMessage,
-  isTurnContextUIMessage,
-  extractTurnContextPayload,
-  findLatestTurnContextHash,
-  insertTurnContextUIMessage,
+  formatContextSectionUserContent,
+  isContextText,
+  contextKindFromText,
+  isContextModelMessage,
+  isContextUIMessage,
+  extractContextSection,
+  hashTurnContextSection,
+  findLatestTurnContextSectionHashes,
 } from "./turn-context-message.js";
+export type { TurnContextSection } from "./turn-context-message.js";
 
 export { getCurrentDate, getGitInfo } from "./env-context.js";
 export type { GitInfo } from "./env-context.js";

@@ -1,5 +1,14 @@
 import type { PlanModePhase } from "./plan-mode-controller.js";
 
+/** Turn-context block stating that neither plan nor auto mode is active. */
+export function buildModeInactivePrompt(): string {
+  return [
+    "<mode_state>",
+    "Neither plan mode nor auto mode is active — the standard tool approval flow applies.",
+    "</mode_state>",
+  ].join("\n");
+}
+
 /** Dynamic turn-context block while exploring (read-only). */
 export function buildPlanModePlanningPrompt(): string {
   return [

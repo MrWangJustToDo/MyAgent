@@ -1,6 +1,7 @@
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/cache/prompt-cache.js";
 
 import type { AgentConfig } from "./agent-types.js";
+import type { TurnContextSection } from "../agent/turn-context/turn-context-message.js";
 
 export { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/cache/prompt-cache.js";
 
@@ -46,24 +47,30 @@ export interface DynamicTurnContextInput {
   currentDate?: string;
   gitBranch?: string;
   gitStatus?: string;
-  /** Plan-mode instructions (planning / ready / executing). */
-  planModeContent?: string;
-  /** Auto / YOLO mode instructions (only when plan is off). */
-  autoModeContent?: string;
+  /** Mode section content — plan/auto instructions, or an explicit inactive
+   *  declaration so mode exits are communicated and re-entries re-inject. */
+  modeContent?: string;
   /** Extension-contributed situational context (nested under `<extension_context>`). */
   extensionTurnContext?: string;
   /** Instruction-context re-injection (nested under `<instruction_context>`). */
   instructionContext?: string;
 }
 
-export function buildDynamicTurnContext(input: DynamicTurnContextInput): string | undefined {
-  // Each section carries its own semantic tag so the model can distinguish
-  // purpose: <current_date> / <git_status> / <relevant_memories> / <reminder> /
-  // <plan_mode> or <auto_mode> / <instruction_context> / <extension_context>.
-  const parts: string[] = [];
+/**
+ * Build the dynamic turn-context as an ordered list of independent sections.
+ *
+ * Each section carries its own semantic tag (e.g. `<current_date>`, `<git_status>`)
+ * and is injected as its own `<ctx kind=...>` synthetic user message. Plan/auto mode
+ * are merged into a single mutually-exclusive `mode` category (plan wins).
+ */
+export function buildTurnContextSections(input: DynamicTurnContextInput): TurnContextSection[] {
+  const sections: TurnContextSection[] = [];
 
   if (input.currentDate) {
-    parts.push(["<current_date>", input.currentDate, "</current_date>"].join("\n"));
+    sections.push({
+      key: "current_date",
+      content: ["<current_date>", input.currentDate, "</current_date>"].join("\n"),
+    });
   }
 
   if (input.gitBranch || input.gitStatus) {
@@ -74,35 +81,51 @@ export function buildDynamicTurnContext(input: DynamicTurnContextInput): string 
     if (input.gitStatus) {
       gitParts.push(`Status:\n${input.gitStatus}`);
     }
-    parts.push(["<git_status>", ...gitParts, "</git_status>"].join("\n"));
+    sections.push({ key: "git_status", content: ["<git_status>", ...gitParts, "</git_status>"].join("\n") });
   }
 
-  if (input.relevantMemoryContent) parts.push(input.relevantMemoryContent.trim());
-  if (input.todoNagReminder) parts.push(input.todoNagReminder.trim());
-  if (input.planModeContent) parts.push(input.planModeContent.trim());
-  else if (input.autoModeContent) parts.push(input.autoModeContent.trim());
+  if (input.relevantMemoryContent)
+    sections.push({ key: "relevant_memories", content: input.relevantMemoryContent.trim() });
+  if (input.todoNagReminder) sections.push({ key: "reminder", content: input.todoNagReminder.trim() });
+
+  if (input.modeContent) sections.push({ key: "mode", content: input.modeContent.trim() });
 
   if (input.instructionContext?.trim()) {
-    parts.push(input.instructionContext.trim());
+    sections.push({ key: "instruction_context", content: input.instructionContext.trim() });
   }
 
   if (input.extensionTurnContext?.trim()) {
-    parts.push(["<extension_context>", input.extensionTurnContext.trim(), "</extension_context>"].join("\n"));
+    sections.push({
+      key: "extension_context",
+      content: ["<extension_context>", input.extensionTurnContext.trim(), "</extension_context>"].join("\n"),
+    });
   }
 
-  return parts.length > 0 ? parts.join("\n\n") : undefined;
+  return sections;
 }
 
 /**
- * Frozen system prompt only (dynamic turn context is admitted as synthetic user messages).
- *
- * `dynamicContext` / `extensionSystemAppend` are ignored here — kept in the signature so
- * older call sites compile; use {@link buildTurnContextPayload} + UI admission instead.
+ * `<project_instructions>` section (agent-doc content) — only injected for
+ * subagents, whose frozen system prompt does not carry the agent doc.
  */
-export function buildSystemPromptWithTurnContext(
-  frozen: string | undefined,
-  _dynamicContext?: string | undefined,
-  _extensionSystemAppend?: string
-): string[] | undefined {
+export function buildProjectInstructionsSection(content: string): TurnContextSection {
+  return {
+    key: "project_instructions",
+    content: [
+      "<project_instructions>",
+      "Below are the project-specific instructions loaded from the repository.",
+      "Follow these conventions, rules, and guidelines when working in this codebase.",
+      "",
+      content,
+      "</project_instructions>",
+    ].join("\n"),
+  };
+}
+
+/**
+ * Frozen system prompt only (dynamic context is injected as synthetic user messages
+ * by the turn-context middleware).
+ */
+export function buildSystemPromptWithTurnContext(frozen: string | undefined): string[] | undefined {
   return frozen ? [frozen] : undefined;
 }

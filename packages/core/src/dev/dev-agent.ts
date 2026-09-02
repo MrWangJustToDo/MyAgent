@@ -161,17 +161,17 @@ export {
 } from "../agent/extension";
 export { buildAutoModePrompt } from "../agent/approval/auto-mode-prompt.js";
 export {
-  TURN_CONTEXT_OPEN,
-  TURN_CONTEXT_CLOSE,
+  CONTEXT_OPEN_PREFIX,
+  CONTEXT_CLOSE,
   hashTurnContextPayload,
-  buildTurnContextPayload,
-  formatTurnContextUserContent,
-  isTurnContextText,
-  isTurnContextModelMessage,
-  isTurnContextUIMessage,
-  extractTurnContextPayload,
-  findLatestTurnContextHash,
-  insertTurnContextUIMessage,
+  formatContextSectionUserContent,
+  isContextText,
+  contextKindFromText,
+  isContextModelMessage,
+  isContextUIMessage,
+  extractContextSection,
+  hashTurnContextSection,
+  findLatestTurnContextSectionHashes,
 } from "../agent/turn-context";
 export {
   INSTRUCTION_FILENAMES,
@@ -184,6 +184,12 @@ export {
 } from "../agent/turn-context";
 export type { InstructionContextState, InstructionFile } from "../agent/turn-context";
 export { toolsToArray } from "../agent/tools/runtime/tools-record.js";
+export {
+  createTurnContextMiddleware,
+  DEFAULT_REFRESH_MESSAGE_THRESHOLD,
+  SUBAGENT_ALLOWED_KINDS,
+} from "../managers/middleware/turn-context-middleware.js";
+export { injectSyntheticMessages, syntheticMessageId } from "../managers/middleware/synthetic-injection.js";
 export { AgentRunner } from "../agent/runner/agent-runner.js";
 export { assertAsyncIterable, formatAgentStreamError } from "../agent/stream/assert-async-iterable.js";
 export {
@@ -277,6 +283,7 @@ export {
   planFilePath,
   stepsFromTexts,
   stripLeadingStepNumber,
+  buildModeInactivePrompt,
   buildPlanModePrompt,
   buildPlanModePlanningPrompt,
   buildPlanModeReadyPrompt,

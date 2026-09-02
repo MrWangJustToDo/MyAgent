@@ -31,8 +31,23 @@ export interface CommandJobPollResult {
   running: boolean;
 }
 
+/** A finished background job surfaced to the model as a completion notification. */
+export interface CompletedCommandJob {
+  id: string;
+  command: string;
+  status: CommandJobStatus;
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  startedAt: number;
+  endedAt: number | null;
+}
+
 class CommandJobRegistry {
   private readonly jobs = new Map<string, CommandJobRecord>();
+
+  /** Job ids already surfaced to the model as completion notifications (dedupe). */
+  private readonly notifiedJobIds = new Set<string>();
 
   create(command: string): CommandJobRecord {
     const id = generateId("job");
@@ -131,14 +146,43 @@ class CommandJobRegistry {
     return true;
   }
 
+  /**
+   * Drain the completion queue: every job that has finished but not yet been
+   * notified to the model. Marks them notified (each job notified exactly once).
+   *
+   * Independent of {@link poll} — this does NOT advance the incremental read
+   * cursors, so the model can still read full output via get_command_output.
+   */
+  collectCompleted(): CompletedCommandJob[] {
+    const completed: CompletedCommandJob[] = [];
+    for (const [id, job] of this.jobs) {
+      if (job.status === "running") continue;
+      if (this.notifiedJobIds.has(id)) continue;
+      this.notifiedJobIds.add(id);
+      completed.push({
+        id: job.id,
+        command: job.command,
+        status: job.status,
+        exitCode: job.exitCode,
+        stdout: job.stdout,
+        stderr: job.stderr,
+        startedAt: job.startedAt,
+        endedAt: job.endedAt,
+      });
+    }
+    return completed;
+  }
+
   async destroyAll(): Promise<void> {
     const ids = [...this.jobs.keys()];
     await Promise.all(ids.map((id) => this.kill(id)));
     this.jobs.clear();
+    this.notifiedJobIds.clear();
   }
 
   clear(): void {
     this.jobs.clear();
+    this.notifiedJobIds.clear();
   }
 }
 

@@ -36,7 +36,8 @@ export { createStatusMiddleware } from "../managers/middleware/status-middleware
 export { createApprovalResumeMiddleware } from "../managers/middleware/approval-resume-middleware.js";
 export {
   buildSystemPromptWithTurnContext,
-  buildDynamicTurnContext,
+  buildTurnContextSections,
+  buildProjectInstructionsSection,
   buildFrozenSystemPrompt,
 } from "../managers/managed-agent-prompt.js";
 export { createPromptCacheMiddleware } from "../managers/middleware/prompt-cache-middleware.js";

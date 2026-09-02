@@ -18,7 +18,7 @@
 import { generateId } from "../../utils/generate-id.js";
 import { runSubagent } from "../subagent/run-subagent.js";
 import { compactSummaryStreamId } from "../summary-stream/types.js";
-import { isTurnContextModelMessage } from "../turn-context/turn-context-message.js";
+import { isContextModelMessage } from "../turn-context/turn-context-message.js";
 
 import { buildCompactionPrompt, COMPACTION_SYSTEM_PROMPT, TURN_PREFIX_INSTRUCTION } from "./compaction-prompt.js";
 import { formatCompactionSummaryContent, isCompactionSummaryModelMessage } from "./compaction-summary.js";
@@ -362,7 +362,7 @@ export async function autoCompact(
   // checkpoint re-projected to the wire head) is not new history. Summarizing
   // it would append a near-duplicate checkpoint without shrinking context.
   const toSummarize = [...historyToSummarize, ...turnPrefixMessages];
-  if (toSummarize.every((message) => isCompactionSummaryModelMessage(message) || isTurnContextModelMessage(message))) {
+  if (toSummarize.every((message) => isCompactionSummaryModelMessage(message) || isContextModelMessage(message))) {
     return { compacted: false, tokensBefore, tokensAfter: tokensBefore, type: "auto" };
   }
 

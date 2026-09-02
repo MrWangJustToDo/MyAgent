@@ -37,8 +37,6 @@ export interface RunLifecycleHost {
   clearTurnContext: () => void;
   getMessagesForLLM: (canon?: ModelMessage[]) => ModelMessage[];
   collectExtensionPromptHooks: (prompt: string) => Promise<void>;
-  captureTurnContextSnapshot: () => Promise<void>;
-  admitTurnContextIfNeeded: () => boolean;
   emitEvent: EmitAgentTelemetryFn;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   log: AgentLog | null;
@@ -84,10 +82,9 @@ export async function prepareManagedAgentForRun(
       abortSignal: host.run.currentAbortController?.signal,
     });
 
-    // Snapshot once per user turn — admit into UI when payload changes (epoch-style).
+    // Extension hooks once per user turn — consumed by the turn-context middleware
+    // at onConfig (injection happens after compaction, against the real wire payload).
     await host.collectExtensionPromptHooks(typeof options.prompt === "string" ? options.prompt : "(structured)");
-    await host.captureTurnContextSnapshot();
-    host.admitTurnContextIfNeeded();
 
     const userMsg = typeof options.prompt === "string" ? options.prompt : "(structured)";
     host.emitEvent("prompt:submit", {

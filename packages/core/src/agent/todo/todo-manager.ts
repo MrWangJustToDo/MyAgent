@@ -78,6 +78,11 @@ export class TodoManager {
   /** Rounds since last todo update */
   private roundsSinceUpdate = 0;
 
+  /** Monotonic nag counter — makes every nag content unique so re-injection is
+   *  never swallowed by content-hash / stable-id dedupe after a reset (rounds
+   *  alone can replay a historical value byte-identically). */
+  private nagEpisode = 0;
+
   private readonly events = new Emitter<TodoManagerEvents>();
 
   /** Auto-clear timer (when all todos completed) */
@@ -214,10 +219,18 @@ export class TodoManager {
   }
 
   /**
-   * Get the nag reminder message to inject.
+   * Get the nag reminder message to inject. Embeds the stale-round count so the
+   * content (and therefore the per-kind hash / stable id) changes every nag —
+   * a constant reminder would be deduped away and never re-fire.
    */
-  getNagReminder(): string {
-    return "<reminder>Update your todos - mark completed tasks and update progress.</reminder>";
+  getNagReminder(roundsSinceUpdate: number): string {
+    this.nagEpisode += 1;
+    return [
+      "<reminder>",
+      `Update your todos - mark completed tasks and update progress.`,
+      `(nag #${this.nagEpisode}, unchanged for ${roundsSinceUpdate} rounds)`,
+      "</reminder>",
+    ].join("\n");
   }
 
   /**

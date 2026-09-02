@@ -1,5 +1,10 @@
 /**
- * Validation for turn-context epoch admission (frozen system + synthetic user messages).
+ * Validation for the unified synthetic-context injection:
+ * - `<ctx kind=...>` shell format + kind parsing
+ * - per-kind supersede notices + per-kind hash admission (only changed kinds inject)
+ * - restore seeding from persisted messages
+ * - subagent kind whitelist (context isolation)
+ * - shared injection helper (channel persistence + dedupe)
  *
  * Run: pnpm --filter @my-agent/core run validate:turn-context
  */
@@ -7,78 +12,269 @@
 import assert from "node:assert/strict";
 
 import {
-  SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
+  CONTEXT_OPEN_PREFIX,
+  SUBAGENT_ALLOWED_KINDS,
   buildAutoModePrompt,
-  buildDynamicTurnContext,
   buildFrozenSystemPrompt,
+  buildModeInactivePrompt,
+  buildProjectInstructionsSection,
   buildSystemPromptWithTurnContext,
-  buildTurnContextPayload,
+  buildTurnContextSections,
+  contextKindFromText,
+  extractContextSection,
   findCutPoint,
-  findLatestTurnContextHash,
-  formatTurnContextUserContent,
+  findLatestTurnContextSectionHashes,
+  formatContextSectionUserContent,
   hashTurnContextPayload,
-  insertTurnContextUIMessage,
-  isTurnContextModelMessage,
-  isTurnContextUIMessage,
+  hashTurnContextSection,
+  injectSyntheticMessages,
+  isContextModelMessage,
+  isContextUIMessage,
+  syntheticMessageId,
+  SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
 } from "../dist/dev.mjs";
 
-const dynamic = "<current_date>\nJuly 22, 2026\n</current_date>";
-
+// ---------------------------------------------------------------------------
+// 1. Frozen system prompt stays frozen — dynamic content never appended.
+// ---------------------------------------------------------------------------
 const frozen = buildFrozenSystemPrompt({
   config: { systemPrompt: "You are helpful." },
   agentDocContent: "",
 });
 assert.ok(frozen?.includes("<SYSTEM_PROMPT_DYNAMIC_BOUNDARY>"));
 
-// System stays frozen — dynamic is not appended.
-const withDynamic = buildSystemPromptWithTurnContext(frozen, dynamic);
+const withDynamic = buildSystemPromptWithTurnContext(frozen);
 assert.deepEqual(withDynamic, [frozen]);
-assert.ok(!withDynamic?.[0]?.includes("<turn_context>"));
-assert.deepEqual(buildSystemPromptWithTurnContext(frozen, undefined), [frozen]);
-assert.equal(buildSystemPromptWithTurnContext(undefined, dynamic), undefined);
+assert.ok(!withDynamic?.[0]?.includes("<ctx kind="));
+assert.deepEqual(buildSystemPromptWithTurnContext(undefined), undefined);
+assert.ok(SYSTEM_PROMPT_DYNAMIC_BOUNDARY.includes("DYNAMIC"));
 
-const payload = buildTurnContextPayload(dynamic, "Extra note");
-assert.ok(payload?.includes(dynamic));
-assert.ok(payload?.includes("Extra note"));
+// ---------------------------------------------------------------------------
+// 2. Section building: mode category merges plan/auto (plan wins).
+// ---------------------------------------------------------------------------
+const autoPrompt = buildAutoModePrompt();
+assert.match(autoPrompt, /<auto_mode>/);
 
-const first = formatTurnContextUserContent(payload, { isUpdate: false });
-assert.match(first, /<turn_context>/);
-assert.doesNotMatch(first, /authoritative/);
+const sections = buildTurnContextSections({
+  currentDate: "September 2, 2026",
+  gitBranch: "main",
+  gitStatus: "M file.ts",
+  relevantMemoryContent: "<relevant_memories>m</relevant_memories>",
+  todoNagReminder: "<reminder>nag</reminder>",
+  modeContent: '<plan_mode phase="planning">plan</plan_mode>',
+  extensionTurnContext: "ext",
+});
+assert.deepEqual(
+  sections.map((s) => s.key),
+  ["current_date", "git_status", "relevant_memories", "reminder", "mode", "extension_context"]
+);
+const modeSection = sections.find((s) => s.key === "mode");
+assert.ok(modeSection?.content.startsWith("<plan_mode"));
+assert.ok(!modeSection?.content.includes("<auto_mode>"), "plan wins over auto in mode category");
 
-const update = formatTurnContextUserContent(payload, { isUpdate: true });
-assert.match(update, /authoritative/);
+const autoOnly = buildTurnContextSections({ modeContent: autoPrompt });
+assert.equal(autoOnly.length, 1);
+assert.ok(autoOnly[0].content.includes("<auto_mode>"));
 
-const hash = hashTurnContextPayload(payload);
-assert.equal(hash, hashTurnContextPayload(payload));
-assert.notEqual(hash, hashTurnContextPayload(dynamic));
+// Inactive mode declaration: mode section is always present so exits are
+// communicated and identical re-entries still re-inject (content = state).
+const inactive = buildModeInactivePrompt();
+assert.match(inactive, /<mode_state>/);
+assert.match(inactive, /Neither plan mode nor auto mode is active/);
+const inactiveSections = buildTurnContextSections({ modeContent: inactive });
+assert.equal(inactiveSections.length, 1);
+assert.equal(inactiveSections[0].key, "mode");
 
+// Nag reminder content carries the stale-round count so each nag produces a
+// new hash / stable id (constant content would be deduped and never re-fire).
+const { TodoManager } = await import("../dist/dev.mjs");
+const tm = new TodoManager({
+  log: {
+    debug: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+    agent: () => {},
+    todo: () => {},
+    clear: () => {},
+  },
+});
+assert.notEqual(tm.getNagReminder(3), tm.getNagReminder(5), "nag content varies per episode");
+assert.match(tm.getNagReminder(7), /unchanged for 7 rounds/);
+
+// Subagent-only project_instructions section builder.
+const projectSection = buildProjectInstructionsSection("Follow conventions.");
+assert.equal(projectSection.key, "project_instructions");
+assert.ok(projectSection.content.includes("<project_instructions>"));
+assert.ok(projectSection.content.includes("Follow conventions."));
+
+// ---------------------------------------------------------------------------
+// 3. Shell format + kind parsing + per-kind supersede notice.
+// ---------------------------------------------------------------------------
+const section = { key: "current_date", content: "<current_date>\nJuly 22, 2026\n</current_date>" };
+const first = formatContextSectionUserContent(section);
+assert.ok(first.startsWith(`<ctx kind=current_date>\n<current_date>`));
+assert.ok(first.endsWith("</current_date>\n</ctx>"));
+assert.ok(!first.includes("authoritative"), "no supersede on first admit");
+
+const update = formatContextSectionUserContent(section, { isUpdate: true });
+assert.match(update, /If earlier <ctx kind=current_date> blocks appear above/);
+
+const parsed = extractContextSection(update);
+assert.deepEqual(parsed, section, "extract round-trips (notice stripped)");
+
+const parsedFirst = extractContextSection(first);
+assert.deepEqual(parsedFirst, section);
+assert.equal(contextKindFromText(first), "current_date");
+assert.equal(contextKindFromText("hello world"), undefined);
+assert.ok(isContextUIMessage({ id: "x", role: "user", parts: [{ type: "text", content: first }] }));
+assert.ok(!isContextUIMessage({ id: "x", role: "user", parts: [{ type: "text", content: "hello" }] }));
+assert.ok(isContextModelMessage({ role: "user", content: first }));
+assert.ok(!isContextModelMessage({ role: "user", content: "hello" }));
+
+// ---------------------------------------------------------------------------
+// 4. Per-kind hash admission (only changed kinds re-inject).
+// ---------------------------------------------------------------------------
+const hash = hashTurnContextSection(section);
+assert.equal(hash, hashTurnContextPayload(section.content));
+assert.notEqual(hash, hashTurnContextPayload(section.content + "x"));
+
+const hashes = new Map();
+hashes.set("current_date", hash);
+assert.equal(hashes.get("current_date"), hash);
+
+// Restore seeding: latest occurrence of each kind wins, newest-first walk.
+const gitSection = { key: "git_status", content: "<git_status>\nBranch: dev\n</git_status>" };
+const gitV2 = { key: "git_status", content: "<git_status>\nBranch: main\n</git_status>" };
+const persisted = [
+  { id: "u1", role: "user", parts: [{ type: "text", content: "hello" }] },
+  { id: "s1", role: "user", parts: [{ type: "text", content: formatContextSectionUserContent(section) }] },
+  { id: "s2", role: "user", parts: [{ type: "text", content: formatContextSectionUserContent(gitSection) }] },
+  {
+    id: "s3",
+    role: "user",
+    parts: [{ type: "text", content: formatContextSectionUserContent(gitV2, { isUpdate: true }) }],
+  },
+  { id: "a1", role: "assistant", parts: [{ type: "text", content: "hi" }] },
+];
+const seeded = findLatestTurnContextSectionHashes(persisted);
+assert.equal(seeded.size, 2);
+assert.equal(seeded.get("current_date"), hashTurnContextSection(section));
+assert.equal(seeded.get("git_status"), hashTurnContextSection(gitV2), "newest git_status wins");
+
+// ---------------------------------------------------------------------------
+// 5. Shared injection helper: dedupe by stable id + channel persistence.
+// ---------------------------------------------------------------------------
 const uiMessages = [
   { id: "u1", role: "user", parts: [{ type: "text", content: "hello" }] },
   { id: "a1", role: "assistant", parts: [{ type: "text", content: "hi" }] },
 ];
-const withTc = insertTurnContextUIMessage(uiMessages, first);
-assert.equal(withTc.length, 3);
-assert.equal(withTc[1].id.startsWith("tc") || withTc[1].role === "user", true);
-assert.ok(isTurnContextUIMessage(withTc[1]));
-assert.equal(withTc[0].parts[0].content, "hello");
-assert.equal(findLatestTurnContextHash(withTc), hashTurnContextPayload(payload));
+const channel = {
+  messages: uiMessages,
+  getMessages() {
+    return this.messages;
+  },
+  setMessages(next) {
+    this.messages = next;
+  },
+};
+let persistedCount = 0;
+const wire = [
+  { role: "user", content: "hello" },
+  { role: "assistant", content: "hi" },
+  { role: "user", content: "next task" },
+];
+const entry = { kind: "current_date", content: first };
+const entry2 = { kind: "git_status", content: formatContextSectionUserContent(gitSection) };
 
-// Guard contract (ManagedAgent.admitTurnContextIfNeeded): a turn_context must
-// never be admitted before the first real user message — the insert helper skips
-// synthetic TC messages when locating the insertion point, so a pre-TC (empty
-// channel) admission would land at index 0 and produce a malformed [TC, user…]
-// transcript. Callers must skip admission when no real user message exists.
-const empty = [];
-const onEmpty = insertTurnContextUIMessage(empty, first);
-assert.equal(onEmpty.length, 1);
-assert.ok(isTurnContextUIMessage(onEmpty[0]), "primitive appends on empty; guard lives in caller");
-const onlyTc = [{ id: "tc0", role: "user", parts: [{ type: "text", content: first }] }];
-const noRealUser = insertTurnContextUIMessage(onlyTc, update);
-assert.equal(noRealUser.length, 2, "no real user msg -> TC goes after the existing TC");
-assert.ok(isTurnContextUIMessage(noRealUser[0]));
-assert.ok(isTurnContextUIMessage(noRealUser[1]));
+const injected = injectSyntheticMessages(wire, [entry, entry2], {
+  ui: channel,
+  persist: () => persistedCount++,
+});
+assert.equal(injected.length, 2);
+assert.equal(persistedCount, 1, "persist called once per batch");
+// Channel: appended at the tail (time order preserved), after existing messages.
+assert.equal(channel.messages.length, 4);
+assert.equal(channel.messages[1].id, "a1");
+assert.equal(channel.messages[2].id, syntheticMessageId(entry));
+assert.equal(channel.messages[3].id, syntheticMessageId(entry2));
+assert.equal(channel.messages[2].parts[0].content, first);
+// Wire: appended at the tail too → prefix up to the append point stays byte-stable.
+assert.equal(wire.length, 5);
+assert.equal(wire[3].content, first);
+assert.equal(wire[4].content, entry2.content);
 
-// findCutPoint skips synthetic turn_context when counting user turns.
+// Re-injecting the same content is a no-op (id dedupe).
+const reinjected = injectSyntheticMessages(wire, [entry], { ui: channel, persist: () => persistedCount++ });
+assert.equal(reinjected.length, 0);
+assert.equal(channel.messages.length, 4);
+assert.equal(persistedCount, 1);
+
+// Append position (notification semantics): goes to the end of channel + wire.
+const notifChannel = {
+  messages: uiMessages.slice(),
+  getMessages() {
+    return this.messages;
+  },
+  setMessages(next) {
+    this.messages = next;
+  },
+};
+const notifWire = [{ role: "user", content: "run in bg" }];
+injectSyntheticMessages(
+  notifWire,
+  [{ kind: "background_notification", content: `<ctx kind=background_notification>\njob done\n</ctx>` }],
+  { ui: notifChannel, persist: () => {} }
+);
+assert.equal(notifChannel.messages.length, 3);
+assert.equal(notifChannel.messages[2].parts[0].content.includes("job done"), true);
+assert.equal(notifWire.length, 2);
+assert.equal(notifWire[1].content.includes("job done"), true);
+
+// Mid-loop mode-change re-admission: turn-context uses APPEND so a later ctx
+// injection lands at the end (time order preserved) and never rewrites already-
+// streamed content (prompt-cache prefix stability). after-last-user would put
+// the later mode block BEFORE the earlier one (see bug: reversed mode + cache loss).
+{
+  const chan = {
+    messages: [
+      { id: "u1", role: "user", parts: [{ type: "text", content: "task" }] },
+      { id: "a1", role: "assistant", parts: [{ type: "text", content: "first reply" }] },
+    ],
+    getMessages() {
+      return this.messages;
+    },
+    setMessages(next) {
+      this.messages = next;
+    },
+  };
+  const wire = [
+    { role: "user", content: "task" },
+    { role: "assistant", content: "first reply" },
+  ];
+
+  // Mode switches mid-loop: first auto, then back to non-auto.
+  const auto = { kind: "mode", content: `<ctx kind=mode>\n<auto_mode>on\n</auto_mode>\n</ctx>` };
+  const nonAuto = { kind: "mode", content: `<ctx kind=mode>\n<mode_state>off\n</mode_state>\n</ctx>` };
+
+  injectSyntheticMessages(wire, [auto], { ui: chan, persist: () => {} });
+  injectSyntheticMessages(wire, [nonAuto], { ui: chan, persist: () => {} });
+
+  // Channel: auto first, nonAuto appended after it (NOT before).
+  assert.equal(chan.messages.length, 4);
+  assert.equal(chan.messages[2].parts[0].content.includes("<auto_mode>"), true);
+  assert.equal(chan.messages[3].parts[0].content.includes("<mode_state>"), true);
+  // Wire mirrors channel order (prefix up to the append point stays byte-stable).
+  assert.equal(wire.length, 4);
+  assert.equal(wire[2].content.includes("<auto_mode>"), true);
+  assert.equal(wire[3].content.includes("<mode_state>"), true);
+  assert.equal(wire[0].content, "task");
+  assert.equal(wire[1].content, "first reply");
+}
+
+// ---------------------------------------------------------------------------
+// 6. findCutPoint skips synthetic context messages when counting user turns.
+// ---------------------------------------------------------------------------
 const modelMessages = [
   { role: "user", content: "First" },
   { role: "assistant", content: "A1" },
@@ -87,22 +283,149 @@ const modelMessages = [
   { role: "assistant", content: "A2" },
   { role: "user", content: "Third" },
 ];
-assert.ok(isTurnContextModelMessage(modelMessages[2]));
-assert.equal(findCutPoint(modelMessages, 2), 3, "skip turn_context; cut on Second");
-assert.equal(SYSTEM_PROMPT_DYNAMIC_BOUNDARY.includes("DYNAMIC"), true);
+assert.equal(findCutPoint(modelMessages, 2), 3, "skip ctx message; cut on Second");
 
-const autoPrompt = buildAutoModePrompt();
-assert.match(autoPrompt, /<auto_mode>/);
-assert.match(autoPrompt, /\/plan/);
+// ---------------------------------------------------------------------------
+// 7. Subagent kind whitelist (context isolation).
+// ---------------------------------------------------------------------------
+assert.deepEqual([...SUBAGENT_ALLOWED_KINDS].sort(), ["current_date", "git_status", "project_instructions"]);
+assert.ok(!SUBAGENT_ALLOWED_KINDS.has("relevant_memories"), "no memory for subagents");
+assert.ok(!SUBAGENT_ALLOWED_KINDS.has("mode"), "no plan/auto for subagents");
+assert.ok(!SUBAGENT_ALLOWED_KINDS.has("extension_context"), "no extension context for subagents");
+assert.ok(!SUBAGENT_ALLOWED_KINDS.has("instruction_context"), "no instruction context for subagents");
+assert.ok(!SUBAGENT_ALLOWED_KINDS.has("extension_system_append"), "no extension append for subagents");
 
-const withAutoOnly = buildDynamicTurnContext({ autoModeContent: autoPrompt, currentDate: "2026-08-07" });
-assert.ok(withAutoOnly?.includes("<auto_mode>"));
+// Shell prefix constant is the single detection anchor.
+assert.equal(CONTEXT_OPEN_PREFIX, "<ctx kind=");
 
-const planWins = buildDynamicTurnContext({
-  planModeContent: "<plan_mode>planning</plan_mode>",
-  autoModeContent: autoPrompt,
-});
-assert.ok(planWins?.includes("<plan_mode>"));
-assert.ok(!planWins?.includes("<auto_mode>"), "plan turn-context must win over auto");
+// ---------------------------------------------------------------------------
+// 8. Middleware refresh threshold: admit baseline counter must advance after
+//    each injection, otherwise aboveThreshold latches permanently.
+// ---------------------------------------------------------------------------
+{
+  const { AgentUIChannel, createTurnContextMiddleware, DEFAULT_REFRESH_MESSAGE_THRESHOLD } =
+    await import("../dist/dev.mjs");
+  const channel = new AgentUIChannel();
+  let hashStore = new Map();
+  let admitCount = 0;
+  const middleware = createTurnContextMiddleware({
+    getFrozenSystemPrompt: () => undefined,
+    getSections: async () => [{ key: "current_date", content: "<current_date>now</current_date>" }],
+    getUIChannel: () => channel,
+    persistMessages: () => {},
+    getManagedAgent: () => null,
+    getAdmittedHashes: () => hashStore,
+    setAdmittedHashes: (next) => {
+      hashStore = next;
+    },
+    getAdmitMessageCount: () => admitCount,
+    setAdmitMessageCount: (count) => {
+      admitCount = count;
+    },
+    refreshMessageThreshold: 3,
+  });
+  const seed = [];
+  for (let i = 0; i < 2; i++) seed.push({ id: `u${i}`, role: "user", parts: [{ type: "text", content: `msg ${i}` }] });
+  channel.setMessages(seed);
+
+  const run = async () => {
+    const wire = seed.map((m) => ({ role: "user", content: m.parts[0].content }));
+    const result = await middleware.onConfig({}, { messages: wire });
+    return result.messages ?? wire;
+  };
+
+  let wire = await run();
+  assert.equal(wire.length, 3, "first admit injects");
+  assert.equal(admitCount, channel.getMessages().length, "admit baseline advances after first injection");
+
+  // Same content, below threshold → no injection.
+  wire = await run();
+  assert.equal(wire.length, 2, "unchanged + below threshold → no injection");
+
+  // Push past the threshold → refresh fires even though the hash is unchanged.
+  for (let i = 2; i < 5; i++)
+    channel.setMessages([
+      ...channel.getMessages(),
+      { id: `u${i}`, role: "user", parts: [{ type: "text", content: `msg ${i}` }] },
+    ]);
+  wire = await run();
+  assert.equal(wire.length, 3, "above threshold → supersede refresh injected");
+  assert.equal(admitCount, channel.getMessages().length, "baseline advances after refresh");
+
+  // After the refresh, another unchanged call below threshold must not inject again.
+  wire = await run();
+  assert.equal(wire.length, 2, "refresh does not latch: back to no-injection");
+  assert.equal(DEFAULT_REFRESH_MESSAGE_THRESHOLD > 0, true);
+}
+
+// ---------------------------------------------------------------------------
+// 9. State cycles must re-inject: mode re-entry with identical instructions and
+//    repeated nag reminders must never be swallowed by stable-id dedupe.
+// ---------------------------------------------------------------------------
+{
+  const { AgentUIChannel, createTurnContextMiddleware } = await import("../dist/dev.mjs");
+  const channel = new AgentUIChannel();
+  let hashStore;
+  let admitCount = 0;
+  const middleware = createTurnContextMiddleware({
+    getFrozenSystemPrompt: () => undefined,
+    getSections: async () => currentSections,
+    getUIChannel: () => channel,
+    persistMessages: () => {},
+    getManagedAgent: () => null,
+    getAdmittedHashes: () => hashStore,
+    setAdmittedHashes: (next) => {
+      hashStore = next;
+    },
+    getAdmitMessageCount: () => admitCount,
+    setAdmitMessageCount: (count) => {
+      admitCount = count;
+    },
+  });
+  channel.setMessages([{ id: "u0", role: "user", parts: [{ type: "text", content: "hello" }] }]);
+  const AUTO = buildAutoModePrompt();
+  const INACTIVE = buildModeInactivePrompt();
+  let currentSections = [{ key: "mode", content: AUTO }];
+  const run = async () => {
+    const wire = [{ role: "user", content: "hi" }];
+    const r = await middleware.onConfig({}, { messages: wire });
+    return r.messages ?? wire;
+  };
+
+  const modeIds = () =>
+    channel
+      .getMessages()
+      .map((m) => m.id)
+      .filter((id) => id?.startsWith("ctx-mode-"));
+  // enter auto → exit (inactive) → re-enter auto (byte-identical instructions).
+  const idsAfterEach = [];
+  for (const content of [AUTO, INACTIVE, AUTO]) {
+    currentSections = [{ key: "mode", content }];
+    await run();
+    idsAfterEach.push(modeIds().length);
+  }
+  assert.deepEqual(idsAfterEach, [1, 2, 3], "mode enter/exit/re-enter all inject (no id-gate swallow)");
+  const injectedIds = modeIds();
+  assert.equal(new Set(injectedIds).size, 3, "each admission gets a unique id (episode nonce)");
+  assert.ok(injectedIds[2] !== injectedIds[0], "re-entry id differs from first entry");
+
+  // Repeated nags with identical rounds value: episode counter keeps ids unique.
+  const { TodoManager } = await import("../dist/dev.mjs");
+  const tm = new TodoManager({
+    log: {
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      agent: () => {},
+      todo: () => {},
+      clear: () => {},
+    },
+  });
+  const first = tm.getNagReminder(3);
+  const second = tm.getNagReminder(3);
+  assert.notEqual(first, second, "same rounds → different episode → different content");
+  assert.ok(second.includes(`#2`), "episode counter is monotonic");
+}
 
 console.log("turn-context validation passed");

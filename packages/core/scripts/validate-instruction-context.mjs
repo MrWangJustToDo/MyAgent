@@ -3,7 +3,7 @@
  *   1. Instruction file discovery (AGENTS.md / CLAUDE.md priority + override)
  *   2. Change detection via content digest (no change → stable; change → detected)
  *   3. formatInstructionContextSection renders latest content + supersede notice
- *   4. buildDynamicTurnContext includes the <instruction_context> section and
+ *   4. buildTurnContextSections includes the <instruction_context> section and
  *      keeps the other sections' existing semantic tags
  *
  * Run: pnpm --filter @my-agent/core run validate:instruction-context
@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
-  buildDynamicTurnContext,
+  buildTurnContextSections,
   diffInstructionStates,
   formatInstructionContextSection,
   instructionStateChanged,
@@ -155,22 +155,24 @@ setFile("CLAUDE.override.md", "# personal override\n");
 }
 
 // ---------------------------------------------------------------------------
-// 5. buildDynamicTurnContext includes <instruction_context> + keeps tags
+// 5. buildTurnContextSections includes <instruction_context> + keeps tags
 // ---------------------------------------------------------------------------
 {
   const loaded = await loadLatestInstructionContent();
   const instructionContext = formatInstructionContextSection(loaded);
 
-  const payload = buildDynamicTurnContext({
+  const payload = buildTurnContextSections({
     relevantMemoryContent: "<relevant_memories>memory A</relevant_memories>",
     todoNagReminder: "<reminder>Update todos</reminder>",
     currentDate: "August 17, 2026",
     gitBranch: "main",
     gitStatus: "M file.ts",
-    planModeContent: '<plan_mode phase="planning">…</plan_mode>',
+    modeContent: '<plan_mode phase="planning">…</plan_mode>',
     extensionTurnContext: "ext activity",
     instructionContext,
-  });
+  })
+    .map((section) => section.content)
+    .join("\n\n");
 
   assert.ok(payload.includes("<instruction_context>"), "instruction_context section present");
   assert.ok(payload.includes("rule B changed"), "latest instruction text in payload");
@@ -187,19 +189,23 @@ setFile("CLAUDE.override.md", "# personal override\n");
 // ---------------------------------------------------------------------------
 {
   const loadedA = await loadLatestInstructionContent();
-  const a = buildDynamicTurnContext({
+  const a = buildTurnContextSections({
     currentDate: "August 17, 2026",
     gitBranch: "main",
     relevantMemoryContent: "<relevant_memories>m</relevant_memories>",
     instructionContext: formatInstructionContextSection(loadedA),
-  });
+  })
+    .map((section) => section.content)
+    .join("\n\n");
   const loadedB = await loadLatestInstructionContent();
-  const b = buildDynamicTurnContext({
+  const b = buildTurnContextSections({
     currentDate: "August 17, 2026",
     gitBranch: "main",
     relevantMemoryContent: "<relevant_memories>m</relevant_memories>",
     instructionContext: formatInstructionContextSection(loadedB),
-  });
+  })
+    .map((section) => section.content)
+    .join("\n\n");
   assert.equal(a, b, "unchanged instructions → identical payload (cache stable)");
 }
 
@@ -231,39 +237,40 @@ setFile("CLAUDE.override.md", "# personal override\n");
   );
 
   // Turn 1: baseline — no instruction section (frozen prompt already carries content).
-  const turn1 = (await managed.getDynamicTurnContext()) ?? "";
+  const turn1 = (await managed.getDynamicTurnContextSections()).map((section) => section.content).join("\n\n");
   assert.ok(!turn1.includes("<instruction_context>"), "baseline turn has no instruction_context");
 
   // Edit the instruction file, then evaluate again — change detected + injected.
   setFile("AGENTS.md", "# AGENTS\n- rule baseline\n- rule NEW\n");
-  const turn2 = (await managed.getDynamicTurnContext()) ?? "";
+  const turn2 = (await managed.getDynamicTurnContextSections()).map((section) => section.content).join("\n\n");
   assert.ok(turn2.includes("<instruction_context>"), "changed turn injects instruction_context");
   assert.ok(turn2.includes("rule NEW"), "latest content injected");
 
   // No further change — still sticky (stable re-injection).
-  const turn3 = (await managed.getDynamicTurnContext()) ?? "";
+  const turn3 = (await managed.getDynamicTurnContextSections()).map((section) => section.content).join("\n\n");
   assert.ok(turn3.includes("<instruction_context>"), "sticky active keeps injecting");
 
   // clearTurnContext clears the per-turn snapshot but NOT the instruction state —
   // sticky remains active (it must survive across user turns, since clearTurnContext
   // runs at every turn finalize).
   managed.clearTurnContext();
-  const turn4 = (await managed.getDynamicTurnContext()) ?? "";
+  const turn4 = (await managed.getDynamicTurnContextSections()).map((section) => section.content).join("\n\n");
   assert.ok(turn4.includes("<instruction_context>"), "clearTurnContext keeps sticky active");
   assert.ok(turn4.includes("rule NEW"), "still injecting latest content after clear");
 
   // Full context reset (compaction path) re-baselines → next turn has no section.
   managed.resetAdmittedTurnContext();
-  const turn5 = (await managed.getDynamicTurnContext()) ?? "";
+  const turn5 = (await managed.getDynamicTurnContextSections()).map((section) => section.content).join("\n\n");
   assert.ok(!turn5.includes("<instruction_context>"), "resetAdmittedTurnContext re-baselines");
 }
 
 // ---------------------------------------------------------------------------
-// 9. End-to-end admit flow: turn_context message injected with instruction
-//     section after a change; hash/UI stable when nothing changes
+// 9. End-to-end injection via turn-context middleware: ctx message injected
+//     with instruction section after a change; stable when nothing changes
 // ---------------------------------------------------------------------------
 {
-  const { AgentUIChannel, ManagedAgent, extractTurnContextPayload } = await import("../dist/dev.mjs");
+  const { AgentUIChannel, ManagedAgent, createTurnContextMiddleware, extractContextSection } =
+    await import("../dist/dev.mjs");
 
   files.clear();
   setFile("AGENTS.md", "# AGENTS\n- rule baseline\n");
@@ -287,50 +294,71 @@ setFile("CLAUDE.override.md", "# personal override\n");
   const channel = new AgentUIChannel();
   managed.setUIChannel(channel);
 
-  // A real user message must exist before turn_context admission (the guard
-  // keeps the synthetic TC after the user epoch instead of at position 0).
+  const middleware = createTurnContextMiddleware({
+    getFrozenSystemPrompt: () => managed.getFrozenSystemPrompt(),
+    getSections: () => managed.getDynamicTurnContextSections(),
+    getUIChannel: () => channel,
+    persistMessages: () => {},
+    getManagedAgent: () => managed,
+    getAdmittedHashes: () => managed.getAdmittedContextHashes(),
+    setAdmittedHashes: (hashes) => managed.setAdmittedContextHashes(hashes),
+    getAdmitMessageCount: () => managed.getTurnContextAdmitMessageCount(),
+    setAdmitMessageCount: (count) => managed.setTurnContextAdmitMessageCount(count),
+  });
+  const runOnConfig = async () => {
+    const wire = [];
+    const result = await middleware.onConfig({}, { messages: wire });
+    return result.messages ?? wire;
+  };
+
+  // A real user message must exist before injection (keeps synthetic ctx after
+  // the user epoch instead of at position 0).
   channel.setMessages([{ id: "u1", role: "user", parts: [{ type: "text", content: "hello" }] }]);
 
-  // Baseline turn — snapshot + admit (no instruction section yet).
-  await managed.captureTurnContextSnapshot();
-  const admittedBaseline = managed.admitTurnContextIfNeeded();
-  assert.equal(admittedBaseline, true, "baseline turn_context admitted");
-  const baselineUIMessages = channel.getMessages();
-  assert.equal(baselineUIMessages.length, 2, "user message + one turn_context message in UI");
-  const baselineContent = baselineUIMessages[baselineUIMessages.length - 1].parts.map((p) => p.content).join("\n");
-  assert.ok(baselineContent.startsWith("<turn_context>"), "UI message is turn_context");
-  assert.ok(!baselineContent.includes("<instruction_context>"), "baseline has no instruction section");
+  // Baseline turn — inject (no instruction section yet).
+  const baselineWire = await runOnConfig();
+  assert.ok(baselineWire.length >= 1, "baseline injected at least current_date");
+  const baselineContent = baselineWire[baselineWire.length - 1];
+  assert.ok(baselineContent.content.startsWith("<ctx kind="), "wire message is synthetic ctx");
+  assert.ok(!baselineContent.content.includes("<instruction_context>"), "baseline has no instruction section");
+  assert.equal(channel.getMessages().length, baselineWire.length + 1, "channel: user + injected ctx messages");
 
-  // Same content, next turn — no new admit (hash stable, cache friendly).
-  await managed.captureTurnContextSnapshot();
-  const admittedAgain = managed.admitTurnContextIfNeeded();
-  assert.equal(admittedAgain, false, "no change → no re-admit");
-  assert.equal(channel.getMessages().length, 2, "UI unchanged (cache stable)");
+  // Same content, next call — no new inject (hash stable, cache friendly).
+  const wireCount = baselineWire.length;
+  const againWire = await runOnConfig();
+  assert.equal(againWire.length, 0, "no change → no re-inject");
+  assert.equal(channel.getMessages().length, wireCount + 1, "channel unchanged (cache stable)");
 
-  // Edit AGENTS.md → next turn snapshot detects change → new admit with section.
-  // A new user message arrives first (real next-turn traffic): admission inserts
-  // the fresh TC right after the latest real user message, so it becomes last.
+  // Edit AGENTS.md → next call detects change → inject with section. A new user
+  // message arrives first (real next-turn traffic): injection inserts the fresh
+  // ctx right after the latest real user message, so it becomes last.
   setFile("AGENTS.md", "# AGENTS\n- rule baseline\n- rule NEW-ADMIT\n");
   channel.setMessages([
     ...channel.getMessages(),
     { id: "u2", role: "user", parts: [{ type: "text", content: "next" }] },
   ]);
-  await managed.captureTurnContextSnapshot();
-  const admittedChanged = managed.admitTurnContextIfNeeded();
-  assert.equal(admittedChanged, true, "change → re-admit");
-  assert.equal(channel.getMessages().length, 4, "second turn_context message inserted after newest user message");
-  const changedMessages = channel.getMessages();
-  const lastContent = changedMessages[changedMessages.length - 1].parts.map((p) => p.content).join("\n");
-  assert.ok(lastContent.startsWith("<turn_context>"), "newest message is turn_context");
-  assert.ok(lastContent.includes("<instruction_context>"), "instruction section present in newest turn_context");
+  const changedWire = await runOnConfig();
+  assert.equal(changedWire.length, 1, "change → one ctx message injected (instruction_context)");
+  const lastContent = changedWire[changedWire.length - 1].content;
+  assert.equal(
+    lastContent.startsWith("<ctx kind=instruction_context>"),
+    true,
+    "newest message is instruction_context ctx"
+  );
+  assert.ok(lastContent.includes("<instruction_context>"), "instruction section present");
   assert.ok(lastContent.includes("rule NEW-ADMIT"), "latest instruction text injected");
   assert.ok(lastContent.includes("authoritative"), "supersede notice present");
+  const channelMessages = channel.getMessages();
+  assert.ok(
+    channelMessages[channelMessages.length - 1].parts[0].content.startsWith("<ctx kind=instruction_context>"),
+    "channel last message matches wire injection"
+  );
 
-  // Parsing compatibility: extractTurnContextPayload still extracts the newest block.
-  const newest = extractTurnContextPayload(lastContent);
-  assert.ok(newest.includes("<instruction_context>"), "nested section survives payload extraction");
+  // Parsing: extractContextSection recovers the newest block.
+  const newest = extractContextSection(lastContent);
+  assert.ok(newest.content.includes("<instruction_context>"), "nested section survives extraction");
+  assert.equal(newest.key, "instruction_context");
 }
 
-// ---------------------------------------------------------------------------
 rmSync(ws, { recursive: true, force: true });
 console.log("validate:instruction-context PASSED");

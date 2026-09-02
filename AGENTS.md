@@ -514,9 +514,10 @@ registerModelProvider(await createRemoteProvider("http://localhost:3100"));
 ## Prompt Cache (prefix)
 
 Frozen system text ends with `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` and stays byte-stable across turns.
-Per-turn dynamic context is admitted as a synthetic `<turn_context>` user message when its payload hash changes (persisted in `uiMessages`, hidden in the transcript UI).
+Per-turn dynamic context is injected as synthetic `<ctx kind=...>` user messages by the turn-context middleware `onConfig` (after compaction) whenever a section's content hash changes (persisted in `uiMessages`, hidden in the transcript UI; per-kind supersede notices mark refreshed sections).
 `<current_date>` uses **day** granularity (not hour/minute) so the payload stays stable within a calendar day.
-`findCutPoint` / `findCutPointByBudget` skip `<turn_context>` messages (turn counting / budget walk respectively).
+`findCutPoint` / `findCutPointByBudget` skip synthetic `<ctx kind=...>` messages (turn counting / budget walk respectively).
+All synthetic injections (turn-context sections, memory, background-command completion notifications) share one helper (`managers/middleware/synthetic-injection.ts`): stable `ctx-<kind>-<hash>` ids, channel + wire in sync, persisted to the session (no cross-turn prefix divergence). Background notifications use `append` position and `<ctx kind=background_notification>`; any future injection must reuse this helper and shell.
 `prompt-cache-middleware` then:
 
 - **Anthropic** — `cache_control: { type: "ephemeral" }` on frozen system, last tool definition, and latest user message (tool-loop friendly)
@@ -733,7 +734,7 @@ compaction: {
 
 **Auto-compact trigger:** The trigger base is the **working budget** — `tokenThreshold`, the same number the UI percentage uses. The agent factory auto-fills it as `min(contextWindow, MAX_THRESHOLD=200k)` when unset, so a huge models.dev window (e.g. 1M) never defers compaction past the displayed budget; the threshold is clamped to the real window so an oversized config cannot defer past what the model accepts (`shouldTriggerAutoCompact`, `resolveAutoCompactTrigger`). Trigger point = `min(tokenThreshold, contextWindow) * compactAtPercent / 100`.
 
-**Auto-compact cut-point strategy:** With a token-budget policy, `findCutPointByBudget()` walks backward accumulating estimated tokens until the budget is reached and cuts at the nearest pairing-safe boundary (user/assistant only — never on a tool result, so call/result pairs stay intact). If the cut lands inside a turn (**split turn**), the discarded turn prefix is summarized separately under `<turn_prefix>` and merged into the SUMMARY; the suffix stays intact. Legacy `findCutPoint()` counts recent *user turns* from the end and keeps the latest N (default: 2 via `keepRecentFlows`). Both skip in-chain summaries and synthetic `<turn_context>` messages. Everything before the cut is summarized; the kept portion remains in the main agent context.
+**Auto-compact cut-point strategy:** With a token-budget policy, `findCutPointByBudget()` walks backward accumulating estimated tokens until the budget is reached and cuts at the nearest pairing-safe boundary (user/assistant only — never on a tool result, so call/result pairs stay intact). If the cut lands inside a turn (**split turn**), the discarded turn prefix is summarized separately under `<turn_prefix>` and merged into the SUMMARY; the suffix stays intact. Legacy `findCutPoint()` counts recent *user turns* from the end and keeps the latest N (default: 2 via `keepRecentFlows`). Both skip in-chain summaries and synthetic `<ctx kind=...>` messages. Everything before the cut is summarized; the kept portion remains in the main agent context.
 
 **Summarizer input:** The summarization subagent receives labeled segments — `<to_compress>` (pre-cut history), `<turn_prefix>` (split-turn prefix, dedicated prompt), and `<still_in_context>` (kept turns) — plus optional `<previous-summary>` for incremental updates. Prompt rules tell the model to summarize the compressed segment thoroughly and use the kept segment only to align Goal/Next (no detailed restatement).
 
@@ -857,7 +858,7 @@ packages/
 │   │   ├── summary-stream/            # SummaryStreamHub (task / compact summary streams)
 │   │   ├── todo-manager/              # Todo tracking + todo tool
 │   │   ├── tools/                     # Universal AI tools (fs, shell, web) + runtime/util
-│   │   ├── turn-context/              # Per-turn dynamic context (<turn_context> payload)
+│   │   ├── turn-context/              # Per-turn dynamic context (<ctx kind=...> payload)
 │   │   ├── ui-channel.ts              # AgentUIChannel (chat / subagent preview)
 │   │   ├── default-prompt.ts          # System prompt builder
 │   │   └── agent-doc-loader.ts        # Agent documentation loader

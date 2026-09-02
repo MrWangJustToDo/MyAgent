@@ -5,11 +5,11 @@
  * creation and frozen into the system prompt's `<project_instructions>`.
  * If the model edits those files via tools, the frozen prompt keeps stale
  * instructions until the session restarts. This module detects such changes
- * so turn_context can re-inject the latest instruction content.
+ * so the synthetic ctx messages can re-inject the latest instruction content.
  *
  * Cache-friendly design: we only re-inject when the instruction file digest
  * changed since the last admit (hash-driven, same epoch pattern as
- * turn_context itself). When nothing changed, the payload is byte-identical
+ * synthetic ctx injection itself). When nothing changed, the payload is byte-identical
  * and the prompt-cache breakpoint stays stable.
  */
 

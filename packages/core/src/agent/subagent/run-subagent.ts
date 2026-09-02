@@ -8,7 +8,6 @@ import { ensureUIChannel, runAgentOnce } from "../run/run-agent-skeleton.js";
 import { extractAssistantText } from "../stream/extract-assistant-text.js";
 import { throwOnRunError } from "../stream/stream-errors.js";
 import { summaryStreamKey } from "../summary-stream";
-import { getCurrentDate, getGitInfo } from "../turn-context/env-context.js";
 
 import { buildExploreSystemPrompt } from "./explore-prompt.js";
 import { isProgressSummaryEligible, summarizeProgress } from "./progress-summary.js";
@@ -118,16 +117,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
   let subagentRunCompleted = false;
   const runStartedAt = Date.now();
   try {
-    // Build minimal turn context (date + git) for subagent's environmental awareness.
-    // Keeps subagent isolated while providing necessary time/workspace context.
-    // NOTE: these must live in the UI channel (durable SoT) — executeManagedAgentRun
-    // reads the model wire messages from the channel, not the `messages` argument.
-    const envContext = await buildSubagentTurnContext(parentManaged);
-    const tcMessages: ModelMessage[] = envContext
-      ? [{ role: "user", content: `<turn_context>\n${envContext}\n</turn_context>` }]
-      : [];
-
-    const messages: ModelMessage[] = [...tcMessages, ...(initialMessages ?? []), { role: "user", content: prompt }];
+    const messages: ModelMessage[] = [...(initialMessages ?? []), { role: "user", content: prompt }];
 
     const userUIMessage: TanStackUIMessage = {
       id: generateId("msg"),
@@ -137,17 +127,10 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     };
 
     // Always attach a channel (durable message SoT). bridgeUI only gates parent panel streaming.
-    // Seed the channel with the turn-context messages too so the model actually receives them
-    // (the runner projects wire messages from the channel).
+    // Context injection is handled by the shared turn-context middleware (subagent kind
+    // whitelist: current_date / git_status / project_instructions) — no manual seed here.
     const channel = ensureUIChannel(subagentManaged, {
-      initialMessages: [
-        ...tcMessages.map((m) => ({
-          id: generateId("tc"),
-          role: "user" as const,
-          parts: [{ type: "text" as const, content: typeof m.content === "string" ? m.content : "" }],
-        })),
-        userUIMessage,
-      ],
+      initialMessages: [userUIMessage],
     });
 
     const summaryHub = bridgeUI || compactSummaryStream ? parentManaged.summaryStreams : undefined;
@@ -420,50 +403,4 @@ async function* tapBeginSummary(
     }
     yield chunk;
   }
-}
-
-/**
- * Build minimal environment turn context for subagents.
- *
- * Includes `<current_date>`, `<git_status>`, and — when a parent agent is
- * available — the parent's `<project_instructions>` (AGENTS.md / CLAUDE.md
- * content) so the subagent follows the same project conventions. No memory,
- * todo, plan, or extension context — keeps subagents context-isolated while
- * providing necessary time/workspace + project awareness.
- */
-async function buildSubagentTurnContext(parentManaged?: { getAgentDocContent(): string }): Promise<string | undefined> {
-  const currentDate = getCurrentDate();
-  const { branch: gitBranch, status: gitStatus } = await getGitInfo();
-
-  const parts: string[] = [];
-
-  if (currentDate) {
-    parts.push(["<current_date>", currentDate, "</current_date>"].join("\n"));
-  }
-
-  if (gitBranch || gitStatus) {
-    const gitParts: string[] = [];
-    if (gitBranch) {
-      gitParts.push(`Branch: ${gitBranch}`);
-    }
-    if (gitStatus) {
-      gitParts.push(`Status:\n${gitStatus}`);
-    }
-    parts.push(["<git_status>", ...gitParts, "</git_status>"].join("\n"));
-  }
-
-  const projectInstructions = parentManaged?.getAgentDocContent();
-  if (projectInstructions) {
-    parts.push(
-      [
-        "<project_instructions>",
-        "Below are the project-specific instructions loaded from the repository. Follow these conventions, rules, and guidelines when working in this codebase.",
-        "",
-        projectInstructions,
-        "</project_instructions>",
-      ].join("\n")
-    );
-  }
-
-  return parts.length > 0 ? parts.join("\n\n") : undefined;
 }

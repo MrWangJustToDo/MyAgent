@@ -474,14 +474,14 @@ assert.equal(retrySnap.pendingLine, "C".repeat(80));
 assert.equal(retryChannel.getTaskRunPhase(), "tools");
 unsubRetry();
 
-// resetForStreamRetry keeps ALL leading user messages (turn_context + prompt),
-// not just the first — subagent channels seed <turn_context> before the prompt.
+// resetForStreamRetry keeps ALL leading user messages (synthetic ctx + prompt),
+// not just the first — subagent channels may hold <ctx kind=...> around the prompt.
 const tcRetryChannel = new AgentUIChannel({
   initialMessages: [
     {
       id: "tc-msg",
       role: "user",
-      parts: [{ type: "text", content: "<turn_context>...</turn_context>" }],
+      parts: [{ type: "text", content: "<ctx kind=current_date>\nnow\n</ctx>" }],
       createdAt: new Date(),
     },
     {
@@ -500,7 +500,7 @@ const tcRetryChannel = new AgentUIChannel({
 });
 tcRetryChannel.resetForStreamRetry();
 assert.equal(tcRetryChannel.getMessages().length, 2, "leading user messages survive soft reset");
-assert.equal(tcRetryChannel.getMessages()[0].parts[0].content, "<turn_context>...</turn_context>");
+assert.equal(tcRetryChannel.getMessages()[0].parts[0].content, "<ctx kind=current_date>\nnow\n</ctx>");
 assert.equal(tcRetryChannel.getMessages()[1].parts[0].content, "find the test framework");
 
 // failRun clears everything including summary subscription state

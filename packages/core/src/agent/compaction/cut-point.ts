@@ -8,7 +8,7 @@
  *   boundaries so tool call/result pairs are never split.
  */
 
-import { isTurnContextModelMessage } from "../turn-context/turn-context-message.js";
+import { isContextModelMessage } from "../turn-context/turn-context-message.js";
 
 import {
   extractCompactionSummaryBody,
@@ -88,13 +88,13 @@ export interface BudgetedCutPointResult {
  * A valid cut boundary: user or assistant messages only. Tool results are
  * excluded so a kept suffix never starts between a tool call and its result
  * (results always follow their call-bearing assistant message). Summaries and
- * synthetic `<turn_context>` messages are excluded from cut counting.
+ * synthetic `<ctx kind=...>` messages are excluded from cut counting.
  */
 function isValidCutBoundary(message: ModelMessage, index: number, summaryMessageIndex: number): boolean {
   if (index === summaryMessageIndex) return false;
   if (message.role !== "user" && message.role !== "assistant") return false;
   if (isCompactionSummaryModelMessage(message)) return false;
-  if (isTurnContextModelMessage(message)) return false;
+  if (isContextModelMessage(message)) return false;
   return true;
 }
 
@@ -104,7 +104,7 @@ function findTurnStart(messages: ModelMessage[], fromIndex: number, summaryMessa
     const message = messages[i]!;
     if (message.role !== "user") continue;
     if (isCompactionSummaryModelMessage(message)) continue;
-    if (isTurnContextModelMessage(message)) continue;
+    if (isContextModelMessage(message)) continue;
     return i;
   }
   return -1;
@@ -167,7 +167,7 @@ export function findCutPointByBudget(
  * Skips:
  * - `summaryMessageIndex` (optional explicit index, e.g. wire-head summary)
  * - In-chain compaction summary user messages ({@link CONVERSATION_SUMMARY_START})
- * - Synthetic `<turn_context>` user messages (epoch dynamic context)
+ * - Synthetic `<ctx kind=...>` user messages (epoch dynamic context)
  *
  * @returns cutIndex (messages[0..cutIndex) = to summarize,
  *          messages[cutIndex..] = to keep). Returns 0 if not enough user turns.
@@ -184,8 +184,8 @@ export function findCutPoint(messages: ModelMessage[], keepRecentUserTurns: numb
     const message = messages[i]!;
     if (message.role !== "user") continue;
     if (isCompactionSummaryModelMessage(message)) continue;
-    // Synthetic turn_context is not a user turn — keep looking upward.
-    if (isTurnContextModelMessage(message)) continue;
+    // Synthetic context is not a user turn — keep looking upward.
+    if (isContextModelMessage(message)) continue;
 
     userCount++;
     if (userCount === keepRecentUserTurns) {

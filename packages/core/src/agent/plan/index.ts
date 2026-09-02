@@ -12,6 +12,7 @@ export {
   buildPlanExecuteSteerMessage,
   buildPlanModeExecutingPrompt,
   buildPlanModePlanningPrompt,
+  buildModeInactivePrompt,
   buildPlanModePrompt,
   buildPlanModeReadyPrompt,
   buildPlanModeRetroPrompt,

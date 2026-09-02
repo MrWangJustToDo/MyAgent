@@ -13,6 +13,7 @@ import { DEFAULT_BASE_URLS } from "../models/config/model-config.js";
 import { buildManagedAgentDeps } from "./managed-agent-deps.js";
 import {
   createApprovalResumeMiddleware,
+  createBackgroundNotificationMiddleware,
   createCompactionMiddleware,
   createEarlyToolResultUiMiddleware,
   createExtensionsMiddleware,
@@ -160,6 +161,19 @@ export function buildAgentRunner(
     }),
     createTurnContextMiddleware({
       getFrozenSystemPrompt: deps.getFrozenSystemPrompt,
+      getSections: () => managed.getDynamicTurnContextSections(),
+      getUIChannel: () => managed.ui,
+      persistMessages: (next) => managed.maybeSaveSessionUIMessages(next, "user-message"),
+      getManagedAgent: () => managed,
+      // Subagents get the parent's agent doc (their own is not loaded).
+      getProjectInstructions: () => {
+        if (!managed.parentId) return undefined;
+        return manager.getAgent(managed.parentId)?.getAgentDocContent() || undefined;
+      },
+      getAdmittedHashes: () => managed.getAdmittedContextHashes(),
+      setAdmittedHashes: (hashes) => managed.setAdmittedContextHashes(hashes),
+      getAdmitMessageCount: () => managed.getTurnContextAdmitMessageCount(),
+      setAdmitMessageCount: (count) => managed.setTurnContextAdmitMessageCount(count),
     }),
     createExtensionsMiddleware({
       getExtensionRunner: () => deps.extensionRunner,
@@ -180,6 +194,13 @@ export function buildAgentRunner(
     }),
     createPlanModeMiddleware({
       getPlanMode: () => managed.planMode,
+    }),
+    // Surface finished background jobs as a lightweight notification before each LLM call.
+    // Both injects the notification into the current run's messages AND persists it as an
+    // independent synthetic UIMessage so it survives across turns (prompt-cache friendly).
+    createBackgroundNotificationMiddleware({
+      getUIChannel: () => managed.ui,
+      persistMessages: (next) => managed.maybeSaveSessionUIMessages(next, "user-message"),
     }),
     // After turn-context / tool filtering so breakpoints see the final wire payload.
     createPromptCacheMiddleware({
@@ -258,7 +279,6 @@ async function executeManagedAgentRun(
     abortSignal: input.abortSignal,
   });
 
-  // prepareForRun may have admitted a synthetic turn_context into the UI channel.
   if (!managed.ui) {
     throw new Error(`Agent "${agentId}" requires a UI channel before LLM runs`);
   }
@@ -270,7 +290,7 @@ async function executeManagedAgentRun(
     throw new Error(`Agent "${agentId}" missing abort controller after prepareForRun`);
   }
 
-  // Always read the live channel — compact / turn_context may mutate it mid-run/recovery.
+  // Always read the live channel — compact / synthetic ctx injection may mutate it mid-run/recovery.
   return runStreamWithRecovery({
     managed,
     manager,

@@ -14,7 +14,11 @@ import {
   type SessionSyncTracker,
 } from "../agent/persistence/session-sync-tracker.js";
 import { PlanModeController } from "../agent/plan/plan-mode-controller.js";
-import { buildPlanModePrompt, buildPlanRetroSteerMessage } from "../agent/plan/plan-prompts.js";
+import {
+  buildModeInactivePrompt,
+  buildPlanModePrompt,
+  buildPlanRetroSteerMessage,
+} from "../agent/plan/plan-prompts.js";
 import { SummaryStreamHub } from "../agent/summary-stream/summary-stream-hub.js";
 import { defineServerTool } from "../agent/tools/runtime/define-tool.js";
 import { getCurrentDate, getGitInfo } from "../agent/turn-context/env-context.js";
@@ -25,14 +29,7 @@ import {
   readInstructionContextState,
   type InstructionContextState,
 } from "../agent/turn-context/instruction-context.js";
-import {
-  buildTurnContextPayload,
-  findLatestTurnContextHash,
-  formatTurnContextUserContent,
-  hashTurnContextPayload,
-  insertTurnContextUIMessage,
-  isTurnContextUIMessage,
-} from "../agent/turn-context/turn-context-message.js";
+import { type TurnContextSection } from "../agent/turn-context/turn-context-message.js";
 import { Emitter } from "../utils/emitter.js";
 import { generateId } from "../utils/generate-id.js";
 
@@ -52,7 +49,7 @@ import {
   savePlanToWorkspace as savePlanToWorkspaceHelper,
   togglePlanMode as togglePlanModeHelper,
 } from "./managed-agent-plan.js";
-import { buildDynamicTurnContext, buildFrozenSystemPrompt } from "./managed-agent-prompt.js";
+import { buildTurnContextSections, buildFrozenSystemPrompt } from "./managed-agent-prompt.js";
 import {
   abortManagedAgentRun,
   finalizeManagedAgentRun,
@@ -106,8 +103,6 @@ import type { AgentRetryState } from "../runtime-types/agent-retry.js";
 // ============================================================================
 
 /** When the turn context payload hasn't changed, re-admit every N messages to keep context fresh. */
-const TURN_CONTEXT_REFRESH_MESSAGE_THRESHOLD = 100;
-
 export type { RunFinalizeReason } from "./agent-types.js";
 
 /** Active agent mode — mutually exclusive modes for the agent. */
@@ -319,15 +314,13 @@ export class ManagedAgent {
   agentDocSource: string;
   private frozenSystemPrompt: string | undefined;
   private systemPromptFrozen: boolean;
-  /** Stable dynamic turn context for the current user turn (payload snapshot). */
-  private turnContextSnapshot: string | undefined;
-  /** Extension append-only text for the current user turn (merged into turn_context message). */
+  /** Extension append-only text for the current user turn (own `extension_system_append` section). */
   private extensionSystemAppendSnapshot: string | undefined;
-  /** Pending extension turn-context text collected in prepareForRun (before snapshot). */
+  /** Pending extension turn-context text collected in prepareForRun (before injection). */
   private pendingExtensionTurnContext: string | undefined;
-  /** Hash of the last turn_context payload admitted into UIMessage history. */
-  private lastAdmittedTurnContextHash: string | undefined;
-  /** Message count at the last turn_context admit (for periodic refresh). */
+  /** Latest admitted hash per section kind (restore-seeded; only changed kinds re-admit). */
+  private lastAdmittedTurnContextHashes: Map<string, string> | undefined;
+  /** Message count at the last context admit (for periodic refresh; state owned by turn-context middleware). */
   private turnContextAdmitMessageCount: number;
   /** Last-seen instruction file digest snapshot (for instruction change detection). */
   private instructionContextState: InstructionContextState | undefined;
@@ -437,7 +430,7 @@ export class ManagedAgent {
     this.agentDocContent = "";
     this.agentDocSource = "";
     this.systemPromptFrozen = false;
-    this.lastAdmittedTurnContextHash = undefined;
+    this.lastAdmittedTurnContextHashes = undefined;
     this.turnContextAdmitMessageCount = 0;
     this.instructionContextState = undefined;
     this.instructionContextActive = false;
@@ -858,17 +851,27 @@ export class ManagedAgent {
     return this.getSystemPrompt();
   }
 
-  getTurnContextSnapshot(): string | undefined {
-    return this.turnContextSnapshot;
+  // --- Turn-context admission state (owned here, mutated by turn-context middleware). ---
+
+  getAdmittedContextHashes(): Map<string, string> | undefined {
+    return this.lastAdmittedTurnContextHashes;
   }
 
-  getExtensionSystemAppendSnapshot(): string | undefined {
-    return this.extensionSystemAppendSnapshot;
+  setAdmittedContextHashes(hashes: Map<string, string> | undefined): void {
+    this.lastAdmittedTurnContextHashes = hashes;
+  }
+
+  getTurnContextAdmitMessageCount(): number {
+    return this.turnContextAdmitMessageCount;
+  }
+
+  setTurnContextAdmitMessageCount(count: number): void {
+    this.turnContextAdmitMessageCount = count;
   }
 
   /**
    * Collect `before_agent_start` interceptors + turn-context providers for this user turn.
-   * Call before {@link captureTurnContextSnapshot}.
+   * Runs in prepareForRun; the turn-context middleware consumes the results at onConfig.
    */
   async collectExtensionPromptHooks(prompt: string): Promise<void> {
     this.pendingExtensionTurnContext = undefined;
@@ -888,64 +891,9 @@ export class ManagedAgent {
     });
   }
 
-  async captureTurnContextSnapshot(): Promise<void> {
-    this.turnContextSnapshot = await this.getDynamicTurnContext();
-  }
-
-  /**
-   * When the dynamic payload changed, insert a synthetic `<turn_context>` user message
-   * into the UI channel (persisted, display-filtered). No-op when unchanged.
-   *
-   * Also re-admits periodically when messages grow beyond {@link TURN_CONTEXT_REFRESH_MESSAGE_THRESHOLD}
-   * to keep context fresh in long conversations, even if the payload hasn't changed.
-   */
-  admitTurnContextIfNeeded(): boolean {
-    const payload = buildTurnContextPayload(this.turnContextSnapshot, this.extensionSystemAppendSnapshot);
-    if (!payload) return false;
-
-    // Only admit turn-context once at least one real user message exists in the
-    // channel. Without this, a run that prepares before any user message lands
-    // (e.g. a stray/early run) would insert the synthetic TC at position 0,
-    // producing a malformed `[TC, user, ...]` transcript instead of the
-    // expected `[user, TC, ...]` epoch ordering.
-    const uiMessages = this.ui?.getMessages() ?? [];
-    if (!uiMessages.some((m) => m.role === "user" && !isTurnContextUIMessage(m))) {
-      return false;
-    }
-
-    const hash = hashTurnContextPayload(payload);
-    if (this.lastAdmittedTurnContextHash === undefined) {
-      const existing = findLatestTurnContextHash(uiMessages) ?? undefined;
-      this.lastAdmittedTurnContextHash = existing;
-    }
-
-    const messageCount = uiMessages.length;
-    const aboveThreshold = messageCount - this.turnContextAdmitMessageCount >= TURN_CONTEXT_REFRESH_MESSAGE_THRESHOLD;
-
-    if (hash === this.lastAdmittedTurnContextHash && !aboveThreshold) return false;
-
-    const content = formatTurnContextUserContent(payload, {
-      isUpdate: Boolean(this.lastAdmittedTurnContextHash),
-    });
-
-    const ui = this.ui;
-    if (!ui) {
-      this.log?.warn("agent", "admitTurnContextIfNeeded: UI channel missing; skipping turn_context admit");
-      return false;
-    }
-
-    const next = insertTurnContextUIMessage(ui.getMessages(), content);
-    ui.setMessages(next);
-    this.maybeSaveSessionUIMessages(next, "user-message");
-
-    this.lastAdmittedTurnContextHash = hash;
-    this.turnContextAdmitMessageCount = next.length;
-    return true;
-  }
-
   /** After compaction / clear — force the next turn to re-admit full dynamic context. */
   resetAdmittedTurnContext(): void {
-    this.lastAdmittedTurnContextHash = undefined;
+    this.lastAdmittedTurnContextHashes = undefined;
     this.turnContextAdmitMessageCount = 0;
     this.instructionContextState = undefined;
     this.instructionContextActive = false;
@@ -953,11 +901,10 @@ export class ManagedAgent {
 
   clearTurnContext(): void {
     this.memory.clearTurnContext();
-    this.turnContextSnapshot = undefined;
     this.extensionSystemAppendSnapshot = undefined;
     this.pendingExtensionTurnContext = undefined;
     // NOTE: instructionContextState / instructionContextActive intentionally NOT
-    // reset here — like lastAdmittedTurnContextHash they must survive across user
+    // reset here — like lastAdmittedTurnContextHashes they must survive across user
     // turns (clearTurnContext runs at every turn finalize). Otherwise every turn
     // re-baselines and cross-turn instruction changes are never detected. Reset
     // only on compact / full context reset (resetAdmittedTurnContext).
@@ -969,10 +916,11 @@ export class ManagedAgent {
     this.invalidateRunner();
   }
 
-  async getDynamicTurnContext(): Promise<string | undefined> {
+  /** Build the ordered dynamic turn-context sections for the current user turn. */
+  async getDynamicTurnContextSections(): Promise<TurnContextSection[]> {
     let todoNagReminder: string | undefined;
     if (this.todoManager?.shouldNag()) {
-      todoNagReminder = this.todoManager.getNagReminder();
+      todoNagReminder = this.todoManager.getNagReminder(this.todoManager.getRoundsSinceUpdate());
       this.log?.todo("Capturing nag reminder in turn context snapshot", {
         roundsSinceUpdate: this.todoManager.getRoundsSinceUpdate(),
       });
@@ -984,7 +932,11 @@ export class ManagedAgent {
     const planState = this.planMode.getState();
     const planModeContent = buildPlanModePrompt(planState.phase, planState.planMarkdown, planState.planFilePath);
     // Plan turn-context wins when plan is active; auto prompt only in pure auto mode.
-    const autoModeContent = planState.phase === "off" && this.autoMode.isEnabled() ? buildAutoModePrompt() : undefined;
+    // The mode section is always present (inactive declaration when neither is
+    // active) so mode exits are explicitly communicated and re-entries with
+    // identical instructions still re-inject (content reflects state).
+    const autoModeContent = !planModeContent && this.autoMode.isEnabled() ? buildAutoModePrompt() : undefined;
+    const modeContent = planModeContent ?? autoModeContent ?? buildModeInactivePrompt();
 
     // Instruction files are frozen into the system prompt at startup; if the model
     // edited AGENTS.md / CLAUDE.md since we last evaluated, re-inject the latest
@@ -993,17 +945,24 @@ export class ManagedAgent {
     // system prompt already carries the initial content).
     const instructionContext = await this.readChangedInstructionContext();
 
-    return buildDynamicTurnContext({
+    const sections = buildTurnContextSections({
       relevantMemoryContent: this.memory.getRelevantContent(),
       todoNagReminder,
       currentDate,
       gitBranch,
       gitStatus,
-      planModeContent,
-      autoModeContent,
+      modeContent,
       extensionTurnContext: this.pendingExtensionTurnContext,
       instructionContext,
     });
+    const append = this.extensionSystemAppendSnapshot?.trim();
+    if (append) {
+      sections.push({
+        key: "extension_system_append",
+        content: ["<extension_system_append>", append, "</extension_system_append>"].join("\n"),
+      });
+    }
+    return sections;
   }
 
   /**
@@ -1320,7 +1279,6 @@ export class ManagedAgent {
     this.retryInfo = null;
     this.pendingApprovalCount = 0;
     this.memory.resetState();
-    this.turnContextSnapshot = undefined;
     this.extensionSystemAppendSnapshot = undefined;
     this.pendingExtensionTurnContext = undefined;
     this.log?.clear();
@@ -1329,7 +1287,7 @@ export class ManagedAgent {
     this.turnLifecycleFinalized = false;
     // Keep chatController + uiChannel alive — /clear calls clearMessages() separately.
     // Resetting these would break subsequent sendMessage() calls.
-    this.lastAdmittedTurnContextHash = undefined;
+    this.lastAdmittedTurnContextHashes = undefined;
     this.systemPromptFrozen = false;
     this.frozenSystemPrompt = undefined;
   }

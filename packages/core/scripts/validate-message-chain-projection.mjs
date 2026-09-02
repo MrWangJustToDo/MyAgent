@@ -54,12 +54,12 @@ const assistant = (content) => ({ role: "assistant", content });
   assert.ok(!visible.some((m) => m.content === "old1"));
 }
 
-// findCutPoint skips summary + turn_context
+// findCutPoint skips summary + synthetic ctx
 {
   const messages = [
     user("u1"),
     assistant("a1"),
-    user("<turn_context>\nx\n</turn_context>"),
+    user("<ctx kind=current_date>\nx\n</ctx>"),
     user("u2"),
     assistant("a2"),
     { role: "user", content: formatCompactionSummaryContent("s") },

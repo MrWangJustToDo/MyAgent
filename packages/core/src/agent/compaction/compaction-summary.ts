@@ -2,7 +2,7 @@
  * Compaction summary markers and detectors (shared; no cut-point imports).
  */
 
-import { isTurnContextUIMessage } from "../turn-context/turn-context-message.js";
+import { isContextUIMessage } from "../turn-context/turn-context-message.js";
 
 import { extractTextFromContent } from "./message-utils.js";
 
@@ -30,7 +30,7 @@ export function isCompactionSummaryUIMessage(message: UIMessage): boolean {
 
 /**
  * True when the latest durable channel message is already a compaction SUMMARY.
- * Skips trailing synthetic `<turn_context>` so a just-appended checkpoint is
+ * Skips trailing synthetic `<ctx kind=...>` so a just-appended checkpoint is
  * detected even if turn-context lands after it.
  *
  * Used to stop auto-compact from stacking a second SUMMARY before any new
@@ -40,7 +40,7 @@ export function isCompactionSummaryUIMessage(message: UIMessage): boolean {
 export function isLatestDurableMessageCompactionSummary(messages: UIMessage[]): boolean {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i]!;
-    if (isTurnContextUIMessage(message)) continue;
+    if (isContextUIMessage(message)) continue;
     return isCompactionSummaryUIMessage(message);
   }
   return false;

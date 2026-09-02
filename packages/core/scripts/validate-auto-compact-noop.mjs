@@ -18,7 +18,7 @@ import {
   createCompactionSummaryUIMessage,
   findCutPoint,
   formatCompactionSummaryContent,
-  formatTurnContextUserContent,
+  formatContextSectionUserContent,
   isLatestDurableMessageCompactionSummary,
 } from "../dist/dev.mjs";
 
@@ -133,13 +133,21 @@ function uiTurnContext() {
   return {
     id: "tc",
     role: "user",
-    parts: [{ type: "text", content: formatTurnContextUserContent("<current_date>\nnow\n</current_date>") }],
+    parts: [
+      {
+        type: "text",
+        content: formatContextSectionUserContent({
+          key: "current_date",
+          content: "<current_date>\nnow\n</current_date>",
+        }),
+      },
+    ],
   };
 }
 
 // ============================================================================
 // Scenario E: channel tail is already a SUMMARY (with optional trailing
-// turn_context). Middleware must skip auto-compact — this is the stacked
+// synthetic <ctx kind=...> message). Middleware must skip auto-compact — this is the stacked
 // compact-5 + compact-6 failure mode.
 // ============================================================================
 assert.equal(
@@ -159,7 +167,7 @@ assert.equal(
 assert.equal(
   isLatestDurableMessageCompactionSummary([createCompactionSummaryUIMessage("checkpoint 5"), uiTurnContext()]),
   true,
-  "E: trailing turn_context is ignored"
+  "E: trailing synthetic ctx message is ignored"
 );
 assert.equal(
   isLatestDurableMessageCompactionSummary([

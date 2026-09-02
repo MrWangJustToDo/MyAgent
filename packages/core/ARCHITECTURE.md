@@ -265,11 +265,18 @@ Sources: `managers/middleware/*` for run stack; `agent/plan/plan-mode-middleware
 2. lifecycle-middleware      usage tracking, thinking events, memory commit, llm:request/response
 3. compaction-middleware     auto-compact only (DeepSeek reasoning echo is adapter-only)
 4. tool-compact-middleware  per-tool LLM shaping
-5. turn-context-middleware  systemPrompts = frozen only (dynamic admitted as UI messages in prepare)
+5. turn-context-middleware  inject changed <ctx kind=...> sections post-compaction (per-kind
+                             hash diff; subagents filtered by SUBAGENT_ALLOWED_KINDS whitelist;
+                             systemPrompts = frozen only)
 6. extensions-middleware    ExtensionEventBus intercept + agent:tool-* lifecycle events
 7. early-tool-result-ui     apply each tool output to StreamProcessor as soon as it finishes
-8. plan-mode-middleware     block forbidden tools while plan mode restricts tooling
-9. prompt-cache-middleware  Anthropic cache_control + OpenAI prompt_cache_key + sorted tools
+8. task-prefork-middleware  subagent task prefork / phase state
+9. plan-mode-middleware     block forbidden tools while plan mode restricts tooling
+10. background-notification-middleware
+                             completed background-command notifications as <ctx kind=background_notification>
+                             synthetic messages (append; persisted + id-deduped)
+11. prompt-cache-middleware  Anthropic cache_control + OpenAI prompt_cache_key + sorted tools
+                             (must stay last so cache breakpoints see the final payload)
 ```
 
 TanStack runs tools sequentially but emits batched `TOOL_CALL_END` results only after the whole tool phase. `early-tool-result-ui` calls `AgentUIChannel.addToolResult` in `onAfterToolCall` so finished tools (e.g. the first of two `task` calls) show complete while later tools still run. The later stream chunks re-apply the same output idempotently.
@@ -412,7 +419,7 @@ Large tool outputs at **execute** time still use `maybeCacheOutput` (`.agents/ca
 
 **Files:** `agent/compaction/auto-compact.ts`, `apply-compaction-result.ts`
 
-**Trigger:** `shouldTriggerAutoCompact` when window input tokens ≥ `tokenThreshold × compactAtPercent / 100`. After a successful compact, `usage.resetWindow()` zeroes window tokens, so the next `onConfig` would otherwise fall through to `estimateTokens(projected wire)` and fire again immediately. Compaction middleware skips auto-compact when the latest durable channel message is already a SUMMARY (`isLatestDurableMessageCompactionSummary`, ignoring trailing `<turn_context>`). `autoCompact` also no-ops when `toSummarize` is only previous SUMMARY / turn-context messages.
+**Trigger:** `shouldTriggerAutoCompact` when window input tokens ≥ `tokenThreshold × compactAtPercent / 100`. After a successful compact, `usage.resetWindow()` zeroes window tokens, so the next `onConfig` would otherwise fall through to `estimateTokens(projected wire)` and fire again immediately. Compaction middleware skips auto-compact when the latest durable channel message is already a SUMMARY (`isLatestDurableMessageCompactionSummary`, ignoring trailing `<ctx kind=...>`). `autoCompact` also no-ops when `toSummarize` is only previous SUMMARY / synthetic ctx messages.
 
 ```
 setStatus("compacting") via beginCompaction("auto")
@@ -576,7 +583,7 @@ uiMessages (source of truth on AgentUIChannel; chronological, including SUMMARY 
 
 Recovery / continuation always re-reads `managed.ui.getMessages()` (not a closed-over snapshot from run start), so a mid-run compact is visible to the next attempt.
 
-- **Each run start** (`prepareForRun`): turn_context may be admitted into the channel; wire is always projected from the live channel on the next `onConfig`.
+- **Each `onConfig`** (turn-context middleware, after compaction): changed `<ctx kind=...>` sections are injected into the channel + wire (per-kind hash diff); wire is otherwise projected from the live channel.
 - **User send** (`AgentChatController.sendMessage` / drained queues): `maybeSaveSessionUIMessages(messages, "user-message")`.
 - **After run idle** (`AgentChatController` after `pumpToolPhases`, including approval wait / abort cleanup): `maybeSaveSessionUIMessages(messages, "pump-complete")`.
 - **During runs / core**: `persistSession()` and `finalizeRun` write model fields only; they never pass `uiMessages`.
@@ -616,19 +623,28 @@ emit memory:prefetch { status: injected | empty | skip-* | error }
 
 ### 7.3 Per-iteration injection
 
-**`turn-context-middleware`** + epoch admission via `admitTurnContextIfNeeded`:
+**`turn-context-middleware`** (runs `onConfig`, after compaction):
 
 ```
-prepareForRun → captureTurnContextSnapshot() once per user turn
-             → if payload hash changed: insert synthetic <turn_context> user UIMessage
-               (after latest real user; persisted; UI-filtered)
-onConfig → systemPrompts = frozen only (no dynamic tail)
+onConfig → build dynamic sections (current_date, git_status, memory, plan mode, etc.)
+         → per-kind hash diff vs last admitted (seeded from persisted messages on restore)
+         → changed kinds injected as synthetic <ctx kind=...> user messages
+           (after latest real user; persisted; UI-filtered; wire + channel in sync)
+systemPrompts = frozen only (no dynamic tail)
 ```
 
 Dynamic context lives in chronological user messages so OpenAI/DeepSeek prefix cache keeps
-the frozen system + prior history stable across turns. Snapshot is not recomputed mid-turn
-(tool loops). `findCutPoint` skips `<turn_context>` when counting `keepRecentFlows`.
+the frozen system + prior history stable across turns. Only changed sections are re-injected
+mid-run; a periodic refresh re-admits everything once the conversation grows past
+`DEFAULT_REFRESH_MESSAGE_THRESHOLD` since the last admit. `findCutPoint` / `findCutPointByBudget`
+skip synthetic `<ctx kind=...>` messages when counting `keepRecentFlows` / walking the budget.
 After compaction / clear, `resetAdmittedTurnContext()` forces a fresh admission.
+
+**Subagent isolation:** subagents run the same middleware but only `SUBAGENT_ALLOWED_KINDS`
+(`current_date`, `git_status`, `project_instructions`) pass; memory / todo / plan / mode /
+extension / instruction kinds are filtered. `project_instructions` for a subagent resolves
+through the parent agent's agentDoc (`run-agent.ts` wiring) — agent-factory loads agentDoc
+only for root agents.
 
 **Provider cache wiring** (`prompt-cache-middleware`, `models/prompt-cache.ts`):
 
@@ -722,7 +738,7 @@ The ExtensionEventBus also carries **session lifecycle events** (distinct from t
 
 1. Runs `before_agent_start` interceptors (fresh event per handler; `appendTurnContext` / `appendSystemPrompt` are chained append-only).
 2. Runs `registerTurnContextProvider` callbacks.
-3. Merges turn-context text into `<extension_context>` inside the dynamic turn snapshot; `appendSystemPrompt` is merged into the same `<turn_context>` user message payload (frozen system stays cacheable).
+3. Merges turn-context text into `<extension_context>` inside the dynamic turn snapshot; `appendSystemPrompt` is merged into the same synthetic ctx user message payload (frozen system stays cacheable).
 
 ## Repo demos live in `examples/extensions/` and are **opt-in** via `AGENT_EXTENSION_DIRS`, `ManagedAgentConfig.extensionDirs`, or CLI `--extension-dirs` (not in core defaults). Extension `registerCommand()` is mirrored onto `ManagedAgent` and synced into app slash commands after bootstrap (`syncExtensionCommands`). Built-in names (`/help`, …) win over extension conflicts. `registerTool()` converts definitions via `defineServerTool` before they enter the TanStack tool set. Tool schemas may use **`ctx.z`** (host Zod) or any Standard-Schema / JSON-Schema-compliant schema (the `inputSchema`/`outputSchema` type is the widened `SchemaInput`). `tool:after:*` interceptors can set `event.payload.modifiedResult` to replace the model-facing result. `ExtensionUI.setStatus(key, text)` publishes a `set-status` notification the app footer renders, and `ctx.ui.theme.fg(color, text)` returns a plain (host-rendered) colored string. Each `ExtensionContext` also exposes `ctx.coreEnv` (the runtime CoreEnv: `rootPath`, `fs`, `runCommand`, `exec`, `fetch`, `path`, `getEnv`) so extensions do real I/O without importing host-specific APIs — `agent-factory.ts` wires it from the global `getEnv()`. `ExtensionRunner.getExtensionInfos()` + `setEnabled(id, enabled)` power the app **Extensions panel** (`Ctrl+Y`, list / toggle enable-disable); disabling calls `deactivate()` and unregisters the extension's tools, commands, interceptors, and turn-context providers (wired via `onUnregisterTool`/`onUnregisterCommand` → `ManagedAgent.unregisterExtensionTool/Command`).
 

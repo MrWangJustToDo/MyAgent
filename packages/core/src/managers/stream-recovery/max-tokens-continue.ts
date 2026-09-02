@@ -58,6 +58,11 @@ export function handleMaxTokensTruncation(options: {
     managed.log?.debug("agent", "Output truncated — injecting continuation prompt", {
       continuationCount: truncation.continuationCount,
     });
+    // NOTE: wire-only recovery. The continuation prompt is a single-turn retry
+    // mechanism, not a durable part of the conversation, so it is NOT written to
+    // the UI channel, NOT persisted to session, and intentionally bypasses the
+    // turn-context/`appendChannelMessages` path. It is rebuilt on every retry from
+    // `getMessagesForLLM()` (the pre-truncation context), which stays cache-stable.
     return {
       messages: [...contextMessages, { role: "user" as const, content: CONTINUATION_PROMPT }],
       shouldRetry: true,

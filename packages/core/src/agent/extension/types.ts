@@ -152,9 +152,9 @@ export interface BeforeAgentStartPayload {
 export interface BeforeAgentStartEvent extends InterceptableEvent<BeforeAgentStartPayload> {
   type: "before_agent_start";
   payload: BeforeAgentStartPayload;
-  /** Appended into `<turn_context>` / `<extension_context>` for this user turn. */
+  /** Appended into the `<extension_context>` ctx section for this user turn. */
   appendTurnContext?: string;
-  /** Appended after DYNAMIC_BOUNDARY for this turn only (outside `<turn_context>`). */
+  /** Appended after DYNAMIC_BOUNDARY for this turn only (outside ctx sections). */
   appendSystemPrompt?: string;
 }
 

@@ -55,11 +55,10 @@ const frozen = buildFrozenSystemPrompt({
   config: { systemPrompt: "You are helpful." },
   agentDocContent: "",
 });
-const dynamic = "<current_date>\nJuly 22, 2026\n</current_date>";
-const system = buildSystemPromptWithTurnContext(frozen, dynamic);
+const system = buildSystemPromptWithTurnContext(frozen);
 assert.ok(system?.[0]);
 assert.equal(system[0], frozen);
-assert.ok(!system[0].includes("<turn_context>"));
+assert.ok(!system[0].includes("<ctx kind="));
 
 const split = splitSystemPromptAtDynamicBoundary(system[0]);
 assert.ok(split.frozen.includes(SYSTEM_PROMPT_DYNAMIC_BOUNDARY.trim()));

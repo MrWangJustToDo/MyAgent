@@ -5,6 +5,7 @@
 
 import { convertMessagesToModelMessages } from "@tanstack/ai";
 
+import { appendChannelMessages } from "../channel-write.js";
 import { cleanupOrphanedToolCache } from "../tools/util/tool-output-cache.js";
 
 import { extractCompactionSummaryBody } from "./compaction-summary.js";
@@ -43,7 +44,9 @@ export function applyCompactionResult(
 
   const keepRecentFlows = options?.keepRecentFlows ?? 2;
   const summaryUI = createCompactionSummaryUIMessage(result.summary);
-  channel.setMessages([...channel.getMessages(), summaryUI]);
+  // Single safe channel-append entry (shared with synthetic injection): dedupes
+  // by stable id, appends at the tail, and emits the same channel write path.
+  appendChannelMessages(channel, [summaryUI]);
   usage.resetWindow();
 
   // Orphan cleanup must use post-append chronology (summary at end changes the wire window).
