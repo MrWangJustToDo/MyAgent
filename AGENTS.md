@@ -90,7 +90,8 @@ interface CoreEnv {
   exec(cmd, opts?): Promise<CoreEnvExecResult>;
   fetch(input, init?): Promise<Response>;
   destroy?(): Promise<void>;       // Lifecycle cleanup
-  // Optional: byteLength, base64Encode/Decode, getMimeType, createMCPStdioTransport
+  // Optional: byteLength, base64Encode/Decode, getMimeType, createMCPStdioTransport,
+  //           createLspConnection, createIsolateDriver (code-mode TS sandbox backend)
 }
 ```
 
@@ -685,6 +686,25 @@ Workspace-root `.lsp.json` customizes which language servers run and how. All fi
 **Parity notes (vs pi-lsp-extension):** Java jdtls gets Lombok via `findLombokJar()` (`LOMBOK_JAR`, explicit path, or `env/Lombok-*` auto-detect). `lsp_symbols` and `lsp_definition` fall back to `WorkspaceIndex` / `findDefinition`. `lsp_completions` supports synthetic-dot member completion with `FileSync` version coordination. Auto-injected write/edit diagnostics poll after file-sync (`tool:after:*` interceptors parse JSON-string args and set `modifiedResult` for the extensions middleware). LSP tool results use plain-text `toModelOutput` (`output.text`).
 
 Validate: `pnpm --filter @my-agent/core run validate:lsp-parity` and `validate:lsp-interceptor`.
+
+## Built-in Code Mode Extension
+
+Sandboxed TypeScript execution via TanStack [`ai-code-mode`](https://tanstack.com/ai) — lets the model write and run TypeScript inside a secure isolated V8 context instead of only issuing read-only tool calls.
+
+Enabled when `ManagedAgentConfig.codeMode !== false` (`createCodeModeExtension()` in `agent-factory.ts`). The extension **feature-detects** the optional CoreEnv capability `createIsolateDriver()`: if the host provides one, code mode is wired up; otherwise it warns and registers nothing (graceful degrade, no native deps in `@my-agent/core`). The Node host implements it via `@tanstack/ai-isolate-node` (backed by `isolated-vm`); browser/WebContainer hosts omit it and code mode stays off.
+
+| Tool | Purpose |
+|------|---------|
+| `execute_typescript` | Run model-written TypeScript in a secure V8 isolate, with a curated subset of agent tools exposed as `external_*` functions inside the sandbox |
+| `discover_tools` | Companion tool registered only when at least one external tool is marked `lazy` — lets the model discover lazy tools on demand |
+
+**Tool subset (kept deliberately small):** only a curated set is exposed to the sandbox as `external_*` bindings — read-only fs tools eager (`read_file`/`grep`/`glob`/`list_file`/`tree`), shell (`run_command`) + `websearch` lazy. Interactive / stateful tools (`ask_user`, `task`, `todo`, plan tools) are excluded. Lazy tools stay out of the system prompt's full type stubs and are listed in a discoverable catalog instead (`discover_tools`), keeping the per-turn prompt small (progressive disclosure).
+
+**Per-turn system prompt:** the extension injects code-mode guidance through a `before_agent_start` interceptor (`event.appendSystemPrompt`) documenting the sandbox API + `external_*` bindings.
+
+**Config:** `ManagedAgentConfig.codeMode` accepts `boolean` (default `true`) or `{ timeout?, memoryLimit?, lazyToolsConfig? }`. The isolate backend must be a CoreEnv optional capability: `createIsolateDriver?(): Promise<IsolateDriver | null> | IsolateDriver | null` (`IsolateDriver` from `@tanstack/ai-code-mode`, type-only — zero native deps in core). Module map: `packages/core/src/agent/code-mode/` (`extension.ts`, `index.ts`); Node host: `packages/node/src/environment/isolate-driver.ts` (lazy-loads `ai-isolate-node`, returns `null` on failure).
+
+Validate: `pnpm --filter @my-agent/core run validate:code-mode-extension` and `pnpm --filter @my-agent/node run validate:code-mode-assembly`.
 
 ## Skill System
 

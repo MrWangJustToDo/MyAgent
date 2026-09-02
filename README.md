@@ -42,6 +42,7 @@ A **runtime-agnostic** AI coding agent — same core logic, runs in terminal, Ch
 | **Telemetry** | Lifecycle telemetry bus (bridged to agent log); hosts subscribe via AgentSession `lifecycle` |
 | **Extensions** | Capability model like [Pi](https://pi.dev) — declarative extension modules (tools / commands / hooks); built-ins (LSP, Memory, Skills, MCP) + third-party modules under `.agents/extension` (`Ctrl+Y` panel). See [Extensions](#extensions) |
 | **Sandbox** | Isolated command execution with OS-level sandboxing (`@anthropic-ai/sandbox-runtime`) |
+| **Code Mode** | Sandboxed TypeScript execution via TanStack `ai-code-mode` — the model can write and run TS in an isolated V8 context with a curated subset of agent tools exposed as `external_*` functions (read-only fs eager, shell/websearch lazy) |
 | **MCP Integration** | Connect to external MCP servers for additional tools |
 | **LSP / Tree-sitter** | Built-in LSP extension: diagnostics, hover, definition, references, symbols, completions, rename, code actions + structural tree-sitter search/rewrite (`.lsp.json` config) |
 | **Web** | Multi-provider search (Brave when host passes `toolConfig.websearch.braveApiKey`, else DuckDuckGo) + page fetch |
@@ -61,6 +62,7 @@ MyAgent's extension model works like [Pi](https://pi.dev) (the `pi-lsp` / `pi-*`
 | **Memory** | `my-agent-memory` | `memory_list`, `memory_read`, `memory_write`; MEMORY.md index injected into turn context | `.agents/memory/` |
 | **Skills** | `my-agent-skills` | `list_skills`, `load_skill`; available-skills index injected into turn context | `.agents/skills/` |
 | **MCP** | `my-agent-mcp` | Connect external MCP servers (stdio/SSE/HTTP); each tool exposed as `mcp__<server>_<tool>` + `/mcp` status command; per-server failure isolation | `.agents/mcp.json` (fallback `.mcp.json`) |
+| **Code Mode** | `my-agent-code-mode` | `execute_typescript` (run model-written TS in a secure V8 isolate via `isolated-vm`) + `discover_tools` (lazy-tool discovery); sandbox exposes a curated subset of agent tools as `external_*` — read-only fs (`read_file`/`grep`/`glob`/`list_file`/`tree`) eager, shell (`run_command`) + `websearch` lazy; injects code-mode system prompt each turn. Requires the host to provide a CoreEnv `createIsolateDriver` (Node host does; degrades gracefully when absent) | — (Node host built-in) |
 
 Beyond the built-ins, drop your own extension modules into `.agents/extension` (hooks, custom tools, slash commands), or point the `my-agent-mcp` built-in at external MCP servers for more tools.
 

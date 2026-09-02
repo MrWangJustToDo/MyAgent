@@ -11,7 +11,7 @@ See [AGENTS.md](AGENTS.md) for full architecture, code conventions, and detailed
 - **`@my-agent/core`** — Runtime-agnostic core: ManagedAgent, AgentSession, tools, models, CoreEnv
 - **`@my-agent/app`** — Shared UI: React, hooks, commands. Session-only for agent control
 - **`@my-agent/cli`** — Terminal host using @my-react/react-terminal
-- **`@my-agent/node`** — Node.js CoreEnv implementation (filesystem, shell, OS sandbox)
+- **`@my-agent/node`** — Node.js CoreEnv implementation (filesystem, shell, OS sandbox, code-mode `createIsolateDriver` via `isolated-vm`)
 - **`@my-agent/server`** — CoreEnv HTTP + provider proxy + Agent Session routes
 - **`@my-agent/extension`** — Chrome extension host using WXT (needs a server)
 - **`@my-agent/playground`** — In-browser WebContainer host
