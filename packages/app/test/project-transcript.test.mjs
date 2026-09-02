@@ -38,13 +38,15 @@ const tools = toolMsg("a1", [
 ]);
 const final = textMsg("a2", "assistant", "Done.");
 
-// Below fold threshold (1 read): keep original messages — density mode, no projection.
+// Even a single completed tool folds into an activity summary (no count threshold).
 const below = projectTranscriptForDisplay([user, tools, final], { mode: "compact" });
 assert.equal(below.length, 3);
-assert.equal(below[1].id, "a1");
-assert.ok(!below.some(isActivitySummaryMessage));
+assert.equal(below[0].id, "u1");
+assert.ok(isActivitySummaryMessage(below[1]));
+assert.equal(below[1].parts[0].content, "1 read, 1 edit · a.ts");
+assert.equal(below[2].id, "a2-d0");
 
-// 3+ consecutive completed reads fold into a path-aware summary.
+// 3+ consecutive completed tools (incl. edit_file — no high-signal exemption) fold into a path-aware summary.
 const manyReads = projectTranscriptForDisplay(
   [
     user,
@@ -61,9 +63,8 @@ const manyReads = projectTranscriptForDisplay(
 assert.equal(manyReads[0].id, "u1");
 assert.ok(isActivitySummaryMessage(manyReads[1]));
 assert.ok(manyReads[1].id.startsWith(`${ACTIVITY_SUMMARY_ID_PREFIX}u1`));
-assert.equal(manyReads[1].parts[0].content, "Explored 3 files · a.ts, b.ts, +1");
-assert.equal(manyReads[2].parts[0].name, "edit_file");
-assert.equal(manyReads[3].parts[0].content, "Done.");
+assert.equal(manyReads[1].parts[0].content, "3 reads, 1 edit · a.ts, b.ts, +1");
+assert.equal(manyReads[2].parts[0].content, "Done.");
 
 // In-progress read after 3 completed: fold completed, keep executing.
 const liveExec = projectTranscriptForDisplay(
@@ -104,7 +105,7 @@ const pending = projectTranscriptForDisplay(
 assert.equal(pending[1].parts[0].id, "t1");
 assert.ok(!isActivitySummaryMessage(pending[1]));
 
-// Esc / abort with only 1 completed read: below threshold → originals (incomplete kept via tool state).
+// Abort mid-tool: the completed read still folds; the in-flight read (no output) stays a row.
 const aborted = projectTranscriptForDisplay(
   [
     user,
@@ -115,8 +116,9 @@ const aborted = projectTranscriptForDisplay(
   ],
   { mode: "compact" }
 );
-assert.equal(aborted[1].id, "a1");
-assert.ok(!aborted.some(isActivitySummaryMessage));
+assert.ok(isActivitySummaryMessage(aborted[1]));
+assert.equal(aborted[1].parts[0].content, "Explored 1 file");
+assert.equal(aborted[2].parts[0].id, "t2");
 
 // Error on foldable tool interrupts fold; 3 completed reads before error still fold.
 const errored = projectTranscriptForDisplay(
@@ -138,7 +140,7 @@ const noTools = projectTranscriptForDisplay([user, final], { mode: "compact" });
 assert.equal(noTools.length, 2);
 assert.ok(!noTools.some(isActivitySummaryMessage));
 
-// Intermediate text + below-threshold explores: no fold, originals kept.
+// Intermediate text splits segments; a lone read+edit pair between texts still folds.
 const withMidText = projectTranscriptForDisplay(
   [
     user,
@@ -151,11 +153,13 @@ const withMidText = projectTranscriptForDisplay(
   ],
   { mode: "compact" }
 );
-assert.equal(withMidText[1].id, "a0");
-assert.equal(withMidText[2].id, "a1");
-assert.ok(!withMidText.some(isActivitySummaryMessage));
+assert.equal(withMidText[0].id, "u1");
+assert.equal(withMidText[1].id, "a0-d0");
+assert.ok(isActivitySummaryMessage(withMidText[2]));
+assert.equal(withMidText[2].parts[0].content, "1 read, 1 edit");
+assert.equal(withMidText[3].id, "a2-d0");
 
-// Sparse parts: single read below threshold → no fold.
+// Sparse parts: a single completed read still folds (no count threshold).
 const sparse = projectTranscriptForDisplay(
   [
     user,
@@ -172,7 +176,8 @@ const sparse = projectTranscriptForDisplay(
   ],
   { mode: "compact" }
 );
-assert.equal(sparse[1].id, "a-sparse");
-assert.ok(!sparse.some(isActivitySummaryMessage));
+assert.ok(isActivitySummaryMessage(sparse[1]));
+assert.equal(sparse[1].parts[0].content, "Explored 1 file");
+assert.equal(sparse[2].id, "a2-d0");
 
 console.log("project-transcript.test.mjs: ok");

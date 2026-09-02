@@ -14,9 +14,6 @@ export type ToolActivityCounts = {
 
 export type ToolActivityBucket = keyof ToolActivityCounts;
 
-/** Minimum contiguous foldable tools before collapsing into an activity summary. */
-export const MIN_FOLD_COUNT = 3;
-
 const BUCKET_ORDER: ToolActivityBucket[] = ["reads", "edits", "searches", "commands", "tasks", "other"];
 
 const BUCKET_LABEL: Record<ToolActivityBucket, { one: string; many: string }> = {
@@ -45,37 +42,10 @@ const TOOL_BUCKET: Record<string, ToolActivityBucket> = {
   task: "tasks",
 };
 
-/** Tools that always stay as one-line rows in compact transcript mode. */
-export const HIGH_SIGNAL_TOOLS = new Set([
-  "edit_file",
-  "write_file",
-  "delete_file",
-  "run_command",
-  "get_command_output",
-  "kill_command",
-  "task",
-  "todo",
-  "create_plan",
-  "update_plan",
-  "complete_plan",
-  "ask_user",
-  "compact",
-]);
-
-/** Exploration tools that may fold into activity summaries when successfully completed. */
-export const FOLDABLE_NOISE_TOOLS = new Set([
-  "read_file",
-  "list_file",
-  "tree",
-  "grep",
-  "glob",
-  "websearch",
-  "webfetch",
-]);
-
 /**
  * Whether a tool call must stay as a real row in compact mode.
- * Covers high-signal names plus lifecycle (executing / incomplete / error / denied / approval).
+ * Covers lifecycle states (executing / incomplete / error / denied / approval).
+ * Completed tools of any kind may fold into an activity summary.
  */
 export function shouldKeepToolRow(part: ToolCallPart): boolean {
   const ui = getUiToolState(part);
@@ -93,17 +63,12 @@ export function shouldKeepToolRow(part: ToolCallPart): boolean {
   // Abort / Esc mid-tool: no output yet — never fold away.
   if (part.output === undefined) return true;
 
-  if (HIGH_SIGNAL_TOOLS.has(part.name)) return true;
-
   return false;
 }
 
-/** Successfully completed foldable noise (reads/searches/other non-signal). */
+/** Successfully completed tools of any kind may fold into an activity summary. */
 export function shouldFoldToolRow(part: ToolCallPart): boolean {
-  if (shouldKeepToolRow(part)) return false;
-  if (FOLDABLE_NOISE_TOOLS.has(part.name)) return true;
-  // Non-signal "other" tools (e.g. skill discovery) fold when complete.
-  return !HIGH_SIGNAL_TOOLS.has(part.name);
+  return !shouldKeepToolRow(part);
 }
 
 export function emptyToolActivityCounts(): ToolActivityCounts {

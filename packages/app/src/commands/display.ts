@@ -57,7 +57,7 @@ registerCommand({
     setMode(mode);
     const hint =
       mode === "compact"
-        ? " (one-line tools; fold 3+ consecutive reads/searches into path summaries)"
+        ? " (one-line tools; fold consecutive completed tools into activity summaries)"
         : " (full tool rows and outputs)";
     return { ok: true, message: `Display mode: ${mode}${hint}` };
   },

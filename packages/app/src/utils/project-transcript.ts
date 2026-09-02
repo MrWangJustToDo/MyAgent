@@ -1,4 +1,4 @@
-import { formatExploredActivitySummary, MIN_FOLD_COUNT, shouldFoldToolRow } from "./tool-activity-summary.js";
+import { formatExploredActivitySummary, shouldFoldToolRow } from "./tool-activity-summary.js";
 import { isToolCallPart } from "./tool-part.js";
 
 import type { TextPart, ToolCallPart, UIMessage } from "@tanstack/ai";
@@ -59,7 +59,7 @@ function emitPartMessage(source: UIMessage, part: UIMessage["parts"][number], pa
 /**
  * Density-first compact projection:
  * - Keep tools as rows by default (render layer hides bulky outputs / shortens headers)
- * - Only fold contiguous completed exploration tools when count >= {@link MIN_FOLD_COUNT}
+ * - Fold contiguous completed tools into path-aware activity summaries (even a single tool)
  * - Folded segments use path-aware activity summaries
  */
 function collapseTurn(turn: Turn): UIMessage[] {
@@ -74,14 +74,7 @@ function collapseTurn(turn: Turn): UIMessage[] {
     const folded = pendingFoldable;
     pendingFoldable = [];
 
-    // Below threshold: keep as individual tool rows (density mode, no projection loss).
-    if (folded.length < MIN_FOLD_COUNT) {
-      for (const item of folded) {
-        out.push(emitPartMessage(item.source, item.part, item.partIndex));
-      }
-      return;
-    }
-
+    // Fold: every completed tool folds into a single activity summary (no count threshold).
     const summary = formatExploredActivitySummary(folded.map((f) => f.part));
     if (!summary) {
       for (const item of folded) {

@@ -101,7 +101,12 @@ export const getMessages = (messages: UIMessage[], options: GetMessagesOptions =
     const content = part.content?.trimStart() ?? "";
     return !content.startsWith("<ctx kind=");
   });
-  const displayMessages = projectTranscriptForDisplay(withoutTurnContext, { mode });
+  // Compact folding applies only to the static portion; the final (dynamic)
+  // message keeps its raw shape so live tool updates render untouched.
+  const lastMessage = withoutTurnContext.length > 0 ? withoutTurnContext[withoutTurnContext.length - 1] : null;
+  const staticSource = lastMessage ? withoutTurnContext.slice(0, -1) : withoutTurnContext;
+  const projectedStatic = projectTranscriptForDisplay(staticSource, { mode });
+  const displayMessages = lastMessage ? [...projectedStatic, lastMessage] : projectedStatic;
 
   const staticMessages: UIMessage[] = [];
   const dynamicMessages: UIMessage[] = [];
