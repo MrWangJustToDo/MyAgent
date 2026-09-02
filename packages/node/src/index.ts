@@ -20,6 +20,7 @@ import { exec } from "node:child_process";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { createNodeIsolateDriver } from "./environment/isolate-driver.js";
 import { resolveLocalEnvironmentMode } from "./environment/local.js";
 import { createNativeFilesystem } from "./environment/native-fs.js";
 import { runNativeCommand, startNativeCommand } from "./environment/native-run.js";
@@ -169,6 +170,8 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
 
     createLspConnection: (config) => createNodeLspConnection(config),
     locateTreeSitterGrammar,
+
+    createIsolateDriver: createNodeIsolateDriver,
 
     resizeImage: async (buffer, { maxWidth = 1024, quality = 80 } = {}) => {
       try {

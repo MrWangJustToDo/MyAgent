@@ -26,6 +26,7 @@ import type {
   StartCommandHandle,
   StartCommandOptions,
 } from "./env-types.js";
+import type { IsolateDriver } from "@tanstack/ai-code-mode";
 
 // ============================================================================
 // Path Utilities (synchronous — pure computation, no I/O)
@@ -288,6 +289,16 @@ export interface CoreEnv {
    * Used for force-killing MCP servers on shutdown.
    */
   getMCPTransportProcess?(transport: unknown): McpProcessHandle | undefined;
+
+  /**
+   * Create an isolate driver for sandboxed TypeScript execution (code-mode).
+   * Optional — implemented by Node hosts via `@tanstack/ai-isolate-node` (V8
+   * isolate, native addon, requires Node >= 22); omitted by hosts without an
+   * isolate runtime (browser, WebContainer) or when code-mode is disabled.
+   * The code-mode extension feature-detects this and degrades gracefully
+   * (does not register `execute_typescript`) when absent.
+   */
+  createIsolateDriver?(): Promise<IsolateDriver | null> | IsolateDriver | null;
 }
 
 // ============================================================================

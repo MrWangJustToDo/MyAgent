@@ -1,4 +1,5 @@
 import { AgentLog } from "../agent/agent-log";
+import { createCodeModeExtension } from "../agent/code-mode";
 import { createCompactionConfig } from "../agent/compaction/types.js";
 import { ExtensionLoader, ExtensionRunner, getDefaultExtensionDirs } from "../agent/extension";
 import { createLspExtension } from "../agent/lsp";
@@ -25,6 +26,7 @@ import { resolveTextAdapterForManaged } from "./run-agent.js";
 import type { AgentManager } from "./agent-manager.js";
 import type { SessionBootstrapContext } from "./session-bootstrap-events.js";
 import type { AgentEvent } from "./telemetry/agent-telemetry-bus.js";
+import type { AnyServerTool } from "@tanstack/ai";
 
 export interface BuildManagedAgentResult {
   managed: ManagedAgent;
@@ -290,6 +292,41 @@ export async function buildManagedAgent({
         }
       } catch (err) {
         log.warn("system", `Failed to load built-in MCP extension: ${err}`);
+      }
+    }
+
+    // Built-in Code Mode extension (enabled unless explicitly disabled).
+    // Curated external_* tool subset exposed to the sandbox: read-only fs tools
+    // eager, shell + websearch lazy (kept out of the system prompt's full type
+    // stubs, discovered on demand). The extension feature-detects the host's
+    // `createIsolateDriver` capability and degrades gracefully when absent.
+    if (config.codeMode !== false) {
+      try {
+        const codeModeConfig =
+          typeof config.codeMode === "object" && config.codeMode !== null ? config.codeMode : undefined;
+        const eagerNames = ["read_file", "grep", "glob", "list_file", "tree"];
+        const lazyNames = ["run_command", "websearch"];
+        const curated = [...eagerNames, ...lazyNames]
+          .map((name) => managed.tools[name])
+          .filter((t): t is AnyServerTool => Boolean(t && "execute" in t));
+        const api = createCodeModeExtension({
+          tools: curated,
+          lazyToolNames: lazyNames,
+          timeout: codeModeConfig?.timeout,
+          memoryLimit: codeModeConfig?.memoryLimit,
+          lazyToolsConfig: codeModeConfig?.lazyToolsConfig,
+        });
+        const instance = await extensionRunner.loadExtension(api);
+        if (instance.state === "active") {
+          log.info("system", `Built-in extension loaded: ${api.id}`);
+        } else {
+          log.warn(
+            "system",
+            `Built-in extension failed to activate "${api.id}": ${instance.error?.message ?? "unknown"}`
+          );
+        }
+      } catch (err) {
+        log.warn("system", `Failed to load built-in Code Mode extension: ${err}`);
       }
     }
   }

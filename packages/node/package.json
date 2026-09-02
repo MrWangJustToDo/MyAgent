@@ -20,11 +20,14 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --noEmit",
-    "validate:lsp-command-exists": "pnpm run build && node scripts/validate-lsp-command-exists.mjs"
+    "validate:lsp-command-exists": "pnpm run build && node scripts/validate-lsp-command-exists.mjs",
+    "validate:code-mode-assembly": "node scripts/validate-code-mode-assembly.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sandbox-runtime": "^0.0.52",
     "@my-agent/core": "workspace:*",
+    "@tanstack/ai-code-mode": "0.4.3",
+    "@tanstack/ai-isolate-node": "^0.1.51",
     "@tanstack/ai-mcp": "^0.3.4",
     "mime-types": "^3.0.2",
     "sharp": "^0.34.5",

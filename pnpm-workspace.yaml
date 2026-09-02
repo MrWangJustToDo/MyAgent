@@ -2,6 +2,7 @@ packages:
   - "packages/*"
 allowBuilds:
   esbuild: false
+  isolated-vm: true
   sharp: true
   spawn-sync: false
   unrs-resolver: false
@@ -30,3 +31,10 @@ publicHoistPattern:
   - "*@heroui/*"
   - "*@my-react/*"
   - "*@my-agent/*"
+
+# Force isolated-vm to a Node 26 (abi 147) compatible build.
+# ai-isolate-node declares ^6.0.2, whose prebuilds stop at abi 137 (Node 24) and
+# whose source build fails on Node 26's changed V8 API; 7.x ships abi147 glibc
+# prebuilds (incl. linux-arm64) so the native addon loads without compiling.
+overrides:
+  isolated-vm: 7.0.1

@@ -37,3 +37,7 @@ export type { CoreEnv } from "./env.js";
 // ============================================================================
 // Built-in Skills extension (internal validation exports — not part of public API)
 // ============================================================================
+// ============================================================================
+// Built-in Code Mode extension (internal validation exports — not part of public API)
+// ============================================================================
+export { createCodeModeExtension, type CodeModeExtensionConfig } from "./agent/code-mode/extension.js";

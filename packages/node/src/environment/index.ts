@@ -29,3 +29,6 @@ export { runNativeCommand } from "./native-run.js";
 
 // OS sandbox utilities
 export { resetOsSandbox, ensureOsSandbox } from "./os-sandbox.js";
+
+// Code-mode isolate driver (native, loaded lazily; degrades to null)
+export { createNodeIsolateDriver } from "./isolate-driver.js";

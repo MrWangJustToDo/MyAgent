@@ -70,6 +70,7 @@ import type { AgentManager } from "./agent-manager.js";
 import type { AgentConfig, AgentStatus, RunFinalizeReason } from "./agent-types.js";
 import type { AgentEvent, AgentEventType } from "./telemetry/agent-telemetry-bus.js";
 import type { AgentLog } from "../agent/agent-log";
+import type { CodeModeExtensionConfig } from "../agent/code-mode";
 import type { CompactionConfig, CompactionConfigInput } from "../agent/compaction/types.js";
 import type {
   ExtensionCommand,
@@ -173,6 +174,14 @@ export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
    * behavior (see {@link McpExtensionConfig}).
    */
   mcp?: boolean | McpExtensionConfig;
+  /**
+   * Enable the built-in Code Mode extension (default: true). Set to `false` to
+   * disable sandboxed TypeScript execution (`execute_typescript`). Pass an object
+   * to fine-tune the exposed `external_*` tool subset and lazy behavior (see
+   * {@link CodeModeExtensionConfig}). The extension degrades gracefully when the
+   * host does not provide a `createIsolateDriver` capability.
+   */
+  codeMode?: boolean | CodeModeExtensionConfig;
   /**
    * Extra filesystem directories to scan for extensions (before env / defaults).
    * Relative paths resolve against CoreEnv `rootPath`.
