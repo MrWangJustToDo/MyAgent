@@ -74,6 +74,8 @@ export interface TodoManagerConfig {
   maxTodos?: number;
   /** Number of rounds without todo update before nag reminder (default: 3) */
   nagReminderThreshold?: number;
+  /** Minimum rounds between nag reminders once the threshold is crossed (default: 5) */
+  nagCooldownRounds?: number;
 }
 
 // ============================================================================
@@ -82,6 +84,7 @@ export interface TodoManagerConfig {
 
 export const DEFAULT_MAX_TODOS = 20;
 export const DEFAULT_NAG_REMINDER_THRESHOLD = 3;
+export const DEFAULT_NAG_COOLDOWN_ROUNDS = 5;
 
 // ============================================================================
 // Status Icons for Rendering

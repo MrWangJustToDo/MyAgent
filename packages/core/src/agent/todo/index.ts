@@ -53,5 +53,6 @@ export {
   STATUS_ICONS,
   DEFAULT_MAX_TODOS,
   DEFAULT_NAG_REMINDER_THRESHOLD,
+  DEFAULT_NAG_COOLDOWN_ROUNDS,
 } from "./types.js";
 export { createTodoTool } from "./todo-tool.js";

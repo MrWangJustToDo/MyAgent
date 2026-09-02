@@ -222,6 +222,7 @@ export function buildAgentRunner(
     maxOutputTokens,
     reasoningEffort: managed.config.reasoningEffort ?? deps.modelInfo?.reasoningConfig?.defaultEffort,
     modelStyle: managed.config.modelStyle,
+    lazyToolsConfig: managed.config.lazyToolsConfig,
   });
 }
 

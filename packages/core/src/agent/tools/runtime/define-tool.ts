@@ -34,6 +34,12 @@ export function defineServerTool<
   inputSchema?: TInput;
   outputSchema?: TOutput;
   needsApproval?: boolean;
+  /**
+   * Lazy tools are excluded from the initial request; the model discovers them
+   * by name via the synthetic `__lazy__tool__discovery__` tool and gets the full
+   * schema on demand. Keeps low-usage tools available without per-turn token cost.
+   */
+  lazy?: boolean;
   execute: (
     args: InferSchemaType<TInput>,
     ctx: ToolExecuteCtx
@@ -64,6 +70,7 @@ export function defineServerTool<
     inputSchema: config.inputSchema,
     outputSchema: config.outputSchema,
     needsApproval: config.needsApproval,
+    lazy: config.lazy,
   }).server(async (args, ctx) => {
     const runContext = ctx?.context as { agentId?: string } | undefined;
     return config.execute(args, {
@@ -87,6 +94,8 @@ export function defineClientTool<
   inputSchema?: TInput;
   outputSchema?: TOutput;
   needsApproval?: boolean;
+  /** See {@link defineServerTool} `lazy` — lazy client tools are discovered on demand. */
+  lazy?: boolean;
 }): ClientTool<TInput, TOutput, TName> {
   return toolDefinition({
     name: config.name,
@@ -94,5 +103,6 @@ export function defineClientTool<
     inputSchema: config.inputSchema,
     outputSchema: config.outputSchema,
     needsApproval: config.needsApproval,
+    lazy: config.lazy,
   }).client() as ClientTool<TInput, TOutput, TName>;
 }

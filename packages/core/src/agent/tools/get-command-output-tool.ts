@@ -17,6 +17,7 @@ export const createGetCommandOutputTool = () => {
     }),
     outputSchema: getCommandOutputSchema,
     needsApproval: false,
+    lazy: true,
     execute: async ({ jobId }) => {
       const result = commandJobRegistry.poll(jobId);
       if (!result) {

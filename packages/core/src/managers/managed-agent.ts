@@ -1,5 +1,10 @@
 /* eslint-disable max-lines */
-import { type ModelMessage, type UIMessage as TanStackUIMessage, convertMessagesToModelMessages } from "@tanstack/ai";
+import {
+  convertMessagesToModelMessages,
+  type LazyToolsConfig,
+  type ModelMessage,
+  type UIMessage as TanStackUIMessage,
+} from "@tanstack/ai";
 
 import { AutoModeController } from "../agent/approval/auto-mode-controller.js";
 import { buildAutoModePrompt } from "../agent/approval/auto-mode-prompt.js";
@@ -182,6 +187,12 @@ export type ManagedAgentConfig<T = ManagedAgent> = AgentConfig & {
    * host does not provide a `createIsolateDriver` capability.
    */
   codeMode?: boolean | CodeModeExtensionConfig;
+  /**
+   * Tune lazy-tool discovery for top-level tools marked `lazy: true` (how much of
+   * each lazy tool's description appears in the pre-discovery catalog). Defaults
+   * to `{ includeDescription: 'none' }`. Only relevant when some tool is lazy.
+   */
+  lazyToolsConfig?: LazyToolsConfig;
   /**
    * Extra filesystem directories to scan for extensions (before env / defaults).
    * Relative paths resolve against CoreEnv `rootPath`.
@@ -788,6 +799,7 @@ export class ManagedAgent {
       description: def.description,
       inputSchema: def.inputSchema,
       outputSchema: def.outputSchema,
+      lazy: def.lazy,
       execute: async (args, ctx) =>
         def.execute(args, {
           toolCallId: ctx.toolCallId,

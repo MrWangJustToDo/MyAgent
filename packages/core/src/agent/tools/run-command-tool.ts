@@ -1,3 +1,4 @@
+import { DISCOVERY_TOOL_NAME } from "@tanstack/ai";
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
@@ -20,6 +21,7 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
     description:
       "Executes a shell command in the workspace environment. Returns stdout, stderr, exit code, and execution duration. " +
       "Set run_in_background=true for long-lived processes (dev servers, watchers); then poll with get_command_output and stop with kill_command. " +
+      `get_command_output and kill_command are lazy tools — discover them via ${DISCOVERY_TOOL_NAME} before calling. ` +
       "Large outputs are saved to disk — use read_file with the cachedOutputPath to read specific sections. " +
       (subagentSafe
         ? "Subagent commands are restricted: only read-only, project-internal commands are allowed; write or external-path commands are denied."
@@ -45,7 +47,8 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
         .optional()
         .describe(
           "When true, start the command in the background and return a jobId immediately. " +
-            "Use get_command_output to read output/status and kill_command to stop it. " +
+            "Use get_command_output to read output/status and kill_command to stop it (both lazy — " +
+            `discover them via ${DISCOVERY_TOOL_NAME} first). ` +
             "Prefer for long-lived servers (e.g. npm run dev)."
         ),
     }),
@@ -165,8 +168,9 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
             content:
               `Started background job ${output.jobId} for: ${output.command}\n` +
               `Status: ${output.status ?? "running"}\n` +
-              `Use get_command_output with jobId="${output.jobId}" to read output/status. ` +
-              `Use kill_command to stop the job when finished. `,
+              `get_command_output and kill_command are lazy tools — call ${DISCOVERY_TOOL_NAME} to get them, ` +
+              `then use get_command_output with jobId="${output.jobId}" to read output/status ` +
+              `and kill_command to stop the job when finished. `,
           },
         ];
       }

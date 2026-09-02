@@ -13,6 +13,8 @@
  * (Node-only). When absent, LSP tools degrade gracefully.
  */
 
+import { DISCOVERY_TOOL_NAME } from "@tanstack/ai";
+
 import { defaultPath } from "../../env.js";
 import { toModelOutputRegistry } from "../tools/runtime/to-model-output-registry.js";
 
@@ -291,20 +293,24 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
     withLspTextOutput(createDiagnosticsTool({ manager: proxyManager(getManager), fallback: tsDiagnosticsFallback }))
   );
   ctx.registerTool(
-    withLspTextOutput(createHoverTool({ manager: proxyManager(getManager), fallback: tsHoverFallback }))
+    withLazy(withLspTextOutput(createHoverTool({ manager: proxyManager(getManager), fallback: tsHoverFallback })))
   );
   ctx.registerTool(
-    withLspTextOutput(
-      createDefinitionTool({
-        manager: proxyManager(getManager),
-        treeSitter,
-        workspaceIndex,
-        readFile: (p) => treeSitterEnv.readFile(p),
-      })
+    withLazy(
+      withLspTextOutput(
+        createDefinitionTool({
+          manager: proxyManager(getManager),
+          treeSitter,
+          workspaceIndex,
+          readFile: (p) => treeSitterEnv.readFile(p),
+        })
+      )
     )
   );
-  ctx.registerTool(withLspTextOutput(createReferencesTool({ manager: proxyManager(getManager) })));
-  ctx.registerTool(withLspTextOutput(createSymbolsTool({ manager: proxyManager(getManager), workspaceIndex })));
+  ctx.registerTool(withLazy(withLspTextOutput(createReferencesTool({ manager: proxyManager(getManager) }))));
+  ctx.registerTool(
+    withLazy(withLspTextOutput(createSymbolsTool({ manager: proxyManager(getManager), workspaceIndex })))
+  );
   if (shouldRegister("lsp_rename")) {
     ctx.registerTool(withLspTextOutput(createRenameTool({ manager: proxyManager(getManager) })));
   }
@@ -312,12 +318,14 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
     ctx.registerTool(withLspTextOutput(createCodeActionsTool({ manager: proxyManager(getManager) })));
   }
   ctx.registerTool(
-    withLspTextOutput(
-      createCompletionsTool({
-        manager: proxyManager(getManager),
-        versionTracker: fileSync,
-        readFile: (p) => treeSitterEnv.readFile(p),
-      })
+    withLazy(
+      withLspTextOutput(
+        createCompletionsTool({
+          manager: proxyManager(getManager),
+          versionTracker: fileSync,
+          readFile: (p) => treeSitterEnv.readFile(p),
+        })
+      )
     )
   );
 
@@ -604,24 +612,29 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
   // register no provider, so the model is not misled into calling dead tools.
   const lspRuntimeAvailable = Boolean(createConnection);
   const tsFallbackAvailable = treeSitter.available();
-  const advertisedTools: string[] = [];
-  if (shouldRegister("lsp_diagnostics") && (lspRuntimeAvailable || tsFallbackAvailable)) {
-    advertisedTools.push("lsp_diagnostics");
-  }
-  if (shouldRegister("lsp_hover") && (lspRuntimeAvailable || tsFallbackAvailable)) {
-    advertisedTools.push("lsp_hover");
-  }
-  if (shouldRegister("lsp_definition") && (lspRuntimeAvailable || tsFallbackAvailable)) {
-    advertisedTools.push("lsp_definition");
-  }
-  if (shouldRegister("lsp_completions") && lspRuntimeAvailable) {
-    advertisedTools.push("lsp_completions");
-  }
+  // Eager tools are advertised as directly callable; lazy ones need discovery.
+  const advertisedEager: string[] = [];
+  const advertisedLazy: string[] = [];
+  const pushAdvertised = (name: string, available: boolean) => {
+    if (!shouldRegister(name) || !available) return;
+    if (name === "lsp_diagnostics") advertisedEager.push(name);
+    else advertisedLazy.push(name);
+  };
+  pushAdvertised("lsp_diagnostics", lspRuntimeAvailable || tsFallbackAvailable);
+  pushAdvertised("lsp_hover", lspRuntimeAvailable || tsFallbackAvailable);
+  pushAdvertised("lsp_definition", lspRuntimeAvailable || tsFallbackAvailable);
+  pushAdvertised("lsp_completions", lspRuntimeAvailable);
 
-  if (advertisedTools.length > 0) {
-    const guidance = lspRuntimeAvailable
-      ? `LSP tools available (${advertisedTools.join(", ")}). After editing code, call lsp_diagnostics to check for compile errors.`
-      : `Code tools available via tree-sitter fallback (${advertisedTools.join(", ")}). After editing code, call lsp_diagnostics to check for syntax errors.`;
+  if (advertisedEager.length > 0 || advertisedLazy.length > 0) {
+    const scope = lspRuntimeAvailable ? "LSP" : "Code (tree-sitter fallback)";
+    const errorKind = lspRuntimeAvailable ? "compile errors" : "syntax errors";
+    const parts: string[] = [];
+    if (advertisedEager.length > 0) parts.push(`${advertisedEager.join(", ")} is always available`);
+    if (advertisedLazy.length > 0)
+      parts.push(
+        `${advertisedLazy.join(", ")} are lazy tools — discover them via ${DISCOVERY_TOOL_NAME} before calling`
+      );
+    const guidance = `${scope} tools: ${parts.join("; ")}. After editing code, call lsp_diagnostics to check for ${errorKind}.`;
     ctx.registerTurnContextProvider(() => guidance);
   }
 
@@ -639,6 +652,17 @@ function proxyManager(getManager: () => LspManager): LspManager {
 
 function withLspTextOutput(def: ExtensionToolDefinition): ExtensionToolDefinition {
   return { ...def, toModelOutput: lspTextToModelOutput };
+}
+
+/**
+ * Mark a tool as `lazy` (excluded from the initial request; discovered on demand
+ * via the synthetic `__lazy__tool__discovery__` tool). Used for low-usage LSP
+ * tools to save per-turn token cost. Execution is unchanged — degradation paths
+ * (no LSP server / tree-sitter fallback) still apply when the tool is discovered
+ * and called.
+ */
+function withLazy(def: ExtensionToolDefinition): ExtensionToolDefinition {
+  return { ...def, lazy: true };
 }
 
 /** Load `.lsp.json` from the project root (best-effort, never throws). */

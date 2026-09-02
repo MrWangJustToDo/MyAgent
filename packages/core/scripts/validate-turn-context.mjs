@@ -102,6 +102,28 @@ const tm = new TodoManager({
 assert.notEqual(tm.getNagReminder(3), tm.getNagReminder(5), "nag content varies per episode");
 assert.match(tm.getNagReminder(7), /unchanged for 7 rounds/);
 
+// Nag throttling: after a nag, shouldNag() stays false until `nagCooldownRounds`
+// more rounds elapse (token saving), then re-fires; an update resets the throttle.
+const tm2 = new TodoManager({
+  log: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, agent: () => {}, todo: () => {}, clear: () => {} },
+});
+tm2.update([{ content: "A", status: "in_progress", priority: "high" }], "Plan");
+assert.equal(tm2.shouldNag(), false, "below threshold -> no nag");
+tm2.incrementRound(); // 1
+tm2.incrementRound(); // 2
+tm2.incrementRound(); // 3 == threshold
+assert.equal(tm2.shouldNag(), true, "threshold crossed -> nag fires");
+tm2.getNagReminder(tm2.getRoundsSinceUpdate()); // record nag
+assert.equal(tm2.shouldNag(), false, "cooldown active -> no immediate re-nag");
+tm2.incrementRound(); // 4
+tm2.incrementRound(); // 5
+tm2.incrementRound(); // 6
+tm2.incrementRound(); // 7
+tm2.incrementRound(); // 8 == 3 + cooldown(5)
+assert.equal(tm2.shouldNag(), true, "cooldown elapsed -> re-fires");
+tm2.update([{ content: "B", status: "in_progress", priority: "high" }], "Plan"); // reset
+assert.equal(tm2.shouldNag(), false, "update resets throttle -> below threshold");
+
 // Subagent-only project_instructions section builder.
 const projectSection = buildProjectInstructionsSection("Follow conventions.");
 assert.equal(projectSection.key, "project_instructions");

@@ -9,6 +9,7 @@ import type { ReasoningEffort } from "../../models/types.js";
 import type {
   AnyTextAdapter,
   ChatMiddleware,
+  LazyToolsConfig,
   ModelMessage,
   ServerTool,
   StreamChunk,
@@ -38,6 +39,12 @@ export interface AgentRunnerConfig {
   reasoningEffort?: ReasoningEffort;
   /** API style — determines the reasoning-effort wire key. */
   modelStyle?: ModelStyle;
+  /**
+   * Optional lazy-tool discovery config. Only used when some tool is `lazy: true`;
+   * tunes how much of each lazy tool's description appears in the discovery catalog.
+   * Defaults to `{ includeDescription: 'none' }` (library side).
+   */
+  lazyToolsConfig?: LazyToolsConfig;
 }
 
 export interface AgentRunnerRunInput {
@@ -110,6 +117,7 @@ export class AgentRunner {
       threadId: input.threadId,
       runId: input.runId,
       agentLoopStrategy: maxIterations(this.config.maxIterations ?? 30),
+      lazyToolsConfig: this.config.lazyToolsConfig,
       // Silence [tanstack-ai:errors] console dumps — they break Ink TUI layout.
       // Failures still surface via RUN_ERROR / agent:stream-error / ManagedAgent.error.
       debug: false,

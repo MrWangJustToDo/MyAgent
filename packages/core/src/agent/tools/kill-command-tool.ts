@@ -15,6 +15,7 @@ export const createKillCommandTool = () => {
     }),
     outputSchema: killCommandOutputSchema,
     needsApproval: true,
+    lazy: true,
     execute: async ({ jobId }) => {
       const existing = commandJobRegistry.get(jobId);
       if (!existing) {

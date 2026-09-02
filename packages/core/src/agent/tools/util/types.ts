@@ -1,3 +1,4 @@
+import { DISCOVERY_TOOL_NAME } from "@tanstack/ai";
 import { z } from "zod";
 
 import { TODO_PRIORITIES, TODO_STATUSES } from "../../todo/types.js";
@@ -62,7 +63,12 @@ export const runCommandOutputSchema = z.object({
       "Whether the command succeeded (exit code 0). Background starts report success=true when spawn succeeds."
     ),
   /** Present when the command was started with run_in_background. */
-  jobId: z.string().optional().describe("Background job id — use get_command_output / kill_command."),
+  jobId: z
+    .string()
+    .optional()
+    .describe(
+      `Background job id — get_command_output / kill_command are lazy tools; discover them via ${DISCOVERY_TOOL_NAME} first.`
+    ),
   /** Present for background starts; typically "running". */
   status: z
     .enum(["running", "exited", "killed", "failed"])

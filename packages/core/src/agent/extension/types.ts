@@ -39,6 +39,12 @@ export interface ExtensionToolDefinition {
   toUI?: (result: unknown) => string;
   /** Optional model-facing output transform (registered on the TanStack tool). */
   toModelOutput?: (ctx: ToModelOutputContext) => Promise<ModelToolContent> | ModelToolContent;
+  /**
+   * Lazy tools are excluded from the initial request; the model discovers them by
+   * name via the synthetic `__lazy__tool__discovery__` tool. Keeps low-usage tools
+   * available without per-turn token cost. Defaults to false (eager).
+   */
+  lazy?: boolean;
 }
 
 // ============================================================================
