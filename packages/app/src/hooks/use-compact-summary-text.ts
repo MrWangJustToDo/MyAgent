@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { resolveAgentSession } from "../utils/session-resolve.js";
 
+import { cancelSummaryBuffer, flushSummaryBuffer, scheduleSummaryFlush } from "./summary-stream-throttle.js";
 import { useAgent } from "./use-agent.js";
 
 export interface UseCompactSummaryTextOptions {
@@ -48,14 +49,23 @@ export function useCompactSummaryText(options?: UseCompactSummaryTextOptions): C
     const handleEvent = (event: SummaryStreamEvent) => {
       if (event.key !== key) return;
       if (event.type === "reset") {
+        cancelSummaryBuffer(key);
         textRef.current = "";
         setText("");
         setLabel(event.label ?? "");
         return;
       }
       if (event.type === "append") {
-        textRef.current += event.chunk;
-        setText(textRef.current);
+        scheduleSummaryFlush(key, event.chunk, (accumulated) => {
+          textRef.current += accumulated;
+          setText(textRef.current);
+        });
+      }
+      if (event.type === "end") {
+        flushSummaryBuffer(key, (accumulated) => {
+          textRef.current += accumulated;
+          setText(textRef.current);
+        });
       }
     };
 
@@ -76,6 +86,7 @@ export function useCompactSummaryText(options?: UseCompactSummaryTextOptions): C
     }
 
     return () => {
+      cancelSummaryBuffer(key);
       unsub();
     };
   }, [rootAgentId]);

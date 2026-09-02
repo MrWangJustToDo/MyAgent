@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { resolveAgentSession } from "../utils/session-resolve.js";
 
+import { cancelSummaryBuffer, flushSummaryBuffer, scheduleSummaryFlush } from "./summary-stream-throttle.js";
 import { useAgent } from "./use-agent.js";
 
 export interface UseSummaryStreamOptions {
@@ -69,16 +70,21 @@ export function useSummaryStream(options: UseSummaryStreamOptions): UseSummarySt
     const applyEvent = (event: SummaryStreamEvent) => {
       if (event.key !== key) return;
       if (event.type === "reset") {
+        cancelSummaryBuffer(key);
         setWindowState(emptySummaryDisplayWindow());
         setStatus("active");
         return;
       }
       if (event.type === "append") {
-        setWindowState((prev) => applyAppendToDisplayWindow(prev, event.chunk, contentSlots));
-        setStatus("active");
-        return;
+        scheduleSummaryFlush(key, event.chunk, (accumulated) => {
+          setWindowState((prev) => applyAppendToDisplayWindow(prev, accumulated, contentSlots));
+          setStatus("active");
+        });
       }
       if (event.type === "end") {
+        flushSummaryBuffer(key, (accumulated) => {
+          setWindowState((prev) => applyAppendToDisplayWindow(prev, accumulated, contentSlots));
+        });
         setStatus("ended");
       }
     };
@@ -100,6 +106,7 @@ export function useSummaryStream(options: UseSummaryStreamOptions): UseSummarySt
     }
 
     return () => {
+      cancelSummaryBuffer(key);
       unsub();
     };
   }, [enabled, agentId, key, contentSlots]);
