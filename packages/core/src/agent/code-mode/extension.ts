@@ -143,5 +143,8 @@ export function createCodeModeExtension(options: CodeModeExtensionConfig = {}): 
         event.appendSystemPrompt = systemPrompt;
       });
     },
+    disabledNotice() {
+      return "Code Mode extension is disabled — sandboxed TypeScript execution (execute_typescript) is unavailable.";
+    },
   };
 }

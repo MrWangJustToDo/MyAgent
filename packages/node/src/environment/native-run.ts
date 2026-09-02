@@ -51,6 +51,7 @@ export async function runNativeCommand(
       cwd,
       env: mergedEnv as NodeJS.ProcessEnv,
       timeout: options?.timeout ? Math.ceil(options.timeout / 1000) : undefined,
+      signal: options?.signal,
       useShellString,
       onStdout: (chunk: string) => {
         stdoutChunks.push(chunk);

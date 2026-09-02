@@ -74,6 +74,7 @@
     "validate:wire-projection-cache": "pnpm run build && node scripts/validate-wire-projection-cache.mjs",
     "validate:empty-assistant-shell": "pnpm run build && node scripts/validate-empty-assistant-shell.mjs",
     "validate:empty-model-stream": "pnpm run build && node scripts/validate-empty-model-stream.mjs",
+    "validate:extension-disable-notice": "pnpm run build && node scripts/validate-extension-disable-notice.mjs",
     "validate:incomplete-tool-calls": "pnpm run build && node scripts/validate-incomplete-tool-calls.mjs",
     "validate:tool-compact": "pnpm run build && node scripts/validate-tool-compact.mjs",
     "validate:tool-denial-reason": "pnpm run build && node scripts/validate-tool-denial-reason.mjs",

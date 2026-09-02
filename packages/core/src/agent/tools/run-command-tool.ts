@@ -54,7 +54,7 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
     }),
     outputSchema: runCommandOutputSchema,
     needsApproval: !subagentSafe,
-    execute: async ({ command, cwd, env, timeout, run_in_background }, { toolCallId, agentId }) => {
+    execute: async ({ command, cwd, env, timeout, run_in_background }, { toolCallId, abortSignal, agentId }) => {
       // Hard safety policy for subagents (no approval UI): only read-only,
       // project-internal commands execute; anything else is denied with a
       // reason surfaced to the model (insufficient permissions).
@@ -127,6 +127,7 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
         cwd,
         env,
         timeout,
+        signal: abortSignal,
         onStdout: (chunk) => {
           stdoutAccumulator.append(encoder.encode(chunk));
           if (agentId) emitStreamingChunk(toolCallId, "stdout", chunk, { agentId });

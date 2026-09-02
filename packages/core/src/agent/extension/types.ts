@@ -287,6 +287,15 @@ export interface ExtensionAPI {
 
   activate(ctx: ExtensionContext): Promise<void> | void;
   deactivate?(): Promise<void> | void;
+
+  /**
+   * Optional notice injected into turn-context when this extension is disabled at
+   * runtime (via `setEnabled(false)`), so the model knows its tools/commands are
+   * gone. Return a string to customize what the model sees; return empty/undefined
+   * to fall back to the runner's default notice. Called only when disabling, never
+   * for config-level opt-out (where the extension is never created).
+   */
+  disabledNotice?(): string | void;
 }
 
 export interface ExtensionFactory {

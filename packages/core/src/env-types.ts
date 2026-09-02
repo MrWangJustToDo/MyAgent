@@ -130,6 +130,8 @@ export interface RunCommandOptions {
   env?: Record<string, string>;
   /** Timeout in milliseconds */
   timeout?: number;
+  /** Abort signal — aborts the command and kills its process tree. */
+  signal?: AbortSignal;
   /** Called with stdout chunks as they are produced (streaming). */
   onStdout?: (chunk: string) => void;
   /** Called with stderr chunks as they are produced (streaming). */
@@ -160,6 +162,8 @@ export interface StartCommandOptions {
   cwd?: string;
   /** Environment variables */
   env?: Record<string, string>;
+  /** Abort signal — aborts the command and kills its process tree. */
+  signal?: AbortSignal;
   /** Called with stdout chunks as they are produced (streaming). */
   onStdout?: (chunk: string) => void;
   /** Called with stderr chunks as they are produced (streaming). */

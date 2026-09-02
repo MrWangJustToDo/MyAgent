@@ -42,6 +42,9 @@ export function createMcpExtension(options: CreateMcpExtensionOptions): Extensio
     deactivate() {
       return mcpManager.shutdown();
     },
+    disabledNotice() {
+      return "MCP extension is disabled — external MCP servers (mcp__<server>_<tool>) and the /mcp status command are unavailable.";
+    },
   };
 }
 

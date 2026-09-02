@@ -9,7 +9,9 @@ import { extractAssistantText } from "../../agent/stream/extract-assistant-text.
 import {
   TOOL_CANCELLED_MESSAGE,
   cancelIncompleteToolCalls,
+  cancelInFlightToolCalls,
   hasCancellableIncompleteToolCalls,
+  hasInFlightToolCalls,
 } from "../../agent/stream/incomplete-tool-calls.js";
 import { throwOnRunError } from "../../agent/stream/stream-errors.js";
 import {
@@ -109,7 +111,7 @@ export class AgentChatController {
     // old pump's finally is guarded with Math.max(0, ...) so this never drifts negative.
     this.pumpDepth = 0;
     // Immediately clear loading tool rows; stream teardown may still finalize later.
-    this.applyCancelledIncompleteTools();
+    this.applyCancelledIncompleteTools(true);
     // App no longer checkpoints on status — persist cancelled tools on abort.
     this.persistMessages("pump-complete");
     // Turn finalize here: bumping runGeneration makes the in-flight pump skip its outcome path.
@@ -354,7 +356,7 @@ export class AgentChatController {
         }
         if (generation !== this.runGeneration) {
           // Stream may have finalized truncated tool args after Esc — cancel again.
-          this.applyCancelledIncompleteTools();
+          this.applyCancelledIncompleteTools(true);
           this.persistMessages("pump-complete");
           return;
         }
@@ -448,7 +450,7 @@ export class AgentChatController {
         transformStream: throwOnRunError,
       });
       if (generation !== this.runGeneration || this.managed.status === "aborted") {
-        this.applyCancelledIncompleteTools();
+        this.applyCancelledIncompleteTools(true);
         return;
       }
 
@@ -464,14 +466,14 @@ export class AgentChatController {
       this.managed.statusController.reconcileWithPolicy(messagesAfter, "during-run");
     } catch (err) {
       if (generation !== this.runGeneration || this.managed.status === "aborted") {
-        this.applyCancelledIncompleteTools();
+        this.applyCancelledIncompleteTools(true);
         return;
       }
       const error = err instanceof Error ? err : new Error(String(err));
       const message = formatAgentStreamError(error).message;
       if (this.managed.isAbortError(err)) {
         this.managed.statusController.onExternalError(message, true);
-        this.applyCancelledIncompleteTools();
+        this.applyCancelledIncompleteTools(true);
       } else {
         // Surface stream failures in status + agent:stream-error (not silent Completed).
         this.managed.statusController.onRunError(message);
@@ -482,11 +484,20 @@ export class AgentChatController {
     }
   }
 
-  /** Mark aborted/truncated tool calls so they stop loading and are not resumed by the next pump. */
-  private applyCancelledIncompleteTools(): void {
+  /**
+   * Mark aborted/truncated tool calls so they stop loading and are not resumed
+   * by the next pump. When {@link includeInFlight} (abort paths only), also
+   * finalizes currently-executing tools as `complete` + user-cancel — this is the
+   * framework fallback that lets extension/MCP tools benefit automatically even
+   * if their execute never resolved before the run was torn down.
+   */
+  private applyCancelledIncompleteTools(includeInFlight = false): void {
     const current = this.channel.getMessages();
-    if (!hasCancellableIncompleteToolCalls(current)) return;
-    const cancelled = cancelIncompleteToolCalls(current, TOOL_CANCELLED_MESSAGE);
+    const hasCancellable =
+      hasCancellableIncompleteToolCalls(current) || (includeInFlight && hasInFlightToolCalls(current));
+    if (!hasCancellable) return;
+    let cancelled = cancelIncompleteToolCalls(current, TOOL_CANCELLED_MESSAGE);
+    if (includeInFlight) cancelled = cancelInFlightToolCalls(cancelled, TOOL_CANCELLED_MESSAGE);
     const cleaned = stripEmptyAssistantShells(cancelled);
     this.channel.setMessages(cleaned);
   }

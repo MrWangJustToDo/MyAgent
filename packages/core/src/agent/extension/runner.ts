@@ -183,6 +183,12 @@ export class ExtensionRunner {
   private toolOwners = new Map<string, string>();
   private commandOwners = new Map<string, string>();
   private turnContextProviders = new Set<TurnContextProvider>();
+  /**
+   * Persistent "this extension is disabled" notices keyed by extension id.
+   * Injected into turn-context so the model isn't left guessing that tools it
+   * previously had are gone; cleared when the extension is re-enabled.
+   */
+  private disabledExtensionNotices = new Map<string, string>();
   private eventBus: DefaultExtensionEventBus;
   private ui: DefaultExtensionUI;
   private options: ExtensionRunnerOptions;
@@ -288,6 +294,13 @@ export class ExtensionRunner {
       }
     }
 
+    // Surface runtime-disabled extensions so the model knows their tools are gone
+    // (asymmetric to enable-side guidance). Hash-dedup below means this only
+    // re-injects when the set actually changes.
+    for (const notice of this.disabledExtensionNotices.values()) {
+      if (notice?.trim()) turnParts.push(notice.trim());
+    }
+
     return {
       turnContext: joinExtensionAppendSegments(...turnParts),
       systemAppend: joinExtensionAppendSegments(...systemParts),
@@ -364,6 +377,7 @@ export class ExtensionRunner {
     this.toolOwners.clear();
     this.commandOwners.clear();
     this.turnContextProviders.clear();
+    this.disabledExtensionNotices.clear();
     this.ui.clearAllStatus();
   }
 
@@ -405,6 +419,7 @@ export class ExtensionRunner {
         await instance.api.activate(instance.context);
         instance.state = "active";
         instance.error = undefined;
+        this.disabledExtensionNotices.delete(instance.api.id);
         return { ok: true, message: `Extension "${id}" enabled` };
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
@@ -417,6 +432,16 @@ export class ExtensionRunner {
     }
 
     await this.destroyExtension(instance);
+    // Let the extension customize the disable notice. Undefined (no method / returns
+    // undefined) falls back to a generic notice so non-customizing extensions stay
+    // informative; an empty string explicitly opts out (inject nothing).
+    const custom = instance.api.disabledNotice?.();
+    const notice =
+      custom === undefined
+        ? `Extension "${instance.api.name ?? id}" is disabled — its tools and commands are unavailable.`
+        : custom.trim();
+    if (notice) this.disabledExtensionNotices.set(instance.api.id, notice);
+    else this.disabledExtensionNotices.delete(instance.api.id);
     return { ok: true, message: `Extension "${id}" disabled` };
   }
 

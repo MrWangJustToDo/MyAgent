@@ -74,12 +74,21 @@ export function hasCancellableIncompleteToolCalls(messages: UIMessage[]): boolea
   return false;
 }
 
-/**
- * Mark incomplete tool calls as cancelled (`error` + synthetic tool-result) so:
- * - UI stops showing a loading spinner
- * - TanStack `checkForPendingToolCalls` will not try to execute truncated args
- */
-export function cancelIncompleteToolCalls(messages: UIMessage[], reason: string = TOOL_CANCELLED_MESSAGE): UIMessage[] {
+interface CancelToolCallOptions {
+  /** TanStack tool-call part state written on cancel. */
+  state: "error" | "complete";
+  /** Whether to include `cancelled: true` in the synthetic result. */
+  cancelled?: boolean;
+}
+
+const DEFAULT_CANCEL_OPTIONS: CancelToolCallOptions = { state: "error", cancelled: true };
+
+function applyToolCallCancellation(
+  messages: UIMessage[],
+  isCancellable: (part: ToolCallPart) => boolean,
+  reason: string,
+  options: CancelToolCallOptions
+): UIMessage[] {
   const message = reason.trim() || TOOL_CANCELLED_MESSAGE;
   let changed = false;
 
@@ -91,12 +100,12 @@ export function cancelIncompleteToolCalls(messages: UIMessage[], reason: string 
 
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
-      if (!isToolCallPart(part) || !isCancellableIncompleteToolCall(part)) continue;
+      if (!isToolCallPart(part) || !isCancellable(part)) continue;
 
       partsChanged = true;
       parts[i] = {
         ...part,
-        state: "error",
+        state: options.state,
         output: { success: false, error: message },
       };
 
@@ -107,7 +116,11 @@ export function cancelIncompleteToolCalls(messages: UIMessage[], reason: string 
         const result: ToolResultPart = {
           type: "tool-result",
           toolCallId: part.id,
-          content: JSON.stringify({ success: false, error: message, cancelled: true }),
+          content: JSON.stringify({
+            success: false,
+            error: message,
+            cancelled: options.cancelled === true,
+          }),
           state: "complete",
         };
         parts.splice(i + 1, 0, result);
@@ -121,4 +134,58 @@ export function cancelIncompleteToolCalls(messages: UIMessage[], reason: string 
   });
 
   return changed ? next : messages;
+}
+
+/**
+ * Mark incomplete tool calls as cancelled (`error` + synthetic tool-result) so:
+ * - UI stops showing a loading spinner
+ * - TanStack `checkForPendingToolCalls` will not try to execute truncated args
+ */
+export function cancelIncompleteToolCalls(messages: UIMessage[], reason: string = TOOL_CANCELLED_MESSAGE): UIMessage[] {
+  return applyToolCallCancellation(messages, isCancellableIncompleteToolCall, reason, DEFAULT_CANCEL_OPTIONS);
+}
+
+/**
+ * Tool call that is currently executing (or queued to execute) when the run is
+ * aborted — valid args, no tool-result yet, but not a live approval prompt.
+ *
+ * These are separate from {@link isCancellableIncompleteToolCall}: a normal
+ * tool-phase pump must let valid `input-complete` tools run, so they are only
+ * cancelled on the abort path via {@link cancelInFlightToolCalls}.
+ */
+export function isInFlightToolCall(part: ToolCallPart): boolean {
+  if (part.output !== undefined) return false;
+  if (part.state === "complete" || part.state === "error") return false;
+  // User still deciding — approval UI owns this.
+  if (part.approval?.needsApproval === true && part.approval.approved === undefined) return false;
+  // Truncated arg streams are handled by cancelIncompleteToolCalls, not here.
+  if (part.state === "awaiting-input" || part.state === "input-streaming") return false;
+  // Valid args that would run in the next tool-phase (or are running now).
+  if (part.state === "input-complete" && hasValidToolArguments(part)) return true;
+  // Approved (`y`) and queued to execute — aborted before a result arrived.
+  if (part.state === "approval-responded" && part.approval?.approved === true) return true;
+  return false;
+}
+
+/** Whether any message still has an in-flight (executing) tool call. */
+export function hasInFlightToolCalls(messages: UIMessage[]): boolean {
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    for (const part of message.parts) {
+      if (isToolCallPart(part) && isInFlightToolCall(part)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Mark currently-executing (in-flight) tool calls as `complete` with a
+ * user-cancel result on abort. This is the framework fallback that also covers
+ * extension/MCP tools whose execute never resolved before the run was torn down.
+ */
+export function cancelInFlightToolCalls(messages: UIMessage[], reason: string = TOOL_CANCELLED_MESSAGE): UIMessage[] {
+  return applyToolCallCancellation(messages, isInFlightToolCall, reason, {
+    state: "complete",
+    cancelled: true,
+  });
 }

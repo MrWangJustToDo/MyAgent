@@ -92,6 +92,9 @@ export function createLspExtension(options?: LspExtensionConfig): ExtensionAPI {
     async activate(ctx) {
       await activateLsp(ctx, options);
     },
+    disabledNotice() {
+      return "LSP integration is disabled — language tooling (diagnostics, hover, definition, references, rename, completions) and auto file-sync are unavailable.";
+    },
   };
 }
 

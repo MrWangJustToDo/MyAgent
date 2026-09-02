@@ -61,6 +61,9 @@ export function createSkillsExtension(options: CreateSkillsExtensionOptions): Ex
     async activate(ctx) {
       await activateSkills(ctx, skillRegistry, config);
     },
+    disabledNotice() {
+      return "Skills extension is disabled — list_skills/load_skill tools and the available-skills index injected into turn context are unavailable.";
+    },
   };
 }
 

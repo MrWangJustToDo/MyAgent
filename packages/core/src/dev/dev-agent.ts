@@ -211,9 +211,12 @@ export {
 export {
   TOOL_CANCELLED_MESSAGE,
   cancelIncompleteToolCalls,
+  cancelInFlightToolCalls,
   hasCancellableIncompleteToolCalls,
+  hasInFlightToolCalls,
   hasValidToolArguments,
   isCancellableIncompleteToolCall,
+  isInFlightToolCall,
 } from "../agent/stream/incomplete-tool-calls.js";
 export {
   MULTIMODAL_OMITTED_PLACEHOLDER,
@@ -348,3 +351,4 @@ export {
   type SkillsExtensionConfig,
   type CreateSkillsExtensionOptions,
 } from "../agent/skills";
+export { createMcpExtension, type McpExtensionConfig, type CreateMcpExtensionOptions } from "../agent/mcp";

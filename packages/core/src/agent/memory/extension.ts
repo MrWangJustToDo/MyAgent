@@ -63,6 +63,9 @@ export function createMemoryExtension(options: CreateMemoryExtensionOptions): Ex
     async activate(ctx) {
       await activateMemory(ctx, memoryManager, config);
     },
+    disabledNotice() {
+      return "Memory extension is disabled — memory_list/memory_read/memory_write tools and the MEMORY.md index injected into turn context are unavailable.";
+    },
   };
 }
 
