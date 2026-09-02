@@ -96,6 +96,10 @@ export async function handleManagedReactiveCompact(
   } catch (err) {
     const compactError = err instanceof Error ? err : new Error(String(err));
     host.emitEvent("compaction:reactive-error", { error: compactError.message });
+    // Restore the status after beginCompaction above — otherwise the agent would
+    // stay stuck in "compacting" (onRecoveryRetry only unwinds "error"), blocking
+    // the stream-recovery loop's other strategies (capability / transient).
+    host.statusController.endCompaction();
     return false;
   }
 }

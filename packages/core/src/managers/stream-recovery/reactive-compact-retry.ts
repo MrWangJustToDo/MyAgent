@@ -10,7 +10,13 @@ import { isPromptTooLongError } from "../../agent/compaction/reactive-compact.js
 import type { AgentManager } from "../agent-manager.js";
 import type { ManagedAgent } from "../managed-agent.js";
 
-async function applyReactiveCompactRetry(managed: ManagedAgent): Promise<boolean> {
+/**
+ * Finalize a successful reactive-compact retry: clear the compacting status
+ * and the surfaced stream error. The compaction itself (summary + tail + archive)
+ * already ran inside {@link ManagedAgent.handleReactiveCompact} — this only
+ * unwinds the retry-scoped state so the restarted stream starts clean.
+ */
+async function finalizeReactiveCompactRetry(managed: ManagedAgent): Promise<boolean> {
   if (!managed.ui) return false;
   managed.statusController.endCompaction();
   managed.setError("");
@@ -32,5 +38,5 @@ export async function tryReactiveCompactRetry(
   const compacted = await managed.handleReactiveCompact(error, manager);
   if (!compacted) return false;
 
-  return applyReactiveCompactRetry(managed);
+  return finalizeReactiveCompactRetry(managed);
 }
