@@ -1259,7 +1259,20 @@ export class ManagedAgent {
   }
 
   async restoreSession(sessionId: string): Promise<SessionData> {
-    return restoreManagedSession(this, sessionId);
+    const manager = this.manager;
+    // Disk-session ownership check: refuse to resume a session already held by
+    // another live agent. Idempotent for the same agent (re-resume is allowed).
+    if (manager && !manager.acquireSessionOwnership(sessionId, this.id)) {
+      throw new Error(`Session "${sessionId}" is already active in another live session and cannot be resumed here.`);
+    }
+    try {
+      return await restoreManagedSession(this, sessionId);
+    } catch (err) {
+      // Roll back ownership so a failed restore (e.g. missing session) doesn't
+      // leave a stale claim.
+      manager?.releaseSessionOwnership(sessionId, this.id);
+      throw err;
+    }
   }
 
   isToolNeedsApproval(toolName: string): boolean {

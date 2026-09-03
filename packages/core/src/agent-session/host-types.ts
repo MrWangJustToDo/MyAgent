@@ -48,6 +48,8 @@ export interface AgentSessionListEntry {
   name: string;
   parentId?: string;
   status: AgentStatus;
+  /** Disk session id currently active for this live agent (root agents only). */
+  sessionId?: string;
   createdAt: number;
   updatedAt: number;
 }

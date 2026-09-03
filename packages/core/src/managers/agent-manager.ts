@@ -67,6 +67,16 @@ export class AgentManager {
   /** Managed agents by ID */
   private agents: Map<string, ManagedAgent> = new Map();
 
+  /**
+   * Disk session ownership registry: maps a persisted session id to the live
+   * agent id that currently holds (has resumed/owns) it. Because each root
+   * agent owns an independent SessionStore, a second live agent would otherwise
+   * resume the same disk session with no mutual exclusion. Live ownership is
+   * intentionally process-local (not persisted) — a crashed process leaves no
+   * stale owner, matching the "live exclusive" semantics.
+   */
+  private sessionOwners: Map<string, string> = new Map();
+
   /** Unified event bus for in-process listeners */
   private eventBus = new AgentTelemetryBus();
 
@@ -281,6 +291,12 @@ export class AgentManager {
     const managedAgent = this.agents.get(id);
     if (!managedAgent) return;
 
+    // Release any disk-session ownership this agent held (root agents own one).
+    const ownedSessionId = managedAgent.getSessionData?.()?.id;
+    if (ownedSessionId) {
+      this.releaseSessionOwnership(ownedSessionId, id);
+    }
+
     // Force-kill MCP child processes synchronously to prevent orphans on exit
     managedAgent.mcpManager?.forceKill();
 
@@ -311,6 +327,30 @@ export class AgentManager {
     }
 
     this.agents.delete(id);
+  }
+
+  /**
+   * Acquire exclusive ownership of a persisted disk session for a live agent.
+   * Returns `false` (and leaves ownership unchanged) when the session is already
+   * held by a *different* live agent. Idempotent for the same agent.
+   */
+  acquireSessionOwnership(sessionId: string, agentId: string): boolean {
+    const owner = this.sessionOwners.get(sessionId);
+    if (owner !== undefined && owner !== agentId) {
+      return false;
+    }
+    this.sessionOwners.set(sessionId, agentId);
+    return true;
+  }
+
+  /**
+   * Release a disk session's ownership if it was held by the given agent.
+   * No-op when the session is owned by another agent or unknown.
+   */
+  releaseSessionOwnership(sessionId: string, agentId: string): void {
+    if (this.sessionOwners.get(sessionId) === agentId) {
+      this.sessionOwners.delete(sessionId);
+    }
   }
 
   /**

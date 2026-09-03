@@ -146,6 +146,13 @@ export async function startNewDiskSession(
   managed.reset();
   usage.reset();
 
+  // Starting a brand-new disk session relinquishes the previous session's
+  // ownership so another live agent may resume it.
+  if (currentSession?.id) {
+    managed.manager?.releaseSessionOwnership(currentSession.id, managed.id);
+  }
+
+
   const chatController = managed.getChatController();
   chatController?.clearMessages();
 
