@@ -45,9 +45,9 @@ export function buildPlanModeExecutingPrompt(planMarkdown: string | null, planFi
     "First read the plan's **Key files** — they are your file anchors; start there before editing.",
     "Do not expand scope without asking the user.",
     "Mark completed steps via the `todo` tool (preferred) or `[DONE:n]` markers (1-based).",
-    "The plan's **Verification** items are seeded as todos (prefixed `[verify]`) — run each check and mark it when it passes, keeping evidence.",
+    "The plan's **Verification** items are seeded as a single `[verify]` todo — run each check and mark it completed only when all pass, keeping evidence.",
     "Before treating the build as done, run the plan **Verification** checklist and keep evidence (commands, scripts, or observed behavior).",
-    "When all plan todos (steps and `[verify]` items) are done, you will enter a forced retrospective — do not skip ahead to unrelated work.",
+    "When all plan todos (steps and the `[verify]` todo) are done, you will enter a forced retrospective — do not skip ahead to unrelated work.",
   ];
   if (planFilePath?.trim()) {
     parts.push(`Plan file: \`${planFilePath.trim()}\``);
@@ -62,7 +62,7 @@ export function buildPlanModeExecutingPrompt(planMarkdown: string | null, planFi
 /** Short user steer when `/plan execute` starts a run. */
 export function buildPlanExecuteSteerMessage(planMarkdown: string | null, planFilePath?: string | null): string {
   const header = [
-    "Build the approved plan step-by-step (you are now in building phase). Start by reading the plan's Key files. Update todos as you go — Verification items are seeded as `[verify]` todos; run and mark each one. Do not expand scope without asking. In retro, report Verification pass/fail with evidence before finishing.",
+    "Build the approved plan step-by-step (you are now in building phase). Start by reading the plan's Key files. Update todos as you go — Verification is seeded as a single `[verify]` todo; run all its checks and mark it when they pass. Do not expand scope without asking. In retro, report Verification pass/fail with evidence before finishing.",
   ];
   if (planFilePath?.trim()) {
     header.push(`Plan file: \`${planFilePath.trim()}\``);

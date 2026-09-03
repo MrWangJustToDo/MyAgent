@@ -409,6 +409,18 @@ export class PlanModeController {
 
     const verificationItems = parseVerificationItemsFromPlanMarkdown(this.planMarkdown);
 
+    // Steps seed one todo each. Verification items are merged into a single
+    // `[verify]` todo (not one per item) so long plans don't blow the todo cap;
+    // complete_plan still gates per-item via plan markdown parsing.
+    const verifyTodo =
+      verificationItems.length > 0
+        ? {
+            content: `[verify] ${verificationItems.join(" | ")}`,
+            status: "pending" as const,
+            priority: "medium" as const,
+          }
+        : null;
+
     todoManager.update(
       [
         ...this.steps.map((s) => ({
@@ -416,13 +428,11 @@ export class PlanModeController {
           status: "pending" as const,
           priority: "medium" as const,
         })),
-        ...verificationItems.map((v) => ({
-          content: `[verify] ${v}`,
-          status: "pending" as const,
-          priority: "medium" as const,
-        })),
+        ...(verifyTodo ? [verifyTodo] : []),
       ],
-      PLAN_TODO_TITLE
+      PLAN_TODO_TITLE,
+      // Plan steps are authoritative; don't cap seeding at maxTodos.
+      { allowMaxExceed: true }
     );
     todoManager.setPlanBound(true);
     this.todosSeeded = true;
@@ -456,7 +466,9 @@ export class PlanModeController {
           priority: item.priority,
         };
       }),
-      title
+      title,
+      // Preserve seeded list size even if it exceeds maxTodos.
+      { allowMaxExceed: true }
     );
   }
 

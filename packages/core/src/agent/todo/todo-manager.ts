@@ -122,11 +122,14 @@ export class TodoManager {
    * Update the todo list (replaces all items).
    * This is the main method called by the todo tool.
    *
+   * @param opts.allowMaxExceed When true, skip the `maxTodos` cap. Used only by
+   *   plan-mode seeding where plan steps are authoritative content that must
+   *   not be silently truncated; the todo tool keeps the cap.
    * @throws Error if validation fails (max todos, multiple in_progress)
    */
-  update(inputs: TodoItemInput[], title: string): string {
-    // Validate max todos
-    if (inputs.length > this.maxTodos) {
+  update(inputs: TodoItemInput[], title: string, opts?: { allowMaxExceed?: boolean }): string {
+    // Validate max todos (plan-mode seeding may exceed via allowMaxExceed)
+    if (!opts?.allowMaxExceed && inputs.length > this.maxTodos) {
       throw new Error(`Maximum ${this.maxTodos} todos allowed, got ${inputs.length}`);
     }
 
