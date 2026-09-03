@@ -117,6 +117,114 @@ export function getInlineSummary(part: ToolCallPart, toolName: string): string |
       if (totalEntries !== undefined) return `${totalEntries} entries`;
       return null;
     }
+
+    // --- LSP inspection ---
+    case "lsp_diagnostics": {
+      const errors = output.errors as number | undefined;
+      const warnings = output.warnings as number | undefined;
+      const count = output.count as number | undefined;
+      if ((errors ?? 0) > 0) {
+        return `${errors} err${errors !== 1 ? "s" : ""}${(warnings ?? 0) > 0 ? `, ${warnings} warn` : ""}`;
+      }
+      if ((warnings ?? 0) > 0) return `${warnings} warning${warnings !== 1 ? "s" : ""}`;
+      if (count !== undefined && count > 0) return `${count} issue${count !== 1 ? "s" : ""}`;
+      return count === 0 ? "clean" : null;
+    }
+    case "lsp_definition": {
+      const count = output.count as number | undefined;
+      if (count !== undefined) return count > 0 ? `${count} definition${count !== 1 ? "s" : ""}` : "not found";
+      return null;
+    }
+    case "lsp_references": {
+      const count = output.count as number | undefined;
+      if (count !== undefined) return count > 0 ? `${count} reference${count !== 1 ? "s" : ""}` : "none";
+      return null;
+    }
+    case "lsp_symbols": {
+      const count = output.count as number | undefined;
+      if (count !== undefined) return count > 0 ? `${count} symbols` : "none";
+      return null;
+    }
+    case "lsp_completions": {
+      const count = output.count as number | undefined;
+      const total = output.total as number | undefined;
+      if (total !== undefined) return `${count ?? 0}/${total} completions`;
+      if (count !== undefined) return count > 0 ? `${count} completions` : "none";
+      return null;
+    }
+    case "lsp_code_actions": {
+      const count = output.count as number | undefined;
+      const preferredCount = output.preferredCount as number | undefined;
+      if (count !== undefined) {
+        if (count === 0) return "none";
+        return (preferredCount ?? 0) > 0 ? `${count} (${preferredCount} preferred)` : `${count} actions`;
+      }
+      return null;
+    }
+    case "lsp_hover":
+      return output.hasResult === true ? "hover" : output.hasResult === false ? "no info" : null;
+
+    // --- AST / structural analysis ---
+    case "ast_search": {
+      const matchCount = output.matchCount as number | undefined;
+      if (matchCount !== undefined)
+        return matchCount > 0 ? `${matchCount} match${matchCount !== 1 ? "es" : ""}` : "no matches";
+      return null;
+    }
+    case "code_overview": {
+      const files = output.files as number | undefined;
+      const symbols = output.symbols as number | undefined;
+      if (files !== undefined) {
+        const head = `${files} file${files !== 1 ? "s" : ""}`;
+        return symbols !== undefined ? `${head}, ${symbols} symbols` : head;
+      }
+      return null;
+    }
+    case "code_rewrite": {
+      const dryRun = output.dryRun as boolean | undefined;
+      const filesModified = output.filesModified as number | undefined;
+      if (dryRun === false) {
+        return filesModified !== undefined && filesModified > 0
+          ? `modified ${filesModified} file${filesModified !== 1 ? "s" : ""}`
+          : "no changes";
+      }
+      const matchCount = output.matchCount as number | undefined;
+      if (matchCount !== undefined) {
+        return matchCount > 0 ? `${matchCount} match${matchCount !== 1 ? "es" : ""} (preview)` : "no matches";
+      }
+      return null;
+    }
+    case "lsp_rename": {
+      const editCount = output.editCount as number | undefined;
+      const fileCount = output.fileCount as number | undefined;
+      if (editCount !== undefined && editCount > 0) {
+        return `${editCount} edit${editCount !== 1 ? "s" : ""}${fileCount !== undefined ? `, ${fileCount} file${fileCount !== 1 ? "s" : ""}` : ""} (preview)`;
+      }
+      return editCount === 0 ? "no edits" : null;
+    }
+
+    // --- Memory ---
+    case "memory_list": {
+      const count = output.count as number | undefined;
+      if (count !== undefined) return `${count} memory${count !== 1 ? "ies" : "y"}`;
+      return null;
+    }
+    case "memory_read": {
+      const type = output.type as string | undefined;
+      return typeof type === "string" ? `[${type}]` : null;
+    }
+    case "memory_write":
+      return output.ok === false ? "failed" : "saved";
+
+    // --- Skills ---
+    case "list_skills": {
+      const count = output.count as number | undefined;
+      if (count !== undefined) return `${count} skill${count !== 1 ? "s" : ""}`;
+      return null;
+    }
+    case "load_skill":
+      return typeof output.name === "string" ? "loaded" : null;
+
     default:
       return null;
   }
