@@ -4,7 +4,7 @@
  * Provides:
  * - 8 LSP tools: lsp_diagnostics, lsp_hover, lsp_definition, lsp_references,
  *   lsp_symbols, lsp_rename, lsp_completions, lsp_code_actions
- * - 4 commands: /lsp, /lsp-restart, /lsp-config, /lsp-lombok
+ * - 3 commands: /lsp, /lsp-restart, /lsp-config
  * - Auto file-sync (didOpen/didChange) after read/write/edit
  * - Auto-diagnostics injection into write/edit tool results
  * - 3 tree-sitter tools: code_overview, ast_search, code_rewrite (Phase 7)
@@ -451,25 +451,6 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
       const [languageId, command, ...serverArgs] = args;
       getManager().setServerConfig(languageId, { command, args: serverArgs });
       return `Configured LSP for ${languageId}: ${command} ${serverArgs.join(" ")}`;
-    },
-  });
-
-  ctx.registerCommand({
-    name: "lsp-lombok",
-    description: "Set Lombok jar path for Java: /lsp-lombok <path-to-lombok.jar>",
-    execute: async (args) => {
-      if (!args[0]) {
-        const current = await getManager().getLombokJar();
-        return current
-          ? `Lombok jar: ${current}`
-          : "No Lombok jar configured.\n\nUsage: /lsp-lombok <path-to-lombok.jar>";
-      }
-      const jarPath = args[0];
-      const resolved = corePath.resolve(ctx.cwd, jarPath);
-      const exists = await fsHelpers.exists(resolved);
-      if (!exists) return `File not found: ${resolved}`;
-      getManager().setLombokJar(resolved);
-      return `Lombok jar set: ${resolved}`;
     },
   });
 

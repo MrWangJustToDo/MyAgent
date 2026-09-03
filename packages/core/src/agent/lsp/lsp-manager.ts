@@ -536,11 +536,6 @@ export class LspManager {
     this._lombokJarPath = jarPath;
   }
 
-  /** Get the resolved Lombok jar path (explicit, env, or auto-detected). */
-  async getLombokJar(): Promise<string | null> {
-    return this.findLombokJarPath();
-  }
-
   /** Read a file's text content if it exists and is readable; null otherwise. */
   async readFileIfPossible(filePath: string): Promise<string | null> {
     const absPath = this.resolvePath(filePath);

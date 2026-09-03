@@ -652,7 +652,7 @@ CLI local mode enables the built-in LSP extension when `ManagedAgentConfig.lsp !
 | `lsp_rename` / `lsp_code_actions` | LSP queries skipped by default (`DEFAULT_DISABLED_LSP_TOOLS`) to save per-turn context — re-enable via `lsp: { enableAll: true }` or omit them from `disabledTools` |
 | `ast_search` / `code_rewrite` / `code_overview` | Structural tree-sitter tools skipped by default — re-enable via `lsp: { enableAll: true }`. `ast_search`/`code_rewrite` are structure search/rewrite (no LSP equivalent); `code_overview` overlaps `lsp_symbols` |
 
-**Config:** workspace `.lsp.json` (`autoStart`, `servers`, `lombokJar`, `autoInjectDiagnostics`). Commands: `/lsp`, `/lsp-restart`, `/lsp-config`, `/lsp-lombok`.
+**Config:** workspace `.lsp.json` (`autoStart`, `servers`, `lombokJar`, `autoInjectDiagnostics`). Commands: `/lsp`, `/lsp-restart`, `/lsp-config`.
 
 #### Per-tool toggle — `ManagedAgentConfig.lsp`
 
