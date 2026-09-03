@@ -32,8 +32,20 @@ export interface RemoteAgentSessionHostOptions {
  * @param options.baseUrl - Agent server base URL (e.g. `"http://localhost:3100"`).
  */
 export function createRemoteAgentSessionHost(options: RemoteAgentSessionHostOptions): AgentSessionHost {
-  const client = (agentId: string): RemoteSessionClient =>
-    new RemoteSessionClient({ baseUrl: options.baseUrl, agentId });
+  // Cache one client per agentId. `connect()` is called repeatedly by UI hooks
+  // (e.g. on every snapshot re-read); returning a fresh shell each time resets
+  // the snapshot to empty until hydration completes, which makes consumers
+  // flicker between empty and full data. Instance identity is the cache key —
+  // mirroring the Local host's handle-cache contract.
+  const clients = new Map<string, RemoteSessionClient>();
+  const client = (agentId: string): RemoteSessionClient => {
+    let session = clients.get(agentId);
+    if (!session) {
+      session = new RemoteSessionClient({ baseUrl: options.baseUrl, agentId });
+      clients.set(agentId, session);
+    }
+    return session;
+  };
 
   return {
     async create(createOptions) {
@@ -69,13 +81,15 @@ export function createRemoteAgentSessionHost(options: RemoteAgentSessionHostOpti
         throw new Error(`Failed to create remote agent session (HTTP ${response.status}): ${detail}`);
       }
       const data = (await response.json()) as { id: string; snapshot: AgentSessionSnapshot };
-      return {
-        session: new RemoteSessionClient({
-          baseUrl: options.baseUrl,
-          agentId: data.id,
-          initialSnapshot: data.snapshot,
-        }),
-      };
+      const session = new RemoteSessionClient({
+        baseUrl: options.baseUrl,
+        agentId: data.id,
+        initialSnapshot: data.snapshot,
+      });
+      // Mirror the Local host's cache contract so a subsequent `connect()`
+      // returns the same instance instead of a fresh shell needing a refresh.
+      clients.set(data.id, session);
+      return { session };
     },
 
     connect(agentId) {
@@ -94,6 +108,7 @@ export function createRemoteAgentSessionHost(options: RemoteAgentSessionHostOpti
 
     async destroy(agentId) {
       await fetch(joinUrl(options.baseUrl, `/api/agent/${agentId}`), { method: "DELETE" });
+      clients.delete(agentId);
     },
   };
 }
