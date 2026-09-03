@@ -13,6 +13,11 @@ export interface SideTextQueryOptions {
   userPrompt: string;
   maxOutputTokens?: number;
   abortSignal?: AbortSignal;
+  /**
+   * Whether to disable model reasoning/thinking for this lightweight call.
+   * Defaults to `true` — memory selection and title generation don't need CoT.
+   */
+  disableThinking?: boolean;
 }
 
 export interface SideTextQueryResult {
@@ -46,13 +51,23 @@ export async function runSideTextQuery(
   }
 
   const startTime = Date.now();
+  const disableThinking = options.disableThinking ?? true;
+  const reasoningOptions =
+    disableThinking && textAdapter.reasoning
+      ? textAdapter.modelStyle === "anthropic"
+        ? { thinking: { type: "disabled" } }
+        : { reasoning_effort: "none" }
+      : {};
   const stream = chat({
     adapter: textAdapter.adapter,
     messages: [{ role: "user", content: options.userPrompt }],
     systemPrompts: options.systemPrompt ? [options.systemPrompt] : undefined,
     abortController,
     debug: false,
-    modelOptions: options.maxOutputTokens != null ? { maxTokens: options.maxOutputTokens } : undefined,
+    modelOptions: {
+      ...(options.maxOutputTokens != null ? { maxTokens: options.maxOutputTokens } : {}),
+      ...reasoningOptions,
+    },
   });
 
   let text = "";

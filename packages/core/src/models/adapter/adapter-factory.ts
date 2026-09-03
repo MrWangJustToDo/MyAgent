@@ -15,6 +15,10 @@ export interface TextAdapterConfig {
   adapter: AnyTextAdapter;
   /** Model id passed to `chat({ model })` */
   model: string;
+  /** API protocol style — determines the reasoning-effort wire key. */
+  modelStyle: ModelStyle;
+  /** Whether the model advertises the `reasoning` capability. */
+  reasoning?: boolean;
 }
 
 export interface ModelAdapterConfig {
@@ -60,6 +64,8 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
         dangerouslyAllowBrowser: true,
       }),
       model,
+      modelStyle: "anthropic",
+      reasoning: true,
     };
   }
 
@@ -72,6 +78,8 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
         ...openaiConfig,
       }) as AnyTextAdapter,
       model,
+      modelStyle: "openai",
+      reasoning: true,
     };
   }
 
@@ -81,5 +89,7 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
       dangerouslyAllowBrowser: true,
     }) as AnyTextAdapter,
     model,
+    modelStyle: "openai",
+    reasoning: shouldEchoReasoningContent(config.modelInfo),
   };
 }
