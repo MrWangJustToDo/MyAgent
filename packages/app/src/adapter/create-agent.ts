@@ -26,7 +26,11 @@ export function bindAgentSession(
   hooks: Pick<AdapterHooks, "useAgent">,
   host?: AgentSessionHost | null
 ): void {
-  hooks.useAgent.getActions().setSession(session);
+  if (session) {
+    hooks.useAgent.getActions().registerSession(session, { activate: true });
+  } else {
+    hooks.useAgent.getActions().setSession(null);
+  }
   if (host !== undefined) {
     hooks.useAgent.getActions().setHost(host);
   }
@@ -107,7 +111,51 @@ export async function createAgentFromConfig({ config, name, hooks, host }: Creat
   }
 
   useAgent.getActions().setHost(host);
-  useAgent.getActions().setSession(session);
+  useAgent.getActions().registerSession(session, { activate: true });
+  useAgentLog.getActions().clear();
+  useTodoManager.getActions().setFromSession(snap.todos, snap.todosTitle);
+  syncExtensionCommands(session);
+
+  return { host, session, ...(initial.length ? { initialMessages: initial } : {}) };
+}
+
+let sessionCounter = 0;
+
+/**
+ * Create an additional live session on an already-initialized host, reusing the
+ * resolved model config from {@link useConfig} (the bootstrap session's provider
+ * resolution). Registers and activates it in the app store.
+ */
+export async function createSessionOnHost({
+  host,
+  hooks,
+  name,
+}: {
+  host: AgentSessionHost;
+  hooks: AdapterHooks;
+  name?: string;
+}): Promise<InitResult> {
+  const config = { ...useConfig.getReadonlyState().config } as AppConfig;
+
+  const { session, initialMessages } = await host.create({
+    name: name ?? `session-${++sessionCounter}`,
+    model: config.model,
+    systemPrompt: config.systemPrompt,
+    maxIterations: config.maxIterations,
+    mcpConfigPath: config.mcpConfigPath || undefined,
+    extensionDirs: config.extensionDirs?.length ? config.extensionDirs : undefined,
+    modelStyle: config.style,
+    modelBaseURL: config.baseURL,
+    modelApiKey: config.apiKey,
+    modelInfo: config.modelInfo,
+    ...(config.toolConfig ? { toolConfig: config.toolConfig } : {}),
+  });
+
+  const { useAgent, useAgentLog, useTodoManager } = hooks;
+  const snap = session.getSnapshot();
+  const initial = initialMessages ?? [];
+
+  useAgent.getActions().registerSession(session, { activate: true });
   useAgentLog.getActions().clear();
   useTodoManager.getActions().setFromSession(snap.todos, snap.todosTitle);
   syncExtensionCommands(session);

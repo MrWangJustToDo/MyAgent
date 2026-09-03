@@ -1,5 +1,6 @@
 import { isActiveStatus } from "@my-agent/core";
 import { throttle } from "lodash-es";
+import { toRaw } from "reactivity-store";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { bindAgentSession } from "../adapter/create-agent.js";
@@ -20,7 +21,7 @@ import { getWorkSpaceInfo } from "./use-workspace-info.js";
 
 import type { AppConfig } from "../adapter/types.js";
 import type { Attachment } from "../types/attachment.js";
-import type { AgentSession, AgentStatus, QueuedMessagesSnapshot } from "@my-agent/core";
+import type { AgentStatus, QueuedMessagesSnapshot } from "@my-agent/core";
 import type { ContentPart, UIMessage } from "@tanstack/ai";
 
 // ============================================================================
@@ -139,7 +140,10 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   const [initLoading, setInitLoading] = useState(true);
   const [initError, setInitError] = useState<Error | null>(null);
-  const [session, setSession] = useState<AgentSession | null>(null);
+  // Active session is store-owned: switching the active session only flips the
+  // pointer (no destroy/rebuild). Derive it here so this hook re-subscribes to
+  // the new handle on switch.
+  const session = toRaw(useAgent((s) => s.session));
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessagesSnapshot>({ steer: [], followUp: [] });
   const [status, setStatus] = useState<AgentStatus>("idle");
@@ -169,7 +173,6 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         bindAgentSession(result.session, { useAgent }, result.host);
 
         const snap = result.session.getSnapshot();
-        setSession(result.session);
         setMessages(snap.messages);
         setStatus(snap.status);
         setAgentError(snap.error);
@@ -207,6 +210,21 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     adapter,
     config,
   ]);
+
+  useEffect(() => {
+    if (!session) return;
+
+    // Session switch: repopulate local state from the newly active session's
+    // snapshot so the UI reflects its transcript/status/todos instead of the
+    // previous session's (no destroy/rebuild — the live agent keeps running).
+    const snap = session.getSnapshot();
+    setMessages(snap.messages);
+    setStatus(snap.status);
+    setAgentError(snap.error);
+    useAgentStatus.getActions().setStatus(snap.status);
+    setQueuedMessages(snap.queues);
+    useTodoManager.getActions().setFromSession(snap.todos, snap.todosTitle);
+  }, [session]);
 
   useEffect(() => {
     if (!session) return;
