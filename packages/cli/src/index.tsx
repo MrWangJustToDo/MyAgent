@@ -159,8 +159,8 @@ initHighlighter()
         maxFps: 30,
         exitOnCtrlC: false,
         renderProcess: true,
-        animatedScroll: true,
         onRender: hideNativeCursor,
+        standardReactLayoutTiming: true,
       }
     );
   })
