@@ -68,6 +68,7 @@ export const KeyLabel = {
   ctrlT: "Ctrl+T",
   ctrlU: "Ctrl+U",
   ctrlV: "Ctrl+V",
+  ctrlX: "Ctrl+X",
   ctrlY: "Ctrl+Y",
   shiftEnter: "Shift+Enter",
   shiftTab: "Shift+Tab",

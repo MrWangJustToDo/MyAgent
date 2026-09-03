@@ -3,7 +3,7 @@
 import { useInput } from "ink";
 
 import { clipboardImageFilename } from "../../utils/attachment-hash.js";
-import { getActiveHost } from "../../utils/session-resolve.js";
+import { getActiveHost, cycleActiveSession } from "../../utils/session-resolve.js";
 import { useAutocomplete } from "../use-autocomplete.js";
 import { useCommandOutput } from "../use-command-output.js";
 import { useExtensionPanel, CLOSE_DEBOUNCE_MS as EXTENSION_CLOSE_DEBOUNCE_MS } from "../use-extension-panel.js";
@@ -67,6 +67,12 @@ export function useGlobalKeybindings(ctx: KeybindingContext): void {
           }
         });
       }
+      return;
+    }
+
+    if (inputKey.ctrl && inputChar === "x") {
+      // Cycle through live sessions when more than one is active.
+      cycleActiveSession();
       return;
     }
 

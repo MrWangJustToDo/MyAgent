@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import { useEffect, useMemo } from "react";
 
 import { FullBox } from "../components/FullBox";
+import { useAgent } from "../hooks/use-agent";
 import { useConfig } from "../hooks/use-config";
 import { useSize } from "../hooks/use-size.js";
 import { useStatic } from "../hooks/use-static";
@@ -69,7 +70,7 @@ export function remotePlanesFromConfig(remoteEnv?: string, remoteProvider?: stri
   ];
 }
 
-const Logo = ({ remotePlanes }: { remotePlanes: string[] }) => {
+const Logo = ({ remotePlanes, sessionCount }: { remotePlanes: string[]; sessionCount: number }) => {
   return (
     <Box flexDirection="column" alignItems="center" width="100%">
       <Box flexDirection="column">
@@ -84,10 +85,10 @@ const Logo = ({ remotePlanes }: { remotePlanes: string[] }) => {
         </Text>
       </Box>
 
-      {remotePlanes.length > 0 && (
+      {(remotePlanes.length > 0 || sessionCount > 1) && (
         <Box marginTop={1}>
           <Text color={COLORS.warning} dimColor>
-            {remotePlanes.join(" · ")}
+            {[...remotePlanes, ...(sessionCount > 1 ? [`${sessionCount} sessions`] : [])].join(" · ")}
           </Text>
         </Box>
       )}
@@ -142,10 +143,16 @@ const GitInfoLine = ({ git, workspacePath }: { git: WorkspaceGitInfo | null; wor
   );
 };
 
-function buildHeader(git: WorkspaceGitInfo | null, workspacePath: string, showMeta: boolean, remotePlanes: string[]) {
+function buildHeader(
+  git: WorkspaceGitInfo | null,
+  workspacePath: string,
+  showMeta: boolean,
+  remotePlanes: string[],
+  sessionCount: number
+) {
   return (
     <FullBox flexDirection="column" key="header" marginBottom={1} paddingX={3} paddingY={1}>
-      <Logo remotePlanes={remotePlanes} />
+      <Logo remotePlanes={remotePlanes} sessionCount={sessionCount} />
       {showMeta && (workspacePath || git) && <GitInfoLine git={git} workspacePath={workspacePath} />}
 
       {showMeta && (
@@ -179,6 +186,7 @@ export const Header = () => {
   const remoteEnv = useConfig((s) => s.config.remoteEnv);
   const remoteProvider = useConfig((s) => s.config.remoteProvider);
   const remoteSession = useConfig((s) => s.config.remoteSession);
+  const sessionCount = Object.keys(useAgent((s) => s.sessions) ?? {}).length;
 
   const remotePlanes = useMemo(
     () => remotePlanesFromConfig(remoteEnv, remoteProvider, remoteSession),
@@ -188,8 +196,10 @@ export const Header = () => {
   useEffect(() => {
     if (!workspacePath) return;
     const showMeta = screenWidth >= HEADER_META_MIN_WIDTH;
-    useStatic.getActions().setStaticHeader(buildHeader(git || null, workspacePath, showMeta, remotePlanes));
-  }, [git, workspacePath, screenWidth, remotePlanes]);
+    useStatic
+      .getActions()
+      .setStaticHeader(buildHeader(git || null, workspacePath, showMeta, remotePlanes, sessionCount));
+  }, [git, workspacePath, screenWidth, remotePlanes, sessionCount]);
 
   return null;
 };
