@@ -2,6 +2,7 @@
 export * from "./adapter/types.js";
 export {
   createAgentFromConfig,
+  createSessionOnHost,
   clearAdapterHooks,
   bindAgentSession,
   type AdapterHooks,

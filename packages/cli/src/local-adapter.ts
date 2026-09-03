@@ -5,7 +5,6 @@ import type { AgentSessionHost } from "@my-agent/core";
 
 export class LocalAgentAdapter implements AgentAdapter {
   private host: AgentSessionHost | null = null;
-  private agentId: string | null = null;
   private _exit: () => void;
   private _readClipboardImage: (() => Promise<ClipboardImageResult | null>) | null;
   private _hooks: AdapterHooks;
@@ -29,15 +28,20 @@ export class LocalAgentAdapter implements AgentAdapter {
       : createLocalAgentSessionHost({ manager: agentManager });
     const result = await createAgentFromConfig({ config, name: "local-chat", hooks: this._hooks, host });
     this.host = host;
-    this.agentId = result.session.id;
     return result;
   }
 
   async destroy(): Promise<void> {
-    if (this.host && this.agentId) {
-      await this.host.destroy(this.agentId);
+    // Tear down every live agent owned by this host (the bootstrap session plus
+    // any additional sessions created via /session new). Iterating host.list()
+    // guarantees no live agent leaks on exit, regardless of how many sessions
+    // were spawned through the store registry.
+    if (this.host) {
+      const entries = await this.host.list();
+      for (const entry of entries) {
+        await this.host.destroy(entry.agentId);
+      }
       this.host = null;
-      this.agentId = null;
     }
     const { clearAdapterHooks } = await import("@my-agent/app");
     clearAdapterHooks(this._hooks);
