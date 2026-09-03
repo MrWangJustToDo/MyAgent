@@ -4,6 +4,8 @@ Shared UI layer (CLI + extension). Agent control is **Session-only**: hooks, lay
 
 `useAgent` stores `session` / `host` with `markRaw`. reactivity-store selectors otherwise wrap those live handles as readonly proxies, and `subscribe` / `dispatch` silently no-op (Vue blocks `Set.add` on the proxy). Call `getActiveSession()`, `getActiveHost()`, or `resolveAgentSession()` (they `toRaw`) before using methods; in components `toRaw(useAgent((s) => s.session))` is equivalent.
 
+**Multiple live sessions.** `useAgent` also keeps a live-session registry: `sessions` (`Record<agentId, AgentSession>`), `activeSessionId`, and the actions `registerSession`, `activateSession`, `removeSession`. `session` always reflects the currently **active** handle, so existing selectors (`useAgent((s) => s.session)`) and `getActiveSession()` keep working when switching. `createSessionOnHost()` (`adapter/create-agent.ts`) boots an additional live session from the active config and registers/activates it; `getSessionById()` looks up a registered handle by id. `use-agent-chat` re-subscribes to the active handle on switch (re-filling messages/status/todos/queues from the snapshot) without destroying the old session.
+
 ## `@my-agent/core` import allowlist
 
 ### Allowed (session-safe / presentation / CoreEnv)

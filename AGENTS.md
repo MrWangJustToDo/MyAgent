@@ -30,7 +30,7 @@ A pnpm monorepo with eight packages organized in a layered architecture.
 | Package | Role |
 |---------|------|
 | `@my-agent/core` | Runtime-agnostic core: agent loop, tools, LLM model factory, CoreEnv interface |
-| `@my-agent/app` | Shared UI layer: React components, hooks, commands, AgentAdapter interface. **Session-only** for agent control — see [`packages/app/README.md`](packages/app/README.md) import allowlist |
+| `@my-agent/app` | Shared UI layer: React components, hooks, commands, AgentAdapter interface. **Session-only** for agent control — keeps a live-session registry (`sessions`/`activeSessionId` + `registerSession`/`activateSession`) so multiple live agents can coexist and be switched. See [`packages/app/README.md`](packages/app/README.md) import allowlist |
 | `@my-agent/cli` | Terminal host — thin shell that registers CoreEnv and renders `@my-agent/app` |
 | `@my-agent/node` | Node.js CoreEnv implementation: native filesystem, shell, OS sandbox |
 | `@my-agent/server` | CoreEnv HTTP server (Hono RPC) + remote client factory |
@@ -150,7 +150,7 @@ interface AgentAdapter {
 }
 ```
 
-Shared initialization logic is in `createAgentFromConfig()` (`@my-agent/app/adapter/create-agent.ts`). Both `LocalAgentAdapter` (CLI) and `ExtensionAgentAdapter` delegate to this helper. `initConfig` must keep host fields such as `toolConfig` (Brave / websearch) and `remoteSession` so they reach `Host.create`.
+Shared initialization logic is in `createAgentFromConfig()` (`@my-agent/app/adapter/create-agent.ts`). Both `LocalAgentAdapter` (CLI) and `ExtensionAgentAdapter` delegate to this helper. `initConfig` must keep host fields such as `toolConfig` (Brave / websearch) and `remoteSession` so they reach `Host.create`. The CLI `LocalAgentAdapter` tracks live sessions through the host and, on `destroy`, iterates `host.list()` to tear down **every** live agent owned by the host (the bootstrap session plus any created via `createSessionOnHost`) so no agent leaks on exit.
 
 ### Bootstrap Sequences
 

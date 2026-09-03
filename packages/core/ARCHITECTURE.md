@@ -224,7 +224,7 @@ Worker profile (runSubagent — task / compact / memory)
   → outcome path "detached" (avoids task-panel ghosts)
 ```
 
-Host observation remains **AgentSession** only. Future interactive child agents or multiple root sessions can reuse the same skeleton per `ManagedAgent` instance (not implemented here).
+Host observation remains **AgentSession** only. Multiple live root sessions are supported: each root is a separate `ManagedAgent` instance (registered in the app store's live-session registry, switched via `Ctrl+X`), and they reuse this same run skeleton per instance. `AgentManager`'s ownership registry (`Map<sessionId, agentId>`) keeps each disk session bound to one live agent (§6.3).
 
 ### 3.2 `runAgentStream` pipeline
 
@@ -567,6 +567,14 @@ AgentManager.continueLatestSession(agentId)
 ```
 
 App bootstrap resume still passes `initialMessages` from Host.create into `ManagedAgent.initChat()`.
+
+**Ownership dedup.** `AgentManager` keeps a process-local ownership registry
+(`Map<sessionId, agentId>`) so a disk session is bound to at most **one** live agent
+at a time. `resumeSession` (and `restoreManagedSession`) first `assertFree(sessionId)` —
+if that session is already owned by another live agent, restore is **rejected** with a
+clear error (the `/resume` picker marks such entries `bound (active)`).
+`startNewDiskSession` acquires ownership for the new session id, and `destroyAgent`
+releases it, so an owned session is never double-resumed and never leaks after teardown.
 
 ### 6.4 Channel ↔ wire projection
 
