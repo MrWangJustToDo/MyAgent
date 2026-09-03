@@ -64,8 +64,16 @@ export function useNormalModeKeybindings(ctx: KeybindingContext): void {
         const session = getSession();
         const phase = session?.getSnapshot().plan.phase;
         if (session && phase === "ready") {
-          usePlanPreview.getActions().hide();
-          void session.dispatch({ type: "plan.execute" });
+          void session.dispatch({ type: "plan.execute" }).then((result) => {
+            if (!result.ok) {
+              // Surface execution failures (e.g. too many plan steps for the
+              // todo cap) instead of silently dropping the dispatch result.
+              inputActions.setInputFeedback(result.error ?? "Cannot execute plan", "error");
+              return;
+            }
+            // Only close the preview once execution actually started.
+            usePlanPreview.getActions().hide();
+          });
           return;
         }
       }
