@@ -26,19 +26,51 @@ const BUCKET_LABEL: Record<ToolActivityBucket, { one: string; many: string }> = 
 };
 
 const TOOL_BUCKET: Record<string, ToolActivityBucket> = {
+  // File / resource inspection.
   read_file: "reads",
   list_file: "reads",
   tree: "reads",
+  // LSP inspection (read-like queries).
+  lsp_definition: "reads",
+  lsp_references: "reads",
+  lsp_hover: "reads",
+  lsp_symbols: "reads",
+  code_overview: "reads",
+  // Memory / skill retrieval.
+  memory_read: "reads",
+  load_skill: "reads",
+
+  // State / file mutation.
   edit_file: "edits",
   write_file: "edits",
   delete_file: "edits",
+  // LSP mutation.
+  lsp_rename: "edits",
+  code_rewrite: "edits",
+  memory_write: "edits",
+
+  // Discovery / searching.
   grep: "searches",
   glob: "searches",
   websearch: "searches",
   webfetch: "searches",
+  // LSP analysis queries.
+  lsp_diagnostics: "searches",
+  lsp_completions: "searches",
+  lsp_code_actions: "searches",
+  ast_search: "searches",
+  // Memory / skill listing.
+  memory_list: "searches",
+  list_skills: "searches",
+  discover_tools: "searches",
+
+  // Shell / code execution.
   run_command: "commands",
   get_command_output: "commands",
   kill_command: "commands",
+  execute_typescript: "commands",
+
+  // Delegation.
   task: "tasks",
 };
 
