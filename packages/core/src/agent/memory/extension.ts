@@ -5,7 +5,7 @@
  * - `memory_list` tool: list memory files (name + description from the index)
  * - `memory_read` tool: read the full content of a specific memory
  * - `memory_write` tool: create / update a memory (user preference, project fact, ...)
- * - Turn-context injection of the MEMORY.md index into `<extension_context>`
+ * - Turn-context injection of the MEMORY.md index into its own `<ctx kind=my-agent-memory>` section
  *   (progressive disclosure: names + descriptions are always visible; the full
  *   body is loaded on demand via `memory_read`).
  *
@@ -62,9 +62,6 @@ export function createMemoryExtension(options: CreateMemoryExtensionOptions): Ex
       "Persistent cross-session memories: memory_list/memory_read/memory_write tools + MEMORY.md index injected into turn context",
     async activate(ctx) {
       await activateMemory(ctx, memoryManager, config);
-    },
-    disabledNotice() {
-      return "Memory extension is disabled — memory_list/memory_read/memory_write tools and the MEMORY.md index injected into turn context are unavailable.";
     },
   };
 }
@@ -194,17 +191,21 @@ creating a duplicate (check memory_list first).`,
 
   // Inject the memory index into per-turn context (progressive disclosure).
   if (config?.indexDisabled !== true) {
-    ctx.registerTurnContextProvider(() => {
-      const index = memoryManager.getIndexContent();
-      if (!index.trim()) return undefined;
-      return [
-        "<memory_index>",
-        "These are memories from previous sessions. Respect user preferences from memory.",
-        "When the user says 'remember' or expresses a clear preference, it will be automatically extracted.",
-        "",
-        index.trim(),
-        "</memory_index>",
-      ].join("\n");
+    ctx.registerContextProvider({
+      content: () => {
+        const index = memoryManager.getIndexContent();
+        if (!index.trim()) return undefined;
+        return [
+          "<memory_index>",
+          "These are memories from previous sessions. Respect user preferences from memory.",
+          "When the user says 'remember' or expresses a clear preference, it will be automatically extracted.",
+          "",
+          index.trim(),
+          "</memory_index>",
+        ].join("\n");
+      },
+      disabledContent: () =>
+        "Memory extension is disabled — memory_list/memory_read/memory_write tools and the MEMORY.md index injected into turn context are unavailable.",
     });
   }
 

@@ -80,15 +80,15 @@ assert.equal(typeof api.activate, "function", "extension has activate");
 // ---------------------------------------------------------------------------
 const registeredTools = [];
 const registeredCommands = [];
-let turnContextProvider = null;
+let contextProvider = null;
 
 const mockCtx = {
   z: (await import("zod")).z,
   registerTool: (def) => registeredTools.push(def),
   registerCommand: (cmd) => registeredCommands.push(cmd),
   registerInterceptor: () => () => {},
-  registerTurnContextProvider: (fn) => {
-    turnContextProvider = fn;
+  registerContextProvider: (provider) => {
+    contextProvider = provider;
     return () => {};
   },
   logger: { info: () => {}, warn: () => {}, error: () => {} },
@@ -100,8 +100,8 @@ const toolNames = registeredTools.map((t) => t.name);
 assert.ok(toolNames.includes("list_skills"), "registers list_skills");
 assert.ok(toolNames.includes("load_skill"), "registers load_skill");
 
-assert.ok(turnContextProvider, "registers a turn-context provider");
-const index = await turnContextProvider();
+assert.ok(contextProvider, "registers a context provider");
+const index = await contextProvider.content();
 assert.ok(index.includes("<skills>"), "turn-context index wraps <skills>");
 assert.ok(index.includes(first.name), `turn-context index lists ${first.name}`);
 
@@ -173,8 +173,8 @@ await toolsOnlyApi.activate({
   registerTool: (def) => toolsOnlyTools.push(def),
   registerCommand: (cmd) => toolsOnlyCommands.push(cmd),
   registerInterceptor: () => () => {},
-  registerTurnContextProvider: (fn) => {
-    toolsOnlyProvider = fn;
+  registerContextProvider: (provider) => {
+    toolsOnlyProvider = provider;
   },
   logger: { info: () => {}, warn: () => {}, error: () => {} },
 });
@@ -196,7 +196,7 @@ await indexOnlyApi.activate({
   registerTool: (def) => indexOnlyTools.push(def),
   registerCommand: (cmd) => indexOnlyCommands.push(cmd),
   registerInterceptor: () => () => {},
-  registerTurnContextProvider: () => () => {},
+  registerContextProvider: () => () => {},
   logger: { info: () => {}, warn: () => {}, error: () => {} },
 });
 assert.equal(indexOnlyTools.length, 0, "toolsDisabled removes both tools");

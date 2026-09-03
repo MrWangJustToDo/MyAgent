@@ -4,7 +4,7 @@
  * Provides:
  * - `list_skills` tool: list available skills (name + description)
  * - `load_skill` tool: load the full SKILL.md content for a skill
- * - Turn-context injection of the available-skills index into `<extension_context>`
+ * - Turn-context injection of the available-skills index into its own `<ctx kind=my-agent-skills>` section
  *   (progressive disclosure: only names + descriptions are always visible; the
  *   full body is loaded on demand via `load_skill`).
  *
@@ -60,9 +60,6 @@ export function createSkillsExtension(options: CreateSkillsExtensionOptions): Ex
       "SKILL.md domain knowledge: list_skills/load_skill tools + available-skills index injected into turn context",
     async activate(ctx) {
       await activateSkills(ctx, skillRegistry, config);
-    },
-    disabledNotice() {
-      return "Skills extension is disabled — list_skills/load_skill tools and the available-skills index injected into turn context are unavailable.";
     },
   };
 }
@@ -138,17 +135,21 @@ that help you complete specific types of tasks.`,
 
   // Inject the available-skills index into per-turn context (progressive disclosure).
   if (config?.indexDisabled !== true) {
-    ctx.registerTurnContextProvider(() => {
-      if (skillRegistry.size === 0) return undefined;
-      const lines = skillRegistry.list().map((s) => `- ${s.name}: ${s.description}`);
-      return [
-        "<skills>",
-        "Use `load_skill` to load any of these skills when relevant to the user's task.",
-        "The index lists name + description summaries only — do not infer or follow a skill's instructions until its full content has been loaded via `load_skill`.",
-        "",
-        ...lines,
-        "</skills>",
-      ].join("\n");
+    ctx.registerContextProvider({
+      content: () => {
+        if (skillRegistry.size === 0) return undefined;
+        const lines = skillRegistry.list().map((s) => `- ${s.name}: ${s.description}`);
+        return [
+          "<skills>",
+          "Use `load_skill` to load any of these skills when relevant to the user's task.",
+          "The index lists name + description summaries only — do not infer or follow a skill's instructions until its full content has been loaded via `load_skill`.",
+          "",
+          ...lines,
+          "</skills>",
+        ].join("\n");
+      },
+      disabledContent: () =>
+        "Skills extension is disabled — list_skills/load_skill tools and the available-skills index injected into turn context are unavailable.",
     });
   }
 

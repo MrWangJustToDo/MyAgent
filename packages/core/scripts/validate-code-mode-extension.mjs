@@ -4,9 +4,9 @@
  * Verifies the two activation paths:
  * 1. When the host provides a `createIsolateDriver` (via CoreEnv), the extension
  *    registers `execute_typescript` (+ `discover_tools`) and contributes a
- *    non-empty code-mode system prompt through `before_agent_start`.
+ *    non-empty code-mode guidance through `registerContextProvider({ content })`.
  * 2. When the driver is absent/null, the extension degrades gracefully: it warns
- *    and registers no tools (no crash, no registered interceptors).
+ *    and registers no tools (no crash, no registered providers).
  *
  * The isolate driver used for path 1 is a lightweight stub so this script has no
  * native dependency on isolated-vm; it only exercises extension wiring.
@@ -28,7 +28,7 @@ const fakeDriver = {
 
 function makeCtx({ driver = null, _tools = [] }) {
   const registered = [];
-  const interceptors = [];
+  const providers = [];
   const warns = [];
   const ctx = {
     coreEnv: {
@@ -38,12 +38,12 @@ function makeCtx({ driver = null, _tools = [] }) {
       warn: (msg) => warns.push(String(msg)),
     },
     registerTool: (def) => registered.push(def.name),
-    registerInterceptor: (type, handler) => {
-      interceptors.push({ type, handler });
+    registerContextProvider: (provider) => {
+      providers.push(provider);
       return () => {};
     },
   };
-  return { ctx, registered, interceptors, warns };
+  return { ctx, registered, providers, warns };
 }
 
 // Dummy tools shaped like AnyServerTool (only name/execute are consumed here).
@@ -59,7 +59,7 @@ function check(label, cond) {
 
 // ---- Path 1: driver present ------------------------------------------------
 {
-  const { ctx, registered, interceptors } = makeCtx({
+  const { ctx, registered, providers } = makeCtx({
     driver: fakeDriver,
     tools: [],
   });
@@ -72,16 +72,10 @@ function check(label, cond) {
   check("driver present -> registers execute_typescript", registered.includes("execute_typescript"));
   check("driver present -> registers discover_tools (lazy present)", registered.includes("discover_tools"));
 
-  const beforeAgentStart = interceptors.find((i) => i.type === "before_agent_start");
-  check("driver present -> before_agent_start interceptor registered", Boolean(beforeAgentStart));
-  if (beforeAgentStart) {
-    const event = { appendSystemPrompt: undefined };
-    beforeAgentStart.handler(event);
-    check(
-      "before_agent_start -> appends non-empty code-mode system prompt",
-      typeof event.appendSystemPrompt === "string" && event.appendSystemPrompt.length > 0
-    );
-  }
+  const provider = providers.find((p) => typeof p.content === "function");
+  check("driver present -> registers a context provider", Boolean(provider));
+  const guidance = await provider?.content?.();
+  check("context provider -> non-empty code-mode guidance", typeof guidance === "string" && guidance.length > 0);
 }
 
 // ---- Path 1b: driver present, no lazy tools => no discover_tools ------------
@@ -121,7 +115,7 @@ function check(label, cond) {
     },
     logger: { warn: (m) => warns.push(String(m)) },
     registerTool: (def) => registered.push(def.name),
-    registerInterceptor: () => () => {},
+    registerContextProvider: () => () => {},
   };
   const ext = createCodeModeExtension({ tools: [tool("read_file")] });
   await ext.activate(ctx);

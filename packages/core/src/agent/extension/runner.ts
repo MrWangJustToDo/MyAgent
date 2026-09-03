@@ -1,7 +1,6 @@
 import { getEnv, hasCoreEnv } from "../../env.js";
 
 import { z } from "./extension-zod.js";
-import { joinExtensionAppendSegments } from "./join-append-segments.js";
 
 import type {
   ExtensionInstance,
@@ -16,7 +15,8 @@ import type {
   ExtensionUI,
   BeforeAgentStartEvent,
   ExtensionPromptAppends,
-  TurnContextProvider,
+  ExtensionTurnContextSection,
+  ExtensionContextProvider,
   ExtensionRegistrations,
   ExtensionInfo,
 } from "./types.js";
@@ -182,11 +182,12 @@ export class ExtensionRunner {
   /** name → owning extension id, to unregister only the owner's artifact on disable. */
   private toolOwners = new Map<string, string>();
   private commandOwners = new Map<string, string>();
-  private turnContextProviders = new Set<TurnContextProvider>();
+  /** Per-extension context injection (extension id → provider). */
+  private contextProviders = new Map<string, ExtensionContextProvider>();
   /**
-   * Persistent "this extension is disabled" notices keyed by extension id.
-   * Injected into turn-context so the model isn't left guessing that tools it
-   * previously had are gone; cleared when the extension is re-enabled.
+   * Persistent "this extension is disabled" notices keyed by extension id
+   * (captured from a provider's `disabledContent` at disable time, since destroy
+   * unsubscribes the provider). Cleared when the extension is re-enabled.
    */
   private disabledExtensionNotices = new Map<string, string>();
   private eventBus: DefaultExtensionEventBus;
@@ -259,13 +260,10 @@ export class ExtensionRunner {
   }
 
   /**
-   * Emit `before_agent_start` to each interceptor with a fresh event, then run turn-context
-   * providers. Returns concatenated append-only segments.
+   * Emit `before_agent_start` to each interceptor (observable event), then run
+   * registered context providers. Returns per-extension turn-context sections.
    */
   async collectBeforeAgentStart(prompt: string, sessionId: string): Promise<ExtensionPromptAppends> {
-    const turnParts: string[] = [];
-    const systemParts: string[] = [];
-
     const handlers = this.eventBus.getHandlers("before_agent_start");
     for (const handler of handlers) {
       const event: BeforeAgentStartEvent = {
@@ -274,37 +272,28 @@ export class ExtensionRunner {
         defaultReturn: undefined,
       };
       await handler(event);
-      if (event.appendTurnContext?.trim()) {
-        turnParts.push(event.appendTurnContext.trim());
-      }
-      if (event.appendSystemPrompt?.trim()) {
-        systemParts.push(event.appendSystemPrompt.trim());
-      }
     }
 
-    for (const provider of this.turnContextProviders) {
+    // Each enabled extension with content becomes its own section (kind = id).
+    const turnContextSections: ExtensionTurnContextSection[] = [];
+    for (const [id, provider] of this.contextProviders) {
       try {
-        const value = await provider();
-        if (value?.trim()) {
-          turnParts.push(value.trim());
-        }
+        const value = await provider.content?.();
+        if (value?.trim()) turnContextSections.push({ id, content: value.trim() });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[extension] turn context provider failed: ${message}`);
       }
     }
-
-    // Surface runtime-disabled extensions so the model knows their tools are gone
-    // (asymmetric to enable-side guidance). Hash-dedup below means this only
-    // re-injects when the set actually changes.
-    for (const notice of this.disabledExtensionNotices.values()) {
-      if (notice?.trim()) turnParts.push(notice.trim());
+    // Surface runtime-disabled extensions under the same tag so the model knows
+    // their tools are gone (symmetric to the enable-side section). A disabled
+    // extension's providers were already unsubscribed on destroy, so its id never
+    // also appears above.
+    for (const [id, notice] of this.disabledExtensionNotices) {
+      if (notice?.trim()) turnContextSections.push({ id, content: notice.trim() });
     }
 
-    return {
-      turnContext: joinExtensionAppendSegments(...turnParts),
-      systemAppend: joinExtensionAppendSegments(...systemParts),
-    };
+    return { turnContextSections };
   }
 
   async loadExtension(api: ExtensionAPI, config?: ExtensionConfig): Promise<ExtensionInstance> {
@@ -376,7 +365,7 @@ export class ExtensionRunner {
     this.commandRegistry.clear();
     this.toolOwners.clear();
     this.commandOwners.clear();
-    this.turnContextProviders.clear();
+    this.contextProviders.clear();
     this.disabledExtensionNotices.clear();
     this.ui.clearAllStatus();
   }
@@ -431,11 +420,14 @@ export class ExtensionRunner {
       }
     }
 
+    // Capture the provider's disabledContent BEFORE destroy (destroy unsubscribes
+    // it). Undefined/absent falls back to a generic notice so non-customizing
+    // extensions stay informative; an empty string explicitly opts out.
+    const provider = this.contextProviders.get(instance.api.id);
+    const custom =
+      provider?.disabledContent === undefined ? undefined : ((await provider.disabledContent()) ?? undefined);
+
     await this.destroyExtension(instance);
-    // Let the extension customize the disable notice. Undefined (no method / returns
-    // undefined) falls back to a generic notice so non-customizing extensions stay
-    // informative; an empty string explicitly opts out (inject nothing).
-    const custom = instance.api.disabledNotice?.();
     const notice =
       custom === undefined
         ? `Extension "${instance.api.name ?? id}" is disabled — its tools and commands are unavailable.`
@@ -515,10 +507,10 @@ export class ExtensionRunner {
         return unsub;
       },
 
-      registerTurnContextProvider: (fn: TurnContextProvider): (() => void) => {
-        this.turnContextProviders.add(fn);
+      registerContextProvider: (provider: ExtensionContextProvider): (() => void) => {
+        this.contextProviders.set(api.id, provider);
         const unsub = () => {
-          this.turnContextProviders.delete(fn);
+          if (this.contextProviders.get(api.id) === provider) this.contextProviders.delete(api.id);
         };
         registrations?.unsubTurnContext.push(unsub);
         return unsub;

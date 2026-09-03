@@ -55,7 +55,6 @@ export type AgentEventPayloadMap = {
   "prompt:before": {
     prompt?: string;
     hasTurnContext?: boolean;
-    hasSystemAppend?: boolean;
   };
   "agent:thinking": EmptyAgentEventPayload;
   "agent:tool-start": {

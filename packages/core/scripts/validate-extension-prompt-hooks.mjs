@@ -1,17 +1,13 @@
 /**
- * Validation for extension prompt-hook helpers (join + collectBeforeAgentStart).
+ * Validation for extension per-extension turn-context injection
+ * (`registerContextProvider` + `collectBeforeAgentStart`).
  *
  * Run: pnpm --filter @my-agent/core run validate:extension-prompt-hooks
  */
 
 import assert from "node:assert/strict";
 
-import { ExtensionRunner, joinExtensionAppendSegments } from "../dist/dev.mjs";
-
-assert.equal(joinExtensionAppendSegments(), undefined);
-assert.equal(joinExtensionAppendSegments("  ", null, undefined), undefined);
-assert.equal(joinExtensionAppendSegments("A", "B"), "A\n\nB");
-assert.equal(joinExtensionAppendSegments("  A  ", "", "B"), "A\n\nB");
+import { ExtensionRunner } from "../dist/dev.mjs";
 
 const runner = new ExtensionRunner({ getEnvVar: () => undefined });
 
@@ -21,11 +17,7 @@ await runner.loadExtension({
   version: "1.0.0",
   description: "first",
   activate(ctx) {
-    ctx.registerInterceptor("before_agent_start", (event) => {
-      event.appendTurnContext = "turn-A";
-      event.appendSystemPrompt = "sys-A";
-    });
-    ctx.registerTurnContextProvider(() => "provider-A");
+    ctx.registerContextProvider({ content: () => "provider-A" });
   },
 });
 
@@ -35,22 +27,23 @@ await runner.loadExtension({
   version: "1.0.0",
   description: "second",
   activate(ctx) {
-    ctx.registerInterceptor("before_agent_start", (event) => {
-      event.appendTurnContext = "turn-B";
-      event.appendSystemPrompt = "   ";
-    });
-    ctx.registerTurnContextProvider(() => undefined);
+    ctx.registerContextProvider({ content: () => undefined });
   },
 });
 
 const collected = await runner.collectBeforeAgentStart("hello world", "agent-1");
-// Handlers first (registration order), then providers (registration order).
-assert.equal(collected.turnContext, "turn-A\n\nturn-B\n\nprovider-A");
-assert.equal(collected.systemAppend, "sys-A");
+// Only non-empty content surfaces; each extension is its own section keyed by id.
+assert.deepEqual(collected.turnContextSections, [{ id: "ext-a", content: "provider-A" }]);
+
+// Disabling ext-a keeps its tag but swaps in the disabled notice.
+await runner.setEnabled("ext-a", false);
+const afterDisable = await runner.collectBeforeAgentStart("x", "id");
+assert.deepEqual(afterDisable.turnContextSections, [
+  { id: "ext-a", content: 'Extension "A" is disabled — its tools and commands are unavailable.' },
+]);
 
 const emptyRunner = new ExtensionRunner({ getEnvVar: () => undefined });
 const empty = await emptyRunner.collectBeforeAgentStart("x", "id");
-assert.equal(empty.turnContext, undefined);
-assert.equal(empty.systemAppend, undefined);
+assert.deepEqual(empty.turnContextSections, []);
 
 console.log("extension-prompt-hooks validation passed");

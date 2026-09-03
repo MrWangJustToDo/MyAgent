@@ -152,23 +152,48 @@ export interface BeforeAgentStartPayload {
 
 /**
  * Interceptable event fired once per user prompt before turn-context snapshot.
- * Handlers mutate `appendTurnContext` / `appendSystemPrompt`; the runner concatenates
- * contributions across handlers (append-only — does not replace the frozen system prompt).
+ * Observable for extensions that want to react to the start of a user turn.
  */
 export interface BeforeAgentStartEvent extends InterceptableEvent<BeforeAgentStartPayload> {
   type: "before_agent_start";
   payload: BeforeAgentStartPayload;
-  /** Appended into the `<extension_context>` ctx section for this user turn. */
-  appendTurnContext?: string;
-  /** Appended after DYNAMIC_BOUNDARY for this turn only (outside ctx sections). */
-  appendSystemPrompt?: string;
 }
 
 export type TurnContextProvider = () => string | undefined | Promise<string | undefined>;
 
+/**
+ * Per-extension context injection (the single unified injection API).
+ *
+ * Register once via {@link ExtensionContext.registerContextProvider}; the runner
+ * emits this extension as its own `<ctx kind=<extension id>>` section each user
+ * turn. `content` is injected while enabled; `disabledContent` replaces it when
+ * the extension is disabled at runtime — both share the same tag, so the model
+ * sees enable/disable symmetrically.
+ */
+export interface ExtensionContextProvider {
+  /** Injected each user turn while the extension is enabled. */
+  content?: TurnContextProvider;
+  /** Injected (under the same `<ctx kind=<id>>` tag) when the extension is disabled. */
+  disabledContent?: TurnContextProvider;
+}
+
+/**
+ * One extension's contribution to per-turn context. Each enabled extension is
+ * emitted as its own `<ctx kind=<extension id>>` section so enable/disable is
+ * expressed symmetrically under the same tag (and only that section re-injects
+ * when its content changes — prompt-cache friendly).
+ */
+export interface ExtensionTurnContextSection {
+  /** Extension id — used directly as the `<ctx kind=...>` tag. */
+  id: string;
+  /** Rendered content. For an enabled extension this is its injected content
+   *  (e.g. `<memory_index>`); for a disabled extension it is the disabled notice. */
+  content: string;
+}
+
 export interface ExtensionPromptAppends {
-  turnContext?: string;
-  systemAppend?: string;
+  /** Per-extension turn-context sections (each emitted under its own kind). */
+  turnContextSections?: ExtensionTurnContextSection[];
 }
 
 // ============================================================================
@@ -260,10 +285,11 @@ export interface ExtensionContext {
   registerCommand(cmd: ExtensionCommand): void;
   registerInterceptor<T extends InterceptableEvent>(eventType: string, handler: EventInterceptor<T>): () => void;
   /**
-   * Register a callback that contributes turn-context text each user turn.
-   * Returns an unsubscribe function.
+   * Register this extension's per-turn context injection (enabled content + disabled
+   * notice) in one call. Each user turn the runner emits this extension as its own
+   * `<ctx kind=<extension id>>` section. Returns an unsubscribe function.
    */
-  registerTurnContextProvider(fn: TurnContextProvider): () => void;
+  registerContextProvider(provider: ExtensionContextProvider): () => void;
 
   events: ExtensionEventBus;
   ui: ExtensionUI;
@@ -287,15 +313,6 @@ export interface ExtensionAPI {
 
   activate(ctx: ExtensionContext): Promise<void> | void;
   deactivate?(): Promise<void> | void;
-
-  /**
-   * Optional notice injected into turn-context when this extension is disabled at
-   * runtime (via `setEnabled(false)`), so the model knows its tools/commands are
-   * gone. Return a string to customize what the model sees; return empty/undefined
-   * to fall back to the runner's default notice. Called only when disabling, never
-   * for config-level opt-out (where the extension is never created).
-   */
-  disabledNotice?(): string | void;
 }
 
 export interface ExtensionFactory {

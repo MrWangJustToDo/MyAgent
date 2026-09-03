@@ -84,6 +84,7 @@ import type {
   ExtensionRunner,
   ExtensionToolDefinition,
 } from "../agent/extension";
+import type { ExtensionTurnContextSection } from "../agent/extension/types.js";
 import type { LspExtensionConfig } from "../agent/lsp";
 import type { McpExtensionConfig } from "../agent/mcp";
 import type { McpManager } from "../agent/mcp/manager.js";
@@ -334,10 +335,8 @@ export class ManagedAgent {
   agentDocSource: string;
   private frozenSystemPrompt: string | undefined;
   private systemPromptFrozen: boolean;
-  /** Extension append-only text for the current user turn (own `extension_system_append` section). */
-  private extensionSystemAppendSnapshot: string | undefined;
-  /** Pending extension turn-context text collected in prepareForRun (before injection). */
-  private pendingExtensionTurnContext: string | undefined;
+  /** Pending per-extension turn-context sections collected in prepareForRun (before injection). */
+  private pendingExtensionTurnContextSections: ExtensionTurnContextSection[] | undefined;
   /** Latest admitted hash per section kind (restore-seeded; only changed kinds re-admit). */
   private lastAdmittedTurnContextHashes: Map<string, string> | undefined;
   /** Message count at the last context admit (for periodic refresh; state owned by turn-context middleware). */
@@ -895,20 +894,17 @@ export class ManagedAgent {
    * Runs in prepareForRun; the turn-context middleware consumes the results at onConfig.
    */
   async collectExtensionPromptHooks(prompt: string): Promise<void> {
-    this.pendingExtensionTurnContext = undefined;
-    this.extensionSystemAppendSnapshot = undefined;
+    this.pendingExtensionTurnContextSections = undefined;
 
     const runner = this.extensionRunner;
     if (!runner) return;
 
     const collected = await runner.collectBeforeAgentStart(prompt, this.id);
-    this.pendingExtensionTurnContext = collected.turnContext;
-    this.extensionSystemAppendSnapshot = collected.systemAppend;
+    this.pendingExtensionTurnContextSections = collected.turnContextSections;
 
     this.emitEvent("prompt:before", {
       prompt,
-      hasTurnContext: Boolean(collected.turnContext),
-      hasSystemAppend: Boolean(collected.systemAppend),
+      hasTurnContext: Boolean(collected.turnContextSections?.length),
     });
   }
 
@@ -922,8 +918,7 @@ export class ManagedAgent {
 
   clearTurnContext(): void {
     this.memory.clearTurnContext();
-    this.extensionSystemAppendSnapshot = undefined;
-    this.pendingExtensionTurnContext = undefined;
+    this.pendingExtensionTurnContextSections = undefined;
     // NOTE: instructionContextState / instructionContextActive intentionally NOT
     // reset here — like lastAdmittedTurnContextHashes they must survive across user
     // turns (clearTurnContext runs at every turn finalize). Otherwise every turn
@@ -973,16 +968,9 @@ export class ManagedAgent {
       gitBranch,
       gitStatus,
       modeContent,
-      extensionTurnContext: this.pendingExtensionTurnContext,
+      extensionTurnContextSections: this.pendingExtensionTurnContextSections,
       instructionContext,
     });
-    const append = this.extensionSystemAppendSnapshot?.trim();
-    if (append) {
-      sections.push({
-        key: "extension_system_append",
-        content: ["<extension_system_append>", append, "</extension_system_append>"].join("\n"),
-      });
-    }
     return sections;
   }
 
@@ -1313,8 +1301,7 @@ export class ManagedAgent {
     this.retryInfo = null;
     this.pendingApprovalCount = 0;
     this.memory.resetState();
-    this.extensionSystemAppendSnapshot = undefined;
-    this.pendingExtensionTurnContext = undefined;
+    this.pendingExtensionTurnContextSections = undefined;
     this.log?.clear();
     this.usage.reset();
     this.todoManager?.reset();

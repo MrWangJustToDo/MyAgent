@@ -609,13 +609,19 @@ Recovery / continuation always re-reads `managed.ui.getMessages()` (not a closed
 
 ## 7. Memory flow
 
-### 7.1 Static index (bootstrap → system prompt)
+### 7.1 Index build + per-turn injection (not frozen)
 
 ```
 MemoryManager.initialize()     // .agents/memory/*.md + MEMORY.md
-buildManagedAgent → setMemoryContent(index)
-buildFrozenSystemPrompt → <memory_index> in frozen system prompt
+createMemoryExtension → ctx.registerContextProvider({ content: () => <memory_index> })
+collectBeforeAgentStart (per user turn) → <ctx kind=my-agent-memory> section
 ```
+
+The memory index (`<memory_index>`) is **not** frozen into the system prompt — it is
+injected per-turn by the built-in Memory extension via `registerContextProvider`, so
+freshly extracted memories surface without waiting for compaction. The index is captured
+at snapshot time by re-evaluating the provider each user turn and hash-diffed like any
+other `<ctx kind=...>` section (only changed index re-injects).
 
 ### 7.2 Per-turn prefetch (before each run)
 
@@ -744,9 +750,11 @@ The ExtensionEventBus also carries **session lifecycle events** (distinct from t
 
 **Per-turn prompt hooks:** On each root user prompt (not tool continuations / subagents), `prepareForRun` calls `ExtensionRunner.collectBeforeAgentStart`, which:
 
-1. Runs `before_agent_start` interceptors (fresh event per handler; `appendTurnContext` / `appendSystemPrompt` are chained append-only).
-2. Runs `registerTurnContextProvider` callbacks.
-3. Merges turn-context text into `<extension_context>` inside the dynamic turn snapshot; `appendSystemPrompt` is merged into the same synthetic ctx user message payload (frozen system stays cacheable).
+1. Runs `before_agent_start` interceptors (observable event only — a fresh event per handler).
+2. Runs each enabled extension's `registerContextProvider({ content })` (only non-empty content emits).
+3. Emits each extension's turn-context text as its **own** `<ctx kind=<extension id>>` section in the dynamic turn snapshot (enable and disable share the same tag — an enabled extension carries its injected `content`, a disabled one carries only its `disabledContent` notice). Per-extension kinds keep the per-kind hash admission granular (only the changed extension re-injects, which is prompt-cache friendly).
+
+There is no system-prompt append channel (`extension_system_append` was removed): extensions inject exclusively through `registerContextProvider`, so the frozen system prompt stays byte-stable and cacheable.
 
 ## Repo demos live in `examples/extensions/` and are **opt-in** via `AGENT_EXTENSION_DIRS`, `ManagedAgentConfig.extensionDirs`, or CLI `--extension-dirs` (not in core defaults). Extension `registerCommand()` is mirrored onto `ManagedAgent` and synced into app slash commands after bootstrap (`syncExtensionCommands`). Built-in names (`/help`, …) win over extension conflicts. `registerTool()` converts definitions via `defineServerTool` before they enter the TanStack tool set. Tool schemas may use **`ctx.z`** (host Zod) or any Standard-Schema / JSON-Schema-compliant schema (the `inputSchema`/`outputSchema` type is the widened `SchemaInput`). `tool:after:*` interceptors can set `event.payload.modifiedResult` to replace the model-facing result. `ExtensionUI.setStatus(key, text)` publishes a `set-status` notification the app footer renders, and `ctx.ui.theme.fg(color, text)` returns a plain (host-rendered) colored string. Each `ExtensionContext` also exposes `ctx.coreEnv` (the runtime CoreEnv: `rootPath`, `fs`, `runCommand`, `exec`, `fetch`, `path`, `getEnv`) so extensions do real I/O without importing host-specific APIs — `agent-factory.ts` wires it from the global `getEnv()`. `ExtensionRunner.getExtensionInfos()` + `setEnabled(id, enabled)` power the app **Extensions panel** (`Ctrl+Y`, list / toggle enable-disable); disabling calls `deactivate()` and unregisters the extension's tools, commands, interceptors, and turn-context providers (wired via `onUnregisterTool`/`onUnregisterCommand` → `ManagedAgent.unregisterExtensionTool/Command`).
 

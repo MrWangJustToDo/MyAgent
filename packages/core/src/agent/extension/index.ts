@@ -1,6 +1,5 @@
 export { ExtensionRunner } from "./runner.js";
 export { ExtensionLoader, normalizeExtensionExport } from "./loader.js";
-export { joinExtensionAppendSegments } from "./join-append-segments.js";
 export {
   DEFAULT_EXTENSION_DIR,
   EXTENSION_DIRS_ENV_VAR,
@@ -39,5 +38,7 @@ export type {
   SessionShutdownPayload,
   ExtensionInfo,
   ExtensionPromptAppends,
+  ExtensionTurnContextSection,
+  ExtensionContextProvider,
   TurnContextProvider,
 } from "./types.js";

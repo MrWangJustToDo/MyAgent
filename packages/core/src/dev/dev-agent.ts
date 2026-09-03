@@ -157,7 +157,6 @@ export {
   pathToFileUrl,
   DEFAULT_EXTENSION_DIR,
   getDefaultExtensionDirs,
-  joinExtensionAppendSegments,
 } from "../agent/extension";
 export { buildAutoModePrompt } from "../agent/approval/auto-mode-prompt.js";
 export {

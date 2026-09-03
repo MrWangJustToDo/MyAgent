@@ -1,31 +1,32 @@
 /**
- * Validation for the extension-API-driven disabled-notice (`ExtensionAPI.disabledNotice`).
+ * Validation for the unified `registerContextProvider({ content, disabledContent })`
+ * disabled-notice semantics.
  *
- * Verifies that disabling at runtime injects the extension's custom notice into
- * turn-context; that undefined/absent falls back to a generic notice; that an empty
- * string opts out entirely; and that re-enabling clears the notice.
+ * Verifies that disabling at runtime injects the extension's custom disabledContent
+ * into turn-context under the same kind tag; that undefined/absent falls back to a
+ * generic notice; that an empty string opts out entirely; and that re-enabling
+ * clears the notice.
  *
  * Run: pnpm --filter @my-agent/core run validate:extension-disable-notice
  */
 
 import assert from "node:assert/strict";
 
-import {
-  ExtensionRunner,
-  createCodeModeExtension,
-  createLspExtension,
-  createMcpExtension,
-  createMemoryExtension,
-  createSkillsExtension,
-} from "../dist/dev.mjs";
+import { ExtensionRunner } from "../dist/dev.mjs";
 
 async function collect(runner, id) {
   await runner.setEnabled(id, false);
   const collected = await runner.collectBeforeAgentStart("x", "id");
-  return collected.turnContext ?? "";
+  return collected.turnContextSections ?? [];
 }
 
-// 1. Custom notice via disabledNotice().
+async function disableText(runner, id) {
+  const sections = await collect(runner, id);
+  const section = sections.find((s) => s.id === id);
+  return section?.content ?? "";
+}
+
+// 1. Custom disabledContent via registerContextProvider({ disabledContent }).
 {
   const runner = new ExtensionRunner({ getEnvVar: () => undefined });
   await runner.loadExtension({
@@ -33,17 +34,22 @@ async function collect(runner, id) {
     name: "Custom Ext",
     version: "1.0.0",
     description: "custom notice",
-    activate() {},
-    disabledNotice() {
-      return "Custom ext is switched off — its widgets are gone.";
+    activate(ctx) {
+      ctx.registerContextProvider({
+        content: () => "widgets on",
+        disabledContent: () => "Custom ext is switched off — its widgets are gone.",
+      });
     },
   });
-  const text = await collect(runner, "custom");
-  assert.match(text, /Custom ext is switched off/);
-  assert.ok(!/disabled — its tools/.test(text), "should use custom, not default");
+  // Enabled: content injected under its own kind.
+  const enabled = await runner.collectBeforeAgentStart("x", "id");
+  assert.deepEqual(enabled.turnContextSections, [{ id: "custom", content: "widgets on" }]);
+  // Disabled: same tag, disabled notice only.
+  const text = await disableText(runner, "custom");
+  assert.equal(text, "Custom ext is switched off — its widgets are gone.");
 }
 
-// 2. No disabledNotice -> generic default (still informative).
+// 2. No disabledContent -> generic default (still informative).
 {
   const runner = new ExtensionRunner({ getEnvVar: () => undefined });
   await runner.loadExtension({
@@ -51,9 +57,11 @@ async function collect(runner, id) {
     name: "Plain Ext",
     version: "1.0.0",
     description: "no custom notice",
-    activate() {},
+    activate(ctx) {
+      ctx.registerContextProvider({ content: () => "active" });
+    },
   });
-  const text = await collect(runner, "plain");
+  const text = await disableText(runner, "plain");
   assert.match(text, /Plain Ext.*is disabled/);
 }
 
@@ -65,16 +73,18 @@ async function collect(runner, id) {
     name: "Muted Ext",
     version: "1.0.0",
     description: "silent on disable",
-    activate() {},
-    disabledNotice() {
-      return "   ";
+    activate(ctx) {
+      ctx.registerContextProvider({
+        content: () => "active",
+        disabledContent: () => "   ",
+      });
     },
   });
-  const text = await collect(runner, "muted");
-  assert.equal(text, "", "empty/whitespace disabledNotice should inject nothing");
+  const text = await disableText(runner, "muted");
+  assert.equal(text, "", "empty/whitespace disabledContent should inject nothing");
 }
 
-// 4. Re-enabling clears the notice.
+// 4. Re-enabling clears the notice and restores the content under the same tag.
 {
   const runner = new ExtensionRunner({ getEnvVar: () => undefined });
   await runner.loadExtension({
@@ -82,37 +92,19 @@ async function collect(runner, id) {
     name: "Toggle Ext",
     version: "1.0.0",
     description: "clear on enable",
-    activate() {},
-    disabledNotice() {
-      return "toggle is off";
+    activate(ctx) {
+      ctx.registerContextProvider({
+        content: () => "toggle active",
+        disabledContent: () => "toggle is off",
+      });
     },
   });
   await runner.setEnabled("toggle", false);
   const off = await runner.collectBeforeAgentStart("x", "id");
-  assert.match(off.turnContext ?? "", /toggle is off/);
+  assert.match(off.turnContextSections?.[0]?.content ?? "", /toggle is off/);
   await runner.setEnabled("toggle", true);
   const on = await runner.collectBeforeAgentStart("x", "id");
-  assert.equal(on.turnContext ?? "", "", "notice cleared after re-enable");
-}
-
-// 5. All built-in extensions define a custom disabledNotice (extension-API mode).
-//    Only lsp/code-mode have no injected deps; the rest use stub managers since
-//    disabledNotice() is a pure method that never touches them.
-{
-  const stubs = {}; // managers are unused by disabledNotice()
-  const builtins = [
-    createLspExtension(),
-    createCodeModeExtension(),
-    createMemoryExtension({ memoryManager: stubs }),
-    createSkillsExtension({ skillRegistry: stubs }),
-    createMcpExtension({ mcpManager: stubs }),
-  ];
-  for (const api of builtins) {
-    assert.equal(typeof api.disabledNotice, "function", `${api.id} must expose disabledNotice()`);
-    const text = api.disabledNotice?.();
-    assert.equal(typeof text, "string");
-    assert.ok(text.trim().length > 0, `${api.id} disabledNotice() must be non-empty`);
-  }
+  assert.deepEqual(on.turnContextSections, [{ id: "toggle", content: "toggle active" }]);
 }
 
 console.log("extension-disable-notice validation passed");

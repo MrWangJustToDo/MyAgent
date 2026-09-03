@@ -75,8 +75,7 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
     category: "chat",
     formatMessage: (event) => {
       const hasTurn = p(event).hasTurnContext ? "turn+ctx" : "no-turn-ctx";
-      const hasSys = p(event).hasSystemAppend ? "sys+append" : "no-sys-append";
-      return `Extension prompt hooks (${hasTurn}, ${hasSys})`;
+      return `Extension prompt hooks (${hasTurn})`;
     },
   },
   "turn:summary": {

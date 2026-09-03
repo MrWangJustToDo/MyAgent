@@ -232,6 +232,8 @@ export type {
   BeforeAgentStartEvent,
   BeforeAgentStartPayload,
   ExtensionPromptAppends,
+  ExtensionTurnContextSection,
+  ExtensionContextProvider,
   TurnContextProvider,
   ExtensionInfo,
 } from "./agent/extension";

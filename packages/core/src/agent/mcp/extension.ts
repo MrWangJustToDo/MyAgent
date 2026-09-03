@@ -37,13 +37,14 @@ export function createMcpExtension(options: CreateMcpExtensionOptions): Extensio
     description:
       "Model Context Protocol: connect external MCP servers over stdio/SSE/HTTP and expose their tools (mcp__<server>_<tool>) plus the /mcp status command",
     async activate(ctx) {
+      ctx.registerContextProvider({
+        disabledContent: () =>
+          "MCP extension is disabled — external MCP servers (mcp__<server>_<tool>) and the /mcp status command are unavailable.",
+      });
       await activateMcp(ctx, mcpManager, configPath);
     },
     deactivate() {
       return mcpManager.shutdown();
-    },
-    disabledNotice() {
-      return "MCP extension is disabled — external MCP servers (mcp__<server>_<tool>) and the /mcp status command are unavailable.";
     },
   };
 }

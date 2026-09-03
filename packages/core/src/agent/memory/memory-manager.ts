@@ -2,7 +2,8 @@
  * MemoryManager - Manages persistent cross-session memory files.
  *
  * Stores memories as markdown files with YAML frontmatter in `.agents/memory/`.
- * Auto-generates a `MEMORY.md` index that is injected into the system prompt.
+ * Auto-generates a `MEMORY.md` index that is injected per-turn as the
+ * `<memory_index>` section by the built-in Memory extension.
  *
  * Uses getEnv().fs for all I/O.
  *
@@ -128,7 +129,8 @@ export class MemoryManager {
 
   /**
    * Get the cached MEMORY.md index content (synchronous).
-   * This is what gets injected into the system prompt.
+   * This is what gets injected per-turn as the `<memory_index>` section by the
+   * built-in Memory extension's `registerContextProvider`.
    */
   getIndexContent(): string {
     return this.cachedIndex;

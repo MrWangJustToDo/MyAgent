@@ -62,12 +62,15 @@ const sections = buildTurnContextSections({
   relevantMemoryContent: "<relevant_memories>m</relevant_memories>",
   todoNagReminder: "<reminder>nag</reminder>",
   modeContent: '<plan_mode phase="planning">plan</plan_mode>',
-  extensionTurnContext: "ext",
+  extensionTurnContextSections: [{ id: "my-agent-memory", content: "<memory_index>m</memory_index>" }],
 });
 assert.deepEqual(
   sections.map((s) => s.key),
-  ["current_date", "git_status", "relevant_memories", "reminder", "mode", "extension_context"]
+  ["current_date", "git_status", "relevant_memories", "reminder", "mode", "my-agent-memory"]
 );
+// Each extension gets its own kind tag (enable/disable share the same tag).
+const memorySection = sections.find((s) => s.key === "my-agent-memory");
+assert.ok(memorySection?.content.includes("<memory_index>"), "extension content kept under its own kind");
 const modeSection = sections.find((s) => s.key === "mode");
 assert.ok(modeSection?.content.startsWith("<plan_mode"));
 assert.ok(!modeSection?.content.includes("<auto_mode>"), "plan wins over auto in mode category");
@@ -105,7 +108,15 @@ assert.match(tm.getNagReminder(7), /unchanged for 7 rounds/);
 // Nag throttling: after a nag, shouldNag() stays false until `nagCooldownRounds`
 // more rounds elapse (token saving), then re-fires; an update resets the throttle.
 const tm2 = new TodoManager({
-  log: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, agent: () => {}, todo: () => {}, clear: () => {} },
+  log: {
+    debug: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+    agent: () => {},
+    todo: () => {},
+    clear: () => {},
+  },
 });
 tm2.update([{ content: "A", status: "in_progress", priority: "high" }], "Plan");
 assert.equal(tm2.shouldNag(), false, "below threshold -> no nag");
@@ -313,9 +324,9 @@ assert.equal(findCutPoint(modelMessages, 2), 3, "skip ctx message; cut on Second
 assert.deepEqual([...SUBAGENT_ALLOWED_KINDS].sort(), ["current_date", "git_status", "project_instructions"]);
 assert.ok(!SUBAGENT_ALLOWED_KINDS.has("relevant_memories"), "no memory for subagents");
 assert.ok(!SUBAGENT_ALLOWED_KINDS.has("mode"), "no plan/auto for subagents");
-assert.ok(!SUBAGENT_ALLOWED_KINDS.has("extension_context"), "no extension context for subagents");
+assert.ok(!SUBAGENT_ALLOWED_KINDS.has("my-agent-memory"), "no extension context for subagents");
 assert.ok(!SUBAGENT_ALLOWED_KINDS.has("instruction_context"), "no instruction context for subagents");
-assert.ok(!SUBAGENT_ALLOWED_KINDS.has("extension_system_append"), "no extension append for subagents");
+assert.ok(!SUBAGENT_ALLOWED_KINDS.has("extension_system_append"), "no extension append channel for subagents");
 
 // Shell prefix constant is the single detection anchor.
 assert.equal(CONTEXT_OPEN_PREFIX, "<ctx kind=");

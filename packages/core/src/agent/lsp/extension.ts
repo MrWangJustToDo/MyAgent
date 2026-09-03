@@ -92,9 +92,6 @@ export function createLspExtension(options?: LspExtensionConfig): ExtensionAPI {
     async activate(ctx) {
       await activateLsp(ctx, options);
     },
-    disabledNotice() {
-      return "LSP integration is disabled — language tooling (diagnostics, hover, definition, references, rename, completions) and auto file-sync are unavailable.";
-    },
   };
 }
 
@@ -619,7 +616,11 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
         `${advertisedLazy.join(", ")} are lazy tools — discover them via ${DISCOVERY_TOOL_NAME} before calling`
       );
     const guidance = `${scope} tools: ${parts.join("; ")}. After editing code, call lsp_diagnostics to check for ${errorKind}.`;
-    ctx.registerTurnContextProvider(() => guidance);
+    ctx.registerContextProvider({
+      content: () => guidance,
+      disabledContent: () =>
+        "LSP integration is disabled — language tooling (diagnostics, hover, definition, references, rename, completions) and auto file-sync are unavailable.",
+    });
   }
 
   ctx.logger.info("LSP extension activated");

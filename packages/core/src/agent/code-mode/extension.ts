@@ -19,12 +19,7 @@
  */
 import { createCodeMode } from "@tanstack/ai-code-mode";
 
-import type {
-  BeforeAgentStartEvent,
-  ExtensionAPI,
-  ExtensionToolDefinition,
-  ToolCallResult,
-} from "../extension/types.js";
+import type { ExtensionAPI, ExtensionToolDefinition, ToolCallResult } from "../extension/types.js";
 import type { AnyServerTool, LazyToolsConfig, SchemaInput } from "@tanstack/ai";
 import type { CodeModeTool } from "@tanstack/ai-code-mode";
 
@@ -138,13 +133,13 @@ export function createCodeModeExtension(options: CodeModeExtensionConfig = {}): 
         ctx.registerTool(toExtensionTool(discoveryTool));
       }
 
-      // Inject code-mode system prompt guidance each turn.
-      ctx.registerInterceptor<BeforeAgentStartEvent>("before_agent_start", (event) => {
-        event.appendSystemPrompt = systemPrompt;
+      // Inject code-mode guidance each turn as its own context section. Disabled
+      // content keeps the model informed that the tools are gone.
+      ctx.registerContextProvider({
+        content: () => systemPrompt,
+        disabledContent: () =>
+          "Code Mode extension is disabled — sandboxed TypeScript execution (execute_typescript) is unavailable.",
       });
-    },
-    disabledNotice() {
-      return "Code Mode extension is disabled — sandboxed TypeScript execution (execute_typescript) is unavailable.";
     },
   };
 }

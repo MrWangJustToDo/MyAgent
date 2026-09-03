@@ -86,15 +86,15 @@ assert.equal(typeof api.activate, "function", "extension has activate");
 // ---------------------------------------------------------------------------
 const registeredTools = [];
 const registeredCommands = [];
-let turnContextProvider = null;
+let contextProvider = null;
 
 const mockCtx = {
   z: (await import("zod")).z,
   registerTool: (def) => registeredTools.push(def),
   registerCommand: (cmd) => registeredCommands.push(cmd),
   registerInterceptor: () => () => {},
-  registerTurnContextProvider: (fn) => {
-    turnContextProvider = fn;
+  registerContextProvider: (provider) => {
+    contextProvider = provider;
     return () => {};
   },
   logger: { info: () => {}, warn: () => {}, error: () => {} },
@@ -107,8 +107,8 @@ assert.ok(toolNames.includes("memory_list"), "registers memory_list");
 assert.ok(toolNames.includes("memory_read"), "registers memory_read");
 assert.ok(toolNames.includes("memory_write"), "registers memory_write");
 
-assert.ok(turnContextProvider, "registers a turn-context provider");
-const index = await turnContextProvider();
+assert.ok(contextProvider, "registers a context provider");
+const index = await contextProvider.content();
 assert.ok(index.includes("<memory_index>"), "turn-context index wraps <memory_index>");
 assert.ok(index.includes("user-prefers-tabs"), "turn-context index lists the written memory");
 
@@ -202,8 +202,8 @@ await toolsOnlyApi.activate({
   registerTool: (def) => toolsOnlyTools.push(def),
   registerCommand: (cmd) => toolsOnlyCommands.push(cmd),
   registerInterceptor: () => () => {},
-  registerTurnContextProvider: (fn) => {
-    toolsOnlyProvider = fn;
+  registerContextProvider: (provider) => {
+    toolsOnlyProvider = provider;
   },
   logger: { info: () => {}, warn: () => {}, error: () => {} },
 });
@@ -225,7 +225,7 @@ await indexOnlyApi.activate({
   registerTool: (def) => indexOnlyTools.push(def),
   registerCommand: (cmd) => indexOnlyCommands.push(cmd),
   registerInterceptor: () => () => {},
-  registerTurnContextProvider: () => () => {},
+  registerContextProvider: () => () => {},
   logger: { info: () => {}, warn: () => {}, error: () => {} },
 });
 assert.equal(indexOnlyTools.length, 0, "toolsDisabled removes all three tools");

@@ -1,6 +1,7 @@
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/cache/prompt-cache.js";
 
 import type { AgentConfig } from "./agent-types.js";
+import type { ExtensionTurnContextSection } from "../agent/extension/types.js";
 import type { TurnContextSection } from "../agent/turn-context/turn-context-message.js";
 
 export { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/cache/prompt-cache.js";
@@ -31,7 +32,7 @@ export function buildFrozenSystemPrompt(input: SystemPromptInput): string | unde
   }
 
   // NOTE: the memory index (<memory_index>) is no longer frozen here — it is
-  // injected per-turn by the built-in Memory extension via `registerTurnContextProvider`
+  // injected per-turn by the built-in Memory extension via `registerContextProvider`
   // so freshly extracted memories surface without waiting for compaction.
 
   const joined = parts.length > 0 ? parts.join("\n\n") : undefined;
@@ -50,8 +51,9 @@ export interface DynamicTurnContextInput {
   /** Mode section content — plan/auto instructions, or an explicit inactive
    *  declaration so mode exits are communicated and re-entries re-inject. */
   modeContent?: string;
-  /** Extension-contributed situational context (nested under `<extension_context>`). */
-  extensionTurnContext?: string;
+  /** Extension-contributed situational context. Each entry is emitted as its
+   *  own `<ctx kind=<extension id>>` section (enable/disable share the same tag). */
+  extensionTurnContextSections?: ExtensionTurnContextSection[];
   /** Instruction-context re-injection (nested under `<instruction_context>`). */
   instructionContext?: string;
 }
@@ -94,11 +96,12 @@ export function buildTurnContextSections(input: DynamicTurnContextInput): TurnCo
     sections.push({ key: "instruction_context", content: input.instructionContext.trim() });
   }
 
-  if (input.extensionTurnContext?.trim()) {
-    sections.push({
-      key: "extension_context",
-      content: ["<extension_context>", input.extensionTurnContext.trim(), "</extension_context>"].join("\n"),
-    });
+  if (input.extensionTurnContextSections) {
+    for (const ext of input.extensionTurnContextSections) {
+      const content = ext.content.trim();
+      if (!content) continue;
+      sections.push({ key: ext.id, content });
+    }
   }
 
   return sections;
