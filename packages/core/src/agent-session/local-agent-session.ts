@@ -59,6 +59,8 @@ class LocalAgentSessionImpl implements AgentSession {
   private readonly lifecycleEvents: readonly AgentEventType[];
   /** Multicast bus for session events; all channels fan out through here. */
   private readonly events = new Emitter<Record<AgentSessionChannel, AgentSessionEvent>>();
+  /** Ref-counted underlying source wiring per channel (see acquireSource). */
+  private readonly sourceRefs = new Map<AgentSessionChannel, { count: number; teardown: () => void }>();
 
   constructor(options: CreateLocalAgentSessionOptions) {
     this.managed = options.managed;
@@ -85,8 +87,85 @@ class LocalAgentSessionImpl implements AgentSession {
     for (const channel of selected) {
       unsubs.push(this.events.on(channel, handler));
     }
+    // Underlying sources must be wired once per session, not once per
+    // subscribe() call: each subscriber registers its handler on the shared
+    // bus above, and a per-subscribe source bridge would re-emit every source
+    // event once per subscriber (N subscribers → N copies of every event),
+    // duplicating streamed text (summary chunks arriving doubled) and other
+    // payloads. Sources are ref-counted and unwired when the last subscriber
+    // for a channel leaves.
+    for (const channel of selected) {
+      unsubs.push(this.acquireSource(channel));
+    }
+
+    // Per-subscriber reconcile: replay the extension status set that was set
+    // before this subscription mounted (the source wiring itself only does
+    // this once for the first subscriber on the channel).
+    if (selected.has("extension-ui")) {
+      const ui = this.managed.extensionRunner?.getUI();
+      if (ui) {
+        for (const [key, text] of Object.entries(ui.getStatus())) {
+          if (text) {
+            this.events.emit("extension-ui", {
+              channel: "extension-ui",
+              payload: { type: "set-status", key, text },
+              ts: now(),
+            });
+          }
+        }
+      }
+    }
+
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      for (const unsub of unsubs) {
+        try {
+          unsub();
+        } catch {
+          // Ignore teardown errors
+        }
+      }
+    };
+  }
+
+  /** Ref-count the underlying source wiring for one channel. */
+  private acquireSource(channel: AgentSessionChannel): () => void {
+    const ref = this.sourceRefs.get(channel);
+    if (ref) {
+      ref.count += 1;
+    } else {
+      this.sourceRefs.set(channel, { count: 1, teardown: this.wireSource(channel) });
+    }
+    return () => this.releaseSource(channel);
+  }
+
+  private releaseSource(channel: AgentSessionChannel): void {
+    const ref = this.sourceRefs.get(channel);
+    if (!ref) return;
+    ref.count -= 1;
+    if (ref.count <= 0) {
+      this.sourceRefs.delete(channel);
+      try {
+        ref.teardown();
+      } catch {
+        // Ignore teardown errors
+      }
+    }
+  }
+
+  /**
+   * Wire the underlying event source for one channel. Runs once per session
+   * regardless of how many subscribers listen on the channel.
+   */
+  private wireSource(channel: AgentSessionChannel): () => void {
     const managed = this.managed;
     const manager = this.manager;
+    // Narrow selection containing only the channel being wired; the guards
+    // below reuse the channelAllowed() helper against it.
+    const selected = new Set([channel]);
+    const unsubs: Array<() => void> = [];
 
     if (channelAllowed("state", selected)) {
       unsubs.push(
@@ -159,7 +238,7 @@ class LocalAgentSessionImpl implements AgentSession {
           // Agent mode is derived from plan phase (+ auto mode) — keep remote
           // snapshot.mode fresh when plan phase changes outside a dispatch
           // (e.g. plan auto-execution after seeding).
-          if (channelAllowed("mode", selected)) {
+          if (channel === "plan") {
             this.events.emit("mode", {
               channel: "mode",
               payload: { mode: managed.getAgentMode(), autoMode: managed.isAutoModeEnabled() },
@@ -238,17 +317,6 @@ class LocalAgentSessionImpl implements AgentSession {
             });
           })
         );
-        // Reconcile status set before this subscription mounted (e.g. during
-        // bootstrap, before the host's extension-ui subscription attaches).
-        for (const [key, text] of Object.entries(ui.getStatus())) {
-          if (text) {
-            this.events.emit("extension-ui", {
-              channel: "extension-ui",
-              payload: { type: "set-status", key, text },
-              ts: now(),
-            });
-          }
-        }
       }
     }
 
@@ -267,10 +335,7 @@ class LocalAgentSessionImpl implements AgentSession {
       }
     }
 
-    let active = true;
     return () => {
-      if (!active) return;
-      active = false;
       for (const unsub of unsubs) {
         try {
           unsub();
