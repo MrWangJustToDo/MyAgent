@@ -1,6 +1,6 @@
 import { bumpAgentUsage } from "../hooks/use-agent-usage.js";
 import { useDynamic } from "../hooks/use-dynamic.js";
-import { getActiveSession } from "../utils/session-resolve.js";
+import { getActiveHost, getActiveSession } from "../utils/session-resolve.js";
 
 import { registerCommand } from "./utils/registry.js";
 
@@ -20,15 +20,30 @@ registerCommand({
       (listed.data as { sessions?: Array<{ id: string; name: string; model: string; updatedAt: number }> } | undefined)
         ?.sessions ?? [];
 
+    // Which disk sessions are already owned by a live agent (can't be resumed).
+    const bound = new Set<string>();
+    const host = getActiveHost();
+    if (host) {
+      const live = await host.list();
+      for (const e of live) {
+        if (e.sessionId) bound.add(e.sessionId);
+      }
+    }
+
     return sessions
       .slice()
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, 20)
-      .map((s) => ({
-        label: s.name,
-        value: s.id,
-        description: `${s.model} · ${new Date(s.updatedAt).toLocaleString()}`,
-      }));
+      .map((s) => {
+        const d = new Date(s.updatedAt);
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        return {
+          label: s.name,
+          value: s.id,
+          description: `${date}${bound.has(s.id) ? " · bound (active)" : ""}`,
+        };
+      });
   },
   execute: async (args, ctx) => {
     const session = ctx.getSession();
