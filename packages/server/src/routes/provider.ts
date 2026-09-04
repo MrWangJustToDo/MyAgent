@@ -12,6 +12,7 @@ import {
   resolveModelConnection,
   type ModelConnection,
   type ModelsConfig,
+  type ModelsConfigEntry,
 } from "@my-agent/core";
 import { Hono } from "hono";
 
@@ -26,6 +27,24 @@ async function loadServerModelsConfig(): Promise<ModelsConfig | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Strip credentials from the server's config before it leaves the process:
+ * direct entries are only needed client-side for the selectable model list, and
+ * their apiKey/baseURL are server secrets — the proxy injects them. Without
+ * this, GET /api/provider/info leaks the upstream key to any caller.
+ */
+function sanitizeConfigForClient(config: ModelsConfig): SanitizedProviderConfig {
+  return {
+    ...config,
+    models: (config.models ?? []).map((entry: ModelsConfigEntry): SanitizedProviderConfig["models"][number] => {
+      if (entry.type !== "direct") return entry;
+      // Redact upstream secrets by omitting them — clients only need the model list;
+      // the proxy injects baseURL/apiKey server-side.
+      return { type: entry.type, style: entry.style, models: entry.models };
+    }),
+  };
 }
 
 /** Union of selectable model ids from the config's direct entries (+ the env model). */
@@ -272,14 +291,22 @@ async function proxyStream(
 // Routes
 // ============================================================================
 
+/**
+ * Server config shape safe to hand to remote clients: direct entries keep only
+ * the selectable model ids — upstream `baseURL`/`apiKey` never leave the server.
+ */
+export type SanitizedProviderConfig = Omit<ModelsConfig, "models"> & {
+  models: Array<{ type: "direct"; style: string; models?: string[] } | { type: "remote-provider"; url: string }>;
+};
+
 export interface ProviderInfoResponse {
   mode: "remote";
   style: "openai" | "anthropic";
   model: string;
   /** Absolute-path adapter baseURL on this server (no host). */
   basePath: string;
-  /** Server's own models.json (unified shape) — lets clients resolve the list. */
-  config?: ModelsConfig;
+  /** Server's own models.json (sanitized) — lets clients resolve the list. */
+  config?: SanitizedProviderConfig;
 }
 
 export const providerRoutes = new Hono()
@@ -294,7 +321,8 @@ export const providerRoutes = new Hono()
       style,
       model: connection.model,
       basePath,
-      ...(serverConfig ? { config: serverConfig } : {}),
+      // Strip direct-entry apiKey/baseURL secrets: clients only need the model list.
+      ...(serverConfig ? { config: sanitizeConfigForClient(serverConfig) } : {}),
     };
     return c.json(body);
   })

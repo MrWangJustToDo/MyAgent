@@ -203,19 +203,21 @@ async function fetchProviderInfo(serverUrl: string): Promise<ProviderInfo> {
 
 export async function resolveModelsConfigFromProvider(serverUrl: string): Promise<ModelsConfig> {
   const info = await fetchProviderInfo(serverUrl);
-  // Prefer the server's own models.json; fall back to a single direct entry
-  // synthesized from its reported connection when it exposes no config.
-  if (info.config?.models?.length) return info.config;
+  // A provider source ALWAYS routes through the server proxy: keys stay on the
+  // server and the client must never talk to an upstream directly. Collapsing
+  // the server's config (if any) into one remote-provider entry is what keeps
+  // `registerModelProviderForEntry` registering a remote-mode provider —
+  // returning the server's raw direct entries would leak its apiKey to the
+  // client and bypass the proxy (empty streams when the client's network
+  // cannot reach the upstream). loadModelEntries expands this entry into the
+  // selectable list (union of the server's direct-entry models + its env
+  // model) via /api/provider/info.
   return {
-    models: [
-      {
-        type: "direct",
-        style: info.style,
-        baseURL: `${serverUrl.replace(/\/+$/, "")}${info.basePath}`,
-        apiKey: REMOTE_PROVIDER_API_KEY,
-        models: info.model ? [info.model] : [],
-      },
-    ],
+    models: [{ type: "remote-provider", url: serverUrl.replace(/\/+$/, "") }],
+    active: {
+      entryIndex: 0,
+      ...(info.config?.active?.model ? { model: info.config.active.model } : {}),
+    },
   };
 }
 
