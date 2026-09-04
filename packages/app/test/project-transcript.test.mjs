@@ -120,7 +120,8 @@ assert.ok(isActivitySummaryMessage(aborted[1]));
 assert.equal(aborted[1].parts[0].content, "Explored 1 file");
 assert.equal(aborted[2].parts[0].id, "t2");
 
-// Error on foldable tool interrupts fold; 3 completed reads before error still fold.
+// Error on foldable tool folds into the summary as an error count (3 reads + 1 error);
+// the errored row no longer surfaces as a standalone row.
 const errored = projectTranscriptForDisplay(
   [
     user,
@@ -134,7 +135,8 @@ const errored = projectTranscriptForDisplay(
   { mode: "compact" }
 );
 assert.ok(isActivitySummaryMessage(errored[1]));
-assert.equal(errored[2].parts[0].id, "t4");
+assert.equal(errored[1].parts[0].content, "3 reads, 1 error · a.ts, b.ts, +1");
+assert.equal(errored.length, 2);
 
 const noTools = projectTranscriptForDisplay([user, final], { mode: "compact" });
 assert.equal(noTools.length, 2);

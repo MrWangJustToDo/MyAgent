@@ -119,8 +119,10 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
       : null;
   const stateColor = errorText || outputFailed ? COLORS.danger : getToolCallColor(uiState);
 
-  // Compact display: errored/denied tools are filtered out entirely — failures
-  // are noise in density mode and the turn-level text still carries the outcome.
+  // Compact display: errored/denied tools are handled by the compact projection
+  // (errors fold into an activity summary count; denied rows are filtered). This
+  // render-layer guard still covers the final (live streaming) message, which the
+  // projection layer does not process.
   if (displayMode === "compact" && (uiState === "output-error" || uiState === "output-denied")) {
     return null;
   }

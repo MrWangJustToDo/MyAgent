@@ -1,4 +1,4 @@
-import { formatExploredActivitySummary, isErrorToolRow, shouldFoldToolRow } from "./tool-activity-summary.js";
+import { formatExploredActivitySummary, shouldFoldToolRow } from "./tool-activity-summary.js";
 import { isToolCallPart } from "./tool-part.js";
 
 import type { TextPart, ToolCallPart, UIMessage } from "@tanstack/ai";
@@ -60,7 +60,7 @@ function emitPartMessage(source: UIMessage, part: UIMessage["parts"][number], pa
  * Density-first compact projection:
  * - Keep tools as rows by default (render layer hides bulky outputs / shortens headers)
  * - Fold contiguous completed tools into path-aware activity summaries (even a single tool)
- * - Errored tool rows are filtered out entirely (keep the foldable run contiguous)
+ * - Errored tool rows fold into the summary too, counted as errors (aggregation stays contiguous)
  * - Folded segments use path-aware activity summaries
  */
 function collapseTurn(turn: Turn): UIMessage[] {
@@ -68,7 +68,6 @@ function collapseTurn(turn: Turn): UIMessage[] {
   let pendingFoldable: PendingFoldable[] = [];
   let summarySeq = 0;
   let didFold = false;
-  let didFilter = false;
 
   const flushSummary = () => {
     if (pendingFoldable.length === 0) return;
@@ -76,7 +75,8 @@ function collapseTurn(turn: Turn): UIMessage[] {
     const folded = pendingFoldable;
     pendingFoldable = [];
 
-    // Fold: every completed tool folds into a single activity summary (no count threshold).
+    // Fold: every completed tool (incl. errored ones, counted as errors) folds
+    // into a single activity summary (no count threshold).
     const summary = formatExploredActivitySummary(folded.map((f) => f.part));
     if (!summary) {
       for (const item of folded) {
@@ -128,13 +128,8 @@ function collapseTurn(turn: Turn): UIMessage[] {
         continue;
       }
 
-      // Errored tool blocks are hidden in compact mode; skip without breaking
-      // the pending foldable run so the remaining tools still aggregate.
-      if (isErrorToolRow(part)) {
-        didFilter = true;
-        continue;
-      }
-
+      // Errored tool rows fold into the pending run like completed ones;
+      // they surface in the summary as an error count instead of vanishing.
       if (shouldFoldToolRow(part)) {
         pendingFoldable.push({ part, source: message, partIndex: i });
         continue;
@@ -147,8 +142,8 @@ function collapseTurn(turn: Turn): UIMessage[] {
 
   flushSummary();
 
-  // Nothing folded or filtered — keep original messages (stable ids).
-  if (!didFold && !didFilter) {
+  // Nothing folded — keep original messages (stable ids).
+  if (!didFold) {
     return turn.messages;
   }
 
@@ -159,8 +154,8 @@ function collapseTurn(turn: Turn): UIMessage[] {
  * Project transcript for compact display.
  *
  * Density-first: most tools stay as one-line rows. Only long runs of completed
- * exploration tools collapse into path-aware activity summaries. Errored tool
- * rows are filtered out in compact mode.
+ * exploration tools collapse into path-aware activity summaries; errored tool
+ * rows fold into those summaries as an error count.
  */
 export function projectTranscriptForDisplay(
   messages: UIMessage[],
