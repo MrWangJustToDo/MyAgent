@@ -18,6 +18,7 @@ export { Agent } from "./app/Agent.js";
 
 // Components
 export { StreamingOutputView } from "./messages/StreamingOutputView.js";
+export { ConfigEditor, STYLE_OPTIONS, type ConfigEditorProps } from "./components/ConfigEditor.js";
 
 // Hooks
 export * from "./hooks";
