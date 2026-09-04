@@ -232,6 +232,20 @@ export async function dispatchLocalAgentSessionCommand(
         managed.setReasoningEffort(command.effort);
         return { ok: true, data: { effort: managed.getReasoningEffort() } };
       }
+      case "model.set": {
+        managed.setModel({
+          model: command.model,
+          modelStyle: command.modelStyle,
+          modelBaseURL: command.modelBaseURL,
+          modelApiKey: command.modelApiKey,
+          modelInfo: command.modelInfo,
+        });
+        const { config } = managed;
+        return {
+          ok: true,
+          data: { model: config.model, modelStyle: config.modelStyle, modelBaseURL: config.modelBaseURL },
+        };
+      }
       default: {
         const _exhaustive: never = command;
         return { ok: false, code: "invalid", error: `Unknown command: ${JSON.stringify(_exhaustive)}` };

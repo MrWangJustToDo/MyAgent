@@ -51,6 +51,14 @@ export class SessionService {
     this.config = config;
   }
 
+  /** Update the model used for new sessions (model switch via `ManagedAgent.setModel`). */
+  setModelConfig(modelStyle: string, model: string): void {
+    if (this.config) {
+      this.config.modelStyle = modelStyle;
+      this.config.model = model;
+    }
+  }
+
   getStore(): SessionStore | null {
     return this.store;
   }

@@ -652,6 +652,54 @@ export class ManagedAgent {
     return this.modelInfo;
   }
 
+  /**
+   * Switch the agent's model at runtime without rebuilding the session.
+   *
+   * Updates the frozen model config, drops the cached text adapter so the next
+   * run resolves the new model, and persists — the conversation history and
+   * live session are preserved. Only the provided fields are changed; omitted
+   * ones keep their current value.
+   *
+   * NOTE: local provider mode only. Under remote-provider the server re-supplies
+   * the model on the next (re)create, so callers should gate this on
+   * `providerMode !== "remote"` (see resolve-from-provider.ts).
+   */
+  setModel(next: {
+    model?: string;
+    modelStyle?: ModelStyle;
+    modelBaseURL?: string;
+    modelApiKey?: string;
+    modelInfo?: ModelInfo | null;
+  }): void {
+    const updates: Partial<AgentConfig> = {};
+    if (next.model !== undefined) updates.model = next.model;
+    if (next.modelStyle !== undefined) updates.modelStyle = next.modelStyle;
+    if (next.modelBaseURL !== undefined) updates.modelBaseURL = next.modelBaseURL;
+    if (next.modelApiKey !== undefined) updates.modelApiKey = next.modelApiKey;
+    if (Object.keys(updates).length > 0) {
+      this.updateConfig(updates);
+    }
+
+    if (next.modelInfo) {
+      this.setModelInfo(next.modelInfo);
+      if (next.modelInfo.pricing) {
+        this.usage.setPricing(next.modelInfo.pricing);
+      }
+      this.usage.setCapabilities(next.modelInfo.capabilities);
+    }
+
+    // Keep new on-disk sessions (`/clear`, session.new) on the switched model.
+    if (updates.model !== undefined || updates.modelStyle !== undefined) {
+      this.session.setModelConfig(updates.modelStyle ?? "openai", updates.model ?? "unknown");
+    }
+
+    // Drop the cached adapter + runner so the next run re-resolves the model.
+    this.setTextAdapter(undefined);
+    this.invalidateRunner();
+    this.persistSession();
+    this.emitStateChange();
+  }
+
   /** Canonical model messages from the UI channel only. */
   getCanonicalFromUI(): ModelMessage[] {
     const uiMessages = this.ui?.getMessages() ?? [];

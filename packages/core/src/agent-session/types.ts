@@ -21,7 +21,7 @@ import type { QueuedMessagesSnapshot } from "../managers/controllers/agent-chat-
 import type { AgentL1State, AgentMode } from "../managers/managed-agent.js";
 import type { AgentEvent } from "../managers/telemetry/agent-telemetry-bus.js";
 import type { UsageChangeSnapshot } from "../managers/telemetry/usage-tracker.js";
-import type { ModelInfo, ReasoningEffort } from "../models/types.js";
+import type { ModelInfo, ModelStyle, ReasoningEffort } from "../models/types.js";
 import type { AgentRetryState } from "../runtime-types/agent-retry.js";
 import type { AgentStatus } from "../runtime-types/agent-status.js";
 import type { ContentPart, UIMessage } from "@tanstack/ai";
@@ -162,6 +162,15 @@ export type AgentSessionCommand =
   | { type: "session.list" }
   /** Set reasoning-effort level for the current session (`/effort`). */
   | { type: "effort.set"; effort?: ReasoningEffort }
+  /** Switch the model for the current session without rebuilding it (`/model`). */
+  | {
+      type: "model.set";
+      model?: string;
+      modelStyle?: ModelStyle;
+      modelBaseURL?: string;
+      modelApiKey?: string;
+      modelInfo?: ModelInfo | null;
+    }
   /**
    * Start a fresh on-disk session (slash `/clear`): persist current if needed, reset
    * transcript/plan/auto/todos, create a new SessionData. Prefer Host.create for a
