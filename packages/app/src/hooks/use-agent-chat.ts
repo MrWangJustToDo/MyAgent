@@ -13,6 +13,7 @@ import { bindSessionLog } from "./use-agent-log.js";
 import { useAgentStatus } from "./use-agent-status.js";
 import { useAgent } from "./use-agent.js";
 import { useCallbackRef } from "./use-callback-ref.js";
+import { useConfig } from "./use-config.js";
 import { useForceUpdate } from "./use-force-update.js";
 import { useThinkingLine } from "./use-thinking-line.js";
 import { useTodoManager } from "./use-todo-manager.js";
@@ -156,8 +157,6 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   useEffect(() => {
     const currentInitId = ++initIdRef.current;
 
-    const setAgentStatus = useAgentStatus.getActions().setStatus;
-
     const init = async () => {
       setInitLoading(true);
       setInitError(null);
@@ -171,14 +170,10 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         if (currentInitId !== initIdRef.current) return;
 
         bindAgentSession(result.session, { useAgent }, result.host);
-
-        const snap = result.session.getSnapshot();
-        setMessages(snap.messages);
-        setStatus(snap.status);
-        setAgentError(snap.error);
-        setAgentStatus(snap.status);
-        setQueuedMessages(snap.queues);
-        useTodoManager.getActions().setFromSession(snap.todos, snap.todosTitle);
+        // Snapshot population (messages/status/queues/todos) is NOT done here.
+        // bindAgentSession activates the new session, which flips `session` and
+        // triggers the session-switch effect below to repopulate UI state from its
+        // snapshot — single source of truth, so init and switch share one path.
       } catch (e) {
         if (currentInitId !== initIdRef.current) return;
         setInitError(e as Error);
@@ -222,6 +217,18 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     useAgentStatus.getActions().setStatus(snap.status);
     setQueuedMessages(snap.queues);
     useTodoManager.getActions().setFromSession(snap.todos, snap.todosTitle);
+
+    // Resume-session linkage: if the restored session was using a model that the
+    // loaded models.config knows about, re-dispatch model.set so the live agent
+    // re-resolves that model instead of keeping the config default. Unknown models
+    // (or no models.config) are left untouched.
+    if (snap.model) {
+      const modelsConfig = useConfig.getReadonlyState().modelsConfig;
+      const found = modelsConfig?.entries[modelsConfig.active.entryIndex];
+      if (found && found.models.includes(snap.model)) {
+        void session.dispatch({ type: "model.set", model: snap.model });
+      }
+    }
   }, [session]);
 
   useEffect(() => {

@@ -1,4 +1,12 @@
-import { DEFAULT_LOCAL_OPENAI_BASE_URL, buildDefaultSystemPrompt, type ModelStyle } from "@my-agent/core";
+import {
+  DEFAULT_LOCAL_OPENAI_BASE_URL,
+  buildDefaultSystemPrompt,
+  loadModels,
+  registerModelProviderForEntry,
+  type LoadedModelEntry,
+  type LoadedModelsState,
+  type ModelStyle,
+} from "@my-agent/core";
 import { createState } from "reactivity-store";
 
 import { applyOptionalAppConfig, clearOptionalAppConfig } from "../utils/apply-app-config.js";
@@ -35,6 +43,8 @@ export const useConfig = createState(
     initialized: false,
     helpRequested: false,
     key: "",
+    /** Loaded model config (entries + active) after the unified pipeline runs. */
+    modelsConfig: null as LoadedModelsState | null,
   }),
   {
     withActions: (state) => ({
@@ -54,6 +64,35 @@ export const useConfig = createState(
         state.config.resumeSession = config.resumeSession || "";
         state.config.serverModel = "";
         applyOptionalAppConfig(state.config, config);
+
+        // Unified model-config pipeline: resolve the config source (local file
+        // for direct / remote-session hosts; the provider server for remote-provider
+        // hosts), load it into memory, and register the matching ModelProvider so
+        // agent creation resolves models through it. Non-fatal — a missing/invalid
+        // config just keeps the host-provided defaults.
+        if (!config.remoteSession) {
+          const source = config.remoteProvider
+            ? { kind: "provider" as const, serverUrl: config.remoteProvider }
+            : { kind: "file" as const };
+          try {
+            const loaded = await loadModels(source);
+            if (loaded) {
+              await registerModelProviderForEntry(loaded);
+              state.modelsConfig = loaded;
+              const entry = loaded.entries[loaded.active.entryIndex];
+              if (entry) {
+                state.config.model = loaded.active.model ?? entry.models[0] ?? state.config.model;
+                state.config.style = entry.style;
+                state.config.baseURL = entry.baseURL;
+                state.config.apiKey = entry.apiKey ?? "";
+                state.config.providerMode = entry.type === "remote" ? "remote" : "direct";
+              }
+            }
+          } catch {
+            // Ignore — fall back to host-provided model defaults.
+          }
+        }
+
         state.initialized = true;
 
         const { model, baseURL, systemPrompt, style } = state.config;
@@ -62,6 +101,25 @@ export const useConfig = createState(
 
       setHelpRequested: (help: boolean) => {
         state.helpRequested = help;
+      },
+
+      /**
+       * Select a model (by `/models`) and persist it as the new active entry so a
+       * restart resumes at it. Updates the in-memory modelsConfig.active and the
+       * config defaults used by agent creation.
+       */
+      selectModel: (entryIndex: number, model: string, entry: LoadedModelEntry) => {
+        if (state.modelsConfig) {
+          state.modelsConfig = {
+            ...state.modelsConfig,
+            active: { entryIndex, model },
+          };
+        }
+        state.config.model = model;
+        state.config.style = entry.style;
+        state.config.baseURL = entry.baseURL;
+        state.config.apiKey = entry.apiKey ?? "";
+        state.config.providerMode = entry.type === "remote" ? "remote" : "direct";
       },
 
       setConfig: <K extends keyof AppConfig>(key: K, value: AppConfig[K]) => {
