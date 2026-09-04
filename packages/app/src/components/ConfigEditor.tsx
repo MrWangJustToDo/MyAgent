@@ -169,7 +169,7 @@ export const ConfigEditor = ({ onDone, onCancel, saveModelsConfig, parseModelsCo
   });
 
   return (
-    <Box flexDirection="column" padding={1}>
+    <Box flexDirection="column">
       <Box marginBottom={1}>
         <Text bold color={COLORS.primary}>
           My Agent — First-Run Model Configuration
@@ -179,24 +179,26 @@ export const ConfigEditor = ({ onDone, onCancel, saveModelsConfig, parseModelsCo
 
       <Box flexDirection="column" marginTop={1}>
         {step === "style" && (
-          <Box flexDirection="column">
+          <Box flexDirection="column" marginBottom={1}>
             <Text>Provider style:</Text>
-            {STYLE_OPTIONS.map((s, i) => {
-              const selected = i === styleIndex;
-              return (
-                <Box key={s}>
-                  <Text color={selected ? COLORS.primary : undefined} bold={selected}>
-                    {selected ? "❯ " : "  "}
-                    {styleLabel(s)}
-                  </Text>
-                  {selected && (
-                    <Text color={COLORS.muted} dimColor>
-                      {"  (selected)"}
+            <Box flexDirection="column">
+              {STYLE_OPTIONS.map((s, i) => {
+                const selected = i === styleIndex;
+                return (
+                  <Box key={s} height={1} width="100%">
+                    <Text color={selected ? COLORS.text : COLORS.muted} bold={selected}>
+                      {selected ? "❯ " : "  "}
+                      {styleLabel(s)}
                     </Text>
-                  )}
-                </Box>
-              );
-            })}
+                    {selected && (
+                      <Text color={COLORS.muted} dimColor>
+                        {"  (selected)"}
+                      </Text>
+                    )}
+                  </Box>
+                );
+              })}
+            </Box>
           </Box>
         )}
 

@@ -2,14 +2,13 @@ import chalk from "chalk";
 import { Text, useInput } from "ink";
 import { useEffect, useRef, useState } from "react";
 
-import { BG } from "../theme/colors.js";
-
 // ============================================================================
 // TextInput — shared single-line text input with full cursor editing
 //
-// Matches the app's MultiLineInput look (BG.input background + chalk.inverse
-// block cursor) but is a lightweight controlled input for form fields: left/
-// right/home/end navigation, insert/delete at the cursor, and Enter to submit.
+// A lightweight controlled input for form fields. The value renders with a
+// chalk.inverse block cursor: left/right/home/end (and Ctrl+A/E/B/F) navigation,
+// insert/delete/backspace, word and line deletion (Ctrl+W/U/K), and Enter to
+// submit.
 // ============================================================================
 
 export interface TextInputProps {
@@ -36,6 +35,16 @@ function renderWithCursor(value: string, cursor: number, placeholder: string): s
   const at = value[cursor] || " ";
   const after = value.slice(cursor + 1);
   return before + chalk.inverse(at) + after;
+}
+
+/** Remove the word immediately before `cursor`; returns [newValue, newCursor]. */
+function deleteWordBefore(value: string, cursor: number): [string, number] {
+  const before = value.slice(0, cursor);
+  let end = before.length;
+  while (end > 0 && /\s/.test(before[end - 1]!)) end--;
+  let start = end;
+  while (start > 0 && !/\s/.test(before[start - 1]!)) start--;
+  return [value.slice(0, start) + value.slice(cursor), start];
 }
 
 export const TextInput = ({
@@ -100,6 +109,51 @@ export const TextInput = ({
       }
       return;
     }
+
+    // Ctrl shortcuts — word/line deletion and fast navigation (readline-style).
+    // NOTE: react-terminal passes the letter itself (e.g. "a") for Ctrl+letter
+    // combinations (with key.ctrl = true), NOT the control char (\x01). Match
+    // the keybindings in hooks/keybindings/*.ts which compare input.toLowerCase().
+    if (key.ctrl && input) {
+      const ch = input.toLowerCase();
+      const c = cursorRef.current;
+      if (ch === "a") {
+        setCursor(0); // Ctrl+A — start
+        return;
+      }
+      if (ch === "e") {
+        setCursor(value.length); // Ctrl+E — end
+        return;
+      }
+      if (ch === "b") {
+        setCursor((cur) => Math.max(0, cur - 1)); // Ctrl+B — back
+        return;
+      }
+      if (ch === "f") {
+        setCursor((cur) => Math.min(value.length, cur + 1)); // Ctrl+F — forward
+        return;
+      }
+      if (ch === "d") {
+        if (c < value.length) onChange(value.slice(0, c) + value.slice(c + 1)); // Ctrl+D — delete char
+        return;
+      }
+      if (ch === "u") {
+        onChange(value.slice(c)); // Ctrl+U — delete to start
+        setCursor(0);
+        return;
+      }
+      if (ch === "k") {
+        onChange(value.slice(0, c)); // Ctrl+K — delete to end
+        return;
+      }
+      if (ch === "w") {
+        const [next, nc] = deleteWordBefore(value, c); // Ctrl+W — delete word before
+        onChange(next);
+        setCursor(nc);
+        return;
+      }
+    }
+
     if (input) {
       const c = cursorRef.current;
       const next = value.slice(0, c) + input + value.slice(c);
@@ -108,9 +162,5 @@ export const TextInput = ({
     }
   });
 
-  return (
-    <Text backgroundColor={BG.input} wrap="truncate-end">
-      {renderWithCursor(display, cursor, placeholder)}
-    </Text>
-  );
+  return <Text wrap="truncate-end">{renderWithCursor(display, cursor, placeholder)}</Text>;
 };
