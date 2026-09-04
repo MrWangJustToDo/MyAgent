@@ -28,6 +28,30 @@ export {
 } from "./provider/resolve-from-provider.js";
 
 export {
+  MODELS_CONFIG_DIR,
+  MODELS_CONFIG_FILE,
+  loadModelEntries,
+  loadModels,
+  loadModelsConfigFromFile,
+  parseModelsConfig,
+  registerModelProviderForEntry,
+  resolveModelInfoFromModelsDev,
+  resolveModelsConfig,
+  resolveModelsConfigFromProvider,
+  saveModelsConfig,
+  type DirectModelsConfigEntry,
+  type LoadedModelEntry,
+  type LoadedModelsState,
+  type ModelsConfig,
+  type ModelsConfigActive,
+  type ModelsConfigEntry,
+  type ModelsConfigGlobal,
+  type ModelsConfigSource,
+  type ProviderInfo,
+  type RemoteProviderConfigEntry,
+} from "./config/models-config.js";
+
+export {
   registerModelProvider,
   clearModelProvider,
   getModelProvider,
