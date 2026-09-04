@@ -19,7 +19,7 @@ import { REMOTE_PROVIDER_API_KEY } from "../provider-constants.js";
 
 export { REMOTE_PROVIDER_API_KEY };
 
-/** Read the server's own models.config (`.agents/config/models.config`), if any. */
+/** Read the server's own models.json (`.agents/config/models.json`), if any. */
 async function loadServerModelsConfig(): Promise<ModelsConfig | null> {
   try {
     return await loadModelsConfigFromFile();
@@ -205,10 +205,10 @@ async function proxyStream(
   const method = c.req.method;
   const hasBody = method !== "GET" && method !== "HEAD";
 
-  // Model policy: when the server has a models.config, validate the client's
+  // Model policy: when the server has a models.json, validate the client's
   // requested model against its allowlist and pass it through unchanged (so
   // remote clients can hot-switch among whitelisted models). Without a
-  // models.config, keep the legacy single-model rewrite so a leftover local
+  // models.json, keep the legacy single-model rewrite so a leftover local
   // default (e.g. "gpt-4o-mini") never leaks upstream.
   const serverConfig = await loadServerModelsConfig();
   const allowed = collectAllowedModels(serverConfig, connection);
@@ -225,7 +225,7 @@ async function proxyStream(
             if (reqModel && !allowed.has(reqModel)) {
               return openaiErrorResponse(
                 400,
-                `Model "${reqModel}" is not in the server's models.config allowlist.`,
+                `Model "${reqModel}" is not in the server's models.json allowlist.`,
                 "model_not_allowed"
               );
             }
@@ -278,7 +278,7 @@ export interface ProviderInfoResponse {
   model: string;
   /** Absolute-path adapter baseURL on this server (no host). */
   basePath: string;
-  /** Server's own models.config (unified shape) — lets clients resolve the list. */
+  /** Server's own models.json (unified shape) — lets clients resolve the list. */
   config?: ModelsConfig;
 }
 

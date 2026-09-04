@@ -136,7 +136,7 @@ if (appConfig.remoteSession) {
 
 configureEnv({ allowNonBrowserUpdates: true });
 
-// First-run config detection (local hosts only): if no `.agents/config/models.config`
+// First-run config detection (local hosts only): if no `.agents/config/models.json`
 // exists and the user didn't pass explicit model flags (or a remote provider/session
 // that supplies its own config), enter the config editor before initializing the
 // session. The editor writes a config via the same file source the unified pipeline

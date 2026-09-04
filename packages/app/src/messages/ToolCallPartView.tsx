@@ -119,6 +119,12 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
       : null;
   const stateColor = errorText || outputFailed ? COLORS.danger : getToolCallColor(uiState);
 
+  // Compact display: errored/denied tools are filtered out entirely — failures
+  // are noise in density mode and the turn-level text still carries the outcome.
+  if (displayMode === "compact" && (uiState === "output-error" || uiState === "output-denied")) {
+    return null;
+  }
+
   const outputUsage =
     isTask && hasOutput && part.output && typeof part.output === "object" && "usage" in part.output
       ? (part.output as { usage?: { inputTokens?: number; outputTokens?: number } }).usage

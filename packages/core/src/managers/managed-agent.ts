@@ -225,8 +225,14 @@ export class ManagedAgent {
 
   readonly id: string;
   name: string;
+  /**
+   * Single source of truth for agent configuration (AgentConfig fields + agent
+   * extras like name/id/modelInfo/skillDirs). Validated through
+   * {@link AgentConfigSchema} at construction; mutated in place by
+   * {@link updateConfig} so all runtime readers (`run-agent`, snapshots) see
+   * updates immediately.
+   */
   readonly config: ManagedAgentConfig;
-  private agentConfig: AgentConfig;
 
   // ============================================================================
   // L1 state + local emitter
@@ -361,8 +367,9 @@ export class ManagedAgent {
   ) {
     this.id = init.id ?? config.id ?? generateId("agent");
     this.name = config.name;
-    this.config = config;
-    this.agentConfig = AgentConfigSchema.parse(config);
+    // Single source of truth: shallow-copy the agent extras, then overlay the
+    // zod-parsed AgentConfig subset (validation + defaults, e.g. maxIterations).
+    this.config = { ...config, ...AgentConfigSchema.parse(config) };
     this.log = init.log;
     this.tools = init.tools;
     this.todoManager = init.todoManager;
@@ -616,16 +623,18 @@ export class ManagedAgent {
   // ============================================================================
 
   getConfig(): Readonly<AgentConfig> {
-    return { ...this.agentConfig };
+    return { ...this.config };
   }
 
   updateConfig(updates: Partial<AgentConfig>): void {
-    this.agentConfig = AgentConfigSchema.parse({ ...this.agentConfig, ...updates });
+    // Mutate the single config object in place (AgentConfigSchema strips the
+    // agent extras, so only the AgentConfig subset is overlaid).
+    Object.assign(this.config, AgentConfigSchema.parse({ ...this.config, ...updates }));
   }
 
   /** Current reasoning-effort level, or undefined when unset (model default). */
   getReasoningEffort(): AgentConfig["reasoningEffort"] {
-    return this.agentConfig.reasoningEffort;
+    return this.config.reasoningEffort;
   }
 
   /**
@@ -906,7 +915,7 @@ export class ManagedAgent {
   getSystemPrompt(): string | undefined {
     if (this.systemPromptFrozen) return this.frozenSystemPrompt;
     this.frozenSystemPrompt = buildFrozenSystemPrompt({
-      config: this.agentConfig,
+      config: this.config,
       agentDocContent: this.agentDocContent,
     });
     this.systemPromptFrozen = true;

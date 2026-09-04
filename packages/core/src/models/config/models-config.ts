@@ -1,7 +1,7 @@
 /**
  * Unified model configuration — the single source of truth for LLM settings.
  *
- * A `models.config` (JSON) file lives at `.agents/config/models.config` and has
+ * A `models.json` file lives at `.agents/config/models.json` and has
  * two sections:
  * - `global`: runtime-only settings (maxIterations, mcpConfigPath, systemPrompt,
  *   toolConfig). Pure environment / server items (SERVER_PORT, ROOT_PATH, ...)
@@ -29,7 +29,7 @@ import type { ModelInfo, ModelStyle } from "../types.js";
 // ============================================================================
 
 export const MODELS_CONFIG_DIR = ".agents/config";
-export const MODELS_CONFIG_FILE = "models.config";
+export const MODELS_CONFIG_FILE = "models.json";
 
 // ============================================================================
 // Zod schema
@@ -115,7 +115,7 @@ export interface ModelsConfig {
 /** Loaded, validated config — the in-memory source for model resolution. */
 export interface ModelsConfigSource {
   kind: "file" | "provider";
-  /** File mode: `.agents/config/models.config` under this root (default: CoreEnv rootPath). */
+  /** File mode: `.agents/config/models.json` under this root (default: CoreEnv rootPath). */
   rootPath?: string;
   /** Provider mode: base URL exposing `GET /api/provider/info`. */
   serverUrl?: string;
@@ -144,7 +144,7 @@ export interface ProviderInfo {
   style: ModelStyle;
   model: string;
   basePath: string;
-  /** Server's own models.config (unified shape) — drives the selectable list. */
+  /** Server's own models.json (unified shape) — drives the selectable list. */
   config?: ModelsConfig;
 }
 
@@ -155,7 +155,7 @@ export interface ProviderInfo {
 export function parseModelsConfig(raw: string): ModelsConfig {
   const parsed = modelsConfigSchema.safeParse(JSON.parse(raw));
   if (!parsed.success) {
-    throw new Error(`Invalid models.config: ${z.prettifyError(parsed.error)}`);
+    throw new Error(`Invalid models.json: ${z.prettifyError(parsed.error)}`);
   }
   return parsed.data as ModelsConfig;
 }
@@ -203,7 +203,7 @@ async function fetchProviderInfo(serverUrl: string): Promise<ProviderInfo> {
 
 export async function resolveModelsConfigFromProvider(serverUrl: string): Promise<ModelsConfig> {
   const info = await fetchProviderInfo(serverUrl);
-  // Prefer the server's own models.config; fall back to a single direct entry
+  // Prefer the server's own models.json; fall back to a single direct entry
   // synthesized from its reported connection when it exposes no config.
   if (info.config?.models?.length) return info.config;
   return {

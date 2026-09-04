@@ -1,14 +1,17 @@
 import chalk from "chalk";
-import { Text, useInput } from "ink";
-import { useEffect, useRef, useState } from "react";
+import { Box, Text, useInput } from "ink";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 // ============================================================================
-// TextInput — shared single-line text input with full cursor editing
+// TextInput — shared text input with full cursor editing (multi-line capable)
 //
 // A lightweight controlled input for form fields. The value renders with a
-// chalk.inverse block cursor: left/right/home/end (and Ctrl+A/E/B/F) navigation,
-// insert/delete/backspace, word and line deletion (Ctrl+W/U/K), and Enter to
-// submit.
+// chalk.inverse block cursor. Editing keys:
+//   - left/right/home/end (and Ctrl+A/E/B/F) navigation; home/end and Ctrl+A/E
+//     move to line edges in multi-line text, up/down move across lines
+//   - insert/delete/backspace, word deletion (Ctrl+W), line deletion (Ctrl+U/K)
+//   - Enter submits (calls onSubmit); Ctrl+J (the raw \n character, reliable
+//     in every terminal, unlike Shift+Enter) inserts a newline
 // ============================================================================
 
 export interface TextInputProps {
@@ -24,6 +27,43 @@ export interface TextInputProps {
   disabled?: boolean;
 }
 
+/** Line start offsets for every line in `value` (index into the raw string). */
+function lineStarts(value: string): number[] {
+  const starts = [0];
+  for (let i = 0; i < value.length; i += 1) {
+    if (value[i] === "\n") starts.push(i + 1);
+  }
+  return starts;
+}
+
+function lineStartOf(value: string, cursor: number): number {
+  const starts = lineStarts(value);
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid]! <= cursor) lo = mid;
+    else hi = mid - 1;
+  }
+  return starts[lo]!;
+}
+
+function lineEndOf(value: string, cursor: number): number {
+  const start = lineStartOf(value, cursor);
+  const newline = value.indexOf("\n", start);
+  return newline === -1 ? value.length : newline;
+}
+
+/** Remove the word immediately before `cursor`; returns [newValue, newCursor]. */
+function deleteWordBefore(value: string, cursor: number): [string, number] {
+  const before = value.slice(0, cursor);
+  let end = before.length;
+  while (end > 0 && /\s/.test(before[end - 1]!)) end--;
+  let start = end;
+  while (start > 0 && !/\s/.test(before[start - 1]!)) start--;
+  return [value.slice(0, start) + value.slice(cursor), start];
+}
+
 function renderWithCursor(value: string, cursor: number, placeholder: string): string {
   if (!value) {
     if (placeholder) {
@@ -37,14 +77,29 @@ function renderWithCursor(value: string, cursor: number, placeholder: string): s
   return before + chalk.inverse(at) + after;
 }
 
-/** Remove the word immediately before `cursor`; returns [newValue, newCursor]. */
-function deleteWordBefore(value: string, cursor: number): [string, number] {
-  const before = value.slice(0, cursor);
-  let end = before.length;
-  while (end > 0 && /\s/.test(before[end - 1]!)) end--;
-  let start = end;
-  while (start > 0 && !/\s/.test(before[start - 1]!)) start--;
-  return [value.slice(0, start) + value.slice(cursor), start];
+/** Multi-line rendering: one Text node per line, cursor drawn at its position. */
+function renderMultiLine(value: string, cursor: number): ReactNode[] {
+  const starts = lineStarts(value);
+  const nodes: ReactNode[] = [];
+  for (let i = 0; i < starts.length; i += 1) {
+    const lineStart = starts[i]!;
+    const lineEnd = i + 1 < starts.length ? starts[i + 1]! - 1 : value.length;
+    const line = value.slice(lineStart, lineEnd);
+    const cursorInLine = cursor >= lineStart && cursor <= lineEnd;
+    let content: string;
+    if (cursorInLine) {
+      const at = cursor - lineStart;
+      content = line.slice(0, at) + chalk.inverse(line[at] || " ") + line.slice(at + 1);
+    } else {
+      content = line;
+    }
+    nodes.push(
+      <Text key={i} wrap="truncate-end">
+        {content || " "}
+      </Text>
+    );
+  }
+  return nodes;
 }
 
 export const TextInput = ({
@@ -75,7 +130,45 @@ export const TextInput = ({
       return;
     }
     if (key.return) {
+      // Enter sends \r (name "return") — submit.
       onSubmit?.(value);
+      return;
+    }
+
+    // Ctrl+J (and some terminals' Ctrl+Enter) delivers the raw \n character
+    // (name "enter", key.ctrl NOT set) — the reliable newline chord in every
+    // terminal. Shift+Enter sends \x1b\r which many terminals do not
+    // recognize, so it must not be relied on.
+    if (input === "\n") {
+      const c = cursorRef.current;
+      onChange(value.slice(0, c) + "\n" + value.slice(c));
+      setCursor(c + 1);
+      return;
+    }
+    if (key.upArrow) {
+      const c = cursorRef.current;
+      const start = lineStartOf(value, c);
+      if (start > 0) {
+        const prevEnd = start - 1; // position of the newline char
+        const prevStart = lineStartOf(value, prevEnd);
+        const col = Math.min(c - start, prevEnd - prevStart);
+        setCursor(prevStart + col);
+      } else {
+        setCursor(0);
+      }
+      return;
+    }
+    if (key.downArrow) {
+      const c = cursorRef.current;
+      const end = lineEndOf(value, c);
+      if (end < value.length) {
+        const nextStart = end + 1;
+        const nextEnd = lineEndOf(value, nextStart);
+        const col = c - lineStartOf(value, c);
+        setCursor(Math.min(nextStart + col, nextEnd));
+      } else {
+        setCursor(value.length);
+      }
       return;
     }
     if (key.leftArrow) {
@@ -87,11 +180,11 @@ export const TextInput = ({
       return;
     }
     if (key.home) {
-      setCursor(0);
+      setCursor(lineStartOf(value, cursorRef.current));
       return;
     }
     if (key.end) {
-      setCursor(value.length);
+      setCursor(lineEndOf(value, cursorRef.current));
       return;
     }
     if (key.backspace) {
@@ -118,11 +211,11 @@ export const TextInput = ({
       const ch = input.toLowerCase();
       const c = cursorRef.current;
       if (ch === "a") {
-        setCursor(0); // Ctrl+A — start
+        setCursor(lineStartOf(value, c)); // Ctrl+A — line start
         return;
       }
       if (ch === "e") {
-        setCursor(value.length); // Ctrl+E — end
+        setCursor(lineEndOf(value, c)); // Ctrl+E — line end
         return;
       }
       if (ch === "b") {
@@ -138,12 +231,14 @@ export const TextInput = ({
         return;
       }
       if (ch === "u") {
-        onChange(value.slice(c)); // Ctrl+U — delete to start
-        setCursor(0);
+        const start = lineStartOf(value, c); // Ctrl+U — delete to line start
+        onChange(value.slice(0, start) + value.slice(c));
+        setCursor(start);
         return;
       }
       if (ch === "k") {
-        onChange(value.slice(0, c)); // Ctrl+K — delete to end
+        const end = lineEndOf(value, c); // Ctrl+K — delete to line end
+        onChange(value.slice(0, c) + value.slice(end));
         return;
       }
       if (ch === "w") {
@@ -162,5 +257,12 @@ export const TextInput = ({
     }
   });
 
+  if (!value) {
+    return <Text wrap="truncate-end">{renderWithCursor(value, cursor, placeholder)}</Text>;
+  }
+
+  if (display.includes("\n")) {
+    return <Box flexDirection="column">{renderMultiLine(display, cursor)}</Box>;
+  }
   return <Text wrap="truncate-end">{renderWithCursor(display, cursor, placeholder)}</Text>;
 };

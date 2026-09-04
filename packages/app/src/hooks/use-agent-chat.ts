@@ -219,9 +219,9 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     useTodoManager.getActions().setFromSession(snap.todos, snap.todosTitle);
 
     // Resume-session linkage: if the restored session was using a model that the
-    // loaded models.config knows about, re-dispatch model.set so the live agent
+    // loaded models.json knows about, re-dispatch model.set so the live agent
     // re-resolves that model instead of keeping the config default. Unknown models
-    // (or no models.config) are left untouched.
+    // (or no models.json) are left untouched.
     if (snap.model) {
       const modelsConfig = useConfig.getReadonlyState().modelsConfig;
       const found = modelsConfig?.entries[modelsConfig.active.entryIndex];

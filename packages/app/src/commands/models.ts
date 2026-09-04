@@ -7,7 +7,7 @@ import { getActiveSession } from "../utils/session-resolve.js";
 import { registerCommand } from "./utils/registry.js";
 
 // ============================================================================
-// /models — switch the model for the current session (models.config entries)
+// /models — switch the model for the current session (models.json entries)
 // ============================================================================
 
 function getState(): LoadedModelsState | null {
@@ -25,7 +25,7 @@ function describeEntry(entry: LoadedModelsState["entries"][number]): string {
 
 function entryLabel(state: LoadedModelsState, index: number, model: string): string {
   const current = state.active.entryIndex === index && state.active.model === model;
-  return `${describeEntry(state.entries[index])} · ${model}${current ? " (current)" : ""}`;
+  return `${model}${current ? " (current)" : ""}`;
 }
 
 function buildOptions(): { label: string; value: string; description: string }[] {
@@ -38,7 +38,7 @@ function buildOptions(): { label: string; value: string; description: string }[]
       options.push({
         label: entryLabel(state, i, model),
         value: `${i}:${model}`,
-        description: `Switch to ${model} via ${describeEntry(entry)}`,
+        description: describeEntry(entry),
       });
     }
   }
@@ -47,7 +47,7 @@ function buildOptions(): { label: string; value: string; description: string }[]
 
 registerCommand({
   name: "models",
-  description: "Switch the model for the current session (models.config entries)",
+  description: "Switch the model for the current session (models.json entries)",
   usage: "/models [entryIndex:modelId] | /models",
   immediate: false,
   allowCustomInput: true,
@@ -60,7 +60,7 @@ registerCommand({
 
     const state = getState();
     if (!state || state.entries.length === 0) {
-      return { ok: false, error: "No models.config loaded — start with a config source." };
+      return { ok: false, error: "No models.json loaded — start with a config source." };
     }
 
     const trimmed = args.trim();

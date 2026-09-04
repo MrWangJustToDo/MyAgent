@@ -2,7 +2,7 @@ import { Box, Text, useInput } from "ink";
 import { useState } from "react";
 
 import { COLORS } from "../theme/colors.js";
-import { listNavHint } from "../utils/keyboard-labels.js";
+import { listNavHint, newlineEnterLabel } from "../utils/keyboard-labels.js";
 
 import { TextInput } from "./TextInput.js";
 
@@ -12,7 +12,7 @@ import type { ModelsConfig } from "@my-agent/core";
 // ConfigEditor — first-run model configuration editor
 //
 // Shared by all hosts (CLI etc.). A multi-step form that builds a minimal
-// `models.config` with a single `direct` entry. The write/parse functions are
+// `models.json` with a single `direct` entry. The write/parse functions are
 // injected so the app package stays decoupled from the concrete persistence
 // implementation (core is a peer dependency); the CLI supplies core's
 // parseModelsConfig / saveModelsConfig. After completion the config is written
@@ -57,7 +57,7 @@ function styleLabel(style: StyleChoice): string {
 
 function parseDraft(draft: Draft, parse: ConfigEditorProps["parseModelsConfig"]): ModelsConfig | null {
   const models = draft.modelsCsv
-    .split(",")
+    .split(/[,\n]/)
     .map((m) => m.trim())
     .filter(Boolean);
   if (models.length === 0) return null;
@@ -104,7 +104,7 @@ export const ConfigEditor = ({ onDone, onCancel, saveModelsConfig, parseModelsCo
       setDraft((d) => ({ ...d, modelsCsv: text }));
       const config = parseDraft({ ...draft, modelsCsv: text }, parseModelsConfig);
       if (!config) {
-        setError("Provide at least one model id (comma-separated).");
+        setError("Provide at least one model id (one per line).");
         return;
       }
       setStep("confirm");
@@ -169,7 +169,7 @@ export const ConfigEditor = ({ onDone, onCancel, saveModelsConfig, parseModelsCo
   });
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" padding={1}>
       <Box marginBottom={1}>
         <Text bold color={COLORS.primary}>
           My Agent — First-Run Model Configuration
@@ -218,8 +218,9 @@ export const ConfigEditor = ({ onDone, onCancel, saveModelsConfig, parseModelsCo
 
         {step === "models" && (
           <Box flexDirection="column">
-            <Text>Model ids (comma-separated, e.g. gpt-4o, gpt-4o-mini):</Text>
-            <TextInput value={text} onChange={setText} onSubmit={commitText} placeholder="gpt-4o, ..." />
+            <Text>Model ids (one per line, e.g. gpt-4o):</Text>
+            <TextInput value={text} onChange={setText} onSubmit={commitText} placeholder="gpt-4o" />
+            <Text dimColor>{newlineEnterLabel()} for newline · Enter to continue</Text>
           </Box>
         )}
 
@@ -241,7 +242,7 @@ export const ConfigEditor = ({ onDone, onCancel, saveModelsConfig, parseModelsCo
             <Text>
               {"  models:  "}
               {draft.modelsCsv
-                .split(",")
+                .split(/[,\n]/)
                 .map((m) => m.trim())
                 .filter(Boolean)
                 .join(", ")}

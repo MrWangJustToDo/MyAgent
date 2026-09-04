@@ -5,10 +5,12 @@
  * - Prefer what Ink actually receives, not desktop-app habits.
  * - TUI chords use **Ctrl**, never Cmd/⌘ (terminals deliver Control; ⌘ is usually
  *   eaten by the host terminal or OS).
- * - Option/Alt+Enter sends \x1b\r (ESC+CR) which parseKeypress detects
- *   as `meta+return` — this is the reliable way to get a modified Enter.
- * - On macOS terminals, Shift+Enter sends \r like plain Enter and cannot be
- *   distinguished from plain Enter, so it will submit rather than insert a newline.
+ * - The newline chord is **Ctrl+J** (the raw `\n` character), which every
+ *   terminal delivers reliably. Option/Alt+Enter sends \x1b\r (ESC+CR) which
+ *   parseKeypress detects as `meta+return` on macOS.
+ * - Shift+Enter is **not** reliable: it sends \r like plain Enter (or an
+ *   unrecognized \x1b\r) on most terminals and cannot be distinguished, so it
+ *   must never be advertised as the newline key.
  * - Platform comes from CoreEnv (`getPlatform`), never `process.platform`.
  */
 
@@ -63,6 +65,7 @@ export const KeyLabel = {
   ctrlA: "Ctrl+A",
   ctrlC: "Ctrl+C",
   ctrlE: "Ctrl+E",
+  ctrlJ: "Ctrl+J",
   ctrlO: "Ctrl+O",
   ctrlP: "Ctrl+P",
   ctrlT: "Ctrl+T",
@@ -76,11 +79,6 @@ export const KeyLabel = {
 
 export type KeyLabelId = keyof typeof KeyLabel;
 
-/** Chord that maps to `key.meta || key.shift` for Enter in typical terminals. */
-export function shiftEnterLabel(): string {
-  return KeyLabel.shiftEnter;
-}
-
 /**
  * Chord for Option/Ctrl+Enter (macOS) or Shift+Enter (Linux) — force-submit while
  * running; also used as the advertised modified-Enter chord in help text.
@@ -92,14 +90,13 @@ export function modifiedEnterLabel(): string {
   return isMacPlatform() ? "Option/Ctrl+Enter" : KeyLabel.shiftEnter;
 }
 
-/** @deprecated Prefer {@link modifiedEnterLabel} — same chord. */
-export function followUpEnterLabel(): string {
-  return modifiedEnterLabel();
-}
-
-/** Idle multi-line insert chord. */
+/**
+ * Idle newline chord — Ctrl+J sends the raw `\n` character, which every
+ * terminal delivers reliably (unlike Shift+Enter, whose `\x1b\r` sequence is
+ * not recognized on many Linux terminals).
+ */
 export function newlineEnterLabel(): string {
-  return shiftEnterLabel();
+  return KeyLabel.ctrlJ;
 }
 
 export function exitAbortLabel(): string {

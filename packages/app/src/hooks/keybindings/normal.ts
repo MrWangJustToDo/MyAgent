@@ -83,13 +83,13 @@ export function useNormalModeKeybindings(ctx: KeybindingContext): void {
         return; // prevent Tab from falling through to character input
       }
       if (inputKey.return || (inputKey.ctrl && inputChar === "\n")) {
-        // While running: Enter = follow-up; Option/Ctrl+Enter = force-submit.
-        // Idle: Option+Enter = newline; Enter = submit.
+        // While running: Enter = follow-up; modified Enter = force-submit.
+        // Idle: Ctrl+J (the raw \n character) = newline; Enter = submit.
         //
-        // On macOS, Option+Enter sends \x1b\r (ESC+CR), which parseKeypress
-        // detects as meta+return — this is the reliable way to insert a newline.
-        // Shift+Enter sends the same \r as plain Enter and cannot be
-        // distinguished, so it will submit rather than insert a newline.
+        // Ctrl+J is the reliable newline chord in every terminal. Option+Enter
+        // sends \x1b\r (ESC+CR) which parseKeypress detects as meta+return on
+        // macOS, but Shift+Enter sends the same \r as plain Enter and cannot be
+        // distinguished on most terminals, so it submits rather than newlines.
         if (isLoading) {
           // When loading, accept autocomplete first if visible.
           if (acceptAutocomplete(true)) return;
