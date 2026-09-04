@@ -2,6 +2,7 @@
 import {
   AdapterProvider,
   App,
+  ConfigEditor,
   initConfig,
   initHighlighter,
   configureEnv,
@@ -10,10 +11,18 @@ import {
   useConfig,
   useTodoManager,
 } from "@my-agent/app";
-import { createDirectModelProvider, registerCoreEnv, registerModelProvider } from "@my-agent/core";
+import {
+  createDirectModelProvider,
+  loadModelsConfigFromFile,
+  parseModelsConfig,
+  registerCoreEnv,
+  registerModelProvider,
+  saveModelsConfig,
+} from "@my-agent/core";
 import { createNodeEnv } from "@my-agent/node";
 import { config as loadEnv } from "dotenv";
 import { render } from "ink";
+import { useEffect, useState } from "react";
 
 import { isHelpRequested, parseCliArgs } from "./args.js";
 import { readClipboardImage } from "./clipboard.js";
@@ -127,7 +136,22 @@ if (appConfig.remoteSession) {
 
 configureEnv({ allowNonBrowserUpdates: true });
 
-await initConfig(appConfig);
+// First-run config detection (local hosts only): if no `.agents/config/models.config`
+// exists and the user didn't pass explicit model flags (or a remote provider/session
+// that supplies its own config), enter the config editor before initializing the
+// session. The editor writes a config via the same file source the unified pipeline
+// reads, so startup continues through the exact same load path as an existing config.
+const helpRequested = isHelpRequested(process.argv.slice(2));
+const needsConfigEditor =
+  !helpRequested &&
+  !appConfig.remoteSession &&
+  !appConfig.remoteProvider &&
+  !appConfig.modelExplicit &&
+  !(await loadModelsConfigFromFile());
+
+if (!needsConfigEditor) {
+  await initConfig(appConfig);
+}
 
 const adapter = new LocalAgentAdapter({
   exit: () => {
@@ -147,12 +171,38 @@ function hideNativeCursor(): void {
   }
 }
 
+/**
+ * Startup gate. When a first-run config is required, show the ConfigEditor and
+ * only initialize the session once it has been written; otherwise initConfig has
+ * already run above and we render the main App directly.
+ */
+function Bootstrap() {
+  const [ready, setReady] = useState(!needsConfigEditor);
+
+  useEffect(() => {
+    if (!needsConfigEditor || !ready) return;
+    void initConfig(appConfig);
+  }, [ready]);
+
+  if (!ready) {
+    return (
+      <ConfigEditor
+        onDone={() => setReady(true)}
+        onCancel={() => process.exit(0)}
+        parseModelsConfig={parseModelsConfig}
+        saveModelsConfig={saveModelsConfig}
+      />
+    );
+  }
+  return <App />;
+}
+
 initHighlighter()
   .then(() => {
     render(
       <AdapterProvider value={adapter}>
         <TerminalTitle />
-        <App />
+        <Bootstrap />
       </AdapterProvider>,
       {
         incrementalRendering: true,
