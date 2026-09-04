@@ -1,7 +1,7 @@
 import { isActiveStatus } from "@my-agent/core";
 import { throttle } from "lodash-es";
-import { toRaw } from "reactivity-store";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toRaw } from "reactivity-store";
 
 import { bindAgentSession } from "../adapter/create-agent.js";
 import { useAdapter } from "../context/adapter-context.js";
@@ -199,17 +199,15 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       bindAgentSession(null, { useAgent }, null);
       void adapter.destroy();
     };
-  }, [
-    config.model,
-    config.baseURL,
-    config.systemPrompt,
-    config.maxIterations,
-    config.style,
-    config.apiKey,
-    config.mcpConfigPath,
-    adapter,
-    config,
-  ]);
+    // Deliberately NOT depending on config.model/baseURL/style/apiKey (or the whole
+    // `config` object): createAgentFromConfig writes the resolved provider values
+    // back into the config store DURING adapter.initialize (remote-provider mode
+    // always changes them). Depending on them here would flip the effect mid-init
+    // and rebuild the session, racing with the stale init's host.create — the old
+    // session ends up registered too (Header shows "2 sessions"). Only rebuild for
+    // inputs that genuinely require a fresh session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `config` intentionally excluded; see comment above.
+  }, [config.systemPrompt, config.maxIterations, config.mcpConfigPath, adapter]);
 
   useEffect(() => {
     if (!session) return;

@@ -110,8 +110,14 @@ export async function createAgentFromConfig({ config, name, hooks, host }: Creat
     useConfig.getActions().updateConfig({ serverModel: snap.model });
   }
 
+  // Session registration is the caller's job (`bindAgentSession`), NOT done here.
+  // Registering inside this async function races with use-agent-chat's effect
+  // rebuild: `updateConfig` above flips the effect deps (config.model/baseURL/...),
+  // the old init's session gets registered unconditionally (no currentInitId guard
+  // here), and the store ends up with two live sessions (Header shows "2 sessions").
+  // The caller registers after its initId guard, so a stale init's session never
+  // enters the store.
   useAgent.getActions().setHost(host);
-  useAgent.getActions().registerSession(session, { activate: true });
   useAgentLog.getActions().clear();
   useTodoManager.getActions().setFromSession(snap.todos, snap.todosTitle);
   syncExtensionCommands(session);
