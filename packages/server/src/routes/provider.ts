@@ -6,12 +6,42 @@
  * (buffers the full body as JSON).
  */
 
-import { parseModelStyle, resolveModelConnection } from "@my-agent/core";
+import {
+  loadModelsConfigFromFile,
+  parseModelStyle,
+  resolveModelConnection,
+  type ModelConnection,
+  type ModelsConfig,
+} from "@my-agent/core";
 import { Hono } from "hono";
 
 import { REMOTE_PROVIDER_API_KEY } from "../provider-constants.js";
 
 export { REMOTE_PROVIDER_API_KEY };
+
+/** Read the server's own models.config (`.agents/config/models.config`), if any. */
+async function loadServerModelsConfig(): Promise<ModelsConfig | null> {
+  try {
+    return await loadModelsConfigFromFile();
+  } catch {
+    return null;
+  }
+}
+
+/** Union of selectable model ids from the config's direct entries (+ the env model). */
+function collectAllowedModels(config: ModelsConfig | null, connection: ModelConnection): Set<string> {
+  const set = new Set<string>();
+  if (config?.models) {
+    for (const e of config.models) {
+      if (e.type === "direct") {
+        for (const m of e.models ?? []) if (m) set.add(m);
+      }
+    }
+    if (config.active?.model) set.add(config.active.model);
+  }
+  if (connection.model) set.add(connection.model);
+  return set;
+}
 
 const HOP_BY_HOP = new Set([
   "connection",
@@ -175,20 +205,38 @@ async function proxyStream(
   const method = c.req.method;
   const hasBody = method !== "GET" && method !== "HEAD";
 
-  // The server is the single source of truth for the model: rewrite any JSON request
-  // body's `model` field to the server-configured model so clients cannot forward a
-  // different one (e.g. a leftover local default like "gpt-4o-mini").
+  // Model policy: when the server has a models.config, validate the client's
+  // requested model against its allowlist and pass it through unchanged (so
+  // remote clients can hot-switch among whitelisted models). Without a
+  // models.config, keep the legacy single-model rewrite so a leftover local
+  // default (e.g. "gpt-4o-mini") never leaks upstream.
+  const serverConfig = await loadServerModelsConfig();
+  const allowed = collectAllowedModels(serverConfig, connection);
   let body: BodyInit | undefined = c.req.raw.body ?? undefined;
-  if (hasBody && connection.model && connection.baseURL) {
+  if (hasBody && connection.baseURL) {
     const contentType = headers.get("content-type") ?? "";
     if (contentType.includes("application/json")) {
       const rawText = await c.req.raw.clone().text();
       try {
         const parsed = JSON.parse(rawText) as Record<string, unknown>;
         if (parsed && typeof parsed === "object") {
-          if (parsed.model !== connection.model) {
-            parsed.model = connection.model;
-            body = JSON.stringify(parsed);
+          const reqModel = typeof parsed.model === "string" ? parsed.model : "";
+          if (allowed.size > 0) {
+            if (reqModel && !allowed.has(reqModel)) {
+              return openaiErrorResponse(
+                400,
+                `Model "${reqModel}" is not in the server's models.config allowlist.`,
+                "model_not_allowed"
+              );
+            }
+            body = rawText;
+          } else if (connection.model) {
+            if (parsed.model !== connection.model) {
+              parsed.model = connection.model;
+              body = JSON.stringify(parsed);
+            } else {
+              body = rawText;
+            }
           } else {
             body = rawText;
           }
@@ -230,19 +278,23 @@ export interface ProviderInfoResponse {
   model: string;
   /** Absolute-path adapter baseURL on this server (no host). */
   basePath: string;
+  /** Server's own models.config (unified shape) — lets clients resolve the list. */
+  config?: ModelsConfig;
 }
 
 export const providerRoutes = new Hono()
-  .get("/info", (c) => {
+  .get("/info", async (c) => {
     const connection = readServerModelEnv();
     const style = parseModelStyle(connection.style);
     const basePath =
       style === "anthropic" ? anthropicProxyBasePath(connection.baseURL) : openaiProxyBasePath(connection.baseURL);
+    const serverConfig = await loadServerModelsConfig();
     const body: ProviderInfoResponse = {
       mode: "remote",
       style,
       model: connection.model,
       basePath,
+      ...(serverConfig ? { config: serverConfig } : {}),
     };
     return c.json(body);
   })
