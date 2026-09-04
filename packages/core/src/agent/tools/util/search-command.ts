@@ -29,12 +29,21 @@ export async function runSearchCommand(
     const fallbackResult = await env.runCommand(fallback, { timeout });
     return fallbackResult.stdout;
   }
-  // Non-zero exit with no stdout suggests the primary ran but failed for another
-  // reason (bad flag, broken pipe mid-stream, etc.). Try the fallback rather than
-  // returning an empty string that the caller would mistake for "no matches".
+  // rg/grep exit 1 means "no matches found" — a legitimate empty result, not a
+  // failure. Return the (empty) stdout so the caller presents 0 matches instead
+  // of a bogus "Search command failed" error.
+  if (primaryResult.exitCode === 1) {
+    return primaryResult.stdout;
+  }
+  // Other non-zero exits with no stdout suggest the primary ran but failed for
+  // another reason (bad flag, broken pipe mid-stream, IO error, etc.). Try the
+  // fallback rather than returning an empty string that the caller would mistake
+  // for "no matches". If both primary and fallback fail, both stderrs are
+  // surfaced via a thrown error for debuggability.
   if (primaryResult.exitCode !== 0 && primaryResult.stdout.trim() === "") {
     const fallbackResult = await env.runCommand(fallback, { timeout });
-    if (fallbackResult.exitCode === 0 || fallbackResult.stdout.trim() !== "") {
+    // exit 0 = matches found; exit 1 = no matches (still a valid empty result).
+    if (fallbackResult.exitCode === 0 || fallbackResult.exitCode === 1 || fallbackResult.stdout.trim() !== "") {
       return fallbackResult.stdout;
     }
     // Both failed — surface both stderrs so the failure is diagnosable.
