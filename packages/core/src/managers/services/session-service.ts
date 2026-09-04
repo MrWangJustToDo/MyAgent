@@ -84,9 +84,9 @@ export class SessionService {
     input: Pick<SessionPersistInput, "usage" | "resolveTextAdapter">
   ): Promise<string> {
     const { usage, resolveTextAdapter } = input;
-    const textAdapter = (await resolveTextAdapter?.()) ?? null;
-    if (!textAdapter) return userMessage.slice(0, 50);
     try {
+      const textAdapter = (await resolveTextAdapter?.()) ?? null;
+      if (!textAdapter) return userMessage.slice(0, 50);
       const { text, usage: queryUsage } = await runSideTextQuery(textAdapter, {
         systemPrompt:
           "Generate a concise title (3-8 words) for a conversation that starts with the following message. Return ONLY the title, no quotes or punctuation.",
@@ -178,7 +178,12 @@ export class SessionService {
       const firstUserText = getFirstUserInput(uiMessages || []);
       this.generateSessionTitle(firstUserText, { usage, resolveTextAdapter }).then((title) => {
         if (this.data) {
-          this.data.name = title;
+          // Skip empty/whitespace titles (e.g. a no-uiMessages persist passes an
+          // empty first user text) so the name stays "New Session" and a later
+          // persist with real messages can regenerate it.
+          const trimmed = title.trim();
+          if (!trimmed) return;
+          this.data.name = trimmed;
           // Reuse the unified save path so a title-write failure also emits
           // `session:save-error` (target "session-title").
           void this.saveToStore(emitEvent, "session-title");
