@@ -103,6 +103,11 @@ export function shouldFoldToolRow(part: ToolCallPart): boolean {
   return !shouldKeepToolRow(part);
 }
 
+/** Errored tool rows are filtered out entirely in compact mode. */
+export function isErrorToolRow(part: ToolCallPart): boolean {
+  return getUiToolState(part) === "output-error";
+}
+
 export function emptyToolActivityCounts(): ToolActivityCounts {
   return { reads: 0, edits: 0, searches: 0, commands: 0, tasks: 0, other: 0 };
 }
