@@ -43,6 +43,20 @@ export interface LogEntry {
   tags?: string[];
 }
 
+/** Options for persisting AgentLog entries to a JSONL file. */
+export interface AgentLogFileSinkOptions {
+  /** Target directory (e.g. `.agents/logs/{sessionId}`). Created on first write. */
+  dir: string;
+  /** Log file name inside `dir` (default `agent.log`). */
+  filename?: string;
+  /** Rotate the file when it exceeds this many bytes (default 5 MiB). */
+  maxBytes?: number;
+  /** Keep at most this many rotated segments (default 5; includes the active file). */
+  maxFiles?: number;
+  /** Batch-flush interval in ms (default 250). */
+  flushIntervalMs?: number;
+}
+
 /** Log filter options */
 export interface LogFilter {
   /** Filter by levels */

@@ -3,8 +3,6 @@
  *
  * Run: pnpm --filter @my-agent/server run validate:provider-proxy
  */
-/* eslint-disable no-undef */
-/* eslint-disable import/no-useless-path-segments */
 
 import { Hono } from "hono";
 import assert from "node:assert/strict";

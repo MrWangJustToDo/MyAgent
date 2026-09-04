@@ -31,6 +31,7 @@ export {
   createEarlyToolResultUiMiddleware,
   createExtensionsMiddleware,
   createLifecycleMiddleware,
+  instrumentMiddlewareLog,
 } from "../managers/middleware";
 export { createStatusMiddleware } from "../managers/middleware/status-middleware.js";
 export { createApprovalResumeMiddleware } from "../managers/middleware/approval-resume-middleware.js";

@@ -28,6 +28,9 @@ export const SESSION_LOG_SUFFIX = ".session.log";
 /** Journal record `kind` for whole-state checkpoints (slice 1). Future slices add semantic kinds. */
 export const SESSION_JOURNAL_KIND = "checkpoint";
 
+/** Directory for per-session AgentLog JSONL files: `.agents/logs/{sessionId}/`. */
+export const AGENT_LOG_DIR = ".agents/logs";
+
 // ============================================================================
 // Session Data Schema
 // ============================================================================

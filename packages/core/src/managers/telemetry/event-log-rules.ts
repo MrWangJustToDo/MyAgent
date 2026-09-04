@@ -248,12 +248,17 @@ export const DEFAULT_EVENT_LOG_RULES: Record<AgentEventType, EventLogRule | fals
     formatMessage: (event) =>
       `Progress summary failed for subagent ${p(event).subagentId ?? event.agentId}: ${p(event).error ?? "unknown"}`,
   },
-  "subagent:destroyed": false,
+  "subagent:destroyed": {
+    level: "info",
+    category: "system",
+    formatMessage: (event) => `Subagent destroyed: ${p(event).subagentId ?? event.agentId}`,
+  },
   "subagent:phase": {
     level: "debug",
     category: "agent",
     formatMessage: (event) => `Subagent phase → ${p(event).phase ?? "?"}`,
   },
+  // UI streaming channel (messageCount per pump) — not diagnostic value, keep off.
   "subagent:ui-update": false,
 
   // ============================================================================

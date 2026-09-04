@@ -22,6 +22,7 @@ import type {
 } from "./types.js";
 import type { CoreEnv } from "../../env.js";
 import type { EmitAgentTelemetryFn } from "../../runtime-types/agent-events.js";
+import type { AgentLog } from "../agent-log/agent-log.js";
 
 // ============================================================================
 // ExtensionEventBus implementation
@@ -173,6 +174,13 @@ export interface ExtensionRunnerOptions {
    * surface in AgentLog / lifecycle channels instead of being swallowed.
    */
   emitEvent?: EmitAgentTelemetryFn;
+  /**
+   * Optional agent log to converge extension logging into. When provided,
+   * `ctx.logger` and turn-context provider failures are written as structured
+   * `hooks` entries instead of raw console output (console stays as a fallback
+   * for standalone runner usage without an agent log).
+   */
+  log?: AgentLog | null;
 }
 
 export class ExtensionRunner {
@@ -282,7 +290,18 @@ export class ExtensionRunner {
         if (value?.trim()) turnContextSections.push({ id, content: value.trim() });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error(`[extension] turn context provider failed: ${message}`);
+        // Converge into the agent log via the existing `agent:extension-error`
+        // rule (error/system) rather than a bare console write; console stays
+        // as a fallback for standalone runners without an emitter.
+        if (this.options.emitEvent) {
+          this.options.emitEvent("agent:extension-error", {
+            extensionId: id,
+            phase: "turn-context",
+            error: message,
+          });
+        } else {
+          this.writeExtensionLog("error", id, `turn context provider failed: ${message}`);
+        }
       }
     }
     // Surface runtime-disabled extensions under the same tag so the model knows
@@ -520,11 +539,30 @@ export class ExtensionRunner {
       ui: this.wrapUi(api.id),
 
       logger: {
-        info: (msg: string) => console.log(`[extension:${api.id}] ${msg}`),
-        warn: (msg: string) => console.warn(`[extension:${api.id}] ${msg}`),
-        error: (msg: string) => console.error(`[extension:${api.id}] ${msg}`),
+        info: (msg: string) => this.writeExtensionLog("info", api.id, msg),
+        warn: (msg: string) => this.writeExtensionLog("warn", api.id, msg),
+        error: (msg: string) => this.writeExtensionLog("error", api.id, msg),
       },
     };
+  }
+
+  /**
+   * Converge extension logging into the agent log (`hooks` category) when one
+   * is wired; fall back to console for standalone runner usage (validation
+   * scripts, hosts that build an ExtensionRunner without an agent).
+   */
+  private writeExtensionLog(level: "info" | "warn" | "error", extensionId: string, msg: string): void {
+    const message = `[extension:${extensionId}] ${msg}`;
+    const log = this.options.log;
+    if (log) {
+      if (level === "error") log.error("hooks", message);
+      else if (level === "warn") log.warn("hooks", message);
+      else log.info("hooks", message);
+      return;
+    }
+    if (level === "error") console.error(message);
+    else if (level === "warn") console.warn(message);
+    else console.log(message);
   }
 
   private resolveCoreEnv(): CoreEnv {

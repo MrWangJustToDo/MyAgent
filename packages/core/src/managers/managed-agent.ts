@@ -618,6 +618,14 @@ export class ManagedAgent {
     return this.session.getSessionData();
   }
 
+  /**
+   * Ensure in-memory session data exists (allocates a stable `ses_` id without
+   * writing to disk). See {@link SessionService.ensureSessionData}.
+   */
+  ensureSessionData(): SessionData | null {
+    return this.session.ensureSessionData();
+  }
+
   // ============================================================================
   // Config & resources
   // ============================================================================

@@ -6,6 +6,8 @@
  * Mid-session switches should use `session.dispatch({ type: "session.resume", ... })`.
  */
 
+import { AGENT_LOG_DIR } from "../agent/persistence/types.js";
+
 import { createLocalAgentSession } from "./local-agent-session.js";
 
 import type {
@@ -94,6 +96,13 @@ class LocalAgentSessionHostImpl implements AgentSessionHost {
     const managed = await this.manager.createManagedAgent(toManagedConfig(options));
     const initialMessages = await restoreInitialMessages(managed, options);
     const initial = initialMessages ?? [];
+
+    // Fix the session id before the first persist so the file sink lands in a
+    // stable per-session directory `.agents/logs/{sessionId}/` (in-memory only;
+    // no disk write until the first save()).
+    managed.ensureSessionData();
+    const sessionId = managed.getSessionData()?.id ?? managed.id;
+    managed.getLog()?.attachFileSink({ dir: `${AGENT_LOG_DIR}/${sessionId}` });
 
     // Chat controller stays behind Session; adapters must not call ManagedAgent.initChat.
     managed.initChat(this.manager as AgentManager, initial);

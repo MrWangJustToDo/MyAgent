@@ -152,7 +152,6 @@ export async function startNewDiskSession(
     managed.manager?.releaseSessionOwnership(currentSession.id, managed.id);
   }
 
-
   const chatController = managed.getChatController();
   chatController?.clearMessages();
 

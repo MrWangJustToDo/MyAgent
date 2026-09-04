@@ -178,6 +178,9 @@ export async function buildManagedAgent({
       cwd: fsRootPath,
       getCoreEnv: () => getEnv(),
       emitEvent: (type, data) => managed.emitEvent(type, data),
+      // Converge extension logging (`ctx.logger`, turn-context provider
+      // failures) into the agent's structured log.
+      log,
     });
     managed.extensionRunner = extensionRunner;
 

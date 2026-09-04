@@ -79,6 +79,17 @@ export class SessionService {
     });
   }
 
+  /**
+   * Ensure in-memory session data exists (allocates the stable `ses_` id without
+   * writing to disk; the first `save()` writes the file). Used to fix a fresh
+   * session's id before its first persist so file sinks keyed by sessionId have
+   * a stable directory from the start.
+   */
+  ensureSessionData(): SessionData | null {
+    this.ensureSession();
+    return this.data;
+  }
+
   private async generateSessionTitle(
     userMessage: string,
     input: Pick<SessionPersistInput, "usage" | "resolveTextAdapter">

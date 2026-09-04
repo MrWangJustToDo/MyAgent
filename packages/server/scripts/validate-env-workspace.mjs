@@ -8,7 +8,6 @@
  * Run: pnpm --filter @my-agent/server run validate:env-workspace
  */
 /* eslint-disable no-undef */
-/* eslint-disable import/no-useless-path-segments */
 import assert from "node:assert/strict";
 import { execSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";

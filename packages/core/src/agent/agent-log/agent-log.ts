@@ -1,7 +1,8 @@
+import { getEnv } from "../../env.js";
 import { Emitter } from "../../utils/emitter.js";
 import { createSequentialIdGenerator } from "../../utils/generate-id.js";
 
-import type { LogCategory, LogEntry, LogFilter, LogLevel } from "./types.js";
+import type { AgentLogFileSinkOptions, LogCategory, LogEntry, LogFilter, LogLevel } from "./types.js";
 
 type AgentLogEvents = {
   entry: LogEntry;
@@ -254,6 +255,125 @@ export class AgentLog {
           break;
       }
     });
+  }
+
+  // ============================================================================
+  // File Sink (disk persistence)
+  // ============================================================================
+
+  private fileSinkDir: string | null = null;
+
+  /** Directory the active file sink writes to, or null when none is attached. */
+  getFileSinkDir(): string | null {
+    return this.fileSinkDir;
+  }
+
+  /**
+   * Persist log entries to a JSONL file (one LogEntry per line) with size-based
+   * rotation. Silent no-op when the env fs lacks `appendFile`. Existing in-memory
+   * entries (logged before attach, e.g. session bootstrap events) are backfilled
+   * first, then new entries stream in. Returns an unsubscribe function.
+   */
+  attachFileSink(options: AgentLogFileSinkOptions): () => void {
+    let fs: ReturnType<typeof getEnv>["fs"];
+    try {
+      fs = getEnv().fs;
+    } catch {
+      return () => {}; // CoreEnv not registered — degrade silently
+    }
+    if (!fs.appendFile) return () => {}; // no append support — degrade silently
+
+    const appendFile = fs.appendFile;
+    if (!appendFile) return () => {};
+    const dir = options.dir;
+    const filename = options.filename ?? "agent.log";
+    const maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
+    const maxFiles = options.maxFiles ?? 5;
+    const flushIntervalMs = options.flushIntervalMs ?? 250;
+    const filePath = `${dir}/${filename}`;
+
+    let buffer: string[] = [];
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let disposed = false;
+
+    /** Shift segments `{file}.{maxFiles-1}` → drop, ..., `{file}` → `{file}.1`, then truncate. */
+    const rotate = async (): Promise<void> => {
+      const oldest = `${filePath}.${maxFiles - 1}`;
+      if (await fs.exists(oldest)) await fs.remove(oldest);
+      for (let i = maxFiles - 2; i >= 1; i--) {
+        const from = `${filePath}.${i}`;
+        const to = `${filePath}.${i + 1}`;
+        if (await fs.exists(from)) {
+          const content = await fs.readFile(from);
+          await fs.writeFile(to, content);
+          await fs.remove(from);
+        }
+      }
+      if (await fs.exists(filePath)) {
+        const content = await fs.readFile(filePath);
+        await fs.writeFile(`${filePath}.1`, content);
+      }
+      await fs.writeFile(filePath, "");
+    };
+
+    const flush = async (): Promise<void> => {
+      if (buffer.length === 0) return;
+      const lines = buffer;
+      buffer = [];
+      try {
+        await fs.mkdir(dir);
+        if (!(await fs.exists(filePath))) {
+          await fs.writeFile(filePath, "");
+        }
+        const content = lines.join("\n") + "\n";
+        const contentBytes = new TextEncoder().encode(content).length;
+        // Rotate when the active file already meets maxBytes, or when the pending
+        // batch would push it past the limit — so a large batch never leaves the
+        // active file over budget. Size comes from stat (restart-safe).
+        let currentBytes = 0;
+        try {
+          currentBytes = (await fs.stat(filePath)).size;
+        } catch {
+          currentBytes = 0;
+        }
+        if (currentBytes > 0 && currentBytes + contentBytes >= maxBytes) {
+          await rotate();
+        }
+        await appendFile(filePath, content);
+      } catch {
+        // Non-fatal: log persistence must never break agent execution.
+      }
+    };
+
+    const schedule = (): void => {
+      if (timer || disposed) return;
+      timer = setTimeout(() => {
+        timer = null;
+        void flush();
+      }, flushIntervalMs);
+    };
+
+    // Subscribe first so entries emitted during backfill are not missed, then
+    // prepend the already-logged entries (older entries must sort first).
+    const unsubscribe = this.on("entry", (entry) => {
+      buffer.push(JSON.stringify(entry));
+      schedule();
+    });
+    const existing = this.entries.map((e) => JSON.stringify(e));
+    buffer.unshift(...existing);
+    if (buffer.length > 0) schedule();
+
+    this.fileSinkDir = dir;
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      void flush(); // best-effort final flush
+    };
   }
 
   // ============================================================================

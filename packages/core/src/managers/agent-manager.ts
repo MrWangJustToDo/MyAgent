@@ -179,6 +179,13 @@ export class AgentManager {
     }
     subagent.invalidateRunner();
 
+    // Subagents share the parent's session log directory but write an
+    // independent file ({subagentId}.log) so per-agent entries stay attributable.
+    const parentLogDir = parent.getLog()?.getFileSinkDir?.();
+    if (parentLogDir) {
+      subagent.getLog()?.attachFileSink({ dir: parentLogDir, filename: `${subagent.id}.log` });
+    }
+
     return subagent;
   }
 

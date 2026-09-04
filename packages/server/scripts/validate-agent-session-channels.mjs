@@ -14,8 +14,6 @@
  *
  * Run: pnpm --filter @my-agent/server run validate:agent-session-channels
  */
-/* eslint-disable no-undef */
-/* eslint-disable import/no-useless-path-segments */
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";

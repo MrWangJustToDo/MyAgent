@@ -24,6 +24,7 @@ import {
   createTaskPreforkMiddleware,
   createToolCompactMiddleware,
   createTurnContextMiddleware,
+  instrumentMiddlewareLog,
 } from "./middleware";
 import { runStreamWithRecovery } from "./run-stream-recovery.js";
 import { createEmitTelemetryFn } from "./telemetry/emit-agent-telemetry.js";
@@ -157,7 +158,6 @@ export function buildAgentRunner(
       getCompactionConfig: () => deps.compactionConfig,
       getToolCompactCache: () => managed.getToolCompactCache(),
       getManagedAgent: () => managed,
-      log: deps.log,
     }),
     createTurnContextMiddleware({
       getFrozenSystemPrompt: deps.getFrozenSystemPrompt,
@@ -217,7 +217,7 @@ export function buildAgentRunner(
     maxIterations: managed.config.maxIterations ?? 10,
     systemPrompts: systemPrompt ? [systemPrompt] : undefined,
     tools: resolveTanStackTools(managed),
-    middleware,
+    middleware: instrumentMiddlewareLog(middleware, deps.log),
     temperature: managed.config.temperature,
     maxOutputTokens,
     reasoningEffort: managed.config.reasoningEffort ?? deps.modelInfo?.reasoningConfig?.defaultEffort,

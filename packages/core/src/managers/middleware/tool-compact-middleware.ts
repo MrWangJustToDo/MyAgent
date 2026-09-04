@@ -1,7 +1,6 @@
 import { applyToolCompact } from "../../agent/compaction/tool-compact/apply-tool-compact.js";
 import { toModelOutputRegistry } from "../../agent/tools/runtime/to-model-output-registry.js";
 
-import type { AgentLog } from "../../agent/agent-log";
 import type { ToolCompactCache } from "../../agent/compaction/tool-compact/tool-compact-cache.js";
 import type { ToModelOutputRegistry } from "../../agent/compaction/tool-compact/types.js";
 import type { CompactionConfig } from "../../agent/compaction/types.js";
@@ -14,7 +13,6 @@ export interface ToolCompactMiddlewareDeps {
   getToolCompactCache: () => ToolCompactCache;
   getManagedAgent: () => ManagedAgent;
   registry?: ToModelOutputRegistry;
-  log?: AgentLog | null;
 }
 
 /** Per-tool LLM shaping via `toModelOutput` and recent-window placeholders. */
@@ -34,8 +32,6 @@ export function createToolCompactMiddleware(deps: ToolCompactMiddlewareDeps): Ch
           registry,
           cache: deps.getToolCompactCache(),
         });
-
-        deps.log?.chat(`After tool-compact messages: ${messages.length}`, { messages });
       }
 
       return { messages };

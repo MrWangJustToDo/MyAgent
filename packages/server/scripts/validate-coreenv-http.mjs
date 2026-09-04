@@ -7,7 +7,6 @@
  * Run: pnpm --filter @my-agent/server run validate:coreenv-http
  */
 /* eslint-disable no-undef */
-/* eslint-disable import/no-useless-path-segments */
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
