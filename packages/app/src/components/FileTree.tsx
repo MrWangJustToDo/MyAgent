@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BG, COLORS } from "../theme/colors.js";
 import { formatFolderGlyph, formatIconGlyph, getFileIconStyle, getFolderIconStyle } from "../utils/file-icons.js";
 import { splitStreamingLines } from "../utils/streaming-output-lines.js";
+import { buildDiffTreeItems, type FlatTreeItem } from "../utils/workspace-diff-tree.js";
 import { joinWorkspacePath, workspaceRelativePath } from "../utils/workspace-path.js";
 
+import type { WorkspaceFileDiffStat } from "../utils/workspace-diff-stats.js";
 import type { FileEntry } from "@my-agent/core";
 
 // ============================================================================
@@ -37,7 +39,17 @@ export function parseGitStatus(raw: string): Map<string, string> {
     if (line.length < 3) continue;
     const status = line.slice(0, 2).trim();
     const filepath = line.slice(3).trim();
-    if (filepath) map.set(filepath, status);
+    if (!filepath) continue;
+    // Rename rows look like "R  old/path -> new/path" — index both sides so the
+    // tree can render the old (deleted) and new (added) paths as separate rows.
+    const rename = filepath.match(/^(.*) -> (.*)$/);
+    const normalized = (p: string) => p.replace(/\\/g, "/");
+    if (rename) {
+      map.set(normalized(rename[1]!), status);
+      map.set(normalized(rename[2]!), status);
+    } else {
+      map.set(normalized(filepath), status);
+    }
   }
   return map;
 }
@@ -65,7 +77,11 @@ export async function fetchGitStatus(rootPath: string): Promise<Map<string, stri
   }
 }
 
-function lookupGitStatus(gitStatus: Map<string, string>, rootPath: string, fullPath: string): string | undefined {
+export function lookupGitStatus(
+  gitStatus: Map<string, string>,
+  rootPath: string,
+  fullPath: string
+): string | undefined {
   const relative = workspaceRelativePath(rootPath, fullPath);
   return gitStatus.get(relative) ?? gitStatus.get(relative.replace(/\\/g, "/"));
 }
@@ -88,18 +104,6 @@ function getStatusStyle(status: string): StatusStyle | null {
   if (s.startsWith("R")) return { label: "R", color: COLORS.primary };
   if (s.startsWith("C")) return { label: "C", color: COLORS.primary };
   return null;
-}
-
-// ============================================================================
-// Flat Tree Item
-// ============================================================================
-
-export interface FlatTreeItem {
-  path: string;
-  name: string;
-  indent: number;
-  type: "file" | "directory";
-  expanded: boolean;
 }
 
 // ============================================================================
@@ -261,6 +265,43 @@ export function useFileTree(rootPath: string): {
 }
 
 // ============================================================================
+// useDiffFileTree (diff mode: only changed files, merged prefixes)
+// ============================================================================
+
+/**
+ * Diff-mode tree: rows are built purely from the git status map (no fs reads),
+ * so the sidebar lists only changed files. Directory chains with a single
+ * subdirectory are merged into one row (GitHub PR style); all directories start
+ * expanded and can be collapsed via `toggleDir`.
+ */
+export function useDiffFileTree(
+  gitStatus: Map<string, string>,
+  rootPath: string
+): {
+  items: FlatTreeItem[];
+  toggleDir: (path: string) => void;
+} {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const items = useMemo(() => buildDiffTreeItems(gitStatus, rootPath, collapsed), [gitStatus, rootPath, collapsed]);
+
+  const toggleDir = useCallback(
+    (path: string) => {
+      const key = workspaceRelativePath(rootPath, path);
+      setCollapsed((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    },
+    [rootPath]
+  );
+
+  return { items, toggleDir };
+}
+
+// ============================================================================
 // FileTree
 // ============================================================================
 
@@ -274,6 +315,10 @@ interface FileTreeProps {
   scrollTop: number;
   visibleCount: number;
   loading: boolean;
+  /** Shown instead of "(empty directory)" when the item list is empty. */
+  emptyLabel?: string;
+  /** Per-file +/− line counts vs HEAD (GitHub PR style labels). */
+  diffStats?: Map<string, WorkspaceFileDiffStat> | null;
 }
 
 export const FileTree = ({
@@ -286,12 +331,14 @@ export const FileTree = ({
   scrollTop,
   visibleCount,
   loading,
+  emptyLabel,
+  diffStats,
 }: FileTreeProps) => {
   if (loading) return <Text color={COLORS.muted}>Loading tree...</Text>;
   if (items.length === 0)
     return (
       <Text color={COLORS.muted} dimColor>
-        (empty directory)
+        {emptyLabel ?? "(empty directory)"}
       </Text>
     );
 
@@ -332,6 +379,7 @@ export const FileTree = ({
         }
 
         const icon = getFileIconStyle(item.path);
+        const stats = diffStats?.get(workspaceRelativePath(rootPath, item.path));
         return (
           <Box key={item.path} flexShrink={0} height={1} width="100%" backgroundColor={rowBg}>
             <Text wrap="truncate">
@@ -343,6 +391,12 @@ export const FileTree = ({
                   {" "}
                   {style.label}
                 </Text>
+              )}
+              {stats && (stats.added > 0 || stats.deleted > 0) && (
+                <>
+                  <Text color={COLORS.success}> +{stats.added}</Text>
+                  <Text color={COLORS.danger}>−{stats.deleted}</Text>
+                </>
               )}
             </Text>
           </Box>

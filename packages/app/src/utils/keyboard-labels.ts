@@ -189,7 +189,7 @@ export function formatKeyboardShortcutsHelp(): string {
 
 /** Workspace panel footer hint. */
 export function workspacePanelHint(): string {
-  return `${KeyLabel.tab} preview/diff · ${KeyLabel.leftRight} focus · ${KeyLabel.upDown} scroll · ${KeyLabel.enter} open · ${KeyLabel.r} refresh · ${KeyLabel.ctrlE}/${KeyLabel.esc} close`;
+  return `${KeyLabel.tab} preview/diff · ${KeyLabel.leftRight} focus · ${KeyLabel.upDown} scroll · ${KeyLabel.enter} open · [ ] files · ${KeyLabel.r} refresh · ${KeyLabel.ctrlP} find · ${KeyLabel.ctrlE}/${KeyLabel.esc} close`;
 }
 
 /** Busy-agent footer: follow-up / force-submit / abort. */

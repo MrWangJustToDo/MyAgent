@@ -5,6 +5,12 @@ import { useSize } from "../hooks/use-size.js";
 import { useWorkspaceView } from "../hooks/use-workspace-view.js";
 import { BG, COLORS } from "../theme/colors.js";
 import { workspacePanelHint } from "../utils/keyboard-labels.js";
+import {
+  clearWorkspaceDiffStatsCache,
+  fetchWorkspaceDiffStats,
+  type WorkspaceDiffStats,
+} from "../utils/workspace-diff-stats.js";
+import { clearWorkspaceFileListCache } from "../utils/workspace-file-search.js";
 import { clearWorkspaceDiffCache } from "../utils/workspace-git-diff.js";
 import { fetchWorkspaceGitInfo, type WorkspaceGitInfo } from "../utils/workspace-git-info.js";
 import { ensureIndexVisible } from "../utils/workspace-scroll.js";
@@ -17,8 +23,11 @@ import {
   computeDirStatuses,
   fetchGitStatus,
   FileTree,
+  lookupGitStatus,
+  useDiffFileTree,
   useFileTree,
 } from "./FileTree.js";
+import { WorkspaceQuickOpen } from "./WorkspaceQuickOpen.js";
 
 import type { CodeViewRef, DiffViewRef } from "@git-diff-view/cli";
 import type { ReactNode } from "react";
@@ -81,7 +90,9 @@ export const WorkspaceFileMode = () => {
   const mode = useWorkspaceView((s) => s.mode);
   const selectedPath = useWorkspaceView((s) => s.selectedPath);
   const treeScrollTop = useWorkspaceView((s) => s.treeScrollTop);
-  const { close, selectFile, setPaneFocus, toggleMode, setTreeScrollTop } = useWorkspaceView.getActions();
+  const quickOpen = useWorkspaceView((s) => s.quickOpen);
+  const { close, openQuickOpen, selectFile, setPaneFocus, toggleMode, setTreeScrollTop } =
+    useWorkspaceView.getActions();
 
   const previewRef = useRef<CodeViewRef>(null);
   const diffRef = useRef<DiffViewRef>(null);
@@ -105,6 +116,7 @@ export const WorkspaceFileMode = () => {
   const [gitInfo, setGitInfo] = useState<WorkspaceGitInfo | null>(null);
   const [cursorIndex, setCursorIndex] = useState(0);
   const [refreshToken, setRefreshToken] = useState(0);
+  const [diffStats, setDiffStats] = useState<WorkspaceDiffStats | null>(null);
 
   const bodyHeight = Math.max(10, screenHeight - HEADER_LINES - FOOTER_LINES);
   const paneBodyLines = Math.max(4, bodyHeight - PANE_TITLE_LINES - 2);
@@ -112,7 +124,15 @@ export const WorkspaceFileMode = () => {
   const previewWidth = Math.max(MIN_PREVIEW_WIDTH, screenWidth - treeWidth - 2);
   const rightPaneTitle = mode === "preview" ? "Preview" : "Diff";
 
-  const { items, loading: treeLoading, toggleDir, reload } = useFileTree(rootPath);
+  const isDiffMode = mode === "diff";
+
+  const { items: fullItems, loading: treeLoading, toggleDir, reload } = useFileTree(rootPath);
+  const { items: diffItems, toggleDir: toggleDiffDir } = useDiffFileTree(gitStatus, rootPath);
+
+  // Diff mode lists only changed files (preprocessed, merged-prefix tree);
+  // preview mode shows the full workspace tree.
+  const items = isDiffMode ? diffItems : fullItems;
+  const handleToggleDir = isDiffMode ? toggleDiffDir : toggleDir;
 
   const dirStatuses = useMemo(() => computeDirStatuses(gitStatus, rootPath), [gitStatus, rootPath]);
 
@@ -126,16 +146,49 @@ export const WorkspaceFileMode = () => {
     [items.length, paneBodyLines, setTreeScrollTop]
   );
 
+  // Jump between files that have git changes (`[` / `]`), wrapping around.
+  const jumpToChanged = useCallback(
+    (direction: 1 | -1) => {
+      const changedIndices: number[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item && item.type === "file" && lookupGitStatus(gitStatus, rootPath, item.path)) {
+          changedIndices.push(i);
+        }
+      }
+      if (changedIndices.length === 0) return;
+      let nextIndex: number;
+      if (direction > 0) {
+        const hit = changedIndices.find((i) => i > cursorIndex);
+        nextIndex = hit ?? changedIndices[0]!;
+      } else {
+        const prev = [...changedIndices].reverse().find((i) => i < cursorIndex);
+        nextIndex = prev ?? changedIndices[changedIndices.length - 1]!;
+      }
+      setCursorIndex(nextIndex);
+      const currentScroll = useWorkspaceView.getReadonlyState().treeScrollTop;
+      setTreeScrollTop(ensureIndexVisible(nextIndex, currentScroll, paneBodyLines, items.length));
+      const target = items[nextIndex];
+      if (target && target.type === "file") selectFile(target.path);
+    },
+    [items, gitStatus, rootPath, cursorIndex, paneBodyLines, selectFile, setTreeScrollTop]
+  );
+
   const refreshGit = useCallback(async (path: string) => {
     if (!path) return;
     try {
       clearGitStatusCache();
-      const [status, info] = await Promise.all([fetchGitStatus(path), fetchWorkspaceGitInfo(path)]);
+      clearWorkspaceDiffStatsCache();
+      const status = await fetchGitStatus(path);
+      const untracked = [...status.entries()].filter(([, s]) => s.trim() === "??").map(([rel]) => rel);
+      const [info, stats] = await Promise.all([fetchWorkspaceGitInfo(path), fetchWorkspaceDiffStats(path, untracked)]);
       setGitStatus(new Map(status));
       setGitInfo(info);
+      setDiffStats(stats);
     } catch {
       setGitStatus(new Map());
       setGitInfo(null);
+      setDiffStats(null);
     }
   }, []);
 
@@ -172,6 +225,9 @@ export const WorkspaceFileMode = () => {
   }, [selectedPath]);
 
   useInput((inputChar, key) => {
+    // The quick-open overlay owns the keyboard while it is up.
+    if (quickOpen) return;
+
     if (key.tab) {
       toggleMode();
       return;
@@ -185,12 +241,24 @@ export const WorkspaceFileMode = () => {
     if (inputChar === "r" && !key.ctrl) {
       clearDirCache();
       clearGitStatusCache();
+      clearWorkspaceDiffStatsCache();
+      clearWorkspaceFileListCache();
       clearContentCache();
       clearWorkspaceDiffCache();
       reload();
       scrollActivePane("top");
       setRefreshToken((t) => t + 1);
       void refreshGit(rootPath);
+      return;
+    }
+
+    if (key.ctrl && inputChar === "p") {
+      openQuickOpen();
+      return;
+    }
+
+    if (inputChar === "]" || inputChar === "[") {
+      jumpToChanged(inputChar === "]" ? 1 : -1);
       return;
     }
 
@@ -208,7 +276,7 @@ export const WorkspaceFileMode = () => {
         if (!current) return;
         if (current.type === "directory") {
           if (!current.expanded) {
-            void toggleDir(current.path);
+            void handleToggleDir(current.path);
             return;
           }
           setPaneFocus("preview");
@@ -224,7 +292,7 @@ export const WorkspaceFileMode = () => {
       if (key.leftArrow) {
         const current = items[cursorIndex];
         if (current?.type === "directory" && current.expanded) {
-          void toggleDir(current.path);
+          void handleToggleDir(current.path);
           return;
         }
         if (current && current.indent > 0) {
@@ -241,7 +309,7 @@ export const WorkspaceFileMode = () => {
       if (key.return) {
         const current = items[cursorIndex];
         if (!current) return;
-        if (current.type === "directory") void toggleDir(current.path);
+        if (current.type === "directory") void handleToggleDir(current.path);
         else selectFile(current.path);
       }
       return;
@@ -303,52 +371,74 @@ export const WorkspaceFileMode = () => {
             )}
           </>
         )}
+        {diffStats && (diffStats.totalAdded > 0 || diffStats.totalDeleted > 0) && (
+          <>
+            <Text color={COLORS.muted} dimColor>
+              {" "}
+              ·{" "}
+            </Text>
+            <Text color={COLORS.muted}>{diffStats.files.size} files</Text>
+            <Text color={COLORS.success}> +{diffStats.totalAdded}</Text>
+            <Text color={COLORS.danger}>−{diffStats.totalDeleted}</Text>
+          </>
+        )}
       </Box>
 
-      <Box flexDirection="row" flexGrow={1} height={bodyHeight} gap={0}>
-        <WorkspacePane title="Files" active={paneFocus === "tree"} width={treeWidth} height={bodyHeight}>
-          <FileTree
-            items={items}
-            gitStatus={gitStatus}
-            dirStatuses={dirStatuses}
-            rootPath={rootPath}
-            cursorIndex={cursorIndex}
-            selectedPath={selectedPath}
-            scrollTop={treeScrollTop}
-            visibleCount={paneBodyLines}
-            loading={treeLoading}
-          />
-        </WorkspacePane>
+      {quickOpen ? (
+        <WorkspaceQuickOpen rootPath={rootPath} width={screenWidth} height={bodyHeight} />
+      ) : (
+        <Box flexDirection="row" flexGrow={1} height={bodyHeight} gap={0}>
+          <WorkspacePane
+            title={isDiffMode ? "Changed Files" : "Files"}
+            active={paneFocus === "tree"}
+            width={treeWidth}
+            height={bodyHeight}
+          >
+            <FileTree
+              items={items}
+              gitStatus={gitStatus}
+              dirStatuses={dirStatuses}
+              rootPath={rootPath}
+              cursorIndex={cursorIndex}
+              selectedPath={selectedPath}
+              scrollTop={treeScrollTop}
+              visibleCount={paneBodyLines}
+              loading={isDiffMode ? gitStatus.size === 0 && treeLoading : treeLoading}
+              emptyLabel={isDiffMode ? "(no changes)" : undefined}
+              diffStats={diffStats?.files ?? null}
+            />
+          </WorkspacePane>
 
-        <WorkspacePane title={rightPaneTitle} active={paneFocus === "preview"} width={undefined} height={bodyHeight}>
-          {selectedPath ? (
-            mode === "preview" ? (
-              <FileContent
-                key={refreshToken}
-                ref={previewRef}
-                filePath={selectedPath}
-                width={previewWidth - 2}
-                height={paneBodyLines}
-              />
+          <WorkspacePane title={rightPaneTitle} active={paneFocus === "preview"} width={undefined} height={bodyHeight}>
+            {selectedPath ? (
+              mode === "preview" ? (
+                <FileContent
+                  key={refreshToken}
+                  ref={previewRef}
+                  filePath={selectedPath}
+                  width={previewWidth - 2}
+                  height={paneBodyLines}
+                />
+              ) : (
+                <FileDiffContent
+                  key={refreshToken}
+                  ref={diffRef}
+                  rootPath={rootPath}
+                  filePath={selectedPath}
+                  width={previewWidth - 2}
+                  height={paneBodyLines}
+                />
+              )
             ) : (
-              <FileDiffContent
-                key={refreshToken}
-                ref={diffRef}
-                rootPath={rootPath}
-                filePath={selectedPath}
-                width={previewWidth - 2}
-                height={paneBodyLines}
-              />
-            )
-          ) : (
-            <Box height={paneBodyLines} alignItems="center" justifyContent="center">
-              <Text color={COLORS.muted} dimColor>
-                Select a file (→) to preview
-              </Text>
-            </Box>
-          )}
-        </WorkspacePane>
-      </Box>
+              <Box height={paneBodyLines} alignItems="center" justifyContent="center">
+                <Text color={COLORS.muted} dimColor>
+                  Select a file (→) to preview
+                </Text>
+              </Box>
+            )}
+          </WorkspacePane>
+        </Box>
+      )}
 
       <Box flexShrink={0} height={FOOTER_LINES} paddingX={1}>
         <Text color={COLORS.muted} dimColor>
