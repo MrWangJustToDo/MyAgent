@@ -74,7 +74,21 @@ async function restoreInitialMessages(
     const data = await managed.restoreSession(options.resumeSessionId);
     return data.uiMessages;
   }
-  if (!options.continueSession) return undefined;
+  if (!options.continueSession) {
+    // Default startup: reuse the most recently updated *empty* session (no user
+    // messages) instead of creating a new one every launch — avoids piling up
+    // empty session files. Sessions with real history are only resumed via an
+    // explicit `--continue` / `--resume`.
+    const store = managed.getSessionStore?.() ?? null;
+    if (store) {
+      const empty = await store.getLatestEmpty();
+      if (empty) {
+        const data = await managed.restoreSession(empty.id);
+        return data.uiMessages;
+      }
+    }
+    return undefined;
+  }
 
   const store = managed.getSessionStore?.() ?? null;
   if (!store) return undefined;

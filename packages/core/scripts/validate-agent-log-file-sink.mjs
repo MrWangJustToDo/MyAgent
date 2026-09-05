@@ -148,5 +148,28 @@ await sleep(40);
 assert.equal(await fs.promises.readFile(filePath, "utf-8"), afterDetach, "no writes after detach");
 console.log("detach OK");
 
+// ----------------------------------------------------------------------------
+// 5. Reused log file: re-attaching to an existing file writes a session
+//    divider so a new launch does not blend into the previous one.
+// ----------------------------------------------------------------------------
+const log2 = new AgentLog();
+const detach2 = log2.attachFileSink({
+  dir: logDir,
+  filename: "agent.log",
+  flushIntervalMs: 20,
+});
+log2.info("system", "launch-2");
+await sleep(60);
+
+const content2 = await fs.promises.readFile(filePath, "utf-8");
+const markerMatch = content2.match(/---------- [^\n]+ new session ----------/);
+assert.ok(markerMatch, `reused file must contain a session divider, got:\n${content2.slice(0, 300)}`);
+const beforeMarker = content2.slice(0, markerMatch.index).trim();
+assert.ok(beforeMarker.length > 0, "previous launch entries precede the divider");
+const afterMarker = content2.slice(markerMatch.index + markerMatch[0].length);
+assert.ok(afterMarker.includes("launch-2"), "new launch entries follow the divider");
+detach2();
+console.log("reused-file divider OK");
+
 await fs.promises.rm(rootPath, { recursive: true, force: true });
 console.log("agent-log-file-sink validation passed");

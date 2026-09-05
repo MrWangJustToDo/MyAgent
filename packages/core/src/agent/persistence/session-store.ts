@@ -176,6 +176,20 @@ export class SessionStore {
   }
 
   /**
+   * Find the most recently updated session that has never been used (contains
+   * no user messages). Lets hosts reuse the leftover empty session from a
+   * previous startup instead of creating a fresh one.
+   */
+  async getLatestEmpty(): Promise<SessionData | null> {
+    const metas = await this.list();
+    for (const meta of metas) {
+      const data = await this.load(meta.id);
+      if (data && !data.uiMessages.some((m) => m.role === "user")) return data;
+    }
+    return null;
+  }
+
+  /**
    * Find sessions by name (partial match, case-insensitive).
    */
   async findByName(query: string): Promise<SessionMeta[]> {

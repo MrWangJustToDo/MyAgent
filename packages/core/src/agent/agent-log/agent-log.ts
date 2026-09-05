@@ -296,6 +296,14 @@ export class AgentLog {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let disposed = false;
 
+    /**
+     * Whether the session-boundary marker has been written. When the sink is
+     * attached to an existing file (same session reused across launches), the
+     * first flush prepends a visible divider so the new launch's log lines do
+     * not blend into the previous one's.
+     */
+    let boundaryWritten = false;
+
     /** Shift segments `{file}.{maxFiles-1}` → drop, ..., `{file}` → `{file}.1`, then truncate. */
     const rotate = async (): Promise<void> => {
       const oldest = `${filePath}.${maxFiles - 1}`;
@@ -322,8 +330,17 @@ export class AgentLog {
       buffer = [];
       try {
         await fs.mkdir(dir);
-        if (!(await fs.exists(filePath))) {
+        const existed = await fs.exists(filePath);
+        if (!existed) {
           await fs.writeFile(filePath, "");
+        }
+        // Reused log file (session resumed/continued): mark the new launch with
+        // a clearly visible divider before the first batch of this session.
+        if (!boundaryWritten) {
+          boundaryWritten = true;
+          if (existed) {
+            lines.unshift(`---------- ${new Date().toISOString()} new session ----------`);
+          }
         }
         const content = lines.join("\n") + "\n";
         const contentBytes = new TextEncoder().encode(content).length;

@@ -80,6 +80,13 @@ function createFake(id, parentId) {
     initChat() {
       return managed.chatController;
     },
+    ensureSessionData() {},
+    getSessionData() {
+      return null;
+    },
+    getLog() {
+      return null;
+    },
     syncInteractionStateFromUIMessages() {},
     resetSessionSyncTracker() {},
     getPlanModeState() {

@@ -11,6 +11,8 @@ import { join } from "node:path";
 
 import { clearCoreEnv, registerCoreEnv, SessionStore } from "../dist/dev.mjs";
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const files = new Map();
 let failWrites = false;
 
@@ -77,8 +79,17 @@ function setupEnv() {
         const prefix = p.endsWith("/") ? p : `${p}/`;
         return [...files.keys()].some((k) => k === p || k.startsWith(prefix));
       },
-      async readdir() {
-        return [];
+      async readdir(p) {
+        const prefix = p.endsWith("/") ? p : `${p}/`;
+        const names = new Set();
+        for (const key of files.keys()) {
+          if (key.startsWith(prefix)) {
+            const rest = key.slice(prefix.length);
+            const name = rest.includes("/") ? rest.slice(0, rest.indexOf("/")) : rest;
+            if (name) names.add(name);
+          }
+        }
+        return [...names].map((name) => ({ name, type: name.endsWith(".session.json") ? "file" : "directory" }));
       },
       async remove(p) {
         files.delete(p);
@@ -107,5 +118,32 @@ await store.save(session);
 const loaded = await store.load(session.id);
 assert.ok(loaded, "save after failure must still work (lock chain healthy)");
 assert.equal(loaded.name, "after-failure");
+
+// ----------------------------------------------------------------------------
+// getLatestEmpty: only sessions without user messages are reusable, and the
+// most recently updated one wins (drives empty-session reuse on startup).
+// ----------------------------------------------------------------------------
+{
+  const oldEmpty = store.create({ modelStyle: "openai", model: "m", name: "old-empty" });
+  await store.save(oldEmpty);
+  await sleep(3);
+
+  const used = store.create({ modelStyle: "openai", model: "m", name: "used" });
+  used.uiMessages = [{ id: "u1", role: "user", parts: [{ type: "text", content: "hi" }] }];
+  await store.save(used);
+  await sleep(3);
+
+  const newEmpty = store.create({ modelStyle: "openai", model: "m", name: "new-empty" });
+  await store.save(newEmpty);
+
+  const reusable = await store.getLatestEmpty();
+  assert.ok(reusable, "must find a reusable empty session");
+  assert.equal(reusable.id, newEmpty.id, "most recently updated empty session wins");
+  assert.equal(reusable.uiMessages.length, 0);
+
+  // A session that has user messages is never returned.
+  const onlyUsed = await store.getLatestEmpty();
+  assert.notEqual(onlyUsed.id, used.id);
+}
 
 console.log("session-store-errors validation passed");
