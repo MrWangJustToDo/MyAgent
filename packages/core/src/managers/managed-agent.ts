@@ -853,7 +853,7 @@ export class ManagedAgent {
     if (!this.sessionSyncTracker.shouldPersist(uiMessages, { reason })) {
       return;
     }
-    void saveSessionUIMessagesHelper(this, uiMessages);
+    void saveSessionUIMessagesHelper(this, uiMessages).catch((err) => this.reportBackgroundPersistError(err));
   }
 
   /**
@@ -861,7 +861,7 @@ export class ManagedAgent {
    * Fire-and-forget — dehydrate + disk write happen in the background.
    */
   saveSessionUIMessages(uiMessages: TanStackUIMessage[]): void {
-    void saveSessionUIMessagesHelper(this, uiMessages);
+    void saveSessionUIMessagesHelper(this, uiMessages).catch((err) => this.reportBackgroundPersistError(err));
   }
 
   /** Reset fingerprint tracking after restore, clear, or new chat bootstrap. */
@@ -871,7 +871,19 @@ export class ManagedAgent {
 
   /** Persist model state only (usage, todos). Does not write `uiMessages`. */
   persistSession(): void {
-    void persistSessionModelState(this);
+    void persistSessionModelState(this).catch((err) => this.reportBackgroundPersistError(err));
+  }
+
+  /**
+   * Backstop for fire-and-forget persists. Without it a rejected persist (e.g. a
+   * media/dehydrate IO error thrown outside `saveToStore`) becomes an unhandled
+   * rejection — and there is no global `unhandledRejection` handler, so the host
+   * process would crash. Surface it as `session:save-error` instead.
+   */
+  private reportBackgroundPersistError(error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error);
+    this.log.warn("system", "background session persist failed", { error: message });
+    this.emitEvent("session:save-error", { target: "session+uiMessages", error: message });
   }
 
   /**

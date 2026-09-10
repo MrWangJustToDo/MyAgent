@@ -181,8 +181,21 @@ export class SessionService {
     }
 
     if (uiMessages !== undefined) {
-      const dehydrated = await dehydrateUIMessages(uiMessages);
-      this.data.uiMessages = dehydrated;
+      // Dehydrate extracts base64 assets to the media store (disk writes). This
+      // runs BEFORE saveToStore, so a media IO failure would reject persistSession
+      // and — for fire-and-forget hosts (`void …persist…`) — escape as an
+      // unhandled rejection. Keep persist best-effort: surface it like any save
+      // failure and fall through with the previous messages, still saving the rest
+      // of the session state.
+      try {
+        const dehydrated = await dehydrateUIMessages(uiMessages);
+        this.data.uiMessages = dehydrated;
+      } catch (err) {
+        emitEvent?.("session:save-error", {
+          target: "session+uiMessages",
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     // Regenerate the title for blank names too, not just "New Session": legacy
@@ -235,10 +248,21 @@ export class SessionService {
     const { usage, todoManager } = input;
     usage.reset();
 
-    const hydrated = await hydrateUIMessages(session.uiMessages);
-    // Canonicalize on disk: repair stringified multimodal + extract media:// refs.
-    const dehydrated = await dehydrateUIMessages(hydrated);
-    session.uiMessages = dehydrated;
+    // Hydrate reads media files; canonicalize re-extracts media:// refs (writes).
+    // Neither must abort a resume on media IO failure, so degrade to the stored
+    // messages instead of throwing out of restore.
+    let hydrated: UIMessage[];
+    try {
+      hydrated = await hydrateUIMessages(session.uiMessages);
+      try {
+        const dehydrated = await dehydrateUIMessages(hydrated);
+        session.uiMessages = dehydrated;
+      } catch {
+        // Canonicalize is best-effort; keep the stored form when media writes fail.
+      }
+    } catch {
+      hydrated = session.uiMessages;
+    }
     session.approvals = normalizeSessionApprovals({
       approvals: session.approvals,
       uiMessages: hydrated,
