@@ -228,6 +228,8 @@ function applyEvent(
         model: event.payload.model,
         modelInfo: event.payload.modelInfo ?? undefined,
         reasoningEffort: event.payload.reasoningEffort ?? undefined,
+        // On-disk session identity (agent identity is the connection, not this).
+        ...(event.payload.sessionId ? { sessionId: event.payload.sessionId } : {}),
       };
     case "lifecycle": {
       // Keep task phases fresh between snapshot refetches — subagent summaries

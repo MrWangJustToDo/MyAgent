@@ -165,6 +165,8 @@ export async function startNewDiskSession(
   managed.resetAdmittedTurnContext();
   managed.resetSystemPrompt();
   managed.getTodoManager()?.reset();
+  // Broadcast the new on-disk session id (agent identity is unchanged).
+  managed.refreshState();
 
   return { ok: true, sessionId: newSession.id };
 }

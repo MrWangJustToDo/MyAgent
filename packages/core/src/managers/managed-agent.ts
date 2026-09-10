@@ -615,10 +615,20 @@ export class ManagedAgent {
     this.emitStateChange();
   }
 
+  /**
+   * Re-emit the L1 state snapshot. Call after swapping the on-disk session
+   * (`session.resume` / `session.new`) so live subscribers observe the new
+   * `sessionId` without waiting for the next unrelated state change.
+   */
+  refreshState(): void {
+    this.emitStateChange();
+  }
+
   getL1State(): AgentL1State {
     return {
       status: this.currentStatus,
       name: this.name,
+      sessionId: this.getSessionData()?.id ?? null,
       error: this.error,
       pendingApprovalCount: this.pendingApprovalCount,
       ...(this.retryInfo ? { retry: this.retryInfo } : {}),

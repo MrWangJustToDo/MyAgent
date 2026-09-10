@@ -37,6 +37,8 @@ export interface SessionHost {
   emitEvent: EmitAgentTelemetryFn;
   /** Update the agent's display name (broadcast via the state channel). */
   setDisplayName?: (name: string) => void;
+  /** Re-emit the L1 state snapshot (after swapping the on-disk session id). */
+  refreshState?: () => void;
   resetAdmittedTurnContext?: () => void;
   /** Drop steer/follow-up queues without clearing the transcript (no-op before initChat). */
   clearQueuedMessages: () => void;
@@ -129,6 +131,9 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
     autoMode: host.isAutoModeEnabled(),
     ...(mediaMissing > 0 ? { mediaMissing } : {}),
   });
+  // The on-disk session (and thus `AgentL1State.sessionId`) just changed while the
+  // agent kept its identity — re-emit state so live subscribers see the switch.
+  host.refreshState?.();
   return session;
 }
 

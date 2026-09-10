@@ -99,6 +99,8 @@ export interface AgentSessionSnapshot {
   parentId?: string;
   name: string;
   status: AgentStatus;
+  /** Active on-disk session id (see {@link AgentL1State.sessionId}); absent before one exists. */
+  sessionId?: string;
   error: string;
   pendingApprovalCount: number;
   /** Present while a recoverable LLM failure is being retried (see {@link AgentRetryState}). */

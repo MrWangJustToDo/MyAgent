@@ -20,6 +20,12 @@ export interface AgentL1State {
   status: AgentStatus;
   /** Agent display name (lets remote clients track renames via the state channel). */
   name: string;
+  /**
+   * Active on-disk session id, or null before one is allocated. Distinct from the
+   * agent id: `session.resume` / `session.new` swap the disk session while the agent
+   * keeps its identity, so this is the only way subscribers observe the switch.
+   */
+  sessionId: string | null;
   error: string;
   pendingApprovalCount: number;
   /** Present while a recoverable LLM failure is being retried (cleared once the stream recovers). */
