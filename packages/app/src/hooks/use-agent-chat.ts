@@ -7,7 +7,6 @@ import { bindAgentSession } from "../adapter/create-agent.js";
 import { useAdapter } from "../context/adapter-context.js";
 import { clearFlatMessageCache } from "../utils/message-flat-cache.js";
 import { getActiveHost, resolveAgentSession } from "../utils/session-resolve.js";
-import { isToolCallPart, isPendingToolApproval, parseToolInput } from "../utils/tool-part.js";
 import { handleToolLifecycleEvent } from "../utils/tool-timing-store.js";
 
 import { useAgentStatus } from "./use-agent-status.js";
@@ -20,7 +19,7 @@ import { getWorkSpaceInfo } from "./use-workspace-info.js";
 
 import type { AppConfig } from "../adapter/types.js";
 import type { Attachment } from "../types/attachment.js";
-import type { AgentStatus, QueuedMessagesSnapshot } from "@my-agent/core";
+import type { AgentStatus, QueuedMessagesSnapshot, SessionInteractionsSnapshot } from "@my-agent/core";
 import type { ContentPart, UIMessage } from "@tanstack/ai";
 
 // ============================================================================
@@ -148,6 +147,9 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   const [status, setStatus] = useState<AgentStatus>("idle");
   const [agentError, setAgentError] = useState("");
   const [saveError, setSaveError] = useState("");
+  // Pending approvals / ask_user come from core (retained `interaction` channel)
+  // instead of each host re-scanning messages.
+  const [interactions, setInteractions] = useState<SessionInteractionsSnapshot>({ approvals: [], askUser: [] });
 
   const forceUpdate = useForceUpdate({ time: 100 });
   const initIdRef = useRef(0);
@@ -214,6 +216,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     setAgentError(snap.error);
     useAgentStatus.getActions().setStatus(snap.status);
     setQueuedMessages(snap.queues);
+    setInteractions(snap.interactions);
 
     // Resume-session linkage: if the restored session was using a model that the
     // loaded models.json knows about, re-dispatch model.set so the live agent
@@ -247,6 +250,10 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
           setQueuedMessages(event.payload);
           return;
         }
+        if (event.channel === "interaction") {
+          setInteractions(event.payload);
+          return;
+        }
         if (event.channel === "state") {
           setStatus(event.payload.status);
           setAgentError(event.payload.error);
@@ -267,7 +274,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
           handleToolLifecycleEvent(payload);
         }
       },
-      { channels: ["messages", "queues", "state", "todos", "lifecycle"] }
+      { channels: ["messages", "queues", "state", "todos", "lifecycle", "interaction"] }
     );
 
     return () => {
@@ -392,47 +399,17 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     [session, forceUpdate]
   );
 
-  const allPendingApproval = useMemo(() => {
-    const all: UseAgentChatReturn["allPendingApproval"] = [];
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg.role !== "assistant") continue;
-      for (const part of msg.parts) {
-        if (!isToolCallPart(part)) continue;
-        if (!isPendingToolApproval(part)) continue;
-        const approvalId = part.approval?.id;
-        if (!approvalId) continue;
-        all.push({
-          id: approvalId,
-          toolName: part.name,
-          toolCallId: part.id,
-        });
-      }
-    }
-    return all;
-  }, [messages]);
+  // Core derives these (retained `interaction` channel / snapshot); hosts no
+  // longer scan messages themselves.
+  const allPendingApproval = useMemo<UseAgentChatReturn["allPendingApproval"]>(
+    () => interactions.approvals.map((a) => ({ id: a.approvalId, toolName: a.toolName, toolCallId: a.toolCallId })),
+    [interactions]
+  );
 
-  const allPendingAskUser = useMemo(() => {
-    const all: UseAgentChatReturn["allPendingAskUser"] = [];
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg.role !== "assistant") continue;
-      for (const part of msg.parts) {
-        if (!isToolCallPart(part)) continue;
-        if (part.name !== "ask_user") continue;
-        if (part.state !== "input-complete" || part.output !== undefined) continue;
-        const input = parseToolInput(part) as
-          { question?: string; options?: string[]; multiSelect?: boolean } | undefined;
-        all.push({
-          toolCallId: part.id,
-          question: input?.question ?? "",
-          options: input?.options,
-          multiSelect: input?.multiSelect,
-        });
-      }
-    }
-    return all;
-  }, [messages]);
+  const allPendingAskUser = useMemo<UseAgentChatReturn["allPendingAskUser"]>(
+    () => interactions.askUser,
+    [interactions]
+  );
 
   const setClientToolWaiting = useCallback(
     (active: boolean) => {
