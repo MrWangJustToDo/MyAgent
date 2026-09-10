@@ -160,7 +160,11 @@ async function dehydrateToolResultContent(content: unknown, store: ReturnType<ty
 }
 
 /** Reverse of {@link dehydrateToolResultContent}: restore nested `source.value`s. */
-async function hydrateToolResultContent(content: unknown, store: ReturnType<typeof getMediaStore>): Promise<string> {
+async function hydrateToolResultContent(
+  content: unknown,
+  store: ReturnType<typeof getMediaStore>,
+  onMissing?: (miss: MediaHydrationMiss) => void
+): Promise<string> {
   const parts = parseToolResultParts(content);
   if (!parts) return content as string;
 
@@ -175,10 +179,16 @@ async function hydrateToolResultContent(content: unknown, store: ReturnType<type
       const filename = typeof metadata.filename === "string" ? metadata.filename : undefined;
       const sourceType = source.type === "data" ? "data" : "url";
       const parsed = parseMediaRefPath(value);
-      if (!parsed) return false;
+      if (!parsed) {
+        onMissing?.({ ref: value, reason: "invalid-ref", path: "tool-result" });
+        return false;
+      }
 
       const loaded = await store.tryLoad({ hash: parsed.hash, mimeType, filename, size: 0, sourceType });
-      if (!loaded) return false;
+      if (!loaded) {
+        onMissing?.({ ref: value, reason: "not-found", path: "tool-result" });
+        return false;
+      }
 
       source.value = loaded;
       delete metadata.mediaRef;
@@ -260,15 +270,42 @@ function isMediaRefValue(value: string): boolean {
   return value.startsWith(MEDIA_PROTOCOL);
 }
 
+// ============================================================================
+// Hydration diagnostics
+// ============================================================================
+
+/** Which part of a UIMessage held a `media://` ref that failed to hydrate. */
+export type MediaMissPath = "content" | "tool-result";
+
+/** A `media://` reference that could not be hydrated. */
+export interface MediaHydrationMiss {
+  /** The `media://` ref (or ref-like value) that failed to resolve. */
+  ref: string;
+  /** `invalid-ref` = malformed ref; `not-found` = ref parsed but the media file is gone. */
+  reason: "invalid-ref" | "not-found";
+  /** Which part of the message held the ref. */
+  path: MediaMissPath;
+}
+
+export interface HydrateUIMessagesOptions {
+  /** Invoked once per un-hydratable media ref. Hydration itself never throws. */
+  onMissing?: (miss: MediaHydrationMiss) => void;
+}
+
 /**
  * Hydrate UIMessages: load binary assets from MediaStore and reconstruct
  * the original `source.value` (data URL or raw base64).
  *
  * @param messages - Dehydrated UIMessage[] (may contain `media://` refs)
+ * @param options - Optional `onMissing` hook fired for each un-hydratable media ref
  * @returns A new UIMessage[] with fully hydrated source values
  */
-export async function hydrateUIMessages(messages: UIMessage[]): Promise<UIMessage[]> {
+export async function hydrateUIMessages(
+  messages: UIMessage[],
+  options?: HydrateUIMessagesOptions
+): Promise<UIMessage[]> {
   const store = getMediaStore();
+  const onMissing = options?.onMissing;
   // Restore multimodal parts that were persisted as JSON.stringify(ContentPart[]).
   const cloned = cloneMessages(repairStringifiedMultimodalUIMessages(messages));
 
@@ -287,7 +324,7 @@ export async function hydrateUIMessages(messages: UIMessage[]): Promise<UIMessag
     }
     for (const part of message.parts) {
       if (part.type === "tool-result") {
-        part.content = await hydrateToolResultContent(part.content, store);
+        part.content = await hydrateToolResultContent(part.content, store, onMissing);
         continue;
       }
 
@@ -306,7 +343,10 @@ export async function hydrateUIMessages(messages: UIMessage[]): Promise<UIMessag
         const filename = metadata?.filename;
         const sourceType = source.type === "data" ? "data" : "url";
         const parsed = parseMediaRefPath(source.value);
-        if (!parsed) continue;
+        if (!parsed) {
+          onMissing?.({ ref: source.value, reason: "invalid-ref", path: "content" });
+          continue;
+        }
 
         const loaded = await store.tryLoad({
           hash: parsed.hash,
@@ -317,12 +357,17 @@ export async function hydrateUIMessages(messages: UIMessage[]): Promise<UIMessag
         });
         if (loaded) {
           source.value = loaded;
+        } else {
+          onMissing?.({ ref: source.value, reason: "not-found", path: "content" });
         }
         continue;
       }
 
       const loaded = await store.tryLoad(mediaRef);
-      if (!loaded) continue;
+      if (!loaded) {
+        onMissing?.({ ref: buildMediaRefPath(mediaRef), reason: "not-found", path: "content" });
+        continue;
+      }
 
       part.source.value = loaded;
       if (metadata) {

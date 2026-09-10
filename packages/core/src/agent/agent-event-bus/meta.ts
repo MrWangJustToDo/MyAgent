@@ -70,13 +70,16 @@ export const AGENT_EVENT_META: Record<AgentEventType, AgentEventMeta> = {
   // ==========================================================================
   // Compaction
   // ==========================================================================
+  // Terminal compaction results carry the numbers / give-up state that status
+  // transitions cannot express, so they project onto the lifecycle channel
+  // (the `-start` events stay channel-less — status covers "compacting").
   "compaction:auto-start": { mode: "emit" },
-  "compaction:auto-complete": { mode: "emit" },
-  "compaction:auto-error": { mode: "emit" },
+  "compaction:auto-complete": { mode: "emit", channel: "lifecycle" },
+  "compaction:auto-error": { mode: "emit", channel: "lifecycle" },
   "compaction:reactive-start": { mode: "emit" },
-  "compaction:reactive-complete": { mode: "emit" },
-  "compaction:reactive-error": { mode: "emit" },
-  "compaction:reactive-max-retries": { mode: "emit" },
+  "compaction:reactive-complete": { mode: "emit", channel: "lifecycle" },
+  "compaction:reactive-error": { mode: "emit", channel: "lifecycle" },
+  "compaction:reactive-max-retries": { mode: "emit", channel: "lifecycle" },
 
   // ==========================================================================
   // Subagents

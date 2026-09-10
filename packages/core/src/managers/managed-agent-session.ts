@@ -78,9 +78,17 @@ export async function persistSessionModelState(host: SessionHost): Promise<void>
 
 export async function restoreManagedSession(host: SessionHost, sessionId: string): Promise<SessionData> {
   host.toolCompactCache.clear();
+  // Read-side dual of `session:save-error`: media files referenced by the
+  // transcript can be gone (cache cleared / media dir removed). Hydration
+  // degrades to the stored form; count the misses so they surface instead of
+  // silently losing attachments.
+  let mediaMissing = 0;
   const session = await host.session.restoreFromStore(sessionId, {
     usage: host.usage,
     todoManager: host.todoManager,
+    onMissingMedia: () => {
+      mediaMissing += 1;
+    },
   });
 
   const planSnapshot = session.planMode ? { ...session.planMode, steps: [...session.planMode.steps] } : null;
@@ -119,6 +127,7 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
     tokenEstimate: session.contextTokens ?? host.usage.getWindowUsage().inputTokens ?? 0,
     planPhase: host.planMode.getPhase(),
     autoMode: host.isAutoModeEnabled(),
+    ...(mediaMissing > 0 ? { mediaMissing } : {}),
   });
   return session;
 }

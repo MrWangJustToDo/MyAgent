@@ -7,7 +7,7 @@
 
 import { normalizeSessionApprovals } from "../../agent/approval/tool-approval-table.js";
 import { getFirstUserInput } from "../../agent/compaction/message-utils.js";
-import { dehydrateUIMessages, hydrateUIMessages } from "../../agent/media/media-utils.js";
+import { dehydrateUIMessages, hydrateUIMessages, type MediaHydrationMiss } from "../../agent/media/media-utils.js";
 import { runSideTextQuery } from "../../models/adapter/side-text-query.js";
 
 import type { SessionStore } from "../../agent/persistence/session-store.js";
@@ -44,6 +44,8 @@ export interface SessionPersistInput {
 export interface SessionRestoreInput {
   usage: UsageTracker;
   todoManager: TodoManager | null;
+  /** Report media refs that could not be hydrated from disk (read-side of media IO failure). */
+  onMissingMedia?: (miss: MediaHydrationMiss) => void;
 }
 
 export class SessionService {
@@ -259,10 +261,11 @@ export class SessionService {
 
     // Hydrate reads media files; canonicalize re-extracts media:// refs (writes).
     // Neither must abort a resume on media IO failure, so degrade to the stored
-    // messages instead of throwing out of restore.
+    // messages instead of throwing out of restore. Missing media is reported
+    // through `onMissingMedia` so the silent data loss becomes observable.
     let hydrated: UIMessage[];
     try {
-      hydrated = await hydrateUIMessages(session.uiMessages);
+      hydrated = await hydrateUIMessages(session.uiMessages, { onMissing: input.onMissingMedia });
       try {
         const dehydrated = await dehydrateUIMessages(hydrated);
         session.uiMessages = dehydrated;

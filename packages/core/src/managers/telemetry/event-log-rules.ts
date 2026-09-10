@@ -54,8 +54,12 @@ const TELEMETRY_EVENT_LOG_RULES: Record<keyof AgentEventPayloadMap, EventLogRule
   "session:restore": {
     level: "info",
     category: "system",
-    formatMessage: (event) =>
-      `Session restored: ${p(event).messageCount ?? "?"} messages, ${p(event).tokenEstimate ?? "?"} tokens`,
+    formatMessage: (event) => {
+      const d = p(event);
+      const missing =
+        typeof d.mediaMissing === "number" && d.mediaMissing > 0 ? `, ${d.mediaMissing} media missing` : "";
+      return `Session restored: ${d.messageCount ?? "?"} messages, ${d.tokenEstimate ?? "?"} tokens${missing}`;
+    },
   },
   "session:save-error": {
     level: "warn",

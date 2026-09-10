@@ -43,6 +43,8 @@ export type AgentEventPayloadMap = {
     tokenEstimate?: number;
     planPhase?: PlanPhase;
     autoMode?: boolean;
+    /** Count of `media://` refs that could not be hydrated from disk on restore. */
+    mediaMissing?: number;
   };
   "session:save-error": {
     target?: string;
