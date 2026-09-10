@@ -116,6 +116,7 @@ export {
 export type { AgentL1State } from "./managers/managed-agent.js";
 export type { AgentRetryState, AgentRetryStrategy } from "./runtime-types/agent-retry.js";
 export type {
+  AgentIterationState,
   PendingApprovalInteraction,
   PendingAskUserInteraction,
   SessionInteractionsSnapshot,

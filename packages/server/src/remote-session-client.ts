@@ -58,6 +58,7 @@ function emptySnapshot(agentId: string): AgentSessionSnapshot {
     mcp: { servers: [] },
     extensions: { extensions: [] },
     interactions: { approvals: [], askUser: [] },
+    iteration: { current: 0, max: 0 },
     subagents: [],
   } as unknown as AgentSessionSnapshot;
 }
@@ -264,6 +265,8 @@ function applyEvent(
       return { ...snapshot, mode: event.payload.mode, autoMode: event.payload.autoMode };
     case "interaction":
       return { ...snapshot, interactions: event.payload };
+    case "iteration":
+      return { ...snapshot, iteration: event.payload };
     default:
       return snapshot;
   }

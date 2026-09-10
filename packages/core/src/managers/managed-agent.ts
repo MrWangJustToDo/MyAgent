@@ -38,7 +38,7 @@ import {
 import { type TurnContextSection } from "../agent/turn-context/turn-context-message.js";
 import { generateId } from "../utils/generate-id.js";
 
-import { AgentConfigSchema } from "./agent-types.js";
+import { AgentConfigSchema, DEFAULT_AGENT_MAX_ITERATIONS } from "./agent-types.js";
 import { AgentChatController } from "./controllers/agent-chat-controller.js";
 import { createAgentStatusController, type AgentStatusController } from "./controllers/agent-status-controller.js";
 import { handleManagedReactiveCompact, runManualCompact } from "./managed-agent-compact.js";
@@ -106,7 +106,12 @@ import type { ModelInfo } from "../models/types.js";
 import type { AgentEventPayloadMap } from "../runtime-types/agent-event-payloads.js";
 import type { AgentEventType } from "../runtime-types/agent-events.js";
 import type { AgentRetryState } from "../runtime-types/agent-retry.js";
-import type { AgentL1State, AgentMode, SessionInteractionsSnapshot } from "../runtime-types/session-payloads.js";
+import type {
+  AgentIterationState,
+  AgentL1State,
+  AgentMode,
+  SessionInteractionsSnapshot,
+} from "../runtime-types/session-payloads.js";
 
 // ============================================================================
 // Config
@@ -241,6 +246,8 @@ export class ManagedAgent {
   private error: string;
   /** Tools awaiting user approval in the current run (set by approval middleware). */
   private pendingApprovalCount: number;
+  /** Agent-loop progress for the current run; null until the first iteration. */
+  private iterationState: AgentIterationState | null = null;
   /** Live LLM retry visibility (set by stream recovery; cleared when the stream recovers). */
   private retryInfo: AgentRetryState | null = null;
 
@@ -631,6 +638,22 @@ export class ManagedAgent {
     };
   }
 
+  /** Current agent-loop progress (1-based iteration vs budget); `{current:0}` when idle. */
+  readIteration(): AgentIterationState {
+    return this.iterationState ?? { current: 0, max: this.config.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS };
+  }
+
+  /**
+   * Record the agent-loop iteration progress for the current run and project it
+   * onto the retained `iteration` channel. Called by the lifecycle middleware at
+   * each model-iteration boundary.
+   * @internal
+   */
+  setIterationProgress(state: AgentIterationState): void {
+    this.iterationState = state;
+    this.eventBus?.emit("agent:iteration", state);
+  }
+
   private emitStateChange(): void {
     // L1 state and mode flow exclusively through the scoped bus (`agent:state`
     // retained, `session:mode` projected) — see unified-agent-event-bus.
@@ -667,6 +690,7 @@ export class ManagedAgent {
     bus.retain("session:extensions", () => ({ extensions: this.extensionRunner?.getExtensionInfos() ?? [] }));
     bus.retain("session:mcp", () => ({ servers: this.getMcpManager()?.getServerStatuses() ?? [] }));
     bus.retain("session:interaction", () => this.readInteractions());
+    bus.retain("agent:iteration", () => this.readIteration());
     // Route telemetry through this agent's scoped bus (up-flows to the root
     // observer / Event→Log bridge) instead of the process-wide root bus.
     this.dispatchEvent = (event) => {

@@ -140,6 +140,8 @@ export function buildAgentRunner(
       onFirstModelOutput: () => deps.memory.commitSurfacedMemories(),
       emitEvent,
       recordUsage: (input) => managed.usageHistory.record({ agentId: managed.id, ...input }),
+      maxIterations: managed.config.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS,
+      onIteration: (state) => managed.setIterationProgress(state),
     }),
     createCompactionMiddleware({
       agentId: deps.agentId,

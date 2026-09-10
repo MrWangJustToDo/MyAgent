@@ -26,6 +26,17 @@ export interface AgentL1State {
 }
 
 /**
+ * Agent-loop progress for the current run. One iteration = one model turn
+ * (TanStack middleware `onIteration`, 0-based on the wire → 1-based here).
+ */
+export interface AgentIterationState {
+  /** 1-based model-iteration index within the current run; 0 when idle / not started. */
+  current: number;
+  /** Configured max iterations (agent-loop budget) for the run; 0 when unknown. */
+  max: number;
+}
+
+/**
  * A tool call paused for the user's approval decision.
  * Part of {@link SessionInteractionsSnapshot}.
  */

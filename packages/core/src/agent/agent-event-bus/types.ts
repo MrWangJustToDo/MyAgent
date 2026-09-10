@@ -15,6 +15,7 @@
 import type { AgentSessionChannel } from "../../agent-session/types.js";
 import type { AgentEventPayloadMap } from "../../runtime-types/agent-event-payloads.js";
 import type {
+  AgentIterationState,
   AgentL1State,
   AgentMode,
   QueuedMessagesSnapshot,
@@ -64,6 +65,8 @@ export interface AgentEvents extends AgentEventPayloadMap {
   "session:extensions": { extensions: ExtensionInfo[] };
   /** Pending approvals / `ask_user` derived from the conversation. */
   "session:interaction": SessionInteractionsSnapshot;
+  /** Agent-loop progress for the current run (iteration vs budget). */
+  "agent:iteration": AgentIterationState;
   /** Extension UI notification. */
   "extension:ui": AgentExtensionUiEvent;
   /** Streaming tool output chunk. */

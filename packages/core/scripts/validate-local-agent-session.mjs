@@ -45,6 +45,7 @@ function createFake(id, parentId) {
     mcpManager: null,
     extensionRunner: null,
     readInteractions: () => ({ approvals: [], askUser: [] }),
+    readIteration: () => ({ current: 0, max: 0 }),
     planMode: {
       on: () => () => {},
       getState: () => ({

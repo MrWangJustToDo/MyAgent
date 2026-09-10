@@ -151,6 +151,7 @@
     "validate:media-store": "pnpm run build && node scripts/validate-media-store.mjs",
     "validate:session-persist-media-failure": "pnpm run build && node scripts/validate-session-persist-media-failure.mjs",
     "validate:session-interaction-channel": "pnpm run build && node scripts/validate-session-interaction-channel.mjs",
+    "validate:agent-iteration-progress": "pnpm run build && node scripts/validate-agent-iteration-progress.mjs",
     "validate:repair-stringified-multimodal": "pnpm run build && node scripts/validate-repair-stringified-multimodal.mjs",
     "validate:restore-session-chat-state": "pnpm run build && node scripts/validate-restore-session-chat-state.mjs",
     "validate:tool-approval-resume": "pnpm run build && node scripts/validate-tool-approval-resume.mjs",

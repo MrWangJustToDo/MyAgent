@@ -11,6 +11,7 @@ import { extractTanStackProvider, extractTanStackUsage } from "../../runtime-typ
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { ModelPricing } from "../../models/types.js";
 import type { UsageTracker } from "../../runtime-types";
+import type { AgentIterationState } from "../../runtime-types/session-payloads.js";
 import type { TokenUsage } from "../../runtime-types/token-usage.js";
 import type { EmitAgentTelemetryFn } from "../telemetry/emit-agent-telemetry.js";
 import type { ChatMiddleware } from "@tanstack/ai";
@@ -41,6 +42,10 @@ export interface LifecycleMiddlewareDeps {
   emitEvent?: EmitAgentTelemetryFn;
   /** Global usage-history hook: record each model iteration's tokens + cost. */
   recordUsage?: (input: { model?: string; usage: TokenUsage; costUsd: number }) => void;
+  /** Effective agent-loop budget for this run (surfaced as the iteration ceiling). */
+  maxIterations?: number;
+  /** Called at the start of each model iteration with 1-based progress. */
+  onIteration?: (state: AgentIterationState) => void;
 }
 
 export function createLifecycleMiddleware(deps: LifecycleMiddlewareDeps): ChatMiddleware<ToolRunContext> {
@@ -61,6 +66,11 @@ export function createLifecycleMiddleware(deps: LifecycleMiddlewareDeps): ChatMi
 
   return {
     name: "lifecycle",
+    onIteration: (_ctx, info) => {
+      // TanStack `IterationInfo.iteration` is 0-based (one iteration = one model
+      // turn); expose 1-based progress plus the run's iteration budget.
+      deps.onIteration?.({ current: info.iteration + 1, max: deps.maxIterations ?? 0 });
+    },
     onStart: (ctx) => {
       memoryCommitted = false;
       thinkingEmitted = false;
