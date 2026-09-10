@@ -223,6 +223,11 @@ function applyEvent(
         error: event.payload.error,
         pendingApprovalCount: event.payload.pendingApprovalCount,
         retry: event.payload.retry ?? undefined,
+        // Model / effort travel on the retained state channel so a live switch
+        // refreshes the cached snapshot (e.g. `/effort` reads `modelInfo`).
+        model: event.payload.model,
+        modelInfo: event.payload.modelInfo ?? undefined,
+        reasoningEffort: event.payload.reasoningEffort ?? undefined,
       };
     case "lifecycle": {
       // Keep task phases fresh between snapshot refetches — subagent summaries

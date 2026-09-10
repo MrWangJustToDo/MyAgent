@@ -33,6 +33,11 @@ export interface SessionPersistInput {
   reasoningEffort?: ReasoningEffort;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   emitEvent?: EmitAgentTelemetryFn;
+  /**
+   * Invoked when the async auto-title resolves, so the agent can broadcast the
+   * new display name (the title lands on `SessionData.name` first).
+   */
+  onTitleResolved?: (name: string) => void;
   uiMessages?: UIMessage[];
 }
 
@@ -143,6 +148,7 @@ export class SessionService {
       approvals,
       reasoningEffort,
       resolveTextAdapter,
+      onTitleResolved,
       emitEvent,
       uiMessages,
     } = input;
@@ -222,6 +228,9 @@ export class SessionService {
           return;
         }
         target.name = trimmed;
+        // Broadcast the new display name so live UI / snapshots see the
+        // auto-generated title (the write above only touches SessionData).
+        onTitleResolved?.(trimmed);
         // Reuse the unified save path so a title-write failure also emits
         // `session:save-error` (target "session-title").
         void this.saveToStore(emitEvent, "session-title");

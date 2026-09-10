@@ -52,7 +52,7 @@ export const AGENT_EVENT_META: Record<AgentEventType, AgentEventMeta> = {
   "agent:retry": { mode: "emit", channel: "lifecycle" },
   "agent:stream-error": { mode: "emit", channel: "lifecycle" },
   "agent:stop": { mode: "emit", channel: "lifecycle" },
-  "agent:extension-error": { mode: "emit" },
+  "agent:extension-error": { mode: "emit", channel: "lifecycle" },
 
   // ==========================================================================
   // Memory

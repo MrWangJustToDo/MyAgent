@@ -622,6 +622,9 @@ export class ManagedAgent {
       error: this.error,
       pendingApprovalCount: this.pendingApprovalCount,
       ...(this.retryInfo ? { retry: this.retryInfo } : {}),
+      model: this.config.model,
+      modelInfo: this.modelInfo,
+      reasoningEffort: this.config.reasoningEffort ?? null,
     };
   }
 

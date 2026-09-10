@@ -52,7 +52,9 @@ export async function generateAndApplySessionTitle(
       return { ok: false, error: "Failed to generate title" };
     }
     session.name = generated;
-    managed.name = generated;
+    // Route through `setDisplayName` so the state channel broadcasts the new
+    // title (a raw `managed.name = …` write never notified subscribers).
+    managed.setDisplayName(generated);
     await store.save(session);
     managed.getLog()?.info("chat", "Title generated", { text: generated });
     return { ok: true, name: generated };

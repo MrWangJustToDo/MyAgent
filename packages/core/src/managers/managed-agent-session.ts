@@ -35,6 +35,8 @@ export interface SessionHost {
   toolCompactCache: ToolCompactCache;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   emitEvent: EmitAgentTelemetryFn;
+  /** Update the agent's display name (broadcast via the state channel). */
+  setDisplayName?: (name: string) => void;
   resetAdmittedTurnContext?: () => void;
   /** Drop steer/follow-up queues without clearing the transcript (no-op before initChat). */
   clearQueuedMessages: () => void;
@@ -57,6 +59,9 @@ export function getSessionPersistInput(host: SessionHost, uiMessages?: TanStackU
     reasoningEffort: host.getReasoningEffort(),
     resolveTextAdapter: host.resolveTextAdapter,
     emitEvent: (type, data) => host.emitEvent(type, data),
+    // The auto-title path writes `SessionData.name`; mirror it onto the agent so
+    // live UI / snapshots pick it up (previously only manual rename broadcast).
+    onTitleResolved: (name) => host.setDisplayName?.(name),
     uiMessages,
   };
 }
@@ -103,6 +108,11 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
   applyRestoredSessionChatState(host, session.uiMessages);
   host.resetAdmittedTurnContext?.();
   host.sessionSyncTracker.reset(session.uiMessages);
+  // Resumed sessions may carry a different display name than the previously
+  // viewed one — mirror it (and broadcast) so the header/snapshot stay in sync.
+  if (session.name) {
+    host.setDisplayName?.(session.name);
+  }
   host.emitEvent("session:restore", {
     sessionId,
     messageCount: session.uiMessages.length,

@@ -9,6 +9,7 @@
 import type { AgentRetryState } from "./agent-retry.js";
 import type { AgentStatus } from "./agent-status.js";
 import type { TokenUsage } from "./token-usage.js";
+import type { ModelInfo, ReasoningEffort } from "../models/types.js";
 import type { ContentPart } from "@tanstack/ai";
 
 /** Active agent mode — mutually exclusive modes for the agent. */
@@ -23,6 +24,12 @@ export interface AgentL1State {
   pendingApprovalCount: number;
   /** Present while a recoverable LLM failure is being retried (cleared once the stream recovers). */
   retry?: AgentRetryState | null;
+  /** Active model id (informational; lets remote clients track model switches via the state channel). */
+  model: string;
+  /** Model metadata (incl. `reasoningConfig` / effort options) for UI display. */
+  modelInfo: ModelInfo | null;
+  /** Current reasoning-effort level (null = model default). */
+  reasoningEffort: ReasoningEffort | null;
 }
 
 /**

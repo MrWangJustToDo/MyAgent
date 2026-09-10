@@ -66,5 +66,5 @@ export type {
   StatusReconcilePolicy,
 } from "../managers/agent-run-outcome.js";
 export { whenClearForReconcilePolicy } from "../managers/agent-run-outcome.js";
-export { applyRestoredSessionChatState } from "../managers/managed-agent-session.js";
+export { applyRestoredSessionChatState, getSessionPersistInput, restoreManagedSession } from "../managers/managed-agent-session.js";
 export { SKILL_DIRS_ENV_VAR, getDefaultSkillDirs } from "../managers/agent-manager.js";
