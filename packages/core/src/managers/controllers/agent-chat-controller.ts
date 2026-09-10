@@ -32,7 +32,7 @@ import type { AgentManager } from "../agent-manager.js";
 import type { ManagedAgent } from "../managed-agent.js";
 import type { ContentPart, ToolCallPart, UIMessage } from "@tanstack/ai";
 
-const MAX_TOOL_PHASE_ITERATIONS = 40;
+const MAX_TOOL_PHASES = 40;
 
 export type { QueuedMessageContent, QueuedMessagesSnapshot } from "../../runtime-types/session-payloads.js";
 
@@ -296,7 +296,7 @@ export class AgentChatController {
    * Follow-up only when the agent would otherwise stop.
    * Returns false when the pump should exit.
    */
-  private prepareContinuationIteration(messages: UIMessage[]): { continue: boolean; messages: UIMessage[] } {
+  private prepareContinuationPhase(messages: UIMessage[]): { continue: boolean; messages: UIMessage[] } {
     if (needsToolPhaseContinue(messages)) {
       // Still executing / resuming tools — do not inject user messages yet.
       this.managed.markNextPrepareAsContinuation();
@@ -331,12 +331,12 @@ export class AgentChatController {
     this.applyCancelledIncompleteTools();
 
     let hasError = false;
-    let llmCalls = 0;
+    let toolPhases = 0;
     const messages = this.channel.getMessages();
     this.managed.statusController.prepareRunPhase(messages);
 
     try {
-      for (let iteration = 0; iteration < MAX_TOOL_PHASE_ITERATIONS; iteration++) {
+      for (let toolPhase = 0; toolPhase < MAX_TOOL_PHASES; toolPhase++) {
         if (hasError) break;
         if (generation !== this.runGeneration) return;
 
@@ -344,14 +344,14 @@ export class AgentChatController {
         if (hasPendingToolApprovals(currentMessages)) break;
         if (hasPendingAskUser(currentMessages)) break;
 
-        if (iteration > 0) {
-          const prepared = this.prepareContinuationIteration(currentMessages);
+        if (toolPhase > 0) {
+          const prepared = this.prepareContinuationPhase(currentMessages);
           if (!prepared.continue) break;
           currentMessages = prepared.messages;
         }
 
         await this.executeStream(currentMessages, generation);
-        llmCalls = iteration + 1;
+        toolPhases = toolPhase + 1;
         if (this.managed.status === "error") {
           hasError = true;
         }
@@ -424,7 +424,7 @@ export class AgentChatController {
           .reduce((count, m) => count + m.parts.filter((p) => p.type === "tool-call").length, 0);
         this.managed.emitEvent("turn:summary", {
           ...(outcomeKind !== "waiting" ? { outcome: outcomeKind } : {}),
-          llmCalls: llmCalls,
+          phases: toolPhases,
           toolCalls: toolCallCount,
           inputTokens: totalUsage?.inputTokens ?? 0,
           outputTokens: totalUsage?.outputTokens ?? 0,

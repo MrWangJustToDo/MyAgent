@@ -157,7 +157,8 @@ export type AgentEventPayloadMap = {
   };
   "turn:summary": {
     outcome?: "finished" | "aborted" | "error";
-    llmCalls?: number;
+    /** Driver-level tool-phase continuations executed in this run (each one streamed once). */
+    phases?: number;
     toolCalls?: number;
     inputTokens?: number;
     outputTokens?: number;

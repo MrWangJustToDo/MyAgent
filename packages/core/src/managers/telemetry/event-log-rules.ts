@@ -90,13 +90,13 @@ const TELEMETRY_EVENT_LOG_RULES: Record<keyof AgentEventPayloadMap, EventLogRule
     formatMessage: (event) => {
       const d = p(event);
       const outcome = d.outcome ? ` (${d.outcome})` : "";
-      const llmCalls = d.llmCalls ?? "?";
+      const phases = d.phases ?? "?";
       const toolCalls = d.toolCalls ?? "?";
       const inTokens = d.inputTokens ?? "?";
       const outTokens = d.outputTokens ?? "?";
       const cost = typeof d.costUsd === "number" && d.costUsd > 0 ? `, $${d.costUsd.toFixed(4)}` : "";
       const ms = d.durationMs ?? "?";
-      return `Turn complete${outcome}: ${llmCalls} LLM calls, ${toolCalls} tools, ${inTokens}→${outTokens} tokens${cost}, ${ms}ms`;
+      return `Turn complete${outcome}: ${phases} phases, ${toolCalls} tools, ${inTokens}→${outTokens} tokens${cost}, ${ms}ms`;
     },
   },
   "agent:thinking": {
