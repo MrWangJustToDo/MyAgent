@@ -245,16 +245,17 @@ export class SessionStore {
    */
   async delete(id: string): Promise<boolean> {
     const filePath = this.getFilePath(id);
-    if (await this.fs.exists(filePath)) {
-      await this.fs.remove(filePath);
-      const logPath = this.getLogPath(id);
-      if (await this.fs.exists(logPath)) {
-        await this.fs.remove(logPath);
-      }
-      this.lastSavedHash.delete(id);
-      return true;
-    }
-    return false;
+    const logPath = this.getLogPath(id);
+    // A crash between the journal append and the snapshot write can leave a
+    // journal-only session (no `.session.json`). Treat either file as the
+    // session existing, else the journal lingers and `load()` resurrects it.
+    const hasSnapshot = await this.fs.exists(filePath);
+    const hasJournal = await this.fs.exists(logPath);
+    if (!hasSnapshot && !hasJournal) return false;
+    if (hasSnapshot) await this.fs.remove(filePath);
+    if (hasJournal) await this.fs.remove(logPath);
+    this.lastSavedHash.delete(id);
+    return true;
   }
 
   /**
@@ -279,15 +280,16 @@ export class SessionStore {
   // ==========================================================================
 
   private async doSave(session: SessionData): Promise<void> {
+    // Fingerprint the live session BEFORE stamping `updatedAt`/`journalSeq`. The
+    // stored hash is the serialized live session from the previous real write
+    // (including its timestamp and seq), so comparing first makes an unchanged
+    // save a true no-op — bumping `updatedAt` beforehand would make every save
+    // look different and silently defeat the dedupe.
+    if (this.lastSavedHash.get(session.id) === JSON.stringify(session)) return;
+
     await this.ensureDir();
 
     session.updatedAt = Date.now();
-
-    const json = JSON.stringify(session);
-
-    // Skip write if content is identical to last save
-    const lastHash = this.lastSavedHash.get(session.id);
-    if (lastHash === json) return;
 
     const filePath = this.getFilePath(session.id);
 

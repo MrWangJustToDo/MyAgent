@@ -190,25 +190,28 @@ export class SessionService {
     // would otherwise never retitle again (name !== "New Session").
     if (!this.data.name || this.data.name === "New Session") {
       const firstUserText = getFirstUserInput(uiMessages || []);
+      // Capture the session identity: the title LLM call is async, and a /new or
+      // /resume during it swaps `this.data`. Without this guard the old session's
+      // title would be written into (and persisted to) the new session.
+      const target = this.data;
       this.generateSessionTitle(firstUserText, { usage, resolveTextAdapter }).then((title) => {
-        if (this.data) {
-          const trimmed = title.trim();
-          if (!trimmed) {
-            // Skip empty/whitespace titles (e.g. a no-uiMessages persist passes an
-            // empty first user text). Keep "New Session" — and repair legacy blank
-            // names so the UI never shows an empty label — until a persist with
-            // real messages regenerates the title.
-            if (!this.data.name || !this.data.name.trim()) {
-              this.data.name = "New Session";
-              void this.saveToStore(emitEvent, "session-title");
-            }
-            return;
+        if (this.data !== target) return;
+        const trimmed = title.trim();
+        if (!trimmed) {
+          // Skip empty/whitespace titles (e.g. a no-uiMessages persist passes an
+          // empty first user text). Keep "New Session" — and repair legacy blank
+          // names so the UI never shows an empty label — until a persist with
+          // real messages regenerates the title.
+          if (!target.name || !target.name.trim()) {
+            target.name = "New Session";
+            void this.saveToStore(emitEvent, "session-title");
           }
-          this.data.name = trimmed;
-          // Reuse the unified save path so a title-write failure also emits
-          // `session:save-error` (target "session-title").
-          void this.saveToStore(emitEvent, "session-title");
+          return;
         }
+        target.name = trimmed;
+        // Reuse the unified save path so a title-write failure also emits
+        // `session:save-error` (target "session-title").
+        void this.saveToStore(emitEvent, "session-title");
       });
     }
 
