@@ -74,6 +74,7 @@ interface AttemptRecoveryOptions {
   managed: ManagedAgent;
   manager: AgentManager;
   getMessages: () => Array<UIMessage | ModelMessage>;
+  signal?: AbortSignal;
 }
 
 async function attemptErrorRecovery(
@@ -83,6 +84,8 @@ async function attemptErrorRecovery(
   multimodalStripAttempted: boolean,
   recoveryAttempts: number
 ): Promise<RecoveryResult | null> {
+  // Never start a new recovery strategy for an already-cancelled run.
+  if (options.signal?.aborted) return null;
   if (recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
     options.managed.log?.error(
       "agent",
@@ -154,6 +157,26 @@ export interface RecoveryOptions {
   run: (messages: Array<UIMessage | ModelMessage>) => AsyncIterable<StreamChunk>;
   /** Optional — needed for max_tokens escalation on truncation */
   runner?: AgentRunner;
+  /** Run abort signal — cancels the retry/backoff loop so Esc is not delayed. */
+  signal?: AbortSignal;
+}
+
+/**
+ * Sleep that resolves early when the run is aborted, so a cancel during a retry
+ * backoff (up to {@link MAX_RETRY_BACKOFF_MS}) does not block the run teardown.
+ */
+function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) return new Promise((resolve) => setTimeout(resolve, ms));
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(finish, ms);
+    function finish(): void {
+      clearTimeout(timer);
+      signal!.removeEventListener("abort", finish);
+      resolve();
+    }
+    signal.addEventListener("abort", finish, { once: true });
+  });
 }
 
 export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIterable<StreamChunk> {
@@ -164,6 +187,8 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
   const truncation = createTruncationState();
 
   while (true) {
+    // Cancelled between attempts — stop before starting another stream.
+    if (options.signal?.aborted) return;
     let shouldRetry = false;
     let truncationDetected = false;
     let retryAfterSeconds: number | undefined;
@@ -271,7 +296,9 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
       delayMs: Math.round(delay),
       retryAfterSeconds,
     });
-    await new Promise((resolve) => setTimeout(resolve, delay));
+    await abortableDelay(delay, options.signal);
+    // Cancelled during backoff — do not issue the (doomed) retry stream.
+    if (options.signal?.aborted) return;
 
     recoveryAttempts++;
   }

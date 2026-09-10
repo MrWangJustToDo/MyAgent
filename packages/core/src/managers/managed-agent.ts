@@ -1312,6 +1312,11 @@ export class ManagedAgent {
     return this.run.isAbortError(err);
   }
 
+  /** Current run abort signal — lets compaction helpers cancel their summarizer. */
+  getAbortSignal(): AbortSignal | undefined {
+    return this.run.currentAbortController?.signal;
+  }
+
   async handleReactiveCompact(error: unknown, manager: AgentManager): Promise<boolean> {
     return handleManagedReactiveCompact(this, error, manager);
   }
@@ -1353,6 +1358,7 @@ export class ManagedAgent {
         persistSession: () => this.persistSession(),
         maybeSaveSessionUIMessages: (messages, reason) => this.maybeSaveSessionUIMessages(messages, reason),
         getLog: () => this.log,
+        getAbortSignal: () => this.getAbortSignal(),
       },
       manager,
       options

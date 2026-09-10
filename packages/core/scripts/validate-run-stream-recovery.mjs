@@ -3,6 +3,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:run-stream-recovery
  */
+/* eslint-disable no-undef */
 
 import assert from "node:assert/strict";
 
@@ -189,5 +190,69 @@ for await (const chunk of runStreamWithRecovery({
 assert.equal(attempts, 2);
 assert.equal(resetCalls, 0, "root agent must not wipe UI on transient retry");
 assert.equal(recoveryRetryCalls, 1, "root still clears error status via onRecoveryRetry");
+
+// --- abort during retry backoff returns promptly and does not retry ---
+
+class SlowRateLimit extends Error {
+  status = 429;
+  retryAfter = 5; // 5s backoff — far longer than the abort below
+  constructor() {
+    super("429 slow");
+  }
+}
+
+let abortAttempts = 0;
+// eslint-disable-next-line require-yield
+async function* alwaysRateLimited() {
+  abortAttempts += 1;
+  throw new SlowRateLimit();
+}
+
+const abortManaged = {
+  usage: null,
+  log: { warn() {}, debug() {}, error() {} },
+  setError() {},
+  setRetry() {},
+  emitEvent() {},
+  statusController: { onRecoveryRetry() {} },
+};
+
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 30);
+const startedAbort = Date.now();
+let abortChunks = 0;
+for await (const chunk of runStreamWithRecovery({
+  managed: abortManaged,
+  manager: {},
+  getMessages: () => msgs,
+  run: () => alwaysRateLimited(),
+  signal: controller.signal,
+})) {
+  void chunk;
+  abortChunks += 1;
+}
+const abortElapsed = Date.now() - startedAbort;
+assert.equal(abortAttempts, 1, "no retry stream is started after abort during backoff");
+assert.equal(abortChunks, 0);
+assert.ok(abortElapsed < 1000, `abort returns promptly, took ${abortElapsed}ms`);
+
+// --- already-aborted signal never starts a stream ---
+
+const preAborted = new AbortController();
+preAborted.abort();
+let preAttempts = 0;
+for await (const chunk of runStreamWithRecovery({
+  managed: abortManaged,
+  manager: {},
+  getMessages: () => msgs,
+  run: () => {
+    preAttempts += 1;
+    return onlyRunError();
+  },
+  signal: preAborted.signal,
+})) {
+  void chunk;
+}
+assert.equal(preAttempts, 0, "no stream starts when the signal is already aborted");
 
 console.log("run-stream-recovery validation passed");

@@ -13,6 +13,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:code-mode-extension
  */
+/* eslint-disable no-undef */
 import { createCodeModeExtension } from "../dist/dev.mjs";
 
 // Minimal fake driver: does not actually execute TS, only satisfies the shape.
@@ -130,6 +131,51 @@ function check(label, cond) {
   await ext.activate(ctx);
   check("no tools provided -> registers NO tools", registered.length === 0);
   check("no tools provided -> warns", warns.length >= 1);
+}
+
+// ---- Path 5: execute_typescript responds to abort --------------------------
+{
+  // Driver whose execute never settles — simulates a long-running isolate.
+  const hangingDriver = {
+    createContext: async () => ({
+      bindings: {},
+      execute: () => new Promise(() => {}),
+      dispose: async () => {},
+    }),
+  };
+  const defs = [];
+  const ctx = {
+    coreEnv: { createIsolateDriver: async () => hangingDriver },
+    logger: { warn() {} },
+    registerTool: (def) => defs.push(def),
+    registerContextProvider: () => () => {},
+  };
+  const ext = createCodeModeExtension({ tools: [tool("read_file")], lazyToolNames: [] });
+  await ext.activate(ctx);
+  const execDef = defs.find((d) => d.name === "execute_typescript");
+  check("abort test -> execute_typescript registered", Boolean(execDef));
+
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 30);
+  const started = Date.now();
+  let rejected = false;
+  try {
+    await execDef.execute({ typescriptCode: "while(true){}" }, { toolCallId: "t1", abortSignal: controller.signal });
+  } catch {
+    rejected = true;
+  }
+  check("abort -> execute_typescript rejects", rejected);
+  check("abort -> rejects promptly (< 1s)", Date.now() - started < 1000);
+
+  const preAborted = new AbortController();
+  preAborted.abort();
+  let preRejected = false;
+  try {
+    await execDef.execute({ typescriptCode: "1" }, { toolCallId: "t2", abortSignal: preAborted.signal });
+  } catch {
+    preRejected = true;
+  }
+  check("pre-aborted signal -> execute_typescript rejects", preRejected);
 }
 
 console.log(`\n${failures === 0 ? "ALL PASSED" : `${failures} FAILURE(S)`}`);

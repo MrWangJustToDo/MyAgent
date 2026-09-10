@@ -37,6 +37,8 @@ export interface ReactiveCompactHost {
   compactionConfig?: { keepRecentTokens?: number } | null;
   /** Model input context window in tokens, if known (drives the reactive tail budget). */
   contextWindow?: number;
+  /** Current run abort signal, so a cancel also cancels the summarizer. */
+  getAbortSignal?: () => AbortSignal | undefined;
 }
 
 export async function handleManagedReactiveCompact(
@@ -63,11 +65,13 @@ export async function handleManagedReactiveCompact(
     });
     const canon = host.getCanonicalFromUI();
     const llmMessages = host.getMessagesForLLM(canon);
+    const abortSignal = host.getAbortSignal?.();
     const compactedMessages = await reactiveCompact(llmMessages, host.id, manager, {
       ...(host.compactionConfig?.keepRecentTokens != null
         ? { keepRecentTokens: host.compactionConfig.keepRecentTokens }
         : {}),
       ...(host.contextWindow && host.contextWindow > 0 ? { contextWindow: host.contextWindow } : {}),
+      ...(abortSignal ? { abortSignal } : {}),
     });
 
     // Capture window fill before apply (usage is reset by applyReactiveCompactionResult).
@@ -94,12 +98,16 @@ export async function handleManagedReactiveCompact(
     host.statusController.endCompaction();
     return true;
   } catch (err) {
+    host.statusController.endCompaction();
+    // A user cancel is not a reactive-compaction failure — stay silent.
+    if (err instanceof Error && err.name === "AbortError") {
+      return false;
+    }
     const compactError = err instanceof Error ? err : new Error(String(err));
     host.emitEvent("compaction:reactive-error", { error: compactError.message });
     // Restore the status after beginCompaction above — otherwise the agent would
     // stay stuck in "compacting" (onRecoveryRetry only unwinds "error"), blocking
     // the stream-recovery loop's other strategies (capability / transient).
-    host.statusController.endCompaction();
     return false;
   }
 }
@@ -124,6 +132,8 @@ export interface ManualCompactHost {
   persistSession: () => void;
   maybeSaveSessionUIMessages: (messages: TanStackUIMessage[], reason: "force") => void;
   getLog?: () => AgentLog | null;
+  /** Current run abort signal, so a cancel also cancels the summarizer. */
+  getAbortSignal?: () => AbortSignal | undefined;
 }
 
 export type ManualCompactResult =
@@ -166,12 +176,15 @@ export async function runManualCompact(
 
   host.statusController.beginCompaction();
 
+  const abortSignal = host.getAbortSignal?.();
+
   try {
     const result = await autoCompact(messages, host.compactionConfig || {}, host.id, manager, {
       focus: options?.focus,
       todos: todos.length > 0 ? todos : undefined,
       actualTokens: actualTokens || undefined,
       contextWindow: host.contextWindow,
+      ...(abortSignal ? { abortSignal } : {}),
     });
 
     const applied = applyCompactionResult(allModelMessages, channel, host.usage, result, {
@@ -182,6 +195,9 @@ export async function runManualCompact(
     });
 
     if (!applied) {
+      if (abortSignal?.aborted) {
+        return { ok: false, error: "Compaction aborted" };
+      }
       if (result.error) {
         return { ok: false, error: result.error };
       }
@@ -209,6 +225,9 @@ export async function runManualCompact(
       tokensAfter,
     };
   } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return { ok: false, error: "Compaction aborted" };
+    }
     const err = error instanceof Error ? error : new Error(String(error));
     return { ok: false, error: `Compaction failed: ${err.message}` };
   } finally {

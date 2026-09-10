@@ -89,10 +89,14 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
           const usage = deps.getUsage();
           const actualTokens = usage.getWindowUsage().inputTokens ?? 0;
           const fromChannel = convertMessagesToModelMessages(channel.getMessages());
+          // Cancel the summarizer with the run so an Esc mid-compaction does not
+          // leave a half-written checkpoint.
+          const runAbortSignal = managed?.run.currentAbortController?.signal;
           const result = await autoCompact(llmMessages, compactionConfig ?? {}, deps.agentId, deps.manager, {
             todos: todos.length > 0 ? todos : undefined,
             actualTokens: actualTokens || undefined,
             contextWindow,
+            ...(runAbortSignal ? { abortSignal: runAbortSignal } : {}),
           });
 
           if (
@@ -118,8 +122,11 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
             });
           }
         } catch (err) {
-          const error = err instanceof Error ? err : new Error(String(err));
-          deps.emitEvent?.("compaction:auto-error", { error: error.message });
+          // A user cancel is not a compaction failure — stay silent.
+          if (!(err instanceof Error && err.name === "AbortError")) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            deps.emitEvent?.("compaction:auto-error", { error: error.message });
+          }
         } finally {
           deps.status.endCompaction();
         }

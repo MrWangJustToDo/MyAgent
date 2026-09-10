@@ -297,6 +297,7 @@ async function executeManagedAgentRun(
   return runStreamWithRecovery({
     managed,
     manager,
+    signal: abortController.signal,
     getMessages: () => managed.ui?.getMessages() ?? [],
     run: (runMessages) =>
       runner.run({

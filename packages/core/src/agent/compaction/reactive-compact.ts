@@ -66,6 +66,8 @@ export interface ReactiveCompactConfig {
   keepRecentTokens?: number;
   /** Model input context window in tokens, if known (derives the tail budget) */
   contextWindow?: number;
+  /** Abort signal for the summarization subagent (cancel propagates, no fallback applied). */
+  abortSignal?: AbortSignal;
 }
 
 /**
@@ -148,8 +150,14 @@ export async function reactiveCompact(
     summary = await summarizeConversation(summaryMessages, parentAgentId, manager, {
       focus: "Emergency compaction — preserve all critical information for continuing work",
       stillInContext: tailMessages,
+      ...(config.abortSignal ? { abortSignal: config.abortSignal } : {}),
     });
-  } catch {
+  } catch (error) {
+    // A cancelled run must not fall back to a placeholder compaction checkpoint
+    // (that would still mutate the channel after the user aborted).
+    if (config.abortSignal?.aborted || (error instanceof Error && error.name === "AbortError")) {
+      throw error;
+    }
     // If summarization fails, use a simple fallback so the session isn't lost
     summary = `[Emergency reactive compaction performed. ${summaryMessages.length} messages summarized. Full history is preserved in session storage. Please read relevant files to re-establish detailed context.]`;
   }

@@ -97,6 +97,19 @@ export interface SummarizeOptions {
    * internally for the split-turn prefix summary.
    */
   instruction?: string;
+  /**
+   * Abort signal for the summarization subagent. When the run is cancelled the
+   * summarizer rejects (rather than yielding a partial summary), so callers
+   * never apply a half-written compaction checkpoint.
+   */
+  abortSignal?: AbortSignal;
+}
+
+/** Tag an aborted summarization so callers can tell cancel apart from failure. */
+function compactionAbortError(): Error {
+  const error = new Error("Compaction summarization aborted");
+  error.name = "AbortError";
+  return error;
 }
 
 /**
@@ -171,6 +184,7 @@ export async function summarizeConversation(
       asTurnPrefix,
       instruction,
       streamEpoch,
+      ...(options?.abortSignal ? { abortSignal: options.abortSignal } : {}),
     });
   }
 
@@ -192,6 +206,7 @@ export async function summarizeConversation(
         instruction,
         streamLabel: `Segment ${i + 1}/${batches.length}`,
         streamEpoch,
+        ...(options?.abortSignal ? { abortSignal: options.abortSignal } : {}),
       })
     );
   }
@@ -208,6 +223,7 @@ export async function summarizeConversation(
     instruction,
     streamLabel: "Merging segment summaries",
     streamEpoch,
+    ...(options?.abortSignal ? { abortSignal: options.abortSignal } : {}),
   });
 }
 
@@ -238,9 +254,16 @@ async function summarizeConversationBatch(
         label: options?.streamLabel ?? "Summarizing conversation",
         epoch: options?.streamEpoch ?? generateId("cmpepoch"),
       },
+      ...(options?.abortSignal ? { abortSignal: options.abortSignal } : {}),
     },
     { manager }
   );
+
+  // An aborted run returns partial text (+ a cancel notice) — never treat that as
+  // a summary, or a half-written compaction checkpoint would be applied.
+  if (result.aborted || options?.abortSignal?.aborted) {
+    throw compactionAbortError();
+  }
 
   const output = result.output?.trim() ?? "";
   if (!output || output === "(no summary)") {
@@ -436,6 +459,11 @@ export async function autoCompact(
       cutIndex,
     };
   } catch (error) {
+    // User cancel: leave the conversation untouched and report no error (the run
+    // is ending anyway — callers must not surface a compaction failure).
+    if (error instanceof Error && error.name === "AbortError") {
+      return { compacted: false, tokensBefore, tokensAfter: tokensBefore, type: "auto" };
+    }
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     return {

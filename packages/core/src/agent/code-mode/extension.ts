@@ -68,11 +68,29 @@ function toExtensionTool(tool: AnyServerTool): ExtensionToolDefinition {
     inputSchema: (tool.inputSchema ?? {}) as SchemaInput,
     outputSchema: tool.outputSchema as SchemaInput | undefined,
     execute: async (input, options) => {
-      const result = await tool.execute?.(input, {
+      const signal = options.abortSignal;
+      signal?.throwIfAborted();
+      const run = tool.execute?.(input, {
         toolCallId: options.toolCallId,
-        abortSignal: options.abortSignal,
+        abortSignal: signal,
       });
-      return (result ?? {}) as ToolCallResult;
+      if (!run) return {} as ToolCallResult;
+      if (!signal) return ((await run) ?? {}) as ToolCallResult;
+
+      // The upstream isolate tool (ai-code-mode) ignores the abort signal, so an
+      // Esc would otherwise wait out the isolate timeout. Race it: reject the
+      // tool call promptly on abort and let the isolate be disposed normally.
+      let onAbort: (() => void) | undefined;
+      try {
+        const aborted = new Promise<never>((_, reject) => {
+          onAbort = () => reject(signal.reason ?? new Error("Aborted"));
+          signal.addEventListener("abort", onAbort, { once: true });
+        });
+        const result = await Promise.race([run, aborted]);
+        return (result ?? {}) as ToolCallResult;
+      } finally {
+        if (onAbort) signal.removeEventListener("abort", onAbort);
+      }
     },
   };
 }
