@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 const { registerCoreEnv } = await import(new URL("../../core/dist/index.mjs", import.meta.url).href);
 registerCoreEnv({ rootPath: "/repo" });
 
-const { buildDiffTreeItems } = await import("../dist/utils/workspace-diff-tree.mjs");
+const { buildDiffTreeItems, orderedChangedFiles } = await import("../dist/utils/workspace-diff-tree.mjs");
 
 const status = (entries) => new Map(entries);
 
@@ -98,6 +98,50 @@ const names = (items) => items.map((i) => `${i.name}${i.type === "directory" ? "
     new Set()
   );
   assert.deepEqual(names(items), ["new/@0", "name.ts@1", "old/@0", "name.ts@1"]);
+}
+
+// orderedChangedFiles: `[` / `]` order must match the rendered tree
+// (directories first, case-insensitive) — NOT a plain lexicographic path sort.
+{
+  const map = status([
+    ["src/z.ts", "M"],
+    ["src/components/Foo.tsx", "M"],
+    ["src/components/bar.tsx", "M"],
+    ["src/utils/a.ts", "M"],
+    ["README.md", "M"],
+  ]);
+  const ordered = orderedChangedFiles(map, "/repo").map((p) => p.replace("/repo/", ""));
+  // dirs first (components, utils), then files; case-insensitive within a dir.
+  assert.deepEqual(ordered, [
+    "src/components/bar.tsx",
+    "src/components/Foo.tsx",
+    "src/utils/a.ts",
+    "src/z.ts",
+    "README.md",
+  ]);
+
+  // And it must differ from the old plain-sort behaviour in exactly these cases.
+  const plainSorted = [...map.keys()].map((rel) => `/repo/${rel}`).sort();
+  assert.notDeepEqual(ordered, plainSorted, "tree order differs from plain path sort");
+}
+
+// Same-name file vs directory: directory subtree sorts before the sibling file.
+{
+  const ordered = orderedChangedFiles(
+    status([
+      ["src/foo.ts", "M"],
+      ["src/foo/bar.ts", "M"],
+      ["src/foo.tsx", "M"],
+    ]),
+    "/repo"
+  ).map((p) => p.replace("/repo/", ""));
+  assert.deepEqual(ordered, ["src/foo/bar.ts", "src/foo.ts", "src/foo.tsx"]);
+}
+
+// No root / empty map => empty order.
+{
+  assert.deepEqual(orderedChangedFiles(new Map(), "/repo"), []);
+  assert.deepEqual(orderedChangedFiles(status([["a.ts", "M"]]), ""), []);
 }
 
 console.log("workspace-diff-tree validation passed");

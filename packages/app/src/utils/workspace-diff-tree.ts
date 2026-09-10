@@ -144,3 +144,19 @@ export function buildDiffTreeItems(
   flattenDiffTree(roots, 0, collapsed, out);
   return out;
 }
+
+/**
+ * Changed file paths in **tree display order** (directories first, then
+ * case-insensitive locale order) — the same order the sidebar renders, so `[` /
+ * `]` navigation actually moves top-to-bottom through the visible tree. A plain
+ * lexicographic sort of the paths (case-sensitive, no directories-first) does
+ * not match the rendered order and made jumps look unsorted.
+ *
+ * Collapse state is irrelevant: only file rows are returned, and callers reveal
+ * the target's ancestors themselves.
+ */
+export function orderedChangedFiles(gitStatus: Map<string, string>, rootPath: string): string[] {
+  return buildDiffTreeItems(gitStatus, rootPath, new Set())
+    .filter((item) => item.type === "file")
+    .map((item) => item.path);
+}

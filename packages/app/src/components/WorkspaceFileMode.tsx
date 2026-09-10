@@ -10,10 +10,10 @@ import {
   fetchWorkspaceDiffStats,
   type WorkspaceDiffStats,
 } from "../utils/workspace-diff-stats.js";
+import { orderedChangedFiles } from "../utils/workspace-diff-tree.js";
 import { clearWorkspaceFileListCache } from "../utils/workspace-file-search.js";
 import { clearWorkspaceDiffCache } from "../utils/workspace-git-diff.js";
 import { fetchWorkspaceGitInfo, type WorkspaceGitInfo } from "../utils/workspace-git-info.js";
-import { joinWorkspacePath } from "../utils/workspace-path.js";
 import { ensureIndexVisible } from "../utils/workspace-scroll.js";
 
 import { clearContentCache, FileContent } from "./FileContent.js";
@@ -147,13 +147,14 @@ export const WorkspaceFileMode = () => {
   );
 
   // Jump between files that have git changes (`[` / `]`), wrapping around.
-  // Uses the git-status changed-file set directly (sorted), so it works on both
-  // the full-tree view and the diff view — even when a changed file's directory
-  // is collapsed in the full tree (the target is revealed + scrolled by the
-  // selectedPath effect below).
+  // Order follows the rendered tree (directories first, case-insensitive), not a
+  // plain path sort, so navigation moves top-to-bottom as shown. Uses the full
+  // changed-file set (not the visible rows) so it works even where a changed
+  // file's directory is collapsed — the target is revealed + scrolled by the
+  // selectedPath effect below.
   const jumpToChanged = useCallback(
     (direction: 1 | -1) => {
-      const changed = [...gitStatus.keys()].map((rel) => joinWorkspacePath(rootPath, rel)).sort();
+      const changed = orderedChangedFiles(gitStatus, rootPath);
       if (changed.length === 0) return;
       const cur = selectedPath ? changed.indexOf(selectedPath) : -1;
       let next: number;
