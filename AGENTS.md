@@ -433,7 +433,7 @@ Use section separators in large files:
 
 Hosts should prefer `AgentSession` (`getSnapshot` / `dispatch` / `subscribe`) over reading `ManagedAgent` fields. Local: `createLocalAgentSession`. HTTP: `@my-agent/server/agent-session` / `@my-agent/server/client`'s `createRemoteAgentSessionHost` against `/api/agent/*`. Subagents reuse the same Session contract by id.
 
-**Host-owned session plane:** hosts construct the `AgentSessionHost` (local manager, or remote HTTP when `--remote-session`) and inject it into `createAgentFromConfig`; the UI layer never imports core runtime singletons (enforced by app's `validate:core-imports`). Remote client features: SSE auto-reconnect with exponential backoff, server heartbeat ping + client watchdog, remount seeds (`/tool-buffers`, `/summary-streams`) so in-flight tool output and summary streams survive reconnects; state channel carries `name`, so commands sync without full-snapshot refetch.
+**Host-owned session plane:** hosts construct the `AgentSessionHost` (local manager, or remote HTTP when `--remote-session`) and inject it into `createAgentFromConfig`; the UI layer never imports core runtime singletons (enforced by app's `validate:core-imports`). Remote client features: SSE auto-reconnect with exponential backoff, server heartbeat ping + client watchdog, remount seeds (`/tool-buffers`, `/summary-streams`) so in-flight tool output and summary streams survive reconnects; the retained `state` channel carries the session identity (`name`, `sessionId`) plus model identity (`model` / `modelInfo` / `reasoningEffort`), so commands and model switches sync without a full-snapshot refetch.
 
 All domain updates route through a single unified `AgentEventBus` (`agent/agent-event-bus`) — one type registry (`AgentEvents` + `AGENT_EVENT_META`), two dispatch modes: observer `emit` (sync, fire-and-forget, retained values) and interceptor `intercept` (async, ordered, cancel short-circuit; `tool:before:*` patterns). `AgentManager.of(agentId, parentId?)` mints per-agent scoped buses (subagent events up-flow to parent/root). `AgentSession` subscribes the scoped bus once and projects every observer event to its channel via `AGENT_EVENT_META[type].channel`, replaying retained values per subscriber. The former structured `log` channel was **removed** — log observability is provided exclusively by the persisted JSONL file sink (`.agents/logs/<sessionId>/agent.log`).
 
@@ -503,12 +503,14 @@ registerModelProvider(await createRemoteProvider("http://localhost:3100"));
 | `agent:thinking` | Model reasoning stream starts |
 | `agent:tool-start` / `agent:tool-end` / `agent:tool-error` | Tool lifecycle (extensions middleware) |
 | `agent:retry` | Recoverable LLM failure being retried (429/gateway backoff, capability strip, reactive compact, max_tokens continuation); payload carries `attempt`/`maxAttempts`/`strategy`/`error`/`delayMs`. Retry state also lives on the Session snapshot + `state` channel (`AgentRetryState`) and is cleared once the stream recovers or the run reaches a terminal status |
+| `agent:iteration` | Agent-loop progress within a run (one iteration = one model turn). Payload `{ current, max }` (1-based; idle `0`; `max` = `maxIterations` budget). Projected onto the retained `iteration` channel + `AgentSessionSnapshot.iteration`; deliberately **not** logged |
 | `agent:abort` / `agent:stream-error` | User abort / stream failure (`RUN_ERROR`, empty-stream guard, and other pump failures; main chat records error without crashing the host) |
 | `agent:stop` | Run finished or aborted |
 | `memory:prefetch` | Relevant memory injection before run |
 | `memory:extract` / `memory:consolidate` | Post-run memory extraction |
 | `compaction:auto-*` / `compaction:reactive-*` | Auto / reactive context compaction |
 | `session:save-error` | Session persistence failure |
+| `session:restore` | Session resume succeeded (`sessionId`, `messageCount`, `tokenEstimate`, `mediaMissing` when >0); also re-emits the retained `state` channel |
 | `subagent:*` | Subagent lifecycle |
 | `plan:enter` / `plan:ready` / `plan:execute` / `plan:cancel-execution` / `plan:retro` / `plan:complete` / `plan:exit` | Plan mode phase transitions |
 
@@ -549,7 +551,7 @@ Cursor-like lifecycle: explore → review → Build → forced retro → complet
 
 **Auto mode:** `/mode auto` skips all tool approvals. Footer shows `Auto`. Mutually exclusive with plan mode (entering one clears the other). Cleared on `/clear` / reset; persisted as `SessionData.autoMode` (legacy sessions may still have `autoApprove`). While auto is on, turn context includes an `<auto_mode>` block.
 
-**Session / safety:** `/clear` and `ManagedAgent.reset()` always `planMode.disable()`, turn off auto mode, and clear the session `approvals` table. Resume restores `planMode` + `autoMode` with plan winning if both were somehow set, and restores `approvals` (or backfills from UIMessage parts when the field is missing). Chat `onConfig` rebuilds TanStack `resumeToolState.approvals` from that table so approved/denied tools do not re-prompt. Plan building auto-approve still requires `executing` **and** `todosSeeded` (separate from `/mode auto`).
+**Session / safety:** `/clear` and `ManagedAgent.reset()` always `planMode.disable()`, turn off auto mode, and clear the session `approvals` table. Resume restores `planMode` + `autoMode` with plan winning if both were somehow set, restores `approvals` (or backfills from UIMessage parts when the field is missing), adopts the persisted `reasoningEffort` / `model` + `modelStyle` (skipped under `providerMode: "remote"`, where the provider server owns the model) and mirrors the session's display name. Chat `onConfig` rebuilds TanStack `resumeToolState.approvals` from that table so approved/denied tools do not re-prompt. Plan building auto-approve still requires `executing` **and** `todosSeeded` (separate from `/mode auto`).
 
 ## Subagent System
 
@@ -569,7 +571,7 @@ The project supports **subagents** — context-isolated agents spawned to handle
 | Summary Limit | 5000 characters max |
 
 | UI Preview | `bridgeUI: true` (default when `parentTaskToolCallId` is set): parent panel + task-tool streaming via the subagent’s `AgentUIChannel` |
-| No parent bridge | `bridgeUI: false` (default otherwise): still has an internal `AgentUIChannel` (message SoT); skips `subagent:ui-update` / task-tool streaming — used by compaction and memory subagents |
+| No parent bridge | `bridgeUI: false` (default otherwise): still has an internal `AgentUIChannel` (message SoT); skips parent task-tool streaming / preview bridging — used by compaction and memory subagents |
 
 ### Subagent UI Preview
 

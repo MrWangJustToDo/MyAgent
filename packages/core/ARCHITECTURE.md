@@ -521,14 +521,16 @@ Fields: `uiMessages` (includes in-chain summaries), `usage`, `cost`, `contextTok
 
 **Binary media (v4):** On persist with `uiMessages`, `SessionService` clones → dehydrates Image/Audio/Video/Document parts to content-addressed **binary** files under `.agents/media/<hash>.<ext>`, writing `media://` refs + `metadata.mediaRef` into the session JSON. Runtime messages stay hydrated (data URLs / raw base64). Restore hydrates for the UI, then re-dehydrates into `this.data` and rewrites the session file (so interrupt-snapshot repairs and media extraction stick). See `agent/media/`.
 
+**Media IO failures never escape the host (v4):** dehydrate runs inside `persistSession`'s try/catch — a write failure emits `session:save-error` (target `session+uiMessages`) and still saves the rest of the state, and the fire-and-forget `void …persist…` call sites attach `.catch` (no unhandled rejection). On the read side, `hydrateUIMessages(messages, { onMissing })` reports every un-hydratable `media://` ref (`not-found` / `invalid-ref`, in content parts or tool results) instead of dropping it silently, and `restoreSession` folds the count into `session:restore.mediaMissing`.
+
 **Interrupt snapshots:** TanStack `MESSAGES_SNAPSHOT` (tool-approval interrupts) is built from engine `this.messages` and would replace the chronological channel. `AgentUIChannel.processChunk` drops every snapshot. Incremental TEXT/TOOL chunks plus `addToolResult` / `addToolApprovalResponse` keep the channel current. Hydrate/dehydrate still repair stringified multimodal `ContentPart[]` in persisted JSON.
 
 ### 6.2 Write paths (unified persist)
 
 | Trigger                                    | Function                                                                                   | What is saved                                                                                      |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| **Run finalizes** (finish / abort / error) | `ManagedAgent.finalizeRun` → `SessionService.persistSession`                               | Model fields: `usage`, `cost`, `contextTokens`, `todos`, `planMode`; auto-title if `"New Session"` |
-| **User message (core)**                    | `AgentChatController` after `addUserMessage` (send / drained steer                         | follow-up) → `maybeSaveSessionUIMessages(..., "user-message")`                                     | Model fields **plus** `uiMessages` when fingerprint changed |
+| **Run finalizes** (finish / abort / error) | `ManagedAgent.finalizeRun` → `SessionService.persistSession`                               | Session state: `usage`, `cost`, `contextTokens`, `todos`, `planMode`, `model`/`modelStyle`, `name`; auto-title if `"New Session"` |
+| **User message (core)**                    | `AgentChatController` after `addUserMessage` (send / drained steer                         | follow-up) → `maybeSaveSessionUIMessages(..., "user-message")`                                     | Session state **plus** `uiMessages` when fingerprint changed |
 | **Pump idle (core)**                       | `AgentChatController.persistMessages` → `maybeSaveSessionUIMessages(..., "pump-complete")` | Same; also on Esc/abort after cancelling incomplete tools                                          |
 | **Manual flush**                           | `saveSessionUIMessages` (`/clear`, slash commands)                                         | Force full persist                                                                                 |
 
@@ -536,7 +538,7 @@ App hosts subscribe to Session `messages`/`state` for UI only — they do **not*
 
 On restore, `PlanModeController.restoreState` rehydrates phase (and reloads markdown from `planFilePath` when missing). `/clear` / `ManagedAgent.reset` always `planMode.disable()`.
 
-`SessionStore.save`: content-hash dedup, per-session write lock, full JSON overwrite.
+`SessionStore.save`: content-hash dedup (compared **before** `updatedAt`/`journalSeq` are bumped, so a re-save of unchanged data is a true no-op), per-session write lock, full JSON overwrite. `delete()` removes the snapshot or journal when either exists (and clears the dedup hash).
 
 **Run finalization** (`finalizeRun`):
 
@@ -563,9 +565,13 @@ AgentManager.resumeSession(agentId, sessionId)
       → usage.reset(); hydrate uiMessages
       → restore usage, todos, approvals (missing/`[]` backfills from UIMessage approval parts)
     → host.approvals.restore(session.approvals)
+    → host.applyPersistedModel({ model, modelStyle })  // adopted unless `providerMode: "remote"`
+    → host.setReasoningEffort(session.reasoningEffort)
+    → host.setDisplayName(session.name)
     → UI channel.setMessages(uiMessages) when channel present
     → clear steer/follow-up queues (no-op before initChat)
     → syncInteractionStateFromUIMessages (approval / ask_user)
+    → host.refreshState()  // retained `state` re-emit (swapped sessionId + adopted model/name)
 
 Host.create `{ resumeSessionId | continueSession }` and Session `session.resume`
 share that restore path. Create then calls `initChat(initialMessages)` because
@@ -603,7 +609,7 @@ Recovery / continuation always re-reads `managed.ui.getMessages()` (not a closed
 - **Each `onConfig`** (turn-context middleware, after compaction): changed `<ctx kind=...>` sections are injected into the channel + wire (per-kind hash diff); wire is otherwise projected from the live channel.
 - **User send** (`AgentChatController.sendMessage` / drained queues): `maybeSaveSessionUIMessages(messages, "user-message")`.
 - **After run idle** (`AgentChatController` after `pumpToolPhases`, including approval wait / abort cleanup): `maybeSaveSessionUIMessages(messages, "pump-complete")`.
-- **During runs / core**: `persistSession()` and `finalizeRun` write model fields only; they never pass `uiMessages`.
+- **During runs / core**: `persistSession()` and `finalizeRun` write the model-state fields (model / modelStyle / reasoningEffort / usage / todos / plan / approvals / name); they never pass `uiMessages`.
 - **Manual `/compact`**: appends summary checkpoint onto the channel; `persistSession()` + `maybeSaveSessionUIMessages(..., "force")`.
 - **Manual `/clear`**: `saveSessionUIMessages()` force-flushes before rotating session.
 
@@ -611,7 +617,7 @@ Recovery / continuation always re-reads `managed.ui.getMessages()` (not a closed
 
 | Event                | When                                                                                 |
 | -------------------- | ------------------------------------------------------------------------------------ |
-| `session:restore`    | `ManagedAgent.restoreSession` succeeds (`messageCount`, `tokenEstimate`)             |
+| `session:restore`    | `ManagedAgent.restoreSession` succeeds (`sessionId`, `messageCount`, `tokenEstimate`, `mediaMissing` when >0). Also drives a retained `state` re-emit (swapped session id, adopted model / display name) |
 | `session:save-error` | `SessionStore.save` fails (target: `session`, `uiMessages`, or `session+uiMessages`) |
 
 ---
@@ -719,14 +725,14 @@ Observer `emit` is synchronous fire-and-forget with per-listener error containme
 
 | Layer | Event source (unified bus)                                                                      | Host surface                                                                       |
 | ----- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| L1    | `ManagedAgent.emitStateChange` → `agent:state` (retained) + `session:mode`                       | Session `state` / `mode` channels                                                  |
+| L1    | `ManagedAgent.emitStateChange` → `agent:state` (retained) + `session:mode` + `session:interaction`; `setIterationProgress` → `agent:iteration` (retained) | Session `state` / `mode` / `interaction` / `iteration` channels                                                  |
 | L2    | Telemetry envelope helpers → scoped bus (root `"*"` observer: Event→Log)                        | Session `lifecycle` channel (declarative projection)                               |
 | L3    | Domain objects emit declared observer events (todos/usage/plan/summary/messages/queues/tool)     | Session `messages`/`tool`/`summary`/`todos`/`usage`/`plan`/`queues`/`extensions`/`mcp` |
 | L4    | Extension interception (`tool:before:*` / `tool:after:*` / `tool:error:*` / `before_agent_start`) + `extension:ui` | Session `extension-ui` channel; host `ctx.ui` facade                        |
 
 **Host observation API:** `AgentSession` only (`createLocalAgentSession` / HTTP client) — `getSnapshot` / `dispatch` / `subscribe(channels)`. There are **no** public domain `.on(...)` APIs: `AgentChatController.on("change")` and `ManagedAgent.on("change"|"ui")` were removed with the domain emitters, and the `AgentTelemetryBus` facade was deleted — `AgentEventBus` is the single mechanism.
 
-**Projection:** `local-agent-session` keeps one subscription per agent scope and routes events to channels via declared metadata (`AGENT_EVENT_META`); retained events (`state` / `mode` / `messages` / `usage` / `todos` / `plan` / `extensions` / `mcp` / `queues`) replay their current value to each new subscriber. The former structured `log` session channel was removed — log observability is provided exclusively by the persisted JSONL file sink (`.agents/logs/{sessionId}/agent.log`).
+**Projection:** `local-agent-session` keeps one subscription per agent scope and routes events to channels via declared metadata (`AGENT_EVENT_META`); retained events (`state` / `mode` / `messages` / `usage` / `todos` / `plan` / `extensions` / `mcp` / `queues` / `interaction` / `iteration`) replay their current value to each new subscriber. The former structured `log` session channel was removed — log observability is provided exclusively by the persisted JSONL file sink (`.agents/logs/{sessionId}/agent.log`).
 
 **Messages channel:** Session snapshots always carry a full `UIMessage[]`; the `messages` channel delivers the same full array (JSON-patch / delta delivery is deferred). Wire projection for the model loop is cached by channel revision + last-message fingerprint (`WireProjectionCache`).
 
@@ -739,13 +745,14 @@ Task / compact summary text uses `ManagedAgent.summaryStreams` (`SummaryStreamHu
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Session bootstrap | `session:doc`, `session:skill`, `session:mcp`, `session:memory`, `session:start`                                                       |
 | Session I/O       | `session:restore`, `session:save-error`                                                                                                |
-| Run lifecycle     | `prompt:submit`, `agent:thinking`, `agent:abort`, `agent:stream-error`, `agent:stop`                                                   |
-| LLM iteration     | `llm:request`, `llm:response` — **per TanStack iteration**, not per user turn                                                          |
-| Turn rollup       | `turn:summary` — end of `AgentChatController.pumpToolPhases` (outcome, LLM/tool calls, tokens, cost, duration)                            |
+| Run lifecycle     | `prompt:submit`, `agent:thinking`, `agent:abort`, `agent:stream-error`, `agent:extension-error`, `agent:stop`                                                   |
+| LLM iteration     | `llm:request`, `llm:response` — **per TanStack iteration**, not per user turn; log-only (no channel)                                     |
+| Iteration progress | `agent:iteration` → retained `iteration` channel + `AgentSessionSnapshot.iteration` (`{ current, max }`, 1-based per model turn). Projection-only: deliberately not written to the log |
+| Turn rollup       | `turn:summary` — end of `AgentChatController.pumpToolPhases` (outcome, tool phases / tool calls, tokens, cost, duration)                 |
 | Tools             | `agent:tool-start`, `agent:tool-approval-request`, `agent:tool-approval-resolved`, `agent:tool-end`, `agent:tool-error`                |
 | Memory            | `memory:prefetch`, `memory:extract`, `memory:consolidate`                                                                              |
 | Compaction        | `compaction:auto-*`, `compaction:reactive-*` (start kind matches path)                                                                 |
-| Subagent          | `subagent:created`, `subagent:started`, `subagent:completed` (`summary` + `iterations`/`durationMs`/`usage`), `subagent:error`, `subagent:destroyed`, `subagent:ui-update` |
+| Subagent          | `subagent:created`, `subagent:started`, `subagent:completed` (`summary` + `iterations`/`durationMs`/`usage`), `subagent:error`, `subagent:destroyed`, `subagent:phase`, `subagent:progress-summary-error` |
 
 ### 8.4 Event → Log bridge
 
