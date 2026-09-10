@@ -26,6 +26,8 @@ export interface AgentSessionCreateOptions {
   modelBaseURL?: string;
   modelApiKey?: string;
   modelInfo?: ModelInfo;
+  /** `remote` = a provider server owns the model (never overridden locally). */
+  providerMode?: "direct" | "remote";
   systemPrompt?: string;
   maxIterations?: number;
   mcpConfigPath?: string;

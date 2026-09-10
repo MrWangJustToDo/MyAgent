@@ -58,6 +58,7 @@ function toManagedConfig(options: AgentSessionCreateOptions): ManagedAgentConfig
     ...(options.modelBaseURL ? { modelBaseURL: options.modelBaseURL } : {}),
     ...(options.modelApiKey ? { modelApiKey: options.modelApiKey } : {}),
     ...(options.modelInfo ? { modelInfo: options.modelInfo } : {}),
+    ...(options.providerMode ? { providerMode: options.providerMode } : {}),
     ...(options.systemPrompt ? { systemPrompt: options.systemPrompt } : {}),
     ...(options.mcpConfigPath ? { mcpConfigPath: options.mcpConfigPath } : {}),
     ...(options.extensionDirs?.length ? { extensionDirs: options.extensionDirs } : {}),

@@ -77,6 +77,7 @@ export async function createAgentFromConfig({ config, name, host }: CreateAgentO
     modelBaseURL: connection.baseURL,
     modelApiKey: connection.apiKey,
     modelInfo,
+    providerMode,
     continueSession: config.continueSession || undefined,
     resumeSessionId: config.resumeSession && config.resumeSession !== "__picker__" ? config.resumeSession : undefined,
     // Survives `initConfig` via applyOptionalAppConfig (CLI BRAVE_API_KEY / WEBSEARCH_PROVIDER).
@@ -116,7 +117,13 @@ let sessionCounter = 0;
  * resolved model config from {@link useConfig} (the bootstrap session's provider
  * resolution). Registers and activates it in the app store.
  */
-export async function createSessionOnHost({ host, name }: { host: AgentSessionHost; name?: string }): Promise<InitResult> {
+export async function createSessionOnHost({
+  host,
+  name,
+}: {
+  host: AgentSessionHost;
+  name?: string;
+}): Promise<InitResult> {
   const config = { ...useConfig.getReadonlyState().config } as AppConfig;
 
   const { session, initialMessages } = await host.create({
@@ -130,6 +137,7 @@ export async function createSessionOnHost({ host, name }: { host: AgentSessionHo
     modelBaseURL: config.baseURL,
     modelApiKey: config.apiKey,
     modelInfo: config.modelInfo,
+    providerMode: config.providerMode,
     ...(config.toolConfig ? { toolConfig: config.toolConfig } : {}),
   });
 

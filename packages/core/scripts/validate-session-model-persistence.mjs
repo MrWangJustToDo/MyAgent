@@ -1,0 +1,139 @@
+/**
+ * Validates that a session's model follows `/models` switches on disk and is
+ * re-applied when the session is resumed:
+ * - `model.set` persists `model` / `modelStyle` into the session record
+ *   (previously only `store.create` wrote it → resume always fell back to the
+ *   creation-time default model).
+ * - `session.resume` adopts the persisted model (except under remote-provider,
+ *   where the provider server owns the model).
+ *
+ * Run: pnpm --filter @my-agent/core run validate:session-model-persistence
+ */
+
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+import { AgentManager, createLocalAgentSessionHost, registerCoreEnv } from "../dist/index.mjs";
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// ============================================================================
+// Mock CoreEnv (real fs under a temp root)
+// ============================================================================
+
+const rootPath = await fs.promises.mkdtemp(path.join(os.tmpdir(), "session-model-"));
+const toAbs = (p) => (path.isAbsolute(p) ? p : path.join(rootPath, p));
+
+registerCoreEnv({
+  rootPath,
+  getPlatform: async () => "linux",
+  getArch: async () => "x64",
+  getEnv: async () => ({}),
+  homedir: async () => rootPath,
+  fs: {
+    readFile: async (p, encoding) => fs.promises.readFile(toAbs(p), encoding ?? "utf-8"),
+    writeFile: async (p, content) => fs.promises.writeFile(toAbs(p), content),
+    appendFile: async (p, content) => fs.promises.appendFile(toAbs(p), content, "utf8"),
+    mkdir: async (p) => fs.promises.mkdir(toAbs(p), { recursive: true }),
+    exists: async (p) =>
+      fs.promises.access(toAbs(p)).then(
+        () => true,
+        () => false
+      ),
+    readdir: async (p) => {
+      try {
+        const entries = await fs.promises.readdir(toAbs(p), { withFileTypes: true });
+        return entries.map((e) => ({ name: e.name, type: e.isDirectory() ? "directory" : "file" }));
+      } catch {
+        return [];
+      }
+    },
+    stat: async (p) => {
+      const st = await fs.promises.stat(toAbs(p));
+      return { isDirectory: st.isDirectory(), isFile: st.isFile(), size: st.size, mtime: st.mtime };
+    },
+    remove: async (p) => fs.promises.rm(toAbs(p), { recursive: true, force: true }),
+  },
+  runCommand: async () => ({ stdout: "", stderr: "", code: 0 }),
+  exec: async () => ({ stdout: "", stderr: "", code: 0 }),
+  fetch: async () => new Response(),
+});
+
+const waitFor = async (check, label) => {
+  for (let i = 0; i < 50; i++) {
+    if (await check()) return;
+    await sleep(20);
+  }
+  throw new Error(`timed out waiting for ${label}`);
+};
+
+// ============================================================================
+// 1. `model.set` reaches disk
+// ============================================================================
+
+const manager = new AgentManager();
+const host = createLocalAgentSessionHost({ manager });
+const created = await host.create({ name: "model-persist", model: "default-model", modelStyle: "openai" });
+const session = created.session;
+const agentId = session.getSnapshot().agentId;
+const managed = manager.getAgent(agentId);
+const store = managed.getSessionStore();
+const sessionId = managed.getSessionData().id;
+
+managed.persistSession();
+await waitFor(async () => (await store.load(sessionId)) !== null, "initial session written");
+assert.equal((await store.load(sessionId)).model, "default-model");
+
+const switched = await session.dispatch({ type: "model.set", model: "switched-model", modelStyle: "anthropic" });
+assert.equal(switched.ok, true);
+
+await waitFor(async () => (await store.load(sessionId)).model === "switched-model", "model persisted to disk");
+const onDisk = await store.load(sessionId);
+assert.equal(onDisk.model, "switched-model", "model switch must be persisted");
+assert.equal(onDisk.modelStyle, "anthropic", "model style must be persisted");
+assert.equal(managed.getL1State().model, "switched-model", "live L1 state reflects the switch");
+
+// ============================================================================
+// 2. Resume adopts the persisted model
+// ============================================================================
+
+// Another live agent owns the session; release it so the second agent may resume.
+manager.releaseSessionOwnership(sessionId, agentId);
+
+const manager2 = new AgentManager();
+const host2 = createLocalAgentSessionHost({ manager: manager2 });
+const created2 = await host2.create({
+  name: "model-restore",
+  model: "default-model",
+  modelStyle: "openai",
+  resumeSessionId: sessionId,
+});
+const managed2 = manager2.getAgent(created2.session.getSnapshot().agentId);
+assert.equal(managed2.config.model, "switched-model", "resume must adopt the persisted model");
+assert.equal(managed2.config.modelStyle, "anthropic", "resume must adopt the persisted style");
+assert.equal(managed2.getL1State().model, "switched-model");
+assert.equal(created2.session.getSnapshot().model, "switched-model");
+
+// ============================================================================
+// 3. remote-provider keeps the provider-supplied model
+// ============================================================================
+
+manager2.releaseSessionOwnership(sessionId, managed2.id);
+
+const manager3 = new AgentManager();
+const host3 = createLocalAgentSessionHost({ manager: manager3 });
+const created3 = await host3.create({
+  name: "model-remote",
+  model: "provider-model",
+  modelStyle: "openai",
+  providerMode: "remote",
+  resumeSessionId: sessionId,
+});
+const managed3 = manager3.getAgent(created3.session.getSnapshot().agentId);
+assert.equal(managed3.config.model, "provider-model", "remote-provider must keep its own model");
+assert.notEqual(managed3.getL1State().model, "switched-model");
+
+await fs.promises.rm(rootPath, { recursive: true, force: true });
+console.log("session-model-persistence validation passed");

@@ -15,7 +15,7 @@ import type { SessionData, ToolApprovalRecord } from "../../agent/persistence/ty
 import type { PlanModeState } from "../../agent/plan/plan-mode-controller.js";
 import type { TodoManager } from "../../agent/todo";
 import type { TextAdapterConfig } from "../../models/adapter/adapter-factory.js";
-import type { ReasoningEffort } from "../../models/types.js";
+import type { ModelStyle, ReasoningEffort } from "../../models/types.js";
 import type { EmitAgentTelemetryFn } from "../telemetry/emit-agent-telemetry.js";
 import type { UsageTracker } from "../telemetry/usage-tracker.js";
 import type { UIMessage } from "@tanstack/ai";
@@ -58,11 +58,18 @@ export class SessionService {
     this.config = config;
   }
 
-  /** Update the model used for new sessions (model switch via `ManagedAgent.setModel`). */
-  setModelConfig(modelStyle: string, model: string): void {
+  /** Update the model used by this session and by new sessions (model switch via `ManagedAgent.setModel`). */
+  setModelConfig(modelStyle: ModelStyle, model: string): void {
     if (this.config) {
       this.config.modelStyle = modelStyle;
       this.config.model = model;
+    }
+    // Mirror onto the active session record: previously only `store.create` wrote
+    // the model, so a `/models` switch never reached disk and restoring always
+    // fell back to the creation-time (default) model.
+    if (this.data) {
+      this.data.modelStyle = modelStyle;
+      this.data.model = model;
     }
   }
 

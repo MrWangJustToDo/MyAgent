@@ -751,6 +751,21 @@ export class ManagedAgent {
     Object.assign(this.config, AgentConfigSchema.parse({ ...this.config, ...updates }));
   }
 
+  /**
+   * Adopt the model a resumed session was persisted with.
+   *
+   * No-op under remote-provider: there the provider server owns the model (see
+   * {@link setModel}), so a local override would desync the connection. Also a no-op
+   * when the persisted model already matches the live config.
+   */
+  applyPersistedModel(next: { model: string; modelStyle?: ModelStyle }): void {
+    if (this.config.providerMode === "remote") return;
+    const sameModel = next.model === this.config.model;
+    const sameStyle = !next.modelStyle || next.modelStyle === this.config.modelStyle;
+    if (sameModel && sameStyle) return;
+    this.setModel({ model: next.model, ...(next.modelStyle ? { modelStyle: next.modelStyle } : {}) });
+  }
+
   /** Current reasoning-effort level, or undefined when unset (model default). */
   getReasoningEffort(): AgentConfig["reasoningEffort"] {
     return this.config.reasoningEffort;

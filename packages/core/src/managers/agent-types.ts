@@ -27,6 +27,12 @@ export const AgentConfigSchema = z.object({
   modelStyle: z.enum(["openai", "anthropic"]).optional().describe("API style (OpenAI-compatible or Anthropic)"),
   modelBaseURL: z.string().optional().describe("Base URL for the model API"),
   modelApiKey: z.string().optional().describe("API key for the model endpoint"),
+  /**
+   * Where the model connection comes from. `remote` means a provider server owns
+   * the model (see `resolveModelConfigFromProvider`) — the agent must not override
+   * it locally, e.g. when adopting a resumed session's persisted model.
+   */
+  providerMode: z.enum(["direct", "remote"]).optional().describe("Model provider mode"),
   systemPrompt: z.string().optional().describe("System prompt for the agent"),
   maxIterations: z
     .number()

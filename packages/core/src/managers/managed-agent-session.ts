@@ -15,7 +15,7 @@ import type { PlanModeController } from "../agent/plan/plan-mode-controller.js";
 import type { TodoManager } from "../agent/todo";
 import type { AgentUIChannel } from "../agent/ui-channel.js";
 import type { TextAdapterConfig } from "../models/adapter/adapter-factory.js";
-import type { ReasoningEffort } from "../models/types.js";
+import type { ModelStyle, ReasoningEffort } from "../models/types.js";
 import type { UIMessage as TanStackUIMessage } from "@tanstack/ai";
 
 export interface SessionHost {
@@ -39,6 +39,11 @@ export interface SessionHost {
   setDisplayName?: (name: string) => void;
   /** Re-emit the L1 state snapshot (after swapping the on-disk session id). */
   refreshState?: () => void;
+  /**
+   * Adopt the model a resumed session was saved with (no-op under remote-provider).
+   * The persisted record is kept in sync by {@link SessionService.setModelConfig}.
+   */
+  applyPersistedModel?: (next: { model: string; modelStyle?: ModelStyle }) => void;
   resetAdmittedTurnContext?: () => void;
   /** Drop steer/follow-up queues without clearing the transcript (no-op before initChat). */
   clearQueuedMessages: () => void;
@@ -106,6 +111,15 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
   const wantAuto = Boolean(session.autoMode ?? session.autoApprove);
   host.setAutoModeEnabled(planOn ? false : wantAuto);
   host.approvals.restore(session.approvals ?? []);
+
+  // Adopt the model this session was saved with: the agent is created from the
+  // ambient config (env / CLI flags), which may differ from what the session ran
+  // on (e.g. after `/models`). Without this a resumed session silently reverts to
+  // the default model.
+  host.applyPersistedModel?.({
+    model: session.model,
+    ...(session.modelStyle ? { modelStyle: session.modelStyle } : {}),
+  });
 
   // Restore the persisted reasoning-effort level so resumed sessions keep their
   // configured thinking depth. `setReasoningEffort` also invalidates the runner.

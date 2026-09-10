@@ -155,6 +155,7 @@
     "validate:l1-state-display-name": "pnpm run build && node scripts/validate-l1-state-display-name.mjs",
     "validate:media-missing-and-compaction": "pnpm run build && node scripts/validate-media-missing-and-compaction.mjs",
     "validate:session-identity": "pnpm run build && node scripts/validate-session-identity.mjs",
+    "validate:session-model-persistence": "pnpm run build && node scripts/validate-session-model-persistence.mjs",
     "validate:repair-stringified-multimodal": "pnpm run build && node scripts/validate-repair-stringified-multimodal.mjs",
     "validate:restore-session-chat-state": "pnpm run build && node scripts/validate-restore-session-chat-state.mjs",
     "validate:tool-approval-resume": "pnpm run build && node scripts/validate-tool-approval-resume.mjs",
