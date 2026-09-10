@@ -2,6 +2,7 @@ import { findLastMeaningfulAssistant, isEmptyAssistantShell } from "./empty-assi
 import { isToolCallPart, partTextContent } from "./message-parts.js";
 
 import type { AgentStatus } from "../../runtime-types/agent-status.js";
+import type { SessionInteractionsSnapshot } from "../../runtime-types/session-payloads.js";
 import type { ModelMessage, ToolCallPart, ToolResultPart, UIMessage } from "@tanstack/ai";
 
 /** Client-side tools — UI supplies output via {@link AgentChatController.addToolResult}. */
@@ -185,4 +186,58 @@ export function hasPendingAskUser(messages: UIMessage[]): boolean {
     if (part.state === "input-complete" && part.output === undefined) return true;
   }
   return false;
+}
+
+/** Parse a tool call's JSON `arguments` string; returns the raw string on failure. */
+function parseToolArguments(args: string | undefined): unknown {
+  if (!args) return undefined;
+  try {
+    return JSON.parse(args) as unknown;
+  } catch {
+    return args;
+  }
+}
+
+/**
+ * Pending tool approvals, newest message first — the exact set/order the app and
+ * im-bridge used to derive by scanning messages themselves. Feeds the retained
+ * `interaction` channel (see {@link SessionInteractionsSnapshot}).
+ */
+export function collectPendingApprovals(messages: UIMessage[]): SessionInteractionsSnapshot["approvals"] {
+  const out: SessionInteractionsSnapshot["approvals"] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.role !== "assistant") continue;
+    for (const part of message.parts) {
+      if (!isToolCallPart(part)) continue;
+      if (!isPendingToolApprovalPart(part)) continue;
+      const approvalId = part.approval?.id;
+      if (!approvalId) continue;
+      out.push({ approvalId, toolName: part.name, toolCallId: part.id });
+    }
+  }
+  return out;
+}
+
+/** Pending `ask_user` requests awaiting a client answer, newest message first. */
+export function collectPendingAskUser(messages: UIMessage[]): SessionInteractionsSnapshot["askUser"] {
+  const out: SessionInteractionsSnapshot["askUser"] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.role !== "assistant") continue;
+    for (const part of message.parts) {
+      if (!isToolCallPart(part)) continue;
+      if (part.name !== "ask_user") continue;
+      if (part.state !== "input-complete" || part.output !== undefined) continue;
+      const input = parseToolArguments(part.arguments) as
+        { question?: string; options?: string[]; multiSelect?: boolean } | undefined;
+      out.push({
+        toolCallId: part.id,
+        question: input?.question ?? "",
+        ...(input?.options ? { options: input.options } : {}),
+        ...(input?.multiSelect !== undefined ? { multiSelect: input.multiSelect } : {}),
+      });
+    }
+  }
+  return out;
 }

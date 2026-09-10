@@ -222,10 +222,6 @@ export type AgentEventPayloadMap = {
     phase?: "running" | "summary";
     parentTaskToolCallId?: string;
   };
-  "subagent:ui-update": {
-    subagentId?: string;
-    messageCount?: number;
-  };
   "subagent:progress-summary-error": {
     subagentId?: string;
     parentAgentId?: string;

@@ -240,6 +240,8 @@ export {
   shouldContinueAgentPump,
   isToolContinuationPrepare,
   countPendingToolApprovals,
+  collectPendingApprovals,
+  collectPendingAskUser,
 } from "../agent/stream/tool-phase-utils.js";
 export { isStaleActiveRunStatus, shouldDeferMidRunQueue } from "../agent/queue/defer-mid-run-queue.js";
 export { createTanStackSubagentTools, createTanStackTools, getReadOnlyTanStackToolNames } from "../agent/tools/runtime";

@@ -18,6 +18,7 @@ import type {
   AgentL1State,
   AgentMode,
   QueuedMessagesSnapshot,
+  SessionInteractionsSnapshot,
   UsageChangeSnapshot,
 } from "../../runtime-types/session-payloads.js";
 import type { EventInterceptor, ExtensionInfo, InterceptableEvent } from "../extension/types.js";
@@ -61,6 +62,8 @@ export interface AgentEvents extends AgentEventPayloadMap {
   "session:mode": { mode: AgentMode; autoMode: boolean };
   /** Extension list snapshot. */
   "session:extensions": { extensions: ExtensionInfo[] };
+  /** Pending approvals / `ask_user` derived from the conversation. */
+  "session:interaction": SessionInteractionsSnapshot;
   /** Extension UI notification. */
   "extension:ui": AgentExtensionUiEvent;
   /** Streaming tool output chunk. */

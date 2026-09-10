@@ -62,11 +62,7 @@ export function useSubagentMessages(subagentId: string | undefined): UIMessage[]
         (event) => {
           if (event.channel !== "lifecycle") return;
           if (event.payload.agentId !== subagentId) return;
-          if (
-            event.payload.type === "subagent:created" ||
-            event.payload.type === "subagent:started" ||
-            event.payload.type === "subagent:ui-update"
-          ) {
+          if (event.payload.type === "subagent:created" || event.payload.type === "subagent:started") {
             attachChild();
             pendingMessages = null;
             throttledFlush();

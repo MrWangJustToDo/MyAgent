@@ -23,6 +23,7 @@ import type { UsageChangeSnapshot } from "../managers/telemetry/usage-tracker.js
 import type { ModelInfo, ModelStyle, ReasoningEffort } from "../models/types.js";
 import type { AgentRetryState } from "../runtime-types/agent-retry.js";
 import type { AgentStatus } from "../runtime-types/agent-status.js";
+import type { SessionInteractionsSnapshot } from "../runtime-types/session-payloads.js";
 import type { ContentPart, UIMessage } from "@tanstack/ai";
 
 // ============================================================================
@@ -43,6 +44,7 @@ export const AGENT_SESSION_CHANNELS = [
   "extensions",
   "mcp",
   "mode",
+  "interaction",
 ] as const;
 
 export type AgentSessionChannel = (typeof AGENT_SESSION_CHANNELS)[number];
@@ -58,6 +60,11 @@ export const DEFAULT_AGENT_SESSION_CHANNELS: readonly AgentSessionChannel[] = [
   "tool",
   "summary",
   "lifecycle",
+  // Pending approvals / ask_user — core derives it, hosts should not re-scan.
+  "interaction",
+  // `mcp` is a retained projection (see `session:mcp`); it gets no explicit
+  // `channels:[...]` opt-in from any host, so without this it is never delivered.
+  "mcp",
 ];
 
 // ============================================================================
@@ -110,6 +117,8 @@ export interface AgentSessionSnapshot {
   autoMode: boolean;
   mcp: AgentSessionMcpSummary;
   extensions: AgentSessionExtensionsSummary;
+  /** Pending approvals / ask_user, mirroring the retained `interaction` channel. */
+  interactions: SessionInteractionsSnapshot;
   subagents: AgentSessionSubagentSummary[];
 }
 
@@ -212,7 +221,8 @@ export type AgentSessionEvent =
   | { channel: "extension-ui"; payload: ExtensionUIEvent; ts: number }
   | { channel: "extensions"; payload: AgentSessionExtensionsSummary; ts: number }
   | { channel: "mcp"; payload: AgentSessionMcpSummary; ts: number }
-  | { channel: "mode"; payload: { mode: AgentMode; autoMode: boolean }; ts: number };
+  | { channel: "mode"; payload: { mode: AgentMode; autoMode: boolean }; ts: number }
+  | { channel: "interaction"; payload: SessionInteractionsSnapshot; ts: number };
 
 export type AgentSessionSubscriber = (event: AgentSessionEvent) => void;
 

@@ -281,8 +281,6 @@ const TELEMETRY_EVENT_LOG_RULES: Record<keyof AgentEventPayloadMap, EventLogRule
     category: "agent",
     formatMessage: (event) => `Subagent phase → ${p(event).phase ?? "?"}`,
   },
-  // UI streaming channel (messageCount per pump) — not diagnostic value, keep off.
-  "subagent:ui-update": false,
 
   // ============================================================================
   // Plan mode

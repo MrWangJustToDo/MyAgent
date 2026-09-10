@@ -29,6 +29,7 @@ function createFake(id, parentId) {
     summaryStreams: new SummaryStreamHub(),
     mcpManager: null,
     extensionRunner: null,
+    readInteractions: () => ({ approvals: [], askUser: [] }),
     planMode: {
       on: () => () => {},
       getState: () => ({

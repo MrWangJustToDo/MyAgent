@@ -57,6 +57,7 @@ function emptySnapshot(agentId: string): AgentSessionSnapshot {
     autoMode: false,
     mcp: { servers: [] },
     extensions: { extensions: [] },
+    interactions: { approvals: [], askUser: [] },
     subagents: [],
   } as unknown as AgentSessionSnapshot;
 }
@@ -261,6 +262,8 @@ function applyEvent(
       return { ...snapshot, mcp: event.payload };
     case "mode":
       return { ...snapshot, mode: event.payload.mode, autoMode: event.payload.autoMode };
+    case "interaction":
+      return { ...snapshot, interactions: event.payload };
     default:
       return snapshot;
   }

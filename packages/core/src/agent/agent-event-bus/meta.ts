@@ -87,7 +87,6 @@ export const AGENT_EVENT_META: Record<AgentEventType, AgentEventMeta> = {
   "subagent:error": { mode: "emit", channel: "lifecycle" },
   "subagent:destroyed": { mode: "emit", channel: "lifecycle" },
   "subagent:phase": { mode: "emit", channel: "lifecycle" },
-  "subagent:ui-update": { mode: "emit" },
   "subagent:progress-summary-error": { mode: "emit", channel: "lifecycle" },
 
   // ==========================================================================
@@ -114,6 +113,7 @@ export const AGENT_EVENT_META: Record<AgentEventType, AgentEventMeta> = {
   "session:summary": { mode: "emit", channel: "summary" },
   "session:mode": { mode: "emit", channel: "mode", retained: true },
   "session:extensions": { mode: "emit", channel: "extensions", retained: true },
+  "session:interaction": { mode: "emit", channel: "interaction", retained: true },
   "extension:ui": { mode: "emit", channel: "extension-ui" },
   "tool:chunk": { mode: "emit", channel: "tool" },
   "tool:clear": { mode: "emit", channel: "tool" },

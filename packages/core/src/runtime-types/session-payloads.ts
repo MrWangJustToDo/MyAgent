@@ -25,6 +25,34 @@ export interface AgentL1State {
   retry?: AgentRetryState | null;
 }
 
+/**
+ * A tool call paused for the user's approval decision.
+ * Part of {@link SessionInteractionsSnapshot}.
+ */
+export interface PendingApprovalInteraction {
+  approvalId: string;
+  toolName: string;
+  toolCallId: string;
+}
+
+/** A `ask_user` call awaiting the user's answer. Part of {@link SessionInteractionsSnapshot}. */
+export interface PendingAskUserInteraction {
+  toolCallId: string;
+  question: string;
+  options?: string[];
+  multiSelect?: boolean;
+}
+
+/**
+ * Pending user interactions derived from the conversation, projected onto the
+ * retained `interaction` channel so hosts no longer each re-scan messages to
+ * discover approvals / `ask_user` requests.
+ */
+export interface SessionInteractionsSnapshot {
+  approvals: PendingApprovalInteraction[];
+  askUser: PendingAskUserInteraction[];
+}
+
 /** Content accepted by the steer / follow-up queues. */
 export type QueuedMessageContent = string | ContentPart[];
 

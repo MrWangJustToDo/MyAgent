@@ -68,6 +68,7 @@ export function readLocalAgentSessionSnapshot(
     autoMode: managed.isAutoModeEnabled(),
     mcp: { servers: managed.getMcpManager()?.getServerStatuses() ?? [] },
     extensions: { extensions: managed.extensionRunner?.getExtensionInfos() ?? [] },
+    interactions: managed.readInteractions(),
     subagents: buildSubagentSummaries(managed, manager),
   };
 }

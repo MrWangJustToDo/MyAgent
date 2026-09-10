@@ -24,6 +24,7 @@ import {
   buildPlanModePrompt,
   buildPlanRetroSteerMessage,
 } from "../agent/plan/plan-prompts.js";
+import { collectPendingApprovals, collectPendingAskUser } from "../agent/stream/tool-phase-utils.js";
 import { SummaryStreamHub } from "../agent/summary-stream/summary-stream-hub.js";
 import { registerStreamingEventBus } from "../agent/tools/util/streaming-callback.js";
 import { getCurrentDate, getGitInfo } from "../agent/turn-context/env-context.js";
@@ -105,7 +106,7 @@ import type { ModelInfo } from "../models/types.js";
 import type { AgentEventPayloadMap } from "../runtime-types/agent-event-payloads.js";
 import type { AgentEventType } from "../runtime-types/agent-events.js";
 import type { AgentRetryState } from "../runtime-types/agent-retry.js";
-import type { AgentL1State, AgentMode } from "../runtime-types/session-payloads.js";
+import type { AgentL1State, AgentMode, SessionInteractionsSnapshot } from "../runtime-types/session-payloads.js";
 
 // ============================================================================
 // Config
@@ -617,11 +618,27 @@ export class ManagedAgent {
     };
   }
 
+  /**
+   * Pending approvals / `ask_user` derived from the current conversation.
+   * Projected onto the retained `interaction` channel so hosts stop re-scanning
+   * messages to discover what the agent is waiting on.
+   */
+  readInteractions(): SessionInteractionsSnapshot {
+    const messages = this.getChatController()?.getMessages() ?? this.ui?.getMessages() ?? [];
+    return {
+      approvals: collectPendingApprovals(messages),
+      askUser: collectPendingAskUser(messages),
+    };
+  }
+
   private emitStateChange(): void {
     // L1 state and mode flow exclusively through the scoped bus (`agent:state`
     // retained, `session:mode` projected) — see unified-agent-event-bus.
     this.eventBus?.emit("agent:state", this.getL1State());
     this.eventBus?.emit("session:mode", this.modeState());
+    // Approvals / ask_user pause also surface through emitStateChange (status +
+    // pending-count transitions), so keep the retained interaction snapshot fresh.
+    this.eventBus?.emit("session:interaction", this.readInteractions());
   }
 
   emitEvent<T extends AgentEventType>(
@@ -649,6 +666,7 @@ export class ManagedAgent {
     bus.retain("session:mode", () => this.modeState());
     bus.retain("session:extensions", () => ({ extensions: this.extensionRunner?.getExtensionInfos() ?? [] }));
     bus.retain("session:mcp", () => ({ servers: this.getMcpManager()?.getServerStatuses() ?? [] }));
+    bus.retain("session:interaction", () => this.readInteractions());
     // Route telemetry through this agent's scoped bus (up-flows to the root
     // observer / Event→Log bridge) instead of the process-wide root bus.
     this.dispatchEvent = (event) => {

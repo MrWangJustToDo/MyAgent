@@ -193,15 +193,6 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
         compactId,
         compactLabel,
         compactEpoch,
-        onUpdate: bridgeUI
-          ? (updated) => {
-              subagentManaged.emitEvent(
-                "subagent:ui-update",
-                { subagentId, messageCount: updated.length },
-                { parentId: parentAgentId }
-              );
-            }
-          : undefined,
         transformStream: (stream) =>
           throwOnRunError(
             captureStreamFinishReason(
