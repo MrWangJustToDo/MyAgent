@@ -6,7 +6,7 @@ import { UsageHeatmap } from "../components/UsageHeatmap.js";
 import { useConfig } from "../hooks/use-config.js";
 import { useSize } from "../hooks/use-size.js";
 import { BG } from "../theme/colors.js";
-import { usageHeatmapColumns } from "../utils/usage-heatmap.js";
+import { usageHeatmapWindow } from "../utils/usage-heatmap.js";
 
 import { registerCommand } from "./utils/registry.js";
 
@@ -21,13 +21,14 @@ const MAX_WEEKS = 52;
 const FALLBACK_SCREEN_WIDTH = 80;
 
 /**
- * Default span: as many weeks as the terminal can show, capped at one year. The
- * graph therefore fills the window width (instead of a fixed six-month block
- * that leaves the right half blank) and adapts to resizes at invocation time.
+ * Default span: whole months, as many as the terminal can show within one year.
+ * The graph therefore fills the window width (instead of a fixed six-month block
+ * that leaves the right half blank), starts on a month boundary so the left edge
+ * never shows a slice of a month, and adapts to resizes at invocation time.
  */
 function defaultWeeks(): number {
   const screenWidth = useSize.getReadonlyState().state.screenWidth || FALLBACK_SCREEN_WIDTH;
-  return usageHeatmapColumns(screenWidth, MAX_WEEKS);
+  return usageHeatmapWindow(screenWidth, MAX_WEEKS).weeks;
 }
 
 function fmt(n: number): string {

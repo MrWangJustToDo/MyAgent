@@ -5,7 +5,7 @@ import { BG, COLORS, interpolateColor } from "../theme/colors.js";
 import {
   HEATMAP_CELL as CELL,
   HEATMAP_LABEL_WIDTH as LABEL_WIDTH,
-  usageHeatmapColumns,
+  usageHeatmapWindow,
 } from "../utils/usage-heatmap.js";
 
 import type { DailyUsageBucket } from "@my-agent/core";
@@ -17,8 +17,10 @@ import type { DailyUsageBucket } from "@my-agent/core";
 // of 7 cells (Mon..Sun), several week columns sit side-by-side, and the day-of-
 // week labels live in their own left column. The month header is a row of
 // boxes each sized to the weeks that month spans, so it lines up with the
-// columns below. Colors are derived from the active theme palette (BG.* /
-// COLORS.success) so the graph stays on-theme in light/dark modes.
+// columns below. The window itself (oldest column + span) comes from
+// `usageHeatmapWindow`, which always starts on a month boundary. Colors are
+// derived from the active theme palette (BG.* / COLORS.success) so the graph
+// stays on-theme in light/dark modes.
 // ============================================================================
 
 /** Day rows, top → bottom (Monday-based week start). */
@@ -27,7 +29,7 @@ const DAY_ROWS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
 /** Number of heat levels above empty (1..LEVELS = increasingly green). */
-const LEVELS = 4;
+const LEVELS = 6;
 
 /** Background for a given heat level. Level 0 (no usage / nonexistent day)
  *  is transparent — only days with activity are tinted, like GitHub. */
@@ -35,18 +37,6 @@ function levelColor(level: number): string | undefined {
   if (level <= 0) return undefined;
   const factor = level / LEVELS;
   return interpolateColor(BG.diffContext, COLORS.success, 0.2 + 0.8 * factor);
-}
-
-/** Monday-based week start (00:00 local) for the first (oldest) column. */
-function firstWeekMonday(weeks: number): Date {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const dow = (today.getDay() + 6) % 7; // 0 = Monday
-  const thisMonday = new Date(today);
-  thisMonday.setDate(today.getDate() - dow);
-  const start = new Date(thisMonday);
-  start.setDate(thisMonday.getDate() - (weeks - 1) * 7);
-  return start;
 }
 
 function dayKey(d: Date): string {
@@ -66,11 +56,11 @@ export const UsageHeatmap = ({ daily, weeks }: UsageHeatmapProps) => {
   const byDay = new Map(daily.map((d) => [d.date, d.totalTokens]));
   const maxDay = daily.reduce((m, d) => Math.max(m, d.totalTokens), 0);
 
-  // Fill the available width (label column + cells), up to the requested span.
+  // Fill the available width (label column + cells) with whole months, up to the
+  // requested span; the window keeps its oldest column on a month boundary.
   const labelW = LABEL_WIDTH; // "Mon " day-label column
   const cellW = CELL.length; // 2
-  const cols = usageHeatmapColumns(screenWidth, weeks);
-  const start = firstWeekMonday(cols);
+  const { startMonday: start, weeks: cols } = usageHeatmapWindow(screenWidth, weeks);
   const today = new Date();
   today.setHours(23, 59, 59, 999);
 
@@ -124,15 +114,21 @@ export const UsageHeatmap = ({ daily, weeks }: UsageHeatmapProps) => {
         {/* Graph: month header + week columns. */}
         <Box flexDirection="column">
           <Box flexDirection="row">
-            {monthSpans.map((s, i) => (
-              // Widen the LAST month to at least its label length so a partial
-              // month (e.g. the current week-only month, ~1 column) doesn't
-              // wrap its label. Earlier months keep their exact column span so
-              // the header still lines up with the cells below.
-              <Box key={i} width={Math.max(s.count * cellW, i === monthSpans.length - 1 ? s.name.length : 0)}>
-                <Text color={COLORS.muted}>{s.name}</Text>
-              </Box>
-            ))}
+            {monthSpans.map((s, i) => {
+              // Widen only the LAST month to at least its label length: the
+              // current month is often one or two columns, and the extra width
+              // spills into the blank area to the right, so its label still
+              // starts where its columns do. Earlier months keep their exact
+              // span to stay aligned with the cells, truncating the label
+              // rather than wrapping it when the span is narrower than the name.
+              const spanW = s.count * cellW;
+              const width = i === monthSpans.length - 1 ? Math.max(spanW, s.name.length) : spanW;
+              return (
+                <Box key={i} width={width}>
+                  <Text color={COLORS.muted}>{s.name.slice(0, width)}</Text>
+                </Box>
+              );
+            })}
           </Box>
           <Box flexDirection="row">
             {columns.map((col, w) => (
