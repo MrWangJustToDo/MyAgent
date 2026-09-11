@@ -41,7 +41,13 @@ import { TreeSitterManager, type TreeSitterEnv } from "./tree-sitter/parser-mana
 import { getSyntaxErrors } from "./tree-sitter/symbol-extractor.js";
 import { WorkspaceIndex } from "./tree-sitter/workspace-index.js";
 
-import type { ExtensionAPI, ExtensionContext, ExtensionToolDefinition, ToolAfterEvent } from "../extension/types.js";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  ExtensionToolDefinition,
+  ExtensionUI,
+  ToolAfterEvent,
+} from "../extension/types.js";
 
 /** Project-level LSP config — loaded from `.lsp.json` in the workspace root. */
 interface ProjectLspConfig {
@@ -80,6 +86,40 @@ export const DEFAULT_DISABLED_LSP_TOOLS: readonly string[] = [
   "code_rewrite",
   "code_overview",
 ];
+
+const NOT_FOUND_ON_PATH = /not found on PATH/i;
+
+/**
+ * Emit an LSP lifecycle notification for one server. Only terminal states are
+ * surfaced (success / failure); the in-between "starting / restarting" stages
+ * are intentionally silent so the transient input feedback is not serialized
+ * into an error→loading→success flicker. A server binary missing on PATH is a
+ * predictable degrade (falls back to tree-sitter), so it is reported as `info`
+ * rather than `error`.
+ */
+function notifyServerLifecycle(
+  ui: ExtensionUI,
+  languageId: string,
+  status: "ready" | "failed" | "crashed",
+  error?: string
+): void {
+  switch (status) {
+    case "ready":
+      ui.notify(`LSP: ${languageId} ready`, "success");
+      break;
+    case "crashed":
+      ui.notify(`LSP: ${languageId} crashed`, "error");
+      break;
+    case "failed":
+      // command not on PATH → degrade to tree-sitter, informational only.
+      if (error && NOT_FOUND_ON_PATH.test(error)) {
+        ui.notify(`LSP: ${languageId} unavailable (command not found)`, "info");
+      } else {
+        ui.notify(`LSP: ${languageId} failed`, "error");
+      }
+      break;
+  }
+}
 
 /** Create the built-in LSP extension. */
 export function createLspExtension(options?: LspExtensionConfig): ExtensionAPI {
@@ -220,17 +260,12 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
     fsHelpers,
     undefined,
     {
-      // Server lifecycle is transient: a host notification (auto-clearing) fits
-      // better than a persistent footer slot.
-      onServerStart: (languageId) => ctx.ui.notify(`LSP: starting ${languageId}...`, "info"),
-      onServerReady: (languageId) => ctx.ui.notify(`LSP: ${languageId} ready`, "success"),
-      onServerError: (languageId) => ctx.ui.notify(`LSP: ${languageId} failed`, "error"),
-      onServerCrash: (languageId, restarting) => {
-        ctx.ui.notify(
-          restarting ? `LSP: restarting ${languageId}...` : `LSP: ${languageId} crashed`,
-          restarting ? "info" : "error"
-        );
-      },
+      // Only terminal states are surfaced (success / failure); the transient
+      // starting / restarting stages stay silent so the input feedback is not
+      // serialized into an error→loading→success flicker.
+      onServerReady: (languageId) => notifyServerLifecycle(ctx.ui, languageId, "ready"),
+      onServerError: (languageId, error) => notifyServerLifecycle(ctx.ui, languageId, "failed", error),
+      onServerCrash: (languageId) => notifyServerLifecycle(ctx.ui, languageId, "crashed"),
     },
     getEnvVar,
     env.commandExists
@@ -568,11 +603,9 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
       fsHelpers,
       undefined,
       {
-        onServerStart: (l) => ctx.ui.notify(`LSP: starting ${l}...`, "info"),
-        onServerReady: (l) => ctx.ui.notify(`LSP: ${l} ready`, "success"),
-        onServerError: (l) => ctx.ui.notify(`LSP: ${l} failed`, "error"),
-        onServerCrash: (l, restarting) =>
-          ctx.ui.notify(restarting ? `LSP: restarting ${l}...` : `LSP: ${l} crashed`, restarting ? "info" : "error"),
+        onServerReady: (l) => notifyServerLifecycle(ctx.ui, l, "ready"),
+        onServerError: (l, error) => notifyServerLifecycle(ctx.ui, l, "failed", error),
+        onServerCrash: (l) => notifyServerLifecycle(ctx.ui, l, "crashed"),
       },
       getEnvVar,
       env.commandExists
