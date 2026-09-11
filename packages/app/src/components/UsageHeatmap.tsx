@@ -2,6 +2,11 @@ import { Box, Text } from "ink";
 
 import { useSize } from "../hooks/use-size.js";
 import { BG, COLORS, interpolateColor } from "../theme/colors.js";
+import {
+  HEATMAP_CELL as CELL,
+  HEATMAP_LABEL_WIDTH as LABEL_WIDTH,
+  usageHeatmapColumns,
+} from "../utils/usage-heatmap.js";
 
 import type { DailyUsageBucket } from "@my-agent/core";
 
@@ -15,9 +20,6 @@ import type { DailyUsageBucket } from "@my-agent/core";
 // columns below. Colors are derived from the active theme palette (BG.* /
 // COLORS.success) so the graph stays on-theme in light/dark modes.
 // ============================================================================
-
-/** Two space characters — the inked "pixel" for every cell. */
-const CELL = "  ";
 
 /** Day rows, top → bottom (Monday-based week start). */
 const DAY_ROWS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -64,10 +66,10 @@ export const UsageHeatmap = ({ daily, weeks }: UsageHeatmapProps) => {
   const byDay = new Map(daily.map((d) => [d.date, d.totalTokens]));
   const maxDay = daily.reduce((m, d) => Math.max(m, d.totalTokens), 0);
 
-  // Cap columns so the grid fits the available width (label column + cells).
-  const labelW = 4; // "Mon " day-label column
+  // Fill the available width (label column + cells), up to the requested span.
+  const labelW = LABEL_WIDTH; // "Mon " day-label column
   const cellW = CELL.length; // 2
-  const cols = Math.max(1, Math.min(weeks, Math.floor((screenWidth - labelW - 3) / cellW)));
+  const cols = usageHeatmapColumns(screenWidth, weeks);
   const start = firstWeekMonday(cols);
   const today = new Date();
   today.setHours(23, 59, 59, 999);

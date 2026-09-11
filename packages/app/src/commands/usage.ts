@@ -4,7 +4,9 @@ import { createElement } from "react";
 import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
 import { UsageHeatmap } from "../components/UsageHeatmap.js";
 import { useConfig } from "../hooks/use-config.js";
+import { useSize } from "../hooks/use-size.js";
 import { BG } from "../theme/colors.js";
+import { usageHeatmapColumns } from "../utils/usage-heatmap.js";
 
 import { registerCommand } from "./utils/registry.js";
 
@@ -12,28 +14,21 @@ import type { CommandContext } from "./utils/types.js";
 import type { DailyUsageBucket, ModelUsageTotal } from "@my-agent/core";
 import type { ReactNode } from "react";
 
-/** Number of months shown by default in the global activity graph. */
-const DEFAULT_MONTHS = 6;
+/** Maximum span of the global activity graph — one full year of weekly columns. */
 const MAX_WEEKS = 52;
 
-/**
- * Number of Monday-aligned weekly columns needed to cover the last `months`
- * months, ending at the current week (so the grid always contains today).
- * Aligning to Monday keeps the column day-of-week labels correct at the start.
- */
-function recentWeeks(months: number): number {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const start = new Date(now.getFullYear(), now.getMonth() - months, now.getDate());
-  const startMonday = new Date(start);
-  startMonday.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-  const thisMonday = new Date(today);
-  thisMonday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-  const weeks = Math.round((thisMonday.getTime() - startMonday.getTime()) / (7 * 86400000)) + 1;
-  return Math.max(1, weeks);
-}
+/** Terminal width assumed before the size store reports a real one. */
+const FALLBACK_SCREEN_WIDTH = 80;
 
-const DEFAULT_WEEKS = recentWeeks(DEFAULT_MONTHS);
+/**
+ * Default span: as many weeks as the terminal can show, capped at one year. The
+ * graph therefore fills the window width (instead of a fixed six-month block
+ * that leaves the right half blank) and adapts to resizes at invocation time.
+ */
+function defaultWeeks(): number {
+  const screenWidth = useSize.getReadonlyState().state.screenWidth || FALLBACK_SCREEN_WIDTH;
+  return usageHeatmapColumns(screenWidth, MAX_WEEKS);
+}
 
 function fmt(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
@@ -119,7 +114,7 @@ registerCommand({
     }
 
     const weeksMatch = /^(\d+)\s*w(week)?$/i.exec(args.trim());
-    const weeks = weeksMatch ? Math.min(MAX_WEEKS, Math.max(1, parseInt(weeksMatch[1], 10))) : DEFAULT_WEEKS;
+    const weeks = weeksMatch ? Math.min(MAX_WEEKS, Math.max(1, parseInt(weeksMatch[1], 10))) : defaultWeeks();
 
     const snap = session.getSnapshot();
     const usage = snap.usage;

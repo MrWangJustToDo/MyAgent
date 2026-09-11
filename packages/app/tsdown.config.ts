@@ -15,6 +15,7 @@ export default defineConfig([
       "src/utils/workspace-file-search.ts",
       "src/utils/streaming-output-lines.ts",
       "src/utils/format-usage.ts",
+      "src/utils/usage-heatmap.ts",
       "src/utils/file-icons.ts",
       "src/utils/tool-activity-summary.ts",
       "src/utils/project-transcript.ts",
