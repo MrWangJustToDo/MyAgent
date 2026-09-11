@@ -1,7 +1,6 @@
-import { registerModelProviderForEntry, resolveModelInfoFromModelsDev, type LoadedModelsState } from "@my-agent/core";
-import { toRaw } from "reactivity-store";
+import { type LoadedModelsState } from "@my-agent/core";
 
-import { useConfig } from "../hooks/use-config.js";
+import { applyModelSelection, getLoadedModelsState } from "../utils/apply-model-selection.js";
 import { getActiveSession } from "../utils/session-resolve.js";
 
 import { registerCommand } from "./utils/registry.js";
@@ -9,14 +8,6 @@ import { registerCommand } from "./utils/registry.js";
 // ============================================================================
 // /models — switch the model for the current session (models.json entries)
 // ============================================================================
-
-function getState(): LoadedModelsState | null {
-  const raw = toRaw(useConfig.getReadonlyState().modelsConfig) as unknown as LoadedModelsState | null;
-  if (!raw) return null;
-  // Deep-clone to strip the store's readonly proxies so entries/models are
-  // mutable plain arrays for provider registration.
-  return JSON.parse(JSON.stringify(raw)) as LoadedModelsState;
-}
 
 function describeEntry(entry: LoadedModelsState["entries"][number]): string {
   if (entry.type === "session") return "session-server";
@@ -30,7 +21,7 @@ function entryLabel(state: LoadedModelsState, index: number, model: string): str
 }
 
 function buildOptions(): { label: string; value: string; description: string }[] {
-  const state = getState();
+  const state = getLoadedModelsState();
   if (!state) return [];
   const options: { label: string; value: string; description: string }[] = [];
   for (let i = 0; i < state.entries.length; i += 1) {
@@ -59,7 +50,7 @@ registerCommand({
       return { ok: false, error: "Agent not initialized" };
     }
 
-    const state = getState();
+    const state = getLoadedModelsState();
     if (!state || state.entries.length === 0) {
       return { ok: false, error: "No models.json loaded — start with a config source." };
     }
@@ -90,37 +81,12 @@ registerCommand({
       };
     }
 
-    // Build a state snapshot pointing at the target entry so provider
-    // registration follows it (remote-provider entries need re-registration).
-    // Session entries (remote-session host) skip registration entirely — the
-    // server-side session resolves the connection itself on `model.set`.
-    if (entry.type !== "session") {
-      const targetState: LoadedModelsState = {
-        ...state,
-        active: { entryIndex, model },
-      };
-      await registerModelProviderForEntry(targetState);
+    // Apply the selection: register the provider, resolve model info, dispatch
+    // `model.set` with the entry's connection, and sync the active entry/config.
+    const applied = await applyModelSelection(session, state, entryIndex, model);
+    if (!applied.ok) {
+      return { ok: false, error: applied.error };
     }
-
-    const modelInfo = await resolveModelInfoFromModelsDev(model, entry.style);
-    const result = await session.dispatch({
-      type: "model.set",
-      model,
-      // Session entries carry no baseURL/apiKey — upstream credentials stay on
-      // the agent server, which resolves them from its own models.json/.env.
-      ...(entry.type !== "session" && {
-        modelStyle: entry.style,
-        modelBaseURL: entry.baseURL,
-        modelApiKey: entry.apiKey,
-      }),
-      modelInfo: modelInfo ?? null,
-    });
-    if (!result.ok) {
-      return { ok: false, error: result.error };
-    }
-
-    // Persist the new active selection so a restart resumes at this model.
-    useConfig.getActions().selectModel(entryIndex, model, entry);
     return { ok: true, message: `Switched to ${model} (${describeEntry(entry)})` };
   },
 });

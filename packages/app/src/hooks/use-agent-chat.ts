@@ -5,6 +5,7 @@ import { toRaw } from "reactivity-store";
 
 import { bindAgentSession } from "../adapter/create-agent.js";
 import { useAdapter } from "../context/adapter-context.js";
+import { applyModelSelection, findModelEntry, getLoadedModelsState } from "../utils/apply-model-selection.js";
 import { clearFlatMessageCache } from "../utils/message-flat-cache.js";
 import { getActiveHost, resolveAgentSession } from "../utils/session-resolve.js";
 import { handleToolLifecycleEvent } from "../utils/tool-timing-store.js";
@@ -218,15 +219,26 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     setQueuedMessages(snap.queues);
     setInteractions(snap.interactions);
 
-    // Resume-session linkage: if the restored session was using a model that the
-    // loaded models.json knows about, re-dispatch model.set so the live agent
-    // re-resolves that model instead of keeping the config default. Unknown models
-    // (or no models.json) are left untouched.
+    // Resume-session linkage: the restored session may carry a model that differs
+    // from the ambient config (e.g. a `/models` switch made before a restart). Core
+    // adopts the persisted model **string**, but `SessionData` stores no connection —
+    // so re-link through the same path `/models` uses: resolve the model against any
+    // models.json entry (not just the active one) and re-dispatch `model.set` with
+    // that entry's baseURL/apiKey + modelInfo, keeping the active entry and the
+    // status surfaces (footer/help/usage) in sync. Unknown models, or no
+    // models.json at all, are left to the core-side adoption.
     if (snap.model) {
-      const modelsConfig = useConfig.getReadonlyState().modelsConfig;
-      const found = modelsConfig?.entries[modelsConfig.active.entryIndex];
-      if (found && found.models.includes(snap.model)) {
-        void session.dispatch({ type: "model.set", model: snap.model });
+      const state = getLoadedModelsState();
+      const entryIndex = state ? findModelEntry(state, snap.model) : -1;
+      const entry = state && entryIndex >= 0 ? state.entries[entryIndex] : undefined;
+      if (state && entry) {
+        const liveConfig = useConfig.getReadonlyState().config;
+        const alreadyLinked = snap.model === (liveConfig.serverModel || liveConfig.model);
+        // `session` entries always re-dispatch: their connection is server-owned and
+        // the agent server only re-resolves it on an explicit `model.set`.
+        if (entry.type === "session" || !alreadyLinked) {
+          void applyModelSelection(session, state, entryIndex, snap.model);
+        }
       }
     }
   }, [session]);
