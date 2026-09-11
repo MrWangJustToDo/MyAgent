@@ -329,7 +329,14 @@ export class SessionStore {
     }
 
     const ids = messages.map((m) => m.id);
-    const structuralChange = prev !== undefined && !isAppendOnlyCompatible(prev.ids, ids);
+    // `prev === undefined` means we have no delta baseline for this id: either the
+    // first save of a brand-new session (nothing durable yet — a rewrite is
+    // equivalent) or a session/store that was never primed by `load()`. In the
+    // latter case the file may already hold content this session does not describe
+    // (e.g. `load()` refused a newer-version log, or the store was recreated), so
+    // treat it as structural and rewrite to converge on the truth rather than
+    // blindly appending into an unknown log.
+    const structuralChange = prev === undefined || !isAppendOnlyCompatible(prev.ids, ids);
 
     if (structuralChange || messages.length === 0) {
       // Non-empty → empty, partial truncation, or the initial empty save:

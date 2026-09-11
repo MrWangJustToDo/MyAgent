@@ -132,6 +132,13 @@ export function createNativeFilesystem(
       await fs.appendFile(fullPath, content, "utf-8");
     },
 
+    rename: async (oldPath: string, newPath: string) => {
+      const fullOldPath = resolvePath(oldPath);
+      const fullNewPath = resolvePath(newPath);
+      await fs.mkdir(path.dirname(fullNewPath), { recursive: true });
+      await fs.rename(fullOldPath, fullNewPath);
+    },
+
     // Synchronous pair — for crash/exit paths that cannot await (see AgentLog).
     appendFileSync: (filePath: string, content: string) => {
       const fullPath = resolvePath(filePath);

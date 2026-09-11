@@ -137,7 +137,7 @@ setupEnv();
   const logPath = `${SESSION_DIR}/${session.id}.session.jsonl`;
 
   await store.save(session);
-  assert.ok(counts.appendFile >= 1, "first save appends the log");
+  assert.ok(counts.writeFile >= 1, "first save of an unprimed session writes the log (rewrite)");
 
   const afterFirst = { ...counts };
   const logAfterFirst = files.get(logPath);
@@ -264,6 +264,31 @@ setupEnv();
   assert.deepEqual(await reader.list(), [], "a newer-version log is not listed as resumable");
   assert.equal(await reader.load(session.id), null, "a newer-version log is not folded");
   assert.ok(files.has(logPath), "the file itself is left untouched");
+}
+
+// --- #4b: a malformed/absent version is not listed or loaded ----------------
+
+setupEnv();
+{
+  const writer = new SessionStore();
+  const session = writer.create({ modelStyle: "openai", model: "test-model", name: "corrupt-version" });
+  session.uiMessages = [{ id: "u1", role: "user", parts: [{ type: "text", content: "hi" }] }];
+  await writer.save(session);
+
+  const logPath = `${SESSION_DIR}/${session.id}.session.jsonl`;
+  // Non-numeric version: must be rejected, not treated as a supported older log.
+  files.set(
+    logPath,
+    files
+      .get(logPath)
+      .split("\n")
+      .map((line) => (line.trim() ? line.replace(/"version":6/g, '"version":"6"') : line))
+      .join("\n")
+  );
+
+  const reader = new SessionStore();
+  assert.deepEqual(await reader.list(), [], "a non-numeric version is not listed");
+  assert.equal(await reader.load(session.id), null, "a non-numeric version is not folded");
 }
 
 // --- #5: getLatestEmpty reuses the newest unused session ---------------------

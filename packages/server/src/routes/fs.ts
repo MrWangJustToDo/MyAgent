@@ -163,6 +163,20 @@ export const fsRoutes = new Hono()
       return c.json(body, status);
     }
   })
+  .post("/rename", zValidator("json", z.object({ oldPath: z.string(), newPath: z.string() })), async (c) => {
+    try {
+      const { oldPath, newPath } = c.req.valid("json");
+      const env = getEnv();
+      if (!env.fs.rename) {
+        return c.json({ error: true, name: "Error", code: "not_supported", message: "rename not available" }, 400);
+      }
+      await env.fs.rename(oldPath, newPath);
+      return c.json({ ok: true });
+    } catch (err) {
+      const { body, status } = handleFsError(err);
+      return c.json(body, status);
+    }
+  })
   .post("/mimeType", zValidator("json", pathSchema), async (c) => {
     try {
       const { path } = c.req.valid("json");

@@ -81,10 +81,36 @@ export async function readLastState(fs: CoreEnvFs, path: string): Promise<Sessio
   return null;
 }
 
-/** Replace the whole log with a compacted form (one line per message). */
+/**
+ * Replace the whole log with a compacted form (one line per message).
+ *
+ * When the env fs implements `rename`, the new body is written to a sibling temp
+ * file and renamed into place: a crash mid-rewrite then leaves either the old log
+ * or the new one, never a truncated file that silently drops the saved history
+ * (an in-place `writeFile` truncates first). Without `rename` this degrades to a
+ * direct overwrite — the append path's torn-trailing-line protection does not
+ * apply to a rewrite, so that host's save is best-effort.
+ */
 export async function writeLog(fs: CoreEnvFs, path: string, lines: SessionLogLine[]): Promise<void> {
   const body = lines.map((line) => JSON.stringify(line)).join("\n");
-  await fs.writeFile(path, body ? body + "\n" : "");
+  const content = body ? body + "\n" : "";
+  if (fs.rename) {
+    const tmpPath = `${path}.tmp`;
+    try {
+      await fs.writeFile(tmpPath, content);
+      await fs.rename(tmpPath, path);
+      return;
+    } catch {
+      // Best-effort cleanup, then fall back to an in-place write rather than
+      // dropping the save; a host whose `rename` fails simply stays non-atomic.
+      try {
+        await fs.remove(tmpPath);
+      } catch {
+        // The temp file may not exist if the initial write failed.
+      }
+    }
+  }
+  await fs.writeFile(path, content);
 }
 
 export interface FoldedSessionLog {
@@ -139,7 +165,8 @@ export function foldLog(lines: SessionLogLine[]): FoldedSessionLog {
     // Explicit per-line timestamps win over inference: apply them BEFORE deriving
     // from the message, otherwise the message-derived `messageUpdatedAt` (the
     // line's write time, e.g. a rewrite stamp) would shadow the real decision
-    // time. Both paths only fill a missing entry, so line order does not matter.
+    // time. Both paths only fill a missing entry, so the EARLIEST line carrying
+    // the approval decides its timestamp — line order is significant.
     if (line.approvalAt) {
       for (const [id, at] of Object.entries(line.approvalAt)) {
         if (approvalAt[id] === undefined) approvalAt[id] = at;

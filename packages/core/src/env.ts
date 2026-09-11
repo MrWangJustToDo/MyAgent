@@ -121,6 +121,12 @@ export interface CoreEnvFs {
   /** Append content to a file */
   appendFile?(path: string, content: string): Promise<void>;
   /**
+   * Rename/move a file, replacing any existing destination. Optional: hosts that
+   * provide it make a whole-file rewrite crash-safe (write a sibling temp file,
+   * then rename it into place) instead of truncating the destination in place.
+   */
+  rename?(oldPath: string, newPath: string): Promise<void>;
+  /**
    * Synchronously append content to a file (creating parent dirs when
    * supported). Optional: only runtimes that can write synchronously (Node)
    * provide it. Used by crash/exit paths that cannot await an async write.

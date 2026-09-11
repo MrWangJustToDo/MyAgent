@@ -32,12 +32,13 @@ export const SESSION_LOG_MESSAGE = "message";
  *
  * Only *newer* formats are rejected: their line/state shape may differ, so folding
  * them would silently produce a wrong session. Older versions are accepted (their
- * extra fields are optional, and a fold only reads what it knows). Logs written by
- * a newer version are skipped by `list()` and `load()` — like the legacy
- * `.session.json` files, they are not migrated.
+ * extra fields are optional, and a fold only reads what it knows). A missing or
+ * malformed version is rejected too — it is not trustworthy enough to fold. Logs
+ * written by a newer version are skipped by `list()` and `load()` — like the
+ * legacy `.session.json` files, they are not migrated.
  */
 export function isSupportedSessionVersion(version: unknown): boolean {
-  return typeof version !== "number" || !Number.isFinite(version) || version <= SESSION_VERSION;
+  return typeof version === "number" && Number.isInteger(version) && version > 0 && version <= SESSION_VERSION;
 }
 
 /** Directory for per-session AgentLog JSONL files: `.agents/logs/{sessionId}/`. */

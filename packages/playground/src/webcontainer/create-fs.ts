@@ -153,5 +153,20 @@ export function createWebContainerFs(wc: WebContainer, rootPath: string, onChang
         wrapFsError(err, filePath);
       }
     },
+
+    rename: async (oldPath, newPath) => {
+      const from = wd(resolve(oldPath));
+      const to = wd(resolve(newPath));
+      try {
+        const parent = to.slice(0, to.lastIndexOf("/")) || "/";
+        if (parent !== "/") {
+          await fs.mkdir(parent, { recursive: true });
+        }
+        await fs.rename(from, to);
+        onChange?.();
+      } catch (err) {
+        wrapFsError(err, oldPath);
+      }
+    },
   };
 }

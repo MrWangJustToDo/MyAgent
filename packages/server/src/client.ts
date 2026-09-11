@@ -155,6 +155,11 @@ function createRemoteFs(client: Client): CoreEnvFs {
       const res = await client.fs.appendFile.$post({ json: { path, content } });
       await unwrap(res);
     },
+
+    rename: async (oldPath: string, newPath: string): Promise<void> => {
+      const res = await client.fs.rename.$post({ json: { oldPath, newPath } });
+      await unwrap(res);
+    },
   };
 }
 

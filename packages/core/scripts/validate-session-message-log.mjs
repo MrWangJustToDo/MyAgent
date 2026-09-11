@@ -6,6 +6,9 @@
  * - state-only change re-emits the last message line;
  * - no-op save appends nothing;
  * - non-empty → empty rewrites the file to a single `message: null` line;
+ * - a rewrite goes through a temp file + rename when the env fs supports it
+ *   (and falls back to an in-place write otherwise);
+ * - an unprimed store rewrites instead of appending into an unknown log;
  * - approvals are derived from messages, with `approvalAt` preserved.
  *
  * Run: pnpm --filter @my-agent/core run validate:session-message-log
@@ -19,13 +22,14 @@ import { clearCoreEnv, registerCoreEnv, SessionStore } from "../dist/dev.mjs";
 const SESSION_DIR = ".agents/sessions";
 
 const files = new Map();
-const counts = { appendFile: 0, writeFile: 0 };
+const counts = { appendFile: 0, writeFile: 0, rename: 0 };
 
-function setupEnv({ withAppend = true } = {}) {
+function setupEnv({ withAppend = true, withRename = true } = {}) {
   clearCoreEnv();
   files.clear();
   counts.appendFile = 0;
   counts.writeFile = 0;
+  counts.rename = 0;
 
   const mockFs = {
     async readFile(p) {
@@ -40,6 +44,13 @@ function setupEnv({ withAppend = true } = {}) {
     async appendFile(p, content) {
       counts.appendFile += 1;
       files.set(p, (files.get(p) ?? "") + (typeof content === "string" ? content : String(content)));
+    },
+    async rename(from, to) {
+      counts.rename += 1;
+      const content = files.get(from);
+      if (content === undefined) throw new Error(`ENOENT: ${from}`);
+      files.delete(from);
+      files.set(to, content);
     },
     async mkdir() {},
     async exists(p) {
@@ -69,6 +80,9 @@ function setupEnv({ withAppend = true } = {}) {
   };
   // Simulate a runtime whose fs lacks the optional `appendFile` primitive.
   if (!withAppend) delete mockFs.appendFile;
+  // Simulate a runtime whose fs lacks the optional `rename` primitive (rewrites
+  // then fall back to an in-place write).
+  if (!withRename) delete mockFs.rename;
 
   registerCoreEnv({
     rootPath: "/mock",
@@ -308,6 +322,65 @@ setupEnv({ withAppend: false });
     loaded.uiMessages.map((m) => m.id),
     ["u1", "a1", "a2"],
     "fold matches after the rewrite fallback"
+  );
+}
+
+// --- rewrite is atomic: temp file + rename, no leftover temp ----------------
+
+setupEnv();
+{
+  const store = new SessionStore();
+  const session = store.create({ modelStyle: "openai", model: "m", name: "atomic" });
+  session.uiMessages = [userMessage("u1", "hi"), assistantMessage("a1", "hello")];
+
+  await store.save(session);
+  assert.ok(counts.rename >= 1, "a rewrite renames the temp file into place");
+  assert.equal(readLines(session.id).length, 2, "the rewritten log holds every message");
+  assert.deepEqual(
+    [...files.keys()].filter((k) => k.endsWith(".tmp")),
+    [],
+    "no temp file is left behind"
+  );
+}
+
+// --- rename absent: rewrite falls back to an in-place write -----------------
+
+setupEnv({ withRename: false });
+{
+  const store = new SessionStore();
+  const session = store.create({ modelStyle: "openai", model: "m", name: "no-rename" });
+  session.uiMessages = [userMessage("u1", "hi")];
+
+  await store.save(session);
+  assert.equal(counts.rename, 0, "rename is unavailable");
+  assert.ok(counts.writeFile > 0, "the rewrite still writes directly");
+  assert.equal(readLines(session.id).length, 1, "the log is on disk without rename");
+}
+
+// --- unprimed store converges on the session instead of appending -----------
+
+setupEnv();
+{
+  const writer = new SessionStore();
+  const session = writer.create({ modelStyle: "openai", model: "m", name: "unprimed" });
+  session.uiMessages = [userMessage("u1", "one"), assistantMessage("a1", "two")];
+  await writer.save(session);
+  assert.equal(readLines(session.id).length, 2);
+
+  // A fresh store that never called load() (so `prev` is undefined) must not
+  // append into the existing log: doing so would keep the removed `a1` alive.
+  const reader = new SessionStore();
+  await reader.save({ ...session, uiMessages: [userMessage("u1", "one")], updatedAt: session.updatedAt });
+  assert.deepEqual(
+    readLines(session.id).map((l) => l.message?.id),
+    ["u1"],
+    "rewrite converges on the session; no stale message survives"
+  );
+  const loaded = await reader.load(session.id);
+  assert.deepEqual(
+    loaded.uiMessages.map((m) => m.id),
+    ["u1"],
+    "fold matches the converged log"
   );
 }
 
