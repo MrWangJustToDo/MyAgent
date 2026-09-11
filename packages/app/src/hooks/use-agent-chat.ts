@@ -13,7 +13,7 @@ import { handleToolLifecycleEvent } from "../utils/tool-timing-store.js";
 import { useAgentStatus } from "./use-agent-status.js";
 import { useAgent } from "./use-agent.js";
 import { useCallbackRef } from "./use-callback-ref.js";
-import { useForceUpdate } from "./use-force-update.js";
+import { useDynamic } from "./use-dynamic.js";
 import { useThinkingLine } from "./use-thinking-line.js";
 import { getWorkSpaceInfo } from "./use-workspace-info.js";
 
@@ -151,7 +151,6 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   // instead of each host re-scanning messages.
   const [interactions, setInteractions] = useState<SessionInteractionsSnapshot>({ approvals: [], askUser: [] });
 
-  const forceUpdate = useForceUpdate({ time: 100 });
   const initIdRef = useRef(0);
   // Last model seen on the session/state channels that has been relinked — dedupes
   // the state-channel watcher against the session-switch effect and repeated
@@ -186,9 +185,11 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       if (currentInitId !== initIdRef.current) return;
       setTimeout(() => {
         if (typeof process === "object") {
-          import("ansi-escapes").then((pkg) => process?.stdout?.write?.(pkg.clearScreen + pkg.cursorTo(0, 0)));
+          import("ansi-escapes")
+            .then((pkg) => process?.stdout?.write?.(pkg.clearScreen + pkg.cursorTo(0, 0)))
+            .then(() => setInitLoading(false))
+            .then(() => useDynamic.getActions().setDynamicKey(Date.now()));
         }
-        setInitLoading(false);
       }, 200);
     };
 
@@ -276,7 +277,6 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
             relinkedModelRef.current = model;
             void relinkSessionModel(session, model);
           }
-          forceUpdate();
           return;
         }
         if (event.channel === "todos") {
@@ -298,7 +298,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     return () => {
       unsub();
     };
-  }, [session, forceUpdate]);
+  }, [session]);
 
   useEffect(() => {
     let latestThinking = "";
@@ -346,48 +346,42 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         for (const child of activeChildren) {
           void resolveAgentSession(child.id)?.dispatch({ type: "stop" });
         }
-        forceUpdate();
         return;
       }
     }
     void session?.dispatch({ type: "stop" });
-    forceUpdate();
-  }, [session, forceUpdate]);
+  }, [session]);
 
   const sendMessage = useCallback(
     async (content: string | SendMessageContent) => {
       if (!session) return;
       await session.dispatch({ type: "send", content: toChatContent(content) });
-      forceUpdate();
     },
-    [session, forceUpdate]
+    [session]
   );
 
   const steer = useCallback(
     (content: string | SendMessageContent) => {
       if (!session) return;
       void session.dispatch({ type: "steer", content: toChatContent(content) });
-      forceUpdate();
     },
-    [session, forceUpdate]
+    [session]
   );
 
   const followUp = useCallback(
     (content: string | SendMessageContent) => {
       if (!session) return;
       void session.dispatch({ type: "followUp", content: toChatContent(content) });
-      forceUpdate();
     },
-    [session, forceUpdate]
+    [session]
   );
 
   const forceSubmit = useCallback(
     (content: string | SendMessageContent) => {
       if (!session) return;
       void session.dispatch({ type: "forceSubmit", content: toChatContent(content) });
-      forceUpdate();
     },
-    [session, forceUpdate]
+    [session]
   );
 
   const clearMessages = useCallback(() => {
@@ -412,9 +406,8 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         approved: options.approved,
         reason: options.reason,
       });
-      forceUpdate();
     },
-    [session, forceUpdate]
+    [session]
   );
 
   // Core derives these (retained `interaction` channel / snapshot); hosts no
@@ -432,9 +425,8 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   const setClientToolWaiting = useCallback(
     (active: boolean) => {
       void session?.dispatch({ type: "setClientToolWaiting", active });
-      forceUpdate();
     },
-    [session, forceUpdate]
+    [session]
   );
 
   const addToolOutput = useCallback(
@@ -444,9 +436,8 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         toolCallId: options.toolCallId,
         output: options.output,
       });
-      forceUpdate();
     },
-    [session, forceUpdate]
+    [session]
   );
 
   return {

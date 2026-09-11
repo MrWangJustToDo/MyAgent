@@ -1,5 +1,3 @@
-import { Box } from "ink";
-
 import { ExtensionConfirm } from "../components/ExtensionConfirm.js";
 import { ExtensionPanel } from "../components/ExtensionPanel.js";
 import { ExtensionWidget } from "../components/ExtensionWidget.js";
@@ -123,9 +121,7 @@ export const Agent = () => {
     <FullBox flexDirection="column">
       <Header />
       {workspaceOpen ? (
-        <Box flexGrow={1} flexDirection="column">
-          <WorkspacePanel />
-        </Box>
+        <WorkspacePanel />
       ) : subagentPanelOpen ? (
         <SubagentPanel />
       ) : extensionPanelOpen ? (

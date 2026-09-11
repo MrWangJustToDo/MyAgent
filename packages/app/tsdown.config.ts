@@ -10,6 +10,7 @@ export default defineConfig([
       "src/utils/workspace-scroll.ts",
       "src/utils/workspace-git-diff.ts",
       "src/utils/workspace-git-info.ts",
+      "src/utils/workspace-git-status.ts",
       "src/utils/workspace-diff-stats.ts",
       "src/utils/workspace-diff-tree.ts",
       "src/utils/workspace-file-search.ts",

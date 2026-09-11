@@ -8,6 +8,8 @@ import { useExtensionPanel } from "../hooks/use-extension-panel.js";
 import { COLORS } from "../theme/colors.js";
 import { listNavHint, pressEscToReturnHint } from "../utils/keyboard-labels.js";
 
+import { PanelOverlay } from "./PanelOverlay.js";
+
 import type { ExtensionInfo } from "@my-agent/core";
 
 const ExtensionPanelList = ({
@@ -154,7 +156,9 @@ export const ExtensionPanel = () => {
     refresh();
   };
 
-  if (view === "closed") return null;
-
-  return <ExtensionPanelList infos={infos} onToggle={handleToggle} onClose={close} />;
+  return (
+    <PanelOverlay open={view !== "closed"}>
+      <ExtensionPanelList infos={infos} onToggle={handleToggle} onClose={close} />
+    </PanelOverlay>
+  );
 };

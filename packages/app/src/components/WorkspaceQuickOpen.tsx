@@ -44,7 +44,7 @@ interface WorkspaceQuickOpenProps {
 
 export const WorkspaceQuickOpen = ({ rootPath, width, height }: WorkspaceQuickOpenProps) => {
   const quickOpen = useWorkspaceView((s) => s.quickOpen);
-  const { closeQuickOpen, moveQuickOpenCursor, selectFile, setQuickOpenCursor, setQuickOpenQuery } =
+  const { closeQuickOpen, moveQuickOpenCursor, selectFile, setMode, setQuickOpenCursor, setQuickOpenQuery } =
     useWorkspaceView.getActions();
 
   const [files, setFiles] = useState<string[] | null>(null);
@@ -86,6 +86,10 @@ export const WorkspaceQuickOpen = ({ rootPath, width, height }: WorkspaceQuickOp
     const result = results[cursor];
     if (!result) return;
     closeQuickOpen();
+    // Picking from search always lands in file (preview) view: search spans all
+    // files, so staying in diff mode would show an empty diff for a jump target
+    // that has no changes.
+    setMode("preview");
     selectFile(joinWorkspacePath(rootPath, result.path));
   };
 

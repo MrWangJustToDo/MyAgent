@@ -4,12 +4,12 @@ import { toRaw } from "reactivity-store";
 import { useAgent } from "../hooks/use-agent.js";
 import { useSubagentPanel } from "../hooks/use-subagent-panel.js";
 
+import { PanelOverlay } from "./PanelOverlay.js";
 import { SubagentDetailPanel } from "./SubagentDetailPanel.js";
 import { SubagentListPanel } from "./SubagentListPanel.js";
 
 /** Full-screen overlay for inspecting active subagent tasks. */
 export const SubagentPanel = () => {
-  const [ready, setReady] = useState(false);
   const view = useSubagentPanel((s) => s.view);
   const selectedSubagentId = useSubagentPanel((s) => s.selectedSubagentId);
   const { openDetail, close, backToList } = useSubagentPanel.getActions();
@@ -17,15 +17,7 @@ export const SubagentPanel = () => {
   const [listRevision, setListRevision] = useState(0);
 
   useEffect(() => {
-    if (typeof process === "object") {
-      import("ansi-escapes").then((pkg) => {
-        process?.stdout?.write?.(pkg.clearScreen + pkg.cursorTo(0, 0));
-      });
-    }
-
-    setReady(true);
-    if (view === "closed") return;
-    if (!rootSession) return;
+    if (view === "closed" || !rootSession) return;
 
     // Row-level status is handled by SubagentTaskRow (per-child session
     // subscription). The root only needs to re-read the task list when its
@@ -47,13 +39,14 @@ export const SubagentPanel = () => {
     return rootSession?.getSnapshot().subagents ?? [];
   }, [rootSession, listRevision]);
 
-  if (view === "closed") return null;
-
-  if (!ready) return null;
-
-  if (view === "detail" && selectedSubagentId) {
-    return <SubagentDetailPanel subagentId={selectedSubagentId} onBack={backToList} />;
-  }
-
-  return <SubagentListPanel tasks={allTasks} onSelect={openDetail} onClose={close} />;
+  return (
+    // `resetKey={view}` re-clears when switching list↔detail inside the overlay.
+    <PanelOverlay open={view !== "closed"} resetKey={view}>
+      {view === "detail" && selectedSubagentId ? (
+        <SubagentDetailPanel subagentId={selectedSubagentId} onBack={backToList} />
+      ) : (
+        <SubagentListPanel tasks={allTasks} onSelect={openDetail} onClose={close} />
+      )}
+    </PanelOverlay>
+  );
 };
