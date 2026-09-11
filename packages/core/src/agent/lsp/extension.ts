@@ -579,7 +579,9 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
 
     const summary = `\n\n⚠ LSP: ${errors.length} error(s) in ${relPath}:\n${lines.join("\n")}`;
     applyDiagnosticsToToolAfterPayload(event.payload, summary);
-    ctx.ui.render("footer", "lsp", `LSP: ${errors.length} error(s) in ${relPath}`);
+    // Diagnostics are transient host notifications, not a retained render slot —
+    // LSP messages all go through `notify` (the input feedback line).
+    ctx.ui.notify(`LSP: ${errors.length} error(s) in ${relPath}`, "error");
   }
 
   // ---- Session lifecycle ----

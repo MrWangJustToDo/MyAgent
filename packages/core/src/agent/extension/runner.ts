@@ -550,7 +550,8 @@ export class ExtensionRunner {
     }
     this.unregisterInstanceArtifacts(instance);
     // Clear any surface slots this extension rendered so they do not linger
-    // after the extension is disabled (e.g. `LSP: 3 error(s) in src/app.ts`).
+    // after the extension is disabled (e.g. a status line it published into the
+    // footer surface).
     this.ui.clearSlotsByOwner(instance.api.id);
     instance.state = "inactive";
   }
