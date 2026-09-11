@@ -5,13 +5,12 @@
  * before writing to disk. Runtime (hydrated) messages are never mutated.
  */
 
-import { normalizeSessionApprovals } from "../../agent/approval/tool-approval-table.js";
 import { getFirstUserInput } from "../../agent/compaction/message-utils.js";
 import { dehydrateUIMessages, hydrateUIMessages, type MediaHydrationMiss } from "../../agent/media/media-utils.js";
 import { runSideTextQuery } from "../../models/adapter/side-text-query.js";
 
 import type { SessionStore } from "../../agent/persistence/session-store.js";
-import type { SessionData, ToolApprovalRecord } from "../../agent/persistence/types.js";
+import type { SessionData } from "../../agent/persistence/types.js";
 import type { PlanModeState } from "../../agent/plan/plan-mode-controller.js";
 import type { TodoManager } from "../../agent/todo";
 import type { TextAdapterConfig } from "../../models/adapter/adapter-factory.js";
@@ -27,8 +26,6 @@ export interface SessionPersistInput {
   planMode?: PlanModeState | null;
   /** Auto-approve (skip all tool approvals) flag. */
   autoMode?: boolean;
-  /** Tool-approval interrupt table; omitted means leave existing / empty. */
-  approvals?: ToolApprovalRecord[];
   /** Reasoning effort level to persist with this session. */
   reasoningEffort?: ReasoningEffort;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
@@ -154,7 +151,6 @@ export class SessionService {
       todoManager,
       planMode,
       autoMode,
-      approvals,
       reasoningEffort,
       resolveTextAdapter,
       onTitleResolved,
@@ -184,10 +180,6 @@ export class SessionService {
 
     if (autoMode !== undefined) {
       this.data.autoMode = autoMode;
-    }
-
-    if (approvals !== undefined) {
-      this.data.approvals = approvals;
     }
 
     // `in` check: explicit undefined (e.g. `/effort off`) also clears the field.
@@ -282,11 +274,6 @@ export class SessionService {
     } catch {
       hydrated = session.uiMessages;
     }
-    session.approvals = normalizeSessionApprovals({
-      approvals: session.approvals,
-      uiMessages: hydrated,
-    });
-
     if (session.usage) {
       usage.addTotal(session.usage);
     }

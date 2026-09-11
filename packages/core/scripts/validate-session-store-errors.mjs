@@ -89,7 +89,7 @@ function setupEnv() {
             if (name) names.add(name);
           }
         }
-        return [...names].map((name) => ({ name, type: name.endsWith(".session.json") ? "file" : "directory" }));
+        return [...names].map((name) => ({ name, type: name.endsWith(".session.jsonl") ? "file" : "directory" }));
       },
       async remove(p) {
         files.delete(p);

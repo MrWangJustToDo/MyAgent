@@ -96,23 +96,32 @@ export class ToolApprovalTable {
   }
 }
 
-/** Missing / empty table → backfill from UIMessage approval parts when present. */
+/**
+ * Derive the approval table from UIMessage approval parts.
+ *
+ * Approval state is not stored separately: the message log is the source of
+ * truth and this reconstructs the table on load. `approvalTimes` (toolCallId →
+ * epoch ms) carries the real decision time recorded in the log; when absent,
+ * `now` is used.
+ */
 export function normalizeSessionApprovals(
-  session: { approvals?: ToolApprovalRecord[]; uiMessages?: UIMessage[] },
+  session: { uiMessages?: UIMessage[]; approvalTimes?: Record<string, number> },
   now = Date.now()
 ): ToolApprovalRecord[] {
-  const existing = session.approvals ?? [];
-  if (existing.length > 0) return existing.map((record) => ({ ...record }));
-  return backfillApprovalsFromUIMessages(session.uiMessages ?? [], now);
+  return backfillApprovalsFromUIMessages(session.uiMessages ?? [], now, session.approvalTimes);
 }
 
-export function backfillApprovalsFromUIMessages(messages: UIMessage[], now = Date.now()): ToolApprovalRecord[] {
+export function backfillApprovalsFromUIMessages(
+  messages: UIMessage[],
+  now = Date.now(),
+  approvalTimes?: Record<string, number>
+): ToolApprovalRecord[] {
   const table = new ToolApprovalTable();
   for (const message of messages) {
     if (message.role !== "assistant") continue;
     for (const part of message.parts) {
       if (!isToolCallPart(part) || !part.approval?.id) continue;
-      const record = recordFromToolCallPart(part, now);
+      const record = recordFromToolCallPart(part, approvalTimes?.[part.approval.id] ?? now);
       if (record) table.upsert(record);
     }
   }

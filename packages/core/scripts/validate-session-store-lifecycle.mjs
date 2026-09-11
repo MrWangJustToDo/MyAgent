@@ -1,13 +1,13 @@
 /**
- * Validates two SessionStore durability/lifecycle fixes:
+ * Validates SessionStore durability/lifecycle on the append-only message log:
  *
- * #1 no-op save dedupe: the content fingerprint is compared BEFORE stamping
+ * #1 no-op save dedupe: the content signature is compared BEFORE stamping
  *    `updatedAt`, so re-saving an unchanged session performs zero disk IO and
- *    does not advance `updatedAt`.
+ *    does not advance `updatedAt`. A changed save appends again.
  *
- * #2 journal-only sessions (crash between the journal append and the snapshot
- *    write) are treated as existing by `delete()` — both files are removed — so
- *    a later `load()` no longer resurrects a deleted session.
+ * #2 a session written by a previous process (log only, no snapshot) loads via
+ *    folding, is listed, and `delete()` removes it so `load()` does not
+ *    resurrect it.
  *
  * Run: pnpm --filter @my-agent/core run validate:session-store-lifecycle
  */
@@ -100,7 +100,7 @@ function setupEnv() {
             if (name) names.add(name);
           }
         }
-        return [...names].map((name) => ({ name, type: name.endsWith(".session.json") ? "file" : "directory" }));
+        return [...names].map((name) => ({ name, type: name.endsWith(".session.jsonl") ? "file" : "directory" }));
       },
       async remove(p) {
         counts.remove += 1;
@@ -123,14 +123,14 @@ setupEnv();
 {
   const store = new SessionStore();
   const session = store.create({ modelStyle: "openai", model: "test-model", name: "dedupe" });
-  const snapshotPath = `${SESSION_DIR}/${session.id}.session.json`;
+  session.uiMessages = [{ id: "u1", role: "user", parts: [{ type: "text", content: "hi" }] }];
+  const logPath = `${SESSION_DIR}/${session.id}.session.jsonl`;
 
   await store.save(session);
-  assert.ok(counts.writeFile >= 1, "first save writes the snapshot");
-  assert.ok(counts.appendFile >= 1, "first save appends the journal");
+  assert.ok(counts.appendFile >= 1, "first save appends the log");
 
   const afterFirst = { ...counts };
-  const snapshotAfterFirst = files.get(snapshotPath);
+  const logAfterFirst = files.get(logPath);
   const updatedAtAfterFirst = session.updatedAt;
 
   // Re-save the SAME object with no changes.
@@ -146,80 +146,53 @@ setupEnv();
     },
     "unchanged save performs no disk IO"
   );
-  assert.equal(files.get(snapshotPath), snapshotAfterFirst, "snapshot bytes unchanged on no-op save");
+  assert.equal(files.get(logPath), logAfterFirst, "log bytes unchanged on no-op save");
   assert.equal(session.updatedAt, updatedAtAfterFirst, "updatedAt not bumped on no-op save");
 
   // A real content change must still persist (and bump updatedAt).
   session.name = "renamed";
   await store.save(session);
   assert.ok(counts.appendFile > afterFirst.appendFile, "changed save appends again");
-  assert.notEqual(files.get(snapshotPath), snapshotAfterFirst, "changed save rewrites the snapshot");
+  assert.notEqual(files.get(logPath), logAfterFirst, "changed save writes new bytes");
   assert.ok(session.updatedAt >= updatedAtAfterFirst, "changed save stamps updatedAt");
 }
 
-// --- #2: journal-only session is deletable and stays deleted -----------------
+// --- #2: log-only session loads, lists, and deletes -------------------------
 
 setupEnv();
 {
-  const id = "ses_journalonly";
-  const journalPath = `${SESSION_DIR}/${id}.session.log`;
-  const snapshotPath = `${SESSION_DIR}/${id}.session.json`;
-  const data = {
-    id,
-    name: "crashed",
-    version: 5,
-    modelStyle: "openai",
-    model: "test-model",
-    createdAt: 1,
-    updatedAt: 2,
-    usage: {},
-    todos: [],
-    uiMessages: [{ id: "u1", role: "user", parts: [{ type: "text", content: "hi" }] }],
-    journalSeq: 1,
-  };
-  const record = { v: 1, seq: 1, kind: "checkpoint", ts: 2, data };
-  files.set(journalPath, JSON.stringify(record) + "\n");
+  const writer = new SessionStore();
+  const session = writer.create({ modelStyle: "openai", model: "test-model", name: "restart" });
+  session.uiMessages = [
+    { id: "u1", role: "user", parts: [{ type: "text", content: "hello" }] },
+    { id: "a1", role: "assistant", parts: [{ type: "text", content: "hi there" }] },
+  ];
+  await writer.save(session);
 
-  const store = new SessionStore();
+  const logPath = `${SESSION_DIR}/${session.id}.session.jsonl`;
+  assert.ok(files.has(logPath), "log exists");
 
-  // load() sees the journal-only session (resurrect source of the bug).
-  const loaded = await store.load(id);
-  assert.ok(loaded && loaded.name === "crashed", "journal-only session loads via the journal");
-
-  // list() does not surface it (metadata scan only sees snapshots) — documents
-  // the known limitation that getLatest/getLatestEmpty also miss it.
-  const metas = await store.list();
-  assert.equal(
-    metas.some((m) => m.id === id),
-    false,
-    "journal-only session is absent from list()"
+  // A fresh store (new process) loads by folding the log.
+  const reader = new SessionStore();
+  const loaded = await reader.load(session.id);
+  assert.ok(loaded, "log-only session loads");
+  assert.equal(loaded.name, "restart");
+  assert.deepEqual(
+    loaded.uiMessages.map((m) => m.id),
+    ["u1", "a1"],
+    "messages folded in order"
   );
 
-  // delete() must remove the journal-only session.
-  assert.equal(await store.delete(id), true, "delete() removes a journal-only session");
-  assert.equal(files.has(journalPath), false, "journal removed");
-  assert.equal(files.has(snapshotPath), false, "snapshot absent");
-  assert.equal(await store.load(id), null, "deleted session does not resurrect");
+  const metas = await reader.list();
+  assert.ok(
+    metas.some((m) => m.id === session.id),
+    "log-only session is listed"
+  );
 
-  // Deleting a non-existent session is a no-op.
-  assert.equal(await store.delete(id), false, "delete() of a missing session returns false");
-}
-
-// --- #2b: snapshot + journal are both cleaned --------------------------------
-
-setupEnv();
-{
-  const store = new SessionStore();
-  const session = store.create({ modelStyle: "openai", model: "test-model", name: "both" });
-  await store.save(session);
-  const journalPath = `${SESSION_DIR}/${session.id}.session.log`;
-  const snapshotPath = `${SESSION_DIR}/${session.id}.session.json`;
-  assert.ok(files.has(journalPath) && files.has(snapshotPath));
-
-  assert.equal(await store.delete(session.id), true);
-  assert.equal(files.has(journalPath), false, "journal removed alongside snapshot");
-  assert.equal(files.has(snapshotPath), false, "snapshot removed");
-  assert.equal(await store.load(session.id), null);
+  assert.equal(await reader.delete(session.id), true, "delete() removes the log");
+  assert.equal(files.has(logPath), false, "log removed");
+  assert.equal(await reader.load(session.id), null, "deleted session does not resurrect");
+  assert.equal(await reader.delete(session.id), false, "delete() of a missing session returns false");
 }
 
 console.log("session-store-lifecycle validation passed");

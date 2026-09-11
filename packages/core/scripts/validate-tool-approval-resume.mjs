@@ -84,12 +84,12 @@ assert.equal(backfilled[0].toolCallId, "call_old");
 const fromOldSession = normalizeSessionApprovals({ uiMessages });
 assert.equal(fromOldSession[0].toolCallId, "call_old");
 
-const keepStored = normalizeSessionApprovals({
-  approvals: records.filter((row) => row.status === "denied"),
-  uiMessages,
-});
-assert.equal(keepStored.length, 1);
-assert.equal(keepStored[0].status, "denied", "non-empty table wins over backfill");
+// Approval state is derived from the message log; `approvalTimes` carries the
+// real decision timestamp recorded in the log instead of `now`.
+const withTimes = normalizeSessionApprovals({ uiMessages, approvalTimes: { approval_call_call_old: 1234 } });
+assert.equal(withTimes.length, 1);
+assert.equal(withTimes[0].status, "approved");
+assert.equal(withTimes[0].updatedAt, 1234, "approvalTimes carries the real decision timestamp");
 
 const middleware = createApprovalResumeMiddleware({
   getApprovals: () => records,

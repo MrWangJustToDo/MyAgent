@@ -1,27 +1,29 @@
 /**
- * SessionStore - Journal + snapshot session persistence.
+ * SessionStore - Append-only incremental session persistence.
  *
- * Stores each session as an append-only JSONL journal
- * `.agents/sessions/{id}.session.log` (source of truth) plus a materialized
- * snapshot `.agents/sessions/{id}.session.json` (cache). save() appends a
- * durable whole-state checkpoint first, then writes the snapshot, then
- * truncates the journal to records newer than the snapshot — a crash between
- * append and snapshot is recovered on load by replaying the journal tail.
+ * Each session is one JSONL log `.agents/sessions/{id}.session.jsonl` (source of
+ * truth). Every line is one message plus the full non-message state snapshot at
+ * that point. `save()` appends only what changed: one line per new/changed
+ * UIMessage, or a re-emit of the last message when only state changed. `load()`
+ * folds the log by message id (later line wins).
  *
  * Binary assets (images, audio, PDFs) are extracted from inline base64 and
  * stored as content-addressed files under `.agents/media/<hash>.<ext>`. The
- * session JSON stores only `media://<hash>` references in `source.value` and
+ * session log stores only `media://<hash>` references in `source.value` and
  * a `MediaRef` in `metadata.mediaRef`. Hydrate/Dehydrate happens in
  * SessionService via `media-utils.ts`.
  */
 
 import { getEnv } from "../../env.js";
 import { generateId } from "../../utils/generate-id.js";
+import { isToolCallPart } from "../stream/message-parts.js";
 
-import { appendCheckpoint, lastRecord, readJournal, truncateAfter } from "./session-journal.js";
-import { SESSION_DIR, SESSION_FILE_SUFFIX, SESSION_LOG_SUFFIX, SESSION_VERSION } from "./types.js";
+import { appendLogLines, foldLog, readLastState, readLog, writeLog } from "./session-journal.js";
+import { fingerprintUIMessage } from "./session-sync-tracker.js";
+import { SESSION_DIR, SESSION_LOG_MESSAGE, SESSION_LOG_SUFFIX, SESSION_VERSION } from "./types.js";
 
-import type { SessionData, SessionMeta } from "./types.js";
+import type { SessionData, SessionLogLine, SessionMeta, SessionStateFields } from "./types.js";
+import type { UIMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Constants
@@ -39,16 +41,26 @@ const EMPTY_USAGE = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
  */
 const EMPTY_SESSION_RESERVE_MS = 5 * 60_000;
 
+/** What we remember about the last durable write, to compute the next delta. */
+interface LastSaved {
+  /** Message ids in order at the last write (prefix check for append-only). */
+  ids: string[];
+  /** id → fingerprint at the last write. */
+  fingerprints: Map<string, string>;
+  /** Content signature at the last write (state sans `updatedAt` + fingerprints). */
+  signature: string;
+}
+
 // ============================================================================
 // SessionStore Class
 // ============================================================================
 
 export class SessionStore {
-  /**
-   * Hash of the last saved JSON string per session.
-   * Used to skip writes when nothing changed.
-   */
-  private lastSavedHash: Map<string, string> = new Map();
+  /** Last durable write per session — drives delta computation and no-op dedupe. */
+  private lastSaved: Map<string, LastSaved> = new Map();
+
+  /** Known approval decision times per session (toolCallId → epoch ms). */
+  private approvalTimes: Map<string, Record<string, number>> = new Map();
 
   /**
    * Per-session write lock to prevent concurrent saves from racing.
@@ -65,7 +77,7 @@ export class SessionStore {
 
   /**
    * Create a new empty session and return its SessionData.
-   * Does NOT write to disk — the first call to save() writes the file.
+   * Does NOT write to disk — the first call to save() writes the log.
    */
   create(options: { modelStyle: string; model: string; name?: string }): SessionData {
     const id = generateId("ses");
@@ -86,11 +98,10 @@ export class SessionStore {
   }
 
   /**
-   * Save a session: append a durable whole-state checkpoint to the journal
-   * (source of truth), then write the snapshot (cache), then truncate the
-   * journal to records newer than the snapshot. Skips both when the content
-   * hasn't changed since the last save. Serializes concurrent saves per
-   * session to prevent race conditions.
+   * Save a session: append only the messages whose content changed since the
+   * last write, plus a full state snapshot on each appended line. State-only
+   * changes re-emit the last message line. Skips all IO when nothing changed.
+   * Serializes concurrent saves per session.
    */
   async save(session: SessionData): Promise<void> {
     const prev = this.saveLocks.get(session.id) ?? Promise.resolve();
@@ -109,38 +120,33 @@ export class SessionStore {
   }
 
   /**
-   * Load a full session by ID: read the snapshot, then replay any journal
-   * record newer than the snapshot (crash between append and snapshot, or a
-   * corrupt/missing snapshot with a valid journal). v4 snapshot-only files
-   * load unchanged.
+   * Load a full session by ID by folding its log. Returns null when the log is
+   * missing or holds no usable lines.
    */
   async load(id: string): Promise<SessionData | null> {
-    const filePath = this.getFilePath(id);
-    const snapshot = await this.tryLoadJson(filePath);
-
     const logPath = this.getLogPath(id);
-    const journal = (await this.fs.exists(logPath)) ? await readJournal(this.fs, logPath) : [];
-    const latest = lastRecord(journal);
+    if (!(await this.fs.exists(logPath))) return null;
 
-    // The journal is canonical when it is ahead of the snapshot.
-    if (latest && (!snapshot || latest.seq > (snapshot.journalSeq ?? 0))) {
-      const session = latest.data as SessionData;
-      if (session.id !== id && id.startsWith("ses_")) {
-        session.id = id;
-      }
-      return session;
+    const lines = await readLog(this.fs, logPath);
+    if (lines.length === 0) return null;
+
+    const { state, uiMessages, approvalAt } = foldLog(lines);
+    if (!state) return null;
+
+    const data: SessionData = { ...state, uiMessages };
+    if (Object.keys(approvalAt).length > 0) data.approvalTimes = approvalAt;
+    if (data.id !== id && id.startsWith("ses_")) {
+      data.id = id;
     }
-
-    if (!snapshot) return null;
-
-    if (snapshot.id !== id && id.startsWith("ses_")) {
-      snapshot.id = id;
-    }
-    return snapshot;
+    // Prime the delta baseline so the first save after a resume appends only
+    // what actually changed instead of re-appending the whole history.
+    this.primeCache(data);
+    return data;
   }
 
   /**
-   * List all sessions (metadata only, sorted by updatedAt descending).
+   * List all sessions (metadata only, sorted by updatedAt descending). Reads only
+   * the newest line's state of each log, so message bodies are never folded.
    */
   async list(): Promise<SessionMeta[]> {
     const dirExists = await this.fs.exists(SESSION_DIR);
@@ -150,22 +156,22 @@ export class SessionStore {
     const sessions: SessionMeta[] = [];
 
     for (const entry of entries) {
-      if (entry.type !== "file" || !entry.name.endsWith(SESSION_FILE_SUFFIX)) continue;
+      if (entry.type !== "file" || !entry.name.endsWith(SESSION_LOG_SUFFIX)) continue;
 
-      const id = entry.name.slice(0, -SESSION_FILE_SUFFIX.length);
+      const id = entry.name.slice(0, -SESSION_LOG_SUFFIX.length);
 
       try {
-        const data = await this.tryLoadJson(`${SESSION_DIR}/${entry.name}`);
-        if (!data) continue;
+        const state = await readLastState(this.fs, `${SESSION_DIR}/${entry.name}`);
+        if (!state) continue;
 
         sessions.push({
-          id: data.id || id,
-          name: data.name,
-          version: data.version,
-          modelStyle: data.modelStyle,
-          model: data.model,
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt,
+          id: state.id || id,
+          name: state.name,
+          version: state.version,
+          modelStyle: state.modelStyle,
+          model: state.model,
+          createdAt: state.createdAt,
+          updatedAt: state.updatedAt,
         });
       } catch {
         // Skip corrupted files
@@ -241,20 +247,14 @@ export class SessionStore {
   }
 
   /**
-   * Delete a session by ID.
+   * Delete a session by ID (its log; there is no separate snapshot file).
    */
   async delete(id: string): Promise<boolean> {
-    const filePath = this.getFilePath(id);
     const logPath = this.getLogPath(id);
-    // A crash between the journal append and the snapshot write can leave a
-    // journal-only session (no `.session.json`). Treat either file as the
-    // session existing, else the journal lingers and `load()` resurrects it.
-    const hasSnapshot = await this.fs.exists(filePath);
-    const hasJournal = await this.fs.exists(logPath);
-    if (!hasSnapshot && !hasJournal) return false;
-    if (hasSnapshot) await this.fs.remove(filePath);
-    if (hasJournal) await this.fs.remove(logPath);
-    this.lastSavedHash.delete(id);
+    if (!(await this.fs.exists(logPath))) return false;
+    await this.fs.remove(logPath);
+    this.lastSaved.delete(id);
+    this.approvalTimes.delete(id);
     return true;
   }
 
@@ -269,10 +269,11 @@ export class SessionStore {
   }
 
   /**
-   * Clear in-memory cache for a session.
+   * Clear in-memory delta/approval bookkeeping for a session.
    */
   clearCache(id: string): void {
-    this.lastSavedHash.delete(id);
+    this.lastSaved.delete(id);
+    this.approvalTimes.delete(id);
   }
 
   // ==========================================================================
@@ -280,54 +281,90 @@ export class SessionStore {
   // ==========================================================================
 
   private async doSave(session: SessionData): Promise<void> {
-    // Fingerprint the live session BEFORE stamping `updatedAt`/`journalSeq`. The
-    // stored hash is the serialized live session from the previous real write
-    // (including its timestamp and seq), so comparing first makes an unchanged
-    // save a true no-op — bumping `updatedAt` beforehand would make every save
-    // look different and silently defeat the dedupe.
-    if (this.lastSavedHash.get(session.id) === JSON.stringify(session)) return;
+    const prev = this.lastSaved.get(session.id);
+
+    // Snapshot the message list (and everything derived from it) before the first
+    // await: a concurrent persist may swap `session.uiMessages` while we wait on
+    // IO, which would desync the fingerprints from the lines we append.
+    const messages = session.uiMessages;
+    const fingerprints = new Map(messages.map((m) => [m.id, fingerprintUIMessage(m)]));
+    const { uiMessages: _uiMessages, approvalTimes: _approvalTimes, ...stateFields } = session;
+    const signature = contentSignature(stateFields, messages, fingerprints);
+
+    // Fingerprint BEFORE stamping `updatedAt`, so an unchanged save is a true
+    // no-op (no IO, no timestamp bump).
+    if (prev && prev.signature === signature) return;
 
     await this.ensureDir();
-
     session.updatedAt = Date.now();
+    stateFields.updatedAt = session.updatedAt;
 
-    const filePath = this.getFilePath(session.id);
-
-    // 1. Durable append to the journal (source of truth) before the snapshot.
-    //    A crash between this and the snapshot write is recovered on load by
-    //    replaying the journal tail.
-    session.journalSeq = (session.journalSeq ?? 0) + 1;
-    const appended = await appendCheckpoint(this.fs, this.getLogPath(session.id), session.journalSeq, session);
-
-    // 2. Snapshot (materialized cache) captures the PREVIOUS durable state, so
-    //    the journal's newest checkpoint stays strictly ahead of it and is the
-    //    load-time source of truth. On the first save the snapshot seq is 0.
-    const snapshotSeq = session.journalSeq - 1;
-    const snapshot = { ...session, journalSeq: snapshotSeq };
-    const snapshotJson = JSON.stringify(snapshot);
-    await this.fs.writeFile(filePath, snapshotJson);
-    // Hash the live session (which carries the current journalSeq) so a no-op
-    // save is detected even though the on-disk snapshot lags one seq behind.
-    this.lastSavedHash.set(session.id, JSON.stringify(session));
-
-    // 3. Bound the journal to records newer than the snapshot seq.
-    if (appended) {
-      await truncateAfter(this.fs, this.getLogPath(session.id), snapshotSeq);
+    // Track newly-decided approvals so their timestamps survive a later rewrite.
+    // Runs after the stamp so a freshly decided approval records this save's
+    // line time (which is what a reader would infer anyway).
+    const knownTimes = this.approvalTimes.get(session.id) ?? {};
+    if (collectNewApprovalTimes(messages, session.updatedAt, knownTimes)) {
+      this.approvalTimes.set(session.id, knownTimes);
     }
+
+    const ids = messages.map((m) => m.id);
+    const structuralChange = prev !== undefined && !isAppendOnlyCompatible(prev.ids, ids);
+
+    if (structuralChange || messages.length === 0) {
+      // Non-empty → empty, partial truncation, or the initial empty save:
+      // rewrite the file (one line per message; a single `message: null` when empty).
+      await this.rewriteLog(messages, session.updatedAt, stateFields, knownTimes);
+    } else {
+      const lines: SessionLogLine[] = [];
+      for (const message of messages) {
+        if (prev?.fingerprints.get(message.id) === fingerprints.get(message.id)) continue;
+        lines.push(buildLine(message, session.updatedAt, stateFields, knownTimes));
+      }
+      // State-only change: re-emit the last message line with the new state.
+      if (lines.length === 0) {
+        const last = messages[messages.length - 1];
+        if (last) lines.push(buildLine(last, session.updatedAt, stateFields, knownTimes));
+      }
+      if (lines.length > 0) {
+        const appended = await appendLogLines(this.fs, this.getLogPath(session.id), lines);
+        if (!appended) {
+          // Env fs has no `appendFile` (optional primitive). Degrade to a full
+          // rewrite so this save is not silently lost — otherwise the delta
+          // baseline below would dedupe every later save into nothing.
+          await this.rewriteLog(messages, session.updatedAt, stateFields, knownTimes);
+        }
+      }
+    }
+
+    this.lastSaved.set(session.id, { ids, fingerprints, signature });
   }
 
-  private async tryLoadJson(filePath: string): Promise<SessionData | null> {
-    if (!(await this.fs.exists(filePath))) return null;
-    try {
-      const content = await this.fs.readFile(filePath);
-      return JSON.parse(content) as SessionData;
-    } catch {
-      return null;
-    }
+  /** Rewrite the log to its compacted form: one line per message (or a single null line). */
+  private async rewriteLog(
+    messages: UIMessage[],
+    updatedAt: number,
+    stateFields: SessionStateFields,
+    knownTimes: Record<string, number>
+  ): Promise<void> {
+    const lines: SessionLogLine[] =
+      messages.length === 0
+        ? [buildLine(null, updatedAt, stateFields, knownTimes)]
+        : messages.map((message) => buildLine(message, updatedAt, stateFields, knownTimes));
+    await writeLog(this.fs, this.getLogPath(stateFields.id), lines);
   }
 
-  private getFilePath(id: string): string {
-    return `${SESSION_DIR}/${id}${SESSION_FILE_SUFFIX}`;
+  /** Seed the delta baseline from a loaded session (resume path). */
+  private primeCache(session: SessionData): void {
+    const fingerprints = new Map(session.uiMessages.map((m) => [m.id, fingerprintUIMessage(m)]));
+    const { uiMessages: _uiMessages, approvalTimes, ...stateFields } = session;
+    this.lastSaved.set(session.id, {
+      ids: session.uiMessages.map((m) => m.id),
+      fingerprints,
+      signature: contentSignature(stateFields, session.uiMessages, fingerprints),
+    });
+    if (approvalTimes) {
+      this.approvalTimes.set(session.id, { ...approvalTimes });
+    }
   }
 
   private getLogPath(id: string): string {
@@ -339,4 +376,75 @@ export class SessionStore {
       await this.fs.mkdir(SESSION_DIR);
     }
   }
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/** Content signature used for no-op detection: state (timestamp-normalized) + messages. */
+function contentSignature(
+  stateFields: SessionStateFields,
+  messages: UIMessage[],
+  fingerprints: Map<string, string>
+): string {
+  const state = JSON.stringify({ ...stateFields, updatedAt: 0 });
+  return `${state}\u0000${messages.map((m) => `${m.id}:${fingerprints.get(m.id)}`).join("\u0001")}`;
+}
+
+/** Whether `ids` preserves `prevIds` as an in-order prefix (pure append). */
+function isAppendOnlyCompatible(prevIds: string[], ids: string[]): boolean {
+  if (ids.length < prevIds.length) return false;
+  for (let i = 0; i < prevIds.length; i++) {
+    if (ids[i] !== prevIds[i]) return false;
+  }
+  return true;
+}
+
+/** Build one log line for `message` (or `null` for the initial empty-session line). */
+function buildLine(
+  message: UIMessage | null,
+  messageUpdatedAt: number,
+  state: SessionStateFields,
+  knownTimes: Record<string, number>
+): SessionLogLine {
+  const approvalAt = message ? approvalTimesForMessage(message, knownTimes) : undefined;
+  const line: SessionLogLine = { t: SESSION_LOG_MESSAGE, message, messageUpdatedAt, state };
+  if (approvalAt && Object.keys(approvalAt).length > 0) line.approvalAt = approvalAt;
+  return line;
+}
+
+/** Decided approval timestamps carried by one message (from the known times map). */
+function approvalTimesForMessage(message: UIMessage, knownTimes: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (message.role !== "assistant") return out;
+  for (const part of message.parts) {
+    if (!isToolCallPart(part)) continue;
+    const approval = part.approval;
+    if (!approval?.id || approval.approved === undefined) continue;
+    const at = knownTimes[approval.id];
+    if (at !== undefined) out[approval.id] = at;
+  }
+  return out;
+}
+
+/**
+ * Record decision times for approvals that are newly decided in `messages`.
+ * Returns true when the map gained a new entry.
+ */
+function collectNewApprovalTimes(messages: UIMessage[], now: number, knownTimes: Record<string, number>): boolean {
+  let changed = false;
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    for (const part of message.parts) {
+      if (!isToolCallPart(part)) continue;
+      const approval = part.approval;
+      if (!approval?.id || approval.approved === undefined) continue;
+      if (knownTimes[approval.id] === undefined) {
+        knownTimes[approval.id] = now;
+        changed = true;
+      }
+    }
+  }
+  return changed;
 }

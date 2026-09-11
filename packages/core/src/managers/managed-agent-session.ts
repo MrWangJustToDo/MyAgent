@@ -2,6 +2,7 @@
  * Session persist / restore helpers for {@link ManagedAgent}.
  */
 
+import { normalizeSessionApprovals } from "../agent/approval/tool-approval-table.js";
 import { readPlanFileAtRelativePath } from "../agent/plan/plan-store.js";
 
 import type { SessionPersistInput, SessionService } from "./services/session-service.js";
@@ -62,7 +63,6 @@ export function getSessionPersistInput(host: SessionHost, uiMessages?: TanStackU
     planMode: host.planMode.getState(),
     // Mutual exclusivity: never persist auto while plan is active.
     autoMode: planOn ? false : host.isAutoModeEnabled(),
-    approvals: host.approvals.toArray(),
     reasoningEffort: host.getReasoningEffort(),
     resolveTextAdapter: host.resolveTextAdapter,
     emitEvent: (type, data) => host.emitEvent(type, data),
@@ -110,7 +110,12 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
   const planOn = host.planMode.getPhase() !== "off";
   const wantAuto = Boolean(session.autoMode ?? session.autoApprove);
   host.setAutoModeEnabled(planOn ? false : wantAuto);
-  host.approvals.restore(session.approvals ?? []);
+  // Approvals are not stored separately: derive them from the restored message
+  // log (the tool-call parts carry pending/approved/denied + reason), keeping
+  // the decision timestamps recorded in the log.
+  host.approvals.restore(
+    normalizeSessionApprovals({ uiMessages: session.uiMessages, approvalTimes: session.approvalTimes })
+  );
 
   // Adopt the model this session was saved with: the agent is created from the
   // ambient config (env / CLI flags), which may differ from what the session ran

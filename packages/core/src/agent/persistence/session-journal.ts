@@ -1,96 +1,152 @@
 /**
- * session-journal.ts - Append-only session journal (write-ahead log).
+ * session-journal.ts - Append-only session message log.
  *
- * Each session is journaled to `.agents/sessions/{id}.session.log` as one JSONL
- * record per line. Slice 1 writes whole-state `checkpoint` records; the journal
- * is the crash-safe source of truth and `.session.json` is a materialized cache.
+ * A session is one JSONL file `.agents/sessions/{id}.session.jsonl`. Every save
+ * appends only what changed: one `message` line per new/changed UIMessage, each
+ * carrying the full non-message state snapshot at that point. {@link foldLog}
+ * reconstructs the session: `state` = the newest line's snapshot, `uiMessages` =
+ * message lines folded by id (later line wins, first-seen position).
  *
- * A torn trailing line (crash mid-append) is dropped on read. Truncation runs
- * only after a snapshot write, so a crash during truncation still leaves a
- * valid snapshot to fall back on.
+ * A torn trailing line (crash mid-append) is skipped on read.
  */
 
-import { SESSION_DIR, SESSION_JOURNAL_KIND, SESSION_LOG_SUFFIX } from "./types.js";
+import { isToolCallPart } from "../stream/message-parts.js";
 
-import type { SessionData, SessionJournalRecord } from "./types.js";
+import { SESSION_DIR, SESSION_LOG_MESSAGE, SESSION_LOG_SUFFIX } from "./types.js";
+
+import type { SessionLogLine, SessionStateFields } from "./types.js";
 import type { CoreEnvFs } from "../../env.js";
-
-/** Journal format version for the record envelope. */
-export const SESSION_JOURNAL_VERSION = 1;
+import type { UIMessage } from "@tanstack/ai";
 
 export function getJournalPath(id: string): string {
   return `${SESSION_DIR}/${id}${SESSION_LOG_SUFFIX}`;
 }
 
 /**
- * Append a whole-state checkpoint for `session` as one JSONL line.
- * Returns false (no-op) when the env fs does not implement appendFile, letting
- * callers fall back to snapshot-only persistence.
+ * Append `lines` to the log as JSONL. Returns false (no-op) when the env fs does
+ * not implement `appendFile`. Saves are serialized per session by
+ * {@link SessionStore}, so this cannot race another append.
  */
-export async function appendCheckpoint(
-  fs: CoreEnvFs,
-  path: string,
-  seq: number,
-  session: SessionData
-): Promise<boolean> {
+export async function appendLogLines(fs: CoreEnvFs, path: string, lines: SessionLogLine[]): Promise<boolean> {
+  if (lines.length === 0) return true;
   if (!fs.appendFile) return false;
-  // Ensure the file exists before appending (some fs impls create it on
-  // append, but we make it explicit so every CoreEnvFs is safe). Saves are
-  // serialized per session, so this cannot race another append.
+  // Ensure the file exists before appending (some fs impls create it on append).
   if (!(await fs.exists(path))) {
     await fs.writeFile(path, "");
   }
-  const record: SessionJournalRecord = {
-    v: SESSION_JOURNAL_VERSION,
-    seq,
-    kind: SESSION_JOURNAL_KIND,
-    ts: Date.now(),
-    data: session,
-  };
-  await fs.appendFile(path, JSON.stringify(record) + "\n");
+  await fs.appendFile(path, lines.map((line) => JSON.stringify(line)).join("\n") + "\n");
   return true;
 }
 
-/**
- * Read all valid records from the journal, sorted by seq ascending.
- * Lines that fail to parse (a torn trailing line after a crash mid-append, or
- * any corruption) are skipped.
- */
-export async function readJournal(fs: CoreEnvFs, path: string): Promise<SessionJournalRecord[]> {
+function parseLine(raw: string): SessionLogLine | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = JSON.parse(trimmed) as SessionLogLine;
+    return parsed && typeof parsed.t === "string" ? parsed : null;
+  } catch {
+    // Skip torn/corrupt line.
+    return null;
+  }
+}
+
+/** Read all valid log lines in file order. Torn/corrupt lines are skipped. */
+export async function readLog(fs: CoreEnvFs, path: string): Promise<SessionLogLine[]> {
   if (!(await fs.exists(path))) return [];
   const content = await fs.readFile(path);
-  const records: SessionJournalRecord[] = [];
-  for (const line of content.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      const parsed = JSON.parse(trimmed) as SessionJournalRecord;
-      if (parsed && typeof parsed.seq === "number") {
-        records.push(parsed);
-      }
-    } catch {
-      // Skip torn/corrupt line.
-    }
+  const lines: SessionLogLine[] = [];
+  for (const raw of content.split("\n")) {
+    const parsed = parseLine(raw);
+    if (parsed) lines.push(parsed);
   }
-  return records.sort((a, b) => a.seq - b.seq);
-}
-
-/** Newest record by seq, or null when the journal is empty. */
-export function lastRecord(records: SessionJournalRecord[]): SessionJournalRecord | null {
-  return records.length === 0 ? null : records[records.length - 1];
+  return lines;
 }
 
 /**
- * Rewrite the journal keeping only records with `seq > seq` (the snapshot seq).
- * Removes the file entirely when nothing newer than the snapshot remains.
- * Runs only after a snapshot write, so a crash here leaves a valid snapshot.
+ * Read only the newest line's `state` snapshot, without parsing older message
+ * bodies. Used by `list()` for cheap metadata reads on long sessions.
  */
-export async function truncateAfter(fs: CoreEnvFs, path: string, seq: number): Promise<void> {
-  if (!(await fs.exists(path))) return;
-  const keep = (await readJournal(fs, path)).filter((r) => r.seq > seq);
-  if (keep.length === 0) {
-    await fs.remove(path);
-    return;
+export async function readLastState(fs: CoreEnvFs, path: string): Promise<SessionStateFields | null> {
+  if (!(await fs.exists(path))) return null;
+  const content = await fs.readFile(path);
+  const rawLines = content.split("\n");
+  for (let i = rawLines.length - 1; i >= 0; i--) {
+    const parsed = parseLine(rawLines[i]!);
+    if (parsed?.state) return parsed.state;
   }
-  await fs.writeFile(path, keep.map((r) => JSON.stringify(r)).join("\n") + "\n");
+  return null;
+}
+
+/** Replace the whole log with a compacted form (one line per message). */
+export async function writeLog(fs: CoreEnvFs, path: string, lines: SessionLogLine[]): Promise<void> {
+  const body = lines.map((line) => JSON.stringify(line)).join("\n");
+  await fs.writeFile(path, body ? body + "\n" : "");
+}
+
+export interface FoldedSessionLog {
+  /** Newest non-message state snapshot, or null when absent. */
+  state: SessionStateFields | null;
+  /** Messages folded by id, in first-seen order. */
+  uiMessages: UIMessage[];
+  /** toolCallId → time the approval first appeared decided (from the earliest line). */
+  approvalAt: Record<string, number>;
+}
+
+/**
+ * Fold log lines into the session they describe.
+ *
+ * Message lines are keyed by `UIMessage.id`: a later line for the same id
+ * replaces the body without moving its position. `approvalAt` records the real
+ * decision time of each tool call: a line's explicit `approvalAt` entry wins, and
+ * anything not covered is inferred as the `messageUpdatedAt` of the first line in
+ * which that approval appears decided. That keeps the decision timestamp stable
+ * across later re-emits and whole-log rewrites.
+ */
+export function foldLog(lines: SessionLogLine[]): FoldedSessionLog {
+  let state: SessionStateFields | null = null;
+  const byId = new Map<string, UIMessage>();
+  const order: string[] = [];
+  const approvalAt: Record<string, number> = {};
+
+  for (const line of lines) {
+    if (line.state) state = line.state;
+
+    // Explicit per-line timestamps win over inference: apply them BEFORE deriving
+    // from the message, otherwise the message-derived `messageUpdatedAt` (the
+    // line's write time, e.g. a rewrite stamp) would shadow the real decision
+    // time. Both paths only fill a missing entry, so line order does not matter.
+    if (line.approvalAt) {
+      for (const [id, at] of Object.entries(line.approvalAt)) {
+        if (approvalAt[id] === undefined) approvalAt[id] = at;
+      }
+    }
+
+    // A first-line `message: null` carries initial state only.
+    const message = line.message;
+    if (message) {
+      if (!byId.has(message.id)) order.push(message.id);
+      byId.set(message.id, message);
+
+      if (message.role === "assistant") {
+        for (const part of message.parts) {
+          if (!isToolCallPart(part)) continue;
+          const approval = part.approval;
+          if (!approval?.id || approval.approved === undefined) continue;
+          if (approvalAt[approval.id] === undefined) approvalAt[approval.id] = line.messageUpdatedAt;
+        }
+      }
+    }
+  }
+
+  const uiMessages: UIMessage[] = [];
+  for (const id of order) {
+    const message = byId.get(id);
+    if (message) uiMessages.push(message);
+  }
+  return { state, uiMessages, approvalAt };
+}
+
+/** Whether a line's kind is understood by this reader. */
+export function isMessageLogLine(line: SessionLogLine): boolean {
+  return line.t === SESSION_LOG_MESSAGE;
 }

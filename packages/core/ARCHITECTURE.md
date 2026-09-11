@@ -513,15 +513,17 @@ Set via `ManagedAgentConfig.compaction` in `agent-factory.ts`.
 
 ### 6.1 Storage
 
-| Item      | Value                                                                                                            |
-| --------- | ---------------------------------------------------------------------------------------------------------------- |
-| Directory | `.agents/sessions/`                                                                                              |
-| File      | `{sessionId}.session.json`                                                                                       |
-| Schema    | `SessionData` v4 (`agent/persistence/types.ts`; older files omit `planMode` / `approvals` / inline base64 media) |
+| Item      | Value                                                                                        |
+| --------- | -------------------------------------------------------------------------------------------- |
+| Directory | `.agents/sessions/`                                                                          |
+| File      | `{sessionId}.session.jsonl` (append-only message log; one line per message)                  |
+| Schema    | `SessionData` v6 (`agent/persistence/types.ts`; each log line = message + full state snapshot) |
 
-Fields: `uiMessages` (includes in-chain summaries), `usage`, `cost`, `contextTokens`, `todos`, `todoPlanBound`, `planMode` (phase/markdown/path/seeded), `autoMode`, `approvals` (pending/approved/denied interrupt table), `modelStyle`, `model`, metadata.
+Each log line is `{ t: "message", message: UIMessage | null, messageUpdatedAt, state, approvalAt? }`: the message plus a full snapshot of the non-message state at that point (`usage`, `cost`, `contextTokens`, `todos`, `todoPlanBound`, `planMode`, `autoMode`, `modelStyle`, `model`, metadata). `load()` folds by `message.id` (later line wins, first-seen position; `state` = newest line). `save()` appends only new/changed messages; a state-only change re-emits the last message line. `message: null` is allowed only on the first line (initial/empty-session state). Approvals are not stored: they are derived from the folded messages' tool-call `approval` parts, with `approvalAt` (decision time) preserved from the log. There is no separate snapshot file.
 
-**Binary media (v4):** On persist with `uiMessages`, `SessionService` clones → dehydrates Image/Audio/Video/Document parts to content-addressed **binary** files under `.agents/media/<hash>.<ext>`, writing `media://` refs + `metadata.mediaRef` into the session JSON. Runtime messages stay hydrated (data URLs / raw base64). Restore hydrates for the UI, then re-dehydrates into `this.data` and rewrites the session file (so interrupt-snapshot repairs and media extraction stick). See `agent/media/`.
+**Legacy files are ignored (v6):** only `.session.jsonl` is recognized, so a v4/v5 `.session.json` (journal + materialized snapshot) is neither listed nor loaded — there is no migration. Sessions written before v6 do not appear in `/resume`; their files stay on disk untouched.
+
+**Binary media (v4):** On persist with `uiMessages`, `SessionService` clones → dehydrates Image/Audio/Video/Document parts to content-addressed **binary** files under `.agents/media/<hash>.<ext>`, writing `media://` refs + `metadata.mediaRef` into the log's message lines. Runtime messages stay hydrated (data URLs / raw base64). Restore hydrates for the UI, then re-dehydrates into `this.data` (so interrupt-snapshot repairs and media extraction stick). See `agent/media/`.
 
 **Media IO failures never escape the host (v4):** dehydrate runs inside `persistSession`'s try/catch — a write failure emits `session:save-error` (target `session+uiMessages`) and still saves the rest of the state, and the fire-and-forget `void …persist…` call sites attach `.catch` (no unhandled rejection). On the read side, `hydrateUIMessages(messages, { onMissing })` reports every un-hydratable `media://` ref (`not-found` / `invalid-ref`, in content parts or tool results) instead of dropping it silently, and `restoreSession` folds the count into `session:restore.mediaMissing`.
 
@@ -536,11 +538,11 @@ Fields: `uiMessages` (includes in-chain summaries), `usage`, `cost`, `contextTok
 | **Pump idle (core)**                       | `AgentChatController.persistMessages` → `maybeSaveSessionUIMessages(..., "pump-complete")` | Same; also on Esc/abort after cancelling incomplete tools                                          |
 | **Manual flush**                           | `saveSessionUIMessages` (`/clear`, slash commands)                                         | Force full persist                                                                                 |
 
-App hosts subscribe to Session `messages`/`state` for UI only — they do **not** checkpoint to disk. Approval decisions are upserted into `SessionData.approvals` (`pending` on request, `approved`/`denied` on `y`/`n` or auto-approve) and written with the same persist triggers as `uiMessages`. Chat middleware rebuilds `resumeToolState.approvals` from that table (pending omitted). Format remains full JSON; `SessionSyncTracker` only skips duplicate fingerprints.
+App hosts subscribe to Session `messages`/`state` for UI only — they do **not** checkpoint to disk. Approval decisions mutate the tool-call message part (`pending` on request, `approved`/`denied` on `y`/`n` or auto-approve), so they ride the same persist triggers as `uiMessages` (the message line is re-emitted). On restore the table is derived from the messages (`normalizeSessionApprovals`); chat middleware rebuilds `resumeToolState.approvals` from it (pending omitted).
 
 On restore, `PlanModeController.restoreState` rehydrates phase (and reloads markdown from `planFilePath` when missing). `/clear` / `ManagedAgent.reset` always `planMode.disable()`.
 
-`SessionStore.save`: content-hash dedup (compared **before** `updatedAt`/`journalSeq` are bumped, so a re-save of unchanged data is a true no-op), per-session write lock, full JSON overwrite. `delete()` removes the snapshot or journal when either exists (and clears the dedup hash).
+`SessionStore.save`: incremental append — content signature (state sans `updatedAt` + per-message fingerprints) is compared **before** `updatedAt` is bumped, so a re-save of unchanged data is a true no-op with zero IO. New/changed messages are appended as lines; a state-only change re-emits the last message line; a session that goes non-empty → empty (or any non-append history change) rewrites the file. Per-session write lock; `delete()` removes the log and clears the cached bookkeeping.
 
 **Run finalization** (`finalizeRun`):
 

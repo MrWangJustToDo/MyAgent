@@ -106,6 +106,7 @@
     "validate:session-sync-tracker": "pnpm run build && node scripts/validate-session-sync-tracker.mjs",
     "validate:session-store-errors": "pnpm run build && node scripts/validate-session-store-errors.mjs",
     "validate:session-store-lifecycle": "pnpm run build && node scripts/validate-session-store-lifecycle.mjs",
+    "validate:session-message-log": "pnpm run build && node scripts/validate-session-message-log.mjs",
     "validate:wire-projection-cache": "pnpm run build && node scripts/validate-wire-projection-cache.mjs",
     "validate:empty-assistant-shell": "pnpm run build && node scripts/validate-empty-assistant-shell.mjs",
     "validate:empty-model-stream": "pnpm run build && node scripts/validate-empty-model-stream.mjs",

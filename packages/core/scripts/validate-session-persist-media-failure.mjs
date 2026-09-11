@@ -179,23 +179,27 @@ setupEnv({ failMediaWrites: true });
   service.setStore(store, { modelStyle: "openai", model: "test-model" });
 
   const id = "ses_restore_media";
+  // A one-line message log. The message carries raw base64 (not a media:// ref)
+  // so hydrate leaves it and the canonicalize dehydrate tries to write the
+  // media file → fails.
   files.set(
-    `.agents/sessions/${id}.session.json`,
+    `.agents/sessions/${id}.session.jsonl`,
     JSON.stringify({
-      id,
-      name: "restore",
-      version: 5,
-      modelStyle: "openai",
-      model: "test-model",
-      createdAt: 1,
-      updatedAt: 2,
-      usage: {},
-      todos: [],
-      // Raw base64 (not a media:// ref) so hydrate leaves it and the canonicalize
-      // dehydrate tries to write the media file → fails.
-      uiMessages: [imageMessage("m1")],
-      journalSeq: 0,
-    })
+      t: "message",
+      message: imageMessage("m1"),
+      messageUpdatedAt: 2,
+      state: {
+        id,
+        name: "restore",
+        version: 6,
+        modelStyle: "openai",
+        model: "test-model",
+        createdAt: 1,
+        updatedAt: 2,
+        usage: {},
+        todos: [],
+      },
+    }) + "\n"
   );
 
   const restored = await service.restoreFromStore(id, { usage: new UsageTracker(), todoManager: null });

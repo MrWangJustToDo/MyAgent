@@ -1,9 +1,10 @@
 /**
  * Session Types - Type definitions for session persistence and resume.
  *
- * Each session is persisted as an append-only JSONL journal
- * `.agents/sessions/{id}.session.log` (source of truth) plus a materialized
- * snapshot `.agents/sessions/{id}.session.json` (cache).
+ * Each session is one append-only JSONL message log
+ * `.agents/sessions/{id}.session.jsonl`. Every line is one message plus a full
+ * snapshot of the non-message session state at that point; `load()` folds the
+ * lines by message id (later line wins). There is no separate snapshot file.
  */
 
 import { z } from "zod";
@@ -18,15 +19,13 @@ import type { UIMessage } from "@tanstack/ai";
 // Constants
 // ============================================================================
 
-/** v5: writes are journaled to {id}.session.log (JSONL, source of truth) and the
- * .session.json becomes a materialized snapshot. v4 files (snapshot only) still load. */
-export const SESSION_VERSION = 5;
+/** v6: one append-only message log per session; no snapshot file. */
+export const SESSION_VERSION = 6;
 export const SESSION_DIR = ".agents/sessions";
-export const SESSION_FILE_SUFFIX = ".session.json";
-/** Append-only JSONL journal recording whole-state checkpoints; crash-safe source of truth. */
-export const SESSION_LOG_SUFFIX = ".session.log";
-/** Journal record `kind` for whole-state checkpoints (slice 1). Future slices add semantic kinds. */
-export const SESSION_JOURNAL_KIND = "checkpoint";
+/** Append-only message log suffix; the single source of truth per session. */
+export const SESSION_LOG_SUFFIX = ".session.jsonl";
+/** Log line kind: one message + the full non-message state snapshot at that point. */
+export const SESSION_LOG_MESSAGE = "message";
 
 /** Directory for per-session AgentLog JSONL files: `.agents/logs/{sessionId}/`. */
 export const AGENT_LOG_DIR = ".agents/logs";
@@ -61,28 +60,29 @@ export type ToolApprovalStatus = z.infer<typeof toolApprovalStatusSchema>;
 export type ToolApprovalRecord = z.infer<typeof toolApprovalRecordSchema>;
 
 // ============================================================================
-// Journal Record Schema
+// Session Log Line Types
 // ============================================================================
 
-/**
- * One line of the append-only session journal (`{id}.session.log`).
- * `kind: "checkpoint"` carries a full SessionData payload (slice 1); the field is
- * reserved so future slices can add semantic per-mutation events to the same log.
- */
-export const sessionJournalRecordSchema = z.object({
-  /** Journal format version. */
-  v: z.number().int().positive(),
-  /** Monotonically increasing per-session sequence. */
-  seq: z.number().int().positive(),
-  /** Record kind; readers ignore unknown kinds. */
-  kind: z.string(),
-  /** Epoch ms when the record was appended. */
-  ts: z.number(),
-  /** Record payload; for checkpoints, the full SessionData. */
-  data: z.unknown(),
-});
+/** Everything in {@link SessionData} except the message history and derived metadata. */
+export type SessionStateFields = Omit<SessionData, "uiMessages" | "approvalTimes">;
 
-export type SessionJournalRecord = z.infer<typeof sessionJournalRecordSchema>;
+/**
+ * One line of the append-only session log (`{id}.session.jsonl`): one message
+ * plus the full non-message state snapshot at that point.
+ *
+ * The message MAY be `null` on the very first line only (initial / empty-session
+ * state such as `reservedAt`); every other line carries a message.
+ * `messageUpdatedAt` is the line's write time; `approvalAt` maps a toolCallId to
+ * the time its approval first became decided (so the decision timestamp survives
+ * folding).
+ */
+export interface SessionLogLine {
+  t: typeof SESSION_LOG_MESSAGE;
+  message: UIMessage | null;
+  messageUpdatedAt: number;
+  state: SessionStateFields;
+  approvalAt?: Record<string, number>;
+}
 
 export interface SessionData {
   /** Unique session identifier */
@@ -119,16 +119,11 @@ export interface SessionData {
   /** When true, skip all tool approvals (auto / YOLO mode). Older sessions omit this. */
   autoMode?: boolean;
   /**
-   * Tool-approval interrupt table (pending / approved / denied).
-   * Older sessions omit this; runtime treats missing as `[]`.
+   * Derived, non-persisted approval decision timestamps (toolCallId → epoch ms),
+   * reconstructed on load from the message log. Never serialized into the log's
+   * `state` snapshot (see {@link SessionStateFields}).
    */
-  approvals?: ToolApprovalRecord[];
-  /**
-   * Seq of the newest journal record this state reflects. Internal persistence
-   * metadata: anchors the next append (seq+1) and lets load() replay journal
-   * records newer than the snapshot. Not surfaced to hosts; older sessions omit it.
-   */
-  journalSeq?: number;
+  approvalTimes?: Record<string, number>;
   /**
    * Epoch ms when a live agent last *reserved* this (still-empty) session for
    * startup reuse. Lets a second process/agent skip a concurrently reused

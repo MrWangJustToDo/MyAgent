@@ -7,15 +7,13 @@ export {
   isUIMessageStable,
   shouldPersistUIMessages,
 } from "./session-sync-tracker.js";
-export { appendCheckpoint, getJournalPath, lastRecord, readJournal, truncateAfter } from "./session-journal.js";
+export { appendLogLines, foldLog, getJournalPath, readLastState, readLog, writeLog } from "./session-journal.js";
 export {
   SESSION_DIR,
   SESSION_VERSION,
-  SESSION_FILE_SUFFIX,
   SESSION_LOG_SUFFIX,
-  SESSION_JOURNAL_KIND,
+  SESSION_LOG_MESSAGE,
   sessionMetaSchema,
-  sessionJournalRecordSchema,
   toolApprovalRecordSchema,
   toolApprovalStatusSchema,
 } from "./types.js";
@@ -24,7 +22,8 @@ export type {
   SessionData,
   SessionMeta,
   ResumeResult,
-  SessionJournalRecord,
+  SessionLogLine,
+  SessionStateFields,
   ToolApprovalRecord,
   ToolApprovalStatus,
 } from "./types.js";
