@@ -15,7 +15,7 @@ export default {
       async execute(args) {
         const label = args.length > 0 ? args.join(" ") : "world";
         const message = `pong (${label})`;
-        ctx.ui.notify("notify", { message, level: "success" });
+        ctx.ui.notify(message, "success");
         return message;
       },
     });

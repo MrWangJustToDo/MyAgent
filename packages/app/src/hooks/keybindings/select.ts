@@ -2,7 +2,7 @@
 
 import { useInput } from "ink";
 
-import { handleExtensionConfirmKeys, isAnyPanelOpen } from "./context.js";
+import { isAnyPanelOpen } from "./context.js";
 
 import type { KeybindingContext } from "./context.js";
 
@@ -11,7 +11,6 @@ export function useSelectModeKeybindings(ctx: KeybindingContext): void {
 
   useInput(
     (inputChar, inputKey) => {
-      if (handleExtensionConfirmKeys(ctx, inputChar, inputKey)) return;
       // Panel open: the panel's own useInput owns the keyboard — never let
       // panel navigation toggle options / submit an ask_user answer.
       if (isAnyPanelOpen()) return;

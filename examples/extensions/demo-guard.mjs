@@ -20,7 +20,7 @@ export default {
         event.skip = true;
         event.reason = `Blocked by demo-guard extension: ${command.slice(0, 80)}`;
         ctx.logger.warn(event.reason);
-        ctx.ui.notify("notify", { message: event.reason, level: "error" });
+        ctx.ui.notify(event.reason, "error");
         return;
       }
 

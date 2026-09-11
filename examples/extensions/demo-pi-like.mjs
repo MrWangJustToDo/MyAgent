@@ -3,7 +3,7 @@
  *
  * Exercises the extension-system enhancements:
  *   - `session:start` / `session:shutdown` lifecycle events (per-agent ExtensionEventBus)
- *   - `ctx.ui.setStatus(key, text)` + `ctx.ui.theme.fg(color, text)` UI feedback
+ *   - `ctx.ui.render(surface, key, payload)` surface slots + `ctx.ui.notify(message, level)`
  *   - Plain JSON Schema tool (non-Zod) via the widened `inputSchema` type
  *   - `modifiedResult` to rewrite a tool result (here: append a marker to `ext_echo`)
  *
@@ -15,17 +15,17 @@ export default {
   id: "demo-pi-like",
   name: "Demo Pi-like",
   version: "1.0.0",
-  description: "Exercises lifecycle events, setStatus/theme, JSON Schema tool, modifiedResult",
+  description: "Exercises lifecycle events, render surface, JSON Schema tool, modifiedResult",
   activate(ctx) {
     // --- Lifecycle events ---------------------------------------------------
     ctx.registerInterceptor("session:start", (event) => {
       ctx.logger.info(`[demo-pi-like] session:start cwd=${event.payload.cwd}`);
-      ctx.ui.setStatus("demo", ctx.ui.theme.fg("accent", "LSP-like: idle"));
+      ctx.ui.render("footer", "demo", "LSP-like: idle");
     });
 
     ctx.registerInterceptor("session:shutdown", (event) => {
       ctx.logger.info(`[demo-pi-like] session:shutdown sessionId=${event.payload.sessionId}`);
-      ctx.ui.setStatus("demo", "");
+      ctx.ui.render("footer", "demo", null);
     });
 
     // --- Plain JSON Schema tool (non-Zod) -----------------------------------
@@ -58,7 +58,7 @@ export default {
         const rootPath = ctx.coreEnv.rootPath;
         const msg = `ext coreEnv: rootPath=${rootPath} platform=${platform}`;
         ctx.logger.info(msg);
-        ctx.ui.notify("notify", { message: msg, level: "info" });
+        ctx.ui.notify(msg, "info");
         return msg;
       },
     });

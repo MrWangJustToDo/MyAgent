@@ -220,11 +220,16 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
     fsHelpers,
     undefined,
     {
-      onServerStart: (languageId) => ctx.ui.setStatus("lsp", `LSP: starting ${languageId}...`),
-      onServerReady: (languageId) => ctx.ui.setStatus("lsp", `LSP: ${languageId} ready`),
-      onServerError: (languageId) => ctx.ui.setStatus("lsp", `LSP: ${languageId} failed`),
+      // Server lifecycle is transient: a host notification (auto-clearing) fits
+      // better than a persistent footer slot.
+      onServerStart: (languageId) => ctx.ui.notify(`LSP: starting ${languageId}...`, "info"),
+      onServerReady: (languageId) => ctx.ui.notify(`LSP: ${languageId} ready`, "success"),
+      onServerError: (languageId) => ctx.ui.notify(`LSP: ${languageId} failed`, "error"),
       onServerCrash: (languageId, restarting) => {
-        ctx.ui.setStatus("lsp", restarting ? `LSP: restarting ${languageId}...` : `LSP: ${languageId} crashed`);
+        ctx.ui.notify(
+          restarting ? `LSP: restarting ${languageId}...` : `LSP: ${languageId} crashed`,
+          restarting ? "info" : "error"
+        );
       },
     },
     getEnvVar,
@@ -539,7 +544,7 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
 
     const summary = `\n\n⚠ LSP: ${errors.length} error(s) in ${relPath}:\n${lines.join("\n")}`;
     applyDiagnosticsToToolAfterPayload(event.payload, summary);
-    ctx.ui.setStatus("lsp", `LSP: ${errors.length} error(s) in ${relPath}`);
+    ctx.ui.render("footer", "lsp", `LSP: ${errors.length} error(s) in ${relPath}`);
   }
 
   // ---- Session lifecycle ----
@@ -563,11 +568,11 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
       fsHelpers,
       undefined,
       {
-        onServerStart: (l) => ctx.ui.setStatus("lsp", `LSP: starting ${l}...`),
-        onServerReady: (l) => ctx.ui.setStatus("lsp", `LSP: ${l} ready`),
-        onServerError: (l) => ctx.ui.setStatus("lsp", `LSP: ${l} failed`),
+        onServerStart: (l) => ctx.ui.notify(`LSP: starting ${l}...`, "info"),
+        onServerReady: (l) => ctx.ui.notify(`LSP: ${l} ready`, "success"),
+        onServerError: (l) => ctx.ui.notify(`LSP: ${l} failed`, "error"),
         onServerCrash: (l, restarting) =>
-          ctx.ui.setStatus("lsp", restarting ? `LSP: restarting ${l}...` : `LSP: ${l} crashed`),
+          ctx.ui.notify(restarting ? `LSP: restarting ${l}...` : `LSP: ${l} crashed`, restarting ? "info" : "error"),
       },
       getEnvVar,
       env.commandExists

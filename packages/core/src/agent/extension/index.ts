@@ -41,4 +41,10 @@ export type {
   ExtensionTurnContextSection,
   ExtensionContextProvider,
   TurnContextProvider,
+  ExtensionNotificationLevel,
+  ExtensionRenderNode,
+  ExtensionRenderPayload,
+  ExtensionUiContext,
+  ExtensionUiModel,
+  ExtensionUiUsage,
 } from "./types.js";

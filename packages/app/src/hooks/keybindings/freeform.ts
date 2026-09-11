@@ -4,7 +4,7 @@ import { useInput } from "ink";
 
 import { useSelect } from "../use-select.js";
 
-import { handleExtensionConfirmKeys, isAnyPanelOpen } from "./context.js";
+import { isAnyPanelOpen } from "./context.js";
 
 import type { KeybindingContext } from "./context.js";
 
@@ -13,7 +13,6 @@ export function useFreeformModeKeybindings(ctx: KeybindingContext): void {
 
   useInput(
     (inputChar, inputKey) => {
-      if (handleExtensionConfirmKeys(ctx, inputChar, inputKey)) return;
       // Panel open: the panel's own useInput owns the keyboard — never leak
       // typed characters into the hidden deny/ask_user draft.
       if (isAnyPanelOpen()) return;

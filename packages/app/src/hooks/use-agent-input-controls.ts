@@ -6,7 +6,6 @@ import { getActiveHost, getActiveSession } from "../utils/session-resolve.js";
 import { useAgentKeybindings } from "./use-agent-keybindings.js";
 import { useAutocomplete } from "./use-autocomplete.js";
 import { useCommandOutput } from "./use-command-output.js";
-import { useExtensionUI, useRespondToConfirm } from "./use-extension-ui.js";
 import { useInputMode } from "./use-input-mode.js";
 import { useSelect } from "./use-select.js";
 import { useUserInput } from "./use-user-input.js";
@@ -73,9 +72,6 @@ export function useAgentInputControls({
   const commandOutputActions = useCommandOutput.getActions();
   const { mode, denyMode } = useInputMode((s) => ({ mode: s.mode, denyMode: s.denyMode }));
   const modeActions = useInputMode.getActions();
-
-  const extensionConfirm = useExtensionUI((s) => s.confirm);
-  const onExtensionConfirmRespond = useRespondToConfirm();
 
   const pendingApproval = allPendingApproval[0];
   const currentPendingIsLast = useMemo(() => {
@@ -260,7 +256,5 @@ export function useAgentInputControls({
     handleNormalSubmit,
     submitAskUserAnswer,
     addToolApprovalResponse,
-    extensionConfirm,
-    onExtensionConfirmRespond,
   });
 }

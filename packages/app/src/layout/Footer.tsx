@@ -10,6 +10,7 @@ import { useThinkingLine } from "../hooks/use-thinking-line.js";
 import { BG, COLORS } from "../theme/colors.js";
 
 import { FooterContextBar } from "./FooterContextBar.js";
+import { FooterExtensionSurface } from "./FooterExtensionSurface.js";
 import { FooterInput } from "./FooterInput.js";
 import { FooterStatusBar } from "./FooterStatusBar.js";
 
@@ -112,6 +113,9 @@ export const Footer = ({
 
       {/* Bottom status bar — mode, usage, model */}
       <FooterStatusBar />
+
+      {/* Extension render surface — bottom-most region of the footer */}
+      <FooterExtensionSurface />
     </FullBox>
   );
 };

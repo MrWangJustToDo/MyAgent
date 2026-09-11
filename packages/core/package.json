@@ -167,7 +167,8 @@
     "validate:lsp-server-probe": "pnpm run build && node scripts/validate-lsp-server-probe.mjs",
     "validate:skills-extension": "pnpm run build && node scripts/validate-skills-extension.mjs",
     "validate:memory-extension": "pnpm run build && node scripts/validate-memory-extension.mjs",
-    "validate:extension-status-owner": "pnpm run build && node scripts/validate-extension-status-owner.mjs",
+    "validate:extension-render-owner": "pnpm run build && node scripts/validate-extension-render-owner.mjs",
+    "validate:extension-ui-channel": "pnpm run build && node scripts/validate-extension-ui-channel.mjs",
     "validate:task-prefork": "pnpm run build && node scripts/validate-task-prefork.mjs",
     "validate:task-run-state": "pnpm run build && node scripts/validate-task-run-state.mjs",
     "validate:code-mode-extension": "pnpm run build && node scripts/validate-code-mode-extension.mjs"

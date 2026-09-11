@@ -4,7 +4,6 @@ import { toRaw } from "reactivity-store";
 
 import { Spinner } from "../components/Spinner.js";
 import { useAgent } from "../hooks/use-agent.js";
-import { useExtensionUI } from "../hooks/use-extension-ui.js";
 import { useUserInput } from "../hooks/use-user-input.js";
 import { COLORS } from "../theme/colors.js";
 import { formatDuration } from "../utils/format.js";
@@ -63,7 +62,6 @@ export const FooterContextBar = ({
 
   const inputError = useUserInput((s) => s.inputError);
   const inputFeedback = useUserInput((s) => s.inputFeedback);
-  const extStatus = useExtensionUI((s) => s.statusText);
 
   const error = _error || inputError;
 
@@ -128,12 +126,6 @@ export const FooterContextBar = ({
           )}
 
           {showSaveError && <Text color={COLORS.warning}>Save failed: {saveError}</Text>}
-
-          {extStatus && status === "idle" && (
-            <Text color={COLORS.muted} dimColor>
-              {extStatus}
-            </Text>
-          )}
 
           {/* Contextual shortcuts */}
           {isAgentBusy && !isPendingApproval && !showFreeformInput && !showSelectList && (

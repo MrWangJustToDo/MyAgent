@@ -1,7 +1,7 @@
 /**
  * Validates the pi-like extension capabilities:
  *   - session:start / session:shutdown lifecycle events (per-agent ExtensionEventBus)
- *   - ExtensionUI.setStatus + theme.fg
+ *   - ExtensionUI.render (raw text + layout tree payloads)
  *   - plain JSON Schema (non-Zod) tool registration
  *   - modifiedResult applied to model-facing results via onToolPhaseComplete
  *   - existing observe-only tool:after stays unchanged (backward compat)
@@ -44,8 +44,8 @@ registerCoreEnv({
     getCoreEnv: () => ({ rootPath: "/workspace" }),
   });
 
-  const statusEvents = [];
-  runner.getUI().subscribe("set-status", (data) => statusEvents.push(data));
+  const renderEvents = [];
+  runner.getUI().subscribe("render", (data) => renderEvents.push(data));
 
   let sawStart = false;
   let sawShutdown = false;
@@ -61,7 +61,7 @@ registerCoreEnv({
         sawStart = true;
         assert.equal(event.payload.cwd, "/workspace");
         assert.equal(event.payload.sessionId, "sess-1");
-        ctx.ui.setStatus("smoke", ctx.ui.theme.fg("accent", "ready"));
+        ctx.ui.render("footer", "smoke", "ready");
       });
       ctx.registerInterceptor("session:shutdown", (event) => {
         sawShutdown = true;
@@ -80,10 +80,11 @@ registerCoreEnv({
   await new Promise((r) => setTimeout(r, 5));
 
   assert.equal(sawStart, true, "session:start fired");
-  assert.equal(statusEvents.length, 1, "setStatus published");
-  assert.equal(statusEvents[0].key, "smoke");
-  assert.equal(statusEvents[0].text, "ready", "theme.fg returns plain text");
-  assert.equal(runner.getUI().getStatus()["smoke"], "ready", "setStatus retained in snapshot");
+  assert.equal(renderEvents.length, 1, "render published");
+  assert.equal(renderEvents[0].surface, "footer");
+  assert.equal(renderEvents[0].key, "smoke");
+  assert.equal(renderEvents[0].payload, "ready", "raw text payload round-trips");
+  assert.equal(runner.getUISlots().footer["smoke"], "ready", "render retained in snapshot");
   assert.ok(
     runner.getTools().some((t) => t.name === "json_tool"),
     "JSON Schema tool registered"

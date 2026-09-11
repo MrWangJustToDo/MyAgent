@@ -22,7 +22,13 @@ import type {
   SessionInteractionsSnapshot,
   UsageChangeSnapshot,
 } from "../../runtime-types/session-payloads.js";
-import type { EventInterceptor, ExtensionInfo, InterceptableEvent } from "../extension/types.js";
+import type {
+  EventInterceptor,
+  ExtensionInfo,
+  ExtensionRenderPayload,
+  ExtensionUiContext,
+  InterceptableEvent,
+} from "../extension/types.js";
 import type { PlanModeState } from "../plan/plan-mode-controller.js";
 import type { SummaryStreamEvent } from "../summary-stream/types.js";
 import type { TodoItem } from "../todo/types.js";
@@ -35,10 +41,9 @@ import type { UIMessage } from "@tanstack/ai";
 
 /** Transport-agnostic extension-UI notification (session `extension-ui` channel). */
 export type AgentExtensionUiEvent =
-  | { type: "set-status"; key: string; text: string }
+  | { type: "render"; surface: string; key: string; payload: ExtensionRenderPayload | null }
   | { type: "notify"; message: string; level?: "success" | "info" | "error" }
-  | { type: "set-widget"; id: string; component: string; props: Record<string, unknown> }
-  | { type: "confirm"; id: string; question: string };
+  | { type: "context"; context: ExtensionUiContext };
 
 /**
  * Authoritative observer event map. Keys that are not part of

@@ -289,6 +289,11 @@ Rules that keep `packages/core` internally consistent. Deviations need a reason 
   placeholders (`helpers.ts`, `output.ts`, `prompt.ts`, `tools.ts`) for non-trivial modules.
 - Built-in extensions live at `<domain>/extension.ts` (e.g. `agent/skills/extension.ts`,
   `agent/lsp/extension.ts`). The extension *framework* itself lives in `agent/extension/`.
+- Extension UI is **one generic render surface**: extensions publish raw text (ANSI) or a
+  `text` / `row` / `column` / `box` layout tree via `ctx.ui.render(surface, key, payload)`, and the
+  host renders it with a single generic renderer. Do **not** reintroduce predefined extension
+  components (status APIs, widget vocabularies, confirm dialogs, color helpers) — that vocabulary
+  was deliberately removed; payloads must stay JSON-serializable for remote hosts.
 
 **Exports**
 

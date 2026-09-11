@@ -1,6 +1,4 @@
-import { ExtensionConfirm } from "../components/ExtensionConfirm.js";
 import { ExtensionPanel } from "../components/ExtensionPanel.js";
-import { ExtensionWidget } from "../components/ExtensionWidget.js";
 import { FullBox } from "../components/FullBox.js";
 import { MessageViewWithCompact } from "../components/MessageListWithCompact.js";
 import { PlanReadyBanner } from "../components/PlanReadyBanner.js";
@@ -13,7 +11,7 @@ import { useAgentInputControls } from "../hooks/use-agent-input-controls.js";
 import { useAgent } from "../hooks/use-agent.js";
 import { useConfig } from "../hooks/use-config.js";
 import { useExtensionPanel } from "../hooks/use-extension-panel.js";
-import { useExtensionUI, useExtensionUIBridge } from "../hooks/use-extension-ui.js";
+import { useExtensionUIBridge } from "../hooks/use-extension-ui.js";
 import { useSize } from "../hooks/use-size.js";
 import { useStatic } from "../hooks/use-static.js";
 import { useSubagentPanel } from "../hooks/use-subagent-panel.js";
@@ -74,8 +72,6 @@ export const Agent = () => {
 
   useExtensionUIBridge();
 
-  const confirm = useExtensionUI((s) => s.confirm);
-  const widgets = useExtensionUI((s) => s.widgets);
   const activeSession = useAgent((s) => s.session);
   const showResumePicker = config.resumeSession === "__picker__";
 
@@ -130,8 +126,6 @@ export const Agent = () => {
         <>
           <MessageViewWithCompact messages={messages} />
           <Content />
-          {confirm && <ExtensionConfirm confirm={confirm} />}
-          {widgets.length > 0 && <ExtensionWidget widgets={widgets} />}
           <PlanReadyBanner />
           <Footer status={status} queuedMessages={queuedMessages} saveError={saveError} />
         </>

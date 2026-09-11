@@ -11,7 +11,7 @@ import { usePlanPreview } from "../use-plan-preview.js";
 import { useSubagentPanel, CLOSE_DEBOUNCE_MS as SUBAGENT_CLOSE_DEBOUNCE_MS } from "../use-subagent-panel.js";
 import { useWorkspaceView, CLOSE_DEBOUNCE_MS as WORKSPACE_CLOSE_DEBOUNCE_MS } from "../use-workspace-view.js";
 
-import { handleExtensionConfirmKeys, isAnyPanelOpen } from "./context.js";
+import { isAnyPanelOpen } from "./context.js";
 
 import type { KeybindingContext } from "./context.js";
 
@@ -20,8 +20,6 @@ export function useGlobalKeybindings(ctx: KeybindingContext): void {
 
   useInput((inputChar, inputKey) => {
     inputActions.addEvent(inputChar, inputKey);
-
-    if (handleExtensionConfirmKeys(ctx, inputChar, inputKey)) return;
 
     // Panel open: let the panel's own handlers process plain keys
     // (Esc/Enter/↑↓); keep global Ctrl/meta shortcuts (exit, toggles) working.

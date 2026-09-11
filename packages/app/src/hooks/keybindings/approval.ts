@@ -5,7 +5,7 @@ import { useInput } from "ink";
 import { dispatchCommand } from "../../commands";
 import { useUserInput } from "../use-user-input.js";
 
-import { handleExtensionConfirmKeys, isAnyPanelOpen } from "./context.js";
+import { isAnyPanelOpen } from "./context.js";
 
 import type { KeybindingContext } from "./context.js";
 
@@ -26,7 +26,6 @@ export function useApprovalModeKeybindings(ctx: KeybindingContext): void {
 
   useInput(
     (inputChar, inputKey) => {
-      if (handleExtensionConfirmKeys(ctx, inputChar, inputKey)) return;
       // Panel open: the panel's own useInput owns the keyboard — never let
       // panel navigation approve/deny a pending tool.
       if (isAnyPanelOpen()) return;

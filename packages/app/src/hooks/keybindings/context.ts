@@ -2,8 +2,8 @@
  * Shared context for the central keybinding handlers.
  *
  * Ink broadcasts every keystroke to ALL registered `useInput` handlers, so
- * every mode handler must early-return when an overlay panel owns the
- * keyboard (`isAnyPanelOpen`) or the extension confirm dialog is up.
+ * every mode handler must early-return when an overlay panel owns the keyboard
+ * (`isAnyPanelOpen`).
  */
 
 import { useExtensionPanel } from "../use-extension-panel.js";
@@ -16,7 +16,6 @@ import type { CommandContext } from "../../commands";
 import type { UseAgentChatReturn } from "../use-agent-chat.js";
 import type { InputMode, useInputMode } from "../use-input-mode.js";
 import type { AgentSession } from "@my-agent/core";
-import type { Key } from "ink";
 import type { MutableRefObject } from "react";
 
 export interface DenyingToolInfo {
@@ -24,12 +23,6 @@ export interface DenyingToolInfo {
   isLast: boolean;
   toolCallId?: string;
   toolName?: string;
-}
-
-/** Active extension UI confirm dialog payload. */
-export interface ExtensionConfirmDialog {
-  id: string;
-  question: string;
 }
 
 /** Everything a keybinding handler may need, built once per render. */
@@ -58,8 +51,6 @@ export interface KeybindingContext {
    */
   submitAskUserAnswer: (answer: string, meta?: { selected?: string[]; draft?: string }) => void;
   addToolApprovalResponse: UseAgentChatReturn["addToolApprovalResponse"];
-  extensionConfirm: ExtensionConfirmDialog | null;
-  onExtensionConfirmRespond: (id: string, ok: boolean) => void;
   /** Resolved active session accessor (root or child). */
   getSession: () => AgentSession | null;
 }
@@ -76,30 +67,4 @@ export function isAnyPanelOpen(): boolean {
     useSubagentPanel.getReadonlyState().view !== "closed" ||
     useExtensionPanel.getReadonlyState().view !== "closed"
   );
-}
-
-/**
- * Guard for the extension UI confirm dialog: consumes y/n/Esc and swallows
- * everything else so keys are not treated as chat input. Global shortcuts
- * (Ctrl+C / Ctrl+T / …) fall through.
- */
-export function handleExtensionConfirmKeys(
-  ctx: Pick<KeybindingContext, "extensionConfirm" | "onExtensionConfirmRespond">,
-  inputChar: string,
-  inputKey: Key
-): boolean {
-  const confirm = ctx.extensionConfirm;
-  if (!confirm) return false;
-  if (inputKey.ctrl || inputKey.meta) return false;
-  const char = inputChar?.toLowerCase();
-  if (char === "y") {
-    ctx.onExtensionConfirmRespond(confirm.id, true);
-    return true;
-  }
-  if (char === "n" || inputKey.escape) {
-    ctx.onExtensionConfirmRespond(confirm.id, false);
-    return true;
-  }
-  // Swallow all other keys so they are not treated as chat input.
-  return true;
 }

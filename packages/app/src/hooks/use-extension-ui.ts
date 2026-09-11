@@ -1,51 +1,57 @@
 /**
- * Extension UI store. Extension → UI notifications are bridged from the session's
- * `extension-ui` channel (see {@link useExtensionUIBridge}); the UI → extension
- * direction (confirm responses) is still a no-op until a Session → extension
- * channel exists.
+ * Extension UI store.
+ *
+ * Extension → UI notifications are bridged from the session's `extension-ui`
+ * channel: extensions publish generic render payloads into named surfaces
+ * (`render`) plus host-native notifications (`notify`). The host owns rendering;
+ * there is no predefined extension component vocabulary.
+ *
+ * There is intentionally no UI → extension channel: extension interaction
+ * (confirm dialogs and the like) is out of scope for this design.
  */
 
-import { useCallback, useEffect } from "react";
+import { useEffect } from "react";
 import { createState, toRaw } from "reactivity-store";
 
 import { useAgent } from "./use-agent.js";
 import { useUserInput } from "./use-user-input.js";
 
-interface ConfirmState {
-  id: string;
-  question: string;
-}
+import type { ExtensionRenderPayload } from "@my-agent/core";
 
-interface WidgetState {
-  id: string;
-  component: string;
-  props: Record<string, unknown>;
+/** surface → key → payload. */
+export type ExtensionSurfaceSlots = Record<string, Record<string, ExtensionRenderPayload>>;
+
+/** Structural comparison so an identical republish never re-renders the host. */
+function samePayload(a: ExtensionRenderPayload | null, b: ExtensionRenderPayload | null): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
 }
 
 export const useExtensionUI = createState(
   () => ({
-    statusText: null as string | null,
-    confirm: null as ConfirmState | null,
-    widgets: [] as WidgetState[],
+    surfaces: {} as ExtensionSurfaceSlots,
   }),
   {
     withActions: (s) => ({
-      setStatusText: (text: string | null) => {
-        s.statusText = text;
-      },
-      setConfirm: (confirm: ConfirmState | null) => {
-        s.confirm = confirm;
-      },
-      addWidget: (widget: WidgetState) => {
-        const idx = s.widgets.findIndex((w) => w.id === widget.id);
-        if (idx >= 0) {
-          s.widgets[idx] = widget;
-        } else {
-          s.widgets.push(widget);
+      /**
+       * Write (or remove, with `null`) one surface slot. Surfaces/keys are owned
+       * by the publishing extension in core; the host only mirrors them.
+       */
+      setSlot: (surface: string, key: string, payload: ExtensionRenderPayload | null) => {
+        const current = s.surfaces[surface] ?? {};
+        if (samePayload(current[key] ?? null, payload)) return;
+        const next: Record<string, ExtensionRenderPayload> = {};
+        for (const [existingKey, existing] of Object.entries(current)) {
+          if (existingKey !== key) next[existingKey] = existing;
         }
-      },
-      removeWidget: (id: string) => {
-        s.widgets = s.widgets.filter((w) => w.id !== id);
+        if (payload !== null) next[key] = payload;
+        // Always reassign so the reactive store notifies subscribers.
+        s.surfaces[surface] = next;
       },
     }),
     withDeepSelector: false,
@@ -56,13 +62,10 @@ export const useExtensionUI = createState(
 /**
  * Bridge extension UI notifications from the active session into the UI store.
  *
- * Session-only cutover removed the direct ExtensionRunner bridge (app no longer
- * touches ManagedAgent). This hook reconnects the extension → UI path through
- * the session's `extension-ui` channel: the core session forwards events published
- * via `ExtensionUI` (set-status / notify / set-widget / confirm) and this hook
- * projects them into {@link useExtensionUI} for the footer, widgets, and confirms.
- *
- * Confirm responses are still a no-op until a Session → extension channel exists.
+ * The session's `extension-ui` channel carries everything an extension published
+ * via `ExtensionUI` (`render` / `notify` / `context`); this hook projects the
+ * render slots into {@link useExtensionUI} and host notifications into the input
+ * feedback line.
  */
 export function useExtensionUIBridge(): void {
   const session = toRaw(useAgent((s) => s.session));
@@ -73,33 +76,21 @@ export function useExtensionUIBridge(): void {
     return session.subscribe(
       (event) => {
         if (event.channel !== "extension-ui") return;
-        const ui = useExtensionUI.getActions();
         const payload = event.payload;
         switch (payload.type) {
-          case "set-status":
-            // Empty text from the extension runner means "remove this status entry"
-            // (a disabled extension had its footer state cleared). Normalize to null
-            // so the footer treats it as absent rather than a blank string.
-            ui.setStatusText(payload.text ? payload.text : null);
+          case "render":
+            useExtensionUI.getActions().setSlot(payload.surface, payload.key, payload.payload);
             break;
           case "notify":
             useUserInput.getActions().setInputFeedback(payload.message, payload.level ?? "info");
             break;
-          case "set-widget":
-            ui.addWidget({ id: payload.id, component: payload.component, props: payload.props });
-            break;
-          case "confirm":
-            ui.setConfirm({ id: payload.id, question: payload.question });
+          case "context":
+            // Context snapshots target in-process extensions; hosts already track
+            // the state they render from via their own channels.
             break;
         }
       },
       { channels: ["extension-ui"] }
     );
   }, [session]);
-}
-
-export function useRespondToConfirm(): (id: string, ok: boolean) => void {
-  return useCallback((_id: string, _ok: boolean) => {
-    useExtensionUI.getActions().setConfirm(null);
-  }, []);
 }

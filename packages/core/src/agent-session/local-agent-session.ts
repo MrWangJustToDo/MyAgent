@@ -163,16 +163,16 @@ class LocalAgentSessionImpl implements AgentSession {
       }
     }
 
-    // Per-subscriber reconcile: replay the extension status set that was set
-    // before this subscription mounted.
+    // Per-subscriber reconcile: replay the extension render slots that were
+    // published before this subscription mounted.
     if (selected.has("extension-ui")) {
-      const ui = this.managed.extensionRunner?.getUI();
-      if (ui) {
-        for (const [key, text] of Object.entries(ui.getStatus())) {
-          if (text) {
+      const slots = this.managed.extensionRunner?.getUISlots();
+      if (slots) {
+        for (const [surface, entries] of Object.entries(slots)) {
+          for (const [key, payload] of Object.entries(entries)) {
             this.events.emit("extension-ui", {
               channel: "extension-ui",
-              payload: { type: "set-status", key, text },
+              payload: { type: "render", surface, key, payload },
               ts: now(),
             });
           }

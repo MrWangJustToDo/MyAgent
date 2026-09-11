@@ -7,7 +7,7 @@ import { cycleAgentMode } from "../../utils/plan-mode-toggle.js";
 import { usePlanPreview } from "../use-plan-preview.js";
 import { useUserInput } from "../use-user-input.js";
 
-import { handleExtensionConfirmKeys, isAnyPanelOpen } from "./context.js";
+import { isAnyPanelOpen } from "./context.js";
 
 import type { KeybindingContext } from "./context.js";
 
@@ -25,7 +25,6 @@ export function useNormalModeKeybindings(ctx: KeybindingContext): void {
 
   useInput(
     (inputChar, inputKey) => {
-      if (handleExtensionConfirmKeys(ctx, inputChar, inputKey)) return;
       // Panel open: the panel's own useInput owns the keyboard.
       if (isAnyPanelOpen()) return;
 

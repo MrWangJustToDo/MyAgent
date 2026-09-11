@@ -268,6 +268,12 @@ export type {
   ExtensionContextProvider,
   TurnContextProvider,
   ExtensionInfo,
+  ExtensionNotificationLevel,
+  ExtensionRenderNode,
+  ExtensionRenderPayload,
+  ExtensionUiContext,
+  ExtensionUiModel,
+  ExtensionUiUsage,
 } from "./agent/extension";
 
 // ============================================================================

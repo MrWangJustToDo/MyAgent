@@ -2,6 +2,7 @@ import { getEnv, hasCoreEnv } from "../../env.js";
 import { createAgentEventBus } from "../agent-event-bus";
 
 import { z } from "./extension-zod.js";
+import { fingerprintOf, normalizePayload, slotId } from "./render-payload.js";
 
 import type {
   ExtensionInstance,
@@ -20,6 +21,9 @@ import type {
   ExtensionContextProvider,
   ExtensionRegistrations,
   ExtensionInfo,
+  ExtensionNotificationLevel,
+  ExtensionRenderPayload,
+  ExtensionUiContext,
 } from "./types.js";
 import type { CoreEnv } from "../../env.js";
 import type { AgentEventBus } from "../agent-event-bus";
@@ -68,22 +72,53 @@ class BusExtensionEventBus implements ExtensionEventBus {
 // ExtensionUI implementation
 // ============================================================================
 
-class DefaultExtensionUI implements ExtensionUI {
-  /** Retained status state so late subscribers can reconcile (e.g. after bootstrap). */
-  private statusMap = new Map<string, string>();
-  /** status key → owning extension id, so a disabled extension's status can be removed. */
-  private statusOwners = new Map<string, string>();
+/** Throttle window for coalescing render notifications (ms). */
+const RENDER_THROTTLE_MS = 100;
 
-  constructor(private readonly bus: AgentEventBus | null) {}
+/** Throttle window for coalescing pushed context snapshots (ms). */
+const CONTEXT_THROTTLE_MS = 250;
+
+/**
+ * {@link ExtensionUI} implementation. The unified bus is the single mechanism
+ * (no internal pub/sub registry), so every state change is a `notify` call the
+ * session `extension-ui` channel projection can consume.
+ *
+ * Render slots are retained so a host subscribing late can reconcile, and are
+ * attributed to an owner so disabling an extension clears its slots.
+ */
+class DefaultExtensionUI implements ExtensionUI {
+  /** surface → key → payload (retained for late-subscriber reconciliation). */
+  private readonly slots = new Map<string, Map<string, ExtensionRenderPayload>>();
+  /** slot id → owning extension id, for owner-scoped teardown. */
+  private readonly slotOwners = new Map<string, string>();
+  /** Coalesced, not-yet-notified slot updates. */
+  private readonly pending = new Map<
+    string,
+    { surface: string; key: string; payload: ExtensionRenderPayload | null }
+  >();
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastFlushAt = 0;
+
+  constructor(
+    private readonly bus: AgentEventBus | null,
+    private readonly buildContext: () => ExtensionUiContext
+  ) {}
 
   /**
    * Publish an `extension:ui` observer event on the agent's scoped bus (the
    * session `extension-ui` channel projection consumes it). The internal
    * pub/sub registry is gone — the bus is the single mechanism.
    */
-  notify(type: string, data: unknown): void {
-    const payload = (typeof data === "object" && data !== null ? data : { data }) as Record<string, unknown>;
-    this.bus?.emit("extension:ui", { type, ...payload } as never);
+  emitEvent(type: string, data: Record<string, unknown>): void {
+    this.bus?.emit("extension:ui", { type, ...data } as never);
+  }
+
+  /**
+   * Host-native, auto-clearing notification (the CLI renders it in its input
+   * feedback line). Persistent content belongs in a {@link render} slot.
+   */
+  notify(message: string, level: ExtensionNotificationLevel = "info"): void {
+    this.emitEvent("notify", { message, level });
   }
 
   /**
@@ -97,52 +132,120 @@ class DefaultExtensionUI implements ExtensionUI {
     });
   }
 
-  setStatus(key: string, text: string): void {
-    // Retain the latest value so hosts that subscribe after the update can read it.
-    this.statusMap.set(key, text);
-    // Publish a `set-status` notification the host UI renders in its status bar.
-    this.notify("set-status", { key, text });
+  /**
+   * Write a render payload into a surface slot. `ownerId` is supplied by
+   * {@link ExtensionRunner.wrapUi} so a disabled extension's slots can be
+   * cleared later. Empty/whitespace raw strings, non-renderable payloads, and
+   * payloads that are not JSON-serializable are all normalized to `null` (remove
+   * the slot).
+   */
+  render(surface: string, key: string, payload: ExtensionRenderPayload | null, ownerId?: string): void {
+    try {
+      const next = normalizePayload(payload);
+      const id = slotId(surface, key);
+      // Identical payload: nothing to render, so do not notify the host at all.
+      if (fingerprintOf(this.slots.get(surface)?.get(key) ?? null) === next.fingerprint) return;
+      this.writeSlot(surface, key, next.value);
+      if (ownerId !== undefined) {
+        // Only existing slots are owned; a removed slot drops its owner entry so
+        // the ownership map cannot grow without bound.
+        if (next.value === null) this.slotOwners.delete(id);
+        else this.slotOwners.set(id, ownerId);
+      }
+      this.queueNotify(surface, key, next.value);
+    } catch {
+      // Failure contained: a broken publish must not break the host UI or the
+      // agent loop.
+    }
+  }
+
+  /** Retained slots (surface → key → payload); lets a late host reconcile. */
+  getSlots(): Readonly<Record<string, Record<string, ExtensionRenderPayload>>> {
+    const out: Record<string, Record<string, ExtensionRenderPayload>> = {};
+    for (const [surface, slots] of this.slots) out[surface] = Object.fromEntries(slots);
+    return out;
+  }
+
+  getContext(): ExtensionUiContext {
+    return this.buildContext();
   }
 
   /**
-   * Record which extension owns a status key, then set it. Used by the runner
-   * wrapper so a disabled extension's status can be cleared on teardown.
+   * Remove every slot owned by `ownerId` and notify the host, so a disabled
+   * extension's UI does not linger.
    */
-  setStatusWithOwner(key: string, text: string, ownerId: string): void {
-    this.statusOwners.set(key, ownerId);
-    this.setStatus(key, text);
-  }
-
-  /**
-   * Remove every status key owned by `ownerId` and notify the host, so a
-   * disabled extension's footer state does not linger.
-   */
-  clearStatusByOwner(ownerId: string): void {
-    for (const [key, owner] of this.statusOwners) {
+  clearSlotsByOwner(ownerId: string): void {
+    for (const [id, owner] of Array.from(this.slotOwners)) {
       if (owner !== ownerId) continue;
-      this.statusOwners.delete(key);
-      this.statusMap.delete(key);
-      // Empty text signals the host to remove the status entry.
-      this.notify("set-status", { key, text: "" });
+      this.slotOwners.delete(id);
+      const [surface, key] = id.split("\u0000");
+      if (surface === undefined || key === undefined) continue;
+      this.writeSlot(surface, key, null);
+      this.queueNotify(surface, key, null);
     }
   }
 
-  /** Remove all status entries and notify the host. */
-  clearAllStatus(): void {
-    for (const key of this.statusMap.keys()) {
-      this.statusMap.delete(key);
-      this.notify("set-status", { key, text: "" });
+  /** Remove all slots and notify the host. */
+  clearAllSlots(): void {
+    for (const [surface, slots] of this.slots) {
+      for (const key of slots.keys()) this.queueNotify(surface, key, null);
     }
-    this.statusOwners.clear();
+    this.slots.clear();
+    this.slotOwners.clear();
+    this.flush();
   }
 
-  getStatus(): Readonly<Record<string, string>> {
-    return Object.fromEntries(this.statusMap);
+  /** Flush coalesced notifications immediately (used on teardown). */
+  flush(): void {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    if (this.pending.size === 0) return;
+    const updates = Array.from(this.pending.values());
+    this.pending.clear();
+    this.lastFlushAt = Date.now();
+    for (const update of updates) {
+      this.emitEvent("render", { surface: update.surface, key: update.key, payload: update.payload });
+    }
   }
 
-  theme = {
-    fg: (color: string, text: string): string => text,
-  };
+  private writeSlot(surface: string, key: string, payload: ExtensionRenderPayload | null): void {
+    if (payload === null) {
+      const existing = this.slots.get(surface);
+      if (!existing) return;
+      existing.delete(key);
+      if (existing.size === 0) this.slots.delete(surface);
+      return;
+    }
+    let slots = this.slots.get(surface);
+    if (!slots) {
+      slots = new Map();
+      this.slots.set(surface, slots);
+    }
+    slots.set(key, payload);
+  }
+
+  /**
+   * Coalesce slot updates and notify at most once per {@link RENDER_THROTTLE_MS}
+   * window (leading edge): rapid publishes collapse to the latest payload per
+   * slot instead of re-rendering the host on every write.
+   */
+  private queueNotify(surface: string, key: string, payload: ExtensionRenderPayload | null): void {
+    this.pending.set(slotId(surface, key), { surface, key, payload });
+    const elapsed = Date.now() - this.lastFlushAt;
+    if (elapsed >= RENDER_THROTTLE_MS) {
+      this.flush();
+      return;
+    }
+    if (this.flushTimer) return;
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      this.flush();
+    }, RENDER_THROTTLE_MS - elapsed);
+    // Never keep a host process alive just to flush extension UI.
+    (this.flushTimer as { unref?: () => void }).unref?.();
+  }
 }
 
 // ============================================================================
@@ -179,6 +282,12 @@ export interface ExtensionRunnerOptions {
    * for standalone runner usage without an agent log).
    */
   log?: AgentLog | null;
+  /**
+   * Host-supplied overrides for the extension UI context snapshot (model /
+   * status / usage / workspace / session name / mode). Omitted fields fall back
+   * to retained bus state and the runner's own `cwd`.
+   */
+  getUiContext?: () => Partial<ExtensionUiContext>;
 }
 
 export class ExtensionRunner {
@@ -201,13 +310,21 @@ export class ExtensionRunner {
   private readonly rawBus: AgentEventBus;
   private ui: DefaultExtensionUI;
   private options: ExtensionRunnerOptions;
+  /** Teardown callbacks for context-push subscriptions. */
+  private readonly contextUnsubs: Array<() => void> = [];
+  private contextTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: ExtensionRunnerOptions) {
     this.options = options;
     const bus = options.eventBus ?? createAgentEventBus();
     this.rawBus = bus;
     this.eventBus = new BusExtensionEventBus(bus);
-    this.ui = new DefaultExtensionUI(bus);
+    this.ui = new DefaultExtensionUI(bus, () => this.buildUiContext());
+    // Push a fresh context snapshot (throttled) whenever state extensions render
+    // from changes, so they never have to poll `getContext()`.
+    for (const type of ["agent:state", "session:usage", "session:mode"] as const) {
+      this.contextUnsubs.push(bus.on(type, () => this.scheduleContextPush(), { replay: false }));
+    }
   }
 
   getEventBus(): ExtensionEventBus {
@@ -219,17 +336,71 @@ export class ExtensionRunner {
   }
 
   /**
-   * Wrap the shared UI for a single extension so status writes are attributed
-   * to that extension (used to clear its footer state when it is disabled).
-   * All other UI surface (notify / subscribe / getStatus / theme) is shared.
+   * Retained extension render slots (surface → key → payload). Lets a session
+   * replay slots that were rendered before a host subscribed.
+   */
+  getUISlots(): Readonly<Record<string, Record<string, ExtensionRenderPayload>>> {
+    return this.ui.getSlots();
+  }
+
+  /**
+   * Assemble the context snapshot from retained bus state, overlaid with any
+   * host-supplied overrides. Unknown values degrade to `null` / empty rather
+   * than throwing — a snapshot is always returned.
+   */
+  private buildUiContext(): ExtensionUiContext {
+    const override = this.options.getUiContext?.();
+    const state = this.rawBus.retainedValue("agent:state");
+    const usage = this.rawBus.retainedValue("session:usage");
+    const mode = this.rawBus.retainedValue("session:mode");
+
+    const modelId = override?.model?.id ?? state?.model ?? "";
+    const displayName = override?.model?.displayName ?? state?.modelInfo?.name ?? modelId;
+
+    return {
+      model: override?.model ?? (modelId ? { id: modelId, displayName } : null),
+      status: override?.status ?? state?.status ?? "unknown",
+      usage:
+        override?.usage ??
+        (usage
+          ? {
+              percent: usage.percent,
+              tokenLimit: usage.tokenLimit,
+              windowTokens: usage.window.totalTokens,
+              costUsd: usage.cost,
+            }
+          : null),
+      workspace: override?.workspace ?? { root: this.options.cwd ?? "", branch: null },
+      sessionName: override?.sessionName ?? null,
+      mode: override?.mode ?? mode?.mode ?? null,
+    };
+  }
+
+  /** Coalesced `context` push so subscribers see changes without polling. */
+  private scheduleContextPush(): void {
+    if (this.contextTimer) return;
+    this.contextTimer = setTimeout(() => {
+      this.contextTimer = null;
+      try {
+        this.ui.emitEvent("context", { context: this.ui.getContext() });
+      } catch {
+        // Failure contained: context pushes are best-effort.
+      }
+    }, CONTEXT_THROTTLE_MS);
+    (this.contextTimer as { unref?: () => void }).unref?.();
+  }
+
+  /**
+   * Wrap the shared UI for a single extension so render slots are attributed to
+   * that extension (used to clear its slots when it is disabled). Every other
+   * member (notify / subscribe / getContext) is shared.
    */
   private wrapUi(ownerId: string): ExtensionUI {
     return {
-      notify: (type, data) => this.ui.notify(type, data),
+      notify: (message, level) => this.ui.notify(message, level),
       subscribe: (type, handler) => this.ui.subscribe(type, handler),
-      setStatus: (key, text) => this.ui.setStatusWithOwner(key, text, ownerId),
-      getStatus: () => this.ui.getStatus(),
-      theme: this.ui.theme,
+      render: (surface, key, payload) => this.ui.render(surface, key, payload, ownerId),
+      getContext: () => this.ui.getContext(),
     };
   }
 
@@ -378,9 +549,9 @@ export class ExtensionRunner {
       }
     }
     this.unregisterInstanceArtifacts(instance);
-    // Clear any footer/status entries this extension wrote so they do not
-    // linger after the extension is disabled (e.g. `LSP: typescript ready`).
-    this.ui.clearStatusByOwner(instance.api.id);
+    // Clear any surface slots this extension rendered so they do not linger
+    // after the extension is disabled (e.g. `LSP: 3 error(s) in src/app.ts`).
+    this.ui.clearSlotsByOwner(instance.api.id);
     instance.state = "inactive";
   }
 
@@ -395,7 +566,13 @@ export class ExtensionRunner {
     this.commandOwners.clear();
     this.contextProviders.clear();
     this.disabledExtensionNotices.clear();
-    this.ui.clearAllStatus();
+    this.ui.clearAllSlots();
+    if (this.contextTimer) {
+      clearTimeout(this.contextTimer);
+      this.contextTimer = null;
+    }
+    for (const unsub of this.contextUnsubs) unsub();
+    this.contextUnsubs.length = 0;
   }
 
   /** Read-only snapshot of loaded extensions for management commands. */

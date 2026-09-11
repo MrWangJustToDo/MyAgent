@@ -11,7 +11,7 @@
  */
 
 import type { AgentEvent } from "../agent/agent-event-bus";
-import type { ExtensionInfo } from "../agent/extension/types.js";
+import type { ExtensionInfo, ExtensionRenderPayload, ExtensionUiContext } from "../agent/extension/types.js";
 import type { McpServerStatus } from "../agent/mcp/manager.js";
 import type { PlanModeState } from "../agent/plan/plan-mode-controller.js";
 import type { SummaryStreamEvent, SummaryStreamSnapshot } from "../agent/summary-stream/types.js";
@@ -202,14 +202,13 @@ export type AgentSessionCommandResult =
 /**
  * Extension UI notification forwarded from the extension runner to session
  * subscribers on the `extension-ui` channel. Mirrors the events published via
- * {@link ExtensionUI} (`setStatus`, `notify`, …) so hosts can render extension
- * status bars, widgets, and confirmations without touching ManagedAgent.
+ * `ExtensionUI` (`render`, `notify`, `context`) so hosts can render extension
+ * surfaces without touching ManagedAgent.
  */
 export type ExtensionUIEvent =
-  | { type: "set-status"; key: string; text: string }
+  | { type: "render"; surface: string; key: string; payload: ExtensionRenderPayload | null }
   | { type: "notify"; message: string; level?: "success" | "info" | "error" }
-  | { type: "set-widget"; id: string; component: string; props: Record<string, unknown> }
-  | { type: "confirm"; id: string; question: string };
+  | { type: "context"; context: ExtensionUiContext };
 
 export type AgentSessionEvent =
   | { channel: "state"; payload: AgentL1State; ts: number }
