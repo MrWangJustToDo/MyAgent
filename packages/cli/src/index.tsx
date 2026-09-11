@@ -10,6 +10,7 @@ import {
 } from "@my-agent/app";
 import {
   createDirectModelProvider,
+  installAgentLogProcessGuards,
   loadModelsConfigFromFile,
   parseModelsConfig,
   registerCoreEnv,
@@ -34,6 +35,10 @@ if (isVersionRequested(argv)) {
 }
 
 loadEnv({ quiet: true });
+
+// Land buffered agent-log entries (and any fatal error) on disk even when the
+// process crashes or is hard-exited before the 250 ms batch flush fires.
+installAgentLogProcessGuards();
 
 const appConfig = parseCliArgs(argv);
 

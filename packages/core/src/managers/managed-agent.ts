@@ -6,6 +6,7 @@ import {
   type UIMessage as TanStackUIMessage,
 } from "@tanstack/ai";
 
+import { registerActiveAgentLog, unregisterActiveAgentLog } from "../agent/agent-log";
 import { AutoModeController } from "../agent/approval/auto-mode-controller.js";
 import { buildAutoModePrompt } from "../agent/approval/auto-mode-prompt.js";
 import { ToolApprovalTable } from "../agent/approval/tool-approval-table.js";
@@ -883,6 +884,18 @@ export class ManagedAgent {
     if (this.log.getFileSinkDir() === dir) return;
     this.detachLogSink?.();
     this.detachLogSink = this.log.attachFileSink({ dir });
+    // Track for the process-level crash/exit guards.
+    registerActiveAgentLog(this.log);
+  }
+
+  /**
+   * Land any buffered log entries synchronously and stop tracking this log for
+   * crash flushes. Called from `destroyAgent` so a quit right after teardown
+   * still records the abort instead of losing it to the 250 ms batch timer.
+   */
+  flushLogOnDestroy(): void {
+    this.log.flushSync();
+    unregisterActiveAgentLog(this.log);
   }
 
   setTodoManager(t: TodoManager): void {

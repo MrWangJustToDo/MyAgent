@@ -18,6 +18,7 @@
 
 import "dotenv/config";
 
+import { installAgentLogProcessGuards } from "@my-agent/core";
 import { appendFileSync } from "node:fs";
 
 import { TelegramAdapter } from "./adapters/telegram.js";
@@ -29,6 +30,7 @@ function log(error: unknown): void {
 }
 
 async function main(): Promise<void> {
+  installAgentLogProcessGuards();
   const config = parseBridgeConfig();
   // The daemon's console is often unattended — mirror every error into
   // `<dataDir>/bridge.log` so a misbehaving interaction row stays diagnosable.

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { serve } from "@hono/node-server";
-import { registerCoreEnv } from "@my-agent/core";
+import { installAgentLogProcessGuards, registerCoreEnv } from "@my-agent/core";
 import { createNodeEnv } from "@my-agent/node";
 import "dotenv/config";
 import { Hono } from "hono";
@@ -65,6 +65,10 @@ if (REMOTE_ENV) {
 } else {
   registerCoreEnv(createNodeEnv({ rootPath: ROOT_PATH, mode: SANDBOX_ENV === "native" ? "native" : "os" }));
 }
+
+// Land buffered agent-log entries (and any fatal error) on disk even when the
+// server crashes or is hard-exited before the batch flush fires.
+installAgentLogProcessGuards();
 
 function getLocalIP() {
   const nets = networkInterfaces();

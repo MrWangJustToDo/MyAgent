@@ -3,6 +3,7 @@
  */
 
 import { FileError } from "@my-agent/core";
+import * as fsSync from "fs";
 import * as fs from "fs/promises";
 import * as path from "path";
 
@@ -129,6 +130,25 @@ export function createNativeFilesystem(
       const fullPath = resolvePath(filePath);
       await fs.mkdir(path.dirname(fullPath), { recursive: true });
       await fs.appendFile(fullPath, content, "utf-8");
+    },
+
+    // Synchronous pair — for crash/exit paths that cannot await (see AgentLog).
+    appendFileSync: (filePath: string, content: string) => {
+      const fullPath = resolvePath(filePath);
+      fsSync.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fsSync.appendFileSync(fullPath, content, "utf-8");
+    },
+
+    mkdirSync: (dirPath: string) => {
+      fsSync.mkdirSync(resolvePath(dirPath), { recursive: true });
+    },
+
+    existsSync: (filePath: string) => {
+      try {
+        return fsSync.existsSync(resolvePath(filePath));
+      } catch {
+        return false;
+      }
     },
   };
 

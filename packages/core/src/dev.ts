@@ -27,6 +27,14 @@ export {
 export { generateId, resetGeneratedIdsForTesting } from "./utils/generate-id.js";
 export { clearCoreEnv, registerCoreEnv } from "./env.js";
 export type { CoreEnv } from "./env.js";
+
+// Agent-log crash/exit guards (internal validation exports)
+export {
+  installAgentLogProcessGuards,
+  registerActiveAgentLog,
+  unregisterActiveAgentLog,
+  flushActiveAgentLogsSync,
+} from "./agent/agent-log/lifecycle-guards.js";
 // ============================================================================
 // Built-in LSP extension (internal validation exports — not part of public API)
 // ============================================================================

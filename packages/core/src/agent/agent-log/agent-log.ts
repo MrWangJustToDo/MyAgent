@@ -35,6 +35,12 @@ export class AgentLog {
   /** Active file sink's per-entry consumer, or null when no sink is attached. */
   private sinkEntry: ((entry: LogEntry) => void) | null = null;
 
+  /** Active sink's awaitable flush, or null when no sink is attached. */
+  private sinkFlush: (() => Promise<void>) | null = null;
+
+  /** Active sink's synchronous flush, or null when no sink is attached. */
+  private sinkFlushSync: (() => void) | null = null;
+
   private static readonly levelPriority: Record<LogLevel, number> = {
     debug: 0,
     info: 1,
@@ -272,21 +278,76 @@ export class AgentLog {
       schedule();
     };
 
+    /**
+     * Synchronous best-effort write of the pending buffer, for crash/exit paths
+     * that cannot await an async flush. Requires a runtime with sync fs
+     * primitives (`appendFileSync`); otherwise falls back to an async flush.
+     * Skips rotation — the goal is to land the final lines, not to enforce size.
+     */
+    const flushSync = (): void => {
+      if (buffer.length === 0) return;
+      const appendFileSync = fs.appendFileSync;
+      if (!appendFileSync) {
+        void flush();
+        return;
+      }
+      const lines = buffer;
+      buffer = [];
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      try {
+        fs.mkdirSync?.(dir);
+        if (!boundaryWritten) {
+          boundaryWritten = true;
+          if (fs.existsSync?.(filePath)) {
+            lines.unshift(`---------- ${new Date().toISOString()} new session ----------`);
+          }
+        }
+        appendFileSync(filePath, lines.join("\n") + "\n");
+      } catch {
+        // Non-fatal: best-effort final flush on a crash path.
+      }
+    };
+
     // Replace any previous sink (one active sink per log).
     this.sinkEntry = handleEntry;
+    this.sinkFlush = flush;
+    this.sinkFlushSync = flushSync;
     this.fileSinkDir = dir;
 
     return () => {
       disposed = true;
       if (this.sinkEntry === handleEntry) {
         this.sinkEntry = null;
+        this.sinkFlush = null;
+        this.sinkFlushSync = null;
         this.fileSinkDir = null;
       }
       if (timer) {
         clearTimeout(timer);
         timer = null;
       }
-      void flush(); // best-effort final flush
+      flushSync(); // best-effort final flush that survives exit
+      void flush(); // and drain anything a sync-unaware runtime failed to write
     };
+  }
+
+  /**
+   * Flush buffered entries to the attached sink and await the write. No-op when
+   * no sink is attached.
+   */
+  async flush(): Promise<void> {
+    await this.sinkFlush?.();
+  }
+
+  /**
+   * Synchronously flush buffered entries. Best-effort: falls back to async when
+   * the runtime lacks sync fs primitives. Safe to call from `process.on`
+   * handlers and teardown paths.
+   */
+  flushSync(): void {
+    this.sinkFlushSync?.();
   }
 }

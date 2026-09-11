@@ -368,6 +368,10 @@ export class AgentManager {
       void runner.destroyAll();
     }
 
+    // Land the buffered teardown/abort entries before the sink is dropped, so a
+    // process exit immediately after destroy does not lose them to the batch timer.
+    managedAgent.flushLogOnDestroy();
+
     this.agents.delete(id);
   }
 

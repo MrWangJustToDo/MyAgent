@@ -120,6 +120,16 @@ export interface CoreEnvFs {
   remove(path: string): Promise<void>;
   /** Append content to a file */
   appendFile?(path: string, content: string): Promise<void>;
+  /**
+   * Synchronously append content to a file (creating parent dirs when
+   * supported). Optional: only runtimes that can write synchronously (Node)
+   * provide it. Used by crash/exit paths that cannot await an async write.
+   */
+  appendFileSync?(path: string, content: string): void;
+  /** Synchronously create a directory (recursive). Paired with `appendFileSync`. */
+  mkdirSync?(path: string): void;
+  /** Synchronously test whether a path exists. Paired with `appendFileSync`. */
+  existsSync?(path: string): boolean;
 }
 
 // ============================================================================
