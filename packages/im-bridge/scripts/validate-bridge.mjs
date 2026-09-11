@@ -8,7 +8,8 @@
  * TTL armed only after the row renders, TTL auto-deny, allowlist rejection,
  * restart recovery (sessions.json → host.connect), code-block-aware splitting,
  * ordered non-streaming segment rendering (text sealed → posted; final answer
- * at finalize).
+ * at finalize). The edit_file / write_file content previews live in
+ * validate-bridge-tool-preview.mjs.
  *
  * Run (builds first):
  *   pnpm --filter @my-agent/im-bridge validate:bridge
@@ -94,7 +95,7 @@ async function testApprovalButton() {
         (entry) =>
           entry.messageId === approvalEntry.messageId &&
           entry.buttons === undefined &&
-          entry.text.includes("✓ approved")
+          entry.text.includes("✅ approved")
       ),
     2000,
     "settled row after click"
@@ -103,7 +104,7 @@ async function testApprovalButton() {
   const diagLog = readFileSync(join(tmpBase, "default", "bridge.log"), "utf8");
   assert.ok(diagLog.includes("button click a=y"), "click logged");
   assert.ok(/settle approval .*applied=true/.test(diagLog), "settle outcome logged");
-  console.log("✓ approval click → respondApproval(true), row settled in place (✓ approved, buttons dropped)");
+  console.log("✓ approval click → respondApproval(true), row settled in place (✅ approved, buttons dropped)");
 }
 
 async function testAskUserButton() {
@@ -336,11 +337,11 @@ async function testTtlAutoDeny() {
   assert.equal(command.approved, false);
   assert.equal(command.reason, "timed out");
   await waitFor(
-    () => adapter.edits.some((entry) => entry.buttons === undefined && entry.text.includes("✗ denied (timed out)")),
+    () => adapter.edits.some((entry) => entry.buttons === undefined && entry.text.includes("❌ denied (timed out)")),
     2000,
     "settled row after TTL expiry"
   );
-  console.log("✓ pending approval TTL expiry → auto-deny + row settled (✗ denied (timed out))");
+  console.log("✓ pending approval TTL expiry → auto-deny + row settled (❌ denied (timed out))");
 }
 
 async function testAllowlistRejection() {
@@ -529,7 +530,7 @@ async function testRebuildMessageId() {
   ];
   session.emit("messages", session.state.messages);
   await waitFor(
-    () => adapter.edits.some((entry) => entry.buttons === undefined && entry.text.includes("✓")),
+    () => adapter.edits.some((entry) => entry.buttons === undefined && entry.text.includes("✅")),
     2000,
     "resolved row edited in place (buttons dropped)"
   );
@@ -612,10 +613,10 @@ async function testSettleAfterPostDoneRace() {
 
   // 3) the click settles the row; the follow-up edit must drop buttons and
   //    show the outcome even though the projection read `done` at post time.
-  const settled = renderer.settle("tool:tc1", "📎 run_command · npm test · ✓ approved");
+  const settled = renderer.settle("tool:tc1", "run_command · $ npm test · ✅ approved");
   assert.equal(settled, true, "settle applies on the interaction row");
   await waitFor(
-    () => edits.some((e) => e.buttons === undefined && e.text.includes("✓ approved")),
+    () => edits.some((e) => e.buttons === undefined && e.text.includes("✅ approved")),
     2000,
     "row edited after settle (buttons dropped, outcome shown)"
   );
@@ -647,7 +648,7 @@ async function testOrderedSegments() {
   // Placeholder (⏳ send) claimed by the first tool line via edit; then text, tool.
   const claim = adapter.log.find((entry) => entry.op === "edit" && entry.messageId === adapter.sent[0].ref.messageId);
   assert.ok(claim, "first segment claims the placeholder");
-  assert.ok(claim.text.includes("run_command") && claim.text.includes("✓"), "tool line first");
+  assert.ok(claim.text.includes("run_command") && claim.text.includes("✅"), "tool line first");
   const sends = adapter.log.filter((entry) => entry.op === "send" && entry.text !== "⏳");
   assert.equal(sends[0].text, "build ok", "text second");
   assert.ok(sends[1].text.includes("grep") && sends[1].text.includes("2 matches"), "tool third");

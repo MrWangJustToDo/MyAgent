@@ -68,7 +68,7 @@ async function testToolGroupCollapse() {
   );
   assert.ok(
     adapter.log.some(
-      (entry) => entry.op === "edit" && entry.messageId === placeholderId && entry.text.startsWith("✓ grep")
+      (entry) => entry.op === "edit" && entry.messageId === placeholderId && entry.text.startsWith("✅ grep")
     ),
     "the group claims the placeholder and leads with the status glyph"
   );

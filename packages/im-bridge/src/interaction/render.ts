@@ -12,9 +12,15 @@
  * - pending approval: `part.approval.needsApproval && part.approval.approved === undefined`
  *
  * Tool lines follow a status-first convention: `<state> tool · key input info`
- * (e.g. `✓ run_command · $ pnpm build`) — the state glyph leads so consecutive
+ * (e.g. `✅ run_command · $ pnpm build`) — the state glyph leads so consecutive
  * lines scan as a status list instead of looking like file attachments (the old
  * leading 📎 read as an attachment in Telegram).
+ *
+ * `edit_file` / `write_file` rows additionally carry a fenced preview of the
+ * pending / applied content (see {@link formatToolPreview}): both tools require
+ * approval, so the reviewer must see WHAT is edited or written — not just which
+ * file — before tapping Approve. It is the one deliberate exception to the
+ * one-line status list.
  */
 
 import type { PendingInteraction } from "../types.js";
@@ -195,6 +201,114 @@ function toolLabel(part: ToolCallPart): string {
   return summary ? `${part.name} · ${summary}` : part.name;
 }
 
+// ---------------------------------------------------------------------------
+// edit_file / write_file content previews
+// ---------------------------------------------------------------------------
+
+/** Caps on an inline preview: shown edits / lines per side / total chars / per-line chars. */
+const PREVIEW_MAX_EDITS = 2;
+const PREVIEW_MAX_LINES_PER_SIDE = 4;
+/** A write preview shows the new content only (one side), so it can afford more lines. */
+const WRITE_PREVIEW_MAX_LINES = 6;
+const PREVIEW_MAX_CHARS = 400;
+const PREVIEW_MAX_LINE_CHARS = 120;
+
+/** `- old` / `+ new` lines for one side of a change (an empty string contributes nothing). */
+function prefixedLines(prefix: "-" | "+", value: string): string[] {
+  if (value.length === 0) return [];
+  return value.split("\n").map((line) => {
+    const clipped = line.length > PREVIEW_MAX_LINE_CHARS ? `${line.slice(0, PREVIEW_MAX_LINE_CHARS - 1)}…` : line;
+    return `${prefix} ${clipped}`;
+  });
+}
+
+/**
+ * Assemble a fenced preview block for a tool row, plus a
+ * `… N more lines, N more edits` tail covering everything the caps dropped.
+ *
+ * The char budget is enforced HERE (dropping trailing lines into the omitted
+ * count) rather than at the call sites, so a truncation notice can never push the
+ * block past its cap. `lines` is consumed; returns "" when nothing is left.
+ */
+function fencedPreview(lines: string[], omittedLines: number, omittedEdits: number): string {
+  if (lines.length === 0) return "";
+  let dropped = omittedLines;
+  const marker = (): string => {
+    const parts = [
+      dropped > 0 ? `${dropped} more line${dropped === 1 ? "" : "s"}` : "",
+      omittedEdits > 0 ? `${omittedEdits} more edit${omittedEdits === 1 ? "" : "s"}` : "",
+    ].filter(Boolean);
+    return parts.length > 0 ? `… ${parts.join(", ")}` : "";
+  };
+  while (lines.length > 1 && lines.join("\n").length + marker().length > PREVIEW_MAX_CHARS) {
+    lines.pop();
+    dropped += 1;
+  }
+  const tail = marker();
+  return `\n\n\`\`\`diff\n${lines.join("\n")}${tail ? `\n${tail}` : ""}\n\`\`\``;
+}
+
+/**
+ * Fenced diff preview of an `edit_file` call — one `- old` / `+ new` block per
+ * (capped) edit in the tool input. Rendered from the INPUT, deliberately not
+ * from `output.oldFile` / `output.newFile`: those are whole files, and the
+ * preview must already exist while the call is still awaiting approval.
+ */
+function formatEditDiff(part: ToolCallPart): string {
+  if (part.name !== "edit_file") return "";
+  const edits = parseInputJson(part)?.edits;
+  if (!Array.isArray(edits) || edits.length === 0) return "";
+
+  const lines: string[] = [];
+  let shown = 0;
+  let omittedEdits = 0;
+  let omittedLines = 0;
+  for (const raw of edits) {
+    if (shown >= PREVIEW_MAX_EDITS) {
+      omittedEdits += 1;
+      continue;
+    }
+    const edit = (raw ?? {}) as { oldString?: unknown; newString?: unknown };
+    const minus = prefixedLines("-", typeof edit.oldString === "string" ? edit.oldString : "");
+    const plus = prefixedLines("+", typeof edit.newString === "string" ? edit.newString : "");
+    if (minus.length === 0 && plus.length === 0) {
+      omittedEdits += 1;
+      continue;
+    }
+    omittedLines += Math.max(0, minus.length - PREVIEW_MAX_LINES_PER_SIDE);
+    omittedLines += Math.max(0, plus.length - PREVIEW_MAX_LINES_PER_SIDE);
+    lines.push(...minus.slice(0, PREVIEW_MAX_LINES_PER_SIDE), ...plus.slice(0, PREVIEW_MAX_LINES_PER_SIDE));
+    shown += 1;
+  }
+  return fencedPreview(lines, omittedLines, omittedEdits);
+}
+
+/**
+ * Fenced preview of a `write_file` call — the new content as `+` lines.
+ *
+ * write_file always replaces the WHOLE file and its input carries only the new
+ * content (no previous content), so this is an addition preview, not a diff: an
+ * overwrite shows what the file becomes, never what it was. Only the leading
+ * lines are shown (IM is a status feed, not a code reviewer), the rest rides the
+ * tail marker.
+ */
+function formatWritePreview(part: ToolCallPart): string {
+  if (part.name !== "write_file") return "";
+  const content = parseInputJson(part)?.content;
+  if (typeof content !== "string" || content.trim().length === 0) return "";
+  const lines = prefixedLines("+", content.endsWith("\n") ? content.slice(0, -1) : content);
+  return fencedPreview(lines.slice(0, WRITE_PREVIEW_MAX_LINES), lines.length - WRITE_PREVIEW_MAX_LINES, 0);
+}
+
+/**
+ * Content preview for the file-mutating tools whose effect the reviewer must see
+ * (`edit_file`, `write_file`) — "" for every other tool and for calls whose args
+ * are still streaming (nothing parsable yet).
+ */
+function formatToolPreview(part: ToolCallPart): string {
+  return formatEditDiff(part) || formatWritePreview(part);
+}
+
 function isFailedOutput(part: ToolCallPart): boolean {
   return (
     typeof part.output === "object" && part.output !== null && (part.output as { success?: boolean }).success === false
@@ -209,7 +323,7 @@ function errorExcerpt(part: ToolCallPart): string {
   return raw ? truncate(raw as string, ERROR_EXCERPT_LIMIT) : "";
 }
 
-/** Optional result hint (e.g. grep match count) appended after `✓`. */
+/** Optional result hint (e.g. grep match count) appended after `✅`. */
 function resultHint(part: ToolCallPart): string {
   if (part.name === "grep" && typeof part.output === "object" && part.output !== null) {
     const matches = (part.output as { matches?: unknown }).matches;
@@ -221,35 +335,39 @@ function resultHint(part: ToolCallPart): string {
 }
 
 /**
- * Status glyphs. `\uFE0E` (VARIATION SELECTOR-15) forces TEXT presentation so
- * `⏸`/`▶` render at the same size as the surrounding text instead of being
- * upgraded to a larger colored emoji by the client's emoji font.
+ * Status emoji — one emoji vocabulary for every tool row state, so the rows read
+ * the same on every Telegram client. `\uFE0F` (VARIATION SELECTOR-16) is the
+ * explicit EMOJI presentation for `⏸`/`▶` (without it clients fall back to the
+ * small text glyph). Running is `▶️` rather than `⏳` because `⏳` is the reply
+ * placeholder the first row claims.
  */
-const GLYPH_DONE = "✓";
-const GLYPH_FAILED = "✗";
-const GLYPH_AWAITING = "⏸\uFE0E";
-const GLYPH_RUNNING = "▶\uFE0E";
+const GLYPH_DONE = "✅";
+const GLYPH_FAILED = "❌";
+const GLYPH_AWAITING = "\u23F8\uFE0F";
+const GLYPH_RUNNING = "\u25B6\uFE0F";
 
-/** Compact status line for a tool call (`✓ run_command · $ pnpm build`). */
+/** Compact status line for a tool call (`✅ run_command · $ pnpm build`). */
 export function toolStatusLine(part: ToolCallPart): string {
   const label = toolLabel(part);
+  // A failed/denied edit or write mutates NOTHING on disk — a preview of the
+  // never-applied content would read as if it had landed, drowning out the error.
   if (part.approval?.approved === false) return `${GLYPH_FAILED} ${label} · denied`;
   if (part.output !== undefined) {
     if (part.state === "error" || isFailedOutput(part)) {
       const excerpt = errorExcerpt(part);
       return `${GLYPH_FAILED} ${label}${excerpt ? ` · ${excerpt}` : ""}`;
     }
-    return `${GLYPH_DONE} ${label}${resultHint(part)}`;
+    return `${GLYPH_DONE} ${label}${resultHint(part)}${formatToolPreview(part)}`;
   }
   if (part.approval?.needsApproval && part.approval.approved === undefined) {
-    return `${GLYPH_AWAITING} ${label} · awaiting approval`;
+    return `${GLYPH_AWAITING} ${label} · awaiting approval${formatToolPreview(part)}`;
   }
   // ask_user without options has no buttons — the only answer channel is a
   // plain reply, so say so on the row instead of a bare "running".
   if (part.name === ASK_USER_TOOL && askUserOptionCount(part) === 0) {
     return `${GLYPH_RUNNING} ${label} · reply with text`;
   }
-  return `${GLYPH_RUNNING} ${label}`;
+  return `${GLYPH_RUNNING} ${label}${formatToolPreview(part)}`;
 }
 
 function askUserOptionCount(part: ToolCallPart): number {
@@ -326,7 +444,7 @@ export function renderRunSegments(messages: UIMessage[]): RunSegment[] {
       } else if (isToolCallPart(part)) {
         // Only post an ask_user row once its args are complete — a mid-stream
         // part (args still arriving) would otherwise render as a bare
-        // `▶ ask_user` with no question and no buttons.
+        // `▶️ ask_user` with no question and no buttons.
         const pending =
           (part.name === ASK_USER_TOOL && part.state === "input-complete" && part.output === undefined) ||
           (part.approval?.needsApproval === true && part.approval.approved === undefined);

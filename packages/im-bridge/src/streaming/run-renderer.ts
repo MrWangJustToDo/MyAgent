@@ -245,7 +245,7 @@ export class RunRenderer {
   /**
    * Immediate feedback for an answered interaction (click or TTL expiry): drop
    * the buttons and show the outcome on the tool's own message right away —
-   * the run's own events re-render the line (running → ✓) when they arrive.
+   * the run's own events re-render the line (▶️ → ✅) when they arrive.
    * This is an interaction message, so the in-place edit is allowed.
    *
    * Returns whether the segment was found and settled (diagnostics: a `false`
@@ -413,7 +413,7 @@ export class RunRenderer {
       return;
     }
     // The only in-place edits: an interaction message progressing toward
-    // its terminal state (⏸ → running → ✓) and dropping its buttons. Edit only
+    // its terminal state (⏸️ → ▶️ → ✅) and dropping its buttons. Edit only
     // when the content or buttons actually changed (a done row already flush-
     // edited once must not re-edit every reconcile).
     if (segment.text === segment.lastText && segment.buttons === segment.lastButtons) return;
@@ -434,7 +434,7 @@ export class RunRenderer {
 
   /**
    * Edit an interaction row in place: show/hide buttons and update its status
-   * line (⏸ → running → ✓). Buttons are cleared once the row is done.
+   * line (⏸️ → ▶️ → ✅). Buttons are cleared once the row is done.
    */
   private async editSegment(segment: SegmentState): Promise<void> {
     const showButtons = !segment.done && segment.buttons !== undefined;

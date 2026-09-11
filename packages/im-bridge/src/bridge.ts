@@ -377,7 +377,7 @@ export class BridgeRuntime {
 
   /**
    * Register pending interactions as buttons ON their tool segment's message
-   * (the same message that shows `… · ⏸ awaiting approval`). Registration
+   * (the same message that shows `… · ⏸️ awaiting approval`). Registration
    * is synchronous before the renderer's post lands, so a button click can
    * never race the pending record's creation.
    */
@@ -588,7 +588,7 @@ export class BridgeRuntime {
 
   /** Row outcome label shown right after an answer. */
   private outcomeFor(record: PendingRecord, payload: NonNullable<ReturnType<typeof decodeButtonPayload>>): string {
-    if (record.pending.kind === "approval") return payload.a === "y" ? "✓ approved" : "✗ denied";
+    if (record.pending.kind === "approval") return payload.a === "y" ? "✅ approved" : "❌ denied";
     if (payload.a === "s") {
       const selected = this.pending.selectedOptions(record);
       return `▸ ${selected.length > 0 ? selected.join(", ") : "(no answer)"}`;
@@ -659,8 +659,8 @@ export class BridgeRuntime {
    */
   private settleInteractionRow(record: PendingRecord, outcome: string): void {
     const pending = record.pending;
-    // No leading state glyph here: the outcome already carries `✓`/`✗` (approval)
-    // or `▸` (answer), so a second glyph would just read as noise.
+    // No leading state glyph here: the outcome already carries the status emoji
+    // (✅/❌ for approvals) or `▸` (answer), so a second glyph would just read as noise.
     const line =
       pending.kind === "approval" ? `${pending.question} · ${outcome}` : `ask_user · ${pending.question} · ${outcome}`;
     const renderer = this.cycles.get(record.chatKey)?.renderer;
@@ -688,7 +688,7 @@ export class BridgeRuntime {
     try {
       // Row feedback is independent of session availability — buttons must
       // never linger on an expired interaction.
-      if (record.pending.kind === "approval") this.settleInteractionRow(record, "✗ denied (timed out)");
+      if (record.pending.kind === "approval") this.settleInteractionRow(record, "❌ denied (timed out)");
       else this.settleInteractionRow(record, "▸ (timed out)");
       const session = this.activeSessions.get(record.chatKey);
       if (!session) return;
