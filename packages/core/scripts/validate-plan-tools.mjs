@@ -12,6 +12,7 @@ import {
   PlanModeController,
   buildPlanModePlanningPrompt,
   buildPlanModeReadyPrompt,
+  createAgentEventBus,
   formatStructuredPlanMarkdown,
   isPlanModeForbiddenTool,
 } from "../dist/dev.mjs";
@@ -67,10 +68,10 @@ assert.match(deduped, /^3\. Third already doubled$/m);
 assert.doesNotMatch(deduped, /1\. 1\./);
 
 const events = [];
-const controller = new PlanModeController({
-  emitEvent: (type, data) => events.push({ type, data }),
-  getTodoManager: () => null,
-});
+const controller = new PlanModeController({ getTodoManager: () => null });
+const bus = createAgentEventBus();
+bus.on("*", (e) => events.push({ type: e.type, data: e.payload }));
+controller.setEventBus(bus);
 controller.enable();
 const applied = await controller.applyStructuredPlan({
   goal: "Ship feature",

@@ -22,7 +22,6 @@ import type {
   ExtensionInfo,
 } from "./types.js";
 import type { CoreEnv } from "../../env.js";
-import type { EmitAgentTelemetryFn } from "../../runtime-types/agent-events.js";
 import type { AgentEventBus } from "../agent-event-bus";
 import type { AgentLog } from "../agent-log/agent-log.js";
 
@@ -166,13 +165,10 @@ export interface ExtensionRunnerOptions {
    */
   getCoreEnv?: () => CoreEnv;
   /**
-   * Optional telemetry emitter. When provided, extension lifecycle failures
-   * (activate / deactivate) are emitted as `agent:extension-error` so they
-   * surface in AgentLog / lifecycle channels instead of being swallowed.
-   */
-  emitEvent?: EmitAgentTelemetryFn;
-  /**
-   * Scoped unified event bus backing extension interception. Defaults to a
+   * Scoped unified event bus backing extension interception and telemetry.
+   * Extension lifecycle failures (activate / deactivate) are emitted as
+   * `agent:extension-error` on it, surfacing in AgentLog / lifecycle channels
+   * via the Event→Log bridge instead of being swallowed. Defaults to a
    * standalone bus for hosts that build an {@link ExtensionRunner} without an agent.
    */
   eventBus?: AgentEventBus;
@@ -201,12 +197,15 @@ export class ExtensionRunner {
    */
   private disabledExtensionNotices = new Map<string, string>();
   private eventBus: BusExtensionEventBus;
+  /** Raw scoped bus (interception + telemetry) behind the extension-facing facade. */
+  private readonly rawBus: AgentEventBus;
   private ui: DefaultExtensionUI;
   private options: ExtensionRunnerOptions;
 
   constructor(options: ExtensionRunnerOptions) {
     this.options = options;
     const bus = options.eventBus ?? createAgentEventBus();
+    this.rawBus = bus;
     this.eventBus = new BusExtensionEventBus(bus);
     this.ui = new DefaultExtensionUI(bus);
   }
@@ -302,9 +301,9 @@ export class ExtensionRunner {
         const message = err instanceof Error ? err.message : String(err);
         // Converge into the agent log via the existing `agent:extension-error`
         // rule (error/system) rather than a bare console write; console stays
-        // as a fallback for standalone runners without an emitter.
-        if (this.options.emitEvent) {
-          this.options.emitEvent("agent:extension-error", {
+        // as a fallback for standalone runners without an injected bus.
+        if (this.options.eventBus) {
+          this.rawBus.emit("agent:extension-error", {
             extensionId: id,
             phase: "turn-context",
             error: message,
@@ -354,7 +353,7 @@ export class ExtensionRunner {
       instance.state = "error";
       instance.error = error;
       ctx.logger.error(`Failed to activate extension "${api.id}": ${error.message}`);
-      this.options.emitEvent?.("agent:extension-error", {
+      this.rawBus.emit("agent:extension-error", {
         extensionId: api.id,
         phase: "activate",
         error: error.message,
@@ -371,7 +370,7 @@ export class ExtensionRunner {
       } catch (err) {
         // Do not swallow: surface deactivation failures for observability.
         const error = err instanceof Error ? err : new Error(String(err));
-        this.options.emitEvent?.("agent:extension-error", {
+        this.rawBus.emit("agent:extension-error", {
           extensionId: instance.api.id,
           phase: "deactivate",
           error: error.message,

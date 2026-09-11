@@ -8,10 +8,8 @@ import assert from "node:assert/strict";
 
 import { PLAN_TODO_TITLE, PlanModeController, TodoManager, createAgentEventBus } from "../dist/dev.mjs";
 
-const events = [];
 const todoManager = new TodoManager();
 const controller = new PlanModeController({
-  emitEvent: (type, data) => events.push({ type, data }),
   getTodoManager: () => todoManager,
 });
 const bus = createAgentEventBus();
@@ -49,7 +47,6 @@ restoredTodos.restoreTodos(todos, { title, planBound });
 restoredTodos.setAutoClearEnabled(true); // would be dangerous without plan restore
 
 const restored = new PlanModeController({
-  emitEvent: (type, data) => events.push({ type, data }),
   getTodoManager: () => restoredTodos,
 });
 const restoredBus = createAgentEventBus();
@@ -80,7 +77,6 @@ assert.equal(restored.shouldAutoApproveTools(), false);
 const otherTodos = new TodoManager();
 otherTodos.update([{ content: "Keep me", status: "pending", priority: "medium" }], "Other");
 const clearCtrl = new PlanModeController({
-  emitEvent: () => {},
   getTodoManager: () => otherTodos,
 });
 clearCtrl.restoreState(null);
@@ -89,7 +85,6 @@ assert.equal(otherTodos.getItems().length, 1);
 
 // Stuck executing without seeded todos must not auto-approve.
 const stuck = new PlanModeController({
-  emitEvent: () => {},
   getTodoManager: () => new TodoManager(),
 });
 stuck.restoreState({

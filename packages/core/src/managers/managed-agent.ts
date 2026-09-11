@@ -415,7 +415,6 @@ export class ManagedAgent {
     });
 
     this.planMode = new PlanModeController({
-      emitEvent: (type, data) => this.emitEvent(type, data),
       getTodoManager: () => this.todoManager,
       onPhaseChange: () => {
         this.invalidateRunner();

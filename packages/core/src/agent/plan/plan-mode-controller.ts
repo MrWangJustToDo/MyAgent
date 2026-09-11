@@ -5,7 +5,6 @@ import { savePlanFile } from "./plan-store.js";
 import { extractGoalFromPlanMarkdown } from "./plan-summary.js";
 import { parseVerificationItemsFromPlanMarkdown } from "./plan-verification.js";
 
-import type { EmitAgentTelemetryFn } from "../../runtime-types/agent-events.js";
 import type { AgentEventBus } from "../agent-event-bus";
 import type { TodoManager } from "../todo/todo-manager.js";
 
@@ -28,7 +27,6 @@ export interface PlanModeState {
 }
 
 export interface PlanModeControllerDeps {
-  emitEvent: EmitAgentTelemetryFn;
   getTodoManager: () => TodoManager | null;
   /** Invalidate runner / notify UI when phase changes. */
   onPhaseChange?: () => void;
@@ -68,7 +66,7 @@ export class PlanModeController {
   private planFilePath: string | null = null;
   private todoUnsub: (() => void) | null = null;
 
-  /** Unified event bus for the owning agent (session `plan` projection). */
+  /** Unified event bus for the owning agent (session `plan` projection + telemetry). */
   private eventBus?: AgentEventBus;
 
   constructor(private readonly deps: PlanModeControllerDeps) {}
@@ -171,7 +169,7 @@ export class PlanModeController {
     this.todosSeeded = false;
     this.preservedExistingTodos = false;
     this.planFilePath = null;
-    this.deps.emitEvent("plan:enter", { phase: this.phase });
+    this.eventBus?.emit("plan:enter", { phase: this.phase });
     this.notifyChange();
   }
 
@@ -186,7 +184,7 @@ export class PlanModeController {
     this.todosSeeded = false;
     this.preservedExistingTodos = false;
     this.planFilePath = null;
-    this.deps.emitEvent("plan:exit", { phase: this.phase });
+    this.eventBus?.emit("plan:exit", { phase: this.phase });
     this.notifyChange();
   }
 
@@ -199,7 +197,7 @@ export class PlanModeController {
       return { ok: false, error: "Plan mode is already off" };
     }
     const fromPhase = this.phase;
-    this.deps.emitEvent("plan:complete", {
+    this.eventBus?.emit("plan:complete", {
       phase: fromPhase,
       planFilePath: this.planFilePath,
       stepCount: this.steps.length,
@@ -223,7 +221,7 @@ export class PlanModeController {
     this.detachTodoListener();
     this.setPlanTodoAutoClear(false);
     this.phase = "ready";
-    this.deps.emitEvent("plan:cancel-execution", {
+    this.eventBus?.emit("plan:cancel-execution", {
       phase: this.phase,
       stepCount: this.steps.length,
     });
@@ -247,7 +245,7 @@ export class PlanModeController {
     this.phase = "executing";
     this.setPlanTodoAutoClear(false);
     this.attachTodoListener();
-    this.deps.emitEvent("plan:execute", {
+    this.eventBus?.emit("plan:execute", {
       phase: this.phase,
       stepCount: this.steps.length,
       replacedExistingTodos: replacedExisting,
@@ -343,7 +341,7 @@ export class PlanModeController {
 
     if (this.phase === "planning") {
       this.phase = "ready";
-      this.deps.emitEvent("plan:ready", {
+      this.eventBus?.emit("plan:ready", {
         phase: this.phase,
         stepCount: this.steps.length,
         preservedExistingTodos: skippedDueToExisting,
@@ -439,7 +437,7 @@ export class PlanModeController {
     todoManager.setPlanBound(true);
     this.todosSeeded = true;
     if (replacedExisting) {
-      this.deps.emitEvent("plan:todo-replaced", { stepCount: this.steps.length });
+      this.eventBus?.emit("plan:todo-replaced", { stepCount: this.steps.length });
     }
     return { seeded: true, skippedDueToExisting: false, replacedExisting };
   }
@@ -487,7 +485,7 @@ export class PlanModeController {
     if (!todoManager.isAllCompleted()) return;
 
     this.phase = "retro";
-    this.deps.emitEvent("plan:retro", {
+    this.eventBus?.emit("plan:retro", {
       phase: this.phase,
       stepCount: this.steps.length,
       planFilePath: this.planFilePath,

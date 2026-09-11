@@ -49,10 +49,10 @@ assert.match(retro, /\.agents\/plans\/x\.md/);
 const events = [];
 const todoManager = new TodoManager();
 const controller = new PlanModeController({
-  emitEvent: (type, data) => events.push({ type, data }),
   getTodoManager: () => todoManager,
 });
 const bus = createAgentEventBus();
+bus.on("*", (e) => events.push({ type: e.type, data: e.payload }));
 todoManager.setEventBus(bus);
 controller.setEventBus(bus);
 
@@ -95,10 +95,7 @@ assert.ok(events.some((e) => e.type === "plan:exit"));
 
 // Fresh controller: plan-bound source after seed
 const todo2 = new TodoManager();
-const c2 = new PlanModeController({
-  emitEvent: () => {},
-  getTodoManager: () => todo2,
-});
+const c2 = new PlanModeController({ getTodoManager: () => todo2 });
 const bus2 = createAgentEventBus();
 todo2.setEventBus(bus2);
 c2.setEventBus(bus2);
@@ -117,10 +114,7 @@ assert.equal(todo2.getSource(), "plan");
 // still executing. Plan identity must be tracked via plan-bound/source, NOT the
 // title string, or the lifecycle is stuck on `building n/m` forever.
 const todo3 = new TodoManager();
-const c3 = new PlanModeController({
-  emitEvent: () => {},
-  getTodoManager: () => todo3,
-});
+const c3 = new PlanModeController({ getTodoManager: () => todo3 });
 const bus3 = createAgentEventBus();
 todo3.setEventBus(bus3);
 c3.setEventBus(bus3);

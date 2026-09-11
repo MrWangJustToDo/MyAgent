@@ -25,7 +25,6 @@ import { resolveTextAdapterForManaged } from "./run-agent.js";
 
 import type { AgentManager } from "./agent-manager.js";
 import type { SessionBootstrapContext } from "./session-bootstrap-events.js";
-import type { AgentEvent } from "../agent/agent-event-bus";
 import type { AnyServerTool } from "@tanstack/ai";
 
 export interface BuildManagedAgentResult {
@@ -37,7 +36,6 @@ export interface BuildManagedAgentOptions {
   config: ManagedAgentConfig;
   parentId?: string;
   manager: AgentManager;
-  emit: (event: AgentEvent) => void;
   getDefaultSkillDirs: () => Promise<string[]>;
 }
 
@@ -49,7 +47,6 @@ export async function buildManagedAgent({
   config,
   parentId,
   manager,
-  emit,
   getDefaultSkillDirs,
 }: BuildManagedAgentOptions): Promise<BuildManagedAgentResult> {
   const {
@@ -82,8 +79,8 @@ export async function buildManagedAgent({
   const toolsRecord: ToolsRecord = { ...(await createTools({ usage: managed.usage })) };
   managed.tools = toolsRecord;
   managed.resolveTextAdapter = () => resolveTextAdapterForManaged(managed);
-  managed.dispatchEvent = emit;
-  // Scoped unified event bus for this agent (session channel projections + retains).
+  // Scoped unified event bus for this agent. Routes session-channel projections
+  // AND telemetry `dispatchEvent` (up-flows to the root observer / Event→Log bridge).
   managed.setEventBus(manager.of(managed.id, parentId));
 
   if (resolvedModelInfo) {
@@ -182,9 +179,9 @@ export async function buildManagedAgent({
       onUnregisterCommand: (name) => managed.unregisterExtensionCommand(name),
       cwd: fsRootPath,
       getCoreEnv: () => getEnv(),
-      // Scoped unified bus backing extension interception (hook names unchanged).
+      // Scoped unified bus backing extension interception (hook names unchanged)
+      // and extension telemetry (`agent:extension-error`).
       eventBus: manager.of(managed.id, parentId),
-      emitEvent: (type, data) => managed.emitEvent(type, data),
       // Converge extension logging (`ctx.logger`, turn-context provider
       // failures) into the agent's structured log.
       log,

@@ -10,7 +10,7 @@ import { emitSessionBootstrapEvents } from "./session-bootstrap-events.js";
 import { bridgeTelemetryToAgentLog } from "./telemetry/event-log-bridge.js";
 
 import type { ManagedAgent, ManagedAgentConfig } from "./managed-agent.js";
-import type { AgentEvent, AgentEventListener, AgentEventBus, AgentEventType } from "../agent/agent-event-bus";
+import type { AgentEventListener, AgentEventBus, AgentEventType } from "../agent/agent-event-bus";
 import type { ResumeResult, SessionData } from "../agent/persistence/types.js";
 import type { ToolsRecord } from "../agent/tools/runtime/tools-record.js";
 import type { StreamChunk } from "@tanstack/ai";
@@ -134,18 +134,6 @@ export class AgentManager {
     return bus;
   }
 
-  /**
-   * Emit an agent event.
-   * @internal Agent code should use `emitAgentTelemetry()` / `agent.emitEvent()` instead.
-   */
-  emit(event: AgentEvent): void {
-    this.eventBus.emit(event.type, event.payload, {
-      agentId: event.agentId,
-      ...(event.parentId !== undefined ? { parentId: event.parentId } : {}),
-      ...(event.sessionId !== undefined ? { sessionId: event.sessionId } : {}),
-    });
-  }
-
   // ============================================================================
   // Agent Lifecycle
   // ============================================================================
@@ -158,7 +146,6 @@ export class AgentManager {
       config,
       parentId,
       manager: this,
-      emit: (event) => this.emit(event),
       getDefaultSkillDirs,
     });
 
