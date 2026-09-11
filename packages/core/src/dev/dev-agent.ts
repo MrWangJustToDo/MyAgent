@@ -142,6 +142,7 @@ export type { RelevantMemory } from "../agent/memory/memory-retrieval.js";
 export {
   DEFAULT_SUMMARIZATION_CONTEXT_WINDOW,
   SUMMARY_OUTPUT_CAP,
+  measureSerializedTokens,
   resolveSummarizationBudget,
   resolveSummarizationInputBudget,
   splitMessagesByTokenBudget,

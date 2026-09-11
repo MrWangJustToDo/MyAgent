@@ -3,7 +3,7 @@
  */
 
 import { buildToolCallNameMap } from "./message-utils.js";
-import { serializedMessageChars } from "./serialize-conversation.js";
+import { measureSerializedConversationChars, serializedMessageChars } from "./serialize-conversation.js";
 
 import type { AgentManager } from "../../runtime-types/hosts.js";
 import type { ModelMessage } from "@tanstack/ai";
@@ -111,4 +111,17 @@ export function splitMessagesByTokenBudget(messages: ModelMessage[], maxTokens: 
   }
 
   return batches;
+}
+
+/**
+ * Serialized-size tokens for a message list — the same truncated, label-inclusive
+ * measure {@link splitMessagesByTokenBudget} uses to size a summarizer prompt.
+ *
+ * Exposed for observability: logging this alongside the raw
+ * `estimateTokens` makes the wire-vs-prompt gap (full tool output vs the
+ * truncated prompt actually sent) visible at compact time.
+ */
+export function measureSerializedTokens(messages: ModelMessage[]): number {
+  const chars = measureSerializedConversationChars(messages);
+  return chars > 0 ? Math.ceil(chars / SUMMARIZATION_CHARS_PER_TOKEN) : 0;
 }

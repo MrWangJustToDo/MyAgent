@@ -27,6 +27,7 @@ import { extractFileOpsFromMessages, formatFileOperations } from "./file-ops-tra
 import { resolveAutoCompactTrigger, resolveKeepPolicy } from "./keep-policy.js";
 import { buildSegmentedConversationText, serializeConversation } from "./serialize-conversation.js";
 import {
+  measureSerializedTokens,
   resolveSummarizationInputBudget,
   resolveSummarizationBudget,
   splitMessagesByTokenBudget,
@@ -38,8 +39,22 @@ import { maybeAppendCompactArchive } from "./write-compact-archive.js";
 
 import type { CompactionTodoItem } from "./compaction-prompt.js";
 import type { CompactionConfig, CompactionResult } from "./types.js";
+import type { AgentLog } from "../agent-log/agent-log.js";
 import type { AgentManager } from "../../runtime-types/hosts.js";
 import type { ModelMessage } from "@tanstack/ai";
+
+/**
+ * Resolve the parent agent's log for observability, tolerating managers that
+ * expose no logger or throw from `getAgent` (e.g. the no-op validation harness).
+ * Logging must never change compaction behaviour.
+ */
+function resolveCompactionLog(manager: AgentManager, parentAgentId: string): AgentLog | null {
+  try {
+    return manager.getAgent(parentAgentId)?.getLog() ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export { extractExistingSummary, findCutPointByBudget, type BudgetedCutPointResult } from "./cut-point.js";
 
@@ -174,6 +189,20 @@ export async function summarizeConversation(
   const stillTokens = stillInContext?.length ? estimateTokens(stillInContext) : 0;
   const compressBudget = Math.max(SUMMARIZATION_OVERHEAD_TOKENS, inputBudget - stillTokens);
   const batches = splitMessagesByTokenBudget(cleanMessages, compressBudget);
+
+  // Decision-side observability: the segment count is driven by the *serialized*
+  // prompt size vs. the resolved budget. Log both that measure and the raw
+  // `estimateTokens` so a wire-vs-prompt gap (full tool output vs. truncated
+  // prompt) that over-splits is visible without reconstructing it from subagent logs.
+  resolveCompactionLog(manager, parentAgentId)?.debug("compaction", "Summarizer segment split", {
+    inputBudget,
+    stillTokens,
+    compressBudget,
+    estimatedTokens: estimateTokens(cleanMessages),
+    serializedTokens: measureSerializedTokens(cleanMessages),
+    segments: batches.length,
+    segmentTokens: batches.map((batch) => measureSerializedTokens(batch)),
+  });
 
   if (batches.length <= 1) {
     return summarizeConversationBatch(cleanMessages, parentAgentId, manager, {
@@ -389,6 +418,23 @@ export async function autoCompact(
   // context.messages" by subtracting the summary message offset. This makes
   // applyCompactionResult's `absoluteCut = oldCompactIndex + cutIndex` correct.
   const cutIndex = llmCutIndex - summaryOffset;
+
+  // Decision-side observability: record the cut plan and the size of the slice
+  // handed to the summarizer. `estimatedTokens` (raw wire) vs `serializedTokens`
+  // (truncated prompt) exposes why a single pass may split into segments.
+  resolveCompactionLog(manager, parentAgentId)?.debug("compaction", "Auto-compact cut plan", {
+    tokensBefore,
+    triggerAt: resolveAutoCompactTrigger(config, contextWindow).triggerAt,
+    keepRecentTokens: policy.keepRecentTokens,
+    cutIndex,
+    turnStartIndex,
+    splitTurn,
+    historyToSummarize: historyToSummarize.length,
+    turnPrefixMessages: turnPrefixMessages.length,
+    keptMessages: keptMessages.length,
+    estimatedTokens: estimateTokens(toSummarize),
+    serializedTokens: measureSerializedTokens(toSummarize),
+  });
 
   try {
     // If there's a previous summary, pass it for incremental update.

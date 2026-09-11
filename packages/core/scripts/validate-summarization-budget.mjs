@@ -4,6 +4,7 @@ import {
   DEFAULT_SUMMARIZATION_CONTEXT_WINDOW,
   SUMMARY_OUTPUT_CAP,
   measureSerializedConversationChars,
+  measureSerializedTokens,
   resolveSummarizationBudget,
   resolveSummarizationInputBudget,
   resolveAutoCompactTrigger,
@@ -150,6 +151,36 @@ for (const [label, window, tokenThreshold, defaultMaxTokens] of [
   const batches = splitMessagesByTokenBudget(huge, 50_000);
   assert.ok(batches.length > 1, "an oversized serialized slice should still split");
   assert.equal(batches.flat().length, huge.length);
+}
+
+// ============================================================================
+// measureSerializedTokens — observability measure mirrors the splitter
+// ============================================================================
+
+// Same truncation-driven sizing as splitMessagesByTokenBudget, in tokens, so the
+// `serializedTokens` we log at compact time reflects the split decision.
+{
+  const toolCallId = "call_obs";
+  const slice = [
+    {
+      role: "assistant",
+      content: "read the file",
+      toolCalls: [{ id: toolCallId, type: "function", function: { name: "read_file", arguments: "{}" } }],
+    },
+    { role: "tool", toolCallId, content: "x".repeat(200_000) },
+  ];
+
+  const tokens = measureSerializedTokens(slice);
+  // 200k chars truncate to TOOL_RESULT_MAX_CHARS (2k) → a handful of tokens.
+  assert.ok(tokens < 5_000, `serialized token measure should truncate tool output (got ${tokens})`);
+  // Parity with the char measure used by the splitter (ceil(chars / 4)).
+  assert.equal(tokens, Math.ceil(measureSerializedConversationChars(slice) / 4));
+  // The logged measure agrees with the split decision (within rounding slack).
+  assert.equal(splitMessagesByTokenBudget(slice, tokens * 2).length, 1, "logged measure fits one batch");
+  assert.ok(
+    splitMessagesByTokenBudget(slice, Math.floor(tokens / 2)).length > 1,
+    "budget below the logged measure → split"
+  );
 }
 
 console.log("summarization-budget validation passed");
