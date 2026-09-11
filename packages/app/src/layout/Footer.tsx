@@ -1,30 +1,19 @@
 import { Box, Text } from "ink";
-import { useEffect, useState } from "react";
-import { toRaw } from "reactivity-store";
 
 import { AutocompleteList } from "../components/AutocompleteList.js";
 import { CommandOutput } from "../components/CommandOutput.js";
 import { FullBox } from "../components/FullBox.js";
-import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
-import { LLMUsage } from "../components/LLMUsage.js";
 import { SelectList } from "../components/SelectList.js";
-import { Spinner } from "../components/Spinner.js";
-import { UserInput } from "../components/UserInput.js";
-import { useAgentUsage } from "../hooks/use-agent-usage.js";
-import { useAgent } from "../hooks/use-agent.js";
-import { useConfig } from "../hooks/use-config.js";
-import { useExtensionUI } from "../hooks/use-extension-ui.js";
 import { useInputMode } from "../hooks/use-input-mode.js";
 import { useSelect } from "../hooks/use-select.js";
 import { useThinkingLine } from "../hooks/use-thinking-line.js";
-import { useUserInput } from "../hooks/use-user-input.js";
 import { BG, COLORS } from "../theme/colors.js";
-import { formatStatusBarModeLabel } from "../utils/agent-mode-label.js";
-import { formatDuration } from "../utils/format.js";
-import { approvalKeysHint, busyQueueHint, freeformSubmitHint, selectListHint } from "../utils/keyboard-labels.js";
-import { formatRetryStatus } from "../utils/retry-status.js";
 
-import type { AgentRetryState, AgentStatus, QueuedMessagesSnapshot } from "@my-agent/core";
+import { FooterContextBar } from "./FooterContextBar.js";
+import { FooterInput } from "./FooterInput.js";
+import { FooterStatusBar } from "./FooterStatusBar.js";
+
+import type { AgentStatus, QueuedMessagesSnapshot } from "@my-agent/core";
 
 export const Footer = ({
   status,
@@ -92,8 +81,7 @@ export const Footer = ({
         width="full"
       />
 
-      {/* Context info bar — above input, no border */}
-      <ContextBar
+      <FooterContextBar
         status={displayStatus}
         isPendingApproval={isPendingApproval}
         showFreeformInput={showFreeformInput}
@@ -106,34 +94,12 @@ export const Footer = ({
         saveError={saveError}
       />
 
-      {/* Input */}
-      <HalfLinePaddedBox backgroundColor={BG.input}>
-        <Box flexDirection="row">
-          <Box flexShrink={0}>
-            {showFreeformInput ? (
-              <Text color={COLORS.warning} bold>
-                {" "}
-                {freeformLabel}
-              </Text>
-            ) : (
-              <Text color={COLORS.accent} bold>
-                {" > "}
-              </Text>
-            )}
-          </Box>
-          {isInputEnabled && !showSelectList ? (
-            <UserInput />
-          ) : isInputEnabled && showSelectList ? (
-            <Text color={COLORS.muted} dimColor>
-              Use arrows to select
-            </Text>
-          ) : (
-            <Text color={COLORS.muted} dimColor>
-              Processing...
-            </Text>
-          )}
-        </Box>
-      </HalfLinePaddedBox>
+      <FooterInput
+        showFreeformInput={showFreeformInput}
+        freeformLabel={freeformLabel}
+        isInputEnabled={isInputEnabled}
+        showSelectList={showSelectList}
+      />
 
       {/* Command output panel (e.g. /help, /mcp) */}
       <CommandOutput />
@@ -145,215 +111,7 @@ export const Footer = ({
       {!showSelectList && isInputEnabled && <AutocompleteList />}
 
       {/* Bottom status bar — mode, usage, model */}
-      <StatusBar />
+      <FooterStatusBar />
     </FullBox>
-  );
-};
-
-/**
- * Context info bar above the input — shows status, shortcuts, todos.
- */
-
-/** Live LLM-retry visibility — single compact line (attempt counts + wait). */
-const RetryStatus = ({ retry }: { retry: AgentRetryState }) => {
-  return <Spinner text={formatRetryStatus(retry)} />;
-};
-
-const ContextBar = ({
-  status,
-  isPendingApproval,
-  showFreeformInput,
-  showSelectList,
-  isMultiSelect,
-  cursorOnFreeform,
-  isAgentBusy,
-  steerCount,
-  followUpCount,
-  saveError,
-}: {
-  status: AgentStatus;
-  isPendingApproval: boolean;
-  showFreeformInput: boolean;
-  showSelectList: boolean;
-  isMultiSelect: boolean;
-  cursorOnFreeform: boolean;
-  isAgentBusy: boolean;
-  steerCount: number;
-  followUpCount: number;
-  saveError?: string;
-}) => {
-  // Prefer session snapshot for duration / error (no ManagedAgent).
-  const session = toRaw(useAgent((s) => s.session));
-  const [agentTick, setAgentTick] = useState(0);
-  useEffect(() => {
-    if (!session) return;
-    return session.subscribe(
-      () => {
-        setAgentTick((n) => n + 1);
-      },
-      { channels: ["state"] }
-    );
-  }, [session]);
-  const snap = agentTick >= 0 ? session?.getSnapshot() : undefined;
-  const lastRunDurationMs = snap?.lastStreamDurationMs || 0;
-  const _error = snap?.error || "";
-  const retry = snap?.retry;
-
-  const inputError = useUserInput((s) => s.inputError);
-  const inputFeedback = useUserInput((s) => s.inputFeedback);
-  const extStatus = useExtensionUI((s) => s.statusText);
-
-  const error = _error || inputError;
-
-  const showSaveError = saveError && status !== "error" && status !== "aborted" && status !== "completed";
-
-  return (
-    <Box flexDirection="column" paddingX={1} gap={0}>
-      <Box gap={2}>
-        <Box gap={2} flexShrink={0}>
-          {/* Status indicator */}
-          {status === "running" && (!retry || retry.strategy === "reactive_compact") && <Spinner text="Running..." />}
-          {status === "thinking" && (!retry || retry.strategy === "reactive_compact") && <Spinner text="Thinking..." />}
-          {status === "responding" && (!retry || retry.strategy === "reactive_compact") && (
-            <Spinner text="Responding..." />
-          )}
-          {status === "awaiting_user" && (
-            <Text color={COLORS.primary} bold>
-              Waiting
-            </Text>
-          )}
-          {status === "compacting" && <Spinner text="Compacting..." />}
-          {status === "completed" && (
-            <Text color={COLORS.success}>
-              {`Completed${lastRunDurationMs > 0 ? ` in ${formatDuration(lastRunDurationMs)}` : ""}`}
-            </Text>
-          )}
-          {status === "aborted" && (
-            <Text color={COLORS.muted} dimColor>
-              Aborted
-            </Text>
-          )}
-          {status === "waiting" && (
-            <Text color={COLORS.warning} bold>
-              Waiting
-            </Text>
-          )}
-          {status === "idle" && (
-            <Text color={COLORS.muted} dimColor>
-              Ready
-            </Text>
-          )}
-          {status === "error" && <Text color={COLORS.danger}>{error}</Text>}
-
-          {/* LLM retry visibility — attempt counts + triggering error */}
-          {retry && status !== "error" && status !== "aborted" && status !== "completed" && status !== "idle" && (
-            <RetryStatus retry={retry} />
-          )}
-
-          {inputFeedback && status !== "error" && (
-            <Text
-              color={
-                inputFeedback.level === "error"
-                  ? COLORS.danger
-                  : inputFeedback.level === "success"
-                    ? COLORS.success
-                    : COLORS.primary
-              }
-              dimColor={inputFeedback.level === "info"}
-            >
-              {inputFeedback.message}
-            </Text>
-          )}
-
-          {showSaveError && <Text color={COLORS.warning}>Save failed: {saveError}</Text>}
-
-          {extStatus && status === "idle" && (
-            <Text color={COLORS.muted} dimColor>
-              {extStatus}
-            </Text>
-          )}
-
-          {/* Contextual shortcuts */}
-          {isAgentBusy && !isPendingApproval && !showFreeformInput && !showSelectList && (
-            <Text color={COLORS.muted} dimColor>
-              {busyQueueHint(steerCount, followUpCount)}
-            </Text>
-          )}
-          {(steerCount > 0 || followUpCount > 0) && !isAgentBusy && !isPendingApproval && (
-            <Text color={COLORS.primary} dimColor>
-              Queued: {steerCount > 0 ? `${steerCount} steer` : ""}
-              {steerCount > 0 && followUpCount > 0 ? ", " : ""}
-              {followUpCount > 0 ? `${followUpCount} follow-up` : ""}
-            </Text>
-          )}
-          {isPendingApproval && !showFreeformInput && (
-            <Text color={COLORS.warning} dimColor>
-              {approvalKeysHint()}
-            </Text>
-          )}
-          {showFreeformInput && (
-            <Text color={COLORS.warning} dimColor>
-              {freeformSubmitHint()}
-            </Text>
-          )}
-          {showSelectList && (
-            <Text color={COLORS.primary} dimColor>
-              {selectListHint({ multiSelect: isMultiSelect, cursorOnFreeform })}
-            </Text>
-          )}
-        </Box>
-      </Box>
-    </Box>
-  );
-};
-
-/**
- * Bottom status bar — mode, usage, model.
- */
-const StatusBar = () => {
-  const model = useConfig((s) => s.config.serverModel || s.config.model);
-  const { version } = useAgentUsage();
-  const session = toRaw(useAgent((s) => s.session));
-  const [tick, setTick] = useState(0);
-
-  useEffect(() => {
-    if (!session) return;
-    return session.subscribe(
-      () => {
-        setTick((n) => n + 1);
-      },
-      // `mode` keeps remote snapshot.mode/autoMode fresh (local sessions re-read
-      // getSnapshot() live; remote caches only update via the mode channel).
-      { channels: ["state", "plan", "todos", "mode"] }
-    );
-  }, [session]);
-
-  // tick forces re-read when plan phase / auto mode / todos change
-  void tick;
-
-  const modeLabel = formatStatusBarModeLabel(session?.getSnapshot());
-  const isDefault = modeLabel === "Normal";
-  const modeColor = isDefault ? COLORS.muted : COLORS.accent;
-
-  return (
-    <Box justifyContent="space-between" paddingX={1}>
-      <Box gap={2} flexShrink={1}>
-        <Text color={modeColor} dimColor={isDefault} bold={!isDefault} wrap="truncate">
-          {modeLabel}
-        </Text>
-      </Box>
-
-      <Box gap={2} flexShrink={0}>
-        {/* key=version: remount only when session identity changes (resume/
-            clear/compact bump it), so AnimateNumber snaps to the new total
-            without animating across session boundaries. */}
-        <LLMUsage key={version} />
-        {model && (
-          <Text color={COLORS.muted} dimColor wrap="truncate">
-            {model}
-          </Text>
-        )}
-      </Box>
-    </Box>
   );
 };
