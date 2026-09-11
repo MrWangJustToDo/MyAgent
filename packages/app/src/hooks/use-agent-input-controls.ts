@@ -99,9 +99,18 @@ export function useAgentInputControls({
     }
   }, [allPendingApproval.length, denyMode, isSelectVisible, setMode]);
 
+  const askUserToolCallId = pendingAskUser?.toolCallId;
+  const clientToolWaitingRef = useRef(false);
   useEffect(() => {
-    setClientToolWaiting(!!pendingAskUser);
-  }, [pendingAskUser, setClientToolWaiting]);
+    // Depend on the stable toolCallId (not the pending object — fresh
+    // interaction snapshots change its reference every emit) and dispatch only
+    // when the boolean flips, so repeated interaction events cannot re-trigger
+    // setClientToolWaiting and feed an app↔core emit loop.
+    const waiting = !!askUserToolCallId;
+    if (clientToolWaitingRef.current === waiting) return;
+    clientToolWaitingRef.current = waiting;
+    setClientToolWaiting(waiting);
+  }, [askUserToolCallId, setClientToolWaiting]);
 
   const submitAskUserAnswer = (answer: string, meta?: { selected?: string[]; draft?: string }) => {
     if (!pendingAskUser) return;

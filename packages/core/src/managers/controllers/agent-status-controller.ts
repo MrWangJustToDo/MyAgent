@@ -216,7 +216,11 @@ export class AgentStatusController {
 
   setClientToolWaiting(active: boolean): void {
     if (active) {
-      if (this.deps.getStatus() !== "waiting") {
+      // Idempotent guard: the app re-dispatches while an ask_user stays pending
+      // (fresh interaction snapshots change the pending object reference), so a
+      // same-value setStatus here would re-emit state + interactions and feed an
+      // infinite app↔core loop. Only transition when not already awaiting_user.
+      if (this.deps.getStatus() !== "awaiting_user") {
         this.deps.setStatus("awaiting_user", "client-tool-wait");
       }
       return;

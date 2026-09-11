@@ -55,6 +55,28 @@ assert.equal(managed.status, "awaiting_user");
 managed.setClientToolWaiting(false);
 assert.equal(managed.status, "completed");
 
+// Regression: while already awaiting_user, a repeated setClientToolWaiting(true)
+// must be a no-op (no setStatus → no re-emit). The app re-dispatches whenever a
+// fresh interaction snapshot changes the pending ask_user object reference; an
+// unguarded re-emit here fed an infinite app↔core loop.
+{
+  let setStatusCalls = 0;
+  const controller = createAgentStatusController({
+    getStatus: () => "awaiting_user",
+    setStatus: () => {
+      setStatusCalls++;
+    },
+    getError: () => "",
+    setError: () => {},
+    setPendingApprovalCount: () => {},
+    emitEvent: () => {},
+  });
+  controller.setClientToolWaiting(true);
+  assert.equal(setStatusCalls, 0);
+  controller.setClientToolWaiting(false);
+  assert.equal(setStatusCalls, 1); // false path still transitions awaiting_user → completed
+}
+
 managed.setStatus("running");
 managed.syncRunStatusFromUIMessages([
   {
