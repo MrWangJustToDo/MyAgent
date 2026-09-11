@@ -82,3 +82,33 @@ export async function applyModelSelection(
   useConfig.getActions().selectModel(entryIndex, model, entry);
   return { ok: true };
 }
+
+/**
+ * Re-link a session's persisted model to its provider connection.
+ *
+ * Shared by the session-switch effect (fresh agent session created with
+ * `--resume <id>`) and the `state`-channel watcher in `useAgentChat` (in-place
+ * resume via `session.resume`, which keeps the agent session identity so the
+ * effect never re-runs). Resolves `model` against any models.json entry and
+ * applies it through {@link applyModelSelection}; unknown models or a missing
+ * models.json return false and are left to the core-side adoption.
+ *
+ * Idempotent for repeated calls with the same model: non-`session` entries skip
+ * the dispatch when the live config already shows that model (e.g. a `/models`
+ * switch that already applied it). `session` entries always re-dispatch — their
+ * connection is server-owned and the agent server only re-resolves it on an
+ * explicit `model.set`.
+ */
+export async function relinkSessionModel(session: AgentSession, model: string): Promise<boolean> {
+  const state = getLoadedModelsState();
+  const entryIndex = state ? findModelEntry(state, model) : -1;
+  const entry = state && entryIndex >= 0 ? state.entries[entryIndex] : undefined;
+  if (!state || !entry) return false;
+
+  const liveConfig = useConfig.getReadonlyState().config;
+  const alreadyLinked = model === (liveConfig.serverModel || liveConfig.model);
+  if (entry.type !== "session" && alreadyLinked) return false;
+
+  const result = await applyModelSelection(session, state, entryIndex, model);
+  return result.ok;
+}

@@ -5,7 +5,7 @@ import { toRaw } from "reactivity-store";
 
 import { bindAgentSession } from "../adapter/create-agent.js";
 import { useAdapter } from "../context/adapter-context.js";
-import { applyModelSelection, findModelEntry, getLoadedModelsState } from "../utils/apply-model-selection.js";
+import { relinkSessionModel } from "../utils/apply-model-selection.js";
 import { clearFlatMessageCache } from "../utils/message-flat-cache.js";
 import { getActiveHost, resolveAgentSession } from "../utils/session-resolve.js";
 import { handleToolLifecycleEvent } from "../utils/tool-timing-store.js";
@@ -13,7 +13,6 @@ import { handleToolLifecycleEvent } from "../utils/tool-timing-store.js";
 import { useAgentStatus } from "./use-agent-status.js";
 import { useAgent } from "./use-agent.js";
 import { useCallbackRef } from "./use-callback-ref.js";
-import { useConfig } from "./use-config.js";
 import { useForceUpdate } from "./use-force-update.js";
 import { useThinkingLine } from "./use-thinking-line.js";
 import { getWorkSpaceInfo } from "./use-workspace-info.js";
@@ -154,6 +153,10 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   const forceUpdate = useForceUpdate({ time: 100 });
   const initIdRef = useRef(0);
+  // Last model seen on the session/state channels that has been relinked — dedupes
+  // the state-channel watcher against the session-switch effect and repeated
+  // state events for the same model.
+  const relinkedModelRef = useRef<string | null>(null);
 
   useEffect(() => {
     const currentInitId = ++initIdRef.current;
@@ -228,18 +231,10 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
     // status surfaces (footer/help/usage) in sync. Unknown models, or no
     // models.json at all, are left to the core-side adoption.
     if (snap.model) {
-      const state = getLoadedModelsState();
-      const entryIndex = state ? findModelEntry(state, snap.model) : -1;
-      const entry = state && entryIndex >= 0 ? state.entries[entryIndex] : undefined;
-      if (state && entry) {
-        const liveConfig = useConfig.getReadonlyState().config;
-        const alreadyLinked = snap.model === (liveConfig.serverModel || liveConfig.model);
-        // `session` entries always re-dispatch: their connection is server-owned and
-        // the agent server only re-resolves it on an explicit `model.set`.
-        if (entry.type === "session" || !alreadyLinked) {
-          void applyModelSelection(session, state, entryIndex, snap.model);
-        }
-      }
+      // Record it so the state-channel watcher below skips the same model (the
+      // snapshot and the subsequent state event both carry it).
+      relinkedModelRef.current = snap.model;
+      void relinkSessionModel(session, snap.model);
     }
   }, [session]);
 
@@ -270,6 +265,17 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
           setStatus(event.payload.status);
           setAgentError(event.payload.error);
           setAgentStatus(event.payload.status);
+          // In-place resume (`session.resume`) swaps the disk session without
+          // changing the agent session identity, so the [session] effect never
+          // re-runs. The state channel re-emits the adopted model on every resume
+          // (refreshState), so watch it here to re-link the model connection.
+          // relinkSessionModel is idempotent (skips non-session entries already
+          // linked in the live config), so an echoed /models switch is a no-op.
+          const model = event.payload.model;
+          if (model && model !== relinkedModelRef.current) {
+            relinkedModelRef.current = model;
+            void relinkSessionModel(session, model);
+          }
           forceUpdate();
           return;
         }
