@@ -52,3 +52,14 @@
 - [x] 8.2 `appendLogLines` returns `false` when the env fs lacks the optional `appendFile`, and the caller ignored it — the save was silently dropped while the delta baseline still advanced (permanent no-op). Degrade to a full rewrite; assert the fallback writes and stays durable.
 - [x] 8.3 `doSave` read `session.uiMessages` after its first `await`, so a concurrent persist swapping the array could desync the fingerprints (duplicate appends). Snapshot the message list (and the derived `state` fields) before any await.
 - [x] 8.4 Document that legacy v4/v5 `.session.json` files are neither listed nor loaded (no migration).
+
+## 9. Follow-ups (second review pass)
+
+- [x] 9.1 The log's file name is the session identity: `list()` no longer substitutes a stale `state.id` (which made a copied/renamed log un-loadable) and `load()` normalizes to the requested id, so a later save writes back to the same file instead of creating a second one.
+- [x] 9.2 `load()`/`list()` refuse a log stamped with a newer schema version (`isSupportedSessionVersion`) instead of folding an unknown shape; older versions still fold.
+- [x] 9.3 `readLastState` doc comment corrected: the whole file is read (the env fs has no partial read) but only the newest line is parsed.
+- [x] 9.4 `getLatestEmpty()` scans for a user message (new `hasUserMessage`, stops at the first hit) instead of folding every candidate, and only folds the chosen session.
+- [x] 9.5 Restoring no longer re-accumulates `contextTokens` into lifetime usage: new `UsageTracker.setWindowUsage` sets the window without touching totals (the restored fill is already in the restored total).
+- [x] 9.6 A mode switch persists on its own — the auto-mode controller now emits **and** persists, and `enablePlanMode`/`disablePlanMode` persist — so a toggled mode survives without another turn.
+- [x] 9.7 Documented single-process ownership (in-process `acquireSessionOwnership` + `reservedAt` for empty sessions; concurrent writes from two processes are not guarded).
+- [x] 9.8 Validators: `validate-session-store-lifecycle` gains identity / newer-version / `getLatestEmpty` cases; new `validate-session-restore-state` covers full restore fidelity, the usage-window fix, and mode-switch persistence.

@@ -18,9 +18,15 @@ import { getEnv } from "../../env.js";
 import { generateId } from "../../utils/generate-id.js";
 import { isToolCallPart } from "../stream/message-parts.js";
 
-import { appendLogLines, foldLog, readLastState, readLog, writeLog } from "./session-journal.js";
+import { appendLogLines, foldLog, hasUserMessage, readLastState, readLog, writeLog } from "./session-journal.js";
 import { fingerprintUIMessage } from "./session-sync-tracker.js";
-import { SESSION_DIR, SESSION_LOG_MESSAGE, SESSION_LOG_SUFFIX, SESSION_VERSION } from "./types.js";
+import {
+  SESSION_DIR,
+  SESSION_LOG_MESSAGE,
+  SESSION_LOG_SUFFIX,
+  SESSION_VERSION,
+  isSupportedSessionVersion,
+} from "./types.js";
 
 import type { SessionData, SessionLogLine, SessionMeta, SessionStateFields } from "./types.js";
 import type { UIMessage } from "@tanstack/ai";
@@ -132,12 +138,16 @@ export class SessionStore {
 
     const { state, uiMessages, approvalAt } = foldLog(lines);
     if (!state) return null;
+    // A log written by a newer schema may fold into a wrong session, so treat it as
+    // unreadable (same as a legacy/corrupt file) rather than guessing.
+    if (!isSupportedSessionVersion(state.version)) return null;
 
     const data: SessionData = { ...state, uiMessages };
     if (Object.keys(approvalAt).length > 0) data.approvalTimes = approvalAt;
-    if (data.id !== id && id.startsWith("ses_")) {
-      data.id = id;
-    }
+    // The log's file name is the session identity (what list/delete/rename address),
+    // so take it over a stale `state.id` — otherwise a later save would write a
+    // second file under the embedded id and leave this one behind.
+    if (data.id !== id) data.id = id;
     // Prime the delta baseline so the first save after a resume appends only
     // what actually changed instead of re-appending the whole history.
     this.primeCache(data);
@@ -146,7 +156,8 @@ export class SessionStore {
 
   /**
    * List all sessions (metadata only, sorted by updatedAt descending). Reads only
-   * the newest line's state of each log, so message bodies are never folded.
+   * the newest line's state of each log, so message bodies are never folded. Logs
+   * written by a newer schema version are skipped (not listed as resumable).
    */
   async list(): Promise<SessionMeta[]> {
     const dirExists = await this.fs.exists(SESSION_DIR);
@@ -158,14 +169,18 @@ export class SessionStore {
     for (const entry of entries) {
       if (entry.type !== "file" || !entry.name.endsWith(SESSION_LOG_SUFFIX)) continue;
 
+      // The file name IS the session identity: `load`/`delete`/`rename` all address
+      // the log by it, so listing must not substitute a possibly-stale `state.id`
+      // (a copied/renamed log would then be un-loadable).
       const id = entry.name.slice(0, -SESSION_LOG_SUFFIX.length);
+      if (!id) continue;
 
       try {
         const state = await readLastState(this.fs, `${SESSION_DIR}/${entry.name}`);
-        if (!state) continue;
+        if (!state || !isSupportedSessionVersion(state.version)) continue;
 
         sessions.push({
-          id: state.id || id,
+          id,
           name: state.name,
           version: state.version,
           modelStyle: state.modelStyle,
@@ -200,9 +215,15 @@ export class SessionStore {
     const metas = await this.list();
     const now = Date.now();
     for (const meta of metas) {
+      // Cheap check first: scan the log from the top for a user message instead of
+      // folding every message of every candidate.
+      if ((await hasUserMessage(this.fs, this.getLogPath(meta.id))) !== false) continue;
+      const state = await readLastState(this.fs, this.getLogPath(meta.id));
+      if (!state) continue;
+      if (state.reservedAt && now - state.reservedAt < EMPTY_SESSION_RESERVE_MS) continue;
+      // Only the chosen candidate is folded in full.
       const data = await this.load(meta.id);
       if (!data || data.uiMessages.some((m) => m.role === "user")) continue;
-      if (data.reservedAt && now - data.reservedAt < EMPTY_SESSION_RESERVE_MS) continue;
       return data;
     }
     return null;

@@ -9,6 +9,16 @@
  *    folding, is listed, and `delete()` removes it so `load()` does not
  *    resurrect it.
  *
+ * #3 the log's FILE NAME is the session identity: a stale `state.id` inside the
+ *    log must not be listed (it would be un-loadable) and `load()` normalizes to
+ *    the requested id so a later save writes back to the same file.
+ *
+ * #4 a log stamped with a newer schema version is neither listed nor loaded.
+ *
+ * #5 `getLatestEmpty()` returns the newest unused session without folding every
+ *    message of every candidate, and skips one still inside its `reservedAt`
+ *    window.
+ *
  * Run: pnpm --filter @my-agent/core run validate:session-store-lifecycle
  */
 
@@ -193,6 +203,98 @@ setupEnv();
   assert.equal(files.has(logPath), false, "log removed");
   assert.equal(await reader.load(session.id), null, "deleted session does not resurrect");
   assert.equal(await reader.delete(session.id), false, "delete() of a missing session returns false");
+}
+
+// --- #3: the file name is the session identity ------------------------------
+
+setupEnv();
+{
+  const store = new SessionStore();
+  const session = store.create({ modelStyle: "openai", model: "test-model", name: "identity" });
+  session.uiMessages = [{ id: "u1", role: "user", parts: [{ type: "text", content: "hi" }] }];
+  await store.save(session);
+
+  // Simulate a copied/renamed log whose embedded state id no longer matches.
+  const logPath = `${SESSION_DIR}/${session.id}.session.jsonl`;
+  files.set(
+    logPath,
+    files
+      .get(logPath)
+      .split("\n")
+      .map((line) => (line.trim() ? line.replace(`"id":"${session.id}"`, '"id":"ses_stale_embedded"') : line))
+      .join("\n")
+  );
+
+  const reader = new SessionStore();
+  const metas = await reader.list();
+  assert.deepEqual(
+    metas.map((m) => m.id),
+    [session.id],
+    "list() reports the file-name id, not a stale embedded state.id"
+  );
+
+  const loaded = await reader.load(session.id);
+  assert.ok(loaded, "the session is loadable by its file-name id");
+  assert.equal(loaded.id, session.id, "load() normalizes id to the file name so a later save hits the same file");
+  await reader.save(loaded);
+  assert.ok(files.has(logPath), "a save after load writes back to the same log");
+  assert.equal(files.has(`${SESSION_DIR}/ses_stale_embedded.session.jsonl`), false, "no second file is created");
+}
+
+// --- #4: a newer schema version is not listed or loaded ---------------------
+
+setupEnv();
+{
+  const writer = new SessionStore();
+  const session = writer.create({ modelStyle: "openai", model: "test-model", name: "future" });
+  session.uiMessages = [{ id: "u1", role: "user", parts: [{ type: "text", content: "hi" }] }];
+  await writer.save(session);
+
+  const logPath = `${SESSION_DIR}/${session.id}.session.jsonl`;
+  files.set(
+    logPath,
+    files
+      .get(logPath)
+      .split("\n")
+      .map((line) => (line.trim() ? line.replace(/"version":6/g, '"version":7') : line))
+      .join("\n")
+  );
+
+  const reader = new SessionStore();
+  assert.deepEqual(await reader.list(), [], "a newer-version log is not listed as resumable");
+  assert.equal(await reader.load(session.id), null, "a newer-version log is not folded");
+  assert.ok(files.has(logPath), "the file itself is left untouched");
+}
+
+// --- #5: getLatestEmpty reuses the newest unused session ---------------------
+
+setupEnv();
+{
+  const store = new SessionStore();
+  const used = store.create({ modelStyle: "openai", model: "test-model", name: "used" });
+  used.uiMessages = [
+    { id: "u1", role: "user", parts: [{ type: "text", content: "hi" }] },
+    { id: "a1", role: "assistant", parts: [{ type: "text", content: "hello" }] },
+  ];
+  await store.save(used);
+
+  const reserved = store.create({ modelStyle: "openai", model: "test-model", name: "reserved" });
+  await store.save(reserved);
+  await store.reserveSession(reserved.id);
+
+  const empty = store.create({ modelStyle: "openai", model: "test-model", name: "empty" });
+  await store.save(empty);
+
+  const reader = new SessionStore();
+  const picked = await reader.getLatestEmpty();
+  assert.equal(picked?.id, empty.id, "the newest unreserved empty session is reused");
+
+  await reader.reserveSession(empty.id);
+  assert.equal(
+    await reader.getLatestEmpty(),
+    null,
+    "once it is reserved, no reusable session is left (used / reserved are skipped)"
+  );
 }
 
 console.log("session-store-lifecycle validation passed");

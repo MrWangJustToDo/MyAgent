@@ -278,7 +278,9 @@ export class SessionService {
       usage.addTotal(session.usage);
     }
     if (session.contextTokens) {
-      usage.updateWindowUsage({
+      // Set (do not accumulate) the window: the restored fill is already part of the
+      // restored lifetime totals, so `updateWindowUsage` would double-count it.
+      usage.setWindowUsage({
         inputTokens: session.contextTokens,
         outputTokens: 0,
         totalTokens: session.contextTokens,

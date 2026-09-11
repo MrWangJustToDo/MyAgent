@@ -63,8 +63,12 @@ export async function readLog(fs: CoreEnvFs, path: string): Promise<SessionLogLi
 }
 
 /**
- * Read only the newest line's `state` snapshot, without parsing older message
- * bodies. Used by `list()` for cheap metadata reads on long sessions.
+ * Read only the newest line's `state` snapshot.
+ *
+ * The file has to be read in full (the env fs has no seek/partial read) and the
+ * lines split, but only the newest line is JSON-parsed: the scan walks backwards
+ * and returns at the first parseable line, skipping a torn trailing line. Used by
+ * `list()` so listing long sessions never folds (or parses) their message bodies.
  */
 export async function readLastState(fs: CoreEnvFs, path: string): Promise<SessionStateFields | null> {
   if (!(await fs.exists(path))) return null;
@@ -93,7 +97,28 @@ export interface FoldedSessionLog {
 }
 
 /**
- * Fold log lines into the session they describe.
+ * Whether the log contains any user message, parsed from the START and stopping at
+ * the first hit: the messages are appended in order, so the first user message is
+ * near the top and the common (non-empty) case parses a single line. A session with
+ * no user message must have its (short) log walked entirely. Used by
+ * `getLatestEmpty()` so it does not fold every message of every candidate.
+ *
+ * Returns `null` when the log is missing or holds no parseable line.
+ */
+export async function hasUserMessage(fs: CoreEnvFs, path: string): Promise<boolean | null> {
+  if (!(await fs.exists(path))) return null;
+  const content = await fs.readFile(path);
+  let sawLine = false;
+  for (const raw of content.split("\n")) {
+    const parsed = parseLine(raw);
+    if (!parsed) continue;
+    sawLine = true;
+    if (parsed.message?.role === "user") return true;
+  }
+  return sawLine ? false : null;
+}
+
+/** Fold log lines into the session they describe.
  *
  * Message lines are keyed by `UIMessage.id`: a later line for the same id
  * replaces the body without moving its position. `approvalAt` records the real

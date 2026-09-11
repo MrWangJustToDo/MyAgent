@@ -79,6 +79,25 @@ export class UsageTracker {
     this.emitChange();
   }
 
+  /**
+   * Set the window (context fill) without touching lifetime totals.
+   *
+   * Used when *restoring* window usage from a persisted session: the restored
+   * context fill is already included in the restored lifetime totals, so
+   * {@link updateWindowUsage} (which accumulates) would count it a second time.
+   */
+  setWindowUsage(usage: TokenUsage): void {
+    this.window = {
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      totalTokens: usage.inputTokens + usage.outputTokens,
+      cacheReadTokens: usage.cacheReadTokens ?? 0,
+      cacheWriteTokens: usage.cacheWriteTokens ?? 0,
+      reasoningTokens: usage.reasoningTokens ?? 0,
+    };
+    this.emitChange();
+  }
+
   /** Add usage to lifetime totals only (side queries, title generation, etc.). */
   addTotal(usage: TokenUsage, pricing?: ModelPricing | null): void {
     this.lastCallCostUsd = this.accumulateTotal(usage, pricing ?? this.pricing);

@@ -27,6 +27,19 @@ export const SESSION_LOG_SUFFIX = ".session.jsonl";
 /** Log line kind: one message + the full non-message state snapshot at that point. */
 export const SESSION_LOG_MESSAGE = "message";
 
+/**
+ * Whether this reader understands a log written with `version`.
+ *
+ * Only *newer* formats are rejected: their line/state shape may differ, so folding
+ * them would silently produce a wrong session. Older versions are accepted (their
+ * extra fields are optional, and a fold only reads what it knows). Logs written by
+ * a newer version are skipped by `list()` and `load()` — like the legacy
+ * `.session.json` files, they are not migrated.
+ */
+export function isSupportedSessionVersion(version: unknown): boolean {
+  return typeof version !== "number" || !Number.isFinite(version) || version <= SESSION_VERSION;
+}
+
 /** Directory for per-session AgentLog JSONL files: `.agents/logs/{sessionId}/`. */
 export const AGENT_LOG_DIR = ".agents/logs";
 

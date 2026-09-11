@@ -7,12 +7,21 @@ export {
   isUIMessageStable,
   shouldPersistUIMessages,
 } from "./session-sync-tracker.js";
-export { appendLogLines, foldLog, getJournalPath, readLastState, readLog, writeLog } from "./session-journal.js";
+export {
+  appendLogLines,
+  foldLog,
+  getJournalPath,
+  hasUserMessage,
+  readLastState,
+  readLog,
+  writeLog,
+} from "./session-journal.js";
 export {
   SESSION_DIR,
   SESSION_VERSION,
   SESSION_LOG_SUFFIX,
   SESSION_LOG_MESSAGE,
+  isSupportedSessionVersion,
   sessionMetaSchema,
   toolApprovalRecordSchema,
   toolApprovalStatusSchema,

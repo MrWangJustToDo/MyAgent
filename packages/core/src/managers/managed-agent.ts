@@ -433,7 +433,13 @@ export class ManagedAgent {
         }
       },
     });
-    this.autoMode = new AutoModeController(() => this.emitStateChange());
+    // A mode switch is session state (autoMode is persisted with every save), so
+    // emit it live AND persist: otherwise a toggle that is not followed by another
+    // turn/state change is lost on the next launch.
+    this.autoMode = new AutoModeController(() => {
+      this.emitStateChange();
+      this.persistSession();
+    });
     this.approvals = new ToolApprovalTable({
       onResolved: (resolution) => {
         this.emitEvent("agent:tool-approval-resolved", {
@@ -1281,10 +1287,14 @@ export class ManagedAgent {
     if (this.autoMode.isEnabled()) {
       this.autoMode.setEnabled(false);
     }
+    // planMode is session state too; persist it without waiting for the next turn
+    // (a redundant call here is a no-op: nothing changed since the autoMode write).
+    this.persistSession();
   }
 
   disablePlanMode(): void {
     disablePlanModeHelper(this);
+    this.persistSession();
   }
 
   getPlanModeState(): PlanModeState {
