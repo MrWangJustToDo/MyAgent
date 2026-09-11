@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 
 import {
   DEFAULT_SUMMARIZATION_CONTEXT_WINDOW,
+  SUMMARY_OUTPUT_CAP,
+  measureSerializedConversationChars,
   resolveSummarizationBudget,
   resolveSummarizationInputBudget,
   resolveAutoCompactTrigger,
@@ -27,6 +29,17 @@ import {
   const b = resolveSummarizationBudget({ contextWindow: 1_000_000, defaultMaxTokens: 32_000 });
   assert.equal(b.maxOutputTokens, 32_000);
   assert.equal(b.inputBudget, 1_000_000 - 32_000 - 8_000);
+}
+
+// A model's declared max output is capped so it cannot starve the input budget.
+{
+  const b = resolveSummarizationBudget({ contextWindow: 1_000_000, defaultMaxTokens: 384_000 });
+  assert.equal(b.maxOutputTokens, SUMMARY_OUTPUT_CAP, "output reserve is capped");
+  assert.equal(
+    b.inputBudget,
+    1_000_000 - SUMMARY_OUTPUT_CAP - 8_000,
+    "inputBudget keeps the window minus the capped reserve"
+  );
 }
 
 // Fallback when the model reports no output cap: derive a window-based reserve.
@@ -103,6 +116,39 @@ for (const [label, window, tokenThreshold, defaultMaxTokens] of [
   }));
   const batches = splitMessagesByTokenBudget(huge, inputBudget);
   assert.ok(batches.length > 1, "an oversized (2× budget) slice should split");
+  assert.equal(batches.flat().length, huge.length);
+}
+
+// ============================================================================
+// splitMessagesByTokenBudget — sizes the *serialized* prompt, not the raw wire
+// ============================================================================
+
+// A huge (untruncated) tool result fits one batch because the serializer only
+// keeps TOOL_RESULT_MAX_CHARS of it. This is the regression that forced
+// needless multi-segment compaction (raw estimate >> actual prompt).
+{
+  const toolCallId = "call_huge";
+  const slice = [
+    {
+      role: "assistant",
+      content: "read the file",
+      toolCalls: [{ id: toolCallId, type: "function", function: { name: "read_file", arguments: "{}" } }],
+    },
+    { role: "tool", toolCallId, content: "x".repeat(200_000) },
+  ];
+
+  const measured = measureSerializedConversationChars(slice);
+  assert.ok(measured < 10_000, `serialized measure should truncate tool output (got ${measured})`);
+
+  const batches = splitMessagesByTokenBudget(slice, 5_000);
+  assert.equal(batches.length, 1, "truncated tool output must not force a split");
+}
+
+// A genuinely oversized serialized slice still splits (fallback preserved).
+{
+  const huge = Array.from({ length: 6 }, () => ({ role: "user", content: "y".repeat(40_000) }));
+  const batches = splitMessagesByTokenBudget(huge, 50_000);
+  assert.ok(batches.length > 1, "an oversized serialized slice should still split");
   assert.equal(batches.flat().length, huge.length);
 }
 

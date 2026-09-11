@@ -141,10 +141,12 @@ export { findRelevantMemories, formatRelevantMemories } from "../agent/memory/me
 export type { RelevantMemory } from "../agent/memory/memory-retrieval.js";
 export {
   DEFAULT_SUMMARIZATION_CONTEXT_WINDOW,
+  SUMMARY_OUTPUT_CAP,
   resolveSummarizationBudget,
   resolveSummarizationInputBudget,
   splitMessagesByTokenBudget,
 } from "../agent/compaction/summarization-budget.js";
+export { measureSerializedConversationChars } from "../agent/compaction/serialize-conversation.js";
 export { estimateTokens } from "../agent/compaction/token-estimator.js";
 export {
   ToolApprovalTable,

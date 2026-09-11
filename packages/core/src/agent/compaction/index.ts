@@ -29,6 +29,7 @@ export {
   DEFAULT_SUMMARIZATION_CONTEXT_WINDOW,
   MIN_SUMMARIZATION_INPUT_BUDGET,
   SUMMARIZATION_OVERHEAD_TOKENS,
+  SUMMARY_OUTPUT_CAP,
   resolveSummarizationBudget,
   resolveSummarizationInputBudget,
   splitMessagesByTokenBudget,

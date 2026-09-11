@@ -2,7 +2,8 @@
  * Token budget helpers for compaction summarization subagents.
  */
 
-import { estimateTokens } from "./token-estimator.js";
+import { buildToolCallNameMap } from "./message-utils.js";
+import { serializedMessageChars } from "./serialize-conversation.js";
 
 import type { AgentManager } from "../../runtime-types/hosts.js";
 import type { ModelMessage } from "@tanstack/ai";
@@ -19,6 +20,14 @@ export const SUMMARIZATION_CHARS_PER_TOKEN = 4;
 /** Reserve tokens for system prompt, instructions, and model output. */
 export const SUMMARIZATION_OVERHEAD_TOKENS = 8_000;
 
+/**
+ * Hard cap on the output reserve. A model's declared `defaultMaxTokens` is an
+ * upper bound on generation, not what a summarizer emits; reserving it whole
+ * (some models report 384k) needlessly starves the input budget and forces
+ * multi-segment summarization.
+ */
+export const SUMMARY_OUTPUT_CAP = 32_000;
+
 /** Minimum input budget so tiny models still get a usable slice. */
 export const MIN_SUMMARIZATION_INPUT_BUDGET = 16_000;
 
@@ -33,10 +42,11 @@ export interface SummarizationBudget {
 /**
  * Resolve the budget for one summarization call from model metadata.
  *
- * The input budget reserves the model's real max output tokens (plus overhead)
- * so the summarizer round-trips a single pass without overflowing the model's
- * context window. When the model reports no `defaultMaxTokens`, a window-derived
- * output reserve is used instead (sized so a typical window still single-passes).
+ * The input budget reserves the output tokens (capped at {@link SUMMARY_OUTPUT_CAP})
+ * plus overhead so the summarizer round-trips a single pass without overflowing
+ * the model's context window. When the model reports no `defaultMaxTokens`, a
+ * window-derived output reserve is used instead (sized so a typical window still
+ * single-passes).
  *
  * @param modelInfo - Model metadata (contextWindow / defaultMaxTokens), if known
  */
@@ -44,10 +54,10 @@ export function resolveSummarizationBudget(
   modelInfo: { contextWindow?: number; defaultMaxTokens?: number } | null | undefined
 ): SummarizationBudget {
   const contextWindow = modelInfo?.contextWindow ?? DEFAULT_SUMMARIZATION_CONTEXT_WINDOW;
-  const maxOutputTokens =
-    modelInfo?.defaultMaxTokens && modelInfo.defaultMaxTokens > 0
-      ? modelInfo.defaultMaxTokens
-      : Math.floor(contextWindow * SUMMARIZATION_OUTPUT_RESERVE_FALLBACK_RATIO);
+  const reportedOutput =
+    modelInfo?.defaultMaxTokens && modelInfo.defaultMaxTokens > 0 ? modelInfo.defaultMaxTokens : undefined;
+  const reserve = reportedOutput ?? Math.floor(contextWindow * SUMMARIZATION_OUTPUT_RESERVE_FALLBACK_RATIO);
+  const maxOutputTokens = Math.min(reserve, SUMMARY_OUTPUT_CAP);
   const inputBudget = Math.max(
     MIN_SUMMARIZATION_INPUT_BUDGET,
     contextWindow - maxOutputTokens - SUMMARIZATION_OVERHEAD_TOKENS
@@ -63,18 +73,30 @@ export function resolveSummarizationInputBudget(manager: AgentManager, parentAge
   return resolveSummarizationBudget(parent?.getModelInfo()).inputBudget;
 }
 
+/** Serialized-size tokens for one message (see {@link splitMessagesByTokenBudget}). */
+function estimateSerializedMessageTokens(message: ModelMessage, toolCallMap: Map<string, string>): number {
+  const chars = serializedMessageChars(message, toolCallMap);
+  return chars > 0 ? Math.ceil(chars / SUMMARIZATION_CHARS_PER_TOKEN) : 0;
+}
+
 /**
  * Split messages into batches that each fit within the summarization token budget.
+ *
+ * Sizing mirrors {@link serializeConversation} (tool results capped at
+ * `TOOL_RESULT_MAX_CHARS`, tool args at `TOOL_ARGS_MAX_CHARS`) so the decision
+ * measures the prompt actually sent to the summarizer — the raw wire carries
+ * full tool output and overestimates the prompt several-fold.
  */
 export function splitMessagesByTokenBudget(messages: ModelMessage[], maxTokens: number): ModelMessage[][] {
   if (messages.length === 0) return [];
 
+  const toolCallMap = buildToolCallNameMap(messages);
   const batches: ModelMessage[][] = [];
   let current: ModelMessage[] = [];
   let currentTokens = 0;
 
   for (const message of messages) {
-    const messageTokens = estimateTokens([message]);
+    const messageTokens = estimateSerializedMessageTokens(message, toolCallMap);
     if (current.length > 0 && currentTokens + messageTokens > maxTokens) {
       batches.push(current);
       current = [];

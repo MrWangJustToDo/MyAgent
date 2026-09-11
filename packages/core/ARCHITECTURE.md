@@ -458,6 +458,8 @@ The durable channel stays chronological. Projection is never written back.
 The summarizer sees both the cut-away history and the kept tail (budget-aware) so Goal/Next stay aligned.
 On later iterations (no compact), `onConfig` again converts the live channel and projects summary-first wire.
 
+**Segmented summarization sizing:** `summarizeConversation` splits `toSummarize` with `splitMessagesByTokenBudget`, which sizes each message by its **serialized** length (`serializeConversation` caps tool results at 2000 chars and tool args at 200) rather than the raw wire. `estimateTokens` on the raw wire counts full tool output and overestimates the actual prompt several-fold, so measuring it forced needless multi-segment passes. The per-call input budget is `contextWindow − min(defaultMaxTokens, SUMMARY_OUTPUT_CAP) − overhead`, so a model declaring a huge `limit.output` (e.g. 384k) does not starve the budget.
+
 ### 5.4 Reactive compact (emergency)
 
 **Files:** `run-stream-recovery.ts`, `stream-recovery/*`, `reactive-compact.ts`, `managed-agent.handleReactiveCompact`

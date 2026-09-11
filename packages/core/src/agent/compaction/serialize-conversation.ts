@@ -16,15 +16,76 @@ import { buildToolCallNameMap, extractTextFromContent, serializeToolMessageConte
 import type { ModelMessage } from "@tanstack/ai";
 
 /** Maximum characters for a single tool result in serialized output */
-const TOOL_RESULT_MAX_CHARS = 2000;
+export const TOOL_RESULT_MAX_CHARS = 2000;
+
+/** Maximum characters for a single tool-call argument string in serialized output */
+export const TOOL_ARGS_MAX_CHARS = 200;
 
 function truncateToolArgs(args: string): string {
-  return args.length > 200 ? args.slice(0, 200) + "..." : args;
+  return args.length > TOOL_ARGS_MAX_CHARS ? args.slice(0, TOOL_ARGS_MAX_CHARS) + "..." : args;
 }
 
 function truncateToolResult(text: string): string {
   if (text.length <= TOOL_RESULT_MAX_CHARS) return text;
   return text.slice(0, TOOL_RESULT_MAX_CHARS) + `\n[... ${text.length - TOOL_RESULT_MAX_CHARS} chars truncated]`;
+}
+
+/**
+ * Character length of the segment one message contributes to
+ * {@link serializeConversation} — labels and truncation included.
+ *
+ * Kept in lockstep with the serializer so callers sizing a summarizer prompt
+ * (e.g. {@link splitMessagesByTokenBudget}) measure what is actually sent
+ * rather than the untruncated wire.
+ *
+ * @param toolCallMap - toolCallId → tool name, built from the whole message
+ *   list via {@link buildToolCallNameMap} so tool result labels are accurate.
+ */
+export function serializedMessageChars(message: ModelMessage, toolCallMap: Map<string, string>): number {
+  if (message.role === "user") {
+    const text = extractTextFromContent(message.content);
+    return text ? `[User]: ${text}`.length : 0;
+  }
+
+  if (message.role === "assistant") {
+    let chars = 0;
+    const text = extractTextFromContent(message.content);
+    if (text) chars += `[Assistant]: ${text}`.length;
+    if (message.toolCalls && message.toolCalls.length > 0) {
+      const toolCalls = message.toolCalls.map((tc) => {
+        const args = truncateToolArgs(tc.function.arguments);
+        return `${tc.function.name}(${args})`;
+      });
+      chars += `[Assistant tool calls]: ${toolCalls.join("; ")}`.length;
+    }
+    return chars;
+  }
+
+  if (message.role === "tool") {
+    const toolName = (message.toolCallId && toolCallMap.get(message.toolCallId)) || "tool";
+    const resultText = truncateToolResult(serializeToolMessageContent(message.content));
+    return resultText ? `[Tool result from ${toolName}]: ${resultText}`.length : 0;
+  }
+
+  return 0;
+}
+
+/**
+ * Serialized character count for a message list, matching
+ * {@link serializeConversation} (including the `\n\n` segment join).
+ */
+export function measureSerializedConversationChars(messages: ModelMessage[]): number {
+  const toolCallMap = buildToolCallNameMap(messages);
+  let chars = 0;
+  let segments = 0;
+  for (const message of messages) {
+    const messageChars = serializedMessageChars(message, toolCallMap);
+    if (messageChars > 0) {
+      chars += messageChars;
+      segments += 1;
+    }
+  }
+  return chars + Math.max(0, segments - 1) * 2;
 }
 
 /**
