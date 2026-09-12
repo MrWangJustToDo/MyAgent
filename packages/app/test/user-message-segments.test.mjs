@@ -1,18 +1,20 @@
 /**
- * Validates image ref extract/parse helpers for inline user-message images.
+ * Validates inline user-message segment parsing: image refs plus the
+ * `<skill>` / `<memory>` blocks injected by `/skill` and `/memory`, which the
+ * transcript collapses into compact chips.
  *
- * Run: pnpm --filter @my-agent/app build && node packages/app/test/user-message-images.test.mjs
+ * Run: pnpm --filter @my-agent/app build && node packages/app/test/user-message-segments.test.mjs
  */
 import assert from "node:assert/strict";
 import test from "node:test";
 import { URL } from "node:url";
 
 const { IMAGE_PLACEHOLDER_START, createImagePlaceholder, extractSubmittedInput, formatImageRef } = await import(
-  new URL("../dist/hooks/user-input-helpers.mjs", import.meta.url).href
+  new URL("../dist/utils/user-input-helpers.mjs", import.meta.url).href
 );
 
-const { parseUserMessageSegments, formatImageChipLabel } = await import(
-  new URL("../dist/utils/user-message-images.mjs", import.meta.url).href
+const { parseUserMessageSegments, formatImageChipLabel, formatMemoryChipLabel, formatSkillChipLabel } = await import(
+  new URL("../dist/utils/user-message-segments.mjs", import.meta.url).href
 );
 
 const { shortContentHash, clipboardImageFilename } = await import(
@@ -61,6 +63,77 @@ test("parseUserMessageSegments splits refs for inline UI", () => {
     { type: "image", displayIndex: 2, filename: "clipboard-bbb.png" },
   ]);
   assert.equal(formatImageChipLabel(1), "[Image #1]");
+});
+
+test("parseUserMessageSegments collapses a <skill> block into one segment", () => {
+  const body = Array.from({ length: 6 }, (_, i) => `skill line ${i + 1}`).join("\n");
+  const text = `<skill name="openspec-explore">\n${body}\n</skill>\n\nUser request with this skill:\ndo the thing`;
+  const segments = parseUserMessageSegments(text);
+
+  assert.deepEqual(segments, [
+    { type: "skill", name: "openspec-explore", lineCount: 6 },
+    { type: "text", content: "\n\nUser request with this skill:\ndo the thing" },
+  ]);
+  assert.equal(formatSkillChipLabel("openspec-explore"), "[Skill: openspec-explore]");
+});
+
+test("parseUserMessageSegments collapses a <memory> block and keeps its type", () => {
+  const body = "line 1\nline 2\nline 3";
+  const text = `<memory name="readme-github-content-decisions" type="project">\nsummary\n\n${body}\n</memory>`;
+  const segments = parseUserMessageSegments(text);
+
+  assert.deepEqual(segments, [
+    { type: "memory", name: "readme-github-content-decisions", memoryType: "project", lineCount: 5 },
+  ]);
+  assert.equal(formatMemoryChipLabel("README", "project"), "[Memory: README (project)]");
+  assert.equal(formatMemoryChipLabel("README"), "[Memory: README]");
+});
+
+test("parseUserMessageSegments leaves mid-sentence block quotes as plain text", () => {
+  const text = `这个 <skill name="foo">\nbody\n</skill> 是什么意思？`;
+  const segments = parseUserMessageSegments(text);
+
+  assert.equal(segments.length, 1);
+  assert.equal(segments[0].type, "text");
+  assert.equal(segments[0].content, text);
+});
+
+test("parseUserMessageSegments anchors on the leading block only", () => {
+  const text = `head <skill name="a">\ns1\n</skill> tail`;
+  const segments = parseUserMessageSegments(text);
+
+  assert.equal(segments.length, 1);
+  assert.equal(segments[0].content, text);
+});
+
+test("parseUserMessageSegments keeps a leading block's follow-up text + image refs", () => {
+  const text = `<skill name="a">\ns1\ns2\n</skill>\n\nUser request with this skill:\nsee ${formatImageRef(
+    2,
+    "clipboard-bbb.png"
+  )}`;
+  const segments = parseUserMessageSegments(text);
+
+  assert.deepEqual(segments, [
+    { type: "skill", name: "a", lineCount: 2 },
+    { type: "text", content: "\n\nUser request with this skill:\nsee " },
+    { type: "image", displayIndex: 2, filename: "clipboard-bbb.png" },
+  ]);
+});
+
+test("parseUserMessageSegments does not collapse a nameless block", () => {
+  const text = `<skill name="">\nbody\n</skill>`;
+  const segments = parseUserMessageSegments(text);
+
+  assert.equal(segments.length, 1);
+  assert.equal(segments[0].content, text);
+});
+
+test("parseUserMessageSegments leaves an unterminated block as plain text", () => {
+  const text = `<skill name="a">\nbody without close tag`;
+  const segments = parseUserMessageSegments(text);
+
+  assert.equal(segments.length, 1);
+  assert.equal(segments[0].type, "text");
 });
 
 test("shortContentHash / clipboardImageFilename are deterministic", () => {

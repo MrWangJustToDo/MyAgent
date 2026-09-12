@@ -7,7 +7,12 @@ import { BG, COLORS } from "../theme/colors.js";
 import { formatFileSize } from "../utils/format.js";
 import { getImageUrl, getTextContent } from "../utils/get-messages.js";
 import { isImagePart } from "../utils/tool-part.js";
-import { formatImageChipLabel, parseUserMessageSegments } from "../utils/user-message-images.js";
+import {
+  formatImageChipLabel,
+  formatMemoryChipLabel,
+  formatSkillChipLabel,
+  parseUserMessageSegments,
+} from "../utils/user-message-segments.js";
 
 import { FilePartView } from "./FilePartView.js";
 
@@ -30,7 +35,7 @@ export const UserMessageView = memo(
 
     const text = textParts.map((p) => getTextContent(p)).join("\n");
     const segments = useMemo(() => parseUserMessageSegments(text), [text]);
-    const hasInlineRefs = segments.some((s) => s.type === "image");
+    const hasInlineRefs = segments.some((s) => s.type !== "text");
 
     const sizeByDisplayIndex = useMemo(() => {
       const map = new Map<number, string>();
@@ -60,15 +65,32 @@ export const UserMessageView = memo(
                   if (segment.type === "text") {
                     return segment.content;
                   }
-                  const size = sizeByDisplayIndex.get(segment.displayIndex);
+                  if (segment.type === "image") {
+                    const size = sizeByDisplayIndex.get(segment.displayIndex);
+                    return (
+                      <Text key={`img-${segment.displayIndex}-${i}`} color={COLORS.accent}>
+                        {formatImageChipLabel(segment.displayIndex)}
+                        {size ? (
+                          <Text color={COLORS.muted} dimColor>
+                            {` (${size})`}
+                          </Text>
+                        ) : null}
+                      </Text>
+                    );
+                  }
+                  // Injected `<skill>` / `<memory>` payloads stay out of the
+                  // transcript: the chip keeps the message scannable while the
+                  // full text remains in the session (and the model's payload).
+                  const label =
+                    segment.type === "skill"
+                      ? formatSkillChipLabel(segment.name)
+                      : formatMemoryChipLabel(segment.name, segment.memoryType);
                   return (
-                    <Text key={`img-${segment.displayIndex}-${i}`} color={COLORS.accent}>
-                      {formatImageChipLabel(segment.displayIndex)}
-                      {size ? (
-                        <Text color={COLORS.muted} dimColor>
-                          {` (${size})`}
-                        </Text>
-                      ) : null}
+                    <Text key={`${segment.type}-${i}`} color={COLORS.accent}>
+                      {label}
+                      <Text color={COLORS.muted} dimColor>
+                        {` (${segment.lineCount} lines)`}
+                      </Text>
                     </Text>
                   );
                 })}

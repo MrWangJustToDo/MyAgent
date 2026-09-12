@@ -20,7 +20,7 @@ export default defineConfig([
       "src/utils/file-icons.ts",
       "src/utils/tool-activity-summary.ts",
       "src/utils/project-transcript.ts",
-      "src/utils/user-message-images.ts",
+      "src/utils/user-message-segments.ts",
       "src/utils/attachment-hash.ts",
       "src/utils/apply-app-config.ts",
       "src/utils/get-messages.ts",

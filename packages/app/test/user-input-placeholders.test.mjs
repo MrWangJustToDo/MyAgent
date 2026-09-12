@@ -11,8 +11,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { useUserInput } from "../dist/index.mjs";
 import {
   IMAGE_PLACEHOLDER_START,
+  PASTE_MERGE_WINDOW_MS,
   PASTE_PLACEHOLDER_START,
   createImagePlaceholder,
   createPastePlaceholder,
@@ -24,8 +26,7 @@ import {
   isLargePaste,
   isPastePlaceholder,
   removePasteAtIndex,
-} from "../dist/hooks/user-input-helpers.mjs";
-import { useUserInput } from "../dist/index.mjs";
+} from "../dist/utils/user-input-helpers.mjs";
 
 const act = () => useUserInput.getActions();
 const state = () => useUserInput.getReadonlyState();
@@ -166,9 +167,12 @@ test("submit expands paste placeholders back to full text and clears state", () 
   assert.equal(s.nextPasteIndex, 0);
 });
 
-test("multiple large pastes are distinct placeholders with independent content", () => {
+test("multiple large pastes are distinct placeholders with independent content", async () => {
   act().reset();
   act().paste("aaa\nbbb\nccc\nddd\neee\nfff"); // index 0
+  // Consecutive `paste` events inside PASTE_MERGE_WINDOW_MS are treated as chunks
+  // of one bracketed paste and merged, so wait the window out for a distinct one.
+  await new Promise((resolve) => setTimeout(resolve, PASTE_MERGE_WINDOW_MS + 20));
   act().paste("111\n222\n333\n444\n555\n666"); // index 1
 
   const s = state();
@@ -265,7 +269,7 @@ test("clear resets both image attachments and pending pastes", () => {
 // History navigation + draft (unsubmitted input) boundaries
 // ============================================================================
 
-test("history stores expanded text; historyPrev restores plain text with no orphan placeholders", () => {
+test("history recalls large pastes collapsed (placeholder kept, Ctrl+O expands)", () => {
   act().reset();
   act().paste(bigPaste); // collapsed placeholder
   const submitted = act().submit().text;
@@ -273,10 +277,29 @@ test("history stores expanded text; historyPrev restores plain text with no orph
 
   act().historyPrev(); // back to the history entry
   const s = state();
-  assert.equal(s.value, bigPaste, "expanded plain text shown");
   assert.equal(s.historyIndex, 0);
-  assert.equal(s.pendingPastes.length, 0, "no orphan paste state");
+  assert.equal(s.value, createPastePlaceholder(0), "recalled input stays collapsed");
+  assert.equal(s.pendingPastes[0].text, bigPaste, "paste content restored behind the placeholder");
+  assert.equal(s.nextPasteIndex, 1, "a later paste cannot reuse the live index");
   assert.equal(s.attachments.length, 0);
+
+  act().togglePasteExpansion();
+  assert.equal(state().expandedPasteIndex, 0, "Ctrl+O expands the recalled paste in place");
+  assert.equal(act().submit().text, bigPaste, "recalled entry still submits expanded");
+});
+
+test("history inlines image refs (attachments are not restorable) and keeps pastes collapsed", () => {
+  act().reset();
+  act().addAttachment(attachment("clipboard-aaa.png"));
+  act().paste(bigPaste);
+  const submitted = act().submit().text;
+  assert.equal(submitted, `${formatImageRef(1, "clipboard-aaa.png")}${bigPaste}`);
+
+  act().historyPrev();
+  const s = state();
+  assert.equal(s.value, `${formatImageRef(1, "clipboard-aaa.png")}${createPastePlaceholder(0)}`);
+  assert.equal(s.pendingPastes[0].text, bigPaste);
+  assert.equal(s.attachments.length, 0, "no orphan image placeholder");
 });
 
 test("draft: history round-trip restores the full unsubmitted input (incl. collapsed paste)", () => {

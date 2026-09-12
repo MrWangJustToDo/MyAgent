@@ -59,6 +59,19 @@ export interface PendingPaste {
   lineCount: number;
 }
 
+/**
+ * Input history entry: the expanded submission text (what the model received)
+ * plus the recalled-input form, whose large pastes stay collapsed.
+ */
+export interface HistoryEntry {
+  /** Expanded submission text — what was sent to the model. */
+  text: string;
+  /** Recalled input value: image refs inlined, large pastes still collapsed. */
+  value: string;
+  /** Paste entries backing `value`'s placeholder chars (sparse, index-aligned). */
+  pendingPastes: (PendingPaste | undefined)[];
+}
+
 /** Check if a character is a large-paste placeholder. */
 export function isPastePlaceholder(char: string): boolean {
   const code = char.charCodeAt(0);
@@ -135,11 +148,50 @@ export function extractSubmittedInput(
   return { text: text.trim(), attachments: orderedAttachments };
 }
 
-export function appendHistoryEntry(history: string[], text: string): string[] {
-  if (!text || history[history.length - 1] === text) {
+/**
+ * Build the recalled-input form of a submitted input (see {@link HistoryEntry}):
+ * image placeholders become their textual `[Image #N: filename]` refs
+ * (attachments themselves cannot be restored from history), while large-paste
+ * placeholders STAY collapsed so recalling a huge paste does not flood the
+ * input box again — Ctrl+O expands each one in place.
+ */
+export function collapseSubmittedInputForHistory(
+  rawValue: string,
+  attachments: Attachment[],
+  pendingPastes?: (PendingPaste | undefined)[]
+): { value: string; pendingPastes: (PendingPaste | undefined)[] } {
+  let value = "";
+  const keptPastes: (PendingPaste | undefined)[] = [];
+  let displayNum = 1;
+
+  for (const char of rawValue) {
+    if (isImagePlaceholder(char)) {
+      const attachment = attachments[getImageIndex(char)];
+      if (attachment) {
+        value += formatImageRef(displayNum, attachment.filename);
+        displayNum++;
+      }
+    } else if (isPastePlaceholder(char)) {
+      const index = getPasteIndex(char);
+      const paste = pendingPastes?.[index];
+      if (paste) {
+        // Keep the placeholder char so `keptPastes` stays index-aligned with it.
+        value += char;
+        keptPastes[index] = paste;
+      }
+    } else {
+      value += char;
+    }
+  }
+
+  return { value: value.trim(), pendingPastes: keptPastes };
+}
+
+export function appendHistoryEntry(history: HistoryEntry[], entry: HistoryEntry): HistoryEntry[] {
+  if (!entry.text || history[history.length - 1]?.text === entry.text) {
     return history;
   }
-  return [...history, text];
+  return [...history, entry];
 }
 
 export function hasImagePlaceholder(value: string): boolean {

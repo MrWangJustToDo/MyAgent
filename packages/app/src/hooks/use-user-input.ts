@@ -3,6 +3,7 @@ import { createState } from "reactivity-store";
 import { createFeedbackQueue, INPUT_FEEDBACK_DISPLAY_MS } from "../utils/input-feedback-queue.js";
 import {
   appendHistoryEntry,
+  collapseSubmittedInputForHistory,
   createImagePlaceholder,
   createPastePlaceholder,
   extractSubmittedInput,
@@ -18,7 +19,7 @@ import {
 } from "../utils/user-input-helpers.js";
 
 import type { Attachment } from "../types/attachment.js";
-import type { PendingPaste } from "../utils/user-input-helpers.js";
+import type { HistoryEntry, PendingPaste } from "../utils/user-input-helpers.js";
 import type { Key } from "ink";
 
 export {
@@ -36,7 +37,7 @@ export {
   isPastePlaceholder,
 } from "../utils/user-input-helpers.js";
 
-export type { PendingPaste } from "../utils/user-input-helpers.js";
+export type { HistoryEntry, PendingPaste } from "../utils/user-input-helpers.js";
 
 // ============================================================================
 // Types
@@ -45,8 +46,8 @@ export type { PendingPaste } from "../utils/user-input-helpers.js";
 export interface UserInputState {
   /** Current input value (may contain image placeholder characters) */
   value: string;
-  /** Input history */
-  history: string[];
+  /** Input history (expanded text + the recalled-input form) */
+  history: HistoryEntry[];
   /** Current history index (-1 means current input) */
   historyIndex: number;
   /** Snapshot of the in-progress input kept while navigating history */
@@ -214,15 +215,23 @@ function restoreDraft(state: UserInputState): void {
 }
 
 /**
- * Load a history entry into the input. History stores already-expanded plain
- * text (placeholders are expanded at submit time), so placeholder-backed state
- * is cleared to avoid leaving orphan entries.
+ * Load a history entry into the input.
+ *
+ * Recalled pastes stay collapsed behind their placeholder characters (Ctrl+O
+ * expands) so a huge paste does not flood the input box again. Image refs are
+ * inlined as plain text: their attachments are not restorable from history.
  */
 function restoreHistoryEntry(state: UserInputState): void {
-  state.value = state.history[state.historyIndex] ?? "";
-  state.cursorPosition = state.value.length;
+  const entry = state.history[state.historyIndex];
+  const value = entry?.value ?? "";
+  state.value = value;
+  state.cursorPosition = value.length;
   state.lastPasteAt = -1;
-  resetInputPlaceholders(state);
+  state.attachments = [];
+  state.nextImageIndex = 0;
+  state.pendingPastes = entry ? [...entry.pendingPastes] : [];
+  state.nextPasteIndex = state.pendingPastes.length;
+  state.expandedPasteIndex = null;
 }
 
 /**
@@ -506,7 +515,14 @@ export const useUserInput = createState(() => ({ ...initialState }), {
     submit: (addToHistory = true): { text: string; attachments: Attachment[] } => {
       const { text, attachments } = extractSubmittedInput(state.value, state.attachments, state.pendingPastes);
       if (addToHistory) {
-        state.history = appendHistoryEntry(state.history, text);
+        // Store the recalled-input form next to the expanded text so recalling
+        // the entry restores its collapsed pastes (see restoreHistoryEntry).
+        const recalled = collapseSubmittedInputForHistory(state.value, state.attachments, state.pendingPastes);
+        state.history = appendHistoryEntry(state.history, {
+          text,
+          value: recalled.value,
+          pendingPastes: recalled.pendingPastes,
+        });
       }
 
       state.value = "";
