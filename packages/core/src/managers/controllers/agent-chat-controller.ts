@@ -30,6 +30,7 @@ import type { AgentEventBus } from "../../agent/agent-event-bus";
 import type { QueuedMessageContent, QueuedMessagesSnapshot } from "../../runtime-types/session-payloads.js";
 import type { AgentManager } from "../agent-manager.js";
 import type { ManagedAgent } from "../managed-agent.js";
+import type { RunToken } from "../run-coordinator.js";
 import type { ContentPart, ToolCallPart, UIMessage } from "@tanstack/ai";
 
 const MAX_TOOL_PHASES = 40;
@@ -47,8 +48,9 @@ export type { QueuedMessageContent, QueuedMessagesSnapshot } from "../../runtime
 export class AgentChatController {
   private readonly channel: AgentUIChannel;
   private runChain: Promise<void> = Promise.resolve();
-  private runGeneration = 0;
-  /** Nested-safe: abort can finish an old pump after a new one has started. */
+  /** Currency token of the pump in flight — superseded/interrupted tokens go stale. */
+  private currentToken: RunToken | null = null;
+  /** Nested-safe depth; reset only by the single interrupt owner (see interruptCurrentRun). */
   private pumpDepth = 0;
 
   private readonly steeringQueue = new PendingMessageQueue<QueuedMessageContent>();
@@ -99,22 +101,23 @@ export class AgentChatController {
 
   /**
    * Abort the in-flight pump, cancel incomplete tools, and finalize the aborted turn.
-   * Bumps {@link runGeneration} so the old pump exits without double-finalizing.
+   * Invalidates the run token so the old pump exits without double-finalizing.
    */
   private interruptCurrentRun(reason: string): void {
     this.clearQueuedMessages();
     this.managed.statusController.onUserCancel();
     this.managed.abort(reason);
-    this.runGeneration += 1;
-    // Reset pumpDepth so a subsequent sendMessage/forceSubmit is not deferred into
-    // the steer/followUp queue by the stale in-flight pump (still unwinding). The
-    // old pump's finally is guarded with Math.max(0, ...) so this never drifts negative.
+    // Single owner of token invalidation + depth reset. The stale pump's finally
+    // skips decrement when its token is not current (it holds a captured token),
+    // so a subsequent sendMessage/forceSubmit is neither deferred by the stale
+    // pump's queue logic nor desynchronized by its unwinding decrement.
+    this.managed.run.invalidateCurrentRun();
     this.pumpDepth = 0;
     // Immediately clear loading tool rows; stream teardown may still finalize later.
     this.applyCancelledIncompleteTools(true);
     // App no longer checkpoints on status — persist cancelled tools on abort.
     this.persistMessages("pump-complete");
-    // Turn finalize here: bumping runGeneration makes the in-flight pump skip its outcome path.
+    // Turn finalize here: the invalidated token makes the in-flight pump skip its outcome path.
     this.managed.finalizeRun(this.manager, "aborted");
   }
 
@@ -244,6 +247,9 @@ export class AgentChatController {
   }
 
   private shouldDeferQueue(): boolean {
+    // A stale (interrupted/superseded) pump still unwinding must not swallow new
+    // input into the queues — new submissions execute immediately.
+    if (this.currentToken && !this.currentToken.isCurrent) return false;
     return shouldDeferMidRunQueue({ pumpDepth: this.pumpDepth, status: this.managed.status });
   }
 
@@ -321,7 +327,8 @@ export class AgentChatController {
   }
 
   private async pumpToolPhases(): Promise<void> {
-    const generation = ++this.runGeneration;
+    const token = this.managed.run.beginRun();
+    this.currentToken = token;
     const turnStart = Date.now();
     this.pumpDepth += 1;
     this.managed.resetTurnLifecycle();
@@ -338,7 +345,7 @@ export class AgentChatController {
     try {
       for (let toolPhase = 0; toolPhase < MAX_TOOL_PHASES; toolPhase++) {
         if (hasError) break;
-        if (generation !== this.runGeneration) return;
+        if (!token.isCurrent) return;
 
         let currentMessages = this.channel.getMessages();
         if (hasPendingToolApprovals(currentMessages)) break;
@@ -350,12 +357,12 @@ export class AgentChatController {
           currentMessages = prepared.messages;
         }
 
-        await this.executeStream(currentMessages, generation);
+        await this.executeStream(currentMessages, token);
         toolPhases = toolPhase + 1;
         if (this.managed.status === "error") {
           hasError = true;
         }
-        if (generation !== this.runGeneration) {
+        if (!token.isCurrent) {
           // Stream may have finalized truncated tool args after Esc — cancel again.
           this.applyCancelledIncompleteTools(true);
           this.persistMessages("pump-complete");
@@ -376,7 +383,7 @@ export class AgentChatController {
         if (!this.shouldKeepPumping(after)) break;
       }
 
-      if (generation === this.runGeneration) {
+      if (token.isCurrent) {
         this.syncPlanModeFromMessages();
         const messages = this.channel.getMessages();
         const waitingForUser = hasPendingToolApprovals(messages) || hasPendingAskUser(messages);
@@ -435,11 +442,14 @@ export class AgentChatController {
         });
       }
     } finally {
-      this.pumpDepth = Math.max(0, this.pumpDepth - 1);
+      // A non-current (interrupted/superseded) pump must not decrement: the
+      // interrupt owner already reset depth to 0, and the decrement would
+      // otherwise steal depth from a newer pump. No Math.max guard needed.
+      if (token.isCurrent) this.pumpDepth -= 1;
     }
   }
 
-  private async executeStream(messages: UIMessage[], generation: number): Promise<void> {
+  private async executeStream(messages: UIMessage[], token: RunToken): Promise<void> {
     // AbortController is created inside prepareForRun (via runAgentStream) and wired
     // directly into TanStack chat. Do not create a second controller here — that used
     // to leave ManagedAgent.abort() aborting a controller chat was not listening to.
@@ -453,7 +463,7 @@ export class AgentChatController {
         channel: this.channel,
         transformStream: throwOnRunError,
       });
-      if (generation !== this.runGeneration || this.managed.status === "aborted") {
+      if (!token.isCurrent || this.managed.status === "aborted") {
         this.applyCancelledIncompleteTools(true);
         return;
       }
@@ -469,7 +479,7 @@ export class AgentChatController {
 
       this.managed.statusController.reconcileWithPolicy(messagesAfter, "during-run");
     } catch (err) {
-      if (generation !== this.runGeneration || this.managed.status === "aborted") {
+      if (!token.isCurrent || this.managed.status === "aborted") {
         this.applyCancelledIncompleteTools(true);
         return;
       }

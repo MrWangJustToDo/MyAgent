@@ -53,15 +53,25 @@ export interface AgentRunnerRunInput {
   /**
    * Preferred: the same AbortController identity owned by {@link ManagedAgent.run}.
    * `ManagedAgent.abort()` must abort this controller to cancel TanStack `chat()`.
-   * Production runs always pass this (via executeManagedAgentRun after prepareForRun).
+   * Managed run paths (chat pump, subagent, recovery) MUST pass this — the
+   * controller comes from `RunCoordinator` (`prepareForRun`), the single
+   * creation point for run abort controllers.
    */
   abortController?: AbortController;
   /**
    * Fallback only: when `abortController` is omitted, create a fresh controller and
-   * link this signal. Not used by the main/subagent run path today; kept for
-   * resolveAbortController / ad-hoc AgentRunner callers.
+   * link this signal. Requires {@link AgentRunnerRunInput.detached} — a runner-created
+   * controller is the historical "double AbortController" bug shape (cancel fired one
+   * controller while `chat()` listened to another) and must never be reachable from
+   * the managed run path.
    */
   abortSignal?: AbortSignal;
+  /**
+   * Explicit opt-in for ad-hoc `AgentRunner` callers without a `RunCoordinator`
+   * (dev scripts, probes). Creates a detached controller linked to `abortSignal`.
+   * MUST NOT be set by managed run paths — they pass `abortController` instead.
+   */
+  detached?: boolean;
   threadId?: string;
   runId?: string;
   agentId: string;
@@ -82,10 +92,26 @@ export class AgentRunner {
     this.config = config;
   }
 
-  /** Resolve the AbortController passed to TanStack `chat()`. */
-  static resolveAbortController(input: Pick<AgentRunnerRunInput, "abortController" | "abortSignal">): AbortController {
+  /**
+   * Resolve the AbortController passed to TanStack `chat()`.
+   *
+   * Managed run paths MUST pass the coordinator-owned `abortController`. A
+   * runner-created controller (the historical "double AbortController" bug
+   * shape) requires the explicit `detached: true` opt-in.
+   */
+  static resolveAbortController(
+    input: Pick<AgentRunnerRunInput, "abortController" | "abortSignal" | "detached">
+  ): AbortController {
     if (input.abortController) {
       return input.abortController;
+    }
+
+    if (!input.detached) {
+      throw new Error(
+        "AgentRunner.run requires an owner AbortController on managed run paths " +
+          "(RunCoordinator is the single creation point). Pass `detached: true` " +
+          "only for ad-hoc, non-managed usage."
+      );
     }
 
     const abortController = new AbortController();

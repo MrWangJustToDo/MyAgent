@@ -153,11 +153,13 @@ Example use cases:
 
         // Subagent owns its RunCoordinator AbortController (created in prepareForRun
         // and passed into TanStack chat). We do NOT register it on the parent's
-        // pendingAbortControllers — parent cancel must not cascade to the subagent
-        // (and vice versa). The app layer cancels via agentManager → sub.abort().
-        //
-        // No external abortSignal is passed here; runAgent wires the subagent's
-        // currentAbortController into chat so sub.abort() actually stops the stream.
+        // pendingAbortControllers — child cancellation stays isolated from the
+        // parent's own controller. Parent cancel still reaches the child through
+        // ManagedAgent.abort() → cascadeAbortToChildren (running children get
+        // child.abort()), so no external abortSignal is passed here; runAgent
+        // wires the subagent's currentAbortController into chat so sub.abort()
+        // actually stops the stream. Preforked runs take the parent-signal
+        // listener path in task-prefork-middleware instead.
         const result =
           preforked ??
           (await runSubagent(

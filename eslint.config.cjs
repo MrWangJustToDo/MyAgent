@@ -83,6 +83,8 @@ module.exports = [
         process: "readonly",
         Buffer: "readonly",
         Response: "readonly",
+        AbortController: "readonly",
+        AbortSignal: "readonly",
       },
     },
     // validate scripts import their package's dist entry (e.g. ../dist/index.mjs);

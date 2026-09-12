@@ -3,6 +3,22 @@ export interface AbortControllerSetup {
 }
 
 /**
+ * Currency marker for the active pump/run. Captured at pump entry; invalidated
+ * when the run is interrupted or superseded. Replaces numeric generation
+ * counters: "am I still current?" is an object identity check, so a forgotten
+ * check site is a visible API omission rather than a comment-only invariant.
+ */
+export interface RunToken {
+  readonly id: number;
+  get isCurrent(): boolean;
+}
+
+interface RunTokenState {
+  readonly id: number;
+  valid: boolean;
+}
+
+/**
  * Run-scoped state: abort controllers + run-lifecycle flags/timing (continuation
  * mark, turn-finalize guard, stream timing, run id). The reactive-compact retry
  * budget lives on {@link CompactionService}; cross-service orchestration belongs
@@ -74,6 +90,40 @@ export class RunCoordinator {
   isAbortError(err: unknown): boolean {
     if (err instanceof Error) return err.name === "AbortError" || err.message.includes("aborted");
     return false;
+  }
+
+  // ==========================================================================
+  // Run token (currency of the active pump/run)
+  // ==========================================================================
+
+  private currentRunToken: RunTokenState | null = null;
+  private runTokenSeq = 0;
+
+  /**
+   * Begin a new run/pump: invalidates any previous token (supersede) and
+   * returns the token the pump must check via `token.isCurrent` before
+   * touching outcome/finalize state.
+   */
+  beginRun(): RunToken {
+    if (this.currentRunToken) this.currentRunToken.valid = false;
+    const state: RunTokenState = { id: ++this.runTokenSeq, valid: true };
+    this.currentRunToken = state;
+    return {
+      id: state.id,
+      get isCurrent() {
+        return state.valid;
+      },
+    };
+  }
+
+  /** Invalidate the current run token (interrupt / force-submit / abort path). */
+  invalidateCurrentRun(): void {
+    if (this.currentRunToken) this.currentRunToken.valid = false;
+  }
+
+  /** Whether the latest begun run is still current (no interrupt/supersede since). */
+  isCurrentRunValid(): boolean {
+    return this.currentRunToken?.valid ?? false;
   }
 
   // ==========================================================================

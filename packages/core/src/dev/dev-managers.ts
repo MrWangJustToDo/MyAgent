@@ -30,7 +30,7 @@ export { UsageTracker } from "../managers/telemetry/usage-tracker.js";
 export { AgentChatController } from "../managers/controllers/agent-chat-controller.js";
 export { finalizeManagedAgentRun } from "../managers/managed-agent-run-lifecycle.js";
 export { ManagedAgent } from "../managers/managed-agent.js";
-export { RunCoordinator } from "../managers/run-coordinator.js";
+export { RunCoordinator, type RunToken } from "../managers/run-coordinator.js";
 export { CompactionService } from "../managers/services/compaction-service.js";
 export { SessionService } from "../managers/services/session-service.js";
 export { resolveTextAdapterForManaged } from "../managers/run-agent.js";
