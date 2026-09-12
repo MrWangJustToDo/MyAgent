@@ -1,3 +1,5 @@
+import { defineMiddleware } from "./phase.js";
+
 import type { ExtensionRunner } from "../../agent/extension/runner.js";
 import type { ToolAfterEvent, ToolBeforeEvent } from "../../agent/extension/types.js";
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
@@ -19,7 +21,7 @@ export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): Chat
   // rewrite the result back to the model (TanStack 0.43.1 API constraint).
   const modifiedResults = new Map<string, unknown>();
 
-  return {
+  return defineMiddleware("tools", {
     name: "extensions",
     onBeforeToolCall: async (_ctx, hookCtx) => {
       deps.emitEvent?.("agent:tool-start", {
@@ -132,5 +134,5 @@ export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): Chat
       }
       modifiedResults.clear();
     },
-  };
+  });
 }

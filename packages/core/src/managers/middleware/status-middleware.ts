@@ -6,6 +6,8 @@
  * directly via {@link createCompactionMiddleware}.
  */
 
+import { defineMiddleware } from "./phase.js";
+
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { AgentStatusController } from "../../runtime-types";
 import type { ChatMiddleware } from "@tanstack/ai";
@@ -20,7 +22,7 @@ export interface StatusMiddlewareDeps {
 }
 
 export function createStatusMiddleware(deps: StatusMiddlewareDeps): ChatMiddleware<ToolRunContext> {
-  return {
+  return defineMiddleware("observe", {
     name: "status",
     onStart: () => {
       deps.status.onRunStart();
@@ -47,5 +49,5 @@ export function createStatusMiddleware(deps: StatusMiddlewareDeps): ChatMiddlewa
       deps.status.onBeforeToolCall();
       return;
     },
-  };
+  });
 }

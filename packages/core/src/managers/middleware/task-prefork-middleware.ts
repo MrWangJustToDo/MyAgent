@@ -17,6 +17,8 @@ import { getTaskPreforkCoordinator } from "../../agent/subagent/task-prefork.js"
 import { SUBAGENT_NO_TRUNCATE } from "../../agent/subagent/types.js";
 import { generateId } from "../../utils/generate-id.js";
 
+import { defineMiddleware } from "./phase.js";
+
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { AgentUIChannel, ManagedAgent, AgentManager } from "../../runtime-types";
 import type { EmitAgentTelemetryFn } from "../telemetry/emit-agent-telemetry.js";
@@ -48,7 +50,7 @@ export function createTaskPreforkMiddleware(deps: TaskPreforkMiddlewareDeps): Ch
     }
   };
 
-  return {
+  return defineMiddleware("tools", {
     name: "task-prefork",
     onChunk: (_ctx, chunk) => {
       const managed = deps.getManagedAgent();
@@ -89,7 +91,7 @@ export function createTaskPreforkMiddleware(deps: TaskPreforkMiddlewareDeps): Ch
     onAbort: async () => {
       resetEpoch();
     },
-  };
+  });
 }
 
 /**

@@ -7,6 +7,8 @@
 
 import { approvalsToResumeMap } from "../../agent/approval/tool-approval-table.js";
 
+import { defineMiddleware } from "./phase.js";
+
 import type { ToolApprovalRecord } from "../../agent/persistence/types.js";
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { ChatMiddleware } from "@tanstack/ai";
@@ -16,7 +18,7 @@ export interface ApprovalResumeMiddlewareDeps {
 }
 
 export function createApprovalResumeMiddleware(deps: ApprovalResumeMiddlewareDeps): ChatMiddleware<ToolRunContext> {
-  return {
+  return defineMiddleware("observe", {
     name: "approval-resume",
     onConfig: async (_ctx, config) => {
       const approvals = approvalsToResumeMap(deps.getApprovals());
@@ -29,5 +31,5 @@ export function createApprovalResumeMiddleware(deps: ApprovalResumeMiddlewareDep
         },
       };
     },
-  };
+  });
 }

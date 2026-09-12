@@ -6,6 +6,7 @@ import {
 } from "../../agent/turn-context/turn-context-message.js";
 import { buildSystemPromptWithTurnContext, buildProjectInstructionsSection } from "../managed-agent-prompt.js";
 
+import { defineMiddleware } from "./phase.js";
 import { injectSyntheticMessages } from "./synthetic-injection.js";
 
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
@@ -57,7 +58,7 @@ export interface TurnContextMiddlewareDeps {
  *   messages on first call (restore support).
  */
 export function createTurnContextMiddleware(deps: TurnContextMiddlewareDeps): ChatMiddleware<ToolRunContext> {
-  return {
+  return defineMiddleware("context-transform", {
     name: "turn-context",
     onConfig: async (_ctx, config) => {
       const systemPrompts = buildSystemPromptWithTurnContext(deps.getFrozenSystemPrompt());
@@ -140,5 +141,5 @@ export function createTurnContextMiddleware(deps: TurnContextMiddlewareDeps): Ch
 
       return { ...result, messages: config.messages };
     },
-  };
+  });
 }

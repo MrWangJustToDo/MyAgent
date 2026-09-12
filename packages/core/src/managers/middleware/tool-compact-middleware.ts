@@ -1,6 +1,8 @@
 import { applyToolCompact } from "../../agent/compaction/tool-compact/apply-tool-compact.js";
 import { toModelOutputRegistry } from "../../agent/tools/runtime/to-model-output-registry.js";
 
+import { defineMiddleware } from "./phase.js";
+
 import type { ToolCompactCache } from "../../agent/compaction/tool-compact/tool-compact-cache.js";
 import type { ToModelOutputRegistry } from "../../agent/compaction/tool-compact/types.js";
 import type { CompactionConfig } from "../../agent/compaction/types.js";
@@ -19,7 +21,7 @@ export interface ToolCompactMiddlewareDeps {
 export function createToolCompactMiddleware(deps: ToolCompactMiddlewareDeps): ChatMiddleware<ToolRunContext> {
   const registry = deps.registry ?? toModelOutputRegistry;
 
-  return {
+  return defineMiddleware("context-transform", {
     name: "tool-compact",
     onConfig: async (_ctx, config) => {
       const messages = config.messages as ModelMessage[];
@@ -36,5 +38,5 @@ export function createToolCompactMiddleware(deps: ToolCompactMiddlewareDeps): Ch
 
       return { messages };
     },
-  };
+  });
 }

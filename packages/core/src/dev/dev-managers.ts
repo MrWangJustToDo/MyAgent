@@ -58,6 +58,19 @@ export {
   buildFrozenSystemPrompt,
 } from "../managers/managed-agent-prompt.js";
 export { createPromptCacheMiddleware } from "../managers/middleware/prompt-cache-middleware.js";
+export {
+  assertCanonicalMiddlewareOrder,
+  CANONICAL_MIDDLEWARE_ORDER,
+  createBackgroundNotificationMiddleware,
+  createCompactionMiddleware,
+  createPlanModeMiddleware,
+  createToolCompactMiddleware,
+  createTurnContextMiddleware,
+  defineMiddleware,
+  sortMiddlewaresByPhase,
+  MIDDLEWARE_PHASE_RANK,
+} from "../managers/middleware/index.js";
+export type { MiddlewarePhase } from "../managers/middleware";
 export { createAgentStatusController, AgentStatusController } from "../managers/controllers/agent-status-controller.js";
 export type {
   AgentRunOutcome,

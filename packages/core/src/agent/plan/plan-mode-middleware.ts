@@ -1,3 +1,5 @@
+import { defineMiddleware } from "../../managers/middleware/phase.js";
+
 import { getPlanModeToolBlockReason } from "./plan-tools.js";
 
 import type { PlanModeController } from "./plan-mode-controller.js";
@@ -10,7 +12,7 @@ export interface PlanModeMiddlewareDeps {
 
 /** Skip forbidden / unsafe tools while plan mode restricts tooling. */
 export function createPlanModeMiddleware(deps: PlanModeMiddlewareDeps): ChatMiddleware<ToolRunContext> {
-  return {
+  return defineMiddleware("tools", {
     name: "plan-mode",
     onBeforeToolCall: async (_ctx, hookCtx) => {
       const planMode = deps.getPlanMode();
@@ -21,5 +23,5 @@ export function createPlanModeMiddleware(deps: PlanModeMiddlewareDeps): ChatMidd
         result: { error: reason },
       };
     },
-  };
+  });
 }

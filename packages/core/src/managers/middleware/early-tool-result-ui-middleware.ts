@@ -7,6 +7,8 @@
  * finish — especially visible for long-running `task` tools.
  */
 
+import { defineMiddleware } from "./phase.js";
+
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { AgentUIChannel } from "../../runtime-types";
 import type { ChatMiddleware } from "@tanstack/ai";
@@ -18,7 +20,7 @@ export interface EarlyToolResultUiMiddlewareDeps {
 export function createEarlyToolResultUiMiddleware(
   deps: EarlyToolResultUiMiddlewareDeps
 ): ChatMiddleware<ToolRunContext> {
-  return {
+  return defineMiddleware("tools", {
     name: "early-tool-result-ui",
     onAfterToolCall: async (_ctx, info) => {
       const toolCallId = info.toolCallId;
@@ -35,5 +37,5 @@ export function createEarlyToolResultUiMiddleware(
       const message = info.error instanceof Error ? info.error.message : String(info.error ?? "Tool execution failed");
       channel.addToolResult(toolCallId, { error: message }, message);
     },
-  };
+  });
 }

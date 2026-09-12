@@ -12,6 +12,8 @@ import {
   wireSourceFingerprint,
 } from "../../agent/compaction";
 
+import { defineMiddleware } from "./phase.js";
+
 import type { AgentLog } from "../../agent/agent-log";
 import type { CompactionConfig } from "../../agent/compaction/types.js";
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
@@ -52,7 +54,7 @@ function projectWireFromChannel(
 /** TanStack compaction via {@link ChatMiddleware.onConfig}. */
 export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): ChatMiddleware<ToolRunContext> {
   const wireCache = new WireProjectionCache();
-  return {
+  return defineMiddleware("context-transform", {
     name: "compaction",
     onIteration: () => {
       deps.getTodoManager()?.incrementRound();
@@ -134,5 +136,5 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
 
       return { messages: llmMessages };
     },
-  };
+  });
 }

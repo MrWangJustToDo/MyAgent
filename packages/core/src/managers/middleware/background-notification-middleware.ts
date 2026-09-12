@@ -1,5 +1,6 @@
 import { commandJobRegistry, type CompletedCommandJob } from "../../agent/tools/util/command-job-registry.js";
 
+import { defineMiddleware } from "./phase.js";
 import { injectSyntheticMessages } from "./synthetic-injection.js";
 
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
@@ -40,7 +41,7 @@ export function createBackgroundNotificationMiddleware(
 ): ChatMiddleware<ToolRunContext> {
   const maxOutputChars = deps.maxOutputChars ?? 2000;
 
-  return {
+  return defineMiddleware("tools", {
     name: "background-notification",
     onConfig: async (_ctx, config) => {
       const completed = commandJobRegistry.collectCompleted();
@@ -65,7 +66,7 @@ export function createBackgroundNotificationMiddleware(
 
       return { messages };
     },
-  };
+  });
 }
 
 function formatNotifications(jobs: CompletedCommandJob[], maxOutputChars: number): string {

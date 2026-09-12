@@ -27,6 +27,7 @@ import {
   createTurnContextMiddleware,
   instrumentMiddlewareLog,
 } from "./middleware";
+import { sortMiddlewaresByPhase, assertCanonicalMiddlewareOrder } from "./middleware/phase.js";
 import { runStreamWithRecovery } from "./run-stream-recovery.js";
 import { createEmitTelemetryFn } from "./telemetry/emit-agent-telemetry.js";
 
@@ -123,7 +124,7 @@ export function buildAgentRunner(
   const systemPrompt = managed.getSystemPrompt();
   const emitEvent = createEmitTelemetryFn(managed);
 
-  const middleware = [
+  const middleware = sortMiddlewaresByPhase([
     createStatusMiddleware({
       status: managed.statusController,
       onApprovalRequested: (approvalId, toolCallId) => {
@@ -206,12 +207,12 @@ export function buildAgentRunner(
       getUIChannel: () => managed.ui,
       persistMessages: (next) => managed.maybeSaveSessionUIMessages(next, "user-message"),
     }),
-    // After turn-context / tool filtering so breakpoints see the final wire payload.
     createPromptCacheMiddleware({
       getModelStyle: () => managed.config.modelStyle,
       getPromptCacheKey: () => resolvePromptCacheKey(deps.session.getSessionData()?.id, deps.agentId),
     }),
-  ];
+  ]);
+  assertCanonicalMiddlewareOrder(middleware, (message: string) => deps.log?.warn("agent", message));
 
   const maxOutputTokens = managed.getConfig().maxTokens ?? deps.modelInfo?.defaultMaxTokens;
 

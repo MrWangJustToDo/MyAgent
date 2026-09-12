@@ -7,6 +7,8 @@ import {
   sortToolsByName,
 } from "../../models/cache/prompt-cache.js";
 
+import { defineMiddleware } from "./phase.js";
+
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { ModelStyle } from "../../models/types.js";
 import type { ChatMiddleware, ModelMessage, ServerTool, SystemPrompt } from "@tanstack/ai";
@@ -50,7 +52,7 @@ export function createPromptCacheMiddleware(deps: PromptCacheMiddlewareDeps): Ch
   let cachedToolFingerprint = "";
   let cachedSortedTools: ServerTool[] | null = null;
 
-  return {
+  return defineMiddleware("wire-annotate", {
     name: "prompt-cache",
     onConfig: async (_ctx, config) => {
       const style = deps.getModelStyle();
@@ -88,5 +90,5 @@ export function createPromptCacheMiddleware(deps: PromptCacheMiddlewareDeps): Ch
 
       return patch;
     },
-  };
+  });
 }

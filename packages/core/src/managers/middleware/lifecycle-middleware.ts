@@ -8,6 +8,8 @@
 
 import { extractTanStackProvider, extractTanStackUsage } from "../../runtime-types/token-usage.js";
 
+import { defineMiddleware } from "./phase.js";
+
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { ModelPricing } from "../../models/types.js";
 import type { UsageTracker } from "../../runtime-types";
@@ -64,7 +66,7 @@ export function createLifecycleMiddleware(deps: LifecycleMiddlewareDeps): ChatMi
   let lastReasoningTokens = 0;
   let lastCostUsd = 0;
 
-  return {
+  return defineMiddleware("observe", {
     name: "lifecycle",
     onIteration: (_ctx, info) => {
       // TanStack `IterationInfo.iteration` is 0-based (one iteration = one model
@@ -153,5 +155,5 @@ export function createLifecycleMiddleware(deps: LifecycleMiddlewareDeps): ChatMi
         durationMs: Date.now() - startTime,
       });
     },
-  };
+  });
 }
