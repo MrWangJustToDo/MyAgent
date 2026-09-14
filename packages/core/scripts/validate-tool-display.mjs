@@ -258,3 +258,31 @@ for (const output of [{ error: "permission denied" }, { ok: false }, { success: 
 assert.equal(core.computeToolDisplay("memory_write", { ok: false }), undefined, "memory_write failure");
 
 console.log("validate-tool-display: lifecycle + failure shapes ok");
+
+// --- 12. hydration fidelity --------------------------------------------------
+// `hasText` is what keeps a text-only tool's row alive (`keepRow || clientSide || text`), so it
+// must survive adoption even though the renderer itself cannot.
+core.hydrateToolPresentations([{ name: "hydrated_text_only", category: "other", hasText: true }]);
+assert.equal(core.keepsCompactRow("hydrated_text_only"), true, "a text-only tool keeps its row");
+assert.equal(typeof core.getToolPresentation("hydrated_text_only")?.text, "function", "as a presence stub");
+
+// Adoption replaces the previous catalog, and a payload without descriptors is tolerated.
+core.hydrateToolPresentations([{ name: "hydrated_other", category: "other", hasText: true }]);
+assert.equal(core.keepsCompactRow("hydrated_text_only"), false, "the old adoption is dropped");
+assert.doesNotThrow(() => core.hydrateToolPresentations(undefined), "undefined catalog is a no-op");
+
+// A row that already shipped its rendered text must not fold, even when the local lookup has
+// never heard of the tool (pre-change history replayed into a remote host).
+const shippedRow = {
+  type: "tool-call",
+  toolCallId: "call-shipped",
+  toolName: "ext_echo",
+  name: "ext_echo",
+  state: "output-available",
+  input: { text: "hi" },
+  output: { echoed: "hi" },
+  display: { text: "echo -> hi" },
+};
+assert.equal(core.shouldKeepToolRow(shippedRow), true, "a row with shipped text keeps its row");
+
+console.log("validate-tool-display: hydration fidelity ok");

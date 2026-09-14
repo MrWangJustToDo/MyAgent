@@ -97,3 +97,15 @@ Report findings, all verified against the code and addressed:
 
 Deferred on purpose: `ToolPresentation.input` stays unused until the input-formatting half of
 stage 2 lands (the plan keeps it in the descriptor API).
+
+### Third review round (catalog equivalence)
+
+- **Adopted catalog now matches the owner**: `hasText` is carried across as a presence stub, so
+  `keepsCompactRow` (`keepRow || clientSide || text`) answers the same on a remote host; a row
+  that shipped its own `part.display.text` no longer folds (the fold rule reads the payload).
+- **Adoption is a replacement, not a merge**: a later catalog drops entries the owner stopped
+  publishing, so a disabled extension cannot keep ruling rows on that host.
+- **Tolerant input**: a payload without `descriptors` (older publisher) is a no-op instead of a
+  throw.
+- `isErrorOutput`'s `ok`/`success` assumption is documented (every built-in uses them as failure
+  semantics; a tool that needs otherwise should declare `isError` in its schema).

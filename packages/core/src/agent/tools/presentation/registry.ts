@@ -45,6 +45,11 @@ export function getToolPresentation(name: string): ToolPresentation | undefined 
  * cannot degrade (it would report renderers as absent).
  */
 export function hydrateToolPresentations(descriptors: readonly ToolPresentationInfo[]): void {
+  // A catalog is always the complete set (snapshot or event), so adopting one replaces the
+  // previous adoption — otherwise a tool the owner dropped keeps ruling this host's rows.
+  hydrated.clear();
+  // Tolerate a publisher that predates the field (its payload simply has no descriptors).
+  if (!Array.isArray(descriptors)) return;
   for (const info of descriptors) {
     if (registered.has(info.name) || declared.has(info.name)) continue;
     const present: ToolPresentation = {};
@@ -53,6 +58,11 @@ export function hydrateToolPresentations(descriptors: readonly ToolPresentationI
     if (info.detailed) present.detailed = true;
     if (info.clientSide) present.clientSide = true;
     if (info.labelKey) present.labelKey = info.labelKey;
+    // The renderer itself cannot cross processes, but its *existence* is what
+    // `keepsCompactRow` (keepRow || clientSide || text) keys off. A presence-only stub keeps the
+    // owner's row shape; it is never called here, and hosts render the shipped
+    // `part.display.text` instead.
+    if (info.hasText) present.text = () => undefined;
     hydrated.set(info.name, present);
   }
 }

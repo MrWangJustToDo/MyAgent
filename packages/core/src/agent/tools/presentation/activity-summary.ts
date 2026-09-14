@@ -51,6 +51,11 @@ export function shouldKeepToolRow(part: ToolCallPart): boolean {
     return true;
   }
 
+  // A row that shipped its own rendered text owns its row: a host that never created the tool
+  // (remote session) cannot learn that from the descriptor lookup, and folding would drop the
+  // text. Locally such tools already keep their row, so this changes nothing for the owner.
+  if ((part as { display?: ToolDisplayPayload }).display?.text) return true;
+
   // Abort / Esc mid-tool: no output yet — never fold away.
   if (part.output === undefined) return true;
 

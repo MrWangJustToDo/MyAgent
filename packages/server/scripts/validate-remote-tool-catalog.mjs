@@ -17,6 +17,8 @@ const core = await import("@my-agent/core");
 const ownerCatalog = [
   { name: "owner_only_tool", category: "read", keepRow: true, hasText: true },
   { name: "owner_command", category: "command", detailed: true, hasText: true },
+  // The hard case: nothing but a renderer keeps this row alive (`keepRow || clientSide || text`).
+  { name: "owner_text_only", category: "other", hasText: true },
 ];
 
 assert.equal(core.keepsCompactRow("owner_only_tool"), false, "unknown before the snapshot arrives");
@@ -37,9 +39,34 @@ new RemoteSessionClient({
 assert.equal(core.keepsCompactRow("owner_only_tool"), true, "the host adopts the owner's row rule");
 assert.equal(core.getToolPresentation("owner_command")?.detailed, true, "and the owner's block ownership");
 assert.equal(
+  core.keepsCompactRow("owner_text_only"),
+  true,
+  "a text-only tool keeps its row on the host too (the owner has a renderer for it)"
+);
+assert.equal(
   core.describeToolPresentations().some((entry) => entry.name === "owner_only_tool"),
   false,
   "adopted entries are never re-published"
 );
+
+// A later catalog is the complete set: a tool the owner dropped must stop ruling rows here.
+new RemoteSessionClient({
+  agentId: "catalog-check",
+  baseUrl: "http://127.0.0.1:1",
+  fetchImpl: async () => {
+    throw new Error("no network in this check");
+  },
+  initialSnapshot: {
+    agentId: "catalog-check",
+    messages: [],
+    toolDescriptors: [ownerCatalog[1]],
+  },
+});
+assert.equal(
+  core.keepsCompactRow("owner_only_tool"),
+  false,
+  "re-adopting a catalog drops entries the owner no longer publishes"
+);
+assert.doesNotThrow(() => core.hydrateToolPresentations(undefined), "a catalog-less payload is tolerated");
 
 console.log("validate-remote-tool-catalog: ok");

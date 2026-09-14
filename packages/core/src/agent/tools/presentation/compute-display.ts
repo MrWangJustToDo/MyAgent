@@ -63,7 +63,14 @@ export function computeToolDisplay(name: string, output: unknown, input?: unknow
   return Object.keys(display).length > 0 ? display : undefined;
 }
 
-/** Whether the stored output is a failure report (as opposed to a normal result). */
+/**
+ * Whether the stored output is a failure report (as opposed to a normal result).
+ *
+ * `ok: false` / `success: false` count as failure: every built-in uses those fields with
+ * that meaning in its output schema. A tool that carries business data in them would lose its
+ * summary — the durable fix for such a tool is to declare `isError` in its output schema
+ * rather than to widen this check.
+ */
 function isErrorOutput(output: unknown): boolean {
   if (typeof output !== "object" || output === null) return false;
   const record = output as { error?: unknown; isError?: unknown; ok?: unknown; success?: unknown };
