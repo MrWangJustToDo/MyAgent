@@ -3,6 +3,7 @@
  *
  * Run: node packages/app/test/project-transcript.test.mjs
  */
+import { clearToolDisplay, clearToUI, registerToUI } from "@my-agent/core";
 import assert from "node:assert/strict";
 
 import {
@@ -181,5 +182,29 @@ const sparse = projectTranscriptForDisplay(
 assert.ok(isActivitySummaryMessage(sparse[1]));
 assert.equal(sparse[1].parts[0].content, "Explored 1 file");
 assert.equal(sparse[2].id, "a2-d0");
+
+// Extension-injected tools: named in the folded summary, and their declared
+// metadata/`toUI` decide whether they fold at all.
+const extTools = toolMsg("a-ext", [
+  { id: "e1", name: "ext_echo", arguments: JSON.stringify({ message: "hi" }), output: { echoed: "hi" } },
+  { id: "e2", name: "ext_echo", arguments: JSON.stringify({ message: "ho" }), output: { echoed: "ho" } },
+]);
+const extFolded = projectTranscriptForDisplay([user, extTools, final], { mode: "compact" });
+assert.ok(isActivitySummaryMessage(extFolded[1]));
+assert.equal(extFolded[1].parts[0].content, "ext_echo ×2");
+
+// Structured tools keep their row once completed instead of folding away.
+const structured = projectTranscriptForDisplay(
+  [user, toolMsg("a-todo", [{ id: "s1", name: "todo", arguments: "{}", output: { items: [] } }]), final],
+  { mode: "compact" }
+);
+assert.equal(structured[1].id, "a-todo");
+
+// A curated toUI line is the tool's compact representation — the row survives.
+registerToUI("ext_echo", (result) => `echo → ${result?.echoed ?? ""}`);
+const extKept = projectTranscriptForDisplay([user, extTools, final], { mode: "compact" });
+assert.equal(extKept[1].id, "a-ext");
+clearToUI();
+clearToolDisplay();
 
 console.log("project-transcript.test.mjs: ok");

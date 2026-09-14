@@ -855,6 +855,21 @@ This is also how a code-mode sandbox reads background output: `read_file` is exp
   `summary` channel. Task keys are `task:${toolCallId}`; compact keys are stable `compact:${agentId}`
   (single-flight per agent). App `useSummaryStream` / `useActiveCompactSummaryStream` keep a fixed line window
   (`pendingLine` + overflow indicator). Do not route summary text through `StreamingOutputView`.
+- **Compact transcript (`/appearance compact`):** the density mode has two layers that must agree:
+  - *Projection* (`packages/app/src/utils/project-transcript.ts`) folds contiguous **completed**
+    tool calls into one synthesized activity-summary row (`display-activity:<turn>:<seq>`). Only the
+    static (non-streaming) portion is projected; the live message renders as-is.
+  - *Render* (`packages/app/src/messages/ToolOutputView.tsx`, `ToolInputView.tsx`) hides bulky
+    blocks; input lines clamp to 72 chars, result blocks to a single 200-char line.
+  - A tool **keeps its row and its one-line result** when `keepsCompactRow(name)` is true
+    (`packages/app/src/utils/tool-display.ts`): structured built-ins (`ALWAYS_VISIBLE_TOOL_NAMES`:
+    `ask_user`, `todo`, `complete_plan`) or any tool that registered a `toUI` renderer (extension
+    tools — a `toUI` string is a one-line contract). Everything else folds; errored rows always
+    fold as an `error` count because the render layer hides them.
+  - Folded tools group by bucket (`TOOL_BUCKET` + registry `display.category`). Tools with no
+    bucket are named in the summary (`ext_echo ×2`) rather than collapsing into an opaque
+    `N other`; `display.label(input)` adds a short label. Extensions declare this metadata via
+    `registerTool`'s `display` field (registry: `getToolDisplay` / `display.label`).
 
 ## CLI Keyboard Shortcuts
 

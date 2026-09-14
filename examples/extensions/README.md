@@ -29,6 +29,13 @@ Manage loaded extensions at runtime with `/extensions` (list), `/extensions enab
 
 For tool schemas, use **`ctx.z`** (host Zod) as the convenience API. `inputSchema`/`outputSchema` are also widened to accept any Standard-Schema / JSON-Schema-compliant schema (Zod, ArkType, Valibot, or a plain JSON Schema object) — see `demo-pi-like.mjs`.
 
+## Tool display (`toUI` + `display`)
+
+A registered tool feeds two host-side display layers:
+
+- **`toUI(result)`** — the result string. In `full` display it renders as the tool's output block; in `compact` display (`/appearance compact`) it renders as **one clamped line** and the row is **kept** instead of being folded into an activity summary. That contract is what keeps an extension tool legible in compact mode, so keep it short and single-line (`demo-echo-tool.mjs`: `echo → hi`).
+- **`display: { category, label }`** — optional compact-transcript metadata. `category` (`reads` / `edits` / `searches` / `commands` / `tasks` / `other`) decides which activity bucket the tool is counted in when it *is* folded; `label(input)` supplies the short text shown after the count (a filename, a query, a message). Without either, a folded extension tool is still named in the summary (`ext_echo ×2`) instead of an opaque `N other`.
+
 Extensions can now also:
 - Observe the agent session lifecycle via `session:start` / `session:shutdown` interceptors.
 - Draw into the host UI via the single generic surface: `ctx.ui.render(surface, key, payload)` with `payload` = raw text (ANSI + newlines preserved) or a `text` / `row` / `column` / `box` layout tree. `null` removes the slot; slots are per-extension and cleared when it is disabled.

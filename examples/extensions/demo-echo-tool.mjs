@@ -27,6 +27,13 @@ export default {
         return { echoed: message };
       },
       toUI: (result) => `echo → ${result?.echoed ?? ""}`,
+      // Compact-transcript metadata (demo): name the bucket this tool folds into
+      // and label folded calls with the echoed text. Pick the category that fits
+      // your tool (reads / edits / searches / commands / tasks / other).
+      display: {
+        category: "other",
+        label: (input) => (typeof input?.message === "string" ? input.message : undefined),
+      },
     });
     ctx.logger.info("registered tool ext_echo");
   },

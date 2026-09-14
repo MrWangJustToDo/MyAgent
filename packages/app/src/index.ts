@@ -48,6 +48,12 @@ export {
   DURATION_THRESHOLD_MS,
 } from "./utils/format.js";
 export {
+  ALWAYS_VISIBLE_TOOL_NAMES,
+  DETAILED_OUTPUT_TOOL_NAMES,
+  hasDetailedOutputBlock,
+  keepsCompactRow,
+} from "./utils/tool-display.js";
+export {
   HINT_ROTATE_INTERVAL_MS,
   INPUT_HINTS,
   currentInputHint,

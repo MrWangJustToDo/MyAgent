@@ -210,6 +210,13 @@ export { resolveSummarizationBudget } from "./agent/compaction";
 
 export { previewEdit, type PreviewEditResult } from "./agent/tools/util/preview-edit.js";
 export { registerToUI, getToUI, clearToUI } from "./agent/tools/runtime/to-ui-registry.js";
+export {
+  registerToolDisplay,
+  getToolDisplay,
+  clearToolDisplay,
+  type ToolActivityCategory,
+  type ToolDisplayMeta,
+} from "./agent/tools/runtime/tool-display-registry.js";
 
 // ============================================================================
 // Tool output types (message formatting)

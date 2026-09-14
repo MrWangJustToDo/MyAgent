@@ -1,9 +1,42 @@
+import { getToUI } from "@my-agent/core";
 import chalk from "chalk";
 
 import { COLORS } from "../theme/colors.js";
 
 import type { UiToolState } from "./tool-part.js";
 import type { ToolCallPart } from "@tanstack/ai";
+
+/**
+ * Completed tool rows that stay visible in compact display: interactive or
+ * structured results (an answer, a checklist, a plan summary) that a row header
+ * cannot express. Single source of truth for both the compact projection (the
+ * fold decision in `tool-activity-summary`) and the render layer (output block).
+ */
+export const ALWAYS_VISIBLE_TOOL_NAMES: ReadonlySet<string> = new Set(["ask_user", "todo", "complete_plan"]);
+
+/** Built-in tools that render a detailed output block in full mode only. */
+export const DETAILED_OUTPUT_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "run_command",
+  "get_command_output",
+  "kill_command",
+  "task",
+]);
+
+/** Whether a tool renders a detailed output block in full mode. */
+export function hasDetailedOutputBlock(toolName: string): boolean {
+  return ALWAYS_VISIBLE_TOOL_NAMES.has(toolName) || DETAILED_OUTPUT_TOOL_NAMES.has(toolName);
+}
+
+/**
+ * Whether a tool owns its compact presentation: structured UI
+ * ({@link ALWAYS_VISIBLE_TOOL_NAMES}) or a registered `toUI` renderer. A `toUI`
+ * string is a single curated line by contract — exactly compact density — so such
+ * a tool keeps its row (instead of folding into an activity count) and renders
+ * that one line as its output block.
+ */
+export function keepsCompactRow(toolName: string): boolean {
+  return ALWAYS_VISIBLE_TOOL_NAMES.has(toolName) || getToUI(toolName) !== undefined;
+}
 
 /** Get status color for tool invocation state. */
 export function getToolCallColor(state: UiToolState | string): string {

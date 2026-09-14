@@ -3,9 +3,12 @@
  *
  * Run: node packages/app/test/tool-activity-summary.test.mjs
  */
+import { clearToUI, clearToolDisplay, registerToolDisplay, registerToUI } from "@my-agent/core";
 import assert from "node:assert/strict";
 
+import { keepsCompactRow } from "../dist/index.mjs";
 import {
+  collectOtherToolNames,
   countToolActivity,
   extractActivityLabel,
   extractActivityLabelInfo,
@@ -224,5 +227,91 @@ assert.equal(
   ]),
   "Explored 1 file · a.ts"
 );
+
+// --- Extension tools: named `other` bucket, display metadata, curated toUI rows -------
+
+// Tools without a bucket of their own are named instead of collapsing into `N other`.
+const unnamed = [
+  { id: "1", name: "ext_echo", type: "tool-call", arguments: JSON.stringify({ message: "hi" }), output: {} },
+  { id: "2", name: "ext_echo", type: "tool-call", arguments: JSON.stringify({ message: "ho" }), output: {} },
+  { id: "3", name: "weird_tool", type: "tool-call", arguments: "{}", output: {} },
+  { id: "1", name: "ext_echo", type: "tool-call", arguments: JSON.stringify({ message: "hi" }), output: {} },
+  { id: "4", name: "read_file", type: "tool-call", arguments: JSON.stringify({ path: "a.ts" }), output: {} },
+  { id: "5", name: "ext_echo", type: "tool-call", state: "error", arguments: "{}", output: { error: "x" } },
+];
+assert.deepEqual(collectOtherToolNames(unnamed), [
+  { name: "ext_echo", count: 2 },
+  { name: "weird_tool", count: 1 },
+]);
+assert.equal(
+  formatToolActivitySummary(countToolActivity(unnamed), collectOtherToolNames(unnamed)),
+  "1 read, ext_echo ×2, weird_tool, 1 error"
+);
+assert.equal(
+  formatExploredActivitySummary(unnamed.filter((p) => p.name !== "read_file")),
+  "ext_echo ×2, weird_tool, 1 error"
+);
+// Built-in labels still lead the label list.
+assert.equal(
+  formatExploredActivitySummary([
+    { id: "1", name: "read_file", type: "tool-call", arguments: JSON.stringify({ path: "a.ts" }), output: {} },
+    { id: "2", name: "ext_echo", type: "tool-call", arguments: JSON.stringify({ message: "hi" }), output: {} },
+  ]),
+  "1 read, ext_echo · a.ts"
+);
+
+// Registered display metadata wins over the built-in table and supplies labels.
+registerToolDisplay("ext_echo", { category: "searches", label: (input) => input?.message });
+assert.equal(getToolActivityBucket("ext_echo"), "searches");
+assert.equal(getToolActivityBucket("read_file"), "reads");
+assert.equal(getToolActivityBucket("never_registered_tool"), "other");
+const curated = extractActivityLabelInfo({
+  id: "1",
+  name: "ext_echo",
+  type: "tool-call",
+  arguments: JSON.stringify({ message: "hi" }),
+});
+assert.equal(curated.text, "hi");
+assert.ok(curated.tier < 0, "curated labels outrank file basenames");
+assert.equal(
+  formatExploredActivitySummary([
+    { id: "1", name: "ext_echo", type: "tool-call", arguments: JSON.stringify({ message: "hi" }), output: {} },
+    { id: "2", name: "ext_echo", type: "tool-call", arguments: JSON.stringify({ message: "ho" }), output: {} },
+    { id: "3", name: "run_command", type: "tool-call", arguments: JSON.stringify({ command: "ls" }), output: {} },
+  ]),
+  "2 searches, 1 command · hi, ho"
+);
+
+// A curated toUI line means the tool owns its compact row (metadata alone does not).
+assert.equal(keepsCompactRow("read_file"), false);
+assert.equal(keepsCompactRow("todo"), true);
+assert.equal(keepsCompactRow("ext_echo"), false);
+registerToUI("ext_echo", (result) => `echo → ${result?.echoed ?? ""}`);
+assert.equal(keepsCompactRow("ext_echo"), true);
+
+const completed = (name) => ({
+  id: "1",
+  name,
+  type: "tool-call",
+  state: "complete",
+  arguments: "{}",
+  output: {},
+});
+
+// Structured tools stay as rows once completed; curated-toUI rows do too.
+assert.equal(shouldKeepToolRow(completed("todo")), true);
+assert.equal(shouldFoldToolRow(completed("todo")), false);
+assert.equal(shouldKeepToolRow(completed("ask_user")), true);
+assert.equal(shouldKeepToolRow(completed("complete_plan")), true);
+assert.equal(shouldKeepToolRow(completed("ext_echo")), true);
+assert.equal(shouldKeepToolRow(completed("run_command")), false);
+assert.equal(shouldFoldToolRow(completed("edit_file")), true);
+// Errored rows still fold (the render layer hides them in compact).
+assert.equal(shouldKeepToolRow({ ...completed("todo"), state: "error", output: { error: "x" } }), false);
+assert.equal(shouldKeepToolRow({ ...completed("ext_echo"), state: "error", output: { error: "x" } }), false);
+
+clearToUI();
+clearToolDisplay();
+assert.equal(getToolActivityBucket("ext_echo"), "other");
 
 console.log("tool-activity-summary.test.mjs: ok");

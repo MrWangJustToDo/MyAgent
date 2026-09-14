@@ -7,6 +7,7 @@ import { useSize } from "../hooks";
 import { BG, COLORS } from "../theme/colors.js";
 import { formatToolOutput } from "../utils/format";
 import { splitStreamingLines } from "../utils/streaming-output-lines.js";
+import { ALWAYS_VISIBLE_TOOL_NAMES, hasDetailedOutputBlock, keepsCompactRow } from "../utils/tool-display.js";
 
 import { TodoToolOutputView } from "./TodoToolOutputView.js";
 
@@ -14,19 +15,13 @@ import type { UiToolState } from "../utils/tool-part.js";
 import type { TodoItem } from "@my-agent/core";
 import type { ToolCallPart } from "@tanstack/ai";
 
-/** Built-in tools that always render a detailed output block. */
-const DETAILED_OUTPUT_TOOLS = new Set([
-  "run_command",
-  "get_command_output",
-  "kill_command",
-  "task",
-  "ask_user",
-  "todo",
-  "complete_plan",
-]);
+/** Max chars kept for a compact single-line result block. */
+const COMPACT_LINE_MAX = 200;
 
-/** In compact mode, only these keep a detailed output block (interactive / structured UI). */
-const COMPACT_DETAILED_OUTPUT_TOOLS = new Set(["ask_user", "todo"]);
+/** Compact keeps one curated line (the `toUI` contract) instead of the full block. */
+function clampCompactLine(line: string): string {
+  return line.length > COMPACT_LINE_MAX ? `${line.slice(0, COMPACT_LINE_MAX - 1)}…` : line;
+}
 
 export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState: UiToolState }) => {
   const mode = useTranscriptDisplayMode();
@@ -35,7 +30,7 @@ export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState:
 
   if (uiState !== "output-available" && uiState !== "output-error") return null;
 
-  if (mode === "compact" && !COMPACT_DETAILED_OUTPUT_TOOLS.has(toolName)) {
+  if (mode === "compact" && !keepsCompactRow(toolName)) {
     return null;
   }
 
@@ -56,7 +51,7 @@ export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState:
 
   if (toolName === "ask_user" && uiState === "output-error") return null;
 
-  const isBuiltinDetailed = DETAILED_OUTPUT_TOOLS.has(toolName);
+  const isDetailed = hasDetailedOutputBlock(toolName);
   const output = formatToolOutput(part.output, toolName);
 
   // Error outputs carry `{ error }` (no formattable body) — the message is
@@ -64,11 +59,17 @@ export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState:
   if (uiState === "output-error" && !output.trim()) return null;
 
   // Extension (and other) tools: show the default block only when toUI produced non-empty text.
-  if (!isBuiltinDetailed) {
+  if (!isDetailed) {
     if (!getToUI(toolName) || !output.trim()) return null;
   }
 
-  const lines = splitStreamingLines(output);
+  const outputLines = splitStreamingLines(output);
+  // Structured tools keep their full block in both modes; anything else allowed to
+  // render in compact (i.e. a registered toUI) is one clamped line.
+  const lines =
+    mode === "compact" && !ALWAYS_VISIBLE_TOOL_NAMES.has(toolName)
+      ? [clampCompactLine(outputLines[0] ?? "")]
+      : outputLines;
   const failed = toolName === "run_command" && (part.output as { success?: boolean } | undefined)?.success === false;
   const lineColor = failed ? COLORS.danger : COLORS.muted;
 

@@ -2,6 +2,7 @@ import { toolDefinition, type InferSchemaType, type SchemaInput, type ServerTool
 
 import { toModelOutputRegistry, type ModelToolContent, type ToModelOutputContext } from "./to-model-output-registry.js";
 import { registerToUI } from "./to-ui-registry.js";
+import { registerToolDisplay, type ToolDisplayMeta } from "./tool-display-registry.js";
 
 // ============================================================================
 // Tool execute context (maps TanStack ToolExecutionContext)
@@ -57,6 +58,12 @@ export function defineServerTool<
     ctx: ToModelOutputContext & { input: InferSchemaType<TInput>; output: InferSchemaType<TOutput> }
   ) => Promise<ModelToolContent> | ModelToolContent;
   toUI?: (result: InferSchemaType<TOutput>) => string;
+  /**
+   * Compact-transcript display metadata: fold bucket for activity summaries and
+   * an optional short input label. Extensions and custom tools declare their
+   * grouping here instead of the host hard-coding another tool-name table.
+   */
+  display?: ToolDisplayMeta;
 }): ServerTool<TInput, TOutput, TName> {
   if (config.toModelOutput) {
     const toModel = config.toModelOutput;
@@ -71,6 +78,10 @@ export function defineServerTool<
 
   if (config.toUI) {
     registerToUI(config.name, config.toUI as (result: unknown) => string);
+  }
+
+  if (config.display) {
+    registerToolDisplay(config.name, config.display);
   }
 
   return toolDefinition({
