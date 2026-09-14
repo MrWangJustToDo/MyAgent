@@ -190,7 +190,6 @@ export {
 export type { InstructionContextState, InstructionFile } from "../agent/turn-context";
 export { toolsToArray } from "../agent/tools/runtime/tools-record.js";
 export {
-  createTurnContextMiddleware,
   DEFAULT_REFRESH_MESSAGE_THRESHOLD,
   SUBAGENT_ALLOWED_KINDS,
 } from "../managers/middleware/turn-context-middleware.js";
@@ -304,7 +303,6 @@ export {
   buildPlanModeReadyPrompt,
   buildPlanModeRetroPrompt,
   buildPlanRetroSteerMessage,
-  createPlanModeMiddleware,
   gateCompletePlanVerification,
   isUsableVerification,
   parseVerificationItemsFromPlanMarkdown,

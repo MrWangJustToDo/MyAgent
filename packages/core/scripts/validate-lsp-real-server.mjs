@@ -7,15 +7,11 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:lsp-real-server
  */
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 
-const require = createRequire(import.meta.url);
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const results = [];
 function record(name, ok, detail = "") {
   results.push({ name, ok, detail });

@@ -39,8 +39,8 @@ import { maybeAppendCompactArchive } from "./write-compact-archive.js";
 
 import type { CompactionTodoItem } from "./compaction-prompt.js";
 import type { CompactionConfig, CompactionResult } from "./types.js";
-import type { AgentLog } from "../agent-log/agent-log.js";
 import type { AgentManager } from "../../runtime-types/hosts.js";
+import type { AgentLog } from "../agent-log/agent-log.js";
 import type { ModelMessage } from "@tanstack/ai";
 
 /**

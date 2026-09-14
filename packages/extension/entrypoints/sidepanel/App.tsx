@@ -1,11 +1,4 @@
-import {
-  AdapterProvider,
-  App,
-  configureEnv,
-  initConfig,
-  initHighlighter,
-  useAgent,
-} from "@my-agent/app";
+import { AdapterProvider, App, configureEnv, initConfig, initHighlighter } from "@my-agent/app";
 import {
   clearCoreEnv,
   clearModelProvider,

@@ -112,7 +112,10 @@ const uiTurnContext = () => ({
   parts: [
     {
       type: "text",
-      content: formatContextSectionUserContent({ key: "current_date", content: "<current_date>\nnow\n</current_date>" }),
+      content: formatContextSectionUserContent({
+        key: "current_date",
+        content: "<current_date>\nnow\n</current_date>",
+      }),
     },
   ],
 });

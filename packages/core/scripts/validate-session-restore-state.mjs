@@ -23,8 +23,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { AgentManager, createLocalAgentSessionHost, registerCoreEnv } from "../dist/index.mjs";
 import { SessionService, SessionStore, TodoManager, UsageTracker } from "../dist/dev.mjs";
+import { AgentManager, createLocalAgentSessionHost, registerCoreEnv } from "../dist/index.mjs";
 
 // ============================================================================
 // Mock CoreEnv (real fs under a temp root)

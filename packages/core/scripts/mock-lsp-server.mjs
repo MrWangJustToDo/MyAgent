@@ -16,11 +16,6 @@
  * Zero third-party deps (hand-rolled framing), so it runs anywhere.
  */
 
-import { readFileSync } from "node:fs";
-
-let nextId = 0;
-const pending = new Map(); // requestId -> { resolve, reject, method }
-
 // Documents currently open: uri -> { text, languageId, version }
 const docs = new Map();
 
@@ -268,7 +263,7 @@ process.stdin.on("data", (chunk) => {
     buffer = buffer.subarray(bodyStart + contentLength);
     try {
       handleMessage(JSON.parse(body));
-    } catch (err) {
+    } catch {
       // Malformed JSON — ignore for mock
     }
   }

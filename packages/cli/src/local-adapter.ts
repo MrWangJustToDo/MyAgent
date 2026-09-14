@@ -8,10 +8,7 @@ export class LocalAgentAdapter implements AgentAdapter {
   private _exit: () => void;
   private _readClipboardImage: (() => Promise<ClipboardImageResult | null>) | null;
 
-  constructor(options: {
-    exit: () => void;
-    readClipboardImage?: () => Promise<ClipboardImageResult | null>;
-  }) {
+  constructor(options: { exit: () => void; readClipboardImage?: () => Promise<ClipboardImageResult | null> }) {
     this._exit = options.exit;
     this._readClipboardImage = options.readClipboardImage ?? null;
   }

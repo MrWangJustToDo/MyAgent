@@ -25,7 +25,6 @@ const messages = [
 // Cut math (pairing-safe token-budget walk) is validated separately in
 // validate-compaction-keep-policy / validate-message-chain-projection. Here we
 // pick a fixed cut index to exercise segmentation prompt construction.
-const keepRecent = 2;
 const llmCutIndex = 2;
 
 const toCompress = messages.slice(0, llmCutIndex);

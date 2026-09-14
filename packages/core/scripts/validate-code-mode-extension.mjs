@@ -13,7 +13,7 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:code-mode-extension
  */
-/* eslint-disable no-undef */
+
 import { createCodeModeExtension } from "../dist/dev.mjs";
 
 // Minimal fake driver: does not actually execute TS, only satisfies the shape.

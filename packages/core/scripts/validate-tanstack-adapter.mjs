@@ -8,7 +8,7 @@
  * Set VALIDATE_TANSTACK_REQUIRED=1 to fail when the endpoint/model is unavailable
  * (default: soft-skip with exit 0).
  */
-/* eslint-disable no-undef */
+
 import { chat } from "@tanstack/ai";
 import assert from "node:assert/strict";
 

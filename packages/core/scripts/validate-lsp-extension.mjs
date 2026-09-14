@@ -19,15 +19,12 @@
  *   - commands execute (/lsp status)
  */
 
-import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOCK_SERVER = resolve(__dirname, "mock-lsp-server.mjs");
 

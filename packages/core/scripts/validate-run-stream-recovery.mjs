@@ -3,7 +3,6 @@
  *
  * Run: pnpm --filter @my-agent/core run validate:run-stream-recovery
  */
-/* eslint-disable no-undef */
 
 import assert from "node:assert/strict";
 

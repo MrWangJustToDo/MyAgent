@@ -10,6 +10,7 @@
 import assert from "node:assert/strict";
 
 import { instrumentMiddlewareLog } from "../dist/dev.mjs";
+
 import { createLogCapture, sleep } from "./helpers/log-capture.mjs";
 
 // A realistic ChatMiddleware-shaped object (plain object, like the create*

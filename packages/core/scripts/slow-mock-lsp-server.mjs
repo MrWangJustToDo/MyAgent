@@ -8,7 +8,6 @@
 
 const SLOW_MS = Number(process.env.SLOW_MS ?? 2000);
 
-let nextId = 0;
 function send(msg) {
   const body = JSON.stringify(msg);
   process.stdout.write(`Content-Length: ${Buffer.byteLength(body, "utf-8")}\r\n\r\n${body}`);
@@ -22,7 +21,7 @@ function notify(method, params) {
 
 function handleMessage(msg) {
   if (!msg || typeof msg !== "object") return;
-  const { id, method, params } = msg;
+  const { id, method } = msg;
 
   if (id === undefined || id === null) {
     if (method === "exit") process.exit(0);

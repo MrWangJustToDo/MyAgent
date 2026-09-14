@@ -13,11 +13,9 @@
  */
 
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOCK_SERVER = resolve(__dirname, "mock-lsp-server.mjs");
 
@@ -131,9 +129,9 @@ record("textDocument/references returns locations", Array.isArray(refs) && refs.
 // (Transport registers a handler; nothing to assert without a server asking, so skip.)
 
 // ---- 6. graceful shutdown ----
-let exitFired = false;
 conn.onUnexpectedExit(() => {
-  exitFired = true;
+  // Registered so an unexpected exit during shutdown is observed here instead of
+  // surfacing as unhandled; there is nothing to assert.
 });
 await conn.shutdown();
 record("shutdown() completes gracefully", true);

@@ -78,7 +78,7 @@ const hasArrow = nodeTypes.has("arrow_function");
 record(
   "TS node types found (function/class/interface/arrow)",
   hasFunction && hasClass && hasInterface,
-  `fn=${hasFunction} class=${hasClass} iface=${hasInterface}`
+  `fn=${hasFunction} class=${hasClass} iface=${hasInterface} arrow=${hasArrow}`
 );
 
 // Function name extraction (what lsp_symbols uses)
