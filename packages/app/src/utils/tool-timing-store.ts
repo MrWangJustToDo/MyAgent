@@ -14,6 +14,7 @@
  * a store + event handler.
  */
 
+import { getToolPresentation } from "@my-agent/core";
 import { createState } from "reactivity-store";
 
 import type { AgentEvent } from "@my-agent/core";
@@ -33,8 +34,14 @@ export interface ToolTimingEntry {
 // Constants
 // ============================================================================
 
-/** Tools executed on the client (no server execute) — excluded from timing. */
-const CLIENT_TOOL_NAMES = new Set<string>(["ask_user"]);
+/**
+ * Tools executed on the client (no server execute) — excluded from timing. The descriptor
+ * decides (`present.clientSide`), so an extension tool that runs in the host is covered too;
+ * this is the same flag core uses for its row rules.
+ */
+function isClientTool(name: string): boolean {
+  return getToolPresentation(name)?.clientSide === true;
+}
 
 // ============================================================================
 // Store
@@ -101,7 +108,7 @@ export function handleToolLifecycleEvent(payload: AgentEvent): void {
     const toolCallId = payload.payload.tool_call_id;
     const toolName = payload.payload.tool_name;
     if (!toolCallId) return;
-    if (typeof toolName === "string" && CLIENT_TOOL_NAMES.has(toolName)) return;
+    if (typeof toolName === "string" && isClientTool(toolName)) return;
     useToolTimingStore.getActions().start(toolCallId);
     return;
   }

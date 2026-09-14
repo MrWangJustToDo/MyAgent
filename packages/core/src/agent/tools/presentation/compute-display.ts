@@ -66,6 +66,6 @@ export function computeToolDisplay(name: string, output: unknown, input?: unknow
 /** Whether the stored output is a failure report (as opposed to a normal result). */
 function isErrorOutput(output: unknown): boolean {
   if (typeof output !== "object" || output === null) return false;
-  const record = output as { error?: unknown; isError?: unknown };
-  return typeof record.error === "string" || record.isError === true;
+  const record = output as { error?: unknown; isError?: unknown; ok?: unknown; success?: unknown };
+  return typeof record.error === "string" || record.isError === true || record.ok === false || record.success === false;
 }

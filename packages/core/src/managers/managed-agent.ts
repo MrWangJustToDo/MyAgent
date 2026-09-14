@@ -1042,6 +1042,7 @@ export class ManagedAgent {
       warn: (message) => this.log?.warn("system", message),
       onToolsChanged: () => this.setRunnerConfigKey(undefined),
     });
+    this.getEventBus()?.emit("session:tool-presentation", { descriptors: describeToolPresentations() });
   }
 
   /** Unregister a command previously added by an extension (used when disabling). */

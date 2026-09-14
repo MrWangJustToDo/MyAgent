@@ -8,11 +8,11 @@ import type { ToolPresentation, ToolPresentationInfo } from "./types.js";
  * tools) layered over the per-tool declarations that {@link defineServerTool}
  * records, with the built-in fallback table underneath.
  *
- * Registered entries are runtime knowledge (extensions, dynamic tools) and are dropped by
- * {@link clearToolPresentation} when a session tears its tool set down. They are *not*
- * persisted: a restored session re-registers from its own startup path, and a host that
- * renders another process's session adopts that session's catalog through
- * {@link hydrateToolPresentations} instead of guessing.
+ * Registered entries are runtime knowledge (extensions, dynamic tools). An entry is dropped
+ * by {@link forgetToolPresentation} when its tool actually goes away (extension disabled or
+ * unloaded); {@link clearToolPresentation} is the wholesale reset. Nothing is persisted — a
+ * restored session rebuilds its own entries, and a host rendering another process's session
+ * adopts that session's catalog through {@link hydrateToolPresentations}.
  */
 const registered = new Map<string, ToolPresentation>();
 const declared = new Map<string, ToolPresentation>();
@@ -61,6 +61,17 @@ export function hydrateToolPresentations(descriptors: readonly ToolPresentationI
 export function describeToolPresentations(): ToolPresentationInfo[] {
   const names = new Set<string>([...registered.keys(), ...declared.keys(), ...builtinPresentationNames()]);
   return Array.from(names, (name) => describePresentation(name, getToolPresentation(name)));
+}
+
+/**
+ * Drop everything known about one tool — used when a tool goes away for real (an extension
+ * is disabled or unloaded). Without it the catalog keeps describing tools that are gone and
+ * those tools' historical rows wrongly count as "owns a compact row".
+ */
+export function forgetToolPresentation(name: string): void {
+  registered.delete(name);
+  declared.delete(name);
+  hydrated.delete(name);
 }
 
 export function clearToolPresentation(): void {

@@ -10,6 +10,7 @@
  * caller passes the record plus invalidation callbacks per call.
  */
 
+import { forgetToolPresentation } from "../../agent/tools/presentation/registry.js";
 import { defineServerTool } from "../../agent/tools/runtime/define-tool.js";
 
 import type {
@@ -153,6 +154,9 @@ export class ExtensionRegistryService {
   unregisterExtensionTool(name: string, ctx: ExtensionToolRegistrationContext): void {
     if (name in ctx.tools) {
       delete (ctx.tools as Record<string, unknown>)[name];
+      // The descriptor was written by `defineServerTool`; without this the catalog keeps
+      // advertising a tool that no longer exists.
+      forgetToolPresentation(name);
       ctx.onToolsChanged();
     }
   }

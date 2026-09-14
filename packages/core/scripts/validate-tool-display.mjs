@@ -244,3 +244,17 @@ assert.equal(
 );
 
 console.log("validate-tool-display: failure + hydration ok");
+
+// --- 11. failure shapes and registry lifecycle -------------------------------
+// `{ ok: false }` / `{ success: false }` are failures just like `{ error }`: none of them may
+// be summarized as a success, because the payload is persisted with the session.
+for (const output of [{ error: "permission denied" }, { ok: false }, { success: false }, { isError: true }]) {
+  assert.equal(
+    core.computeToolDisplay("write_file", output),
+    undefined,
+    `write_file output ${JSON.stringify(output)} must not summarize as success`
+  );
+}
+assert.equal(core.computeToolDisplay("memory_write", { ok: false }), undefined, "memory_write failure");
+
+console.log("validate-tool-display: lifecycle + failure shapes ok");
