@@ -1,16 +1,20 @@
-name: Release to npm
+name: CI
 
 on:
-  workflow_dispatch:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  release:
+  check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -25,7 +29,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 26.4.0
-          registry-url: https://registry.npmjs.org
           cache: pnpm
 
       - name: Install dependencies
@@ -50,13 +53,5 @@ jobs:
 
       - name: Test
         # @my-agent/app is the only package with a node:test suite; it imports
-        # its own dist entry, so it must run after Build.
+        # its own dist entry, so it must run after the build above.
         run: pnpm --filter @my-agent/app test
-
-      - name: Publish to npm
-        # Topological order: core → app → node → server → cli.
-        # `@my-agent/cli` keeps bare imports of its workspace siblings in the
-        # bundle, so every runtime dependency must be on the registry first.
-        run: pnpm run publish:only
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

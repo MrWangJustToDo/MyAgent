@@ -240,6 +240,10 @@ pnpm format           # Format with Prettier
 
 Per-package type check: `cd packages/<pkg> && pnpm tsc --noEmit` (e.g. `core`, `app`, `cli`).
 
+Tests: `@my-agent/app` owns the only `node:test` suite — `pnpm --filter @my-agent/app test` builds the package, then runs `node --test test/*.test.mjs` against its `dist` output. Core is covered by the `validate:*` scripts instead (see step 3 of the Task Completion Checklist).
+
+CI: `.github/workflows/ci.yml` runs on every pull request and on pushes to `main` — `wxt prepare` → `pnpm lint` → `pnpm typecheck` → `pnpm build` → `pnpm --filter @my-agent/app test`. The release workflow (`.github/workflows/release.yml`, `v*` tag or manual dispatch) runs the same checks before `pnpm run publish:only`.
+
 ## Code Style Guidelines
 
 ### Formatting (Prettier)
@@ -1022,5 +1026,5 @@ Validate **once at the end of the task** (not after every small edit). Prefer sc
 3. **Build Order** — Core → App → rest (`pnpm build` handles this).
 4. **Type Exports** — Use `export type` for type-only exports.
 5. **CoreEnv is the single source of truth** — `rootPath` comes only from `getEnv().rootPath`, never from config objects. Tools access all platform APIs via `getEnv()`.
-6. **No Test Framework** — Currently no tests configured. Use TypeScript compiler for validation.
+6. **Tests** — The only `node:test` suite lives in `@my-agent/app` (`pnpm --filter @my-agent/app test`, which imports its own `dist`); everything else is validated by `validate:*` scripts and `pnpm typecheck`. CI runs lint + typecheck + build + the app suite on every PR.
 7. **Adapter pattern** — Both hosts (CLI, extension) implement `AgentAdapter` and delegate shared init logic to `createAgentFromConfig()` in `@my-agent/app`.
