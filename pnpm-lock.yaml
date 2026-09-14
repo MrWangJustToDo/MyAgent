@@ -92,6 +92,9 @@ importers:
       diff:
         specifier: ^9.0.0
         version: 9.0.0
+      ink:
+        specifier: npm:@my-react/react-terminal@^0.0.31
+        version: '@my-react/react-terminal@0.0.31(@my-react/react@0.3.30(@my-react/react@0.3.30))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
       ink-gradient:
         specifier: ^4.0.0
         version: 4.0.1(@my-react/react-terminal@0.0.31(@my-react/react@0.3.30(@my-react/react@0.3.30))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0))(@my-react/react@0.3.30)
@@ -110,6 +113,9 @@ importers:
       lodash-es:
         specifier: ^4.17.23
         version: 4.18.1
+      react:
+        specifier: npm:@my-react/react@^0.3.30
+        version: '@my-react/react@0.3.30(@my-react/react@0.3.30)'
       reactivity-store:
         specifier: ^0.4.0
         version: 0.4.0(@my-react/react@0.3.30)
@@ -123,12 +129,6 @@ importers:
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.17
-      ink:
-        specifier: npm:@my-react/react-terminal@0.0.31
-        version: '@my-react/react-terminal@0.0.31(@my-react/react@0.3.30(@my-react/react@0.3.30))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
-      react:
-        specifier: npm:@my-react/react@0.3.30
-        version: '@my-react/react@0.3.30(@my-react/react@0.3.30)'
       socket.io-client:
         specifier: ^4.8.3
         version: 4.8.3
@@ -162,12 +162,15 @@ importers:
       '@my-react/react-terminal':
         specifier: ^0.0.31
         version: 0.0.31(@my-react/react@0.3.30(@my-react/react@0.3.30))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)
-      ai:
-        specifier: ^7.0.93
-        version: 7.0.93(zod@4.5.4)
       dotenv:
         specifier: ^17.3.1
         version: 17.4.2
+      ink:
+        specifier: npm:@my-react/react-terminal@^0.0.31
+        version: '@my-react/react-terminal@0.0.31(@my-react/react@0.3.30(@my-react/react@0.3.30))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
+      react:
+        specifier: npm:@my-react/react@^0.3.30
+        version: '@my-react/react@0.3.30(@my-react/react@0.3.30)'
       reactivity-store:
         specifier: ^0.4.0
         version: 0.4.0(@my-react/react@0.3.30)
@@ -181,12 +184,6 @@ importers:
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.17
-      ink:
-        specifier: npm:@my-react/react-terminal@0.0.31
-        version: '@my-react/react-terminal@0.0.31(@my-react/react@0.3.30(@my-react/react@0.3.30))(@xterm/addon-fit@0.11.0)(@xterm/xterm@6.0.0)'
-      react:
-        specifier: npm:@my-react/react@0.3.30
-        version: '@my-react/react@0.3.30(@my-react/react@0.3.30)'
       tsdown:
         specifier: ^0.21.10
         version: 0.21.10(synckit@0.11.13)(typescript@5.9.3)
@@ -399,9 +396,6 @@ importers:
       '@tanstack/ai-code-mode':
         specifier: ^0.4.8
         version: 0.4.8(@tanstack/ai@0.53.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(zod@4.5.4)
-      '@tanstack/ai-isolate-node':
-        specifier: ^0.1.51
-        version: 0.1.51(@tanstack/ai-code-mode@0.4.8(@tanstack/ai@0.53.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(zod@4.5.4))
       '@tanstack/ai-mcp':
         specifier: ^0.3.9
         version: 0.3.9(@opentelemetry/api@1.9.1)(zod@4.5.4)
@@ -433,6 +427,10 @@ importers:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+    optionalDependencies:
+      '@tanstack/ai-isolate-node':
+        specifier: ^0.1.51
+        version: 0.1.51(@tanstack/ai-code-mode@0.4.8(@tanstack/ai@0.53.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(zod@4.5.4))
 
   packages/playground:
     dependencies:
@@ -3243,9 +3241,6 @@ packages:
     resolution: {integrity: sha512-yPDz7wqpg1/mmHLmS3tcfTfbw5f1eryXvyghYBffGdERwe+mV7ZcWzTR8LR17Kvqt3qfPurjlonmnq3MKXIOXw==}
     engines: {node: '>= 0.4'}
 
-  es-toolkit@1.51.0:
-    resolution: {integrity: sha512-zC2lQGkM7QX+Gm6iM3+WIdZJzthsEd14LvRNJneSO2hzyz/zNBENR8+YXWo1cKxgPBtV6ksPYHELbcwBRzmdCw==}
-
   es-toolkit@1.52.0:
     resolution: {integrity: sha512-XTNEJQh1tY1ZJVcf6ayP/2n4ZPyaHlW2FWs7xvw5ddPuhUVjLD3olQVQS7kf58JbAB48iL0uL/jerTrjtV3lDA==}
 
@@ -5903,10 +5898,6 @@ packages:
     resolution: {integrity: sha512-TeTSQ6H5YHvpqVwBRcnLDCBnDOHWYu7IvGbHT6N8AOymcr9PJGjc1GTtiWZTYg0NCgYwvnYWEkVChQAr9bjfwA==}
     engines: {node: '>=16'}
 
-  type-fest@5.8.0:
-    resolution: {integrity: sha512-YGYEVz3Fm5iy/AybuA0oyNFq7H4CgQNfRp/qfe8nurE1kuCeNm3/vfm9X4Mtl+qLyaKJUh5xrFZwogr41SMjYA==}
-    engines: {node: '>=20'}
-
   type-fest@5.9.0:
     resolution: {integrity: sha512-yANm3Jr3GiJ1qgJlxGAVxTOIcEOk1rhQHamlXtnrCK7EHP4HeM9OGxtMg/W7HFdrVzw/ZWJKGVIJusVH85sLtw==}
     engines: {node: '>=20'}
@@ -7132,7 +7123,7 @@ snapshots:
       cli-truncate: 6.1.1
       code-excerpt: 4.0.0
       environment: 1.1.0
-      es-toolkit: 1.51.0
+      es-toolkit: 1.52.0
       indent-string: 5.0.0
       is-fullwidth-code-point: 5.1.0
       is-in-ci: 2.0.0
@@ -7142,7 +7133,7 @@ snapshots:
       slice-ansi: 9.0.0
       stack-utils: 2.0.6
       string-width: 8.2.2
-      type-fest: 5.8.0
+      type-fest: 5.9.0
       widest-line: 6.0.0
       wrap-ansi: 10.0.1
       yoga-layout: 3.2.1
@@ -7162,7 +7153,7 @@ snapshots:
       cli-truncate: 6.1.1
       code-excerpt: 4.0.0
       environment: 1.1.0
-      es-toolkit: 1.51.0
+      es-toolkit: 1.52.0
       indent-string: 5.0.0
       is-fullwidth-code-point: 5.1.0
       is-in-ci: 2.0.0
@@ -7172,7 +7163,7 @@ snapshots:
       slice-ansi: 9.0.0
       stack-utils: 2.0.6
       string-width: 8.2.2
-      type-fest: 5.8.0
+      type-fest: 5.9.0
       widest-line: 6.0.0
       wrap-ansi: 10.0.1
       yoga-layout: 3.2.1
@@ -7631,6 +7622,7 @@ snapshots:
     dependencies:
       '@tanstack/ai-code-mode': 0.4.8(@tanstack/ai@0.53.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(zod@4.5.4)
       isolated-vm: 7.0.1
+    optional: true
 
   '@tanstack/ai-mcp@0.3.9(@opentelemetry/api@1.9.1)(zod@4.5.4)':
     dependencies:
@@ -8795,8 +8787,6 @@ snapshots:
       is-date-object: 1.1.0
       is-symbol: 1.1.1
 
-  es-toolkit@1.51.0: {}
-
   es-toolkit@1.52.0: {}
 
   es6-error@4.1.1: {}
@@ -9822,6 +9812,7 @@ snapshots:
   isolated-vm@7.0.1:
     dependencies:
       node-gyp-build: 4.8.4
+    optional: true
 
   iterator.prototype@1.1.5:
     dependencies:
@@ -10322,7 +10313,8 @@ snapshots:
 
   node-forge@1.4.0: {}
 
-  node-gyp-build@4.8.4: {}
+  node-gyp-build@4.8.4:
+    optional: true
 
   node-notifier@10.0.1:
     dependencies:
@@ -11717,10 +11709,6 @@ snapshots:
   type-fest@3.13.1: {}
 
   type-fest@4.41.0: {}
-
-  type-fest@5.8.0:
-    dependencies:
-      tagged-tag: 1.0.0
 
   type-fest@5.9.0:
     dependencies:
