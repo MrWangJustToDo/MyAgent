@@ -2,6 +2,8 @@
  * Local AgentSession command dispatch against ManagedAgent.
  */
 
+import { describeToolPresentations } from "../agent/tools/presentation/registry.js";
+
 import type { AgentSessionCommand, AgentSessionCommandResult } from "./types.js";
 import type { ManagedAgent } from "../managers/managed-agent.js";
 
@@ -153,6 +155,9 @@ export async function dispatchLocalAgentSessionCommand(
         const result = await runner.setEnabled(command.id, command.enabled);
         if (result.ok) {
           managed.getEventBus()?.emit("session:extensions", { extensions: runner.getExtensionInfos() });
+          // Enabling/disabling an extension adds or drops its tools, so the presentation
+          // catalog changes too — publishers (SSE subscribers) must see the new shape.
+          managed.getEventBus()?.emit("session:tool-presentation", { descriptors: describeToolPresentations() });
           return { ok: true, data: result };
         }
         return { ok: false, code: "failed", error: result.message };

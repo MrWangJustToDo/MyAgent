@@ -4,6 +4,7 @@ import { getToolPresentation } from "./registry.js";
 import { keepsCompactRow } from "./row-rules.js";
 import { getUiToolState, parseToolInput } from "./tool-state.js";
 
+import type { ToolDisplayPayload } from "./types.js";
 import type { ToolCallPart } from "@tanstack/ai";
 
 /** Count buckets for Cursor-style turn activity lines. */
@@ -192,7 +193,10 @@ export function extractActivityLabelInfo(part: ToolCallPart): ActivityLabel | nu
   if (!input || typeof input !== "object") return null;
   const obj = input as Record<string, unknown>;
 
-  // A label declared by the tool itself (extension display metadata) wins.
+  // A label declared by the tool itself wins; a host rendering another process's session
+  // has no descriptor functions, so it reads the label the owner already rendered.
+  const payloadLabel = (part as { display?: ToolDisplayPayload }).display?.label;
+  if (payloadLabel) return { text: shortenLabel(payloadLabel), tier: TIER_CURATED };
   const curated = getToolPresentation(part.name)?.label;
   if (curated) {
     const text = curated(input);

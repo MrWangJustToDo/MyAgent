@@ -214,3 +214,33 @@ const owners = core
 assert.deepEqual(owners, blockOwners, "the block-owning built-ins are unchanged");
 
 console.log("validate-tool-display: block ownership ok");
+
+// --- 10. failure outputs and host-side catalogs ------------------------------
+// A failed call renders through the error path, so it must not carry success-shaped text.
+assert.equal(
+  core.computeToolDisplay("write_file", { error: "denied by user" }),
+  undefined,
+  "a failed write_file carries no payload"
+);
+assert.equal(
+  core.computeToolDisplay("edit_file", { error: "no match" }),
+  undefined,
+  "a failed edit_file carries no payload"
+);
+
+// A host that never created the tools (remote session, publisher) adopts the owning
+// process's catalog and then folds/labels identically.
+const remoteTool = "remote_only_tool";
+assert.equal(core.getToolPresentation(remoteTool), undefined, "unknown before hydration");
+core.hydrateToolPresentations([
+  { name: remoteTool, category: "other", keepRow: true, detailed: true, clientSide: false },
+]);
+assert.equal(core.keepsCompactRow(remoteTool), true, "hydration restores the row rules");
+assert.equal(core.getToolPresentation(remoteTool)?.detailed, true, "hydration restores the flags");
+assert.equal(
+  core.describeToolPresentations().some((entry) => entry.name === remoteTool),
+  false,
+  "adopted entries stay out of the published catalog"
+);
+
+console.log("validate-tool-display: failure + hydration ok");

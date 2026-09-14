@@ -11,6 +11,8 @@
  *   stream for `HEARTBEAT_TIMEOUT_MS` triggers a reconnect.
  */
 
+import { hydrateToolPresentations } from "@my-agent/core";
+
 import type {
   AgentSession,
   AgentSessionCommand,
@@ -268,6 +270,8 @@ function applyEvent(
     case "extensions":
       return { ...snapshot, extensions: event.payload };
     case "tool-presentation":
+      // The owning process decided how its tools fold and label; adopt it before rendering.
+      hydrateToolPresentations(event.payload.descriptors);
       return { ...snapshot, toolDescriptors: event.payload.descriptors };
     case "mcp":
       return { ...snapshot, mcp: event.payload };
@@ -350,6 +354,7 @@ export class RemoteSessionClient implements AgentSession {
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.snapshot = options.initialSnapshot ?? emptySnapshot(options.agentId);
     reviveMessageTimestamps(this.snapshot.messages);
+    if (this.snapshot.toolDescriptors.length > 0) hydrateToolPresentations(this.snapshot.toolDescriptors);
     if (options.initialSnapshot) this.lastSyncAt = Date.now();
   }
 
@@ -441,6 +446,7 @@ export class RemoteSessionClient implements AgentSession {
     }
     this.snapshot = await readJson<AgentSessionSnapshot>(snapRes);
     reviveMessageTimestamps(this.snapshot.messages);
+    if (this.snapshot.toolDescriptors.length > 0) hydrateToolPresentations(this.snapshot.toolDescriptors);
     this.lastSyncAt = Date.now();
 
     try {

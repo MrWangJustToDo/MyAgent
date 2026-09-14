@@ -216,6 +216,7 @@ export {
   describeToolPresentations,
   clearToolPresentation,
 } from "./agent/tools/presentation/registry.js";
+export { hydrateToolPresentations } from "./agent/tools/presentation/registry.js";
 export { keepsCompactRow } from "./agent/tools/presentation/row-rules.js";
 export { computeToolDisplay } from "./agent/tools/presentation/compute-display.js";
 export { formatDuration } from "./agent/tools/presentation/format.js";

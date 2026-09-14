@@ -113,10 +113,6 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
     : ((part as { display?: { summary?: string } }).display?.summary ?? getInlineSummary(part, toolName)) || null;
   const outputFailed = (part.output as { success?: boolean } | undefined)?.success === false;
   // Density compact: skip success one-liners; keep failure hints.
-  // const compactOutput =
-  //   hasOutput && (displayMode !== "compact" || outputFailed || Boolean(errorText))
-  //     ? getCompactOutput(part, toolName)
-  //     : null;
   const stateColor = errorText || outputFailed ? COLORS.danger : getToolCallColor(uiState);
 
   // Compact display: errored/denied tools are handled by the compact projection
@@ -185,17 +181,6 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
           </Text>
         </Box>
       )}
-      {/* {compactOutput && !errorText && (
-        <Box paddingLeft={2}>
-          <Text
-            color={(part.output as { success?: boolean } | undefined)?.success === false ? COLORS.danger : COLORS.muted}
-            dimColor={(part.output as { success?: boolean } | undefined)?.success !== false}
-            wrap="truncate-end"
-          >
-            {compactOutput}
-          </Text>
-        </Box>
-      )} */}
     </Box>
   );
 };

@@ -42,6 +42,11 @@ function safe<T>(render: () => T): T | undefined {
 export function computeToolDisplay(name: string, output: unknown, input?: unknown): ToolDisplayPayload | undefined {
   if (!name) return undefined;
 
+  // A failed call is rendered by the error path (the part's `errorText`), never by the
+  // tool's success-shaped renderers: `{ error: "denied by user" }` used to summarize as
+  // "updated" / "applied" / "saved", and that wrong text is persisted with the session.
+  if (isErrorOutput(output)) return undefined;
+
   const present = getToolPresentation(name);
   const text = safe(() => present?.text?.(output));
   const summary =
@@ -56,4 +61,11 @@ export function computeToolDisplay(name: string, output: unknown, input?: unknow
   if (label) display.label = label;
 
   return Object.keys(display).length > 0 ? display : undefined;
+}
+
+/** Whether the stored output is a failure report (as opposed to a normal result). */
+function isErrorOutput(output: unknown): boolean {
+  if (typeof output !== "object" || output === null) return false;
+  const record = output as { error?: unknown; isError?: unknown };
+  return typeof record.error === "string" || record.isError === true;
 }

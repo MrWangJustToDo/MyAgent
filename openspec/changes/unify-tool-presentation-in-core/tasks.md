@@ -77,3 +77,23 @@ all pass. The two items below drive a real TUI, so they stay with the user:
 - **7.4 remote**: run the CLI with `--remote-session` against `pnpm start:server` and
   repeat 7.3 — this is the regression the change exists for (the host has no tool
   registry of its own; it renders `part.display` + `snapshot.toolDescriptors`).
+
+## Review follow-ups (4395be9..HEAD)
+
+Report findings, all verified against the code and addressed:
+
+- **P1 mid-run text loss** — `attachToolDisplay` went through the channel-level `setMessages`,
+  which refreshes the run-boundary snapshot with the streaming message id, so
+  `shouldSuppressStaleTextChunk` dropped the model's text after the tool. It patches the
+  processor now; `validate:mid-run-tool-display` keeps it fixed.
+- **P2 catalog never published** — `session:tool-presentation` is emitted on
+  `extension.toggle`, not only retained.
+- **P2 catalog never consumed** — `hydrateToolPresentations` + `RemoteSessionClient` adoption
+  (initial snapshot, resync, catalog events) makes fold buckets, row rules and labels come
+  from the owning process in every host; `part.display.label` covers the label path.
+- **P3 wrong failure summaries** — an error-shaped output produces no payload at all.
+- **P3 misc** — registry comment corrected, app duplicates deleted (core re-exports), dead
+  commented-out compact one-liner removed.
+
+Deferred on purpose: `ToolPresentation.input` stays unused until the input-formatting half of
+stage 2 lands (the plan keeps it in the descriptor API).
