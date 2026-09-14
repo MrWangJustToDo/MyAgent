@@ -26,6 +26,7 @@ export interface ReferencesToolDeps {
 export function createReferencesTool(deps: ReferencesToolDeps) {
   return {
     name: "lsp_references",
+    present: { category: "reads" as const },
     description:
       "Find all references to a symbol at a position (1-indexed line/character, or a query symbol name). Returns a list of file locations.",
     inputSchema: {

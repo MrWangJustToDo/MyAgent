@@ -76,6 +76,7 @@ async function activateMemory(
   if (config?.toolsDisabled !== true) {
     ctx.registerTool({
       name: "memory_list",
+      present: { category: "searches" as const },
       description: `List available memories (name + type + description).
 
 Memories are durable facts extracted from previous sessions (user preferences,
@@ -115,6 +116,7 @@ lists them; call this to refresh or enumerate with type/filename detail.`,
 
     ctx.registerTool({
       name: "memory_read",
+      present: { category: "reads" as const },
       description: `Read the full content of a memory by name or filename.
 
 Use after memory_list (or the <memory_index>) to load the full body of a specific
@@ -153,6 +155,7 @@ memory. Returns the memory wrapped in <memory> tags.`,
 
     ctx.registerTool({
       name: "memory_write",
+      present: { category: "edits" as const },
       description: `Write a durable memory to persist knowledge across sessions.
 
 Use for user preferences, corrections, project facts, decisions, and external

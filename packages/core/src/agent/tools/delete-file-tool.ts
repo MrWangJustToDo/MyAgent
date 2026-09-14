@@ -9,6 +9,7 @@ import { toolOutputBaseSchema } from "./util/types.js";
 export const createDeleteFileTool = () => {
   return defineServerTool({
     name: "delete_file",
+    present: { category: "edits" },
     description: "Deletes a file or directory. Requires user approval before execution.",
     inputSchema: z.object({
       path: z.string().describe("The path to the file or directory to delete, relative to the project directory."),

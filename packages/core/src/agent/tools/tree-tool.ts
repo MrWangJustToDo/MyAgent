@@ -22,6 +22,7 @@ const MAX_TREE_ENTRIES = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
 export const createTreeTool = () => {
   return defineServerTool({
     name: "tree",
+    present: { category: "reads" },
     description:
       "Shows a hierarchical directory tree (structure overview). Prefer over list_file when you need depth/layout; use list_file for one-level detail with sizes/dates; use glob to find paths by pattern.",
     inputSchema: z.object({

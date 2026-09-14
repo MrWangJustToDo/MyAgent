@@ -70,6 +70,7 @@ export interface CodeActionsToolDeps {
 export function createCodeActionsTool(deps: CodeActionsToolDeps) {
   return {
     name: "lsp_code_actions",
+    present: { category: "searches" as const },
     description:
       "Get available code actions (quick fixes, refactorings, source actions) at a position or range. Use after lsp_diagnostics shows errors to find auto-fixes.",
     inputSchema: {

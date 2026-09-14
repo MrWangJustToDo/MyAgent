@@ -114,6 +114,7 @@ async function runGlobSearch(
 export const createGlobTool = () => {
   return defineServerTool({
     name: "glob",
+    present: { category: "searches" },
     description:
       "Finds paths matching a glob pattern (e.g. '**/*.ts', 'src/**/*.json'). Prefer over tree/list_file when you know a filename pattern; use grep to search file contents. " +
       "Uses `fd` when available (respects .gitignore), falls back to `find`. " +

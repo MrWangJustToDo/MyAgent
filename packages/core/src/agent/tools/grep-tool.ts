@@ -283,6 +283,7 @@ function parseCountLine(line: string): { file: string; lineNumber: number; conte
 export const createGrepTool = () => {
   return defineServerTool({
     name: "grep",
+    present: { category: "searches" },
     description:
       "Searches file contents using regular expressions. Returns file paths and line numbers with matching content. " +
       "Uses ripgrep (rg) when available, falls back to grep. " +

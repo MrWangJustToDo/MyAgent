@@ -85,6 +85,7 @@ async function treeSitterDefinitionFallback(
 export function createDefinitionTool(deps: DefinitionToolDeps) {
   return {
     name: "lsp_definition",
+    present: { category: "reads" as const },
     description:
       "Go to the definition of a symbol at a position (1-indexed line/character, or a query symbol name). Returns the file path and location of the definition.",
     inputSchema: {

@@ -7,6 +7,8 @@
  * finish — especially visible for long-running `task` tools.
  */
 
+import { computeToolDisplay } from "../../agent/tools/presentation/compute-display.js";
+
 import { defineMiddleware } from "./phase.js";
 
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
@@ -30,12 +32,32 @@ export function createEarlyToolResultUiMiddleware(
       if (!channel) return;
 
       if (info.ok) {
-        channel.addToolResult(toolCallId, info.result ?? null);
+        const output = info.result ?? null;
+        channel.addToolResult(toolCallId, output);
+        attachToolDisplay(channel, info, toolCallId, output);
         return;
       }
 
       const message = info.error instanceof Error ? info.error.message : String(info.error ?? "Tool execution failed");
-      channel.addToolResult(toolCallId, { error: message }, message);
+      const failure = { error: message };
+      channel.addToolResult(toolCallId, failure, message);
+      attachToolDisplay(channel, info, toolCallId, failure);
     },
   });
+}
+
+/**
+ * Core owns presentation: render the tool's display payload once here and hang it on
+ * the part, so every host (local, remote session, extension host) reads the same text
+ * without needing the tool registry in its own process.
+ */
+function attachToolDisplay(
+  channel: AgentUIChannel,
+  info: { toolName?: string; input?: unknown },
+  toolCallId: string,
+  output: unknown
+): void {
+  if (!info.toolName) return;
+  const display = computeToolDisplay(info.toolName, output, info.input);
+  if (display) channel.attachToolDisplay(toolCallId, display);
 }

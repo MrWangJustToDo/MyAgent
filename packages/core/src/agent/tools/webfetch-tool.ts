@@ -92,6 +92,7 @@ export type WebfetchOutput = z.infer<typeof webfetchOutputSchema>;
 export const createWebfetchTool = ({ managed }: { managed?: ManagedAgent } = {}) => {
   return defineServerTool({
     name: "webfetch",
+    present: { category: "searches" },
     description: `Fetches content from a URL and returns it in the specified format.
 
 Use this tool when you need to:

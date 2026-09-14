@@ -99,6 +99,10 @@ export type TaskOutput = z.infer<typeof taskOutputSchema>;
 export const createTaskTool = ({ parentAgentId, manager }: TaskToolConfig) => {
   return defineServerTool({
     name: "task",
+    present: {
+      category: "tasks",
+      detailed: true,
+    },
     description: `Spawn a subagent with fresh context to complete a delegated task.
 
 Use this tool when you need to:

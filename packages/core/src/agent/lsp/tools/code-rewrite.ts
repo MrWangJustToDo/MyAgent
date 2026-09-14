@@ -34,6 +34,7 @@ export function createCodeRewriteTool(deps: CodeRewriteToolDeps) {
 
   return {
     name: "code_rewrite",
+    present: { category: "edits" as const },
     description:
       "Transform code matching a structural pattern into a replacement. Use $NAME to capture and reuse single nodes, $$$NAME for sequences. Defaults to dry-run mode (preview only). Set dry_run=false to apply changes. For symbol renames, prefer lsp_rename instead (semantically correct).",
     inputSchema: {

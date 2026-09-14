@@ -217,6 +217,7 @@ export {
   clearToolPresentation,
 } from "./agent/tools/presentation/registry.js";
 export { keepsCompactRow } from "./agent/tools/presentation/row-rules.js";
+export { computeToolDisplay } from "./agent/tools/presentation/compute-display.js";
 export type {
   ToolActivityCategory,
   ToolPresentation,

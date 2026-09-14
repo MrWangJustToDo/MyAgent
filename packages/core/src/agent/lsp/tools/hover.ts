@@ -35,6 +35,7 @@ export interface HoverToolDeps {
 export function createHoverTool(deps: HoverToolDeps) {
   return {
     name: "lsp_hover",
+    present: { category: "reads" as const },
     description:
       "Get type information and documentation for a symbol at a position (1-indexed line/character, or a query symbol name).",
     inputSchema: {

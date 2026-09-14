@@ -2,12 +2,14 @@ import type { ToolActivityCategory, ToolPresentation } from "./types.js";
 
 /**
  * Built-in fallback table: presentation for tools that do not declare their own
- * metadata (e.g. a third-party tool reusing a built-in name).
+ * metadata — a process that renders without having created the tools (a remote host
+ * before the snapshot catalog lands), a third-party tool reusing a built-in name, or
+ * a unit test. In-repo tools declare `present` at their definition site, and the
+ * `validate:tool-presentation` script asserts the two agree, so this table can never
+ * drift into a second source of truth.
  *
  * Migrated out of `packages/app/src/utils/tool-activity-summary.ts` (`TOOL_BUCKET`)
- * and `packages/app/src/utils/tool-display.ts` (keep-row / detailed sets). Stage 2 of
- * the change moves each entry to the tool's definition site; the table stays as the
- * last-resort layer, and the app copy is deleted.
+ * and `packages/app/src/utils/tool-display.ts` (keep-row / detailed sets).
  */
 export interface BuiltinPresentationEntry {
   category: ToolActivityCategory;

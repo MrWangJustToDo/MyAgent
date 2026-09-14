@@ -65,6 +65,7 @@ export interface DiagnosticsToolDeps {
 export function createDiagnosticsTool(deps: DiagnosticsToolDeps) {
   return {
     name: "lsp_diagnostics",
+    present: { category: "searches" as const },
     description:
       'Get compilation errors and warnings from the LSP server. Pass a file path to check a single file, or "*" for all cached workspace diagnostics. After edits, use this to verify the file compiles.',
     inputSchema: {

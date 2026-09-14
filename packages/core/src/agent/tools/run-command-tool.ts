@@ -18,6 +18,10 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
   const subagentSafe = options?.subagentSafe ?? false;
   return defineServerTool({
     name: "run_command",
+    present: {
+      category: "commands",
+      detailed: true,
+    },
     description:
       "Executes a shell command in the workspace environment. Returns stdout, stderr, exit code, and execution duration. " +
       "Set run_in_background=true for long-lived processes (dev servers, watchers); then poll with get_command_output and stop with kill_command. " +

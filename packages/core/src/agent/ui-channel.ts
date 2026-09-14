@@ -20,8 +20,10 @@ import { shouldSuppressReplayedToolChunk } from "./stream/suppress-replayed-tool
 import { shouldSuppressStaleTextChunk } from "./stream/suppress-stale-text-chunks.js";
 import { BEGIN_SUMMARY_TOOL_NAME } from "./subagent/begin-summary-tool.js";
 import { summaryStreamKey, type SummaryStreamHub } from "./summary-stream";
+import { computeToolDisplay } from "./tools/presentation/compute-display.js";
 
 import type { AgentEventBus } from "./agent-event-bus";
+import type { ToolDisplayPayload } from "./tools/presentation/types.js";
 import type { StreamChunk, StreamProcessorEvents, UIMessage as TanStackUIMessage, ContentPart } from "@tanstack/ai";
 
 // ============================================================================
@@ -215,6 +217,35 @@ export class AgentUIChannel {
     this.processor.addToolResult(toolCallId, output, error);
   }
 
+  /**
+   * Attach the core-rendered display payload to that tool call's part.
+   *
+   * Host-facing only: `uiMessageToModelMessages` copies a fixed set of fields, so an
+   * extra top-level field on the part never reaches the model wire.
+   */
+  attachToolDisplay(toolCallId: string, display: ToolDisplayPayload): void {
+    type DisplayAwarePart = { type?: string; id?: string; display?: ToolDisplayPayload };
+
+    let changed = false;
+    const next = this.getMessages().map((message) => {
+      const parts = (message as unknown as { parts?: DisplayAwarePart[] }).parts;
+      if (!parts?.length) return message;
+
+      let touched = false;
+      const patched = parts.map((part) => {
+        if (part?.type !== "tool-call" || part.id !== toolCallId) return part;
+        touched = true;
+        return { ...part, display };
+      });
+      if (!touched) return message;
+
+      changed = true;
+      return { ...message, parts: patched } as typeof message;
+    });
+
+    if (changed) this.setMessages(next);
+  }
+
   subscribeApprovalRequests(listener: ApprovalListener): () => void {
     this.approvalListeners.add(listener);
     return () => {
@@ -346,6 +377,11 @@ export class AgentUIChannel {
     if (cleaned.length !== this.processor.getMessages().length) {
       this.processor.setMessages(cleaned);
     }
+    // Safety net for the tool paths the early-result middleware does not see
+    // (batched tool phase, replayed results): attach each completed call's display
+    // payload once, here, before the turn becomes historical.
+    const withDisplay = attachMissingToolDisplays(this.getMessages());
+    if (withDisplay) this.processor.setMessages(withDisplay);
     // End of run: everything now materialized becomes historical for the next
     // one (matters when the next stream is fed via processChunk directly).
     this.historicalMessageIds = new Set(this.getMessages().map((message) => message.id));
@@ -462,4 +498,58 @@ export class AgentUIChannel {
     // Summary streaming is driven by TEXT_MESSAGE_CONTENT chunks in processChunk —
     // do not diff UIMessage snapshots (that caused mid-stream flicker).
   }
+}
+
+/**
+ * Attach the core-rendered display payload to completed tool-call parts that lack one.
+ *
+ * The early-result middleware covers the sequential tool path; batched results and
+ * replayed chunks materialize only when the run finalizes. Runs once per turn and is
+ * idempotent (a part that already has a payload is left untouched), so restored
+ * sessions keep the payload they were persisted with — no history rewrite.
+ */
+function attachMissingToolDisplays(messages: TanStackUIMessage[]): TanStackUIMessage[] | null {
+  type ToolCallPartLike = {
+    type?: string;
+    id?: string;
+    name?: string;
+    state?: string;
+    output?: unknown;
+    arguments?: unknown;
+    display?: ToolDisplayPayload;
+  };
+  const displayableStates = new Set(["complete", "output-available", "output-error"]);
+
+  let changed = false;
+  const next = messages.map((message) => {
+    const parts = (message as unknown as { parts?: ToolCallPartLike[] }).parts;
+    if (!parts?.length) return message;
+
+    let touched = false;
+    const patched = parts.map((part) => {
+      if (part?.type !== "tool-call" || !part.name || part.display) return part;
+      if (!part.state || !displayableStates.has(part.state) || part.output === undefined) return part;
+
+      let input: unknown;
+      if (typeof part.arguments === "string" && part.arguments) {
+        try {
+          input = JSON.parse(part.arguments);
+        } catch {
+          input = undefined;
+        }
+      }
+
+      const display = computeToolDisplay(part.name, part.output, input);
+      if (!display) return part;
+
+      touched = true;
+      return { ...part, display };
+    });
+    if (!touched) return message;
+
+    changed = true;
+    return { ...message, parts: patched } as typeof message;
+  });
+
+  return changed ? next : null;
 }

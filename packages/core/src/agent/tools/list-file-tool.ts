@@ -13,6 +13,7 @@ const DEFAULT_LIMIT = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
 export const createListFileTool = () => {
   return defineServerTool({
     name: "list_file",
+    present: { category: "reads" },
     description:
       "Lists one directory level with name, type, size, and modification date. Prefer tree for hierarchical overview; glob for pattern matching across the tree. Supports pagination with offset/limit.",
     inputSchema: z.object({

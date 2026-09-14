@@ -66,6 +66,7 @@ export interface RenameToolDeps {
 export function createRenameTool(deps: RenameToolDeps) {
   return {
     name: "lsp_rename",
+    present: { category: "edits" as const },
     description:
       "Preview a rename refactoring for a symbol at a position (1-indexed line/character, or query). Returns planned edits across all files; does NOT apply them.",
     inputSchema: {

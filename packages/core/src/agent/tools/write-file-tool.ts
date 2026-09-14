@@ -12,6 +12,7 @@ import type { WriteFileOutput } from "./util/types.js";
 export const createWriteFileTool = () => {
   return defineServerTool({
     name: "write_file",
+    present: { category: "edits" },
     description:
       "Writes the full content of a file. Prefer edit_file for surgical changes to existing files. " +
       "Creating a new file: omit overwrite (or set false). Overwriting an existing file: pass overwrite: true. " +

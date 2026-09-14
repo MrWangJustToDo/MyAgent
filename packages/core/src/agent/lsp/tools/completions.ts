@@ -80,6 +80,7 @@ export interface CompletionsToolDeps {
 export function createCompletionsTool(deps: CompletionsToolDeps) {
   return {
     name: "lsp_completions",
+    present: { category: "searches" as const },
     description:
       'Get completion suggestions at a position (1-indexed line/character, or query). Returns methods, properties, and symbols available at that point. When trigger is "auto" (default), a dot is temporarily inserted at the end of identifiers to enable member completion.',
     inputSchema: {

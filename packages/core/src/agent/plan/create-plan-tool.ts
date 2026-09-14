@@ -46,6 +46,7 @@ function createPlanAuthoringTool(name: "create_plan" | "update_plan", deps: Crea
   const isUpdate = name === "update_plan";
   return defineServerTool({
     name,
+    present: { category: "other" },
     description: isUpdate
       ? `Update the current plan while in plan mode (review/planning). Replaces the plan artifact and overwrites the plan file. Prefer this over rewriting ## Plan in chat. Requires a non-empty verification checklist.`
       : `Create a structured implementation plan while in plan mode. Auto-saves under .agents/plans/ for user review in the ready banner. Prefer this over free-form ## Plan markdown when possible. Requires a non-empty verification checklist.`,
@@ -128,6 +129,11 @@ const completePlanOutputSchema = z.object({
 export const createCompletePlanTool = (deps: CreatePlanToolDeps) => {
   return defineServerTool({
     name: "complete_plan",
+    present: {
+      category: "other",
+      keepRow: true,
+      detailed: true,
+    },
     description: `End the current plan lifecycle after the retrospective. Only use in retro phase when every Verification checklist item has a pass/fail result with evidence. Exits plan mode. (Users may still force-exit with /mode done.)`,
     inputSchema: z.object({
       note: z.string().optional().describe("Optional one-line note about the retrospective outcome"),

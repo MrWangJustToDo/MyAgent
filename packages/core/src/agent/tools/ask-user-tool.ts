@@ -31,6 +31,12 @@ export type AskUserOutput = z.infer<typeof askUserOutputSchema>;
 export const createAskUserTool = () => {
   return defineClientTool({
     name: "ask_user",
+    present: {
+      category: "other",
+      keepRow: true,
+      detailed: true,
+      clientSide: true,
+    },
     description: `Ask the user a question and wait for their response. Use this tool when you need clarification or input from the user to proceed.
 
 When to use:

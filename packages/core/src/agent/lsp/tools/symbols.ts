@@ -70,6 +70,7 @@ export interface SymbolsToolDeps {
 export function createSymbolsTool(deps: SymbolsToolDeps) {
   return {
     name: "lsp_symbols",
+    present: { category: "reads" as const },
     description: "List symbols in a file (pass path) or search symbols across the workspace (pass query).",
     inputSchema: {
       type: "object",

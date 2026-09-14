@@ -9,6 +9,10 @@ import type { KillCommandOutput } from "./util/types.js";
 export const createKillCommandTool = () => {
   return defineServerTool({
     name: "kill_command",
+    present: {
+      category: "commands",
+      detailed: true,
+    },
     description: "Stop a background shell job started with run_command(run_in_background=true).",
     inputSchema: z.object({
       jobId: z.string().describe("The jobId returned by a background run_command."),

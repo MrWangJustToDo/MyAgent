@@ -9,6 +9,10 @@ import type { GetCommandOutput } from "./util/types.js";
 export const createGetCommandOutputTool = () => {
   return defineServerTool({
     name: "get_command_output",
+    present: {
+      category: "commands",
+      detailed: true,
+    },
     description:
       "Read incremental stdout/stderr and status for a background job started with run_command(run_in_background=true). " +
       "Each call returns output since the previous poll for that jobId. " +

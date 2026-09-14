@@ -11,6 +11,11 @@ import type { TodoOutput } from "../tools/util/types.js";
 export const createTodoTool = ({ todoManager }: { todoManager: TodoManager }) => {
   return defineServerTool({
     name: "todo",
+    present: {
+      category: "other",
+      keepRow: true,
+      detailed: true,
+    },
     description: `Create and manage a task list to track progress on multi-step work. Use this tool to:
  - Plan complex tasks by breaking them into steps
  - Track what you're currently working on (mark as in_progress)

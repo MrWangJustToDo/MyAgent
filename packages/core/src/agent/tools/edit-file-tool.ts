@@ -44,6 +44,7 @@ function findLineNumber(content: string, index: number): number {
 export const createEditFileTool = () => {
   return defineServerTool({
     name: "edit_file",
+    present: { category: "edits" },
     description: `Edits a file by replacing oldString with newString. Supports one or more edits via the \`edits\` array.
 
 **Key Rules:**

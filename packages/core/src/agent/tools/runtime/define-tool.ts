@@ -118,7 +118,13 @@ export function defineClientTool<
   needsApproval?: boolean;
   /** See {@link defineServerTool} `lazy` — lazy client tools are discovered on demand. */
   lazy?: boolean;
+  /** See {@link defineServerTool} `present` — how the tool is displayed. */
+  present?: ToolPresentation;
 }): ClientTool<TInput, TOutput, TName> {
+  if (config.present) {
+    declareToolPresentation(config.name, config.present);
+  }
+
   return toolDefinition({
     name: config.name,
     description: config.description,

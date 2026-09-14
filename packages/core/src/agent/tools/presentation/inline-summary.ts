@@ -204,6 +204,22 @@ export function getInlineSummary(part: ToolCallPart, toolName: string): string |
   }
 }
 
+/**
+ * Header summary for a completed call derived from its output alone — the shape the
+ * descriptor API uses (`present.summary(output)`).
+ */
+export function inlineSummaryForOutput(output: unknown, toolName: string): string | null {
+  const part = {
+    type: "tool-call",
+    id: "",
+    name: toolName,
+    arguments: "",
+    state: "complete",
+    output,
+  } as unknown as ToolCallPart;
+  return getInlineSummary(part, toolName);
+}
+
 const SHOW_COMPACT_OUTPUT = new Set(["run_command"]);
 
 /** Get a compact multi-line output summary only for tools where it adds value. */

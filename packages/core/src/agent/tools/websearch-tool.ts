@@ -74,6 +74,7 @@ export const createWebsearchTool = ({ managed }: { managed?: ManagedAgent }) => 
 
   return defineServerTool({
     name: "websearch",
+    present: { category: "searches" },
     description: `Search the web and return titles, snippets, and URLs.
 
 Use when you need current information, docs, or to discover URLs (then webfetch). Prefer over webfetch when the URL is unknown.

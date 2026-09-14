@@ -31,6 +31,7 @@ export function createCodeSearchTool(deps: CodeSearchToolDeps) {
 
   return {
     name: "ast_search",
+    present: { category: "searches" as const },
     description:
       "Find code matching a structural pattern using AST matching. Use $NAME to match any single node, $$$NAME to match zero-or-more nodes. More precise than grep — matches code structure, not text.",
     inputSchema: {

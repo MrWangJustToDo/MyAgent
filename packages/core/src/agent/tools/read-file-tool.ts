@@ -110,6 +110,7 @@ export const createReadFileTool = ({ usage }: { usage?: UsageTracker } = {}) => 
 
   return defineServerTool({
     name: "read_file",
+    present: { category: "reads" },
     description: `Read the contents of a file or directory.
 
 Supports multiple file types:

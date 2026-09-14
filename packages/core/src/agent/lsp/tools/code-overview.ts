@@ -72,6 +72,7 @@ export function createCodeOverviewTool(deps: CodeOverviewToolDeps) {
 
   return {
     name: "code_overview",
+    present: { category: "reads" as const },
     description:
       "Summarize project structure: directory tree, top-level symbols per key file, dependency manifests. Uses tree-sitter for symbol extraction — no LSP required.",
     inputSchema: {

@@ -74,6 +74,7 @@ async function activateSkills(
   if (config?.toolsDisabled !== true) {
     ctx.registerTool({
       name: "list_skills",
+      present: { category: "searches" as const },
       description: `List available skills (name + brief description).
 
 Prefer the <skills> index already in the turn context. Call this only to refresh the list.
@@ -100,6 +101,7 @@ Then use load_skill to load the full content of a specific skill.`,
 
     ctx.registerTool({
       name: "load_skill",
+      present: { category: "reads" as const },
       description: `Load the full content of a skill by name.
 
 Use this after list_skills (or the <skills> index) to load specific domain knowledge.
