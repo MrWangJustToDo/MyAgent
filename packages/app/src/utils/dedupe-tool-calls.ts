@@ -132,7 +132,10 @@ export function mergeToolCallPart(primary: ToolCallPart, duplicate: ToolCallPart
     arguments: pickArguments(primary?.arguments, duplicate?.arguments),
     approval: primary?.approval ?? duplicate?.approval,
     metadata: primary?.metadata ?? duplicate?.metadata,
-  };
+    // Core attaches the rendered display payload to the part; a duplicate-only payload
+    // must survive the field-by-field rebuild.
+    display: (primary as { display?: unknown })?.display ?? (duplicate as { display?: unknown })?.display,
+  } as ToolCallPart;
 }
 
 type ToolLocation = { messageIdx: number; partIdx: number };
@@ -209,11 +212,16 @@ export function encodeToolCallState(tool: {
   state?: string;
   output?: unknown;
   approval?: { approved?: boolean };
+  display?: unknown;
 }): string {
   const hasOutput = tool.output !== undefined ? "1" : "0";
   const approval =
     tool.approval?.approved === true ? "a" : tool.approval?.approved === false ? "d" : tool.approval ? "p" : "-";
-  return `${tool.id ?? ""}:${tool.state ?? ""}:${hasOutput}:${approval}`;
+  // The display payload is rendered by core *after* the part first appears, so it must
+  // be part of the fingerprint — otherwise a row keeps showing its previous text
+  // (same failure class as the flat-cache staleness fixed in 73d5d95).
+  const display = tool.display === undefined ? "-" : `d${digestString(safeStringify(tool.display))}`;
+  return `${tool.id ?? ""}:${tool.state ?? ""}:${hasOutput}:${approval}:${display}`;
 }
 
 /** Fingerprint tool-call state for static list invalidation when merges update earlier rows. */

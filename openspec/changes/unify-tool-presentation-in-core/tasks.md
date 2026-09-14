@@ -42,7 +42,7 @@
 
 ## 5. App: consume, then delete the tables
 
-- [ ] 5.1 Cache correctness first: include a `part.display` digest in `encodeToolCallState` / `encodePartRenderSignature` / `computeMessageRenderSignature` / `MessageList`'s dynamic signature; merge `display` in `mergeToolCallPart`
+- [x] 5.1 Cache correctness first: include a `part.display` digest in `encodeToolCallState` / `encodePartRenderSignature` / `computeMessageRenderSignature` / `MessageList`'s dynamic signature; merge `display` in `mergeToolCallPart`
 - [ ] 5.2 `ToolCallPartView` / `ToolOutputView` / `ToolInputView` / `ToolStatusIcon` / `tool-timing-store`: read `part.display` + catalog, keep ink/theme logic; `clientSide` replaces `CLIENT_TOOL_NAMES`
 - [ ] 5.3 `project-transcript.ts`: keep the projection loop, take fold decisions + labels from core
 - [ ] 5.4 Delete `TOOL_BUCKET`, the two name sets, and the `getInlineSummary` / `formatToolOutput` / `formatToolInput` switch bodies from the app; keep thin re-exports only where public API stability matters
