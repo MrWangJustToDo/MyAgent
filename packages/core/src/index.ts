@@ -218,6 +218,34 @@ export {
 } from "./agent/tools/presentation/registry.js";
 export { keepsCompactRow } from "./agent/tools/presentation/row-rules.js";
 export { computeToolDisplay } from "./agent/tools/presentation/compute-display.js";
+export { formatDuration } from "./agent/tools/presentation/format.js";
+export { normalizeOutputNewlines, splitStreamingLines } from "./agent/tools/presentation/lines.js";
+export {
+  countToolActivity,
+  collectOtherToolNames,
+  emptyToolActivityCounts,
+  extractActivityLabel,
+  extractActivityLabelInfo,
+  formatExploredActivitySummary,
+  formatToolActivitySummary,
+  getToolActivityBucket,
+  isErrorToolRow,
+  shouldFoldToolRow,
+  shouldKeepToolRow,
+  summarizeToolActivity,
+  type ActivityLabel,
+  type ToolActivityBucket,
+  type ToolActivityCounts,
+} from "./agent/tools/presentation/activity-summary.js";
+export {
+  getUiToolState,
+  isImagePart,
+  isPendingToolApproval,
+  isToolCallPart,
+  isToolExecuting,
+  parseToolInput,
+  type UiToolState,
+} from "./agent/tools/presentation/tool-state.js";
 export type {
   ToolActivityCategory,
   ToolPresentation,

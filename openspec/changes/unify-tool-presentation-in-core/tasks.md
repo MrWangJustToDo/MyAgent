@@ -43,10 +43,10 @@
 ## 5. App: consume, then delete the tables
 
 - [x] 5.1 Cache correctness first: include a `part.display` digest in `encodeToolCallState` / `encodePartRenderSignature` / `computeMessageRenderSignature` / `MessageList`'s dynamic signature; merge `display` in `mergeToolCallPart`
-- [ ] 5.2 `ToolCallPartView` / `ToolOutputView` / `ToolInputView` / `ToolStatusIcon` / `tool-timing-store`: read `part.display` + catalog, keep ink/theme logic; `clientSide` replaces `CLIENT_TOOL_NAMES`
-- [ ] 5.3 `project-transcript.ts`: keep the projection loop, take fold decisions + labels from core
-- [ ] 5.4 Delete `TOOL_BUCKET`, the two name sets, and the `getInlineSummary` / `formatToolOutput` / `formatToolInput` switch bodies from the app; keep thin re-exports only where public API stability matters
-- [ ] 5.5 Re-point app tests (`utils.test.mjs`, `format-tool-output-to-ui.test.mjs`, `tool-activity-summary.test.mjs`, `dedupe-tool-calls.test.mjs`, `project-transcript.test.mjs`, `get-messages.test.mjs`) at the core-owned implementations
+- [x] 5.2 `ToolCallPartView` / `ToolOutputView` / `ToolInputView` / `ToolStatusIcon` / `tool-timing-store`: read `part.display` + catalog, keep ink/theme logic; `clientSide` replaces `CLIENT_TOOL_NAMES`
+- [x] 5.3 `project-transcript.ts`: keep the projection loop, take fold decisions + labels from core
+- [x] 5.4 Delete `TOOL_BUCKET`, the two name sets, and the `getInlineSummary` / `formatToolOutput` / `formatToolInput` switch bodies from the app; keep thin re-exports only where public API stability matters
+- [x] 5.5 Re-point app tests (`utils.test.mjs`, `format-tool-output-to-ui.test.mjs`, `tool-activity-summary.test.mjs`, `dedupe-tool-calls.test.mjs`, `project-transcript.test.mjs`, `get-messages.test.mjs`) at the core-owned implementations
 
 ## 6. Boundary, docs, extension surface
 

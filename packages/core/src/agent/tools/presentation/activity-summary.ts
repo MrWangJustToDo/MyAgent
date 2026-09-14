@@ -175,7 +175,7 @@ const TIER_SEARCH = 1;
 const TIER_DIR = 2;
 const TIER_OTHER = 3;
 
-type ActivityLabel = { text: string; tier: number };
+export type ActivityLabel = { text: string; tier: number };
 
 /** Guess whether a path basename looks like a file (has a dotted extension). */
 function looksLikeFile(basename: string): boolean {
