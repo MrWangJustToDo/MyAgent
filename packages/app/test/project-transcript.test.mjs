@@ -3,7 +3,7 @@
  *
  * Run: node packages/app/test/project-transcript.test.mjs
  */
-import { clearToolDisplay, clearToUI, registerToUI } from "@my-agent/core";
+import { clearToolPresentation, registerToolPresentation } from "@my-agent/core";
 import assert from "node:assert/strict";
 
 import {
@@ -200,11 +200,10 @@ const structured = projectTranscriptForDisplay(
 );
 assert.equal(structured[1].id, "a-todo");
 
-// A curated toUI line is the tool's compact representation — the row survives.
-registerToUI("ext_echo", (result) => `echo → ${result?.echoed ?? ""}`);
+// A curated present.text line is the tool's compact representation — the row survives.
+registerToolPresentation("ext_echo", { text: (result) => `echo → ${result?.echoed ?? ""}` });
 const extKept = projectTranscriptForDisplay([user, extTools, final], { mode: "compact" });
 assert.equal(extKept[1].id, "a-ext");
-clearToUI();
-clearToolDisplay();
+clearToolPresentation();
 
 console.log("project-transcript.test.mjs: ok");

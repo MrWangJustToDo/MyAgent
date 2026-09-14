@@ -142,8 +142,7 @@ export class ExtensionRegistryService {
           toolCallId: toolCtx.toolCallId,
           abortSignal: toolCtx.abortSignal,
         }),
-      toUI: def.toUI,
-      display: def.display,
+      present: def.present,
       toModelOutput: def.toModelOutput,
     });
     (ctx.tools as Record<string, unknown>)[def.name] = serverTool;

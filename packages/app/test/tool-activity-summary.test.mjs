@@ -3,7 +3,7 @@
  *
  * Run: node packages/app/test/tool-activity-summary.test.mjs
  */
-import { clearToUI, clearToolDisplay, registerToolDisplay, registerToUI } from "@my-agent/core";
+import { clearToolPresentation, registerToolPresentation } from "@my-agent/core";
 import assert from "node:assert/strict";
 
 import { keepsCompactRow } from "../dist/index.mjs";
@@ -260,8 +260,8 @@ assert.equal(
   "1 read, ext_echo · a.ts"
 );
 
-// Registered display metadata wins over the built-in table and supplies labels.
-registerToolDisplay("ext_echo", { category: "searches", label: (input) => input?.message });
+// Registered presentation metadata wins over the built-in table and supplies labels.
+registerToolPresentation("ext_echo", { category: "searches", label: (input) => input?.message });
 assert.equal(getToolActivityBucket("ext_echo"), "searches");
 assert.equal(getToolActivityBucket("read_file"), "reads");
 assert.equal(getToolActivityBucket("never_registered_tool"), "other");
@@ -282,11 +282,15 @@ assert.equal(
   "2 searches, 1 command · hi, ho"
 );
 
-// A curated toUI line means the tool owns its compact row (metadata alone does not).
+// A curated present.text line means the tool owns its compact row (metadata alone does not).
 assert.equal(keepsCompactRow("read_file"), false);
 assert.equal(keepsCompactRow("todo"), true);
 assert.equal(keepsCompactRow("ext_echo"), false);
-registerToUI("ext_echo", (result) => `echo → ${result?.echoed ?? ""}`);
+registerToolPresentation("ext_echo", {
+  category: "searches",
+  label: (input) => input?.message,
+  text: (result) => `echo → ${result?.echoed ?? ""}`,
+});
 assert.equal(keepsCompactRow("ext_echo"), true);
 
 const completed = (name) => ({
@@ -310,8 +314,7 @@ assert.equal(shouldFoldToolRow(completed("edit_file")), true);
 assert.equal(shouldKeepToolRow({ ...completed("todo"), state: "error", output: { error: "x" } }), false);
 assert.equal(shouldKeepToolRow({ ...completed("ext_echo"), state: "error", output: { error: "x" } }), false);
 
-clearToUI();
-clearToolDisplay();
+clearToolPresentation();
 assert.equal(getToolActivityBucket("ext_echo"), "other");
 
 console.log("tool-activity-summary.test.mjs: ok");

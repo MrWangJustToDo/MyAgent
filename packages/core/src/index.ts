@@ -209,14 +209,30 @@ export { resolveSummarizationBudget } from "./agent/compaction";
 // ============================================================================
 
 export { previewEdit, type PreviewEditResult } from "./agent/tools/util/preview-edit.js";
-export { registerToUI, getToUI, clearToUI } from "./agent/tools/runtime/to-ui-registry.js";
 export {
-  registerToolDisplay,
-  getToolDisplay,
-  clearToolDisplay,
-  type ToolActivityCategory,
-  type ToolDisplayMeta,
-} from "./agent/tools/runtime/tool-display-registry.js";
+  declareToolPresentation,
+  registerToolPresentation,
+  getToolPresentation,
+  describeToolPresentations,
+  clearToolPresentation,
+} from "./agent/tools/presentation/registry.js";
+export { keepsCompactRow } from "./agent/tools/presentation/row-rules.js";
+export type {
+  ToolActivityCategory,
+  ToolPresentation,
+  ToolPresentationInfo,
+  ToolDisplayPayload,
+  DisplayToolCallPart,
+} from "./agent/tools/presentation/types.js";
+export {
+  DURATION_THRESHOLD_MS,
+  LIVE_DURATION_THRESHOLD_MS,
+  getCompactOutput,
+  getDurationMs,
+  getInlineSummary,
+} from "./agent/tools/presentation/inline-summary.js";
+export { formatToolArgs, formatToolOutput } from "./agent/tools/presentation/output-format.js";
+export { formatToolInput } from "./agent/tools/presentation/input-format.js";
 
 // ============================================================================
 // Tool output types (message formatting)

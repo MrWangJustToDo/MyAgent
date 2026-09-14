@@ -46,7 +46,7 @@ export default {
         ctx.logger.info(`[demo-pi-like] ext_json_echo called with: ${message}`);
         return { echoed: `[json-schema] ${message}` };
       },
-      toUI: (result) => `json echo → ${result?.echoed ?? ""}`,
+      present: { text: (result) => `json echo → ${result?.echoed ?? ""}` },
     });
 
     // --- CoreEnv access ------------------------------------------------------

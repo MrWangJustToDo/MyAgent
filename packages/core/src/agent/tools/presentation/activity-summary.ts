@@ -1,8 +1,8 @@
-import { getToolPresentation } from "@my-agent/core";
-
 import { formatDuration } from "./format.js";
-import { DURATION_THRESHOLD_MS, getDurationMs, keepsCompactRow } from "./tool-display.js";
-import { getUiToolState, parseToolInput } from "./tool-part.js";
+import { DURATION_THRESHOLD_MS, getDurationMs } from "./inline-summary.js";
+import { getToolPresentation } from "./registry.js";
+import { keepsCompactRow } from "./row-rules.js";
+import { getUiToolState, parseToolInput } from "./tool-state.js";
 
 import type { ToolCallPart } from "@tanstack/ai";
 

@@ -15,7 +15,7 @@ Shared UI layer (CLI + extension). Agent control is **Session-only**: hooks, lay
 | Session API | `AgentSession`, `AgentSessionHost`, snapshots, commands, channel types |
 | Serializable types | `AgentStatus`, `AgentMode`, `TodoItem`, `TokenUsage`, `LogEntry`, `PlanModeState`, `SessionMeta`, tool output types, `ExtensionInfo`, `AgentEvent` (typed envelope) |
 | Status helpers | `isActiveStatus` |
-| Presentation registry | `getToUI` / `registerToUI` / `clearToUI` (tools register in core; UI looks up) |
+| Presentation registry | `getToolPresentation` / `registerToolPresentation` / `describeToolPresentations` (tools declare a single `present` descriptor in core; the UI reads it) |
 | CoreEnv plane | `getEnv`, `hasCoreEnv`, `FileEntry`, … (workspace panels only) |
 | Model types | `DEFAULT_BASE_URLS`, `DEFAULT_LOCAL_OPENAI_BASE_URL`, `ModelStyle` / `ModelInfo` / `ModelCapability` / `ModelPricing` / `ReasoningConfig` |
 | Summary stream protocol | `summaryStreamKey`, `compactSummaryStreamId`, display-window helpers, `SummaryStreamEvent` types |

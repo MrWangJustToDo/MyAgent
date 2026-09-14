@@ -1,63 +1,4 @@
-import { getToolPresentation } from "@my-agent/core";
-import chalk from "chalk";
-
-import { COLORS } from "../theme/colors.js";
-
-import type { UiToolState } from "./tool-part.js";
 import type { ToolCallPart } from "@tanstack/ai";
-
-/**
- * Completed tool rows that stay visible in compact display: interactive or
- * structured results (an answer, a checklist, a plan summary) that a row header
- * cannot express. Single source of truth for both the compact projection (the
- * fold decision in `tool-activity-summary`) and the render layer (output block).
- */
-export const ALWAYS_VISIBLE_TOOL_NAMES: ReadonlySet<string> = new Set(["ask_user", "todo", "complete_plan"]);
-
-/** Built-in tools that render a detailed output block in full mode only. */
-export const DETAILED_OUTPUT_TOOL_NAMES: ReadonlySet<string> = new Set([
-  "run_command",
-  "get_command_output",
-  "kill_command",
-  "task",
-]);
-
-/** Whether a tool renders a detailed output block in full mode. */
-export function hasDetailedOutputBlock(toolName: string): boolean {
-  return ALWAYS_VISIBLE_TOOL_NAMES.has(toolName) || DETAILED_OUTPUT_TOOL_NAMES.has(toolName);
-}
-
-/**
- * Whether a tool owns its compact presentation: structured UI
- * ({@link ALWAYS_VISIBLE_TOOL_NAMES}) or a registered `present.text` renderer. That
- * string is a single curated line by contract — exactly compact density — so such a
- * tool keeps its row (instead of folding into an activity count) and renders that one
- * line as its output block.
- */
-export function keepsCompactRow(toolName: string): boolean {
-  return ALWAYS_VISIBLE_TOOL_NAMES.has(toolName) || getToolPresentation(toolName)?.text !== undefined;
-}
-
-/** Get status color for tool invocation state. */
-export function getToolCallColor(state: UiToolState | string): string {
-  switch (state) {
-    case "input-streaming":
-      return COLORS.warning;
-    case "input-available":
-      return COLORS.primary;
-    case "output-available":
-      return COLORS.success;
-    case "output-error":
-    case "output-denied":
-      return COLORS.danger;
-    case "approval-requested":
-      return COLORS.warning;
-    case "approval-responded":
-      return COLORS.primary;
-    default:
-      return COLORS.muted;
-  }
-}
 
 /** Only show final duration for slow operations (>= this threshold). */
 export const DURATION_THRESHOLD_MS = 500;
@@ -286,29 +227,4 @@ export function getCompactOutput(part: ToolCallPart, toolName: string): string |
     return `Command failed with exit code ${exitCode ?? "?"}${dur}`;
   }
   return null;
-}
-
-/**
- * Build the full tool header as a single chalk-styled string.
- * Produces: `toolName args (summary, duration)`.
- */
-export function buildToolHeader(
-  toolName: string,
-  displayInput: string | null,
-  parenText: string,
-  stateColor: string
-): string {
-  const chalkByColor = chalk as unknown as Record<string, typeof chalk>;
-  const colorFn = chalkByColor[stateColor] ?? chalk.white;
-  let header = colorFn.bold(toolName);
-
-  if (displayInput) {
-    header += " " + colorFn.dim(displayInput);
-  }
-
-  if (parenText) {
-    header += chalk.hex(COLORS.muted)(parenText);
-  }
-
-  return header;
 }

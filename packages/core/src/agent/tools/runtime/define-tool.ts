@@ -1,8 +1,10 @@
 import { toolDefinition, type InferSchemaType, type SchemaInput, type ServerTool, type ClientTool } from "@tanstack/ai";
 
+import { declareToolPresentation } from "../presentation/registry.js";
+
 import { toModelOutputRegistry, type ModelToolContent, type ToModelOutputContext } from "./to-model-output-registry.js";
-import { registerToUI } from "./to-ui-registry.js";
-import { registerToolDisplay, type ToolDisplayMeta } from "./tool-display-registry.js";
+
+import type { ToolPresentation } from "../presentation/types.js";
 
 // ============================================================================
 // Tool execute context (maps TanStack ToolExecutionContext)
@@ -57,13 +59,17 @@ export function defineServerTool<
   toModelOutput?: (
     ctx: ToModelOutputContext & { input: InferSchemaType<TInput>; output: InferSchemaType<TOutput> }
   ) => Promise<ModelToolContent> | ModelToolContent;
-  toUI?: (result: InferSchemaType<TOutput>) => string;
   /**
-   * Compact-transcript display metadata: fold bucket for activity summaries and
-   * an optional short input label. Extensions and custom tools declare their
-   * grouping here instead of the host hard-coding another tool-name table.
+   * How this tool is presented: fold category, keep-row / detailed / client-side
+   * flags, header summary, input label, and the result-text renderer (`text`).
+   *
+   * Declared here rather than in a host-side table because core owns the tools and may
+   * run in another process (remote CoreEnv / Agent Session / extension host). Core
+   * renders it once at tool completion and ships the result with the message, so every
+   * function MUST be pure — a function of the persisted output (or parsed input) only,
+   * for the same reason as {@link toModelOutput}.
    */
-  display?: ToolDisplayMeta;
+  present?: ToolPresentation;
 }): ServerTool<TInput, TOutput, TName> {
   if (config.toModelOutput) {
     const toModel = config.toModelOutput;
@@ -76,12 +82,8 @@ export function defineServerTool<
     );
   }
 
-  if (config.toUI) {
-    registerToUI(config.name, config.toUI as (result: unknown) => string);
-  }
-
-  if (config.display) {
-    registerToolDisplay(config.name, config.display);
+  if (config.present) {
+    declareToolPresentation(config.name, config.present);
   }
 
   return toolDefinition({

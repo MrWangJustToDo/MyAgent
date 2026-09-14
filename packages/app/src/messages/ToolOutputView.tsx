@@ -1,4 +1,4 @@
-import { getToUI } from "@my-agent/core";
+import { getToolPresentation } from "@my-agent/core";
 import { Box, Text } from "ink";
 
 import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
@@ -60,7 +60,7 @@ export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState:
 
   // Extension (and other) tools: show the default block only when toUI produced non-empty text.
   if (!isDetailed) {
-    if (!getToUI(toolName) || !output.trim()) return null;
+    if (!getToolPresentation(toolName)?.text || !output.trim()) return null;
   }
 
   const outputLines = splitStreamingLines(output);

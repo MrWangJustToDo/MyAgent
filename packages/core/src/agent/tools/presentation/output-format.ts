@@ -1,7 +1,8 @@
-import { getToolPresentation } from "@my-agent/core";
+import { splitStreamingLines } from "./lines.js";
+import { getToolPresentation } from "./registry.js";
 
-import { splitStreamingLines } from "./streaming-output-lines.js";
-
+import type { TaskOutput } from "../../subagent/task-tool.js";
+import type { ReadFileOutput } from "../read-file-tool.js";
 import type {
   EditFileOutput,
   GetCommandOutput,
@@ -9,12 +10,10 @@ import type {
   GrepOutput,
   KillCommandOutput,
   ListFileOutput,
-  ReadFileOutput,
   RunCommandOutput,
-  TaskOutput,
   TodoOutput,
   WriteFileOutput,
-} from "@my-agent/core";
+} from "../util/types.js";
 
 // ============================================================================
 // Helpers

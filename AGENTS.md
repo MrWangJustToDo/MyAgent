@@ -862,14 +862,17 @@ This is also how a code-mode sandbox reads background output: `read_file` is exp
   - *Render* (`packages/app/src/messages/ToolOutputView.tsx`, `ToolInputView.tsx`) hides bulky
     blocks; input lines clamp to 72 chars, result blocks to a single 200-char line.
   - A tool **keeps its row and its one-line result** when `keepsCompactRow(name)` is true
-    (`packages/app/src/utils/tool-display.ts`): structured built-ins (`ALWAYS_VISIBLE_TOOL_NAMES`:
-    `ask_user`, `todo`, `complete_plan`) or any tool that registered a `toUI` renderer (extension
-    tools — a `toUI` string is a one-line contract). Everything else folds; errored rows always
-    fold as an `error` count because the render layer hides them.
-  - Folded tools group by bucket (`TOOL_BUCKET` + registry `display.category`). Tools with no
-    bucket are named in the summary (`ext_echo ×2`) rather than collapsing into an opaque
-    `N other`; `display.label(input)` adds a short label. Extensions declare this metadata via
-    `registerTool`'s `display` field (registry: `getToolDisplay` / `display.label`).
+    (core: `agent/tools/presentation/row-rules.ts`, re-exported by app `utils/tool-display.ts`):
+    structured built-ins (`present.keepRow`: `ask_user`, `todo`, `complete_plan`), host-supplied
+    results (`present.clientSide`) or any tool with a `present.text` renderer (extension tools —
+    that string is a one-line contract). Everything else folds; errored rows always fold as an
+    `error` count because the render layer hides them.
+  - Folded tools group by the tool's `present.category` (fold bucket). Tools with no bucket are named
+    in the summary (`ext_echo ×2`) rather than collapsing into an opaque `N other`; `present.label(input)`
+    adds a short label. Tools (extensions included) declare all of this through one field —
+    `defineServerTool({ present })` / `registerTool({ present })` — read back via
+    `getToolPresentation` / `registerToolPresentation`; see `packages/core/src/agent/tools/presentation/types.ts`.
+    Every descriptor function must be a pure function of the stored output (or parsed input).
 
 ## CLI Keyboard Shortcuts
 

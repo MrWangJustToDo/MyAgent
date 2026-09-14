@@ -1,7 +1,7 @@
 import type { ExtensionZod } from "./extension-zod.js";
 import type { CoreEnv } from "../../env.js";
+import type { ToolPresentation } from "../tools/presentation/types.js";
 import type { ModelToolContent, ToModelOutputContext } from "../tools/runtime/to-model-output-registry.js";
-import type { ToolDisplayMeta } from "../tools/runtime/tool-display-registry.js";
 import type { SchemaInput } from "@tanstack/ai";
 
 export type { ExtensionZod } from "./extension-zod.js";
@@ -37,13 +37,16 @@ export interface ExtensionToolDefinition {
   inputSchema: SchemaInput;
   outputSchema?: SchemaInput;
   execute: (input: unknown, options: ToolExecutionOptions) => Promise<ToolCallResult>;
-  toUI?: (result: unknown) => string;
   /**
-   * Optional compact-transcript metadata: fold bucket for activity summaries
-   * plus a short input label. Keeps extension tools legible in compact display
-   * without the host hard-coding their names.
+   * How this tool is presented: fold category, keep-row / detailed / client-side
+   * flags, header summary, input label, and the result-text renderer (`text`).
+   *
+   * Declared here instead of in a host-side table: core renders it at tool completion
+   * and ships the result with the message, so it works even when the host runs in a
+   * different process (remote CoreEnv / Agent Session). Every function MUST be pure —
+   * a function of the stored output (or parsed input) only.
    */
-  display?: ToolDisplayMeta;
+  present?: ToolPresentation;
   /** Optional model-facing output transform (registered on the TanStack tool). */
   toModelOutput?: (ctx: ToModelOutputContext) => Promise<ModelToolContent> | ModelToolContent;
   /**

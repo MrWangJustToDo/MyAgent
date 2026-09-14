@@ -26,11 +26,12 @@ export default {
         const message = typeof input?.message === "string" ? input.message : String(input ?? "");
         return { echoed: message };
       },
-      toUI: (result) => `echo → ${result?.echoed ?? ""}`,
-      // Compact-transcript metadata (demo): name the bucket this tool folds into
-      // and label folded calls with the echoed text. Pick the category that fits
-      // your tool (reads / edits / searches / commands / tasks / other).
-      display: {
+      // How this tool is presented — one declaration, which also travels to hosts
+      // running in another process. `text` is the curated line the tool shows, `category`
+      // is the bucket it folds into (reads / edits / searches / commands / tasks / other)
+      // and `label` names folded calls.
+      present: {
+        text: (result) => `echo → ${result?.echoed ?? ""}`,
         category: "other",
         label: (input) => (typeof input?.message === "string" ? input.message : undefined),
       },
