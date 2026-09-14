@@ -50,15 +50,15 @@
 
 ## 6. Boundary, docs, extension surface
 
-- [ ] 6.1 `packages/app/README.md`: update the core-import boundary table (presentation formatters move back to core; **state why** — cross-process correctness + drift) and the "pure presentation helpers" note
-- [ ] 6.2 `AGENTS.md`: `### Tool Definition Pattern` (declare `present`), `### Streaming UI` (compact contract now core-owned + `part.display`), architecture layer descriptions
-- [ ] 6.3 `examples/extensions/README.md` + `demo-echo-tool.mjs`: document `toUI` (+ `display`) as the way to own a compact row, and that the text is precomputed and shipped to the host
-- [ ] 6.4 `validate:core-imports` allowlist refresh (new core symbols imported by the app)
+- [x] 6.1 `packages/app/README.md`: update the core-import boundary table (presentation formatters move back to core; **state why** — cross-process correctness + drift) and the "pure presentation helpers" note
+- [x] 6.2 `AGENTS.md`: `### Tool Definition Pattern` (declare `present`), `### Streaming UI` (compact contract now core-owned + `part.display`), architecture layer descriptions
+- [x] 6.3 `examples/extensions/README.md` + `demo-echo-tool.mjs`: document `toUI` (+ `display`) as the way to own a compact row, and that the text is precomputed and shipped to the host
+- [x] 6.4 `validate:core-imports` allowlist refresh (new core symbols imported by the app)
 
 ## 7. Verification
 
-- [ ] 7.1 `pnpm lint` / `pnpm typecheck` / `pnpm build` / `pnpm --filter @my-agent/app test`
-- [ ] 7.2 Core validate subset: `tanstack-tools`, `early-tool-result-ui`, `incomplete-tool-calls`, `tool-phase-utils`, `tool-compact`, `extensions-middleware`, `extension-*` set, `plan-tools`, `command-job-registry`
+- [x] 7.1 `pnpm lint` / `pnpm typecheck` / `pnpm build` / `pnpm --filter @my-agent/app test`
+- [x] 7.2 Core validate subset: `tanstack-tools`, `early-tool-result-ui`, `incomplete-tool-calls`, `tool-phase-utils`, `tool-compact`, `extensions-middleware`, `extension-*` set, `plan-tools`, `command-job-registry`
 - [ ] 7.3 Local CLI manual pass: built-in rows unchanged in `full`; compact still folds/keeps per the fixed rules; extension tool (`ext_echo`) shows its `toUI` line in **both** modes
 - [ ] 7.4 Remote pass (`--remote-session` against a local server): extension tool text and compact folding behave the same as local — the regression this change exists for
 - [ ] 7.5 Snapshot/JSONL check: `.session.jsonl` carries `display`, restoring the session renders without recomputation

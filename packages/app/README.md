@@ -39,7 +39,7 @@ Remote session Host bootstrap (`createRemoteAgentSessionHost`) replaces the Loca
 - Side-LLM / managed runners: `runSideTextQuery`, `resolveTextAdapterForManaged`
 - Runtime extension loaders: `ExtensionRunner`, `ExtensionLoader` (observe via Session `extensions` snapshot)
 
-Pure presentation helpers that used to come from core live under `src/utils/` (`compaction-summary.ts`, `plan-footer-label.ts`).
+The presentation helpers (activity summaries, input/output formatting, tool-part state, row rules) live in **core** (`src/agent/tools/presentation/`) and the app re-exports them — hosts must not keep their own tool-name tables, which drifted and cannot be seen by a host that renders off-process (remote session / extension hosts).
 
 ## Validate
 

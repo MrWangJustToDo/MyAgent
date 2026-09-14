@@ -357,6 +357,13 @@ const { setStatus } = useAgent.getActions();        // Non-reactive actions
 ```
 
 ### Tool Definition Pattern
+> Canonical form: `defineServerTool({ name, description, inputSchema, outputSchema, present, execute })`
+> (or `defineClientTool` for host-executed tools). `present` is how the tool is displayed —
+> fold `category`, `keepRow` / `detailed` / `clientSide`, `summary` / `label` / `text` renderers
+> and `labelKey` — declared at the definition site, pure functions of the stored output, and
+> shipped to hosts as data (`part.display`). See `packages/core/src/agent/tools/presentation/types.ts`
+> and the drift guard `validate:tool-presentation`.
+
 ```typescript
 export const createReadFileTool = () => {
   return tool({
