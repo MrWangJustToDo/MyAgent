@@ -22,22 +22,40 @@ assert.ok(readFile, "read_file produces a payload");
 assert.equal(readFile.summary, "42 lines", `read_file summary (${readFile.summary})`);
 
 const writeFile = core.computeToolDisplay("write_file", { path: "a.ts", bytes: 10, ok: true });
-assert.ok(writeFile?.text?.includes("a.ts"), `write_file renders its block (${JSON.stringify(writeFile)})`);
+assert.equal(writeFile?.summary, "updated", `write_file summary (${writeFile?.summary})`);
 
-const runCommand = core.computeToolDisplay("run_command", {
-  success: true,
-  exitCode: 0,
-  stdout: "hello\nworld",
-  stderr: "",
-  durationMs: 12,
-});
-assert.ok(
-  runCommand?.text?.includes("hello"),
-  `run_command success renders its stdout block (got ${JSON.stringify(runCommand)})`
+// A successful command has nothing the host cannot compute itself (it owns a detailed
+// block, rendered locally from the stored output), so no payload is attached.
+assert.equal(
+  core.computeToolDisplay("run_command", { success: true, exitCode: 0, stdout: "hello", stderr: "" }),
+  undefined,
+  "a successful command carries no payload"
+);
+assert.equal(
+  core.computeToolDisplay("run_command", { success: false, exitCode: 2, stdout: "", stderr: "" }),
+  undefined,
+  "a failed command carries no payload either (its failure line is host-computable)"
 );
 
 const listFile = core.computeToolDisplay("list_file", { count: 3, entries: [{ name: "a.ts", type: "file" }] });
 assert.equal(listFile?.summary, "3 entries", `list_file summary (${listFile?.summary})`);
+
+// Regression guard: only a tool's *own* renderer may put text in the payload — otherwise
+// every built-in looks like it owns a result block (`read_file` / `grep` grew blocks).
+for (const [name, output] of [
+  ["read_file", { type: "file", totalLines: 42, content: "x" }],
+  ["grep", { matches: [{ file: "a.ts", line: 1, text: "x" }] }],
+  ["list_file", { count: 3, entries: [{ name: "a.ts", type: "file" }] }],
+  ["write_file", { path: "a.ts", bytes: 10, ok: true }],
+  ["glob", { files: ["a.ts"] }],
+  ["tree", { tree: "a.ts" }],
+]) {
+  assert.equal(
+    core.computeToolDisplay(name, output)?.text,
+    undefined,
+    `${name} must not carry text (it owns no result block)`
+  );
+}
 
 // A renderer that throws must not take the run down: `todo` without stats is exactly
 // the shape that used to raise inside `formatTodoOutput`.

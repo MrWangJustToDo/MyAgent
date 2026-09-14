@@ -1,6 +1,4 @@
-import { builtinPresentation } from "./builtin-table.js";
 import { inlineSummaryForOutput } from "./inline-summary.js";
-import { formatToolOutput } from "./output-format.js";
 import { getToolPresentation } from "./registry.js";
 
 import type { ToolDisplayPayload } from "./types.js";
@@ -29,9 +27,13 @@ function safe<T>(render: () => T): T | undefined {
  * a tool looks has to be reachable in the host process: remote CoreEnv / Agent Session
  * and extension hosts get the same strings as the local CLI.
  *
- * `text` prefers the tool's own renderer (`present.text`); a built-in without one falls
- * back to the built-in output switch. `summary` prefers `present.summary`, then the
- * built-in inline summary. `label` is the tool's declarative input label.
+ * `text` is the tool's **own** renderer (`present.text`, the old `toUI` contract): that one
+ * string *is* the row, and hosts read its presence as "this tool owns a result block".
+ * Built-ins deliberately get no `text` here — their formatting lives in core's
+ * self-contained output switch (a host can run it without the registry), and filling
+ * `text` for them made every tool look like it owns a block (`read_file` / `grep` grew
+ * output blocks). `summary` prefers `present.summary`, then the built-in inline summary;
+ * `label` is the tool's declarative input label.
  *
  * Deterministic by construction: every renderer is a pure function of the stored
  * output / parsed input (see {@link ToolPresentation}), so the payload can be persisted
@@ -41,9 +43,7 @@ export function computeToolDisplay(name: string, output: unknown, input?: unknow
   if (!name) return undefined;
 
   const present = getToolPresentation(name);
-  const text =
-    safe(() => present?.text?.(output)) ??
-    safe(() => (builtinPresentation(name) ? formatToolOutput(output, name) : undefined));
+  const text = safe(() => present?.text?.(output));
   const summary =
     safe(() => present?.summary?.(output)) ?? safe(() => inlineSummaryForOutput(output, name)) ?? undefined;
   const label = safe(() => present?.label?.(input)) ?? undefined;
