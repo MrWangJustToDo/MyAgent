@@ -13,6 +13,8 @@ test("splitExtensionCommandArgs trims and splits argv", () => {
 test("registerExtensionCommand skips built-in name conflicts and clears independently", () => {
   clearExtensionCommands();
   assert.equal(getCommand("help")?.name, "help");
+  const builtinHelpDescription = getCommand("help")?.description;
+  assert.ok(builtinHelpDescription, "built-in help command must carry a description");
 
   const before = getAllCommands().length;
   const registered = registerExtensionCommand({
@@ -32,7 +34,9 @@ test("registerExtensionCommand skips built-in name conflicts and clears independ
     execute: () => ({ ok: true }),
   });
   assert.equal(skipped, false);
-  assert.equal(getCommand("help")?.description, "Show available commands");
+  // The built-in survives untouched — compare against its own copy rather than a
+  // literal, so tweaking the help text never breaks this conflict test.
+  assert.equal(getCommand("help")?.description, builtinHelpDescription);
 
   clearExtensionCommands();
   assert.equal(getCommand("ext-ping"), undefined);

@@ -7,7 +7,7 @@ import {
   getStreamingStoreOutput,
   ingestStreamingChunk,
   registerStreamingThrottle,
-} from "../dist/hooks/streaming-ingest.mjs";
+} from "../dist/utils/streaming-ingest.mjs";
 
 test("ingestStreamingChunk with throttleMs=0 flushes every chunk", () => {
   const unregister = registerStreamingThrottle("call-immediate", 0);
