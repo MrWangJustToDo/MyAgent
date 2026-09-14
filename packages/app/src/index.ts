@@ -48,6 +48,13 @@ export {
   DURATION_THRESHOLD_MS,
 } from "./utils/format.js";
 export {
+  HINT_ROTATE_INTERVAL_MS,
+  INPUT_HINTS,
+  currentInputHint,
+  nextInputHint,
+  resetInputHints,
+} from "./utils/input-hints.js";
+export {
   dedupeToolCallsInMessages,
   mergeToolCallPart,
   computeMessageRenderSignature,
