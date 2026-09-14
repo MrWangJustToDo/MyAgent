@@ -59,6 +59,21 @@
 
 - [x] 7.1 `pnpm lint` / `pnpm typecheck` / `pnpm build` / `pnpm --filter @my-agent/app test`
 - [x] 7.2 Core validate subset: `tanstack-tools`, `early-tool-result-ui`, `incomplete-tool-calls`, `tool-phase-utils`, `tool-compact`, `extensions-middleware`, `extension-*` set, `plan-tools`, `command-job-registry`
-- [ ] 7.3 Local CLI manual pass: built-in rows unchanged in `full`; compact still folds/keeps per the fixed rules; extension tool (`ext_echo`) shows its `toUI` line in **both** modes
-- [ ] 7.4 Remote pass (`--remote-session` against a local server): extension tool text and compact folding behave the same as local — the regression this change exists for
+- [ ] 7.3 (needs a human) Local CLI manual pass: built-in rows unchanged in `full`; compact still folds/keeps per the fixed rules; extension tool (`ext_echo`) shows its `toUI` line in **both** modes
+- [ ] 7.4 (needs a human) Remote pass (`--remote-session` against a local server): extension tool text and compact folding behave the same as local — the regression this change exists for
 - [ ] 7.5 Snapshot/JSONL check: `.session.jsonl` carries `display`, restoring the session renders without recomputation
+
+## Remaining (interactive verification)
+
+Automated coverage is complete: lint / typecheck / build / the 84 app assertions (now
+exercising the core-owned implementations) / `validate:tool-presentation` /
+`validate:tool-display` / `validate:agent-ui-channel` / `validate:message-chain-projection`
+all pass. The two items below drive a real TUI, so they stay with the user:
+
+- **7.3 local**: run the CLI, check built-in rows are unchanged in `full`, that
+  `/appearance compact` folds and keeps rows per the core rules, and that an extension
+  tool (e.g. `examples/extensions/demo-echo-tool.mjs` → `ext_echo`) shows its
+  `present.text` line in both modes.
+- **7.4 remote**: run the CLI with `--remote-session` against `pnpm start:server` and
+  repeat 7.3 — this is the regression the change exists for (the host has no tool
+  registry of its own; it renders `part.display` + `snapshot.toolDescriptors`).
