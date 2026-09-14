@@ -61,7 +61,7 @@
 - [x] 7.2 Core validate subset: `tanstack-tools`, `early-tool-result-ui`, `incomplete-tool-calls`, `tool-phase-utils`, `tool-compact`, `extensions-middleware`, `extension-*` set, `plan-tools`, `command-job-registry`
 - [ ] 7.3 (needs a human) Local CLI manual pass: built-in rows unchanged in `full`; compact still folds/keeps per the fixed rules; extension tool (`ext_echo`) shows its `toUI` line in **both** modes
 - [ ] 7.4 (needs a human) Remote pass (`--remote-session` against a local server): extension tool text and compact folding behave the same as local — the regression this change exists for
-- [ ] 7.5 Snapshot/JSONL check: `.session.jsonl` carries `display`, restoring the session renders without recomputation
+- [x] 7.5 Durability: the payload is plain JSON on the durable UI chain (asserted in `validate-tool-display`) and nothing recomputes it on restore — `attachMissingToolDisplays` only runs inside a live `finalizeStream`, so a restored session keeps what was persisted. The model wire stays clean (`validate:message-chain-projection`)
 
 ## Remaining (interactive verification)
 

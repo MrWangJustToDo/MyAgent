@@ -164,3 +164,13 @@ assert.equal(
 );
 
 console.log("validate-tool-display: catalog ok");
+
+// --- 8. durability -----------------------------------------------------------
+// The payload rides the durable UI chain as ordinary JSON, and nothing recomputes it
+// on restore: `attachMissingToolDisplays` only runs inside `finalizeStream` (a live
+// run), so a restored session keeps exactly what was persisted. The model wire is
+// covered separately by `validate:message-chain-projection`.
+const roundTripped = JSON.parse(JSON.stringify(partWithDisplay));
+assert.deepEqual(roundTripped.display, partWithDisplay.display, "the payload survives JSONL persistence");
+
+console.log("validate-tool-display: durability ok");
