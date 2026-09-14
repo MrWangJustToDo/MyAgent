@@ -86,6 +86,8 @@ function projectChannelEvent(channel: AgentSessionChannel, event: AgentEvent): A
       return { channel, payload: event.payload as ChannelPayload<"summary">, ts };
     case "extensions":
       return { channel, payload: event.payload as ChannelPayload<"extensions">, ts };
+    case "tool-presentation":
+      return { channel, payload: event.payload as ChannelPayload<"tool-presentation">, ts };
     case "mode":
       return { channel, payload: event.payload as ChannelPayload<"mode">, ts };
     case "interaction":

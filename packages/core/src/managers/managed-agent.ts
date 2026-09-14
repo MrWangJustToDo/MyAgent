@@ -27,6 +27,7 @@ import {
 } from "../agent/plan/plan-prompts.js";
 import { collectPendingApprovals, collectPendingAskUser } from "../agent/stream/tool-phase-utils.js";
 import { SummaryStreamHub } from "../agent/summary-stream/summary-stream-hub.js";
+import { describeToolPresentations } from "../agent/tools/presentation/registry.js";
 import { registerStreamingEventBus } from "../agent/tools/util/streaming-callback.js";
 import { getCurrentDate, getGitInfo } from "../agent/turn-context/env-context.js";
 import {
@@ -707,6 +708,7 @@ export class ManagedAgent {
     bus.retain("agent:state", () => this.getL1State());
     bus.retain("session:mode", () => this.modeState());
     bus.retain("session:extensions", () => ({ extensions: this.extensionRunner?.getExtensionInfos() ?? [] }));
+    bus.retain("session:tool-presentation", () => ({ descriptors: describeToolPresentations() }));
     bus.retain("session:mcp", () => ({ servers: this.getMcpManager()?.getServerStatuses() ?? [] }));
     bus.retain("session:interaction", () => this.readInteractions());
     bus.retain("agent:iteration", () => this.readIteration());

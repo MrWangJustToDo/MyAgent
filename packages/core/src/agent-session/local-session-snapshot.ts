@@ -1,8 +1,8 @@
+import { readTaskRunPhase } from "../agent/subagent/task-run-state.js";
+import { describeToolPresentations } from "../agent/tools/presentation/registry.js";
 /**
  * Project ManagedAgent → AgentSessionSnapshot (serializable, no live handles).
  */
-
-import { readTaskRunPhase } from "../agent/subagent/task-run-state.js";
 
 import type { AgentSessionSnapshot, AgentSessionSubagentSummary } from "./types.js";
 import type { ManagedAgent } from "../managers/managed-agent.js";
@@ -69,6 +69,7 @@ export function readLocalAgentSessionSnapshot(
     autoMode: managed.isAutoModeEnabled(),
     mcp: { servers: managed.getMcpManager()?.getServerStatuses() ?? [] },
     extensions: { extensions: managed.extensionRunner?.getExtensionInfos() ?? [] },
+    toolDescriptors: describeToolPresentations(),
     interactions: managed.readInteractions(),
     iteration: managed.readIteration(),
     subagents: buildSubagentSummaries(managed, manager),

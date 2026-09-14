@@ -34,11 +34,11 @@
 
 ## 4. Core: serializable catalog on the session snapshot
 
-- [ ] 4.1 `ToolPresentationInfo` projection from the registry (no functions); publish as `snapshot.toolDescriptors`
-- [ ] 4.2 Wire it through: `agent-session/types.ts` snapshot shape, `local-session-snapshot.ts`, a retained `session:tool-presentation` event (`agent-event-bus/types.ts` + `meta.ts` + `managed-agent.ts`), and per-tool metadata in `ExtensionInfo.tools`
-- [ ] 4.3 `remote-session-client.ts`: carry the new field in `emptySnapshot` + `applyEvent`
-- [ ] 4.4 `packages/server` snapshot round-trip check (route serializes `getSnapshot()`) — add to the server validate set
-- [ ] 4.5 Test: catalog contents for built-ins + an extension tool; disabled extension drops its entries
+- [x] 4.1 `ToolPresentationInfo` projection from the registry (no functions); publish as `snapshot.toolDescriptors`
+- [x] 4.2 Wire it through: `agent-session/types.ts` snapshot shape, `local-session-snapshot.ts`, a retained `session:tool-presentation` event (`agent-event-bus/types.ts` + `meta.ts` + `managed-agent.ts`), and per-tool metadata in `ExtensionInfo.tools`
+- [x] 4.3 `remote-session-client.ts`: carry the new field in `emptySnapshot` + `applyEvent`
+- [x] 4.4 `packages/server` snapshot round-trip check (route serializes `getSnapshot()`) — add to the server validate set
+- [x] 4.5 Test: catalog contents for built-ins + an extension tool; disabled extension drops its entries
 
 ## 5. App: consume, then delete the tables
 

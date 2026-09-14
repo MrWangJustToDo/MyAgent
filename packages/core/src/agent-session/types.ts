@@ -16,6 +16,7 @@ import type { McpServerStatus } from "../agent/mcp/manager.js";
 import type { PlanModeState } from "../agent/plan/plan-mode-controller.js";
 import type { SummaryStreamEvent, SummaryStreamSnapshot } from "../agent/summary-stream/types.js";
 import type { TodoItem } from "../agent/todo/types.js";
+import type { ToolPresentationInfo } from "../agent/tools/presentation/types.js";
 import type { StreamingChunk } from "../agent/tools/util/streaming-callback.js";
 import type { QueuedMessagesSnapshot } from "../managers/controllers/agent-chat-controller.js";
 import type { AgentL1State, AgentMode } from "../managers/managed-agent.js";
@@ -25,6 +26,10 @@ import type { AgentRetryState } from "../runtime-types/agent-retry.js";
 import type { AgentStatus } from "../runtime-types/agent-status.js";
 import type { AgentIterationState, SessionInteractionsSnapshot } from "../runtime-types/session-payloads.js";
 import type { ContentPart, UIMessage } from "@tanstack/ai";
+
+// ============================================================================
+// Snapshot
+// ============================================================================
 
 // ============================================================================
 // Channels
@@ -42,6 +47,7 @@ export const AGENT_SESSION_CHANNELS = [
   "lifecycle",
   "extension-ui",
   "extensions",
+  "tool-presentation",
   "mcp",
   "mode",
   "interaction",
@@ -69,10 +75,6 @@ export const DEFAULT_AGENT_SESSION_CHANNELS: readonly AgentSessionChannel[] = [
   // `channels:[...]` opt-in from any host, so without this it is never delivered.
   "mcp",
 ];
-
-// ============================================================================
-// Snapshot
-// ============================================================================
 
 export interface AgentSessionMcpSummary {
   servers: McpServerStatus[];
@@ -122,6 +124,13 @@ export interface AgentSessionSnapshot {
   autoMode: boolean;
   mcp: AgentSessionMcpSummary;
   extensions: AgentSessionExtensionsSummary;
+  /**
+   * Serializable projection of the tool presentation registry (no functions), so a host
+   * can render rows that have no per-call `part.display` yet — executing tools, older
+   * messages — and off-process hosts (remote session, extension hosts) see the same
+   * fold buckets and row rules as core.
+   */
+  toolDescriptors: ToolPresentationInfo[];
   /** Pending approvals / ask_user, mirroring the retained `interaction` channel. */
   interactions: SessionInteractionsSnapshot;
   /** Agent-loop progress for the current run, mirroring the retained `iteration` channel. */
@@ -226,6 +235,7 @@ export type AgentSessionEvent =
   | { channel: "lifecycle"; payload: AgentEvent; ts: number }
   | { channel: "extension-ui"; payload: ExtensionUIEvent; ts: number }
   | { channel: "extensions"; payload: AgentSessionExtensionsSummary; ts: number }
+  | { channel: "tool-presentation"; payload: { descriptors: ToolPresentationInfo[] }; ts: number }
   | { channel: "mcp"; payload: AgentSessionMcpSummary; ts: number }
   | { channel: "mode"; payload: { mode: AgentMode; autoMode: boolean }; ts: number }
   | { channel: "interaction"; payload: SessionInteractionsSnapshot; ts: number }

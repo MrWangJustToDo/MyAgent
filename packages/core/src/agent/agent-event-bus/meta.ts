@@ -116,6 +116,7 @@ export const AGENT_EVENT_META: Record<AgentEventType, AgentEventMeta> = {
   "session:summary": { mode: "emit", channel: "summary" },
   "session:mode": { mode: "emit", channel: "mode", retained: true },
   "session:extensions": { mode: "emit", channel: "extensions", retained: true },
+  "session:tool-presentation": { mode: "emit", channel: "tool-presentation", retained: true },
   "session:interaction": { mode: "emit", channel: "interaction", retained: true },
   "agent:iteration": { mode: "emit", channel: "iteration", retained: true },
   "extension:ui": { mode: "emit", channel: "extension-ui" },

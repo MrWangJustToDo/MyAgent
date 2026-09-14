@@ -32,6 +32,7 @@ import type {
 import type { PlanModeState } from "../plan/plan-mode-controller.js";
 import type { SummaryStreamEvent } from "../summary-stream/types.js";
 import type { TodoItem } from "../todo/types.js";
+import type { ToolPresentationInfo } from "../tools/presentation/types.js";
 import type { StreamingChunk } from "../tools/util/streaming-callback.js";
 import type { UIMessage } from "@tanstack/ai";
 
@@ -68,6 +69,8 @@ export interface AgentEvents extends AgentEventPayloadMap {
   "session:mode": { mode: AgentMode; autoMode: boolean };
   /** Extension list snapshot. */
   "session:extensions": { extensions: ExtensionInfo[] };
+  /** Tool presentation catalog: serializable descriptors (no functions) for every known tool. */
+  "session:tool-presentation": { descriptors: ToolPresentationInfo[] };
   /** Pending approvals / `ask_user` derived from the conversation. */
   "session:interaction": SessionInteractionsSnapshot;
   /** Agent-loop progress for the current run (iteration vs budget). */

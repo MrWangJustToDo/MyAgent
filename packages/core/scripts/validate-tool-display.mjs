@@ -138,3 +138,29 @@ if (typeof attach !== "function") {
 }
 
 console.log("validate-tool-display: ok");
+
+// --- 7. catalog (snapshot) ---------------------------------------------------
+const catalog = core.describeToolPresentations();
+const byName = new Map(catalog.map((entry) => [entry.name, entry]));
+assert.equal(byName.get("read_file")?.category, "reads", "built-ins are in the catalog");
+assert.equal(byName.get("todo")?.keepRow, true, "row-keeping built-ins are marked");
+assert.equal(byName.get("run_command")?.detailed, true, "detailed built-ins are marked");
+assert.ok(
+  catalog.every((entry) => typeof entry.name === "string"),
+  "catalog entries are serializable data"
+);
+
+core.registerToolPresentation("ext_catalog", { category: "searches", text: (r) => String(r?.n ?? "") });
+assert.equal(
+  core.describeToolPresentations().find((entry) => entry.name === "ext_catalog")?.hasText,
+  true,
+  "a registered extension tool joins the catalog"
+);
+core.clearToolPresentation();
+assert.equal(
+  core.describeToolPresentations().some((entry) => entry.name === "ext_catalog"),
+  false,
+  "disabling (clearing) an extension drops it from the catalog"
+);
+
+console.log("validate-tool-display: catalog ok");
