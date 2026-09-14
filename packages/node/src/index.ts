@@ -26,6 +26,7 @@ import { createNativeFilesystem } from "./environment/native-fs.js";
 import { runNativeCommand, startNativeCommand } from "./environment/native-run.js";
 import { resetOsSandbox } from "./environment/os-sandbox.js";
 import { locateTreeSitterGrammar } from "./lsp/grammar.js";
+import { resolveCommandPath } from "./lsp/resolve-command.js";
 import { createLspConnection as createNodeLspConnection } from "./lsp/transport.js";
 
 import type { LocalEnvironmentConfig } from "./environment/local.js";
@@ -130,6 +131,9 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
     },
 
     commandExists: async (command: string): Promise<boolean> => {
+      // Prefer a project-local install so a devDependency server is usable
+      // without a global install (kept in sync with the LSP spawn path).
+      if (resolveCommandPath(command, rootPath) !== command) return true;
       const probe = `command -v "${command}" >/dev/null 2>&1`;
       return new Promise<boolean>((resolve) => {
         exec(probe, (err) => {
@@ -168,7 +172,12 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
       };
     },
 
-    createLspConnection: (config) => createNodeLspConnection(config),
+    createLspConnection: (config) =>
+      createNodeLspConnection({
+        ...config,
+        // Same resolution as commandExists, so the probed binary is the spawned one.
+        command: resolveCommandPath(config.command, config.cwd ?? rootPath),
+      }),
     locateTreeSitterGrammar,
 
     createIsolateDriver: createNodeIsolateDriver,
