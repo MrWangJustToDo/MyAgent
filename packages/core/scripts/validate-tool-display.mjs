@@ -192,3 +192,25 @@ const roundTripped = JSON.parse(JSON.stringify(partWithDisplay));
 assert.deepEqual(roundTripped.display, partWithDisplay.display, "the payload survives JSONL persistence");
 
 console.log("validate-tool-display: durability ok");
+
+// --- 9. block ownership ------------------------------------------------------
+// Exactly these built-ins render a result block in full display. Every other built-in
+// must stay block-less: filling their payload `text` made all of them look like block
+// owners (`read_file` / `grep` grew output blocks).
+const blockOwners = [
+  "ask_user",
+  "complete_plan",
+  "get_command_output",
+  "kill_command",
+  "run_command",
+  "task",
+  "todo",
+].sort();
+const owners = core
+  .describeToolPresentations()
+  .filter((entry) => entry.detailed || entry.keepRow)
+  .map((entry) => entry.name)
+  .sort();
+assert.deepEqual(owners, blockOwners, "the block-owning built-ins are unchanged");
+
+console.log("validate-tool-display: block ownership ok");

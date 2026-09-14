@@ -22,8 +22,17 @@ export const DETAILED_OUTPUT_TOOL_NAMES: ReadonlySet<string> = new Set([
   "task",
 ]);
 
-/** Whether a tool renders a detailed output block in full mode. */
+/**
+ * Whether a tool renders a detailed output block in full display.
+ *
+ * The descriptor wins — a tool that declares `detailed` or `keepRow` always keeps its
+ * block, so a newly declared one cannot be missed by the static sets below. Those sets
+ * remain as the fallback for a host whose process never created the tools (a remote
+ * renderer, before the snapshot catalog is wired into the views).
+ */
 export function hasDetailedOutputBlock(toolName: string): boolean {
+  const present = getToolPresentation(toolName);
+  if (present?.detailed || present?.keepRow) return true;
   return ALWAYS_VISIBLE_TOOL_NAMES.has(toolName) || DETAILED_OUTPUT_TOOL_NAMES.has(toolName);
 }
 
