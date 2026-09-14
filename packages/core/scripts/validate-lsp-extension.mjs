@@ -382,15 +382,22 @@ record(
 );
 
 // ---- 14. Cleanup: session:shutdown must shut down all LSP servers (child processes) ----
-// Without this, the spawned mock-lsp-server child keeps the event loop alive and the
-// script would hang. This mirrors production teardown (agent-factory emits this event).
+// code_rewrite applies changes through fileSync.handleFileWrite (fire-and-forget),
+// so a server can be lazily starting here. Wait the teardown out instead of exiting
+// mid-shutdown (that is what used to orphan the mock server child).
 await runner.emitSessionShutdown("sess-1");
-await new Promise((r) => setTimeout(r, 200));
-record("session:shutdown shuts down LSP servers (no lingering children)", true);
+const afterShutdown = await waitForMockServers(mockBaseline, 60, 200);
+record(
+  "session:shutdown shuts down LSP servers (no lingering children)",
+  afterShutdown <= mockBaseline,
+  `${afterShutdown} alive (baseline ${mockBaseline})`
+);
 
 // ---- Cleanup ----
 await runner.destroyAll();
 core.clearCoreEnv();
+const atExit = await waitForMockServers(mockBaseline, 10, 200);
+record("no orphaned mock server at exit", atExit <= mockBaseline, `${atExit} alive (baseline ${mockBaseline})`);
 
 const failed = results.filter((r) => !r.ok);
 console.log("\n=== LSP EXTENSION VALIDATION ===");

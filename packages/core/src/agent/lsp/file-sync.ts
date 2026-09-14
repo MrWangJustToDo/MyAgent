@@ -133,13 +133,13 @@ export class FileSync {
 
     // Bounded wait for a cold start: a lazy start can take minutes (Java: project
     // indexing), which must not stall the tool result. A server that does not come
-    // up in time is pre-warmed in the background and this file is synced as soon
-    // as the server reports ready (flushPendingSync), so the change is deferred
-    // rather than dropped.
+    // up in time is left starting and this file is synced as soon as it reports
+    // ready (flushPendingSync), so the change is deferred rather than dropped.
+    // No extra pre-warm here: startServer is already in flight (waitForClient kicks
+    // it off), and starting another one after the timeout can outlive a shutdown.
     const client = await this.manager.waitForClient(languageId, FIRST_SYNC_WAIT_MS).catch(() => null);
     if (!client) {
       this.markPendingSync(languageId, absPath);
-      void this.manager.getClientForLanguage(languageId).catch(() => {});
       return;
     }
 

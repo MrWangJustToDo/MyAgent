@@ -411,6 +411,11 @@ export class LspManager {
       this.triggerPostInit(languageId, client);
     } catch (err) {
       this.startingServers.delete(languageId);
+      // A start can fail *after* the child was spawned (bad handshake, init error,
+      // timeout). Dispose the connection so the process cannot outlive the attempt:
+      // nothing else keeps a reference to it once the start promise is dropped.
+      await connection.shutdown().catch(() => {});
+      connection.kill();
       const message = err instanceof Error ? err.message : String(err);
       // Spawn ENOENT means the server binary isn't on PATH — translate to a
       // clear, actionable hint instead of a raw "spawn ... ENOENT" error.
