@@ -1,7 +1,7 @@
 import {
+  computeMessageRenderSignature,
   computeToolCallsRenderSignature,
   dedupeToolCallsInMessages,
-  getMessageToolSignature,
   normalizeToolPartsInMessages,
   shouldFlattenPart,
 } from "./dedupe-tool-calls.js";
@@ -48,7 +48,10 @@ function flattenMessage(message: UIMessage): UIMessage[] {
 }
 
 function resolveStaticFlatMessage(message: UIMessage): UIMessage[] {
-  const signature = getMessageToolSignature(message);
+  // The cache key is the message id, so the signature must cover *every* flatten
+  // input: synthetic rows (compact activity summaries) keep their id while their
+  // text grows, and a tool-only fingerprint would pin the first render forever.
+  const signature = computeMessageRenderSignature(message);
   const cached = getFlatMessage(message.id);
   if (cached && cached.signature === signature) {
     return cached.flat;

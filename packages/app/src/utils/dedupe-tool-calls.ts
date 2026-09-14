@@ -1,4 +1,6 @@
-import type { ToolCallPart, UIMessage } from "@tanstack/ai";
+import { digestString } from "./string-digest.js";
+
+import type { ImagePart, TextPart, ToolCallPart, UIMessage } from "@tanstack/ai";
 
 const SKIPPED_FLATTEN_PART_TYPES = new Set(["thinking", "tool-result"]);
 
@@ -223,6 +225,39 @@ export function computeToolCallsRenderSignature(messages: UIMessage[]): string {
     .join("|");
 }
 
-export function getMessageToolSignature(message: UIMessage): string {
-  return computeToolCallsRenderSignature([message]);
+/**
+ * Fingerprint everything a message's flattened display rows are derived from: the
+ * role (user rows stay whole, assistant rows split per part) plus, for every part
+ * that yields a row, its content.
+ *
+ * Tool state is encoded cheaply ({@link encodeToolCallState}). Text and image parts
+ * — the ones rewritten *under a stable id* (compact activity summaries, streamed
+ * compaction summaries, replaced images) — are content-digested, so the
+ * flat-message cache invalidates instead of pinning the first render forever.
+ */
+export function computeMessageRenderSignature(message: UIMessage): string {
+  const parts = message.parts.filter((part) => shouldFlattenPart(part)).map(encodePartRenderSignature);
+  return `${message.role}|${parts.join("|")}`;
+}
+
+function encodePartRenderSignature(part: UIMessage["parts"][number]): string {
+  if (part.type === "text") return `t${digestString((part as TextPart).content ?? "")}`;
+  if (part.type === "image") return `i${digestString(imageSourceValue(part as ImagePart))}`;
+  if (part.type === "tool-call") return `c${encodeToolCallState(part as ToolCallPart)}`;
+  // Unknown row types (thinking / tool-result never produce rows): a full
+  // fingerprint is the only safe option, and they are rare enough to be free.
+  return `x${digestString(safeStringify(part))}`;
+}
+
+function imageSourceValue(part: ImagePart): string {
+  const source = part.source as { value?: unknown } | undefined;
+  return typeof source?.value === "string" ? source.value : "";
+}
+
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? "";
+  } catch {
+    return "";
+  }
 }

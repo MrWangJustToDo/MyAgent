@@ -50,6 +50,7 @@ export {
 export {
   dedupeToolCallsInMessages,
   mergeToolCallPart,
+  computeMessageRenderSignature,
   computeToolCallsRenderSignature,
   normalizeToolPartsInMessages,
   shouldFlattenPart,
