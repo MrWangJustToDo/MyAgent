@@ -112,6 +112,12 @@ export class LspManager {
   private commandExists: ((command: string) => Promise<boolean>) | null;
   /** Cache of probed commands (command → exists). */
   private commandProbeCache = new Map<string, boolean>();
+  /**
+   * Monotonic count of `publishDiagnostics` notifications per document URI.
+   * Kept on the manager (not on the client) so it survives a server restart and
+   * keeps increasing for the same URI.
+   */
+  private diagnosticsRevision = new Map<string, number>();
 
   constructor(
     rootDir: string,
@@ -373,6 +379,10 @@ export class LspManager {
       if (client) {
         client.diagnostics.set(uri, diagnostics);
       }
+      // Bump outside the client check: a publish means the server finished
+      // analyzing the current document version, even when it reports no
+      // problems (empty list). Waiters rely on this signal for clean files.
+      this.diagnosticsRevision.set(uri, (this.diagnosticsRevision.get(uri) ?? 0) + 1);
     });
 
     try {
@@ -554,6 +564,18 @@ export class LspManager {
     const client = this.getRunningClient(this.getLanguageIdFromUri(uri));
     if (!client) return [];
     return client.diagnostics.get(uri) ?? [];
+  }
+
+  /**
+   * How many times the server has published diagnostics for this document.
+   *
+   * Callers snapshot this before syncing a file change and poll until it
+   * advances, which is the signal that "the server re-analyzed this document".
+   * Unlike waiting for errors to show up, it also resolves for clean files.
+   */
+  getDiagnosticsRevision(filePathOrUri: string): number {
+    const uri = filePathOrUri.startsWith("file:") ? filePathOrUri : this.getFileUri(filePathOrUri);
+    return this.diagnosticsRevision.get(uri) ?? 0;
   }
 
   /** Compute a path relative to the project root (POSIX-style, no node:path). */

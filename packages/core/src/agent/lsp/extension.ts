@@ -24,7 +24,7 @@ import { LspManager, type LspServerConfigRecord } from "./lsp-manager.js";
 import { applyDiagnosticsToToolAfterPayload } from "./shared/apply-tool-diagnostics.js";
 import { MAX_AUTO_DIAGNOSTIC_LINES } from "./shared/constants.js";
 import { extractToolPath } from "./shared/parse-tool-args.js";
-import { AUTO_DIAG_SERVER_WAIT_MS, AUTO_DIAG_SETTLE_POLL_MS, AUTO_DIAG_SETTLE_TIMEOUT_MS } from "./shared/timing.js";
+import { AUTO_DIAG_SETTLE_POLL_MS, AUTO_DIAG_SETTLE_TIMEOUT_MS } from "./shared/timing.js";
 import { lspTextToModelOutput } from "./shared/tool-output.js";
 import { createCodeActionsTool } from "./tools/code-actions.js";
 import { createCodeOverviewTool } from "./tools/code-overview.js";
@@ -263,7 +263,12 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
       // Only terminal states are surfaced (success / failure); the transient
       // starting / restarting stages stay silent so the input feedback is not
       // serialized into an error→loading→success flicker.
-      onServerReady: (languageId) => notifyServerLifecycle(ctx.ui, languageId, "ready"),
+      onServerReady: (languageId) => {
+        notifyServerLifecycle(ctx.ui, languageId, "ready");
+        // A write that landed while this server was starting had its sync
+        // deferred — send it now so its diagnostics reach the next tool call.
+        void fileSync.flushPendingSync(languageId).catch(() => {});
+      },
       onServerError: (languageId, error) => notifyServerLifecycle(ctx.ui, languageId, "failed", error),
       onServerCrash: (languageId) => notifyServerLifecycle(ctx.ui, languageId, "crashed"),
     },
@@ -514,25 +519,47 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
     })
   );
 
+  /**
+   * Snapshot the publish counter for a file before the change is synced to the
+   * server, so the diagnostics wait can tell "a publish caused by this write"
+   * apart from a stale one. Null when there is nothing to wait for.
+   */
+  function captureDiagnosticsBaseline(path: string | undefined): { uri: string; revision: number } | null {
+    if (!path) return null;
+    try {
+      const mgr = getManager();
+      const uri = mgr.getFileUri(path);
+      return { uri, revision: mgr.getDiagnosticsRevision(uri) };
+    } catch {
+      return null;
+    }
+  }
+
   unsubs.push(
     ctx.registerInterceptor<ToolAfterEvent>("tool:after:write_file", async (event) => {
       const path = extractToolPath(event.payload.args);
+      const baseline = captureDiagnosticsBaseline(path);
       if (path) await handleAfter("write_file", path);
-      await maybeInjectDiagnostics(path, event);
+      await maybeInjectDiagnostics(path, event, baseline);
     })
   );
 
   unsubs.push(
     ctx.registerInterceptor<ToolAfterEvent>("tool:after:edit_file", async (event) => {
       const path = extractToolPath(event.payload.args);
+      const baseline = captureDiagnosticsBaseline(path);
       if (path) await handleAfter("edit_file", path);
-      await maybeInjectDiagnostics(path, event);
+      await maybeInjectDiagnostics(path, event, baseline);
     })
   );
 
   /** Auto-inject LSP error diagnostics into write/edit results via modifiedResult. */
-  async function maybeInjectDiagnostics(path: string | undefined, event: ToolAfterEvent): Promise<void> {
-    if (!path) return;
+  async function maybeInjectDiagnostics(
+    path: string | undefined,
+    event: ToolAfterEvent,
+    baseline: { uri: string; revision: number } | null
+  ): Promise<void> {
+    if (!path || !baseline) return;
 
     const mgr = getManager();
 
@@ -543,22 +570,25 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
     if (inject === false) return;
     if (Array.isArray(inject) && !inject.includes(languageId)) return;
 
-    const client = await mgr.waitForClient(languageId, AUTO_DIAG_SERVER_WAIT_MS);
-    if (!client) return;
+    // Cold start: never stall the tool result waiting for the server to boot.
+    // file-sync already kicked the start off in the background, so diagnostics
+    // arrive on the next write once the server is warm. Nothing is emitted here:
+    // LSP notifications only report terminal states.
+    if (!mgr.getRunningClient(languageId)) return;
 
-    // Wait for the LSP to publish updated diagnostics. Analysis latency grows
-    // with project size (monorepo roots are slower than isolated dirs), so poll
-    // until errors appear or the timeout elapses instead of a single fixed wait.
-    const uri = mgr.getFileUri(path);
+    // Wait for the server to (re)publish diagnostics for this document rather
+    // than waiting for errors to appear: a clean file publishes an empty list,
+    // so a successful edit returns as soon as analysis finishes instead of
+    // always burning the timeout. The timeout stays the upper bound for slow
+    // servers, and for servers that never publish.
+    const { uri, revision } = baseline;
     const deadline = Date.now() + AUTO_DIAG_SETTLE_TIMEOUT_MS;
-    let errors: { severity?: number }[] = [];
-    for (;;) {
-      const diagnostics = mgr.getDiagnostics(uri);
-      errors = (diagnostics as { severity?: number }[]).filter((d) => d.severity === 1);
-      if (errors.length > 0 || Date.now() >= deadline) break;
+    while (mgr.getDiagnosticsRevision(uri) <= revision && Date.now() < deadline) {
+      if (!mgr.getRunningClient(languageId)) return; // crashed mid-wait
       await new Promise((r) => setTimeout(r, AUTO_DIAG_SETTLE_POLL_MS));
     }
 
+    const errors = (mgr.getDiagnostics(uri) as { severity?: number }[]).filter((d) => d.severity === 1);
     if (errors.length === 0) return;
 
     const relPath = mgr.pathRelative(path);
@@ -605,7 +635,11 @@ async function activateLsp(ctx: ExtensionContext, options?: LspExtensionConfig):
       fsHelpers,
       undefined,
       {
-        onServerReady: (l) => notifyServerLifecycle(ctx.ui, l, "ready"),
+        onServerReady: (l) => {
+          notifyServerLifecycle(ctx.ui, l, "ready");
+          // Deferred syncs belong to whichever manager is active now.
+          void fileSync.flushPendingSync(l).catch(() => {});
+        },
         onServerError: (l, error) => notifyServerLifecycle(ctx.ui, l, "failed", error),
         onServerCrash: (l) => notifyServerLifecycle(ctx.ui, l, "crashed"),
       },

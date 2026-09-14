@@ -4,15 +4,25 @@
 export const DIAGNOSTIC_SETTLE_DELAY_MS = 1500;
 
 /**
- * How long auto-diagnostics waits for a lazily-started server to become ready
- * before giving up (first write that triggers startup must not skip injection).
+ * How long the explicit `lsp_diagnostics` tool waits for a lazily-started
+ * server to become ready before giving up. Write/edit auto-injection never
+ * waits on a cold start — it pre-warms the server in the background instead.
  */
 export const AUTO_DIAG_SERVER_WAIT_MS = 15000;
 
 /**
- * Upper bound for how long auto-diagnostics polls after a write/edit waiting
- * for the server to publish diagnostics. Large projects (monorepo roots) can
- * take longer than {@link DIAGNOSTIC_SETTLE_DELAY_MS} to analyze a file.
+ * How long a write/edit waits for a cold server before deferring the sync.
+ * A lazy start can take minutes (Java indexing), which must not stall the tool
+ * result — files that miss this window are synced as soon as the server reports
+ * ready (see `FileSync.flushPendingSync`).
+ */
+export const FIRST_SYNC_WAIT_MS = 3000;
+
+/**
+ * Upper bound for how long auto-diagnostics polls after a write/edit for the
+ * server to publish diagnostics. Polling exits as soon as a publish arrives,
+ * which also covers clean files (servers publish an empty list), so this bound
+ * is only reached by slow or unresponsive servers.
  */
 export const AUTO_DIAG_SETTLE_TIMEOUT_MS = 8000;
 
@@ -29,6 +39,3 @@ export const SHUTDOWN_TIMEOUT_MS = 3000;
 
 /** Delay after synthetic didChange before requesting member completions. */
 export const SYNTHETIC_DOT_SETTLE_DELAY_MS = 100;
-
-/** Timeout when connecting to a shared daemon socket. */
-export const SOCKET_CONNECT_TIMEOUT_MS = 10_000;

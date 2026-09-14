@@ -11,7 +11,7 @@
 
 import { MAX_TRACKED_DOCUMENTS } from "./shared/constants.js";
 import { syntheticDotLocks } from "./shared/synthetic-dot.js";
-import { AUTO_DIAG_SERVER_WAIT_MS } from "./shared/timing.js";
+import { FIRST_SYNC_WAIT_MS } from "./shared/timing.js";
 
 import type { LspManager } from "./lsp-manager.js";
 
@@ -24,6 +24,8 @@ interface TrackedDocument {
 export class FileSync {
   /** LRU map: most-recently-used documents are at the end (Map preserves insertion order). */
   private tracked: Map<string, TrackedDocument> = new Map();
+  /** Files whose write could not be synced yet (server still starting), by language. */
+  private pendingSync = new Map<string, Set<string>>();
   private maxTracked: number;
   private readFile: (absPath: string) => Promise<string>;
   private exists: (p: string) => Promise<boolean>;
@@ -44,6 +46,31 @@ export class FileSync {
   setManager(manager: LspManager): void {
     this.manager = manager;
     this.tracked.clear();
+    this.pendingSync.clear();
+  }
+
+  /** Remember a file whose sync has to wait for the server to come up. */
+  private markPendingSync(languageId: string, absPath: string): void {
+    let pending = this.pendingSync.get(languageId);
+    if (!pending) {
+      pending = new Set();
+      this.pendingSync.set(languageId, pending);
+    }
+    pending.add(absPath);
+  }
+
+  /**
+   * Sync files whose writes arrived while the server was still starting.
+   * Wired to the manager's `onServerReady`, so a deferred cold-start sync is
+   * never silently lost — the server learns about the file as soon as it can.
+   */
+  async flushPendingSync(languageId: string): Promise<void> {
+    const pending = this.pendingSync.get(languageId);
+    if (!pending || pending.size === 0) return;
+    this.pendingSync.delete(languageId);
+    for (const absPath of pending) {
+      await this.handleFileWrite(absPath).catch(() => {});
+    }
   }
 
   /**
@@ -104,11 +131,17 @@ export class FileSync {
 
     if (!languageId) return;
 
-    // Wait for the server to become ready (kicks off lazy startup if needed) so
-    // the very first write/edit in a session still syncs the file and produces
-    // diagnostics, instead of silently dropping didOpen/didChange.
-    const client = await this.manager.waitForClient(languageId, AUTO_DIAG_SERVER_WAIT_MS).catch(() => null);
-    if (!client) return;
+    // Bounded wait for a cold start: a lazy start can take minutes (Java: project
+    // indexing), which must not stall the tool result. A server that does not come
+    // up in time is pre-warmed in the background and this file is synced as soon
+    // as the server reports ready (flushPendingSync), so the change is deferred
+    // rather than dropped.
+    const client = await this.manager.waitForClient(languageId, FIRST_SYNC_WAIT_MS).catch(() => null);
+    if (!client) {
+      this.markPendingSync(languageId, absPath);
+      void this.manager.getClientForLanguage(languageId).catch(() => {});
+      return;
+    }
 
     try {
       const content = await this.readFile(absPath);
