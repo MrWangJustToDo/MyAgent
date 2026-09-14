@@ -184,11 +184,23 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
       if (currentInitId !== initIdRef.current) return;
       setTimeout(() => {
+        // Revealing the app is host-agnostic: only the terminal clear is Node-specific.
+        // Keeping the reveal inside the `process` guard would strand browser hosts
+        // (playground / extension) on the init splash forever — there is no `process`
+        // global there, so the branch never runs.
+        const reveal = () => {
+          setInitLoading(false);
+          useDynamic.getActions().setDynamicKey(Date.now());
+        };
+
         if (typeof process === "object") {
-          import("ansi-escapes")
-            .then((pkg) => process?.stdout?.write?.(pkg.clearScreen + pkg.cursorTo(0, 0)))
-            .then(() => setInitLoading(false))
-            .then(() => useDynamic.getActions().setDynamicKey(Date.now()));
+          // CLI: clear the real TTY first so the splash is not left behind, then reveal.
+          void (async () => {
+            const pkg = await import("ansi-escapes");
+            process?.stdout?.write?.(pkg.clearScreen + pkg.cursorTo(0, 0));
+          })().finally(reveal);
+        } else {
+          reveal();
         }
       }, 200);
     };
