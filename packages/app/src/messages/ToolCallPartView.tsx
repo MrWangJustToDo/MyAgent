@@ -105,7 +105,12 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
   const showDuration = durationMs !== null && durationMs >= DURATION_THRESHOLD_MS;
 
   const errorText = extractErrorText(part);
-  const inlineSummary = errorText ? null : getInlineSummary(part, toolName);
+  // The header summary travels with the part (core renders it at completion), so a host
+  // without the tool registry still shows it; the local formatter is the fallback for
+  // parts written before core started attaching the payload.
+  const inlineSummary = errorText
+    ? null
+    : ((part as { display?: { summary?: string } }).display?.summary ?? getInlineSummary(part, toolName)) || null;
   const outputFailed = (part.output as { success?: boolean } | undefined)?.success === false;
   // Density compact: skip success one-liners; keep failure hints.
   // const compactOutput =

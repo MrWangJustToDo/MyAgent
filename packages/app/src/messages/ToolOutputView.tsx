@@ -7,7 +7,7 @@ import { useSize } from "../hooks";
 import { BG, COLORS } from "../theme/colors.js";
 import { formatToolOutput } from "../utils/format";
 import { splitStreamingLines } from "../utils/streaming-output-lines.js";
-import { ALWAYS_VISIBLE_TOOL_NAMES, hasDetailedOutputBlock, keepsCompactRow } from "../utils/tool-display.js";
+import { hasDetailedOutputBlock, keepsCompactRow } from "../utils/tool-display.js";
 
 import { TodoToolOutputView } from "./TodoToolOutputView.js";
 
@@ -18,7 +18,7 @@ import type { ToolCallPart } from "@tanstack/ai";
 /** Max chars kept for a compact single-line result block. */
 const COMPACT_LINE_MAX = 200;
 
-/** Compact keeps one curated line (the `toUI` contract) instead of the full block. */
+/** Compact keeps one curated line (the `present.text` contract) instead of the full block. */
 function clampCompactLine(line: string): string {
   return line.length > COMPACT_LINE_MAX ? `${line.slice(0, COMPACT_LINE_MAX - 1)}…` : line;
 }
@@ -52,24 +52,28 @@ export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState:
   if (toolName === "ask_user" && uiState === "output-error") return null;
 
   const isDetailed = hasDetailedOutputBlock(toolName);
-  const output = formatToolOutput(part.output, toolName);
+  // Core renders the result text once, at completion, and ships it with the part. Hosts
+  // must not need the tool registry in their own process (remote session, extension
+  // hosts) — the local formatter stays only as the fallback for older parts.
+  const display = (part as ToolCallPart & { display?: { text?: string } }).display;
+  const output = display?.text ?? formatToolOutput(part.output, toolName);
 
   // Error outputs carry `{ error }` (no formattable body) — the message is
   // rendered by ToolCallPartView, so skip the otherwise-empty result block.
   if (uiState === "output-error" && !output.trim()) return null;
 
-  // Extension (and other) tools: show the default block only when toUI produced non-empty text.
+  // Extension (and other) tools: show the default block only when the tool rendered
+  // non-empty text (`present.text`, in-process or precomputed into the payload).
   if (!isDetailed) {
-    if (!getToolPresentation(toolName)?.text || !output.trim()) return null;
+    const hasRenderer = Boolean(display?.text) || Boolean(getToolPresentation(toolName)?.text);
+    if (!hasRenderer || !output.trim()) return null;
   }
 
   const outputLines = splitStreamingLines(output);
-  // Structured tools keep their full block in both modes; anything else allowed to
-  // render in compact (i.e. a registered toUI) is one clamped line.
-  const lines =
-    mode === "compact" && !ALWAYS_VISIBLE_TOOL_NAMES.has(toolName)
-      ? [clampCompactLine(outputLines[0] ?? "")]
-      : outputLines;
+  // Structured tools (row-keeping, no result renderer) keep their full block in both
+  // modes; anything else allowed to render in compact is one clamped line.
+  const structured = keepsCompactRow(toolName) && !getToolPresentation(toolName)?.text;
+  const lines = mode === "compact" && !structured ? [clampCompactLine(outputLines[0] ?? "")] : outputLines;
   const failed = toolName === "run_command" && (part.output as { success?: boolean } | undefined)?.success === false;
   const lineColor = failed ? COLORS.danger : COLORS.muted;
 
