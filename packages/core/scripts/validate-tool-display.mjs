@@ -269,7 +269,13 @@ assert.equal(typeof core.getToolPresentation("hydrated_text_only")?.text, "funct
 // Adoption replaces the previous catalog, and a payload without descriptors is tolerated.
 core.hydrateToolPresentations([{ name: "hydrated_other", category: "other", hasText: true }]);
 assert.equal(core.keepsCompactRow("hydrated_text_only"), false, "the old adoption is dropped");
-assert.doesNotThrow(() => core.hydrateToolPresentations(undefined), "undefined catalog is a no-op");
+
+// A malformed payload must be a no-op, *not* a wipe: the host keeps ruling rows the way the
+// owner does until a real catalog arrives.
+core.hydrateToolPresentations(undefined);
+assert.equal(core.keepsCompactRow("hydrated_other"), true, "undefined catalog keeps the adoption");
+core.hydrateToolPresentations([]);
+assert.equal(core.keepsCompactRow("hydrated_other"), false, "an empty catalog really does clear it");
 
 // A row that already shipped its rendered text must not fold, even when the local lookup has
 // never heard of the tool (pre-change history replayed into a remote host).

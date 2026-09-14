@@ -43,13 +43,21 @@ export function getToolPresentation(name: string): ToolPresentation | undefined 
  * no payload (in-flight, restored, declaration-only). Local knowledge always wins, and the
  * adopted entries stay out of {@link describeToolPresentations} so a re-published catalog
  * cannot degrade (it would report renderers as absent).
+ *
+ * Scope: the adoption layer is process-global, like the rest of this registry (declarations and
+ * registrations are too), so **the last adoption wins**. That matches the current hosts, which
+ * render one remote session at a time; a process that renders several sessions at once (an
+ * IM bridge fan-out, a multi-session panel) would need per-session scoping — an overlay keyed
+ * by session id consulted before this layer — not merely a bigger map here.
  */
 export function hydrateToolPresentations(descriptors: readonly ToolPresentationInfo[]): void {
+  // Tolerate a publisher that predates the field (its payload simply has no descriptors).
+  // This must come FIRST: a malformed payload keeping the previous adoption is a no-op, while
+  // clearing first would silently wipe every row rule the host already learned.
+  if (!Array.isArray(descriptors)) return;
   // A catalog is always the complete set (snapshot or event), so adopting one replaces the
   // previous adoption — otherwise a tool the owner dropped keeps ruling this host's rows.
   hydrated.clear();
-  // Tolerate a publisher that predates the field (its payload simply has no descriptors).
-  if (!Array.isArray(descriptors)) return;
   for (const info of descriptors) {
     if (registered.has(info.name) || declared.has(info.name)) continue;
     const present: ToolPresentation = {};

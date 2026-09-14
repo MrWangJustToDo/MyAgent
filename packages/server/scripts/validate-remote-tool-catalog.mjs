@@ -67,6 +67,11 @@ assert.equal(
   false,
   "re-adopting a catalog drops entries the owner no longer publishes"
 );
-assert.doesNotThrow(() => core.hydrateToolPresentations(undefined), "a catalog-less payload is tolerated");
+core.hydrateToolPresentations(undefined);
+assert.equal(
+  core.keepsCompactRow("owner_command"),
+  true,
+  "a catalog-less payload is a no-op, not a wipe of what this host already adopted"
+);
 
 console.log("validate-remote-tool-catalog: ok");

@@ -109,3 +109,17 @@ stage 2 lands (the plan keeps it in the descriptor API).
   throw.
 - `isErrorOutput`'s `ok`/`success` assumption is documented (every built-in uses them as failure
   semantics; a tool that needs otherwise should declare `isError` in its schema).
+
+### Known limitation (not fixed here)
+
+The adoption layer (`hydrated` in the presentation registry) is **process-global**, like the rest
+of that registry — declarations and registrations are too — so *the last adoption wins*. That
+matches today's hosts, which render one remote session at a time (the CLI mounts a single
+session; the server host caches a client per agent id but only for its own requests). A process
+that renders several sessions at once (an IM bridge fan-out, a multi-session panel) would show
+the wrong row shapes for all but the last session.
+
+The fix is per-session scoping — an overlay keyed by session id, consulted before the adoption
+layer — not a bigger map in this module; the same overlay would also be the right answer for the
+pre-existing "one process, many local sessions" case, where two sessions' extension tools already
+share one registry.
