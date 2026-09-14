@@ -181,7 +181,8 @@
     "validate:run-abort-ownership": "pnpm run build && node scripts/validate-run-abort-ownership.mjs",
     "validate:middleware-order": "pnpm run build && node scripts/validate-middleware-order.mjs",
     "validate:tool-presentation": "node scripts/validate-tool-presentation.mjs",
-    "validate:tool-display": "pnpm run build && node scripts/validate-tool-display.mjs"
+    "validate:tool-display": "pnpm run build && node scripts/validate-tool-display.mjs",
+    "validate:mid-run-tool-display": "pnpm run build && node scripts/validate-mid-run-tool-display.mjs"
   },
   "dependencies": {
     "@tanstack/ai": "^0.53.0",

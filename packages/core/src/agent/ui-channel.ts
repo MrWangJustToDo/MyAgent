@@ -243,7 +243,13 @@ export class AgentUIChannel {
       return { ...message, parts: patched } as typeof message;
     });
 
-    if (changed) this.setMessages(next);
+    // Patch the processor directly, NOT the channel-level `setMessages`: that one also
+    // refreshes the run-boundary snapshot (`historicalMessageIds`), and doing so mid-run
+    // makes `shouldSuppressStaleTextChunk` drop every remaining TEXT delta of the
+    // assistant message that is still streaming — the tool call is normally mid-message,
+    // so the model's text after the tool would be lost. `addToolApprovalResponse`
+    // patches the processor for the same reason.
+    if (changed) this.processor.setMessages(next);
   }
 
   subscribeApprovalRequests(listener: ApprovalListener): () => void {
