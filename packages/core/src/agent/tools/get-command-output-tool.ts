@@ -11,7 +11,8 @@ export const createGetCommandOutputTool = () => {
     name: "get_command_output",
     description:
       "Read incremental stdout/stderr and status for a background job started with run_command(run_in_background=true). " +
-      "Each call returns output since the previous poll for that jobId.",
+      "Each call returns output since the previous poll for that jobId. " +
+      "The job's full log is returned as cachedOutputPath — read it with read_file for output that already scrolled past.",
     inputSchema: z.object({
       jobId: z.string().describe("The jobId returned by a background run_command."),
     }),
@@ -25,7 +26,7 @@ export const createGetCommandOutputTool = () => {
       }
       return {
         ...result,
-        cachedOutputPath: null,
+        cachedOutputPath: result.logPath,
       };
     },
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: GetCommandOutput }) {
@@ -38,6 +39,11 @@ export const createGetCommandOutputTool = () => {
       if (output.stderr?.trim()) parts.push(`stderr:\n${output.stderr}`);
       if (output.stdout?.trim()) parts.push(`stdout:\n${output.stdout}`);
       else if (!output.stderr?.trim()) parts.push("(no new output)");
+      if (output.cachedOutputPath) {
+        parts.push(
+          `log: ${output.cachedOutputPath} (full log — read_file; a missing "[exit ...]" footer means still running)`
+        );
+      }
       return [{ type: "text" as const, content: parts.join("\n") }];
     },
   });

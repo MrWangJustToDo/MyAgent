@@ -23,7 +23,9 @@ export const toolOutputBaseSchema = z.object({
   cachedOutputPath: z
     .string()
     .nullable()
-    .describe("Path to cached full output on disk, or null when no caching occurred."),
+    .describe(
+      "Path to the full output on disk — a cached tool result or a background job's log — or null when no such file was written."
+    ),
 });
 
 // ============================================================================

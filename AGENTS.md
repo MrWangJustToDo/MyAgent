@@ -709,7 +709,7 @@ Enabled when `ManagedAgentConfig.codeMode !== false` (`createCodeModeExtension()
 | `execute_typescript` | Run model-written TypeScript in a secure V8 isolate, with a curated subset of agent tools exposed as `external_*` functions inside the sandbox |
 | `discover_tools` | Companion tool registered only when at least one external tool is marked `lazy` — lets the model discover lazy tools on demand |
 
-**Tool subset (kept deliberately small):** only a curated set is exposed to the sandbox as `external_*` bindings — read-only fs tools eager (`read_file`/`grep`/`glob`/`list_file`/`tree`), shell (`run_command`) + `websearch` lazy. Interactive / stateful tools (`ask_user`, `task`, `todo`, plan tools) are excluded. Lazy tools stay out of the system prompt's full type stubs and are listed in a discoverable catalog instead (`discover_tools`), keeping the per-turn prompt small (progressive disclosure).
+**Tool subset (kept deliberately small):** only a curated set is exposed to the sandbox as `external_*` bindings — read-only fs tools eager (`read_file`/`grep`/`glob`/`list_file`/`tree`), shell (`run_command`) + `websearch` lazy. Interactive / stateful tools (`ask_user`, `task`, `todo`, plan tools) are excluded — including `get_command_output` / `kill_command`, so a background job started inside the sandbox is read through its log file via `read_file` (see the `run_command` section) and is polled/killed by the outer agent. Lazy tools stay out of the system prompt's full type stubs and are listed in a discoverable catalog instead (`discover_tools`), keeping the per-turn prompt small (progressive disclosure).
 
 **Per-turn system prompt:** the extension injects code-mode guidance through a `before_agent_start` interceptor (`event.appendSystemPrompt`) documenting the sandbox API + `external_*` bindings.
 
@@ -832,6 +832,15 @@ Programmatic equivalent: `createNodeEnv({ rootPath, mode: "os" | "native" })`. E
 ### run_command Tool
 - Max 50KB for stdout and stderr each
 - Keeps the **end** of output (most relevant for errors)
+
+**Background jobs (`run_in_background`) and their log.** Output is retained in memory (head-trimmed: 256K/stream running, 64K/stream finished, 50 finished jobs kept) **and** tee'd to a durable log at `.agents/cache/command-jobs/<jobId>.log`, whose workspace-relative path is returned as `cachedOutputPath` by `run_command` (background) and `get_command_output`:
+- one file per job, chunks appended in arrival order, stderr lines marked `[stderr] `;
+- header (`# <command>` + start time) on creation, terminal footer `[exit <code> · <status> · finished <iso>]` — **no footer means still running**;
+- **head durable, tail live**: at 16 MiB the log stops growing (single truncation marker) instead of rewriting, so `read_file` line offsets stay stable while recent output remains available through `get_command_output`;
+- deleted with the job record (registry eviction / `destroyAllCommandJobs`); logs older than 24 h are swept once per process; a host whose fs lacks `appendFile` degrades to `cachedOutputPath: null`;
+- it must **not** live under `.agents/cache/tool-output/`, which `cleanupOrphanedToolCache` GCs against message references (it would delete a running job's log).
+
+This is also how a code-mode sandbox reads background output: `read_file` is exposed there, `get_command_output` is not.
 
 ### Streaming UI (`@my-agent/app`)
 - **`run_command`:** Core emits every chunk via `emitStreamingChunk` onto the session `tool` channel

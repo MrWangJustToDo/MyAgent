@@ -22,6 +22,7 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
       "Executes a shell command in the workspace environment. Returns stdout, stderr, exit code, and execution duration. " +
       "Set run_in_background=true for long-lived processes (dev servers, watchers); then poll with get_command_output and stop with kill_command. " +
       `get_command_output and kill_command are lazy tools — discover them via ${DISCOVERY_TOOL_NAME} before calling. ` +
+      "Background jobs also append their output to a durable log file (cachedOutputPath) that can be read with read_file. " +
       "Large outputs are saved to disk — use read_file with the cachedOutputPath to read specific sections. " +
       (subagentSafe
         ? "Subagent commands are restricted: only read-only, project-internal commands are allowed; write or external-path commands are denied."
@@ -49,6 +50,8 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
           "When true, start the command in the background and return a jobId immediately. " +
             "Use get_command_output to read output/status and kill_command to stop it (both lazy — " +
             `discover them via ${DISCOVERY_TOOL_NAME} first). ` +
+            "The job's output is also appended to a durable log file returned as cachedOutputPath — read it with read_file " +
+            '(no trailing "[exit ...]" footer means the job is still running). ' +
             "Prefer for long-lived servers (e.g. npm run dev)."
         ),
     }),
@@ -110,7 +113,7 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
           jobId: job.id,
           status: "running" as const,
           runInBackground: true,
-          cachedOutputPath: null,
+          cachedOutputPath: job.logPath,
         };
       }
 
@@ -171,7 +174,11 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
               `Status: ${output.status ?? "running"}\n` +
               `get_command_output and kill_command are lazy tools — call ${DISCOVERY_TOOL_NAME} to get them, ` +
               `then use get_command_output with jobId="${output.jobId}" to read output/status ` +
-              `and kill_command to stop the job when finished. `,
+              `and kill_command to stop the job when finished. ` +
+              (output.cachedOutputPath
+                ? `Full output is appended to ${output.cachedOutputPath} — read it with read_file ` +
+                  `(a missing "[exit ...]" footer means the job is still running). `
+                : ""),
           },
         ];
       }

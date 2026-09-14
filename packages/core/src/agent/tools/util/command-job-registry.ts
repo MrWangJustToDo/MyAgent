@@ -1,8 +1,16 @@
 /**
  * In-memory registry for background shell jobs started via CoreEnv.startCommand.
+ *
+ * Output is retained in memory (head-trimmed, see the caps below) *and* tee'd to
+ * a durable per-job log (`command-output-log.ts`), so early output survives
+ * trimming and stays readable from surfaces that cannot poll a job.
  */
 
 import { generateId } from "../../../utils/generate-id.js";
+
+import { createCommandJobLogWriter, sweepStaleJobLogs } from "./command-output-log.js";
+
+import type { CommandJobLogWriter } from "./command-output-log.js";
 
 export type CommandJobStatus = "running" | "exited" | "killed" | "failed";
 
@@ -18,6 +26,12 @@ export interface CommandJobRecord {
   exitCode: number | null;
   startedAt: number;
   endedAt: number | null;
+  /**
+   * Workspace-relative durable log holding this job's output, or `null` when the
+   * host cannot append to files (logging degraded). Advertised to callers so a
+   * surface that can only read files (e.g. the code-mode sandbox) can read it.
+   */
+  logPath: string | null;
   /** Adapter-provided kill (best-effort). */
   kill?: () => Promise<void>;
 }
@@ -29,6 +43,8 @@ export interface CommandJobPollResult {
   stderr: string;
   exitCode: number | null;
   running: boolean;
+  /** Durable log holding this job's output, or `null` when unavailable. */
+  logPath: string | null;
 }
 
 /** A finished background job surfaced to the model as a completion notification. */
@@ -60,11 +76,24 @@ export interface CompletedCommandJob {
 class CommandJobRegistry {
   private readonly jobs = new Map<string, CommandJobRecord>();
 
+  /** Durable log writers for jobs where logging is available. */
+  private readonly logs = new Map<string, CommandJobLogWriter>();
+
   /** Job ids already surfaced to the model as completion notifications (dedupe). */
   private readonly notifiedJobIds = new Set<string>();
 
   create(command: string): CommandJobRecord {
     const id = generateId("job");
+    const startedAt = Date.now();
+    // A write failure disables logging for this job — stop advertising the path.
+    const stopAdvertising = () => {
+      const current = this.jobs.get(id);
+      if (current) current.logPath = null;
+    };
+    const log = createCommandJobLogWriter({ jobId: id, command, startedAt, onDisabled: stopAdvertising });
+    if (log) this.logs.set(id, log);
+    // Opportunistic safety net for logs left behind by an earlier run.
+    void sweepStaleJobLogs();
     const record: CommandJobRecord = {
       id,
       command,
@@ -74,8 +103,9 @@ class CommandJobRegistry {
       stdoutReadOffset: 0,
       stderrReadOffset: 0,
       exitCode: null,
-      startedAt: Date.now(),
+      startedAt,
       endedAt: null,
+      logPath: log?.path ?? null,
     };
     this.jobs.set(id, record);
     return record;
@@ -95,6 +125,7 @@ class CommandJobRegistry {
     if (!job || job.status !== "running") return;
     job.stdout += chunk;
     this.trimStream(job, "stdout");
+    this.logs.get(jobId)?.appendStdout(chunk);
   }
 
   appendStderr(jobId: string, chunk: string): void {
@@ -102,6 +133,7 @@ class CommandJobRegistry {
     if (!job || job.status !== "running") return;
     job.stderr += chunk;
     this.trimStream(job, "stderr");
+    this.logs.get(jobId)?.appendStderr(chunk);
   }
 
   markExited(jobId: string, exitCode: number | null): void {
@@ -111,16 +143,21 @@ class CommandJobRegistry {
     job.exitCode = exitCode ?? 1;
     job.endedAt = Date.now();
     this.afterFinished(job);
+    this.finalizeLog(job);
   }
 
   markFailed(jobId: string, message?: string): void {
     const job = this.jobs.get(jobId);
     if (!job) return;
-    if (message) job.stderr += (job.stderr ? "\n" : "") + message;
+    if (message) {
+      job.stderr += (job.stderr ? "\n" : "") + message;
+      this.logs.get(jobId)?.appendStderr(`${message}\n`);
+    }
     job.status = "failed";
     job.exitCode = job.exitCode ?? 1;
     job.endedAt = Date.now();
     this.afterFinished(job);
+    this.finalizeLog(job);
   }
 
   markKilled(jobId: string): void {
@@ -129,6 +166,22 @@ class CommandJobRegistry {
     job.status = "killed";
     job.endedAt = Date.now();
     this.afterFinished(job);
+    this.finalizeLog(job);
+  }
+
+  /** Record the terminal status in the job log (no-op when logging is off). */
+  private finalizeLog(job: CommandJobRecord): void {
+    const log = this.logs.get(job.id);
+    if (!log) return;
+    void log.finalize(job.status, job.exitCode, job.endedAt ?? Date.now());
+  }
+
+  /** Stop buffering and delete a job's log (record evicted / registry cleared). */
+  private disposeLog(jobId: string): Promise<void> {
+    const log = this.logs.get(jobId);
+    if (!log) return Promise.resolve();
+    this.logs.delete(jobId);
+    return log.remove();
   }
 
   /**
@@ -173,6 +226,7 @@ class CommandJobRegistry {
       if (!this.notifiedJobIds.has(id)) continue;
       this.jobs.delete(id);
       this.notifiedJobIds.delete(id);
+      void this.disposeLog(id);
       excess--;
     }
   }
@@ -215,6 +269,7 @@ class CommandJobRegistry {
       stderr,
       exitCode: job.exitCode,
       running: job.status === "running",
+      logPath: job.logPath,
     };
   }
 
@@ -257,16 +312,29 @@ class CommandJobRegistry {
     return completed;
   }
 
+  /**
+   * Kill and forget every job registered when the call started. Only the ids
+   * captured here are removed: `clearCoreEnv()` fires this without awaiting, and
+   * a job started in the meantime belongs to the next session and must stay
+   * queryable/killable rather than be silently dropped.
+   */
   async destroyAll(): Promise<void> {
     const ids = [...this.jobs.keys()];
     await Promise.all(ids.map((id) => this.kill(id)));
-    this.jobs.clear();
-    this.notifiedJobIds.clear();
+    for (const id of ids) {
+      this.jobs.delete(id);
+      this.notifiedJobIds.delete(id);
+    }
+    await Promise.all(ids.map((id) => this.disposeLog(id)));
   }
 
   clear(): void {
-    this.jobs.clear();
-    this.notifiedJobIds.clear();
+    const ids = [...this.jobs.keys()];
+    for (const id of ids) {
+      this.jobs.delete(id);
+      this.notifiedJobIds.delete(id);
+      void this.disposeLog(id);
+    }
   }
 }
 

@@ -270,6 +270,12 @@ export {
 export { commandJobRegistry } from "../agent/tools/util/command-job-registry.js";
 export type { CommandJobRecord, CommandJobPollResult } from "../agent/tools/util/command-job-registry.js";
 export {
+  COMMAND_JOB_LOG_DIR,
+  MAX_JOB_LOG_AGE_MS,
+  MAX_JOB_LOG_BYTES,
+  sweepStaleJobLogs,
+} from "../agent/tools/util/command-output-log.js";
+export {
   PlanModeController,
   cleanStepText,
   extractDoneSteps,
