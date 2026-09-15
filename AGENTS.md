@@ -234,15 +234,17 @@ pnpm start:server     # Run CoreEnv HTTP server
 pnpm start:im-bridge  # Run the IM bridge (Telegram)
 
 pnpm typecheck        # Type check all packages
-pnpm lint             # Run ESLint
+pnpm lint             # Run ESLint (after a build — see below)
 pnpm format           # Format with Prettier
 ```
 
 Per-package type check: `cd packages/<pkg> && pnpm tsc --noEmit` (e.g. `core`, `app`, `cli`).
 
+**Build first.** `pnpm lint` and `pnpm typecheck` only pass against a built checkout: the `validate:*` / test / render-smoke scripts import their own package's `dist` output (`../dist/dev.mjs`), and bare workspace specifiers (`@my-agent/core`) resolve through each package's `exports` map, which points at `dist`. In a fresh clone both commands report ~280 phantom `import/no-unresolved` / `TS2307` errors until `pnpm build` has run once. That is why CI builds before linting.
+
 Tests: `@my-agent/app` owns the only `node:test` suite — `pnpm --filter @my-agent/app test` builds the package, then runs `node --test test/*.test.mjs` against its `dist` output. Core is covered by the `validate:*` scripts instead (see step 3 of the Task Completion Checklist).
 
-CI: `.github/workflows/ci.yml` runs on every pull request and on pushes to `main` — `wxt prepare` → `pnpm lint` → `pnpm typecheck` → `pnpm build` → `pnpm --filter @my-agent/app test`. The release workflow (`.github/workflows/release.yml`, `v*` tag or manual dispatch) runs the same checks before `pnpm run publish:only`.
+CI: `.github/workflows/ci.yml` runs on every pull request and on pushes to `main` — `wxt prepare` → `pnpm build` → `pnpm lint` → `pnpm typecheck` → `pnpm --filter @my-agent/app test`. The release workflow (`.github/workflows/release.yml`, `v*` tag or manual dispatch) runs the same checks before `pnpm run publish:only`.
 
 ## Code Style Guidelines
 
@@ -1031,7 +1033,7 @@ Validate **once at the end of the task** (not after every small edit). Prefer sc
    pnpm exec prettier --write <changed-files...>
    pnpm exec eslint <changed-files...>
    ```
-   Use `pnpm format` / `pnpm lint` only when many files changed or Prettier/ESLint config itself changed.
+   Use `pnpm format` / `pnpm lint` only when many files changed or Prettier/ESLint config itself changed. Both require a build from a fresh checkout — see [Build, Lint, Test Commands](#build-lint-test-commands).
 
 2. **Build affected packages only** (see also `.cursor/rules/010-affected-package-builds.mdc`):
    ```bash

@@ -19,6 +19,31 @@ module.exports = [
       ".agents/**",
     ],
   },
+  // ── Build state is a lint/typecheck prerequisite ───────────────────────────
+  // Both resolvers below are still asked about specifiers this config cannot
+  // see through, so lint (and `pnpm typecheck`) only pass against a *built*
+  // checkout. ~280 `import/no-unresolved` errors show up with every `dist/`
+  // removed:
+  //
+  //   1. Relative `../dist/...` imports — ~190 in the `validate:*` / test /
+  //      render-smoke scripts, which import their own package's build output.
+  //      Each is paired with a `build &&` prefix in its package.json script;
+  //      the rule cannot follow a path into a gitignored directory. The
+  //      per-directory `import/no-unresolved: "off"` blocks below cover those
+  //      script trees, including the `../dist/utils/*` entry-point imports in
+  //      packages/app/test.
+  //   2. Bare workspace specifiers (`@my-agent/core`, `@my-agent/server/client`, …)
+  //      — the TS resolver follows `exports` → `./dist/index.mjs`, and the
+  //      node resolver never reaches the package at all, so `alwaysTryTypes`
+  //      alone does not save a dist-less tree. ~86 of these, spread across
+  //      package `src/`, the extension's non-`src/` TS files, the scripts and
+  //      the root host entry points.
+  //
+  // Turning the rule off repo-wide would buy a green clean-checkout lint at the
+  // cost of the one thing it is for — catching a genuinely misspelled relative
+  // import or a path that points at a file that no longer exists. CI therefore
+  // builds first (see .github/workflows/ci.yml); locally, run `pnpm build`
+  // before `pnpm lint` in a fresh clone.
   {
     settings: {
       "import/resolver": {
@@ -90,19 +115,15 @@ module.exports = [
         AbortSignal: "readonly",
       },
     },
-    // validate scripts import their package's dist entry (e.g. ../dist/index.mjs);
-    // the index.mjs segment is required for ESM resolution but trips the rule.
+    // Every script in these trees imports its own package's build output
+    // (`../dist/dev.mjs`, `../dist/index.mjs`, `../dist/utils/*.mjs`, …), and
+    // each is paired with a `build &&` prefix in its package.json script. The
+    // rule cannot follow a path into a gitignored directory, and the `index.mjs`
+    // segment ESM requires is itself enough to trip
+    // `import/no-useless-path-segments`, so both are off here. This covers the
+    // render-smoke bundle too (`packages/app/scripts/render-smoke/**`).
     rules: {
       "import/no-useless-path-segments": "off",
-    },
-  },
-  // The render smoke imports the bundle it just built (`scripts/render-smoke/dist`,
-  // gitignored), so resolution only succeeds after the script has run its own build --
-  // linting a clean checkout would otherwise report a dozen phantom errors for imports
-  // that are correct by construction.
-  {
-    files: ["packages/app/scripts/render-smoke/**"],
-    rules: {
       "import/no-unresolved": "off",
     },
   },

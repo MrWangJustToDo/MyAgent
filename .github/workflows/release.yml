@@ -39,14 +39,17 @@ jobs:
         # tsconfig's references, including packages/extension).
         run: pnpm --filter @my-agent/extension exec wxt prepare
 
+      - name: Build
+        # Must precede Lint and Typecheck — see the same note in ci.yml: the
+        # validate/test scripts import their package's `dist`, and workspace
+        # packages resolve through `exports` → `dist`.
+        run: pnpm build
+
       - name: Lint
         run: pnpm lint
 
       - name: Typecheck
         run: pnpm typecheck
-
-      - name: Build
-        run: pnpm build
 
       - name: Test
         # @my-agent/app is the only package with a node:test suite; it imports

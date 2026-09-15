@@ -42,14 +42,22 @@ jobs:
         # tsconfig's references, including packages/extension).
         run: pnpm --filter @my-agent/extension exec wxt prepare
 
+      - name: Build
+        # Must precede Lint and Typecheck: the 226 validate/test/smoke scripts
+        # import their own package's `dist` (e.g. `../dist/dev.mjs`), and
+        # cross-package imports resolve through the `exports` map, which points
+        # at `dist`. On a dist-less checkout `import/no-unresolved` and `tsc`
+        # report ~280 phantom errors for imports that are correct by
+        # construction — the scripts' own `build &&` prefix is what satisfies
+        # them locally. See the "Build state is a lint/typecheck prerequisite"
+        # note in eslint.config.cjs.
+        run: pnpm build
+
       - name: Lint
         run: pnpm lint
 
       - name: Typecheck
         run: pnpm typecheck
-
-      - name: Build
-        run: pnpm build
 
       - name: Test
         # @my-agent/app is the only package with a node:test suite; it imports
