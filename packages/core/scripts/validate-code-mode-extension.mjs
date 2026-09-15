@@ -178,5 +178,71 @@ function check(label, cond) {
   check("pre-aborted signal -> execute_typescript rejects", preRejected);
 }
 
+// ---------------------------------------------------------------------------
+// 3. Upstream console noise is captured, not written to the terminal
+// ---------------------------------------------------------------------------
+// ai-code-mode logs every failed run with a bare `console.error('[code-mode] …', payload)`.
+// That write lands outside the renderer and splices raw text into Ink's frame under the
+// TUI. The extension must swallow it and route it through the extension logger instead.
+{
+  const logged = [];
+  const fakeDriverFailing = {
+    createContext: async () => ({
+      bindings: {},
+      execute: async () => ({
+        success: false,
+        error: { name: "Error", message: "boom" },
+        logs: ["inner log line"],
+      }),
+      dispose: async () => {},
+    }),
+  };
+
+  const { ctx } = makeCtx({ driver: fakeDriverFailing, _tools: [tool("read_file")] });
+  ctx.logger = {
+    info: (msg) => logged.push({ level: "info", msg: String(msg) }),
+    warn: (msg) => logged.push({ level: "warn", msg: String(msg) }),
+    error: (msg) => logged.push({ level: "error", msg: String(msg) }),
+  };
+  const registered = [];
+  ctx.registerTool = (def) => registered.push(def);
+
+  await createCodeModeExtension({ tools: [tool("read_file")] }).activate(ctx);
+  const execTool = registered.find((t) => t.name === "execute_typescript");
+  check("failing driver still registers execute_typescript", Boolean(execTool));
+
+  let leaked = [];
+  const realError = console.error;
+  const realInfo = console.info;
+  console.error = (...args) => leaked.push(args.map(String).join(" "));
+  console.info = (...args) => leaked.push(args.map(String).join(" "));
+  let result;
+  try {
+    result = await execTool.execute({ typescriptCode: "throw new Error('boom')" }, { toolCallId: "t3" });
+  } finally {
+    console.error = realError;
+    console.info = realInfo;
+  }
+
+  check("failed run does not write to the host console (TUI stays intact)", leaked.length === 0);
+  check(
+    "the upstream failure line reaches the extension logger instead",
+    logged.some((e) => e.level === "error" && e.msg.includes("execute_typescript failed"))
+  );
+  check("the tool result still carries the error", result?.success === false);
+
+  // And the console must be restored afterwards, so later host logging is unaffected.
+  let afterRestore = false;
+  const probe = (..._args) => {
+    afterRestore = true;
+  };
+  const savedError = console.error;
+  console.error = probe;
+  console.error("x");
+  afterRestore = console.error === probe;
+  console.error = savedError;
+  check("console.error is restored after the call", afterRestore);
+}
+
 console.log(`\n${failures === 0 ? "ALL PASSED" : `${failures} FAILURE(S)`}`);
 process.exit(failures === 0 ? 0 : 1);

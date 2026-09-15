@@ -19,7 +19,7 @@
  */
 import { createCodeMode } from "@tanstack/ai-code-mode";
 
-import type { ExtensionAPI, ExtensionToolDefinition, ToolCallResult } from "../extension/types.js";
+import type { ExtensionAPI, ExtensionContext, ExtensionToolDefinition, ToolCallResult } from "../extension/types.js";
 import type { AnyServerTool, LazyToolsConfig, SchemaInput } from "@tanstack/ai";
 import type { CodeModeTool } from "@tanstack/ai-code-mode";
 
@@ -53,6 +53,52 @@ export interface CodeModeExtensionConfig {
 }
 
 // ============================================================================
+// Upstream console suppression
+// ============================================================================
+
+/**
+ * `@tanstack/ai-code-mode` logs every failed run with a bare `console.error`
+ * (`create-code-mode-tool.js`: `if (!result.success) console.error('[code-mode] …', payload)`),
+ * and its payload is a multi-line object dump. That write lands on the process stream
+ * outside the renderer, so under the TUI it splices raw text into Ink's frame and
+ * scrambles the display.
+ *
+ * The same information is already returned to the model inside the tool result and is
+ * also emitted as the `code_mode:execution_finished` custom event, so the console write is
+ * pure duplication. Capture it during the call and re-route it through the extension
+ * logger (which converges into the agent log) instead of the terminal.
+ *
+ * The upstream `finish()` runs inside the awaited `execute`, so restoring in `finally`
+ * cannot leave the global console patched — unlike a patch scoped to extension activation,
+ * which would double-log the success path for every host process.
+ */
+function formatLogArgs(args: unknown[]): string {
+  return args
+    .map((arg) => {
+      if (typeof arg === "string") return arg;
+      try {
+        return JSON.stringify(arg);
+      } catch {
+        return String(arg);
+      }
+    })
+    .join(" ");
+}
+
+async function withoutCodeModeConsole<T>(log: ExtensionContext["logger"], run: () => Promise<T>): Promise<T> {
+  const originalError = console.error;
+  const originalInfo = console.info;
+  console.error = (...args: unknown[]) => log.error(formatLogArgs(args));
+  console.info = (...args: unknown[]) => log.info(formatLogArgs(args));
+  try {
+    return await run();
+  } finally {
+    console.error = originalError;
+    console.info = originalInfo;
+  }
+}
+
+// ============================================================================
 // Extension factory
 // ============================================================================
 
@@ -61,7 +107,7 @@ export interface CodeModeExtensionConfig {
  * can be registered through `ctx.registerTool` (which re-wraps via
  * `defineServerTool`). Preserves name/description/schemas/execute.
  */
-function toExtensionTool(tool: AnyServerTool): ExtensionToolDefinition {
+function toExtensionTool(tool: AnyServerTool, log: ExtensionContext["logger"]): ExtensionToolDefinition {
   return {
     name: tool.name,
     description: tool.description,
@@ -75,7 +121,7 @@ function toExtensionTool(tool: AnyServerTool): ExtensionToolDefinition {
         abortSignal: signal,
       });
       if (!run) return {} as ToolCallResult;
-      if (!signal) return ((await run) ?? {}) as ToolCallResult;
+      if (!signal) return ((await withoutCodeModeConsole(log, () => run)) ?? {}) as ToolCallResult;
 
       // The upstream isolate tool (ai-code-mode) ignores the abort signal, so an
       // Esc would otherwise wait out the isolate timeout. Race it: reject the
@@ -86,7 +132,7 @@ function toExtensionTool(tool: AnyServerTool): ExtensionToolDefinition {
           onAbort = () => reject(signal.reason ?? new Error("Aborted"));
           signal.addEventListener("abort", onAbort, { once: true });
         });
-        const result = await Promise.race([run, aborted]);
+        const result = await Promise.race([withoutCodeModeConsole(log, () => run), aborted]);
         return (result ?? {}) as ToolCallResult;
       } finally {
         if (onAbort) signal.removeEventListener("abort", onAbort);
@@ -146,9 +192,9 @@ export function createCodeModeExtension(options: CodeModeExtensionConfig = {}): 
         lazyToolsConfig: options.lazyToolsConfig,
       });
 
-      ctx.registerTool(toExtensionTool(tool));
+      ctx.registerTool(toExtensionTool(tool, ctx.logger));
       if (discoveryTool) {
-        ctx.registerTool(toExtensionTool(discoveryTool));
+        ctx.registerTool(toExtensionTool(discoveryTool, ctx.logger));
       }
 
       // Inject code-mode guidance each turn as its own context section. Disabled
