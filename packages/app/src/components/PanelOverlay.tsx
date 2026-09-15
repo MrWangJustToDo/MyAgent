@@ -6,22 +6,22 @@ interface PanelOverlayProps {
   /** Whether the overlay is open. Closed → nothing renders and readiness resets. */
   open: boolean;
   /**
-   * Changing this while open re-runs the clear (e.g. a list↔detail view switch
+   * Changing this while open re-runs the blank frame (e.g. a list↔detail view switch
    * inside the panel). The overlay blanks briefly so the new screen is drawn
-   * after the clear, not before it.
+   * after the blank frame, not before it.
    */
   resetKey?: unknown;
   children: ReactNode;
 }
 
 /**
- * Full-screen panel wrapper that clears the terminal, then reveals its children
- * only once the async clear has actually been written.
+ * Full-screen panel wrapper that blanks for one frame, then reveals its children.
  *
- * Rendering before the clear lands would let the late clear wipe the freshly
- * drawn panel, leaving a blank overlay — so `ready` must flip strictly after
- * the clear resolves. Readiness resets on close, and a `cancelled` guard drops
- * stale async completions after close/reset.
+ * The blank frame must be produced by Ink itself (rendering `null`), never by writing
+ * a raw RIS (`\x1bc` / `ansi-escapes.clearScreen`) to `process.stdout`: Ink tracks the
+ * terminal contents row by row, so an external clear makes it skip every row whose
+ * content did not change — those rows stay blank on the real terminal, which shows up
+ * as a half-empty panel. Letting Ink own the blank frame keeps its model in sync.
  */
 export const PanelOverlay = ({ open, resetKey, children }: PanelOverlayProps) => {
   const [ready, setReady] = useState(false);
@@ -32,21 +32,16 @@ export const PanelOverlay = ({ open, resetKey, children }: PanelOverlayProps) =>
       return;
     }
 
-    // Clear first, then reveal.
+    // Blank first, then reveal.
     setReady(false);
     let cancelled = false;
-    void (async () => {
-      if (typeof process === "object") {
-        const pkg = await import("ansi-escapes");
-        process?.stdout?.write?.(pkg.clearScreen + pkg.cursorTo(0, 0));
-        await new Promise((r) => setTimeout(r));
-      }
-      if (cancelled) return;
-      setReady(true);
-    })();
+    const timer = setTimeout(() => {
+      if (!cancelled) setReady(true);
+    });
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [open, resetKey]);
 

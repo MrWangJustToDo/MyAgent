@@ -213,7 +213,6 @@ initHighlighter()
         <Bootstrap />
       </AdapterProvider>,
       {
-        incrementalRendering: true,
         maxFps: 30,
         exitOnCtrlC: false,
         renderProcess: true,

@@ -188,22 +188,13 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
       if (currentInitId !== initIdRef.current) return;
       setTimeout(() => {
-        // Revealing the app is host-agnostic: only the terminal clear is Node-specific.
-        // Keeping the reveal inside the `process` guard would strand browser hosts
-        // (playground / extension) on the init splash forever — there is no `process`
-        // global there, so the branch never runs.
-        const reveal = () => setInitLoading(false);
-
-        if (typeof process === "object") {
-          // CLI: clear the real TTY first so the splash is not left behind, then reveal.
-          void (async () => {
-            const pkg = await import("ansi-escapes");
-            process?.stdout?.write?.(pkg.clearScreen + pkg.cursorTo(0, 0));
-            await new Promise((r) => setTimeout(r));
-          })().finally(reveal);
-        } else {
-          reveal();
-        }
+        // Host-agnostic reveal. The init splash deliberately does NOT write a raw RIS
+        // (`\x1bc` / `ansi-escapes.clearScreen`) to the TTY: Ink owns the terminal and
+        // tracks it row by row, so an external clear makes Ink skip every row it
+        // believes is unchanged — the freshly rendered first frame then stays blank
+        // until something else dirties those rows. Switching the tree off the splash
+        // and letting Ink repaint it is what actually clears the splash.
+        setInitLoading(false);
       }, 200);
     };
 
