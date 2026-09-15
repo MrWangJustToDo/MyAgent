@@ -32,6 +32,15 @@ export interface ExtensionToolRegistrationContext {
   warn: (message: string) => void;
   /** Called after the tools record changes so cached runners re-resolve. */
   onToolsChanged: () => void;
+  /**
+   * Owning agent id, used as a fallback when the run context supplies none.
+   *
+   * `ToolExecuteCtx.agentId` (from `ToolRunContext`) is the preferred source: it is set per
+   * run by the runner, so it describes the run actually executing — which is what a tool
+   * keying per-agent resources must use, since the same tool set serves the root and its
+   * subagents. This field only covers hosts that register tools without a run context.
+   */
+  agentId?: string;
 }
 
 export class ExtensionRegistryService {
@@ -142,6 +151,11 @@ export class ExtensionRegistryService {
         def.execute(args, {
           toolCallId: toolCtx.toolCallId,
           abortSignal: toolCtx.abortSignal,
+          // Fallback ONLY. `defineServerTool` already resolves the id from the run context
+          // (`ToolRunContext.agentId`, set per run by the runner), and that value describes
+          // the run actually executing while this one merely records which agent the tool was
+          // registered on. Keep the run's value when present.
+          agentId: toolCtx.agentId ?? ctx.agentId,
         }),
       present: def.present,
       toModelOutput: def.toModelOutput,

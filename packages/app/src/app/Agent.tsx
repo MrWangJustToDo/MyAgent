@@ -12,6 +12,7 @@ import { useAgent } from "../hooks/use-agent.js";
 import { useConfig } from "../hooks/use-config.js";
 import { useExtensionPanel } from "../hooks/use-extension-panel.js";
 import { useExtensionUIBridge } from "../hooks/use-extension-ui.js";
+import { useFlattenCacheCleanup } from "../hooks/use-flatten-cache-cleanup.js";
 import { useSize } from "../hooks/use-size.js";
 import { useStatic } from "../hooks/use-static.js";
 import { useSubagentPanel } from "../hooks/use-subagent-panel.js";
@@ -34,6 +35,10 @@ export const Agent = () => {
   const screenWidth = useSize((s) => s.state.screenWidth);
 
   useStatic.getActions().useInitStdout();
+
+  // Root-level so it outlives the subagent panel: a destroyed agent's full-transcript
+  // flatten snapshot is released even if the user already navigated away from its panel.
+  useFlattenCacheCleanup();
 
   // The config store wraps state as DeepReadonly; downstream consumers
   // (useAgentChat → adapter.initialize → createAgentFromConfig) treat it as a

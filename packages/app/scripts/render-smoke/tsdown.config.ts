@@ -18,6 +18,8 @@ export default defineConfig({
     `${src}/components/MessageList.tsx`,
     `${src}/layout/Content.tsx`,
     `${src}/hooks/use-static.ts`,
+    `${src}/hooks/use-agent.ts`,
+    `${src}/hooks/use-flatten-cache-cleanup.ts`,
     `${src}/hooks/use-dynamic.ts`,
     `${src}/hooks/use-size.ts`,
     `${src}/hooks/use-agent-status.ts`,

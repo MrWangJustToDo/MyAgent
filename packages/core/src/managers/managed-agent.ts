@@ -1028,6 +1028,7 @@ export class ManagedAgent {
       tools: this.tools,
       warn: (message) => this.log?.warn("system", message),
       onToolsChanged: () => this.setRunnerConfigKey(undefined),
+      agentId: this.id,
     });
   }
 

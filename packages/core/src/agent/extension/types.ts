@@ -13,6 +13,15 @@ export type { ExtensionZod } from "./extension-zod.js";
 export interface ToolExecutionOptions {
   toolCallId: string;
   abortSignal?: AbortSignal;
+  /**
+   * Id of the agent running this tool call.
+   *
+   * Supplied by the run context (`ToolRunContext.agentId`) — the authoritative value, since
+   * this same tool set is served to a subagent's runs too. A tool that keys per-agent
+   * resources (caches, sandboxes) must use THIS id, not the registration-time one. Hosts
+   * that register tools without a run context fall back to the registering agent's id.
+   */
+  agentId?: string;
 }
 
 export type ToolCallResult = Record<string, unknown>;

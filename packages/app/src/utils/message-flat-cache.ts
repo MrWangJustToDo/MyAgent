@@ -76,9 +76,15 @@ export function setFlatByRef(message: UIMessage, rows: UIMessage[]): void {
  * an unchanged frame return the previous arrays by identity instead of re-deriving a
  * digest for every message.
  *
- * `namespace` keeps callers from evicting each other: the main transcript and the
- * subagent preview panel both call with the same `mode`, and they render mutually
- * exclusively, so a single slot would be thrashed by whichever is not currently mounted.
+ * `namespace` keeps callers from evicting each other. It is the AGENT id: the main
+ * transcript uses the root session id and each subagent preview uses its own, so a
+ * subagent panel can neither thrash the transcript's snapshot nor another panel's.
+ *
+ * Reuse is gated on message IDENTITY (`srcRefs[i] === projectedStatic[i]`), never on id
+ * equality, so a stale entry left by a destroyed agent can only cost one recompute — it
+ * cannot produce a wrong frame. Cleanup via {@link clearStaticFlattenNamespace} is
+ * therefore about memory (a subagent preview keeps the FULL transcript, as it passes no
+ * `window`), not correctness.
  */
 export type StaticFlattenSnapshot = {
   /** Static-source messages these rows were derived from (identity-comparable). */
@@ -89,11 +95,34 @@ export type StaticFlattenSnapshot = {
   validRows: UIMessage[];
 };
 
-/** Distinct callers are few; a tiny map keeps the isolation cheap. */
+/**
+ * Upper bound on retained snapshots, across all namespaces. Two slots are actually in use at
+ * once — the main transcript's mode and the one open subagent preview's — so this is 2x
+ * headroom, which absorbs entries left by a namespace whose cleanup has not run yet (a
+ * preview switched away from, before its agent is destroyed).
+ *
+ * Kept deliberately small: with per-agent namespaces the count of LIVE namespaces is 2, so a
+ * larger cap buys nothing and would only let dead agents' snapshots pile up. A snapshot holds
+ * one row array per static-source message, so the cap is the memory bound — a 1300-message
+ * transcript retains ~1 MB of row text per slot (measured), all of it reachable through the
+ * map, unlike the rows themselves.
+ */
 const MAX_STATIC_SNAPSHOTS = 4;
 const staticSnapshots = new Map<string, StaticFlattenSnapshot>();
 
 const snapshotKey = (namespace: string, mode: string): string => `${namespace}|${mode}`;
+
+const namespacePrefix = (namespace: string): string => `${namespace}|`;
+
+/**
+ * Flatten-snapshot namespace prefix for agent transcripts. Keyed by the agent id so the
+ * main transcript and each subagent preview keep separate snapshots instead of evicting
+ * one another.
+ */
+export const FLATTEN_NAMESPACE_PREFIX = "agent";
+
+/** Namespace holding one agent's transcript snapshots (one entry per display mode). */
+export const flattenNamespaceFor = (agentId: string): string => `${FLATTEN_NAMESPACE_PREFIX}:${agentId}`;
 
 export function getStaticFlattenSnapshot(namespace: string, mode: string): StaticFlattenSnapshot | undefined {
   return staticSnapshots.get(snapshotKey(namespace, mode));
@@ -108,5 +137,19 @@ export function setStaticFlattenSnapshot(namespace: string, mode: string, snapsh
     const oldest = staticSnapshots.keys().next().value;
     if (oldest === undefined) break;
     staticSnapshots.delete(oldest);
+  }
+}
+
+/**
+ * Drop every snapshot belonging to one agent (all modes). Call with an AGENT ID — the
+ * namespace is derived internally, so callers never hand-build the prefixed key. Used when
+ * an agent is destroyed, so a preview's full-transcript snapshot is not retained until LRU
+ * eviction.
+ */
+export function clearStaticFlattenNamespace(agentId: string): void {
+  // The prefix ends in the key separator, so "agent:a" can never match "agent:ab|full".
+  const prefix = namespacePrefix(flattenNamespaceFor(agentId));
+  for (const key of [...staticSnapshots.keys()]) {
+    if (key.startsWith(prefix)) staticSnapshots.delete(key);
   }
 }

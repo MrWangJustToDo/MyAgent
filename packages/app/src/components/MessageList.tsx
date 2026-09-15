@@ -10,6 +10,7 @@ import { useEffect, useRef } from "react";
 
 import { StaticContext } from "../context/static-context.js";
 import { TranscriptDisplayContext } from "../context/transcript-display-context.js";
+import { useAgent } from "../hooks/use-agent.js";
 import { useDynamic } from "../hooks/use-dynamic";
 import { useStatic } from "../hooks/use-static";
 import { useTranscriptDisplay } from "../hooks/use-transcript-display.js";
@@ -17,6 +18,7 @@ import { MessageView } from "../messages";
 import { COLORS } from "../theme/colors.js";
 import { encodeToolCallState } from "../utils/dedupe-tool-calls";
 import { countSourceMessages, getMessages } from "../utils/get-messages";
+import { flattenNamespaceFor } from "../utils/message-flat-cache.js";
 
 import { CursorFlush } from "./CursorFlush";
 
@@ -38,8 +40,8 @@ const MAX_STATIC_PARTS = 100;
  */
 const STATIC_INPUT_WINDOW = 120;
 
-/** Cache namespace for this transcript's flatten snapshot (see `message-flat-cache`). */
-const FLATTEN_NAMESPACE = "transcript";
+/** Fallback namespace when no session is bound yet (pre-bootstrap renders). */
+const FLATTEN_NAMESPACE_FALLBACK = "transcript";
 
 // ============================================================================
 // Props
@@ -73,10 +75,15 @@ function computeDynamicListSignature(messages: UIMessage[]): string {
 
 export const MessageList = ({ messages }: MessageListProps) => {
   const mode = useTranscriptDisplay((s) => s.mode);
+  // Namespace by the owning agent so this transcript's snapshot cannot be evicted by a
+  // subagent preview (and vice versa). `session` is the live AgentSession handle for the
+  // active agent; before it is bound, fall back to a shared slot.
+  const session = useAgent((s) => s.session);
+  const namespace = session ? flattenNamespaceFor(session.id) : FLATTEN_NAMESPACE_FALLBACK;
   const { staticMessages, dynamicMessages, toolCallsSignature, hiddenSourceMessages } = getMessages(messages, {
     mode,
     window: STATIC_INPUT_WINDOW,
-    namespace: FLATTEN_NAMESPACE,
+    namespace,
   });
 
   // ── Truncate static list to bounded size ──

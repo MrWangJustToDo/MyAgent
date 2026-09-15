@@ -24,7 +24,9 @@ import { createElement } from "react";
 
 import { MessageList } from "./dist/components/MessageList.mjs";
 import { useAgentStatus } from "./dist/hooks/use-agent-status.mjs";
+import { useAgent } from "./dist/hooks/use-agent.mjs";
 import { useDynamic } from "./dist/hooks/use-dynamic.mjs";
+import { useFlattenCacheCleanup } from "./dist/hooks/use-flatten-cache-cleanup.mjs";
 import { useSize } from "./dist/hooks/use-size.mjs";
 import { useStatic } from "./dist/hooks/use-static.mjs";
 import { useTheme } from "./dist/hooks/use-theme.mjs";
@@ -32,6 +34,7 @@ import { useTranscriptDisplay } from "./dist/hooks/use-transcript-display.mjs";
 import { useWorkspaceInfo } from "./dist/hooks/use-workspace-info.mjs";
 import { Content } from "./dist/layout/Content.mjs";
 import { getMessages, countSourceMessages } from "./dist/utils/get-messages.mjs";
+import { flattenNamespaceFor, getStaticFlattenSnapshot } from "./dist/utils/message-flat-cache.mjs";
 
 // ── fake terminal ────────────────────────────────────────────────────────────
 
@@ -395,7 +398,111 @@ record("no React key/identity warning after slides", !consoleErrors.some((e) => 
   });
 }
 
-// ── 4. mode switch leaves no residue from the previous mode ──────────────────
+// ── 5. per-agent flatten-snapshot namespaces + cleanup on destroy ────────────
+//
+// Namespaces are agent ids, so two subagent previews no longer evict each other's snapshot
+// (the old shared "subagent" namespace did) and a preview can never thrash the main
+// transcript. `useFlattenCacheCleanup` releases a destroyed agent's snapshots — everything
+// else stays. The reuse guard is message IDENTITY, so this is a memory concern only.
+{
+  const subagentMessages = buildFixture(4, 2);
+  const otherSubagentMessages = buildFixture(3, 5);
+  const mainMessages = buildFixture(6, 3);
+  const rootId = "ses_root";
+
+  // Populate the three namespaces a live app would hold: main transcript + two previews.
+  getMessages(mainMessages, { mode: "full", namespace: flattenNamespaceFor(rootId), window: 120 });
+  getMessages(subagentMessages, { mode: "full", namespace: flattenNamespaceFor("sub_a") });
+  getMessages(otherSubagentMessages, { mode: "full", namespace: flattenNamespaceFor("sub_b") });
+
+  const held = (agentId) => Boolean(getStaticFlattenSnapshot(flattenNamespaceFor(agentId), "full"));
+  record(
+    "main transcript and two subagent previews hold snapshots simultaneously",
+    held(rootId) && held("sub_a") && held("sub_b"),
+    { rootId, sub_a: held("sub_a"), sub_b: held("sub_b") }
+  );
+  // Distinct SLOTS, not merely non-empty: with one shared namespace every lookup resolves to
+  // the same entry (the last writer's), which is the collision this namespacing removed.
+  const slots = [rootId, "sub_a", "sub_b"].map((id) => getStaticFlattenSnapshot(flattenNamespaceFor(id), "full"));
+  record("each agent holds its own snapshot slot (no shared entry)", new Set(slots).size === 3, {
+    distinctSlots: new Set(slots).size,
+  });
+
+  // Unchanged input still short-circuits after other namespaces wrote (the isolation point:
+  // with one shared namespace a subagent render would have evicted this entry).
+  const first = getMessages(subagentMessages, { mode: "full", namespace: flattenNamespaceFor("sub_a") });
+  const second = getMessages(subagentMessages, { mode: "full", namespace: flattenNamespaceFor("sub_a") });
+  record(
+    "a preview keeps its short-circuit after another preview rendered",
+    first.staticMessages === second.staticMessages,
+    { sameArray: first.staticMessages === second.staticMessages }
+  );
+
+  // Drive the real hook through the real store with a fake session whose subscribe matches
+  // the core contract: it filters by channel, and `agentId` is the emitting agent.
+  const subscribers = [];
+  const fakeSession = {
+    id: rootId,
+    getSnapshot: () => ({ agentId: rootId, messages: [] }),
+    subscribe(handler, options) {
+      const channels = options?.channels ?? ["messages", "lifecycle"];
+      subscribers.push({ handler, channels });
+      return () => {
+        const i = subscribers.findIndex((s) => s.handler === handler);
+        if (i >= 0) subscribers.splice(i, 1);
+      };
+    },
+  };
+  const emitLifecycle = (type, agentId, payload) => {
+    for (const s of [...subscribers]) {
+      if (!s.channels.includes("lifecycle")) continue;
+      // Matches the real envelope: channel/ts/agentId/payload, where `payload` carries the
+      // event type plus the emitter's own fields (core nests the event payload verbatim).
+      s.handler({
+        channel: "lifecycle",
+        ts: Date.now(),
+        agentId,
+        payload: { type, ts: Date.now(), agentId, parentId: rootId, payload },
+      });
+    }
+  };
+
+  // Bind the fake session before mounting so the hook subscribes on its first effect.
+  useAgent.getActions().setSession(fakeSession);
+  const cleanupHarness = render(
+    createElement(() => {
+      useFlattenCacheCleanup();
+      return null;
+    }),
+    { stdout: new FakeStdout(), stdin: fakeStdin(), exitOnCtrlC: false, patchConsole: false }
+  );
+  await settle(60);
+  const subscribedToLifecycle = subscribers.some((s) => s.channels.includes("lifecycle"));
+  record("cleanup hook subscribes to the lifecycle channel", subscribedToLifecycle, {
+    subscriberChannels: subscribers.map((s) => s.channels),
+  });
+
+  emitLifecycle("subagent:destroyed", "sub_a", { subagentId: "sub_a", parentId: rootId });
+  await settle(60);
+  record("destroying a subagent releases its snapshots", !held("sub_a"), { sub_a: held("sub_a") });
+  record("destroying a subagent leaves the main transcript and other previews intact", held(rootId) && held("sub_b"), {
+    rootId: held(rootId),
+    sub_b: held("sub_b"),
+  });
+
+  // A non-lifecycle / unrelated event must not clear anything.
+  emitLifecycle("subagent:created", "sub_c", { subagentId: "sub_c" });
+  await settle(40);
+  record("an unrelated lifecycle event clears nothing", held(rootId) && held("sub_b"), {
+    rootId: held(rootId),
+    sub_b: held("sub_b"),
+  });
+
+  cleanupHarness.unmount();
+  useAgent.getActions().setSession(null);
+}
+
+// ── 6. mode switch leaves no residue from the previous mode ──────────────────
 
 useTranscriptDisplay.getActions().setMode("compact");
 await settle(120);

@@ -8,6 +8,7 @@ import { useSubagentMessages } from "../hooks/use-subagent-messages.js";
 import { useTranscriptDisplay } from "../hooks/use-transcript-display.js";
 import { COLORS } from "../theme/colors.js";
 import { getMessages } from "../utils/get-messages.js";
+import { flattenNamespaceFor } from "../utils/message-flat-cache.js";
 import { truncateTextToMaxLines } from "../utils/user-message-lines.js";
 
 import { MessageView } from "./MessageView.js";
@@ -55,7 +56,8 @@ function collapseUserPrompts(messages: UIMessage[]): UIMessage[] {
 function selectPanelPreviewMessages(
   messages: UIMessage[],
   mode: TranscriptDisplayMode,
-  textWidth: number
+  textWidth: number,
+  subagentId: string
 ): {
   prompt: UIMessage | null;
   activity: UIMessage[];
@@ -63,11 +65,13 @@ function selectPanelPreviewMessages(
 } {
   const collapsed = collapseUserPrompts(messages);
   // No `window` here on purpose: this panel locates its task prompt with
-  // `findIndex(role === "user")`, so it needs the full transcript. The distinct
-  // namespace keeps its flatten snapshot from evicting the main transcript's.
+  // `findIndex(role === "user")`, so it needs the full transcript. Namespacing by the
+  // subagent's own id keeps this panel's snapshot from evicting the main transcript's or
+  // another subagent's (and this snapshot is the one that needs explicit cleanup, since it
+  // retains the FULL transcript).
   const { staticMessages, dynamicMessages } = getMessages(collapsed, {
     mode,
-    namespace: "subagent",
+    namespace: flattenNamespaceFor(subagentId),
   });
   const all = [...staticMessages, ...dynamicMessages];
 
@@ -113,8 +117,8 @@ export const SubagentPreviewView = ({ subagentId }: SubagentPreviewViewProps) =>
   const promptTextWidth = Math.max(1, screenWidth - 6);
 
   const { prompt, activity, omittedEarlier } = useMemo(
-    () => selectPanelPreviewMessages(messages, mode, promptTextWidth),
-    [messages, mode, promptTextWidth]
+    () => selectPanelPreviewMessages(messages, mode, promptTextWidth, subagentId),
+    [messages, mode, promptTextWidth, subagentId]
   );
 
   if (!prompt && activity.length === 0) {

@@ -16,6 +16,7 @@ export { useAutocomplete } from "./use-autocomplete.js";
 export { useCommandOutput } from "./use-command-output.js";
 export { useDiffFileCache } from "./use-diff-file-cache.js";
 export { useDynamic } from "./use-dynamic.js";
+export { useFlattenCacheCleanup } from "./use-flatten-cache-cleanup.js";
 export { useForceUpdate } from "./use-force-update.js";
 export { useInputMode, type InputMode, type FreeformContext } from "./use-input-mode.js";
 export { usePreviewEdit } from "./use-preview-edit.js";
