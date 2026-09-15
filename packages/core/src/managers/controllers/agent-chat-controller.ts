@@ -227,7 +227,10 @@ export class AgentChatController {
   }
 
   respondToToolApproval(approvalId: string, approved: boolean, reason?: string): Promise<void> {
-    this.channel.addToolApprovalResponse(approvalId, approved, reason);
+    // The channel stamps the decision time onto the tool-call part (that is what
+    // the session log stores); the approval table reuses the same value so the
+    // in-memory and persisted timelines never diverge.
+    const decidedAt = this.channel.addToolApprovalResponse(approvalId, approved, reason);
     const toolCallId = findToolCallIdForApproval(this.channel.getMessages(), approvalId) ?? approvalId;
     this.managed.approvals.upsert({
       id: approvalId,
@@ -235,6 +238,7 @@ export class AgentChatController {
       status: approved ? "approved" : "denied",
       reason: approved ? undefined : reason,
       toolName: findToolCallNameForApproval(this.channel.getMessages(), approvalId),
+      updatedAt: decidedAt,
     });
     this.managed.statusController.reconcileWithPolicy(this.channel.getMessages(), "during-run");
     this.persistMessages("pump-complete");
@@ -560,22 +564,24 @@ export class AgentChatController {
       const decision = evaluateCommandApproval(report, { agentKind: "root" });
 
       if (decision.action === "allow") {
-        this.channel.addToolApprovalResponse(approvalId, true);
+        const decidedAt = this.channel.addToolApprovalResponse(approvalId, true);
         this.managed.approvals.upsert({
           id: approvalId,
           toolCallId: toolCall.id,
           status: "approved",
           toolName: toolCall.name,
+          updatedAt: decidedAt,
         });
         handled = true;
       } else if (decision.action === "deny") {
-        this.channel.addToolApprovalResponse(approvalId, false, decision.reason);
+        const decidedAt = this.channel.addToolApprovalResponse(approvalId, false, decision.reason);
         this.managed.approvals.upsert({
           id: approvalId,
           toolCallId: toolCall.id,
           status: "denied",
           reason: decision.reason,
           toolName: toolCall.name,
+          updatedAt: decidedAt,
         });
         handled = true;
       }
@@ -603,12 +609,13 @@ export class AgentChatController {
       if (toolCall.approval?.needsApproval === true && toolCall.approval.approved === undefined) {
         const approvalId = toolCall.approval.id;
         if (approvalId) {
-          this.channel.addToolApprovalResponse(approvalId, true);
+          const decidedAt = this.channel.addToolApprovalResponse(approvalId, true);
           this.managed.approvals.upsert({
             id: approvalId,
             toolCallId: toolCall.id,
             status: "approved",
             toolName: toolCall.name,
+            updatedAt: decidedAt,
           });
           didApprove = true;
         }

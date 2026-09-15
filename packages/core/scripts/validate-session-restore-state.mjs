@@ -82,10 +82,15 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /** Wait until the log's newest state satisfies `check` (persists are fire-and-forget). */
 const waitForState = async (id, check, label) => {
   for (let i = 0; i < 50; i++) {
-    const state = await fs.promises.readFile(toAbs(logPath(id)), "utf8").then(
-      (raw) => JSON.parse(raw.trim().split("\n").at(-1)).state,
-      () => null
-    );
+    // Read + parse defensively: the log is appended in the background, so a poll can
+    // observe a partially flushed line (or none yet) and must simply retry.
+    const state = await fs.promises
+      .readFile(toAbs(logPath(id)), "utf8")
+      .then((raw) => {
+        const tail = raw.trim().split("\n").at(-1);
+        return tail ? JSON.parse(tail).state : null;
+      })
+      .catch(() => null);
     if (state && check(state)) return state;
     await sleep(20);
   }
@@ -185,7 +190,7 @@ let sessionId;
   assert.equal(session.todoTitle, "My plan todos", "todoTitle restored");
   assert.equal(session.todoPlanBound, true, "todoPlanBound restored");
   assert.equal(session.name, "resume-state", "name restored");
-  assert.equal(session.version, 6, "version 6");
+  assert.equal(session.version, 7, "version 7");
   assert.deepEqual(
     session.todos.map((t) => ({ content: t.content, status: t.status, priority: t.priority })),
     [{ content: "one", status: "in_progress", priority: "high" }],
@@ -197,6 +202,12 @@ let sessionId;
     "messages restored in order"
   );
   assert.ok(session.approvalTimes?.["approval_call_1"] > 0, "approval decision time derived from the log");
+  assert.equal(
+    session.uiMessages[1].parts.find((p) => p.type === "tool-call").approval.updatedAt,
+    session.approvalTimes["approval_call_1"],
+    "decision time carried on the tool-call part"
+  );
+  assert.ok(session.uiMessages[1].updatedAt > 0, "restored messages carry their write time");
 
   // Todos are pushed into the live manager as well.
   assert.equal(todos.getItems().length, 1, "todos pushed into TodoManager");

@@ -40,10 +40,9 @@ Line shape:
 ```jsonc
 {
   "t": "message",
-  "message": { "id": "msg_…", "role": "assistant", "parts": [ … ], "createdAt": 1789090000000 },
-  "messageUpdatedAt": 1789090005000,
+  "message": { "id": "msg_…", "role": "assistant", "parts": [ … ], "createdAt": 1789090000000, "updatedAt": 1789090005000 },
   "state": {                     // SessionData minus uiMessages (and minus approvals)
-    "id": "ses_…", "name": "…", "version": 6, "modelStyle": "openai", "model": "…",
+    "id": "ses_…", "name": "…", "version": 7, "modelStyle": "openai", "model": "…",
     "usage": { … }, "cost": 0.0123, "contextTokens": 123456,
     "todos": [ … ], "todoTitle": null, "todoPlanBound": false,
     "reasoningEffort": "medium", "planMode": null, "autoMode": false,
@@ -51,6 +50,8 @@ Line shape:
   }
 }
 ```
+
+Timestamps belong to the message: `message.updatedAt` (store-owned, stamped only when the message's content changed) sits beside TanStack's `createdAt`, and a decided tool call carries its decision time on the part (`part.approval.updatedAt`).
 
 `message: null` is allowed **only on the first line** (initial/empty-session state, e.g. `reservedAt` for startup reuse). All other lines must carry a message.
 
@@ -74,7 +75,7 @@ approvals = derive from the folded messages' tool-call approval parts
 
 `SessionData.approvals` is removed. On load, `normalizeSessionApprovals`/`backfillApprovalsFromUIMessages` rebuild the table from the folded messages' tool-call parts. This supersedes the session-file portion of the `persist-tool-approvals` change while keeping its resume middleware (the derived table still feeds `resumeToolState`).
 
-**Timestamps**: `message.createdAt` is the message creation time. `messageUpdatedAt` is the line's write time. A line may also carry an explicit `approvalAt` map — the real decision time, recorded when the approval was first persisted. On fold, **explicit entries win**; anything not covered falls back to the `messageUpdatedAt` of the earliest line in which that approval first appears decided (approved/denied). Explicit-first is what keeps the decision time stable across later re-emits and whole-log rewrites, both of which restamp every line with the current time.
+**Timestamps**: `message.createdAt` is the message creation time. `message.updatedAt` (v7) is the store's stamp of the message's last content change — the store owns it, resolves it before the no-op check, and never re-stamps an unchanged message, so a re-emitted line stays byte-identical. A decided approval carries its own decision time on the part itself (`part.approval.updatedAt`), stamped by the channel when the decision is made and reused verbatim by the in-memory approval table, so neither a state-only re-emit nor a whole-log rewrite can move it. v6 put these on the line instead (the line's `messageUpdatedAt`, plus an `approvalAt` map); `foldLog` still reads that form whenever a message/part has no stamp of its own, and the earliest time ever seen for an approval wins.
 
 ### 5. Non-empty → empty rewrites the file
 
@@ -84,21 +85,23 @@ approvals = derive from the folded messages' tool-call approval parts
 
 `list()` prefilter-parses lines starting with `{"t":"state"` and keeps the last, so metadata listing never parses message bodies.
 
-### 7. No backward compatibility; `SESSION_VERSION = 6`
+### 7. No backward compatibility with `.session.json` / v4 / v5 files; `SESSION_VERSION = 7`
+
+v7 moves the message timestamps onto the message (v6 had them on the line); v6 logs still fold, so a resumed pre-v7 session keeps its times and picks up the new shape on its next write.
 
 Old `.session.json` / v4 / v5 files are not read. `SessionStore` API is unchanged, so hosts need no changes.
 
 ## Risks / Trade-offs
 
 - [Non-atomic rewrite (non-empty → empty, and future compaction)] → same exposure as today's snapshot/journal rewrites; only triggered on rare structural events.
-- [Approval timestamp lost if lines are ever collapsed/compacted] → compaction is a Non-Goal here; if added, it MUST preserve the earliest decided-line `messageUpdatedAt`.
+- [Approval timestamp lost if lines are ever collapsed/compacted] → compaction is a Non-Goal here; if added, it MUST keep the decision time stamped on the part (and the earliest one the store saw) rather than restamping.
 - [File grows with re-emitted lines (streaming / state-only saves)] → growth is O(saves), not O(saves × history), because only changed messages are written; compaction is deferred.
 - [Per-save fingerprinting is O(messages)] → string work only, no full serialization; strictly cheaper than the current `JSON.stringify(session)`.
 - [Fold assumes message ids are stable across a session] → they are (`UIMessage.id`); compaction summaries use stable ids too.
 
 ## Migration Plan
 
-1. Bump `SESSION_VERSION` to 6; add `.session.jsonl` suffix and line types.
+1. Bump `SESSION_VERSION` to 7; the line carries the message only (timestamps move onto the message / tool-call part).
 2. Rewrite `session-journal.ts` as the log I/O + `foldLog`; rewrite `SessionStore.save`/`load`/`list`/`delete` to the new format.
 3. Drop `approvals` from `SessionData`; make the load path derive approvals (with the earliest-decided-line timestamp).
 4. Update validate scripts that assert the old layout, and docs (`ARCHITECTURE.md` §6, `AGENTS.md`).

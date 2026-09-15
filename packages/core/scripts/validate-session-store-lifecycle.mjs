@@ -256,7 +256,7 @@ setupEnv();
     files
       .get(logPath)
       .split("\n")
-      .map((line) => (line.trim() ? line.replace(/"version":6/g, '"version":7') : line))
+      .map((line) => (line.trim() ? line.replace(/"version":7/g, '"version":8') : line))
       .join("\n")
   );
 
@@ -282,7 +282,7 @@ setupEnv();
     files
       .get(logPath)
       .split("\n")
-      .map((line) => (line.trim() ? line.replace(/"version":6/g, '"version":"6"') : line))
+      .map((line) => (line.trim() ? line.replace(/"version":7/g, '"version":"7"') : line))
       .join("\n")
   );
 

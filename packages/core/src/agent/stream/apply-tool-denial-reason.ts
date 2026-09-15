@@ -1,3 +1,5 @@
+import { isToolCallPart } from "./message-parts.js";
+
 import type { ToolCallPart, ToolResultPart, UIMessage } from "@tanstack/ai";
 
 export const DEFAULT_TOOL_DENIAL_MESSAGE = "User denied this tool execution. Do not assume the action was performed.";
@@ -5,6 +7,76 @@ export const DEFAULT_TOOL_DENIAL_MESSAGE = "User denied this tool execution. Do 
 export function buildToolDenialResultContent(reason?: string): string {
   const message = reason?.trim() || DEFAULT_TOOL_DENIAL_MESSAGE;
   return JSON.stringify({ approved: false, message });
+}
+
+/** True when two approval parts describe the same decision (status / reason / time). */
+export function sameApprovalDecision(
+  a: ToolCallPart["approval"] | undefined,
+  next: ToolCallPart["approval"] | undefined
+): boolean {
+  if (a === next) return true;
+  if (!a || !next) return false;
+  return (
+    a.id === next.id &&
+    a.needsApproval === next.needsApproval &&
+    a.approved === next.approved &&
+    approvalStamp(a) === approvalStamp(next) &&
+    approvalReason(a) === approvalReason(next)
+  );
+}
+
+/** Decision timestamp carried by an approval part, if any (set by the core channel). */
+export function approvalStamp(approval: ToolCallPart["approval"] | undefined): number | undefined {
+  const value = (approval as { updatedAt?: unknown } | undefined)?.updatedAt;
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/** Denial reason carried by an approval part, if any (dynamically added on deny). */
+export function approvalReason(approval: ToolCallPart["approval"] | undefined): string | undefined {
+  const value = (approval as { reason?: unknown } | undefined)?.reason;
+  return typeof value === "string" ? value : undefined;
+}
+
+/**
+ * Patch a decided approval onto its tool-call part: decision status, denial
+ * reason, and the decision timestamp. Returns the same array when nothing
+ * changed, so replaying a decision is a no-op.
+ *
+ * `decidedAt` is the single time value for the decision: the channel stamps it
+ * onto the part, which both feeds the persisted log and makes the same value
+ * usable by the in-memory approval table.
+ */
+export function applyToolApprovalDecision(
+  messages: UIMessage[],
+  approvalId: string,
+  approved: boolean,
+  options?: { reason?: string; decidedAt?: number }
+): UIMessage[] {
+  let changed = false;
+
+  const next = messages.map((message) => {
+    if (message.role !== "assistant") return message;
+
+    let touched = false;
+    const parts = message.parts.map((part) => {
+      if (!isToolCallPart(part) || part.approval?.id !== approvalId) return part;
+      const approval = part.approval;
+      const reason = approved ? undefined : options?.reason?.trim() || DEFAULT_TOOL_DENIAL_MESSAGE;
+      const current = { ...approval, approved, ...(reason ? { reason } : {}) } as ToolCallPart["approval"];
+      // Keep an existing decision time: the first decision owns the timestamp.
+      const decidedAt = approvalStamp(approval) ?? options?.decidedAt;
+      if (decidedAt !== undefined) (current as { updatedAt?: number }).updatedAt = decidedAt;
+      if (sameApprovalDecision(approval, current)) return part;
+      touched = true;
+      return { ...part, state: "approval-responded" as ToolCallPart["state"], approval: current };
+    });
+
+    if (!touched) return message;
+    changed = true;
+    return { ...message, parts };
+  });
+
+  return changed ? next : messages;
 }
 
 /**
@@ -17,9 +89,10 @@ export function buildToolDenialResultContent(reason?: string): string {
  */
 export function applyToolDenialReason(messages: UIMessage[], approvalId: string, reason?: string): UIMessage[] {
   const denialContent = buildToolDenialResultContent(reason);
-  const denialMessage = reason?.trim() || DEFAULT_TOOL_DENIAL_MESSAGE;
 
-  return messages.map((message) => {
+  const withDecision = applyToolApprovalDecision(messages, approvalId, false, { reason });
+
+  return withDecision.map((message) => {
     if (message.role !== "assistant") return message;
 
     const toolCallIndex = message.parts.findIndex(
@@ -31,25 +104,16 @@ export function applyToolDenialReason(messages: UIMessage[], approvalId: string,
     const hasDenialResult = message.parts.some(
       (part) => part.type === "tool-result" && part.toolCallId === toolCallPart.id
     );
+    if (hasDenialResult) return message;
 
     const parts = [...message.parts];
-    parts[toolCallIndex] = {
-      ...toolCallPart,
-      state: "approval-responded",
-      approval: toolCallPart.approval
-        ? ({ ...toolCallPart.approval, approved: false, reason: denialMessage } as ToolCallPart["approval"])
-        : toolCallPart.approval,
+    const denialResult: ToolResultPart = {
+      type: "tool-result",
+      toolCallId: toolCallPart.id,
+      content: denialContent,
+      state: "complete",
     };
-
-    if (!hasDenialResult) {
-      const denialResult: ToolResultPart = {
-        type: "tool-result",
-        toolCallId: toolCallPart.id,
-        content: denialContent,
-        state: "complete",
-      };
-      parts.splice(toolCallIndex + 1, 0, denialResult);
-    }
+    parts.splice(toolCallIndex + 1, 0, denialResult);
 
     return { ...message, parts };
   });

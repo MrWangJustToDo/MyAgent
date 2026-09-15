@@ -14,7 +14,7 @@ import { isToolCallPart } from "../stream/message-parts.js";
 
 import { SESSION_DIR, SESSION_LOG_MESSAGE, SESSION_LOG_SUFFIX } from "./types.js";
 
-import type { SessionLogLine, SessionStateFields } from "./types.js";
+import type { PersistedToolCallPart, PersistedUIMessage, SessionLogLine, SessionStateFields } from "./types.js";
 import type { CoreEnvFs } from "../../env.js";
 import type { UIMessage } from "@tanstack/ai";
 
@@ -144,29 +144,51 @@ export async function hasUserMessage(fs: CoreEnvFs, path: string): Promise<boole
   return sawLine ? false : null;
 }
 
-/** Fold log lines into the session they describe.
+/** Coerce a persisted stamp (v7 number, JSON string, or absent) to epoch ms. */
+function toStamp(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+/** Our write-time stamp carried by a persisted message (`undefined` on a v6 line). */
+export function readMessageUpdatedAt(message: PersistedUIMessage): number | undefined {
+  return toStamp(message.updatedAt);
+}
+
+/** Our decision-time stamp carried by a persisted tool-call part (`undefined` on a v6 line). */
+export function readApprovalUpdatedAt(part: PersistedToolCallPart): number | undefined {
+  return toStamp(part.approval?.updatedAt);
+}
+
+/**
+ * Fold log lines into the session they describe.
  *
  * Message lines are keyed by `UIMessage.id`: a later line for the same id
- * replaces the body without moving its position. `approvalAt` records the real
- * decision time of each tool call: a line's explicit `approvalAt` entry wins, and
- * anything not covered is inferred as the `messageUpdatedAt` of the first line in
- * which that approval appears decided. That keeps the decision timestamp stable
- * across later re-emits and whole-log rewrites.
+ * replaces the body without moving its position.
+ *
+ * `approvalAt` records the real decision time of each tool call. On a v7 line the
+ * tool-call part itself carries it (`approval.updatedAt`). On a v6 line it is
+ * either the line's explicit `approvalAt` entry or — failing that — the earliest
+ * line stamp in which that approval appears decided (the line's own
+ * `messageUpdatedAt`, else the message stamp that replaced it). Both legacy paths
+ * only fill a missing entry, so the EARLIEST line carrying the approval decides
+ * its timestamp and a later re-emit or whole-log rewrite cannot overwrite it.
  */
 export function foldLog(lines: SessionLogLine[]): FoldedSessionLog {
   let state: SessionStateFields | null = null;
-  const byId = new Map<string, UIMessage>();
+  const byId = new Map<string, PersistedUIMessage>();
   const order: string[] = [];
   const approvalAt: Record<string, number> = {};
 
   for (const line of lines) {
     if (line.state) state = line.state;
 
-    // Explicit per-line timestamps win over inference: apply them BEFORE deriving
-    // from the message, otherwise the message-derived `messageUpdatedAt` (the
-    // line's write time, e.g. a rewrite stamp) would shadow the real decision
-    // time. Both paths only fill a missing entry, so the EARLIEST line carrying
-    // the approval decides its timestamp — line order is significant.
+    // Applied BEFORE deriving from the message: an explicit legacy entry is the
+    // real decision time and must not be shadowed by a restamped line time.
     if (line.approvalAt) {
       for (const [id, at] of Object.entries(line.approvalAt)) {
         if (approvalAt[id] === undefined) approvalAt[id] = at;
@@ -177,15 +199,26 @@ export function foldLog(lines: SessionLogLine[]): FoldedSessionLog {
     const message = line.message;
     if (message) {
       if (!byId.has(message.id)) order.push(message.id);
-      byId.set(message.id, message);
+      const updatedAt = readMessageUpdatedAt(message);
+      const lineTime = toStamp(line.messageUpdatedAt);
+      const prev = byId.get(message.id);
+      // A resumed process holds the first line's body — it may lack `updatedAt`
+      // (the seeding write did not stamp) — and rewrites the whole message on its
+      // next save, so that later line is the authority for the body.
+      const fold: PersistedUIMessage =
+        prev && readMessageUpdatedAt(prev) === undefined && lineTime !== undefined && updatedAt !== undefined
+          ? { ...prev, ...message }
+          : message;
+      byId.set(message.id, fold);
 
-      if (message.role === "assistant") {
-        for (const part of message.parts) {
-          if (!isToolCallPart(part)) continue;
-          const approval = part.approval;
-          if (!approval?.id || approval.approved === undefined) continue;
-          if (approvalAt[approval.id] === undefined) approvalAt[approval.id] = line.messageUpdatedAt;
-        }
+      if (fold.role !== "assistant") continue;
+      for (const part of fold.parts) {
+        if (!isToolCallPart(part)) continue;
+        const approval = part.approval;
+        if (!approval?.id || approval.approved === undefined) continue;
+        if (approvalAt[approval.id] !== undefined) continue;
+        const stamp = readApprovalUpdatedAt(part as unknown as PersistedToolCallPart) ?? updatedAt ?? lineTime;
+        if (stamp !== undefined) approvalAt[approval.id] = stamp;
       }
     }
   }
@@ -193,7 +226,7 @@ export function foldLog(lines: SessionLogLine[]): FoldedSessionLog {
   const uiMessages: UIMessage[] = [];
   for (const id of order) {
     const message = byId.get(id);
-    if (message) uiMessages.push(message);
+    if (message) uiMessages.push(message as UIMessage);
   }
   return { state, uiMessages, approvalAt };
 }

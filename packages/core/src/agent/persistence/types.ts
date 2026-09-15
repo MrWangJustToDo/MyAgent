@@ -5,6 +5,12 @@
  * `.agents/sessions/{id}.session.jsonl`. Every line is one message plus a full
  * snapshot of the non-message session state at that point; `load()` folds the
  * lines by message id (later line wins). There is no separate snapshot file.
+ *
+ * Timestamps on a message live ON the message: `message.createdAt` (creation)
+ * and `message.updatedAt` (last content change / decision). v6 kept the line's
+ * write time and the approval decision times as line-level fields
+ * (`messageUpdatedAt` / `approvalAt`) — still read for legacy logs, never
+ * written.
  */
 
 import { z } from "zod";
@@ -13,19 +19,22 @@ import type { ModelStyle, ReasoningEffort } from "../../models/types.js";
 import type { TokenUsage } from "../../runtime-types/token-usage.js";
 import type { PlanModeState } from "../plan/plan-mode-controller.js";
 import type { TodoItem } from "../todo";
-import type { UIMessage } from "@tanstack/ai";
+import type { UIMessage as TanStackUIMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-/** v6: one append-only message log per session; no snapshot file. */
-export const SESSION_VERSION = 6;
+/** v6: one append-only message log per session; no snapshot file. v7: message timestamps. */
+export const SESSION_VERSION = 7;
 export const SESSION_DIR = ".agents/sessions";
 /** Append-only message log suffix; the single source of truth per session. */
 export const SESSION_LOG_SUFFIX = ".session.jsonl";
 /** Log line kind: one message + the full non-message state snapshot at that point. */
 export const SESSION_LOG_MESSAGE = "message";
+
+/** Directory for per-session AgentLog JSONL files: `.agents/logs/{sessionId}/`. */
+export const AGENT_LOG_DIR = ".agents/logs";
 
 /**
  * Whether this reader understands a log written with `version`.
@@ -40,9 +49,6 @@ export const SESSION_LOG_MESSAGE = "message";
 export function isSupportedSessionVersion(version: unknown): boolean {
   return typeof version === "number" && Number.isInteger(version) && version > 0 && version <= SESSION_VERSION;
 }
-
-/** Directory for per-session AgentLog JSONL files: `.agents/logs/{sessionId}/`. */
-export const AGENT_LOG_DIR = ".agents/logs";
 
 // ============================================================================
 // Session Data Schema
@@ -73,12 +79,32 @@ export const toolApprovalRecordSchema = z.object({
 export type ToolApprovalStatus = z.infer<typeof toolApprovalStatusSchema>;
 export type ToolApprovalRecord = z.infer<typeof toolApprovalRecordSchema>;
 
-// ============================================================================
-// Session Log Line Types
-// ============================================================================
-
 /** Everything in {@link SessionData} except the message history and derived metadata. */
 export type SessionStateFields = Omit<SessionData, "uiMessages" | "approvalTimes">;
+
+/**
+ * A `UIMessage` as written to the log: the TanStack message plus the two
+ * agent-owned timestamps.
+ *
+ * `createdAt` is TanStack's own field (ISO string on the wire/disk). `updatedAt`
+ * is our epoch-ms stamp of the last meaningful change to this message. Both are
+ * plain data, so they round-trip through JSON like every other UIMessage field
+ * and survive the TanStack wire conversion (`uiMessageToModelMessages` copies a
+ * fixed field set; the engine never sees these extras).
+ *
+ * `state` is typed as `string` only so a v6 log (no `updatedAt`) still parses
+ * into this shape; every v7 message written by us carries a number.
+ */
+export type PersistedUIMessage = Omit<TanStackUIMessage, "createdAt"> & {
+  createdAt?: TanStackUIMessage["createdAt"];
+  updatedAt?: number | string;
+};
+
+/** A tool-call part whose `approval` may carry our decision timestamp (see {@link PersistedUIMessage}). */
+export type PersistedToolCallPart = {
+  type?: string;
+  approval?: { id?: string; approved?: boolean; updatedAt?: number | string } & Record<string, unknown>;
+} & Record<string, unknown>;
 
 /**
  * One line of the append-only session log (`{id}.session.jsonl`): one message
@@ -86,15 +112,19 @@ export type SessionStateFields = Omit<SessionData, "uiMessages" | "approvalTimes
  *
  * The message MAY be `null` on the very first line only (initial / empty-session
  * state such as `reservedAt`); every other line carries a message.
- * `messageUpdatedAt` is the line's write time; `approvalAt` maps a toolCallId to
- * the time its approval first became decided (so the decision timestamp survives
- * folding).
+ *
+ * v7 carries the timestamps ON the message (`message.updatedAt`, and
+ * `part.approval.updatedAt` for a decided approval). `messageUpdatedAt` and
+ * `approvalAt` are the v6 line-level forms: read for legacy logs only, never
+ * written.
  */
 export interface SessionLogLine {
   t: typeof SESSION_LOG_MESSAGE;
-  message: UIMessage | null;
-  messageUpdatedAt: number;
+  message: PersistedUIMessage | null;
   state: SessionStateFields;
+  /** v6 only: the line's write time. Superseded by `message.updatedAt`. */
+  messageUpdatedAt?: number;
+  /** v6 only: toolCallId → time its approval first became decided. Superseded by `part.approval.updatedAt`. */
   approvalAt?: Record<string, number>;
 }
 
@@ -110,7 +140,7 @@ export interface SessionData {
   /** Model name used */
   model: string;
   /** Full conversation as UIMessages (for client display on resume; includes in-chain summaries) */
-  uiMessages: UIMessage[];
+  uiMessages: TanStackUIMessage[];
   /** Token usage statistics */
   usage: TokenUsage;
   /** Session cost in USD */
@@ -134,8 +164,8 @@ export interface SessionData {
   autoMode?: boolean;
   /**
    * Derived, non-persisted approval decision timestamps (toolCallId → epoch ms),
-   * reconstructed on load from the message log. Never serialized into the log's
-   * `state` snapshot (see {@link SessionStateFields}).
+   * reconstructed on load by folding the message timestamps. Never serialized
+   * into the log's `state` snapshot (see {@link SessionStateFields}).
    */
   approvalTimes?: Record<string, number>;
   /**
@@ -163,7 +193,7 @@ export interface SessionData {
 
 export interface ResumeResult {
   /** UIMessages for client to display */
-  uiMessages: UIMessage[];
+  uiMessages: TanStackUIMessage[];
   /** Session metadata */
   session: SessionMeta;
 }

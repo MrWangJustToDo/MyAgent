@@ -179,9 +179,9 @@ setupEnv({ failMediaWrites: true });
   service.setStore(store, { modelStyle: "openai", model: "test-model" });
 
   const id = "ses_restore_media";
-  // A one-line message log. The message carries raw base64 (not a media:// ref)
-  // so hydrate leaves it and the canonicalize dehydrate tries to write the
-  // media file → fails.
+  // A one-line message log (v6 shape: the line carries the write time). The
+  // message carries raw base64 (not a media:// ref) so hydrate leaves it and the
+  // canonicalize dehydrate tries to write the media file → fails.
   files.set(
     `.agents/sessions/${id}.session.jsonl`,
     JSON.stringify({

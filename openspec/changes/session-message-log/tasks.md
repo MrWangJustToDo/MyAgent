@@ -63,3 +63,13 @@
 - [x] 9.6 A mode switch persists on its own — the auto-mode controller now emits **and** persists, and `enablePlanMode`/`disablePlanMode` persist — so a toggled mode survives without another turn.
 - [x] 9.7 Documented single-process ownership (in-process `acquireSessionOwnership` + `reservedAt` for empty sessions; concurrent writes from two processes are not guarded).
 - [x] 9.8 Validators: `validate-session-store-lifecycle` gains identity / newer-version / `getLatestEmpty` cases; new `validate-session-restore-state` covers full restore fidelity, the usage-window fix, and mode-switch persistence.
+
+## 10. v7: message timestamps move onto the message
+
+- [x] 10.1 `SESSION_VERSION` → 7; `SessionLogLine` drops the line-level `messageUpdatedAt` / `approvalAt` (kept as read-only legacy fields) and carries `message.updatedAt` / `part.approval.updatedAt` instead.
+- [x] 10.2 `SessionStore` resolves the stamps before the no-op check (`resolveMessageStamps`, `collectApprovalStamps`, `snapshotTimestamps`) and applies them at write time only, so the live channel messages are never mutated; a re-emitted line stays byte-identical and an unchanged save still writes nothing.
+- [x] 10.3 `primeCache` seeds only the stamps the log actually carries, so an unchanged resume of a v6 log is a byte-level no-op (no forced migration rewrite).
+- [x] 10.4 `AgentUIChannel.addToolApprovalResponse` records the decision on the part (via `applyToolApprovalDecision`) and returns it, so `AgentChatController` gives the *same* value to `approvals.upsert`.
+- [x] 10.5 `foldLog` reads the v7 stamps first and falls back to the v6 line-level fields; the earliest time ever seen for an approval wins.
+- [x] 10.6 `fingerprintPart` includes the decision stamp so a decision that only adds a time still persists.
+- [x] 10.7 Validators updated (`session-message-log` gains v7 shape / v6 legacy-fold / rewrite-stability cases; `session-restore-state` asserts the version and the part stamp; `session-store-lifecycle` bumps its newer-version fixture); docs (`ARCHITECTURE.md` §6, openspec design/spec) synced.

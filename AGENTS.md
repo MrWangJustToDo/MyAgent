@@ -796,7 +796,7 @@ Runtime data under the project root is grouped under a single gitignored `.agent
 
 | Path | Purpose |
 |------|---------|
-| `.agents/sessions/` | Session message log (`*.session.jsonl`, one line per message + state) |
+| `.agents/sessions/` | Session message log (`*.session.jsonl`, one line per message + state; timestamps live on the message) |
 | `.agents/logs/<sessionId>/` | AgentLog JSONL event timeline (`agent.log`, size-rotated) |
 | `.agents/usage/` | Global usage history (`usage-<year>.jsonl`, per-LLM-call records) |
 | `.agents/config/models.json` | Unified model config (global settings + provider entries) |

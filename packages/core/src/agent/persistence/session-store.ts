@@ -18,7 +18,16 @@ import { getEnv } from "../../env.js";
 import { generateId } from "../../utils/generate-id.js";
 import { isToolCallPart } from "../stream/message-parts.js";
 
-import { appendLogLines, foldLog, hasUserMessage, readLastState, readLog, writeLog } from "./session-journal.js";
+import {
+  appendLogLines,
+  foldLog,
+  hasUserMessage,
+  readApprovalUpdatedAt,
+  readLastState,
+  readLog,
+  readMessageUpdatedAt,
+  writeLog,
+} from "./session-journal.js";
 import { fingerprintUIMessage } from "./session-sync-tracker.js";
 import {
   SESSION_DIR,
@@ -28,8 +37,14 @@ import {
   isSupportedSessionVersion,
 } from "./types.js";
 
-import type { SessionData, SessionLogLine, SessionMeta, SessionStateFields } from "./types.js";
-import type { UIMessage } from "@tanstack/ai";
+import type {
+  PersistedToolCallPart,
+  PersistedUIMessage,
+  SessionData,
+  SessionLogLine,
+  SessionMeta,
+  SessionStateFields,
+} from "./types.js";
 
 // ============================================================================
 // Constants
@@ -55,6 +70,19 @@ interface LastSaved {
   fingerprints: Map<string, string>;
   /** Content signature at the last write (state sans `updatedAt` + fingerprints). */
   signature: string;
+  /**
+   * id → the `message.updatedAt` value written to disk for that message. Reusing
+   * this (instead of re-stamping) is what keeps a re-emitted line byte-identical
+   * and an approval's decision time stable across a state-only re-emit.
+   */
+  stamps: Map<string, number>;
+}
+
+/** The timestamps frozen for one message in the upcoming write. */
+interface TimestampSnapshot {
+  updatedAt?: number;
+  /** approvalId → decision time, for decided tool calls in this message. */
+  approvals: Record<string, number>;
 }
 
 // ============================================================================
@@ -65,8 +93,8 @@ export class SessionStore {
   /** Last durable write per session — drives delta computation and no-op dedupe. */
   private lastSaved: Map<string, LastSaved> = new Map();
 
-  /** Known approval decision times per session (toolCallId → epoch ms). */
-  private approvalTimes: Map<string, Record<string, number>> = new Map();
+  /** Known approval decision times per session (approvalId → epoch ms). */
+  private statusStamps: Map<string, Record<string, number>> = new Map();
 
   /**
    * Per-session write lock to prevent concurrent saves from racing.
@@ -275,7 +303,7 @@ export class SessionStore {
     if (!(await this.fs.exists(logPath))) return false;
     await this.fs.remove(logPath);
     this.lastSaved.delete(id);
-    this.approvalTimes.delete(id);
+    this.statusStamps.delete(id);
     return true;
   }
 
@@ -294,7 +322,7 @@ export class SessionStore {
    */
   clearCache(id: string): void {
     this.lastSaved.delete(id);
-    this.approvalTimes.delete(id);
+    this.statusStamps.delete(id);
   }
 
   // ==========================================================================
@@ -307,8 +335,24 @@ export class SessionStore {
     // Snapshot the message list (and everything derived from it) before the first
     // await: a concurrent persist may swap `session.uiMessages` while we wait on
     // IO, which would desync the fingerprints from the lines we append.
-    const messages = session.uiMessages;
+    const messages = session.uiMessages as PersistedUIMessage[];
     const fingerprints = new Map(messages.map((m) => [m.id, fingerprintUIMessage(m)]));
+    // Timestamps are resolved BEFORE the no-op check and are deliberately not part
+    // of it (they are derived from what changed): a message keeps the stamp it was
+    // first written with, so an unchanged save still writes nothing and a re-emit
+    // reproduces the previous line byte for byte.
+    const stamps = resolveMessageStamps(messages, prev, fingerprints);
+
+    // Track newly-decided approvals so their times survive a later rewrite. Taken
+    // before the message stamps so a message that changed for an unrelated reason
+    // cannot move its approval's decision time; a decision made through the
+    // channel carries its own time on the part.
+    const knownTimes = this.statusStamps.get(session.id) ?? {};
+    if (collectApprovalStamps(messages, knownTimes)) {
+      this.statusStamps.set(session.id, knownTimes);
+    }
+    const snapshot = snapshotTimestamps(messages, stamps, knownTimes);
+
     const { uiMessages: _uiMessages, approvalTimes: _approvalTimes, ...stateFields } = session;
     const signature = contentSignature(stateFields, messages, fingerprints);
 
@@ -319,14 +363,6 @@ export class SessionStore {
     await this.ensureDir();
     session.updatedAt = Date.now();
     stateFields.updatedAt = session.updatedAt;
-
-    // Track newly-decided approvals so their timestamps survive a later rewrite.
-    // Runs after the stamp so a freshly decided approval records this save's
-    // line time (which is what a reader would infer anyway).
-    const knownTimes = this.approvalTimes.get(session.id) ?? {};
-    if (collectNewApprovalTimes(messages, session.updatedAt, knownTimes)) {
-      this.approvalTimes.set(session.id, knownTimes);
-    }
 
     const ids = messages.map((m) => m.id);
     // `prev === undefined` means we have no delta baseline for this id: either the
@@ -341,17 +377,17 @@ export class SessionStore {
     if (structuralChange || messages.length === 0) {
       // Non-empty → empty, partial truncation, or the initial empty save:
       // rewrite the file (one line per message; a single `message: null` when empty).
-      await this.rewriteLog(messages, session.updatedAt, stateFields, knownTimes);
+      await this.rewriteLog(messages, stateFields, snapshot);
     } else {
       const lines: SessionLogLine[] = [];
       for (const message of messages) {
         if (prev?.fingerprints.get(message.id) === fingerprints.get(message.id)) continue;
-        lines.push(buildLine(message, session.updatedAt, stateFields, knownTimes));
+        lines.push(buildLine(message, stateFields, snapshot));
       }
       // State-only change: re-emit the last message line with the new state.
       if (lines.length === 0) {
         const last = messages[messages.length - 1];
-        if (last) lines.push(buildLine(last, session.updatedAt, stateFields, knownTimes));
+        if (last) lines.push(buildLine(last, stateFields, snapshot));
       }
       if (lines.length > 0) {
         const appended = await appendLogLines(this.fs, this.getLogPath(session.id), lines);
@@ -359,39 +395,47 @@ export class SessionStore {
           // Env fs has no `appendFile` (optional primitive). Degrade to a full
           // rewrite so this save is not silently lost — otherwise the delta
           // baseline below would dedupe every later save into nothing.
-          await this.rewriteLog(messages, session.updatedAt, stateFields, knownTimes);
+          await this.rewriteLog(messages, stateFields, snapshot);
         }
       }
     }
 
-    this.lastSaved.set(session.id, { ids, fingerprints, signature });
+    this.lastSaved.set(session.id, { ids, fingerprints, signature, stamps });
   }
 
   /** Rewrite the log to its compacted form: one line per message (or a single null line). */
   private async rewriteLog(
-    messages: UIMessage[],
-    updatedAt: number,
+    messages: PersistedUIMessage[],
     stateFields: SessionStateFields,
-    knownTimes: Record<string, number>
+    snapshot: Map<string, TimestampSnapshot>
   ): Promise<void> {
     const lines: SessionLogLine[] =
       messages.length === 0
-        ? [buildLine(null, updatedAt, stateFields, knownTimes)]
-        : messages.map((message) => buildLine(message, updatedAt, stateFields, knownTimes));
+        ? [buildLine(null, stateFields, snapshot)]
+        : messages.map((message) => buildLine(message, stateFields, snapshot));
     await writeLog(this.fs, this.getLogPath(stateFields.id), lines);
   }
 
   /** Seed the delta baseline from a loaded session (resume path). */
   private primeCache(session: SessionData): void {
-    const fingerprints = new Map(session.uiMessages.map((m) => [m.id, fingerprintUIMessage(m)]));
+    const messages = session.uiMessages as PersistedUIMessage[];
+    const fingerprints = new Map(messages.map((m) => [m.id, fingerprintUIMessage(m)]));
+    // Only messages that already carry a stamp are seeded: a v6 line has none, and
+    // the next write must be free to mint one that the *live* message can keep.
+    const stamps = new Map<string, number>();
+    for (const message of messages) {
+      const stamp = readMessageUpdatedAt(message);
+      if (stamp !== undefined) stamps.set(message.id, stamp);
+    }
     const { uiMessages: _uiMessages, approvalTimes, ...stateFields } = session;
     this.lastSaved.set(session.id, {
-      ids: session.uiMessages.map((m) => m.id),
+      ids: messages.map((m) => m.id),
       fingerprints,
-      signature: contentSignature(stateFields, session.uiMessages, fingerprints),
+      signature: contentSignature(stateFields, messages, fingerprints),
+      stamps,
     });
     if (approvalTimes) {
-      this.approvalTimes.set(session.id, { ...approvalTimes });
+      this.statusStamps.set(session.id, { ...approvalTimes });
     }
   }
 
@@ -413,7 +457,7 @@ export class SessionStore {
 /** Content signature used for no-op detection: state (timestamp-normalized) + messages. */
 function contentSignature(
   stateFields: SessionStateFields,
-  messages: UIMessage[],
+  messages: PersistedUIMessage[],
   fingerprints: Map<string, string>
 ): string {
   const state = JSON.stringify({ ...stateFields, updatedAt: 0 });
@@ -429,50 +473,111 @@ function isAppendOnlyCompatible(prevIds: string[], ids: string[]): boolean {
   return true;
 }
 
-/** Build one log line for `message` (or `null` for the initial empty-session line). */
-function buildLine(
-  message: UIMessage | null,
-  messageUpdatedAt: number,
-  state: SessionStateFields,
-  knownTimes: Record<string, number>
-): SessionLogLine {
-  const approvalAt = message ? approvalTimesForMessage(message, knownTimes) : undefined;
-  const line: SessionLogLine = { t: SESSION_LOG_MESSAGE, message, messageUpdatedAt, state };
-  if (approvalAt && Object.keys(approvalAt).length > 0) line.approvalAt = approvalAt;
-  return line;
-}
-
-/** Decided approval timestamps carried by one message (from the known times map). */
-function approvalTimesForMessage(message: UIMessage, knownTimes: Record<string, number>): Record<string, number> {
-  const out: Record<string, number> = {};
-  if (message.role !== "assistant") return out;
-  for (const part of message.parts) {
-    if (!isToolCallPart(part)) continue;
-    const approval = part.approval;
-    if (!approval?.id || approval.approved === undefined) continue;
-    const at = knownTimes[approval.id];
-    if (at !== undefined) out[approval.id] = at;
+/**
+ * Resolve the `message.updatedAt` each message will be written with.
+ *
+ * A message whose content changed is stamped now; an unchanged one keeps the
+ * stamp it already carries (from disk or from the last write) so re-emitting its
+ * line stays byte-identical. A message the log has never carried is stamped now —
+ * the store, not the caller, owns this timestamp.
+ */
+function resolveMessageStamps(
+  messages: PersistedUIMessage[],
+  prev: LastSaved | undefined,
+  fingerprints: Map<string, string>
+): Map<string, number> {
+  const now = Date.now();
+  const stamps = new Map<string, number>();
+  for (const message of messages) {
+    const changed = prev === undefined || prev.fingerprints.get(message.id) !== fingerprints.get(message.id);
+    const known = readMessageUpdatedAt(message) ?? prev?.stamps.get(message.id);
+    stamps.set(message.id, changed || known === undefined ? now : known);
   }
-  return out;
+  return stamps;
 }
 
 /**
  * Record decision times for approvals that are newly decided in `messages`.
  * Returns true when the map gained a new entry.
+ *
+ * A decision made through the channel already carries its own time on the part;
+ * anything else (a decision replayed from a legacy log, or a non-channel path)
+ * falls back to this save's time.
  */
-function collectNewApprovalTimes(messages: UIMessage[], now: number, knownTimes: Record<string, number>): boolean {
+function collectApprovalStamps(messages: PersistedUIMessage[], knownTimes: Record<string, number>): boolean {
   let changed = false;
+  const now = Date.now();
   for (const message of messages) {
     if (message.role !== "assistant") continue;
     for (const part of message.parts) {
       if (!isToolCallPart(part)) continue;
       const approval = part.approval;
       if (!approval?.id || approval.approved === undefined) continue;
-      if (knownTimes[approval.id] === undefined) {
-        knownTimes[approval.id] = now;
-        changed = true;
-      }
+      if (knownTimes[approval.id] !== undefined) continue;
+      knownTimes[approval.id] = readApprovalUpdatedAt(part as unknown as PersistedToolCallPart) ?? now;
+      changed = true;
     }
   }
   return changed;
+}
+
+/** Freeze the timestamps each message will be written with, keyed by message id. */
+function snapshotTimestamps(
+  messages: PersistedUIMessage[],
+  stamps: Map<string, number>,
+  knownTimes: Record<string, number>
+): Map<string, TimestampSnapshot> {
+  const out = new Map<string, TimestampSnapshot>();
+  for (const message of messages) {
+    const approvals: Record<string, number> = {};
+    if (message.role === "assistant") {
+      for (const part of message.parts) {
+        if (!isToolCallPart(part)) continue;
+        const approval = part.approval;
+        if (!approval?.id || approval.approved === undefined) continue;
+        const at = readApprovalUpdatedAt(part as unknown as PersistedToolCallPart) ?? knownTimes[approval.id];
+        if (at !== undefined) approvals[approval.id] = at;
+      }
+    }
+    const updatedAt = stamps.get(message.id);
+    out.set(message.id, updatedAt === undefined ? { approvals } : { updatedAt, approvals });
+  }
+  return out;
+}
+
+/**
+ * Build one log line for `message` (or `null` for the initial empty-session line).
+ *
+ * Timestamps are applied here, at write time only: the live channel messages are
+ * never mutated (a mid-run UI patch would otherwise have to reason about fields
+ * it does not own).
+ */
+function buildLine(
+  message: PersistedUIMessage | null,
+  state: SessionStateFields,
+  snapshot: Map<string, TimestampSnapshot>
+): SessionLogLine {
+  return {
+    t: SESSION_LOG_MESSAGE,
+    message: message ? applyTimestamps(message, snapshot.get(message.id)) : null,
+    state,
+  };
+}
+
+/** Return a copy of `message` carrying its write-time and approval decision stamps. */
+function applyTimestamps(message: PersistedUIMessage, stamp: TimestampSnapshot | undefined): PersistedUIMessage {
+  const next: PersistedUIMessage = { ...message };
+  if (stamp?.updatedAt !== undefined) next.updatedAt = stamp.updatedAt;
+
+  const approvalIds = Object.keys(stamp?.approvals ?? {});
+  if (approvalIds.length === 0) return next;
+
+  const parts = message.parts.map((part) => {
+    if (!isToolCallPart(part)) return part;
+    const approval = part.approval;
+    const at = approval?.id ? stamp?.approvals[approval.id] : undefined;
+    if (!approval || at === undefined) return part;
+    return { ...part, approval: { ...approval, updatedAt: at } } as typeof part;
+  });
+  return { ...next, parts };
 }

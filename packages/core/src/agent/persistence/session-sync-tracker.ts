@@ -67,6 +67,10 @@ function fingerprintPart(part: UIMessage["parts"][number]): string {
             ? "0"
             : "",
         (part.approval as ToolCallApproval | undefined)?.reason ?? "",
+        // Decision time: a freshly decided approval carries it on the part, and a
+        // legacy one is stamped with the save time — either way the fingerprint
+        // moves when the decision time appears.
+        (part.approval as { updatedAt?: number } | undefined)?.updatedAt ? "stamped" : "",
         part.output !== undefined ? "out" : "",
       ].join(":");
     case "tool-result":

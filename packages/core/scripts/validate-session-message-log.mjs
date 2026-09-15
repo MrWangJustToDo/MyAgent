@@ -9,7 +9,7 @@
  * - a rewrite goes through a temp file + rename when the env fs supports it
  *   (and falls back to an in-place write otherwise);
  * - an unprimed store rewrites instead of appending into an unknown log;
- * - approvals are derived from messages, with `approvalAt` preserved.
+ * - approvals are derived from messages, with the decision time on the part.
  *
  * Run: pnpm --filter @my-agent/core run validate:session-message-log
  */
@@ -222,7 +222,7 @@ setupEnv();
   assert.equal(lines[0].state.name, "fresh");
 }
 
-// --- approvals derived from messages, approvalAt preserved ------------------
+// --- approvals derived from messages, decision time on the part ----------------
 
 setupEnv();
 {
@@ -248,11 +248,80 @@ setupEnv();
   await store.save(session);
 
   const lines = readLines(session.id);
-  const at = lines[0].approvalAt?.["approval_call_1"];
-  assert.ok(at > 0, "decided approval records its timestamp on the line");
+  const part = lines[0].message.parts.find((p) => p.type === "tool-call");
+  assert.ok(part.approval.updatedAt > 0, "decided approval carries its decision time on the part");
+  assert.equal(lines[0].messageUpdatedAt, undefined, "v7 writes no line-level timestamp");
+  assert.equal(lines[0].approvalAt, undefined, "v7 writes no line-level approval map");
+  assert.ok(lines[0].message.updatedAt > 0, "the message carries its own write time");
 
   const loaded = await store.load(session.id);
   assert.ok(loaded.approvalTimes?.["approval_call_1"] > 0, "approvalTimes derived from the log");
+  assert.equal(
+    loaded.approvalTimes["approval_call_1"],
+    part.approval.updatedAt,
+    "the derived time is the part's decision time"
+  );
+}
+
+// --- a legacy v6 line still folds (line-level time / approvalAt) -------------
+
+setupEnv();
+{
+  const id = "ses_legacy_v6";
+  const part = {
+    type: "tool-call",
+    id: "call_1",
+    name: "run_command",
+    arguments: "{}",
+    state: "approval-responded",
+    approval: { id: "approval_call_1", needsApproval: true, approved: true },
+  };
+  files.set(
+    `${SESSION_DIR}/${id}.session.jsonl`,
+    JSON.stringify({
+      t: "message",
+      message: { id: "a1", role: "assistant", parts: [part], createdAt: 2 },
+      messageUpdatedAt: 4242,
+      state: {
+        id,
+        name: "legacy",
+        version: 6,
+        modelStyle: "openai",
+        model: "m",
+        createdAt: 1,
+        updatedAt: 4242,
+        usage: {},
+        todos: [],
+      },
+    }) + "\n"
+  );
+
+  const store = new SessionStore();
+  const loaded = await store.load(id);
+  assert.equal(loaded.version, 6, "a v6 log is still readable");
+  assert.equal(loaded.approvalTimes["approval_call_1"], 4242, "v6 line time derives the decision time");
+  assert.equal(loaded.uiMessages[0].updatedAt, undefined, "a v6 message stays unstamped in memory");
+
+  // Nothing changed since the load, so the resume writes nothing at all.
+  const appendsBefore = counts.appendFile;
+  await store.save(loaded);
+  assert.equal(counts.appendFile, appendsBefore, "an unchanged resume of a v6 log appends nothing");
+  assert.equal(readLines(id).length, 1, "still the original v6 line");
+
+  // A state-only change re-emits the last message line — now in v7 shape, so the
+  // legacy message finally carries its own write time.
+  loaded.todos = [{ content: "do it", status: "pending", priority: "high" }];
+  await store.save(loaded);
+  const lines = readLines(id);
+  assert.equal(lines.length, 2, "the save appended instead of rewriting");
+  assert.equal(counts.appendFile, appendsBefore + 1, "exactly one append");
+  assert.ok(lines[1].message.updatedAt > 0, "the appended line stamps the message");
+  assert.equal(lines[1].messageUpdatedAt, undefined, "no line-level timestamp is written anymore");
+  assert.equal(
+    (await store.load(id)).approvalTimes["approval_call_1"],
+    4242,
+    "the v6 decision time survives the v7 re-emit"
+  );
 }
 
 // --- a whole-log rewrite keeps the original approval decision time ----------
@@ -282,16 +351,17 @@ setupEnv();
   assert.ok(decisionAt > 0, "decision time recorded on the first save");
 
   // A structural change (the message set is no longer an append-only extension)
-  // rewrites every line with the rewrite timestamp — the explicit `approvalAt`
-  // carried on the line must win over that inferred stamp.
+  // rewrites every line with the rewrite time — the decision time stamped on the
+  // part must survive it, and so must the message's own write time.
   await new Promise((resolve) => setTimeout(resolve, 5));
   session.uiMessages = [userMessage("u0", "before"), decided("a1")];
   await store.save(session);
   assert.ok(counts.writeFile > 0, "structural change rewrites the log");
   const line = readLines(session.id).find((l) => l.message?.id === "a1");
   assert.ok(line, "the approved message survived the rewrite");
-  assert.ok(line.messageUpdatedAt > decisionAt, "the rewrite stamped a later line time");
-  assert.equal(line.approvalAt["approval_call_1"], decisionAt, "explicit approvalAt carries the decision time");
+  assert.ok(line.state.updatedAt > decisionAt, "the rewrite stamped a later state time");
+  const rewrittenPart = line.message.parts.find((p) => p.type === "tool-call");
+  assert.equal(rewrittenPart.approval.updatedAt, decisionAt, "the part keeps the decision time");
   assert.equal(
     (await store.load(session.id)).approvalTimes["approval_call_1"],
     decisionAt,

@@ -7,13 +7,14 @@ import { StreamProcessor } from "@tanstack/ai";
 import { generateId } from "../utils/generate-id.js";
 
 import { repairMessagesSnapshotChunk } from "./media/repair-stringified-multimodal.js";
-import { applyToolDenialReason } from "./stream/apply-tool-denial-reason.js";
+import { applyToolApprovalDecision, applyToolDenialReason, approvalStamp } from "./stream/apply-tool-denial-reason.js";
 import { stripEmptyAssistantShells } from "./stream/empty-assistant-shell.js";
 import {
   resolveTaskRunPhase,
   type TaskRunPhase,
   type TaskSummaryStreamState,
 } from "./stream/extract-assistant-text.js";
+import { isToolCallPart } from "./stream/message-parts.js";
 import { throwOnRunError } from "./stream/stream-errors.js";
 import { shouldSuppressMessagesSnapshot } from "./stream/suppress-messages-snapshot.js";
 import { shouldSuppressReplayedToolChunk } from "./stream/suppress-replayed-tool-chunks.js";
@@ -90,6 +91,25 @@ function normalizeToolCallName(chunk: StreamChunk): StreamChunk {
     return { ...chunk, toolCallName: chunk.toolName };
   }
   return chunk;
+}
+
+/**
+ * Decision timestamp the patch put on the tool-call part carrying `approvalId`.
+ *
+ * Read from the array we just patched — never from the engine — so the value is
+ * ours by construction: the engine keeps it only so the UI snapshot and the
+ * persisted log agree, and `touchToolPart`/`setMessages` merge (never rebuild)
+ * parts. `undefined` when no tool call carries `approvalId`.
+ */
+function findApprovalDecisionTime(messages: TanStackUIMessage[], approvalId: string): number | undefined {
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    for (const part of message.parts) {
+      if (!isToolCallPart(part) || part.approval?.id !== approvalId) continue;
+      return approvalStamp(part.approval);
+    }
+  }
+  return undefined;
 }
 
 function readTextMessageId(chunk: StreamChunk): string | undefined {
@@ -206,11 +226,31 @@ export class AgentUIChannel {
     return this.processor.addUserMessage(content, id);
   }
 
-  addToolApprovalResponse(approvalId: string, approved: boolean, reason?: string): void {
-    this.processor.addToolApprovalResponse(approvalId, approved);
+  /**
+   * Record an approval decision on the channel: decision status, denial reason,
+   * and the decision timestamp (the single time value shared by the log and the
+   * in-memory approval table). Returns the decision time.
+   *
+   * The time is resolved BEFORE anything is handed to the engine (reusing the
+   * approval's own stamp when it already has one), and only the already-patched
+   * array is read back afterwards — never `processor.getMessages()`. The engine
+   * is where we write the patch (its `StreamProcessor` owns the UI snapshot);
+   * it is not where we ask for the value.
+   */
+  addToolApprovalResponse(approvalId: string, approved: boolean, reason?: string, decidedAt?: number): number {
+    const before = this.processor.getMessages() as TanStackUIMessage[];
+    // Resolve the time here: the decision is made now, and an approval that
+    // already carries a time keeps it.
+    const at = findApprovalDecisionTime(before, approvalId) ?? decidedAt ?? Date.now();
+    const next = applyToolApprovalDecision(before, approvalId, approved, { reason, decidedAt: at });
+    let patched = next;
     if (!approved) {
-      this.processor.setMessages(applyToolDenialReason(this.processor.getMessages(), approvalId, reason));
+      // Model-facing denial result (idempotent: keeps an existing one).
+      patched = applyToolDenialReason(next, approvalId, reason);
     }
+    // The UI snapshot and the session log must see the same parts; one write for both.
+    this.processor.setMessages(patched);
+    return at;
   }
 
   addToolResult(toolCallId: string, output: unknown, error?: string): void {
