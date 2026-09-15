@@ -62,7 +62,13 @@ function selectPanelPreviewMessages(
   omittedEarlier: boolean;
 } {
   const collapsed = collapseUserPrompts(messages);
-  const { staticMessages, dynamicMessages } = getMessages(collapsed, { mode });
+  // No `window` here on purpose: this panel locates its task prompt with
+  // `findIndex(role === "user")`, so it needs the full transcript. The distinct
+  // namespace keeps its flatten snapshot from evicting the main transcript's.
+  const { staticMessages, dynamicMessages } = getMessages(collapsed, {
+    mode,
+    namespace: "subagent",
+  });
   const all = [...staticMessages, ...dynamicMessages];
 
   const firstUserIndex = all.findIndex((m) => m.role === "user");

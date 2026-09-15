@@ -13,7 +13,7 @@
 import assert from "node:assert/strict";
 
 import { computeMessageRenderSignature } from "../dist/index.mjs";
-import { getMessages } from "../dist/utils/get-messages.mjs";
+import { countSourceMessages, getMessages } from "../dist/utils/get-messages.mjs";
 
 function textMsg(id, role, content) {
   return { id, role, parts: [{ type: "text", content }] };
@@ -103,6 +103,53 @@ assert.equal(
   rowText(fullAfter.staticMessages.find((m) => m.id.startsWith("a1"))),
   "Working, and now finished.",
   "static text rows must not pin the first render"
+);
+
+// ---------------------------------------------------------------------------
+// 5. `countSourceMessages` must not split ids that merely end in digits
+// ---------------------------------------------------------------------------
+// Regression: the counter used to strip a `-d?\d+$` suffix from EVERY row id, so source
+// messages whose own ids end in a number were merged together and the hidden count was
+// under-reported. `flattenMessage` never renames user messages, so a user row's id IS its
+// source id; only assistant rows carry a part index appended by the projection.
+const rowOf = (id, role = "assistant") => ({ id, role, parts: [{ type: "text", content: "x" }] });
+
+assert.equal(countSourceMessages([rowOf("a0-d0"), rowOf("a0-d1")]), 1, "two parts of one message count once");
+assert.equal(countSourceMessages([rowOf("a0-d1"), rowOf("a1-d1")]), 2, "distinct messages count separately");
+assert.equal(
+  countSourceMessages([rowOf("msg-user-0", "user"), rowOf("msg-user-1", "user"), rowOf("msg-user-2", "user")]),
+  3,
+  "user ids ending in digits are distinct messages, not flattened rows"
+);
+assert.equal(
+  countSourceMessages([rowOf("ctx-git_status-abc-7", "user"), rowOf("ctx-git_status-abc-8", "user")]),
+  2,
+  "ctx ids carrying a numeric nonce are distinct messages"
+);
+assert.equal(
+  countSourceMessages([rowOf("msg-user-0", "user"), rowOf("a5-d0"), rowOf("a5-d1")]),
+  2,
+  "digit-tailed user ids and flattened assistant rows resolve independently"
+);
+assert.equal(
+  countSourceMessages([rowOf("display-activity:u2:0")]),
+  1,
+  "a compact summary row is a single source message"
+);
+
+// The same guarantee through the real pipeline, with a digit-tailed user message present.
+const digitUser = textMsg("msg-user-0", "user", "first prompt");
+const digitUser2 = textMsg("msg-user-1", "user", "second prompt");
+const digitResult = getMessages([digitUser, toolMsg("a1", [readFile("t1")]), digitUser2, final("a2")], {
+  mode: "full",
+});
+const distinctSources = new Set(
+  digitResult.staticMessages.map((m) => (m.role === "user" ? m.id : m.id.replace(/-d?\d+$/, "")))
+).size;
+assert.equal(
+  countSourceMessages(digitResult.staticMessages),
+  distinctSources,
+  "the counter must match the real distinct-source count for digit-tailed ids"
 );
 
 process.stdout.write("get-messages: ok\n");

@@ -96,6 +96,16 @@ module.exports = [
       "import/no-useless-path-segments": "off",
     },
   },
+  // The render smoke imports the bundle it just built (`scripts/render-smoke/dist`,
+  // gitignored), so resolution only succeeds after the script has run its own build --
+  // linting a clean checkout would otherwise report a dozen phantom errors for imports
+  // that are correct by construction.
+  {
+    files: ["packages/app/scripts/render-smoke/**"],
+    rules: {
+      "import/no-unresolved": "off",
+    },
+  },
   // Relax rules for packages/app — uses reactivity-store patterns where:
   // - getActions() returns stable refs (exhaustive-deps false positives)
   // - refs are read during render for perf optimization

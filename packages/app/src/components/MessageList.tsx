@@ -16,7 +16,7 @@ import { useTranscriptDisplay } from "../hooks/use-transcript-display.js";
 import { MessageView } from "../messages";
 import { COLORS } from "../theme/colors.js";
 import { encodeToolCallState } from "../utils/dedupe-tool-calls";
-import { getMessages } from "../utils/get-messages";
+import { countSourceMessages, getMessages } from "../utils/get-messages";
 
 import { CursorFlush } from "./CursorFlush";
 
@@ -27,8 +27,19 @@ import type { JSX } from "react";
 // Constants
 // ============================================================================
 
-/** Maximum number of completed (static) flat parts to render. Older messages are truncated with a summary line. */
+/** Maximum number of completed (static) rows to render. Older rows are truncated with a marker. */
 const MAX_STATIC_PARTS = 100;
+
+/**
+ * How many messages enter the static derivation (`getMessages`). Bounds the per-render
+ * cost — digest, flatten and tool fingerprint — by a constant instead of by session
+ * length. The window start snaps back to a user-message boundary, so the effective
+ * count can exceed this slightly.
+ */
+const STATIC_INPUT_WINDOW = 120;
+
+/** Cache namespace for this transcript's flatten snapshot (see `message-flat-cache`). */
+const FLATTEN_NAMESPACE = "transcript";
 
 // ============================================================================
 // Props
@@ -62,14 +73,24 @@ function computeDynamicListSignature(messages: UIMessage[]): string {
 
 export const MessageList = ({ messages }: MessageListProps) => {
   const mode = useTranscriptDisplay((s) => s.mode);
-  const { staticMessages, dynamicMessages, toolCallsSignature } = getMessages(messages, {
+  const { staticMessages, dynamicMessages, toolCallsSignature, hiddenSourceMessages } = getMessages(messages, {
     mode,
+    window: STATIC_INPUT_WINDOW,
+    namespace: FLATTEN_NAMESPACE,
   });
 
   // ── Truncate static list to bounded size ──
+  // Everything here is counted in MESSAGES (never rows): `hiddenSourceMessages` covers the
+  // window prefix plus static messages that produced no row, and the rendered-row cap adds
+  // the messages behind the rows it drops. Mixing the two units would print a total that
+  // exceeds the transcript length.
   const hiddenPartCount = staticMessages.length > MAX_STATIC_PARTS ? staticMessages.length - MAX_STATIC_PARTS : 0;
   const visibleStaticMessages = hiddenPartCount > 0 ? staticMessages.slice(-MAX_STATIC_PARTS) : staticMessages;
   const visibleStaticLength = visibleStaticMessages.length;
+  // `staticMessages` is the source for the rows the cap drops. Counting is split by role
+  // inside `countSourceMessages`, so no id needs to be seeded here.
+  const hiddenTotal =
+    hiddenSourceMessages + (hiddenPartCount > 0 ? countSourceMessages(staticMessages.slice(0, -MAX_STATIC_PARTS)) : 0);
   const dynamicSignature = computeDynamicListSignature(dynamicMessages);
 
   // Rebuild static list when length changes, projection/mode changes, or static tool state updates.
@@ -111,11 +132,11 @@ export const MessageList = ({ messages }: MessageListProps) => {
       </Box>
     ));
 
-    if (hiddenPartCount > 0) {
+    if (hiddenTotal > 0) {
       elements.unshift(
         <Box key="truncation-marker" paddingX={1} marginTop={1}>
           <Text color={COLORS.muted} dimColor>
-            ... {hiddenPartCount} older message{hiddenPartCount === 1 ? "" : "s"} hidden
+            ... {hiddenTotal} older message{hiddenTotal === 1 ? "" : "s"} hidden
           </Text>
         </Box>
       );

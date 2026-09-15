@@ -20,9 +20,12 @@ function parseToolResultContent(content: string): unknown {
 // path misses on every stream tick and the map below would clone every assistant
 // part ~16×/s (allocation churn → GC pauses). StreamProcessor updates messages
 // immutably, so completed messages keep object identity — memoize by reference.
-// Explicit FIFO eviction (insertion-order delete of the oldest key).
-const NORMALIZE_MEMO_LIMIT = 600;
-const normalizeMemo = new Map<UIMessage, UIMessage>();
+//
+// Keyed by object identity in a WeakMap: a rebuilt message is a new object (so a hit is
+// always sound) and a message dropped by the input window becomes collectable instead of
+// being retained by a size-capped FIFO. That removes the old failure mode where the cap
+// (600) sat below the working set (693 messages) and every entry was recomputed each tick.
+const normalizeMemo = new WeakMap<UIMessage, UIMessage>();
 
 function normalizeMessage(message: UIMessage): UIMessage {
   const parts = message.parts.map((part) => ({ ...part }));
@@ -75,10 +78,6 @@ export function normalizeToolPartsInMessages(messages: UIMessage[]): UIMessage[]
 
     const normalized = normalizeMessage(message);
     normalizeMemo.set(message, normalized);
-    if (normalizeMemo.size > NORMALIZE_MEMO_LIMIT) {
-      const oldest = normalizeMemo.keys().next().value;
-      if (oldest !== undefined) normalizeMemo.delete(oldest);
-    }
     return normalized;
   });
 
