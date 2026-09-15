@@ -19,4 +19,6 @@ export {
   getDurationMs,
   getInlineSummary,
   getToolCallColor,
+  getToolStatusGlyph,
+  isBudgetCutoffTaskPhase,
 } from "./tool-display.js";

@@ -52,6 +52,8 @@ export {
   DETAILED_OUTPUT_TOOL_NAMES,
   hasDetailedOutputBlock,
   keepsCompactRow,
+  getToolStatusGlyph,
+  isBudgetCutoffTaskPhase,
 } from "./utils/tool-display.js";
 export {
   HINT_ROTATE_INTERVAL_MS,

@@ -2,29 +2,42 @@ import { Text } from "ink";
 
 import { Spinner } from "../components/Spinner.js";
 import { COLORS } from "../theme/colors.js";
+import { getToolStatusGlyph } from "../utils/tool-display.js";
 
 import type { UiToolState } from "../utils/tool-part.js";
 
 export interface ToolStatusIconProps {
   state: UiToolState;
   toolName: string;
+  /**
+   * A `task` run that the step budget cut off. Its part still settles as
+   * `output-available` — the run neither errored nor was cancelled — so `state`
+   * alone would render a truncated run with the clean-finish check. Only the
+   * live `taskPhase` distinguishes the two.
+   */
+  stoppedByLimit?: boolean;
 }
 
 /** Get status icon for tool invocation */
-export const ToolStatusIcon = ({ state, toolName }: ToolStatusIconProps) => {
+export const ToolStatusIcon = ({ state, toolName, stoppedByLimit = false }: ToolStatusIconProps) => {
+  // Lifecycle states render a spinner or a question mark rather than a status
+  // glyph, so they never reach the glyph table.
   switch (state) {
     case "input-streaming":
     case "input-available":
     case "approval-responded":
       return toolName === "ask_user" ? <Text color={COLORS.warning}>?</Text> : <Spinner text="" />;
-    case "output-available":
-      return <Text color={COLORS.success}>✓</Text>;
-    case "output-error":
-    case "output-denied":
-      return <Text color={COLORS.danger}>✗</Text>;
     case "approval-requested":
       return <Text color={COLORS.warning}>?</Text>;
     default:
-      return null;
+      break;
   }
+
+  const glyph = getToolStatusGlyph(state, stoppedByLimit);
+  if (!glyph) return null;
+
+  // A cutoff outranks the underlying state: the run did not fail, but it must not
+  // wear the success colour either.
+  const color = stoppedByLimit ? COLORS.warning : state === "output-available" ? COLORS.success : COLORS.danger;
+  return <Text color={color}>{glyph}</Text>;
 };

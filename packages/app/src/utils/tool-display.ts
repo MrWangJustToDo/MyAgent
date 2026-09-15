@@ -67,6 +67,41 @@ export function getToolCallColor(state: UiToolState | string): string {
   }
 }
 
+/** A `task` run's live phase, as far as the row cares: only `limit` says the step
+ * budget ended it. */
+export type TaskRowPhase = "running" | "summary" | "limit" | undefined;
+
+/**
+ * A step-budget cutoff, which the row must render as a warning instead of a
+ * success.
+ *
+ * The part still settles as `output-available` (the run neither errored nor was
+ * cancelled) and the subagent's own status is `completed`, so neither the tool
+ * state nor the status can tell a cut-off run from a clean finish — only the live
+ * `taskPhase` can. `taskPhase` is optional, so an absent value degrades to the old
+ * behaviour rather than assuming a cutoff.
+ */
+export function isBudgetCutoffTaskPhase(phase: TaskRowPhase): boolean {
+  return phase === "limit";
+}
+
+/** Status glyph for a tool row, resolving the budget-cutoff case before `state`. */
+export function getToolStatusGlyph(state: UiToolState | string, stoppedByLimit = false): string {
+  // Ordered first, not last: a cut-off `task` is `output-available` too.
+  if (stoppedByLimit) return "⚠";
+  switch (state) {
+    case "output-available":
+      return "✓";
+    case "output-error":
+    case "output-denied":
+      return "✗";
+    case "approval-requested":
+      return "?";
+    default:
+      return "";
+  }
+}
+
 // Re-exported from core so a host cannot drift from the owning process: these are the
 // same thresholds and functions the core layer uses when it renders a call.
 export {

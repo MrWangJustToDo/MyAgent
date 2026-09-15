@@ -17,6 +17,7 @@ import {
   getDurationMs,
   getInlineSummary,
   getToolCallColor,
+  isBudgetCutoffTaskPhase,
   LIVE_DURATION_THRESHOLD_MS,
 } from "../utils/format.js";
 import { getUiToolState, isToolExecuting, parseToolInput } from "../utils/tool-part.js";
@@ -101,7 +102,7 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
   // the live phase: a budget cutoff is NOT a natural finish, and only the live
   // value can say which one this was (the subagent's own status is `completed`
   // either way). Read it from the summary the parent handed down.
-  const stoppedByLimit = isTask && taskAgent?.taskPhase === "limit";
+  const stoppedByLimit = isTask && isBudgetCutoffTaskPhase(taskAgent?.taskPhase);
 
   const displayInput =
     toolInput === undefined || toolInput === null
@@ -121,8 +122,9 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
     ? null
     : ((part as { display?: { summary?: string } }).display?.summary ?? getInlineSummary(part, toolName)) || null;
   const outputFailed = (part.output as { success?: boolean } | undefined)?.success === false;
-  // Density compact: skip success one-liners; keep failure hints.
-  const stateColor = errorText || outputFailed ? COLORS.danger : getToolCallColor(uiState);
+  // Density compact: skip success one-liners; keep failure hints. A cut-off task
+  // is treated as a failure hint: it must not read as a clean finish.
+  const stateColor = errorText || outputFailed || stoppedByLimit ? COLORS.danger : getToolCallColor(uiState);
 
   // Compact display: errored/denied tools are handled by the compact projection
   // (errors fold into an activity summary count; denied rows are filtered). This
@@ -166,7 +168,7 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
     <Box flexDirection="column" paddingLeft={2}>
       <Box flexDirection="row">
         <Box flexShrink={0} width={2}>
-          <ToolStatusIcon state={uiState} toolName={toolName} />
+          <ToolStatusIcon state={uiState} toolName={toolName} stoppedByLimit={stoppedByLimit} />
         </Box>
         <Text wrap="wrap">{headerText}</Text>
       </Box>
