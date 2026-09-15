@@ -1,14 +1,17 @@
 import { StaticRender } from "ink";
-import { memo, type JSX } from "react";
+import { Fragment, memo, type JSX } from "react";
 
 import { useSize } from "../hooks";
 import { useDiffRenderer } from "../hooks/use-diff-renderer";
 import { useDynamic } from "../hooks/use-dynamic";
+import { useInit } from "../hooks/use-init";
 import { useStatic } from "../hooks/use-static";
 import { useTheme } from "../hooks/use-theme";
 import { useWorkspaceInfo } from "../hooks/use-workspace-info";
 
 export const Content = memo(() => {
+  const loading = useInit((s) => s.loading);
+
   const { head, list, listSet, headerSet, toolCallsSignature } = useStatic((s) => ({
     list: s.list,
     listSet: s.listSet,
@@ -34,15 +37,15 @@ export const Content = memo(() => {
   if (!hasPath) return null;
 
   return (
-    <>
+    <Fragment key={String(loading)}>
       <StaticRender
         width={width}
-        deps={[width, validList.length, listSet, headerSet, dynamicKey, toolCallsSignature, theme, mode]}
+        deps={[loading, width, validList.length, listSet, headerSet, dynamicKey, toolCallsSignature, theme, mode]}
       >
         {() => validList}
       </StaticRender>
       {dynamicList}
-    </>
+    </Fragment>
   );
 });
 

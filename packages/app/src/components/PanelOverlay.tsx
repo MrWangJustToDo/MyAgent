@@ -39,6 +39,7 @@ export const PanelOverlay = ({ open, resetKey, children }: PanelOverlayProps) =>
       if (typeof process === "object") {
         const pkg = await import("ansi-escapes");
         process?.stdout?.write?.(pkg.clearScreen + pkg.cursorTo(0, 0));
+        await new Promise((r) => setTimeout(r));
       }
       if (cancelled) return;
       setReady(true);

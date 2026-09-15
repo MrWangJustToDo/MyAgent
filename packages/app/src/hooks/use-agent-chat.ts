@@ -13,7 +13,7 @@ import { handleToolLifecycleEvent } from "../utils/tool-timing-store.js";
 import { useAgentStatus } from "./use-agent-status.js";
 import { useAgent } from "./use-agent.js";
 import { useCallbackRef } from "./use-callback-ref.js";
-import { useDynamic } from "./use-dynamic.js";
+import { useInit } from "./use-init.js";
 import { useThinkingLine } from "./use-thinking-line.js";
 import { getWorkSpaceInfo } from "./use-workspace-info.js";
 
@@ -136,8 +136,10 @@ function isAgentLoading(status: AgentStatus): boolean {
 export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   const adapter = useAdapter();
 
-  const [initLoading, setInitLoading] = useState(true);
-  const [initError, setInitError] = useState<Error | null>(null);
+  const { loading: initLoading, error: initError } = useInit((s) => s);
+
+  // const [initLoading, setInitLoading] = useState(true);
+  // const [initError, setInitError] = useState<Error | null>(null);
   // Active session is store-owned: switching the active session only flips the
   // pointer (no destroy/rebuild). Derive it here so this hook re-subscribes to
   // the new handle on switch.
@@ -159,6 +161,8 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
 
   useEffect(() => {
     const currentInitId = ++initIdRef.current;
+
+    const { setLoading: setInitLoading, setError: setInitError } = useInit.getActions();
 
     const init = async () => {
       setInitLoading(true);
@@ -188,16 +192,14 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
         // Keeping the reveal inside the `process` guard would strand browser hosts
         // (playground / extension) on the init splash forever — there is no `process`
         // global there, so the branch never runs.
-        const reveal = () => {
-          setInitLoading(false);
-          useDynamic.getActions().setDynamicKey(Date.now());
-        };
+        const reveal = () => setInitLoading(false);
 
         if (typeof process === "object") {
           // CLI: clear the real TTY first so the splash is not left behind, then reveal.
           void (async () => {
             const pkg = await import("ansi-escapes");
             process?.stdout?.write?.(pkg.clearScreen + pkg.cursorTo(0, 0));
+            await new Promise((r) => setTimeout(r));
           })().finally(reveal);
         } else {
           reveal();
