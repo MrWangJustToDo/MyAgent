@@ -32,9 +32,15 @@ const SubagentTaskRow = ({ task }: { task: AgentSessionSubagentSummary }) => {
 
   void tick;
 
+  // A budget cutoff leaves the subagent's own status at `completed` (the run did
+  // not error or get cancelled), so the row label has to carry the distinction or
+  // it reads as a clean finish. `taskPhase` is authoritative and already on the
+  // summary the parent handed down.
   const status = childSession?.getSnapshot().status ?? task.status;
-  const icon = getStatusIcon(status);
-  const iconColor = getStatusColor(status);
+  const stoppedByLimit = task.taskPhase === "limit" && !isSubagentActiveStatus(status);
+  const label = stoppedByLimit ? "limit reached" : status;
+  const icon = stoppedByLimit ? "⚠" : getStatusIcon(status);
+  const iconColor = stoppedByLimit ? COLORS.warning : getStatusColor(status);
 
   return (
     <>
@@ -43,7 +49,7 @@ const SubagentTaskRow = ({ task }: { task: AgentSessionSubagentSummary }) => {
       </Text>
       <Text color={COLORS.muted} dimColor>
         {" "}
-        ({status})
+        ({label})
       </Text>
     </>
   );

@@ -19,6 +19,23 @@ type TaskToolCall = {
 
 export type TaskRunPhase = "tools" | "summary";
 
+/**
+ * Core's live task phase. `limit` means the step budget cut the subagent off (the
+ * report came from the progress-summary fallback), which is NOT a natural finish.
+ */
+type CoreTaskPhase = "running" | "summary" | "limit";
+
+/**
+ * Collapse the live phase onto this view's two-value phase.
+ *
+ * Both terminal phases stream a report, and every consumer here only asks "is the
+ * subagent past tool work" (as the `begin_summary` scan used to decide). The
+ * limit/natural distinction is surfaced separately, so it does not belong in this
+ * axis — but it must not be silently dropped either: unknown phases fall back to
+ * `tools` rather than assuming a report is coming.
+ */
+const toViewPhase = (phase: CoreTaskPhase): TaskRunPhase => (phase === "running" ? "tools" : "summary");
+
 const getTaskPhaseFromMessages = (messages: UIMessage[]): TaskRunPhase => {
   for (const msg of messages) {
     if (msg.role !== "assistant") continue;
@@ -49,7 +66,7 @@ const getTaskToolsFromMessages = (messages: UIMessage[]): TaskToolCall[] => {
   return tools;
 };
 
-const readTaskInfo = (session: AgentSession | null, taskPhase?: "running" | "summary") => {
+const readTaskInfo = (session: AgentSession | null, taskPhase?: CoreTaskPhase) => {
   const snapshot = session?.getSnapshot();
   const messages = snapshot?.messages ?? [];
   const allTools = getTaskToolsFromMessages(messages);
@@ -60,7 +77,7 @@ const readTaskInfo = (session: AgentSession | null, taskPhase?: "running" | "sum
     usage,
     // Authoritative phase machine first; message scan is a fallback for
     // transcripts that predate live phase tracking.
-    phase: taskPhase ?? getTaskPhaseFromMessages(messages),
+    phase: taskPhase ? toViewPhase(taskPhase) : getTaskPhaseFromMessages(messages),
     // Live LLM-retry state from the child agent (null when not retrying).
     retry: snapshot?.retry ?? null,
   };

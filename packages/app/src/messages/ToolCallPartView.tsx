@@ -80,12 +80,16 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
   // user message boxes (screenWidth - 2).
   const boxWidth = Math.max(screenWidth - 4, 1);
   const liveElapsedMs = useToolElapsed(toolCallId, isExecuting, LIVE_DURATION_THRESHOLD_MS);
-  const { phase: taskPhase, usage: taskUsage } = useTask({
+  const {
+    phase: taskPhase,
+    usage: taskUsage,
+    agent: taskAgent,
+  } = useTask({
     taskId: isTask ? part.id : "",
   });
-  // Authoritative per-task phase machine (running → summary): `begin_summary`
-  // and the progress-summary fallback both transition it, so the panel view
-  // no longer depends on message inference.
+  // Authoritative per-task phase machine (running → summary | limit): the
+  // `begin_summary` call and the progress-summary fallback both transition it, so
+  // the panel view no longer depends on message inference.
   const showTaskSummaryStream = isTask && isExecuting && taskPhase === "summary";
   const taskSummary = useSummaryStream({
     source: "task",
@@ -93,6 +97,11 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
     enabled: showTaskSummaryStream,
     maxLines: 5,
   });
+  // `useTask` collapses core's phase onto tools/summary, but the row still needs
+  // the live phase: a budget cutoff is NOT a natural finish, and only the live
+  // value can say which one this was (the subagent's own status is `completed`
+  // either way). Read it from the summary the parent handed down.
+  const stoppedByLimit = isTask && taskAgent?.taskPhase === "limit";
 
   const displayInput =
     toolInput === undefined || toolInput === null
@@ -132,6 +141,11 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
 
   const parenParts: string[] = [];
   if (inlineSummary) parenParts.push(inlineSummary);
+  // Budget cutoff: the only signal that separates it from a clean finish while the
+  // row is still live. `inlineSummary` carries the same word once core attaches the
+  // completed payload — this covers the window before the part settles, and every
+  // host that renders without the tool registry.
+  if (stoppedByLimit && !inlineSummary) parenParts.push("limit reached");
   if (showDuration) {
     parenParts.push(formatDuration(durationMs!));
   } else if (liveElapsedMs != null) {
