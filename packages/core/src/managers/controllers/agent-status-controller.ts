@@ -64,13 +64,19 @@ function applyChunkStatus(
   // Keep interactive pauses and user cancel sticky — leftover chunks must not resurrect "running".
   if (current === "waiting" || current === "awaiting_user" || current === "aborted") return;
 
+  // Each branch names the status its chunk implies and moves only when the agent
+  // is not already there. A run streams hundreds of reasoning/text chunks in a
+  // row, so re-setting the status it already has is not a transition: `setStatus`
+  // logs only real transitions but still re-emits the state/mode/interaction
+  // projections on every call, and recomputes the interaction snapshot (two full
+  // passes over the message list) with them.
   if (type === "TOOL_CALL_START") {
-    setStatus("running", "chunk:tool");
+    if (current !== "running") setStatus("running", "chunk:tool");
     return;
   }
 
   if (type === "REASONING_MESSAGE_CONTENT" || type === "REASONING_MESSAGE_START") {
-    setStatus("thinking", "chunk:reasoning");
+    if (current !== "thinking") setStatus("thinking", "chunk:reasoning");
     return;
   }
 

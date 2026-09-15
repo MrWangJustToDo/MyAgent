@@ -136,6 +136,50 @@ assert.equal(managed.status, "waiting");
 }
 
 {
+  // Chunk-driven transitions must only fire on a real change. A run streams
+  // hundreds of reasoning/text chunks in a row; re-setting the status they
+  // already imply is not a transition (`setStatus` logs only real transitions but
+  // re-emits the state/mode/interaction projections on every call).
+  let current = "running";
+  const setCalls = [];
+  const status = createAgentStatusController({
+    getStatus: () => current,
+    setStatus: (next) => {
+      current = next;
+      setCalls.push(next);
+    },
+    getError: () => "",
+    setError: () => {},
+    setPendingApprovalCount: () => {},
+  });
+
+  const reasoning = (i) => ({ type: "REASONING_MESSAGE_CONTENT", messageId: "m1", content: `t${i}`, delta: `t${i}` });
+
+  // First reasoning chunk: running → thinking (a real transition).
+  status.onStreamChunk(reasoning(0));
+  assert.equal(current, "thinking");
+  assert.deepEqual(setCalls, ["thinking"]);
+
+  // The rest of the reasoning stream is the same status — no setStatus at all.
+  for (let i = 1; i < 200; i++) status.onStreamChunk(reasoning(i));
+  assert.deepEqual(setCalls, ["thinking"], "repeated reasoning chunks must not re-set status");
+
+  // Text after reasoning: thinking → responding (a real transition), then silent.
+  const text = (i) => ({ type: "TEXT_MESSAGE_CONTENT", messageId: "m1", content: `x${i}`, delta: `x${i}` });
+  status.onStreamChunk(text(0));
+  assert.equal(current, "responding");
+  for (let i = 1; i < 200; i++) status.onStreamChunk(text(i));
+  assert.deepEqual(setCalls, ["thinking", "responding"], "repeated text chunks must not re-set status");
+
+  // A tool call still moves responding → running, then stays put on repeats.
+  const tool = () => ({ type: "TOOL_CALL_START", toolCallId: "t1", toolName: "read_file" });
+  status.onStreamChunk(tool());
+  assert.equal(current, "running");
+  for (let i = 0; i < 50; i++) status.onStreamChunk(tool());
+  assert.deepEqual(setCalls, ["thinking", "responding", "running"], "repeated tool chunks must not re-set status");
+}
+
+{
   let current = "running";
   const status = createAgentStatusController({
     getStatus: () => current,
