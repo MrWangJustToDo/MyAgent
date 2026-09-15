@@ -127,6 +127,17 @@ module.exports = [
       "import/no-unresolved": "off",
     },
   },
+  // `devtool/load.ts` dynamically imports this same directory, which resolves
+  // to the gitignored `devtool/index.js` that `init.mjs` downloads during the
+  // extension's `postinstall` (`wxt prepare && node init.mjs`). The file is
+  // absent on a fresh checkout and in CI, where install runs with
+  // `--ignore-scripts`, so the rule can never resolve it there.
+  {
+    files: ["packages/extension/devtool/load.ts"],
+    rules: {
+      "import/no-unresolved": "off",
+    },
+  },
   // Relax rules for packages/app — uses reactivity-store patterns where:
   // - getActions() returns stable refs (exhaustive-deps false positives)
   // - refs are read during render for perf optimization
