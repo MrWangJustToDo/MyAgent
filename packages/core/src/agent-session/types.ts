@@ -91,8 +91,14 @@ export interface AgentSessionSubagentSummary {
   /** Display label derived from spawn description when available. */
   description?: string;
   parentTaskToolCallId?: string;
-  /** Task-level phase machine (running → summary); see TaskRunState. */
-  taskPhase: "running" | "summary";
+  /**
+   * Task-level phase machine for the delegated run this row wraps
+   * (running → summary | limit); see TaskRunState. Absent for a non-task row.
+   * `limit` is a budget cutoff, NOT a natural finish — a row that ends there must
+   * not read as one (the subagent's own `status` is `completed` in both cases,
+   * because the run neither errored nor was cancelled).
+   */
+  taskPhase?: "running" | "summary" | "limit";
   usage?: UsageChangeSnapshot;
 }
 

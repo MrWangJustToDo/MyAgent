@@ -8,8 +8,15 @@ import assert from "node:assert/strict";
 
 import { TaskRunState } from "../dist/dev.mjs";
 
-const { beginTaskRun, clearTaskRuns, enterTaskSummaryPhase, getTaskRunState, readTaskRunPhase } =
-  await import("../dist/dev.mjs");
+const {
+  beginTaskRun,
+  clearTaskRuns,
+  enterTaskLimitPhase,
+  enterTaskPhase,
+  enterTaskSummaryPhase,
+  getTaskRunState,
+  readTaskRunPhase,
+} = await import("../dist/dev.mjs");
 
 // --- defaults ---
 
@@ -32,8 +39,37 @@ assert.equal(getTaskRunState(parent, "t1"), undefined);
   assert.equal(state.phase, "summary", "one-way: summary never reverts to running");
 }
 
-// --- registries are per-parent ---
+// --- limit is a distinct terminal phase ---
 
+{
+  // Straight from running: either terminal phase is reachable.
+  const p = {};
+  assert.equal(enterTaskLimitPhase(p, "a"), true);
+  assert.equal(readTaskRunPhase(p, "a"), "limit", "budget cutoff is its own phase, not summary");
+  const p2 = {};
+  assert.equal(enterTaskSummaryPhase(p2, "b"), true);
+  assert.equal(readTaskRunPhase(p2, "b"), "summary");
+}
+
+{
+  // A subagent can call `begin_summary` and STILL exhaust the budget before the run
+  // closes — the more specific `limit` wins, and reports the change.
+  const p = {};
+  assert.equal(enterTaskSummaryPhase(p, "t"), true);
+  assert.equal(enterTaskLimitPhase(p, "t"), true, "summary → limit is a real transition");
+  assert.equal(readTaskRunPhase(p, "t"), "limit");
+  assert.equal(enterTaskLimitPhase(p, "t"), false, "idempotent");
+}
+
+{
+  // `limit` is terminal: it never falls back to the less specific `summary`.
+  const p = {};
+  enterTaskLimitPhase(p, "t");
+  assert.equal(enterTaskSummaryPhase(p, "t"), false, "limit never downgrades to summary");
+  assert.equal(readTaskRunPhase(p, "t"), "limit");
+}
+
+// --- registries are per-parent ---
 {
   const parentA = {};
   const parentB = {};

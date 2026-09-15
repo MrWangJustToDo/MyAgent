@@ -13,7 +13,7 @@ import { buildExploreSystemPrompt } from "./explore-prompt.js";
 import { isProgressSummaryEligible, summarizeProgress } from "./progress-summary.js";
 import { captureStreamFinishReason, deriveSubagentRunStats, hasBeginSummaryCall } from "./run-stats.js";
 import { applySubagentCancelNotice, truncateSummary } from "./subagent-output.js";
-import { beginTaskRun, enterTaskSummaryPhase } from "./task-run-state.js";
+import { beginTaskRun, enterTaskPhase } from "./task-run-state.js";
 import { resolveSubagentBridgeUI, SUBAGENT_DEFAULT_MAX_ITERATIONS } from "./types.js";
 
 import type { SubagentConfig, SubagentResult } from "./types.js";
@@ -149,17 +149,19 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     const compactLabel = compactSummaryStream?.label;
     const compactEpoch = compactSummaryStream?.epoch;
 
-    /** One-way running → summary transition + telemetry (no-op once in summary). */
-    const enterSummaryPhase = () => {
+    /**
+     * One-way running → terminal transition + telemetry (no-op once in that phase).
+     * `limit` upgrades a phase that was already left at `summary`: a subagent can
+     * call `begin_summary` and still exhaust the budget before the run closes.
+     */
+    const enterPhase = (phase: "summary" | "limit") => {
       if (!parentTaskToolCallId) return;
-      if (enterTaskSummaryPhase(parentManaged, parentTaskToolCallId)) {
-        subagent.emitEvent(
-          "subagent:phase",
-          { subagentId, phase: "summary", parentTaskToolCallId },
-          { parentId: parentAgentId }
-        );
+      if (enterTaskPhase(parentManaged, parentTaskToolCallId, phase)) {
+        subagent.emitEvent("subagent:phase", { subagentId, phase, parentTaskToolCallId }, { parentId: parentAgentId });
       }
     };
+    /** `begin_summary` call site — the subagent is writing its own report. */
+    const enterSummaryPhase = () => enterPhase("summary");
 
     subagent.emitEvent("subagent:created", { subagentId }, { parentId: parentAgentId });
     subagent.emitEvent("subagent:started", { subagentId, description }, { parentId: parentAgentId });
@@ -305,10 +307,12 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       )
     ) {
       // Mirror generation into the task summary UI: the phase machine flips to
-      // `summary` and the hub reset switches the panel to its summary view;
-      // deltas stream live; end settles the view. Without this the report
-      // would only appear after the whole side-LLM pass finishes.
-      enterSummaryPhase();
+      // `limit` (NOT `summary` — the run was cut off by the budget, and the UI
+      // must not present the fallback report as a natural finish) and the hub
+      // reset switches the panel to its summary view; deltas stream live; end
+      // settles the view. Without this the report would only appear after the
+      // whole side-LLM pass finishes.
+      enterPhase("limit");
       const hub = parentTaskToolCallId ? parentManaged.summaryStreams : undefined;
       if (hub && parentTaskToolCallId) {
         hub.reset({ source: "task", toolCallId: parentTaskToolCallId });

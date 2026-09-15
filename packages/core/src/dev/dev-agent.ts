@@ -73,6 +73,8 @@ export { MAX_ACTIVE_TASK_PREFORKS, TaskPreforkCoordinator } from "../agent/subag
 export {
   beginTaskRun,
   clearTaskRuns,
+  enterTaskLimitPhase,
+  enterTaskPhase,
   enterTaskSummaryPhase,
   getTaskRunState,
   readTaskRunPhase,

@@ -221,8 +221,12 @@ export type AgentEventPayloadMap = {
   };
   "subagent:phase": {
     subagentId?: string;
-    /** Task-level phase: running (exploring) or summary (report streaming). */
-    phase?: "running" | "summary";
+    /**
+     * Task-level phase: running (exploring), summary (the subagent is writing its
+     * own report), or limit (budget cutoff; the progress-summary fallback is
+     * writing the report instead).
+     */
+    phase?: "running" | "summary" | "limit";
     parentTaskToolCallId?: string;
   };
   "subagent:progress-summary-error": {

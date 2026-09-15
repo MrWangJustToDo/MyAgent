@@ -80,6 +80,16 @@ export function getInlineSummary(part: ToolCallPart, toolName: string): string |
       if (!results) return null;
       return results.length === 0 ? "no results" : `${results.length} result${results.length !== 1 ? "s" : ""}`;
     }
+    case "task": {
+      // A delegated run that was cut short must not read as a clean finish on the
+      // row: the parent's result distinguishes a budget cutoff (`reachedLimit`)
+      // from a stall (`incomplete` without a limit) from a natural end. Mirrors
+      // the wording of `formatTaskOutput` so the row and the detailed block agree.
+      if (output.aborted === true) return "cancelled";
+      if (output.reachedLimit === true) return "limit reached";
+      if (output.incomplete === true) return "stalled";
+      return null;
+    }
     case "webfetch": {
       const truncated = output.truncated === true;
       const contentType = typeof output.contentType === "string" ? output.contentType : null;

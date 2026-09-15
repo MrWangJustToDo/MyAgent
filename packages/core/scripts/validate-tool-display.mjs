@@ -259,6 +259,50 @@ assert.equal(core.computeToolDisplay("memory_write", { ok: false }), undefined, 
 
 console.log("validate-tool-display: lifecycle + failure shapes ok");
 
+// --- 11b. a cut-off task must not summarize as a clean finish -----------------
+// The subagent's own status is `completed` for both a natural end and a budget
+// cutoff, so the row summary is the only place the difference can show up. `task`
+// carries `reachedLimit` / `incomplete` / `aborted`, and each must surface.
+const limitDisplay = core.computeToolDisplay("task", {
+  summary: "partial findings",
+  iterations: 50,
+  reachedLimit: true,
+  incomplete: true,
+  aborted: false,
+  truncated: false,
+});
+assert.equal(limitDisplay?.summary, "limit reached", "a budget cutoff is not a clean finish");
+
+const stalledDisplay = core.computeToolDisplay("task", {
+  summary: "partial findings",
+  reachedLimit: false,
+  incomplete: true,
+  aborted: false,
+});
+assert.equal(stalledDisplay?.summary, "stalled", "an incomplete run without a limit is a stall");
+
+const cancelledDisplay = core.computeToolDisplay("task", {
+  summary: "cancelled by user",
+  reachedLimit: false,
+  incomplete: false,
+  aborted: true,
+});
+assert.equal(cancelledDisplay?.summary, "cancelled", "a cancelled run reads as cancelled");
+
+// A clean run adds no status word (usage/iterations are rendered elsewhere).
+assert.equal(
+  core.computeToolDisplay("task", {
+    summary: "found it",
+    reachedLimit: false,
+    incomplete: false,
+    aborted: false,
+  }),
+  undefined,
+  "a clean task run carries no status summary"
+);
+
+console.log("validate-tool-display: cut-off task summary ok");
+
 // --- 12. hydration fidelity --------------------------------------------------
 // `hasText` is what keeps a text-only tool's row alive (`keepRow || clientSide || text`), so it
 // must survive adoption even though the renderer itself cannot.
