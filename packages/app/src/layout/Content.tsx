@@ -2,7 +2,6 @@ import { StaticRender } from "ink";
 import { Fragment, memo, type JSX } from "react";
 
 import { useSize } from "../hooks";
-import { useDiffRenderer } from "../hooks/use-diff-renderer";
 import { useDynamic } from "../hooks/use-dynamic";
 import { useInit } from "../hooks/use-init";
 import { useStatic } from "../hooks/use-static";
@@ -12,38 +11,40 @@ import { useWorkspaceInfo } from "../hooks/use-workspace-info";
 export const Content = memo(() => {
   const loading = useInit((s) => s.loading);
 
-  const { head, list, listSet, headerSet, toolCallsSignature } = useStatic((s) => ({
-    list: s.list,
-    listSet: s.listSet,
-    headerSet: s.headerSet,
-    head: s.header,
-    toolCallsSignature: s.toolCallsSignature,
-  }));
-
-  const theme = useTheme((s) => s.theme);
+  // Individual rows arrive already cached: each is its own `<StaticRender>` leaf built by
+  // `MessageList`, so nothing here re-caches them. Depending on a transcript-wide tool
+  // signature is what used to pin every row to every other row's updates — it is gone.
+  // `list` and `head` are replaced (never mutated) by their setters, so identity is a
+  // sufficient change signal here.
+  const { head, list, headerSet } = useStatic((s) => ({ list: s.list, head: s.header, headerSet: s.headerSet }));
 
   const hasPath = useWorkspaceInfo((s) => s.workspaceInfo.path);
 
-  const mode = useDiffRenderer((s) => s.mode + s.key);
-
-  const { dynamicList, dynamicKey } = useDynamic((s) => ({ dynamicList: s.list, dynamicKey: s.key }));
+  const dynamicList = useDynamic((s) => s.list);
 
   const width = useSize((s) => s.state.screenWidth);
+  const theme = useTheme((s) => s.theme);
 
   const typedList = list as JSX.Element[];
-
-  const validList = [head, ...typedList].filter(Boolean);
 
   if (!hasPath) return null;
 
   return (
     <Fragment key={String(loading)}>
-      <StaticRender
-        width={width}
-        deps={[loading, width, validList.length, listSet, headerSet, dynamicKey, toolCallsSignature, theme, mode]}
-      >
-        {() => validList}
-      </StaticRender>
+      {/*
+       * The welcome panel is its own cache unit, rendered from outside the transcript's row
+       * budget. It must always be visible: the budget is counted in rendered LINES, so a tall
+       * enough transcript would otherwise be able to push the panel — which is the user's
+       * orientation (workspace, git, remote planes) — out of the kept region. `headerSet` is
+       * the header's own change signal (`Header` republishes on git/workspace/width changes),
+       * so this re-caches on real changes instead of on every repaint.
+       */}
+      {head ? (
+        <StaticRender key="header" width={width} deps={[headerSet, width, theme]}>
+          {() => head}
+        </StaticRender>
+      ) : null}
+      {typedList}
       {dynamicList}
     </Fragment>
   );
