@@ -105,6 +105,9 @@ export async function buildManagedAgent({
         : docResult.content;
       managed.setAgentDocContent(instructions, docResult.source);
     }
+    // One-time gate for the session-retrieval section (root agents only, like the
+    // agent doc): whether past conversations exist to point the model at.
+    await managed.primeSessionHistoryGate();
     // A broken `@` reference would otherwise be invisible: the file loads fine,
     // just without the imported content. Surface it.
     for (const notice of docResult.importNotices) {

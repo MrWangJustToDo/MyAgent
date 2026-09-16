@@ -68,34 +68,30 @@ export function stripCompactArchiveSections(text: string): string {
 /**
  * Format the summary section listing all known compact archives for this session.
  *
- * Paths are listed oldest → newest. Guidance steers the agent to grep newest first
- * so it knows which file holds the most recently compacted details.
+ * Holds **path data plus scope only** — no guidance for how to search archives.
+ * That lives in the session-retrieval turn-context section, the single place usage
+ * instructions belong: the copy that used to sit here had already drifted from the
+ * archive header's copy, and neither could be corrected for archives already on
+ * disk.
+ *
+ * The list stays attached to the summary because it is the summary's natural
+ * neighbour — the summary states which turns were compacted, this states where they
+ * went. The scope line is required: this list is current-session only, while the
+ * retrieval section covers all sessions, and the two must not be conflated.
+ *
+ * Paths are listed oldest → newest.
  */
 export function formatCompactArchivesSection(paths: string[]): string {
   if (paths.length === 0) return "";
 
-  const newest = paths[paths.length - 1]!;
   const list = paths
     .map((path, index) => {
-      const suffix = index === paths.length - 1 ? " ← newest slice (search here first for recent details)" : "";
+      const suffix = index === paths.length - 1 ? " ← newest slice" : "";
       return `- \`${path}\`${suffix}`;
     })
     .join("\n");
 
-  return `
-
-## Compact archives
-
-Cold storage for compacted turns — details live in these files, not duplicated in the summary body above.
-
-- Filenames are compact-N.md (N=1 earliest; higher N = later slices).
-- Missing a detail? Grep **newest → oldest** (start with \`${newest}\`). Prefer the highest N for work done just before the latest compaction.
-- Use grep or small offset/limit \`read_file\` reads. Do **not** load whole archive files into context.
-- Cite the archive path when looking something up; do not paste large archive excerpts back into the conversation.
-
-File shape: short header (\`session\`, \`sequence\`, \`timestamp\`, \`cutIndex\`) then a plain-text transcript (\`[User]\` / \`[Assistant]\` / tool calls / truncated tool results).
-
-${list}`;
+  return `\n\n## Compact archives\n\nThis session's compacted turns, oldest → newest (current session only — other sessions' history is covered by the \`session_retrieval\` turn-context section):\n\n${list}`;
 }
 
 /**
@@ -110,6 +106,15 @@ export function parseCompactSequence(filename: string): number | null {
 
 /**
  * Build markdown archive body (header + serialized conversation).
+ */
+/**
+ * Build an archive as a self-describing artifact: metadata header, then the body.
+ *
+ * Deliberately carries no guidance about how to search or read it. A model only
+ * opens an archive after following the session-retrieval turn-context guidance,
+ * so repeating "prefer grep / do not load this file" here would contradict the
+ * action it just took — and as prose frozen at write time it could never be
+ * revised for archives already on disk.
  */
 export function buildCompactArchiveMarkdown(options: {
   sessionId: string;
@@ -126,8 +131,6 @@ export function buildCompactArchiveMarkdown(options: {
 - sequence: ${options.sequence}
 - timestamp: ${timestamp}
 - cutIndex: ${options.cutIndex}
-
-> Prefer grep (or small offset/limit reads). Do not load this entire transcript into context.
 
 ---
 

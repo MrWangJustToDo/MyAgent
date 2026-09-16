@@ -37,6 +37,7 @@ import {
   readInstructionContextState,
   type InstructionContextState,
 } from "../agent/turn-context/instruction-context.js";
+import { formatSessionRetrievalSection, hasSessionHistory } from "../agent/turn-context/session-retrieval.js";
 import { type TurnContextSection } from "../agent/turn-context/turn-context-message.js";
 import { generateId } from "../utils/generate-id.js";
 
@@ -370,6 +371,12 @@ export class ManagedAgent {
   private instructionContextState: InstructionContextState | undefined;
   /** Once an instruction change is detected, keep re-injecting (stable payload). */
   private instructionContextActive = false;
+  /**
+   * Whether the workspace had conversation history when this agent was created.
+   * Evaluated once: the retrieval section must be byte-stable across turns, so it
+   * cannot be re-probed per turn (a new session would flip it and re-inject).
+   */
+  private sessionHistoryPresent = false;
 
   constructor(
     config: ManagedAgentConfig,
@@ -1003,6 +1010,18 @@ export class ManagedAgent {
     this.agentDocSource = source ?? "";
   }
 
+  /**
+   * Evaluate the session-history gate once, at agent creation.
+   *
+   * Deliberately not re-evaluated per turn: the retrieval section is injected by
+   * hash, so a workspace gaining its first session mid-conversation would flip the
+   * gate, change the hash, and re-inject the whole block. Called only for root
+   * agents (see `agent-factory`), matching `setAgentDocContent`.
+   */
+  async primeSessionHistoryGate(): Promise<void> {
+    this.sessionHistoryPresent = await hasSessionHistory();
+  }
+
   getAgentDocContent(): string {
     return this.agentDocContent;
   }
@@ -1177,6 +1196,14 @@ export class ManagedAgent {
     // system prompt already carries the initial content).
     const instructionContext = await this.readChangedInstructionContext();
 
+    // Retrieval guidance is static and gated on history existing. The gate is
+    // evaluated once (see `primeSessionHistoryGate`) rather than per turn: a
+    // workspace gaining its first session must not change this section's hash.
+    // This session's own archive paths are omitted on purpose — the compaction
+    // summary already appends them, so naming them here would re-inject the whole
+    // block on every compaction.
+    const sessionRetrieval = formatSessionRetrievalSection({ hasHistory: this.sessionHistoryPresent });
+
     const sections = buildTurnContextSections({
       relevantMemoryContent: this.memory.getRelevantContent(),
       todoNagReminder,
@@ -1184,6 +1211,7 @@ export class ManagedAgent {
       gitBranch,
       gitStatus,
       modeContent,
+      sessionRetrieval,
       extensionTurnContextSections: this.pendingExtensionTurnContextSections,
       instructionContext,
     });

@@ -26,3 +26,14 @@ export {
   readInstructionContextState,
 } from "./instruction-context.js";
 export type { InstructionContextState, InstructionFile, LoadedInstructionContent } from "./instruction-context.js";
+
+export {
+  SESSION_RETRIEVAL_CLOSE,
+  SESSION_RETRIEVAL_KIND,
+  SESSION_RETRIEVAL_OPEN,
+  formatSessionRetrievalSection,
+  renderStaticRetrievalBody,
+  hasSessionHistory,
+  listCompactArchives,
+} from "./session-retrieval.js";
+export type { SessionRetrievalSection } from "./session-retrieval.js";

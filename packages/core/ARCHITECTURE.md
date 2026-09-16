@@ -700,6 +700,16 @@ its notices, so editing an `@`-imported file re-injects the block; the byte budg
 counted in bytes and truncation is surfaced. Validate: `validate:instruction-imports`,
 `validate:instruction-context`, `validate:instruction-budget`.
 
+**Session-retrieval guidance** (`agent/turn-context/session-retrieval.ts`): the single source of
+truth for how the model reaches past conversation, emitted as `<ctx kind=session_retrieval>`.
+Gated on workspace history existing, evaluated **once per agent** so the section stays
+byte-stable (a per-turn probe would flip on the first new session and re-inject); the body is
+static with no counts for the same reason. Root agents only — the kind is deliberately absent
+from `SUBAGENT_ALLOWED_KINDS`. Usage guidance is not duplicated elsewhere: the compaction
+summary's `## Compact archives` block carries this session's paths plus a scope line, and the
+archive header is self-describing metadata only. Validate: `validate:session-retrieval`,
+`validate:compact-archive`.
+
 **Provider cache wiring** (`prompt-cache-middleware`, `models/prompt-cache.ts`):
 
 | Style                                 | Behavior                                                                                                                                        |

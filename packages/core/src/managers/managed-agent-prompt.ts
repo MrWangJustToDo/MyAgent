@@ -1,3 +1,4 @@
+import { SESSION_RETRIEVAL_KIND } from "../agent/turn-context/session-retrieval.js";
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/cache/prompt-cache.js";
 
 import type { AgentConfig } from "./agent-types.js";
@@ -56,6 +57,9 @@ export interface DynamicTurnContextInput {
   extensionTurnContextSections?: ExtensionTurnContextSection[];
   /** Instruction-context re-injection (nested under `<instruction_context>`). */
   instructionContext?: string;
+  /** Session-retrieval guidance — where past conversations live and how to read
+   *  each shape. Absent when the workspace has no history to search. */
+  sessionRetrieval?: string;
 }
 
 /**
@@ -94,6 +98,10 @@ export function buildTurnContextSections(input: DynamicTurnContextInput): TurnCo
 
   if (input.instructionContext?.trim()) {
     sections.push({ key: "instruction_context", content: input.instructionContext.trim() });
+  }
+
+  if (input.sessionRetrieval?.trim()) {
+    sections.push({ key: SESSION_RETRIEVAL_KIND, content: input.sessionRetrieval.trim() });
   }
 
   if (input.extensionTurnContextSections) {

@@ -192,6 +192,13 @@ export {
 } from "../agent/turn-context";
 export type { InstructionContextState, InstructionFile, LoadedInstructionContent } from "../agent/turn-context";
 export {
+  SESSION_RETRIEVAL_KIND,
+  formatSessionRetrievalSection,
+  renderStaticRetrievalBody,
+  hasSessionHistory,
+  listCompactArchives,
+} from "../agent/turn-context";
+export {
   MAX_INSTRUCTION_IMPORT_DEPTH,
   expandInstructionImports,
   findCodeRegions,

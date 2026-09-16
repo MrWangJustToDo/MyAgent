@@ -43,18 +43,32 @@ assert.match(markdown, /sequence: 3/);
 assert.match(markdown, /cutIndex: 4/);
 assert.match(markdown, /\[User\]: Investigate login bug/);
 
+// The archive is self-describing: metadata then body, with no usage guidance.
+// Guidance lives in the `session_retrieval` turn-context section; a copy here
+// would be frozen at write time and could never be revised for archives already
+// on disk — which is exactly how the previous copy drifted.
+assert.match(markdown, /^# Compact archive\n/);
+for (const banned of [/prefer grep/i, /do not load/i, /offset\/limit/i, /newest/i]) {
+  assert.doesNotMatch(markdown, banned, `archive header must not carry usage guidance (${banned})`);
+}
+
 const section = formatCompactArchivesSection([
   ".agents/transcripts/ses_test/compact-1.md",
   ".agents/transcripts/ses_test/compact-2.md",
 ]);
 assert.match(section, /## Compact archives/);
-assert.match(section, /Cold storage for compacted turns/);
-assert.match(section, /newest → oldest/);
-assert.match(section, /File shape:/);
 assert.match(section, /compact-1\.md/);
 assert.match(section, /compact-2\.md/);
 assert.match(section, /newest slice/);
-assert.match(section, /Do \*\*not\*\* load whole archive files/);
+// Scope is stated so the list is not mistaken for the cross-session guidance.
+assert.match(section, /current session only/i);
+assert.match(section, /session_retrieval/);
+
+// Path data only — no usage prose. Re-adding it fails here on purpose: duplicated
+// guidance aging at different rates is the drift this design removes.
+for (const banned of [/newest → oldest/i, /File shape:/i, /do not load/i, /prefer grep/i, /offset\/limit/i]) {
+  assert.doesNotMatch(section, banned, `summary list must not carry usage guidance (${banned})`);
+}
 
 // Instructional prose must not be mistaken for real archive paths on the next compact.
 assert.deepEqual(extractCompactArchivePaths(section), [
