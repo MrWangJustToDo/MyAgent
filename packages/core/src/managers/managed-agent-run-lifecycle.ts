@@ -119,11 +119,14 @@ export function finalizeManagedAgentRun(
   host.clearTurnContext();
   if (reason === "finished") {
     host.memory.runExtraction({
-      agentId: host.id,
       getMessagesForLLM: () => host.getMessagesForLLM(),
       log: host.log,
-      manager,
+      resolveTextAdapter: host.resolveTextAdapter,
       emitEvent: (type, data) => host.emitEvent(type, data),
+      // Let abort interrupt the extraction / consolidation queries. By finalize
+      // time the run's own controller is gone, so this mirrors whatever the
+      // in-flight run had (undefined once the turn has settled).
+      abortSignal: host.run.currentAbortController?.signal,
     });
   }
   host.emitEvent("agent:stop", { reason });

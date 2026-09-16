@@ -4,40 +4,49 @@
  * After each agent turn, this module analyzes recent conversation messages
  * and extracts new memories (user preferences, project facts, feedback).
  *
- * Uses the same subagent pattern as compaction summarization:
- * - No tools (pure extraction task)
- * - Single iteration
- * - Serialized conversation input (prevents tool-call contamination)
+ * Both operations are one-shot structured queries against a Zod contract:
+ * the schema is sent as the provider's output schema and validates the reply,
+ * so a text-shaped response can never be mistaken for a valid one and no
+ * pattern-matching recovery is needed.
  *
  * @example
  * ```typescript
- * const count = await extractMemories(messages, memoryManager, "agent-123", manager);
+ * const count = await extractMemories(messages, memoryManager, textAdapter, log);
  * // Returns number of newly extracted memories
  *
- * await consolidateMemories(memoryManager, "agent-123", manager);
+ * await consolidateMemories(memoryManager, textAdapter, log);
  * // Merges/deduplicates when threshold exceeded
  * ```
  */
 
-import { extractTextFromContent } from "../compaction/message-utils.js";
-import { runSubagent } from "../subagent/run-subagent.js";
+import { z } from "zod";
 
-import { DEFAULT_HARD_MAX_MEMORIES, MEMORY_TYPES } from "./types.js";
+import { runSideTextQuery } from "../../models/adapter/side-text-query.js";
+import { extractTextFromContent } from "../compaction/message-utils.js";
+
+import { DEFAULT_HARD_MAX_MEMORIES, memoryTypeSchema } from "./types.js";
 
 import type { MemoryManager } from "./memory-manager.js";
-import type { Memory, MemoryType } from "./types.js";
-import type { AgentManager } from "../../runtime-types/hosts.js";
+import type { Memory } from "./types.js";
+import type { TextAdapterConfig } from "../../models/adapter/adapter-factory.js";
+import type { AgentLog } from "../agent-log/agent-log.js";
 import type { ModelMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-/** Max output length (chars) for the memory-extraction subagent (compact JSON array). */
-export const MEMORY_EXTRACT_MAX_OUTPUT_LENGTH = 2000;
+/** Max output tokens for the extraction query (compact JSON array). */
+const MEMORY_EXTRACT_MAX_TOKENS = 2000;
 
-/** Max output length (chars) for the memory-consolidation subagent (merge/delete JSON). */
-export const MEMORY_CONSOLIDATE_MAX_OUTPUT_LENGTH = 8000;
+/** Max output tokens for the consolidation query (merge/delete JSON). */
+const MEMORY_CONSOLIDATE_MAX_TOKENS = 4000;
+
+/**
+ * Upper bound on accepted extraction entries — a guard against a runaway
+ * response, applied after validation rather than by truncating the payload.
+ */
+const MAX_EXTRACTED_ENTRIES = 20;
 
 const EXTRACTION_SYSTEM_PROMPT = `You are a memory extraction assistant. Your role is to identify and extract \
 durable knowledge from conversation transcripts that should be remembered across sessions.
@@ -56,7 +65,7 @@ Rules:
 - Keep descriptions concise (one line)
 - Keep body content focused and specific
 - Use kebab-case for names (e.g., "user-prefers-tabs")
-- Return a JSON array; use [] only when the dialogue truly has nothing durable`;
+- Return an empty list only when the dialogue truly has nothing durable`;
 
 const CONSOLIDATION_SYSTEM_PROMPT = `You are a memory consolidation assistant. Your role is to merge, \
 deduplicate, and clean up a collection of memory entries.
@@ -72,23 +81,14 @@ Rules:
 5. Keep descriptions concise (one line).
 6. Use kebab-case for names.
 
-Return a JSON object:
-{
-  "merged": [
-    { "name": "...", "type": "user|feedback|project|reference", "description": "...", "body": "...",
-      "replaces": ["filename1.md", "filename2.md"],
-      "importance": 0.9, "expiresAt": "2026-12-31T00:00:00.000Z" }
-  ],
-  "deleted": ["filename3.md", "filename4.md"]
-}
-
+Field notes:
 - "merged": new memories that replace 2+ source files listed in "replaces".
   Write the full merged body yourself based on the descriptions.
 - "importance" (optional): 0–1 weight for the merged entry; omit to keep default.
 - "expiresAt" (optional): ISO expiry; omit unless the merged topic is time-bound.
 - "deleted": files to remove outright (outdated/contradicted).
 - Files not mentioned in either list are kept as-is.
-- If no changes needed, return { "merged": [], "deleted": [] }.`;
+- If no changes are needed, return empty "merged" and "deleted" lists.`;
 
 /** Number of recent messages to analyze for extraction */
 const EXTRACTION_WINDOW = 30;
@@ -98,6 +98,76 @@ const MAX_EXTRACTION_CHARS = 12000;
 
 /** Maximum characters of the lightweight catalog (frontmatter only) sent for consolidation */
 const MAX_CONSOLIDATION_CATALOG_CHARS = 20000;
+
+// ============================================================================
+// Model contracts
+// ============================================================================
+
+/**
+ * An importance outside 0–1 is dropped rather than rejected: the value is a
+ * hint the model adds voluntarily, and failing the whole entry over it would
+ * throw away a perfectly good memory.
+ *
+ * `.optional()` sits outside the transform so the field stays optional in both
+ * the input and the output shape — otherwise the port's input-derived type and
+ * the schema's output type disagree on whether the key is required.
+ */
+const importanceSchema = z
+  .number()
+  .min(0)
+  .max(1)
+  .transform((value) => Math.round(value * 100) / 100)
+  .optional()
+  .catch(undefined);
+
+/**
+ * An unparseable expiry is dropped for the same reason as importance. A
+ * parseable one is normalized to ISO so the frontmatter writer sees one format.
+ */
+const expiresAtSchema = z
+  .string()
+  .transform((value) => {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? undefined : new Date(parsed).toISOString();
+  })
+  .optional()
+  .catch(undefined);
+
+/**
+ * One extracted memory.
+ *
+ * `type` is validated against the known set rather than defaulted, so a model
+ * that invents a fifth type is rejected instead of silently filed as `user`
+ * (the old code substituted `"user"` for anything unrecognized).
+ */
+const extractedMemorySchema = z.object({
+  name: z.string().min(1),
+  type: memoryTypeSchema,
+  description: z.string().min(1),
+  body: z.string().min(1),
+  importance: importanceSchema,
+  expiresAt: expiresAtSchema,
+});
+
+/**
+ * Extraction returns a bare array, so the schema does too — the provider's
+ * structured output is an array, not an object wrapper.
+ *
+ * An entry missing a required field invalidates the whole response, which the
+ * caller turns into "zero new memories": a memory with an empty body is not
+ * worth a repair attempt, and partial recovery is what the old ad-hoc checks did.
+ */
+const extractionSchema = z.array(extractedMemorySchema);
+
+const mergedMemorySchema = extractedMemorySchema.extend({
+  replaces: z.array(z.string()).catch([]).optional(),
+});
+
+/** Consolidation decisions: which entries to fold together, which to drop. */
+const consolidationSchema = z.object({
+  merged: z.array(mergedMemorySchema).catch([]).optional(),
+  deleted: z.array(z.string()).catch([]).optional(),
+});
 
 // ============================================================================
 // Conversation Serialization
@@ -123,33 +193,32 @@ function serializeForExtraction(messages: ModelMessage[]): string {
 // Memory Extraction
 // ============================================================================
 
-interface ExtractedMemory {
-  name: string;
-  type: MemoryType;
-  description: string;
-  body: string;
-  /** Optional relevance weight (0–1) set by the extractor. */
-  importance?: number;
-  /** Optional ISO expiry timestamp set by the extractor. */
-  expiresAt?: string;
-}
+type ExtractedMemory = z.infer<typeof extractedMemorySchema>;
+type ConsolidationDecisions = z.infer<typeof consolidationSchema>;
 
 /**
  * Extract new memories from recent conversation messages.
  *
- * Uses a subagent to analyze the last N messages and identify
- * new user preferences, project facts, and feedback.
+ * Runs one structured side query against {@link extractionSchema}; the schema is
+ * both the request contract and the response validator, so there is no JSON
+ * recovery step and no field-by-field repair afterwards.
+ *
+ * A failure (transport or schema) yields zero new memories — extraction is
+ * opportunistic background work and must never disturb the turn.
  *
  * @param messages - Full conversation messages
  * @param memoryManager - MemoryManager instance for reading existing + writing new
- * @param parentAgentId - Parent agent ID for spawning subagent
+ * @param textAdapter - Text adapter for the extraction query
+ * @param log - Optional agent log for failure visibility
+ * @param abortSignal - Aborts the query when the triggering turn is cancelled
  * @returns Number of newly extracted memories
  */
 export async function extractMemories(
   messages: ModelMessage[],
   memoryManager: MemoryManager,
-  parentAgentId: string,
-  manager: AgentManager
+  textAdapter: TextAdapterConfig,
+  log?: AgentLog,
+  abortSignal?: AbortSignal
 ): Promise<number> {
   // Take only recent messages
   const recentMessages = messages.slice(-EXTRACTION_WINDOW);
@@ -161,13 +230,11 @@ export async function extractMemories(
   const existing = await memoryManager.listMemories();
   const existingDesc = existing.length > 0 ? existing.map((m) => `- ${m.name}: ${m.description}`).join("\n") : "(none)";
 
-  const validTypes = MEMORY_TYPES.join(", ");
-
   const prompt = [
     "Extract user preferences, constraints, or project facts from this dialogue.",
-    `Return a JSON array. Each item: {name, type, description, body, importance?, expiresAt?}.`,
+    "Each entry needs: name, type, description, body, and optionally importance and expiresAt.",
     `- name: short kebab-case identifier (e.g. "user-preference-tabs")`,
-    `- type: one of ${validTypes}`,
+    `- type: one of ${memoryTypeSchema.options.join(", ")}`,
     "- description: one-line summary for index lookup",
     "- body: full detail in markdown",
     "- importance (optional): number 0–1 rating how valuable this memory is across",
@@ -175,48 +242,38 @@ export async function extractMemories(
     "  facts; 0.3–0.6 for moderately useful details; omit for typical entries.",
     "- expiresAt (optional): ISO timestamp when this memory stops being relevant",
     "  (e.g. a temporary constraint or a deprecation date). Omit for durable memories.",
-    "If nothing new or already covered by existing memories, return [].",
+    "If nothing new or already covered by existing memories, return an empty list.",
     "",
     `Existing memories:\n${existingDesc}`,
     "",
     `Dialogue:\n${dialogue.slice(0, MAX_EXTRACTION_CHARS)}`,
   ].join("\n");
 
-  const result = await runSubagent(
-    {
-      prompt,
-      parentAgentId,
+  let produced: unknown;
+  try {
+    const { data } = await runSideTextQuery(textAdapter, {
       systemPrompt: EXTRACTION_SYSTEM_PROMPT,
-      tools: {},
-      maxIterations: 1,
-      maxOutputLength: MEMORY_EXTRACT_MAX_OUTPUT_LENGTH,
-      autoDestroy: true,
-      aggregateUsageToParent: true,
-      description: "memory-extract",
-      bridgeUI: false,
-    },
-    { manager }
-  );
+      userPrompt: prompt,
+      maxOutputTokens: MEMORY_EXTRACT_MAX_TOKENS,
+      abortSignal,
+      log,
+      schema: extractionSchema,
+    });
+    produced = data;
+  } catch {
+    // Transport and schema failures both land here. The port has already logged
+    // the reason; an abort is expected, not a fault, so neither is re-reported.
+    return 0;
+  }
 
-  // Parse JSON array from response
-  const items = parseJsonArray(result.output);
-  if (!items || items.length === 0) return 0;
-
+  const items = produced as ExtractedMemory[];
   let count = 0;
-  for (const item of items) {
-    const mem = item as Partial<ExtractedMemory>;
-    const name = typeof mem.name === "string" ? mem.name : "";
-    const type = isValidMemoryType(mem.type) ? mem.type : "user";
-    const description = typeof mem.description === "string" ? mem.description : "";
-    const body = typeof mem.body === "string" ? mem.body : "";
-
-    if (name && description && body) {
-      await memoryManager.writeMemory(name, type, description, body, {
-        importance: parseImportance(mem.importance),
-        expiresAt: parseExpiresAt(mem.expiresAt),
-      });
-      count++;
-    }
+  for (const item of items.slice(0, MAX_EXTRACTED_ENTRIES)) {
+    await memoryManager.writeMemory(item.name, item.type, item.description, item.body, {
+      importance: item.importance,
+      expiresAt: item.expiresAt,
+    });
+    count++;
   }
 
   return count;
@@ -246,13 +303,14 @@ export interface ConsolidationResult {
  *    under the cap.
  *
  * @param memoryManager - MemoryManager instance
- * @param parentAgentId - Parent agent ID for spawning subagent
+ * @param textAdapter - Text adapter for the consolidation query
+ * @param log - Optional agent log for failure visibility
  * @returns Consolidation result with changed flag and final count
  */
 export async function consolidateMemories(
   memoryManager: MemoryManager,
-  parentAgentId: string,
-  manager: AgentManager
+  textAdapter: TextAdapterConfig,
+  log?: AgentLog
 ): Promise<ConsolidationResult> {
   const memories = await memoryManager.listMemories();
   if (memories.length < memoryManager.getConsolidateThreshold()) {
@@ -262,7 +320,7 @@ export async function consolidateMemories(
   // Phase 1: LLM consolidation via lightweight catalog (frontmatter only).
   // This avoids the token-truncation problem where sending full bodies would
   // exceed the context and cause the LLM to only see a subset of memories.
-  const llmChanged = await llmConsolidate(memories, memoryManager, parentAgentId, manager);
+  const llmChanged = await llmConsolidate(memories, memoryManager, textAdapter, log);
 
   // Phase 2: Hard-cap eviction. If LLM consolidation didn't reduce enough,
   // evict oldest memories by updatedAt to stay under the hard limit.
@@ -277,13 +335,14 @@ export async function consolidateMemories(
 /**
  * Phase 1: LLM-driven consolidation using a lightweight frontmatter-only catalog.
  *
- * Returns true if any files were written or deleted.
+ * Returns true if any files were written or deleted. A failure (transport or
+ * schema) returns false, leaving every existing memory untouched.
  */
 async function llmConsolidate(
   memories: Memory[],
   memoryManager: MemoryManager,
-  parentAgentId: string,
-  manager: AgentManager
+  textAdapter: TextAdapterConfig,
+  log?: AgentLog
 ): Promise<boolean> {
   // Build a lightweight catalog: filename + name + type + description (no body).
   // 59 memories × ~80 chars each ≈ 5KB — well within token limits.
@@ -296,44 +355,43 @@ async function llmConsolidate(
     catalog.slice(0, MAX_CONSOLIDATION_CATALOG_CHARS),
   ].join("\n");
 
-  const result = await runSubagent(
-    {
-      prompt,
-      parentAgentId,
+  let decisions: ConsolidationDecisions;
+  try {
+    const { data } = await runSideTextQuery(textAdapter, {
       systemPrompt: CONSOLIDATION_SYSTEM_PROMPT,
-      tools: {},
-      maxIterations: 1,
-      maxOutputLength: MEMORY_CONSOLIDATE_MAX_OUTPUT_LENGTH,
-      autoDestroy: true,
-      aggregateUsageToParent: true,
-      description: "memory-consolidate",
-      bridgeUI: false,
-    },
-    { manager }
-  );
+      userPrompt: prompt,
+      maxOutputTokens: MEMORY_CONSOLIDATE_MAX_TOKENS,
+      log,
+      schema: consolidationSchema,
+    });
+    decisions = data as ConsolidationDecisions;
+  } catch {
+    // The port logged the reason. Reporting "no change" keeps the existing
+    // memories exactly as they are rather than half-applying a failed response.
+    return false;
+  }
 
-  const decisions = parseConsolidationResponse(result.output);
-  if (!decisions) return false;
-
+  const merged = decisions.merged ?? [];
+  const deleted = decisions.deleted ?? [];
   let changed = false;
   const allReplaced = new Set<string>();
   const allDeleted = new Set<string>();
 
   // Write merged memories
-  for (const merge of decisions.merged) {
+  for (const merge of merged) {
     if (!merge.name || !merge.description || !merge.body) continue;
     await memoryManager.writeMemory(merge.name, merge.type, merge.description, merge.body, {
       importance: merge.importance,
       expiresAt: merge.expiresAt,
     });
-    for (const f of merge.replaces) {
+    for (const f of merge.replaces ?? []) {
       allReplaced.add(f);
     }
     changed = true;
   }
 
   // Collect deletions
-  for (const f of decisions.deleted) {
+  for (const f of deleted) {
     allDeleted.add(f);
   }
 
@@ -389,103 +447,4 @@ async function evictOldest(memories: Memory[], memoryManager: MemoryManager): Pr
     await memoryManager.deleteMemory(m.filename);
   }
   return toEvict.length;
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-interface ConsolidationDecisions {
-  merged: Array<{
-    name: string;
-    type: MemoryType;
-    description: string;
-    body: string;
-    replaces: string[];
-    /** Optional importance (0–1) for the merged memory. */
-    importance?: number;
-    /** Optional ISO expiry timestamp for the merged memory. */
-    expiresAt?: string;
-  }>;
-  deleted: string[];
-}
-
-/**
- * Parse the LLM's consolidation response.
- *
- * Expected format: { "merged": [...], "deleted": ["f.md", ...] }
- */
-function parseConsolidationResponse(text: string): ConsolidationDecisions | null {
-  if (!text.trim()) return null;
-
-  const match = /\{[\s\S]*\}/.exec(text);
-  if (!match) return null;
-
-  try {
-    const parsed = JSON.parse(match[0]) as Partial<ConsolidationDecisions>;
-    const merged = Array.isArray(parsed.merged) ? parsed.merged : [];
-    const deleted = Array.isArray(parsed.deleted) ? parsed.deleted : [];
-
-    return {
-      merged: merged
-        .filter((m): m is NonNullable<typeof m> => m != null)
-        .map((m) => ({
-          name: typeof m.name === "string" ? m.name.trim() : "",
-          type: isValidMemoryType(m.type) ? m.type : "user",
-          description: typeof m.description === "string" ? m.description.trim() : "",
-          body: typeof m.body === "string" ? m.body.trim() : "",
-          replaces: Array.isArray(m.replaces) ? m.replaces.filter((f): f is string => typeof f === "string") : [],
-          importance: parseImportance((m as { importance?: unknown }).importance),
-          expiresAt: parseExpiresAt((m as { expiresAt?: unknown }).expiresAt),
-        }))
-        .filter((m) => m.name && m.description && m.body),
-      deleted: deleted.filter((f): f is string => typeof f === "string"),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function isValidMemoryType(value: unknown): value is MemoryType {
-  return typeof value === "string" && (MEMORY_TYPES as readonly string[]).includes(value);
-}
-
-/**
- * Parse an optional importance (0–1) from LLM output, clamping to valid range.
- * Returns undefined for missing / non-numeric / out-of-range values.
- */
-function parseImportance(value: unknown): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
-  if (value < 0 || value > 1) return undefined;
-  return Math.round(value * 100) / 100;
-}
-
-/**
- * Parse an optional ISO expiry timestamp from LLM output.
- * Returns undefined for missing / non-string / invalid dates.
- */
-function parseExpiresAt(value: unknown): string | undefined {
-  if (typeof value !== "string" || !value.trim()) return undefined;
-  const t = Date.parse(value);
-  if (Number.isNaN(t)) return undefined;
-  return new Date(t).toISOString();
-}
-
-/**
- * Parse a JSON array from LLM output. Handles markdown code fences.
- * Used by extractMemories (not consolidation, which uses parseConsolidationResponse).
- */
-function parseJsonArray(text: string): unknown[] | null {
-  if (!text.trim()) return null;
-
-  // Try to find JSON array in the response
-  const match = /\[[\s\S]*\]/.exec(text);
-  if (!match) return null;
-
-  try {
-    const parsed = JSON.parse(match[0]);
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
 }

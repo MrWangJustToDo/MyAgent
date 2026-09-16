@@ -294,7 +294,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     // ("Let me do a final check…") but without a `begin_summary` call it is not a
     // final answer. Failure is silent — the original output is kept unchanged.
     //
-    // Gated to exploration subagents (default explore tools). Compaction / memory
+    // Gated to exploration subagents (default explore tools). Compaction
     // summarizer subagents pass `tools: {}` — never fall back for them, or the
     // fallback would recursively spawn yet another summarizer.
     if (

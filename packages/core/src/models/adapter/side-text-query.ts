@@ -188,15 +188,17 @@ async function runStructuredQuery<TSchema extends SchemaInput>(
   // cannot carry the non-null narrowing past the await points on its own.
   const result = capture;
 
-  // Validate explicitly: never return a partially-parsed or coerced object.
-  const issue = validateAgainstSchema(options.schema, result.object);
-  if (issue) {
-    const reason = `response failed schema validation: ${issue}`;
+  // Validate explicitly. The schema may also transform (clamping a range,
+  // normalizing a timestamp), and the transformed value is what callers must
+  // receive — returning the raw object would silently drop every transform.
+  const validation = validateAgainstSchema(options.schema, result.object);
+  if (!validation.ok) {
+    const reason = `response failed schema validation: ${validation.issue}`;
     throw new Error(sideQueryError(reason, textAdapter, options.log, startTime, true, result.raw));
   }
 
   return {
-    data: result.object as InferSchemaType<TSchema>,
+    data: validation.value as InferSchemaType<TSchema>,
     raw: result.raw,
     usage,
     durationMs,
@@ -206,23 +208,31 @@ async function runStructuredQuery<TSchema extends SchemaInput>(
 /**
  * Validate with the Standard Schema surface when the caller passed one.
  *
- * Returns a human-readable issue string, or null when the value is acceptable.
- * A plain JSON Schema has no validator attached, so it is accepted as-is — the
+ * Returns the transformed value on success — a schema's transforms are part of
+ * its contract (clamping a range, normalizing a timestamp), so discarding
+ * `result.value` would hand callers a value the schema never approved.
+ *
+ * A plain JSON Schema has no validator attached, so it is accepted as-is: the
  * provider already constrained the shape, and rejecting it here would make the
  * port unusable with raw JSON Schemas.
  */
-function validateAgainstSchema(schema: SchemaInput, value: unknown): string | null {
+function validateAgainstSchema(schema: SchemaInput, value: unknown): ValidationOutcome {
   const standard = (schema as { "~standard"?: { validate?: (input: unknown) => unknown } })["~standard"];
-  if (!standard?.validate) return null;
+  if (!standard?.validate) return { ok: true, value };
 
   const result = standard.validate(value) as
     { value?: unknown; issues?: ReadonlyArray<{ message?: string }> } | Promise<unknown>;
   if (result instanceof Promise) {
-    return "schema produced an async validation result, which this port does not support";
+    return { ok: false, issue: "schema produced an async validation result, which this port does not support" };
   }
-  if (!result.issues || result.issues.length === 0) return null;
-  return result.issues.map((entry) => entry.message ?? "invalid").join("; ");
+  const issues = result.issues;
+  if (issues && issues.length > 0) {
+    return { ok: false, issue: issues.map((entry) => entry.message ?? "invalid").join("; ") };
+  }
+  return { ok: true, value: "value" in result ? result.value : value };
 }
+
+type ValidationOutcome = { ok: true; value: unknown } | { ok: false; issue: string };
 
 // ============================================================================
 // Shared helpers

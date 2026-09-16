@@ -153,7 +153,9 @@ function logMemoryExtract(log: AgentLog, event: AgentEvent): void {
   if (status === "error") {
     log.warn("memory", `Memory extraction failed: ${p(event).error ?? "unknown"}`);
   }
-  // start/complete/empty/queued/skip-short are silent — not actionable per-entry.
+  // start/complete/empty/queued/skip-short/skip-no-adapter are silent — not
+  // actionable per-entry. LLM failures are not reported here either: the
+  // side-query port logs them once, under its own category.
 }
 
 function logMemoryConsolidate(log: AgentLog, event: AgentEvent): void {

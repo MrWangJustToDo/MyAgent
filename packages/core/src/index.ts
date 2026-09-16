@@ -198,10 +198,6 @@ export type { AgentToolConfig, WebsearchToolConfig } from "./agent/tools/tool-co
 export { buildDefaultSystemPrompt } from "./agent/prompt/default-prompt.js";
 export { DEFAULT_AGENT_MAX_ITERATIONS } from "./managers/agent-types.js";
 export { SUBAGENT_NO_TRUNCATE } from "./agent/subagent";
-export {
-  MEMORY_EXTRACT_MAX_OUTPUT_LENGTH,
-  MEMORY_CONSOLIDATE_MAX_OUTPUT_LENGTH,
-} from "./agent/memory/memory-extractor.js";
 export { resolveSummarizationBudget } from "./agent/compaction";
 
 // ============================================================================

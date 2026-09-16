@@ -131,6 +131,7 @@
     "validate:extension-loader": "pnpm run build && node scripts/validate-extension-loader.mjs",
     "validate:memory-service": "pnpm run build && node scripts/validate-memory-service.mjs",
     "validate:memory-lifecycle": "pnpm run build && node scripts/validate-memory-lifecycle.mjs",
+    "validate:memory-llm-contract": "pnpm run build && node scripts/validate-memory-llm-contract.mjs",
     "validate:summarization-budget": "pnpm run build && node scripts/validate-summarization-budget.mjs",
     "validate:summarization-segments": "pnpm run build && node scripts/validate-summarization-segments.mjs",
     "validate:compaction-prompt": "pnpm run build && node scripts/validate-compaction-prompt.mjs",

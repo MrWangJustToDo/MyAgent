@@ -112,6 +112,31 @@ const makeCapturingLog = () => {
 }
 
 // ---------------------------------------------------------------------------
+// 2.2c — the schema's transforms are applied, not just its checks
+// ---------------------------------------------------------------------------
+//
+// A schema may normalize a value (clamping a range, uppercasing a tag). The
+// port must return the *transformed* result: validating via `~standard` and then
+// returning the raw object would silently drop every transform the schema
+// declares, and memory's importance/expiresAt handling depends on it.
+
+{
+  const transformed = z.object({
+    name: z.string(),
+    tag: z.string().transform((value) => value.toUpperCase()),
+  });
+  const textAdapter = makeTextAdapterConfig({
+    structured: [completeChunk({ name: "Ada", tag: "agent" }, '{"name":"Ada","tag":"agent"}')],
+  });
+
+  const result = await runSideTextQuery(textAdapter, { userPrompt: "x", schema: transformed });
+
+  assert.deepEqual(result.data, { name: "Ada", tag: "AGENT" }, "the schema's transform is applied to the result");
+
+  console.log("✓ schema transforms are applied");
+}
+
+// ---------------------------------------------------------------------------
 // 2.2b — usage is attributed to the shared side-query contributor
 // ---------------------------------------------------------------------------
 //

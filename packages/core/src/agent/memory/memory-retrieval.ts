@@ -20,6 +20,8 @@
  * ```
  */
 
+import { z } from "zod";
+
 import { getEnv } from "../../env.js";
 import { runSideTextQuery } from "../../models/adapter/side-text-query.js";
 
@@ -64,11 +66,21 @@ to an AI coding agent as it processes a user's query. \
 Select memories you are CERTAIN will be relevant to the query — when in doubt, do not select.
 
 Rules:
-- Return a JSON object: { "selected_memories": ["filename1.md", "filename2.md"] }
 - Select at most 5 memories
 - Only select memories whose description clearly relates to the query
 - Prefer memories with a higher importance score (shown as [imp:N]) when relevance is comparable
-- If none are relevant, return { "selected_memories": [] }`;
+- If none are relevant, return an empty list`;
+
+/**
+ * The selection contract, enforced by the port rather than by prompt wording.
+ *
+ * `resolveSelectedMemoryFilename` already drops filenames it cannot match, so
+ * the schema guarantees only "an array of strings" and leaves the manifest
+ * lookup where it is.
+ */
+const SELECTION_SCHEMA = z.object({
+  selected_memories: z.array(z.string()),
+});
 
 // ============================================================================
 // Manifest Formatting
@@ -172,37 +184,22 @@ async function selectWithLLM(
   logger?: AgentLog,
   abortSignal?: AbortSignal
 ): Promise<string[]> {
-  const { text, usage: queryUsage } = await runSideTextQuery(textAdapter, {
+  // A schema failure throws out of here; the caller turns it into the keyword
+  // fallback, the same path a transport failure takes.
+  const { data, usage: queryUsage } = await runSideTextQuery(textAdapter, {
     systemPrompt: SELECT_MEMORIES_SYSTEM_PROMPT,
     userPrompt: `Query: ${query}\n\nAvailable memories:\n${manifest}`,
     maxOutputTokens: 256,
     abortSignal,
     log: logger,
+    schema: SELECTION_SCHEMA,
   });
 
   if (usage && queryUsage) {
     usage.addTotal(queryUsage);
   }
 
-  const match = /\{[\s\S]*?\}/.exec(text);
-  if (!match) {
-    logger?.warn("memory", "LLM selection returned no JSON object in response", { raw: text });
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(match[0]) as { selected_memories?: unknown };
-    if (Array.isArray(parsed.selected_memories)) {
-      const filenames = parsed.selected_memories.filter((f: unknown): f is string => typeof f === "string");
-      return filenames;
-    }
-    logger?.warn("memory", "LLM selection response missing selected_memories array", { parsed });
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    logger?.warn("memory", `LLM selection JSON parse failed: ${errorMsg}`, { raw: match[0] });
-  }
-
-  return [];
+  return data.selected_memories;
 }
 
 // ============================================================================

@@ -48,36 +48,36 @@ Structured output is an **overload on the existing `runSideTextQuery`**, not a n
 
 ## 3. Memory retrieval migration
 
-- [ ] 3.1 Define the retrieval selection schema (`{ selected_memories: string[] }`) as the single contract for the call
-- [ ] 3.2 Switch `selectWithLLM` in `packages/core/src/agent/memory/memory-retrieval.ts` to the structured variant and delete the `/\{[\s\S]*?\}/` match plus the `JSON.parse` block
-- [ ] 3.3 Route schema-validation failures into the existing `selectWithKeywords` fallback and confirm the turn continues
-- [ ] 3.4 Keep the usage accounting that `selectWithLLM` performs today (`usage.addTotal`) working against the structured result
-- [ ] 3.5 Verify the four existing `runSideTextQuery` callers (session titles, session summaries, `session-service`) are unaffected
+- [x] 3.1 Define the retrieval selection schema (`{ selected_memories: string[] }`) as the single contract for the call
+- [x] 3.2 Switch `selectWithLLM` in `packages/core/src/agent/memory/memory-retrieval.ts` to the structured variant and delete the `/\{[\s\S]*?\}/` match plus the `JSON.parse` block
+- [x] 3.3 Route schema-validation failures into the existing `selectWithKeywords` fallback and confirm the turn continues
+- [x] 3.4 Keep the usage accounting that `selectWithLLM` performs today (`usage.addTotal`) working against the structured result
+- [x] 3.5 Verify the four existing `runSideTextQuery` callers (session titles, session summaries, `session-service`) are unaffected
 
 ## 4. Memory extraction migration
 
-- [ ] 4.1 Define the extraction entry schema (name, type, description, body, optional importance, optional expiresAt) reusing `memoryTypeSchema`; fold type membership, importance range, and expiry parsing into the schema so the ad-hoc post-parse checks go away
-- [ ] 4.2 Replace the `runSubagent` call in `extractMemories` with the structured variant; drop `tools`/`maxIterations`/`bridgeUI`/`autoDestroy` options that only existed for the subagent path
-- [ ] 4.3 Delete `parseJsonArray`, and the `ExtractedMemory` interface if nothing else needs it
-- [ ] 4.4 Keep an output bound: pass `maxOutputTokens` and, if needed, cap accepted entries after validation instead of truncating the payload
-- [ ] 4.5 Thread an `abortSignal` from the triggering turn into the call
-- [ ] 4.6 Catch schema failure and return zero new memories without surfacing an error into the conversation
+- [x] 4.1 Define the extraction entry schema (name, type, description, body, optional importance, optional expiresAt) reusing `memoryTypeSchema`; fold type membership, importance range, and expiry parsing into the schema so the ad-hoc post-parse checks go away
+- [x] 4.2 Replace the `runSubagent` call in `extractMemories` with the structured variant; drop `tools`/`maxIterations`/`bridgeUI`/`autoDestroy` options that only existed for the subagent path
+- [x] 4.3 Delete `parseJsonArray`, and the `ExtractedMemory` interface if nothing else needs it
+- [x] 4.4 Keep an output bound: pass `maxOutputTokens` and, if needed, cap accepted entries after validation instead of truncating the payload
+- [x] 4.5 Thread an `abortSignal` from the triggering turn into the call
+- [x] 4.6 Catch schema failure and return zero new memories without surfacing an error into the conversation
 
 ## 5. Memory consolidation migration
 
-- [ ] 5.1 Define the consolidation schema (`{ merged: [...], deleted: string[] }`) including the per-entry fields, `replaces` as a string array, and optional `importance` / `expiresAt`
-- [ ] 5.2 Replace the `runSubagent` call in `llmConsolidate` with the structured variant
-- [ ] 5.3 Delete `parseConsolidationResponse` and the `ConsolidationDecisions` interface
-- [ ] 5.4 Catch schema failure and report no change, leaving existing memories untouched
-- [ ] 5.5 Confirm the two-phase flow is unchanged: phase 1 LLM decisions, phase 2 hard-cap eviction staying pure JS
+- [x] 5.1 Define the consolidation schema (`{ merged: [...], deleted: string[] }`) including the per-entry fields, `replaces` as a string array, and optional `importance` / `expiresAt`
+- [x] 5.2 Replace the `runSubagent` call in `llmConsolidate` with the structured variant
+- [x] 5.3 Delete `parseConsolidationResponse` and the `ConsolidationDecisions` interface
+- [x] 5.4 Catch schema failure and report no change, leaving existing memories untouched
+- [x] 5.5 Confirm the two-phase flow is unchanged: phase 1 LLM decisions, phase 2 hard-cap eviction staying pure JS
 
 ## 6. Call-site and API cleanup
 
-- [ ] 6.1 Update `packages/core/src/managers/services/memory-service.ts` for the changed `extractMemories` / `consolidateMemories` signatures
-- [ ] 6.2 Remove the `AgentManager` forwarding chain, which exists only to hand `manager` to `runSubagent`: the `manager` field on `MemoryExtractionInput`, its destructuring in `runExtraction` (`memory-service.ts:155`), the `manager` parameter on `extractMemories` / `consolidateMemories` / `llmConsolidate`, and the `manager` argument at `managed-agent-run-lifecycle.ts:125`
-- [ ] 6.3 Rely on `pnpm typecheck` (not grep) to prove no call site was missed in 6.2
-- [ ] 6.4 Remove now-unused imports (`runSubagent`, `AgentManager`) from the memory modules
-- [ ] 6.5 Confirm no module still imports the removed parsers or interfaces (`grep` for `parseJsonArray`, `parseConsolidationResponse`, `ExtractedMemory`, `ConsolidationDecisions`)
+- [x] 6.1 Update `packages/core/src/managers/services/memory-service.ts` for the changed `extractMemories` / `consolidateMemories` signatures
+- [x] 6.2 Remove the `AgentManager` forwarding chain, which exists only to hand `manager` to `runSubagent`: the `manager` field on `MemoryExtractionInput`, its destructuring in `runExtraction` (`memory-service.ts:155`), the `manager` parameter on `extractMemories` / `consolidateMemories` / `llmConsolidate`, and the `manager` argument at `managed-agent-run-lifecycle.ts:125`
+- [x] 6.3 Rely on `pnpm typecheck` (not grep) to prove no call site was missed in 6.2
+- [x] 6.4 Remove now-unused imports (`runSubagent`, `AgentManager`) from the memory modules
+- [x] 6.5 Confirm no module still imports the removed parsers or interfaces (`grep` for `parseJsonArray`, `parseConsolidationResponse`, `ExtractedMemory`, `ConsolidationDecisions`)
 
 ## 6b. Subagent surface cleanup
 
@@ -85,15 +85,15 @@ Apply the D8 rule: remove only options whose references drop to zero. Memory's d
 `aggregateUsageToParent`, `maxIterations`, and `bridgeUI` with a single remaining consumer
 (`auto-compact`) — those MUST stay.
 
-- [ ] 6b.1 Delete `MEMORY_EXTRACT_MAX_OUTPUT_LENGTH` and `MEMORY_CONSOLIDATE_MAX_OUTPUT_LENGTH` from `memory-extractor.ts:37,40` — memory's `maxOutputLength` arguments were their only use
-- [ ] 6b.2 Delete the matching public re-export at `packages/core/src/index.ts:201-204` (public API removal; the package is 0.0.1 and unpublished, so no shim)
-- [ ] 6b.3 Confirm zero remaining references to either constant across the repo, including `packages/core/scripts/`
-- [ ] 6b.4 Confirm `aggregateUsageToParent`, `maxIterations`, and `bridgeUI` still have their `auto-compact` consumer and were NOT deleted — verify by reading the call sites, not by assuming
-- [ ] 6b.5 Confirm `description` is still set by `compaction` / `progress-summary` / `task-prefork` and that nothing was removed on the mistaken belief it was memory-only
-- [ ] 6b.6 Confirm no empty-tools special case was introduced or removed in `run-subagent.ts` — the `tools` option is passed straight through with no `{}`-vs-`undefined` branch to clean up
-- [ ] 6b.7 Update `AGENTS.md:592` — drop memory from the "used by compaction and memory subagents" note on `bridgeUI: false`
-- [ ] 6b.8 Update `packages/core/ARCHITECTURE.md:232` — drop `memory` from the worker-profile list `runSubagent — task / compact / memory`
-- [ ] 6b.9 Format the changed markdown with prettier (repo convention for docs edits)
+- [x] 6b.1 Delete `MEMORY_EXTRACT_MAX_OUTPUT_LENGTH` and `MEMORY_CONSOLIDATE_MAX_OUTPUT_LENGTH` from `memory-extractor.ts:37,40` — memory's `maxOutputLength` arguments were their only use
+- [x] 6b.2 Delete the matching public re-export at `packages/core/src/index.ts:201-204` (public API removal; the package is 0.0.1 and unpublished, so no shim)
+- [x] 6b.3 Confirm zero remaining references to either constant across the repo, including `packages/core/scripts/`
+- [x] 6b.4 Confirm `aggregateUsageToParent`, `maxIterations`, and `bridgeUI` still have their `auto-compact` consumer and were NOT deleted — verify by reading the call sites, not by assuming
+- [x] 6b.5 Confirm `description` is still set by `compaction` / `progress-summary` / `task-prefork` and that nothing was removed on the mistaken belief it was memory-only
+- [x] 6b.6 Confirm no empty-tools special case was introduced or removed in `run-subagent.ts` — the `tools` option is passed straight through with no `{}`-vs-`undefined` branch to clean up
+- [x] 6b.7 Update `AGENTS.md:592` — drop memory from the "used by compaction and memory subagents" note on `bridgeUI: false`
+- [x] 6b.8 Update `packages/core/ARCHITECTURE.md:232` — drop `memory` from the worker-profile list `runSubagent — task / compact / memory`
+- [x] 6b.9 Format the changed markdown with prettier (repo convention for docs edits)
 
 ## 6c. Regression cover for the migration
 
@@ -101,16 +101,16 @@ No existing suite observes this path (D9): `validate-memory-service`, `validate-
 and `validate-memory-extension` never reference `runSubagent`, `extractMemories`, or
 `consolidateMemories`. Add the one guard the new failure mode needs.
 
-- [ ] 6c.1 Add a `validate:*` script asserting extraction returns 0 (and does not throw) when the structured query fails schema validation — the spec's "Extraction failure is contained" requirement
-- [ ] 6c.2 Assert the same for consolidation: a failed query reports no change and leaves existing memories untouched
-- [ ] 6c.3 Mutation test 6c.1 by letting the error propagate, and confirm the script fails
-- [ ] 6c.4 Register the new script in `packages/core/package.json`
+- [x] 6c.1 Add a `validate:*` script asserting extraction returns 0 (and does not throw) when the structured query fails schema validation — the spec's "Extraction failure is contained" requirement
+- [x] 6c.2 Assert the same for consolidation: a failed query reports no change and leaves existing memories untouched
+- [x] 6c.3 Mutation test 6c.1 by letting the error propagate, and confirm the script fails
+- [x] 6c.4 Register the new script in `packages/core/package.json`
 
 ## 7. Acceptance
 
-- [ ] 7.1 Verify the subagent panel no longer lists `memory-extract` / `memory-consolidate` rows, and that this is the intended observable change (spec: REMOVED requirement)
-- [ ] 7.2 Verify memory tokens still appear in the usage/cost graph, now attributed to the internal side-query contributor
-- [ ] 7.3 Run `pnpm --filter @my-agent/core run validate:memory-extension` and the other affected `validate:*` scripts
-- [ ] 7.4 Run `pnpm typecheck`, `pnpm build:core`, and `pnpm lint` on the changed files
-- [ ] 7.5 Exercise a real turn that triggers extraction with a large dialogue and confirm no truncation-related parse failure occurs (the current regex path's worst case)
-- [ ] 7.6 Confirm no `chat({ outputSchema })` call was added to the agent run loop, `AgentRunner`, or `SubagentConfig` — this change must not enter the conversational path
+- [x] 7.1 Verify the subagent panel no longer lists `memory-extract` / `memory-consolidate` rows, and that this is the intended observable change (spec: REMOVED requirement)
+- [x] 7.2 Verify memory tokens still appear in the usage/cost graph, now attributed to the internal side-query contributor
+- [x] 7.3 Run `pnpm --filter @my-agent/core run validate:memory-extension` and the other affected `validate:*` scripts
+- [x] 7.4 Run `pnpm typecheck`, `pnpm build:core`, and `pnpm lint` on the changed files
+- [x] 7.5 Exercise a real turn that triggers extraction with a large dialogue and confirm no truncation-related parse failure occurs (the current regex path's worst case)
+- [x] 7.6 Confirm no `chat({ outputSchema })` call was added to the agent run loop, `AgentRunner`, or `SubagentConfig` — this change must not enter the conversational path

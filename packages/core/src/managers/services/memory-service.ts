@@ -11,7 +11,6 @@ import { getEnv } from "../../env.js";
 import type { AgentLog } from "../../agent/agent-log";
 import type { MemoryManager } from "../../agent/memory/memory-manager.js";
 import type { TextAdapterConfig } from "../../models/adapter/adapter-factory.js";
-import type { AgentManager } from "../agent-manager.js";
 import type { EmitAgentTelemetryFn } from "../telemetry/emit-agent-telemetry.js";
 import type { UsageTracker } from "../telemetry/usage-tracker.js";
 import type { ModelMessage } from "@tanstack/ai";
@@ -27,11 +26,16 @@ export interface MemoryPrefetchInput {
 }
 
 export interface MemoryExtractionInput {
-  agentId: string;
   getMessagesForLLM: () => ModelMessage[];
   log: AgentLog | null;
-  manager: AgentManager;
+  /**
+   * Text adapter for the extraction and consolidation queries. Resolved by the
+   * host so extraction runs through the same provider/model as the turn.
+   */
+  resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   emitEvent?: EmitAgentTelemetryFn;
+  /** Abort signal from the owning run — lets abort interrupt the queries. */
+  abortSignal?: AbortSignal;
 }
 
 export class MemoryService {
@@ -152,14 +156,21 @@ export class MemoryService {
 
     const messages = llmMessages.slice(-80);
     const memoryManager = this.manager;
-    const { agentId, manager: agentManager, emitEvent } = input;
+    const { emitEvent, log, resolveTextAdapter, abortSignal } = input;
 
     this.extractionInProgress = true;
     emitEvent?.("memory:extract", { status: "start" });
 
     (async () => {
       try {
-        const count = await extractMemories(messages, memoryManager, agentId, agentManager);
+        const textAdapter = (await resolveTextAdapter?.()) ?? null;
+        if (!textAdapter) {
+          // No provider configured — skip rather than report a memory error.
+          emitEvent?.("memory:extract", { status: "skip-no-adapter" });
+          return;
+        }
+
+        const count = await extractMemories(messages, memoryManager, textAdapter, log ?? undefined, abortSignal);
         if (count > 0) {
           await memoryManager.flushIndex();
           emitEvent?.("memory:extract", { status: "complete", count });
@@ -170,7 +181,7 @@ export class MemoryService {
         const memoryCount = await memoryManager.getMemoryCount();
         if (memoryCount >= memoryManager.getConsolidateThreshold()) {
           emitEvent?.("memory:consolidate", { status: "start", count: memoryCount });
-          const result = await consolidateMemories(memoryManager, agentId, agentManager);
+          const result = await consolidateMemories(memoryManager, textAdapter, log ?? undefined);
           if (result.changed) {
             await memoryManager.flushIndex();
             emitEvent?.("memory:consolidate", {

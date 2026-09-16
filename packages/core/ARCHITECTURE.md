@@ -227,7 +227,7 @@ InteractiveChat profile (AgentChatController)
   pumpToolPhases / queues / approvals / session persist
   → runAgentOnce(channel) per stream; outcome path "chat" after full pump
 
-Worker profile (runSubagent — task / compact / memory)
+Worker profile (runSubagent — task / compact)
   spawn + tool isolation → always ensureUIChannel → runAgentOnce once
   → bridgeUI only gates parent panel / task-tool streaming
   → outcome path "detached" (avoids task-panel ghosts)

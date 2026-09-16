@@ -266,6 +266,23 @@ rather than done silently.
 **Decision.** Add one minimal validation to the memory check-in, because the existing suites
 do not touch this path at all.
 
+**Landed as `validate:memory-llm-contract`** (`packages/core/scripts/validate-memory-llm-contract.mjs`),
+which drives extraction and consolidation through a fake structured adapter and asserts: the
+entries the model returned are written (importance kept, `expiresAt` normalized to ISO), an
+out-of-range importance / unparseable expiry is *normalized away rather than fatal*, an unknown
+memory type is *rejected rather than defaulted to `user`*, a transport or schema failure yields
+zero memories (and no change, for consolidation) with the store untouched, and consolidation
+applies merges plus deletions. Four mutations were used to prove the assertions bite: dropping
+the `expiresAt` transform, letting the type fall back to `user`, recovering entries from a
+schema-invalid response, and returning the raw object instead of the transformed one.
+
+**Implementation note: the no-adapter case is a skip, and a resolve failure is not.** With no
+provider configured, extraction skips (`skip-no-adapter`) rather than reporting a memory error.
+But `resolveTextAdapter` is also where a genuine resolution failure lands, and letting that
+throw keeps the extraction slot releasable: the `finally` block that clears
+`extractionInProgress` runs on the failure path, so a broken provider cannot wedge every later
+turn's extraction. It still never reaches the conversation.
+
 **Why.** `validate-memory-service`, `validate-memory-lifecycle`, and
 `validate-memory-extension` contain no reference to `runSubagent`, `extractMemories`, or
 `consolidateMemories`. Deleting the forwarding chain and the public constants can therefore

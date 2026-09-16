@@ -589,7 +589,7 @@ The project supports **subagents** — context-isolated agents spawned to handle
 | Summary Limit | 5000 characters max |
 
 | UI Preview | `bridgeUI: true` (default when `parentTaskToolCallId` is set): parent panel + task-tool streaming via the subagent’s `AgentUIChannel` |
-| No parent bridge | `bridgeUI: false` (default otherwise): still has an internal `AgentUIChannel` (message SoT); skips parent task-tool streaming / preview bridging — used by compaction and memory subagents |
+| No parent bridge | `bridgeUI: false` (default otherwise): still has an internal `AgentUIChannel` (message SoT); skips parent task-tool streaming / preview bridging — used by compaction |
 
 ### Subagent UI Preview
 
