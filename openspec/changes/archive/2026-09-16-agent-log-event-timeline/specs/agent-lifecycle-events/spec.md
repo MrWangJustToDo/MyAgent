@@ -18,12 +18,12 @@ The system SHALL emit `agent:tool-approval-resolved` on the AgentEventBus exactl
 
 ### Requirement: Subagent completed payload includes summary
 
-When a subagent run finishes successfully, the system SHALL emit `subagent:completed` with a `summary` field (string) suitable for Event→Log formatting, plus `iterations` (number), `durationMs` (number), and `usage` (token usage snapshot from the subagent run result). Event→Log SHALL prefer `event.data.summary` when composing the log message and SHALL include the run statistics in the entry data.
+When a subagent run finishes successfully, the system SHALL emit `subagent:completed` with a `summary` field (string) suitable for Event→Log formatting, plus `iterations` (number), `durationMs` (number), and `usage` (token usage snapshot from the subagent run result), all carried on the event's typed `payload`. Event→Log SHALL prefer `payload.summary` when composing the log message — it reads the payload through its single accessor rather than an `event.data` alias — and SHALL include the run statistics in the entry data.
 
 #### Scenario: Completed subagent logs summary text
 - **WHEN** a subagent completes with a non-empty summary string
-- **THEN** `subagent:completed` data includes `summary` and the Event→Log message includes that summary text rather than a placeholder such as “(no summary)”
+- **THEN** the `subagent:completed` payload includes `summary` and the Event→Log message includes that summary text rather than a placeholder such as “(no summary)”
 
 #### Scenario: Completed subagent logs run statistics
 - **WHEN** a subagent completes after 3 iterations, 12 seconds, with recorded token usage
-- **THEN** `subagent:completed` data includes `iterations: 3`, a `durationMs` of approximately 12000, and a `usage` object, and the bridged log entry carries these fields
+- **THEN** the `subagent:completed` payload includes `iterations: 3`, a `durationMs` of approximately 12000, and a `usage` object, and the bridged log entry carries these fields

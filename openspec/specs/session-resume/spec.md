@@ -1,5 +1,10 @@
 # session-resume
 
+## Purpose
+
+Restoring a saved conversation: which session is chosen, how the durable message chain and model
+configuration come back, and what usage / todo state is rehydrated before the next turn.
+## Requirements
 ### Requirement: Restore conversation from uiMessages on resume
 The system SHALL restore conversation continuity on resume from persisted `uiMessages` only (including any in-chain compaction summary already present in that list). The system SHALL NOT restore or migrate separate `compactMessages` / `summaryMessage` / `compactIndex` into the runtime.
 
@@ -65,3 +70,15 @@ The system SHALL allow resuming a specific session by ID or by name (partial mat
 #### Scenario: Resume by name
 - **WHEN** the user provides a session name (or partial match)
 - **THEN** the matching session is loaded (or a list of matches is presented if ambiguous)
+
+### Requirement: Restore approvals with the session
+The system SHALL restore the `approvals` table when a session is resumed so the next `chat()` can rebuild `resumeToolState`. The UI channel SHALL still hydrate from `uiMessages`.
+
+#### Scenario: Resume loads approvals
+- **WHEN** a session with `approvals` is resumed
+- **THEN** the in-memory approval table matches the stored records and is available before the next pump
+
+#### Scenario: Resume without approvals field
+- **WHEN** a session without `approvals` is resumed
+- **THEN** the in-memory table is empty unless backfilled from remaining UIMessage approval parts
+

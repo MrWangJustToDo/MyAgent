@@ -1,5 +1,11 @@
 # session-event-log
 
+## Purpose
+
+The durable session journal: append-only event records that back session persistence, checkpointing, and resume.
+
+## Requirements
+
 ### Requirement: Durable session journal
 
 The system SHALL maintain an append-only JSONL journal at `.agents/sessions/{id}.session.log` for each session, storing seq-numbered records. The journal SHALL be the crash-safe source of the session's latest state; the `.session.json` snapshot SHALL be a materialized cache of the journal's latest state.

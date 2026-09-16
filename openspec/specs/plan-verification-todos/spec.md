@@ -1,5 +1,7 @@
 # plan-verification-todos
 
+## Purpose
+
 Plan Verification checklist items MUST seed as plan todos so verification progress is tracked incrementally during execution, while the `complete_plan` gate stays evidence-based.
 
 ## Requirements

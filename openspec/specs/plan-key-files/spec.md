@@ -1,5 +1,7 @@
 # plan-key-files
 
+## Purpose
+
 Plan artifacts MUST carry key file anchors so execution can start from concrete file locations instead of re-exploring.
 
 ## Requirements

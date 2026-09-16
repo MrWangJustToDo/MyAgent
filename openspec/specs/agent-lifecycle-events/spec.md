@@ -57,11 +57,15 @@ When tool approvals become pending, the system SHALL emit `agent:tool-approval-r
 
 ### Requirement: Subagent completed payload includes summary
 
-When a subagent run finishes successfully, the system SHALL emit `subagent:completed` with a `summary` field (string) suitable for Event→Log formatting. Event→Log SHALL prefer `event.data.summary` when composing the log message.
+When a subagent run finishes successfully, the system SHALL emit `subagent:completed` with a typed `payload.summary` field (string) suitable for Event→Log formatting, plus `iterations` (number), `durationMs` (number), and a `usage` token snapshot from the subagent run result. Event→Log SHALL prefer `payload.summary` when composing the log message and SHALL include the run statistics in the entry data.
 
-#### Scenario: Completed subagent logs summary text
-- **WHEN** a subagent completes with a non-empty summary string
-- **THEN** `subagent:completed` data includes `summary` and the Event→Log message includes that summary text rather than a placeholder such as “(no summary)”
+#### Scenario: Completed event includes summary for logging
+- **WHEN** a subagent finishes successfully and emits `subagent:completed`
+- **THEN** the event envelope includes `payload.summary` as a string and Event→Log uses that field for the log line
+
+#### Scenario: Completed subagent logs run statistics
+- **WHEN** a subagent completes after 3 iterations, 12 seconds, with recorded token usage
+- **THEN** the `subagent:completed` payload includes `iterations: 3`, a `durationMs` of approximately 12000, and a `usage` object, and the bridged log entry carries these fields
 
 ### Requirement: Architecture docs describe extension observation model
 
@@ -76,4 +80,24 @@ When a subagent run finishes successfully, the system SHALL emit `subagent:compl
 
 - **WHEN** a reader follows the ARCHITECTURE event-model section
 - **THEN** it documents one `AgentEventBus` with observer and interceptor modes and the session channel projection, and does not describe `AgentTelemetryBus` and `ExtensionEventBus` as separate systems
+
+### Requirement: Approval resolution emits lifecycle event
+
+The system SHALL emit `agent:tool-approval-resolved` on the AgentEventBus exactly once per pending approval when it is resolved — whether by user decision or by command-safety auto-decision. The event payload SHALL include `tool_call_id`, `tool_name`, `decision` (`approved` | `denied`), and `reason` when a reason exists. The Event→Log bridge SHALL be the sole core path that turns this event into an `approval` category log entry.
+
+#### Scenario: Command-safety auto-deny emits resolution
+- **WHEN** command-safety automatically denies a shell command tool call
+- **THEN** `agent:tool-approval-resolved` is emitted with `decision: "denied"` and a reason, and one bridged `approval` log entry is written
+
+#### Scenario: No resolution event for already-resolved approvals
+- **WHEN** a resolution arrives for a tool call that has no pending approval
+- **THEN** no `agent:tool-approval-resolved` event is emitted
+
+### Requirement: Lifecycle events use typed envelope
+AgentEventBus emissions covered by this spec (tool lifecycle, compaction kind, session restore, subagent destroy/completed, approval requests) SHALL use the shared typed AgentEvent envelope (`ts`, `agentId`, `parentId?`, `payload`) instead of loosely typed `data` bags. Existing emission timing and exclusivity contracts remain in force.
+
+#### Scenario: Approval request uses payload envelope
+- **WHEN** tools need approval and `agent:tool-approval-request` is emitted
+- **THEN** the event includes typed `payload` fields required by Event→Log
+- **AND** the status controller still does not call `log.approval` directly
 

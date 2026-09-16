@@ -1,5 +1,11 @@
 # model-message-converter
 
+## Purpose
+
+The conversion between `ModelMessage` and `UIMessage`: how each role and content part maps across the two shapes, and what the round-trip guarantees are.
+
+## Requirements
+
 ### Requirement: Convert user messages
 The system SHALL convert ModelMessage with role "user" to UIMessage with role "user", mapping text content to text parts and file/image content to file parts.
 

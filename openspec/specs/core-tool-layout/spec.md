@@ -1,5 +1,7 @@
 # core-tool-layout
 
+## Purpose
+
 Ownership rules for where tool factories and tool helpers live under `@my-agent/core`.
 
 ## Requirements
