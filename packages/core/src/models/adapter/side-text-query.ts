@@ -221,18 +221,40 @@ function validateAgainstSchema(schema: SchemaInput, value: unknown): ValidationO
   if (!standard?.validate) return { ok: true, value };
 
   const result = standard.validate(value) as
-    { value?: unknown; issues?: ReadonlyArray<{ message?: string }> } | Promise<unknown>;
+    { value?: unknown; issues?: ReadonlyArray<ValidationIssue> } | Promise<unknown>;
   if (result instanceof Promise) {
     return { ok: false, issue: "schema produced an async validation result, which this port does not support" };
   }
   const issues = result.issues;
   if (issues && issues.length > 0) {
-    return { ok: false, issue: issues.map((entry) => entry.message ?? "invalid").join("; ") };
+    return { ok: false, issue: issues.map(formatIssue).join("; ") };
   }
   return { ok: true, value: "value" in result ? result.value : value };
 }
 
 type ValidationOutcome = { ok: true; value: unknown } | { ok: false; issue: string };
+
+interface ValidationIssue {
+  message?: string;
+  /** Standard Schema's location of the offending value, e.g. `[1, "body"]`. */
+  path?: ReadonlyArray<PropertyKey>;
+}
+
+/**
+ * Render one issue with its path.
+ *
+ * The message alone ("expected string, received undefined") does not say *which*
+ * entry failed, so a 20-entry array whose second item is malformed reads the
+ * same as one whose last item is. That location is the only diagnostic a
+ * background extraction gets, so dropping it makes a schema failure
+ * indistinguishable from a model that simply returned nothing.
+ */
+function formatIssue(issue: ValidationIssue): string {
+  const message = issue.message ?? "invalid";
+  const path = issue.path;
+  if (!path || path.length === 0) return message;
+  return `${path.map(String).join(".")}: ${message}`;
+}
 
 // ============================================================================
 // Shared helpers
@@ -272,10 +294,33 @@ function createQueryRequest(
     abortController,
     debug: false,
     modelOptions: {
-      ...(options.maxOutputTokens != null ? { maxTokens: options.maxOutputTokens } : {}),
+      ...maxTokensOption(textAdapter, options.maxOutputTokens),
       ...reasoningOptions,
     },
   };
+}
+
+/**
+ * Name the output-token cap the way the active adapter actually reads it.
+ *
+ * `modelOptions` is spread verbatim into the provider request body, and the
+ * adapters deliberately do not read a generic `maxTokens`:
+ *
+ * - chat-completions (`@tanstack/openai-base`) spreads `modelOptions` straight
+ *   into the body and reads only the provider-native spellings — the SDK's own
+ *   sampling-keys list annotates `maxTokens` as "generic / migration leftover
+ *   (no adapter reads it)".
+ * - the Anthropic adapter copies a curated key set and reads `max_tokens`
+ *   through its own default path.
+ *
+ * A cap sent under the wrong name is silently ignored, so the bound this port
+ * advertises only exists if the key matches the adapter.
+ */
+function maxTokensOption(textAdapter: TextAdapterConfig, maxOutputTokens: number | undefined): Record<string, number> {
+  if (maxOutputTokens == null) return {};
+  return textAdapter.modelStyle === "anthropic"
+    ? { max_tokens: maxOutputTokens }
+    : { max_completion_tokens: maxOutputTokens };
 }
 
 /**

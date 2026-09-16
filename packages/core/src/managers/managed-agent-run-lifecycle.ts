@@ -7,7 +7,6 @@ import { type UIMessage as TanStackUIMessage, type ModelMessage } from "@tanstac
 import { getLatestUserMessage } from "../agent/compaction/message-utils.js";
 import { isToolContinuationPrepare } from "../agent/stream/tool-phase-utils.js";
 
-import type { AgentManager } from "./agent-manager.js";
 import type { AgentStatus, RunFinalizeReason } from "./agent-types.js";
 import type { RunCoordinator } from "./run-coordinator.js";
 import type { CompactionService } from "./services/compaction-service.js";
@@ -105,11 +104,7 @@ export async function prepareManagedAgentForRun(
   }
 }
 
-export function finalizeManagedAgentRun(
-  host: RunLifecycleHost,
-  manager: AgentManager,
-  reason: RunFinalizeReason
-): void {
+export function finalizeManagedAgentRun(host: RunLifecycleHost, reason: RunFinalizeReason): void {
   // Idempotent per turn — pump `stop()` and outcome paths may both attempt finalize.
   if (!host.beginTurnFinalize()) return;
 
@@ -123,9 +118,14 @@ export function finalizeManagedAgentRun(
       log: host.log,
       resolveTextAdapter: host.resolveTextAdapter,
       emitEvent: (type, data) => host.emitEvent(type, data),
-      // Let abort interrupt the extraction / consolidation queries. By finalize
-      // time the run's own controller is gone, so this mirrors whatever the
-      // in-flight run had (undefined once the turn has settled).
+      // Best-effort pass-through of the run's controller. Note the limit: this
+      // runs from `finalize`, which only happens once the turn has settled (and
+      // only for `reason === "finished"`, so an aborted turn never gets here),
+      // and the coordinator's controller is replaced per run rather than aborted
+      // on completion. The signal is therefore live but nothing aborts it while
+      // extraction is in flight — cancellation of a later turn does not reach
+      // this call. Kept so the port's abort plumbing stays uniform with prefetch,
+      // where the same signal is genuinely live mid-turn.
       abortSignal: host.run.currentAbortController?.signal,
     });
   }

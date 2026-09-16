@@ -153,20 +153,43 @@ const extractedMemorySchema = z.object({
  * Extraction returns a bare array, so the schema does too — the provider's
  * structured output is an array, not an object wrapper.
  *
- * An entry missing a required field invalidates the whole response, which the
- * caller turns into "zero new memories": a memory with an empty body is not
- * worth a repair attempt, and partial recovery is what the old ad-hoc checks did.
+ * **Failure is all-or-nothing, deliberately.** One malformed entry rejects the
+ * whole response, so the caller writes nothing rather than writing the entries
+ * that happened to survive. The trade-off is explicit: the system prompt says
+ * "prefer capturing rather than skipping", and a per-entry `.catch` would keep
+ * that bias, but it would also mean a model that systematically emits one bad
+ * field (say, a `type` it keeps inventing) silently produces *no* memories
+ * while looking successful. A visible zero, with the offending path in the log,
+ * is the failure mode worth having; entry-level recovery hides a broken
+ * contract behind partial results.
  */
 const extractionSchema = z.array(extractedMemorySchema);
 
+/**
+ * A merged memory. `replaces` is required: a merge that does not name its
+ * source files leaves the originals on disk, which is worse than not merging —
+ * the merged entry and its sources would both be listed.
+ */
 const mergedMemorySchema = extractedMemorySchema.extend({
-  replaces: z.array(z.string()).catch([]).optional(),
+  replaces: z.array(z.string()),
 });
 
-/** Consolidation decisions: which entries to fold together, which to drop. */
+/**
+ * Consolidation decisions: which entries to fold together, which to drop.
+ *
+ * No `.catch([])` on either collection. A collection-level catch collapses the
+ * *entire* list on a single bad entry without throwing, and the caller then
+ * runs the deletions anyway — a merge that failed validation would still delete
+ * the files it claimed to replace, losing them outright. Rejecting the response
+ * keeps `deleted` from being applied on top of a `merged` that never happened.
+ *
+ * Also note the two failure semantics differ on purpose: consolidation requires
+ * a recognizable decision object, while extraction requires a whole array.
+ * Neither accepts an unrecognized top-level shape as "nothing to do".
+ */
 const consolidationSchema = z.object({
-  merged: z.array(mergedMemorySchema).catch([]).optional(),
-  deleted: z.array(z.string()).catch([]).optional(),
+  merged: z.array(mergedMemorySchema),
+  deleted: z.array(z.string()),
 });
 
 // ============================================================================
@@ -371,20 +394,20 @@ async function llmConsolidate(
     return false;
   }
 
-  const merged = decisions.merged ?? [];
-  const deleted = decisions.deleted ?? [];
+  // Both collections are required by the schema, so a response that omitted one
+  // is a failure, not "nothing to do" — there is no empty-array default here.
+  const { merged, deleted } = decisions;
   let changed = false;
   const allReplaced = new Set<string>();
   const allDeleted = new Set<string>();
 
   // Write merged memories
   for (const merge of merged) {
-    if (!merge.name || !merge.description || !merge.body) continue;
     await memoryManager.writeMemory(merge.name, merge.type, merge.description, merge.body, {
       importance: merge.importance,
       expiresAt: merge.expiresAt,
     });
-    for (const f of merge.replaces ?? []) {
+    for (const f of merge.replaces) {
       allReplaced.add(f);
     }
     changed = true;

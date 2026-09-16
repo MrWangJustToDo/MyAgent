@@ -118,7 +118,7 @@ export class AgentChatController {
     // App no longer checkpoints on status — persist cancelled tools on abort.
     this.persistMessages("pump-complete");
     // Turn finalize here: the invalidated token makes the in-flight pump skip its outcome path.
-    this.managed.finalizeRun(this.manager, "aborted");
+    this.managed.finalizeRun("aborted");
   }
 
   /** How steering messages are drained at each drain point. */
@@ -425,7 +425,7 @@ export class AgentChatController {
 
         // Waiting (approval / ask_user) keeps turn context for the resume pump.
         if (outcomeKind === "finished" || outcomeKind === "aborted" || outcomeKind === "error") {
-          this.managed.finalizeRun(this.manager, outcomeKind);
+          this.managed.finalizeRun(outcomeKind);
         }
 
         const totalUsage = this.managed.usage?.getTotal();

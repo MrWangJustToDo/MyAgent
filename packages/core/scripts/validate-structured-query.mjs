@@ -38,31 +38,37 @@ const runErrorChunk = (message) => ({ type: "RUN_ERROR", error: new Error(messag
  *
  * `runSideTextQuery` passes no tools, so the engine takes its tool-less
  * structured path and consumes `structuredOutputStream` directly; the text path
- * consumes `chatStream`.
+ * consumes `chatStream`. The structured call records the request options the
+ * engine handed the adapter, so the token-cap key can be asserted.
  */
-const makeTextAdapterConfig = ({ structured = [], text = [] } = {}) => ({
-  model: "fake-model",
-  modelStyle: "openai",
-  adapter: {
-    kind: "text",
-    name: "fake",
+const makeTextAdapterConfig = ({ structured = [], text = [], modelStyle = "openai" } = {}) => {
+  const seen = [];
+  return {
+    seen,
     model: "fake-model",
-    "~types": {},
-    chatStream() {
-      return (async function* () {
-        for (const chunk of text) yield chunk;
-      })();
+    modelStyle,
+    adapter: {
+      kind: "text",
+      name: "fake",
+      model: "fake-model",
+      "~types": {},
+      chatStream() {
+        return (async function* () {
+          for (const chunk of text) yield chunk;
+        })();
+      },
+      async structuredOutput() {
+        throw new Error("not implemented");
+      },
+      structuredOutputStream(options) {
+        seen.push(options?.chatOptions?.modelOptions ?? {});
+        return (async function* () {
+          for (const chunk of structured) yield chunk;
+        })();
+      },
     },
-    async structuredOutput() {
-      throw new Error("not implemented");
-    },
-    structuredOutputStream() {
-      return (async function* () {
-        for (const chunk of structured) yield chunk;
-      })();
-    },
-  },
-});
+  };
+};
 
 const makeCapturingLog = () => {
   const entries = [];
@@ -134,6 +140,49 @@ const makeCapturingLog = () => {
   assert.deepEqual(result.data, { name: "Ada", tag: "AGENT" }, "the schema's transform is applied to the result");
 
   console.log("✓ schema transforms are applied");
+}
+
+// ---------------------------------------------------------------------------
+// 2.2d — the output-token cap is named the way the adapter reads it
+// ---------------------------------------------------------------------------
+//
+// `modelOptions` is spread verbatim into the provider request body, and the
+// adapters deliberately do not read a generic `maxTokens` (the SDK annotates it
+// as "no adapter reads it"). A cap sent under the wrong name is silently
+// ignored, so the bound this port advertises would not exist. Pinning the key
+// here is what keeps that from regressing unnoticed.
+
+{
+  const openaiAdapter = makeTextAdapterConfig({
+    structured: [completeChunk({ name: "Ada", age: 1 }, "{}")],
+  });
+  await runSideTextQuery(openaiAdapter, { userPrompt: "x", schema: personSchema, maxOutputTokens: 20 });
+  assert.deepEqual(
+    openaiAdapter.seen[0],
+    { max_completion_tokens: 20 },
+    "an openai-style structured query caps output with `max_completion_tokens`"
+  );
+
+  const anthropicAdapter = makeTextAdapterConfig({
+    modelStyle: "anthropic",
+    structured: [completeChunk({ name: "Ada", age: 1 }, "{}")],
+  });
+  await runSideTextQuery(anthropicAdapter, { userPrompt: "x", schema: personSchema, maxOutputTokens: 20 });
+  assert.deepEqual(
+    anthropicAdapter.seen[0],
+    { max_tokens: 20 },
+    "an anthropic-style structured query caps output with `max_tokens`"
+  );
+
+  // Omitting the cap must not invent one.
+  const uncapped = makeTextAdapterConfig({ structured: [completeChunk({ name: "Ada", age: 1 }, "{}")] });
+  await runSideTextQuery(uncapped, { userPrompt: "x", schema: personSchema });
+  assert.ok(
+    !/max_tokens|maxTokens|max_completion_tokens/.test(JSON.stringify(uncapped.seen[0])),
+    "no cap is sent when the caller did not ask for one"
+  );
+
+  console.log("✓ the output-token cap uses the adapter's native key");
 }
 
 // ---------------------------------------------------------------------------

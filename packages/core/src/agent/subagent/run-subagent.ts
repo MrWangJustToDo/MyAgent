@@ -242,7 +242,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
           // ignore status errors while propagating the run failure
         }
         try {
-          subagentManaged.finalizeRun(manager, "error");
+          subagentManaged.finalizeRun("error");
         } catch {
           // ignore finalize errors while propagating the run failure
         }
@@ -263,7 +263,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       messages: previewMessages,
       path: "detached",
     });
-    subagentManaged.finalizeRun(manager, outcomeKind);
+    subagentManaged.finalizeRun(outcomeKind);
     const noticed = applySubagentCancelNotice(output, aborted);
     let { summary: finalOutput, truncated } = truncateSummary(noticed, maxOutputLength);
 

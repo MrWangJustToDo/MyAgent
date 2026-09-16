@@ -306,7 +306,97 @@ const readBody = async (manager, filename) => manager.readMemory(filename);
 }
 
 // ---------------------------------------------------------------------------
-// 6. Consolidation failures leave existing memories alone
+// 6. A bad merge must not delete the files it failed to replace
+// ---------------------------------------------------------------------------
+//
+// This is the case a collection-level `.catch([])` produced: the merged entry
+// failed validation, the collection collapsed to empty *without throwing*, and
+// the caller then applied `deleted` — so the sources named in the rejected
+// merge were removed and their replacement was never written. One malformed
+// field could therefore destroy every file the merge claimed to fold together,
+// with no error anywhere.
+
+{
+  const manager = new MemoryManager({ rootPath: root, consolidateThreshold: 2 });
+  await manager.initialize();
+
+  await manager.writeMemory("doomed-alpha", "project", "Alpha", "Alpha body.");
+  await manager.writeMemory("doomed-beta", "project", "Beta", "Beta body.");
+  await manager.writeMemory("doomed-stale", "reference", "Stale", "Stale body.");
+
+  const before = (await manager.listMemories()).map((m) => m.filename).sort();
+
+  const entries = [];
+  const log = {
+    warn: (category, message) => entries.push(`${category}: ${message}`),
+    info: () => null,
+    debug: () => null,
+    error: () => null,
+  };
+
+  // The merge is invalid (unknown type); the deletions are perfectly valid and
+  // name the very files the merge was supposed to replace.
+  const textAdapter = makeTextAdapterConfig({
+    object: {
+      merged: [
+        {
+          name: "doomed-merged",
+          type: "consolidated",
+          description: "Merged",
+          body: "Combined body.",
+          replaces: ["doomed-alpha.md", "doomed-beta.md"],
+        },
+      ],
+      deleted: ["doomed-alpha.md", "doomed-beta.md", "doomed-stale.md"],
+    },
+  });
+
+  const result = await consolidateMemories(manager, textAdapter, log);
+
+  assert.equal(result.changed, false, "a rejected merge reports no change");
+  assert.deepEqual(
+    (await manager.listMemories()).map((m) => m.filename).sort(),
+    before,
+    "a rejected merge must not let its deletions run — no source file is lost"
+  );
+  assert.equal(entries.length, 1, "the rejection is logged rather than silent");
+  assert.match(entries[0], /merged\.0\.type/, "the log names the offending field, so the bad entry is locatable");
+
+  console.log("✓ a rejected merge does not delete its sources");
+}
+
+// ---------------------------------------------------------------------------
+// 7. An unrecognized top-level shape is a failure, not "nothing to do"
+// ---------------------------------------------------------------------------
+
+{
+  const manager = new MemoryManager({ rootPath: root, consolidateThreshold: 2 });
+  await manager.initialize();
+
+  await manager.writeMemory("shape-one", "project", "One", "One body.");
+  await manager.writeMemory("shape-two", "project", "Two", "Two body.");
+  const before = (await manager.listMemories()).map((m) => m.filename).sort();
+
+  for (const malformed of [{}, { changes: [{ name: "x" }] }, { merged: [], deleted: "alpha.md" }]) {
+    const textAdapter = makeTextAdapterConfig({ object: malformed });
+    const result = await consolidateMemories(manager, textAdapter);
+    assert.equal(
+      result.changed,
+      false,
+      `a response shaped ${JSON.stringify(malformed).slice(0, 40)} reports no change`
+    );
+    assert.deepEqual(
+      (await manager.listMemories()).map((m) => m.filename).sort(),
+      before,
+      "an unrecognized shape never mutates the store"
+    );
+  }
+
+  console.log("✓ unrecognized consolidation shapes are rejected");
+}
+
+// ---------------------------------------------------------------------------
+// 8. Consolidation failures leave existing memories alone
 // ---------------------------------------------------------------------------
 
 {

@@ -981,8 +981,8 @@ export class ManagedAgent {
    * Owned by {@link AgentChatController} / subagent runners (not per-`chat()` middleware).
    * Memory extraction runs only when `reason === "finished"`. Idempotent per turn until {@link resetTurnLifecycle}.
    */
-  finalizeRun(manager: AgentManager, reason: RunFinalizeReason): void {
-    finalizeManagedAgentRun(this, manager, reason);
+  finalizeRun(reason: RunFinalizeReason): void {
+    finalizeManagedAgentRun(this, reason);
   }
 
   /** Call at the start of a chat pump or detached run so finalize can run once for that turn. */

@@ -293,6 +293,71 @@ not behavioural regressions.
 schema is unsatisfied — the one new failure mode this change introduces — so the fallback
 contract in the spec has at least one executable guard.
 
+### D10: Schema failure granularity — all-or-nothing, and never partially applied
+
+**Decision.** The collection-level `.catch([])` is **not** used on either memory contract.
+A response that fails validation is rejected whole, and no part of it is applied.
+
+**Why this needed deciding.** The first implementation carried a `.catch([])` on
+`consolidationSchema.merged` / `.deleted`. In zod, `.catch()` on an *array* replaces the
+entire array when any element fails — without throwing. The caller then ran the deletions
+anyway, so a merge that failed validation still deleted the files it named in `replaces`:
+reproduced with three memories, an invalid `merged[0].type`, and `deleted` listing all three,
+the result was `changed: true, count: 0` with every file gone and **nothing logged** — the
+only copy of each memory destroyed. This is exactly the "half-applying a failed response"
+the surrounding code comment claimed to prevent, and it made schema failure indistinguishable
+from a legitimate empty decision.
+
+**The asymmetry is deliberate.** Consolidation and extraction are both all-or-nothing, but for
+different reasons and with different shapes:
+
+- *Consolidation* rejects a partial **application** because applying `deleted` without `merged`
+loses data. `merged` / `deleted` are required (no `.optional()`, no default), and a merge's
+`replaces` is required too — a merge that does not name its sources would leave both copies on
+disk.
+- *Extraction* rejects a partial **response** rather than skipping the bad entry. Honouring
+"prefer capturing rather than skipping" would mean per-entry recovery, which would also hide a
+model that systematically emits one bad field: it would produce *no* memories while looking
+successful. A visible zero, with the offending path in the log, is the failure mode worth
+having. The trade-off is real and accepted: one bad entry costs the good ones with it.
+
+**Field-level `.catch` is still right for the optional hints.** `importance` / `expiresAt`
+normalize instead of rejecting, because they are optional hints rather than the result itself —
+dropping one cannot lose data, and failing a whole entry over a stray importance value would.
+
+**Never indistinguishable from success.** Because `.catch([])` also made an unrecognized
+top-level shape (`{}`) read as "nothing to do", the required-collection shape is asserted
+explicitly, and the validation message now carries the issue **path** (`merged.0.type`), which
+is the only diagnostic a background extraction gets.
+
+**Proven by.** `validate:memory-llm-contract` cases 6 and 7, plus mutations that restore
+`.catch([])` and that let `type` fall back to `user`; both make the script fail. The earlier
+mutation set did **not** catch this, because the two mutations that looked like they covered
+`type` rejection only exercised the extraction path — the consolidation path's `.catch`
+swallowed them first.
+
+### D11: The output-token cap must be spelled per adapter
+
+**Decision.** `runSideTextQuery` maps `maxOutputTokens` to `max_completion_tokens` for
+openai-style adapters and `max_tokens` for anthropic, instead of the generic `maxTokens`.
+
+**Why.** `modelOptions` is spread verbatim into the provider request body, and the adapters
+deliberately do not read a generic spelling — the SDK's own sampling-keys list annotates
+`maxTokens` as "generic / migration leftover (no adapter reads it)", and
+`@tanstack/openai-base`'s chat-completions adapter notes the root
+`temperature`/`topP`/`maxTokens` fields are "intentionally NOT read". Measured against a local
+mock endpoint, the old code put `{"maxTokens":20}` on the wire and nothing else: the cap was
+a no-op for every one of the three structured callers (extraction 2000, consolidation 4000,
+retrieval 256), which removed the only mitigation design.md listed under Risks.
+
+The migration made this a **capability regression**, not a pre-existing quirk: the subagent's
+`maxOutputLength` was a real character-level truncation, whereas the token parameter it was
+replaced with did nothing at all.
+
+**Scope.** Fixed in the port (which the structured callers share) and asserted there. The
+text-side `AgentRunner` has the same `maxTokens` spelling; that is a separate, pre-existing
+text-path issue and is left as a follow-up rather than widened into this change.
+
 ## Risks / Trade-offs
 
 - **[Loss of abort propagation nuance]** The subagent path currently aborts via the parent

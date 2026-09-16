@@ -707,10 +707,10 @@ only for root agents.
 
 ```
 Guard: manager exists, ≥8 messages, not already in progress
-extractMemories → runSubagent → write .agents/memory/*.md files
+extractMemories → structured one-shot query (side-query port) → write .agents/memory/*.md files
   → emit memory:extract { status: start | complete | empty | queued | skip-short | error }
 If count >= consolidateThreshold (default 25):
-  consolidateMemories → merge/delete via subagent
+  consolidateMemories → structured one-shot query (merge/delete decisions)
   → emit memory:consolidate
 flushIndex → update memory.content for next session
 ```

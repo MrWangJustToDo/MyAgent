@@ -41,16 +41,32 @@ satisfied the same rules the schema states.
 
 #### Scenario: Invalid memory type is rejected by the schema
 
-- **WHEN** the model returns an entry whose type is not one of the known memory types
-- **THEN** the schema validation rejects it instead of the caller silently substituting a
-  default type
+- **WHEN** the model returns an entry whose type is not one of the known memory types, on
+  either the extraction or the consolidation response
+- **THEN** the schema validation rejects the response instead of the caller silently
+  substituting a default type, and the rejection is reported rather than swallowed
+
+#### Scenario: A rejected merge never deletes its sources
+
+- **WHEN** a consolidation response contains a merge that fails schema validation alongside
+  deletions that name that merge's source files
+- **THEN** no deletion is applied, because the merge that was supposed to replace those files
+  did not happen — a partially-applied consolidation would destroy the only copy of the sources
+
+#### Scenario: An unrecognized consolidation shape is not "nothing to do"
+
+- **WHEN** a consolidation response is an object that carries neither a `merged` nor a
+  `deleted` collection in the expected form
+- **THEN** the response is treated as a failure rather than as an empty decision, so a
+  malformed reply is never indistinguishable from a model that chose to change nothing
 
 #### Scenario: Importance and expiry keep their existing accepted ranges
 
 - **WHEN** the model returns an importance outside the accepted range or an unparseable
   expiry
-- **THEN** the entry is rejected by the schema or normalized by an explicit schema
-  transform, and the behaviour is covered by a test
+- **THEN** the entry keeps its other fields and the unusable optional value is normalized
+  away by an explicit schema transform, because these are optional hints rather than the
+  result itself — unlike a rejected merge, dropping one cannot lose data
 
 ### Requirement: Memory work degrades without the LLM
 

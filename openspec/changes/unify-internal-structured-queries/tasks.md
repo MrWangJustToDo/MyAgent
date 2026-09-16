@@ -20,7 +20,8 @@ Structured output is an **overload on the existing `runSideTextQuery`**, not a n
 - [x] 1.3 Implement the structured branch against `chat({ outputSchema, stream: true })`; read the object from the `structured-output.complete` CUSTOM event and token usage from `RUN_FINISHED`, per design D1
 - [x] 1.4 Throw when the completion event never arrives or the payload fails schema validation; do not return a coerced or partial object (spec: explicit failure)
 - [x] 1.5 Record usage in `sharedUsageHistory` exactly as the text path does, so structured calls appear in the cost graph
-- [x] 1.6 Reuse the existing abort plumbing and the per-`modelStyle` thinking-disable option rather than reimplementing them
+- [x] 1.6 Reuse the existing abort plumbing and the per-`modelStyle` thinking-disable option rather than reimplementing them. **The token cap is not shared plumbing:** `maxOutputTokens` must be spelled per adapter (`max_completion_tokens` for openai-style chat-completions, `max_tokens` for anthropic), because `modelOptions` is spread verbatim into the provider body and no adapter reads a generic `maxTokens` — see design D11.
+- [x] 1.9 Assert the request's output-token cap reaches the adapter under its native key, per `modelStyle` (design D11).
 - [x] 1.7 Audit the return shape against every consumer expectation (iterable vs promise) and reconcile with any `assertAsyncIterable` caller that can reach this port
 - [x] 1.8 Confirm the structured branch passes no tools, so the engine takes its tool-less structured path (`skipAgentLoop`)
 
@@ -56,7 +57,7 @@ Structured output is an **overload on the existing `runSideTextQuery`**, not a n
 
 ## 4. Memory extraction migration
 
-- [x] 4.1 Define the extraction entry schema (name, type, description, body, optional importance, optional expiresAt) reusing `memoryTypeSchema`; fold type membership, importance range, and expiry parsing into the schema so the ad-hoc post-parse checks go away
+- [x] 4.1 Define the extraction entry schema (name, type, description, body, optional importance, optional expiresAt) reusing `memoryTypeSchema`; fold type membership, importance range, and expiry parsing into the schema so the ad-hoc post-parse checks go away. **Schema-failure granularity is all-or-nothing by decision (design D10):** one malformed entry rejects the whole response rather than being skipped, and the optional hints (importance / expiresAt) normalize instead of rejecting. Note the deliberate asymmetry with consolidation, which is also all-or-nothing but for a different reason — there a partial application loses files.
 - [x] 4.2 Replace the `runSubagent` call in `extractMemories` with the structured variant; drop `tools`/`maxIterations`/`bridgeUI`/`autoDestroy` options that only existed for the subagent path
 - [x] 4.3 Delete `parseJsonArray`, and the `ExtractedMemory` interface if nothing else needs it
 - [x] 4.4 Keep an output bound: pass `maxOutputTokens` and, if needed, cap accepted entries after validation instead of truncating the payload
@@ -67,14 +68,14 @@ Structured output is an **overload on the existing `runSideTextQuery`**, not a n
 
 - [x] 5.1 Define the consolidation schema (`{ merged: [...], deleted: string[] }`) including the per-entry fields, `replaces` as a string array, and optional `importance` / `expiresAt`
 - [x] 5.2 Replace the `runSubagent` call in `llmConsolidate` with the structured variant
-- [x] 5.3 Delete `parseConsolidationResponse` and the `ConsolidationDecisions` interface
+- [x] 5.3 Delete `parseConsolidationResponse` and the `ConsolidationDecisions` interface. **No collection-level `.catch([])`** — see design D10; the interface is kept only as the schema's inferred type.
 - [x] 5.4 Catch schema failure and report no change, leaving existing memories untouched
 - [x] 5.5 Confirm the two-phase flow is unchanged: phase 1 LLM decisions, phase 2 hard-cap eviction staying pure JS
 
 ## 6. Call-site and API cleanup
 
 - [x] 6.1 Update `packages/core/src/managers/services/memory-service.ts` for the changed `extractMemories` / `consolidateMemories` signatures
-- [x] 6.2 Remove the `AgentManager` forwarding chain, which exists only to hand `manager` to `runSubagent`: the `manager` field on `MemoryExtractionInput`, its destructuring in `runExtraction` (`memory-service.ts:155`), the `manager` parameter on `extractMemories` / `consolidateMemories` / `llmConsolidate`, and the `manager` argument at `managed-agent-run-lifecycle.ts:125`
+- [x] 6.2 Remove the `AgentManager` forwarding chain, which exists only to hand `manager` to `runSubagent`: the `manager` field on `MemoryExtractionInput`, its destructuring in `runExtraction` (`memory-service.ts:155`), the `manager` parameter on `extractMemories` / `consolidateMemories` / `llmConsolidate`, and the `manager` argument at `managed-agent-run-lifecycle.ts:125`. Also removes the now-unreferenced `manager` parameter on `finalizeManagedAgentRun` and `ManagedAgent.finalizeRun` (an unused named parameter is NOT reported by `tsc`, so grep is what finds these).
 - [x] 6.3 Rely on `pnpm typecheck` (not grep) to prove no call site was missed in 6.2
 - [x] 6.4 Remove now-unused imports (`runSubagent`, `AgentManager`) from the memory modules
 - [x] 6.5 Confirm no module still imports the removed parsers or interfaces (`grep` for `parseJsonArray`, `parseConsolidationResponse`, `ExtractedMemory`, `ConsolidationDecisions`)
@@ -101,7 +102,10 @@ No existing suite observes this path (D9): `validate-memory-service`, `validate-
 and `validate-memory-extension` never reference `runSubagent`, `extractMemories`, or
 `consolidateMemories`. Add the one guard the new failure mode needs.
 
-- [x] 6c.1 Add a `validate:*` script asserting extraction returns 0 (and does not throw) when the structured query fails schema validation — the spec's "Extraction failure is contained" requirement
+- [x] 6c.1 Add a `validate:*` script asserting extraction returns 0 (and does not throw) when the structured query fails schema validation — the spec's "Extraction failure is contained" requirement. Also covers the consolidation counterpart, including the rejected-merge case below.
+- [x] 6c.5 Assert a rejected merge never deletes its sources (design D10): an invalid `merged` entry plus `deleted` naming those files must leave every file on disk and log the offending field path.
+- [x] 6c.6 Assert an unrecognized consolidation top-level shape is rejected rather than read as "nothing to do".
+- [x] 6c.7 Assert the output-token cap uses the adapter's native key (`max_completion_tokens` for openai-style, `max_tokens` for anthropic) — a cap under the generic `maxTokens` name is silently ignored by every adapter.
 - [x] 6c.2 Assert the same for consolidation: a failed query reports no change and leaves existing memories untouched
 - [x] 6c.3 Mutation test 6c.1 by letting the error propagate, and confirm the script fails
 - [x] 6c.4 Register the new script in `packages/core/package.json`
