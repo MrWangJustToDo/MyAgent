@@ -22,18 +22,22 @@ import fs from "node:fs";
 import { Readable } from "node:stream";
 import { createElement } from "react";
 
-import { MessageList } from "./dist/components/MessageList.mjs";
+import { checks as budgetChecks } from "./budget-fixtures.mjs";
+import { MessageList, selectVisibleRows, MAX_STATIC_LINES } from "./dist/components/MessageList.mjs";
 import { useAgentStatus } from "./dist/hooks/use-agent-status.mjs";
 import { useAgent } from "./dist/hooks/use-agent.mjs";
+import { useDiffRenderer } from "./dist/hooks/use-diff-renderer.mjs";
 import { useDynamic } from "./dist/hooks/use-dynamic.mjs";
 import { useFlattenCacheCleanup } from "./dist/hooks/use-flatten-cache-cleanup.mjs";
 import { useSize } from "./dist/hooks/use-size.mjs";
+import { useStaticHeights } from "./dist/hooks/use-static-heights.mjs";
 import { useStatic } from "./dist/hooks/use-static.mjs";
 import { useTheme } from "./dist/hooks/use-theme.mjs";
 import { useTranscriptDisplay } from "./dist/hooks/use-transcript-display.mjs";
 import { useWorkspaceInfo } from "./dist/hooks/use-workspace-info.mjs";
 import { Content } from "./dist/layout/Content.mjs";
-import { getMessages, countSourceMessages } from "./dist/utils/get-messages.mjs";
+import { Header } from "./dist/layout/Header.mjs";
+import { getMessages } from "./dist/utils/get-messages.mjs";
 import { flattenNamespaceFor, getStaticFlattenSnapshot } from "./dist/utils/message-flat-cache.mjs";
 
 // ── fake terminal ────────────────────────────────────────────────────────────
@@ -138,11 +142,20 @@ function loadSession(path, limit) {
 const sessionPath = process.argv[2] ?? null;
 const all = sessionPath ? loadSession(sessionPath, 400) : buildFixture(60, 4);
 
+// The list most recently handed to the component. Guards below must mutate THIS, not the
+// original `all`: the smoke drives several different lists, and switching back would change
+// every row's projection at once and mask what the guard is measuring.
+let renderedMessages = all;
+
 const Screen = ({ messages }) => {
+  renderedMessages = messages;
   // The real app initializes screen size in Agent.tsx (`useSize.getActions().useInitTerminalSize()`).
   // Without it `useSize.state.screenWidth` stays 0 and width-derived paddings go negative.
   useSize.getActions().useInitTerminalSize();
   return createElement("ink-box", { flexDirection: "column" }, [
+    // Mounted so `useStatic.header` is populated as it is in the app, where `Header` is a
+    // sibling of `Content` under `Agent`.
+    createElement(Header, { key: "header" }),
     createElement(MessageList, { key: "list", messages }),
     createElement(Content, { key: "content" }),
   ]);
@@ -200,7 +213,7 @@ console.error = (...args) => {
 
 // ── 1. mount + no duplication / no crash ────────────────────────────────────
 
-useWorkspaceInfo.getActions().setWorkspaceInfo({ path: "/workspace" });
+useWorkspaceInfo.getActions().setWorkspaceInfo({ path: "/workspace", git: { branch: "main" } });
 useTheme.getActions().setTheme("gemini");
 useAgentStatus.getActions().setStatus("idle");
 
@@ -220,31 +233,121 @@ record("no React key/identity warnings", !consoleErrors.some((e) => /key|duplica
   consoleErrors: consoleErrors.slice(0, 3),
 });
 
-// Derive the expectation from the same pure function the component uses.
+// Derive the expectation from the same pure function the component uses, fed with the heights
+// the component itself measured (`onRender` writes them into `useStaticHeights`). Row ids are
+// part-scoped, so the row list is not simply the message list.
 const { staticMessages, dynamicMessages, hiddenSourceMessages } = getMessages(all, {
   mode: useTranscriptDisplay.getState().mode,
   window: 120,
   namespace: "transcript",
 });
-const MAX_STATIC_PARTS = 100;
 
-// What actually reaches <StaticRender> after the component's own truncation. The marker is
-// prepended INSIDE the cached static block (that is where it belongs: it describes the rows
-// the block dropped), so the store holds the capped rows plus one marker element.
-const staticTruncated = staticMessages.length > MAX_STATIC_PARTS;
-const markerExpected =
-  hiddenSourceMessages + (staticTruncated ? countSourceMessages(staticMessages.slice(0, -MAX_STATIC_PARTS)) : 0);
-const expectedStoreRows = Math.min(MAX_STATIC_PARTS, staticMessages.length) + (markerExpected > 0 ? 1 : 0);
+/** Recompute the row budget as `MessageList` does, from the live measured heights. */
+function expectedStaticRows() {
+  const heights = useStaticHeights.getState().heights;
+  return selectVisibleRows(staticMessages, heights);
+}
+
+// ── 0. the line budget in isolation, plus the selection/pruning fixed point ───────────
+//
+// Expectations come from hand-built heights in `budget-fixtures.mjs`, never from the store the
+// component writes — see that file for why a self-referential expectation would stay green
+// through exactly the regression this section exists to catch.
+for (const c of budgetChecks) record(c.name, c.pass, c.detail);
+
+// ── 0c. measured heights are sane ─────────────────────────────────────────────
+//
+// A short text row at 120 columns must be a handful of lines. `onRender` used to fire on a
+// pre-layout pass reporting `2 * columns - 2` (238) with width 0; caching at that width produced
+// a 0-line region, and the first bogus value stuck because `recordHeight` rejects <= 0.
+{
+  const values = Object.values(useStaticHeights.getState().heights);
+  const worst = values.length ? Math.max(...values) : 0;
+  record(
+    "measured row heights are plausible for the fixture (no width-derived garbage)",
+    values.length > 0 && worst < 60,
+    { n: values.length, min: Math.min(...values), max: worst, storeRows: useStatic.getState().list.length }
+  );
+}
+
+// What actually reaches the store after the component's own line budget. The marker is
+// prepended INSIDE the cached static region (that is where it belongs: it describes the rows
+// the budget dropped), so the store holds the kept rows plus one marker element.
+const budget0 = expectedStaticRows();
+const markerExpected = hiddenSourceMessages + budget0.droppedSourceMessages;
+const expectedStoreRows = budget0.visibleCount + (markerExpected > 0 ? 1 : 0);
 record(
-  "static store holds the capped rows plus the in-block marker (no unbounded growth)",
-  useStatic.getState().list.length === expectedStoreRows &&
-    Math.min(MAX_STATIC_PARTS, staticMessages.length) <= MAX_STATIC_PARTS,
-  { storeRows: useStatic.getState().list.length, expectedStoreRows, staticMessages: staticMessages.length }
+  "static store holds exactly the line-budget rows plus the in-region marker",
+  useStatic.getState().list.length === expectedStoreRows,
+  {
+    storeRows: useStatic.getState().list.length,
+    expectedStoreRows,
+    staticMessages: staticMessages.length,
+    visibleCount: budget0.visibleCount,
+    droppedCount: budget0.droppedCount,
+    maxStaticLines: MAX_STATIC_LINES,
+  }
 );
 record("dynamic store holds the live rows", useDynamic.getState().list.length === Math.max(1, dynamicMessages.length), {
   storeRows: useDynamic.getState().list.length,
   dynamicMessages: dynamicMessages.length,
 });
+
+// ── 1b. the welcome panel stays outside the transcript budget ─────────────────
+//
+// The panel is the user's orientation (workspace, git, remote planes) and the only element
+// pinned to the very top of the transcript. It must never be droppable by the line budget:
+// the budget selects rows newest-first over accumulated rendered height, so a tall enough
+// transcript would otherwise be able to push the panel out of the kept region. It therefore
+// renders as its own cache unit in `Content`, from outside `MessageList`'s row list.
+//
+// What matters is the PAINTED FRAME, not the store field: the store could hold a header while
+// the layout drops it. A workspace path only the panel renders is the marker for that.
+const HEADER_MARKER = "/workspace";
+// Identity, not a key check: the invariant is that the PANEL ELEMENT ITSELF is absent from the
+// budgeted row list. Asserting on the string "header" would miss an implementation that
+// prepends the header element under some other key (which is exactly how the mutation test
+// re-created the bug), so compare against `useStatic.header` by identity.
+const headerInRowList = useStatic.getState().list.some((el) => el === useStatic.getState().header);
+record(
+  "the welcome panel is published as its own cache unit (not part of the row list)",
+  useStatic.getState().header !== null && !headerInRowList,
+  { headerSet: useStatic.getState().headerSet, headerInRowList }
+);
+{
+  // Drive the budget to exhaustion: enough tall rows that most of the transcript is dropped.
+  const flood = all.concat(
+    Array.from({ length: 300 }, (_, i) => ({
+      id: `flood-${i}`,
+      role: "assistant",
+      parts: [{ type: "text", content: `line ${i}\nsecond line ${i}\nthird line ${i}` }],
+    }))
+  );
+  instance.rerender(createElement(Screen, { messages: flood }));
+  await settle(300);
+  const floodBudget = selectVisibleRows(
+    getMessages(flood, { mode: useTranscriptDisplay.getState().mode, window: 120, namespace: "transcript" })
+      .staticMessages,
+    useStaticHeights.getState().heights
+  );
+  // Non-vacuous only if the budget actually dropped rows.
+  record("the budget is genuinely exhausted (so the header guard is not vacuous)", floodBudget.droppedCount > 0, {
+    droppedCount: floodBudget.droppedCount,
+    visibleCount: floodBudget.visibleCount,
+  });
+  record(
+    "the welcome panel still paints while the transcript is truncated",
+    frameLines(stdout).join("\n").includes(HEADER_MARKER),
+    {
+      rows: useStatic.getState().list.length,
+      headerSet: useStatic.getState().headerSet,
+      frameLines: frameLines(stdout).length,
+    }
+  );
+  // Restore the long fixture so later assertions see the original row set.
+  instance.rerender(createElement(Screen, { messages: all }));
+  await settle(300);
+}
 
 // ── 2. hidden-count marker: correct value, exactly once, not stale ───────────
 
@@ -252,17 +355,22 @@ record("dynamic store holds the live rows", useDynamic.getState().list.length ==
 // legitimately appears once per repaint there.
 const visibleText = lines.join("\n");
 const frameMarkerMatches = [...visibleText.matchAll(/\.\.\. (\d+) older messages? hidden/g)].map((m) => Number(m[1]));
+// Recompute from the CURRENT row set: the header/flood section above drove a different transcript
+// through the same component, so its measurements replace the ones `markerExpected` was derived
+// from. Reusing the pre-flood expectation here would compare against a stale row set.
+const budgetNow = expectedStaticRows();
+const markerNow = hiddenSourceMessages + budgetNow.droppedSourceMessages;
 record(
   "hidden marker value equals the component's own hidden total",
-  markerExpected === 0 ? frameMarkerMatches.length === 0 : frameMarkerMatches.at(-1) === markerExpected,
-  { markerExpected, frameMarkerMatches }
+  markerNow === 0 ? frameMarkerMatches.length === 0 : frameMarkerMatches.at(-1) === markerNow,
+  { markerExpected: markerNow, frameMarkerMatches }
 );
 record("hidden marker rendered exactly once per frame", frameMarkerMatches.length <= 1, {
   occurrences: frameMarkerMatches.length,
 });
-// Architectural position: the marker belongs to the cached static block. Asserting it is the
-// FIRST store element catches an accidental move back to a sibling element outside the block.
-if (markerExpected > 0) {
+// Architectural position: the marker belongs to the cached static region. Asserting it is the
+// FIRST store element catches an accidental move back to a sibling element outside the region.
+if (markerNow > 0) {
   const head = useStatic.getState().list[0];
   record("truncation marker is the first element of the static block", Boolean(head?.props?.children), {
     hasHead: Boolean(head),
@@ -271,24 +379,42 @@ if (markerExpected > 0) {
 
 // ── 3. row count stable across window slides (no drift / ghost rows) ─────────
 
-const rowCounts = [];
+// Each step appends to the transcript and records both the store size and how many rows the
+// line budget says should be kept, recomputed from the CURRENT measured heights.
+const rowChecks = [];
+let grownSoFar = all;
 for (const extra of [1, 2, 4]) {
-  const grown = all.concat(
+  grownSoFar = grownSoFar.concat(
     Array.from({ length: extra }, (_, i) => ({
       id: `synthetic-${extra}-${i}`,
       role: "assistant",
       parts: [{ type: "text", content: `step ${extra}-${i}` }],
     }))
   );
-  instance.rerender(createElement(Screen, { messages: grown }));
-  await settle(80);
-  rowCounts.push(useStatic.getState().list.length);
+  instance.rerender(createElement(Screen, { messages: grownSoFar }));
+  await settle(120);
+  // The store uses the same window/namespace the component does, so the budget and the hidden
+  // prefix must be derived from THAT projection, not from the unbounded `all`.
+  const projected = getMessages(grownSoFar, {
+    mode: useTranscriptDisplay.getState().mode,
+    window: 120,
+    namespace: "transcript",
+  });
+  const budget = selectVisibleRows(projected.staticMessages, useStaticHeights.getState().heights);
+  rowChecks.push({
+    storeRows: useStatic.getState().list.length,
+    expectedRows: budget.visibleCount + (projected.hiddenSourceMessages + budget.droppedSourceMessages > 0 ? 1 : 0),
+  });
 }
-// The cap must keep holding as the window slides: growth here would mean the truncation
-// (and therefore the static block) is unbounded, which is the jank this plan removes.
-// Allow the one extra element the in-block marker occupies.
-const stable = rowCounts.every((n) => n > 0 && n <= MAX_STATIC_PARTS + 1);
-record("static row count stays capped as the window slides", stable, { rowCounts });
+// The budget must keep holding as the window slides: growth without bound would mean the
+// truncation (and therefore the cached region) is unbounded, which is the jank this plan
+// removes. The budget is counted in LINES, so the row count it admits varies as rows get
+// measured — assert each step matches its own recomputed expectation instead of a fixed cap.
+record(
+  "static row count stays within the line budget as the window slides",
+  rowChecks.every((c) => c.storeRows === c.expectedRows && c.storeRows > 0),
+  { rowChecks, maxStaticLines: MAX_STATIC_LINES }
+);
 record("no React key/identity warning after slides", !consoleErrors.some((e) => /key|duplicate/i.test(e)), {
   consoleErrors: consoleErrors.slice(0, 3),
 });
@@ -315,19 +441,29 @@ record("no React key/identity warning after slides", !consoleErrors.some((e) => 
   await settle(120);
 
   const midStreamRows = useStatic.getState().list.length;
-  const expectedMidStream = getMessages(streaming, {
+  const midStreamResult = getMessages(streaming, {
     mode: useTranscriptDisplay.getState().mode,
     window: 120,
     namespace: "transcript",
   });
-  // Store = capped rows + the in-block marker (when the block is truncated).
-  const cappedRows = Math.min(MAX_STATIC_PARTS, expectedMidStream.staticMessages.length);
-  const expectedRows = cappedRows + (expectedMidStream.hiddenSourceMessages > 0 ? 1 : 0);
+  const midBudget = selectVisibleRows(midStreamResult.staticMessages, useStaticHeights.getState().heights);
+  const expectedRows =
+    midBudget.visibleCount + (midStreamResult.hiddenSourceMessages + midBudget.droppedSourceMessages > 0 ? 1 : 0);
 
+  // The regression this guards is rows rendered NOWHERE, not the exact row count: a message
+  // promoted out of the streaming tail while the agent is non-idle belongs to neither list if
+  // the region refuses to rebuild. So assert the region republished and that its rows are a
+  // suffix of the projected rows (fresh), rather than stale pre-append rows.
+  const storeKeys = useStatic.getState().list.map((e) => String(e?.key ?? ""));
+  const projectedTail = midStreamResult.staticMessages.slice(-3).map((m) => m.id);
+  const newestRowKey = storeKeys.at(-1);
   record(
-    "mid-stream appends reach the static block (no dropped rows while running)",
-    midStreamRows === expectedRows && midStreamRows >= before,
-    { status: useAgentStatus.getState().status, before, midStreamRows, expectedRows }
+    "mid-stream appends reach the static region (no dropped rows while running)",
+    midStreamRows > 0 &&
+      /\.\.\. \d+ older/.test(String(storeKeys[0] ?? "")) === false &&
+      projectedTail.some((id) => storeKeys.includes(id)) &&
+      midStreamRows === expectedRows,
+    { status: useAgentStatus.getState().status, before, midStreamRows, expectedRows, projectedTail, newestRowKey }
   );
 
   // And the status must not be what governs publication: reaching an idle edge afterwards
@@ -396,6 +532,171 @@ record("no React key/identity warning after slides", !consoleErrors.some((e) => 
     shared: trailingShared,
     dynamicRows: trailingResult.dynamicMessages.map((m) => m.id),
   });
+}
+
+// ── 4. per-row cache invalidation scope (the point of this change) ────────────
+//
+// Regression guard: each row is its own `<StaticRender>` leaf, so ONE row's state changing
+// must re-cache exactly that row. Before this change the whole transcript was a single block
+// keyed on a transcript-wide tool signature, so any row's update re-cached every row.
+//
+// `onRender` fires once per (re-)cache, so counting the row ids it reports is the direct
+// measurement of what the cache did — not a proxy like emitted bytes, which are bounded by
+// the viewport and cannot show a caching win.
+{
+  const recorded = [];
+  const actions = useStaticHeights.getActions();
+  const realRecord = actions.recordHeight;
+  actions.recordHeight = (id, height) => {
+    recorded.push(id);
+    return realRecord(id, height);
+  };
+
+  // Mutate ONE row that is inside the kept window, leaving id set and row count identical,
+  // so nothing except that row's own signature can change. The row renders the core-supplied
+  // `display` payload, which IS part of the row signature (a tool output's *content* is not).
+  //
+  // The row id carries a per-part suffix (`call-7-0-1` = turn 7, tool 0, part 1), so the
+  // source message id is the key minus that suffix. Picking the row from the store (rather
+  // than a hardcoded id) keeps the guard valid for a recorded session too.
+  const storeKeys = useStatic.getState().list.map((el) => String(el?.key ?? ""));
+  // Rows are per part, so a tool row's id is `<messageId>-<partIndex>`. Pick a tool row
+  // (part 1 of an assistant message with a text part + a tool part) — only a tool part has a
+  // `display` payload to advance, which is what the row actually renders.
+  const toolRowKey = storeKeys.find((k) => /^call-\d+-\d+-1$/.test(k)) ?? null;
+  const targetMessageId = toolRowKey ? toolRowKey.replace(/-\d+$/, "") : null;
+  const mutated = renderedMessages.map((msg) =>
+    msg.id === targetMessageId
+      ? {
+          ...msg,
+          parts: msg.parts.map((p) =>
+            p.type === "tool-call" ? { ...p, display: { text: `read_file ${targetMessageId} // ADVANCED` } } : p
+          ),
+        }
+      : msg
+  );
+
+  const sigsBefore = useStatic.getState().itemSigs.slice();
+  recorded.length = 0;
+  instance.rerender(createElement(Screen, { messages: mutated }));
+  await settle(250);
+  const cachedIds = [...new Set(recorded)];
+  const sigsAfter = useStatic.getState().itemSigs;
+  const changedSigs = sigsAfter.filter((s, i) => sigsBefore[i] !== s).length;
+
+  // Two failure modes, both must be caught:
+  //  - `cachedIds` contains MORE than the one row that changed => the whole region re-cached
+  //    (the pre-change behaviour: any row's update rebuilt the transcript).
+  //  - `cachedIds` is EMPTY => the changed row did NOT re-cache, so it is pinned to its stale
+  //    render. The mutation test (wrapping the rows back in one whole-transcript block)
+  //    reproduces exactly this, which is how the guard was verified to bite.
+  record(
+    "changing ONE row re-caches exactly that row (not more, not zero)",
+    toolRowKey !== null && cachedIds.length === 1 && cachedIds[0] === toolRowKey,
+    { targetMessageId, toolRowKey, cachedIds, changedSigs, rowCount: useStatic.getState().list.length }
+  );
+  // The rows must genuinely differ (otherwise "only one changed" would be vacuous).
+  record("exactly one row signature changed", changedSigs === 1, { changedSigs, toolRowKey });
+
+  // And an unrelated re-render must re-cache nothing at all.
+  recorded.length = 0;
+  instance.rerender(createElement(Screen, { messages: mutated }));
+  await settle(200);
+  record("a re-render with no row change re-caches nothing", recorded.length === 0, {
+    cachedIds: [...new Set(recorded)],
+  });
+
+  // Switching the diff renderer must reach the rows that actually contain a diff — and must
+  // re-cache NOTHING when none do. `useDiffRenderer` is consumed deep inside the row
+  // (ToolInputView -> MessageDiffView) as a subscription, not a prop, so a cached row cannot
+  // notice the switch on its own: the mode has to reach the element array's rebuild key.
+  //
+  // The strong form matters. An earlier assertion accepted `>= rows - 1`, which a redundant dep
+  // satisfied by re-caching everything twice — so a whole-transcript re-cache passed as success.
+  // This fixture has no diff rows, so the correct answer is exactly zero.
+  recorded.length = 0;
+  const diffBefore = useDiffRenderer.getState().mode;
+  useDiffRenderer.getActions().toggle();
+  await settle(300);
+  const diffReCached = [...new Set(recorded)].length;
+  record(
+    "a diff-renderer switch re-caches nothing in a transcript with no diff rows",
+    diffReCached === 0 && useDiffRenderer.getState().mode !== diffBefore,
+    {
+      diffBefore,
+      diffAfter: useDiffRenderer.getState().mode,
+      reCached: diffReCached,
+      storeRows: useStatic.getState().list.length,
+    }
+  );
+  useDiffRenderer.getActions().setMode(diffBefore);
+  await settle(250);
+
+  // The mirror case: width genuinely changes every row's layout, so every row must re-cache.
+  // Asserting both directions keeps them from regressing together — the value lives in the
+  // rebuild key, and these two assertions pin both ends (re-cache all when it matters, none when
+  // it does not).
+  recorded.length = 0;
+  const colsBefore = stdout.columns;
+  stdout.columns = colsBefore === 120 ? 100 : 120;
+  stdout.emit("resize");
+  await settle(350);
+  const resizeReCached = [...new Set(recorded)].length;
+  record(
+    "a resize re-caches every visible row (width reaches each row's cache)",
+    resizeReCached >= useStatic.getState().list.length - 1,
+    {
+      colsBefore,
+      colsAfter: stdout.columns,
+      reCached: resizeReCached,
+      storeRows: useStatic.getState().list.length,
+    }
+  );
+  stdout.columns = colsBefore;
+  stdout.emit("resize");
+  await settle(300);
+
+  actions.recordHeight = realRecord;
+}
+
+// ── 4b. content rewritten under a stable id must not stay pinned ───────────────
+//
+// Some messages keep their id while their text is replaced wholesale (activity summaries,
+// streamed compaction summaries). The per-row signature must digest text content, otherwise
+// the row's cached render is pinned to the first version forever — the same failure class as
+// the flat-cache staleness bug. This asserts the signature moves when only the text moves.
+{
+  // A single message is the dynamic tail, so the summary needs a predecessor to land in the
+  // static region at all.
+  const withSummary = (text) => [
+    { id: "stable-user-1", role: "user", parts: [{ type: "text", content: "go" }] },
+    { id: "stable-summary-1", role: "assistant", parts: [{ type: "text", content: text }] },
+    { id: "stable-user-2", role: "user", parts: [{ type: "text", content: "next" }] },
+  ];
+  // Distinct namespaces: the static flatten snapshot short-circuits on message identity, so
+  // reusing one namespace would return the first result verbatim and pass vacuously.
+  const before = getMessages(withSummary("Summarizing part one of the transcript"), {
+    mode: "full",
+    namespace: "stable-id-guard-a",
+  });
+  const after = getMessages(withSummary("Summarizing part two, completely different text"), {
+    mode: "full",
+    namespace: "stable-id-guard-b",
+  });
+  // Static rows are per part, so the summary's row id carries a part suffix (`-0`).
+  const rowOf = (result) => result.staticMessages.findIndex((m) => m.id === "stable-summary-1-0");
+  const beforeIndex = rowOf(before);
+  const afterIndex = rowOf(after);
+  record(
+    "a row rewritten under the same id changes its render signature",
+    beforeIndex >= 0 && afterIndex >= 0 && before.staticSignatures[beforeIndex] !== after.staticSignatures[afterIndex],
+    {
+      beforeIndex,
+      afterIndex,
+      sigBefore: before.staticSignatures[beforeIndex],
+      sigAfter: after.staticSignatures[afterIndex],
+    }
+  );
 }
 
 // ── 5. per-agent flatten-snapshot namespaces + cleanup on destroy ────────────
