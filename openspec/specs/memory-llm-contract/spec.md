@@ -96,6 +96,25 @@ conversation or aborts a turn.
 - **WHEN** the consolidation structured query fails
 - **THEN** consolidation reports no change and the existing memories are left untouched
 
+### Requirement: Memory prompts declare the fields their schemas require
+
+The memory prompts SHALL state every field the corresponding schema requires, including each
+enum together with its allowed values, because the provider is not required to enforce the
+schema and the prompt is therefore the only instruction the model receives.
+
+#### Scenario: Consolidation prompt names the merged-entry fields
+
+- **WHEN** the consolidation prompt is composed
+- **THEN** it introduces every required merged-entry field (`name`, `type`, `description`,
+  `body`, `replaces`) as a named field, and states `type` together with its four allowed
+  values rather than leaving the model to infer them
+
+#### Scenario: A required field dropped from the prompt is a regression
+
+- **WHEN** a prompt change stops naming a schema-required field
+- **THEN** that is treated as a regression and covered by a test, because with an
+  all-or-nothing contract every reply omitting that field is rejected whole
+
 ### Requirement: Memory work no longer runs as subagents
 
 Memory extraction and consolidation SHALL run through the structured one-shot query port

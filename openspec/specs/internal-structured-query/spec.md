@@ -15,6 +15,18 @@ returns the schema-validated object, without entering the agent loop, without to
 without producing a transcript that any host renders. The port MUST be usable by internal
 callers (memory, titles, summaries) that are not conversational turns.
 
+The schema SHALL be treated as a response filter, not a request constraint: a provider is
+not required to enforce it, so every caller MUST state the fields its schema requires in the
+prompt it sends. A schema field the prompt never mentions is a field the model has no reason
+to produce, and under an all-or-nothing contract every such reply is rejected.
+
+#### Scenario: Prompts state the contract their schema enforces
+
+- **WHEN** a caller issues a structured query
+- **THEN** the prompt introduces each field the schema requires as a named field, including
+  any enum together with its allowed values, so the model is told what to emit rather than
+  only being judged afterwards
+
 #### Scenario: Validated object is returned
 
 - **WHEN** an internal caller invokes the port with a system prompt, a user prompt, and a

@@ -100,3 +100,5 @@ export {
   type StructuredQueryOptions,
   type StructuredQueryResult,
 } from "./adapter/side-text-query.js";
+
+export { maxTokensOption } from "./max-tokens-option.js";

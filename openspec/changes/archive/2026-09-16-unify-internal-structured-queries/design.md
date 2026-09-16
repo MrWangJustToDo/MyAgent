@@ -354,9 +354,38 @@ The migration made this a **capability regression**, not a pre-existing quirk: t
 `maxOutputLength` was a real character-level truncation, whereas the token parameter it was
 replaced with did nothing at all.
 
-**Scope.** Fixed in the port (which the structured callers share) and asserted there. The
-text-side `AgentRunner` has the same `maxTokens` spelling; that is a separate, pre-existing
-text-path issue and is left as a follow-up rather than widened into this change.
+**Scope.** Fixed in both call sites via one shared helper (`models/max-tokens-option.ts`):
+`runSideTextQuery` and `AgentRunner`. The run loop's cap is not cosmetic —
+`max-tokens-continue` escalates it to 64k on truncation, and that escalation was a no-op
+while still logging "Output truncated — escalating max_tokens". The helper exists so the two
+sites cannot drift again, and both the run loop's key and the helper itself are asserted.
+
+### D12: The output schema is a response filter, not a request constraint
+
+**Decision.** Every prompt that pairs with an `outputSchema` must state the full field contract
+the schema enforces. The schema validates; it does not instruct.
+
+**Why this needs stating explicitly.** D1/D5b assumed `outputSchema` would constrain the model.
+Measured against the configured provider it does not: a prompt that contradicts the schema wins,
+and malformed output reaches the consumer unchanged. So the schema acts purely as a filter on
+the response, and the prompt is the only thing telling the model what to emit. A field the
+schema requires but the prompt never mentions is a field the model has no reason to produce —
+and with an all-or-nothing contract (D10), every such reply is rejected whole.
+
+**This bit precisely once.** Rewriting `CONSOLIDATION_SYSTEM_PROMPT` dropped the JSON skeleton
+that used to spell out `"type": "user|feedback|project|reference"`, replacing it with "Field
+notes" that covered every field *except* `type`. The schema still required `type` as a strict
+enum, so consolidation went from 3/8 to 5/8 of live replies being rejected — with the old regex
+path having accepted them by falling back to `"user"`. The regression was invisible to the
+fixtures, which always included `type`.
+
+**Guarded by.** `validate:memory-llm-contract` case 1b asserts each prompt introduces its
+required fields *as fields* (`- name:` for extraction, `"name":` for consolidation) with `type`
+stated alongside its four allowed values. The first version of that assertion only checked
+`prompt.includes("type")`, which passed even after the contract was deleted — the preamble
+"(filename, name, type, description)" and rules like "preserve user preferences" mention the
+word incidentally. It now requires the field-shaped form, and the mutation that restores the
+broken prompt fails it.
 
 ## Risks / Trade-offs
 

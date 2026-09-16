@@ -12,7 +12,13 @@
 import assert from "node:assert/strict";
 import { z } from "zod";
 
-import { runSideTextQuery, sharedUsageHistory, logCategorySchema, logEntrySchema } from "../dist/dev.mjs";
+import {
+  runSideTextQuery,
+  sharedUsageHistory,
+  logCategorySchema,
+  logEntrySchema,
+  maxTokensOption,
+} from "../dist/dev.mjs";
 
 // ---------------------------------------------------------------------------
 // Fake adapter
@@ -183,6 +189,28 @@ const makeCapturingLog = () => {
   );
 
   console.log("✓ the output-token cap uses the adapter's native key");
+}
+
+// ---------------------------------------------------------------------------
+// 2.2e — the shared helper keeps both call sites on the native key
+// ---------------------------------------------------------------------------
+//
+// `AgentRunner` (the conversational run loop) and this port both build their
+// `modelOptions` with the same helper. Asserting the helper directly is what
+// protects the run loop, whose cap also feeds max-tokens-continue: an escalation
+// there is logged as "escalating max_tokens" but does nothing if the key is wrong.
+
+{
+  assert.deepEqual(maxTokensOption("openai", 100), { max_completion_tokens: 100 });
+  assert.deepEqual(maxTokensOption("anthropic", 100), { max_tokens: 100 });
+  assert.deepEqual(maxTokensOption(undefined, 100), { max_completion_tokens: 100 });
+  assert.deepEqual(maxTokensOption("openai", undefined), {}, "no cap -> no key");
+  assert.ok(
+    !("maxTokens" in maxTokensOption("openai", 5)),
+    "the generic `maxTokens` spelling is never produced — no adapter reads it"
+  );
+
+  console.log("✓ the shared cap helper never emits the unread `maxTokens` key");
 }
 
 // ---------------------------------------------------------------------------

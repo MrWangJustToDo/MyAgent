@@ -3,6 +3,7 @@ import { chat } from "@tanstack/ai";
 import { extractRunErrorMessage } from "../../agent/stream/stream-errors.js";
 import { sharedUsageHistory } from "../../agent/usage/usage-history-service.js";
 import { calculateCost, extractTanStackUsage, type TokenUsage } from "../../runtime-types/token-usage.js";
+import { maxTokensOption } from "../max-tokens-option.js";
 
 import { isStructuredOutputComplete } from "./structured-output-chunk.js";
 
@@ -294,33 +295,10 @@ function createQueryRequest(
     abortController,
     debug: false,
     modelOptions: {
-      ...maxTokensOption(textAdapter, options.maxOutputTokens),
+      ...maxTokensOption(textAdapter.modelStyle, options.maxOutputTokens),
       ...reasoningOptions,
     },
   };
-}
-
-/**
- * Name the output-token cap the way the active adapter actually reads it.
- *
- * `modelOptions` is spread verbatim into the provider request body, and the
- * adapters deliberately do not read a generic `maxTokens`:
- *
- * - chat-completions (`@tanstack/openai-base`) spreads `modelOptions` straight
- *   into the body and reads only the provider-native spellings — the SDK's own
- *   sampling-keys list annotates `maxTokens` as "generic / migration leftover
- *   (no adapter reads it)".
- * - the Anthropic adapter copies a curated key set and reads `max_tokens`
- *   through its own default path.
- *
- * A cap sent under the wrong name is silently ignored, so the bound this port
- * advertises only exists if the key matches the adapter.
- */
-function maxTokensOption(textAdapter: TextAdapterConfig, maxOutputTokens: number | undefined): Record<string, number> {
-  if (maxOutputTokens == null) return {};
-  return textAdapter.modelStyle === "anthropic"
-    ? { max_tokens: maxOutputTokens }
-    : { max_completion_tokens: maxOutputTokens };
 }
 
 /**

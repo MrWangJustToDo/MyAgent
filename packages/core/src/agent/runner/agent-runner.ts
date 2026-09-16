@@ -1,5 +1,6 @@
 import { chat, maxIterations } from "@tanstack/ai";
 
+import { maxTokensOption } from "../../models/max-tokens-option.js";
 import { DEFAULT_AGENT_MAX_ITERATIONS } from "../../runtime-types/agent-limits.js";
 import { assertAsyncIterable } from "../stream/assert-async-iterable.js";
 
@@ -150,7 +151,7 @@ export class AgentRunner {
       debug: false,
       modelOptions: {
         ...(this.config.temperature != null ? { temperature: this.config.temperature } : {}),
-        ...(this.config.maxOutputTokens != null ? { maxTokens: this.config.maxOutputTokens } : {}),
+        ...maxTokensOption(this.config.modelStyle, this.config.maxOutputTokens),
         ...(this.config.reasoningEffort
           ? this.config.modelStyle === "anthropic"
             ? { effort: this.config.reasoningEffort }

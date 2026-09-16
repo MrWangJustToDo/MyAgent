@@ -185,6 +185,122 @@ const readBody = async (manager, filename) => manager.readMemory(filename);
 }
 
 // ---------------------------------------------------------------------------
+// 1b. The prompt states the contract the schema enforces
+// ---------------------------------------------------------------------------
+//
+// A provider that does not enforce the output schema leaves the prompt as the
+// only thing telling the model what to emit. Consolidation's prompt previously
+// listed every field except `type` while the schema required it, so a reply that
+// simply omitted `type` was rejected whole — 2 of 8 live replies. Asserting the
+// prompt here is what keeps the two in sync: a schema field the prompt never
+// mentions is a field the model has no reason to produce.
+
+{
+  // Threshold 1 so `consolidateMemories` does not short-circuit below its cap
+  // and actually issues the query.
+  const manager = new MemoryManager({ rootPath: root, consolidateThreshold: 1 });
+  await manager.initialize();
+  await manager.writeMemory("contract-probe-source", "project", "Source", "Source body.");
+
+  const prompts = [];
+  const capturing = (object) => ({
+    model: "fake-model",
+    modelStyle: "openai",
+    adapter: {
+      kind: "text",
+      name: "fake",
+      model: "fake-model",
+      "~types": {},
+      chatStream() {
+        return (async function* () {
+          yield usageChunk(1, 1);
+        })();
+      },
+      async structuredOutput() {
+        throw new Error("not implemented");
+      },
+      // The engine hands the adapter `{ chatOptions, outputSchema }`; the
+      // system prompt lives on `chatOptions.systemPrompts`.
+      structuredOutputStream(options) {
+        // Capture system *and* user prompt: extraction states its field contract
+        // in the user prompt, consolidation in the system prompt. Messages are
+        // joined as real text (not JSON-encoded) so line-anchored assertions see
+        // the prompt the model actually reads.
+        const chat = options?.chatOptions ?? {};
+        const userText = (chat.messages ?? [])
+          .map((message) => {
+            const content = message?.content ?? message?.parts ?? "";
+            return typeof content === "string" ? content : JSON.stringify(content);
+          })
+          .join("\n");
+        prompts.push(`${(chat.systemPrompts ?? []).join("\n")}\n${userText}`);
+        return (async function* () {
+          yield completeChunk(object);
+          yield usageChunk(10, 5);
+        })();
+      },
+    },
+  });
+
+  const mergeEntry = {
+    name: "contract-probe-merged",
+    type: "project",
+    description: "Merged probe",
+    body: "Body.",
+    replaces: ["contract-probe-a.md"],
+  };
+
+  await extractMemories(dialogue, manager, capturing([]));
+  await consolidateMemories(manager, capturing({ merged: [mergeEntry], deleted: [] }));
+
+  assert.equal(prompts.length, 2, "both prompts were captured");
+
+  const [extractionPrompt, consolidationPrompt] = prompts;
+
+  // Assert the *contract*, not incidental word presence. The consolidation
+  // prompt's preamble already says it receives a catalog of
+  // "(filename, name, type, description)", and rules like "preserve user
+  // preferences" mention type values — so asserting `prompt.includes("type")`
+  // passes even when the entry contract is absent. That weaker check survived a
+  // mutation that deleted the contract, which is exactly the false negative this
+  // assertion must not have. Require instead that each required field is
+  // introduced as a quoted field name in the contract block.
+  // The two prompts introduce fields differently (extraction as a bulleted
+  // `- name: ...` list, consolidation as JSON-shaped `"name":` entries), so each
+  // is matched in its own form. Both must introduce the field *as a field*, with
+  // the type alongside its allowed values — not merely mention the word anywhere.
+  const contracts = [
+    {
+      label: "extraction",
+      prompt: extractionPrompt,
+      fieldRe: (f) => new RegExp("^-\\s*" + f + "\\s*:", "m"),
+      typeRe: /^-\s*type:\s*one of[^\n]*user[^\n]*feedback[^\n]*project[^\n]*reference/m,
+      fields: ["name", "type", "description", "body"],
+    },
+    {
+      label: "consolidation",
+      prompt: consolidationPrompt,
+      fieldRe: (f) => new RegExp('"' + f + '"\\s*:'),
+      typeRe: /"type"\s*:\s*one of[^\n]*user[^\n]*feedback[^\n]*project[^\n]*reference/,
+      fields: ["name", "type", "description", "body", "replaces"],
+    },
+  ];
+
+  for (const { label, prompt, fieldRe, typeRe, fields } of contracts) {
+    for (const field of fields) {
+      assert.match(
+        prompt,
+        fieldRe(field),
+        `the ${label} prompt introduces \`${field}\` as a field, not just in passing`
+      );
+    }
+    assert.match(prompt, typeRe, `the ${label} contract states \`type\` together with its four allowed values`);
+  }
+
+  console.log("✓ both prompts state the contract their schema enforces");
+}
+
+// ---------------------------------------------------------------------------
 // 2. Out-of-range hints are normalized, not fatal
 // ---------------------------------------------------------------------------
 

@@ -82,13 +82,18 @@ Rules:
 6. Use kebab-case for names.
 
 Field notes:
-- "merged": new memories that replace 2+ source files listed in "replaces".
-  Write the full merged body yourself based on the descriptions.
+- Every entry in "merged" MUST contain exactly these fields, and MUST NOT add others:
+  - "name": short kebab-case identifier (e.g. "user-preference-tabs")
+  - "type": one of ${memoryTypeSchema.options.join(", ")}
+  - "description": one-line summary for index lookup
+  - "body": full merged detail in markdown
+  - "replaces": the source filenames this entry replaces
 - "importance" (optional): 0–1 weight for the merged entry; omit to keep default.
 - "expiresAt" (optional): ISO expiry; omit unless the merged topic is time-bound.
 - "deleted": files to remove outright (outdated/contradicted).
 - Files not mentioned in either list are kept as-is.
-- If no changes are needed, return empty "merged" and "deleted" lists.`;
+- If no changes are needed, return empty "merged" and "deleted" lists.
+- Reply with the JSON object only — no prose, no markdown code fences.`;
 
 /** Number of recent messages to analyze for extraction */
 const EXTRACTION_WINDOW = 30;
@@ -266,7 +271,7 @@ export async function extractMemories(
     "- expiresAt (optional): ISO timestamp when this memory stops being relevant",
     "  (e.g. a temporary constraint or a deprecation date). Omit for durable memories.",
     "If nothing new or already covered by existing memories, return an empty list.",
-    "",
+    "Reply with the JSON array only — no prose, no markdown code fences.",
     `Existing memories:\n${existingDesc}`,
     "",
     `Dialogue:\n${dialogue.slice(0, MAX_EXTRACTION_CHARS)}`,
