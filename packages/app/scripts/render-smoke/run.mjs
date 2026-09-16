@@ -617,26 +617,49 @@ record("no React key/identity warning after slides", !consoleErrors.some((e) => 
     cachedIds: [...new Set(recorded)],
   });
 
-  // Switching the diff renderer must reach the rows that actually contain a diff — and must
-  // re-cache NOTHING when none do. `useDiffRenderer` is consumed deep inside the row
-  // (ToolInputView -> MessageDiffView) as a subscription, not a prop, so a cached row cannot
-  // notice the switch on its own: the mode has to reach the element array's rebuild key.
+  // Switching the diff renderer must reach EVERY row. `useDiffRenderer` is consumed deep
+  // inside the row (ToolInputView -> MessageDiffView) as a subscription, not a prop, so a
+  // cached row cannot notice the switch on its own: the mode has to reach the row's cache
+  // deps (or the element array those deps are rebuilt from). A row left un-re-cached keeps
+  // rendering through the previous renderer — and, because the two renderers lay out to
+  // different heights, it also holds a stale measured height.
   //
-  // The strong form matters. An earlier assertion accepted `>= rows - 1`, which a redundant dep
-  // satisfied by re-caching everything twice — so a whole-transcript re-cache passed as success.
-  // This fixture has no diff rows, so the correct answer is exactly zero.
+  // This fixture has no diff rows, so the re-caching is pure cost — but it is NOT zero, and it
+  // must not be: the deps are what make the switch reach a row that DOES contain a diff, and a
+  // row cannot know in advance whether it will render one. The bound is "every row, but not
+  // more often than the store itself updates":
+  //
+  //  0 rows = the switch never reaches the rows (the stale-render bug this guards).
+  //  1-2 passes = within `useDiffRenderer`'s two-phase update: `toggle()`/`setMode()` set
+  //    `mode` synchronously and bump `key` on a `setTimeout`, so deps carrying `${mode}:${key}`
+  //    change twice. Measured: 6 toggles out of 6, 179 rows, 358 events.
+  //  3+ passes = redundant deps re-caching more than once per store update — what the earlier
+  //    `>= rows - 1` form accepted (a whole-transcript re-cache read as success).
   recorded.length = 0;
   const diffBefore = useDiffRenderer.getState().mode;
   useDiffRenderer.getActions().toggle();
   await settle(300);
+  const diffEvents = recorded.length;
   const diffReCached = [...new Set(recorded)].length;
+  // The truncation marker caches alongside the rows but has no measurement of its own, so it
+  // never appears in `recorded` and is excluded from the row count.
+  const diffRows = useStatic
+    .getState()
+    .list.map((el) => String(el?.key ?? ""))
+    .filter((key) => key !== "truncation-marker").length;
+
   record(
-    "a diff-renderer switch re-caches nothing in a transcript with no diff rows",
-    diffReCached === 0 && useDiffRenderer.getState().mode !== diffBefore,
+    "a diff-renderer switch re-caches every row, at most once per store update",
+    diffRows > 0 &&
+      diffReCached === diffRows &&
+      diffEvents <= diffRows * 2 &&
+      useDiffRenderer.getState().mode !== diffBefore,
     {
       diffBefore,
       diffAfter: useDiffRenderer.getState().mode,
+      rows: diffRows,
       reCached: diffReCached,
+      events: diffEvents,
       storeRows: useStatic.getState().list.length,
     }
   );
