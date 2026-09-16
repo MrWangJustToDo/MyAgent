@@ -856,6 +856,46 @@ Programmatic equivalent: `createNodeEnv({ rootPath, mode: "os" | "native" })`. E
 This is also how a code-mode sandbox reads background output: `read_file` is exposed there, `get_command_output` is not.
 
 ### Streaming UI (`@my-agent/app`)
+- **Transcript static region (per-row caching):** every completed row in `MessageList` is its own
+  `<StaticRender>` leaf, keyed on a **per-row** signature (`getMessages` returns `staticSignatures`,
+  one entry per row, built from `computeMessageRenderSignature`). So one row's state advancing
+  re-caches only that row — do **not** reintroduce a transcript-wide signature (the old
+  `toolCallsSignature` / `computeToolCallsRenderSignature` fold) into any cache dependency, and do
+  not wrap the whole row list in one `<StaticRender>`: either one makes every row depend on every
+  other row, which is the jank this replaced.
+  - Rows are **per part**, so a row id is `<messageId>-<partIndex>` (e.g. `call-7-0-1`), and the
+    store's `itemSigs` is positional against `useStatic.list` — always written together via the
+    single `setStaticList(items, signatures)` action.
+  - The row array must be rebuilt whenever **any** row signature moves (the elements carry their
+    own `deps`); freezing the array on a row-*set* key pins changed rows to stale renders.
+- **Transcript truncation is a LINE budget:** `MAX_STATIC_LINES` (in `MessageList`) caps the
+  completed region by accumulated rendered height, not message count. Heights come from each row's
+  `onRender` → `measureElement` (`useStaticHeights`, keyed by row id, pruned to the rendered set);
+  rows never measured get `PROVISIONAL_ROW_LINES`, which must stay stable so a selection never
+  oscillates as measurements land, and conservative so a cold mount never truncates harder than the
+  message-count cap it replaced. Historic message counts and dropped-row totals are derived from
+  `selectVisibleRows`; note the worker's screen model keeps ~1000 lines and evicts history only when
+  a **single frame** exceeds it — raising that limit is not the fix for long sessions.
+  - **The welcome panel sits OUTSIDE this budget** (`Content` renders it as its own `<StaticRender>`
+    keyed on `headerSet`). It is the user's orientation and the only element pinned to the top of
+    the transcript, so the budget must never be able to drop it. Do not prepend it to the row list.
+  - **Prune measured heights by the DERIVED row set, never by the visible subset.**
+    `selectVisibleRows` decides visibility *from* those heights, so pruning by the visible subset
+    makes the two chase each other and the kept window oscillates as messages arrive.
+  - **`width`/`theme`/`diffMode` belong in the element-array rebuild key, not the per-row deps.**
+    Rebuilding the array is the only thing that gives rows new deps, so the key is where those
+    values take effect; putting them in both is redundant and makes one toggle cost two rebuilds.
+  - **`onRender` fires once on a pre-layout pass at `width 0`** with a width-derived bogus height
+    (`2 * columns - 2`); caching then yields a 0-line region and the post-cache pass reports
+    `height 0`, which the recorder rejects — so the bogus value would stick. Gate the first
+    publication on a known width. Measuring from inside a row cannot substitute: a cached row's
+    inner Yoga subtree is detached, so inner refs measure `NaN`.
+  - **A row's cache deps must include every store it subscribes to**, not just its props: `mode`,
+    `theme` and `useDiffRenderer` are all read *inside* the row subtree (`MessageDiffView`
+    subscribes to the diff renderer), so each has to reach a cache input. Grep the row subtree for
+    stores before adding a cache unit.
+- **Truncation marker** (`... N older messages hidden`) caches with the rows it describes and is a
+  single element (`key="truncation-marker"`), counted in MESSAGES while the budget is counted in LINES.
 - **`run_command`:** Core emits every chunk via `emitStreamingChunk` onto the session `tool` channel
   (`chunk` / `clear` by `toolCallId`); throttling is applied in the app layer.
   `useStreamingOutput(toolCallId, { throttleMs })` / `StreamingOutputView` (default `0` = every chunk).
