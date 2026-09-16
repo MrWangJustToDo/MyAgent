@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import {
   CONTEXT_OPEN_PREFIX,
   SUBAGENT_ALLOWED_KINDS,
+  TURN_CONTEXT_KINDS,
   buildAutoModePrompt,
   buildFrozenSystemPrompt,
   buildModeInactivePrompt,
@@ -64,14 +65,22 @@ const sections = buildTurnContextSections({
   modeContent: '<plan_mode phase="planning">plan</plan_mode>',
   extensionTurnContextSections: [{ id: "my-agent-memory", content: "<memory_index>m</memory_index>" }],
 });
+// Built-in kinds come from the catalog so a rename cannot silently pass here.
 assert.deepEqual(
   sections.map((s) => s.key),
-  ["current_date", "git_status", "relevant_memories", "reminder", "mode", "my-agent-memory"]
+  [
+    TURN_CONTEXT_KINDS.currentDate,
+    TURN_CONTEXT_KINDS.gitStatus,
+    TURN_CONTEXT_KINDS.relevantMemories,
+    TURN_CONTEXT_KINDS.reminder,
+    TURN_CONTEXT_KINDS.mode,
+    "my-agent-memory",
+  ]
 );
 // Each extension gets its own kind tag (enable/disable share the same tag).
 const memorySection = sections.find((s) => s.key === "my-agent-memory");
 assert.ok(memorySection?.content.includes("<memory_index>"), "extension content kept under its own kind");
-const modeSection = sections.find((s) => s.key === "mode");
+const modeSection = sections.find((s) => s.key === TURN_CONTEXT_KINDS.mode);
 assert.ok(modeSection?.content.startsWith("<plan_mode"));
 assert.ok(!modeSection?.content.includes("<auto_mode>"), "plan wins over auto in mode category");
 
@@ -137,7 +146,7 @@ assert.equal(tm2.shouldNag(), false, "update resets throttle -> below threshold"
 
 // Subagent-only project_instructions section builder.
 const projectSection = buildProjectInstructionsSection("Follow conventions.");
-assert.equal(projectSection.key, "project_instructions");
+assert.equal(projectSection.key, TURN_CONTEXT_KINDS.projectInstructions);
 assert.ok(projectSection.content.includes("<project_instructions>"));
 assert.ok(projectSection.content.includes("Follow conventions."));
 

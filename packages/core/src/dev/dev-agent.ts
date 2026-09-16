@@ -190,6 +190,8 @@ export {
   loadLatestInstructionContent,
   readInstructionContextState,
 } from "../agent/turn-context";
+export { TURN_CONTEXT_KINDS } from "../agent/turn-context";
+export type { TurnContextKind } from "../agent/turn-context";
 export type { InstructionContextState, InstructionFile, LoadedInstructionContent } from "../agent/turn-context";
 export {
   SESSION_RETRIEVAL_KIND,

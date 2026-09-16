@@ -1,4 +1,4 @@
-import { SESSION_RETRIEVAL_KIND } from "../agent/turn-context/session-retrieval.js";
+import { TURN_CONTEXT_KINDS } from "../agent/turn-context/turn-context-message.js";
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../models/cache/prompt-cache.js";
 
 import type { AgentConfig } from "./agent-types.js";
@@ -74,7 +74,7 @@ export function buildTurnContextSections(input: DynamicTurnContextInput): TurnCo
 
   if (input.currentDate) {
     sections.push({
-      key: "current_date",
+      key: TURN_CONTEXT_KINDS.currentDate,
       content: ["<current_date>", input.currentDate, "</current_date>"].join("\n"),
     });
   }
@@ -87,21 +87,24 @@ export function buildTurnContextSections(input: DynamicTurnContextInput): TurnCo
     if (input.gitStatus) {
       gitParts.push(`Status:\n${input.gitStatus}`);
     }
-    sections.push({ key: "git_status", content: ["<git_status>", ...gitParts, "</git_status>"].join("\n") });
+    sections.push({
+      key: TURN_CONTEXT_KINDS.gitStatus,
+      content: ["<git_status>", ...gitParts, "</git_status>"].join("\n"),
+    });
   }
 
   if (input.relevantMemoryContent)
-    sections.push({ key: "relevant_memories", content: input.relevantMemoryContent.trim() });
-  if (input.todoNagReminder) sections.push({ key: "reminder", content: input.todoNagReminder.trim() });
+    sections.push({ key: TURN_CONTEXT_KINDS.relevantMemories, content: input.relevantMemoryContent.trim() });
+  if (input.todoNagReminder) sections.push({ key: TURN_CONTEXT_KINDS.reminder, content: input.todoNagReminder.trim() });
 
-  if (input.modeContent) sections.push({ key: "mode", content: input.modeContent.trim() });
+  if (input.modeContent) sections.push({ key: TURN_CONTEXT_KINDS.mode, content: input.modeContent.trim() });
 
   if (input.instructionContext?.trim()) {
-    sections.push({ key: "instruction_context", content: input.instructionContext.trim() });
+    sections.push({ key: TURN_CONTEXT_KINDS.instructionContext, content: input.instructionContext.trim() });
   }
 
   if (input.sessionRetrieval?.trim()) {
-    sections.push({ key: SESSION_RETRIEVAL_KIND, content: input.sessionRetrieval.trim() });
+    sections.push({ key: TURN_CONTEXT_KINDS.sessionRetrieval, content: input.sessionRetrieval.trim() });
   }
 
   if (input.extensionTurnContextSections) {
@@ -121,7 +124,7 @@ export function buildTurnContextSections(input: DynamicTurnContextInput): TurnCo
  */
 export function buildProjectInstructionsSection(content: string): TurnContextSection {
   return {
-    key: "project_instructions",
+    key: TURN_CONTEXT_KINDS.projectInstructions,
     content: [
       "<project_instructions>",
       "Below are the project-specific instructions loaded from the repository.",

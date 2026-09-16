@@ -1,4 +1,5 @@
 import {
+  TURN_CONTEXT_KINDS,
   findLatestTurnContextSectionHashes,
   formatContextSectionUserContent,
   hashTurnContextSection,
@@ -18,10 +19,12 @@ import type { ChatMiddleware, ModelMessage, UIMessage } from "@tanstack/ai";
  * Kinds a subagent may receive — everything else is filtered out so subagents
  * stay context-isolated (no memory / todo / plan / extension context).
  */
-export const SUBAGENT_ALLOWED_KINDS: ReadonlySet<string> = new Set([
-  "current_date",
-  "git_status",
-  "project_instructions",
+// `section.key` is a string: extension-contributed sections use the extension id
+// as their kind, so it is not necessarily a built-in TurnContextKind.
+export const SUBAGENT_ALLOWED_KINDS: ReadonlySet<string> = new Set<string>([
+  TURN_CONTEXT_KINDS.currentDate,
+  TURN_CONTEXT_KINDS.gitStatus,
+  TURN_CONTEXT_KINDS.projectInstructions,
 ]);
 
 /** Re-admit all sections when the conversation grows this much since last admit. */

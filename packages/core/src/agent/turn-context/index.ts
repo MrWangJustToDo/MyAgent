@@ -2,6 +2,7 @@ export {
   CONTEXT_CLOSE,
   CONTEXT_OPEN_PREFIX,
   hashTurnContextPayload,
+  TURN_CONTEXT_KINDS,
   formatContextSectionUserContent,
   isContextText,
   contextKindFromText,
@@ -11,7 +12,7 @@ export {
   hashTurnContextSection,
   findLatestTurnContextSectionHashes,
 } from "./turn-context-message.js";
-export type { TurnContextSection } from "./turn-context-message.js";
+export type { TurnContextKind, TurnContextSection } from "./turn-context-message.js";
 
 export { getCurrentDate, getGitInfo } from "./env-context.js";
 export type { GitInfo } from "./env-context.js";

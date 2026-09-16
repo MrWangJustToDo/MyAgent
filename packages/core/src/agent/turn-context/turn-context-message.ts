@@ -24,6 +24,35 @@ import type { ModelMessage, UIMessage } from "@tanstack/ai";
 export const CONTEXT_OPEN_PREFIX = "<ctx kind=";
 export const CONTEXT_CLOSE = "</ctx>";
 
+// ============================================================================
+// Section kinds
+// ============================================================================
+
+/**
+ * Every turn-context section kind.
+ *
+ * The kind is a section's identity for per-kind hash admission — it decides which
+ * synthetic message is replaced and which payload comparison decides re-injection.
+ * It was previously written as a bare literal in three places (the builder, the
+ * subagent allowlist, and `project_instructions`), so a rename would compile while
+ * silently splitting a kind into two independently-admitted ones.
+ *
+ * Named rather than a positional array: index access (`KINDS[1]`) would read as
+ * nothing and would silently reassign every kind if one were inserted.
+ */
+export const TURN_CONTEXT_KINDS = {
+  currentDate: "current_date",
+  gitStatus: "git_status",
+  relevantMemories: "relevant_memories",
+  reminder: "reminder",
+  mode: "mode",
+  instructionContext: "instruction_context",
+  sessionRetrieval: "session_retrieval",
+  projectInstructions: "project_instructions",
+} as const;
+
+export type TurnContextKind = (typeof TURN_CONTEXT_KINDS)[keyof typeof TURN_CONTEXT_KINDS];
+
 /** FNV-1a 32-bit — stable, dependency-free payload fingerprint. */
 export function hashTurnContextPayload(payload: string): string {
   let hash = 0x811c9dc5;

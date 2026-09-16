@@ -26,6 +26,8 @@ import { getEnv } from "../../env.js";
 import { COMPACT_TRANSCRIPT_ROOT } from "../compaction/write-compact-archive.js";
 import { SESSION_DIR } from "../persistence/types.js";
 
+import { TURN_CONTEXT_KINDS, type TurnContextKind } from "./turn-context-message.js";
+
 /** Archive files are named `compact-<N>.md`, N ascending with each compaction. */
 const COMPACT_ARCHIVE_RE = /^compact-(\d+)\.md$/;
 
@@ -33,8 +35,14 @@ const COMPACT_ARCHIVE_RE = /^compact-(\d+)\.md$/;
 export const SESSION_RETRIEVAL_OPEN = "<session_retrieval>";
 export const SESSION_RETRIEVAL_CLOSE = "</session_retrieval>";
 
-/** Section key used for hash admission (matches the tag). */
-export const SESSION_RETRIEVAL_KIND = "session_retrieval";
+/**
+ * Section kind for the retrieval section.
+ *
+ * Typed against the shared catalog so a rename that misses one site fails to
+ * compile instead of silently splitting the kind into two independently-admitted
+ * ones.
+ */
+export const SESSION_RETRIEVAL_KIND: TurnContextKind = TURN_CONTEXT_KINDS.sessionRetrieval;
 
 /** Rendered retrieval section, or the empty string when there is no history. */
 export type SessionRetrievalSection = string;

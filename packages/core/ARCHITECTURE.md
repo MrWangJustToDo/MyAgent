@@ -700,6 +700,12 @@ its notices, so editing an `@`-imported file re-injects the block; the byte budg
 counted in bytes and truncation is surfaced. Validate: `validate:instruction-imports`,
 `validate:instruction-context`, `validate:instruction-budget`.
 
+Section kinds are declared once in `agent/turn-context/turn-context-message.ts`
+(`TURN_CONTEXT_KINDS`); the builder, the subagent allowlist, and `session-retrieval` all read from it.
+A kind is a section's identity for per-kind hash admission, so a spelling drift would compile while
+splitting one kind into two independently-admitted ones. (`SUBAGENT_ALLOWED_KINDS` stays a
+`ReadonlySet<string>`: extension sections carry arbitrary ids as their kind.)
+
 **Session-retrieval guidance** (`agent/turn-context/session-retrieval.ts`): the single source of
 truth for how the model reaches past conversation, emitted as `<ctx kind=session_retrieval>`.
 Gated on workspace history existing, evaluated **once per agent** so the section stays
