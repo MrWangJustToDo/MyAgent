@@ -185,7 +185,8 @@
     "validate:middleware-order": "pnpm run build && node scripts/validate-middleware-order.mjs",
     "validate:tool-presentation": "node scripts/validate-tool-presentation.mjs",
     "validate:tool-display": "pnpm run build && node scripts/validate-tool-display.mjs",
-    "validate:mid-run-tool-display": "pnpm run build && node scripts/validate-mid-run-tool-display.mjs"
+    "validate:mid-run-tool-display": "pnpm run build && node scripts/validate-mid-run-tool-display.mjs",
+    "validate:instruction-imports": "pnpm run build && node scripts/validate-instruction-imports.mjs"
   },
   "dependencies": {
     "@tanstack/ai": "^0.54.0",

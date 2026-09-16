@@ -25,4 +25,4 @@ export {
   loadLatestInstructionContent,
   readInstructionContextState,
 } from "./instruction-context.js";
-export type { InstructionContextState, InstructionFile } from "./instruction-context.js";
+export type { InstructionContextState, InstructionFile, LoadedInstructionContent } from "./instruction-context.js";

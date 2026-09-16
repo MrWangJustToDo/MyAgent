@@ -26,6 +26,7 @@ export async function emitSessionBootstrapEvents(
       message: formatAgentDocResult({
         content: docContent,
         source: docSource || undefined,
+        importNotices: [],
       }),
     });
   }

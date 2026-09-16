@@ -1,19 +1,32 @@
 /**
  * Agent Documentation Loader (AGENTS.md / CLAUDE.md)
  *
- * This module provides a standardized way to load agent-specific documentation
- * files (AGENTS.md, CLAUDE.md, etc.) from the project root and inject them
- * into the agent's system prompt.
+ * Loads the project's instruction file and injects it into the agent's system
+ * prompt as `<project_instructions>`.
  *
  * This follows the cross-tool standard established by AGENTS.md (stewarded by
  * the Linux Foundation's Agentic AI Foundation) and is compatible with how
- * Claude Code, Codex CLI, Cursor, Gemini CLI, and other tools discover and
- * load project instructions.
+ * Claude Code, Codex CLI, Cursor, Gemini CLI, and other tools discover and load
+ * project instructions.
+ *
+ * Discovery and `@` import expansion live in
+ * {@link import("./instruction-files.js")} — the same module the turn-context
+ * change detector uses, so what is loaded here and what is re-injected later
+ * cannot disagree.
  *
  * @see https://agents.md/
  */
 
 import { getEnv } from "../../env.js";
+
+import {
+  INSTRUCTION_FILENAMES,
+  INSTRUCTION_MAX_BYTES,
+  resolveOverrideInstruction,
+  resolvePrimaryInstruction,
+  type InstructionDiscoveryOptions,
+  type ResolvedInstructionFile,
+} from "./instruction-files.js";
 
 // ============================================================================
 // Constants
@@ -22,45 +35,29 @@ import { getEnv } from "../../env.js";
 /**
  * Default filenames to search for, in priority order.
  *
- * - `CLAUDE.md` first: Claude Code's native format (higher priority for Claude users)
- * - `AGENTS.md` second: The cross-tool standard (Linux Foundation, 60k+ projects)
- *
- * Agents look for these files and use the first one found.
+ * Re-exported from the shared discovery module so the loader and the
+ * turn-context path cannot drift apart.
  */
-export const DEFAULT_AGENT_DOC_FILENAMES = ["CLAUDE.md", "AGENTS.md"];
+export const DEFAULT_AGENT_DOC_FILENAMES = INSTRUCTION_FILENAMES;
 
-/**
- * Default maximum bytes to read from a single agent documentation file.
- * Matches Codex CLI's project_doc_max_bytes default (65536 = 64 KiB).
- */
-export const DEFAULT_AGENT_DOC_MAX_BYTES = 65536;
+/** Default maximum bytes per file after import expansion (65536 = 64 KiB). */
+export const DEFAULT_AGENT_DOC_MAX_BYTES = INSTRUCTION_MAX_BYTES;
+
+export { INSTRUCTION_FILENAMES, INSTRUCTION_MAX_BYTES };
 
 // ============================================================================
 // Types
 // ============================================================================
 
 /** Configuration for the agent documentation loader */
-export interface AgentDocLoaderConfig {
-  /** Root path of the project */
-  rootPath: string;
-  /**
-   * Filenames to search for, in priority order.
-   * Defaults to [CLAUDE.md, AGENTS.md]
-   */
-  filenames?: string[];
-  /**
-   * Maximum bytes per file (default: 65536).
-   * Content beyond this limit is silently truncated with a notice.
-   */
-  maxBytes?: number;
+export type AgentDocLoaderConfig = InstructionDiscoveryOptions & {
   /**
    * Whether to also look for a local override file.
    * For AGENTS.md, this would be AGENTS.override.md (gitignored, personal overrides).
-   * For CLAUDE.md, there's no standard override pattern.
    * Default: true
    */
   loadOverride?: boolean;
-}
+};
 
 /** Result of loading agent documentation */
 export interface AgentDocLoadResult {
@@ -77,6 +74,11 @@ export interface AgentDocLoadResult {
    * (e.g., which files were searched, errors encountered).
    */
   notice?: string;
+  /**
+   * Diagnostics from `@` import expansion (missing target, circular reference,
+   * depth or budget stop). Empty when no imports needed expanding.
+   */
+  importNotices: string[];
 }
 
 /**
@@ -88,14 +90,17 @@ export function formatAgentDocResult(result: AgentDocLoadResult): string {
   const parts: string[] = [];
 
   if (result.source) {
-    const size = result.content.length;
-    const sizeKB = (size / 1024).toFixed(1);
+    const sizeKB = (env.byteLength(result.content, "utf-8") / 1024).toFixed(1);
     parts.push(`Loaded instructions from ${env.path.basename(result.source)} (${sizeKB} KB)`);
   }
 
   if (result.overrideSource && result.overrideContent != null) {
-    const sizeKB = (result.overrideContent.length / 1024).toFixed(1);
+    const sizeKB = (env.byteLength(result.overrideContent, "utf-8") / 1024).toFixed(1);
     parts.push(`Loaded override from ${env.path.basename(result.overrideSource)} (${sizeKB} KB)`);
+  }
+
+  if (result.importNotices.length > 0) {
+    parts.push(`${result.importNotices.length} import notice(s)`);
   }
 
   return parts.join("; ") || "No agent documentation files found";
@@ -106,120 +111,51 @@ export function formatAgentDocResult(result: AgentDocLoadResult): string {
 // ============================================================================
 
 /**
- * Search for and load agent documentation files from the project root.
+ * Search for and load the project's instruction file.
  *
- * Discovery algorithm (matching cross-tool conventions):
- * 1. Look for each configured filename in order (CLAUDE.md, AGENTS.md)
- * 2. Use the FIRST one found (priority ordering)
- * 3. If `loadOverride` is enabled, also look for AGENTS.override.md
- *    alongside the found file
- * 4. Truncate content that exceeds maxBytes with a notice
+ * The first existing file in `filenames` order wins and is the only one loaded —
+ * `AGENTS.md` is not appended as a fallback. A project that keeps `CLAUDE.md` as
+ * a pointer to `AGENTS.md` writes `@AGENTS.md` in it (Claude Code's import
+ * syntax), which the shared resolver inlines during the load.
  *
  * @param config - Loader configuration
  * @returns The loaded content and metadata
  *
  * @example
  * ```typescript
- * const result = await loadAgentDoc({
- *   rootPath: "/project",
- * });
- * // result.content contains the contents of AGENTS.md or CLAUDE.md
+ * const result = await loadAgentDoc({ rootPath: "/project" });
+ * // result.content contains CLAUDE.md (with imports expanded) or AGENTS.md
  * ```
  */
 export async function loadAgentDoc(config: AgentDocLoaderConfig): Promise<AgentDocLoadResult> {
-  const env = getEnv();
-  const {
-    rootPath,
-    filenames = DEFAULT_AGENT_DOC_FILENAMES,
-    maxBytes = DEFAULT_AGENT_DOC_MAX_BYTES,
-    loadOverride = true,
-  } = config;
+  const { rootPath, filenames = DEFAULT_AGENT_DOC_FILENAMES, maxBytes, loadOverride = true } = config;
 
-  let result: AgentDocLoadResult = { content: "" };
-
-  for (const filename of filenames) {
-    const filePath = env.path.join(rootPath, filename);
-    try {
-      const exists = await env.fs.exists(filePath);
-      if (exists) {
-        const rawContent = await env.fs.readFile(filePath);
-
-        const content = truncateContent(rawContent, maxBytes, filename);
-        result = { ...result, content, source: filePath };
-
-        if (loadOverride) {
-          const overrideResult = await loadOverrideFile(rootPath, filename);
-          if (overrideResult) {
-            result = { ...result, ...overrideResult };
-          }
-        }
-
-        break;
-      }
-    } catch (err) {
-      result.notice = `Error checking file ${filename}: ${String(err)}`;
-      continue;
-    }
+  const primary = await resolvePrimaryInstruction({ rootPath, filenames, maxBytes });
+  if (!primary) {
+    return {
+      content: "",
+      notice: `No agent documentation file found (searched: ${filenames.join(", ")})`,
+      importNotices: [],
+    };
   }
 
-  if (!result.content) {
-    result.notice = `No agent documentation file found (searched: ${filenames.join(", ")})`;
+  const result: AgentDocLoadResult = {
+    content: primary.content,
+    source: primary.path,
+    importNotices: [...primary.importNotices],
+  };
+
+  if (loadOverride) {
+    const override = await resolveOverrideInstruction(rootPath, primary.name, maxBytes ?? DEFAULT_AGENT_DOC_MAX_BYTES);
+    if (override) {
+      result.overrideContent = override.content;
+      result.overrideSource = override.path;
+      result.importNotices.push(...override.importNotices);
+    }
   }
 
   return result;
 }
 
-/**
- * Load an override file alongside the primary documentation.
- *
- * Converts "AGENTS.md" → "AGENTS.override.md" in the same directory.
- * Override files are meant to be gitignored (personal/local overrides).
- */
-async function loadOverrideFile(
-  rootPath: string,
-  primaryFilename: string
-): Promise<{ overrideContent: string; overrideSource: string } | null> {
-  const env = getEnv();
-  const parsed = env.path.parse(primaryFilename);
-  const overrideFilename = `${parsed.name}.override${parsed.ext}`;
-
-  if (overrideFilename === primaryFilename) return null;
-
-  const overridePath = env.path.join(rootPath, overrideFilename);
-
-  try {
-    const exists = await env.fs.exists(overridePath);
-    if (exists) {
-      const rawContent = await env.fs.readFile(overridePath);
-      const overrideContent = truncateContent(rawContent, DEFAULT_AGENT_DOC_MAX_BYTES, overrideFilename);
-      return { overrideContent, overrideSource: overridePath };
-    }
-  } catch {
-    // Override file not found or unreadable — that's fine
-  }
-
-  return null;
-}
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-/**
- * Truncate content that exceeds maxBytes, adding a notice.
- * Returns the original content if within limits.
- */
-function truncateContent(content: string, maxBytes: number, filename: string): string {
-  const contentBytes = getEnv().byteLength(content, "utf-8");
-  if (contentBytes <= maxBytes) return content;
-
-  const truncateAt = Math.min(maxBytes, content.length);
-  const lineBreak = content.lastIndexOf("\n", truncateAt);
-  const cutPoint = lineBreak > 0 ? lineBreak : truncateAt;
-
-  return (
-    content.slice(0, cutPoint) +
-    `\n\n[Content truncated at ${maxBytes / 1024} KiB (was ${(contentBytes / 1024).toFixed(1)} KiB). ` +
-    `The file ${filename} is too large and was cut here.]\n`
-  );
-}
+/** Exposed for callers that need the resolved (rather than concatenated) shape. */
+export type { ResolvedInstructionFile };

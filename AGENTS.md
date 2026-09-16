@@ -551,6 +551,21 @@ All synthetic injections (turn-context sections, memory, background-command comp
 
 Helpers: `packages/core/src/models/prompt-cache.ts`. Validate: `pnpm --filter @my-agent/core run validate:prompt-cache`.
 
+### Project instructions (`<project_instructions>`)
+
+The project instruction file is loaded once at agent creation and frozen into the system prompt as `<project_instructions>`. `CLAUDE.md` is checked first, then `AGENTS.md`; **the first one found is the only one loaded** — there is no implicit fallback, so a project that keeps `CLAUDE.md` as a pointer composes explicitly with `@` imports.
+
+`@path/to/file.md` anywhere in an instruction file is inlined at load time (Claude Code's syntax, max depth 5):
+
+- relative paths resolve against the file that contains the reference; a leading `/` means **project-root-relative** (`@/openspec/AGENTS.md`)
+- references inside fenced blocks and inline code spans are left literal
+- a token only counts when it ends in a file extension, so npm-style prose (`@my-agent/app`) is inert
+- a missing target, an escape via `../`, or a cycle is **left as written and reported** (logged at bootstrap, listed in `<instruction_context>` on re-injection) rather than silently dropped. A cycle is detected per chain (`visited` set), so the same file referenced twice in different branches still expands in both.
+
+Discovery and expansion live in `packages/core/src/agent/prompt/instruction-files.ts` — one module shared by `agent-doc-loader.ts` (system prompt) and `turn-context/instruction-context.ts` (change detection + re-injection). They must not drift: the change-detection digest covers the **expanded** text, so editing an `@`-imported file re-injects the instruction block like any other edit. Both the result and the expansion notices are part of that digest.
+
+The expanded content is bounded by a **65536-byte** budget, counted in bytes (not characters — a CJK character is 3 bytes), cut on a line boundary and reported when truncation occurs. Validate: `pnpm --filter @my-agent/core run validate:instruction-imports` (plus `validate:instruction-context` and `validate:instruction-budget`).
+
 ## Plan Mode
 
 Cursor-like lifecycle: explore → review → Build → forced retro → complete (exit).

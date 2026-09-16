@@ -105,6 +105,11 @@ export async function buildManagedAgent({
         : docResult.content;
       managed.setAgentDocContent(instructions, docResult.source);
     }
+    // A broken `@` reference would otherwise be invisible: the file loads fine,
+    // just without the imported content. Surface it.
+    for (const notice of docResult.importNotices) {
+      log?.warn("agent", `Instruction import: ${notice}`);
+    }
     // docResult.notice is covered by the bridged `session:doc` event — no direct log.
   }
 

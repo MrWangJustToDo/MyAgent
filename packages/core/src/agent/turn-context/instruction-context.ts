@@ -2,18 +2,32 @@
  * Instruction-context detection and formatting for dynamic turn context.
  *
  * The agent documentation (AGENTS.md / CLAUDE.md) is loaded once at agent
- * creation and frozen into the system prompt's `<project_instructions>`.
- * If the model edits those files via tools, the frozen prompt keeps stale
- * instructions until the session restarts. This module detects such changes
- * so the synthetic ctx messages can re-inject the latest instruction content.
+ * creation and frozen into the system prompt's `<project_instructions>`. If the
+ * model edits those files via tools, the frozen prompt keeps stale instructions
+ * until the session restarts. This module detects such changes so the synthetic
+ * ctx messages can re-inject the latest instruction content.
+ *
+ * Discovery and `@` import expansion come from the shared module
+ * ({@link import("../prompt/instruction-files.js")}), the same one the loader
+ * uses. That matters for correctness, not just tidiness: the digest below covers
+ * the **expanded** text, so editing a file pulled in through `@` is detected like
+ * any other edit. Hashing raw bytes would miss it and leave the stale
+ * `<project_instructions>` in place for the rest of the session.
  *
  * Cache-friendly design: we only re-inject when the instruction file digest
  * changed since the last admit (hash-driven, same epoch pattern as
- * synthetic ctx injection itself). When nothing changed, the payload is byte-identical
- * and the prompt-cache breakpoint stays stable.
+ * synthetic ctx injection itself). When nothing changed, the payload is
+ * byte-identical and the prompt-cache breakpoint stays stable.
  */
 
 import { getEnv } from "../../env.js";
+import {
+  INSTRUCTION_FILENAMES,
+  INSTRUCTION_MAX_BYTES,
+  resolveOverrideInstruction,
+  resolvePrimaryInstruction,
+  type ResolvedInstructionFile,
+} from "../prompt/instruction-files.js";
 
 import { hashTurnContextPayload } from "./turn-context-message.js";
 
@@ -39,15 +53,23 @@ export interface InstructionContextState {
   override: InstructionFile | undefined;
 }
 
+/** Resolved instruction content handed to the turn-context formatter. */
+export interface LoadedInstructionContent {
+  primary: { name: string; content: string; truncated: boolean; importNotices: string[] } | undefined;
+  override: { name: string; content: string; truncated: boolean; importNotices: string[] } | undefined;
+}
+
 // ============================================================================
 // Constants
 // ============================================================================
 
-/** Instruction filenames in discovery priority order (matches agent-doc-loader). */
-export const INSTRUCTION_FILENAMES = ["CLAUDE.md", "AGENTS.md"];
-
-/** Maximum bytes read from an instruction file (matches agent-doc-loader default). */
-export const INSTRUCTION_MAX_BYTES = 65536;
+/**
+ * Instruction filenames in discovery priority order.
+ *
+ * Re-exported from the shared discovery module so this path and the loader
+ * cannot drift apart.
+ */
+export { INSTRUCTION_FILENAMES, INSTRUCTION_MAX_BYTES };
 
 /** Marker describing the instruction context section. */
 const INSTRUCTION_CONTEXT_OPEN = "<instruction_context>";
@@ -61,84 +83,35 @@ const INSTRUCTION_CONTEXT_CLOSE = "</instruction_context>";
  * Read the current instruction file state (paths + digests only — content is
  * not retained in memory to avoid keeping large file bodies around).
  *
- * Discovery mirrors {@link import("../agent-doc-loader.js").loadAgentDoc}:
- * - first existing file in `INSTRUCTION_FILENAMES` order wins
- * - a sibling override file (e.g. `AGENTS.override.md`) is loaded when present
+ * Discovery mirrors the agent-doc loader: the first existing file in
+ * {@link INSTRUCTION_FILENAMES} order wins, and a sibling override file
+ * (e.g. `AGENTS.override.md`) is loaded when present. Digests cover the
+ * **import-expanded** content, so a change to an `@`-referenced file counts as a
+ * change to the instruction file that references it.
  *
  * @returns The discovered instruction state (empty files when none found).
  */
 export async function readInstructionContextState(): Promise<InstructionContextState> {
   const env = getEnv();
-  const state: InstructionContextState = { primary: undefined, override: undefined };
+  const rootPath = env.rootPath;
 
-  for (const filename of INSTRUCTION_FILENAMES) {
-    const filePath = env.path.join(env.rootPath, filename);
-    try {
-      const exists = await env.fs.exists(filePath);
-      if (!exists) continue;
+  const primary = await resolvePrimaryInstruction({ rootPath });
+  if (!primary) return { primary: undefined, override: undefined };
 
-      const content = await env.fs.readFile(filePath);
-      state.primary = { path: filePath, name: filename, digest: digestContent(content) };
+  const override = await resolveOverrideInstruction(rootPath, primary.name);
 
-      const overridePath = env.path.join(env.path.dirname(filePath), overrideFilename(filename));
-      const override = await readOverrideFile(overridePath);
-      if (override) state.override = override;
-      break;
-    } catch {
-      // Unreadable instruction file — skip to next candidate.
-      continue;
-    }
-  }
-
-  return state;
+  return {
+    primary: { path: primary.path, name: primary.name, digest: digestResolved(primary) },
+    override: override ? { path: override.path, name: override.name, digest: digestResolved(override) } : undefined,
+  };
 }
 
-/** Load an override instruction file (e.g. AGENTS.override.md) if present. */
-async function readOverrideFile(overridePath: string): Promise<InstructionFile | undefined> {
-  const env = getEnv();
-  try {
-    const exists = await env.fs.exists(overridePath);
-    if (!exists) return undefined;
-    const content = await env.fs.readFile(overridePath);
-    return {
-      path: overridePath,
-      name: env.path.basename(overridePath),
-      digest: digestContent(content),
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-/** Derive the override filename for a primary filename (AGENTS.md → AGENTS.override.md). */
-function overrideFilename(primaryFilename: string): string {
-  const env = getEnv();
-  const parsed = env.path.parse(primaryFilename);
-  return `${parsed.name}.override${parsed.ext}`;
-}
-
-/** Hash instruction content (truncated to the byte budget first). */
-function digestContent(content: string): string {
-  return hashTurnContextPayload(`instruction\n${truncateContent(content)}`);
-}
-
-/** Truncate content to the byte budget (matches agent-doc-loader's max-bytes rule). */
-function truncateContent(content: string): string {
-  return truncateContentWithFlag(content).content;
-}
-
-/**
- * Truncate content to the byte budget and report whether truncation occurred.
- *
- * Used by the re-injection path so an oversized instruction file is surfaced
- * to the model instead of being silently cut off.
- */
-function truncateContentWithFlag(content: string): { content: string; truncated: boolean } {
-  const env = getEnv();
-  if (env.byteLength(content, "utf-8") <= INSTRUCTION_MAX_BYTES) {
-    return { content, truncated: false };
-  }
-  return { content: content.slice(0, INSTRUCTION_MAX_BYTES), truncated: true };
+/** Hash an instruction file's expanded content. */
+function digestResolved(file: ResolvedInstructionFile): string {
+  // The notices are part of what the model sees, so they must be part of what
+  // we compare: a target that appears (or a cycle that is broken) is a change.
+  const shape = [file.content, ...file.importNotices].join("\n--notice--\n");
+  return hashTurnContextPayload(`instruction\n${shape}`);
 }
 
 // ============================================================================
@@ -172,48 +145,29 @@ export function instructionStateChanged(
  * Load the latest instruction content (full text) for re-injection.
  *
  * Called only when a change was detected — re-reads the primary (and override)
- * file and returns their current text. Content is intentionally not retained
- * on the state object; it is fetched on demand at injection time.
+ * file and returns their current, import-expanded text. Content is intentionally
+ * not retained on the state object; it is fetched on demand at injection time.
  */
-export async function loadLatestInstructionContent(): Promise<{
-  primary: { name: string; content: string; truncated: boolean } | undefined;
-  override: { name: string; content: string; truncated: boolean } | undefined;
-}> {
+export async function loadLatestInstructionContent(): Promise<LoadedInstructionContent> {
   const env = getEnv();
+  const rootPath = env.rootPath;
 
-  for (const filename of INSTRUCTION_FILENAMES) {
-    const filePath = env.path.join(env.rootPath, filename);
-    try {
-      const exists = await env.fs.exists(filePath);
-      if (!exists) continue;
+  const primary = await resolvePrimaryInstruction({ rootPath });
+  if (!primary) return { primary: undefined, override: undefined };
 
-      const content = await env.fs.readFile(filePath);
-      const overridePath = env.path.join(env.path.dirname(filePath), overrideFilename(filename));
-      const override = await loadOverrideContent(overridePath);
+  const override = await resolveOverrideInstruction(rootPath, primary.name);
 
-      const primary = truncateContentWithFlag(content);
-      return { primary: { name: filename, ...primary }, override };
-    } catch {
-      continue;
-    }
-  }
-
-  return { primary: undefined, override: undefined };
+  return {
+    primary: toLoaded(primary, primary.name),
+    override: override ? toLoaded(override, override.name) : undefined,
+  };
 }
 
-/** Load override file content if present. */
-async function loadOverrideContent(
-  overridePath: string
-): Promise<{ name: string; content: string; truncated: boolean } | undefined> {
-  const env = getEnv();
-  try {
-    const exists = await env.fs.exists(overridePath);
-    if (!exists) return undefined;
-    const content = await env.fs.readFile(overridePath);
-    return { name: env.path.basename(overridePath), ...truncateContentWithFlag(content) };
-  } catch {
-    return undefined;
-  }
+function toLoaded(
+  file: ResolvedInstructionFile,
+  name: string
+): { name: string; content: string; truncated: boolean; importNotices: string[] } {
+  return { name, content: file.content, truncated: file.truncated, importNotices: file.importNotices };
 }
 
 /**
@@ -223,9 +177,7 @@ async function loadOverrideContent(
  * @param loaded - Latest instruction content (from {@link loadLatestInstructionContent}).
  * @returns The rendered section, or undefined when no instruction files exist.
  */
-export function formatInstructionContextSection(
-  loaded: Awaited<ReturnType<typeof loadLatestInstructionContent>>
-): string | undefined {
+export function formatInstructionContextSection(loaded: LoadedInstructionContent): string | undefined {
   if (!loaded.primary) return undefined;
 
   const parts: string[] = [];
@@ -240,6 +192,7 @@ export function formatInstructionContextSection(
       `NOTE: ${loaded.primary.name} exceeds the ${INSTRUCTION_MAX_BYTES}-byte instruction budget and was truncated.`
     );
   }
+  parts.push(...formatImportNotices(loaded.primary.name, loaded.primary.importNotices));
   parts.push(`# ${loaded.primary.name}`);
   parts.push(loaded.primary.content);
 
@@ -249,9 +202,16 @@ export function formatInstructionContextSection(
         `NOTE: ${loaded.override.name} exceeds the ${INSTRUCTION_MAX_BYTES}-byte instruction budget and was truncated.`
       );
     }
+    parts.push(...formatImportNotices(loaded.override.name, loaded.override.importNotices));
     parts.push(`## Local Override (${loaded.override.name})`);
     parts.push(loaded.override.content);
   }
 
   return [INSTRUCTION_CONTEXT_OPEN, ...parts, INSTRUCTION_CONTEXT_CLOSE].join("\n");
+}
+
+/** Render `@` import diagnostics so a broken reference is visible, not silent. */
+function formatImportNotices(name: string, notices: string[] | undefined): string[] {
+  if (!notices || notices.length === 0) return [];
+  return [`NOTE: ${name} has unresolved @ imports:`, ...notices.map((notice) => `- ${notice}`)];
 }

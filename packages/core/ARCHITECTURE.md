@@ -687,6 +687,19 @@ extension / instruction kinds are filtered. `project_instructions` for a subagen
 through the parent agent's agentDoc (`run-agent.ts` wiring) — agent-factory loads agentDoc
 only for root agents.
 
+**Instruction file loading & `@` imports** (`agent/prompt/instruction-files.ts`): the single
+source of truth for which instruction file wins and what it expands to, shared by
+`agent-doc-loader.ts` (system prompt) and `turn-context/instruction-context.ts` (change
+detection + re-injection). `CLAUDE.md` then `AGENTS.md`, first found wins and is the only one
+loaded — composition between them is explicit, via `@path` imports that are inlined at load
+time (max depth 5). A leading `/` in a reference is **project-root-relative**; references in
+code regions, extensionless tokens (npm scopes), `../` escapes, and cycles are left literal
+and reported instead of silently dropped (cycle detection is per chain, so a sibling
+re-reference still expands). The change-detection digest hashes the **expanded** text plus
+its notices, so editing an `@`-imported file re-injects the block; the byte budget (65536) is
+counted in bytes and truncation is surfaced. Validate: `validate:instruction-imports`,
+`validate:instruction-context`, `validate:instruction-budget`.
+
 **Provider cache wiring** (`prompt-cache-middleware`, `models/prompt-cache.ts`):
 
 | Style                                 | Behavior                                                                                                                                        |

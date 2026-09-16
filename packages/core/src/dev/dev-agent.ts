@@ -190,7 +190,22 @@ export {
   loadLatestInstructionContent,
   readInstructionContextState,
 } from "../agent/turn-context";
-export type { InstructionContextState, InstructionFile } from "../agent/turn-context";
+export type { InstructionContextState, InstructionFile, LoadedInstructionContent } from "../agent/turn-context";
+export {
+  MAX_INSTRUCTION_IMPORT_DEPTH,
+  expandInstructionImports,
+  findCodeRegions,
+  overrideFilenameFor,
+  resolveOverrideInstruction,
+  resolvePrimaryInstruction,
+  truncateToBudget,
+} from "../agent/prompt/instruction-files.js";
+export type {
+  InstructionDiscoveryOptions,
+  ResolvedInstructionFile,
+} from "../agent/prompt/instruction-files.js";
+export { loadAgentDoc, formatAgentDocResult } from "../agent/prompt/agent-doc-loader.js";
+export type { AgentDocLoadResult, AgentDocLoaderConfig } from "../agent/prompt/agent-doc-loader.js";
 export { toolsToArray } from "../agent/tools/runtime/tools-record.js";
 export {
   DEFAULT_REFRESH_MESSAGE_THRESHOLD,
