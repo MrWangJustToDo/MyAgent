@@ -333,11 +333,10 @@ export async function findRelevantMemories(
         }
       }
     } catch (err) {
-      // The port already recorded the transport failure under `side-query` with
-      // the reason, so this entry covers only the decision made here. Repeating
-      // the error message would double-report one failure under two categories.
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      logger?.info("memory", `Falling back to keyword memory selection (${errorMsg})`);
+      // The port has already recorded the reason under `side-query`; this entry
+      // records only the decision made here, so one failure is not filed twice.
+      const reason = err instanceof Error ? err.message : String(err);
+      logger?.info("memory", `Fell back to keyword memory selection (${reason})`);
       selectedFilenames = selectWithKeywords(query, candidates, maxItems);
       selectionMethod = "keyword-fallback";
     }
