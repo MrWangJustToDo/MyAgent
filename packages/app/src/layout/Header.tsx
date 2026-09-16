@@ -1,9 +1,11 @@
+import { StaticRender } from "ink";
 import { useEffect, useMemo } from "react";
 
 import { useAgent } from "../hooks/use-agent";
 import { useConfig } from "../hooks/use-config";
 import { useSize } from "../hooks/use-size.js";
 import { useStatic } from "../hooks/use-static";
+import { useTheme } from "../hooks/use-theme";
 import { useWorkspaceInfo } from "../hooks/use-workspace-info";
 
 import { WelcomePanel } from "./WelcomePanel.js";
@@ -33,26 +35,34 @@ export const Header = () => {
   const remoteSession = useConfig((s) => s.config.remoteSession);
   const sessionCount = Object.keys(useAgent((s) => s.sessions) ?? {}).length;
 
+  const width = screenWidth;
+
+  const theme = useTheme((s) => s.theme);
+
   const remotePlanes = useMemo(
     () => remotePlanesFromConfig(remoteEnv, remoteProvider, remoteSession),
     [remoteEnv, remoteProvider, remoteSession]
   );
 
+  const headerKey = `${workspacePath}|${remotePlanes}|${sessionCount}|${Boolean(git)}`;
+
   useEffect(() => {
     if (!workspacePath) return;
-    useStatic
-      .getActions()
-      .setStaticHeader(
-        <WelcomePanel
-          variant="ready"
-          screenWidth={screenWidth}
-          git={git || null}
-          workspacePath={workspacePath}
-          remotePlanes={remotePlanes}
-          sessionCount={sessionCount}
-        />
-      );
-  }, [git, workspacePath, screenWidth, remotePlanes, sessionCount]);
+    useStatic.getActions().setStaticHeader(
+      <StaticRender key="header" width={width} deps={[headerKey, width, theme]}>
+        {() => (
+          <WelcomePanel
+            variant="ready"
+            screenWidth={screenWidth}
+            git={git || null}
+            workspacePath={workspacePath}
+            remotePlanes={remotePlanes}
+            sessionCount={sessionCount}
+          />
+        )}
+      </StaticRender>
+    );
+  }, [git, workspacePath, screenWidth, remotePlanes, sessionCount, width, headerKey, theme]);
 
   return null;
 };

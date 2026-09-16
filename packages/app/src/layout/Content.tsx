@@ -1,11 +1,8 @@
-import { StaticRender } from "ink";
 import { Fragment, memo, type JSX } from "react";
 
-import { useSize } from "../hooks";
 import { useDynamic } from "../hooks/use-dynamic";
 import { useInit } from "../hooks/use-init";
 import { useStatic } from "../hooks/use-static";
-import { useTheme } from "../hooks/use-theme";
 import { useWorkspaceInfo } from "../hooks/use-workspace-info";
 
 export const Content = memo(() => {
@@ -16,14 +13,11 @@ export const Content = memo(() => {
   // signature is what used to pin every row to every other row's updates — it is gone.
   // `list` and `head` are replaced (never mutated) by their setters, so identity is a
   // sufficient change signal here.
-  const { head, list, headerSet } = useStatic((s) => ({ list: s.list, head: s.header, headerSet: s.headerSet }));
+  const { head, list } = useStatic((s) => ({ list: s.list, head: s.header }));
 
   const hasPath = useWorkspaceInfo((s) => s.workspaceInfo.path);
 
   const dynamicList = useDynamic((s) => s.list);
-
-  const width = useSize((s) => s.state.screenWidth);
-  const theme = useTheme((s) => s.theme);
 
   const typedList = list as JSX.Element[];
 
@@ -39,11 +33,7 @@ export const Content = memo(() => {
        * the header's own change signal (`Header` republishes on git/workspace/width changes),
        * so this re-caches on real changes instead of on every repaint.
        */}
-      {head ? (
-        <StaticRender key="header" width={width} deps={[headerSet, width, theme]}>
-          {() => head}
-        </StaticRender>
-      ) : null}
+      {head}
       {typedList}
       {dynamicList}
     </Fragment>

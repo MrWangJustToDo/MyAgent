@@ -244,7 +244,7 @@ export const MessageList = ({ messages }: MessageListProps) => {
       <StaticRender
         key={item.id}
         width={width}
-        deps={[visibleStaticSignatures[i]]}
+        deps={[visibleStaticSignatures[i], width, mode, theme, diffMode]}
         onRender={(node: DOMElement) => onRowRender(item.id, node)}
       >
         {() => (
@@ -263,7 +263,7 @@ export const MessageList = ({ messages }: MessageListProps) => {
       // The marker caches with the rows it describes, and its text only changes when
       // `hiddenTotal` does — which is part of `elementsKey`.
       elements.unshift(
-        <StaticRender key="truncation-marker" width={width} deps={[hiddenTotal]}>
+        <StaticRender key="truncation-marker" width={width} deps={[hiddenTotal, width, mode, theme]}>
           {() => (
             <Box paddingX={1} marginTop={1}>
               <Text color={COLORS.muted} dimColor>

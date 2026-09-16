@@ -21,6 +21,19 @@ function displayWidth(char: string): number {
   return WIDE_CHAR_RE.test(char) ? 2 : 1;
 }
 
+/**
+ * Display width of a string as Ink lays it out: wide characters count 2 columns and
+ * newlines count 0, so `"a\nb"` measures 2 — the width a `\n`-joined text row occupies.
+ *
+ * Callers that predict Ink's layout (e.g. deciding whether a row fits a terminal width
+ * before rendering it) need this instead of `String.length`.
+ */
+export function textDisplayWidth(text: string): number {
+  let width = 0;
+  for (const char of text) width += displayWidth(char);
+  return width;
+}
+
 /** Wrap one logical line (no newlines) into physical rows, mirroring Ink.
  *
  * `rowLimit` stops wrapping once the limit is reached (the rest of the line is

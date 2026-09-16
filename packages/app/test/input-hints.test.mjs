@@ -13,6 +13,7 @@ import {
   currentInputHint,
   nextInputHint,
   resetInputHints,
+  wrapTextToLines,
 } from "../dist/index.mjs";
 
 /** Deterministic RNG (mulberry32) so pass behaviour is reproducible. */
@@ -105,5 +106,22 @@ for (let i = 1; i < sequence.length; i++) {
 // ---------------------------------------------------------------------------
 resetInputHints();
 assert.equal(currentInputHint(), INPUT_HINTS[0]);
+
+// ---------------------------------------------------------------------------
+// 5. Startup tip copy stays measurable at the same width the tips row uses
+// ---------------------------------------------------------------------------
+// The header row budgets its tips in terminal columns (measured with the same wrapper),
+// so each hint that carries a tip must be a single row of text at a normal width.
+const HEADER_TIP_COPY = [
+  "/ opens all commands",
+  "Shift+Tab cycles",
+  "Ctrl+E workspace",
+  "Ctrl+T tasks",
+  "Ctrl+Y extensions",
+];
+for (const tip of HEADER_TIP_COPY) {
+  assert.ok(copy.includes(tip), `hint copy must mention the header tip "${tip}"`);
+  assert.ok(wrapTextToLines(tip, 120).length === 1, `tip must stay one row: ${tip}`);
+}
 
 process.stdout.write("input-hints: ok\n");

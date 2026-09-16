@@ -12,7 +12,13 @@ export const useStatic = createState(
      * depends only on its own entry, so one row changing no longer re-caches the others.
      */
     itemSigs: [] as string[],
+    /**
+     * @deprecated
+     */
     headerSet: 0,
+    /**
+     * @deprecated
+     */
     listSet: 0,
   }),
   {

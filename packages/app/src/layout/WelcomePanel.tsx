@@ -6,6 +6,7 @@ import { Spinner } from "../components/Spinner.js";
 import { BG, COLORS } from "../theme/colors.js";
 import { getGradientStops, interpolateColor, mapCharsToGradient } from "../utils/gradient.js";
 import { headerShortcutTips } from "../utils/keyboard-labels.js";
+import { textDisplayWidth } from "../utils/user-message-lines.js";
 
 import type { WorkspaceGitInfo } from "../utils/workspace-git-info.js";
 
@@ -38,12 +39,37 @@ export function welcomeTierForWidth(width: number): WelcomeTier {
   return "narrow";
 }
 
-/** Number of startup tips that fit on one line per tier. */
-function tipsForTier(tier: WelcomeTier): ReadonlyArray<{ key: string; desc: string }> {
-  const tips = headerShortcutTips();
-  if (tier === "wide") return tips;
-  if (tier === "compact") return tips.slice(0, 3);
-  return tips.slice(0, 1);
+/** Horizontal gap between two tips (Ink `gap`, in columns) for a layout tier. */
+export function tipsRowGapForTier(tier: WelcomeTier): number {
+  return tier === "wide" ? 3 : 2;
+}
+
+/**
+ * Tips that actually fit `available` columns on one row, in priority order.
+ *
+ * The tiers only know the terminal has room for the *wordmark*; the tips row is a
+ * different budget entirely. Five tips need 104 columns (text + gaps), so a wide-tier
+ * terminal narrower than that would wrap the row onto a second line. Measuring here
+ * keeps the row to one line on every width: drop from the right until it fits, and
+ * never render an empty row (the first tip is always shown, wrapping in the extreme).
+ */
+export function fitTipsToWidth(
+  tips: ReadonlyArray<{ key: string; desc: string }>,
+  available: number,
+  gap: number
+): ReadonlyArray<{ key: string; desc: string }> {
+  if (tips.length === 0) return tips;
+  const firstWidth = textDisplayWidth(`${tips[0].key} ${tips[0].desc}`);
+  let used = firstWidth;
+  let count = 1;
+  for (let i = 1; i < tips.length; i++) {
+    const next = used + gap + textDisplayWidth(`${tips[i].key} ${tips[i].desc}`);
+    if (next > available) break;
+    used = next;
+    count++;
+  }
+  const fitted = count >= tips.length ? tips : tips.slice(0, count);
+  return fitted;
 }
 
 /** Last path segment, used as a shorter workspace label on compact terminals. */
@@ -161,7 +187,8 @@ const MetaLine = ({
 };
 
 const TipsRow = ({ tier, innerWidth }: { tier: WelcomeTier; innerWidth: number }) => {
-  const tips = useMemo(() => tipsForTier(tier), [tier]);
+  const gap = tipsRowGapForTier(tier);
+  const tips = useMemo(() => fitTipsToWidth(headerShortcutTips(), innerWidth, gap), [innerWidth, gap]);
 
   if (tips.length === 0) return null;
 
@@ -170,7 +197,7 @@ const TipsRow = ({ tier, innerWidth }: { tier: WelcomeTier; innerWidth: number }
       <Box marginTop={1}>
         <Text color={BG.border}>{"─".repeat(Math.max(0, innerWidth))}</Text>
       </Box>
-      <Box marginTop={1} gap={tier === "wide" ? 3 : 2} justifyContent="center" width="100%" flexShrink={0}>
+      <Box marginTop={1} gap={gap} justifyContent="center" width="100%" flexShrink={0}>
         {tips.map((tip, i) => (
           <Box key={i} gap={1} flexShrink={0}>
             <Text color={COLORS.text}>{tip.key}</Text>

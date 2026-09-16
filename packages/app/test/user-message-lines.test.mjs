@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { URL } from "node:url";
 
-const { truncateTextToMaxLines, wrapTextToLines } = await import(new URL("../dist/index.mjs", import.meta.url).href);
+const { textDisplayWidth, truncateTextToMaxLines, wrapTextToLines } = await import(
+  new URL("../dist/index.mjs", import.meta.url).href
+);
 
 test("wrapTextToLines hard-wraps long words and counts CJK as 2 columns", () => {
   const rows = wrapTextToLines("abcdefghij", 4);
@@ -28,6 +30,16 @@ test("truncateTextToMaxLines returns original text when under budget", () => {
   assert.equal(text, "short");
   assert.equal(truncated, false);
   assert.equal(hiddenLines, 0);
+});
+
+test("textDisplayWidth matches Ink's column budget (CJK = 2, newlines = 0, emoji = 1)", () => {
+  assert.equal(textDisplayWidth("abc"), 3);
+  assert.equal(textDisplayWidth("中文"), 4);
+  assert.equal(textDisplayWidth("a\nb"), 2);
+  assert.equal(textDisplayWidth("→"), 1);
+  assert.equal(textDisplayWidth("✅"), 1);
+  // Text carrying a non-1:1 glyph stays the widest thing the wrapper can split.
+  assert.equal(textDisplayWidth("↑↓"), 2);
 });
 
 test("truncateTextToMaxLines falls back to a bare ellipsis when the hint would wrap", () => {
