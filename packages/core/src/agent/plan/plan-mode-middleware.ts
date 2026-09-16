@@ -1,4 +1,4 @@
-import { defineMiddleware } from "../../managers/middleware/phase.js";
+import { defineMiddleware } from "../../runtime-types/middleware-phase.js";
 
 import { getPlanModeToolBlockReason } from "./plan-tools.js";
 

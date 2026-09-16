@@ -15,6 +15,9 @@ export type { AgentEventPayloadMap, AgentEventPayload, EmptyAgentEventPayload } 
 
 export type { ManagedAgent, AgentManager, UsageTracker, AgentUIChannel, AgentStatusController } from "./hosts.js";
 
+export type { MiddlewarePhase, PhasedChatMiddleware } from "./middleware-phase.js";
+export { MIDDLEWARE_PHASE_RANK, defineMiddleware } from "./middleware-phase.js";
+
 export type {
   AgentL1State,
   AgentMode,

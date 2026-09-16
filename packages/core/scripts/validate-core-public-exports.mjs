@@ -36,6 +36,9 @@ const leaked = DENY.filter((name) => name in mod);
 
 assert.equal(leaked.length, 0, `Forbidden public exports found: ${leaked.join(", ")}`);
 
+// Presentation is now descriptor-based: `getToUI` was removed with the
+// `toUI`/`display` extension fields (unify-tool-presentation-in-core, "no aliases
+// kept"). Assert the replacements are published instead of the deleted lookup.
 for (const name of [
   "agentManager",
   "createLocalAgentSessionHost",
@@ -44,7 +47,10 @@ for (const name of [
   "resolveModelConfigFromProvider",
   "buildDefaultSystemPrompt",
   "isActiveStatus",
-  "getToUI",
+  "declareToolPresentation",
+  "getToolPresentation",
+  "keepsCompactRow",
+  "computeToolDisplay",
   "previewEdit",
   "generateId",
 ]) {

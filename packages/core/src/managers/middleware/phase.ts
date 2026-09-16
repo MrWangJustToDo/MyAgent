@@ -1,54 +1,22 @@
-import type { ChatMiddleware } from "@tanstack/ai";
-
-// ============================================================================
-// Types
-// ============================================================================
-
 /**
- * Declared pipeline phase for an agent-run middleware. `buildAgentRunner`
- * sorts middlewares by phase rank (stable within a phase), so "where does a
- * new middleware go" is answered by the declaration, not by comment-only
- * ordering notes.
+ * Middleware pipeline assembly: canonical order + phase sort.
  *
- * - `observe`: sees the run as-is (status, lifecycle accounting, approval resume).
- * - `context-transform`: rewrites the message chain before tools/model (compaction,
- *   tool-compact, turn-context). Order within the phase is dependency-sensitive —
- *   guarded by the canonical order snapshot (`CANONICAL_MIDDLEWARE_ORDER`).
- * - `tools`: tool-phase behaviors (extension interception, UI mirroring, prefork,
- *   plan-mode filtering, background notifications).
- * - `wire-annotate`: annotates the final wire payload (prompt-cache must be last
- *   so its key covers the fully transformed messages).
+ * The phase primitives a middleware declares about *itself* live in
+ * `runtime-types/middleware-phase.ts`, so domain modules (e.g.
+ * `agent/plan/plan-mode-middleware.ts`) can declare their phase without
+ * importing `managers/**`. What remains here is the manager-side concern: how
+ * the assembled pipeline is ordered and guarded.
+ *
+ * The phase primitives are re-exported so existing manager-side importers keep
+ * working through this module.
  */
-export type MiddlewarePhase = "observe" | "context-transform" | "tools" | "wire-annotate";
 
-export const MIDDLEWARE_PHASE_RANK: Record<MiddlewarePhase, number> = {
-  observe: 0,
-  "context-transform": 1,
-  tools: 2,
-  "wire-annotate": 3,
-};
+import { MIDDLEWARE_PHASE_RANK, type MiddlewarePhase } from "../../runtime-types/middleware-phase.js";
 
-export type PhasedChatMiddleware<TContext = unknown> = ChatMiddleware<TContext> & {
-  phase: MiddlewarePhase;
-};
+export { MIDDLEWARE_PHASE_RANK, defineMiddleware } from "../../runtime-types/middleware-phase.js";
+export type { MiddlewarePhase, PhasedChatMiddleware } from "../../runtime-types/middleware-phase.js";
 
-/**
- * Attach a phase declaration to a middleware. ChatMiddleware is structurally
- * open, so the returned object remains assignable wherever the plain
- * middleware is accepted.
- */
-export function defineMiddleware<TContext = unknown>(
-  phase: MiddlewarePhase,
-  middleware: ChatMiddleware<TContext>
-): ChatMiddleware<TContext> & { phase: MiddlewarePhase } {
-  return { ...middleware, phase };
-}
-
-/**
- * Stable sort by phase rank. Middlewares without a declared phase keep their
- * relative position (rank fallback) and surface a dev warning — an undeclared
- * phase is an assembly-contract violation caught by the order snapshot too.
- */
+/** Re-exported so existing importers keep working. */
 export type { ChatMiddleware } from "@tanstack/ai";
 
 /**

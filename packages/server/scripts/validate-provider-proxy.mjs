@@ -56,7 +56,9 @@ assert.equal(filtered.BRAVE_API_KEY, undefined);
 const upstreamChunks = ["data: hello\n\n", "data: world\n\n"];
 let sawAuth = "";
 let sawBody = "";
+let upstreamHits = 0;
 const upstream = createServer((req, res) => {
+  upstreamHits += 1;
   sawAuth = String(req.headers.authorization || "");
   req.on("data", (d) => (sawBody += d));
   req.on("end", () => {
@@ -79,8 +81,7 @@ const app = new Hono().route("/api/provider", providerRoutes);
 const proxyRes = await app.request("http://local/api/provider/openai/v1/chat/completions", {
   method: "POST",
   headers: { "content-type": "application/json", authorization: "Bearer client-should-not-win" },
-  // Client sends a different model — the server must rewrite it to its own MODEL.
-  body: JSON.stringify({ model: "client-wrong-model", stream: true }),
+  body: JSON.stringify({ model: "mock-model", stream: true }),
 });
 
 assert.equal(proxyRes.status, 200);
@@ -90,9 +91,27 @@ assert.ok(body.includes("hello"));
 assert.ok(body.includes("world"));
 assert.equal(proxyRes.headers.get("content-encoding"), null, "must not forward content-encoding after decode");
 
-// Server is the single source of truth for the model (remote-mode request body rewrite).
-assert.ok(sawBody.includes('"model":"mock-model"'), "server must rewrite forwarded body model");
-assert.ok(!sawBody.includes("client-wrong-model"), "client model must not reach upstream");
+// The server allowlist gates which model ids may pass through, and a rejected
+// request must never reach upstream. `collectAllowedModels` always seeds the set
+// with the env MODEL, so the legacy single-model *rewrite* branch is unreachable
+// (see the assertion below) — a client model outside the allowlist is refused
+// with 400, not rewritten.
+assert.ok(sawBody.includes('"model":"mock-model"'), "allowlisted model is forwarded unchanged");
+
+const rejectedRes = await app.request("http://local/api/provider/openai/v1/chat/completions", {
+  method: "POST",
+  headers: { "content-type": "application/json", authorization: "Bearer client-should-not-win" },
+  body: JSON.stringify({ model: "client-wrong-model", stream: true }),
+});
+assert.equal(rejectedRes.status, 400, "a model outside the allowlist is rejected");
+const rejectedBody = await rejectedRes.text();
+assert.equal(
+  JSON.parse(rejectedBody).error.code,
+  "model_not_allowed",
+  "rejection carries the model_not_allowed code so clients can explain it"
+);
+assert.ok(!sawBody.includes("client-wrong-model"), "a rejected model must not reach the upstream provider");
+assert.equal(upstreamHits, 1, "the rejected request caused no upstream call");
 
 const infoRes = await app.request("http://local/api/provider/info");
 assert.equal(infoRes.status, 200);

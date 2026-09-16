@@ -21,6 +21,9 @@ function createHost() {
   const host = {
     id: "agent-1",
     context: {},
+    // Finalize passes the run's abort signal through to memory extraction
+    // (see `finalizeManagedAgentRun`); the stub only needs the shape.
+    run: { currentAbortController: undefined },
     memory: {
       runExtraction: () => {
         extractCalls += 1;
@@ -63,8 +66,8 @@ function createHost() {
 }
 
 const host = createHost();
-finalizeManagedAgentRun(host, {}, "finished");
-finalizeManagedAgentRun(host, {}, "finished");
+finalizeManagedAgentRun(host, "finished");
+finalizeManagedAgentRun(host, "finished");
 let stats = host.stats();
 assert.equal(stats.clearTurnContextCalls, 1);
 assert.equal(stats.stopEvents, 1);
@@ -73,7 +76,7 @@ assert.equal(stats.extractCalls, 1);
 assert.equal(stats.prepareAsContinuation, false);
 
 host.resetTurnLifecycle();
-finalizeManagedAgentRun(host, {}, "aborted");
+finalizeManagedAgentRun(host, "aborted");
 stats = host.stats();
 assert.equal(stats.clearTurnContextCalls, 2);
 assert.equal(stats.stopEvents, 2);
