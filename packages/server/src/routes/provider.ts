@@ -62,6 +62,22 @@ function collectAllowedModels(config: ModelsConfig | null, connection: ModelConn
   return set;
 }
 
+/**
+ * Explain a refused model by naming the actual sources of the allowed set.
+ *
+ * The previous message always said "models.json allowlist" even when no
+ * models.json existed and the only allowed model came from the server's `MODEL`
+ * env var — which sent readers looking for a file that was not there.
+ */
+function modelNotAllowedMessage(reqModel: string, allowed: Set<string>): string {
+  const names = [...allowed].sort().join(", ");
+  return (
+    `Model "${reqModel}" is not available on this server. ` +
+    `The server serves: ${names || "(none configured)"}. ` +
+    `Set MODEL / a models.json entry on the server, or request one of those models.`
+  );
+}
+
 const HOP_BY_HOP = new Set([
   "connection",
   "keep-alive",
@@ -224,11 +240,18 @@ async function proxyStream(
   const method = c.req.method;
   const hasBody = method !== "GET" && method !== "HEAD";
 
-  // Model policy: when the server has a models.json, validate the client's
-  // requested model against its allowlist and pass it through unchanged (so
-  // remote clients can hot-switch among whitelisted models). Without a
-  // models.json, keep the legacy single-model rewrite so a leftover local
-  // default (e.g. "gpt-4o-mini") never leaks upstream.
+  // Model policy: the server's own model set is the allowlist, and it is the
+  // single source of truth — a client model outside it is refused, never
+  // rewritten. Rewriting was the older behaviour ("so a leftover local default
+  // like gpt-4o-mini never leaks upstream"), but silently swapping the model in
+  // a client's request body is the worse failure: the client believes it is
+  // talking to model A while the server answers as model B, with nothing in the
+  // response to reveal the substitution. A 400 with the allowed set named is
+  // diagnosable.
+  //
+  // The set is never empty on this path: reaching here requires
+  // `connection.baseURL`, whose companion `MODEL` is seeded below, so a server
+  // with no models.json still refuses unknown models rather than rewriting them.
   const serverConfig = await loadServerModelsConfig();
   const allowed = collectAllowedModels(serverConfig, connection);
   let body: BodyInit | undefined = c.req.raw.body ?? undefined;
@@ -240,25 +263,10 @@ async function proxyStream(
         const parsed = JSON.parse(rawText) as Record<string, unknown>;
         if (parsed && typeof parsed === "object") {
           const reqModel = typeof parsed.model === "string" ? parsed.model : "";
-          if (allowed.size > 0) {
-            if (reqModel && !allowed.has(reqModel)) {
-              return openaiErrorResponse(
-                400,
-                `Model "${reqModel}" is not in the server's models.json allowlist.`,
-                "model_not_allowed"
-              );
-            }
-            body = rawText;
-          } else if (connection.model) {
-            if (parsed.model !== connection.model) {
-              parsed.model = connection.model;
-              body = JSON.stringify(parsed);
-            } else {
-              body = rawText;
-            }
-          } else {
-            body = rawText;
+          if (reqModel && !allowed.has(reqModel)) {
+            return openaiErrorResponse(400, modelNotAllowedMessage(reqModel, allowed), "model_not_allowed");
           }
+          body = rawText;
         }
       } catch {
         // Not JSON or unparseable — forward the original body unchanged.

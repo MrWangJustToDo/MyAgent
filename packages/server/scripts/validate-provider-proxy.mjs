@@ -91,11 +91,11 @@ assert.ok(body.includes("hello"));
 assert.ok(body.includes("world"));
 assert.equal(proxyRes.headers.get("content-encoding"), null, "must not forward content-encoding after decode");
 
-// The server allowlist gates which model ids may pass through, and a rejected
-// request must never reach upstream. `collectAllowedModels` always seeds the set
-// with the env MODEL, so the legacy single-model *rewrite* branch is unreachable
-// (see the assertion below) — a client model outside the allowlist is refused
-// with 400, not rewritten.
+// The server's model set is the allowlist and the single source of truth on
+// this path: a client model outside it is refused, never silently rewritten.
+// `collectAllowedModels` seeds the set with the env MODEL, and reaching here
+// requires `connection.baseURL`, whose companion MODEL is always set — so the
+// set is never empty and there is no "no allowlist configured" rewrite path.
 assert.ok(sawBody.includes('"model":"mock-model"'), "allowlisted model is forwarded unchanged");
 
 const rejectedRes = await app.request("http://local/api/provider/openai/v1/chat/completions", {
@@ -103,15 +103,30 @@ const rejectedRes = await app.request("http://local/api/provider/openai/v1/chat/
   headers: { "content-type": "application/json", authorization: "Bearer client-should-not-win" },
   body: JSON.stringify({ model: "client-wrong-model", stream: true }),
 });
-assert.equal(rejectedRes.status, 400, "a model outside the allowlist is rejected");
-const rejectedBody = await rejectedRes.text();
+assert.equal(rejectedRes.status, 400, "a model the server does not serve is refused");
+const rejectedBody = JSON.parse(await rejectedRes.text());
 assert.equal(
-  JSON.parse(rejectedBody).error.code,
+  rejectedBody.error.code,
   "model_not_allowed",
   "rejection carries the model_not_allowed code so clients can explain it"
 );
-assert.ok(!sawBody.includes("client-wrong-model"), "a rejected model must not reach the upstream provider");
-assert.equal(upstreamHits, 1, "the rejected request caused no upstream call");
+// The message must name the real source of the allowed set. It previously always
+// said "models.json allowlist" even when no models.json existed and the only
+// model came from the server's MODEL env var, which sent readers looking for a
+// file that was not there.
+assert.match(rejectedBody.error.message, /mock-model/, "the refusal names the model(s) the server does serve");
+assert.ok(!sawBody.includes("client-wrong-model"), "a refused model must not reach the upstream provider");
+assert.equal(upstreamHits, 1, "the refused request caused no upstream call");
+
+// A request with no model field has nothing to contradict and is forwarded
+// unchanged, matching the previous pass-through behaviour.
+const noModelRes = await app.request("http://local/api/provider/openai/v1/chat/completions", {
+  method: "POST",
+  headers: { "content-type": "application/json", authorization: "Bearer client-should-not-win" },
+  body: JSON.stringify({ stream: true }),
+});
+assert.equal(noModelRes.status, 200, "a request without a model field still passes through");
+assert.equal(upstreamHits, 2, "the model-less request reached upstream");
 
 const infoRes = await app.request("http://local/api/provider/info");
 assert.equal(infoRes.status, 200);
