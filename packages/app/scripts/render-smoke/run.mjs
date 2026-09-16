@@ -22,6 +22,7 @@ import fs from "node:fs";
 import { Readable } from "node:stream";
 import { createElement } from "react";
 
+import { awaitStableMarker } from "./await-stable-marker.mjs";
 import { checks as budgetChecks } from "./budget-fixtures.mjs";
 import { MessageList, selectVisibleRows, MAX_STATIC_LINES } from "./dist/components/MessageList.mjs";
 import { useAgentStatus } from "./dist/hooks/use-agent-status.mjs";
@@ -351,26 +352,36 @@ record(
 
 // ── 2. hidden-count marker: correct value, exactly once, not stale ───────────
 
-// Count in the CURRENT frame only — `stdout.text` concatenates every frame, so the marker
-// legitimately appears once per repaint there.
-const visibleText = lines.join("\n");
-const frameMarkerMatches = [...visibleText.matchAll(/\.\.\. (\d+) older messages? hidden/g)].map((m) => Number(m[1]));
-// Recompute from the CURRENT row set: the header/flood section above drove a different transcript
-// through the same component, so its measurements replace the ones `markerExpected` was derived
-// from. Reusing the pre-flood expectation here would compare against a stale row set.
-const budgetNow = expectedStaticRows();
-const markerNow = hiddenSourceMessages + budgetNow.droppedSourceMessages;
+// Section 1b drove the flood transcript through the same component and restored the long
+// fixture, so the measurements this guard reads are still settling here — see
+// `await-stable-marker.mjs` (a bare sleep made this flap: 281 vs 292, no source change).
+const markerState = await awaitStableMarker({
+  readState: () => {
+    const budget = expectedStaticRows();
+    return { marker: hiddenSourceMessages + budget.droppedSourceMessages, visibleCount: budget.visibleCount };
+  },
+  readPaintedMarker: () =>
+    [
+      ...frameLines(stdout)
+        .join("\n")
+        .matchAll(/\.\.\. (\d+) older messages? hidden/g),
+    ].map((m) => Number(m[1])),
+  settle: () => settle(120),
+});
+const frameMarkerMatches = markerState.painted;
 record(
   "hidden marker value equals the component's own hidden total",
-  markerNow === 0 ? frameMarkerMatches.length === 0 : frameMarkerMatches.at(-1) === markerNow,
-  { markerExpected: markerNow, frameMarkerMatches }
+  markerState.state.marker === 0
+    ? frameMarkerMatches.length === 0
+    : frameMarkerMatches.at(-1) === markerState.state.marker,
+  { markerExpected: markerState.state.marker, frameMarkerMatches, settled: markerState.settled }
 );
 record("hidden marker rendered exactly once per frame", frameMarkerMatches.length <= 1, {
   occurrences: frameMarkerMatches.length,
 });
 // Architectural position: the marker belongs to the cached static region. Asserting it is the
 // FIRST store element catches an accidental move back to a sibling element outside the region.
-if (markerNow > 0) {
+if (markerState.state.marker > 0) {
   const head = useStatic.getState().list[0];
   record("truncation marker is the first element of the static block", Boolean(head?.props?.children), {
     hasHead: Boolean(head),
