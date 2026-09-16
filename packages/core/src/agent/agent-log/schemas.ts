@@ -19,6 +19,10 @@ const logCategories = [
   "memory",
   "hooks",
   "system",
+  // Kept in sync with the `LogCategory` union in ./types.ts — the list is
+  // declared twice, and a category missing here is rejected by
+  // `logEntrySchema` at write time (the entry silently never lands).
+  "side-query",
 ] as const;
 export const logCategorySchema = z.enum(logCategories);
 

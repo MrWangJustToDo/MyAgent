@@ -1,0 +1,328 @@
+/**
+ * Validation for the structured branch of `runSideTextQuery` (no network).
+ *
+ * The structured overload is driven by a fake adapter that emits the exact event
+ * shape a real provider produces — `TEXT_MESSAGE_CONTENT` deltas, a terminal
+ * `structured-output.complete` CUSTOM event, and `RUN_FINISHED` carrying usage —
+ * so the port's behaviour is asserted without an API key.
+ *
+ * Run: pnpm --filter @my-agent/core run validate:structured-query
+ */
+
+import assert from "node:assert/strict";
+import { z } from "zod";
+
+import { runSideTextQuery, sharedUsageHistory, logCategorySchema, logEntrySchema } from "../dist/dev.mjs";
+
+// ---------------------------------------------------------------------------
+// Fake adapter
+// ---------------------------------------------------------------------------
+
+const personSchema = z.object({ name: z.string(), age: z.number() });
+
+const usageChunk = (promptTokens, completionTokens) => ({
+  type: "RUN_FINISHED",
+  usage: { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens },
+});
+
+const completeChunk = (object, raw) => ({
+  type: "CUSTOM",
+  name: "structured-output.complete",
+  value: { object, raw },
+});
+
+const runErrorChunk = (message) => ({ type: "RUN_ERROR", error: new Error(message) });
+
+/**
+ * Build a text-adapter config whose underlying adapter yields `chunks`.
+ *
+ * `runSideTextQuery` passes no tools, so the engine takes its tool-less
+ * structured path and consumes `structuredOutputStream` directly; the text path
+ * consumes `chatStream`.
+ */
+const makeTextAdapterConfig = ({ structured = [], text = [] } = {}) => ({
+  model: "fake-model",
+  modelStyle: "openai",
+  adapter: {
+    kind: "text",
+    name: "fake",
+    model: "fake-model",
+    "~types": {},
+    chatStream() {
+      return (async function* () {
+        for (const chunk of text) yield chunk;
+      })();
+    },
+    async structuredOutput() {
+      throw new Error("not implemented");
+    },
+    structuredOutputStream() {
+      return (async function* () {
+        for (const chunk of structured) yield chunk;
+      })();
+    },
+  },
+});
+
+const makeCapturingLog = () => {
+  const entries = [];
+  return {
+    entries,
+    warn(category, message, data) {
+      entries.push({ category, message, data });
+      return null;
+    },
+    info: () => null,
+    debug: () => null,
+    error: () => null,
+  };
+};
+
+// ---------------------------------------------------------------------------
+// 2.1 / 2.2 — validated object + usage
+// ---------------------------------------------------------------------------
+
+{
+  const textAdapter = makeTextAdapterConfig({
+    structured: [
+      { type: "TEXT_MESSAGE_CONTENT", delta: '{"name":"Ada","age":36}' },
+      completeChunk({ name: "Ada", age: 36 }, '{"name":"Ada","age":36}'),
+      usageChunk(120, 30),
+    ],
+  });
+
+  const result = await runSideTextQuery(textAdapter, {
+    systemPrompt: "extract a person",
+    userPrompt: "Ada is 36",
+    schema: personSchema,
+  });
+
+  assert.deepEqual(result.data, { name: "Ada", age: 36 }, "the validated object is returned");
+  assert.equal(result.raw, '{"name":"Ada","age":36}', "the raw text is returned alongside it");
+  assert.equal(typeof result.durationMs, "number");
+
+  // 2.2 — usage must survive. The `Promise<T>` form of `chat({ outputSchema })`
+  // drops usage entirely, so this assertion is what pins the `stream: true`
+  // choice; the 2.4 mutation removes the capture and expects this to fail.
+  assert.ok(result.usage, "usage is reported on the structured path");
+  assert.equal(result.usage.inputTokens, 120);
+  assert.equal(result.usage.outputTokens, 30);
+
+  console.log("✓ validated object + usage");
+}
+
+// ---------------------------------------------------------------------------
+// 2.2b — usage is attributed to the shared side-query contributor
+// ---------------------------------------------------------------------------
+//
+// `sharedUsageHistory.record` is fire-and-forget (it appends to a workspace
+// JSONL file), so the assertion spies on the call rather than reading the file
+// back — reading would require a registered CoreEnv and a real workspace.
+
+{
+  const recorded = [];
+  const original = sharedUsageHistory.record.bind(sharedUsageHistory);
+  sharedUsageHistory.record = (input) => {
+    recorded.push(input);
+  };
+
+  try {
+    const textAdapter = makeTextAdapterConfig({
+      structured: [completeChunk({ name: "Ada", age: 3 }, '{"name":"Ada","age":3}'), usageChunk(40, 10)],
+    });
+    await runSideTextQuery(textAdapter, { userPrompt: "x", schema: personSchema });
+  } finally {
+    sharedUsageHistory.record = original;
+  }
+
+  assert.equal(recorded.length, 1, "the structured query records exactly one usage entry");
+  assert.equal(recorded[0].agentId, "side-query", "attributed to the internal side-query contributor");
+  assert.equal(recorded[0].model, "fake-model");
+  assert.equal(recorded[0].usage.totalTokens, 50);
+  assert.equal(typeof recorded[0].costUsd, "number", "cost is computed (0 when the adapter has no pricing)");
+
+  console.log("✓ usage recorded against the side-query contributor");
+}
+
+// ---------------------------------------------------------------------------
+// 2.3 — schema violation throws, never returns a partial object
+// ---------------------------------------------------------------------------
+
+{
+  const textAdapter = makeTextAdapterConfig({
+    structured: [
+      { type: "TEXT_MESSAGE_CONTENT", delta: '{"name":"Ada"}' },
+      completeChunk({ name: "Ada" }, '{"name":"Ada"}'),
+      usageChunk(10, 5),
+    ],
+  });
+
+  await assert.rejects(
+    () => runSideTextQuery(textAdapter, { userPrompt: "x", schema: personSchema }),
+    /schema validation/i,
+    "an object that does not satisfy the schema must throw"
+  );
+
+  console.log("✓ schema violation throws");
+}
+
+// ---------------------------------------------------------------------------
+// 2.3b — no completion event at all must throw, not return undefined
+// ---------------------------------------------------------------------------
+
+{
+  const textAdapter = makeTextAdapterConfig({
+    structured: [{ type: "TEXT_MESSAGE_CONTENT", delta: "not json" }, usageChunk(10, 5)],
+  });
+
+  await assert.rejects(
+    () => runSideTextQuery(textAdapter, { userPrompt: "x", schema: personSchema }),
+    // The engine reports a missing structured result as its own ``RUN_ERROR``
+    // (0.54.0: "emit only RUN_ERROR if parsing fails"), so the port surfaces the
+    // engine's reason rather than its own fallback text. Either way it must
+    // throw rather than return undefined.
+    (err) => {
+      assert.ok(err instanceof Error, "a missing completion event throws an Error");
+      assert.ok(err.message.trim().length > 0, "the error carries a reason");
+      return true;
+    },
+    "a missing completion event must throw"
+  );
+
+  console.log("✓ missing completion event throws");
+}
+
+// ---------------------------------------------------------------------------
+// 2.4 — usage must not be droppable (mutation target)
+// ---------------------------------------------------------------------------
+//
+// If the structured branch stopped capturing `RUN_FINISHED.usage`, the assertion
+// above would see `undefined`. Kept as its own case so the intent survives a
+// refactor of the block above, and so the mutation is unambiguous.
+
+{
+  const textAdapter = makeTextAdapterConfig({
+    structured: [completeChunk({ name: "Ada", age: 1 }, '{"name":"Ada","age":1}'), usageChunk(9, 1)],
+  });
+  const result = await runSideTextQuery(textAdapter, { userPrompt: "x", schema: personSchema });
+  assert.ok(
+    result.usage && result.usage.totalTokens === 10,
+    "usage is captured from RUN_FINISHED even when no text deltas were emitted"
+  );
+  console.log("✓ usage captured without text deltas");
+}
+
+// ---------------------------------------------------------------------------
+// 2.5 — a transport failure must be logged under the port's own category
+// ---------------------------------------------------------------------------
+
+{
+  const log = makeCapturingLog();
+  const textAdapter = makeTextAdapterConfig({
+    structured: [runErrorChunk("provider exploded"), usageChunk(1, 1)],
+  });
+
+  await assert.rejects(
+    () => runSideTextQuery(textAdapter, { userPrompt: "x", schema: personSchema, log }),
+    /provider exploded/,
+    "a RUN_ERROR chunk is converted into a throw"
+  );
+
+  assert.equal(log.entries.length, 1, "the failure is logged exactly once");
+  assert.equal(log.entries[0].category, "side-query", "logged under the port's dedicated category");
+  assert.match(log.entries[0].message, /provider exploded/, "the reason is carried");
+  assert.equal(log.entries[0].data.model, "fake-model");
+  assert.equal(typeof log.entries[0].data.durationMs, "number");
+
+  console.log("✓ transport failure logged under `side-query`");
+}
+
+// ---------------------------------------------------------------------------
+// 2.5b — a schema failure is logged with the reason and a raw excerpt
+// ---------------------------------------------------------------------------
+
+{
+  const log = makeCapturingLog();
+  const textAdapter = makeTextAdapterConfig({
+    structured: [completeChunk({ name: "Ada" }, '{"name":"Ada"}'), usageChunk(3, 2)],
+  });
+
+  await assert.rejects(() => runSideTextQuery(textAdapter, { userPrompt: "x", schema: personSchema, log }));
+
+  assert.equal(log.entries.length, 1, "the validation failure is logged");
+  assert.equal(log.entries[0].category, "side-query");
+  assert.equal(log.entries[0].data.structured, true);
+  assert.match(String(log.entries[0].data.raw), /Ada/, "a raw-response excerpt is attached for diagnosis");
+
+  console.log("✓ schema failure logged with reason + excerpt");
+}
+
+// ---------------------------------------------------------------------------
+// 2.5c — success stays quiet
+// ---------------------------------------------------------------------------
+
+{
+  const log = makeCapturingLog();
+  const textAdapter = makeTextAdapterConfig({
+    structured: [completeChunk({ name: "Ada", age: 2 }, '{"name":"Ada","age":2}'), usageChunk(1, 1)],
+  });
+
+  await runSideTextQuery(textAdapter, { userPrompt: "x", schema: personSchema, log });
+  assert.equal(log.entries.length, 0, "a successful query writes no log entry");
+
+  console.log("✓ success path is silent");
+}
+
+// ---------------------------------------------------------------------------
+// 2.6 — the text overload still works (existing callers unaffected)
+// ---------------------------------------------------------------------------
+
+{
+  const textAdapter = makeTextAdapterConfig({
+    text: [
+      { type: "TEXT_MESSAGE_CONTENT", delta: "  hello " },
+      { type: "TEXT_MESSAGE_CONTENT", delta: "world  " },
+      usageChunk(7, 3),
+    ],
+  });
+
+  const result = await runSideTextQuery(textAdapter, { userPrompt: "hi" });
+  assert.equal(result.text, "hello world", "the text branch trims accumulated deltas");
+  assert.ok(result.usage, "the text branch still reports usage");
+  assert.equal(result.data, undefined, "the text result carries no structured payload");
+
+  console.log("✓ text overload unchanged");
+}
+
+// ---------------------------------------------------------------------------
+// 2b — the dedicated category survives the persisted log-entry schema
+// ---------------------------------------------------------------------------
+//
+// `LogCategory` is declared twice (a TS union in types.ts and a zod enum in
+// schemas.ts). A category missing from the zod list is rejected at write time,
+// so the entry silently never lands — this asserts the two agree.
+
+{
+  const entry = {
+    id: "log_probe",
+    timestamp: Date.now(),
+    level: "warn",
+    category: "side-query",
+    message: "Side query failed: boom",
+    data: { model: "fake-model", durationMs: 1 },
+  };
+
+  const accepted = logEntrySchema.safeParse(entry);
+  assert.equal(accepted.success, true, "a `side-query` entry passes the persisted log-entry schema");
+
+  // The schema must still be discriminating — otherwise the assertion above
+  // would pass for any string and prove nothing.
+  const rejected = logEntrySchema.safeParse({ ...entry, category: "not-a-category" });
+  assert.equal(rejected.success, false, "an unknown category is still rejected");
+
+  assert.equal(logCategorySchema.safeParse("side-query").success, true);
+
+  console.log("✓ `side-query` category accepted by the log-entry schema");
+}
+
+console.log("structured-query validation passed");

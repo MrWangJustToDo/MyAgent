@@ -93,4 +93,10 @@ export {
   type ReasoningChatCompletionsConfig,
 } from "./adapter/reasoning-chat-completions-adapter.js";
 
-export { runSideTextQuery, type SideTextQueryOptions, type SideTextQueryResult } from "./adapter/side-text-query.js";
+export {
+  runSideTextQuery,
+  type SideTextQueryOptions,
+  type SideTextQueryResult,
+  type StructuredQueryOptions,
+  type StructuredQueryResult,
+} from "./adapter/side-text-query.js";

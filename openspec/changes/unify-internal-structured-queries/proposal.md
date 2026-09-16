@@ -20,6 +20,12 @@ the version we run, so the previously-blocking reason to wait no longer applies.
 - Add a **structured one-shot query** capability to the internal-query port: a variant of
   `runSideTextQuery` that takes a Zod schema and returns the **validated object** alongside
   `raw` text, token `usage`, and `durationMs`.
+- Give the port **failure visibility**. It currently has none: `side-text-query.ts` carries no
+  logger at all, so a request-level failure is invisible — and one of its four callers
+  (`session-service.ts` `generateSessionTitle`) swallows it with a bare `catch {}`. The port
+  gains an optional log handle, a dedicated `side-query` log category, and warnings for both
+  transport errors and schema-validation failures. Success stays quiet to avoid per-call
+  noise.
 - Internally drive it with `chat({ outputSchema, stream: true })` and read the object from
   the `structured-output.complete` CUSTOM event. The explicit `stream: true` is required for
   two independent reasons: it is the only mode that forwards token usage, and it keeps the
@@ -61,15 +67,32 @@ the version we run, so the previously-blocking reason to wait no longer applies.
 - `packages/core/src/models/adapter/side-text-query.ts` — new structured variant beside
   `runSideTextQuery`; the four existing text callers (`session-service`,
   `session-lifecycle-commands` ×2) keep the text path unchanged.
+- `packages/core/src/agent/agent-log/types.ts` + `schemas.ts` — new `side-query` log category.
+  The category list is declared **twice** (a TS union and a zod enum); both must be updated or
+  `logEntrySchema` rejects the entry at write time.
+- `packages/core/src/managers/managed-agent-session.ts` + `services/session-service.ts` —
+  thread a log handle through `SessionHost` / `SessionPersistInput` so the three callers that
+  currently have none can pass one.
 - `packages/core/src/agent/memory/memory-retrieval.ts` — regex parser removed, schema added.
 - `packages/core/src/agent/memory/memory-extractor.ts` — both `runSubagent` calls replaced;
   `parseJsonArray`, `parseConsolidationResponse`, `ExtractedMemory`,
   `ConsolidationDecisions` removed; `runSubagent` / `AgentManager` arguments dropped from
   the exported signatures, so `memory-service.ts` call sites change too.
+- `packages/core/src/index.ts` — **public API removal**: the `MEMORY_EXTRACT_MAX_OUTPUT_LENGTH`
+  and `MEMORY_CONSOLIDATE_MAX_OUTPUT_LENGTH` exports go away, since memory's `maxOutputLength`
+  arguments were their only use.
 - `packages/core/src/managers/services/memory-service.ts` — call-site updates.
+- `packages/core/src/managers/services/session-service.ts` — the bare `catch {}` in
+  `generateSessionTitle` is removed; a swallowed title failure leaves a trace.
 - Memory workers are no longer subagents: the `subagent:` panel loses the
   `memory-extract` / `memory-consolidate` rows, and `aggregateUsageToParent` no longer
   attributes their tokens to the parent run.
+- `AGENTS.md` and `packages/core/ARCHITECTURE.md` — both list memory among the internal
+  subagent workers and must drop it.
+- **Testing gap:** no existing suite exercises memory's subagent path
+  (`validate-memory-service` / `-lifecycle` / `-extension` never reference `runSubagent`,
+  `extractMemories`, or `consolidateMemories`), so this change adds its own check for the
+  new failure mode rather than inheriting cover.
 - **Risk:** these three calls currently run inside a subagent, so they inherit abort
   propagation and a dedicated model handle. The one-shot port must take an `abortSignal`
   (memory retrieval already passes one) and must not silently lose usage accounting.

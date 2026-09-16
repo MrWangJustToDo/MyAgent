@@ -122,16 +122,49 @@ get a parsed object", and bundling it would make this change unreviewable. The m
 layer's partial existing awareness of the part type is a starting point, not a completed
 integration.
 
-### D5: No SDK version bump
+### D5: Upgrade to `@tanstack/ai@0.54.0` first
 
-**Decision.** Stay on `@tanstack/ai@0.53.0`.
+**Decision.** Bump `@tanstack/ai` to `^0.54.0` (all three declaring packages) together with
+its adapters, as the **first** step, before any port work.
 
-**Why.** `0.54.0`'s structured-output change (#1340) reorders the native structured result
-to be emitted *before* `RUN_FINISHED`. The port reads the object from
-`structured-output.complete` and does not depend on its position relative to
-`RUN_FINISHED`; usage is read from `RUN_FINISHED` independently. Neither guarantee is
-violated by the current ordering, so the bump buys nothing here and would be an unrelated
-change to package.json and the lockfile.
+**Why the earlier "no bump needed" reading was wrong.** `0.54.0`'s #1340 has two parts:
+
+1. *Ordering.* In `0.53.0` the model terminal is **deferred** — the engine pushes
+   `RUN_FINISHED` onto `deferredModelRunFinishedChunks` and flushes it later, while the
+   structured result travels out-of-band via `structuredOutputResult`. A consumer can
+   therefore observe `RUN_FINISHED` before it has the object.
+2. *Failure semantics.* `0.54.0` makes parsing failure emit **only** `RUN_ERROR`.
+
+The spec's "Internal query failures are observable" requirement depends on a failure being
+reliably identifiable. Under `0.53.0` that is exactly the guarantee in question, so the bump
+is load-bearing for this change rather than unrelated.
+
+**Adapters move with it.** `@tanstack/ai-openai@0.22.6`, `@tanstack/ai-anthropic@0.18.6`, and
+`@tanstack/openai-base@0.10.11` all declare `peerDependencies: { "@tanstack/ai": "^0.54.0" }`,
+so bumping the engine alone produces a peer conflict. `@tanstack/ai-code-mode` and
+`@tanstack/ai-mcp` are bumped in the same pass (agreed: one wave) even though they are not
+structured-output related.
+
+**Release-age policy.** `pnpm-workspace.yaml` carries a `minimumReleaseAgeExclude` list of
+`@tanstack/*` exceptions. If the configured age threshold exceeds the time since 0.54.0's
+release (2026-09-10), an exception must be added or the install will refuse the version.
+
+**Regression risk.** 0.54.0 also changes agent-loop event delivery ("wait for the active
+subscriber to process all events before resolving send"). This repo has substantial custom
+stream handling (`packages/core/src/agent/stream/`, plus suppression/recovery middleware), so
+the existing stream validations must be run against the upgraded tree before port work
+begins — the upgrade is the riskiest step in this change, not the memory migration.
+
+### D5b: Structured output is an overload on `runSideTextQuery`, not a new function
+
+**Decision.** `runSideTextQuery` gains an optional `outputSchema`. When it is passed the
+function returns the structured result; when it is omitted the existing text result is
+returned. The two are expressed as **TypeScript overloads** so the four existing callers need
+no change at all.
+
+**Why overloads over a union return.** A union return would force every existing caller to
+narrow a value that is statically known at their call site. Overloads keep the text path
+byte-identical in type terms and confine the new shape to the calls that ask for it.
 
 ### D6: Validation failures surface as thrown errors, callers own the fallback
 
@@ -142,6 +175,106 @@ memories; consolidation → no change.
 **Why.** The three callers already have different, correct fallbacks. A single
 "return null on failure" contract inside the port would push the same decision into the
 port and force it to guess which fallback applies.
+
+### D7: The port owns failure logging; success is silent
+
+**Decision.** The port takes an optional `log?: AgentLog`, logs warnings under a new
+`side-query` category on transport/model failure and on schema-validation failure, and
+writes nothing on success. A caller may still degrade, but not silently.
+
+**Why.** `side-text-query.ts` currently has no logger and no logging call — its only
+log-adjacent line is `debug: false`, which exists to keep TanStack's console dumps out of
+the Ink TUI. The consequences today:
+
+- `session-service.ts` `generateSessionTitle` has a bare `catch {}`, so a failed title
+  generation leaves no trace anywhere.
+- TanStack emits `RUN_ERROR` as a **chunk**, not a throw. A consumer that does not convert it
+  never reaches a catch block, so without the port logging it the failure is unobservable.
+- `memory-retrieval` logs its own parse failures but loses the reason for a request-level
+  failure, because the error thrown by the port is flattened into one coarse line at the
+  caller.
+
+Putting this in the port (rather than in each of the four callers) means one contract covers
+all of them plus the structured variant they will share.
+
+**On the new category.** `LogCategory` is declared twice — a TS union in
+`agent-log/types.ts` and a zod enum in `agent-log/schemas.ts`. Nothing enumerates the union
+exhaustively (verified: no zod mirror elsewhere, no exhaustive switch), but a category
+missing from the zod enum fails at write time. The name `side-query` reuses the label the
+usage history already records for these calls (`agentId: "side-query"`), so logs and usage
+agree.
+
+**Alternative considered.** Reuse an existing category (`llm` or `memory`). Rejected: the
+port serves memory, session titles, and session summaries alike, so filing under any
+caller's category would misattribute two thirds of its entries.
+
+**Alternative considered.** A caller-supplied `category` parameter. Rejected: the port has
+one identity, and making the category a per-call knob invites drift for no benefit.
+
+**Measured during implementation.** Two facts that only surfaced by running the code, both
+of which changed the implementation:
+
+- The consumer never sees `chunk.error`. The engine normalizes the adapter's failure onto the
+  chunk's **top-level `message`** (probed: an adapter yielding
+  `{ type: "RUN_ERROR", error: new Error("provider exploded") }` arrives as
+  `{"type":"RUN_ERROR","message":"provider exploded"}`). Reading only the declared `error`
+  field degrades every failure to a generic string, so the port reuses the repo's existing
+  `extractRunErrorMessage`, which prefers `message`.
+- A schema failure does not reach the port's own validation. 0.54.0 reports it as a
+  `RUN_ERROR` chunk instead (the #1340 fix), so the missing-object branch is a backstop rather
+  than the main path. The validation assertion in the task list was rewritten to assert "it
+  throws, with a reason" rather than matching the port's own fallback wording — otherwise the
+  test would have been green only against a string the engine never lets it produce.
+
+### D8: Deleting subagent surface — dead code vs single-consumer
+
+**Decision.** After memory leaves the subagent path, a `SubagentConfig` option is removed
+only when its reference count drops to **zero**. An option left with a single consumer
+(`auto-compact`) is kept.
+
+**Why this needs stating.** Two of memory's options were the *second* consumer of a feature
+that still has one, which makes "memory no longer uses this" a misleading reason to delete.
+Applying the rule:
+
+| Option | References after | Verdict |
+|---|---|---|
+| `aggregateUsageToParent` | 1 (`auto-compact.ts:278`) | keep |
+| `maxIterations` | 1 (`auto-compact.ts:275`) | keep |
+| `bridgeUI` | 1 (`auto-compact.ts:280`; memory only used the default) | keep |
+| `MEMORY_EXTRACT_MAX_OUTPUT_LENGTH` / `MEMORY_CONSOLIDATE_MAX_OUTPUT_LENGTH` | 0 | **remove** |
+| The `AgentManager` forwarding chain | 0 | **remove** |
+
+**Consequence to watch.** Memory's `autoDestroy: true` / `aggregateUsageToParent: true` were
+**redundant defaults** — `run-subagent.ts:90-91` already default both to `true`. The usage
+re-attribution described in D3 therefore shows up as the parameters *disappearing*, not as a
+`true → false` flip, so it is invisible in a diff and must be verified against the real usage
+graph instead.
+
+**Also explicitly not dead.** `description` is not a memory leftover: `compaction`,
+`progress-summary`, and `task-prefork` still set it, and no core logic branches on its value
+(it feeds the `subagent:started` telemetry message at `event-log-rules.ts:257` and the app-side
+row label at `subagent-status.ts:35`). `run-subagent.ts` also contains **no** empty-tools
+special case written for a tool-less worker, so there is no branch to remove there.
+
+**Removing a public export.** The two `MEMORY_*` constants are re-exported from
+`packages/core/src/index.ts:201-204`, so deleting them is a public API change. The package is
+0.0.1 and unpublished, so no deprecation shim is warranted, but the removal is called out
+rather than done silently.
+
+### D9: This migration lands without regression cover
+
+**Decision.** Add one minimal validation to the memory check-in, because the existing suites
+do not touch this path at all.
+
+**Why.** `validate-memory-service`, `validate-memory-lifecycle`, and
+`validate-memory-extension` contain no reference to `runSubagent`, `extractMemories`, or
+`consolidateMemories`. Deleting the forwarding chain and the public constants can therefore
+break nothing that any existing test observes; `pnpm typecheck` catches dropped call sites but
+not behavioural regressions.
+
+**Mitigation.** A focused check that extraction returns 0 (rather than throwing) when the
+schema is unsatisfied — the one new failure mode this change introduces — so the fallback
+contract in the spec has at least one executable guard.
 
 ## Risks / Trade-offs
 
@@ -162,6 +295,19 @@ port and force it to guess which fallback applies.
   → Mitigation: the spec requires usage to be returned; add a validation script asserting a
   structured query records usage in the shared history, and a mutation test that fails when
   usage is dropped.
+
+- **[Failure visibility is only as good as the log handle]** The new warnings reach disk
+  only when a caller passes a log. Three of the four callers have none today, so the
+  threading task (`SessionHost` → `SessionPersistInput` → the port) is load-bearing; skipping
+  it yields a port that can log but never does.
+  → Mitigation: log threading is its own task group, and the acceptance check asserts a
+  failure entry actually lands in the JSONL sink rather than only that the call was made.
+
+- **[Success is intentionally silent]** Because only failures are logged, a side query that
+  returns a wrong but schema-valid answer produces no entry. This is the accepted cost of
+  the no-noise trade-off, not an oversight.
+  → Mitigation: none required; noted so a later reader does not "fix" the silence by adding
+  per-call info lines.
 
 - **[Model/provider schema support]** `supportsCombinedToolsAndSchema` gates the
   tools+schema combination, and it is model-dependent (Anthropic: Claude 4.5+ only; Groq:
@@ -190,6 +336,14 @@ port and force it to guess which fallback applies.
 
 Rollback: steps 1–3 are independent commits. Reverting step 3 restores the subagent path
 without touching the port; reverting step 2 and then 1 removes the capability.
+
+Logging is deliberately the **first** step, before any memory migration: it is the change
+that makes the later migrations debuggable, and without it a schema-validation failure
+introduced in step 3 would be visible only as "memory stopped working".
+
+Subagent surface cleanup (D8) is the **last** step and must run only after the memory
+migration is verified. Doing it earlier would delete the options the migrating call sites
+still pass.
 
 ## Open Questions
 

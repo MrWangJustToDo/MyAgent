@@ -9,6 +9,7 @@ import { getFirstUserInput } from "../../agent/compaction/message-utils.js";
 import { dehydrateUIMessages, hydrateUIMessages, type MediaHydrationMiss } from "../../agent/media/media-utils.js";
 import { runSideTextQuery } from "../../models/adapter/side-text-query.js";
 
+import type { AgentLog } from "../../agent/agent-log";
 import type { SessionStore } from "../../agent/persistence/session-store.js";
 import type { SessionData } from "../../agent/persistence/types.js";
 import type { PlanModeState } from "../../agent/plan/plan-mode-controller.js";
@@ -31,6 +32,12 @@ export interface SessionPersistInput {
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   emitEvent?: EmitAgentTelemetryFn;
   /**
+   * Agent log for the async side queries this service runs on its own (session
+   * title generation). Without it those failures are invisible: the title path
+   * falls back to a truncated first message, which looks like a normal title.
+   */
+  log?: AgentLog;
+  /**
    * Invoked when the async auto-title resolves, so the agent can broadcast the
    * new display name (the title lands on `SessionData.name` first).
    */
@@ -49,7 +56,6 @@ export class SessionService {
   private store: SessionStore | null = null;
   private data: SessionData | null = null;
   private config: { modelStyle: string; model: string } | null = null;
-
   setStore(store: SessionStore, config: { modelStyle: string; model: string }): void {
     this.store = store;
     this.config = config;
@@ -103,9 +109,9 @@ export class SessionService {
 
   private async generateSessionTitle(
     userMessage: string,
-    input: Pick<SessionPersistInput, "usage" | "resolveTextAdapter">
+    input: Pick<SessionPersistInput, "usage" | "resolveTextAdapter" | "log">
   ): Promise<string> {
-    const { usage, resolveTextAdapter } = input;
+    const { usage, resolveTextAdapter, log } = input;
     try {
       const textAdapter = (await resolveTextAdapter?.()) ?? null;
       if (!textAdapter) return userMessage.slice(0, 50);
@@ -114,6 +120,7 @@ export class SessionService {
           "Generate a concise title (3-8 words) for a conversation that starts with the following message. Return ONLY the title, no quotes or punctuation.",
         userPrompt: userMessage.slice(0, 500),
         maxOutputTokens: 30,
+        log,
       });
 
       if (queryUsage) {
@@ -121,7 +128,14 @@ export class SessionService {
       }
 
       return text.slice(0, 80) || userMessage.slice(0, 50);
-    } catch {
+    } catch (error) {
+      // The port logs its own transport / model failures, but this catch also
+      // covers adapter resolution and any non-LLM throw, so the fallback stays
+      // observable instead of being a bare swallow. Filed under `side-query` —
+      // the category the port itself uses — so one filter shows the health of
+      // every internal one-shot call.
+      const reason = error instanceof Error ? error.message : String(error);
+      log?.warn("side-query", `Session title generation failed: ${reason}`);
       return userMessage.slice(0, 50);
     }
   }
@@ -156,6 +170,7 @@ export class SessionService {
       onTitleResolved,
       emitEvent,
       uiMessages,
+      log,
     } = input;
     if (!this.store) return;
     if (!this.data) {
@@ -214,7 +229,7 @@ export class SessionService {
       // /resume during it swaps `this.data`. Without this guard the old session's
       // title would be written into (and persisted to) the new session.
       const target = this.data;
-      this.generateSessionTitle(firstUserText, { usage, resolveTextAdapter }).then((title) => {
+      this.generateSessionTitle(firstUserText, { usage, resolveTextAdapter, log }).then((title) => {
         if (this.data !== target) return;
         const trimmed = title.trim();
         if (!trimmed) {

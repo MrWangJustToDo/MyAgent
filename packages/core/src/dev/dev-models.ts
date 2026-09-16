@@ -11,6 +11,7 @@ export {
   shouldEchoReasoningContent,
 } from "../models/adapter/reasoning-echo.js";
 export { runSideTextQuery } from "../models/adapter/side-text-query.js";
+export { sharedUsageHistory } from "../agent/usage/usage-history-service.js";
 export {
   SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
   ANTHROPIC_CACHE_BREAKPOINT_CAP,

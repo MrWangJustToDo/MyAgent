@@ -8,6 +8,7 @@ import { readPlanFileAtRelativePath } from "../agent/plan/plan-store.js";
 import type { SessionPersistInput, SessionService } from "./services/session-service.js";
 import type { EmitAgentTelemetryFn } from "./telemetry/emit-agent-telemetry.js";
 import type { UsageTracker } from "./telemetry/usage-tracker.js";
+import type { AgentLog } from "../agent/agent-log";
 import type { ToolApprovalTable } from "../agent/approval/tool-approval-table.js";
 import type { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
 import type { SessionSyncTracker } from "../agent/persistence/session-sync-tracker.js";
@@ -36,6 +37,11 @@ export interface SessionHost {
   toolCompactCache: ToolCompactCache;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   emitEvent: EmitAgentTelemetryFn;
+  /**
+   * The agent's log, for side queries the helpers run on their own (session
+   * titles). Optional so hosts without logging keep compiling.
+   */
+  getLog?: () => AgentLog | undefined;
   /** Update the agent's display name (broadcast via the state channel). */
   setDisplayName?: (name: string) => void;
   /** Re-emit the L1 state snapshot (after swapping the on-disk session id). */
@@ -66,6 +72,7 @@ export function getSessionPersistInput(host: SessionHost, uiMessages?: TanStackU
     reasoningEffort: host.getReasoningEffort(),
     resolveTextAdapter: host.resolveTextAdapter,
     emitEvent: (type, data) => host.emitEvent(type, data),
+    log: host.getLog?.(),
     // The auto-title path writes `SessionData.name`; mirror it onto the agent so
     // live UI / snapshots pick it up (previously only manual rename broadcast).
     onTitleResolved: (name) => host.setDisplayName?.(name),

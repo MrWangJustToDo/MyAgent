@@ -64,6 +64,50 @@ fires.
 - **WHEN** a caller's abort signal fires while a structured query is in flight
 - **THEN** the underlying request is aborted and the port settles without emitting a result
 
+### Requirement: Internal query failures are observable
+
+The port SHALL accept an optional agent log and SHALL record a warning when a query fails,
+covering both a transport/model error and a structured-output validation failure. A caller
+that handles a failure by degrading MUST leave a trace, either by logging it or by
+returning a distinguishable failure to its own caller.
+
+#### Scenario: Transport or model error is logged
+
+- **WHEN** a query fails at the transport or model level (including a `RUN_ERROR` stream
+  event, which is not thrown by the stream consumer unless the port converts it)
+- **THEN** the port records a warning carrying the failure reason, the model, and the
+  elapsed duration
+
+#### Scenario: Schema validation failure is logged with the reason
+
+- **WHEN** a structured query's response does not satisfy the requested schema
+- **THEN** the port records a warning carrying the validation reason and a bounded excerpt
+  of the raw response, so a schema failure is distinguishable from a legitimate empty
+  result
+
+#### Scenario: Degrading caller leaves a trace
+
+- **WHEN** a caller swallows a query failure and falls back to a non-LLM path
+- **THEN** the fallback is recorded, and a silent `catch` with no log entry is not an
+  acceptable implementation
+
+### Requirement: The port logs under its own category
+
+The port SHALL log under a dedicated log category rather than reusing an existing one, and
+that category MUST be accepted by the persisted log-entry schema so entries are not
+dropped at write time.
+
+#### Scenario: Dedicated category is accepted by the schema
+
+- **WHEN** the port writes a log entry under its own category
+- **THEN** the log-entry schema accepts the category and the entry survives serialization
+
+#### Scenario: No existing category is repurposed
+
+- **WHEN** the port's log entries are inspected
+- **THEN** they are not filed under a caller's category (for example the memory
+  subsystem's), so a consumer filtering by category sees the port's own activity
+
 ## MODIFIED Requirements
 
 <!-- None: no existing requirement in openspec/specs/ governs internal query output

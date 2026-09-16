@@ -177,6 +177,7 @@ async function selectWithLLM(
     userPrompt: `Query: ${query}\n\nAvailable memories:\n${manifest}`,
     maxOutputTokens: 256,
     abortSignal,
+    log: logger,
   });
 
   if (usage && queryUsage) {
@@ -335,8 +336,11 @@ export async function findRelevantMemories(
         }
       }
     } catch (err) {
+      // The port already recorded the transport failure under `side-query` with
+      // the reason, so this entry covers only the decision made here. Repeating
+      // the error message would double-report one failure under two categories.
       const errorMsg = err instanceof Error ? err.message : String(err);
-      logger?.warn("memory", `LLM memory selection threw, falling back to keyword: ${errorMsg}`);
+      logger?.info("memory", `Falling back to keyword memory selection (${errorMsg})`);
       selectedFilenames = selectWithKeywords(query, candidates, maxItems);
       selectionMethod = "keyword-fallback";
     }

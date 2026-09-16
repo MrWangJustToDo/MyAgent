@@ -7,7 +7,24 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
 
 /** Log categories for filtering */
 export type LogCategory =
-  "agent" | "chat" | "llm" | "tool" | "approval" | "compaction" | "todo" | "skill" | "memory" | "hooks" | "system";
+  | "agent"
+  | "chat"
+  | "llm"
+  | "tool"
+  | "approval"
+  | "compaction"
+  | "todo"
+  | "skill"
+  | "memory"
+  | "hooks"
+  | "system"
+  /**
+   * Internal one-shot LLM calls that are not conversational turns — memory
+   * selection, session titles, session summaries. Filed under their own
+   * category rather than a caller's, because the same port serves several
+   * subsystems and none of them owns it.
+   */
+  | "side-query";
 
 /** Log entry */
 export interface LogEntry {
