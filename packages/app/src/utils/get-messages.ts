@@ -1,6 +1,5 @@
 import {
   computeMessageRenderSignature,
-  computeToolCallsRenderSignature,
   dedupeToolCallsInMessages,
   normalizeToolPartsInMessages,
   shouldFlattenPart,
@@ -13,11 +12,7 @@ import {
   setFlatByRef,
   setStaticFlattenSnapshot,
 } from "./message-flat-cache.js";
-import {
-  isActivitySummaryMessage,
-  projectTranscriptForDisplay,
-  type TranscriptDisplayMode,
-} from "./project-transcript.js";
+import { projectTranscriptForDisplay, type TranscriptDisplayMode } from "./project-transcript.js";
 
 import type { ImagePart, TextPart, UIMessage } from "@tanstack/ai";
 
@@ -107,27 +102,6 @@ function resolveStaticRows(message: UIMessage): UIMessage[] {
 }
 
 /**
- * Signature for ink Static rebuilds.
- * Only fingerprints the static portion (all but last display message) so live tool
- * updates on the dynamic last message do not remount the entire transcript.
- *
- * Callers pass the static portion already windowed, so this stays O(window).
- */
-function computeStaticRenderSignature(staticSource: UIMessage[], options: { mode: TranscriptDisplayMode }): string {
-  const toolSig = computeToolCallsRenderSignature(staticSource);
-  const summaries = staticSource
-    .filter(isActivitySummaryMessage)
-    .map((m) => {
-      const text = m.parts[0]?.type === "text" ? ((m.parts[0] as TextPart).content ?? "") : "";
-      return `${m.id}:${text}`;
-    })
-    .join(";");
-
-  const ids = staticSource.map((m) => m.id).join(",");
-  return `${options.mode}|n${staticSource.length}|${ids}|${summaries}|${toolSig}`;
-}
-
-/**
  * Pick the static-input window start, backing up to the nearest user message.
  *
  * The start MUST land on a user message: `projectTranscriptForDisplay` groups by turn and
@@ -208,7 +182,12 @@ export const getMessages = (messages: UIMessage[], options: GetMessagesOptions =
   const projectedStatic = projectTranscriptForDisplay(staticSource, { mode });
 
   const staticMessages = resolveStaticRowsForStaticSource(projectedStatic, namespace, mode);
-  const staticRows = staticMessages;
+  // One invalidation signature per rendered static row, derived from that row's own
+  // content. `staticMessages` is already flattened to one row per message for the static
+  // region, so the signature is computed over the same rows the renderer will cache.
+  // Deliberately excludes `mode`/window/id components: those are cross-row (a projection
+  // change must not silently reuse a cached row), so callers keep them as separate deps.
+  const staticSignatures = staticMessages.map(computeMessageRenderSignature);
   const dynamicMessages: UIMessage[] = [];
   if (lastMessage) {
     if (lastMessage.role === "user") {
@@ -225,15 +204,15 @@ export const getMessages = (messages: UIMessage[], options: GetMessagesOptions =
 
   return {
     staticMessages,
+    staticSignatures,
     dynamicMessages: validDynamicMessages,
-    toolCallsSignature: computeStaticRenderSignature(staticSource, { mode }),
     /**
      * Messages not represented in the transcript at all: the window prefix plus every
      * static source message that produced no row (thinking-only, tool-result-only, …).
      * `MessageList` subtracts the messages visible in the rendered cap to get the marker
      * total. Kept in MESSAGES so the marker never mixes units.
      */
-    hiddenSourceMessages: windowStart + Math.max(0, staticSource.length - countSourceMessages(staticRows)),
+    hiddenSourceMessages: windowStart + Math.max(0, staticSource.length - countSourceMessages(staticMessages)),
   };
 };
 

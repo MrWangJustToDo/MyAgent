@@ -22,6 +22,7 @@ export { useInputMode, type InputMode, type FreeformContext } from "./use-input-
 export { usePreviewEdit } from "./use-preview-edit.js";
 export { useSelect } from "./use-select.js";
 export { useStatic } from "./use-static.js";
+export { useStaticHeights } from "./use-static-heights.js";
 export { useSubAgents } from "./use-sub-agents.js";
 export { useSubagentMessages } from "./use-subagent-messages.js";
 export { useSubagentPanel, type SubagentPanelView } from "./use-subagent-panel.js";

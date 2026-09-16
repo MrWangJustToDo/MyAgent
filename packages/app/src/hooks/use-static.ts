@@ -7,9 +7,13 @@ export const useStatic = createState(
     stdoutRef: markRaw({ current: null as ReturnType<typeof useStdout>["stdout"] | null }),
     header: null as JSX.Element | null,
     list: [] as JSX.Element[],
+    /**
+     * One invalidation signature per row in `list`, same order. Each row's `<StaticRender>`
+     * depends only on its own entry, so one row changing no longer re-caches the others.
+     */
+    itemSigs: [] as string[],
     headerSet: 0,
     listSet: 0,
-    toolCallsSignature: "",
   }),
   {
     withActions(s) {
@@ -19,10 +23,14 @@ export const useStatic = createState(
           s.stdoutRef.current = result.stdout;
         },
         setStaticHeader: (item: JSX.Element) => ((s.header = item), s.headerSet++),
-        setStaticList: (items: JSX.Element[]) => ((s.list = items), s.listSet++),
-        setToolCallsSignature: (signature: string) => {
-          if (s.toolCallsSignature === signature) return;
-          s.toolCallsSignature = signature;
+        /**
+         * Rows and their signatures are written together: they are positional, so letting
+         * them diverge would attach one row's signature to another row's cache.
+         */
+        setStaticList: (items: JSX.Element[], signatures: string[]) => {
+          s.list = items;
+          s.itemSigs = signatures;
+          s.listSet++;
         },
       };
     },
