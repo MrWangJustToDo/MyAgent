@@ -26,7 +26,6 @@ import {
   MODEL_CAPABILITIES,
   MODELS_DEV_COST_FIELDS,
   MODELS_DEV_MODEL_FIELDS,
-  RUNTIME_TRUE_CAPABILITIES,
   deriveCapabilities,
 } from "../dist/dev.mjs";
 
@@ -46,25 +45,65 @@ function check(name, fn) {
 // 1. Invariants on the declared capability surface
 // ============================================================================
 
-check("every runtime-true capability is a declared capability", () => {
-  for (const cap of RUNTIME_TRUE_CAPABILITIES) {
-    assert.ok(MODEL_CAPABILITIES.includes(cap), `"${cap}" is not in MODEL_CAPABILITIES`);
-  }
+check("every declared capability is producible from metadata (no dead members)", () => {
+  // A capability nobody can derive is dead weight at best: `streaming` and `computer_use` were
+  // exactly that, yet both were exported as the authoritative vocabulary and one of them was
+  // load-bearing. Drive each member through a real metadata input instead of restating the list.
+  const witnesses = {
+    reasoning: { reasoning: true },
+    tool_calling: { tool_call: true },
+    json_output: { structured_output: true },
+    prompt_caching: { cost: { cache_read: 0.1 } },
+    vision: { modalities: { input: ["image"] } },
+    audio: { modalities: { input: ["audio"] } },
+    video: { modalities: { input: ["video"] } },
+    document: { modalities: { input: ["pdf"] } },
+  };
+  const unproducible = MODEL_CAPABILITIES.filter((cap) => {
+    const witness = witnesses[cap];
+    return !witness || !deriveCapabilities(witness).includes(cap);
+  });
+  assert.deepEqual(
+    unproducible,
+    [],
+    `capability(ies) no metadata input can produce: ${unproducible.join(", ")}. Either map them to a ` +
+      `field deriveCapabilities reads, or drop them — an unproducible member is a constant pretending ` +
+      `to be model metadata`
+  );
 });
 
-check("runtime-true capabilities are granted from the transport, not metadata", () => {
-  // A mapping that reads them from metadata would make this list lie. Assert they are granted
-  // for an entry with NO metadata signal at all — which is the plain-text-model case.
+check("no capability is a runtime-constant that describes every model", () => {
+  // `streaming` was granted to all 7842 entries and `computer_use` had no source at all. Both
+  // said nothing about any particular model while looking like model metadata, and `streaming`
+  // was load-bearing only as a "metadata was parsed" marker. Every remaining member must be
+  // evidenced by a metadata field this mapping reads.
+  const evidenceable = new Set([
+    "reasoning",
+    "tool_calling",
+    "json_output",
+    "prompt_caching",
+    "vision",
+    "audio",
+    "video",
+    "document",
+  ]);
+  const unexplained = MODEL_CAPABILITIES.filter((cap) => !evidenceable.has(cap));
+  assert.deepEqual(
+    unexplained,
+    [],
+    `capability without metadata evidence: ${unexplained.join(", ")}. Every member must map to a ` +
+      `field deriveCapabilities reads, otherwise it is a constant masquerading as model metadata`
+  );
+});
+
+check("a parse with no metadata signal yields [] (declared none), never undefined", () => {
+  // [] and undefined are different for the whole pipeline: the probe is permissive only for
+  // `undefined` (unknown), so a resolved-but-plain model must come back [] and be treated
+  // strictly. `deriveCapabilities` returning anything falsy here would put the model on the
+  // permissive path and let images go to an endpoint that rejects them.
   const caps = deriveCapabilities({});
-  for (const cap of RUNTIME_TRUE_CAPABILITIES) {
-    assert.ok(caps.includes(cap), `"${cap}" must be granted even with no metadata signal`);
-  }
-  assert.equal(caps.length, RUNTIME_TRUE_CAPABILITIES.length, "nothing else may be granted without evidence");
-});
-
-check("a parse with no metadata signal never yields an empty list", () => {
-  // Load-bearing: `hasCapability` reads an empty list as "unknown" and allows everything.
-  assert.ok(deriveCapabilities({}).length > 0, "empty result would authorize every modality");
+  assert.ok(Array.isArray(caps), "the mapping must always return an array");
+  assert.deepEqual(caps, [], "a plain text model declares no capabilities — that is an answer, not a gap");
 });
 
 // ============================================================================
@@ -145,13 +184,39 @@ if (!fs.existsSync(cachePath)) {
     for (const model of Object.values(provider.models ?? {})) entries.push(model);
   }
 
-  check(`corpus: every parsed entry yields a non-empty capability list (${entries.length} models)`, () => {
-    const empty = entries.filter((m) => deriveCapabilities(m).length === 0);
-    assert.equal(
-      empty.length,
-      0,
-      `${empty.length} entries produced [] — that reads as "unknown" and allows everything`
+  check(`corpus: [] is reserved for entries with no capability evidence (${entries.length} models)`, () => {
+    // [] now means "resolved, and none apply" and makes the send-gates strict. That is correct
+    // for a plain text model, but it would be WRONG for an entry that carries evidence -- the
+    // model would have its supported modalities stripped. So [] must correlate exactly with
+    // "nothing in the metadata says this model can do anything".
+    const offenders = [];
+    let plain = 0;
+    for (const model of entries) {
+      const caps = deriveCapabilities(model);
+      if (caps.length > 0) continue;
+      plain++;
+      const hasEvidence =
+        model.reasoning === true ||
+        model.tool_call === true ||
+        model.structured_output === true ||
+        model.cost?.cache_read !== undefined ||
+        model.cost?.cache_write !== undefined ||
+        (Array.isArray(model.modalities?.input)
+          ? model.modalities.input.some((m) => m !== "text")
+          : // `attachment` is the coarse fallback and is ONLY consulted when modalities is absent
+            // (modalities.input is authoritative and overrides it). Counting it unconditionally
+            // flagged poe/cerebras/llama-3.3-70b-cs, which is `attachment: true` with
+            // `modalities.input: ["text"]` — correctly resolved to [] and correctly stripped.
+            model.attachment === true);
+      if (hasEvidence) offenders.push(model.id ?? model.name ?? "?");
+    }
+    assert.deepEqual(
+      offenders.slice(0, 5),
+      [],
+      `${offenders.length} entr(ies) resolved to [] despite carrying capability evidence, e.g. ` +
+        `${offenders.slice(0, 5).join(", ")} — those models would have their modalities stripped`
     );
+    console.log(`       (${plain} of ${entries.length} entries are plain text / no evidence)`);
   });
 
   check("corpus: no multimedia capability is granted without its metadata evidence", () => {

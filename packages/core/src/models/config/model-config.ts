@@ -77,7 +77,12 @@ function mergeModelInfo(base: ModelInfo | undefined, override: ModelInfo | undef
   return {
     ...base,
     ...override,
-    capabilities: override.capabilities.length > 0 ? override.capabilities : base.capabilities,
+    // `undefined` on the override means "this side has no capability data", so the base wins.
+    // It does NOT mean "no capabilities": an explicit `[]` is a real declaration (resolved, none
+    // apply) and must be kept, or a caller deliberately describing a text-only model would be
+    // silently upgraded to whatever models.dev says about the same id. The old `length > 0` test
+    // could not tell those two apart.
+    capabilities: override.capabilities !== undefined ? override.capabilities : base.capabilities,
     pricing: override.pricing ?? base.pricing,
     reasoningConfig: override.reasoningConfig ?? base.reasoningConfig,
     baseURL: override.baseURL ?? base.baseURL,

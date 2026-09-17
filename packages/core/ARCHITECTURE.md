@@ -479,15 +479,25 @@ The capability list has exactly one source of truth: `MODEL_CAPABILITIES` in `mo
 
 | Source | Grants | Notes |
 | ------ | ------ | ----- |
-| `RUNTIME_TRUE_CAPABILITIES` | `streaming` | Transport property, **not** metadata. Every endpoint we ship adapters for streams and models.dev has no field for it. Load-bearing: it is what keeps the list non-empty for a plain text model. |
 | `modalities.input` | `vision` (`image`), `audio`, `video`, `document` (`pdf`; `document`/`file` aliases) | Authoritative, per-modality, exact in both directions. Primary source. |
 | `attachment` | `vision` only | **Fallback**, used only when `modalities.input` is absent. It is one boolean and cannot say *which* modality, so it is never expanded into `document` — doing that once marked 34% of the catalog document-capable when only 23% accept `pdf`. |
 | `reasoning` / `tool_call` / `structured_output` | `reasoning` / `tool_calling` / `json_output` | One-to-one booleans. |
 | `cost.cache_read` or `cost.cache_write` present | `prompt_caching` | Caching is inferred from cache pricing existing. |
 
-**Empty means unknown, never "no capabilities".** `UsageTracker.hasCapability` is permissive when the list is empty (unknown model → assume support). Therefore a successful metadata parse must never return an empty list — that is why the runtime-true seed exists rather than being optional. `validate:model-capabilities` asserts this against the real cached catalog (7822 models) plus the mapping rules in both directions.
+**`undefined` means unknown; `[]` means "declared, and none apply".** The two states look alike and mean opposite things, and keeping them distinct is what lets `UsageTracker.hasCapability` stay permissive without over-sending:
 
-**Not modelled:** `temperature`, `open_weights`, `modalities.output`, `interleaved`, `experimental`. `interleaved` is the one with real impact — it carries the reasoning echo-back field (`reasoning_content` for 970 entries, `reasoning_details` for 15), which is strictly more precise than `reasoning` for choosing `ReasoningChatCompletionsTextAdapter`, and there are entries with `interleaved` set but `reasoning: false`. `computer_use` has no models.dev field at all and is only reachable via the CLI `MODEL_CAPABILITIES` env var.
+| `ModelInfo.capabilities` | `UsageTracker` | `hasCapability` | Pre-send strip for a text-only model |
+| --- | --- | --- | --- |
+| `undefined` (no metadata resolved) | `null` | permissive — allows everything | does **not** strip (nothing is known) |
+| `[]` (resolved, no evidence) | `[]` | strict — denies everything absent | **strips** |
+
+A successful metadata parse must therefore return `[]`, never `undefined`, for a plain text model. 330 of 7842 catalog entries resolve to `[]` (plain text / TTS) and are now correctly stripped; they were previously exempt because `[]` was indistinguishable from unknown.
+
+Three hops have to preserve the distinction, and all three are guarded by `validate:capability-unknown-vs-none` (merge + probe) and `validate:model-capabilities` (mapping): `deriveCapabilities` (must emit `[]`, not seed a placeholder), `mergeModelInfo` (an override's `undefined` means "this side has no data", while an explicit `[]` is a real declaration that must win), and `UsageTracker.setCapabilities` (`undefined` → `null`).
+
+A member removed from `MODEL_CAPABILITIES` makes an existing `MODEL_CAPABILITIES` env var / CLI value fail validation, since the schema rejects unknown names rather than ignoring them.
+
+**Not modelled:** `temperature`, `open_weights`, `modalities.output`, `interleaved`, `experimental`. `interleaved` is the one with real impact — it carries the reasoning echo-back field (`reasoning_content` for 982 entries, `reasoning_details` for 15, plus 86 bare `true`), which is strictly more precise than `reasoning` for choosing `ReasoningChatCompletionsTextAdapter`, and there are entries with `interleaved` set but `reasoning: false`.
 
 
 **DeepSeek reasoning echo** (`reasoning-chat-completions-adapter.ts` + `reasoning-content-cache.ts`):

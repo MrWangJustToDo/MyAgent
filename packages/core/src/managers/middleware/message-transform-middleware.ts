@@ -68,7 +68,7 @@ function resolveTransformPhase(phase: ChatMiddlewarePhase): MessageTransformPhas
  */
 function buildTransformCapabilities(usage: UsageTracker): {
   unsupportedPartTypes: ReadonlySet<MultimodalPartType>;
-  capabilities: ReadonlySet<ModelCapability>;
+  capabilities: ReadonlySet<ModelCapability> | null;
 } & ModelCapabilityFlags {
   return {
     unsupportedPartTypes: unsupportedMultimodalPartTypes(usage),

@@ -234,8 +234,13 @@ export function resolveModelInfoFromEnv(
 
   const style = envConfig.style ?? fallbackStyle ?? "openai";
 
-  // Merge capabilities: explicit list > [multimodal ? vision+document : nothing].
-  let capabilities: ModelCapability[];
+  // Merge capabilities: explicit list > [multimodal ? vision+document] > unknown.
+  //
+  // The final branch is `undefined`, NOT `[]`. A bare env config declares nothing about the
+  // model, so its capabilities are unknown and the permissive probe applies — emitting `[]`
+  // here would assert "this model supports no modalities", which for a user who simply set
+  // MODEL without metadata would strip every image before send.
+  let capabilities: ModelCapability[] | undefined;
   if (envConfig.capabilities) {
     capabilities = [...envConfig.capabilities];
     if (envConfig.multimodal) {
@@ -245,7 +250,7 @@ export function resolveModelInfoFromEnv(
   } else if (envConfig.multimodal) {
     capabilities = ["vision", "document"];
   } else {
-    capabilities = [];
+    capabilities = undefined;
   }
 
   let reasoningConfig: ReasoningConfig | undefined;
@@ -284,7 +289,10 @@ export function resolveModelInfoFromEnv(
     ...(envConfig.contextWindow !== undefined ? { contextWindow: envConfig.contextWindow } : {}),
     ...(envConfig.defaultMaxTokens !== undefined ? { defaultMaxTokens: envConfig.defaultMaxTokens } : {}),
     ...(pricing ? { pricing } : {}),
-    capabilities,
+    // Omitted entirely when unknown, matching the spread-guarded fields around it: an explicit
+    // `capabilities: undefined` and an absent key mean the same thing here, and the spread keeps
+    // the object shape honest about what env actually declared.
+    ...(capabilities !== undefined ? { capabilities } : {}),
     ...(reasoningConfig ? { reasoningConfig } : {}),
     ...(envConfig.isDefault !== undefined ? { isDefault: envConfig.isDefault } : {}),
   };

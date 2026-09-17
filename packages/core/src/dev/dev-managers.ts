@@ -64,8 +64,11 @@ export { createPromptCacheMiddleware } from "../managers/middleware/prompt-cache
 export { buildAgentRunner } from "../managers/run-agent.js";
 
 export { deriveCapabilities, MODELS_DEV_COST_FIELDS, MODELS_DEV_MODEL_FIELDS } from "../models/provider/models-dev.js";
-export { RUNTIME_TRUE_CAPABILITIES } from "../models/types.js";
 export { MODEL_CAPABILITIES } from "../models/types.js";
+
+// Drives `validate:capability-unknown-vs-none`: the `undefined` (unknown) vs `[]` (declared
+// none) distinction has to survive the metadata merge, and that merge is only reachable here.
+export { resolveModelConfig } from "../models/config/model-config.js";
 export { MODEL_CAPABILITY_FLAGS } from "../agent/extension/types.js";
 
 export {

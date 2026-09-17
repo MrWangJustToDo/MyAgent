@@ -66,9 +66,7 @@ export const MODEL_CAPABILITY_FLAGS = {
   document: "modelHasDocument",
   tool_calling: "modelHasToolCalling",
   prompt_caching: "modelHasPromptCaching",
-  streaming: "modelHasStreaming",
   json_output: "modelHasJsonOutput",
-  computer_use: "modelHasComputerUse",
 } as const satisfies Record<ModelCapability, string>;
 
 /** The per-capability boolean flags carried by {@link MessageTransformContext}. */
@@ -119,17 +117,19 @@ export interface MessageTransformContext extends ModelCapabilityFlags {
    */
   unsupportedPartTypes: ReadonlySet<MultimodalPartType>;
   /**
-   * Every model capability as a set, as reported by the provider.
+   * Every model capability as a set, or `null` when the model's capabilities are **unknown**.
    *
-   * **Empty means unknown, not absent.** The `modelHas*` booleans below are therefore
-   * permissive: with no capability data every one of them is `true`. Read this set when
-   * you need to tell "the model declared this capability" apart from "the model declared
-   * nothing" — the booleans cannot express that difference on purpose.
+   * `null` and an empty set are different on purpose. `null` means nothing was declared, and
+   * the `modelHas*` booleans below are then all `true` (permissive — never assume a model lacks
+   * a capability it did not deny). An empty set means capabilities were resolved and the model
+   * declares none of them, so every boolean is `false`. Read this property when you need to tell
+   * "the model declared this capability" apart from "the model declared nothing" — the booleans
+   * cannot express that difference on purpose.
    */
-  capabilities: ReadonlySet<ModelCapability>;
+  capabilities: ReadonlySet<ModelCapability> | null;
   /**
-   * Per-capability convenience flags. All permissive: `true` when capabilities are
-   * unknown/empty (see {@link capabilities}).
+   * Per-capability convenience flags. All permissive: `true` when capabilities are unknown
+   * (`capabilities === null`); all `false` when the model declared an empty set.
    */
   modelHasVision: boolean;
   modelHasAudio: boolean;
@@ -138,9 +138,7 @@ export interface MessageTransformContext extends ModelCapabilityFlags {
   modelHasReasoning: boolean;
   modelHasToolCalling: boolean;
   modelHasPromptCaching: boolean;
-  modelHasStreaming: boolean;
   modelHasJsonOutput: boolean;
-  modelHasComputerUse: boolean;
   /** Aborts when the owning run is cancelled. */
   abortSignal?: AbortSignal;
 }

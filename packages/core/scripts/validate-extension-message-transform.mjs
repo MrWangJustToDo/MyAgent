@@ -77,7 +77,12 @@ function wire(...roles) {
   return roles.map((role, i) => msg(role, `m${i}`));
 }
 
-function makeUsage({ capabilities = [] } = {}) {
+/**
+ * `capabilities` omitted means UNKNOWN (`undefined`, permissive); an explicit array means the
+ * model declared exactly that set. The two are no longer the same thing, so this helper must
+ * not default to `[]` — that would assert "supports nothing" and make every flag strict.
+ */
+function makeUsage({ capabilities } = {}) {
   const usage = new UsageTracker();
   usage.setCapabilities(capabilities);
   return usage;
@@ -555,10 +560,11 @@ await runCase("capability context is forwarded from the usage probe", async () =
   await noVision.onConfig({ phase: "init" }, { messages: wire("user") });
 
   // Unknown capabilities → permissive (nothing unsupported, vision available).
+  // UNKNOWN is `undefined`; an empty array now means "declared, and none apply" (strict).
   const unknown = createMessageTransformMiddleware({
     agentId: "x",
     getExtensionRunner: () => runner,
-    getUsage: () => makeUsage({ capabilities: [] }),
+    getUsage: () => makeUsage({}),
   });
   await unknown.onConfig({ phase: "init" }, { messages: wire("user") });
 
@@ -629,13 +635,27 @@ await runCase("every exposed modelHas* flag tracks its ModelCapability", async (
   const unknown = createMessageTransformMiddleware({
     agentId: "x",
     getExtensionRunner: () => runner,
-    getUsage: () => makeUsage({ capabilities: [] }),
+    getUsage: () => makeUsage({}),
   });
   await unknown.onConfig({ phase: "init" }, { messages: wire("user") });
   for (const [, flag] of CAPABILITY_FLAGS) {
     assert.equal(ctx[flag], true, `ctx.${flag} must be permissive when capabilities are unknown`);
   }
-  assert.equal(ctx.capabilities.size, 0, "ctx.capabilities is empty (unknown), not absent");
+  assert.equal(ctx.capabilities, null, "ctx.capabilities is null when unknown — distinct from an empty set");
+
+  // An explicitly EMPTY declaration is the opposite: resolved, and none apply, so every flag is
+  // strict. This is the distinction the whole `undefined` vs `[]` split exists to make reachable.
+  const declaredNone = createMessageTransformMiddleware({
+    agentId: "x",
+    getExtensionRunner: () => runner,
+    getUsage: () => makeUsage({ capabilities: [] }),
+  });
+  await declaredNone.onConfig({ phase: "init" }, { messages: wire("user") });
+  for (const [, flag] of CAPABILITY_FLAGS) {
+    assert.equal(ctx[flag], false, `ctx.${flag} must be strict when the model declared none of them`);
+  }
+  assert.equal(ctx.capabilities.size, 0, "ctx.capabilities is an empty set when none were declared");
+  assert.notEqual(ctx.capabilities, null, "an empty declaration must not be reported as unknown");
 });
 
 await runCase("pipeline assembles with the new middleware in canonical order", async () => {

@@ -12,7 +12,6 @@
  */
 
 import { getEnv } from "../../env.js";
-import { RUNTIME_TRUE_CAPABILITIES } from "../types.js";
 
 import type { ModelCapability, ModelInfo, ModelStyle, ReasoningEffort } from "../types.js";
 
@@ -282,11 +281,17 @@ const MODALITY_CAPABILITY: Record<string, ModelCapability> = {
 /**
  * Derive the capability list for a models.dev entry.
  *
- * Why `RUNTIME_TRUE_CAPABILITIES` is seeded rather than read from metadata: models.dev has no
- * streaming field, and the list must not come back empty for a model whose metadata is
- * successfully parsed but plain — `hasCapability` treats an empty array as "unknown" and is
- * permissive, so an empty result would silently authorize every modality. See
- * {@link MODEL_CAPABILITIES}.
+ * Returns exactly what the metadata evidences, which for a plain text model is `[]`. That is
+ * the intended answer, not a missing value: an empty array means "resolved, and none apply",
+ * and it makes the send-gates strict for a model we can describe. `undefined` (unknown, gates
+ * permissive) is reserved for the case where no metadata was resolved at all — it is the
+ * absence of a {@link ModelInfo.capabilities} field, not an empty one.
+ *
+ * This used to seed a runtime-true capability (`streaming`) purely to keep the result non-empty,
+ * because empty was indistinguishable from unknown. Now that the two states are separate, the
+ * seed is gone and 330 plain-text or TTS entries correctly resolve to `[]` instead of being
+ * treated as fully capable — previously they were exempt from pre-send stripping and would have
+ * sent images to endpoints that reject them.
  *
  * `attachment` is deliberately NOT expanded into `vision` + `document`: it is one boolean and
  * cannot distinguish the two. Expanding it marked 2624 entries (34% of the catalog) as
@@ -295,7 +300,7 @@ const MODALITY_CAPABILITY: Record<string, ModelCapability> = {
  * in both directions.
  */
 export function deriveCapabilities(data: ModelsDevModel): ModelCapability[] {
-  const capabilities: ModelCapability[] = [...RUNTIME_TRUE_CAPABILITIES];
+  const capabilities: ModelCapability[] = [];
 
   if (data.reasoning) capabilities.push("reasoning");
   if (data.tool_call) capabilities.push("tool_calling");

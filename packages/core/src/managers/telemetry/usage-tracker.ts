@@ -38,7 +38,15 @@ export class UsageTracker {
 
   private totalCostUsd = 0;
   private pricing: ModelPricing | null = null;
-  private capabilities: ModelCapability[] = [];
+  /**
+   * Declared capabilities, or `null` when **unknown**.
+   *
+   * `null` and `[]` are different on purpose: `null` means nothing was declared, so
+   * {@link hasCapability} is permissive; `[]` means capabilities were resolved and none apply,
+   * so it is strict. Collapsing the two is what previously required a permanently-true
+   * capability (`streaming`) to keep the list non-empty.
+   */
+  private capabilities: ModelCapability[] | null = null;
   private tokenLimit = 0;
 
   /** Cumulative wall-clock time of measured main-loop LLM calls (ms). */
@@ -193,22 +201,24 @@ export class UsageTracker {
     return this.pricing;
   }
 
-  setCapabilities(caps: ModelCapability[]): void {
-    this.capabilities = caps;
+  setCapabilities(caps: ModelCapability[] | undefined): void {
+    // `undefined` (no metadata resolved) must stay distinguishable from `[]` (resolved, none
+    // apply) all the way to the probe — see the field doc.
+    this.capabilities = caps === undefined ? null : [...caps];
   }
 
   /**
-   * Capabilities as reported for the current model.
+   * Capabilities as reported for the current model, or `null` when unknown.
    *
-   * **Empty means unknown**, not "no capabilities" — {@link hasCapability} is permissive
-   * for that reason. Use this when you must tell "declared nothing" from "declared this".
+   * **`null` means unknown**, not "no capabilities" — {@link hasCapability} is permissive for
+   * that reason. Use this when you must tell "declared nothing" from "declared none of them".
    */
-  getCapabilities(): ReadonlySet<ModelCapability> {
-    return new Set(this.capabilities);
+  getCapabilities(): ReadonlySet<ModelCapability> | null {
+    return this.capabilities === null ? null : new Set(this.capabilities);
   }
 
   hasCapability(cap: ModelCapability): boolean {
-    if (this.capabilities.length === 0) return true;
+    if (this.capabilities === null) return true;
     return this.capabilities.includes(cap);
   }
 
