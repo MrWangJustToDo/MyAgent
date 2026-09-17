@@ -22,7 +22,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-import { MODEL_CAPABILITIES, RUNTIME_TRUE_CAPABILITIES, deriveCapabilities } from "../dist/dev.mjs";
+import {
+  MODEL_CAPABILITIES,
+  MODELS_DEV_COST_FIELDS,
+  MODELS_DEV_MODEL_FIELDS,
+  RUNTIME_TRUE_CAPABILITIES,
+  deriveCapabilities,
+} from "../dist/dev.mjs";
 
 const errors = [];
 
@@ -175,6 +181,41 @@ if (!fs.existsSync(cachePath)) {
     }
     const unmapped = [...seen].filter((m) => !mapped.has(m) && m !== "text");
     assert.deepEqual(unmapped, [], `unmapped input modalities would silently grant nothing`);
+  });
+
+  //
+  // Schema coverage. `ModelsDevModel` is a hand-written shape, so an optional field we forgot
+  // is NOT a compile error -- nothing points at metadata we never read. The real payload is the
+  // only authority on what the upstream schema emits, so it decides: any key present in the
+  // cache but missing from the declared shape (or from the exported key list) fails here.
+  //
+  // This is what would have caught `interleaved` (present in 7842 entries, absent from the type).
+  //
+  check("corpus: every payload model field is declared in ModelsDevModel", () => {
+    const declared = new Set(MODELS_DEV_MODEL_FIELDS);
+    const undeclared = new Set();
+    for (const model of entries) {
+      for (const key of Object.keys(model)) {
+        if (!declared.has(key)) undeclared.add(key);
+      }
+    }
+    assert.deepEqual(
+      [...undeclared].sort(),
+      [],
+      `models.dev emits field(s) ModelsDevModel does not declare — add them (plus the key list) ` +
+        `so the shape stays honest about metadata we are ignoring`
+    );
+  });
+
+  check("corpus: every payload cost field is declared in ModelsDevCost", () => {
+    const declared = new Set(MODELS_DEV_COST_FIELDS);
+    const undeclared = new Set();
+    for (const model of entries) {
+      for (const key of Object.keys(model.cost ?? {})) {
+        if (!declared.has(key)) undeclared.add(key);
+      }
+    }
+    assert.deepEqual([...undeclared].sort(), [], `models.dev emits cost field(s) not declared in ModelsDevCost`);
   });
 }
 
