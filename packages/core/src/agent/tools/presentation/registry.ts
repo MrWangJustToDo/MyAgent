@@ -15,13 +15,36 @@ import type { ToolPresentation, ToolPresentationInfo } from "./types.js";
  * adopts that session's catalog through {@link hydrateToolPresentations}.
  */
 const registered = new Map<string, ToolPresentation>();
-const declared = new Map<string, ToolPresentation>();
+/**
+ * Per tool, a stack of factory declarations in registration order — the last one is live.
+ *
+ * A stack rather than one entry because the same name is declared more than once: the built-in
+ * factory declares it, then an extension registering that name declares it again through the
+ * same path. `ownerId` lets the extension's declaration be removed on its own, which is what
+ * brings the built-in's back — with a single entry the extension's simply overwrote it, so the
+ * best a removal could fall back to was the built-in *table*, and nothing at all for a custom
+ * tool that is not in that table.
+ */
+const declared = new Map<string, Array<{ ownerId: string; present: ToolPresentation }>>();
 /** Catalog entries adopted from another process — consulted last, never re-published. */
 const hydrated = new Map<string, ToolPresentation>();
 
-/** Called by the tool factories: a built-in or custom tool declares its own metadata. */
-export function declareToolPresentation(name: string, present: ToolPresentation): void {
-  declared.set(name, present);
+/**
+ * Called by the tool factories: a built-in or custom tool declares its own metadata.
+ *
+ * `ownerId` names the declarer (default: the tool itself, right for a built-in). An extension
+ * passing its id lets {@link forgetToolPresentationOwner} drop exactly its declaration and
+ * expose the one underneath.
+ */
+export function declareToolPresentation(name: string, present: ToolPresentation, ownerId = name): void {
+  const stack = declared.get(name);
+  if (!stack) {
+    declared.set(name, [{ ownerId, present }]);
+    return;
+  }
+  const own = stack.findIndex((entry) => entry.ownerId === ownerId);
+  if (own === -1) stack.push({ ownerId, present });
+  else stack[own] = { ownerId, present };
 }
 
 /** Called by runtime registrars (extensions, dynamic tools). Wins over declarations. */
@@ -29,8 +52,19 @@ export function registerToolPresentation(name: string, present: ToolPresentation
   registered.set(name, present);
 }
 
+/** How many owners have declared a tool — for validations that a re-registration replaces. */
+export function declaredStackDepth(name: string): number {
+  return declared.get(name)?.length ?? 0;
+}
+
+/** The live declaration for a tool: the top of its stack. */
+function declaredTop(name: string): ToolPresentation | undefined {
+  const stack = declared.get(name);
+  return stack?.[stack.length - 1]?.present;
+}
+
 export function getToolPresentation(name: string): ToolPresentation | undefined {
-  return registered.get(name) ?? declared.get(name) ?? hydrated.get(name) ?? builtinPresentation(name);
+  return registered.get(name) ?? declaredTop(name) ?? hydrated.get(name) ?? builtinPresentation(name);
 }
 
 /**
@@ -90,6 +124,23 @@ export function forgetToolPresentation(name: string): void {
   registered.delete(name);
   declared.delete(name);
   hydrated.delete(name);
+}
+
+/**
+ * Drop one owner's declarations for a tool, leaving everyone else's alone.
+ *
+ * This is the operation a disable needs: the name may still be owned by another declaration
+ * (an earlier extension, or the built-in the extension shadowed), and removing only this
+ * owner's entry puts that one back as the live declaration. Clearing the whole stack instead
+ * would leave a still-registered tool described by the fallback table — or by nothing, which
+ * drops it out of the compact view entirely (`keepsCompactRow` is false with no descriptor).
+ */
+export function forgetToolPresentationOwner(name: string, ownerId: string): void {
+  const stack = declared.get(name);
+  if (!stack) return;
+  const remaining = stack.filter((entry) => entry.ownerId !== ownerId);
+  if (remaining.length === 0) declared.delete(name);
+  else declared.set(name, remaining);
 }
 
 export function clearToolPresentation(): void {

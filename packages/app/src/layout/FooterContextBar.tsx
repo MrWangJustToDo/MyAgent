@@ -105,10 +105,16 @@ export const FooterContextBar = ({
           )}
           {status === "error" && <Text color={COLORS.danger}>{error}</Text>}
 
-          {/* LLM retry visibility — attempt counts + triggering error */}
-          {retry && status !== "error" && status !== "aborted" && status !== "completed" && status !== "idle" && (
-            <RetryStatus retry={retry} />
-          )}
+          {/* LLM retry visibility — attempt counts + triggering error. Hidden for
+              terminal statuses and for the interactive pauses (a stale retry must
+              never render over an approval prompt / ask_user question). */}
+          {retry &&
+            status !== "error" &&
+            status !== "aborted" &&
+            status !== "completed" &&
+            status !== "idle" &&
+            status !== "waiting" &&
+            status !== "awaiting_user" && <RetryStatus retry={retry} />}
 
           {inputFeedback && status !== "error" && (
             <Text

@@ -5,7 +5,7 @@ import { armCapabilityStrip, tryCapabilitySanitizeRetry } from "./stream-recover
 import {
   createTruncationState,
   handleMaxTokensTruncation,
-  MAX_TRUNCATION_CONTINUATIONS,
+  readTruncationProgress,
 } from "./stream-recovery/max-tokens-continue.js";
 import { tryReactiveCompactRetry } from "./stream-recovery/reactive-compact-retry.js";
 import { extractRetryAfterSeconds, isTransientRetryableError } from "./stream-recovery/transient-retry.js";
@@ -24,6 +24,7 @@ export {
   ESCALATED_MAX_TOKENS,
   MAX_TRUNCATION_CONTINUATIONS,
   handleMaxTokensTruncation,
+  readTruncationProgress,
 } from "./stream-recovery/max-tokens-continue.js";
 
 // ============================================================================
@@ -34,7 +35,12 @@ export {
 const MAX_RETRY_BACKOFF_MS = 32000;
 /** Base delay for exponential backoff (kept high enough that attempt gaps are perceptible). */
 const BASE_RETRY_DELAY_MS = 2000;
-/** Max number of overall recovery attempts (reactive compact, multimodal strip, truncation, backoff). */
+/**
+ * Max number of *error* recovery attempts (reactive compact, multimodal strip,
+ * transient backoff). Output-truncation continuations keep their own budget
+ * (`MAX_TRUNCATION_CONTINUATIONS` + 1) and do not consume this one — see
+ * `handleMaxTokensTruncation().countsAsRecoveryAttempt`.
+ */
 const MAX_RECOVERY_ATTEMPTS = 3;
 
 // ============================================================================
@@ -189,10 +195,17 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
   const truncation = createTruncationState();
 
   while (true) {
-    // Cancelled between attempts — stop before starting another stream.
-    if (options.signal?.aborted) return;
+    // Cancelled between attempts — stop before starting another stream. Clear the
+    // retry visibility first: this path returns without a terminal status change,
+    // so nothing else unwinds the state recorded for the attempt that just ended.
+    if (options.signal?.aborted) {
+      options.managed.setRetry?.(null);
+      return;
+    }
     let shouldRetry = false;
     let truncationDetected = false;
+    /** Whether this retry consumes `MAX_RECOVERY_ATTEMPTS` (truncation owns its own budget). */
+    let countsAsRecoveryAttempt = true;
     let retryAfterSeconds: number | undefined;
     let lastErrorMessage = "";
     let retryStrategy: AgentRetryStrategy | undefined;
@@ -255,6 +268,7 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
       });
       if (truncationResult.shouldRetry) {
         shouldRetry = true;
+        countsAsRecoveryAttempt = truncationResult.countsAsRecoveryAttempt;
         lastErrorMessage = "";
         retryStrategy = "max_tokens";
       }
@@ -271,10 +285,18 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
 
     const delay = retryDelayMs(recoveryAttempts, retryAfterSeconds);
 
+    // Truncation labels itself from its own state: the shared `recoveryAttempts`
+    // counter is not advanced by that branch, so reading it here reported
+    // "attempt 1" for the escalation and the first continuations, then
+    // "attempt 4/3" on the last one.
+    const progress = truncationDetected
+      ? readTruncationProgress(truncation)
+      : { attempt: recoveryAttempts + 1, maxAttempts: MAX_RECOVERY_ATTEMPTS };
+
     // Surface retry progress to the UI + telemetry (attempt is 1-based).
     recordRetry(options.managed, {
-      attempt: recoveryAttempts + 1,
-      maxAttempts: truncationDetected ? MAX_TRUNCATION_CONTINUATIONS : MAX_RECOVERY_ATTEMPTS,
+      attempt: progress.attempt,
+      maxAttempts: progress.maxAttempts,
       strategy: retryStrategy!,
       ...(lastErrorMessage ? { error: lastErrorMessage } : {}),
       delayMs: Math.round(delay),
@@ -289,10 +311,16 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
       retryAfterSeconds,
     });
     await abortableDelay(delay, options.signal);
-    // Cancelled during backoff — do not issue the (doomed) retry stream.
-    if (options.signal?.aborted) return;
+    // Cancelled during backoff — do not issue the (doomed) retry stream, and do
+    // not leave the recorded retry surfaced: this return skips both the recovery
+    // clear and the terminal-status clear in `ManagedAgent.setStatus`, so hosts
+    // that keep rendering a live snapshot would keep showing "Retrying …".
+    if (options.signal?.aborted) {
+      options.managed.setRetry?.(null);
+      return;
+    }
 
-    recoveryAttempts++;
+    if (countsAsRecoveryAttempt) recoveryAttempts++;
   }
 }
 

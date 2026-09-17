@@ -289,6 +289,154 @@ assert.equal(abortAttempts, 1, "no retry stream is started after abort during ba
 assert.equal(abortChunks, 0);
 assert.ok(abortElapsed < 1000, `abort returns promptly, took ${abortElapsed}ms`);
 
+// --- aborting during backoff must clear the surfaced retry ---
+//
+// The early returns in the recovery loop exit without a terminal status change, so
+// nothing else unwinds the `AgentRetryState` recorded for the attempt that just ended:
+// `clearRetryOnNextChunk` never fires and `setStatus`'s terminal branch never runs.
+// A host still rendering that snapshot would keep showing "Retrying (1/3) …".
+
+{
+  const seenRetryStates = [];
+  const abortClearManaged = {
+    run: makeRunCoordinatorStub(),
+    usage: null,
+    log: { warn() {}, debug() {}, error() {} },
+    setError() {},
+    setRetry(state) {
+      seenRetryStates.push(state);
+    },
+    emitEvent() {},
+    // Deliberately no terminal setStatus: models a host that keeps rendering the
+    // live snapshot after the run is torn down.
+    statusController: { onRecoveryRetry() {} },
+  };
+
+  const clearController = new AbortController();
+  setTimeout(() => clearController.abort(), 30);
+  for await (const chunk of runStreamWithRecovery({
+    managed: abortClearManaged,
+    manager: {},
+    getMessages: () => msgs,
+    run: () => alwaysRateLimited(),
+    signal: clearController.signal,
+  })) {
+    void chunk;
+  }
+
+  assert.ok(seenRetryStates.length >= 2, "the retry is recorded, then unwound");
+  assert.equal(seenRetryStates.at(-1), null, "an abort during backoff must clear the surfaced retry state");
+}
+
+// --- truncation continuations stay within their own cap and never report over-budget ---
+
+{
+  const truncationRetries = [];
+  let truncationAttempts = 0;
+  const escalations = [];
+  const truncationManaged = {
+    run: makeRunCoordinatorStub(),
+    usage: null,
+    log: { warn() {}, debug() {}, error() {} },
+    setError() {},
+    setRetry(state) {
+      if (state) truncationRetries.push(state);
+    },
+    emitEvent() {},
+    statusController: { onRecoveryRetry() {} },
+  };
+
+  async function* alwaysTruncated() {
+    truncationAttempts += 1;
+    yield { type: "TEXT_MESSAGE_CONTENT", delta: "partial" };
+    yield { type: "RUN_FINISHED", finishReason: "length" };
+  }
+
+  for await (const chunk of runStreamWithRecovery({
+    managed: truncationManaged,
+    manager: {},
+    getMessages: () => msgs,
+    run: () => alwaysTruncated(),
+    runner: {
+      setMaxOutputTokens(max) {
+        escalations.push(max);
+      },
+    },
+  })) {
+    void chunk;
+  }
+
+  // 1 escalation + MAX_TRUNCATION_CONTINUATIONS continuations each record a retry,
+  // then one final stream reveals the budget is exhausted (that one arms nothing).
+  // The loop can only learn the budget is exhausted by running the next stream, so
+  // exactly one more model call happens than "useful" budget units.
+  assert.equal(escalations.length, 1, "max_tokens is escalated exactly once");
+  assert.equal(truncationAttempts, 5, "1 escalation + 3 continuations + 1 exhaust probe");
+  assert.equal(truncationRetries.length, 4, "the escalation plus 3 continuations are reported");
+  for (const state of truncationRetries) {
+    assert.equal(
+      state.attempt <= state.maxAttempts,
+      true,
+      `truncation retry attempt ${state.attempt} must not exceed ${state.maxAttempts}`
+    );
+    assert.equal(state.strategy, "max_tokens");
+  }
+}
+
+// --- a truncated run still has its full transient backoff available ---
+//
+// Continuations used to consume the shared `MAX_RECOVERY_ATTEMPTS` budget, so a run
+// that truncated a few times then hit a 429 was denied its only backoff.
+
+{
+  const mixedRetries = [];
+  let mixedAttempts = 0;
+  const mixedManaged = {
+    run: makeRunCoordinatorStub(),
+    usage: null,
+    log: { warn() {}, debug() {}, error() {} },
+    setError() {},
+    setRetry(state) {
+      if (state) mixedRetries.push(state);
+    },
+    emitEvent() {},
+    statusController: { onRecoveryRetry() {} },
+  };
+
+  // Truncate once, then 429 once, then succeed.
+  async function* truncateThenRateLimit() {
+    mixedAttempts += 1;
+    if (mixedAttempts === 1) {
+      yield { type: "TEXT_MESSAGE_CONTENT", delta: "partial" };
+      yield { type: "RUN_FINISHED", finishReason: "length" };
+      return;
+    }
+    if (mixedAttempts === 2) throw new RateLimitError();
+    yield { type: "TEXT_MESSAGE_CONTENT", delta: "ok" };
+    yield { type: "RUN_FINISHED", finishReason: "stop" };
+  }
+
+  const mixedOut = [];
+  for await (const chunk of runStreamWithRecovery({
+    managed: mixedManaged,
+    manager: {},
+    getMessages: () => msgs,
+    run: () => truncateThenRateLimit(),
+    runner: { setMaxOutputTokens() {} },
+  })) {
+    mixedOut.push(chunk.type);
+  }
+
+  assert.equal(mixedAttempts, 3, "truncation → 429 → success all ran");
+  assert.deepEqual(mixedOut, ["TEXT_MESSAGE_CONTENT", "TEXT_MESSAGE_CONTENT", "RUN_FINISHED"]);
+  assert.deepEqual(
+    mixedRetries.map((state) => state.strategy),
+    ["max_tokens", "transient"],
+    "the 429 still gets its backoff after a truncation continuation"
+  );
+  assert.equal(mixedRetries[1].attempt, 1, "the transient budget starts fresh, not depleted by truncation");
+}
+
 // --- already-aborted signal never starts a stream ---
 
 const preAborted = new AbortController();

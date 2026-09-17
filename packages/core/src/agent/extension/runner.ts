@@ -265,10 +265,11 @@ export interface ExtensionRunnerOptions {
 
 export class ExtensionRunner {
   private extensions: ExtensionInstance[] = [];
-  private toolRegistry = new Map<string, ExtensionToolDefinition>();
+  /** Per name, the extension tools registered in order — the last one is live. A stack, so a
+   * handover leaves the top pointing at whatever is still registered; see
+   * `validate:extension-tool-restore`. Bookkeeping only — the host's stack is the authority. */
+  private toolStacks = new Map<string, Array<{ ownerId: string; def: ExtensionToolDefinition }>>();
   private commandRegistry = new Map<string, ExtensionCommand>();
-  /** name → owning extension id, to unregister only the owner's artifact on disable. */
-  private toolOwners = new Map<string, string>();
   private commandOwners = new Map<string, string>();
   /** Per-extension context injection (extension id → provider). */
   private contextProviders = new Map<string, ExtensionContextProvider>();
@@ -449,16 +450,9 @@ export class ExtensionRunner {
       .catch(() => {});
   }
 
-  /**
-   * The extension tool definitions this runner still holds.
-   *
-   * This is the runner's own bookkeeping, so a name whose last owner was disabled disappears
-   * here even when an older extension's registration becomes live again — the runner does not
-   * model that fallback. What the model actually receives is decided by the host's stack
-   * (`ExtensionRegistryService`), which is the authority on what is registered.
-   */
+  /** The extension tools this runner still holds, one per name — a mirror of what is registered. */
   getTools(): ExtensionToolDefinition[] {
-    return Array.from(this.toolRegistry.values());
+    return Array.from(this.toolStacks.values(), (stack) => stack[stack.length - 1].def);
   }
 
   getCommands(): ExtensionCommand[] {
@@ -466,7 +460,7 @@ export class ExtensionRunner {
   }
 
   getTool(name: string): ExtensionToolDefinition | undefined {
-    return this.toolRegistry.get(name);
+    return this.toolStacks.get(name)?.at(-1)?.def;
   }
 
   /**
@@ -583,9 +577,8 @@ export class ExtensionRunner {
       await this.destroyExtension(instance);
     }
     this.extensions = [];
-    this.toolRegistry.clear();
+    this.toolStacks.clear();
     this.commandRegistry.clear();
-    this.toolOwners.clear();
     this.commandOwners.clear();
     this.contextProviders.clear();
     this.messageTransformers.clearAll();
@@ -672,13 +665,16 @@ export class ExtensionRunner {
    * turn-context providers are unsubscribed.
    */
   private unregisterInstanceArtifacts(instance: ExtensionInstance): void {
+    // No ownership test: a per-runner map cannot tell whose tool was the one taken (two agents
+    // loading the same extension share an id), and it does not need to — the host's per-name stack
+    // answers "is this still mine?" itself, the same way whether this owner was on top or buried.
+    // The mirror goes first because the callback may read `getTools()`.
     for (const name of instance.registrations.tools) {
-      // Hand the name back with this owner removed — whether it was still the owner or had been
-      // buried under a newer registration. The host re-derives what is live from its stack, so
-      // there is no "is it mine?" branch to get wrong here.
-      if (this.toolOwners.get(name) === instance.api.id) {
-        this.toolOwners.delete(name);
-        this.toolRegistry.delete(name);
+      const stack = this.toolStacks.get(name);
+      if (stack) {
+        const remaining = stack.filter((entry) => entry.ownerId !== instance.api.id);
+        if (remaining.length === 0) this.toolStacks.delete(name);
+        else this.toolStacks.set(name, remaining);
       }
       this.options.onUnregisterTool?.(name, instance.api.id);
     }
@@ -722,8 +718,13 @@ export class ExtensionRunner {
       cwd: this.options.cwd ?? "",
       coreEnv: this.resolveCoreEnv(),
       registerTool: (def: ExtensionToolDefinition) => {
-        this.toolRegistry.set(def.name, def);
-        this.toolOwners.set(def.name, api.id);
+        const stack = this.toolStacks.get(def.name);
+        if (!stack) this.toolStacks.set(def.name, [{ ownerId: api.id, def }]);
+        else {
+          const own = stack.findIndex((entry) => entry.ownerId === api.id);
+          if (own === -1) stack.push({ ownerId: api.id, def });
+          else stack[own] = { ownerId: api.id, def };
+        }
         registrations?.tools.push(def.name);
         this.options.onRegisterTool?.(def, api.id);
       },

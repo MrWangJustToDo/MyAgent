@@ -394,7 +394,6 @@ export class ManagedAgent {
       memory?: MemoryService;
       session?: SessionService;
       usageHistory?: UsageHistoryService;
-      extensions?: ExtensionRegistryService;
       compaction?: CompactionService;
     }
   ) {
@@ -405,7 +404,14 @@ export class ManagedAgent {
     this.config = { ...config, ...AgentConfigSchema.parse(config) };
     this.log = init.log;
     this.tools = init.tools;
-    this.extensions = init.extensions ?? new ExtensionRegistryService();
+    // Always its own service, never injectable. It holds per-agent state that cannot be shared:
+    // the agent's `tools` record (written straight into by `registerTool`), a single
+    // `ExtensionRunner` slot, and the MCP / todo / managed-tools providers. Two agents sharing
+    // one would overwrite each other's tool objects and handlers, not just their presentation
+    // descriptors — and the owner-id scoping applied at this boundary cannot help, because the
+    // later agent's `setExtensionRunner` replaces the first agent's runner outright. Keeping it
+    // un-injectable makes "one registry per agent" unexpressible rather than merely conventional.
+    this.extensions = new ExtensionRegistryService();
     if (init.todoManager) this.extensions.setTodoManager(init.todoManager);
     this.parentId = init.parentId;
     this.usage = init.usage ?? new UsageTracker();
@@ -1072,10 +1078,18 @@ export class ManagedAgent {
     return this.extensions.getMcpManager();
   }
 
-  registerTool(def: ExtensionToolDefinition, ownerId = this.id): void {
+  /**
+   * Register a tool on THIS agent.
+   *
+   * `extensionId` (the caller's own id, defaulting to the agent id) is scoped to this agent
+   * inside the registry. The same extension loaded onto two agents in one process produces the
+   * same extension id twice, and the two entries must stay independent — they describe tools in
+   * two different agents' tool sets, and a disable on one agent has to leave the other alone.
+   */
+  registerTool(def: ExtensionToolDefinition, extensionId = this.id): void {
     this.extensions.registerTool(def, {
       tools: this.tools,
-      ownerId,
+      ownerId: this.scopedOwnerId(extensionId),
       warn: (message) => this.log?.warn("system", message),
       onToolsChanged: () => this.setRunnerConfigKey(undefined),
       agentId: this.id,
@@ -1092,16 +1106,33 @@ export class ManagedAgent {
    * Removes this owner's entries for the name and re-derives what is live, so whatever the name
    * meant before the extension loaded comes back — an earlier extension's tool, or the built-in
    * it shadowed. One code path covers both "this extension owned it" and "this extension was
-   * buried under a newer one".
+   * buried under a newer one", which is why the runner needs no ownership test of its own.
    */
-  unregisterExtensionTool(name: string, ownerId = this.id): void {
+  unregisterExtensionTool(name: string, extensionId = this.id): void {
     this.extensions.unregisterExtensionTool(name, {
       tools: this.tools,
-      ownerId,
+      ownerId: this.scopedOwnerId(extensionId),
       warn: (message) => this.log?.warn("system", message),
       onToolsChanged: () => this.setRunnerConfigKey(undefined),
     });
     this.emitToolPresentationCatalog();
+  }
+
+  /**
+   * Namespace an extension owner id to this agent.
+   *
+   * The tool and presentation registries are process-global while an agent's tools are its own,
+   * so a bare extension id is not a unique owner: two agents loading the same extension share it,
+   * and a disable on one would release the other's claim. Scoping the id here is what keeps the
+   * two apart, and it is needed for the paths where no extension is involved either — the
+   * `defineServerTool` default owner (the tool name, `createTools()` re-run per agent) collides
+   * the same way, breaking the descriptor of every agent's `read_file` but the last created.
+   *
+   * `:` separates the two halves; a generated agent id is unique per agent, so the scoped id is
+   * too. Owner ids are matched by string equality only — nothing parses them back apart.
+   */
+  private scopedOwnerId(extensionId: string): string {
+    return `${this.id}:${extensionId}`;
   }
 
   /** Publish the current presentation catalog (tool set changed). */

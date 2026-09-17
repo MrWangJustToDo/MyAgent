@@ -10,7 +10,7 @@
  * caller passes the record plus invalidation callbacks per call.
  */
 
-import { forgetToolPresentation } from "../../agent/tools/presentation/registry.js";
+import { forgetToolPresentationOwner } from "../../agent/tools/presentation/registry.js";
 import { defineServerTool } from "../../agent/tools/runtime/define-tool.js";
 import { toModelOutputRegistry } from "../../agent/tools/runtime/to-model-output-registry.js";
 
@@ -234,9 +234,11 @@ export class ExtensionRegistryService {
       this.toolStacks.set(name, remaining);
     }
 
-    // The descriptor was written by `defineServerTool` at registration; dropping it exposes
-    // the restored tool's own declaration (or the built-in fallback table).
-    forgetToolPresentation(name);
+    // Drop only THIS owner's descriptor. Clearing the whole entry would take a still-live
+    // owner's descriptor with it — a handover (an older extension released while a newer one
+    // holds the name) left the surviving tool described by the fallback table, or by nothing at
+    // all when it is not a built-in, which drops its rows out of the compact view.
+    forgetToolPresentationOwner(name, ownerId);
     toModelOutputRegistry.removeOwner(name, ownerId);
     ctx.onToolsChanged();
   }
@@ -250,9 +252,14 @@ export class ExtensionRegistryService {
   /**
    * Unregister a tool previously added by an extension (used when disabling).
    *
-   * Delegates to {@link removeToolOwner}: dropping this owner's entry and re-reading the top
-   * brings back whatever the tool name meant before this extension loaded — an earlier
-   * extension's tool, or the built-in it shadowed.
+   * Delegates to {@link removeToolOwner}, which is the one operation for every case: drop this
+   * owner's entries for the name and re-read the top. Whether the owner was on top (an extension
+   * with the name to itself) or buried under a newer one (a handover, where the top is untouched
+   * and only this claim goes away) is not a distinction the caller has to make or can get wrong.
+   *
+   * Both the tool stack and the two per-owner artifacts are filtered by the same owner, so a tool
+   * and its descriptor / result shaping can never be restored to different owners — the mismatch a
+   * displacement-record design produced when an entry was removed out of order.
    */
   unregisterExtensionTool(name: string, ctx: ExtensionToolRegistrationContext): void {
     this.removeToolOwner(name, ctx.ownerId, ctx);

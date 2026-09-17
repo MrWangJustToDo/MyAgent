@@ -25,13 +25,47 @@ export function createTruncationState(): TruncationState {
   };
 }
 
+/**
+ * Attempt numbering for the truncation path, owned here so it can never report
+ * `attempt > maxAttempts`.
+ *
+ * The shared `recoveryAttempts` counter in `run-stream-recovery` is a *different*
+ * budget (it bounds error recovery) and must not be used to label a truncation:
+ * it was never advanced by the truncation branch, so the escalation and the first
+ * continuations all reported `attempt: 1` and the last one reported `attempt: 4`
+ * against `maxAttempts: 3`.
+ *
+ * The escalation is retry 1 and each continuation is the next one, so the most
+ * this path ever arms is `MAX_TRUNCATION_CONTINUATIONS + 1` recovery streams.
+ */
+export function readTruncationProgress(truncation: TruncationState): { attempt: number; maxAttempts: number } {
+  return {
+    attempt: truncation.continuationCount + 1,
+    maxAttempts: MAX_TRUNCATION_CONTINUATIONS + 1,
+  };
+}
+
 export interface TruncationRecoveryResult {
   /** True when the run should be retried (escalation or continuation armed). */
   shouldRetry: boolean;
+  /**
+   * Whether this continuation consumes the shared recovery budget
+   * (`MAX_RECOVERY_ATTEMPTS` in `run-stream-recovery`).
+   *
+   * The escalation is a config change, not a retry attempt — it burns no budget.
+   * Each continuation does take a real model call at an escalated `max_tokens`,
+   * so it must consume one; otherwise a run that truncated a few times loses its
+   * only transient-error backoff right when an upstream 429 is most likely.
+   */
+  countsAsRecoveryAttempt: boolean;
 }
 
 /**
  * Handle finishReason === "length": escalate max_tokens once, then inject continuation prompts.
+ *
+ * The attempt surfaced to hosts is `continuationCount + 1`: one call to this
+ * function arms exactly one more stream, so the reported attempt can never
+ * exceed {@link MAX_TRUNCATION_CONTINUATIONS}.
  */
 export function handleMaxTokensTruncation(options: {
   managed: ManagedAgent;
@@ -46,7 +80,7 @@ export function handleMaxTokensTruncation(options: {
     managed.log?.debug("agent", "Output truncated — escalating max_tokens", {
       escalatedTokens: ESCALATED_MAX_TOKENS,
     });
-    return { shouldRetry: true };
+    return { shouldRetry: true, countsAsRecoveryAttempt: false };
   }
 
   if (truncation.continuationCount < MAX_TRUNCATION_CONTINUATIONS) {
@@ -65,9 +99,9 @@ export function handleMaxTokensTruncation(options: {
     // persisted to session, so the channel stays cache-stable and the transcript keeps
     // only what the user actually said.
     managed.run.setWireContinuationArmed(true);
-    return { shouldRetry: true };
+    return { shouldRetry: true, countsAsRecoveryAttempt: true };
   }
 
   managed.log?.warn("agent", "Output truncated — max continuations reached, returning partial result");
-  return { shouldRetry: false };
+  return { shouldRetry: false, countsAsRecoveryAttempt: false };
 }

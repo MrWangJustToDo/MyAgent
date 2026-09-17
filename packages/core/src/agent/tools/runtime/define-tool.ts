@@ -71,12 +71,14 @@ export function defineServerTool<
    */
   present?: ToolPresentation;
   /**
-   * Who owns this tool's model-output registration.
+   * Who owns this tool's presentation declaration and model-output registration.
    *
    * Defaults to the tool name, which is right for a built-in: it IS its own registration and
-   * nothing ever removes it. An extension registering a tool passes its own id instead, so the
-   * host can drop that handler again when the extension is disabled — the whole reason the
-   * registry is owner-keyed.
+   * nothing ever removes it. An extension registering a tool passes its own id instead, so
+   * disabling the extension drops exactly its entries and the shadowed tool's own descriptor
+   * and shaping return — the whole reason both registries are owner-keyed. The scope an agent
+   * adds on top is applied by its caller (`ManagedAgent.scopedOwnerId`), which is the only
+   * place that knows which agent the tool set belongs to.
    */
   ownerId?: string;
 }): ServerTool<TInput, TOutput, TName> {
@@ -95,7 +97,7 @@ export function defineServerTool<
   }
 
   if (config.present) {
-    declareToolPresentation(config.name, config.present);
+    declareToolPresentation(config.name, config.present, config.ownerId);
   }
 
   return toolDefinition({
@@ -132,9 +134,11 @@ export function defineClientTool<
   lazy?: boolean;
   /** See {@link defineServerTool} `present` — how the tool is displayed. */
   present?: ToolPresentation;
+  /** See {@link defineServerTool} `ownerId` — who owns the declaration. */
+  ownerId?: string;
 }): ClientTool<TInput, TOutput, TName> {
   if (config.present) {
-    declareToolPresentation(config.name, config.present);
+    declareToolPresentation(config.name, config.present, config.ownerId);
   }
 
   return toolDefinition({

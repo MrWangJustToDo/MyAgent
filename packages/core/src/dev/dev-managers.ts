@@ -87,12 +87,27 @@ export {
   MIDDLEWARE_PHASE_RANK,
 } from "../managers/middleware/index.js";
 export type { MiddlewarePhase } from "../managers/middleware";
-export { CONTINUATION_PROMPT } from "../managers/stream-recovery/max-tokens-continue.js";
+export {
+  CONTINUATION_PROMPT,
+  MAX_TRUNCATION_CONTINUATIONS,
+} from "../managers/stream-recovery/max-tokens-continue.js";
 export {
   createTruncationState,
   handleMaxTokensTruncation,
+  readTruncationProgress,
 } from "../managers/stream-recovery/max-tokens-continue.js";
 export { createAgentStatusController, AgentStatusController } from "../managers/controllers/agent-status-controller.js";
+
+// Tool presentation registry (internal validation exports — the live descriptor for a tool name,
+// which the public entry only exposes as an event payload).
+export {
+  declareToolPresentation,
+  declaredStackDepth,
+  describeToolPresentations,
+  forgetToolPresentation,
+  forgetToolPresentationOwner,
+  getToolPresentation,
+} from "../agent/tools/presentation/registry.js";
 export type {
   AgentRunOutcome,
   AgentRunOutcomeKind,

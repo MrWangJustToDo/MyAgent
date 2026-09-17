@@ -60,7 +60,9 @@ import {
   createTruncationState,
   createTurnContextMiddleware,
   createWireRecoveryMiddleware,
+  MAX_TRUNCATION_CONTINUATIONS,
   handleMaxTokensTruncation,
+  readTruncationProgress,
   registerCoreEnv,
   sortMiddlewaresByPhase,
 } from "../dist/dev.mjs";
@@ -422,6 +424,11 @@ function wireHasImage(messages) {
   const handedIn = [{ role: "user", content: "hi" }];
   const first = handleMaxTokensTruncation({ managed, truncation });
   assert.equal(first.shouldRetry, true, "a truncation with budget left must retry");
+  assert.equal(
+    first.countsAsRecoveryAttempt,
+    true,
+    "a continuation is a real model call — it must spend a recovery attempt"
+  );
   assert.equal(run.isWireContinuationArmed(), true, "the continuation must be armed on the run");
   assert.equal(
     JSON.stringify(handedIn).includes(CONTINUATION_PROMPT),
@@ -429,9 +436,36 @@ function wireHasImage(messages) {
     "the producer must not edit the messages it was handed — the projection would discard that"
   );
 
-  // Budget exhausted → stop retrying.
+  // The escalation is a config change, not a retry attempt, so it must not spend
+  // the error-recovery budget (a run that truncated a few times would otherwise
+  // lose its only transient backoff).
+  const escalationRun = new TestRun();
+  const escalation = handleMaxTokensTruncation({
+    managed: { run: escalationRun, log: { debug: noop, warn: noop, error: noop }, getMessagesForLLM: () => [] },
+    runner: { setMaxOutputTokens: noop },
+    truncation: createTruncationState(),
+  });
+  assert.equal(escalation.shouldRetry, true, "the escalation retries");
+  assert.equal(escalation.countsAsRecoveryAttempt, false, "the escalation must not spend a recovery attempt");
+  assert.equal(escalationRun.isWireContinuationArmed(), false, "the escalation does not arm the continuation prompt");
+
+  // Budget exhausted → stop retrying, and the labelled attempt never exceeds the cap.
+  // (Re-assign rather than reuse the state above: `handleMaxTokensTruncation`
+  // mutates the escalation flag / continuation count it is handed.)
   truncation.continuationCount = 3;
   assert.equal(handleMaxTokensTruncation({ managed, truncation }).shouldRetry, false, "no retry past the cap");
+  assert.deepEqual(
+    readTruncationProgress({ maxTokensEscalated: true, continuationCount: 0 }),
+    { attempt: 1, maxAttempts: MAX_TRUNCATION_CONTINUATIONS + 1 },
+    "the escalation is attempt 1"
+  );
+  for (let n = 0; n <= MAX_TRUNCATION_CONTINUATIONS; n++) {
+    const progress = readTruncationProgress({ maxTokensEscalated: true, continuationCount: n });
+    assert.ok(
+      progress.attempt <= progress.maxAttempts,
+      `truncation attempt ${progress.attempt} must not exceed ${progress.maxAttempts}`
+    );
+  }
 
   // Capability strip: armed on the run, with the drop set the probe reports.
   const stripRun = new TestRun();
