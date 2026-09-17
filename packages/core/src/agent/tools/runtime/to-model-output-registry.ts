@@ -12,6 +12,17 @@ export interface ToModelOutputContext {
   output: unknown;
 }
 
+/**
+ * Point-in-time copy of the handlers registered for one tool.
+ *
+ * The decorator chain is kept as-is (not composed) so restoring a snapshot cannot
+ * double-wrap a decorator that is still installed.
+ */
+export interface ToModelOutputSnapshot {
+  handler?: ToModelOutputFn;
+  decorators?: readonly ToModelOutputDecorator[];
+}
+
 export type ToModelOutputFn = (ctx: ToModelOutputContext) => Promise<ModelToolContent> | ModelToolContent;
 
 /**
@@ -34,6 +45,41 @@ class ToModelOutputRegistry {
 
   register(toolName: string, fn: ToModelOutputFn): void {
     this.handlers.set(toolName, fn);
+  }
+
+  /**
+   * Drop everything registered for one tool.
+   *
+   * Needed when a tool that owned a handler goes away — an extension registering a
+   * tool name replaces the previous handler (see {@link register}), but unregistering
+   * the extension only removed it from the tools record, leaving this registry shaping
+   * the restored tool's results with the unloaded extension's function.
+   */
+  unregister(toolName: string): void {
+    this.handlers.delete(toolName);
+    this.decorators.delete(toolName);
+  }
+
+  /**
+   * Copy the current handler + decorators for one tool, for a later {@link restore}.
+   * `undefined` means nothing is registered — a valid snapshot (it restores "none").
+   */
+  snapshot(toolName: string): ToModelOutputSnapshot | undefined {
+    const handler = this.handlers.get(toolName);
+    const decorators = this.decorators.get(toolName);
+    if (!handler && !decorators) return undefined;
+    return {
+      ...(handler ? { handler } : {}),
+      ...(decorators ? { decorators: [...decorators] } : {}),
+    };
+  }
+
+  /** Put a tool's handler/decorators back exactly as {@link snapshot} found them. */
+  restore(toolName: string, snapshot: ToModelOutputSnapshot | undefined): void {
+    this.unregister(toolName);
+    if (!snapshot) return;
+    if (snapshot.handler) this.handlers.set(toolName, snapshot.handler);
+    if (snapshot.decorators) this.decorators.set(toolName, [...snapshot.decorators]);
   }
 
   /**

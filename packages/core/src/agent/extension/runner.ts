@@ -220,10 +220,15 @@ class DefaultExtensionUI implements ExtensionUI {
 
 export interface ExtensionRunnerOptions {
   getEnvVar: (key: string) => string | undefined;
-  onRegisterTool?: (def: ExtensionToolDefinition) => void;
+  onRegisterTool?: (def: ExtensionToolDefinition, ownerId: string) => void;
   onRegisterCommand?: (cmd: ExtensionCommand) => void;
   /** Unregister a previously registered tool (used when disabling an extension). */
-  onUnregisterTool?: (name: string) => void;
+  onUnregisterTool?: (name: string, ownerId: string) => void;
+  /**
+   * A tool name this extension registered is now owned by another extension: the name stays
+   * registered (it must not lose the newer tool), so the host can only drop the ownership.
+   */
+  onReleaseToolOwner?: (name: string, ownerId: string) => void;
   /** Unregister a previously registered command (used when disabling an extension). */
   onUnregisterCommand?: (name: string) => void;
   /** Working directory (rootPath) injected into {@link ExtensionContext.cwd}. */
@@ -660,10 +665,16 @@ export class ExtensionRunner {
     for (const name of instance.registrations.tools) {
       // Only unregister when this extension still owns the artifact — a later extension
       // may have overwritten the same name, and we must not remove its registration.
-      if (this.toolOwners.get(name) !== instance.api.id) continue;
+      if (this.toolOwners.get(name) !== instance.api.id) {
+        // Ownership is gone but the name stays: the host's displaced-value ledger still
+        // holds this extension's entry, which would be restored over the surviving tool
+        // the next time the same name is unregistered. Drop it now.
+        this.options.onReleaseToolOwner?.(name, instance.api.id);
+        continue;
+      }
       this.toolOwners.delete(name);
       this.toolRegistry.delete(name);
-      this.options.onUnregisterTool?.(name);
+      this.options.onUnregisterTool?.(name, instance.api.id);
     }
     for (const name of instance.registrations.commands) {
       if (this.commandOwners.get(name) !== instance.api.id) continue;
@@ -708,7 +719,7 @@ export class ExtensionRunner {
         this.toolRegistry.set(def.name, def);
         this.toolOwners.set(def.name, api.id);
         registrations?.tools.push(def.name);
-        this.options.onRegisterTool?.(def);
+        this.options.onRegisterTool?.(def, api.id);
       },
 
       registerCommand: (cmd: ExtensionCommand) => {

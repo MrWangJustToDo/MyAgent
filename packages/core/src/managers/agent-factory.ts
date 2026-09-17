@@ -181,9 +181,10 @@ export async function buildManagedAgent({
       // Extensions access the environment primarily via ctx.coreEnv.getEnv() (async).
       // getEnvVar stays a sync best-effort hook for convenience fields like API keys.
       getEnvVar: () => undefined,
-      onRegisterTool: (def) => managed.registerTool(def),
+      onRegisterTool: (def, ownerId) => managed.registerTool(def, ownerId),
       onRegisterCommand: (cmd) => managed.registerCommand(cmd),
-      onUnregisterTool: (name) => managed.unregisterExtensionTool(name),
+      onUnregisterTool: (name, ownerId) => managed.unregisterExtensionTool(name, ownerId),
+      onReleaseToolOwner: (name, ownerId) => managed.releaseExtensionToolOwner(name, ownerId),
       onUnregisterCommand: (name) => managed.unregisterExtensionCommand(name),
       cwd: fsRootPath,
       getCoreEnv: () => getEnv(),

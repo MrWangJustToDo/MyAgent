@@ -1072,9 +1072,10 @@ export class ManagedAgent {
     return this.extensions.getMcpManager();
   }
 
-  registerTool(def: ExtensionToolDefinition): void {
+  registerTool(def: ExtensionToolDefinition, ownerId = this.id): void {
     this.extensions.registerTool(def, {
       tools: this.tools,
+      ownerId,
       warn: (message) => this.log?.warn("system", message),
       onToolsChanged: () => this.setRunnerConfigKey(undefined),
       agentId: this.id,
@@ -1085,13 +1086,37 @@ export class ManagedAgent {
     this.extensions.registerCommand(cmd, (message) => this.log?.warn("system", message));
   }
 
-  /** Unregister a tool previously added by an extension (used when disabling). */
-  unregisterExtensionTool(name: string): void {
+  /**
+   * Unregister a tool previously added by an extension (used when disabling).
+   *
+   * Restores whatever that extension displaced (an earlier extension's tool, or the
+   * built-in it shadowed), so disabling never leaves the workspace without a tool it had
+   * before the extension was loaded.
+   */
+  unregisterExtensionTool(name: string, ownerId = this.id): void {
     this.extensions.unregisterExtensionTool(name, {
       tools: this.tools,
+      ownerId,
       warn: (message) => this.log?.warn("system", message),
       onToolsChanged: () => this.setRunnerConfigKey(undefined),
     });
+    this.emitToolPresentationCatalog();
+  }
+
+  /**
+   * Drop one extension's claim on a tool name another extension has taken over.
+   *
+   * The name stays registered (removing it would delete the newer extension's tool), but the
+   * displaced-value ledger must forget the older extension's entry — otherwise it would be
+   * restored over the surviving tool on a later unregister of the same name.
+   */
+  releaseExtensionToolOwner(name: string, ownerId: string): void {
+    this.extensions.releaseToolRegistration(name, ownerId);
+    this.emitToolPresentationCatalog();
+  }
+
+  /** Publish the current presentation catalog (tool set changed). */
+  private emitToolPresentationCatalog(): void {
     this.getEventBus()?.emit("session:tool-presentation", { descriptors: describeToolPresentations() });
   }
 
