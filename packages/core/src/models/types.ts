@@ -60,6 +60,15 @@ export type ModelCapability = (typeof MODEL_CAPABILITIES)[number];
 export type ReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh" | "max" | "minimal";
 
 /**
+ * Wire field a model echoes its reasoning back on.
+ *
+ * `reasoning_content` is the DeepSeek-style scalar we implement; `reasoning_details` is
+ * OpenRouter's structured block array (used for encrypted / summarized reasoning). See
+ * {@link ModelInfo.reasoningEchoField}.
+ */
+export type ReasoningEchoField = "reasoning_content" | "reasoning_details";
+
+/**
  * Reasoning-specific configuration for models that support thinking/CoT.
  */
 export interface ReasoningConfig {
@@ -131,6 +140,36 @@ export interface ModelInfo {
    * `createTextAdapter` / `ReasoningChatCompletionsTextAdapter`, not in middleware.
    */
   reasoningConfig?: ReasoningConfig;
+  /**
+   * Whether models.dev marks reasoning as interleaving with tool calls (`interleaved` present).
+   *
+   * Separate from {@link reasoningEchoField}, and not derivable from it: `reasoningEchoField` is
+   * only set for the non-default wire field, so an entry that interleaves on `reasoning_content`
+   * has no field override but still needs the reasoning-echo adapter. Two catalog entries are
+   * exactly that shape *and* declare `reasoning: false`
+   * (`siliconflow-cn/…/MiniMax-M2.5`, `novita-ai/minimax/minimax-m2.1`), so honoring only the
+   * `reasoning` capability left them with no echo at all.
+   *
+   * This is the signal the adapter routes on; `capabilities` alone is not sufficient.
+   */
+  reasoningInterleaved?: boolean;
+  /**
+   * Wire field this model echoes reasoning back on, when it is **not** the default.
+   *
+   * `undefined` means `reasoning_content`. Only 15 of 7842 entries name `reasoning_details`; the
+   * other 1068 entries carrying `interleaved` either name `reasoning_content` or name nothing, and
+   * both of those are the default — so only the override is worth storing.
+   *
+   * A string, deliberately **not** a numbered capability: it describes the wire protocol rather
+   * than what the model can do, which is why it sits beside `reasoningConfig` (where the DeepSeek
+   * `reasoning_content` quirk is documented) instead of in `capabilities`.
+   *
+   * Not consumed yet — the adapter still sends `reasoning_content`, so today this is observability
+   * plus the decision input for a structural (`reasoning_details`) handoff. Structured blocks
+   * cannot be carried yet regardless: TanStack's `extractReasoning` seam returns
+   * `{ text: string }`, so an encrypted or summarized block has nowhere to live.
+   */
+  reasoningEchoField?: ReasoningEchoField;
   /** Whether this is a recommended/default model for its style */
   isDefault?: boolean;
   /** Optional API base URL override (merged into connection resolution) */

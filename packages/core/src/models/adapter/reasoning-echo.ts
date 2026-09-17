@@ -21,15 +21,21 @@ export function extractReasoningContentFromStreamChunk(chunk: unknown): string |
 }
 
 /**
- * Whether this endpoint/model requires `reasoning_content` echo-back.
+ * Whether this endpoint/model requires reasoning echo-back.
  *
- * A resolved model whose metadata advertises the `reasoning` capability
- * (models.dev `reasoning: true`) routes through the reasoning adapter. When
- * metadata is missing (offline, models.dev-unknown models, hosts that don't
- * pass modelInfo) we conservatively default to the reasoning adapter — it is a
- * no-op superset of the plain adapter, so unknown thinking models never
- * silently drop their reasoning.
+ * True when the model advertises the `reasoning` capability **or** when models.dev marks it as
+ * interleaving reasoning with tool calls. The second condition is not redundant: 2 of the 1083
+ * entries carrying `interleaved` (`siliconflow-cn/…/MiniMax-M2.5`, `novita-ai/minimax/minimax-m2.1`)
+ * declare `reasoning: false` while still naming a reasoning echo field. Reading only the capability
+ * flag left those two with no echo adapter at all.
+ *
+ * When metadata is missing (offline, models.dev-unknown models, hosts that don't pass modelInfo) we
+ * conservatively default to the reasoning adapter — it is a no-op superset of the plain adapter, so
+ * unknown thinking models never silently drop their reasoning.
  */
-export function shouldEchoReasoningContent(modelInfo?: Pick<ModelInfo, "capabilities"> | null): boolean {
-  return modelInfo?.capabilities?.includes("reasoning") ?? true;
+export function shouldEchoReasoningContent(
+  modelInfo?: Pick<ModelInfo, "capabilities" | "reasoningInterleaved"> | null
+): boolean {
+  if (!modelInfo) return true;
+  return Boolean(modelInfo.capabilities?.includes("reasoning")) || modelInfo.reasoningInterleaved === true;
 }

@@ -13,7 +13,7 @@
 
 import { getEnv } from "../../env.js";
 
-import type { ModelCapability, ModelInfo, ModelStyle, ReasoningEffort } from "../types.js";
+import type { ModelCapability, ModelInfo, ModelStyle, ReasoningEchoField, ReasoningEffort } from "../types.js";
 
 // ============================================================================
 // Constants
@@ -323,7 +323,51 @@ export function deriveCapabilities(data: ModelsDevModel): ModelCapability[] {
   return capabilities;
 }
 
-function parseModelsDevModel(vendorId: string, modelId: string, data: ModelsDevModel): ModelInfo {
+/** Wire field a model echoes its reasoning back on. See {@link ModelInfo.reasoningEchoField}. */
+export type { ReasoningEchoField };
+
+/**
+ * Resolve the reasoning echo field from models.dev `interleaved`.
+ *
+ * Returns `undefined` when the metadata does not name one, which means "use the default"
+ * (`reasoning_content`) — not "this model does not echo", which is decided by
+ * {@link shouldEchoReasoning} instead.
+ *
+ * The flag is a union: `true` names no field, so all 86 bare-`true` entries resolve to
+ * `undefined` and fall back to the default. Only the 15 entries that actually say
+ * `reasoning_details` need the override, and the 982 that say `reasoning_content` agree with
+ * the default — so the whole range is "default unless explicitly told otherwise".
+ */
+export function resolveReasoningEchoField(data: ModelsDevModel): ReasoningEchoField | undefined {
+  const interleaved = data.interleaved;
+  if (!interleaved || interleaved === true) return undefined;
+  return interleaved.field === "reasoning_details" ? "reasoning_details" : undefined;
+}
+
+/**
+ * Whether this entry should take the reasoning-echo adapter.
+ *
+ * Broader than the `reasoning` capability flag: 1083 entries carry `interleaved`, and 2 of them
+ * (`siliconflow-cn/…/MiniMax-M2.5`, `novita-ai/minimax/minimax-m2.1`) declare
+ * `reasoning: false` while still advertising a reasoning echo field. Taking the capability flag
+ * alone left those two with no echo adapter at all, so a model that interleaves reasoning with
+ * tool calls would never have its reasoning handed back.
+ *
+ * `interleaved` is the more precise signal for this specific question ("does reasoning come
+ * back interleaved, and on which field") — it is the one field models.dev provides for it.
+ */
+export function shouldEchoReasoning(data: ModelsDevModel): boolean {
+  return data.reasoning === true || data.interleaved !== undefined;
+}
+
+/**
+ * Translate one models.dev record into our {@link ModelInfo}.
+ *
+ * Exported only so `validate:model-capabilities` can drive the REAL parse (including the
+ * `interleaved` → echo-field/echo-adapter decisions) against the cached catalog instead of
+ * restating it; it is not part of the public package surface.
+ */
+export function parseModelsDevModel(vendorId: string, modelId: string, data: ModelsDevModel): ModelInfo {
   const style = resolveStyleFromModelsDevVendor(vendorId);
   const capabilities = deriveCapabilities(data);
 
@@ -352,9 +396,15 @@ function parseModelsDevModel(vendorId: string, modelId: string, data: ModelsDevM
     };
   }
 
+  const reasoningEchoField = resolveReasoningEchoField(data);
+  const reasoningInterleaved = shouldEchoReasoning(data);
+
   return {
     id: modelId,
-    name: data.name ?? modelId,
+    // models.dev descriptions carry the model's own variant names (e.g. "MiniMax‑M2.5" where the
+    // record id is provider-prefixed). Prefer the description and fall back to the id — the record
+    // id is sometimes not a name at all (`standardcompute/standardcompute`).
+    name: data.name ?? data.description ?? modelId,
     style,
     apiModel: data.id ?? modelId,
     contextWindow: data.limit?.context ?? 0,
@@ -362,6 +412,8 @@ function parseModelsDevModel(vendorId: string, modelId: string, data: ModelsDevM
     ...(pricing ? { pricing } : {}),
     capabilities,
     ...(reasoningConfig ? { reasoningConfig } : {}),
+    ...(reasoningInterleaved ? { reasoningInterleaved: true } : {}),
+    ...(reasoningEchoField ? { reasoningEchoField } : {}),
   };
 }
 

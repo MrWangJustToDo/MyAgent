@@ -497,7 +497,18 @@ Three hops have to preserve the distinction, and all three are guarded by `valid
 
 A member removed from `MODEL_CAPABILITIES` makes an existing `MODEL_CAPABILITIES` env var / CLI value fail validation, since the schema rejects unknown names rather than ignoring them.
 
-**Not modelled:** `temperature`, `open_weights`, `modalities.output`, `interleaved`, `experimental`. `interleaved` is the one with real impact — it carries the reasoning echo-back field (`reasoning_content` for 982 entries, `reasoning_details` for 15, plus 86 bare `true`), which is strictly more precise than `reasoning` for choosing `ReasoningChatCompletionsTextAdapter`, and there are entries with `interleaved` set but `reasoning: false`.
+**Reasoning echo field (`interleaved`).** models.dev's `interleaved` is a union — `true` (names no field) or `{ field: "reasoning_content" | "reasoning_details" }` — and it is the only field that answers "does reasoning come back interleaved with tool calls, and on which wire field". It drives two `ModelInfo` fields:
+
+| Field | Meaning |
+| ----- | ------- |
+| `reasoningInterleaved` | `interleaved` is present. **This is what the adapter routes on** — `capabilities.includes("reasoning")` alone is not enough. |
+| `reasoningEchoField` | Set **only** for the non-default `reasoning_details`. `undefined` means `reasoning_content`, which is what the adapter already sends. |
+
+Only 15 of 7842 entries name `reasoning_details`; the 982 that name `reasoning_content` and the 86 bare `true` entries all mean the default. Two entries (`siliconflow-cn/…/MiniMax-M2.5`, `novita-ai/minimax/minimax-m2.1`) carry `interleaved` **and** `reasoning: false` — routing on the capability flag gave them no echo adapter at all. Counts are asserted, so a catalog change surfaces instead of drifting.
+
+`reasoningEchoField` is **not consumed**: the adapter still sends `reasoning_content`. What we can fix is the handoff, not the capture — TanStack's `extractReasoning` seam returns `{ text: string }`, so OpenRouter's structured `reasoning_details` blocks (encrypted / summarized / signed) have nowhere to live. OpenRouter accepts the string field (`reasoning_content` is a documented alias of `reasoning`), so this is a capability gap for signed/encrypted reasoning, not a hard failure. Validate: `validate:reasoning-echo` (rules) and `validate:model-capabilities` (catalog counts + routing).
+
+**Not modelled:** `temperature`, `open_weights`, `modalities.output`, `experimental`.
 
 
 **DeepSeek reasoning echo** (`reasoning-chat-completions-adapter.ts` + `reasoning-content-cache.ts`):

@@ -27,6 +27,9 @@ import {
   MODELS_DEV_COST_FIELDS,
   MODELS_DEV_MODEL_FIELDS,
   deriveCapabilities,
+  parseModelsDevModel,
+  resolveReasoningEchoField,
+  shouldEchoReasoningContent,
 } from "../dist/dev.mjs";
 
 const errors = [];
@@ -281,6 +284,46 @@ if (!fs.existsSync(cachePath)) {
       }
     }
     assert.deepEqual([...undeclared].sort(), [], `models.dev emits cost field(s) not declared in ModelsDevCost`);
+  });
+
+  check("corpus: an interleaved entry never falls through to the plain adapter", () => {
+    // `interleaved` is the only models.dev field that says reasoning comes back interleaved with
+    // tool calls. 2 of the 1083 entries carrying it declare `reasoning: false` while naming a
+    // reasoning echo field for the `reasoning_content` default — routing on the capability flag
+    // alone gave those two no echo adapter at all, so their reasoning was never handed back.
+    const offenders = [];
+    let interleaved = 0;
+    for (const model of entries) {
+      if (!model.interleaved) continue;
+      interleaved++;
+      const info = parseModelsDevModel("test-vendor", model.id ?? "test-model", model);
+      if (!shouldEchoReasoningContent(info)) {
+        offenders.push(`${model.id}: reasoning=${model.reasoning}`);
+      }
+    }
+    assert.deepEqual(
+      offenders.slice(0, 5),
+      [],
+      `${offenders.length} interleaved entr(ies) would skip the reasoning adapter, e.g. ${offenders.slice(0, 3).join(", ")}`
+    );
+    console.log(`       (${interleaved} entries carry interleaved)`);
+  });
+
+  check("corpus: reasoning_details is resolved only for entries that name it", () => {
+    // `reasoning_content` is the default the adapter already sends, so resolving it explicitly
+    // would be redundant; a bare `true` names no field at all. Only `reasoning_details` is an
+    // actual override, and getting this wrong would silently switch the wire field.
+    const wrong = [];
+    let details = 0;
+    for (const model of entries) {
+      const resolved = resolveReasoningEchoField(model);
+      const named = model.interleaved && model.interleaved !== true ? model.interleaved.field : undefined;
+      const expected = named === "reasoning_details" ? "reasoning_details" : undefined;
+      if (expected === "reasoning_details") details++;
+      if (resolved !== expected) wrong.push(`${model.id}: got ${resolved}, expected ${expected}`);
+    }
+    assert.deepEqual(wrong.slice(0, 5), [], `${wrong.length} entr(ies) resolved the wrong echo field`);
+    assert.equal(details, 15, "the corpus is expected to name reasoning_details for exactly 15 entries");
   });
 }
 
