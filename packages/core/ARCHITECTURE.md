@@ -277,26 +277,69 @@ Sources: `managers/middleware/*` for run stack; `agent/plan/plan-mode-middleware
 5. message-transform-middleware  extension message transformers (registerMessageTransformer).
                              MUST run immediately after compaction, and ONLY consumes
                              config.messages — anything placed before the projection is discarded
-6. tool-compact-middleware   per-tool LLM shaping
-7. turn-context-middleware   inject changed <ctx kind=...> sections post-compaction (per-kind
+6. wire-recovery-middleware  per-run wire overrides that are NOT in the channel: the capability
+                             strip (unsupportedMultimodalPartTypes) and the max_tokens
+                             continuation prompt. MUST run after message-transform: a strip
+                             replaces media with a placeholder, so stripping first would hide
+                             the real attachment from an extension transformer
+7. tool-compact-middleware   per-tool LLM shaping
+8. turn-context-middleware   inject changed <ctx kind=...> sections post-compaction (per-kind
                              hash diff; subagents filtered by SUBAGENT_ALLOWED_KINDS whitelist;
                              systemPrompts = frozen only)
-8. extensions-middleware     ExtensionEventBus intercept + agent:tool-* lifecycle events
-9. early-tool-result-ui      apply each tool output to StreamProcessor as soon as it finishes
-10. task-prefork-middleware  subagent task prefork / phase state
-11. plan-mode-middleware     block forbidden tools while plan mode restricts tooling
-12. background-notification-middleware
+9. extensions-middleware     ExtensionEventBus intercept + agent:tool-* lifecycle events
+10. early-tool-result-ui      apply each tool output to StreamProcessor as soon as it finishes
+11. task-prefork-middleware  subagent task prefork / phase state
+12. plan-mode-middleware     block forbidden tools while plan mode restricts tooling
+13. background-notification-middleware
                              completed background-command notifications as <ctx kind=background_notification>
                              synthetic messages (append; persisted + id-deduped)
-13. prompt-cache-middleware  Anthropic cache_control + OpenAI prompt_cache_key + sorted tools
+14. prompt-cache-middleware  Anthropic cache_control + OpenAI prompt_cache_key + sorted tools
                              (must stay last so cache breakpoints see the final payload)
 ```
 
 Each middleware declares its own phase (`observe` / `context-transform` / `tools` / `wire-annotate`) via
 `defineMiddleware(phase, { name, ... })`, and `sortMiddlewaresByPhase` stable-sorts by phase. **Within a
 phase the array position in `buildAgentRunner` decides the order**, so same-phase adjacency is a real
-contract — `compaction` and `message-transform` both being `context-transform` is why `validate:middleware-order`
-drives `buildAgentRunner` instead of checking a copied factory list.
+contract — `compaction`, `message-transform`, and `wire-recovery` are all `context-transform`, which is why
+`validate:middleware-order` drives `buildAgentRunner` instead of checking a copied factory list.
+
+### Wire overrides vs. the channel projection
+
+The projection in `compaction` is the authority on what the model sees: it rebuilds every wire call from
+`channel.getMessages()` and **discards the incoming `config.messages`**. That makes `config.messages` a
+write-only channel on the way in — anything that edits the array handed to `runner.run()` applies to the
+first call of a run only and is overwritten from the second call on.
+
+Three call sites assumed the older contract and were silently dead: the pre-send capability strip, the
+widened strip retry after a multimodal API rejection, and the `max_tokens` continuation prompt. They now
+arm per-run state on `RunCoordinator` (`setWireDropPartTypes` / `setWireContinuationArmed`) which
+`wire-recovery` applies after the projection. Two rules follow:
+
+- **Never edit the messages passed to `runner.run()` expecting them to reach the model.** State the
+  intent on the run and let `wire-recovery` apply it, or write to the UI channel if it should be durable.
+- **Anything wire-only stays wire-only.** The strip and the continuation prompt are never written to the
+  channel, so the persisted session and the transcript keep the original media and only what the user said.
+
+### Message-operation ownership (writers on the wire are pure)
+
+`compaction` rebuilds the wire from the channel and `WireProjectionCache` returns the **same array
+reference** on every hit within a run. The projected array is therefore shared, long-lived state, and a
+writer that edits its input instead of returning a replacement corrupts every later call of the run — with
+no error and no other guard noticing. Rules:
+
+- **Every writer returns a replacement** (new array, and new message objects for changed entries).
+  `applyToolCompact` and `injectSyntheticMessages` both follow this; the latter returns `{ injected, messages }`
+  so a caller must use the new wire rather than rely on a side effect on the old one.
+- **Read the cache before parsing.** `applyToolCompact` consults `ToolCompactCache` *before*
+  `parseToolMessageOutput`. Decoding a tool payload (`JSON.parse` of up to ~100KB per result) runs on every
+  model call and its result is discarded on a hit — that decode was most of the cost: 0.49 ms/call →
+  0.05 ms/call for 60 results × 25 KB payloads.
+- **One projection implementation.** `projectWireFromChannel` (`managers/middleware/wire-projection.ts`) is
+  shared by the compaction middleware and `ManagedAgent.getMessagesForLLM` (manual `/compact`, reactive
+  compact, memory extraction, run-outcome previews), over the agent's single `WireProjectionCache`. A second
+  projection is what would let a reader disagree with the window the model actually receives.
+
+Validate: `pnpm --filter @my-agent/core run validate:message-ops-purity`.
 
 TanStack runs tools sequentially but emits batched `TOOL_CALL_END` results only after the whole tool phase. `early-tool-result-ui` calls `AgentUIChannel.addToolResult` in `onAfterToolCall` so finished tools (e.g. the first of two `task` calls) show complete while later tools still run. The later stream chunks re-apply the same output idempotently.
 

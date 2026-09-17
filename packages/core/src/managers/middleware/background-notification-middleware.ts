@@ -50,21 +50,23 @@ export function createBackgroundNotificationMiddleware(
       const messages = config.messages as ModelMessage[];
       const ui = deps.getUIChannel();
       if (!ui) {
-        // No channel: transient wire-only injection (next projection drops it).
-        messages.push({ role: "user", content: formatNotifications(completed, maxOutputChars) });
-        return { messages };
+        // No channel: transient wire-only injection. Still returns a new array — the
+        // input may be the projection WireProjectionCache retains.
+        return {
+          messages: [...messages, { role: "user", content: formatNotifications(completed, maxOutputChars) }],
+        };
       }
 
       // Shared injection path: content-hash dedupe + channel persistence + wire
       // positioning. Jobs are marked notified by the registry, so each completion
       // reaches this point exactly once. Appended at the end (one-shot semantics).
-      injectSyntheticMessages(
+      const { messages: next } = injectSyntheticMessages(
         messages,
         [{ kind: "background_notification", content: formatNotifications(completed, maxOutputChars) }],
         { ui, persist: deps.persistMessages }
       );
 
-      return { messages };
+      return { messages: next };
     },
   });
 }

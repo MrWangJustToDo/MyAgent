@@ -32,6 +32,10 @@ export const CANONICAL_MIDDLEWARE_ORDER = [
   // MUST stay adjacent to `compaction`: it transforms the channel-projected wire
   // that `compaction` produces, and that projection discards any earlier edit.
   "message-transform",
+  // MUST stay after `message-transform`: a capability strip replaces media parts
+  // with a placeholder, so stripping first would hide the real attachment from an
+  // extension transformer. Also requires the channel projection to have run first.
+  "wire-recovery",
   "tool-compact",
   "turn-context",
   "extensions",

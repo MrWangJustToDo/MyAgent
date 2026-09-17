@@ -62,30 +62,38 @@ const messages = [
 ];
 
 const cloned = structuredClone(messages);
+const inputBefore = JSON.stringify(cloned);
 
-await applyToolCompact(cloned, {
+// `applyToolCompact` is pure: it returns replacements and never edits its input.
+const compacted = await applyToolCompact(cloned, {
   config: {},
   registry: toModelOutputRegistry,
   cache,
 });
+assert.notEqual(compacted, cloned, "a transformed wire must be a new array");
+assert.equal(
+  JSON.stringify(cloned),
+  inputBefore,
+  "the input array must be byte-identical after the call — it may be the cached projection"
+);
 
-const oldest = cloned.find((m) => m.role === "tool" && m.toolCallId === "call-1");
+const oldest = compacted.find((m) => m.role === "tool" && m.toolCallId === "call-1");
 assert.ok(oldest);
 assert.match(String(oldest.content), /alpha/);
 
-const newest = cloned.find((m) => m.role === "tool" && m.toolCallId === "call-3");
+const newest = compacted.find((m) => m.role === "tool" && m.toolCallId === "call-3");
 assert.ok(newest);
 assert.match(String(newest.content), /gamma/);
 assert.equal(cache.has("call-3"), true);
 
 const replay = structuredClone(messages);
-await applyToolCompact(replay, {
+const replayed = await applyToolCompact(replay, {
   config: {},
   registry: toModelOutputRegistry,
   cache,
 });
 
-const replayNewest = replay.find((m) => m.role === "tool" && m.toolCallId === "call-3");
+const replayNewest = replayed.find((m) => m.role === "tool" && m.toolCallId === "call-3");
 assert.ok(replayNewest);
 assert.equal(replayNewest.content, newest.content);
 
@@ -113,13 +121,13 @@ const pendingApproval = [
 ];
 
 const pendingClone = structuredClone(pendingApproval);
-await applyToolCompact(pendingClone, {
+const pendingOut = await applyToolCompact(pendingClone, {
   config: {},
   registry: toModelOutputRegistry,
   cache: new ToolCompactCache(),
 });
 
-const pendingTool = pendingClone.find((m) => m.role === "tool" && m.toolCallId === "call-cmd");
+const pendingTool = pendingOut.find((m) => m.role === "tool" && m.toolCallId === "call-cmd");
 assert.ok(pendingTool);
 assert.match(String(pendingTool.content), /pendingExecution/);
 
@@ -156,13 +164,13 @@ const errorMessages = [
 ];
 
 const errorClone = structuredClone(errorMessages);
-await applyToolCompact(errorClone, {
+const errorOut = await applyToolCompact(errorClone, {
   config: {},
   registry: toModelOutputRegistry,
   cache: new ToolCompactCache(),
 });
 
-const errorTool = errorClone.find((m) => m.role === "tool" && m.toolCallId === "call-err");
+const errorTool = errorOut.find((m) => m.role === "tool" && m.toolCallId === "call-err");
 assert.ok(errorTool);
 const errorText =
   typeof errorTool.content === "string"

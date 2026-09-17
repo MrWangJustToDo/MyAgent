@@ -1,3 +1,5 @@
+import type { MultimodalPartType } from "../models/adapter/capability-message-utils.js";
+
 export interface AbortControllerSetup {
   onAborted: () => void;
 }
@@ -198,5 +200,54 @@ export class RunCoordinator {
     this.pendingAbortControllers = [];
     this.cancelAbortController();
     this.currentAbortController = null;
+  }
+
+  // ==========================================================================
+  // Per-run wire override (content the model must see that is NOT in the channel)
+  // ==========================================================================
+
+  /**
+   * Two pieces of per-run wire state that must survive the channel projection:
+   *
+   * - `wireDropPartTypes` — multimodal part types this model cannot accept (the
+   *   pre-send capability strip, or the wider strip of a post-rejection retry).
+   * - `wireContinuationArmed` — append the `max_tokens` continuation prompt as a
+   *   synthetic user turn.
+   *
+   * Why this lives on the run instead of on the messages handed to the engine:
+   * `compaction` rebuilds every wire call from `channel.getMessages()` and discards
+   * the incoming `config.messages`, so a strip or an appended prompt applied there
+   * reaches the first call only and is silently overwritten on every later one. The
+   * `wire-recovery` middleware runs after that projection and applies this state.
+   *
+   * Both fields are wire-only: the channel (and therefore the persisted session and
+   * the UI) keeps the original media parts.
+   */
+  private wireDropPartTypes: Set<MultimodalPartType> | null = null;
+  private wireContinuationArmed = false;
+
+  getWireDropPartTypes(): Set<MultimodalPartType> | null {
+    return this.wireDropPartTypes;
+  }
+
+  setWireDropPartTypes(drop: Set<MultimodalPartType> | null): void {
+    this.wireDropPartTypes = drop;
+  }
+
+  isWireContinuationArmed(): boolean {
+    return this.wireContinuationArmed;
+  }
+
+  setWireContinuationArmed(armed: boolean): void {
+    this.wireContinuationArmed = armed;
+  }
+
+  /**
+   * Clear both overrides. Called once per run, before the first wire build, so
+   * recovery state from a previous turn can never leak into the next one.
+   */
+  resetWireOverride(): void {
+    this.wireDropPartTypes = null;
+    this.wireContinuationArmed = false;
   }
 }

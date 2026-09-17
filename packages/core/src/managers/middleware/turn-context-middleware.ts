@@ -122,7 +122,7 @@ export function createTurnContextMiddleware(deps: TurnContextMiddlewareDeps): Ch
         content: formatContextSectionUserContent(section, { isUpdate }),
         nonce: (kindCounts.get(section.key) ?? 0) + 1,
       }));
-      injectSyntheticMessages(
+      const { messages: wireMessages } = injectSyntheticMessages(
         config.messages as ModelMessage[],
         entries,
         {
@@ -142,7 +142,7 @@ export function createTurnContextMiddleware(deps: TurnContextMiddlewareDeps): Ch
       // messages later instead of staying permanently above threshold.
       deps.setAdmitMessageCount(ui.getMessages().length);
 
-      return { ...result, messages: config.messages };
+      return { ...result, messages: wireMessages };
     },
   });
 }

@@ -3,24 +3,24 @@ import { convertMessagesToModelMessages, type ChatMiddleware, type ModelMessage 
 import {
   applyCompactionResult,
   autoCompact,
-  getModelVisibleMessages,
   isLatestDurableMessageCompactionSummary,
   keepPolicyProjectionOptions,
-  policyKeyFromOptions,
   resolveKeepPolicy,
-  WireProjectionCache,
-  wireSourceFingerprint,
 } from "../../agent/compaction";
 
 import { defineMiddleware } from "./phase.js";
+import { projectWireFromChannel } from "./wire-projection.js";
 
 import type { AgentLog } from "../../agent/agent-log";
+import type { WireProjectionCache } from "../../agent/compaction";
 import type { CompactionConfig } from "../../agent/compaction/types.js";
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { TodoManager } from "../../agent/todo";
 import type { AgentUIChannel } from "../../agent/ui-channel.js";
 import type { AgentManager, AgentStatusController, UsageTracker } from "../../runtime-types";
 import type { EmitAgentTelemetryFn } from "../telemetry/emit-agent-telemetry.js";
+
+export { projectWireFromChannel, type WireProjectionSource } from "./wire-projection.js";
 
 export interface CompactionMiddlewareDeps {
   agentId: string;
@@ -35,31 +35,23 @@ export interface CompactionMiddlewareDeps {
   status: AgentStatusController;
   log: AgentLog | null;
   emitEvent?: EmitAgentTelemetryFn;
-}
-
-function projectWireFromChannel(
-  channel: AgentUIChannel,
-  config: CompactionConfig | null,
-  contextWindow: number | undefined,
-  cache: WireProjectionCache
-): ModelMessage[] {
-  const policyOptions = keepPolicyProjectionOptions(resolveKeepPolicy(config ?? {}, contextWindow));
-  const messages = channel.getMessages();
-  const fingerprint = wireSourceFingerprint(channel.getRevision(), messages, policyKeyFromOptions(policyOptions));
-  return cache.getOrCompute(fingerprint, () =>
-    getModelVisibleMessages(convertMessagesToModelMessages(messages), policyOptions)
-  );
+  /**
+   * Wire-projection cache to use. Supplied by the agent so that `getMessagesForLLM`
+   * (manual `/compact`, reactive compact, memory extraction) and this middleware share
+   * one cache and therefore one projection — not just one *implementation*.
+   */
+  getWireProjectionCache: () => WireProjectionCache;
 }
 
 /** TanStack compaction via {@link ChatMiddleware.onConfig}. */
 export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): ChatMiddleware<ToolRunContext> {
-  const wireCache = new WireProjectionCache();
   return defineMiddleware("context-transform", {
     name: "compaction",
     onIteration: () => {
       deps.getTodoManager()?.incrementRound();
     },
     onConfig: async (_ctx, config) => {
+      const wireCache = deps.getWireProjectionCache();
       const engineMessages = config.messages as ModelMessage[];
       const channel = deps.getUIChannel();
 

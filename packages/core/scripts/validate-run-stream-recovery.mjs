@@ -7,9 +7,9 @@
 import assert from "node:assert/strict";
 
 import {
+  armCapabilityStrip,
   extractRetryAfterSeconds,
   isTransientRetryableError,
-  messagesForModelCapabilities,
   retryDelayMs,
   runStreamWithRecovery,
 } from "../dist/dev.mjs";
@@ -42,7 +42,7 @@ async function* onlyRunError() {
 let threw = false;
 try {
   for await (const chunk of runStreamWithRecovery({
-    managed: { parentId: "sub", usage: { hasCapability: () => true } },
+    managed: { parentId: "sub", run: makeRunCoordinatorStub(), usage: { hasCapability: () => true } },
     manager: {},
     getMessages: () => [],
     run: () => onlyRunError(),
@@ -78,8 +78,30 @@ async function* flakyThenOk() {
 
 const retryStates = [];
 const retryEvents = [];
+
+/** Minimal RunCoordinator surface the recovery loop + arm helper touch. */
+function makeRunCoordinatorStub() {
+  let drop = null;
+  let continuation = false;
+  return {
+    resetWireOverride() {
+      drop = null;
+      continuation = false;
+    },
+    getWireDropPartTypes: () => drop,
+    setWireDropPartTypes: (next) => {
+      drop = next;
+    },
+    isWireContinuationArmed: () => continuation,
+    setWireContinuationArmed: (next) => {
+      continuation = next;
+    },
+  };
+}
+
 const managed = {
   parentId: "sub-agent",
+  run: makeRunCoordinatorStub(),
   usage: null,
   log: { warn() {}, debug() {}, error() {} },
   setError() {},
@@ -91,7 +113,36 @@ const managed = {
   },
 };
 const msgs = [{ role: "user", content: "hi" }];
-assert.equal(messagesForModelCapabilities(managed, msgs), msgs);
+
+// --- capability strip is armed on the RUN, not by editing the messages handed in ---
+//
+// `compaction` rebuilds every wire call from the channel and discards
+// `config.messages`, so a strip applied to the array passed to `run()` reaches the
+// first call only. `armCapabilityStrip` stores the drop set on the run instead, and
+// `wire-recovery` applies it after the projection (see validate-wire-override-reaches-adapter).
+
+const stripRun = makeRunCoordinatorStub();
+const stripManaged = {
+  parentId: "sub-agent",
+  run: stripRun,
+  usage: { hasCapability: (cap) => cap !== "vision" },
+  log: { warn() {}, debug() {}, error() {} },
+};
+assert.equal(armCapabilityStrip(stripManaged), true, "a model without vision arms a strip");
+assert.deepEqual([...stripRun.getWireDropPartTypes()], ["image"], "only the unsupported modality is dropped");
+
+const fullRun = makeRunCoordinatorStub();
+assert.equal(
+  armCapabilityStrip({
+    parentId: undefined,
+    run: fullRun,
+    usage: { hasCapability: () => true },
+    log: { warn() {}, debug() {}, error() {} },
+  }),
+  false,
+  "a fully capable model arms no strip"
+);
+assert.equal(fullRun.getWireDropPartTypes(), null, "no drop set is stored when nothing is unsupported");
 
 const out = [];
 for await (const chunk of runStreamWithRecovery({
@@ -125,6 +176,7 @@ let recoveryRetryCalls = 0;
 let lastError = "stale";
 const subManaged = {
   parentId: "parent-1",
+  run: makeRunCoordinatorStub(),
   usage: null,
   log: { warn() {}, debug() {}, error() {} },
   setError(error) {
@@ -163,6 +215,7 @@ attempts = 0;
 resetCalls = 0;
 recoveryRetryCalls = 0;
 const rootManaged = {
+  run: makeRunCoordinatorStub(),
   usage: null,
   log: { warn() {}, debug() {}, error() {} },
   setError() {},
@@ -208,6 +261,7 @@ async function* alwaysRateLimited() {
 }
 
 const abortManaged = {
+  run: makeRunCoordinatorStub(),
   usage: null,
   log: { warn() {}, debug() {}, error() {} },
   setError() {},

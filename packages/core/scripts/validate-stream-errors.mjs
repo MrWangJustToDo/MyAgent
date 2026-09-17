@@ -46,7 +46,15 @@ async function* onlyRunError() {
 threw = false;
 try {
   for await (const chunk of runStreamWithRecovery({
-    managed: { parentId: "sub", usage: { hasCapability: () => true } },
+    managed: {
+      parentId: "sub",
+      usage: { hasCapability: () => true },
+      // The recovery loop arms per-run wire overrides before the first wire build.
+      run: {
+        resetWireOverride() {},
+        setWireDropPartTypes() {},
+      },
+    },
     manager: {},
     getMessages: () => [],
     run: () => onlyRunError(),

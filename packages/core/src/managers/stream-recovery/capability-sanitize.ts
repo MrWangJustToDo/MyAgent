@@ -1,50 +1,56 @@
 import {
-  sanitizeMessagesForCapabilities,
-  trySanitizeForMultimodalRetry,
+  isMultimodalUnsupportedError,
   unsupportedMultimodalPartTypes,
 } from "../../models/adapter/capability-message-utils.js";
 
 import type { ManagedAgent } from "../managed-agent.js";
-import type { ModelMessage, UIMessage } from "@tanstack/ai";
 
-/** Prepare messages for the wire: drop multimodal parts the model cannot accept. */
-export function messagesForModelCapabilities(
-  managed: ManagedAgent,
-  messages: Array<UIMessage | ModelMessage>
-): Array<UIMessage | ModelMessage> {
-  const probe = managed.usage ?? null;
-  const drop = unsupportedMultimodalPartTypes(probe);
-  if (drop.size === 0) return messages;
+/** Every multimodal part type — the drop set of a post-rejection retry. */
+const ALL_MULTIMODAL_PART_TYPES = ["image", "audio", "video", "document"] as const;
 
-  const sanitized = sanitizeMessagesForCapabilities(messages, probe);
-  if (sanitized !== messages) {
-    managed.log?.warn(
-      "agent",
-      `Stripping unsupported multimodal parts for model capabilities: ${[...drop].join(", ")}`
-    );
+/**
+ * Arm the per-run capability strip from the model's declared capabilities.
+ *
+ * This does NOT edit the messages handed to the engine. `compaction` rebuilds every
+ * wire call from `channel.getMessages()` and discards the incoming `config.messages`,
+ * so a strip applied there reaches the first call only and is silently overwritten on
+ * every later one. The drop set is stored on the run and applied by the
+ * `wire-recovery` middleware, which runs after that projection.
+ *
+ * @returns true when a strip was armed (the model lacks at least one modality).
+ */
+export function armCapabilityStrip(managed: ManagedAgent): boolean {
+  const drop = unsupportedMultimodalPartTypes(managed.usage ?? null);
+  if (drop.size === 0) {
+    managed.run.setWireDropPartTypes(null);
+    return false;
   }
-  return sanitized;
+
+  managed.run.setWireDropPartTypes(drop);
+  managed.log?.warn("agent", `Stripping unsupported multimodal parts for model capabilities: ${[...drop].join(", ")}`);
+  return true;
 }
 
 /**
- * One-shot retry without multimodal parts after a capability/schema API error.
- * Returns sanitized messages when a retry is warranted; otherwise null.
+ * One-shot widened strip after a multimodal schema/API rejection: drop **every**
+ * multimodal part type, not just the ones the capability probe predicted.
+ *
+ * Returns true when a retry is warranted (the run's drop set was widened);
+ * otherwise false. The UI history is untouched — the widened set is wire-only.
  */
 export function tryCapabilitySanitizeRetry(
   managed: ManagedAgent,
   error: unknown,
-  currentMessages: Array<UIMessage | ModelMessage>,
   multimodalStripAttempted: boolean
-): Array<UIMessage | ModelMessage> | null {
-  if (multimodalStripAttempted) return null;
+): boolean {
+  if (multimodalStripAttempted) return false;
+  if (!isMultimodalUnsupportedError(error)) return false;
 
-  const stripped = trySanitizeForMultimodalRetry(error, currentMessages);
-  if (!stripped) return null;
-
+  managed.run.setWireDropPartTypes(new Set(ALL_MULTIMODAL_PART_TYPES));
   managed.log?.warn(
     "agent",
     "Retrying without multimodal parts after capability/schema API error (UI history unchanged)"
   );
   managed.setError("");
-  return stripped;
+  return true;
 }

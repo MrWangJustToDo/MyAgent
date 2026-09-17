@@ -30,6 +30,7 @@ import {
   createTaskPreforkMiddleware,
   createToolCompactMiddleware,
   createTurnContextMiddleware,
+  createWireRecoveryMiddleware,
   MIDDLEWARE_PHASE_RANK,
   sortMiddlewaresByPhase,
 } from "../dist/dev.mjs";
@@ -58,6 +59,7 @@ const FACTORIES = [
   createLifecycleMiddleware,
   createCompactionMiddleware,
   createMessageTransformMiddleware,
+  createWireRecoveryMiddleware,
   createToolCompactMiddleware,
   createTurnContextMiddleware,
   createExtensionsMiddleware,
@@ -128,13 +130,25 @@ const liveNames = liveRunner.config.middleware.map((mw) => mw.name);
 // contract first so a regression reads as what it actually is.
 const compactionIdx = liveNames.indexOf("compaction");
 const transformIdx = liveNames.indexOf("message-transform");
+const wireRecoveryIdx = liveNames.indexOf("wire-recovery");
 assert.notEqual(compactionIdx, -1, "compaction middleware must be present in the assembled pipeline");
 assert.notEqual(transformIdx, -1, "message-transform middleware must be present in the assembled pipeline");
+assert.notEqual(wireRecoveryIdx, -1, "wire-recovery middleware must be present in the assembled pipeline");
 assert.equal(
   transformIdx,
   compactionIdx + 1,
   `message-transform must RUN immediately after compaction, or the channel projection discards ` +
     `its output. Assembled order: ${liveNames.join(", ")}`
+);
+// The capability strip replaces media parts with a placeholder, so it has to run after
+// the extension transform or an extension could never see a real attachment on a model
+// that lacks vision. Both halves of this ordering have been broken by relocation before.
+assert.equal(
+  wireRecoveryIdx,
+  transformIdx + 1,
+  `wire-recovery must RUN immediately after message-transform: before it, a capability strip ` +
+    `would hide the real media part from an extension transformer; before compaction, the ` +
+    `channel projection would discard the strip. Assembled order: ${liveNames.join(", ")}`
 );
 
 assert.deepEqual(

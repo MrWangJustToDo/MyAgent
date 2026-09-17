@@ -29,11 +29,15 @@ export function createToolCompactMiddleware(deps: ToolCompactMiddlewareDeps): Ch
       const parentId = deps.getManagedAgent().parentId;
 
       if (!parentId) {
-        await applyToolCompact(messages, {
-          config: deps.getCompactionConfig() ?? undefined,
-          registry,
-          cache: deps.getToolCompactCache(),
-        });
+        // `applyToolCompact` is pure — it returns replacements instead of editing the
+        // array it is handed, which may be the one `WireProjectionCache` retains.
+        return {
+          messages: await applyToolCompact(messages, {
+            config: deps.getCompactionConfig() ?? undefined,
+            registry,
+            cache: deps.getToolCompactCache(),
+          }),
+        };
       }
 
       return { messages };

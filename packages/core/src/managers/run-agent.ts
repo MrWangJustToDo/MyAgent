@@ -26,6 +26,7 @@ import {
   createTaskPreforkMiddleware,
   createToolCompactMiddleware,
   createTurnContextMiddleware,
+  createWireRecoveryMiddleware,
   instrumentMiddlewareLog,
 } from "./middleware";
 import { sortMiddlewaresByPhase, assertCanonicalMiddlewareOrder } from "./middleware/phase.js";
@@ -159,6 +160,7 @@ export function buildAgentRunner(
       status: managed.statusController,
       log: deps.log,
       emitEvent,
+      getWireProjectionCache: () => managed.getWireProjectionCache(),
     }),
     // Extension message transformers. Sits right after `compaction` so it sees the
     // channel-projected wire — running earlier would be discarded by that projection.
@@ -167,6 +169,12 @@ export function buildAgentRunner(
       getExtensionRunner: () => deps.extensionRunner,
       getUsage: () => deps.usage,
       getAbortSignal: () => managed.run.currentAbortController?.signal,
+    }),
+    // Per-run wire overrides that must outlive the channel projection (capability
+    // strip + `max_tokens` continuation). Sits after `message-transform` so a
+    // capability strip cannot hide the real media part from an extension transformer.
+    createWireRecoveryMiddleware({
+      getRun: () => managed.run,
     }),
     createToolCompactMiddleware({
       getCompactionConfig: () => deps.compactionConfig,

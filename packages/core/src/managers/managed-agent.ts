@@ -13,6 +13,7 @@ import { ToolApprovalTable } from "../agent/approval/tool-approval-table.js";
 import { keepPolicyProjectionOptions, resolveKeepPolicy } from "../agent/compaction/keep-policy.js";
 import { getModelVisibleMessages } from "../agent/compaction/message-chain-projection.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
+import { WireProjectionCache } from "../agent/compaction/wire-projection-cache.js";
 import {
   createSessionSyncTracker,
   type SessionSaveReason,
@@ -67,6 +68,7 @@ import {
   restoreManagedSession,
   saveSessionUIMessages as saveSessionUIMessagesHelper,
 } from "./managed-agent-session.js";
+import { projectWireFromChannel } from "./middleware/wire-projection.js";
 import { RunCoordinator } from "./run-coordinator.js";
 import { CompactionService } from "./services/compaction-service.js";
 import { ExtensionRegistryService } from "./services/extension-registry-service.js";
@@ -343,6 +345,8 @@ export class ManagedAgent {
   // ============================================================================
 
   readonly compaction: CompactionService;
+  /** Shared channel → wire projection cache (see `getWireProjectionCache`). */
+  private wireProjectionCache: WireProjectionCache | null = null;
   readonly toolCompactCache: ToolCompactCache;
   readonly sessionSyncTracker: SessionSyncTracker;
 
@@ -867,13 +871,39 @@ export class ManagedAgent {
 
   /**
    * Messages sent to the LLM after in-chain compaction summary projection.
+   *
+   * Projects through {@link projectWireFromChannel} — the **same** function the
+   * compaction middleware uses per model call — so a manual `/compact`, a reactive
+   * compact, or memory extraction sees exactly the window the model receives. Keeping
+   * a second implementation here is what would let the two drift.
    */
   getMessagesForLLM(canon?: ModelMessage[]): ModelMessage[] {
-    const base = canon ?? this.getCanonicalFromUI();
-    const policy = keepPolicyProjectionOptions(
-      resolveKeepPolicy(this.compaction.getConfig() ?? {}, this.modelInfo?.contextWindow)
+    // An explicit base (a pre-projected chain) bypasses the channel entirely.
+    if (canon) {
+      return getModelVisibleMessages(
+        canon,
+        keepPolicyProjectionOptions(resolveKeepPolicy(this.compaction.getConfig() ?? {}, this.modelInfo?.contextWindow))
+      );
+    }
+
+    const channel = this.ui;
+    if (!channel) return [];
+
+    return projectWireFromChannel(
+      channel,
+      this.compaction.getConfig(),
+      this.modelInfo?.contextWindow,
+      this.getWireProjectionCache()
     );
-    return getModelVisibleMessages(base, policy);
+  }
+
+  /**
+   * Wire-projection cache owned by the agent, so every projection site (middleware and
+   * `getMessagesForLLM`) shares one cache and one fingerprint contract.
+   */
+  getWireProjectionCache(): WireProjectionCache {
+    this.wireProjectionCache ??= new WireProjectionCache();
+    return this.wireProjectionCache;
   }
 
   setLog(c: AgentLog): void {

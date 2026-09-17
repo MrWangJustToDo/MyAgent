@@ -1,7 +1,7 @@
 import { assertAsyncIterable } from "../agent/stream/assert-async-iterable.js";
 import { extractRunErrorMessage } from "../agent/stream/stream-errors.js";
 
-import { messagesForModelCapabilities, tryCapabilitySanitizeRetry } from "./stream-recovery/capability-sanitize.js";
+import { armCapabilityStrip, tryCapabilitySanitizeRetry } from "./stream-recovery/capability-sanitize.js";
 import {
   createTruncationState,
   handleMaxTokensTruncation,
@@ -16,7 +16,7 @@ import type { AgentRunner } from "../agent/runner/agent-runner.js";
 import type { AgentRetryStrategy, AgentRetryState } from "../runtime-types/agent-retry.js";
 import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai";
 
-export { messagesForModelCapabilities } from "./stream-recovery/capability-sanitize.js";
+export { armCapabilityStrip, tryCapabilitySanitizeRetry } from "./stream-recovery/capability-sanitize.js";
 export { tryReactiveCompactRetry } from "./stream-recovery/reactive-compact-retry.js";
 export { extractRetryAfterSeconds, isTransientRetryableError } from "./stream-recovery/transient-retry.js";
 export {
@@ -62,7 +62,6 @@ export function retryDelayMs(attempt: number, retryAfter?: number): number {
 // ============================================================================
 
 interface RecoveryResult {
-  messages: Array<UIMessage | ModelMessage>;
   multimodalStripAttempted: boolean;
   /** Which recovery strategy matched — drives UI retry visibility. */
   strategy: AgentRetryStrategy;
@@ -80,7 +79,6 @@ interface AttemptRecoveryOptions {
 async function attemptErrorRecovery(
   options: AttemptRecoveryOptions,
   error: unknown,
-  currentMessages: Array<UIMessage | ModelMessage>,
   multimodalStripAttempted: boolean,
   recoveryAttempts: number
 ): Promise<RecoveryResult | null> {
@@ -97,16 +95,14 @@ async function attemptErrorRecovery(
 
   const compactHandled = await tryReactiveCompactRetry(options.managed, options.manager, error);
   if (compactHandled) {
-    return {
-      messages: messagesForModelCapabilities(options.managed, options.getMessages()),
-      multimodalStripAttempted,
-      strategy: "reactive_compact",
-    };
+    // The reactive compact wrote a SUMMARY onto the channel; re-arm the capability
+    // strip so the retry still drops parts this model cannot take.
+    armCapabilityStrip(options.managed);
+    return { multimodalStripAttempted, strategy: "reactive_compact" };
   }
 
-  const stripped = tryCapabilitySanitizeRetry(options.managed, error, currentMessages, multimodalStripAttempted);
-  if (stripped) {
-    return { messages: stripped, multimodalStripAttempted: true, strategy: "capability" };
+  if (tryCapabilitySanitizeRetry(options.managed, error, multimodalStripAttempted)) {
+    return { multimodalStripAttempted: true, strategy: "capability" };
   }
 
   // Same messages + backoff (429 / gateway / network). Applies to root and subagents.
@@ -120,7 +116,6 @@ async function attemptErrorRecovery(
     });
     options.managed.setError("");
     return {
-      messages: messagesForModelCapabilities(options.managed, currentMessages),
       multimodalStripAttempted,
       strategy: "transient",
       ...(retryAfterSeconds != null ? { retryAfterSeconds } : {}),
@@ -180,7 +175,14 @@ function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIterable<StreamChunk> {
-  let messages = messagesForModelCapabilities(options.managed, options.getMessages());
+  // Strip the capability state of any previous turn before the first wire build, so
+  // a strip armed by an earlier run cannot leak into this one.
+  options.managed.run.resetWireOverride();
+  // Arm the pre-send capability strip for this run. The drop set is applied by the
+  // `wire-recovery` middleware on every wire build — see `armCapabilityStrip`.
+  armCapabilityStrip(options.managed);
+
+  const messages = options.getMessages();
   let multimodalStripAttempted = false;
   let recoveryAttempts = 0;
   let clearRetryOnNextChunk = false;
@@ -208,16 +210,9 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
         if (chunk.type === "RUN_ERROR") {
           const runError = errorFromUnknown(extractRunErrorMessage(chunk) || "Agent run failed");
           lastErrorMessage = runError.message;
-          const result = await attemptErrorRecovery(
-            options,
-            runError,
-            messages,
-            multimodalStripAttempted,
-            recoveryAttempts
-          );
+          const result = await attemptErrorRecovery(options, runError, multimodalStripAttempted, recoveryAttempts);
           if (result) {
             shouldRetry = true;
-            messages = result.messages;
             multimodalStripAttempted = result.multimodalStripAttempted;
             retryAfterSeconds = result.retryAfterSeconds;
             retryStrategy = result.strategy;
@@ -240,10 +235,9 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
     } catch (error) {
       if (!shouldRetry) {
         lastErrorMessage = errorFromUnknown(error).message;
-        const result = await attemptErrorRecovery(options, error, messages, multimodalStripAttempted, recoveryAttempts);
+        const result = await attemptErrorRecovery(options, error, multimodalStripAttempted, recoveryAttempts);
         if (result) {
           shouldRetry = true;
-          messages = result.messages;
           multimodalStripAttempted = result.multimodalStripAttempted;
           retryAfterSeconds = result.retryAfterSeconds;
           retryStrategy = result.strategy;
@@ -257,11 +251,9 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
       const truncationResult = handleMaxTokensTruncation({
         managed: options.managed,
         runner: options.runner,
-        messages,
         truncation,
       });
-      if (truncationResult.shouldRetry && truncationResult.messages) {
-        messages = truncationResult.messages;
+      if (truncationResult.shouldRetry) {
         shouldRetry = true;
         lastErrorMessage = "";
         retryStrategy = "max_tokens";

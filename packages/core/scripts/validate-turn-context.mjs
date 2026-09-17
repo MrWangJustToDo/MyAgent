@@ -233,7 +233,7 @@ const injected = injectSyntheticMessages(wire, [entry, entry2], {
   ui: channel,
   persist: () => persistedCount++,
 });
-assert.equal(injected.length, 2);
+assert.equal(injected.injected.length, 2);
 assert.equal(persistedCount, 1, "persist called once per batch");
 // Channel: appended at the tail (time order preserved), after existing messages.
 assert.equal(channel.messages.length, 4);
@@ -242,13 +242,17 @@ assert.equal(channel.messages[2].id, syntheticMessageId(entry));
 assert.equal(channel.messages[3].id, syntheticMessageId(entry2));
 assert.equal(channel.messages[2].parts[0].content, first);
 // Wire: appended at the tail too → prefix up to the append point stays byte-stable.
-assert.equal(wire.length, 5);
-assert.equal(wire[3].content, first);
-assert.equal(wire[4].content, entry2.content);
+// The input array is NEVER edited: it may be the WireProjectionCache-retained
+// projection, and pushing into it would replay the ctx on every later call.
+assert.equal(wire.length, 3, "injectSyntheticMessages must not mutate the wire it is handed");
+assert.equal(injected.messages.length, 5);
+assert.equal(injected.messages[3].content, first);
+assert.equal(injected.messages[4].content, entry2.content);
 
 // Re-injecting the same content is a no-op (id dedupe).
 const reinjected = injectSyntheticMessages(wire, [entry], { ui: channel, persist: () => persistedCount++ });
-assert.equal(reinjected.length, 0);
+assert.equal(reinjected.injected.length, 0);
+assert.equal(reinjected.messages, wire, "a no-op must return the input array unchanged");
 assert.equal(channel.messages.length, 4);
 assert.equal(persistedCount, 1);
 
@@ -263,15 +267,16 @@ const notifChannel = {
   },
 };
 const notifWire = [{ role: "user", content: "run in bg" }];
-injectSyntheticMessages(
+const notifResult = injectSyntheticMessages(
   notifWire,
   [{ kind: "background_notification", content: `<ctx kind=background_notification>\njob done\n</ctx>` }],
   { ui: notifChannel, persist: () => {} }
 );
 assert.equal(notifChannel.messages.length, 3);
 assert.equal(notifChannel.messages[2].parts[0].content.includes("job done"), true);
-assert.equal(notifWire.length, 2);
-assert.equal(notifWire[1].content.includes("job done"), true);
+assert.equal(notifWire.length, 1, "the handed-in wire must not be mutated");
+assert.equal(notifResult.messages.length, 2);
+assert.equal(notifResult.messages[1].content.includes("job done"), true);
 
 // Mid-loop mode-change re-admission: turn-context uses APPEND so a later ctx
 // injection lands at the end (time order preserved) and never rewrites already-
@@ -299,19 +304,20 @@ assert.equal(notifWire[1].content.includes("job done"), true);
   const auto = { kind: "mode", content: `<ctx kind=mode>\n<auto_mode>on\n</auto_mode>\n</ctx>` };
   const nonAuto = { kind: "mode", content: `<ctx kind=mode>\n<mode_state>off\n</mode_state>\n</ctx>` };
 
-  injectSyntheticMessages(wire, [auto], { ui: chan, persist: () => {} });
-  injectSyntheticMessages(wire, [nonAuto], { ui: chan, persist: () => {} });
+  const afterAuto = injectSyntheticMessages(wire, [auto], { ui: chan, persist: () => {} }).messages;
+  const afterNonAuto = injectSyntheticMessages(afterAuto, [nonAuto], { ui: chan, persist: () => {} }).messages;
 
   // Channel: auto first, nonAuto appended after it (NOT before).
   assert.equal(chan.messages.length, 4);
   assert.equal(chan.messages[2].parts[0].content.includes("<auto_mode>"), true);
   assert.equal(chan.messages[3].parts[0].content.includes("<mode_state>"), true);
   // Wire mirrors channel order (prefix up to the append point stays byte-stable).
-  assert.equal(wire.length, 4);
-  assert.equal(wire[2].content.includes("<auto_mode>"), true);
-  assert.equal(wire[3].content.includes("<mode_state>"), true);
-  assert.equal(wire[0].content, "task");
-  assert.equal(wire[1].content, "first reply");
+  assert.equal(wire.length, 2, "the original wire stays untouched across both injections");
+  assert.equal(afterNonAuto.length, 4);
+  assert.equal(afterNonAuto[2].content.includes("<auto_mode>"), true);
+  assert.equal(afterNonAuto[3].content.includes("<mode_state>"), true);
+  assert.equal(afterNonAuto[0].content, "task");
+  assert.equal(afterNonAuto[1].content, "first reply");
 }
 
 // ---------------------------------------------------------------------------

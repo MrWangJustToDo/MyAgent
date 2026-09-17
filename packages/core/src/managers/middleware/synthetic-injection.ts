@@ -33,6 +33,13 @@ export interface SyntheticInjectionDeps {
   persist: (next: UIMessage[]) => void;
 }
 
+export interface SyntheticInjectionResult {
+  /** Contents actually injected this call (empty when nothing changed). */
+  injected: string[];
+  /** The wire to use — a new array when anything was injected, else the input. */
+  messages: ModelMessage[];
+}
+
 /** Stable id for a synthetic context message (content-hash dedupe across restores). */
 export function syntheticMessageId(entry: SyntheticMessageEntry): string {
   const hash = hashTurnContextPayload(entry.content);
@@ -49,17 +56,25 @@ export function syntheticMessageId(entry: SyntheticMessageEntry): string {
  * Both channel and wire APPEND to the end. Appending keeps per-turn injection
  * order = time order (so later re-injections never jump ahead of earlier ones)
  * and only grows the message tail — preserving the prompt-cache prefix.
+ *
+ * **Returns a new wire array; never edits the one it is handed.** That array may be
+ * the projection `WireProjectionCache` retains and returns by reference, so pushing
+ * into it would (a) leak the synthetic message into every later call of the run even
+ * after it is no longer admitted, and (b) duplicate it on the next channel projection,
+ * which appends the same message by id. Callers must use the return value.
+ *
+ * @returns `{ injected, messages }` — the injected contents, and the wire to use.
  */
 export function injectSyntheticMessages(
   messages: ModelMessage[],
   entries: SyntheticMessageEntry[],
   deps: SyntheticInjectionDeps
-): string[] {
-  if (entries.length === 0) return [];
+): SyntheticInjectionResult {
+  if (entries.length === 0) return { injected: [], messages };
 
   const existingIds = new Set(deps.ui.getMessages().map((message) => message.id));
   const fresh = entries.filter((entry) => !existingIds.has(syntheticMessageId(entry)));
-  if (fresh.length === 0) return [];
+  if (fresh.length === 0) return { injected: [], messages };
 
   // --- Channel: append (time order) via the shared safe entry, then persist. ---
   const inserted: UIMessage[] = fresh.map((entry) => ({
@@ -67,11 +82,12 @@ export function injectSyntheticMessages(
     role: "user",
     parts: [{ type: "text", content: entry.content }],
   }));
+  // --- Channel: append (time order) via the shared safe entry, then persist. ---
   appendChannelMessages(deps.ui, inserted, { existingIds, persist: deps.persist });
 
-  // --- Wire: append at the tail so this call's payload matches what the next
-  // channel projection produces (cross-turn prefix stability). ---
-  messages.push(...fresh.map((entry) => ({ role: "user" as const, content: entry.content })));
+  // --- Wire: new array, appended at the tail so this call's payload matches what
+  // the next channel projection produces (cross-turn prefix stability). ---
+  const next = [...messages, ...fresh.map((entry) => ({ role: "user" as const, content: entry.content }))];
 
-  return fresh.map((entry) => entry.content);
+  return { injected: fresh.map((entry) => entry.content), messages: next };
 }

@@ -35,11 +35,12 @@ export { CompactionService } from "../managers/services/compaction-service.js";
 export { SessionService } from "../managers/services/session-service.js";
 export { resolveTextAdapterForManaged } from "../managers/run-agent.js";
 export {
+  armCapabilityStrip,
   extractRetryAfterSeconds,
   isTransientRetryableError,
-  messagesForModelCapabilities,
   retryDelayMs,
   runStreamWithRecovery,
+  tryCapabilitySanitizeRetry,
   tryReactiveCompactRetry,
 } from "../managers/run-stream-recovery.js";
 export { createTaskPreforkMiddleware } from "../managers/middleware/task-prefork-middleware.js";
@@ -73,6 +74,7 @@ export {
   createBackgroundNotificationMiddleware,
   createCompactionMiddleware,
   createMessageTransformMiddleware,
+  createWireRecoveryMiddleware,
   createPlanModeMiddleware,
   createToolCompactMiddleware,
   createTurnContextMiddleware,
@@ -81,6 +83,11 @@ export {
   MIDDLEWARE_PHASE_RANK,
 } from "../managers/middleware/index.js";
 export type { MiddlewarePhase } from "../managers/middleware";
+export { CONTINUATION_PROMPT } from "../managers/stream-recovery/max-tokens-continue.js";
+export {
+  createTruncationState,
+  handleMaxTokensTruncation,
+} from "../managers/stream-recovery/max-tokens-continue.js";
 export { createAgentStatusController, AgentStatusController } from "../managers/controllers/agent-status-controller.js";
 export type {
   AgentRunOutcome,

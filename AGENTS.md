@@ -539,7 +539,6 @@ registerModelProvider(await createRemoteProvider("http://localhost:3100"));
 **Event → Log bridge:** `bridgeTelemetryToAgentLog()` in `AgentManager` subscribes the unified bus `"*"` (its only wildcard consumer) and maps telemetry events to `AgentLog` entries — each stamped with the originating event type (`event`) and scoped to the in-flight run (`run`). Policy lives in `managers/telemetry/event-log-bridge.ts` (`DEFAULT_EVENT_LOG_RULES`); override per event type with `EventLogPolicy`. Emit sites should not duplicate lifecycle logs covered by events. The sink persists every entry to `.agents/logs/<sessionId>/agent.log` (size-rotated).
 
 ## Prompt Cache (prefix)
-
 Frozen system text ends with `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` and stays byte-stable across turns.
 Per-turn dynamic context is injected as synthetic `<ctx kind=...>` user messages by the turn-context middleware `onConfig` (after compaction) whenever a section's content hash changes (persisted in `uiMessages`, hidden in the transcript UI; per-kind supersede notices mark refreshed sections).
 `<current_date>` uses **day** granularity (not hour/minute) so the payload stays stable within a calendar day.
@@ -552,6 +551,23 @@ All synthetic injections (turn-context sections, memory, background-command comp
 - **All styles** — tools sorted by name for stable schemas
 
 Helpers: `packages/core/src/models/prompt-cache.ts`. Validate: `pnpm --filter @my-agent/core run validate:prompt-cache`.
+
+### Message-operation ownership (writers on the wire are pure)
+
+`compaction` rebuilds the wire from the channel, and `WireProjectionCache` returns the **same array reference** on every hit within a run. The projected array is therefore shared, long-lived state: a writer that edits its input instead of returning a replacement corrupts every later call of the run, silently. Two shipped writers follow the replacement contract —
+`applyToolCompact` (returns a new array; only changed entries are copied) and `injectSyntheticMessages` (returns `{ injected, messages }`, so a caller must use the new wire rather than a side effect on the old one). Two further rules:
+
+- **Cache before parse.** `applyToolCompact` consults `ToolCompactCache` *before* `parseToolMessageOutput`. Decoding a tool payload runs on every model call and its result is discarded on a hit — that decode was most of the cost: 0.49 ms/call → 0.05 ms/call for 60 results × 25 KB, and 2.00 ms → ~0.05 ms at
+100 KB payloads (what remains is the O(results) scan + Map lookups).
+- **One projection.** `projectWireFromChannel` (`managers/middleware/wire-projection.ts`) is shared by the compaction middleware and `ManagedAgent.getMessagesForLLM` (manual `/compact`, reactive compact, memory extraction), over the agent's single `WireProjectionCache`. A second implementation is what would let a reader disagree with the window the model receives.
+
+Validate: `pnpm --filter @my-agent/core run validate:message-ops-purity`.
+
+**Durability rule — what is wire-only must never become durable.** The wire and the UI channel are not independent: `getModelVisibleMessages` builds fresh message objects but the content-part objects inside them are the **same references** as the channel's. One in-place edit to a part downstream of the projection is therefore written to disk, so a wire-only transform applied in place would destroy the user's attachment in the persisted session. Every transform on the wire is copy-on-write for this reason — `stripMultimodalFromChatMessages` filters into a new `parts` / `content` array and returns the original when nothing is dropped; `liftToolMediaForChatCompletions`, `applyAnthropicToolCacheBreakpoint` and `applyAnthropicLatestUserCacheBreakpoint` all rebuild rather than mutate.
+
+The persisted session is written from `channel.getMessages()` (`AgentChatController.persistMessages` → `maybeSaveSessionUIMessages` → `SessionService.persistSession` → `dehydrateUIMessages` → `SessionStore`), never from the wire. The two rules meet on the synthetic `<ctx kind=...>` messages, which are the one thing a middleware injects that **must** be durable: `injectSyntheticMessages` appends to the channel *and* to the wire, and the stable content-hash id makes the injection idempotent across a restore (so a resumed session never re-injects, and the prefix cache stays stable).
+
+Validate: `pnpm --filter @my-agent/core run validate:wire-override-reaches-adapter` (sections 8-10 persist through a real `SessionService` + `SessionStore` and assert on the log bytes and the reload: no strip placeholder on disk, no continuation prompt on disk, the image still there, the ctx present exactly once, and the same after a restore + re-run).
 
 ### Project instructions (`<project_instructions>`)
 
@@ -697,7 +713,7 @@ ctx.registerMessageTransformer((c) => {
 | Property | Behaviour |
 |----------|-----------|
 | Registration | `ctx.registerMessageTransformer(fn)` returns a disposer. **At most one per extension** — re-registering replaces, and a stale disposer is inert. Cleared when the extension is disabled or destroyed. |
-| Position | A dedicated `message-transform` middleware running **immediately after `compaction`**. `compaction` is channel-anchored (it rebuilds the wire from the UI channel and ignores `config.messages`), so anything placed before it applies to the first call and is silently discarded afterwards. |
+| Position | A dedicated `message-transform` middleware running **immediately after `compaction`**. `compaction` is channel-anchored (it rebuilds the wire from the UI channel and ignores `config.messages`), so anything placed before it applies to the first call and is silently discarded afterwards. The capability strip and the `max_tokens` continuation prompt are the two shipped examples of that trap — both were dead until the `wire-recovery` middleware (which runs after the transform) took over applying them from per-run state. |
 | Invoked | Once per model call — `init` and every later iteration — because every restart-style retry rebuilds the `chat()` engine and re-runs init `onConfig`. |
 | Sees | The projected wire, including synthetic `<ctx kind=...>` messages (turn context / background notifications), which live on **both** the channel and the wire. Edits from middleware that rewrite only `config.messages` *before* the projection are not visible. |
 | Returns | A replacement `ModelMessage[]`; `void` or a non-array leaves the previous value. **Wire-only** — output is never written to the UI channel, the session store, or any durable state, and never reused as a later run's input. |
@@ -708,7 +724,7 @@ ctx.registerMessageTransformer((c) => {
 
 It is deliberately **not** an `AgentEventBus` interceptor: interceptor mode is a shared mutable payload with cancel short-circuit, whereas a transform returns a replacement array. `AgentEventBus` gains no third dispatch mode, and no `message-transform` name appears in the interceptor pattern list.
 
-Validate: `pnpm --filter @my-agent/core run validate:extension-message-transform` (registration/ownership/wire-only/zero-overhead/placement) and `validate:middleware-order` (the adjacency is asserted against the pipeline `buildAgentRunner` actually assembles — phase sorting cannot order two same-phase middlewares, so the array position decides it).
+Validate: `pnpm --filter @my-agent/core run validate:extension-message-transform` (registration/ownership/wire-only/zero-overhead/placement), `validate:wire-override-reaches-adapter` (drives a real `AgentRunner` + `chat()` and asserts the capability strip and continuation prompt reach the adapter), and `validate:middleware-order` (the adjacency is asserted against the pipeline `buildAgentRunner` actually assembles — phase sorting cannot order same-phase middlewares, so the array position decides it).
 
 ## Built-in LSP Extension
 

@@ -3,6 +3,7 @@ export {
   createMessageTransformMiddleware,
   type MessageTransformMiddlewareDeps,
 } from "./message-transform-middleware.js";
+export { createWireRecoveryMiddleware, type WireRecoveryMiddlewareDeps } from "./wire-recovery-middleware.js";
 export { createLifecycleMiddleware, type LifecycleMiddlewareDeps } from "./lifecycle-middleware.js";
 export { createToolCompactMiddleware, type ToolCompactMiddlewareDeps } from "./tool-compact-middleware.js";
 export { createExtensionsMiddleware, type ExtensionsMiddlewareDeps } from "./extensions-middleware.js";
