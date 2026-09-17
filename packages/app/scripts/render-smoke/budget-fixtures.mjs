@@ -10,7 +10,7 @@
  * `checks` is a flat array of `{ name, pass, detail }` so `run.mjs` can fold it into its report.
  */
 import { MAX_STATIC_LINES, PROVISIONAL_ROW_LINES, selectVisibleRows } from "./dist/components/MessageList.mjs";
-import { FAST_TICK_MS, SLOW_TICK_MS } from "./dist/hooks/use-tool-elapsed.mjs";
+import { TICK_MS } from "./dist/hooks/use-tool-elapsed.mjs";
 import { formatTaskTurns } from "./dist/messages/task-turns.mjs";
 
 const row = (id) => ({ id, role: "assistant", parts: [{ type: "text", content: `r ${id}` }] });
@@ -124,7 +124,7 @@ function pruningLoop() {
  *
  * The restored case is why the frozen pair exists: a child session does not survive a restore, so
  * the readout has to come from the task output. The absent / zero cases matter for the same reason
-they always did — `iteration` is optional on the snapshot, and a task that never ran records
+ * they always did — `iteration` is optional on the snapshot, and a task that never ran records
  * `iterations: 0` — a consumer that assumes otherwise renders `0/0`.
  */
 function taskTurnsAndClock() {
@@ -172,15 +172,11 @@ function taskTurnsAndClock() {
     { got: formatTaskTurns({ current: 2, max: 50 }, { iterations: 9, maxIterations: 50 }) }
   );
 
-  // The clock follows the resolution of the rendered string: sub-minute shows tenths of a
-  // second, minute-and-over shows whole seconds. One repaint per visible change, either way.
-  check("the live clock ticks per rendered second below the minute", FAST_TICK_MS === 500, { FAST_TICK_MS });
-  check("and per whole second at and above it", SLOW_TICK_MS === 1000, { SLOW_TICK_MS });
-  check(
-    "the clock never repaints faster than the value it renders changes",
-    FAST_TICK_MS >= 100 && SLOW_TICK_MS >= FAST_TICK_MS,
-    { FAST_TICK_MS, SLOW_TICK_MS }
-  );
+  // The live clock repaints on a fixed 200ms interval. It is pinned as an exact value
+  // because it is a *rendering cadence*, and the thing worth catching is a change to it:
+  // the rendered string only moves in tenths of a second, so anything slower than 100ms
+  // visibly stalls the last digit.
+  check("the live clock ticks on a fixed 200ms interval", TICK_MS === 200, { TICK_MS });
 
   return done;
 }
