@@ -24,6 +24,7 @@ import { getUiToolState, isToolExecuting, parseToolInput } from "../utils/tool-p
 
 import { StreamingOutputView } from "./StreamingOutputView.js";
 import { SummaryStreamView } from "./SummaryStreamView.js";
+import { formatTaskTurns } from "./task-turns.js";
 import { ToolInputView } from "./ToolInputView.js";
 import { ToolOutputView } from "./ToolOutputView.js";
 import { ToolStatusIcon } from "./ToolStatusIcon.js";
@@ -85,6 +86,7 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
     phase: taskPhase,
     usage: taskUsage,
     agent: taskAgent,
+    iteration: taskIteration,
   } = useTask({
     taskId: isTask ? part.id : "",
   });
@@ -103,6 +105,10 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
   // value can say which one this was (the subagent's own status is `completed`
   // either way). Read it from the summary the parent handed down.
   const stoppedByLimit = isTask && isBudgetCutoffTaskPhase(taskAgent?.taskPhase);
+  // Subagent loop progress, e.g. `3/50`. Shown only while the task is live: a settled
+  // task's final turn count is history, and how it ended is already carried by the
+  // summary/usage parts beside it.
+  const taskTurns = isTask && isExecuting ? formatTaskTurns(taskIteration) : null;
 
   const displayInput =
     toolInput === undefined || toolInput === null
@@ -148,6 +154,7 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
   // completed payload — this covers the window before the part settles, and every
   // host that renders without the tool registry.
   if (stoppedByLimit && !inlineSummary) parenParts.push("limit reached");
+  if (taskTurns) parenParts.push(`${taskTurns} turns`);
   if (showDuration) {
     parenParts.push(formatDuration(durationMs!));
   } else if (liveElapsedMs != null) {

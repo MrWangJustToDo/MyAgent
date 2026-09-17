@@ -10,6 +10,8 @@
  * `checks` is a flat array of `{ name, pass, detail }` so `run.mjs` can fold it into its report.
  */
 import { MAX_STATIC_LINES, PROVISIONAL_ROW_LINES, selectVisibleRows } from "./dist/components/MessageList.mjs";
+import { FAST_TICK_MS, SLOW_TICK_MS } from "./dist/hooks/use-tool-elapsed.mjs";
+import { formatTaskTurns } from "./dist/messages/task-turns.mjs";
 
 const row = (id) => ({ id, role: "assistant", parts: [{ type: "text", content: `r ${id}` }] });
 
@@ -113,4 +115,46 @@ function pruningLoop() {
   ];
 }
 
-export const checks = [...budgetInvariants(), ...pruningLoop()];
+/**
+ * The task row's turn readout (`3/50`) and the live-duration clock cadence.
+ *
+ * Both are pure values rather than rendered output, so they are pinned here rather than in the
+ * mounted `MessageList` checks — mounting the tool row would need a resolvable child session.
+ * The `undefined` case is the one that matters: `iteration` is optional on the session snapshot,
+ * and a consumer that assumes it exists would render `0/0` on every transcript that predates it.
+ */
+function taskTurnsAndClock() {
+  const done = [];
+  const check = (name, pass, detail) => done.push({ name, pass, detail });
+
+  check("task turns render as n/m", formatTaskTurns({ current: 3, max: 50 }) === "3/50", {
+    got: formatTaskTurns({ current: 3, max: 50 }),
+  });
+  check("an unknown budget renders as a bare count, never n/0", formatTaskTurns({ current: 3, max: 0 }) === "3", {
+    got: formatTaskTurns({ current: 3, max: 0 }),
+  });
+  check(
+    "a run that has not reported an iteration yet shows nothing",
+    formatTaskTurns({ current: 0, max: 50 }) === null,
+    {
+      got: formatTaskTurns({ current: 0, max: 50 }),
+    }
+  );
+  check("an absent iteration state degrades to nothing (it is optional)", formatTaskTurns(undefined) === null, {
+    got: formatTaskTurns(undefined),
+  });
+
+  // The clock follows the resolution of the rendered string: sub-minute shows tenths of a
+  // second, minute-and-over shows whole seconds. One repaint per visible change, either way.
+  check("the live clock ticks per rendered second below the minute", FAST_TICK_MS === 500, { FAST_TICK_MS });
+  check("and per whole second at and above it", SLOW_TICK_MS === 1000, { SLOW_TICK_MS });
+  check(
+    "the clock never repaints faster than the value it renders changes",
+    FAST_TICK_MS >= 100 && SLOW_TICK_MS >= FAST_TICK_MS,
+    { FAST_TICK_MS, SLOW_TICK_MS }
+  );
+
+  return done;
+}
+
+export const checks = [...budgetInvariants(), ...pruningLoop(), ...taskTurnsAndClock()];

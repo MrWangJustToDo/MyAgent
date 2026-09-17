@@ -2,12 +2,13 @@ import { Box, Text, useInput } from "ink";
 import { useEffect, useMemo, useState } from "react";
 
 import { SubagentPreviewView } from "../messages/SubagentPreviewView.js";
+import { formatTaskTurns } from "../messages/task-turns.js";
 import { COLORS } from "../theme/colors.js";
 import { formatUsageBrief } from "../utils/format-usage.js";
 import { KeyLabel } from "../utils/keyboard-labels.js";
 import { formatRetryStatus } from "../utils/retry-status.js";
 import { resolveAgentSession } from "../utils/session-resolve.js";
-import { getStatusColor, getStatusIcon } from "../utils/subagent-status.js";
+import { getStatusColor, getStatusIcon, isSubagentActiveStatus } from "../utils/subagent-status.js";
 
 import { Spinner } from "./Spinner.js";
 
@@ -29,7 +30,7 @@ export const SubagentDetailPanel = ({ subagentId, onBack }: { subagentId: string
       () => {
         setTick((n) => n + 1);
       },
-      { channels: ["usage", "state", "lifecycle"] }
+      { channels: ["usage", "state", "lifecycle", "iteration"] }
     );
   }, [childSession, subagentId]);
 
@@ -48,6 +49,12 @@ export const SubagentDetailPanel = ({ subagentId, onBack }: { subagentId: string
   const usage = snap?.usage.total;
 
   const usageLabel = usage && (usage.inputTokens > 0 || usage.outputTokens > 0) ? formatUsageBrief(usage) : null;
+
+  // Subagent loop progress, e.g. `3/50`, from the child's retained `iteration`
+  // channel. Live only: a finished subagent's child session reports its last
+  // iteration, but the transcript it belonged to is gone, so nothing here is
+  // restorable — see the note on `formatTaskTurns`.
+  const turns = isSubagentActiveStatus(status) ? formatTaskTurns(snap?.iteration) : null;
 
   const statusIcon = getStatusIcon(status);
 
@@ -68,6 +75,12 @@ export const SubagentDetailPanel = ({ subagentId, onBack }: { subagentId: string
           <Text color={COLORS.muted} dimColor>
             {status}
           </Text>
+          {turns ? (
+            <Text color={COLORS.muted} dimColor>
+              {" "}
+              · {turns} turns
+            </Text>
+          ) : null}
           {usageLabel ? (
             <Text color={COLORS.muted} dimColor>
               {" "}

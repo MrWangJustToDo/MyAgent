@@ -80,6 +80,11 @@ const readTaskInfo = (session: AgentSession | null, taskPhase?: CoreTaskPhase) =
     phase: taskPhase ? toViewPhase(taskPhase) : getTaskPhaseFromMessages(messages),
     // Live LLM-retry state from the child agent (null when not retrying).
     retry: snapshot?.retry ?? null,
+    // Subagent loop progress (1-based iteration vs its budget; `current` is 0 when
+    // the child has not started). The lifecycle middleware reports it from the same
+    // `buildAgentRunner` pipeline the main chat uses, so a subagent gets the same
+    // retained `iteration` channel — nothing extra has to be threaded for it.
+    iteration: snapshot?.iteration ?? { current: 0, max: 0 },
   };
 };
 
@@ -102,7 +107,7 @@ export const useTask = ({ taskId }: { taskId: string }) => {
       () => {
         refresh();
       },
-      { channels: ["messages", "usage", "state", "lifecycle"] }
+      { channels: ["messages", "usage", "state", "lifecycle", "iteration"] }
     );
   }, [subagent, subagent?.id, subagent?.taskPhase]);
 

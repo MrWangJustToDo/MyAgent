@@ -33,6 +33,10 @@ export default defineConfig({
     `${src}/utils/get-messages.ts`,
     `${src}/utils/message-flat-cache.ts`,
     `${src}/utils/project-transcript.ts`,
+    // Pure formatter for the task row's turn readout, so the smoke can pin the
+    // string without mounting the whole tool row.
+    `${src}/messages/task-turns.ts`,
+    `${src}/hooks/use-tool-elapsed.ts`,
   ],
   outDir: resolve(here, "dist"),
   format: ["esm"],
