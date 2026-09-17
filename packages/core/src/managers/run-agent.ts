@@ -19,6 +19,7 @@ import {
   createEarlyToolResultUiMiddleware,
   createExtensionsMiddleware,
   createLifecycleMiddleware,
+  createMessageTransformMiddleware,
   createPlanModeMiddleware,
   createPromptCacheMiddleware,
   createStatusMiddleware,
@@ -158,6 +159,14 @@ export function buildAgentRunner(
       status: managed.statusController,
       log: deps.log,
       emitEvent,
+    }),
+    // Extension message transformers. Sits right after `compaction` so it sees the
+    // channel-projected wire — running earlier would be discarded by that projection.
+    createMessageTransformMiddleware({
+      agentId: deps.agentId,
+      getExtensionRunner: () => deps.extensionRunner,
+      getUsage: () => deps.usage,
+      getAbortSignal: () => managed.run.currentAbortController?.signal,
     }),
     createToolCompactMiddleware({
       getCompactionConfig: () => deps.compactionConfig,

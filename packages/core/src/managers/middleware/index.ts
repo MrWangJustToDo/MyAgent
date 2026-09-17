@@ -1,4 +1,8 @@
 export { createCompactionMiddleware, type CompactionMiddlewareDeps } from "./compaction-middleware.js";
+export {
+  createMessageTransformMiddleware,
+  type MessageTransformMiddlewareDeps,
+} from "./message-transform-middleware.js";
 export { createLifecycleMiddleware, type LifecycleMiddlewareDeps } from "./lifecycle-middleware.js";
 export { createToolCompactMiddleware, type ToolCompactMiddlewareDeps } from "./tool-compact-middleware.js";
 export { createExtensionsMiddleware, type ExtensionsMiddlewareDeps } from "./extensions-middleware.js";

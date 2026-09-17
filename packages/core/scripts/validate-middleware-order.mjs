@@ -10,16 +10,20 @@
  * Run: pnpm --filter @my-agent/core run validate:middleware-order
  */
 
+"use strict";
+
 import assert from "node:assert/strict";
 
 import {
   CANONICAL_MIDDLEWARE_ORDER,
+  buildAgentRunner,
   createApprovalResumeMiddleware,
   createBackgroundNotificationMiddleware,
   createCompactionMiddleware,
   createEarlyToolResultUiMiddleware,
   createExtensionsMiddleware,
   createLifecycleMiddleware,
+  createMessageTransformMiddleware,
   createPlanModeMiddleware,
   createPromptCacheMiddleware,
   createStatusMiddleware,
@@ -53,6 +57,7 @@ const FACTORIES = [
   createApprovalResumeMiddleware,
   createLifecycleMiddleware,
   createCompactionMiddleware,
+  createMessageTransformMiddleware,
   createToolCompactMiddleware,
   createTurnContextMiddleware,
   createExtensionsMiddleware,
@@ -63,7 +68,86 @@ const FACTORIES = [
   createPromptCacheMiddleware,
 ];
 
-// --- 1. Every factory declares a phase; names match the canonical snapshot ---
+// --- 1. The pipeline the engine ACTUALLY assembles ---
+//
+// This reads the order out of `buildAgentRunner` rather than a duplicated factory
+// list. A list copied here in canonical order would only re-assert itself: it never
+// observes the real assembly, so moving a factory inside `buildAgentRunner` would
+// leave this file green while the engine ran a different order.
+
+const noop = () => {};
+
+/** Stub ManagedAgent: factories only capture deps, and the `managed` getters are lazy. */
+function makeManagedStub() {
+  return {
+    id: "validation-agent",
+    parentId: undefined,
+    config: {},
+    run: {},
+    ui: null,
+    tools: {},
+    statusController: {},
+    approvals: { toArray: () => [], upsert: noop },
+    usageHistory: { record: noop },
+    usage: {},
+    memory: { commitSurfacedMemories: noop },
+    session: { getSessionData: () => ({ id: "validation-session" }) },
+    log: {
+      warn: noop,
+      info: noop,
+      error: noop,
+      debug: noop,
+      child: () => ({ warn: noop, info: noop, error: noop, debug: noop }),
+    },
+    todoManager: {},
+    extensionRunner: {},
+    planMode: { isRestrictingTools: () => false, getPhase: () => "off" },
+    getSystemPrompt: () => "",
+    getFrozenSystemPrompt: () => "",
+    getCompactionConfig: () => ({}),
+    getModelInfo: () => undefined,
+    getConfig: () => ({}),
+    getToolCompactCache: () => undefined,
+    getDynamicTurnContextSections: () => [],
+    getAdmittedContextHashes: () => undefined,
+    setAdmittedContextHashes: noop,
+    getTurnContextAdmitMessageCount: () => 0,
+    setTurnContextAdmitMessageCount: noop,
+    maybeSaveSessionUIMessages: noop,
+    setIterationProgress: noop,
+    getAgentDocContent: () => "",
+  };
+}
+
+const liveRunner = buildAgentRunner(makeManagedStub(), { adapter: {}, model: "validation-model" }, {});
+const liveNames = liveRunner.config.middleware.map((mw) => mw.name);
+
+// Placement is asserted FIRST and on its own message: when the seam is misordered, the
+// generic snapshot comparison below would fire too, and its "order drift" text would
+// hide the fact that the transform seam is now ineffective. Report the specific
+// contract first so a regression reads as what it actually is.
+const compactionIdx = liveNames.indexOf("compaction");
+const transformIdx = liveNames.indexOf("message-transform");
+assert.notEqual(compactionIdx, -1, "compaction middleware must be present in the assembled pipeline");
+assert.notEqual(transformIdx, -1, "message-transform middleware must be present in the assembled pipeline");
+assert.equal(
+  transformIdx,
+  compactionIdx + 1,
+  `message-transform must RUN immediately after compaction, or the channel projection discards ` +
+    `its output. Assembled order: ${liveNames.join(", ")}`
+);
+
+assert.deepEqual(
+  liveNames,
+  [...CANONICAL_MIDDLEWARE_ORDER],
+  "the pipeline buildAgentRunner assembles must match the canonical order snapshot"
+);
+assert.ok(
+  liveNames.every((name) => typeof name === "string" && name.length > 0),
+  "every assembled middleware declares a name"
+);
+
+// --- 2. Every factory declares a phase; phases resolve to the canonical order ---
 
 const assembled = FACTORIES.map((factory) => factory(makeStub()));
 const names = assembled.map((mw) => mw.name);
@@ -73,7 +157,7 @@ assert.ok(
   "every middleware declares a phase"
 );
 
-// --- 2. Phase-sorted order === historical order (zero behavior change) ---
+// --- 3. Phase-sorted order === historical order (zero behavior change) ---
 
 const warnings = [];
 const sorted = sortMiddlewaresByPhase(assembled, (message) => warnings.push(message));
@@ -91,7 +175,15 @@ for (let i = 1; i < sorted.length; i++) {
   assert.ok(prev <= curr, `phase ranks must be non-decreasing at ${sorted[i].name}`);
 }
 
-// --- 3. Undeclared phase surfaces a warning and sorts last ---
+// --- 4. Placement contract is asserted on the live pipeline (see section 1) ---
+//
+// `compaction` is channel-anchored: it rebuilds the wire from the UI channel and
+// ignores the incoming `config.messages`. A transform running before it is therefore
+// silently discarded — it would apply to the first call only. The assertion lives
+// against `liveNames` in section 1, because the failure mode is a relocation inside
+// `buildAgentRunner`, which the factory list below cannot observe.
+
+// --- 5. Phase declarations resolve to the canonical order ---
 
 const unphased = { name: "unphased-experiment" };
 const warnings2 = [];

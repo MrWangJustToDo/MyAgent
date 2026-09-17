@@ -271,22 +271,32 @@ Sources: `managers/middleware/*` for run stack; `agent/plan/plan-mode-middleware
 
 ```
 1. status-middleware         status transitions only (via AgentStatusController)
-2. lifecycle-middleware      usage tracking, thinking events, memory commit, llm:request/response
-3. compaction-middleware     auto-compact only (DeepSeek reasoning echo is adapter-only)
-4. tool-compact-middleware  per-tool LLM shaping
-5. turn-context-middleware  inject changed <ctx kind=...> sections post-compaction (per-kind
+2. approval-resume-middleware re-apply persisted approvals so resumed tools do not re-prompt
+3. lifecycle-middleware      usage tracking, thinking events, memory commit, llm:request/response
+4. compaction-middleware     auto-compact + channel-anchored wire projection (cache by revision)
+5. message-transform-middleware  extension message transformers (registerMessageTransformer).
+                             MUST run immediately after compaction, and ONLY consumes
+                             config.messages — anything placed before the projection is discarded
+6. tool-compact-middleware   per-tool LLM shaping
+7. turn-context-middleware   inject changed <ctx kind=...> sections post-compaction (per-kind
                              hash diff; subagents filtered by SUBAGENT_ALLOWED_KINDS whitelist;
                              systemPrompts = frozen only)
-6. extensions-middleware    ExtensionEventBus intercept + agent:tool-* lifecycle events
-7. early-tool-result-ui     apply each tool output to StreamProcessor as soon as it finishes
-8. task-prefork-middleware  subagent task prefork / phase state
-9. plan-mode-middleware     block forbidden tools while plan mode restricts tooling
-10. background-notification-middleware
+8. extensions-middleware     ExtensionEventBus intercept + agent:tool-* lifecycle events
+9. early-tool-result-ui      apply each tool output to StreamProcessor as soon as it finishes
+10. task-prefork-middleware  subagent task prefork / phase state
+11. plan-mode-middleware     block forbidden tools while plan mode restricts tooling
+12. background-notification-middleware
                              completed background-command notifications as <ctx kind=background_notification>
                              synthetic messages (append; persisted + id-deduped)
-11. prompt-cache-middleware  Anthropic cache_control + OpenAI prompt_cache_key + sorted tools
+13. prompt-cache-middleware  Anthropic cache_control + OpenAI prompt_cache_key + sorted tools
                              (must stay last so cache breakpoints see the final payload)
 ```
+
+Each middleware declares its own phase (`observe` / `context-transform` / `tools` / `wire-annotate`) via
+`defineMiddleware(phase, { name, ... })`, and `sortMiddlewaresByPhase` stable-sorts by phase. **Within a
+phase the array position in `buildAgentRunner` decides the order**, so same-phase adjacency is a real
+contract — `compaction` and `message-transform` both being `context-transform` is why `validate:middleware-order`
+drives `buildAgentRunner` instead of checking a copied factory list.
 
 TanStack runs tools sequentially but emits batched `TOOL_CALL_END` results only after the whole tool phase. `early-tool-result-ui` calls `AgentUIChannel.addToolResult` in `onAfterToolCall` so finished tools (e.g. the first of two `task` calls) show complete while later tools still run. The later stream chunks re-apply the same output idempotently.
 
@@ -416,7 +426,26 @@ Large tool outputs at **execute** time still use `maybeCacheOutput` (`.agents/ca
 | ---------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Adapter-specific**   | `models/adapter-factory.ts`, `*-adapter.ts` | DeepSeek `reasoning_content` echo (`ReasoningChatCompletionsTextAdapter`); Chat Completions tool-image lift (`liftToolMediaForChatCompletions` — tool text stays string, images become a synthetic user `image_url` message); PDF text extract in `read_file` for Completions; Anthropic vs OpenAI Chat Completions style selection |
 | **Capability-generic** | middleware / reactive retry                 | Multimodal strip via `vision`/`audio`/`video`/`document` (`capability-message-utils`); `prompt_too_long` reactive compact                                                                                                                                                                                                           |
-| **Config / metadata**  | `model-config`, `models.dev`, session       | `modelStyle`, pricing, `capabilities[]`, unused-for-now `reasoningConfig` (tag/effort/budget — not yet mapped to request options)                                                                                                                                                                                                   |
+| **Config / metadata**  | `model-config`, `models.dev`, session       | `modelStyle`, pricing, `capabilities[]` (see below), unused-for-now `reasoningConfig` (tag/effort/budget — not yet mapped to request options)                                                                                                                                                                                        |
+
+### Model capabilities — where the list comes from
+
+The capability list has exactly one source of truth: `MODEL_CAPABILITIES` in `models/types.ts`. `ModelCapability` is derived from it, and the extension-facing boolean flags (`MODEL_CAPABILITY_FLAGS`, exhaustively keyed by that union) name each member — so the union, the list and the flag surface cannot drift apart, and a new capability is a compile error until it is named in both places.
+
+`parseModelsDevModel` (`models/provider/models-dev.ts`) fills the list for a metadata-resolved model:
+
+| Source | Grants | Notes |
+| ------ | ------ | ----- |
+| `RUNTIME_TRUE_CAPABILITIES` | `streaming` | Transport property, **not** metadata. Every endpoint we ship adapters for streams and models.dev has no field for it. Load-bearing: it is what keeps the list non-empty for a plain text model. |
+| `modalities.input` | `vision` (`image`), `audio`, `video`, `document` (`pdf`; `document`/`file` aliases) | Authoritative, per-modality, exact in both directions. Primary source. |
+| `attachment` | `vision` only | **Fallback**, used only when `modalities.input` is absent. It is one boolean and cannot say *which* modality, so it is never expanded into `document` — doing that once marked 34% of the catalog document-capable when only 23% accept `pdf`. |
+| `reasoning` / `tool_call` / `structured_output` | `reasoning` / `tool_calling` / `json_output` | One-to-one booleans. |
+| `cost.cache_read` or `cost.cache_write` present | `prompt_caching` | Caching is inferred from cache pricing existing. |
+
+**Empty means unknown, never "no capabilities".** `UsageTracker.hasCapability` is permissive when the list is empty (unknown model → assume support). Therefore a successful metadata parse must never return an empty list — that is why the runtime-true seed exists rather than being optional. `validate:model-capabilities` asserts this against the real cached catalog (7822 models) plus the mapping rules in both directions.
+
+**Not modelled:** `temperature`, `open_weights`, `modalities.output`, `interleaved`, `experimental`. `interleaved` is the one with real impact — it carries the reasoning echo-back field (`reasoning_content` for 970 entries, `reasoning_details` for 15), which is strictly more precise than `reasoning` for choosing `ReasoningChatCompletionsTextAdapter`, and there are entries with `interleaved` set but `reasoning: false`. `computer_use` has no models.dev field at all and is only reachable via the CLI `MODEL_CAPABILITIES` env var.
+
 
 **DeepSeek reasoning echo** (`reasoning-chat-completions-adapter.ts` + `reasoning-content-cache.ts`):
 
@@ -815,6 +844,23 @@ Task / compact summary text uses `ManagedAgent.summaryStreams` (`SummaryStreamHu
 ### 8.5 Extension interception (L4)
 
 Extension interception (`tool:before:*` / `tool:after:*` / `tool:error:*` / `before_agent_start`) is **interceptor mode on the same `AgentEventBus`** (invoked from middleware and prepare-for-run) — there is no separate interceptor bus. There is **no** `.agent-hooks` / hook-script path — customize via `.agents/extension` modules or programmatic `config.extensions`.
+
+**Message transformers (`ctx.registerMessageTransformer`) are deliberately NOT one of those interceptor patterns.** They are a named registration method with a different shape: interceptor mode is a shared mutable payload with cancel short-circuitness, whereas a message transformer receives the model-facing message array and returns a replacement. The interceptor pattern lists above and below do not gain a message-transform entry, and `AgentEventBus` gains no third dispatch mode.
+
+| Property | Behaviour |
+| -------- | --------- |
+| Registration | `ctx.registerMessageTransformer(fn)` returns a disposer. At most one per extension (re-registering replaces; a stale disposer is inert). Cleared on disable / destroy. |
+| Position | The dedicated `message-transform` middleware, running **immediately after `compaction`** (same `context-transform` phase). |
+| Invoked | Once per model call — the initial `init` call and every later iteration — so restart-style retries (429 / capability strip / reactive compact / max_tokens) are covered too. |
+| Sees | The channel-projected wire produced by `compaction`. Synthetic messages written to **both** channel and wire (turn context, background notifications) are present. Edits from middleware that rewrite only `config.messages` **before** the projection are not. |
+| Returns | A replacement `ModelMessage[]`, or `void` / a non-array to leave the previous value. The output is **wire-only**: never written back to the UI channel, the session store, or any durable state. |
+| Ownership | The system hands the transformer a fresh outer array **and** fresh message objects, so in-place edits cannot reach the array retained by `WireProjectionCache` (which the engine also keeps for the rest of the run). Content-part objects inside a message are **not** exclusively owned — return a new message to change a part. |
+| Zero overhead | With no transformer registered the middleware returns no config change: the pipeline and the projection cache behave byte-for-byte as if it did not exist. |
+| Failure | A throwing transformer logs a warning and emits `agent:extension-error` with `phase: "message-transform"`; the last valid message set is kept and the run continues. |
+| Scope | Subagents do **not** inherit the parent's transformers (`if (!parentId)` at `agent-factory.ts:176`). In a remote-session host the transformer runs **server-side**, so an external endpoint's credentials belong in the server environment. Disc-loading hosts only — browser-only hosts (WebContainer playground) cannot load extensions from disk. |
+| Capabilities | `ctx.capabilities` carries the provider's raw declared set (**empty = unknown**, not "no capabilities"); `ctx.unsupportedPartTypes` is the derived multimodal strip set; every capability also gets a flat named boolean (`modelHasVision`, `modelHasAudio`, … one per entry of `MODEL_CAPABILITIES`), all from the same probe that gates pre-send stripping, and all permissive (`true` when capabilities are unknown). Read the raw set when "declared nothing" must be told from "declared this". The capability list lives once, in `models/types.ts`: `MODEL_CAPABILITIES` is the runtime array and `ModelCapability` is derived from it, while `MODEL_CAPABILITY_FLAGS` (exhaustively keyed by that union) maps each capability to its boolean name — adding a capability therefore fails compilation until both the flag name and the table are updated, instead of silently missing a flag. |
+
+Same-phase ordering note: `compaction` and `message-transform` declare the same phase, so the phase sort cannot order them — their relative order comes from the array position in `buildAgentRunner`, which is why `validate:middleware-order` asserts the adjacency against the pipeline the runner **actually assembles** rather than a copied factory list.
 
 The ExtensionEventBus also carries **session lifecycle events** (distinct from the L2 `session:start` telemetry): `session:start` (emitted at the end of `emitSessionBootstrapEvents`, payload `{ cwd, sessionId }`) and `session:shutdown` (emitted in `AgentManager.destroyAgent()` before `extensionRunner.destroyAll()`, so extensions can release resources first).
 

@@ -173,6 +173,16 @@ export {
   resolveModelsConfigFromProvider,
   saveModelsConfig,
 } from "./models";
+
+/**
+ * Every `ModelCapability` as a runtime value — the single source of truth that
+ * `ModelCapability` is derived from. Enumerate this instead of keeping a second list.
+ */
+export { MODEL_CAPABILITIES } from "./models/types.js";
+
+/** Capability → transformer-context flag name; exhaustively keyed by `ModelCapability`. */
+export { MODEL_CAPABILITY_FLAGS } from "./agent/extension/types.js";
+
 export type {
   DirectModelsConfigEntry,
   LoadedModelEntry,
@@ -323,6 +333,10 @@ export type {
   ExtensionUiContext,
   ExtensionUiModel,
   ExtensionUiUsage,
+  MessageTransformContext,
+  MessageTransformPhase,
+  MessageTransformer,
+  MultimodalPartType,
 } from "./agent/extension";
 
 // ============================================================================

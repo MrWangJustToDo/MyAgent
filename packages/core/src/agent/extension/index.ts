@@ -47,4 +47,10 @@ export type {
   ExtensionUiContext,
   ExtensionUiModel,
   ExtensionUiUsage,
+  MessageTransformContext,
+  MessageTransformPhase,
+  MessageTransformer,
+  ModelCapability,
+  ModelCapabilityFlags,
+  MultimodalPartType,
 } from "./types.js";

@@ -2,6 +2,7 @@
 // Model Metadata from Environment Variables
 // ============================================================================
 
+import { MODEL_CAPABILITIES } from "@my-agent/core";
 import { z } from "zod";
 
 import type {
@@ -15,25 +16,18 @@ import type {
 
 /**
  * Zod schema for a single capability string.
- * Allows arbitrary strings for forward compatibility but constrains known ones.
+ *
+ * Validates against `MODEL_CAPABILITIES` — the single source of truth for the capability list
+ * (its members are derived from that array, so this cannot go stale the way a copied list
+ * does). An unknown value FAILS rather than falling through: a typo'd capability silently
+ * becomes a no-op `capabilities` entry, which the permissive empty-list semantics would then
+ * mask as "unknown model".
  */
 const capabilitySchema = z.string().transform((val, ctx): ModelCapability => {
-  const known: readonly ModelCapability[] = [
-    "reasoning",
-    "vision",
-    "audio",
-    "video",
-    "document",
-    "tool_calling",
-    "prompt_caching",
-    "streaming",
-    "json_output",
-    "computer_use",
-  ];
-  if (!known.includes(val as ModelCapability)) {
+  if (!(MODEL_CAPABILITIES as readonly string[]).includes(val)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: `Unknown capability "${val}". Known: ${known.join(", ")}`,
+      message: `Unknown capability "${val}". Known: ${MODEL_CAPABILITIES.join(", ")}`,
     });
     return z.NEVER;
   }

@@ -15,21 +15,52 @@ export type ModelStyle = "openai" | "anthropic";
 export type ModelId = string;
 
 /**
+ * Every model capability, as a runtime value.
+ *
+ * The single source of truth for the capability list. `ModelCapability` is derived from it,
+ * so the union and this array cannot drift apart — add a capability here and the union
+ * follows.
+ *
+ * Order is the declaration order used for display/iteration; do not reorder casually, as
+ * snapshots and generated tables follow it.
+ *
+ * **runtime-true** marks the capabilities every Chat Completions / Messages endpoint we
+ * support provides as a transport property rather than an optional model feature. They are
+ * granted unconditionally instead of being read from provider metadata, and they are what
+ * keeps `capabilities` from being empty for a plain text model — an empty array means
+ * "unknown" to {@link CapabilityProbe.hasCapability}, which is permissive, so it must not
+ * be produced by a successful metadata parse. See `parseModelsDevModel`.
+ */
+export const MODEL_CAPABILITIES = [
+  "streaming",
+  "reasoning",
+  "vision",
+  "audio",
+  "video",
+  "document",
+  "tool_calling",
+  "prompt_caching",
+  "json_output",
+  "computer_use",
+] as const;
+
+/**
+ * Capabilities granted from the transport rather than from provider metadata.
+ *
+ * `streaming` is the only member: every endpoint we ship adapters for streams, and models.dev
+ * has no field for it. It is also the reason a plain text model still yields a non-empty
+ * capability list, which is load-bearing — see {@link MODEL_CAPABILITIES}.
+ */
+export const RUNTIME_TRUE_CAPABILITIES: readonly ModelCapability[] = ["streaming"];
+
+/**
  * Model capability flags.
  * Using a string union for forward compatibility — new capabilities
  * can be added without breaking existing configs.
+ *
+ * Derived from {@link MODEL_CAPABILITIES} so there is exactly one list.
  */
-export type ModelCapability =
-  | "reasoning"
-  | "vision"
-  | "audio"
-  | "video"
-  | "document"
-  | "tool_calling"
-  | "prompt_caching"
-  | "streaming"
-  | "json_output"
-  | "computer_use";
+export type ModelCapability = (typeof MODEL_CAPABILITIES)[number];
 
 /** Reasoning effort values a model may accept. */
 export type ReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh" | "max" | "minimal";

@@ -197,6 +197,16 @@ export class UsageTracker {
     this.capabilities = caps;
   }
 
+  /**
+   * Capabilities as reported for the current model.
+   *
+   * **Empty means unknown**, not "no capabilities" — {@link hasCapability} is permissive
+   * for that reason. Use this when you must tell "declared nothing" from "declared this".
+   */
+  getCapabilities(): ReadonlySet<ModelCapability> {
+    return new Set(this.capabilities);
+  }
+
   hasCapability(cap: ModelCapability): boolean {
     if (this.capabilities.length === 0) return true;
     return this.capabilities.includes(cap);

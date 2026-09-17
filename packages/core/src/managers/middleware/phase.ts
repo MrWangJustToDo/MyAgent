@@ -29,6 +29,9 @@ export const CANONICAL_MIDDLEWARE_ORDER = [
   "approval-resume",
   "lifecycle",
   "compaction",
+  // MUST stay adjacent to `compaction`: it transforms the channel-projected wire
+  // that `compaction` produces, and that projection discards any earlier edit.
+  "message-transform",
   "tool-compact",
   "turn-context",
   "extensions",

@@ -1,7 +1,9 @@
 import { getEnv, hasCoreEnv } from "../../env.js";
 import { createAgentEventBus } from "../agent-event-bus";
 
+import { BusExtensionEventBus } from "./bus-extension-event-bus.js";
 import { z } from "./extension-zod.js";
+import { MessageTransformerRegistry } from "./message-transformer-registry.js";
 import { fingerprintOf, normalizePayload, slotId } from "./render-payload.js";
 
 import type {
@@ -24,49 +26,13 @@ import type {
   ExtensionNotificationLevel,
   ExtensionRenderPayload,
   ExtensionUiContext,
+  MessageTransformContext,
+  MessageTransformer,
 } from "./types.js";
 import type { CoreEnv } from "../../env.js";
 import type { AgentEventBus } from "../agent-event-bus";
 import type { AgentLog } from "../agent-log/agent-log.js";
-
-// ============================================================================
-// ExtensionEventBus implementation
-// ============================================================================
-
-/**
- * {@link ExtensionEventBus} backed by the unified {@link AgentEventBus}.
- * Interception (async, ordered, shared mutable event, cancel short-circuit) is
- * delegated to the unified bus's `intercept` mode; hook names are unchanged.
- */
-class BusExtensionEventBus implements ExtensionEventBus {
-  private readonly disposers = new Map<EventInterceptor<InterceptableEvent>, () => void>();
-
-  constructor(private readonly bus: AgentEventBus) {}
-
-  async emit<T extends InterceptableEvent>(event: T): Promise<T["defaultReturn"] | undefined> {
-    return this.bus.intercept(event);
-  }
-
-  on<T extends InterceptableEvent>(type: string, handler: EventInterceptor<T>): () => void {
-    const key = handler as EventInterceptor<InterceptableEvent>;
-    const unsub = this.bus.onIntercept(type, handler);
-    this.disposers.set(key, unsub);
-    return () => {
-      this.disposers.delete(key);
-      unsub();
-    };
-  }
-
-  off<T extends InterceptableEvent>(type: string, handler: EventInterceptor<T>): void {
-    void type;
-    const key = handler as EventInterceptor<InterceptableEvent>;
-    const unsub = this.disposers.get(key);
-    if (unsub) {
-      this.disposers.delete(key);
-      unsub();
-    }
-  }
-}
+import type { ModelMessage } from "@tanstack/ai";
 
 // ============================================================================
 // ExtensionUI implementation
@@ -300,6 +266,13 @@ export class ExtensionRunner {
   /** Per-extension context injection (extension id → provider). */
   private contextProviders = new Map<string, ExtensionContextProvider>();
   /**
+   * Per-extension model-message transform. The registry owns the map, the chaining order
+   * and the ownership copy; the runner only wires lifecycle into it.
+   */
+  private readonly messageTransformers = new MessageTransformerRegistry({
+    reportTransformerFailure: (extensionId, err) => this.reportTransformerFailure(extensionId, err),
+  });
+  /**
    * Persistent "this extension is disabled" notices keyed by extension id
    * (captured from a provider's `disabledContent` at disable time, since destroy
    * unsubscribes the provider). Cleared when the extension is re-enabled.
@@ -329,6 +302,39 @@ export class ExtensionRunner {
 
   getEventBus(): ExtensionEventBus {
     return this.eventBus;
+  }
+
+  /**
+   * Whether any extension currently holds a message transformer.
+   *
+   * Fast-path guard for the wire seam: when this is false the caller must take the
+   * unchanged (cached) path so an extension-free workspace pays nothing.
+   */
+  hasMessageTransformers(): boolean {
+    return this.messageTransformers.has();
+  }
+
+  /**
+   * Apply every registered message transformer in extension load order, chaining each
+   * result into the next. Returns the messages to send for this call.
+   *
+   * Failure isolation: a transformer that throws, or returns something that is not a
+   * message array, only costs its own contribution — the last valid message set is
+   * kept and the remaining transformers still run. A broken extension must never abort
+   * a run, so this method does not throw.
+   */
+  async applyMessageTransformers(ctx: MessageTransformContext): Promise<ModelMessage[]> {
+    return this.messageTransformers.apply(ctx);
+  }
+
+  private reportTransformerFailure(extensionId: string, err: unknown): void {
+    const message = err instanceof Error ? err.message : String(err);
+    this.writeExtensionLog("warn", extensionId, `message transformer failed (messages kept as last valid): ${message}`);
+    this.rawBus.emit("agent:extension-error", {
+      extensionId,
+      phase: "message-transform",
+      error: message,
+    });
   }
 
   getUI(): ExtensionUI {
@@ -501,6 +507,7 @@ export class ExtensionRunner {
       commands: [],
       unsubInterceptors: [],
       unsubTurnContext: [],
+      messageTransformers: [],
     };
     const ctx = this.createContext(api, config, registrations);
 
@@ -566,6 +573,7 @@ export class ExtensionRunner {
     this.toolOwners.clear();
     this.commandOwners.clear();
     this.contextProviders.clear();
+    this.messageTransformers.clearAll();
     this.disabledExtensionNotices.clear();
     this.ui.clearAllSlots();
     if (this.contextTimer) {
@@ -669,6 +677,11 @@ export class ExtensionRunner {
     for (const unsub of instance.registrations.unsubTurnContext) {
       unsub();
     }
+    // Transformer slot is keyed by owner id, so only clear it when this extension
+    // still holds it — a re-registered instance may have replaced the entry.
+    for (const id of instance.registrations.messageTransformers) {
+      this.messageTransformers.clearExtension(id);
+    }
     // Clear in place (`.length = 0`) rather than reassigning: the `createContext`
     // closures reference `registrations` and may read/capture these arrays at call
     // time. Reassigning would silently desync re-enabled registrations from the
@@ -677,6 +690,7 @@ export class ExtensionRunner {
     instance.registrations.commands.length = 0;
     instance.registrations.unsubInterceptors.length = 0;
     instance.registrations.unsubTurnContext.length = 0;
+    instance.registrations.messageTransformers.length = 0;
   }
 
   private createContext(
@@ -720,6 +734,18 @@ export class ExtensionRunner {
         };
         registrations?.unsubTurnContext.push(unsub);
         return unsub;
+      },
+
+      registerMessageTransformer: (transformer: MessageTransformer): (() => void) => {
+        this.messageTransformers.register(api.id, transformer);
+        if (registrations && !registrations.messageTransformers.includes(api.id)) {
+          registrations.messageTransformers.push(api.id);
+        }
+        // Identity-checked: a stale disposer from a replaced transformer must not
+        // clear the newer registration (mirrors `registerContextProvider` above).
+        return () => {
+          this.messageTransformers.dispose(api.id, transformer);
+        };
       },
 
       events: this.eventBus,

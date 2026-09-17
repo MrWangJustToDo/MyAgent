@@ -12,6 +12,7 @@
  */
 
 import { getEnv } from "../../env.js";
+import { RUNTIME_TRUE_CAPABILITIES } from "../types.js";
 
 import type { ModelCapability, ModelInfo, ModelStyle, ReasoningEffort } from "../types.js";
 
@@ -64,6 +65,20 @@ interface ModelsDevModel {
   cost?: ModelsDevCost;
   status?: string;
 }
+
+/**
+ * Shape of one models.dev entry, for the capability-mapping guard.
+ *
+ * Exported only so validation scripts can drive {@link deriveCapabilities} against the real
+ * metadata payload; it is not part of the public package surface.
+ */
+export type ModelsDevModelEntry = ModelsDevModel;
+
+/** The metadata subset {@link deriveCapabilities} reads, exported for the same reason. */
+export type ModelsDevCapabilityInput = Pick<
+  ModelsDevModel,
+  "reasoning" | "tool_call" | "structured_output" | "attachment" | "modalities" | "cost"
+>;
 
 interface ModelsDevProvider {
   id: string;
@@ -172,38 +187,67 @@ export async function fetchModelsDev(): Promise<ModelsDevData> {
 /**
  * Convert a models.dev model entry into our {@link ModelInfo}.
  */
-function parseModelsDevModel(vendorId: string, modelId: string, data: ModelsDevModel): ModelInfo {
-  const style = resolveStyleFromModelsDevVendor(vendorId);
+/**
+ * Multimodal capability for each metadata input modality.
+ *
+ * models.dev's `modalities.input` (observed value set: `text` | `image` | `audio` | `video` |
+ * `pdf`) is the authoritative, per-modality signal, so it is the primary source for the four
+ * multimedia capabilities. `attachment` is a single boolean that means "accepts some
+ * non-text input" — it cannot say WHICH — so it is only a fallback for entries with no
+ * `modalities` array, and even then it grants `vision` only.
+ */
+const MODALITY_CAPABILITY: Record<string, ModelCapability> = {
+  image: "vision",
+  audio: "audio",
+  video: "video",
+  pdf: "document",
+  // Aliases seen in the wild; kept because the cost of missing one is a wrong capability.
+  document: "document",
+  file: "document",
+};
 
-  const capabilities: ModelCapability[] = ["streaming"];
+/**
+ * Derive the capability list for a models.dev entry.
+ *
+ * Why `RUNTIME_TRUE_CAPABILITIES` is seeded rather than read from metadata: models.dev has no
+ * streaming field, and the list must not come back empty for a model whose metadata is
+ * successfully parsed but plain — `hasCapability` treats an empty array as "unknown" and is
+ * permissive, so an empty result would silently authorize every modality. See
+ * {@link MODEL_CAPABILITIES}.
+ *
+ * `attachment` is deliberately NOT expanded into `vision` + `document`: it is one boolean and
+ * cannot distinguish the two. Expanding it marked 2624 entries (34% of the catalog) as
+ * document-capable when only 1837 accept `pdf`, and sent those entries down the
+ * document-accepting branch of pre-send stripping. `modalities.input`, when present, is exact
+ * in both directions.
+ */
+export function deriveCapabilities(data: ModelsDevCapabilityInput): ModelCapability[] {
+  const capabilities: ModelCapability[] = [...RUNTIME_TRUE_CAPABILITIES];
+
   if (data.reasoning) capabilities.push("reasoning");
-  if (data.attachment) {
-    capabilities.push("vision");
-    capabilities.push("document");
-  }
   if (data.tool_call) capabilities.push("tool_calling");
   if (data.structured_output) capabilities.push("json_output");
   if (data.cost?.cache_read !== undefined || data.cost?.cache_write !== undefined) {
     capabilities.push("prompt_caching");
   }
 
-  // Prefer modalities.input when present (more precise than attachment boolean).
-  const inputModalities = data.modalities?.input ?? [];
-  if (inputModalities.includes("image") && !capabilities.includes("vision")) {
+  const inputModalities = data.modalities?.input;
+  if (Array.isArray(inputModalities)) {
+    for (const modality of inputModalities) {
+      const capability = MODALITY_CAPABILITY[modality];
+      if (capability && !capabilities.includes(capability)) capabilities.push(capability);
+    }
+  } else if (data.attachment) {
+    // No modality detail available — `attachment` only evidences image input.
     capabilities.push("vision");
   }
-  if (inputModalities.includes("audio") && !capabilities.includes("audio")) {
-    capabilities.push("audio");
-  }
-  if (inputModalities.includes("video") && !capabilities.includes("video")) {
-    capabilities.push("video");
-  }
-  if (
-    (inputModalities.includes("pdf") || inputModalities.includes("document") || inputModalities.includes("file")) &&
-    !capabilities.includes("document")
-  ) {
-    capabilities.push("document");
-  }
+
+  return capabilities;
+}
+
+function parseModelsDevModel(vendorId: string, modelId: string, data: ModelsDevModel): ModelInfo {
+  const style = resolveStyleFromModelsDevVendor(vendorId);
+  const capabilities = deriveCapabilities(data);
 
   const pricing = data.cost
     ? {

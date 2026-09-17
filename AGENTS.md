@@ -137,6 +137,8 @@ The exclusivity is a **client** rule: a server (`pnpm start:server`) may itself 
 
 `createAgentFromConfig` uses `resolveModelConfigFromProvider()`. All hosts share one model-config pipeline (`models-config.ts`): a local `.agents/config/models.json` (file), a remote provider (`/api/provider/info`), or a remote-session server (`/api/agent/models`) — `/models` switches the active entry/model. Remote mode forces `baseURL`/`apiKey` from the provider (re-forced after models.dev so upstream URLs cannot bypass). `/api/env/vars` strips `API_KEY` / `*_API_KEY`. Footer shows `model · remote` when `providerMode === "remote"`.
 
+**Model capabilities** have one source of truth — `MODEL_CAPABILITIES` in `packages/core/src/models/types.ts`, from which the `ModelCapability` union and the extension `MODEL_CAPABILITY_FLAGS` are both derived. `parseModelsDevModel` fills the list: `modalities.input` is authoritative per modality (`image`→`vision`, `audio`, `video`, `pdf`→`document`); `attachment` is a fallback used only when `modalities` is absent and grants `vision` alone (it cannot distinguish modalities, so it never implies `document`); `reasoning` / `tool_call` / `structured_output` map one-to-one; cache pricing implies `prompt_caching`; `streaming` comes from `RUNTIME_TRUE_CAPABILITIES` because it is a transport property, not metadata (models.dev has no field). **An empty list means "unknown"** to `hasCapability` and is permissive, so a successful parse must never produce one. Validate: `pnpm --filter @my-agent/core run validate:model-capabilities`.
+
 ### AgentAdapter — Host Abstraction
 
 Each host (CLI, extension) provides an `AgentAdapter` implementation:
@@ -680,6 +682,33 @@ packages/core/src/agent/
 │   └── index.ts
 ├── tools/              # Universal tools (fs/shell/web) + runtime glue
 ```
+
+## Extension Point: Message Transformers
+
+`ExtensionContext` offers four registration channels today — `registerTool` / `registerCommand` / `registerInterceptor` / `registerContextProvider`. Its fifth, `registerMessageTransformer(fn)`, is the only one that edits **the message chain the model sees**. Use it for media-to-text (e.g. describe an image through an out-of-process multimodal endpoint before handing it to a text-only model), redaction, trimming to a budget, or wire-only context injection.
+
+```ts
+ctx.registerMessageTransformer((c) => {
+  if (c.modelHasVision || !c.unsupportedPartTypes.has("image")) return; // model can see it
+  return c.messages.map((m) => replaceImagePartsWithText(m));
+});
+```
+
+| Property | Behaviour |
+|----------|-----------|
+| Registration | `ctx.registerMessageTransformer(fn)` returns a disposer. **At most one per extension** — re-registering replaces, and a stale disposer is inert. Cleared when the extension is disabled or destroyed. |
+| Position | A dedicated `message-transform` middleware running **immediately after `compaction`**. `compaction` is channel-anchored (it rebuilds the wire from the UI channel and ignores `config.messages`), so anything placed before it applies to the first call and is silently discarded afterwards. |
+| Invoked | Once per model call — `init` and every later iteration — because every restart-style retry rebuilds the `chat()` engine and re-runs init `onConfig`. |
+| Sees | The projected wire, including synthetic `<ctx kind=...>` messages (turn context / background notifications), which live on **both** the channel and the wire. Edits from middleware that rewrite only `config.messages` *before* the projection are not visible. |
+| Returns | A replacement `ModelMessage[]`; `void` or a non-array leaves the previous value. **Wire-only** — output is never written to the UI channel, the session store, or any durable state, and never reused as a later run's input. |
+| Ownership | You get a fresh outer array **and** fresh message objects, so in-place edits cannot reach the array `WireProjectionCache` retains (which the engine also keeps for the rest of the run). Content-part objects inside a message are still shared — return a new message to change a part. |
+| Capabilities | `ctx.capabilities` carries the raw declared set (empty = unknown, not "no capabilities"); `ctx.unsupportedPartTypes` is the derived multimodal strip set; every capability also gets a flat boolean named `modelHas<Capability>` in PascalCase (`modelHasVision`, `modelHasToolCalling`, …), one per entry of `MODEL_CAPABILITIES`. All come from the same probe that gates pre-send stripping, so an extension never re-derives model ability from host config. Every boolean is permissive (`true` when capabilities are unknown) — read `capabilities` when you must tell "declared nothing" from "declared this". The list lives once in `models/types.ts`: `MODEL_CAPABILITIES` is the runtime array, `ModelCapability` is derived from it, and `MODEL_CAPABILITY_FLAGS` (exhaustively keyed by that union) names each boolean — so adding a capability is a compile error until it is named, not a silently missing flag. |
+| Failure | A throw logs a warning + emits `agent:extension-error` with `phase: "message-transform"`; the last valid message set is kept and the run continues. Multiple transformers chain in extension load order. |
+| Scope | Subagents do **not** inherit the parent's transformers. In a `REMOTE_SESSION` host the transformer runs **server-side** — put an external endpoint's API key in the server environment. Disk-loading hosts only; browser-only hosts (WebContainer playground) cannot load extensions. |
+
+It is deliberately **not** an `AgentEventBus` interceptor: interceptor mode is a shared mutable payload with cancel short-circuit, whereas a transform returns a replacement array. `AgentEventBus` gains no third dispatch mode, and no `message-transform` name appears in the interceptor pattern list.
+
+Validate: `pnpm --filter @my-agent/core run validate:extension-message-transform` (registration/ownership/wire-only/zero-overhead/placement) and `validate:middleware-order` (the adjacency is asserted against the pipeline `buildAgentRunner` actually assembles — phase sorting cannot order two same-phase middlewares, so the array position decides it).
 
 ## Built-in LSP Extension
 

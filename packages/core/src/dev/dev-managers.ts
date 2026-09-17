@@ -58,11 +58,21 @@ export {
   buildFrozenSystemPrompt,
 } from "../managers/managed-agent-prompt.js";
 export { createPromptCacheMiddleware } from "../managers/middleware/prompt-cache-middleware.js";
+// Exported for `validate:middleware-order`, which drives the real pipeline assembly
+// instead of duplicating the factory list (see that script's section 1).
+export { buildAgentRunner } from "../managers/run-agent.js";
+
+export { deriveCapabilities } from "../models/provider/models-dev.js";
+export { RUNTIME_TRUE_CAPABILITIES } from "../models/types.js";
+export { MODEL_CAPABILITIES } from "../models/types.js";
+export { MODEL_CAPABILITY_FLAGS } from "../agent/extension/types.js";
+
 export {
   assertCanonicalMiddlewareOrder,
   CANONICAL_MIDDLEWARE_ORDER,
   createBackgroundNotificationMiddleware,
   createCompactionMiddleware,
+  createMessageTransformMiddleware,
   createPlanModeMiddleware,
   createToolCompactMiddleware,
   createTurnContextMiddleware,
