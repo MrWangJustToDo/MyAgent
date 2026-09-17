@@ -69,7 +69,7 @@ When a subagent run finishes successfully, the system SHALL emit `subagent:compl
 
 ### Requirement: Architecture docs describe extension observation model
 
-`packages/core/ARCHITECTURE.md` SHALL describe the current middleware stack (`extensions-middleware`), SHALL NOT document `.agent-hooks` / HookRegistry as supported customization, and SHALL document the unified `AgentEventBus` model (single registry with observer `emit` and interceptor `intercept` dispatch modes, retained values, scoped routing, and the `AgentSession` channel projection) instead of the former dual-bus split.
+`packages/core/ARCHITECTURE.md` SHALL describe the current middleware stack (`extensions-middleware`), SHALL NOT document `.agent-hooks` / HookRegistry as supported customization, SHALL document the unified `AgentEventBus` model (single registry with observer `emit` and interceptor `intercept` dispatch modes, retained values, scoped routing, and the `AgentSession` channel projection) instead of the former dual-bus split, and SHALL document the extension message-transform surface (`registerMessageTransformer`) as a non-bus capability alongside the bus-backed interceptors.
 
 #### Scenario: Doc middleware list matches buildAgentRunner
 
@@ -80,6 +80,11 @@ When a subagent run finishes successfully, the system SHALL emit `subagent:compl
 
 - **WHEN** a reader follows the ARCHITECTURE event-model section
 - **THEN** it documents one `AgentEventBus` with observer and interceptor modes and the session channel projection, and does not describe `AgentTelemetryBus` and `ExtensionEventBus` as separate systems
+
+#### Scenario: Doc separates bus-backed from non-bus extension surfaces
+
+- **WHEN** a reader follows the extension interception section
+- **THEN** the interceptor pattern list contains only bus-backed hook names, and the message-transform registration is described in its own right with its ordering, wire-only, and cache-bypass contracts
 
 ### Requirement: Approval resolution emits lifecycle event
 

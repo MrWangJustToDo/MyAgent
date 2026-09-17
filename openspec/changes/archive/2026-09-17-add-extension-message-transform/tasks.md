@@ -43,26 +43,28 @@
 
 ## 7. Documentation
 
-- [ ] 7.1 `packages/core/ARCHITECTURE.md` §8.5 (`:799-811`) — describe `registerMessageTransformer`: position in the wire-build order (the dedicated middleware immediately after `compaction`), wire-only contract, per-call invocation, ownership boundary (message objects copied, parts not), failure isolation; explicitly separate it from the bus-backed interceptor list
-- [ ] 7.2 Same file — leave the two interceptor pattern lists (`:756`, `:801`) unchanged (do **not** add a message-transform entry); add `message-transform` to the middleware list instead
-- [ ] 7.3 `AGENTS.md` — extension section (`:296-306`, `:450-456`) gains the new registration API; Agent Event System table (`:511-533`) unchanged
-- [ ] 7.4 Prettier-format every markdown file touched
+- [x] 7.1 `packages/core/ARCHITECTURE.md` §8.5 — describe `registerMessageTransformer`: position in the wire-build order (the dedicated middleware immediately after `compaction`), wire-only contract, per-call invocation, ownership boundary (message objects copied, parts not), failure isolation; explicitly separate it from the bus-backed interceptor list
+- [x] 7.2 Same file — leave the two interceptor pattern lists unchanged (no message-transform entry); the middleware list carries `message-transform` instead (currently a 15-middleware snapshot: `message-transform` at 5, `wire-recovery` at 6)
+- [x] 7.3 `AGENTS.md` — extension section gains the new registration API; Agent Event System table unchanged
+- [x] 7.4 Prettier-format every markdown file touched
 
 ## 8. Verification
 
-- [ ] 8.1 `pnpm --filter @my-agent/core run validate:middleware-order` — must pass with the intentionally updated 13-middleware snapshot and the adjacency check against the real assembly
-- [ ] 8.2 `pnpm --filter @my-agent/core run validate:extensions-middleware` — must still pass
-- [ ] 8.3 `pnpm build:core`
-- [ ] 8.4 `pnpm typecheck`
-- [ ] 8.5 Lint changed files only
-- [ ] 8.6 Run the new `validate:extension-message-transform` script and record output
+- [x] 8.1 `pnpm --filter @my-agent/core run validate:middleware-order` — passes; the snapshot is the current 15-middleware order and the adjacency is asserted against the real `buildAgentRunner` assembly
+- [x] 8.2 `pnpm --filter @my-agent/core run validate:extensions-middleware` — passes (re-run after 7.1's capability doc fix)
+- [x] 8.3 `pnpm build:core`
+- [x] 8.4 `pnpm typecheck` — 9/9 packages
+- [x] 8.5 Lint — clean (0 errors)
+- [x] 8.6 `validate:extension-message-transform` (18 cases) and, for the same seam, `validate:wire-override-reaches-adapter` — both pass
+
+**Follow-up landed after the original scope** (`fix(core): give back what an extension tool registration displaced`): disabling an extension that had shadowed a built-in tool now restores it instead of deleting it, covered by `validate:extension-tool-restore`. The seam's own scope is unchanged.
 
 ## 9. Acceptance
 
-- [ ] 9.1 An extension can replace an `image` content part with text produced by an out-of-process call, and the model receives the text — demonstrated by the validation script
-- [ ] 9.2 The same transform applies on the second and later iterations of the run
-- [ ] 9.3 With no transformer registered a run's wire is byte-identical to today (seam returns no config change; cache branch taken)
-- [ ] 9.4 Channel messages and persisted session contain the original media part, not the transformed text
-- [ ] 9.5 ARCHITECTURE §8.5 and the spec text agree on: invocation points, wire-only semantics, the ownership boundary, the post-projection observation boundary, the server-side execution location in remote-session hosts, and that the transform is not an event-bus dispatch mode
-- [ ] 9.6 The iteration ≥ 2 guard (5.1) fails when the seam is mutated to a `config.messages`-only position; the order guard (5.3c) fails when the middleware is relocated; the ownership guard (5.2) fails when the copy is removed or shallow
+- [x] 9.1 An extension can replace an `image` content part with text produced by an out-of-process call, and the model receives the text — demonstrated by `validate:extension-message-transform`
+- [x] 9.2 The same transform applies on the second and later iterations of the run (`§ multi-iteration` case)
+- [x] 9.3 With no transformer registered a run's wire is byte-identical to before (seam returns no config change; cache branch taken — the zero-overhead case)
+- [x] 9.4 Channel messages and the persisted session contain the original media part, not the transformed text — asserted end-to-end against a real `SessionService` + `SessionStore` by `validate:wire-override-reaches-adapter` (sections 8–10)
+- [x] 9.5 ARCHITECTURE §8.5 and the spec text agree on: invocation points, wire-only semantics, the ownership boundary, the post-projection observation boundary, the server-side execution location in remote-session hosts, and that the transform is not an event-bus dispatch mode
+- [x] 9.6 The iteration ≥ 2 guard fails when the seam is mutated to a `config.messages`-only position; the order guard fails when the middleware is relocated (mutation-tested at the time of `29b7fa8`, which is also where the `wire-recovery` middleware came from)
 
