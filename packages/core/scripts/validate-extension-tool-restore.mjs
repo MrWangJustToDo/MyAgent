@@ -118,8 +118,8 @@ function shaped() {
   const { managed } = await makeBuiltinAgent();
   const builtinShaper = shaped();
 
-  managed.registerTool(extTool("extension read", "EXTENSION SHAPING"));
-  managed.unregisterExtensionTool("read_file");
+  managed.registerTool(extTool("extension read", "EXTENSION SHAPING"), "ext_a");
+  managed.unregisterExtensionTool("read_file", "ext_a");
 
   assert.equal(
     shaped(),
@@ -131,21 +131,28 @@ function shaped() {
 }
 
 // ============================================================================
-// 3. A tool that displaced nothing is still removed
+// 3. A tool that was never shadowing anything is removed outright
+//
+// A name the extension introduced itself: there is no built-in underneath it, so the top of the
+// stack is gone and the entry is dropped from the record. (`defineServerTool` seeds the
+// incumbent slot, so the stack starts with an `undefined` tool rather than being absent.)
 // ============================================================================
 
 {
   const managed = makeAgent({});
 
-  managed.registerTool({
-    name: "fresh_tool",
-    description: "registered onto an empty record",
-    inputSchema: { type: "object", properties: {} },
-    execute: async () => ({}),
-  });
+  managed.registerTool(
+    {
+      name: "fresh_tool",
+      description: "registered onto an empty record",
+      inputSchema: { type: "object", properties: {} },
+      execute: async () => ({}),
+    },
+    "ext_fresh"
+  );
   assert.ok(managed.tools.fresh_tool, "registered onto an empty record");
 
-  managed.unregisterExtensionTool("fresh_tool");
+  managed.unregisterExtensionTool("fresh_tool", "ext_fresh");
   assert.ok(!("fresh_tool" in managed.tools), "a tool with nothing underneath it must be removed");
 }
 
@@ -194,7 +201,6 @@ function shaped() {
     getEnvVar: () => undefined,
     onRegisterTool: (def, ownerId) => managed.registerTool(def, ownerId),
     onUnregisterTool: (name, ownerId) => managed.unregisterExtensionTool(name, ownerId),
-    onReleaseToolOwner: (name, ownerId) => managed.releaseExtensionToolOwner(name, ownerId),
   });
 
   const makeExt = (description) => ({
@@ -238,33 +244,40 @@ function shaped() {
 }
 
 // ============================================================================
-// 6. One owner registering the same name twice unwinds one registration at a time
+// 6. One owner registering the same name twice is released as a unit
 //
-// An extension can register a name twice inside a single `activate` (a config-driven
-// extension building the list, then appending). Each call displaces a different tool, so the
-// ledger needs one entry PER CALL and must pop the most recent — undoing the whole chain on
-// the first unregister would skip a tool that was live a moment ago.
+// An extension can register a name twice inside a single `activate` (a config-driven extension
+// building the list, then appending). Both registrations belong to the same owner, and the
+// owner is disabled as a whole, so ONE release has to settle the name back to the tool it
+// shadowed — and the runner's second (now redundant) call must be a no-op rather than a
+// second restore.
+//
+// An earlier design kept one ledger entry per registration and unwound them one at a time,
+// which is where this case was pinned. A stack makes that distinction unnecessary: entries are
+// keyed by owner, so an owner's entries for a name go away together, and "remove this owner and
+// re-read the top" is the only rule.
 // ============================================================================
 
 {
   const { managed, builtinReadFile } = await makeBuiltinAgent();
 
   managed.registerTool(extTool("registration one", "one"), "same-owner");
-  const intermediate = managed.tools.read_file;
   managed.registerTool(extTool("registration two", "two"), "same-owner");
-  assert.equal(shaped(), "two");
+  assert.equal(shaped(), "two", "the newest registration of the owner is live");
 
   managed.unregisterExtensionTool("read_file", "same-owner");
   assert.equal(
     managed.tools.read_file,
-    intermediate,
-    "the first unregister must undo the most recent registration, not the whole chain"
+    builtinReadFile,
+    "releasing the owner must settle the name on what it shadowed, not leave its own tool behind"
   );
-  assert.equal(shaped(), "one");
-
-  managed.unregisterExtensionTool("read_file", "same-owner");
-  assert.equal(managed.tools.read_file, builtinReadFile, "the second unregister unwinds to the built-in");
   assert.equal(shaped(), "{}", "and the built-in's own shaper is in force again");
+
+  // The runner calls the hook once per registration, so it calls again here. Nothing is left
+  // to remove; that must not re-write the record or resurrect anything.
+  managed.unregisterExtensionTool("read_file", "same-owner");
+  assert.equal(managed.tools.read_file, builtinReadFile, "the redundant release must be a no-op");
+  assert.equal(shaped(), "{}", "and must not disturb the handler either");
 }
 
 // ============================================================================
@@ -282,6 +295,117 @@ function shaped() {
   managed.unregisterExtensionTool("read_file", "ext_that_never_registered_this");
   assert.ok(managed.tools.read_file, "an unknown owner must not delete the name");
   assert.equal(managed.tools.read_file, builtinReadFile, "and must leave the current tool exactly as it is");
+}
+
+// ============================================================================
+// 8. The full disable sequence — through the real runner
+//
+// Section 5 disables the older extension first (a handover) and section 6 covers one owner
+// registering twice, so neither ever reached the case where the runner finds NO owner at all
+// (`toolOwners.get(name) !== id` AND `has(name) === false`). That is what happens once the
+// name's last owner was unregistered earlier: its ownership record is deleted without one
+// being added, so a later disable of a stale holder arrives as a release with `stillOwned:
+// false` — the last holder leaving, which must restore rather than only drop the entry.
+//
+// Section 5's extensions also had no `toModelOutput`, so a wrong model-output handler was
+// invisible even when the tool object came back correctly.
+// ============================================================================
+
+{
+  const newSeq = async () => {
+    const { managed, builtinReadFile } = await makeBuiltinAgent();
+    const runner = new ExtensionRunner({
+      getEnvVar: () => undefined,
+      onRegisterTool: (def, ownerId) => managed.registerTool(def, ownerId),
+      onUnregisterTool: (name, ownerId) => managed.unregisterExtensionTool(name, ownerId),
+    });
+    const makeExt = (id) => ({
+      id,
+      name: id,
+      version: "1.0.0",
+      activate(ctx) {
+        ctx.registerTool({
+          name: "read_file",
+          description: `TOOL-${id}`,
+          inputSchema: { type: "object", properties: {} },
+          execute: async () => ({}),
+          toModelOutput: () => `SHAPER-${id}`,
+        });
+      },
+    });
+    await runner.loadExtension(makeExt("ext_old"));
+    const oldTool = managed.tools.read_file;
+    await runner.loadExtension(makeExt("ext_new"));
+    const newTool = managed.tools.read_file;
+    await runner.setEnabled("ext_new", false); // the name's owner leaves first
+    return { managed, runner, builtinReadFile, oldTool, newTool };
+  };
+
+  // 8a. After the owner is disabled the older extension's tool is back in the record, but it no
+  // longer owns the name — so disabling IT is the `stillOwned: false` path, and it is the last
+  // holder leaving. The built-in has to come back for real: both the tool object AND the
+  // model-output handler, the latter being process-global and therefore impossible to restore
+  // by "just leaving it alone".
+  {
+    const { managed, builtinReadFile, oldTool, newTool } = await newSeq();
+    assert.equal(managed.tools.read_file, oldTool, "disabling the owner hands the name back to the older tool");
+    assert.equal(shaped(), "SHAPER-ext_old", "and to that tool's own handler");
+
+    managed.unregisterExtensionTool("read_file", "ext_old");
+
+    assert.equal(
+      managed.tools.read_file,
+      builtinReadFile,
+      "the last holder leaving must RESTORE, not merely drop its ledger entry — only dropping it " +
+        "leaves the built-in shadowed by an extension that is already disabled"
+    );
+    assert.notEqual(managed.tools.read_file, oldTool, "the disabled extension's tool must not survive");
+    assert.notEqual(newTool, builtinReadFile);
+    assert.equal(shaped(), "{}", "and its process-global handler must be rolled back to the built-in's");
+  }
+
+  // 8b. The same sequence driven end-to-end through the runner, so the flag is the one the
+  // runner computes rather than one the test supplies.
+  {
+    const { managed, runner, builtinReadFile, oldTool } = await newSeq();
+    await runner.setEnabled("ext_old", false);
+    assert.notEqual(managed.tools.read_file, oldTool, "the older extension's tool must be gone");
+    assert.equal(
+      managed.tools.read_file,
+      builtinReadFile,
+      "disabling both extensions, owner first, must leave the built-in"
+    );
+    assert.equal(shaped(), "{}", "the built-in's handler is in force once nothing shadows it");
+    await runner.destroyAll();
+  }
+}
+
+// ============================================================================
+// 7. Re-registering a name by the same owner is replace, not stack
+//
+// `defineServerTool` runs once per agent for the same built-in names (`createTools()` is
+// re-run per agent), all under the owner default of the tool name itself. A blind push would
+// grow the stack entry by entry for every agent created in the process, so the shared registry
+// must treat "same owner registers again" as a replacement. Otherwise memory grows with the
+// number of agents and `has()`/`get()` stop reflecting a single live registration.
+// ============================================================================
+
+{
+  const { managed } = await makeBuiltinAgent();
+
+  // The built-in already registered `read_file`; re-creating the agent's tools must not add
+  // another entry for it.
+  const before = toModelOutputRegistry.stackDepth("read_file");
+  const { managed: second } = await makeBuiltinAgent();
+  const after = toModelOutputRegistry.stackDepth("read_file");
+  assert.ok(second.tools.read_file, "a second agent also gets read_file");
+  assert.equal(
+    after,
+    before,
+    "re-registering an existing tool name must replace the owner's entry, not stack another — " +
+      "otherwise the shared registry grows once per agent created"
+  );
+  assert.ok(managed.tools.read_file);
 }
 
 console.log("extension-tool-restore validation passed");

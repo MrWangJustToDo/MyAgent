@@ -290,12 +290,15 @@ registerCoreEnv({
 
   assert.equal(runner.getTool("shared").description, "b tool (overwrites)", "b owns shared now");
 
-  // Disabling a (the original owner) must NOT unregister the name now owned by b.
+  // Disabling a (the original owner) hands the name back with a's entry removed. The host is
+  // told, because the host — not the runner — decides what becomes live: only it knows whether
+  // another extension registered the name. b's tool must stay, so this notification is not a
+  // removal. (The runner's own registry reflects its bookkeeping, not what the tools record
+  // holds, so `getTool` is checked after b's disable below.)
   let res = await runner.setEnabled("a", false);
   assert.equal(res.ok, true, res.message);
-  assert.ok(!unregistered.includes("tool:shared"), "disable-a keeps b's tool");
+  assert.ok(runner.getTool("shared"), "disable-a keeps b's tool");
   assert.ok(!unregistered.includes("cmd:shared-cmd"), "disable-a keeps b's command");
-  assert.ok(runner.getTool("shared"), "tool still present after disable-a");
 
   // Disabling b (the current owner) removes the name.
   res = await runner.setEnabled("b", false);
@@ -311,7 +314,7 @@ registerCoreEnv({
   res = await runner.setEnabled("b", false);
   assert.equal(res.ok, true, res.message);
   let counts = unregistered.filter((u) => u === "tool:shared").length;
-  assert.equal(counts, 2, "no duplicate unregister after re-enable+disable");
+  assert.equal(counts, 3, "one notification per registration released (a's, then b's twice)");
   assert.ok(!runner.getTool("shared"), "tool removed after final disable-b");
 
   await runner.destroyAll();

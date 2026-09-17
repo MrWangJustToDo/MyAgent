@@ -13,13 +13,17 @@ export interface ToModelOutputContext {
 }
 
 /**
- * Point-in-time copy of the handlers registered for one tool.
+ * One entry on a tool's model-output stack.
  *
- * The decorator chain is kept as-is (not composed) so restoring a snapshot cannot
- * double-wrap a decorator that is still installed.
+ * An entry carries ITS OWN implementation, never a reference to what it covered. That is what
+ * makes removal trivial: removing one entry (by owner, wherever it sits) and re-reading the top
+ * is the same operation whether the entry was live or buried, so nothing has to track who
+ * displaced whom.
  */
-export interface ToModelOutputSnapshot {
-  handler?: ToModelOutputFn;
+export interface ToModelOutputEntry {
+  /** Who registered it, so an unload can remove exactly its own entries. */
+  ownerId: string;
+  handler: ToModelOutputFn;
   decorators?: readonly ToModelOutputDecorator[];
 }
 
@@ -40,46 +44,57 @@ export type ToModelOutputDecorator = (
 // ============================================================================
 
 class ToModelOutputRegistry {
-  private readonly handlers = new Map<string, ToModelOutputFn>();
+  /** Per tool, a stack of handlers in registration order — the last one is live. */
+  private readonly stacks = new Map<string, ToModelOutputEntry[]>();
   private readonly decorators = new Map<string, ToModelOutputDecorator[]>();
 
-  register(toolName: string, fn: ToModelOutputFn): void {
-    this.handlers.set(toolName, fn);
+  /**
+   * Push a handler for a tool, shadowing whatever was there.
+   *
+   * `ownerId` names the registrant so its entry can be removed later without disturbing
+   * entries that are still valid. One owner holds at most one entry per tool name: a second
+   * registration by the same owner replaces its own entry instead of stacking, which keeps
+   * `defineServerTool` — run once per agent for the same built-in names — from growing the
+   * stack on every agent creation.
+   */
+  register(toolName: string, fn: ToModelOutputFn, ownerId = toolName): void {
+    const stack = this.stacks.get(toolName);
+    if (!stack) {
+      this.stacks.set(toolName, [{ ownerId, handler: fn }]);
+      return;
+    }
+    const own = stack.findIndex((entry) => entry.ownerId === ownerId);
+    if (own === -1) stack.push({ ownerId, handler: fn });
+    else stack[own] = { ownerId, handler: fn };
   }
 
   /**
-   * Drop everything registered for one tool.
+   * Remove every entry a given owner pushed, and live with whatever is left.
    *
-   * Needed when a tool that owned a handler goes away — an extension registering a
-   * tool name replaces the previous handler (see {@link register}), but unregistering
-   * the extension only removed it from the tools record, leaving this registry shaping
-   * the restored tool's results with the unloaded extension's function.
+   * For a tool that went away with its owner this empties the stack, because the push IS the
+   * registration. For an extension that merely shadowed an existing tool it pops back to the
+   * implementation underneath — the built-in, or an earlier extension. Both are "filter this
+   * owner out and re-read the top", which is why neither needs to know what it covered. The
+   * built-in's own entry survives because `defineServerTool` owns it, not the extension.
+   */
+  removeOwner(toolName: string, ownerId: string): void {
+    const stack = this.stacks.get(toolName);
+    if (!stack) return;
+    const remaining = stack.filter((entry) => entry.ownerId !== ownerId);
+    if (remaining.length === 0) this.stacks.delete(toolName);
+    else this.stacks.set(toolName, remaining);
+  }
+
+  /**
+   * Forget a tool entirely — its stack and its decorators.
+   *
+   * For a tool that is gone for good (a removed extension tool) this is belt-and-braces, since
+   * {@link removeOwner} already empties its stack. It also clears a decorator another extension
+   * installed for that name, which is right: nothing is left to shape.
    */
   unregister(toolName: string): void {
-    this.handlers.delete(toolName);
+    this.stacks.delete(toolName);
     this.decorators.delete(toolName);
-  }
-
-  /**
-   * Copy the current handler + decorators for one tool, for a later {@link restore}.
-   * `undefined` means nothing is registered — a valid snapshot (it restores "none").
-   */
-  snapshot(toolName: string): ToModelOutputSnapshot | undefined {
-    const handler = this.handlers.get(toolName);
-    const decorators = this.decorators.get(toolName);
-    if (!handler && !decorators) return undefined;
-    return {
-      ...(handler ? { handler } : {}),
-      ...(decorators ? { decorators: [...decorators] } : {}),
-    };
-  }
-
-  /** Put a tool's handler/decorators back exactly as {@link snapshot} found them. */
-  restore(toolName: string, snapshot: ToModelOutputSnapshot | undefined): void {
-    this.unregister(toolName);
-    if (!snapshot) return;
-    if (snapshot.handler) this.handlers.set(toolName, snapshot.handler);
-    if (snapshot.decorators) this.decorators.set(toolName, [...snapshot.decorators]);
   }
 
   /**
@@ -100,7 +115,8 @@ class ToModelOutputRegistry {
   }
 
   get(toolName: string): ToModelOutputFn | undefined {
-    const base = this.handlers.get(toolName);
+    const stack = this.stacks.get(toolName);
+    const base = stack?.[stack.length - 1]?.handler;
     const decos = this.decorators.get(toolName);
     if (!base || !decos || decos.length === 0) return base;
 
@@ -116,7 +132,17 @@ class ToModelOutputRegistry {
   }
 
   has(toolName: string): boolean {
-    return this.handlers.has(toolName);
+    return this.stacks.has(toolName);
+  }
+
+  /**
+   * How many stacked registrations exist for a tool.
+   *
+   * Exists so a guard can assert the stack does not grow when the same owner registers the same
+   * name again; not used by production paths.
+   */
+  stackDepth(toolName: string): number {
+    return this.stacks.get(toolName)?.length ?? 0;
   }
 }
 

@@ -222,13 +222,15 @@ export interface ExtensionRunnerOptions {
   getEnvVar: (key: string) => string | undefined;
   onRegisterTool?: (def: ExtensionToolDefinition, ownerId: string) => void;
   onRegisterCommand?: (cmd: ExtensionCommand) => void;
-  /** Unregister a previously registered tool (used when disabling an extension). */
-  onUnregisterTool?: (name: string, ownerId: string) => void;
   /**
-   * A tool name this extension registered is now owned by another extension: the name stays
-   * registered (it must not lose the newer tool), so the host can only drop the ownership.
+   * Drop one extension's registrations for a tool name.
+   *
+   * Called whether the extension still owns the name or was buried under a newer one: the
+   * host removes this owner's entries and re-derives what is live, which is one operation for
+   * both cases. The runner does not have to say which situation it is, because it cannot get
+   * that distinction wrong if it does not exist.
    */
-  onReleaseToolOwner?: (name: string, ownerId: string) => void;
+  onUnregisterTool?: (name: string, ownerId: string) => void;
   /** Unregister a previously registered command (used when disabling an extension). */
   onUnregisterCommand?: (name: string) => void;
   /** Working directory (rootPath) injected into {@link ExtensionContext.cwd}. */
@@ -447,6 +449,14 @@ export class ExtensionRunner {
       .catch(() => {});
   }
 
+  /**
+   * The extension tool definitions this runner still holds.
+   *
+   * This is the runner's own bookkeeping, so a name whose last owner was disabled disappears
+   * here even when an older extension's registration becomes live again — the runner does not
+   * model that fallback. What the model actually receives is decided by the host's stack
+   * (`ExtensionRegistryService`), which is the authority on what is registered.
+   */
   getTools(): ExtensionToolDefinition[] {
     return Array.from(this.toolRegistry.values());
   }
@@ -663,17 +673,13 @@ export class ExtensionRunner {
    */
   private unregisterInstanceArtifacts(instance: ExtensionInstance): void {
     for (const name of instance.registrations.tools) {
-      // Only unregister when this extension still owns the artifact — a later extension
-      // may have overwritten the same name, and we must not remove its registration.
-      if (this.toolOwners.get(name) !== instance.api.id) {
-        // Ownership is gone but the name stays: the host's displaced-value ledger still
-        // holds this extension's entry, which would be restored over the surviving tool
-        // the next time the same name is unregistered. Drop it now.
-        this.options.onReleaseToolOwner?.(name, instance.api.id);
-        continue;
+      // Hand the name back with this owner removed — whether it was still the owner or had been
+      // buried under a newer registration. The host re-derives what is live from its stack, so
+      // there is no "is it mine?" branch to get wrong here.
+      if (this.toolOwners.get(name) === instance.api.id) {
+        this.toolOwners.delete(name);
+        this.toolRegistry.delete(name);
       }
-      this.toolOwners.delete(name);
-      this.toolRegistry.delete(name);
       this.options.onUnregisterTool?.(name, instance.api.id);
     }
     for (const name of instance.registrations.commands) {

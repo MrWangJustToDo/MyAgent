@@ -23,7 +23,6 @@ import type {
 import type { McpManager } from "../../agent/mcp/manager.js";
 import type { SkillRegistry } from "../../agent/skills";
 import type { TodoManager } from "../../agent/todo";
-import type { ToModelOutputSnapshot } from "../../agent/tools/runtime/to-model-output-registry.js";
 import type { ToolsRecord } from "../../agent/tools/runtime/tools-record.js";
 
 /** Callbacks the caller (ManagedAgent) supplies for tool registration. */
@@ -53,16 +52,11 @@ export interface ExtensionToolRegistrationContext {
   agentId?: string;
 }
 
-/** What one extension's tool registration displaced, for last-in-first-out restoration. */
-interface ToolDisplacement {
-  /** The tool object that was in the record before this registration. */
-  tool?: unknown;
-  /** How the displaced tool shaped its results for the model, if it did. */
-  toModelOutput?: ToModelOutputSnapshot;
-}
+/** Who owns the entry that was already in the record before any extension registered. */
+const INCUMBENT_TOOL_OWNER = "(incumbent)";
 
-/** A stack of displacements per tool name — one entry per extension that overwrote it. */
-type ToolDisplacementLedger = Map<string, Array<{ ownerId: string; displaced: ToolDisplacement }>>;
+/** A stack of tool entries per name — bottom is what was there before, top is live. */
+type ToolStack = Map<string, Array<{ ownerId: string; tool: unknown }>>;
 
 export class ExtensionRegistryService {
   // Set-once integration managers
@@ -80,13 +74,12 @@ export class ExtensionRegistryService {
   private managedToolsProvider?: () => ToolsRecord;
 
   /**
-   * What each extension tool registration displaced, keyed by tool name.
+   * Per-tool stacks of live registrations (see {@link ToolStack}).
    *
-   * The tools record holds no history of its own, and nothing keeps a copy of the
-   * built-ins, so this ledger is the only way to bring back what a registration
-   * shadowed. Pushed on register, popped on unregister (last-in-first-out).
+   * An entry stores its OWN tool, never a pointer to what it covered, so removing one owner's
+   * entries and re-reading the top is all that "restore" ever needs.
    */
-  private readonly toolDisplacements: ToolDisplacementLedger = new Map();
+  private readonly toolStacks: ToolStack = new Map();
 
   // ---------------------------------------------------------------------------
   // Integration managers (set-once)
@@ -172,19 +165,13 @@ export class ExtensionRegistryService {
     if (existing) {
       ctx.warn(`Tool "${def.name}" already registered, overwriting`);
     }
-    // Record what this registration displaces BEFORE overwriting. The tools record is the
-    // only holder of the previous tool (nothing keeps a built-in base copy), so without
-    // this the displaced tool is unrecoverable and disabling an extension would delete a
-    // built-in it merely shadowed.
-    const ledger = this.toolDisplacements.get(def.name) ?? [];
-    ledger.push({
-      ownerId: ctx.ownerId,
-      displaced: {
-        ...(existing ? { tool: existing } : {}),
-        toModelOutput: toModelOutputRegistry.snapshot(def.name),
-      },
-    });
-    this.toolDisplacements.set(def.name, ledger);
+    // The incumbent becomes the bottom of the stack the first time an extension shadows this
+    // name. It has to be captured HERE and only here: the tools record is the only holder of
+    // the previous tool (nothing keeps a built-in base copy), so a stack that starts empty
+    // would have nothing to fall back to when the last extension is disabled.
+    if (!this.toolStacks.has(def.name)) {
+      this.toolStacks.set(def.name, [{ ownerId: INCUMBENT_TOOL_OWNER, tool: existing }]);
+    }
 
     const serverTool = defineServerTool({
       name: def.name,
@@ -204,79 +191,71 @@ export class ExtensionRegistryService {
         }),
       present: def.present,
       toModelOutput: def.toModelOutput,
+      // The handler belongs to the registering extension, not to the tool name, so disabling
+      // the extension can drop it and expose the shadowed tool's own shaping again.
+      ownerId: ctx.ownerId,
     });
+
+    // The stack entry carries the tool itself, so nothing has to remember what it covered.
+    this.stackOf(def.name).push({ ownerId: ctx.ownerId, tool: serverTool });
     (ctx.tools as Record<string, unknown>)[def.name] = serverTool;
     ctx.onToolsChanged();
   }
 
   /**
-   * Drop one extension's ledger entry for a tool it no longer owns, without touching the
-   * live tool.
+   * Drop one owner's registrations for a tool, and re-derive what is live.
    *
-   * The runner refuses to unregister a name another extension has taken over (it must not
-   * delete that extension's tool), but the ledger entry still has to go — otherwise the
-   * displaced value is restored over the surviving tool the next time the same name is
-   * unregistered.
+   * One operation for every case, because a stack has no ownership bookkeeping to get wrong:
+   * remove this owner's entries and the top of what remains is live. That is the same whether
+   * the owner was on top (an extension being disabled with the name to itself) or buried under
+   * a newer extension (a handover, where the top is untouched and only this claim goes away).
+   *
+   * Both the tool stack and the model-output stack are filtered by the same owner, so a tool and
+   * its result shaping can never be restored to different owners — the mismatch a
+   * displacement-record design produced when an entry was removed out of order.
    */
-  releaseToolRegistration(name: string, ownerId: string): void {
-    const ledger = this.toolDisplacements.get(name);
-    if (!ledger) return;
-    const index = ledger.findIndex((entry) => entry.ownerId === ownerId);
-    if (index === -1) return;
-    const [removed] = ledger.splice(index, 1);
-    // The entry that overwrote this one is given what THIS one displaced. Dropping the entry
-    // outright would orphan the chain: the next entry still points at a tool that just left
-    // the record, so a later unregister would hand back an unloaded extension's tool.
-    if (ledger[index]) ledger[index].displaced = removed.displaced;
-    if (ledger.length === 0) this.toolDisplacements.delete(name);
+  removeToolOwner(name: string, ownerId: string, ctx: ExtensionToolRegistrationContext): void {
+    const stack = this.toolStacks.get(name);
+    if (!stack) return;
+
+    const remaining = stack.filter((entry) => entry.ownerId !== ownerId);
+    // The runner calls this once per registration, so an owner that registered the name twice
+    // reaches here a second time with nothing left to drop. Bail out instead of re-writing the
+    // same tool and re-emitting — a no-op must stay a no-op.
+    if (remaining.length === stack.length) return;
+    const top = remaining[remaining.length - 1];
+
+    if (!top || top.tool === undefined) {
+      // Nothing left to fall back to: the name goes away.
+      delete (ctx.tools as Record<string, unknown>)[name];
+      this.toolStacks.delete(name);
+    } else {
+      (ctx.tools as Record<string, unknown>)[name] = top.tool;
+      this.toolStacks.set(name, remaining);
+    }
+
+    // The descriptor was written by `defineServerTool` at registration; dropping it exposes
+    // the restored tool's own declaration (or the built-in fallback table).
+    forgetToolPresentation(name);
+    toModelOutputRegistry.removeOwner(name, ownerId);
+    ctx.onToolsChanged();
+  }
+
+  private stackOf(name: string): Array<{ ownerId: string; tool: unknown }> {
+    const stack = this.toolStacks.get(name);
+    if (!stack) throw new Error(`tool stack for "${name}" must be seeded before pushing`);
+    return stack;
   }
 
   /**
    * Unregister a tool previously added by an extension (used when disabling).
    *
-   * Last-in-first-out: the entry this owner displaced is restored, so whatever the tool name
-   * meant before the extension loaded comes back — an earlier extension's tool, or the
-   * built-in the extension shadowed. Without a ledger entry (a name the extension did not
-   * displace, e.g. one it registered on a fresh record) the name is simply deleted.
+   * Delegates to {@link removeToolOwner}: dropping this owner's entry and re-reading the top
+   * brings back whatever the tool name meant before this extension loaded — an earlier
+   * extension's tool, or the built-in it shadowed.
    */
   unregisterExtensionTool(name: string, ctx: ExtensionToolRegistrationContext): void {
-    const ledger = this.toolDisplacements.get(name);
-    // Last-in-first-out, and an owner may have displaced the same name more than once
-    // (re-registering inside one activate), so scan from the end.
-    let index = -1;
-    if (ledger) {
-      for (let i = ledger.length - 1; i >= 0; i--) {
-        if (ledger[i].ownerId === ctx.ownerId) {
-          index = i;
-          break;
-        }
-      }
-    }
-
-    if (index === -1) {
-      // No entry for this owner: nothing was displaced, and there is no proof the name is
-      // even ours. Leave the record alone — deleting a name another extension owns would be
-      // far worse than keeping a tool this extension did not own.
-      return;
-    }
-
-    const [entry] = ledger!.splice(index, 1);
-    if (ledger!.length === 0) this.toolDisplacements.delete(name);
-
-    const displaced = entry.displaced;
-    if (displaced.tool === undefined) {
-      delete (ctx.tools as Record<string, unknown>)[name];
-    } else {
-      (ctx.tools as Record<string, unknown>)[name] = displaced.tool;
-    }
-
-    // The displaced tool's presentation descriptor was overwritten by `defineServerTool`
-    // when the extension registered. Dropping it here exposes the restored tool's own
-    // declaration (or the built-in fallback table), instead of leaving the extension's
-    // descriptor advertising a tool that is gone.
-    forgetToolPresentation(name);
-    toModelOutputRegistry.restore(name, displaced.toModelOutput);
-    ctx.onToolsChanged();
+    this.removeToolOwner(name, ctx.ownerId, ctx);
   }
 
   // ---------------------------------------------------------------------------

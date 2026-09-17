@@ -70,15 +70,27 @@ export function defineServerTool<
    * for the same reason as {@link toModelOutput}.
    */
   present?: ToolPresentation;
+  /**
+   * Who owns this tool's model-output registration.
+   *
+   * Defaults to the tool name, which is right for a built-in: it IS its own registration and
+   * nothing ever removes it. An extension registering a tool passes its own id instead, so the
+   * host can drop that handler again when the extension is disabled — the whole reason the
+   * registry is owner-keyed.
+   */
+  ownerId?: string;
 }): ServerTool<TInput, TOutput, TName> {
   if (config.toModelOutput) {
     const toModel = config.toModelOutput;
-    toModelOutputRegistry.register(config.name, (ctx) =>
-      toModel({
-        toolCallId: ctx.toolCallId,
-        input: ctx.input as InferSchemaType<TInput>,
-        output: ctx.output as InferSchemaType<TOutput>,
-      })
+    toModelOutputRegistry.register(
+      config.name,
+      (ctx) =>
+        toModel({
+          toolCallId: ctx.toolCallId,
+          input: ctx.input as InferSchemaType<TInput>,
+          output: ctx.output as InferSchemaType<TOutput>,
+        }),
+      config.ownerId
     );
   }
 

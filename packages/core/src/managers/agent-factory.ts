@@ -184,7 +184,6 @@ export async function buildManagedAgent({
       onRegisterTool: (def, ownerId) => managed.registerTool(def, ownerId),
       onRegisterCommand: (cmd) => managed.registerCommand(cmd),
       onUnregisterTool: (name, ownerId) => managed.unregisterExtensionTool(name, ownerId),
-      onReleaseToolOwner: (name, ownerId) => managed.releaseExtensionToolOwner(name, ownerId),
       onUnregisterCommand: (name) => managed.unregisterExtensionCommand(name),
       cwd: fsRootPath,
       getCoreEnv: () => getEnv(),
