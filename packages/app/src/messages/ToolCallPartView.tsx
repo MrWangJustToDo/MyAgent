@@ -29,6 +29,7 @@ import { ToolInputView } from "./ToolInputView.js";
 import { ToolOutputView } from "./ToolOutputView.js";
 import { ToolStatusIcon } from "./ToolStatusIcon.js";
 
+import type { TaskTurnCounts } from "./task-turns.js";
 import type { ToolCallPart } from "@tanstack/ai";
 
 function extractErrorText(part: ToolCallPart): string | null {
@@ -105,10 +106,12 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
   // value can say which one this was (the subagent's own status is `completed`
   // either way). Read it from the summary the parent handed down.
   const stoppedByLimit = isTask && isBudgetCutoffTaskPhase(taskAgent?.taskPhase);
-  // Subagent loop progress, e.g. `3/50`. Shown only while the task is live: a settled
-  // task's final turn count is history, and how it ended is already carried by the
-  // summary/usage parts beside it.
-  const taskTurns = isTask && isExecuting ? formatTaskTurns(taskIteration) : null;
+  // Subagent loop progress, e.g. `3/50`. Live while the task runs; after it settles the
+  // frozen pair on the output keeps the row readable once the child session is gone
+  // (a restore). See `formatTaskTurns`.
+  const taskTurns = isTask
+    ? formatTaskTurns(taskIteration, (part.output as TaskTurnCounts | undefined) ?? undefined)
+    : null;
 
   const displayInput =
     toolInput === undefined || toolInput === null

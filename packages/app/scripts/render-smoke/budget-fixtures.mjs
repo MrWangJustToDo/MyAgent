@@ -116,18 +116,22 @@ function pruningLoop() {
 }
 
 /**
- * The task row's turn readout (`3/50`) and the live-duration clock cadence.
+ * The task row's turn readout (`3/50`) and the two carriers behind it, plus the live-duration
+ * clock cadence.
  *
- * Both are pure values rather than rendered output, so they are pinned here rather than in the
- * mounted `MessageList` checks — mounting the tool row would need a resolvable child session.
- * The `undefined` case is the one that matters: `iteration` is optional on the session snapshot,
- * and a consumer that assumes it exists would render `0/0` on every transcript that predates it.
+ * All pure values rather than rendered output, so they are pinned here rather than in the mounted
+ * `MessageList` checks — mounting the tool row would need a resolvable child session.
+ *
+ * The restored case is why the frozen pair exists: a child session does not survive a restore, so
+ * the readout has to come from the task output. The absent / zero cases matter for the same reason
+they always did — `iteration` is optional on the snapshot, and a task that never ran records
+ * `iterations: 0` — a consumer that assumes otherwise renders `0/0`.
  */
 function taskTurnsAndClock() {
   const done = [];
   const check = (name, pass, detail) => done.push({ name, pass, detail });
 
-  check("task turns render as n/m", formatTaskTurns({ current: 3, max: 50 }) === "3/50", {
+  check("live task turns render as n/m", formatTaskTurns({ current: 3, max: 50 }) === "3/50", {
     got: formatTaskTurns({ current: 3, max: 50 }),
   });
   check("an unknown budget renders as a bare count, never n/0", formatTaskTurns({ current: 3, max: 0 }) === "3", {
@@ -135,14 +139,38 @@ function taskTurnsAndClock() {
   });
   check(
     "a run that has not reported an iteration yet shows nothing",
-    formatTaskTurns({ current: 0, max: 50 }) === null,
+    formatTaskTurns({ current: 0, max: 50 }, { iterations: 0, maxIterations: 50 }) === null,
     {
-      got: formatTaskTurns({ current: 0, max: 50 }),
+      got: formatTaskTurns({ current: 0, max: 50 }, { iterations: 0, maxIterations: 50 }),
     }
   );
   check("an absent iteration state degrades to nothing (it is optional)", formatTaskTurns(undefined) === null, {
     got: formatTaskTurns(undefined),
   });
+
+  // Restored: no live state, so the frozen pair on the task output is the only carrier.
+  check(
+    "a restored task shows the frozen used/budget from its output",
+    formatTaskTurns(undefined, { iterations: 7, maxIterations: 50 }) === "7/50",
+    { got: formatTaskTurns(undefined, { iterations: 7, maxIterations: 50 }) }
+  );
+  check(
+    "a restored task with no recorded budget shows a bare count",
+    formatTaskTurns(undefined, { iterations: 7, maxIterations: 0 }) === "7",
+    { got: formatTaskTurns(undefined, { iterations: 7, maxIterations: 0 }) }
+  );
+  check(
+    "a cancelled task that never ran shows nothing",
+    formatTaskTurns(undefined, { iterations: 0, maxIterations: 0 }) === null,
+    {
+      got: formatTaskTurns(undefined, { iterations: 0, maxIterations: 0 }),
+    }
+  );
+  check(
+    "live state wins over the frozen pair while the task is running",
+    formatTaskTurns({ current: 2, max: 50 }, { iterations: 9, maxIterations: 50 }) === "2/50",
+    { got: formatTaskTurns({ current: 2, max: 50 }, { iterations: 9, maxIterations: 50 }) }
+  );
 
   // The clock follows the resolution of the rendered string: sub-minute shows tenths of a
   // second, minute-and-over shows whole seconds. One repaint per visible change, either way.

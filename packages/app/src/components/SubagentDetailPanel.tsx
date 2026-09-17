@@ -51,9 +51,9 @@ export const SubagentDetailPanel = ({ subagentId, onBack }: { subagentId: string
   const usageLabel = usage && (usage.inputTokens > 0 || usage.outputTokens > 0) ? formatUsageBrief(usage) : null;
 
   // Subagent loop progress, e.g. `3/50`, from the child's retained `iteration`
-  // channel. Live only: a finished subagent's child session reports its last
-  // iteration, but the transcript it belonged to is gone, so nothing here is
-  // restorable — see the note on `formatTaskTurns`.
+  // channel. Live only: once the child is gone the frozen pair on the task output takes
+  // over in the task row, and this panel has no live session to open at all — so there
+  // is nothing to render here that is not already on the row. See `formatTaskTurns`.
   const turns = isSubagentActiveStatus(status) ? formatTaskTurns(snap?.iteration) : null;
 
   const statusIcon = getStatusIcon(status);

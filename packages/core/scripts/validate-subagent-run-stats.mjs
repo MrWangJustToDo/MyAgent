@@ -6,7 +6,13 @@
 
 import assert from "node:assert/strict";
 
-import { countSubagentIterations, deriveSubagentRunStats, hasBeginSummaryCall } from "../dist/dev.mjs";
+import {
+  countSubagentIterations,
+  createTaskTool,
+  deriveSubagentRunStats,
+  hasBeginSummaryCall,
+  toModelOutputRegistry,
+} from "../dist/dev.mjs";
 
 const exploreDone = [
   {
@@ -203,5 +209,181 @@ const parallel = [
   },
 ];
 assert.equal(countSubagentIterations(parallel), 1);
+
+// ============================================================================
+// The engine's count wins over the message-derived one
+//
+// `iterations` feeds the step-budget comparison behind `reachedLimit`, and TanStack's
+// budget is expressed in model turns (`maxIterations(max) => ({iterationCount}) =>
+// iterationCount < max`). The message-derived count is a different quantity: it only
+// counts tool-call batches, so it cannot see a model turn that starts none.
+//
+// The fixture below is that shape — two tool rounds plus a closing text turn. The engine
+// spent 3 model turns; the message-derived count sees 2. Passing the observed value must
+// override it, or a cutoff on such a turn is missed.
+// ============================================================================
+
+const closingTurn = [
+  {
+    id: "assistant-1",
+    role: "assistant",
+    parts: [
+      { type: "tool-call", id: "a", name: "read_file", arguments: "{}", state: "complete", output: "{}" },
+      { type: "tool-result", toolCallId: "a", content: "{}", state: "complete" },
+    ],
+  },
+  {
+    id: "assistant-2",
+    role: "assistant",
+    parts: [
+      { type: "tool-call", id: "b", name: "grep", arguments: "{}", state: "complete", output: "{}" },
+      { type: "tool-result", toolCallId: "b", content: "[]", state: "complete" },
+    ],
+  },
+  // The closing answer: a real model turn that spends budget, and starts no tool batch.
+  { id: "assistant-3", role: "assistant", parts: [{ type: "text", content: "Done." }] },
+];
+
+assert.equal(
+  countSubagentIterations(closingTurn),
+  2,
+  "the message-derived count cannot see the closing text turn (2 of the engine's 3)"
+);
+
+// Without the observed value, the derived count is used (the fallback path).
+const derivedOnly = deriveSubagentRunStats({
+  messages: closingTurn,
+  maxIterations: 50,
+  finishReason: "stop",
+  output: "Done.",
+  aborted: false,
+});
+assert.equal(derivedOnly.iterations, 2, "no observed state — falls back to the derived count");
+
+// With it, the engine's count wins — 2 vs 3 is the whole point of the parameter.
+const observed = deriveSubagentRunStats({
+  messages: closingTurn,
+  maxIterations: 50,
+  finishReason: "stop",
+  output: "Done.",
+  aborted: false,
+  observedIterations: { current: 3, max: 50 },
+});
+assert.equal(observed.iterations, 3, "the engine's own count overrides the message-derived one");
+
+// And it changes the budget decision, which is why the override matters at all: at a
+// budget of 3 the engine is spent (3 >= 3), while the derived count reports 2 and would
+// have missed the cutoff.
+const cutoffMissed = deriveSubagentRunStats({
+  messages: closingTurn,
+  maxIterations: 3,
+  finishReason: "stop",
+  output: "",
+  aborted: false,
+  observedIterations: { current: 3, max: 3 },
+});
+assert.equal(cutoffMissed.reachedLimit, true, "a real cutoff at the budget must be reported");
+const derivedWouldMiss = deriveSubagentRunStats({
+  messages: closingTurn,
+  maxIterations: 3,
+  finishReason: "stop",
+  output: "",
+  aborted: false,
+});
+assert.equal(derivedWouldMiss.reachedLimit, false, "…and the derived count misses it — the guard is non-vacuous");
+
+// Zero observed state (a caller that never saw an iteration) must not override the
+// fallback with a meaningless 0.
+const zeroObserved = deriveSubagentRunStats({
+  messages: closingTurn,
+  maxIterations: 50,
+  finishReason: "stop",
+  output: "Done.",
+  aborted: false,
+  observedIterations: { current: 0, max: 0 },
+});
+assert.equal(zeroObserved.iterations, 2, "an idle iteration state falls back to the derived count");
+
+// ============================================================================
+// The budget travels with the count, and neither one reaches the model
+//
+// A restored task row shows `used/budget`, and a child session does not exist after a
+// restore — so the budget has to be persisted next to the count, and it must be the budget
+// the count was compared against (the caller's), not whatever the observed state carried.
+//
+// The model-facing projection deliberately drops both: `reachedLimit` already IS the budget
+// verdict and needs no ceiling, a bare count says nothing without one, and the tool
+// description never explained the field. This pins the removal so it cannot drift back.
+// ============================================================================
+
+const budgetStats = deriveSubagentRunStats({
+  messages: closingTurn,
+  maxIterations: 40,
+  finishReason: "stop",
+  output: "Done.",
+  aborted: false,
+  observedIterations: { current: 3, max: 50 },
+});
+assert.equal(budgetStats.iterations, 3);
+assert.equal(
+  budgetStats.maxIterations,
+  40,
+  "the budget reported must be the one the count was compared against, not the observed state's own"
+);
+
+const noBudget = deriveSubagentRunStats({
+  messages: closingTurn,
+  maxIterations: 0,
+  finishReason: "stop",
+  output: "Done.",
+  aborted: false,
+});
+assert.equal(noBudget.maxIterations, 0, "an unknown budget stays 0 so the readout drops the `/0`");
+
+{
+  // `defineServerTool` does not carry `toModelOutput` on the tool object — it registers it in
+  // `toModelOutputRegistry`, which is how the production path reads it (`applyToolCompact`). So
+  // the projection is asserted through the registry, not through a method on the tool. The tool
+  // needs no live manager for this: `toModelOutput` is a pure projection of the output.
+  const taskTool = createTaskTool({ parentAgentId: "parent", manager: {} });
+  const project = toModelOutputRegistry.get("task");
+  assert.ok(project, "the task tool must register a model-output projection");
+
+  // The description is the other model-facing surface: a field the model is never handed must
+  // not be listed there either, or it would look like something it can rely on.
+  assert.ok(
+    !/\bmaxIterations\b/.test(taskTool.description),
+    "the description must not advertise `maxIterations` either"
+  );
+  assert.ok(
+    /status flags \(reachedLimit, incomplete, aborted, truncated\)/.test(taskTool.description),
+    "and it must still name the status flags the model does receive"
+  );
+
+  const projected = project({
+    toolCallId: "t1",
+    input: {},
+    output: {
+      subagentId: "s1",
+      summary: "findings",
+      truncated: false,
+      iterations: 7,
+      maxIterations: 50,
+      durationMs: 12,
+      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+      reachedLimit: false,
+      incomplete: false,
+      aborted: false,
+      success: true,
+    },
+  });
+  const text = JSON.stringify(projected);
+  assert.ok(
+    !text.includes("iterations=") && !text.includes("maxIterations"),
+    "the model must not receive either iteration number — reachedLimit is the budget verdict"
+  );
+  assert.ok(text.includes("reachedLimit=false"), "but the verdict itself must still reach the model");
+  assert.ok(text.includes("incomplete=false"), "along with the other completion flags");
+}
 
 console.log("subagent-run-stats validation passed");

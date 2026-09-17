@@ -9,6 +9,7 @@ import { BEGIN_SUMMARY_TOOL_NAME } from "./begin-summary-tool.js";
 
 import type { SubagentResult } from "./types.js";
 import type { AgentStatus } from "../../runtime-types/agent-status.js";
+import type { AgentIterationState } from "../../runtime-types/session-payloads.js";
 import type { StreamChunk, UIMessage } from "@tanstack/ai";
 
 /**
@@ -25,6 +26,14 @@ export interface DeriveSubagentRunStatsInput {
   output: string;
   aborted: boolean;
   status?: AgentStatus;
+  /**
+   * The child agent's own loop progress, read from the retained `iteration` state.
+   *
+   * Authoritative when present: this is the engine's own count
+   * (`IterationInfo.iteration + 1`), so it needs no inference. It covers turns the
+   * message-derived count cannot see at all — see {@link countSubagentIterations}.
+   */
+  observedIterations?: AgentIterationState;
 }
 
 /** Whether the subagent called {@link BEGIN_SUMMARY_TOOL_NAME} (explore natural end). */
@@ -48,6 +57,19 @@ export function countSubagentToolCalls(messages: UIMessage[]): number {
 /**
  * Count agent-loop style rounds: each contiguous tool-call batch from one model
  * turn (parallel tools = 1 round). Falls back to text-only step segments.
+ *
+ * **Not the same quantity as the engine's iteration count** ({@link AgentIterationState}), and
+ * it is kept only as a fallback for callers that have no access to that state:
+ *
+ *   - it cannot see turns that start no tool batch, so a final text-only turn — a real model
+ *     turn that spends budget — is not counted at all (measured: 2 here vs 3 engine turns for a
+ *     transcript of two tool rounds plus a closing answer);
+ *   - it has to GUESS when it can count nothing (`sawAssistant` false / no assistant message),
+ *     returning a floor of 1;
+ *   - it is only available after the run.
+ *
+ * `deriveSubagentRunStats` prefers the engine's count when the caller passes it, which is why
+ * that parameter exists.
  */
 export function countSubagentIterations(messages: UIMessage[]): number {
   let rounds = 0;
@@ -99,8 +121,13 @@ export async function* captureStreamFinishReason(
 
 export function deriveSubagentRunStats(
   input: DeriveSubagentRunStatsInput
-): Pick<SubagentResult, "iterations" | "reachedLimit" | "incomplete"> {
-  const iterations = countSubagentIterations(input.messages);
+): Pick<SubagentResult, "iterations" | "maxIterations" | "reachedLimit" | "incomplete"> {
+  // Prefer the engine's own count when the caller has it. It cannot undercount the
+  // way the message-derived count does (a final text-only turn is a real model turn
+  // that spends budget but starts no tool batch), and the budget comparison below is
+  // a decision — undercounting it misses a real cutoff.
+  const observed = input.observedIterations?.current;
+  const iterations = observed && observed > 0 ? observed : countSubagentIterations(input.messages);
   const toolCalls = countSubagentToolCalls(input.messages);
   const finishReason = input.finishReason;
   const calledBeginSummary = hasBeginSummaryCall(input.messages);
@@ -110,12 +137,13 @@ export function deriveSubagentRunStats(
   // Fallback: an explore subagent that exhausted the budget WITHOUT ever calling
   // `begin_summary` cannot have finished naturally — some cutoffs end on a text
   // narration step (finishReason "stop"), which would otherwise hide the limit.
+  //
+  // This comparison is `iterationCount >= max` in the engine's own units
+  // (`maxIterations(max) => ({iterationCount}) => iterationCount < max`), which is
+  // why `iterations` above has to be that same count and not a tool-batch tally.
   const hitStepBudget =
     input.maxIterations > 0 &&
-    (finishReason === "tool_calls" ||
-      (!calledBeginSummary &&
-        countSubagentToolCalls(input.messages) > 0 &&
-        countSubagentIterations(input.messages) >= input.maxIterations));
+    (finishReason === "tool_calls" || (!calledBeginSummary && toolCalls > 0 && iterations >= input.maxIterations));
   const reachedLimit = hitStepBudget;
 
   const hasSummary = input.output.trim().length > 0 && input.output !== "(no summary)";
@@ -136,6 +164,11 @@ export function deriveSubagentRunStats(
 
   return {
     iterations: Math.max(iterations, 1),
+    // The ceiling the count was measured against, so a host can render `used/budget` —
+    // and it must be the budget the count was actually compared with, i.e. this same
+    // `maxIterations` (an observed state carries its own `max`, which is the child's
+    // configured default and can differ from the caller's).
+    maxIterations: input.maxIterations,
     reachedLimit,
     incomplete,
   };

@@ -48,6 +48,7 @@ export function subagentResultToTaskOutput(result: SubagentResult) {
     summary: result.output,
     truncated: result.truncated,
     iterations: result.iterations,
+    maxIterations: result.maxIterations,
     durationMs: result.durationMs,
     usage: result.usage,
     reachedLimit: result.reachedLimit,
@@ -274,6 +275,10 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       output: finalOutput,
       aborted,
       status: subagentManaged.status,
+      // The child's own loop progress. Authoritative for `iterations` and for the
+      // step-budget comparison behind `reachedLimit`; the message-derived count is
+      // the fallback for callers that lack it.
+      observedIterations: subagentManaged.readIteration(),
     });
 
     // Snapshot status flags BEFORE the progress-summary fallback. The fallback may
@@ -283,6 +288,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     // snapshots (not re-read runStats) keeps the contract explicit.
     const statusFlags = {
       iterations: runStats.iterations,
+      maxIterations: runStats.maxIterations,
       reachedLimit: runStats.reachedLimit,
       incomplete: runStats.incomplete,
     };
@@ -359,6 +365,11 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
             subagentId,
             summary: finalOutput,
             iterations: statusFlags.iterations,
+            // Recorded next to the count so the persisted log data carries the budget the
+            // number was measured against — a bare count there says nothing about how close
+            // the run came to its limit. (Both land as structured `data` fields; the log
+            // message is `Subagent completed: <summary>` either way.)
+            maxIterations: statusFlags.maxIterations,
             durationMs,
             usage: {
               inputTokens: usage.inputTokens ?? 0,
@@ -383,6 +394,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       output: finalOutput,
       truncated,
       iterations: statusFlags.iterations,
+      maxIterations: statusFlags.maxIterations,
       durationMs,
       usage: {
         inputTokens: usage.inputTokens ?? 0,

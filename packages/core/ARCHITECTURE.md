@@ -886,7 +886,7 @@ Task / compact summary text uses `ManagedAgent.summaryStreams` (`SummaryStreamHu
 | Tools             | `agent:tool-start`, `agent:tool-approval-request`, `agent:tool-approval-resolved`, `agent:tool-end`, `agent:tool-error`                |
 | Memory            | `memory:prefetch`, `memory:extract`, `memory:consolidate`                                                                              |
 | Compaction        | `compaction:auto-*`, `compaction:reactive-*` (start kind matches path)                                                                 |
-| Subagent          | `subagent:created`, `subagent:started`, `subagent:completed` (`summary` + `iterations`/`durationMs`/`usage`), `subagent:error`, `subagent:destroyed`, `subagent:phase`, `subagent:progress-summary-error` |
+| Subagent          | `subagent:created`, `subagent:started`, `subagent:completed` (`summary` + `iterations`/`maxIterations`/`durationMs`/`usage`), `subagent:error`, `subagent:destroyed`, `subagent:phase`, `subagent:progress-summary-error` |
 
 ### 8.4 Event → Log bridge
 

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Headless render smoke for the long-session transcript (MessageList + StaticRender).
  *
@@ -853,6 +854,64 @@ record(
   fullLines.length > 0 && !/Summarizing/i.test(fullText),
   { fullLines: fullLines.length }
 );
+// ── 7. a settled task row paints used/budget after a restore ─────────────────
+
+// The pure formatter is pinned in `budget-fixtures.mjs`, but a green formatter says nothing
+// about whether the component still HANDS IT the persisted pair: `formatTaskTurns(iteration)`
+// with the second argument dropped type-checks and keeps every unit check passing while
+// silently going blank on every restored task — which is the regression this guards.
+//
+// So mount the real row through the real `MessageList` and assert on the PAINTED frame. No
+// live session exists for the child (that is precisely the restore case), so the frozen pair
+// on the part's output is the only thing that can produce these numbers.
+useTranscriptDisplay.getActions().setMode("full");
+const FROZEN_USED = 7;
+const FROZEN_BUDGET = 50;
+const restoredTask = {
+  id: "msg-restored-task",
+  role: "assistant",
+  parts: [
+    {
+      type: "tool-call",
+      id: "call-restored-task",
+      name: "task",
+      state: "output-available",
+      arguments: JSON.stringify({ prompt: "Audit the persistence layer", description: "audit-persistence" }),
+      output: {
+        subagentId: "sub-restored",
+        summary: "Persistence keeps the wire and the channel apart.",
+        truncated: false,
+        iterations: FROZEN_USED,
+        maxIterations: FROZEN_BUDGET,
+        durationMs: 4200,
+        usage: { inputTokens: 1200, outputTokens: 300, totalTokens: 1500 },
+        reachedLimit: false,
+        incomplete: false,
+        aborted: false,
+      },
+    },
+  ],
+};
+instance.rerender(createElement(Screen, { messages: [restoredTask] }));
+await settle(200);
+{
+  const text = frameLines(stdout).join("\n");
+  record("a restored task row paints its frozen used/budget", text.includes(`${FROZEN_USED}/${FROZEN_BUDGET} turns`), {
+    expected: `${FROZEN_USED}/${FROZEN_BUDGET} turns`,
+    sawTaskRow: text.includes("task"),
+    frameLines: frameLines(stdout).length,
+  });
+  // Non-vacuous: the row's other persisted carriers still paint, so a blank frame cannot pass
+  // the check above by accident of the row not rendering at all.
+  record(
+    "and the same row still renders (so the readout is not passing on an empty frame)",
+    text.includes("audit-persistence") || /task/i.test(text),
+    { frameLines: frameLines(stdout).length }
+  );
+}
+instance.rerender(createElement(Screen, { messages: all }));
+await settle(120);
+
 instance.unmount();
 console.error = realConsoleError;
 const pass = results.every((r) => r.pass);

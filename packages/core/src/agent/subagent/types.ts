@@ -104,8 +104,10 @@ export interface SubagentResult {
   output: string;
   /** Whether the output was truncated */
   truncated: boolean;
-  /** Number of iterations used */
+  /** Number of iterations used (model turns, the engine's own count) */
   iterations: number;
+  /** Iteration budget those counts were measured against (`used/budget` for display) */
+  maxIterations: number;
   /** Wall-clock duration of the subagent run itself (ms) — authoritative for
    * pre-forked tasks where the caller's join wait would undercount. */
   durationMs: number;

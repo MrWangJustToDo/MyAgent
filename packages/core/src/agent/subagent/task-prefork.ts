@@ -26,6 +26,8 @@ function cancelledStubResult(): SubagentResult {
     output: "[Task cancelled.]",
     truncated: false,
     iterations: 0,
+    // No run happened, so there is no budget to report against the count.
+    maxIterations: 0,
     durationMs: 0,
     usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
     reachedLimit: false,

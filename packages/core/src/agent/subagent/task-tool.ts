@@ -54,7 +54,9 @@ export const taskOutputSchema = z.object({
   /** Whether the summary was truncated by maxOutputLength (not disk-cache preview) */
   truncated: z.boolean().describe("Whether the summary was truncated by maxOutputLength"),
   /** Number of iterations the subagent used */
-  iterations: z.number().describe("Number of iterations used"),
+  iterations: z.number().describe("Iterations used by the subagent"),
+  /** The subagent's iteration budget, so a restored row can show `used/budget` */
+  maxIterations: z.number().describe("Iteration budget the subagent ran under"),
   /** Whether the subagent hit the iteration limit */
   reachedLimit: z.boolean().describe("Whether iteration limit was reached"),
   /**
@@ -119,7 +121,7 @@ The subagent:
 - Starts with fresh context (doesn't see your conversation history)
 - Has read-only tools: read_file, glob, grep, list_file, tree, websearch, webfetch
 - Cannot modify files, run shell commands, or spawn additional subagents
-- Returns a summary plus status flags (iterations, reachedLimit, incomplete, aborted, truncated)
+- Returns a summary plus status flags (reachedLimit, incomplete, aborted, truncated)
 
 How to use the result:
 - Treat findings as trustworthy and extendable only when the run completed cleanly
@@ -200,6 +202,7 @@ Example use cases:
           summary,
           truncated,
           iterations: result.iterations,
+          maxIterations: result.maxIterations,
           reachedLimit: result.reachedLimit,
           incomplete: result.incomplete,
           aborted: result.aborted,
@@ -214,9 +217,13 @@ Example use cases:
     },
 
     // Summary + completion status for the model (usage stays UI-only).
+    //
+    // No iteration counts here, and none in the description either (it lists only the four
+    // status flags). `reachedLimit` already IS the budget verdict and needs no knowledge of
+    // the ceiling, while a bare count says nothing without one — so the pair is host-only,
+    // persisted on the output for a restored `used/budget` readout.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: TaskOutput }) {
       const status = [
-        `iterations=${output.iterations}`,
         `reachedLimit=${output.reachedLimit}`,
         `incomplete=${output.incomplete}`,
         `aborted=${output.aborted}`,

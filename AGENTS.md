@@ -644,7 +644,7 @@ On restart-style stream recovery (429 / capability sanitize), `AgentUIChannel.re
 keeps the user prompt and clears tools/summary so the task panel does not keep stale state;
 terminal non-abort failures still call `failRun()`. Max-tokens continuation does not reset.
 Compact summarization uses the same hub with stable key `compact:${parentAgentId}` (one in-flight compact per agent).
-Only the last text-only step is returned to the parent as the task `summary`; `toModelOutput` also includes completion status (`reachedLimit` / `incomplete` / `aborted` / `truncated`) so the parent can judge whether findings are trustworthy to extend.
+Only the last text-only step is returned to the parent as the task `summary`; `toModelOutput` also includes completion status (`reachedLimit` / `incomplete` / `aborted` / `truncated`) so the parent can judge whether findings are trustworthy to extend. The iteration pair (`iterations` = model turns, `maxIterations` = the budget it ran under) is **host-only**: it is persisted on the task output so a restored row can still show `used/budget`, but it is in neither `toModelOutput` nor the description — `reachedLimit` already is the budget verdict, and a bare count says nothing without a ceiling.
 
 ### Per-task phase machine & parallel pre-fork
 

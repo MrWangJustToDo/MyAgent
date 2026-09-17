@@ -58,6 +58,9 @@ export {
   shouldStreamTaskSummary,
 } from "../agent/stream/extract-assistant-text.js";
 export { countSubagentIterations, deriveSubagentRunStats, hasBeginSummaryCall } from "../agent/subagent/run-stats.js";
+// The task tool itself, so a validation can assert what the model-facing projection actually
+// contains (the iteration numbers must not be in it).
+export { createTaskTool, taskOutputSchema } from "../agent/subagent/task-tool.js";
 export {
   applySubagentCancelNotice,
   SUBAGENT_CANCELLED_NOTICE,

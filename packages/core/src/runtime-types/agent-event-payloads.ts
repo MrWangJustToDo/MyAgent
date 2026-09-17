@@ -206,6 +206,8 @@ export type AgentEventPayloadMap = {
     subagentId?: string;
     summary: string;
     iterations?: number;
+    /** Iteration budget the count was measured against (structured log data field). */
+    maxIterations?: number;
     durationMs?: number;
     usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
     inputTokens?: number;
