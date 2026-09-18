@@ -17,6 +17,16 @@ export interface FlatTreeItem {
   indent: number;
   type: "file" | "directory";
   expanded: boolean;
+  /**
+   * The chain of directory keys above this row — every one of which can hide it
+   * by being collapsed. Set by the diff tree; `undefined` for full-tree rows,
+   * which carry their own `expanded` state instead.
+   *
+   * Needed because the chain is not derivable from the row's path: a merged
+   * directory node's `key` is the deepest real dir of the merged chain, so
+   * `app/src/utils` is one key and `app/src` is not a row at all.
+   */
+  ancestorKeys?: string[];
 }
 
 interface DiffTreeNode {
@@ -102,7 +112,13 @@ function compressDiffTree(nodes: DiffTreeNode[]): DiffTreeNode[] {
   return result;
 }
 
-function flattenDiffTree(nodes: DiffTreeNode[], indent: number, collapsed: Set<string>, out: FlatTreeItem[]): void {
+function flattenDiffTree(
+  nodes: DiffTreeNode[],
+  indent: number,
+  collapsed: Set<string>,
+  out: FlatTreeItem[],
+  ancestorKeys: string[]
+): void {
   for (const node of nodes) {
     const isDir = node.type === "directory";
     const isExpanded = !collapsed.has(node.key);
@@ -112,8 +128,13 @@ function flattenDiffTree(nodes: DiffTreeNode[], indent: number, collapsed: Set<s
       indent,
       type: isDir ? "directory" : "file",
       expanded: isDir && isExpanded,
+      // The chain of directory keys above this row (see `FlatTreeItem.ancestorKeys`
+      // for why it cannot be re-derived from the path).
+      ancestorKeys,
     });
-    if (isDir && isExpanded) flattenDiffTree(node.children, indent + 1, collapsed, out);
+    if (isDir && isExpanded) {
+      flattenDiffTree(node.children, indent + 1, collapsed, out, [...ancestorKeys, node.key]);
+    }
   }
 }
 
@@ -141,7 +162,7 @@ export function buildDiffTreeItems(
     root.type === "directory" ? { ...root, children: compressDiffTree(root.children) } : root
   );
   const out: FlatTreeItem[] = [];
-  flattenDiffTree(roots, 0, collapsed, out);
+  flattenDiffTree(roots, 0, collapsed, out, []);
   return out;
 }
 
@@ -152,11 +173,55 @@ export function buildDiffTreeItems(
  * lexicographic sort of the paths (case-sensitive, no directories-first) does
  * not match the rendered order and made jumps look unsorted.
  *
- * Collapse state is irrelevant: only file rows are returned, and callers reveal
- * the target's ancestors themselves.
+ * Collapse state is NOT taken into account (the tree is built with nothing
+ * collapsed), so this walk covers every changed file — including ones hidden
+ * inside a collapsed directory, which must stay reachable. The companions below
+ * give the caller what it needs to reveal such a target.
  */
 export function orderedChangedFiles(gitStatus: Map<string, string>, rootPath: string): string[] {
   return buildDiffTreeItems(gitStatus, rootPath, new Set())
     .filter((item) => item.type === "file")
     .map((item) => item.path);
+}
+
+/**
+ * Where `[` / `]` should jump next, and what must be expanded for it to be
+ * visible.
+ *
+ * Kept here as a pure function (rather than inline in the component) because the
+ * wrap-around and the reveal chain are the parts worth pinning, and both are
+ * pure decisions over the git status map.
+ *
+ * The walk covers every changed file, **including** ones hidden inside a
+ * collapsed directory — a collapsed dir must not make its files unreachable.
+ * `revealKeys` is what makes such a target visible; it comes from an
+ * uncollapsed build, since the target's own row is exactly the row the collapse
+ * removed.
+ *
+ * @returns the next target plus the directory keys to expand, or `null` when
+ *   there is nothing to do (no changed files, or the walk stays put because
+ *   only one file is changed).
+ */
+export function changedFileJumpTarget(
+  gitStatus: Map<string, string>,
+  rootPath: string,
+  selectedPath: string | null,
+  direction: 1 | -1
+): { target: string; revealKeys: string[] } | null {
+  const changed = orderedChangedFiles(gitStatus, rootPath);
+  if (changed.length === 0) return null;
+  const cur = selectedPath ? changed.indexOf(selectedPath) : -1;
+  let next: number;
+  if (direction > 0) next = cur < 0 ? 0 : cur + 1 >= changed.length ? 0 : cur + 1;
+  else next = cur < 0 ? changed.length - 1 : cur - 1 < 0 ? changed.length - 1 : cur - 1;
+  const target = changed[next]!;
+  if (target === selectedPath) return null;
+  // Built with NOTHING collapsed on purpose: a collapsed ancestor removes the
+  // target's own row, so the row could not report its own ancestors. Reading the
+  // chain off the rendered rows is the trap a first fix fell into (dead code for
+  // exactly this case, while every pure formatter test still passed).
+  const row = buildDiffTreeItems(gitStatus, rootPath, new Set()).find(
+    (item) => item.type === "file" && item.path === target
+  );
+  return { target, revealKeys: row?.ancestorKeys ?? [] };
 }

@@ -7,7 +7,7 @@ import { useWorkspaceView } from "../hooks/use-workspace-view.js";
 import { COLORS } from "../theme/colors.js";
 import { workspacePanelHint } from "../utils/keyboard-labels.js";
 import { clearWorkspaceDiffStatsCache } from "../utils/workspace-diff-stats.js";
-import { orderedChangedFiles } from "../utils/workspace-diff-tree.js";
+import { changedFileJumpTarget } from "../utils/workspace-diff-tree.js";
 import { clearWorkspaceFileListCache } from "../utils/workspace-file-search.js";
 import { clearWorkspaceDiffCache } from "../utils/workspace-git-diff.js";
 import { clearGitStatusCache } from "../utils/workspace-git-status.js";
@@ -69,7 +69,12 @@ export const WorkspaceFileMode = () => {
   const isDiffMode = mode === "diff";
 
   const { items: fullItems, loading: treeLoading, toggleDir, reload, revealPath } = useFileTree(rootPath);
-  const { items: diffItems, toggleDir: toggleDiffDir } = useDiffFileTree(gitStatus, rootPath);
+  const {
+    items: diffItems,
+    toggleDir: toggleDiffDir,
+    revealDiffDirs,
+    resetDiffCollapsed,
+  } = useDiffFileTree(gitStatus, rootPath);
 
   // Diff mode lists only changed files (preprocessed, merged-prefix tree);
   // preview mode shows the full workspace tree.
@@ -100,24 +105,22 @@ export const WorkspaceFileMode = () => {
   );
 
   // Jump between files that have git changes (`[` / `]`), wrapping around.
-  // Order follows the rendered tree (directories first, case-insensitive), not a
-  // plain path sort, so navigation moves top-to-bottom as shown. Uses the full
-  // changed-file set (not the visible rows) so it works even where a changed
-  // file's directory is collapsed — the target is revealed + scrolled by the
-  // selectedPath effect below.
+  //
+  // The decision (walk order, wrap-around, reveal chain) is a pure function in
+  // `workspace-diff-tree` so it can be pinned by tests; this only applies it. A
+  // hidden target is expanded first because its row is absent from `items` —
+  // otherwise the cursor would move nowhere while the preview still rendered the
+  // file, reading as the jump silently doing nothing. In the full-tree view
+  // `revealPath` is the effect's job (keyed off `selectedPath`), so only the
+  // diff pane needs the keys.
   const jumpToChanged = useCallback(
     (direction: 1 | -1) => {
-      const changed = orderedChangedFiles(gitStatus, rootPath);
-      if (changed.length === 0) return;
-      const cur = selectedPath ? changed.indexOf(selectedPath) : -1;
-      let next: number;
-      if (direction > 0) next = cur < 0 ? 0 : cur + 1 >= changed.length ? 0 : cur + 1;
-      else next = cur < 0 ? changed.length - 1 : cur - 1 < 0 ? changed.length - 1 : cur - 1;
-      const target = changed[next]!;
-      if (target === selectedPath) return;
-      selectFile(target);
+      const jump = changedFileJumpTarget(gitStatus, rootPath, selectedPath, direction);
+      if (!jump) return;
+      if (isDiffMode) revealDiffDirs(jump.revealKeys);
+      selectFile(jump.target);
     },
-    [gitStatus, rootPath, selectedPath, selectFile]
+    [gitStatus, rootPath, selectedPath, selectFile, isDiffMode, revealDiffDirs]
   );
 
   useEffect(() => {
@@ -128,25 +131,45 @@ export const WorkspaceFileMode = () => {
     setCursorIndex((prev) => Math.min(prev, Math.max(0, items.length - 1)));
   }, [items.length]);
 
+  // Full-tree view: expand the target's ancestor chain so it becomes a row.
+  //
+  // `revealedRef` holds only paths whose reveal is unconfirmed — it is cleared
+  // once the row appears (below) rather than being a permanent "already done"
+  // marker. That way a reveal that did not produce a row is retried, while one
+  // that did is never repeated: the second run sees the row and clears the flag
+  // without re-adding it. (Permanent markers are what make a failed reveal
+  // unrecoverable; retrying unconditionally would instead loop, since
+  // `revealPath` always writes new Sets into `useFileTree` and those `items` are
+  // this effect's dependency.)
+  //
+  // Diff mode does not reveal here: a `[`/`]` jump calls `revealDiffDirs` before
+  // selecting, because the row it would read the chain from is exactly the row a
+  // collapsed ancestor removed.
   useEffect(() => {
     if (!selectedPath) return;
-    // In the full-tree view, ensure the selected file's ancestor directories are
-    // expanded so it is present in `items` (and can be scrolled into view).
+    const index = items.findIndex((item) => item.path === selectedPath);
+
+    // Row is present: the reveal (if any) is confirmed done.
+    if (index >= 0) {
+      revealedRef.current.delete(selectedPath);
+      setCursorIndex(index);
+      const currentScroll = useWorkspaceView.getReadonlyState().treeScrollTop;
+      setTreeScrollTop(ensureIndexVisible(index, currentScroll, paneBodyLines, items.length));
+      return;
+    }
+
+    // Row missing: reveal it (once per unconfirmed path). The settle-after-commit
+    // re-run then either finds the row or retries a reveal that failed.
     if (!isDiffMode && !revealedRef.current.has(selectedPath)) {
       revealedRef.current.add(selectedPath);
       void revealPath(selectedPath);
     }
-    const index = items.findIndex((item) => item.path === selectedPath);
-    if (index < 0) return;
-    setCursorIndex(index);
-    const currentScroll = useWorkspaceView.getReadonlyState().treeScrollTop;
-    setTreeScrollTop(ensureIndexVisible(index, currentScroll, paneBodyLines, items.length));
     // Re-run when items change (post-reveal / mode switch) so the reveal + scroll
     // settle on a location the file is actually present in.
   }, [selectedPath, items, isDiffMode, revealPath, paneBodyLines, setTreeScrollTop]);
 
-  // Full manual refresh: drop every cache, reload the tree, reset pane scroll and
-  // re-fetch git state.
+  // Full manual refresh: drop every cache, reload the tree, reset pane scroll,
+  // collapse state in BOTH trees, and re-fetch git state.
   const refreshAll = useCallback(() => {
     clearDirCache();
     clearGitStatusCache();
@@ -155,11 +178,15 @@ export const WorkspaceFileMode = () => {
     clearContentCache();
     clearWorkspaceDiffCache();
     reload();
+    // Diff mode's collapse state lives in `useDiffFileTree`, not in the store, so
+    // `reload()` above does not touch it — without this the diff tree would keep
+    // directories collapsed across a refresh while the full tree resets.
+    resetDiffCollapsed();
     scrollActivePane("top");
     setRefreshToken((t) => t + 1);
     revealedRef.current.clear();
     void refreshGit(rootPath);
-  }, [reload, scrollActivePane, refreshGit, rootPath]);
+  }, [reload, scrollActivePane, refreshGit, rootPath, resetDiffCollapsed]);
 
   /** Keybindings that work regardless of which pane has focus. Returns true when handled. */
   const handleGlobalKey = useCallback(

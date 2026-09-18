@@ -264,6 +264,8 @@ export function useDiffFileTree(
 ): {
   items: FlatTreeItem[];
   toggleDir: (path: string) => void;
+  revealDiffDirs: (keys: readonly string[]) => void;
+  resetDiffCollapsed: () => void;
 } {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -282,7 +284,40 @@ export function useDiffFileTree(
     [rootPath]
   );
 
-  return { items, toggleDir };
+  /**
+   * Expand directories by their diff-tree KEYS (relative paths).
+   *
+   * The mirror of `useFileTree`'s `revealPath` for the diff tree, and the reason
+   * keys are passed in rather than derived here: a merged directory node's key is
+   * the deepest real dir of the merged chain, so `app/src/utils` is one key and
+   * `app/src` is not a row at all. Splitting the file's path would produce keys
+   * that hide nothing.
+   *
+   * Callers get the chain from `changedFileJumpTarget`, which builds it with
+   * nothing collapsed — reading it off the rendered rows cannot work, since a
+   * collapsed ancestor removes the target row itself.
+   */
+  const revealDiffDirs = useCallback((keys: readonly string[]) => {
+    if (keys.length === 0) return;
+    setCollapsed((prev) => {
+      if (keys.every((key) => !prev.has(key))) return prev;
+      const next = new Set(prev);
+      for (const key of keys) next.delete(key);
+      return next;
+    });
+  }, []);
+
+  /**
+   * Drop every collapse choice, restoring the diff tree to its initial all-expanded
+   * shape. Used by the panel's manual refresh so `r` resets BOTH trees — the
+   * full-tree view's `expanded` is already cleared there, and leaving the diff
+   * pane collapsed would make the same key mean different things per mode.
+   */
+  const resetDiffCollapsed = useCallback(() => {
+    setCollapsed((prev) => (prev.size === 0 ? prev : new Set()));
+  }, []);
+
+  return { items, toggleDir, revealDiffDirs, resetDiffCollapsed };
 }
 
 // ============================================================================

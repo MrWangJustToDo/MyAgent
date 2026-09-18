@@ -10,7 +10,8 @@ import assert from "node:assert/strict";
 const { registerCoreEnv } = await import(new URL("../../core/dist/index.mjs", import.meta.url).href);
 registerCoreEnv({ rootPath: "/repo" });
 
-const { buildDiffTreeItems, orderedChangedFiles } = await import("../dist/utils/workspace-diff-tree.mjs");
+const { buildDiffTreeItems, changedFileJumpTarget, orderedChangedFiles } =
+  await import("../dist/utils/workspace-diff-tree.mjs");
 
 const status = (entries) => new Map(entries);
 
@@ -142,6 +143,123 @@ const names = (items) => items.map((i) => `${i.name}${i.type === "directory" ? "
 {
   assert.deepEqual(orderedChangedFiles(new Map(), "/repo"), []);
   assert.deepEqual(orderedChangedFiles(status([["a.ts", "M"]]), ""), []);
+}
+
+// ancestorKeys: the chain of rendered directory ROW keys above each row, so a
+// consumer can tell whether a file is reachable and which keys hide it.
+//
+// This is what `[` / `]` uses to expand a hidden jump target, and it cannot be
+// re-derived by splitting the file path: the MERGED node's key is the deepest
+// real dir of the chain, so `app/src/utils` is ONE key here — `app/src` is not a
+// directory row at all.
+{
+  const items = buildDiffTreeItems(status([["app/src/utils/generateDir.ts", "M"]]), "/repo", new Set());
+  assert.deepEqual(
+    items.map((i) => [i.path.replace("/repo/", ""), i.ancestorKeys]),
+    [
+      // The first tree level is never merged, so `app` is its own row.
+      ["app", []],
+      ["app/src/utils", ["app"]],
+      // The file's chain is the rows above it — note `app/src` is absent.
+      ["app/src/utils/generateDir.ts", ["app", "app/src/utils"]],
+    ]
+  );
+
+  // Collapsing any key in that chain is exactly what makes the file row
+  // disappear — which is why the consumer must expand it before selecting.
+  for (const key of ["app", "app/src/utils"]) {
+    const collapsed = buildDiffTreeItems(status([["app/src/utils/generateDir.ts", "M"]]), "/repo", new Set([key]));
+    assert.ok(
+      !collapsed.some((i) => i.type === "file"),
+      `the file row is indeed hidden once its reported ancestor key "${key}" is collapsed`
+    );
+  }
+}
+
+// Nested: every rendered directory row below the (never-merged) first level
+// contributes one key, and keys are FULL paths from the root.
+{
+  const items = buildDiffTreeItems(status([["a/b/c/d/file.ts", "M"]]), "/repo", new Set());
+  const file = items.find((i) => i.type === "file");
+  assert.deepEqual(
+    file?.ancestorKeys,
+    ["a", "a/b/c/d"],
+    "one key per rendered directory row, keyed as full paths from the root"
+  );
+  // The point: `a/b` and `a/b/c` are not rows, so splitting the file path would
+  // produce keys that hide nothing.
+  assert.ok(!file?.ancestorKeys?.includes("a/b"), "the merged interior is not a row");
+}
+
+// Workspace `[` / `]` jump: the reveal chain must be reported even while the
+// target is HIDDEN.
+//
+// A collapsed directory removes the target's own row from the tree, so it cannot
+// report its own ancestors — a first fix read the chain off the rendered rows and
+// was dead code for exactly this case (found nothing, revealed nothing) while
+// every pure formatter test still passed. Pin the collapsed case directly.
+{
+  const map = status([
+    ["a/b/c/d/file.ts", "M"],
+    ["top.ts", "M"],
+  ]);
+  const target = "/repo/a/b/c/d/file.ts";
+  const first = changedFileJumpTarget(map, "/repo", null, 1);
+  assert.deepEqual(first, { target, revealKeys: ["a", "a/b/c/d"] });
+
+  // The target row really is gone while collapsed...
+  assert.ok(
+    !buildDiffTreeItems(map, "/repo", new Set(["a"])).some((r) => r.path === target),
+    "the target row is hidden while its ancestor is collapsed"
+  );
+  // ...so a chain read from the rendered rows would be empty (the dead-code
+  // variant this exists to prevent)...
+  assert.equal(
+    buildDiffTreeItems(map, "/repo", new Set(["a"])).find((r) => r.path === target),
+    undefined,
+    "looking the row up in a collapsed tree finds nothing"
+  );
+  // ...while the real chain is still reported, and expanding it reveals the file.
+  assert.deepEqual(
+    changedFileJumpTarget(map, "/repo", null, 1)?.revealKeys,
+    ["a", "a/b/c/d"],
+    "the chain is reported even though the row is not in the tree"
+  );
+  assert.ok(
+    buildDiffTreeItems(map, "/repo", new Set()).some((r) => r.path === target),
+    "expanding every reported key reveals the file"
+  );
+}
+
+// Walk order, wrap-around, and the no-op cases.
+{
+  const map = status([
+    ["a/b/c/d/file.ts", "M"],
+    ["top.ts", "M"],
+  ]);
+  const target = "/repo/a/b/c/d/file.ts";
+  assert.deepEqual(changedFileJumpTarget(map, "/repo", target, 1), {
+    target: "/repo/top.ts",
+    revealKeys: [],
+  });
+  assert.deepEqual(changedFileJumpTarget(map, "/repo", "/repo/top.ts", 1), {
+    target,
+    revealKeys: ["a", "a/b/c/d"],
+  });
+  assert.deepEqual(changedFileJumpTarget(map, "/repo", target, -1), {
+    target: "/repo/top.ts",
+    revealKeys: [],
+  });
+  // Backwards from nothing selected lands on the LAST file, not the first.
+  assert.deepEqual(changedFileJumpTarget(map, "/repo", null, -1), { target: "/repo/top.ts", revealKeys: [] });
+
+  assert.equal(changedFileJumpTarget(new Map(), "/repo", null, 1), null);
+  // One changed file: the walk stays put, so it is a no-op rather than a
+  // self-selection (which would drop the preview pane's focus).
+  const single = status([["only.ts", "M"]]);
+  assert.equal(changedFileJumpTarget(single, "/repo", "/repo/only.ts", 1), null);
+  // A stale selection (path no longer changed) restarts the walk from the top.
+  assert.equal(changedFileJumpTarget(map, "/repo", "/repo/gone.ts", 1)?.target, target);
 }
 
 console.log("workspace-diff-tree validation passed");
