@@ -61,6 +61,11 @@ export { countSubagentIterations, deriveSubagentRunStats, hasBeginSummaryCall } 
 // The task tool itself, so a validation can assert what the model-facing projection actually
 // contains (the iteration numbers must not be in it).
 export { createTaskTool, taskOutputSchema } from "../agent/subagent/task-tool.js";
+// The three tools that settle their own abort, so the cancellation contract can be driven
+// through their real factories (their `toModelOutput` must tell the model, not only the UI).
+export { createRunCommandTool } from "../agent/tools/run-command-tool.js";
+export { createWebfetchTool } from "../agent/tools/webfetch-tool.js";
+export { createWebsearchTool } from "../agent/tools/websearch-tool.js";
 export {
   applySubagentCancelNotice,
   SUBAGENT_CANCELLED_NOTICE,

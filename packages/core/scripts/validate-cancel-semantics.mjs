@@ -1,0 +1,417 @@
+/**
+ * Validation: the user-cancel contract is one semantic with two wire shapes.
+ *
+ * Run: pnpm --filter @codent/core run validate:cancel-semantics
+ *
+ * A cancelled tool call can be written by three producers, and they do not agree on the field
+ * name: the framework fallback and the built-in tools that catch their own abort write
+ * `cancelled: true`, while the `task` tool writes `aborted: true` (its subagent cancels
+ * instead of throwing, so the tool returns normally). Reading only one of the two is how the
+ * original defect appeared — "only `task` shows cancelled".
+ *
+ * The invariant that keeps the two shapes one semantic is `isCancelledOutputMarker` (both
+ * markers) plus `isSyntheticCancelOutput` (which of the two `cancelled` producers it is).
+ * This script pins:
+ *
+ *   1. the marker tables — both markers, both read from `output` alone
+ *   2. the framework fallback's real output — every tool gets a readable cancel, opted in or not
+ *   3. both markers readable off a persisted part, the way a host reads them after a resume
+ *   4. "could Esc cut this tool short?" answered at every tool definition site, enforced
+ *      against the source so a new tool cannot quietly skip the question
+ *   5. the model-facing projection carries the flag (it is not a UI-only concern)
+ *   6. the derived status flags cannot contradict a cancel
+ */
+
+import assert from "node:assert/strict";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+
+// The render-layer readers are public (`@codent/core`) — a host uses them to render a part it
+// was handed; the producers and the projection registry are internal (`dev.mjs`).
+import {
+  TOOL_CANCELLED_MESSAGE,
+  applySubagentCancelNotice,
+  cancelInFlightToolCalls,
+  cancelIncompleteToolCalls,
+  createTaskTool,
+  deriveSubagentRunStats,
+  taskOutputSchema,
+} from "../dist/dev.mjs";
+import {
+  formatToolOutput,
+  getInlineSummary,
+  isCancelledOutputMarker,
+  isCancelledToolCall,
+  isSyntheticCancelOutput,
+} from "../dist/index.mjs";
+
+const SRC = new URL("../src/", import.meta.url).pathname;
+
+// ============================================================================
+// 1. The marker tables: one semantic, two field names
+// ============================================================================
+
+assert.equal(isCancelledOutputMarker({ cancelled: true }), true, "`cancelled` is a cancel marker");
+assert.equal(isCancelledOutputMarker({ aborted: true }), true, "`aborted` is a cancel marker");
+assert.equal(isCancelledOutputMarker({ cancelled: false }), false, "an explicit false is not a cancel");
+assert.equal(isCancelledOutputMarker({}), false, "no marker is not a cancel");
+assert.equal(isCancelledOutputMarker(null), false, "a null output is not a cancel");
+assert.equal(isCancelledOutputMarker("cancelled"), false, "a bare string is not a cancel");
+
+// The two `cancelled` producers differ in kind, and only the empty one may skip rendering.
+const synthetic = { success: false, error: TOOL_CANCELLED_MESSAGE, cancelled: true };
+const ownCatch = { success: false, cancelled: true, command: "x", stdout: "partial", exitCode: -1 };
+assert.equal(isSyntheticCancelOutput(synthetic), true, "the framework payload is the synthetic one");
+assert.equal(isSyntheticCancelOutput(ownCatch), false, "a tool's own partial result is a real result");
+assert.equal(isCancelledOutputMarker(ownCatch), true, "though both are cancels");
+
+// The marker union lives in exactly one place. If a "cleanup" ever drops `aborted`, every
+// persisted `task` row silently turns into a tool failure with nothing else failing.
+const abortSrc = readFileSync(join(SRC, "runtime-types/abort.ts"), "utf8");
+assert.ok(
+  /\(output as \{ cancelled\?: boolean \}\)\.cancelled === true[\s\S]{0,120}\(output as \{ aborted\?: boolean \}\)\.aborted === true/.test(
+    abortSrc
+  ),
+  "`isCancelledOutputMarker` must keep reading BOTH marker fields"
+);
+assert.ok(
+  /const SYNTHETIC_CANCEL_KEYS = new Set\(\[[^\]]*"cancelled"[^\]]*"aborted"[^\]]*\]\)/.test(abortSrc),
+  "the synthetic-payload key table must keep both markers"
+);
+
+// ============================================================================
+// 2. The framework fallback: every tool gets a readable cancel, opted in or not
+//
+// Driven through the real writer (`cancelInFlightToolCalls` / `cancelIncompleteToolCalls`),
+// not a hand-written payload — the original defect was that the marker was written only onto
+// the appended `tool-result` and never onto the part output the host reads.
+// ============================================================================
+
+{
+  const names = ["run_command", "task", "grep", "read_file", "glob", "list_file", "tree", "webfetch", "write_file"];
+
+  const inFlight = (name) => [
+    {
+      id: `m-${name}`,
+      role: "assistant",
+      parts: [{ type: "tool-call", id: `call-${name}`, name, state: "input-complete", arguments: '{"path":"a.ts"}' }],
+    },
+  ];
+  const truncated = (name) => [
+    {
+      id: `m-${name}`,
+      role: "assistant",
+      parts: [{ type: "tool-call", id: `call-${name}`, name, state: "input-streaming", arguments: '{"pa' }],
+    },
+  ];
+
+  for (const name of names) {
+    for (const [cancel, build] of [
+      [cancelInFlightToolCalls, inFlight],
+      [cancelIncompleteToolCalls, truncated],
+    ]) {
+      const [part, result] = cancel(build(name), TOOL_CANCELLED_MESSAGE)[0].parts;
+      assert.equal(isCancelledToolCall(part), true, `${name}: the part carries the marker`);
+      assert.equal(getInlineSummary(part, name), "cancelled", `${name}: the row reads as cancelled`);
+      assert.equal(formatToolOutput(part.output, name), TOOL_CANCELLED_MESSAGE, `${name}: the body reads as cancelled`);
+      // The wire copy must agree with the part, or the model sees a different verdict than the user.
+      assert.ok(
+        String(result.content).includes('"cancelled":true'),
+        `${name}: the appended tool-result carries the marker for the model wire`
+      );
+      assert.equal(
+        isCancelledOutputMarker(JSON.parse(String(result.content))),
+        true,
+        `${name}: wire output is a cancel`
+      );
+    }
+  }
+
+  // Same channel, opposite verdicts: a genuine failure must keep its own reading.
+  const failure = {
+    type: "tool-call",
+    id: "call-f",
+    name: "grep",
+    state: "error",
+    arguments: "{}",
+    output: { error: "boom" },
+  };
+  assert.equal(isCancelledToolCall(failure), false, "a real failure is not a cancel");
+  assert.equal(getInlineSummary(failure, "grep"), null, "and it keeps the failure verdict");
+}
+
+// ============================================================================
+// 3. Both markers readable off a persisted part (a host's only view after a resume)
+// ============================================================================
+
+{
+  const taskPart = {
+    type: "tool-call",
+    id: "call-t",
+    name: "task",
+    state: "complete",
+    arguments: "{}",
+    output: {
+      subagentId: "sub_1",
+      summary: applySubagentCancelNotice("Now let me look at…", true),
+      truncated: false,
+      iterations: 1,
+      maxIterations: 50,
+      reachedLimit: false,
+      incomplete: false,
+      aborted: true,
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      durationMs: 1,
+      cachedOutputPath: null,
+    },
+  };
+  assert.equal(isCancelledToolCall(taskPart), true, "the task tool's own marker is readable off the part");
+  assert.equal(getInlineSummary(taskPart, "task"), "cancelled", "a cancelled task reads as cancelled on the row");
+  const body = formatToolOutput(taskPart.output, "task");
+  assert.ok(body.includes("cancelled"), `the detailed block words it as cancelled (${body})`);
+  assert.ok(body.includes("[Task cancelled by user.]"), "and the cancel notice survives into the body");
+  assert.ok(!body.includes("stalled"), "and it is never worded as a stall");
+
+  // ...while a normal task result stays a normal result.
+  const cleanPart = { ...taskPart, output: { ...taskPart.output, aborted: false, summary: "found it" } };
+  assert.equal(isCancelledToolCall(cleanPart), false, "a clean task is not a cancel");
+}
+
+// ============================================================================
+// 4. "Can Esc cut this tool short?" — answered at every definition site
+//
+// A tool that does not declare a marker is not broken: the fallback in section 2 still marks
+// its row. It just cannot use `cancelled`/`aborted` as an *output field*, which only matters
+// for a tool that catches its own abort to keep partial output. That is a real decision, so it
+// is declared with the tool.
+// ============================================================================
+
+/** Tools whose own `catch` settles the abort must declare the marker they write. */
+const CATCHER_TOOLS = [
+  {
+    file: "agent/tools/run-command-tool.ts",
+    name: "run_command",
+    marker: "cancelled",
+    // Its `catch` returns a full result (partial stdout, synthesized exit code) with the marker.
+    evidence: [
+      [/cancelled: true/, "settles its own abort with `cancelled: true` instead of throwing"],
+      [/isAbortError\(/, "classifies the abort through the shared predicate, not a local heuristic"],
+    ],
+  },
+  {
+    file: "agent/tools/webfetch-tool.ts",
+    name: "webfetch",
+    marker: "cancelled",
+    evidence: [
+      [/cancelled: true/, "settles its own abort with `cancelled: true` instead of throwing"],
+      [/isAbortError\(/, "classifies the abort through the shared predicate"],
+    ],
+  },
+  {
+    file: "agent/tools/websearch-tool.ts",
+    name: "websearch",
+    marker: "cancelled",
+    evidence: [
+      [/cancelled: true/, "settles its own abort with `cancelled: true` instead of throwing"],
+      [/isAbortError\(/, "classifies the abort through the shared predicate"],
+    ],
+  },
+  {
+    file: "agent/subagent/task-tool.ts",
+    name: "task",
+    marker: "aborted",
+    // The task tool does not catch anything: its subagent cancels without throwing, so the flag
+    // comes from the run result and is a required boolean on the output schema.
+    evidence: [
+      [/aborted: result\.aborted/, "passes the subagent's cancel verdict through untouched"],
+      [/aborted: z\.boolean\(\)/, "declares it as a required boolean status flag"],
+    ],
+  },
+];
+
+/** Every other built-in tool, with the reason it needs no marker field. */
+const NO_MARKER_REASON = {
+  read_file: "no partial output worth keeping; the fallback marks the row",
+  list_file: "no partial output worth keeping; the fallback marks the row",
+  glob: "no partial output worth keeping; the fallback marks the row",
+  grep: "no partial output worth keeping; the fallback marks the row",
+  tree: "no partial output worth keeping; the fallback marks the row",
+  get_command_output: "background-job poll; a cancel leaves the job running, nothing to report",
+  kill_command: "background-job control; synchronous",
+  write_file: "synchronous and short; cannot be interrupted mid-write",
+  edit_file: "synchronous and short; cannot be interrupted mid-write",
+  delete_file: "synchronous and short; cannot be interrupted mid-write",
+  todo: "local state mutation; nothing to report when cut short",
+  complete_plan: "local state mutation; nothing to report when cut short",
+  ask_user: "blocks on the user, not on the run; a cancel is the interaction layer's story",
+};
+
+function walk(dir) {
+  return readdirSync(dir).flatMap((entry) => {
+    const path = join(dir, entry);
+    return statSync(path).isDirectory() ? walk(path) : path.endsWith(".ts") ? [path] : [];
+  });
+}
+
+{
+  // Every `defineServerTool` / `defineClientTool` definition site, by source.
+  const defined = [];
+  for (const file of walk(join(SRC, "agent"))) {
+    const src = readFileSync(file, "utf8");
+    if (!/define(?:Server|Client)Tool\(/.test(src)) continue;
+    for (const match of src.matchAll(/\bname: "([a-z_]+)",\n/g)) defined.push({ name: match[1], file });
+  }
+  const names = defined.map((d) => d.name);
+  assert.ok(names.length >= 12, `expected the built-in tool set, found ${names.length}: ${names.join(",")}`);
+  for (const required of ["run_command", "task", "grep", "read_file", "todo", "webfetch"]) {
+    assert.ok(names.includes(required), `${required} must be part of the enumerated tool set`);
+  }
+
+  const catcherNames = new Set(CATCHER_TOOLS.map((t) => t.name));
+  for (const { name, file } of defined) {
+    if (catcherNames.has(name)) continue;
+    assert.ok(
+      name in NO_MARKER_REASON,
+      `${name} (${file.replace(SRC, "")}): unclassified — every tool must answer whether Esc can cut it ` +
+        `short. Add it to CATCHER_TOOLS (it declares the marker it writes) or NO_MARKER_REASON (with why ` +
+        `it declares none).`
+    );
+    assert.ok(NO_MARKER_REASON[name]?.trim().length > 10, `${name}: the no-marker reason must say something real`);
+    // The two answers are exclusive: a tool that declares no marker must not write one.
+    const src = readFileSync(file, "utf8");
+    assert.ok(
+      !/\bcancelled: true\b|\baborted: true\b/.test(src),
+      `${name}: claims no cancel marker but writes one — the tables disagree with the source`
+    );
+  }
+
+  // A stale entry is an error too: the two tables must describe the tool set exactly.
+  for (const name of Object.keys(NO_MARKER_REASON)) {
+    assert.ok(names.includes(name), `NO_MARKER_REASON.${name} is stale — no such tool definition site`);
+  }
+  for (const { file, name, evidence } of CATCHER_TOOLS) {
+    assert.ok(names.includes(name), `CATCHER_TOOLS.${name} is stale — no such tool definition site`);
+    const src = readFileSync(join(SRC, file), "utf8");
+    for (const [pattern, why] of evidence) {
+      assert.ok(pattern.test(src), `${name}: ${why}`);
+    }
+  }
+
+  // The subagent side of the task tool: a cancel is recognized there, not in the tool.
+  const runSubagentSrc = readFileSync(join(SRC, "agent/subagent/run-subagent.ts"), "utf8");
+  assert.ok(
+    /applySubagentCancelNotice\(output, aborted\)/.test(runSubagentSrc),
+    "run-subagent: a cancelled run appends the notice to the summary it hands back"
+  );
+  assert.ok(
+    /aborted \|\|[\s\S]{0,200}status === "aborted"/.test(runSubagentSrc),
+    "run-subagent: derives the flag from the child status AND the abort signal, not one of them"
+  );
+  const planSrc = readFileSync(join(SRC, "agent/plan/create-plan-tool.ts"), "utf8");
+  assert.ok(
+    /createPlanAuthoringTool\(name: "create_plan" \| "update_plan"/.test(planSrc),
+    "create_plan / update_plan are still one parameterized authoring tool"
+  );
+  assert.ok(!/\bcancelled: true\b|\baborted: true\b/.test(planSrc), "plan authoring writes no cancel marker");
+  const beginSummarySrc = readFileSync(join(SRC, "agent/subagent/begin-summary-tool.ts"), "utf8");
+  assert.ok(/name: BEGIN_SUMMARY_TOOL_NAME/.test(beginSummarySrc), "begin_summary takes its name from a constant");
+  assert.ok(!/\bcancelled: true\b|\baborted: true\b/.test(beginSummarySrc), "begin_summary writes no cancel marker");
+}
+
+// ============================================================================
+// 5. The flag is not a UI-only concern: the model is told too
+// ============================================================================
+
+{
+  // `defineServerTool` moves the projection into the registry, so the composed chain the engine
+  // calls is `toModelOutputRegistry.get(name)` — that is what must carry the cancel notice.
+  const toModelOutputRegistry = (await import("../dist/dev.mjs")).toModelOutputRegistry;
+
+  createTaskTool({ parentAgentId: "a", manager: { getAgent: () => undefined } });
+  const taskProjection = toModelOutputRegistry.get("task");
+  assert.equal(typeof taskProjection, "function", "the task tool registers its model-facing projection");
+  const projected = await taskProjection({
+    toolCallId: "c",
+    input: {},
+    output: { summary: "partial", reachedLimit: false, incomplete: false, aborted: true, truncated: false },
+  });
+  const text = (Array.isArray(projected) ? projected : [projected]).map((p) => p?.content ?? "").join("\n");
+  assert.ok(text.includes("aborted=true"), `the task projection must carry the cancel flag, got: ${text}`);
+  assert.ok(text.includes("partial"), "and the summary the subagent produced");
+
+  // A tool that catches its own abort must not let the model read a cancel as a result. The
+  // three producers are registered through their real factories — the projection is part of the
+  // contract, not a UI detail.
+  const { createRunCommandTool, createWebfetchTool, createWebsearchTool } = await import("../dist/dev.mjs");
+  for (const [name, make, output, expected] of [
+    [
+      "run_command",
+      createRunCommandTool,
+      { command: "x", stdout: "partial", stderr: "", exitCode: -1, success: false, cancelled: true },
+      "[Command cancelled by user.]",
+    ],
+    [
+      "websearch",
+      createWebsearchTool,
+      { query: "q", results: [], provider: "", cancelled: true },
+      "[Search cancelled by user.]",
+    ],
+    [
+      "webfetch",
+      createWebfetchTool,
+      { url: "u", content: "", contentType: "text/plain", cancelled: true },
+      "[Fetch cancelled by user.]",
+    ],
+  ]) {
+    assert.equal(typeof make, "function", `${name}: factory is reachable for the projection check`);
+    make({ managed: undefined }); // registration is a side effect; the registry is what runs
+    const toModelOutput = toModelOutputRegistry.get(name);
+    assert.equal(typeof toModelOutput, "function", `${name}: registered its model-facing projection`);
+    const out = await toModelOutput({ toolCallId: "c", input: {}, output });
+    const body = (Array.isArray(out) ? out : [out]).map((p) => p?.content ?? "").join("\n");
+    assert.ok(body.includes(expected), `${name}: the model reads a cancel notice, got: ${body}`);
+    assert.ok(!/Exit code: -?\d/.test(body), `${name}: the model must not read a result for a stopped call`);
+  }
+}
+
+// The task tool's marker is a status flag, not an optional decorator: a required boolean on the
+// output schema (`false` on every clean run) that reaches the model as `aborted=…`.
+assert.ok(taskOutputSchema.shape.aborted, "task.aborted exists on the schema");
+assert.equal(
+  taskOutputSchema.shape.aborted.isOptional(),
+  false,
+  "task.aborted is a required status flag — collapsing it into an optional marker changes the wire contract"
+);
+assert.equal(taskOutputSchema.shape.cancelled, undefined, "task declares ONE marker, not both");
+
+// ============================================================================
+// 6. The derived status flags cannot contradict a cancel
+// ============================================================================
+
+{
+  // `deriveSubagentRunStats` only evaluates `incomplete` on the `!aborted` path, so an aborted
+  // run must never also read as "stalled" — a consumer that reads `incomplete` alone (the
+  // progress-summary fallback does) would report the wrong reason.
+  const stats = deriveSubagentRunStats({
+    messages: [{ id: "a1", role: "assistant", parts: [{ type: "text", content: "Working…" }] }],
+    maxIterations: 50,
+    finishReason: null,
+    output: "(no summary)",
+    aborted: true,
+  });
+  assert.equal(stats.incomplete, false, "an aborted run is not `incomplete` — consumers read that as `stalled`");
+  assert.notEqual(stats.reachedLimit, true, "and it is not a budget cutoff");
+
+  // The stub the pre-fork coordinator settles a never-started run with must obey the same
+  // invariant: the consumer reads `incomplete` without consulting `aborted`.
+  const preforkSrc = readFileSync(join(SRC, "agent/subagent/task-prefork.ts"), "utf8");
+  const stub = /function cancelledStubResult\(\): SubagentResult \{([\s\S]*?)\n\}/.exec(preforkSrc);
+  assert.ok(stub, "the pre-fork cancel stub still exists");
+  assert.ok(/aborted: true/.test(stub[1]), "the stub is a cancel");
+  assert.ok(
+    /incomplete: false/.test(stub[1]),
+    "and it must NOT also be `incomplete` — that flag is cancel-unaware on the consumer side"
+  );
+}
+
+console.log("cancel-semantics validation passed");

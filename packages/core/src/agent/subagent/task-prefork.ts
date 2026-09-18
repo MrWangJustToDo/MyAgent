@@ -31,7 +31,12 @@ function cancelledStubResult(): SubagentResult {
     durationMs: 0,
     usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
     reachedLimit: false,
-    incomplete: true,
+    // `incomplete` means "finished, but not cleanly" — `deriveSubagentRunStats` only ever
+    // sets it on the `!aborted` path, so a cancel can never carry it. This stub is
+    // unreachable today (a registered entry is always joined, and `join` deletes it before
+    // `abortAll` can mark it), but it is the one place that contradicts that invariant, and
+    // `incomplete` is not cancel-aware: a stale flag here would read as "stalled".
+    incomplete: false,
     aborted: true,
   };
 }

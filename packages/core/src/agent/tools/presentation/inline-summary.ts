@@ -95,7 +95,11 @@ export function getInlineSummary(part: ToolCallPart, toolName: string): string |
       // row: the parent's result distinguishes a budget cutoff (`reachedLimit`)
       // from a stall (`incomplete` without a limit) from a natural end. Mirrors
       // the wording of `formatTaskOutput` so the row and the detailed block agree.
-      if (output.aborted === true) return "cancelled";
+      //
+      // The cancel case is NOT repeated here: `aborted` is one of the cancel markers, so
+      // `isCancelledToolCall` above already returned "cancelled" for it. A second check on
+      // this same output was unreachable — and it is the shape that made the marker look
+      // like it needed per-tool handling.
       if (output.reachedLimit === true) return "limit reached";
       if (output.incomplete === true) return "stalled";
       return null;
