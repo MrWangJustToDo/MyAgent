@@ -8,6 +8,7 @@ import { BG, COLORS } from "../theme/colors.js";
 import { formatToolOutput } from "../utils/format";
 import { splitStreamingLines } from "../utils/streaming-output-lines.js";
 import { hasDetailedOutputBlock, keepsCompactRow } from "../utils/tool-display.js";
+import { isCancelledToolCall } from "../utils/tool-part.js";
 
 import { TodoToolOutputView } from "./TodoToolOutputView.js";
 
@@ -74,7 +75,15 @@ export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState:
   // modes; anything else allowed to render in compact is one clamped line.
   const structured = keepsCompactRow(toolName) && !getToolPresentation(toolName)?.text;
   const lines = mode === "compact" && !structured ? [clampCompactLine(outputLines[0] ?? "")] : outputLines;
-  const failed = toolName === "run_command" && (part.output as { success?: boolean } | undefined)?.success === false;
+  // A cancelled command carries `success: false`, so the old check painted its output block in
+  // the failure color while the header showed a neutral ⚠ — one row, two verdicts. It did not
+  // fail; it was stopped. The muted/dim treatment is the same "neither succeeded nor failed"
+  // choice the glyph makes, and it survives the part being rewritten (the synthetic cancel
+  // payload and the tool's own catch both leave `success: false`).
+  const failed =
+    toolName === "run_command" &&
+    (part.output as { success?: boolean } | undefined)?.success === false &&
+    !isCancelledToolCall(part);
   const lineColor = failed ? COLORS.danger : COLORS.muted;
 
   return (

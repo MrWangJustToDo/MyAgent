@@ -1,3 +1,5 @@
+import { isSyntheticCancelOutput } from "../../../runtime-types/abort.js";
+
 import { splitStreamingLines } from "./lines.js";
 import { getToolPresentation } from "./registry.js";
 
@@ -70,10 +72,17 @@ function formatRunCommandOutput(output: RunCommandOutput): string {
     return `Background job ${output.jobId} (${output.status ?? "running"}): ${output.command}`;
   }
 
-  const { stdout, stderr, exitCode, success } = output;
+  const { stdout, stderr, exitCode, success, cancelled } = output;
   const lines: string[] = [];
 
-  if (!success) {
+  // `formatToolOutput` already short-circuits the framework's synthetic cancel payload before it
+  // reaches a tool's formatter. This branch is for the OTHER cancel shape: the tool's own catch
+  // returns a full run_command output with `cancelled: true` and a synthesized `exitCode: -1`.
+  // Only these two differ, and only for a moment — the synthetic one is what you see the instant
+  // you press Esc, and it is replaced by the full one on the next pass (the same row read
+  // `undefined` then `-1`). Neither number is a result, so print neither; the ⚠ glyph and the
+  // inline summary already carry the cancelled state.
+  if (!success && !cancelled) {
     lines.push(`Exit code: ${exitCode}`);
   }
 
@@ -96,6 +105,7 @@ function formatRunCommandOutput(output: RunCommandOutput): string {
   }
 
   if (lines.length === 0) {
+    if (cancelled) return "Cancelled by user.";
     return success ? "Command completed successfully" : `Command failed (exit ${exitCode})`;
   }
 
@@ -250,6 +260,21 @@ function formatTaskOutput(output: TaskOutput): string {
 /** Format tool output for display based on tool name. */
 export function formatToolOutput(output: unknown, toolName?: string): string {
   if (output === undefined || output === null) return "";
+
+  // The framework's abort fallback (`cancelInFlightToolCalls` / `cancelIncompleteToolCalls`)
+  // settles a tool that never produced a result with a SHARED synthetic payload —
+  // `{ success: false, error, cancelled: true }` — regardless of which tool it was. It is not any
+  // tool's output schema: `run_command` has no `exitCode` in it (so this rendered the literal
+  // `Exit code: undefined` on the first frame after a cancel, until the tool's own catch replaced
+  // the part one message later with `-1`), `todo` has no `stats` (its formatter threw), and
+  // `edit_file` has no `path` (so it rendered "Edited undefined"). Reading it here, before
+  // dispatching on tool name, is what makes a cancelled row render as cancelled for EVERY tool
+  // instead of each formatter having to defend against a shape it can never legitimately receive.
+  //
+  // Only the SYNTHETIC one is short-circuited. A tool that caught its own abort returns a full
+  // output with `cancelled: true` and whatever it had produced — that is a real result, and its
+  // formatter renders it (minus the exit code the tool synthesizes).
+  if (isSyntheticCancelOutput(output)) return "Cancelled by user.";
 
   if (toolName) {
     const uiRenderer = getToolPresentation(toolName)?.text;

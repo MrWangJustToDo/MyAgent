@@ -229,7 +229,7 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
               `[Command cancelled by user.] The run was stopped while this command was executing; ` +
               `the partial output below is what it produced before the stop.\n` +
               (output.stderr?.trim?.() ? `stderr:\n${output.stderr}\n` : "") +
-              output.stdout,
+              (output.stdout ?? ""),
           },
         ];
       }

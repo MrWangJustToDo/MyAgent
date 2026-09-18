@@ -1053,6 +1053,107 @@ instance.unmount();
   );
 }
 
+// ── a cancelled run_command must not render as a failure ─────────────────────
+// Runs LAST, deliberately: it mounts extra roots, and `useStatic` / `useDynamic` are module
+// singletons that earlier assertions read exact row counts from — mounting mid-file shifted
+// those counts and broke two unrelated checks. At the end nothing is left to disturb.
+//
+// The two shapes of ONE cancelled command, taken verbatim from the session that reported this
+// (`ses_mu6ui27o_wf3j4m`, lines 39-40): the framework's abort fallback, which has no `exitCode`
+// at all, and the tool's own catch, which synthesizes `-1`. They are written at different
+// moments, so the row has to be correct for either.
+//
+// Scoped to the TEXT, not the colour: this harness's fake stdout makes the renderer emit no
+// SGR at all (`frameLines` never sees an escape to strip), so a colour assertion here would
+// pass vacuously. The body/warning colour agreement is pinned at the source level in
+// `test/abort-and-streaming-bounds.test.mjs` instead.
+{
+  const cancelCases = [
+    ["framework fallback", { success: false, error: "Cancelled by user.", cancelled: true }, false],
+    [
+      "tool's own catch",
+      {
+        command: "total=90; for i in $(seq 1 $total); do ...; done",
+        stdout: "[  6%] =  19:01:47\n[  7%] =  19:01:48",
+        stderr: "",
+        exitCode: -1,
+        durationMs: 0,
+        success: false,
+        cancelled: true,
+        cachedOutputPath: null,
+      },
+      false,
+    ],
+    [
+      "a real failure",
+      {
+        command: "false",
+        stdout: "",
+        stderr: "boom",
+        exitCode: 1,
+        durationMs: 5,
+        success: false,
+        cachedOutputPath: null,
+      },
+      true,
+    ],
+  ];
+
+  const mountCommandRow = async (label, output) => {
+    const row = {
+      id: `msg-cmd-${label}`,
+      role: "assistant",
+      parts: [
+        { type: "text", content: "Running the long task" },
+        {
+          type: "tool-call",
+          id: `call-cmd-${label}`,
+          name: "run_command",
+          state: "complete",
+          arguments: JSON.stringify({ command: output.command ?? "total=90" }),
+          output,
+        },
+      ],
+    };
+    const rowStdout = new FakeStdout();
+    const rowInstance = render(createElement(Screen, { messages: [row] }), {
+      stdout: rowStdout,
+      stdin: fakeStdin(),
+      exitOnCtrlC: false,
+      patchConsole: false,
+      maxFps: 30,
+    });
+    await settle(220);
+    const text = frameLines(rowStdout).join("\n");
+    rowInstance.unmount();
+    return { text };
+  };
+
+  for (const [label, output, isFailure] of cancelCases) {
+    const { text } = await mountCommandRow(label, output);
+    const where = (re) => text.split("\n").find((l) => re.test(l));
+    if (isFailure) {
+      // The guard must be able to fail: a genuine failure still reports its code.
+      record("a real failure still reports its exit code", /Exit code: 1/.test(text), { line: where(/Exit code/) });
+    } else {
+      record(`cancelled run_command (${label}) reports no exit code`, !/Exit code/.test(text), {
+        line: where(/Exit code/),
+      });
+      // The concrete symptom: the synthetic payload has no `exitCode`, so the old
+      // unconditional line interpolated the literal string into the row.
+      record(`cancelled run_command (${label}) leaks no undefined`, !/undefined/.test(text), {
+        line: where(/undefined/),
+      });
+      // The partial output it did produce must survive — a cancel is not "no output".
+      if (output.stdout) {
+        record(`cancelled run_command (${label}) still shows its partial output`, text.includes("19:01:47"), {
+          line: where(/19:01:47/),
+        });
+      }
+    }
+  }
+}
+
 console.error = realConsoleError;
 const pass = results.every((r) => r.pass);
 console.log(

@@ -117,6 +117,112 @@ const part = (name, output) => ({
 }
 
 // ============================================================================
+// A cancelled row's OUTPUT BODY must read as cancelled, for every tool
+//
+// Reconstructed from a real session (`.agents/sessions/ses_mu6ui27o_wf3j4m.session.jsonl`,
+// lines 39-40): the same part id was written twice by two different writers, and the row
+// showed `Exit code: undefined` the instant the user pressed Esc and `Exit code: -1` one
+// message later. The first is the framework's abort fallback — a SHARED synthetic payload
+// (`{ success, error, cancelled }`) that is not any tool's output schema — so the fix can
+// only live before the per-tool dispatch; patching `run_command` alone would leave `todo`
+// throwing and `edit_file` reading "Edited undefined".
+// ============================================================================
+{
+  const { formatToolOutput } = await import("@codent/core");
+  const { readFileSync } = await import("node:fs");
+
+  // --- The two shapes of ONE cancelled run_command, verbatim from the session ---
+  const synthetic = { success: false, error: "Cancelled by user.", cancelled: true };
+  assert.equal(
+    formatToolOutput(synthetic, "run_command"),
+    "Cancelled by user.",
+    "the framework fallback must not render `Exit code: undefined`"
+  );
+
+  const ownCatch = {
+    command: "total=90; for i in $(seq 1 $total); do ...; done",
+    stdout: "[  6%] =  19:01:47\n[  7%] =  19:01:48",
+    stderr: "",
+    exitCode: -1,
+    durationMs: 0,
+    success: false,
+    cancelled: true,
+    cachedOutputPath: null,
+  };
+  const rendered = formatToolOutput(ownCatch, "run_command");
+  assert.ok(!rendered.includes("undefined"), `no undefined leak, got: ${rendered}`);
+  // `-1` is the schema's "not finished" value, not a result. A cancel must not print an exit
+  // code at all — otherwise the row claims a failure code for a run the user stopped.
+  assert.ok(!/Exit code/.test(rendered), `a cancelled run has no exit code to report, got: ${rendered}`);
+  assert.ok(rendered.includes("19:01:47"), "but the partial output it produced is still shown");
+
+  // --- The same synthetic payload, for tools whose formatter would break or lie ---
+  // `todo` dereferences `stats.total` (threw), `edit_file` interpolates `path` ("Edited
+  // undefined"), `write_file` says "Overwrote file: undefined". All three must be caught by
+  // the entry-point short-circuit rather than each growing its own guard.
+  for (const toolName of ["todo", "edit_file", "write_file", "read_file", "glob", "grep", "task"]) {
+    const out = formatToolOutput(synthetic, toolName);
+    assert.equal(out, "Cancelled by user.", `${toolName}: a cancel renders as a cancel`);
+    assert.ok(!out.includes("undefined") && !out.includes("NaN"), `${toolName}: no placeholder leak`);
+  }
+
+  // The `task` tool's OTHER cancel shape (`aborted`, its own summary) is unchanged.
+  const taskAborted = formatToolOutput({ summary: "partial findings", aborted: true }, "task");
+  assert.ok(!taskAborted.includes("undefined"), "an aborted task still renders its summary");
+  assert.ok(taskAborted.includes("partial findings"), "and the summary is what the parent reads");
+
+  // --- The short-circuit must not swallow real results ---
+  const realFailure = formatToolOutput(
+    { command: "false", stdout: "", stderr: "boom", exitCode: 1, durationMs: 5, success: false },
+    "run_command"
+  );
+  assert.ok(realFailure.includes("Exit code: 1"), "a genuine failure still reports its code");
+  const realSuccess = formatToolOutput(
+    { command: "true", stdout: "ok", stderr: "", exitCode: 0, durationMs: 5, success: true },
+    "run_command"
+  );
+  assert.ok(realSuccess.includes("ok") && !realSuccess.includes("Exit code"), "success stays success");
+  // An exit code of -1 from a background job is NOT a cancel — nothing may treat it as one.
+  const running = formatToolOutput(
+    {
+      command: "sleep 9",
+      stdout: "",
+      stderr: "",
+      exitCode: -1,
+      durationMs: 0,
+      success: true,
+      runInBackground: true,
+      jobId: "job_1",
+      status: "running",
+    },
+    "run_command"
+  );
+  assert.ok(running.includes("job_1"), `a running background job is not a cancel, got: ${running}`);
+  // `cancelled: false` (an explicit "not cancelled") must not trigger the short-circuit — it
+  // falls through to whatever the tool's own formatter does with it.
+  const explicitFalse = formatToolOutput({ success: false, error: "boom", cancelled: false }, "grep");
+  assert.ok(!explicitFalse.includes("Cancelled by user."), "`cancelled: false` is not a cancel");
+
+  // The two shapes are distinguished, not merged: the synthetic payload is what gets
+  // short-circuited, and a tool's own partial result must NOT be (it carries real output).
+  const { isSyntheticCancelOutput, isCancelledOutputMarker } = await import("@codent/core");
+  assert.equal(isSyntheticCancelOutput(synthetic), true, "the framework payload is synthetic");
+  assert.equal(isSyntheticCancelOutput(ownCatch), false, "a tool's own partial result is not");
+  assert.equal(isCancelledOutputMarker(ownCatch), true, "though both are cancels");
+  assert.equal(isSyntheticCancelOutput({ aborted: true }), true, "the task tool's marker counts too");
+  assert.equal(isSyntheticCancelOutput({ success: false, error: "boom" }), false, "no marker, no cancel");
+
+  // One row must not carry two verdicts: a cancelled command's output block was painted in the
+  // failure color (`success: false`) while its header showed a neutral ⚠. Asserted on source
+  // because the color only exists once rendered; the render smoke covers the pixels.
+  const outView = readFileSync(new URL("../src/messages/ToolOutputView.tsx", import.meta.url), "utf8");
+  assert.ok(
+    /success === false &&\s*\n\s*!isCancelledToolCall\(part\)/.test(outView),
+    "the output block must not paint a cancelled run in the failure color"
+  );
+}
+
+// ============================================================================
 // `isAbortError` — the ONE abort predicate, across the shapes three layers produce
 //
 // It is shared by the run coordinator and by every tool that holds an `abortSignal`,

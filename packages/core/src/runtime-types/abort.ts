@@ -34,3 +34,29 @@ export function isCancelledOutputMarker(output: unknown): boolean {
   if (typeof output !== "object" || output === null) return false;
   return (output as { cancelled?: boolean }).cancelled === true || (output as { aborted?: boolean }).aborted === true;
 }
+
+/** The fields the framework's synthetic cancel payload carries — and nothing else. */
+const SYNTHETIC_CANCEL_KEYS = new Set(["success", "error", "cancelled", "aborted"]);
+
+/**
+ * The framework's synthetic cancel payload specifically, as opposed to any output that carries a
+ * cancel marker.
+ *
+ * They need distinguishing because a cancelled tool has TWO possible outputs, written by two
+ * different writers at two different moments, and they deserve different rendering:
+ *
+ * - the framework fallback (`cancelInFlightToolCalls` / `cancelIncompleteToolCalls`) settles an
+ *   interrupted tool with `{ success: false, error, cancelled: true }` — a SHARED shape that is no
+ *   tool's output schema, and which carries no output at all, because the tool never returned;
+ * - a tool that caught its own abort returns a FULL output with `cancelled: true` — `run_command`
+ *   includes the stdout the command managed to print before the stop.
+ *
+ * A formatter must not read the first (there is nothing there to read — `run_command` rendered the
+ * literal `Exit code: undefined`, and `todo` threw). The second is a real result and must still
+ * render, minus the exit code. Telling them apart by "does it carry anything besides the marker"
+ * is exactly the difference between "we have no output" and "we have partial output".
+ */
+export function isSyntheticCancelOutput(output: unknown): boolean {
+  if (!isCancelledOutputMarker(output)) return false;
+  return Object.keys(output as object).every((key) => SYNTHETIC_CANCEL_KEYS.has(key));
+}

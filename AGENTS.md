@@ -606,6 +606,21 @@ The persisted session is written from `channel.getMessages()` (`AgentChatControl
 
 Validate: `pnpm --filter @codent/core run validate:wire-override-reaches-adapter` (sections 8-10 persist through a real `SessionService` + `SessionStore` and assert on the log bytes and the reload: no strip placeholder on disk, no continuation prompt on disk, the image still there, the ctx present exactly once, and the same after a restore + re-run).
 
+### A cancelled tool call has TWO possible outputs, and they are not the same shape
+
+Telling a user-cancelled run from a failure is one question, answered in one place per layer: `isAbortError(err, signal)` decides whether a throw is the abort (`runtime-types/abort.ts` — signal first, then the DOM name, then `code === "aborted"` for the local and remote-reconstructed shapes, then the bare `message`, because three layers had three different heuristics before), `agent:tool-error`'s payload carries the same verdict as `cancelled` (the abort reaches TanStack as a throw, so this is the *only* event that can express it), and `isCancelledToolCall` renders both marker spellings — `cancelled` (a tool that caught its own abort) and `aborted` (the `task` tool, whose subagent cancels without throwing) — as one neutral ⚠.
+
+What that predicate must **not** be used for is deciding what the row says. A cancelled call has two possible outputs, written by two writers at two moments, and they differ in kind:
+
+| Writer | Output | Why it exists |
+|--------|--------|----------------|
+| `cancelInFlightToolCalls` / `cancelIncompleteToolCalls` | `{ success: false, error, cancelled: true }` | Framework fallback for a call interrupted before its execute resolved. **Not any tool's schema** — `run_command` has no `exitCode` in it. |
+| the tool's own catch (`run_command`, `webfetch`, `websearch`) | a **full** output with `cancelled: true` | A real result: whatever the tool had produced before the stop. `run_command` synthesizes `exitCode: -1`. |
+
+The first is short-circuited by `isSyntheticCancelOutput` at the top of `formatToolOutput` — before the per-tool dispatch, because every formatter would otherwise read fields that cannot be there (`run_command` rendered the literal `Exit code: undefined`; `todo` **threw** on `stats.total`; `edit_file` said "Edited undefined"). The second must still render, minus the exit code it made up. Merging the two — treating "carries a cancel marker" as "has nothing to show" — silently discards the partial output the user watched being produced. `isCancelledOutputMarker` answers "is this a cancel"; `isSyntheticCancelOutput` answers "is there nothing here but the cancel", and only the latter may skip rendering.
+
+This is observable only when it is wrong, and for a moment: pressing Esc showed `Exit code: undefined`, and the next message rewrote the same part with the tool's own `-1`. Two writers, one part id, two verdicts. Assert both shapes — the render smoke mounts each (`cancelled run_command (…)` checks) and the app tests feed both to `formatToolOutput` directly.
+
 ### Project instructions (`<project_instructions>`)
 
 The project instruction file is loaded once at agent creation and frozen into the system prompt as `<project_instructions>`. `CLAUDE.md` is checked first, then `AGENTS.md`; **the first one found is the only one loaded** — there is no implicit fallback, so a project that keeps `CLAUDE.md` as a pointer composes explicitly with `@` imports.
