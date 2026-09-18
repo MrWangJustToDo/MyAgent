@@ -189,7 +189,7 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
       if (currentInitId !== initIdRef.current) return;
       setTimeout(() => {
         // Host-agnostic reveal. The init splash deliberately does NOT write a raw RIS
-        // (`\x1bc` / `ansi-escapes.clearScreen`) to the TTY: Ink owns the terminal and
+        // (Reset to Initial State, `\x1bc`) to the TTY: Ink owns the terminal and
         // tracks it row by row, so an external clear makes Ink skip every row it
         // believes is unchanged — the freshly rendered first frame then stays blank
         // until something else dirties those rows. Switching the tree off the splash
