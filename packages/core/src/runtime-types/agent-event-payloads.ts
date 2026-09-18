@@ -89,6 +89,14 @@ export type AgentEventPayloadMap = {
     tool_name?: string;
     tool_call_id?: string;
     error?: string;
+    /**
+     * True when the failure IS the user aborting the run, not a tool fault. Without it the
+     * lifecycle stream cannot tell "the command failed" from "the user pressed Esc", so a
+     * consumer counting failures counts cancels, and the log bridge reports a cancel as an
+     * error. The row still settles as `output-error` (the abort reached TanStack as a throw),
+     * which is exactly why the distinction has to be carried here.
+     */
+    cancelled?: boolean;
     timestamp?: number;
   };
   "agent:abort": {

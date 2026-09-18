@@ -254,6 +254,7 @@ export {
   parseToolInput,
   type UiToolState,
 } from "./agent/tools/presentation/tool-state.js";
+export { isAbortError, isCancelledOutputMarker } from "./runtime-types/abort.js";
 export type {
   ToolActivityCategory,
   ToolPresentation,

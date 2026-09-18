@@ -204,9 +204,16 @@ const TELEMETRY_EVENT_LOG_RULES: Record<keyof AgentEventPayloadMap, EventLogRule
     },
   },
   "agent:tool-error": {
+    // A user abort arrives here as a failed tool call, so the message is worded as a cancel
+    // when the payload says so — the level stays `warn` because `EventLogRule.level` is
+    // static per event type, and a cancel is still worth seeing next to the real faults in
+    // the log. What matters is that the line does not read as a tool fault.
     level: "warn",
     category: "tool",
-    formatMessage: (event) => `Tool error: ${p(event).tool_name ?? "unknown"} — ${p(event).error ?? "unknown"}`,
+    formatMessage: (event) =>
+      p(event).cancelled === true
+        ? `Tool cancelled: ${p(event).tool_name ?? "unknown"} — ${p(event).error ?? "unknown"}`
+        : `Tool error: ${p(event).tool_name ?? "unknown"} — ${p(event).error ?? "unknown"}`,
   },
 
   // ============================================================================

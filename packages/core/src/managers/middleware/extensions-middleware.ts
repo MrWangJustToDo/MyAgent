@@ -1,3 +1,5 @@
+import { isAbortError } from "../../runtime-types/abort.js";
+
 import { defineMiddleware } from "./phase.js";
 
 import type { ExtensionRunner } from "../../agent/extension/runner.js";
@@ -12,6 +14,11 @@ export interface ExtensionsMiddlewareDeps {
   getSessionId: () => string;
   getTodoManager?: () => TodoManager | null;
   emitEvent?: EmitAgentTelemetryFn;
+  /**
+   * The in-flight run's abort signal, so a tool throw can be classified as the user's abort
+   * instead of a tool fault. Same accessor shape as the other middlewares' `getAbortSignal`.
+   */
+  getAbortSignal?: () => AbortSignal | undefined;
 }
 
 export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): ChatMiddleware<ToolRunContext> {
@@ -82,6 +89,10 @@ export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): Chat
           tool_name: info.toolName,
           tool_call_id: info.toolCallId,
           error: info.error instanceof Error ? info.error.message : String(info.error),
+          // A user abort reaches here as a throw, indistinguishable from a fault unless we
+          // ask the run's signal. Consumers counting failures must not count cancels, and
+          // the log bridge must not report one as an error.
+          cancelled: isAbortError(info.error, deps.getAbortSignal?.()),
           timestamp: Date.now(),
         });
       }

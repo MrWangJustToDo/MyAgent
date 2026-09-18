@@ -117,6 +117,92 @@ const part = (name, output) => ({
 }
 
 // ============================================================================
+// `isAbortError` — the ONE abort predicate, across the shapes three layers produce
+//
+// It is shared by the run coordinator and by every tool that holds an `abortSignal`,
+// so the heuristics cannot drift apart again: the signal, the DOM name, the plain
+// `code`, the remote-reconstructed `{name, code}` pair, and the node shell's bare
+// `Error("aborted")` all have to be recognized — and an ordinary fault must not be.
+// ============================================================================
+{
+  const { isAbortError } = await import("@codent/core");
+
+  const abortedSignal = AbortSignal.abort();
+  const liveSignal = new AbortController().signal;
+
+  // The signal is the strongest evidence — it classifies the throw whatever it looks like.
+  assert.equal(isAbortError(new Error("whatever"), abortedSignal), true, "an aborted signal wins");
+  assert.equal(isAbortError(undefined, abortedSignal), true, "even a non-Error throw");
+
+  // The DOM shape.
+  const domAbort = new Error("The operation was aborted");
+  domAbort.name = "AbortError";
+  assert.equal(isAbortError(domAbort), true, "a DOM AbortError is an abort");
+
+  // The local `ExecutionError("aborted")` and the remote-reconstructed double.
+  const localExec = Object.assign(new Error("Command aborted"), { name: "ExecutionError", code: "aborted" });
+  assert.equal(isAbortError(localExec), true, "a local ExecutionError(aborted) is an abort");
+  const remoteExec = Object.assign(new Error("Command aborted"), { name: "ExecutionError", code: "aborted" });
+  assert.equal(isAbortError(remoteExec, liveSignal), true, "a remote-reconstructed one too");
+  // The code alone is enough — a remote host may not preserve the name.
+  assert.equal(isAbortError(Object.assign(new Error("x"), { code: "aborted" })), true);
+
+  // The node shell's bare throw.
+  assert.equal(isAbortError(new Error("aborted")), true, '`throw new Error("aborted")` is an abort');
+
+  // ...and ordinary faults stay faults. A cancelled run must not swallow a real failure.
+  assert.equal(isAbortError(new Error("boom")), false, "a plain error is not an abort");
+  assert.equal(isAbortError(new Error("boom"), liveSignal), false, "nor is it one under a live signal");
+  const timeout = Object.assign(new Error("Command timed out"), { name: "ExecutionError", code: "timeout" });
+  assert.equal(isAbortError(timeout), false, "a timeout is not an abort");
+  assert.equal(isAbortError(undefined), false);
+  assert.equal(isAbortError(null), false);
+  assert.equal(isAbortError("aborted"), false, "a bare string is not an Error");
+  // An aborted-signal check must not leak across: a live run's signal says nothing.
+  assert.equal(isAbortError(new Error("aborted"), liveSignal), true, "the message path still applies");
+}
+
+// ============================================================================
+// The lifecycle event carries the same distinction
+//
+// `agent:tool-error` is emitted for a user abort too (the abort reaches TanStack as a
+// throw), so without the payload flag a consumer counting failures counts cancels, and
+// the log bridge writes "Tool error" for something the user stopped. The predicate the
+// emit site uses is the one just tested; this pins that the emit site actually asks.
+// ============================================================================
+{
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(
+    new URL("../../core/src/managers/middleware/extensions-middleware.ts", import.meta.url),
+    "utf8"
+  );
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  assert.ok(
+    /cancelled: isAbortError\(info\.error/.test(code),
+    "the tool-error emit must classify the throw, not just report it"
+  );
+  assert.ok(
+    /getAbortSignal\?\.\(\)/.test(code),
+    "and it must consult the run's signal — the error shape alone is not enough"
+  );
+
+  // And the payload declares the field, so a typed consumer can read it.
+  const payloads = readFileSync(
+    new URL("../../core/src/runtime-types/agent-event-payloads.ts", import.meta.url),
+    "utf8"
+  );
+  const block = payloads.slice(payloads.indexOf('"agent:tool-error"'));
+  assert.ok(
+    /cancelled\?: boolean/.test(block.slice(0, block.indexOf("};"))),
+    "agent:tool-error must declare `cancelled`"
+  );
+
+  // The log bridge must word a cancel as a cancel, not as a tool error.
+  const rules = readFileSync(new URL("../../core/src/managers/telemetry/event-log-rules.ts", import.meta.url), "utf8");
+  assert.ok(/Tool cancelled:/.test(rules), "a cancel must not be logged under the `Tool error:` wording");
+}
+
+// ============================================================================
 // The streaming retention is bounded, and a finished call is released
 //
 // Two independent holes behind the command-tool OOM:

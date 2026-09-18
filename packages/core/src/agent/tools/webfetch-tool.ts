@@ -13,6 +13,7 @@
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
+import { isAbortError } from "../../runtime-types/abort.js";
 
 import { defineServerTool } from "./runtime/define-tool.js";
 import { withDuration } from "./util/helpers.js";
@@ -64,6 +65,8 @@ export const webfetchOutputSchema = z.object({
   isImage: z.boolean().describe("Whether the content is an image"),
   /** Whether the content was truncated due to size limits */
   truncated: z.boolean().describe("Whether content was truncated due to size limits"),
+  /** Present when the USER aborted the run mid-fetch; see `runCommandOutputSchema.cancelled`. */
+  cancelled: z.boolean().optional().describe("True when the user aborted the run while this fetch was in flight."),
   /** Execution duration in milliseconds */
   durationMs: z.number().describe("Execution duration in milliseconds"),
   ...toolOutputBaseSchema.shape,
@@ -263,6 +266,21 @@ Usage notes:
             truncated,
             cachedOutputPath,
           };
+        } catch (err) {
+          // The user aborting is not a fetch failure. Uncaught, the abort surfaces as a throw
+          // and TanStack settles the row as `output-error` — a red cross on something the user
+          // stopped. Same contract as run_command: return normally with `cancelled: true`.
+          if (!isAbortError(err, abortSignal)) throw err;
+          return {
+            url,
+            contentType: "text/plain",
+            content: "",
+            contentLength: 0,
+            isImage: false,
+            truncated: false,
+            cancelled: true,
+            cachedOutputPath: null,
+          };
         } finally {
           if (!hasParentAgent) {
             managedAgent?.removePendingAbortController(controller);
@@ -274,6 +292,11 @@ Usage notes:
     // Only send url + content (or multimodal image parts) to the LLM —
     // contentType/contentLength/isImage/truncated/cachedOutputPath are UI metadata.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: z.infer<typeof webfetchOutputSchema> }) {
+      // A cancelled fetch has no content; without this the model reads an empty successful
+      // fetch of the URL. Same contract as the task tool's cancel notice.
+      if (output.cancelled) {
+        return [{ type: "text" as const, content: `[Fetch cancelled by user.] ${output.url}` }];
+      }
       if (output.isImage) {
         const parsed = parseDataUrl(output.content);
         if (parsed) {

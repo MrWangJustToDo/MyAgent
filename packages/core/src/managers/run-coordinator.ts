@@ -1,3 +1,5 @@
+import { isAbortError as matchesAbortError } from "../runtime-types/abort.js";
+
 import type { MultimodalPartType } from "../models/adapter/capability-message-utils.js";
 
 export interface AbortControllerSetup {
@@ -90,8 +92,7 @@ export class RunCoordinator {
   }
 
   isAbortError(err: unknown): boolean {
-    if (err instanceof Error) return err.name === "AbortError" || err.message.includes("aborted");
-    return false;
+    return matchesAbortError(err, this.currentAbortController?.signal);
   }
 
   // ==========================================================================

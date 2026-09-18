@@ -13,6 +13,8 @@
 
 import { z } from "zod";
 
+import { isAbortError } from "../../runtime-types/abort.js";
+
 import { defineServerTool } from "./runtime/define-tool.js";
 import { withDuration } from "./util/helpers.js";
 import { toolOutputBaseSchema } from "./util/types.js";
@@ -50,6 +52,8 @@ export const websearchOutputSchema = z.object({
   provider: z.string().describe("The search provider used"),
   /** Execution duration in milliseconds */
   durationMs: z.number().describe("Execution duration in milliseconds"),
+  /** Present when the USER aborted the run mid-search; see `runCommandOutputSchema.cancelled`. */
+  cancelled: z.boolean().optional().describe("True when the user aborted the run while this search was in flight."),
   ...toolOutputBaseSchema.shape,
 });
 
@@ -153,6 +157,11 @@ Use the current year from <current_date> in turn context for time-sensitive quer
             results: filteredResults.slice(0, limit),
             provider,
           };
+        } catch (err) {
+          // The user aborting is not a search failure — same contract as run_command and
+          // webfetch: settle normally with the marker so the row reads "cancelled".
+          if (!isAbortError(err, abortSignal)) throw err;
+          return { query, results: [], provider: "", cancelled: true };
         } finally {
           if (!hasParentAgent) {
             managedAgent?.removePendingAbortController(controller);
@@ -161,6 +170,11 @@ Use the current year from <current_date> in turn context for time-sensitive quer
       });
     },
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: z.infer<typeof websearchOutputSchema> }) {
+      // A cancelled search returns no results; without this the model reads "no results" as
+      // a real (empty) outcome instead of a stopped run.
+      if (output.cancelled) {
+        return [{ type: "text" as const, content: `[Search cancelled by user.] ${output.query}` }];
+      }
       const lines = output.results?.map?.((r) => `${r.title}\n${r.url}\n${r.snippet}`);
       return [
         {

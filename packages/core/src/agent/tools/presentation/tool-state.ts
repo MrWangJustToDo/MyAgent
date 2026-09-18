@@ -1,3 +1,5 @@
+import { isCancelledOutputMarker } from "../../../runtime-types/abort.js";
+
 import type { ImagePart, ToolCallPart, ToolCallState } from "@tanstack/ai";
 
 /** UI-facing tool state labels (terminal rendering). */
@@ -23,23 +25,20 @@ export function isToolCallPart(part: { type?: string } | null | undefined): part
  *
  * Two shapes exist because two layers settle aborts:
  *
- *  - `output.cancelled === true` — written by the framework fallback
- *    (`cancelInFlightToolCalls` / `cancelIncompleteToolCalls`), which settles a call that was
- *    still in flight (or whose args never finished streaming) when the run was torn down.
- *  - `output.aborted === true` — written by the `task` tool itself, which catches its
- *    subagent's cancellation and returns a normal result carrying the
- *    `[Task cancelled by user.]` notice, so the parent model learns of the cancel.
+ *  - `output.cancelled === true` — a tool that caught its own abort and returned a normal
+ *    result (`run_command`); deeper still, the framework fallback
+ *    (`cancelInFlightToolCalls` / `cancelIncompleteToolCalls`) writes the same marker for a
+ *    call that never settled at all.
+ *  - `output.aborted === true` — the `task` tool, which catches its subagent's cancellation
+ *    and reports `[Task cancelled by user.]`, so the parent model learns of the cancel.
  *
- * The distinction matters to every consumer that renders a settled row: both shapes read as
- * "finished" to `getUiToolState` (one as `output-error`, one as `output-available`), so a row
- * the user cancelled would otherwise wear the failure cross or the success check. This is the
- * one predicate for that — inline summaries, status glyphs and colors all branch through it
- * rather than re-matching the output shapes.
+ * The distinction matters to every consumer that renders a settled row: the two shapes settle
+ * on opposite states (one `output-error`, one `output-available`), so a row the user cancelled
+ * would otherwise wear the failure cross or the success check. This delegates to
+ * {@link isCancelledOutputMarker} so the marker shapes live in one place.
  */
 export function isCancelledToolCall(part: ToolCallPart | { output?: unknown }): boolean {
-  const output = part?.output;
-  if (typeof output !== "object" || output === null) return false;
-  return (output as { cancelled?: boolean }).cancelled === true || (output as { aborted?: boolean }).aborted === true;
+  return isCancelledOutputMarker(part?.output);
 }
 
 export function parseToolInput(part: ToolCallPart): unknown {

@@ -202,6 +202,7 @@ export function buildAgentRunner(
       getSessionId: () => deps.session.getSessionData()?.id ?? deps.agentId,
       getTodoManager: () => deps.todoManager,
       emitEvent,
+      getAbortSignal: () => managed.run.currentAbortController?.signal,
     }),
     // TanStack batches TOOL_CALL_END until all tools finish; mirror each result into UI early.
     createEarlyToolResultUiMiddleware({

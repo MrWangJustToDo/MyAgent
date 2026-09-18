@@ -1,8 +1,8 @@
 import { DISCOVERY_TOOL_NAME } from "@tanstack/ai";
 import { z } from "zod";
 
-import { ExecutionError } from "../../env-types.js";
 import { getEnv } from "../../env.js";
+import { isAbortError } from "../../runtime-types/abort.js";
 
 import { analyzeCommand, createAnalysisContext } from "./command-safety/command-analyzer.js";
 import { evaluateCommandApproval } from "./command-safety/command-approval-policy.js";
@@ -155,11 +155,7 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
           },
         });
       } catch (err) {
-        const isAbort =
-          abortSignal?.aborted === true ||
-          (err instanceof ExecutionError && err.code === "aborted") ||
-          (err instanceof Error && err.name === "ExecutionError" && (err as { code?: string }).code === "aborted");
-        if (!isAbort) throw err;
+        if (!isAbortError(err, abortSignal)) throw err;
 
         stdoutAccumulator.finish();
         stderrAccumulator.finish();
