@@ -130,8 +130,23 @@ export function finalizeManagedAgentRun(host: RunLifecycleHost, reason: RunFinal
     });
   }
   host.emitEvent("agent:stop", { reason });
+  // Clear the run scope in a LATER task, not now.
+  //
+  // Teardown outlives the run it tears down: a cancelled tool's `onAfterToolCall` —
+  // and, in the pump path, the `turn:summary` that reports the run — is delivered
+  // after `agent:stop`, so clearing synchronously here wrote those entries with NO
+  // `run` at all (observed: the cancelled `run_command`'s `tool-end` was the only
+  // line in the session log without a run id). Deferring keeps a late entry inside
+  // the run that produced it while still clearing before the next run, which stamps
+  // a fresh id with `setRun` anyway.
+  //
+  // A microtask is enough for the pump path (`emitEvent` dispatches synchronously, so
+  // `turn:summary` lands before this checkpoint); the `setRun` in `prepareManagedAgent`
+  // is the backstop for anything slower, since it overwrites unconditionally.
   host.setCurrentRunId(null);
-  host.log?.setRun(null);
+  queueMicrotask(() => {
+    host.log?.setRun(null);
+  });
 }
 
 export function abortManagedAgentRun(host: RunLifecycleHost, reason?: string): void {

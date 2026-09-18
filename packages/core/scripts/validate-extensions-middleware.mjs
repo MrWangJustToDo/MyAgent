@@ -56,4 +56,49 @@ assert.equal(events[0].type, "agent:tool-start");
 assert.equal(events[1].type, "agent:tool-error");
 assert.equal(events[1].data?.error, "exit 1");
 
+// ---------------------------------------------------------------------------
+// A tool that caught its own abort RETURNS, so it reports through `tool-end`.
+//
+// `info.ok` only means the tool returned, and a cancelled call does exactly that:
+// `run_command` settles with `cancelled: true` plus the partial stdout, `task` with
+// `aborted: true`. Classifying by the return alone recorded both as clean successes,
+// so the verdict has to be read off the output.
+// ---------------------------------------------------------------------------
+
+for (const [label, result] of [
+  ["run_command's own catch", { command: "x", stdout: "partial", exitCode: -1, success: false, cancelled: true }],
+  ["the task tool's marker", { subagentId: "s1", summary: "partial", aborted: true }],
+]) {
+  events.length = 0;
+  await middleware.onBeforeToolCall?.(undefined, { toolName: "run_command", args: {} });
+  await middleware.onAfterToolCall?.(undefined, {
+    ok: true,
+    toolName: "run_command",
+    duration: 5,
+    result,
+    toolCall: { function: { arguments: {} } },
+  });
+
+  assert.equal(events[1].type, "agent:tool-end", `${label}: a returned cancel still reports as tool-end`);
+  assert.equal(events[1].data?.cancelled, true, `${label}: and the payload says it was a cancel`);
+}
+
+// A genuine success must not be labelled a cancel — the flag is read from the output,
+// so anything without the marker stays `cancelled: false`.
+for (const [label, result] of [
+  ["a clean run_command", { command: "x", stdout: "ok", exitCode: 0, success: true }],
+  ["a clean task", { subagentId: "s1", summary: "done", aborted: false }],
+  ["a tool with no marker at all", { content: "ok" }],
+]) {
+  events.length = 0;
+  await middleware.onAfterToolCall?.(undefined, {
+    ok: true,
+    toolName: "read_file",
+    duration: 5,
+    result,
+    toolCall: { function: { arguments: {} } },
+  });
+  assert.equal(events[0].data?.cancelled, false, `${label}: is not reported as a cancel`);
+}
+
 console.log("extensions-middleware validation passed");

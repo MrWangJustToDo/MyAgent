@@ -1,4 +1,4 @@
-import { isAbortError } from "../../runtime-types/abort.js";
+import { isAbortError, isCancelledOutputMarker } from "../../runtime-types/abort.js";
 
 import { defineMiddleware } from "./phase.js";
 
@@ -82,6 +82,12 @@ export function createExtensionsMiddleware(deps: ExtensionsMiddlewareDeps): Chat
           tool_call_id: info.toolCallId,
           duration_ms: info.duration,
           tool_output: info.result,
+          // `info.ok` only means the tool RETURNED — a tool that catches its own abort
+          // returns normally (`run_command` settles with `cancelled: true` + partial
+          // stdout, `task` with `aborted: true`), so the return alone cannot tell a
+          // cancel from a success. Read the verdict off the output, the same marker
+          // the render layer uses, so one semantic does not get two readers.
+          cancelled: isCancelledOutputMarker(info.result),
           timestamp: Date.now(),
         });
       } else {

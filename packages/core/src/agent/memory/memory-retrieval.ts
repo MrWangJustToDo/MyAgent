@@ -72,19 +72,81 @@ Rules:
 - If none are relevant, return an empty list`;
 
 /**
- * The selection contract, enforced by the port rather than by prompt wording.
+ * Unwrap the single-key wrapper some providers emit around the selection object.
  *
- * `resolveSelectedMemoryFilename` already drops filenames it cannot match, so
- * the schema guarantees only "an array of strings" and leaves the manifest
- * lookup where it is.
+ * Measured against the configured Anthropic-style endpoint (forced-tool
+ * `structured_output`): the model intermittently returns
+ * `{"selected_memories":{"selected_memories":[...]}}` instead of
+ * `{"selected_memories":[...]}` — 2 of 4 sampled calls. The nesting is present in
+ * the provider's `tool_use.input` itself, so nothing in our parsing produced it, and
+ * the request we send is correct (`input_schema` carries the array-typed field, and
+ * the renderer output is unchanged by this transform). It is a model quirk on that
+ * provider, not a prompt defect: describing the array element did not stop it.
+ *
+ * **Narrow on purpose.** Only a single-key object whose value is itself an object
+ * that already contains that same key is unwrapped. Every other shape stays as it
+ * was, so the transform cannot silently reinterpret a genuine response:
+ *
+ * | Input | Result |
+ * |---|---|
+ * | `{"selected_memories":[...]}` | accepted (untouched) |
+ * | `{"selected_memories":{"selected_memories":[...]}}` | unwrapped, accepted |
+ * | `{"result":{"selected_memories":[...]}}` | rejected (key differs) |
+ * | `{"selected_memories":{...},"extra":1}` | rejected (more than one key) |
+ * | triple nesting | rejected (one level only) |
+ *
+ * This is a schema **transform**, not a text repair: the value is passed through
+ * unchanged when it does not match, and the schema still decides what is valid. The
+ * text-mode path's "a document may be located, but never repaired" rule applies to
+ * editing the reply's text to make it parseable, which this does not do.
  */
-const SELECTION_SCHEMA = z
+function unwrapSingleKeyWrapper(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
+
+  const keys = Object.keys(value);
+  if (keys.length !== 1) return value;
+
+  const key = keys[0];
+  const nested = (value as Record<string, unknown>)[key];
+  if (typeof nested !== "object" || nested === null || Array.isArray(nested)) return value;
+
+  // The wrapper is only redundant when the inner object already carries the key we
+  // are about to read — otherwise the "wrapper" is the actual payload.
+  return key in nested ? nested : value;
+}
+
+/**
+ * The object the selector must produce, before the wrapper tolerance is applied.
+ * Kept as its own binding so the preprocessed schema can declare the same output
+ * type — `z.preprocess` widens its output to `unknown`, which would otherwise leak
+ * into `selected_memories` at the call site.
+ */
+const SELECTION_RESULT = z
   .object({
     selected_memories: z
       .array(z.string())
       .describe("filenames (or bare names) of the memories judged relevant; empty when none are"),
   })
   .describe("the memory selection result");
+
+/**
+ * The selection contract, enforced by the port rather than by prompt wording.
+ *
+ * `resolveSelectedMemoryFilename` already drops filenames it cannot match, so
+ * the schema guarantees only "an array of strings" and leaves the manifest
+ * lookup where it is.
+ *
+ * The `preprocess` stage exists only to absorb the provider's double-nesting quirk
+ * (see {@link unwrapSingleKeyWrapper}); `renderSchemaContract` reads the wrapped
+ * schema's properties, so the text-mode contract is identical with or without it —
+ * verified against the live provider and pinned by validate-memory-llm-contract.
+ *
+ * The assertion only restores the output type `z.preprocess` widens to `unknown`
+ * (zod's `ZodPreprocess` does not thread the inner schema's type). The runtime value
+ * is the pipe itself, so nothing about `~standard` — and therefore nothing about what
+ * the provider is sent — changes.
+ */
+const SELECTION_SCHEMA = z.preprocess(unwrapSingleKeyWrapper, SELECTION_RESULT) as unknown as typeof SELECTION_RESULT;
 
 // ============================================================================
 // Manifest Formatting

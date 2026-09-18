@@ -107,7 +107,17 @@ function resolveRule(type: AgentEventType, policy?: EventLogPolicy): EventLogRul
 function writeLog(log: AgentLog, rule: EventLogRule, event: AgentEvent, message: string): void {
   const data = summarizePayload(p(event));
 
+  // A `cancelled` payload is not a fault, so it must not be written through the error
+  // path: that attaches the payload's `error` text as a synthesized `Error` — for a
+  // cancelled subagent that text is its partial narration, and the entry then carried
+  // a whole paragraph as a stack-bearing exception. The level stays at the rule's
+  // (the rule table is static per event type; `agent:tool-error` keeps `warn` for the
+  // same reason), only the fault-shaped error object is dropped.
   if (rule.level === "error") {
+    if (p(event).cancelled === true) {
+      log.eventEntry("error", rule.category, event.type, message, data);
+      return;
+    }
     const errorMessage = (p(event).error as string | undefined) ?? message;
     log.eventEntry("error", rule.category, event.type, message, data, new Error(errorMessage));
     return;

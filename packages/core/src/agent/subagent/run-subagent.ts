@@ -360,7 +360,15 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     subagent.emitEvent(
       aborted ? "subagent:error" : "subagent:completed",
       aborted
-        ? { subagentId, error: finalOutput }
+        ? {
+            subagentId,
+            // On a cancel the payload carries the partial narration, which is a
+            // summary of work done — not a fault. The flag is what tells the log
+            // bridge (and any other consumer) which of the two it is holding; the
+            // `error` field keeps the text so nothing is lost.
+            error: finalOutput,
+            cancelled: true,
+          }
         : {
             subagentId,
             summary: finalOutput,

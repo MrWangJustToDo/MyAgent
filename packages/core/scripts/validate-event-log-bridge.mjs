@@ -120,6 +120,75 @@ assert.match(reactiveEntry.message, /40→12 messages/);
 assert.match(reactiveEntry.message, /9000→2100 tokens/);
 assert.ok(!reactiveEntry.message.includes("?→?"));
 
+// ---------------------------------------------------------------------------
+// A cancel must not read as a fault in the log.
+//
+// Two events carry a user-cancel verdict on a payload whose `error` field holds
+// something that is not an error: `agent:tool-end` for a tool that caught its own
+// abort (it carries the partial output), and `subagent:error` for a cancelled
+// subagent (it carries the partial narration). The second used to be written through
+// the error path, which attached that whole paragraph as a stack-bearing exception.
+// ---------------------------------------------------------------------------
+
+entries = await emitAndRead({
+  type: "agent:tool-end",
+  ts: Date.now(),
+  agentId: "agent-1",
+  payload: { tool_name: "run_command", tool_call_id: "tc-cancel", duration_ms: 4552, cancelled: true },
+});
+const cancelEndEntry = entries.find(
+  (entry) => entry.event === "agent:tool-end" && entry.data?.tool_call_id === "tc-cancel"
+);
+assert.ok(cancelEndEntry, "a cancelled tool-end is bridged");
+assert.match(cancelEndEntry.message, /^Tool cancelled: run_command/, "and is worded as a cancel, not a success");
+assert.ok(cancelEndEntry.message.includes("4552ms"), "while keeping the duration the row still shows");
+
+entries = await emitAndRead({
+  type: "agent:tool-end",
+  ts: Date.now(),
+  agentId: "agent-1",
+  payload: { tool_name: "read_file", tool_call_id: "tc-ok", duration_ms: 12, cancelled: false },
+});
+const okEndEntry = entries.find((entry) => entry.event === "agent:tool-end" && entry.data?.tool_call_id === "tc-ok");
+assert.ok(okEndEntry, "a clean tool-end is bridged");
+assert.match(okEndEntry.message, /^Tool end: read_file/, "a clean call keeps the success wording");
+
+entries = await emitAndRead({
+  type: "subagent:error",
+  ts: Date.now(),
+  agentId: "agent-1",
+  payload: {
+    subagentId: "subagent-1",
+    error: "Let me check the builtin-table.ts… [Task cancelled by user.]",
+    cancelled: true,
+  },
+});
+const cancelSubEntry = entries.find((entry) => entry.event === "subagent:error");
+assert.ok(cancelSubEntry);
+assert.match(cancelSubEntry.message, /^Subagent cancelled:/, "a cancelled subagent is not worded as a failure");
+assert.ok(
+  !cancelSubEntry.message.includes("builtin-table"),
+  "and its partial narration is not rendered as the error message"
+);
+assert.equal(
+  cancelSubEntry.error,
+  undefined,
+  "nor attached as a synthesized Error — a cancel is not a fault with a stack"
+);
+
+// The real failure path is untouched: a subagent that actually failed still reports one.
+entries = await emitAndRead({
+  type: "subagent:error",
+  ts: Date.now(),
+  agentId: "agent-1",
+  payload: { subagentId: "subagent-2", error: "429 after retries" },
+});
+const realSubEntry = entries.find(
+  (entry) => entry.event === "subagent:error" && entry.data?.subagentId === "subagent-2"
+);
+assert.match(realSubEntry.message, /^Subagent error: 429 after retries/, "a genuine failure keeps its wording");
+assert.equal(realSubEntry.error?.message, "429 after retries", "and still carries the fault");
+
 console.log("bridged entries persisted to JSONL sink: OK");
 console.log("payload summarization (bytes+preview, no eventType): OK");
 console.log("memory debug streams silent: OK");

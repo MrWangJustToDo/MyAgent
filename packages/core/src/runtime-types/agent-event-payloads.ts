@@ -83,6 +83,18 @@ export type AgentEventPayloadMap = {
     tool_call_id?: string;
     duration_ms?: number;
     tool_output?: unknown;
+    /**
+     * True when the output carries a user-cancel marker (`cancelled` / `aborted`) rather
+     * than being a genuine success.
+     *
+     * This event fires whenever the tool RETURNS, and a tool that catches its own abort
+     * returns normally — `run_command` settles with `cancelled: true` and the partial
+     * stdout, the `task` tool with `aborted: true`. Classifying by the return (which is
+     * all TanStack reports: `info.ok`) therefore recorded a user-cancelled call as a
+     * successful one, and the log bridge wrote `Tool end: …` with nothing about the
+     * cancel. The verdict has to come from the output, because the return says nothing.
+     */
+    cancelled?: boolean;
     timestamp?: number;
   };
   "agent:tool-error": {
@@ -225,6 +237,15 @@ export type AgentEventPayloadMap = {
   "subagent:error": {
     subagentId?: string;
     error?: string;
+    /**
+     * True when the run was cut short by the user rather than failing.
+     *
+     * The abort path reuses this event (a cancelled subagent has no other terminal
+     * event), so without the flag a cancel was written at `error` level carrying the
+     * subagent's partial narration as if it were a fault message. That is the same
+     * conflation `agent:tool-error` already avoids, expressed the same way.
+     */
+    cancelled?: boolean;
   };
   "subagent:destroyed": {
     subagentId?: string;

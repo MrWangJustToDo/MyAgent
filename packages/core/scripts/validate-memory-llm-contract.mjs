@@ -639,6 +639,119 @@ await assert.rejects(
 
 console.log("✓ structured requests project to a usable provider schema");
 
+// ---------------------------------------------------------------------------
+// 9. The selection schema absorbs the provider's single-key wrapper
+// ---------------------------------------------------------------------------
+//
+// Measured against the configured Anthropic-style endpoint: the selector returns
+// `{"selected_memories":{"selected_memories":[...]}}` for a nontrivial fraction of
+// calls (2 of 4 sampled). The nesting is in the provider's `tool_use.input` itself,
+// so nothing here produced it and no prompt wording prevents it. Before this, the
+// mismatch aborted structured mode and the text retry then answered `[]`, so the
+// model's real selection was thrown away and retrieval silently degraded to the
+// keyword fallback.
+//
+// The tolerance is deliberately narrow. These assertions are the whole contract: the
+// accepted shapes below must be accepted, and everything else must still be REJECTED
+// — a transform that silently reinterprets a genuine response is worse than the
+// failure it hides, because the wrong answer then arrives looking like a valid one.
+
+{
+  // The selection schema is not exported, so it is driven through the real port the
+  // way `findRelevantMemories` does (Zod v4 exposes the Standard Schema + JSON Schema
+  // surfaces the port reads).
+  const selectionAdapter = (object) => ({
+    model: "fake-model",
+    modelStyle: "openai",
+    adapter: {
+      kind: "text",
+      name: "fake",
+      model: "fake-model",
+      "~types": {},
+      chatStream() {
+        return (async function* () {
+          yield usageChunk(1, 1);
+        })();
+      },
+      async structuredOutput() {
+        throw new Error("not implemented");
+      },
+      structuredOutputStream() {
+        return (async function* () {
+          yield completeChunk(object);
+          yield usageChunk(10, 2);
+        })();
+      },
+    },
+  });
+
+  // Mirrors `SELECTION_SCHEMA`: the same inner object plus the wrapper tolerance.
+  const unwrapSingleKeyWrapper = (value) => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
+    const keys = Object.keys(value);
+    if (keys.length !== 1) return value;
+    const key = keys[0];
+    const nested = value[key];
+    if (typeof nested !== "object" || nested === null || Array.isArray(nested)) return value;
+    return key in nested ? nested : value;
+  };
+  const inner = z.object({ selected_memories: z.array(z.string()) });
+  const selectionSchema = z.preprocess(unwrapSingleKeyWrapper, inner);
+
+  const select = async (object) =>
+    (await runSideTextQuery(selectionAdapter(object), { userPrompt: "query", schema: selectionSchema })).data;
+
+  // 9a — the wrapper is absorbed, and the payload survives it intact.
+  const nested = await select({ selected_memories: { selected_memories: ["a.md", "b.md"] } });
+  assert.deepEqual(
+    nested.selected_memories,
+    ["a.md", "b.md"],
+    "a single-key wrapper named after the root key is unwrapped, so the model's real selection is used"
+  );
+
+  // 9b — an empty selection survives the same path (the `[]` that used to be the
+  // silent answer for every failure).
+  const nestedEmpty = await select({ selected_memories: { selected_memories: [] } });
+  assert.deepEqual(nestedEmpty.selected_memories, [], "an empty selection is still a selection");
+
+  // 9c — the plain shape is untouched: the transform must be a no-op when there is
+  // nothing to unwrap.
+  const plain = await select({ selected_memories: ["a.md"] });
+  assert.deepEqual(plain.selected_memories, ["a.md"], "the correct shape passes through unchanged");
+
+  // 9d — the boundaries. Each of these must FAIL, not be coerced.
+  const rejected = [
+    ["a differently-named wrapper", { result: { selected_memories: ["a.md"] } }],
+    ["a wrapper carrying extra keys", { selected_memories: { selected_memories: ["a.md"] }, extra: 1 }],
+    ["double wrapping", { selected_memories: { selected_memories: { selected_memories: ["a.md"] } } }],
+    ["a bare string leaf", { selected_memories: "a.md" }],
+  ];
+  for (const [label, object] of rejected) {
+    await assert.rejects(
+      () => select(object),
+      `${label} must stay a failure — the tolerance is one level, one key, one name`
+    );
+  }
+
+  // 9e — the tolerance must not change what the provider is asked for. The text-mode
+  // contract is rendered from this schema; a wrapper that leaked into the projection
+  // would tell the model to emit something the validator then rejects.
+  const projected = projectForProvider(selectionSchema);
+  assert.deepEqual(
+    Object.keys(projected.properties),
+    ["selected_memories"],
+    "the projected provider schema keeps the root key the validator reads"
+  );
+  assert.equal(
+    projected.properties.selected_memories.type,
+    "array",
+    "and keeps its declared type, so the request is not degenerate"
+  );
+  assert.deepEqual(projected.required, ["selected_memories"], "and keeps it required");
+
+  console.log("✓ the selection schema absorbs only the single-key wrapper");
+}
+
 await rm(root, { recursive: true, force: true });
 
 console.log("memory-llm-contract validation passed");

@@ -197,10 +197,14 @@ const TELEMETRY_EVENT_LOG_RULES: Record<keyof AgentEventPayloadMap, EventLogRule
   "agent:tool-end": {
     level: "debug",
     category: "tool",
+    // A tool that caught its own abort returns normally, so its `tool-end` carries the
+    // cancel verdict. Worded as a cancel for the same reason `agent:tool-error` is:
+    // otherwise a user-stopped call is indistinguishable from a clean success here.
     formatMessage: (event) => {
       const name = p(event).tool_name ?? "unknown";
       const duration = p(event).duration_ms;
-      return duration != null ? `Tool end: ${name} (${duration}ms)` : `Tool end: ${name}`;
+      const suffix = duration != null ? ` (${duration}ms)` : "";
+      return p(event).cancelled === true ? `Tool cancelled: ${name}${suffix}` : `Tool end: ${name}${suffix}`;
     },
   },
   "agent:tool-error": {
@@ -274,7 +278,15 @@ const TELEMETRY_EVENT_LOG_RULES: Record<keyof AgentEventPayloadMap, EventLogRule
   "subagent:error": {
     level: "error",
     category: "system",
-    formatMessage: (event) => `Subagent error: ${p(event).error ?? "unknown"}`,
+    // A cancelled subagent reuses this event, but the payload is then the partial
+    // narration rather than a fault — worded as a cancel so the log does not read as
+    // a failure with a whole paragraph of prose as its error. The level stays `error`
+    // because `EventLogRule.level` is static per event type, matching how
+    // `agent:tool-error` handles the same two-way payload.
+    formatMessage: (event) =>
+      p(event).cancelled === true
+        ? `Subagent cancelled: ${p(event).subagentId ?? event.agentId}`
+        : `Subagent error: ${p(event).error ?? "unknown"}`,
   },
   "subagent:progress-summary-error": {
     level: "warn",

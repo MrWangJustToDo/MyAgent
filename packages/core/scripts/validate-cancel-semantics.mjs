@@ -20,6 +20,8 @@
  *      against the source so a new tool cannot quietly skip the question
  *   5. the model-facing projection carries the flag (it is not a UI-only concern)
  *   6. the derived status flags cannot contradict a cancel
+ *   7. the lifecycle events that report a cancel carry the verdict, and the log wording
+ *      follows it — a cancel reaches the log as a cancel, a fault as a fault
  */
 
 import assert from "node:assert/strict";
@@ -411,6 +413,69 @@ assert.equal(taskOutputSchema.shape.cancelled, undefined, "task declares ONE mar
   assert.ok(
     /incomplete: false/.test(stub[1]),
     "and it must NOT also be `incomplete` — that flag is cancel-unaware on the consumer side"
+  );
+}
+
+// ============================================================================
+// 7. The lifecycle verdict: a returned cancel still reports as a cancel
+// ============================================================================
+//
+// Sections 2–3 pin what is written into a part. This pins what the LIFECYCLE says about
+// it, which is a different reader of the same semantic:
+//
+//   - `agent:tool-end` fires whenever a tool RETURNS, and a tool that catches its own
+//     abort returns normally — so `info.ok` was `true` for a user-cancelled
+//     `run_command`, and the log recorded it as a successful call. The verdict has to be
+//     read from the output, because the return carries no information about it.
+//   - `agent:tool-error` and `subagent:error` are the two events whose payload `error`
+//     field can hold something that is not an error. Without the flag, the log bridge
+//     attached a cancelled subagent's partial narration as a stack-bearing exception.
+//
+// Both payload fields are load-bearing for the log wording, which is asserted here so a
+// field dropped from the payload fails a check rather than quietly changing what the
+// session log says.
+
+{
+  const payloadSrc = readFileSync(join(SRC, "runtime-types/agent-event-payloads.ts"), "utf8");
+
+  for (const [eventType, why] of [
+    ["agent:tool-end", "a tool that catches its own abort returns normally, so `ok` cannot express it"],
+    ["subagent:error", "the abort path reuses this event, and its `error` field then holds narration"],
+  ]) {
+    const block = new RegExp(`"${eventType}": \\{([\\s\\S]*?)\\n  \\};`).exec(payloadSrc);
+    assert.ok(block, `${eventType} payload block still exists`);
+    assert.ok(/cancelled\?: boolean/.test(block[1]), `${eventType} declares the cancel flag — ${why}`);
+  }
+
+  // The emit sites must actually set it, and read it from the right place.
+  const middlewareSrc = readFileSync(join(SRC, "managers/middleware/extensions-middleware.ts"), "utf8");
+  assert.ok(
+    /cancelled: isCancelledOutputMarker\(info\.result\)/.test(middlewareSrc),
+    "tool-end derives the verdict from the OUTPUT — `info.ok` only says the tool returned"
+  );
+  assert.ok(
+    /cancelled: isAbortError\(info\.error, deps\.getAbortSignal\?\.\(\)\)/.test(middlewareSrc),
+    "tool-error keeps classifying the throw against the run's signal"
+  );
+
+  const runSubagentSrc2 = readFileSync(join(SRC, "agent/subagent/run-subagent.ts"), "utf8");
+  assert.ok(
+    /aborted\s*\?\s*\{[\s\S]{0,400}cancelled: true/.test(runSubagentSrc2),
+    "subagent:error marks the abort branch it reuses for a cancel"
+  );
+
+  // The log wording follows the flag on all three, so the flag cannot be set without the
+  // log changing with it.
+  const rulesSrc = readFileSync(join(SRC, "managers/telemetry/event-log-rules.ts"), "utf8");
+  assert.ok(/Tool cancelled:/.test(rulesSrc) && /Tool end:/.test(rulesSrc), "tool-end has both wordings");
+  assert.ok(/Subagent cancelled:/.test(rulesSrc), "subagent:error has both wordings");
+
+  // And a cancel must not be written through the error path, which synthesizes an Error
+  // from the payload — for a cancelled subagent that text is a paragraph of narration.
+  const bridgeSrc = readFileSync(join(SRC, "managers/telemetry/event-log-bridge.ts"), "utf8");
+  assert.ok(
+    /rule\.level === "error"[\s\S]{0,300}p\(event\)\.cancelled === true/.test(bridgeSrc),
+    "the bridge short-circuits a cancelled payload BEFORE synthesizing an Error from it"
   );
 }
 
