@@ -39,8 +39,17 @@ jobs:
           node-version: 26.4.0
           cache: pnpm
 
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.local/share/pnpm/store
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      # See ci.yml: a cold pnpm store makes the install dominate the run.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts --prefer-offline
 
       - name: Generate WXT types (extension .wxt)
         # --ignore-scripts skips the extension postinstall ("wxt prepare"), so
@@ -48,7 +57,7 @@ jobs:
         # vite 8 / rolldown oxc tsconfig auto-discovery fails: it loads the root
         # tsconfig's references (packages/extension extends ./.wxt/tsconfig.json)
         # and aborts with "Tsconfig not found".
-        run: pnpm --filter @my-agent/extension exec wxt prepare
+        run: pnpm --filter @codent/extension exec wxt prepare
 
       - name: Build playground
         env:
@@ -56,12 +65,25 @@ jobs:
           # Must be Repository-level (not only the github-pages Environment) — the build job has no environment.
           VITE_FETCH_PROXY_URL: ${{ vars.VITE_FETCH_PROXY_URL || secrets.VITE_FETCH_PROXY_URL }}
         run: |
-          if [ -n "$VITE_FETCH_PROXY_URL" ]; then
-            echo "VITE_FETCH_PROXY_URL is set (length=${#VITE_FETCH_PROXY_URL})"
-          else
-            echo "::warning::VITE_FETCH_PROXY_URL is empty — webfetch/websearch will fail on GitHub Pages. Add a Repository Variable or Secret named VITE_FETCH_PROXY_URL, then re-run this workflow."
+          if [ -z "$VITE_FETCH_PROXY_URL" ]; then
+            echo "::error::VITE_FETCH_PROXY_URL is empty — webfetch/websearch would fail on the deployed site. Add a Repository Variable or Secret named VITE_FETCH_PROXY_URL, then re-run this workflow. See packages/playground/workers/fetch-proxy/README.md."
+            exit 1
           fi
-          pnpm build:core && pnpm --filter @my-agent/node build && pnpm build:server && pnpm build:app && pnpm build:playground
+          echo "VITE_FETCH_PROXY_URL is set (length=${#VITE_FETCH_PROXY_URL})"
+          pnpm build:core && pnpm --filter @codent/node build && pnpm build:server && pnpm build:app && pnpm build:playground
+
+      - name: Verify the deployed bundle carries the proxy URL
+        # The Vite define substitution is the thing actually under test here: an
+        # empty value still produces a *successful* build whose web tools fail
+        # at runtime, in a deployed artifact nobody re-checks. Assert on bytes.
+        env:
+          VITE_FETCH_PROXY_URL: ${{ vars.VITE_FETCH_PROXY_URL || secrets.VITE_FETCH_PROXY_URL }}
+        run: |
+          if ! grep -rqF "$VITE_FETCH_PROXY_URL" packages/playground/dist; then
+            echo "::error::VITE_FETCH_PROXY_URL is not present in packages/playground/dist — the build did not inline it."
+            exit 1
+          fi
+          echo "proxy URL inlined into the deployed bundle"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

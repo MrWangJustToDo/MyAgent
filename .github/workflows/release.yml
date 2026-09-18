@@ -1,5 +1,14 @@
 name: Release to npm
 
+# Publishes ONE package: the fully bundled `codent` CLI.
+#
+# This is deliberate. `codent` inlines `@codent/app` / `core` / `node` into its
+# `dist` (asserted by `validate:self-contained`), so a release needs no other
+# package on the registry — not the `@codent/*` libraries, and not the sibling
+# hosts (cli / server / extension / playground / mcp-server / im-bridge).
+# `pnpm run publish:packages` still exists for the monorepo libraries if they
+# ever need releasing independently; it is not part of this workflow.
+
 on:
   workflow_dispatch:
   push:
@@ -28,8 +37,16 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: pnpm
 
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.local/share/pnpm/store
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts --prefer-offline
 
       - name: Generate WXT types (extension .wxt)
         # --ignore-scripts skips the extension postinstall ("wxt prepare"), so
@@ -37,12 +54,16 @@ jobs:
         # typecheck (tsconfig extends ./.wxt/tsconfig.json) and for the
         # playground build (vite 8 oxc tsconfig auto-discovery loads the root
         # tsconfig's references, including packages/extension).
-        run: pnpm --filter @my-agent/extension exec wxt prepare
+        run: pnpm --filter @codent/extension exec wxt prepare
 
       - name: Build
         # Must precede Lint and Typecheck — see the same note in ci.yml: the
         # validate/test scripts import their package's `dist`, and workspace
         # packages resolve through `exports` → `dist`.
+        #
+        # The full build (not just core → app → node → codent) is intentional:
+        # CI only runs on branch pushes, so a `v*` tag reaches this workflow
+        # with no prior gate. Everything this repo can build has to build here.
         run: pnpm build
 
       - name: Lint
@@ -52,14 +73,26 @@ jobs:
         run: pnpm typecheck
 
       - name: Test
-        # @my-agent/app is the only package with a node:test suite; it imports
+        # @codent/app is the only package with a node:test suite; it imports
         # its own dist entry, so it must run after Build.
-        run: pnpm --filter @my-agent/app test
+        run: pnpm --filter @codent/app test
+
+      - name: Verify the bundle is self-contained
+        # The release contract, checked against the *packed* output rather than
+        # assumed: no `@codent/*` specifier may survive into `dist`, and the
+        # only runtime dependencies may be the four externals that cannot be
+        # inlined. A failure here means the tarball would not run for a user
+        # who installs nothing else — refuse to publish.
+        run: pnpm --filter codent validate:self-contained
 
       - name: Publish to npm
-        # Topological order: core → app → node → server → cli.
-        # `@my-agent/cli` keeps bare imports of its workspace siblings in the
-        # bundle, so every runtime dependency must be on the registry first.
-        run: pnpm run publish:only
+        # `codent` is the only published package (see the header note). It has
+        # no `@codent/*` runtime dependency, so there is no ordering to respect
+        # and nothing else to publish first.
+        #
+        # The dist-tag is derived from the version by the script, not passed
+        # here: `0.0.1-beta.1` must land on `beta`, and a stray `--tag latest`
+        # would promote a prerelease to the default install for every user.
+        run: pnpm --filter codent run publish:beta
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

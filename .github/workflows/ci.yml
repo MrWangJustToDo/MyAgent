@@ -31,8 +31,20 @@ jobs:
           node-version: 26.4.0
           cache: pnpm
 
+      # Keep the pnpm content-addressable store between runs. Every job in every
+      # workflow installs the same ~540-package tree, and a cold store makes the
+      # install (documented at 121-141s) dominate the build. `pnpm store path`
+      # is constant on a given OS, so the key is too.
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Linux' && '/home/runner/.local/share/pnpm/store' || '~/Library/pnpm/store' }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts --prefer-offline
 
       - name: Generate WXT types (extension .wxt)
         # --ignore-scripts skips the extension postinstall ("wxt prepare"), so
@@ -40,10 +52,10 @@ jobs:
         # typecheck (tsconfig extends ./.wxt/tsconfig.json) and for the
         # playground build (vite 8 oxc tsconfig auto-discovery loads the root
         # tsconfig's references, including packages/extension).
-        run: pnpm --filter @my-agent/extension exec wxt prepare
+        run: pnpm --filter @codent/extension exec wxt prepare
 
       - name: Build
-        # Must precede Lint and Typecheck: the 226 validate/test/smoke scripts
+        # Must precede Lint and Typecheck: the 266 validate/test/smoke scripts
         # import their own package's `dist` (e.g. `../dist/dev.mjs`), and
         # cross-package imports resolve through the `exports` map, which points
         # at `dist`. On a dist-less checkout `import/no-unresolved` and `tsc`
@@ -60,6 +72,14 @@ jobs:
         run: pnpm typecheck
 
       - name: Test
-        # @my-agent/app is the only package with a node:test suite; it imports
+        # @codent/app is the only package with a node:test suite; it imports
         # its own dist entry, so it must run after the build above.
-        run: pnpm --filter @my-agent/app test
+        run: pnpm --filter @codent/app test
+
+      - name: Verify the bundled release CLI is self-contained
+        # guards the release contract on every PR, not just at tag time: the
+        # built `codent` tarball must contain no `@codent/*` specifier and must
+        # declare only the four externals that cannot be inlined. Without this,
+        # a new `@codent/*` import inside app/core/node would only be caught by
+        # the release workflow, after the tag is already pushed.
+        run: pnpm --filter codent validate:self-contained
