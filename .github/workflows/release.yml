@@ -77,13 +77,6 @@ jobs:
         # its own dist entry, so it must run after Build.
         run: pnpm --filter @codent/app test
 
-      - name: Render smoke (long-session transcript)
-        # The other half of this package's own coverage, and the half that
-        # actually renders: `Test` above runs unit tests against formatters and
-        # stores, while this mounts the real transcript and asserts on frames.
-        # Kept in step with ci.yml — a release should not be the first run.
-        run: pnpm --filter @codent/app validate:render-smoke
-
       - name: Verify the bundle is self-contained
         # The release contract, checked against the *packed* output rather than
         # assumed: no `@codent/*` specifier may survive into `dist`, and the

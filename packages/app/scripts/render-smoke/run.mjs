@@ -30,6 +30,8 @@
  * unrelated frame assertions rather than as two bad imports.
  */
 
+import "./neutralize-ci-env.mjs";
+
 import { createElement } from "@my-react/react";
 import { render } from "@my-react/react-terminal";
 import { EventEmitter } from "node:events";
