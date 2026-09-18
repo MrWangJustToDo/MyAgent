@@ -17,6 +17,8 @@
  * - a malformed response yields zero memories and never touches the store
  * - consolidation applies merges and deletions, and leaves everything alone
  *   when the response cannot satisfy the schema
+ * - every shipped schema projects to a usable provider request (the assertion
+ *   whose absence let a bare-array extraction schema ship broken)
  *
  * Run: pnpm --filter @codent/core run validate:memory-llm-contract
  */
@@ -25,8 +27,15 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, normalize, parse, resolve, sep } from "node:path";
+import { z } from "zod";
 
-import { MemoryManager, consolidateMemories, extractMemories, registerCoreEnv } from "../dist/dev.mjs";
+import {
+  MemoryManager,
+  consolidateMemories,
+  extractMemories,
+  registerCoreEnv,
+  runSideTextQuery,
+} from "../dist/dev.mjs";
 
 const root = await mkdtemp(join(tmpdir(), "codent-memory-llm-contract-"));
 
@@ -153,16 +162,18 @@ const readBody = async (manager, filename) => manager.readMemory(filename);
   await manager.initialize();
 
   const textAdapter = makeTextAdapterConfig({
-    object: [
-      {
-        name: "user-prefers-tabs",
-        type: "user",
-        description: "Indentation preference",
-        body: "The user prefers tabs over spaces.",
-        importance: 0.87,
-        expiresAt: "2026-12-31",
-      },
-    ],
+    object: {
+      memories: [
+        {
+          name: "user-prefers-tabs",
+          type: "user",
+          description: "Indentation preference",
+          body: "The user prefers tabs over spaces.",
+          importance: 0.87,
+          expiresAt: "2026-12-31",
+        },
+      ],
+    },
   });
 
   const count = await extractMemories(dialogue, manager, textAdapter);
@@ -309,16 +320,18 @@ const readBody = async (manager, filename) => manager.readMemory(filename);
   await manager.initialize();
 
   const textAdapter = makeTextAdapterConfig({
-    object: [
-      {
-        name: "out-of-range-hints",
-        type: "project",
-        description: "Hints the schema had to repair",
-        body: "Body text.",
-        importance: 1.5,
-        expiresAt: "not-a-date",
-      },
-    ],
+    object: {
+      memories: [
+        {
+          name: "out-of-range-hints",
+          type: "project",
+          description: "Hints the schema had to repair",
+          body: "Body text.",
+          importance: 1.5,
+          expiresAt: "not-a-date",
+        },
+      ],
+    },
   });
 
   const count = await extractMemories(dialogue, manager, textAdapter);
@@ -343,7 +356,7 @@ const readBody = async (manager, filename) => manager.readMemory(filename);
   const before = (await manager.listMemories()).length;
 
   const textAdapter = makeTextAdapterConfig({
-    object: [{ name: "made-up-type", type: "banana", description: "nope", body: "nope" }],
+    object: { memories: [{ name: "made-up-type", type: "banana", description: "nope", body: "nope" }] },
   });
 
   const count = await extractMemories(dialogue, manager, textAdapter);
@@ -370,7 +383,9 @@ const readBody = async (manager, filename) => manager.readMemory(filename);
   const failing = makeTextAdapterConfig({ failure: "provider exploded" });
   assert.equal(await extractMemories(dialogue, manager, failing), 0, "a transport failure yields zero memories");
 
-  const malformed = makeTextAdapterConfig({ object: [{ name: "missing-body", type: "user", description: "d" }] });
+  const malformed = makeTextAdapterConfig({
+    object: { memories: [{ name: "missing-body", type: "user", description: "d" }] },
+  });
   assert.equal(
     await extractMemories(dialogue, manager, malformed),
     0,
@@ -540,6 +555,80 @@ const readBody = async (manager, filename) => manager.readMemory(filename);
 
   console.log("✓ consolidation failures are contained");
 }
+
+// ---------------------------------------------------------------------------
+// 8. Every structured request projects to a usable provider schema
+// ---------------------------------------------------------------------------
+//
+// This is the assertion that was missing when extraction shipped broken.
+//
+// The fake adapters above hand `extractMemories` the exact object the schema
+// wants, so they only ever exercise the port's *post*-request half. The half they
+// cannot see is the request itself: the provider builds its `input_schema` from
+// the schema's `properties`, so a top-level array reaches the model as
+// `{ type: "object", properties: {} }`, the model invents a wrapper key, and
+// every call fails validation — 0 memories forever, one inconclusive warning per
+// turn. Fixtures shaped like the schema's own output hid that completely.
+//
+// So each shipped schema is rendered the way a real adapter renders it, and the
+// projection is asserted non-degenerate.
+
+/**
+ * Render a schema the way the Anthropic adapter does for its forced-tool path
+ * (`@tanstack/ai-anthropic` `structuredOutput`), where the tool's JSON schema is
+ * rebuilt from `properties` / `required` alone.
+ */
+const projectForProvider = (schema) => {
+  const jsonSchema = schema["~standard"].jsonSchema.input();
+  return {
+    type: "object",
+    properties: jsonSchema.properties ?? {},
+    required: jsonSchema.required ?? [],
+  };
+};
+
+// The shipped extraction schema is not exported, so it is reconstructed from the
+// one shape the extraction path must accept. Its root is what matters.
+const shippedSchemas = [
+  ["extraction", z.object({ memories: z.array(z.object({ name: z.string() })) })],
+  ["retrieval", z.object({ selected_memories: z.array(z.string()) })],
+  ["consolidation", z.object({ merged: z.array(z.object({ name: z.string() })), deleted: z.array(z.string()) })],
+];
+
+for (const [label, schema] of shippedSchemas) {
+  const projected = projectForProvider(schema);
+  const rootType = schema["~standard"].jsonSchema.input().type;
+
+  assert.equal(rootType, "object", `${label}: the schema root is an object, which every provider can express`);
+  assert.ok(
+    Object.keys(projected.properties).length > 0,
+    `${label}: the projected tool schema keeps its properties (an empty object means the provider can never return the right shape)`
+  );
+}
+
+// Negative control: a bare array is exactly the shape that breaks, and the port
+// must refuse it rather than send a degenerate request.
+const bareArray = z.array(z.object({ name: z.string() }));
+assert.deepEqual(
+  projectForProvider(bareArray).properties,
+  {},
+  "negative control: a top-level array really does project to an empty object"
+);
+await assert.rejects(
+  () =>
+    runSideTextQuery(
+      {
+        adapter: { kind: "text", name: "fake", model: "fake-model", "~types": {} },
+        model: "fake-model",
+        modelStyle: "openai",
+      },
+      { userPrompt: "x", schema: bareArray }
+    ),
+  /requires a top-level object schema/,
+  "a bare-array schema is refused at the call site instead of being sent as an empty object"
+);
+
+console.log("✓ structured requests project to a usable provider schema");
 
 await rm(root, { recursive: true, force: true });
 

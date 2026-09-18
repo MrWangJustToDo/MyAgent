@@ -21,6 +21,21 @@ structured model output by pattern-matching raw text.
   describing the memory entry shape (name, type, description, body, optional importance,
   optional expiresAt)
 
+#### Scenario: The extraction schema root is an object
+
+- **WHEN** the extraction schema is inspected or rendered into a provider request
+- **THEN** its root is an object that carries the entry array under a named key, and the
+  prompt names that key — a top-level array root is not acceptable, because the request is
+  built from the schema's `properties` and an array root is projected as an empty object,
+  which makes every extraction reply fail validation
+
+#### Scenario: Every memory schema reaches the provider non-degenerate
+
+- **WHEN** an extraction, consolidation, or retrieval schema is rendered the way the provider
+  adapter renders it
+- **THEN** the rendered request carries the properties the schema declares, so the model is
+  actually constrained by the contract rather than by an empty object
+
 #### Scenario: Consolidation contract is one schema
 
 - **WHEN** consolidation requests merge and delete decisions from the model
@@ -108,6 +123,14 @@ schema and the prompt is therefore the only instruction the model receives.
 - **THEN** it introduces every required merged-entry field (`name`, `type`, `description`,
   `body`, `replaces`) as a named field, and states `type` together with its four allowed
   values rather than leaving the model to infer them
+
+#### Scenario: Extraction prompt names the entry fields and the envelope key
+
+- **WHEN** the extraction prompt is composed
+- **THEN** it introduces the top-level key the extraction schema requires, and every required
+  entry field (`name`, `type`, `description`, `body`) as a named field with `type`'s four
+  allowed values, because a key or field the prompt never mentions is one the model has no
+  reason to produce
 
 #### Scenario: A required field dropped from the prompt is a regression
 

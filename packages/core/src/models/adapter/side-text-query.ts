@@ -136,10 +136,50 @@ async function runTextQuery(
 // Structured branch
 // ============================================================================
 
+/**
+ * Reject a top-level non-object schema before the request is built.
+ *
+ * **This is why the guard exists.** The Anthropic adapter has no
+ * `structuredOutputStream`, so `chat({ outputSchema, stream: true })` falls back
+ * to its forced-tool `structuredOutput()`, which builds the tool's `input_schema`
+ * from the schema's **properties**:
+ *
+ * ```ts
+ * input_schema: { type: "object", properties: outputSchema.properties ?? {}, required: outputSchema.required ?? [] }
+ * ```
+ *
+ * A top-level `array` (or any schema without `properties`) therefore degrades to
+ * `{ type: "object", properties: {}, required: [] }` — an empty object the model
+ * fills with whatever key it likes. The reply is never an array, so validation
+ * fails on **every** call, deterministically. That is exactly how memory
+ * extraction returned zero memories for two days while every attempt logged a
+ * schema error: the failure looked like a flaky model, not a broken request.
+ *
+ * The guard turns that silent 100%-failure mode into one loud call-site error.
+ * `object` is the contract every provider can honour, so a top-level array is a
+ * bug in the caller, not a capability the port should absorb.
+ */
+function assertObjectRootSchema(schema: SchemaInput): void {
+  const root = (schema as { "~standard"?: { jsonSchema?: { input?: () => unknown } } })[
+    "~standard"
+  ]?.jsonSchema?.input?.();
+  // A raw JSON Schema the caller passed through has no `~standard`; nothing to check.
+  if (!root || typeof root !== "object") return;
+  const type = (root as { type?: unknown }).type;
+  if (type === undefined || type === "object") return;
+  throw new Error(
+    `runSideTextQuery requires a top-level object schema, received \`${JSON.stringify(type)}\`. ` +
+      "The provider's structured-output request is built from the schema's `properties`, so a " +
+      "non-object root is sent as an empty object and its response can never validate — every call " +
+      "fails. Wrap the payload in an object key (e.g. `z.object({ items: z.array(...) })`)."
+  );
+}
+
 async function runStructuredQuery<TSchema extends SchemaInput>(
   textAdapter: TextAdapterConfig,
   options: StructuredQueryOptions<TSchema>
 ): Promise<StructuredQueryResult<InferSchemaType<TSchema>>> {
+  assertObjectRootSchema(options.schema);
   const startTime = Date.now();
 
   // `stream: true` is required, not stylistic. The `Promise<T>` form of

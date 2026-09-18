@@ -51,6 +51,19 @@ const MAX_EXTRACTED_ENTRIES = 20;
 const EXTRACTION_SYSTEM_PROMPT = `You are a memory extraction assistant. Your role is to identify and extract \
 durable knowledge from conversation transcripts that should be remembered across sessions.
 
+Reply with a JSON **object** containing a single key "memories", whose value is the array of \
+extracted entries. No prose, no markdown code fences, no other top-level keys.
+
+Each entry in "memories" MUST contain exactly these fields, and MUST NOT add others:
+  - "name": short kebab-case identifier (e.g. "user-preference-tabs")
+  - "type": one of ${memoryTypeSchema.options.join(", ")}
+  - "description": one-line summary for index lookup
+  - "body": full detail in markdown
+  - "importance" (optional): number 0–1 rating how valuable this memory is across future
+    sessions; omit it for typical entries rather than inventing a value.
+  - "expiresAt" (optional): ISO timestamp when this memory stops being relevant; omit for
+    durable memories.
+
 You extract (prefer capturing rather than skipping when unsure):
 - User preferences (coding style, tool choices, communication preferences)
 - User corrections and feedback (things the user corrected or asked you to do differently)
@@ -65,7 +78,7 @@ Rules:
 - Keep descriptions concise (one line)
 - Keep body content focused and specific
 - Use kebab-case for names (e.g., "user-prefers-tabs")
-- Return an empty list only when the dialogue truly has nothing durable`;
+- Use an empty "memories" array only when the dialogue truly has nothing durable`;
 
 const CONSOLIDATION_SYSTEM_PROMPT = `You are a memory consolidation assistant. Your role is to merge, \
 deduplicate, and clean up a collection of memory entries.
@@ -155,8 +168,16 @@ const extractedMemorySchema = z.object({
 });
 
 /**
- * Extraction returns a bare array, so the schema does too — the provider's
- * structured output is an array, not an object wrapper.
+ * Extraction returns the entries under an object key, **not** as a bare array.
+ *
+ * The array is the natural shape, and the old schema used it — but a top-level
+ * array reaches the provider as `{ type: "object", properties: {} }`, because the
+ * structured-output request is built from the schema's `properties` (see
+ * `assertObjectRootSchema` in `models/adapter/side-text-query.ts`). The model then
+ * invents a wrapper key (`value`, `input`, `entries`, …) and the reply can never
+ * match, so extraction returned zero memories on every turn while logging a schema
+ * error that read like a flaky model. The key is pinned here and named in the
+ * prompt so the two cannot disagree.
  *
  * **Failure is all-or-nothing, deliberately.** One malformed entry rejects the
  * whole response, so the caller writes nothing rather than writing the entries
@@ -168,7 +189,9 @@ const extractedMemorySchema = z.object({
  * is the failure mode worth having; entry-level recovery hides a broken
  * contract behind partial results.
  */
-const extractionSchema = z.array(extractedMemorySchema);
+const extractionSchema = z.object({
+  memories: z.array(extractedMemorySchema),
+});
 
 /**
  * A merged memory. `replaces` is required: a merge that does not name its
@@ -188,9 +211,10 @@ const mergedMemorySchema = extractedMemorySchema.extend({
  * the files it claimed to replace, losing them outright. Rejecting the response
  * keeps `deleted` from being applied on top of a `merged` that never happened.
  *
- * Also note the two failure semantics differ on purpose: consolidation requires
- * a recognizable decision object, while extraction requires a whole array.
- * Neither accepts an unrecognized top-level shape as "nothing to do".
+ * Also note the two failure semantics differ on purpose: consolidation requires a
+ * recognizable decision object, while extraction rejects anything whose
+ * `memories` entry is malformed. Neither accepts an unrecognized top-level shape
+ * as "nothing to do".
  */
 const consolidationSchema = z.object({
   merged: z.array(mergedMemorySchema),
@@ -260,6 +284,7 @@ export async function extractMemories(
 
   const prompt = [
     "Extract user preferences, constraints, or project facts from this dialogue.",
+    'Return a JSON object: { "memories": [ { ...entry } ] }. An empty "memories" array means nothing new.',
     "Each entry needs: name, type, description, body, and optionally importance and expiresAt.",
     `- name: short kebab-case identifier (e.g. "user-preference-tabs")`,
     `- type: one of ${memoryTypeSchema.options.join(", ")}`,
@@ -270,14 +295,13 @@ export async function extractMemories(
     "  facts; 0.3–0.6 for moderately useful details; omit for typical entries.",
     "- expiresAt (optional): ISO timestamp when this memory stops being relevant",
     "  (e.g. a temporary constraint or a deprecation date). Omit for durable memories.",
-    "If nothing new or already covered by existing memories, return an empty list.",
-    "Reply with the JSON array only — no prose, no markdown code fences.",
+    "Reply with the JSON object only — no prose, no markdown code fences.",
     `Existing memories:\n${existingDesc}`,
     "",
     `Dialogue:\n${dialogue.slice(0, MAX_EXTRACTION_CHARS)}`,
   ].join("\n");
 
-  let produced: unknown;
+  let extracted: ExtractedMemory[];
   try {
     const { data } = await runSideTextQuery(textAdapter, {
       systemPrompt: EXTRACTION_SYSTEM_PROMPT,
@@ -287,14 +311,14 @@ export async function extractMemories(
       log,
       schema: extractionSchema,
     });
-    produced = data;
+    extracted = data.memories;
   } catch {
     // Transport and schema failures both land here. The port has already logged
     // the reason; an abort is expected, not a fault, so neither is re-reported.
     return 0;
   }
 
-  const items = produced as ExtractedMemory[];
+  const items = extracted;
   let count = 0;
   for (const item of items.slice(0, MAX_EXTRACTED_ENTRIES)) {
     await memoryManager.writeMemory(item.name, item.type, item.description, item.body, {

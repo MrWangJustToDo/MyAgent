@@ -20,6 +20,13 @@ not required to enforce it, so every caller MUST state the fields its schema req
 prompt it sends. A schema field the prompt never mentions is a field the model has no reason
 to produce, and under an all-or-nothing contract every such reply is rejected.
 
+The schema SHALL have an object at its root, and the port MUST reject a non-object root at
+the call site rather than issuing the request. A structured-output request is built from the
+schema's `properties`, so a top-level array (or any root without `properties`) is sent as an
+empty object schema; the model then invents a wrapper key and no reply can ever satisfy the
+schema, which makes the query fail on every call. That failure mode is indistinguishable
+from a flaky model after the fact, so it is refused up front instead.
+
 #### Scenario: Prompts state the contract their schema enforces
 
 - **WHEN** a caller issues a structured query
@@ -33,6 +40,20 @@ to produce, and under an all-or-nothing contract every such reply is rejected.
   Zod schema
 - **THEN** the port returns the object produced by the model, already parsed and validated
   against that schema, together with the raw model text
+
+#### Scenario: A non-object root schema is refused
+
+- **WHEN** a caller passes a schema whose root is not an object (for example a bare array)
+- **THEN** the port raises an error naming the required object root, before any request is
+  issued, so the caller learns that its schema cannot be satisfied instead of receiving a
+  per-call validation failure that looks like a model fault
+
+#### Scenario: An object-root schema reaches the provider intact
+
+- **WHEN** a caller passes a schema whose root is an object
+- **THEN** the properties the schema declares survive into the request the provider receives,
+  so the projected request is not degenerate (an empty property set cannot constrain the
+  model and guarantees the response will not validate)
 
 #### Scenario: No agent loop and no tools
 
