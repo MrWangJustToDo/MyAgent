@@ -104,6 +104,37 @@ const part = (name, output) => ({
   );
   assert.equal(isCancelledToolCall(part("grep", undefined)), false, "no output is not a cancel");
 
+  // ── the overwrite: a synthetic marker replaced by an unmarked abort error ────────────
+  // On abort the eager pass writes the synthetic marker, and then a tool whose `execute`
+  // REJECTS gets its part settled by TanStack as `{ error: message }` — no marker, and it
+  // overwrites the synthetic output. Reading the marker alone showed a red cross for a run
+  // the user stopped. The body IS the abort, so `isAbortError` has to be consulted too.
+  //
+  // The message is what the node shell / remote CoreEnv actually produces for an abort, and
+  // it is the only thing left on the part by the time the UI reads it (the rejected promise
+  // is gone). `d734233` classified exactly this shape on the lifecycle event for the same
+  // reason; the render layer was not.
+  const overwritten = part("run_command", { error: "Command aborted" });
+  assert.equal(
+    isCancelledToolCall(overwritten),
+    true,
+    "an unmarked abort error must still read as cancelled, not as a tool failure"
+  );
+  // And its glyph agrees — this is the assertion that fails on the old behaviour.
+  const { getUiToolState } = await import("@codent/core");
+  assert.equal(getToolStatusGlyph(getUiToolState(overwritten), false, isCancelledToolCall(overwritten)), "⚠");
+  // A DOM-style AbortError message counts too.
+  assert.equal(isCancelledToolCall(part("webfetch", { error: "The operation was aborted" })), true);
+  // But an ordinary fault keeps its cross: the classification must not swallow real failures.
+  assert.equal(isCancelledToolCall(part("grep", { error: "boom" })), false, "a plain error stays a failure");
+  assert.equal(
+    isCancelledToolCall(part("run_command", { error: "Command timed out after 30s" })),
+    false,
+    "a timeout is not a cancel"
+  );
+  // Only a STRING `error` is inspected — a nested object is not coerced into a message.
+  assert.equal(isCancelledToolCall(part("grep", { error: { message: "aborted" } })), false);
+
   // The glyph outranks the settled state in BOTH directions: the cancelled run_command
   // (output-error) must not wear the failure cross, and the cancelled task
   // (output-available) must not wear the success check.

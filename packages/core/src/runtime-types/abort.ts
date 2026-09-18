@@ -10,9 +10,16 @@
  * gone by the time it arrives. This is the one predicate for all of them.
  *
  * `signal` is checked first and is the strongest evidence: if the run's controller is already
- * aborted, the throw is the abort, whatever the error looks like. `aborted` in the message is
- * the last resort, kept because it is what the node shell throws (`throw new Error("aborted")`)
- * and because `run-coordinator` relied on it before this module existed.
+ * aborted, the throw is the abort, whatever the error looks like.
+ *
+ * The message branch is the last resort, and it matches an abort WORD rather than one exact
+ * string — because by the time the error has crossed into a tool-call part only its message is
+ * left (TanStack writes `{ error: message }`), and the two producers disagree on the text:
+ * `native-run` throws `ExecutionError("aborted", "Command aborted")` and the node shell throws a
+ * bare `Error("aborted")`. Matching `=== "aborted"` recognized only the second, so an abort that
+ * reached the render layer as "Command aborted" was classified as a plain failure. The word
+ * anchor keeps it from over-reaching: "abort" must appear as a word, and a timeout is not an
+ * abort ("Command timed out after 30s" does not match).
  */
 export function isAbortError(err: unknown, signal?: AbortSignal | null): boolean {
   if (signal?.aborted) return true;
@@ -22,7 +29,7 @@ export function isAbortError(err: unknown, signal?: AbortSignal | null): boolean
   // host-side; `instanceof` survives that, but the plain-object path does not, so match both.
   if ((err as { code?: unknown }).code === "aborted") return true;
   if (err.name === "ExecutionError" && (err as { code?: unknown }).code === "aborted") return true;
-  return err.message === "aborted";
+  return /\babort(?:ed)?\b/i.test(err.message);
 }
 
 /**

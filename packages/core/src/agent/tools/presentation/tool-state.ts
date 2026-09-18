@@ -1,4 +1,4 @@
-import { isCancelledOutputMarker } from "../../../runtime-types/abort.js";
+import { isAbortError, isCancelledOutputMarker } from "../../../runtime-types/abort.js";
 
 import type { ImagePart, ToolCallPart, ToolCallState } from "@tanstack/ai";
 
@@ -36,9 +36,20 @@ export function isToolCallPart(part: { type?: string } | null | undefined): part
  * on opposite states (one `output-error`, one `output-available`), so a row the user cancelled
  * would otherwise wear the failure cross or the success check. This delegates to
  * {@link isCancelledOutputMarker} so the marker shapes live in one place.
+ *
+ * The second shape is the one a marker alone misses. On abort the eager pass writes the
+ * synthetic marker, and then the tool's own `execute` may REJECT with the abort error — TanStack
+ * catches that and settles the same part as `{ error: message }`, which carries no marker and
+ * OVERWRITES the synthetic one. Reading only the marker then showed a red ✗ for a run the user
+ * stopped. So an `output-error` body that is itself an abort also reads as cancelled: the abort
+ * reach the tool as an error is exactly what `isAbortError` recognizes, whatever shape it took
+ * (a rejected fetch, an `ExecutionError(\"aborted\")`, an extension rethrowing the signal's
+ * reason). No signal is passed — this only ever sees the error's shape.
  */
 export function isCancelledToolCall(part: ToolCallPart | { output?: unknown }): boolean {
-  return isCancelledOutputMarker(part?.output);
+  if (isCancelledOutputMarker(part?.output)) return true;
+  const output = part?.output as { error?: unknown } | undefined;
+  return typeof output?.error === "string" && isAbortError(new Error(output.error));
 }
 
 export function parseToolInput(part: ToolCallPart): unknown {
