@@ -8,18 +8,23 @@
  *
  * - one file per job, chunks appended in arrival order, stderr lines marked
  * - header on creation, terminal footer once the job ends (no footer = running)
- * - **head durable, tail live**: at {@link MAX_JOB_LOG_BYTES} we stop appending
- *   (writing one marker) instead of rewriting the file, so `read_file` line
- *   offsets stay valid; recent output stays available through `get_command_output`
+ * - **unbounded**: background output is always written to the file, never sized
+ *   against a cap and never truncated. Disk growth is bounded by the 24 h stale
+ *   sweep plus deletion with the job record, not by cutting the file, so
+ *   `read_file` offsets stay valid for as long as the file exists
  * - every failure degrades silently (no path, no throw): logging must never
  *   affect the command result
  *
  * Deleting the file belongs to the job record (registry eviction / teardown);
- * files left behind by an earlier run are swept opportunistically.
+ * files left behind by an earlier run are swept opportunistically by the shared
+ * age sweep (`stale-file-sweep.ts`).
  */
 
 import { getEnv } from "../../../env.js";
 
+import { createStaleFileSweeper } from "./stale-file-sweep.js";
+
+import type { StaleSweepOptions } from "./stale-file-sweep.js";
 import type { CoreEnvFs } from "../../../env.js";
 
 // ============================================================================
@@ -29,9 +34,6 @@ import type { CoreEnvFs } from "../../../env.js";
 /** Cache directory holding one log per background job (workspace-relative). */
 export const COMMAND_JOB_LOG_DIR = ".agents/cache/command-jobs";
 
-/** Stop appending to a job log once it reaches this size. */
-export const MAX_JOB_LOG_BYTES = 16 * 1024 * 1024;
-
 /** Buffered write interval — batches noisy streams into fewer filesystem writes. */
 export const JOB_LOG_FLUSH_INTERVAL_MS = 250;
 
@@ -40,8 +42,6 @@ export const MAX_JOB_LOG_AGE_MS = 24 * 60 * 60 * 1000;
 
 /** Per-line marker keeping stderr distinguishable from stdout in the log. */
 const STDERR_MARK = "[stderr] ";
-
-const encoder = new TextEncoder();
 
 // ============================================================================
 // Paths
@@ -86,8 +86,6 @@ class FileJobLogWriter implements CommandJobLogWriter {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private chain: Promise<void> = Promise.resolve();
   private created = false;
-  private bytesWritten: number;
-  private truncated = false;
   private finalized = false;
   private stopped = false;
   /** Whether the next stderr line begins at a line boundary (chunks split mid-line). */
@@ -101,7 +99,6 @@ class FileJobLogWriter implements CommandJobLogWriter {
     this.appendFile = options.fs.appendFile as (path: string, content: string) => Promise<void>;
     this.path = jobLogPath(options.jobId);
     this.header = `# ${options.command}\n# started ${new Date(options.startedAt).toISOString()}\n`;
-    this.bytesWritten = encoder.encode(this.header).length;
   }
 
   appendStdout(chunk: string): void {
@@ -117,7 +114,6 @@ class FileJobLogWriter implements CommandJobLogWriter {
   async finalize(status: string, exitCode: number | null, endedAt: number): Promise<void> {
     if (this.finalized || this.stopped) return;
     this.finalized = true;
-    // The footer is metadata: it is written even once the cap was reached.
     const footer = `[exit ${exitCode ?? "n/a"} · ${status} · finished ${new Date(endedAt).toISOString()}]\n`;
     if (this.pending.length > 0 && !this.pending[this.pending.length - 1].endsWith("\n")) {
       this.pending.push("\n");
@@ -164,19 +160,6 @@ class FileJobLogWriter implements CommandJobLogWriter {
 
   private enqueue(text: string): void {
     if (this.stopped || this.finalized) return;
-    if (this.truncated) return;
-
-    const size = encoder.encode(text).length;
-    if (this.bytesWritten + size > MAX_JOB_LOG_BYTES) {
-      this.truncated = true;
-      const marker = `\n[log truncated at ${MAX_JOB_LOG_BYTES / (1024 * 1024)} MiB — later output is only available via get_command_output]\n`;
-      this.bytesWritten += encoder.encode(marker).length;
-      this.pending.push(marker);
-      this.schedule();
-      return;
-    }
-
-    this.bytesWritten += size;
     this.pending.push(text);
     this.schedule();
   }
@@ -259,38 +242,20 @@ export async function removeJobLog(path: string): Promise<void> {
 // Stale sweep
 // ============================================================================
 
-let sweptThisProcess = false;
-
 /**
  * Delete logs whose job can no longer be queried (older than
  * {@link MAX_JOB_LOG_AGE_MS}). Runs at most once per process unless forced.
  * Age-based on purpose: concurrent sessions may share a workspace root, and a
- * live session's logs are never older than the threshold.
+ * live session's logs are never older than the threshold. Shares its walk with
+ * the tool-output spill sweep (`stale-file-sweep.ts`) — same policy, and the
+ * `.log` suffix keeps the two caches from ever deleting each other's files.
  */
-export async function sweepStaleJobLogs(options?: { force?: boolean; now?: number }): Promise<number> {
-  if (sweptThisProcess && !options?.force) return 0;
-  sweptThisProcess = true;
+const jobLogSweeper = createStaleFileSweeper({
+  dir: COMMAND_JOB_LOG_DIR,
+  suffix: ".log",
+  maxAgeMs: MAX_JOB_LOG_AGE_MS,
+});
 
-  const now = options?.now ?? Date.now();
-  let removed = 0;
-  try {
-    const fs = getEnv().fs;
-    if (!(await fs.exists(COMMAND_JOB_LOG_DIR))) return 0;
-    const entries = await fs.readdir(COMMAND_JOB_LOG_DIR);
-    for (const entry of entries) {
-      if (!entry.name.endsWith(".log")) continue;
-      const path = `${COMMAND_JOB_LOG_DIR}/${entry.name}`;
-      try {
-        const stat = await fs.stat(path);
-        if (now - stat.mtime.getTime() <= MAX_JOB_LOG_AGE_MS) continue;
-        await fs.remove(path);
-        removed++;
-      } catch {
-        // Raced with another sweep / removal — ignore.
-      }
-    }
-  } catch {
-    // Non-fatal — the sweep is a safety net, never a source of failure.
-  }
-  return removed;
+export function sweepStaleJobLogs(options?: StaleSweepOptions): Promise<number> {
+  return jobLogSweeper.sweep(options);
 }

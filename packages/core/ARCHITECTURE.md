@@ -461,6 +461,8 @@ Runs **after** context auto-compact in the middleware stack.
 
 Large tool outputs at **execute** time still use `maybeCacheOutput` (`.agents/cache/tool-output/`) as a separate fallback — not part of compaction.
 
+That cache has **two** collectors, and neither subsumes the other: compaction's `cleanupOrphanedToolCache` is reference-based and therefore only ever fires for a session that compacts, over files that session's wire referenced; `sweepStaleToolOutput` is an age sweep (7 days, lazily on the first cache write of a process) that catches everything the reference pass structurally cannot see — sessions that never compacted, and files no session ever referenced. Removing the age sweep reintroduces unbounded growth (measured: 289 of 688 files in a real workspace were unreferenced leak).
+
 ### 5.2 Adapter vs capability boundary
 
 **Rule:** provider wire-protocol quirks belong under `packages/core/src/models/` (`createTextAdapter` and subclasses). Middleware / tools / UI must not branch on vendor names (`deepseek`, etc.).

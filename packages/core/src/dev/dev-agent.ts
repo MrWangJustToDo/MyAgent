@@ -301,9 +301,18 @@ export type { CommandJobRecord, CommandJobPollResult } from "../agent/tools/util
 export {
   COMMAND_JOB_LOG_DIR,
   MAX_JOB_LOG_AGE_MS,
-  MAX_JOB_LOG_BYTES,
   sweepStaleJobLogs,
 } from "../agent/tools/util/command-output-log.js";
+export {
+  CACHE_THRESHOLD,
+  TOOL_OUTPUT_CACHE_DIR,
+  TOOL_OUTPUT_MAX_AGE_MS,
+  cacheToolOutput,
+  cleanupOrphanedToolCache,
+  maybeCacheOutput,
+  resetToolOutputSweepForTesting,
+  sweepStaleToolOutput,
+} from "../agent/tools/util/tool-output-cache.js";
 export {
   PlanModeController,
   cleanStepText,

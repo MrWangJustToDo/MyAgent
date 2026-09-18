@@ -1,7 +1,7 @@
 /**
  * Validates CommandJobRegistry poll/kill/destroyAll semantics plus the durable
- * per-job log: creation, arrival order, stderr marking, terminal footer, size
- * cap, eviction/teardown deletion, stale sweep and degraded hosts.
+ * per-job log: creation, arrival order, stderr marking, terminal footer,
+ * unbounded size, eviction/teardown deletion, stale sweep and degraded hosts.
  *
  * Run: pnpm --filter @my-agent/core run validate:command-job-registry
  */
@@ -13,7 +13,6 @@ import path from "node:path";
 
 import {
   COMMAND_JOB_LOG_DIR,
-  MAX_JOB_LOG_BYTES,
   MAX_JOB_LOG_AGE_MS,
   clearCoreEnv,
   commandJobRegistry,
@@ -24,6 +23,8 @@ import {
 const registry = commandJobRegistry;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const MIB = 1024 * 1024;
+/** The size cap this feature deliberately does NOT have any more (regression guard). */
+const REMOVED_JOB_LOG_CAP_BYTES = 16 * MIB;
 
 // ---------------------------------------------------------------------------
 // Mock CoreEnv backed by the real filesystem (relative paths resolve against
@@ -223,23 +224,24 @@ assert.equal(await logExists(jobB.logPath), false, "teardown deletes the job log
 console.log("teardown log deletion OK");
 
 // ---------------------------------------------------------------------------
-// 10. Size cap: the head is durable, one marker, no further appends
+// 10. No size cap: background output is always written, nothing is truncated
 // ---------------------------------------------------------------------------
 {
-  const capJob = registry.create("echo cap");
+  const bigJob = registry.create("echo big");
   const chunkFor = (i) => `${String(i).padStart(2, "0")}-` + "x".repeat(MIB - 4) + "\n";
-  for (let i = 0; i < 17; i++) registry.appendStdout(capJob.id, chunkFor(i));
-  registry.markExited(capJob.id, 0);
+  const CHUNKS = 17;
+  for (let i = 0; i < CHUNKS; i++) registry.appendStdout(bigJob.id, chunkFor(i));
+  registry.markExited(bigJob.id, 0);
 
-  const content = await waitForLog(capJob.logPath, "log truncated at");
-  const stat = await fs.promises.stat(abs(capJob.logPath));
-  assert.equal((content.match(/log truncated at/g) ?? []).length, 1, "exactly one truncation marker");
-  assert.ok(content.startsWith("# echo cap\n"), "head survives the cap");
-  assert.ok(content.includes("14-"), "output below the cap is retained");
-  assert.equal(content.includes("16-"), false, "output past the cap is not appended");
-  assert.ok(stat.size < MAX_JOB_LOG_BYTES, `log stays under the cap (${stat.size} bytes)`);
-  assert.ok(content.includes("[exit 0 · exited · finished "), "footer written even after truncation");
-  console.log("size cap OK:", stat.size, "bytes");
+  const content = await waitForLog(bigJob.logPath, "[exit 0");
+  const stat = await fs.promises.stat(abs(bigJob.logPath));
+  assert.equal(content.includes("log truncated"), false, "no truncation marker is ever written");
+  assert.ok(content.startsWith("# echo big\n"), "header intact");
+  assert.ok(content.includes("00-"), "first chunk retained");
+  assert.ok(content.includes(`${String(CHUNKS - 1).padStart(2, "0")}-`), "LAST chunk retained too (past 16 MiB)");
+  assert.ok(stat.size > REMOVED_JOB_LOG_CAP_BYTES, `log exceeds the removed 16 MiB cap, got ${stat.size} bytes`);
+  assert.ok(content.includes("[exit 0 · exited · finished "), "footer written after an over-cap log");
+  console.log("no size cap OK:", stat.size, "bytes (over the removed", REMOVED_JOB_LOG_CAP_BYTES, "cap)");
 }
 
 // ---------------------------------------------------------------------------

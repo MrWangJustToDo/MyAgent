@@ -865,7 +865,8 @@ Runtime data under the project root is grouped under a single gitignored `.agent
 | `.agents/usage/` | Global usage history (`usage-<year>.jsonl`, per-LLM-call records) |
 | `.agents/config/models.json` | Unified model config (global settings + provider entries) |
 | `.agents/memory/` | Cross-session memory markdown + `MEMORY.md` |
-| `.agents/cache/tool-output/` | Large tool-output spill files |
+| `.agents/cache/tool-output/` | Large tool-output spill files (`*.txt`) — GC'd two ways: reference-based on compaction **and** a 7-day age sweep (`sweepStaleToolOutput`, lazy on first cache write of a process). The age sweep is the only thing that collects files from sessions that never compacted, and files no session ever referenced |
+| `.agents/cache/command-jobs/` | Durable per-job background shell logs (`.log`); 24 h age sweep + deletion with the job record |
 | `.agents/cache/models-dev.json` | models.dev metadata disk cache |
 | `.agents/transcripts/<sessionId>/` | Compaction transcript archives |
 | `.agents/plans/` | Saved plan markdown |
@@ -911,7 +912,7 @@ Programmatic equivalent: `createNodeEnv({ rootPath, mode: "os" | "native" })`. E
 **Background jobs (`run_in_background`) and their log.** Output is retained in memory (head-trimmed: 256K/stream running, 64K/stream finished, 50 finished jobs kept) **and** tee'd to a durable log at `.agents/cache/command-jobs/<jobId>.log`, whose workspace-relative path is returned as `cachedOutputPath` by `run_command` (background) and `get_command_output`:
 - one file per job, chunks appended in arrival order, stderr lines marked `[stderr] `;
 - header (`# <command>` + start time) on creation, terminal footer `[exit <code> · <status> · finished <iso>]` — **no footer means still running**;
-- **head durable, tail live**: at 16 MiB the log stops growing (single truncation marker) instead of rewriting, so `read_file` line offsets stay stable while recent output remains available through `get_command_output`;
+- **unbounded by design**: the log is never sized against a cap and never truncated — background output is always written. Disk growth is bounded by the 24 h stale sweep plus deletion with the job record, not by cutting the file, so `read_file` line offsets stay valid for as long as the file exists;
 - deleted with the job record (registry eviction / `destroyAllCommandJobs`); logs older than 24 h are swept once per process; a host whose fs lacks `appendFile` degrades to `cachedOutputPath: null`;
 - it must **not** live under `.agents/cache/tool-output/`, which `cleanupOrphanedToolCache` GCs against message references (it would delete a running job's log).
 

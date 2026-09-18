@@ -5,23 +5,44 @@
  * to `.agents/cache/tool-output/{id}.txt` and a preview (head + tail) is returned
  * to the LLM with instructions to use `read_file` for the full content.
  *
- * ## Cache Cleanup on Compaction
+ * ## Two cleanup paths (they are complements, not alternatives)
  *
- * When the conversation is compacted (auto or reactive), old messages before the
- * compact index are shadowed — the LLM will never see them again, so their cached
- * output files become stale. Call `cleanupOrphanedToolCache()` after compaction
- * to delete those files. Failure to delete a file is non-fatal (logged as warning).
+ * 1. **Compaction — reference-based, optimistic.** When the conversation is
+ *    compacted (auto or reactive), messages before the compact index are shadowed,
+ *    so the LLM will never see them again and their files become collectable.
+ *    `cleanupOrphanedToolCache()` deletes those. It only *can* fire for sessions
+ *    that actually compact, and only for files that session's wire referenced —
+ *    a file no session references is never in its candidate set.
+ * 2. **Age-based — unconditional backstop.** `sweepStaleToolOutput()` deletes any
+ *    cache file older than {@link TOOL_OUTPUT_MAX_AGE_MS}, regardless of
+ *    references. Without it, every session that never compacted (and every file
+ *    no session ever referenced) leaks forever: the reference-based path has no
+ *    global scan. It runs lazily on the first cache write of a process, mirroring
+ *    `sweepStaleJobLogs` for background job logs.
+ *
+ * Both are non-fatal by contract: a failed delete never fails the tool call.
  */
 
 import { getEnv } from "../../../env.js";
 
+import { createStaleFileSweeper } from "./stale-file-sweep.js";
+
+import type { StaleSweepOptions } from "./stale-file-sweep.js";
 import type { ModelMessage } from "@tanstack/ai";
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-const CACHE_DIR = ".agents/cache/tool-output";
+/** Cache directory holding one file per spilled tool result (workspace-relative). */
+export const TOOL_OUTPUT_CACHE_DIR = ".agents/cache/tool-output";
+
+/**
+ * Only `.txt` entries are swept. Background job logs live in a sibling directory
+ * and use `.log`, so a future merge of the two directories cannot let this sweep
+ * eat a live job log.
+ */
+const CACHE_ENTRY_SUFFIX = ".txt";
 
 /** Content length threshold to trigger disk caching (~2.5k tokens) */
 export const CACHE_THRESHOLD = 10000;
@@ -38,15 +59,22 @@ const DEFAULT_HEAD_CHARS = 5000;
 /** Number of chars to show from the end when content has few (but very long) lines */
 const DEFAULT_TAIL_CHARS = 2000;
 
+/** Spill files older than this are swept on the first cache write of a process. */
+export const TOOL_OUTPUT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 // ============================================================================
 // Public API
 // ============================================================================
 
 /**
  * Write full tool output to disk and return the cache file path.
+ *
+ * Sweeps before writing so the stale-file pass cannot observe its own output
+ * (a freshly written file is never a candidate anyway — the filter is age-based).
  */
 export async function cacheToolOutput(content: string, id: string): Promise<string> {
-  const filePath = `${CACHE_DIR}/${id}.txt`;
+  await sweepStaleToolOutput();
+  const filePath = `${TOOL_OUTPUT_CACHE_DIR}/${id}${CACHE_ENTRY_SUFFIX}`;
   await getEnv().fs.writeFile(filePath, content);
   return filePath;
 }
@@ -131,27 +159,17 @@ export function shouldCache(content: string): boolean {
 /**
  * Cache content if it exceeds the threshold, returning either the original
  * content or a preview with cache path. Also returns the cache path if cached.
- *
- * @param existingFilePath - Optional path to an existing file (e.g., from OutputAccumulator)
- *                           that already contains the content. If provided, this file path
- *                           is returned directly instead of creating a new cache file.
  */
 export async function maybeCacheOutput(
   content: string,
   id: string,
-  existingFilePath?: string | null,
   opts?: { headLines?: number; tailLines?: number }
 ): Promise<{ content: string; cachedOutputPath: string | null }> {
   if (!shouldCache(content)) {
-    // Even if content is small, if we have an existing file path, we should return it
-    if (existingFilePath) {
-      return { content, cachedOutputPath: existingFilePath };
-    }
     return { content, cachedOutputPath: null };
   }
 
-  // If an existing file path is provided, use it directly
-  const cachedPath = existingFilePath ?? (await cacheToolOutput(content, id));
+  const cachedPath = await cacheToolOutput(content, id);
   const preview = buildCachedPreview(content, cachedPath, opts);
   return { content: preview, cachedOutputPath: cachedPath };
 }
@@ -221,4 +239,33 @@ export async function cleanupOrphanedToolCache(messages: ModelMessage[], compact
   });
 
   await Promise.all(deletions);
+}
+
+// ============================================================================
+// Stale sweep
+// ============================================================================
+
+/**
+ * Delete cache files older than {@link TOOL_OUTPUT_MAX_AGE_MS}, which no live
+ * surface can still be reading. Runs at most once per process unless forced.
+ *
+ * Age-based on purpose: the reference-based compaction pass can only collect
+ * files a *compacting* session referenced, so anything else (a session that never
+ * compacted, a file no session ever referenced) would otherwise accumulate
+ * forever. Symmetric to `sweepStaleJobLogs` for background job logs — same
+ * laziness, same silent degradation, same shared walker.
+ */
+const toolOutputSweeper = createStaleFileSweeper({
+  dir: TOOL_OUTPUT_CACHE_DIR,
+  suffix: CACHE_ENTRY_SUFFIX,
+  maxAgeMs: TOOL_OUTPUT_MAX_AGE_MS,
+});
+
+export function sweepStaleToolOutput(options?: StaleSweepOptions): Promise<number> {
+  return toolOutputSweeper.sweep(options);
+}
+
+/** Test-only escape hatch for the once-per-process guard. */
+export function resetToolOutputSweepForTesting(): void {
+  toolOutputSweeper.reset();
 }

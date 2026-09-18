@@ -128,20 +128,19 @@ The system SHALL include the job log's workspace-relative path in the `run_comma
 - **WHEN** the log could not be written for a job
 - **THEN** the path field is null and the rest of the tool result is unaffected
 
-### Requirement: Job log growth is bounded without moving the head
+### Requirement: Job log growth is bounded by lifecycle, not by truncation
 
-The system SHALL cap each job log at a fixed maximum size. On reaching the cap it SHALL stop appending, write a single truncation marker, and SHALL NOT discard or rewrite already-written content, so previously read offsets remain valid. Recent output beyond the cap SHALL remain available through `get_command_output`.
+The system SHALL write every byte of a background job's output to its log — it SHALL NOT cap the log at a fixed size, SHALL NOT truncate it, and SHALL NOT discard or rewrite already-written content. Disk growth SHALL instead be bounded by the log's lifecycle: deletion together with the job record and the stale-log sweep. Because the file is never rewritten or cut, previously read offsets remain valid for as long as the log exists.
 
-#### Scenario: Cap reached
+#### Scenario: Output past the old 16 MiB watermark is still written
 
-- **WHEN** a job produces more output than the configured log cap
-- **THEN** the log retains its beginning, contains exactly one truncation marker, and receives no further output
+- **WHEN** a job produces more than 16 MiB of output
+- **THEN** the log contains the entire output in arrival order, with no truncation marker, and ends with the terminal footer
 
 #### Scenario: Offsets stay stable
 
-- **WHEN** a job log has reached its cap and the model re-reads an earlier section
+- **WHEN** a job log is long and the model re-reads an earlier section
 - **THEN** the same lines are found at the same positions as before
-
 ### Requirement: Job log lifecycle is owned by the job record
 
 The system SHALL create a job's log lazily on first output, SHALL delete it together with the job record (registry eviction or environment teardown), SHALL sweep stale logs left behind by earlier runs, and SHALL keep the job's log available after it is killed. Logging failures SHALL never fail or alter the command result.
