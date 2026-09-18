@@ -137,6 +137,14 @@ export interface LoadedModelEntry {
   apiKey?: string;
   /** Selectable model ids (direct: `entry.models`; remote: server's list). */
   models: string[];
+  /**
+   * Remote entries only: the model the provider server serves (its `/api/provider/info`
+   * `model`). Remote mode forces this onto every request
+   * ({@link resolveModelConfigFromProvider}), so it — not the client's recorded
+   * selection — is the entry's effective model, and {@link loadModels} reports it as
+   * `active.model`. Absent when the server declares none.
+   */
+  servedModel?: string;
 }
 
 /** Fully-loaded models config: schema + per-entry connection + active selection. */
@@ -224,6 +232,9 @@ export async function resolveModelsConfigFromProvider(serverUrl: string): Promis
     models: [{ type: "remote-provider", url: serverUrl.replace(/\/+$/, "") }],
     active: {
       entryIndex: 0,
+      // Fallback only: `loadModels` overrides this with the model the provider serves
+      // (`LoadedModelEntry.servedModel`) whenever the server declares one, because that
+      // is the model every proxied request carries. Kept for a server that names none.
       ...(info.config?.active?.model ? { model: info.config.active.model } : {}),
     },
   };
@@ -285,16 +296,29 @@ export async function loadModelEntries(config: ModelsConfig): Promise<LoadedMode
     // remote-provider: ask the server for its connection + selectable list.
     const info = await fetchProviderInfo(entry.url);
     const baseUrl = entry.url.replace(/\/+$/, "");
-    const remoteModels =
-      info.config?.models
-        ?.filter((e): e is DirectModelsConfigEntry => e.type === "direct")
-        .flatMap((e) => e.models ?? []) ?? (info.model ? [info.model] : []);
+    // Mirror the server's allowlist (`collectAllowedModels` in the provider proxy): its
+    // models.json ids, its own recorded selection, PLUS the model it serves. The served
+    // model must be listed even when models.json names other ids — it is what every
+    // proxied request carries, so leaving it out advertised a list (and, via
+    // `entry.models[0]`, a "current" model) the client never sends. The old `??` fallback
+    // could not cover that case anyway: an empty `flatMap` is not nullish, so a chained
+    // `remote-provider`-only models.json produced an empty list instead of `[info.model]`.
+    const remoteModels = [
+      ...new Set([
+        ...(info.config?.models
+          ?.filter((e): e is DirectModelsConfigEntry => e.type === "direct")
+          .flatMap((e) => e.models ?? []) ?? []),
+        ...(info.config?.active?.model ? [info.config.active.model] : []),
+        ...(info.model ? [info.model] : []),
+      ]),
+    ];
     entries.push({
       type: "remote",
       style: info.style,
       baseURL: `${baseUrl}${info.basePath}`,
       apiKey: REMOTE_PROVIDER_API_KEY,
       models: remoteModels,
+      ...(info.model ? { servedModel: info.model } : {}),
     });
   }
   return entries;
@@ -329,7 +353,17 @@ export async function loadModels(source: ModelsConfigSource): Promise<LoadedMode
   const config = await resolveModelsConfig(source);
   if (!config) return null;
   const entries = await loadModelEntries(config);
-  const active = config.active ?? { entryIndex: 0 };
+  let active: ModelsConfigActive = config.active ?? { entryIndex: 0 };
+  // A remote entry cannot honor a client-side model choice: the provider forces its own
+  // served model onto every request ({@link resolveModelConfigFromProvider}), so the
+  // recorded selection — a file's `active.model`, or the server's models.json `active`
+  // echoed by {@link resolveModelsConfigFromProvider} — is not what runs. Reporting it
+  // made the host display (footer / help) and the `/models` "(current)" marker name a
+  // model the client never sends.
+  const activeEntry = entries[active.entryIndex];
+  if (activeEntry?.servedModel && activeEntry.servedModel !== active.model) {
+    active = { ...active, model: activeEntry.servedModel };
+  }
   return { config, entries, active };
 }
 

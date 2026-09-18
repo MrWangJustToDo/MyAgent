@@ -34,16 +34,45 @@ async function loadServerModelsConfig(): Promise<ModelsConfig | null> {
  * direct entries are only needed client-side for the selectable model list, and
  * their apiKey/baseURL are server secrets — the proxy injects them. Without
  * this, GET /api/provider/info leaks the upstream key to any caller.
+ *
+ * The payload is normalized at the same time: the model this server actually serves
+ * (its `.env` `MODEL`) leads the advertised list and is reported as the active
+ * selection. Clients build both their selectable list and their notion of "current"
+ * from this payload, so a models.json naming other ids — or a chained
+ * `remote-provider` entry contributed by an even further server — used to hand out a
+ * list that excluded the only model the proxy would ever send, leaving the client
+ * displaying a model it never used.
+ *
+ * `entryIndex: 0` names the synthetic entry below, so the advertised config stays
+ * self-consistent: the served model is where `active` says it is.
  */
-function sanitizeConfigForClient(config: ModelsConfig): SanitizedProviderConfig {
+function sanitizeConfigForClient(config: ModelsConfig, connection: ModelConnection): SanitizedProviderConfig {
+  const servedModel = connection.model?.trim();
+  const others = (config.models ?? []).map((entry: ModelsConfigEntry): SanitizedProviderConfig["models"][number] => {
+    if (entry.type !== "direct") return entry;
+    // Redact upstream secrets by omitting them — clients only need the model list;
+    // the proxy injects baseURL/apiKey server-side.
+    return { type: entry.type, style: entry.style, models: entry.models };
+  });
+  if (!servedModel) {
+    // No served model (the server's `.env` names none): nothing to advertise — the
+    // proxy forwards whatever the client sends against its own allowlist.
+    return { ...config, models: others };
+  }
   return {
     ...config,
-    models: (config.models ?? []).map((entry: ModelsConfigEntry): SanitizedProviderConfig["models"][number] => {
-      if (entry.type !== "direct") return entry;
-      // Redact upstream secrets by omitting them — clients only need the model list;
-      // the proxy injects baseURL/apiKey server-side.
-      return { type: entry.type, style: entry.style, models: entry.models };
-    }),
+    models: [
+      // The served model leads, under the connection's own style — the style the proxy
+      // will actually use for it, which a hand-written models.json entry may disagree
+      // with. It is removed from the entry that declared it so the id appears once.
+      { type: "direct", style: parseModelStyle(connection.style), models: [servedModel] },
+      ...others.map((entry) =>
+        entry.type === "direct" && entry.models?.includes(servedModel)
+          ? { ...entry, models: entry.models.filter((model) => model !== servedModel) }
+          : entry
+      ),
+    ],
+    active: { entryIndex: 0, model: servedModel },
   };
 }
 
@@ -330,7 +359,7 @@ export const providerRoutes = new Hono()
       model: connection.model,
       basePath,
       // Strip direct-entry apiKey/baseURL secrets: clients only need the model list.
-      ...(serverConfig ? { config: sanitizeConfigForClient(serverConfig) } : {}),
+      ...(serverConfig ? { config: sanitizeConfigForClient(serverConfig, connection) } : {}),
     };
     return c.json(body);
   })

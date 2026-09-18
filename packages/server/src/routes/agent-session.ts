@@ -277,12 +277,23 @@ export const agentSessionRoutes = new Hono()
     const entries = (config?.models ?? [])
       .filter((e): e is Extract<ModelsConfigEntry, { type: "direct" }> => e.type === "direct")
       .map((e) => ({ style: e.style, models: e.models ?? [] }));
-    // Fallback entry from the server `.env` so a models.json-less server still
-    // offers its own model.
-    if (entries.length === 0 && envConnection.model) {
-      entries.push({ style: envConnection.style, models: [envConnection.model] });
+    // The server's own default — its `.env` model, the connection `POST /api/agent`
+    // resolves when a client names none — must always be offered. It used to be offered
+    // only when models.json was absent, so a models.json listing other ids advertised a
+    // list in which a session could not select the model it would actually run.
+    const envModel = envConnection.model?.trim();
+    if (envModel && !entries.some((e) => e.models.includes(envModel))) {
+      // Appended rather than prepended: `active.entryIndex` is recorded against the
+      // ids models.json declares, and inserting ahead of them would shift every one.
+      entries.push({ style: envConnection.style, models: [envModel] });
     }
-    const active = config?.active ?? { entryIndex: 0, ...(envConnection.model ? { model: envConnection.model } : {}) };
+    const active =
+      config?.active ??
+      // No recorded selection: the server's own model is what a session started now
+      // would use, so that is what the client should show as current.
+      (envModel
+        ? { entryIndex: entries.findIndex((e) => e.models.includes(envModel)), model: envModel }
+        : { entryIndex: 0 });
     return c.json({ entries, active });
   })
   .post("/", async (c) => {

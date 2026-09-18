@@ -4,9 +4,14 @@
  * Run: pnpm --filter @codent/server run validate:provider-proxy
  */
 
+import { registerCoreEnv } from "@codent/core";
+import { createNodeEnv } from "@codent/node";
 import { Hono } from "hono";
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   REMOTE_PROVIDER_API_KEY,
@@ -135,6 +140,52 @@ assert.equal(info.mode, "remote");
 assert.equal(info.style, "openai");
 assert.equal(info.model, "mock-model");
 assert.equal(info.basePath, "/api/provider/openai/v1");
+
+// The advertised config must be self-consistent: the model this server serves leads the
+// list and is reported as active, so a client's selectable list — and its idea of which
+// model is current — contains the model every proxied request carries. The server's own
+// models.json names other ids and records no selection, which is exactly the shape that
+// made clients display a model the proxy never sent.
+{
+  const root = mkdtempSync(join(tmpdir(), "provider-info-"));
+  mkdirSync(join(root, ".agents", "config"), { recursive: true });
+  writeFileSync(
+    join(root, ".agents", "config", "models.json"),
+    JSON.stringify({
+      models: [
+        {
+          type: "direct",
+          style: "anthropic",
+          baseURL: "https://upstream.example.com/v1",
+          apiKey: "sk-must-not-leak",
+          models: ["other-a", "other-b"],
+        },
+      ],
+    })
+  );
+  registerCoreEnv(createNodeEnv({ rootPath: root }));
+
+  const advertised = await (await app.request("http://local/api/provider/info")).json();
+  const directModels = advertised.config.models
+    .filter((entry) => entry.type === "direct")
+    .flatMap((entry) => entry.models ?? []);
+
+  assert.deepEqual(
+    directModels,
+    ["mock-model", "other-a", "other-b"],
+    "the served model must be advertised first, without duplicating a models.json id"
+  );
+  assert.equal(advertised.config.models[0].style, "openai", "advertised under the connection's own style");
+  assert.deepEqual(advertised.config.active, { entryIndex: 0, model: "mock-model" });
+  assert.ok(
+    advertised.config.models[advertised.config.active.entryIndex].models.includes(advertised.config.active.model),
+    "active must point at an entry that offers it"
+  );
+  assert.ok(!JSON.stringify(advertised).includes("sk-must-not-leak"), "no apiKey may leave the server");
+  assert.ok(!JSON.stringify(advertised).includes("upstream.example.com"), "no upstream baseURL either");
+
+  rmSync(root, { recursive: true, force: true });
+}
 
 upstream.close();
 

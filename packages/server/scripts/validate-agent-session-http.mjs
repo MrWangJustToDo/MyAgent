@@ -10,7 +10,7 @@
  */
 /* eslint-disable no-undef */
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -143,6 +143,44 @@ assert.ok(renamed, `rename must propagate via state channel (got "${session.getS
   assert.equal(missing.status, 404);
   const lazy = host.connect("does-not-exist");
   assert.ok(lazy, "connect stays synchronous and delegates existence to the server");
+}
+
+// ── 5b. `/models` must always offer the server's own model ──
+{
+  // The connection `POST /api/agent` falls back to when a client names no model is the
+  // server's `.env` MODEL. A models.json listing other ids used to hide it: the route
+  // added the fallback entry only when models.json was absent, so the advertised list
+  // was one no session could select its own default model from.
+  process.env.MODEL = "served-model";
+  mkdirSync(join(process.env.ROOT_PATH, ".agents", "config"), { recursive: true });
+  writeFileSync(
+    join(process.env.ROOT_PATH, ".agents", "config", "models.json"),
+    JSON.stringify({
+      models: [
+        {
+          type: "direct",
+          style: "openai",
+          baseURL: "https://upstream.example.com/v1",
+          apiKey: "sk-must-not-leak",
+          models: ["other-model"],
+        },
+      ],
+    })
+  );
+
+  const modelsRes = await fetch(`${baseUrl}/api/agent/models`);
+  assert.equal(modelsRes.status, 200);
+  const payload = await modelsRes.json();
+  const offered = payload.entries.flatMap((entry) => entry.models);
+  assert.ok(offered.includes("other-model"), "models.json ids stay offered");
+  assert.ok(offered.includes("served-model"), "the server's own .env model must always be offered");
+  assert.equal(payload.active.model, "served-model", "and it is what a session started now would run");
+  assert.ok(
+    payload.entries[payload.active.entryIndex].models.includes(payload.active.model),
+    "active must point at an entry that offers it"
+  );
+  assert.ok(!JSON.stringify(payload).includes("upstream.example.com"), "no upstream baseURL leaves the server");
+  assert.ok(!JSON.stringify(payload).includes("sk-must-not-leak"), "no apiKey either");
 }
 
 // ── 6. Destroy ──
