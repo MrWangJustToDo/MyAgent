@@ -1,17 +1,33 @@
 import { DEFAULT_BASE_URLS, DEFAULT_LOCAL_OPENAI_BASE_URL, getEnv } from "@codent/core";
 import { Box, Text } from "ink";
+import { useEffect } from "react";
 
+import { useAdapter } from "../context/adapter-context.js";
 import { useConfig } from "../hooks/use-config.js";
 import { COLORS } from "../theme/colors.js";
 import { getKeyboardShortcutSections } from "../utils/keyboard-labels.js";
 
+/** Give Ink one frame to paint the help text before the process goes away. */
+const HELP_EXIT_DELAY_MS = 150;
+
 export const Help = () => {
   const config = useConfig((s) => s.config);
+  const adapter = useAdapter();
   const shortcutSections = getKeyboardShortcutSections();
-  // Cosmetic host identity: the dev CLI is `codent`, the bundled release host
-  // is `codent`. `remotePlanes: false` hides flags the host cannot honour.
+  // Cosmetic host identity. `productName` is the host's own name (`codent` for
+  // the bundled release host, `@codent/cli` for the development host), and
+  // `remotePlanes: false` hides the remote flags a host cannot honour.
   const name = config.productName || "codent";
   const remotePlanes = config.remotePlanes !== false;
+
+  // `--help` used to render and then hang: nothing in this branch ever ended the
+  // process, and by the time it mounted the CoreEnv, the OS sandbox and the Ink
+  // render loop were all live, so it waited on stdin forever. Deferred by a
+  // frame so the text reaches the terminal before stdout is torn down.
+  useEffect(() => {
+    const timer = setTimeout(() => adapter.exit(), HELP_EXIT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [adapter]);
 
   return (
     <Box flexDirection="column" padding={1}>

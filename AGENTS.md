@@ -220,12 +220,14 @@ pnpm install          # Install dependencies
 
 pnpm build            # Build all packages (core → app → rest)
 pnpm build:core       # Build core package only
-pnpm build:app        # Build app package only
+pnpm build:app        # Build app package only (deps external — see "Two app builds")
+pnpm build:app:release # Build app with every third-party dep inlined (release paths only)
 pnpm build:cli        # Build CLI package only
 pnpm build:server     # Build server package only
 pnpm build:extension  # Build extension only
 pnpm build:im-bridge  # Build im-bridge package only
 pnpm build:codent      # Build the release host (fully bundled, self-contained)
+                       # → core, then app:release, then node, then codent
 
 pnpm dev              # Run all packages in watch mode (parallel)
 pnpm dev:core         # Watch core package
@@ -245,11 +247,28 @@ pnpm format           # Format with Prettier
 
 Per-package type check: `cd packages/<pkg> && pnpm tsc --noEmit` (e.g. `core`, `app`, `cli`).
 
+### Two `@codent/app` builds
+
+`@codent/app` has **two** tsdown configs, and the only difference is dependency handling. Both share their entries and dependency lists in `packages/app/tsdown.shared.ts`, so the two cannot drift.
+
+| Config | Script | Dependencies | Who consumes it |
+|--------|--------|--------------|-----------------|
+| `tsdown.config.ts` | `build` (default) | **external** | every host in this repo — playground, extension, cli, codent |
+| `tsdown.config.release.ts` | `build:release` | **inlined** | the fully bundled release paths (`build:codent`, `pnpm publish:*`) |
+
+The default is the cheap one and must stay the default: a dependency is built **once**, by whoever owns it, instead of being inlined into `dist` and then bundled *again* by each host that inlines `@codent/app`. Inlining at this layer also freezes one module form into the artifact before any host has a say — `reactivity-store` is the worked example. The release config resolves it on the Node platform target, so it lands as its CJS entry (`require("react")`), which a browser host cannot execute (the playground's `node:module` stub turns that `require` into a thrown `require() is not available in the browser`). A host that resolves the package itself picks the `module` (ESM) entry and the problem does not exist.
+
+The release config exists because those third-party deps (`reactivity-store`, `chalk`, `diff`, `ink-stream-markdown`, `@git-diff-view/*`, `@m234/nerd-fonts`) are **`devDependencies`** here — they are implementation details of the render layer, not a public API. A host inside this workspace provides them (every one of them is a real dependency of the playground and the extension), but a **published** `@codent/app` would resolve nothing: tsdown only auto-externalises production dependencies, so the default build emits bare specifiers that npm never installs for the consumer (`ERR_MODULE_NOT_FOUND`). `build:release` inlines them, which is what makes `pnpm publish:packages` viable.
+
+`build:codent` composes the release path explicitly (`core` → `app:release` → `node` → `codent`), while plain `pnpm build` keeps the default. (For `codent` itself the choice is cosmetic — its own `alwaysBundle: [/.*/]` would inline the externals anyway — but reusing the release path keeps the ordering honest and reuses the config that the publish path needs.) CI builds the default, then the release config, then runs `validate:self-contained` — so a broken release config is a PR failure rather than a tag-time discovery.
+
+**Consequence for host configs:** because the app build emits the renderer under its **real** package name (`@my-react/react-terminal`, not the bare `ink`), a browser host must alias *both* spellings to the package's `/web` entry. Aliasing only `ink` silently pulls the Node entry of the terminal renderer, which imports `signal-exit` and reads `process.platform` at module scope (`process is not defined`). See the alias blocks in `packages/playground/vite.config.ts` and `packages/extension/wxt.config.ts`.
+
 **Build first.** `pnpm lint` and `pnpm typecheck` only pass against a built checkout: the `validate:*` / test / render-smoke scripts import their own package's `dist` output (`../dist/dev.mjs`), and bare workspace specifiers (`@codent/core`) resolve through each package's `exports` map, which points at `dist`. In a fresh clone both commands report ~280 phantom `import/no-unresolved` / `TS2307` errors until `pnpm build` has run once. That is why CI builds before linting.
 
 Tests: `@codent/app` owns the only `node:test` suite — `pnpm --filter @codent/app test` builds the package, then runs `node --test test/*.test.mjs` against its `dist` output. Core is covered by the `validate:*` scripts instead (see step 3 of the Task Completion Checklist).
 
-CI: `.github/workflows/ci.yml` runs on every pull request and on pushes to `main` — `wxt prepare` → `pnpm build` → `pnpm lint` → `pnpm typecheck` → `pnpm --filter @codent/app test`. The release workflow (`.github/workflows/release.yml`, `v*` tag or manual dispatch) runs the same checks before `pnpm run publish:only`.
+CI: `.github/workflows/ci.yml` runs on every pull request and on pushes to `main` — `wxt prepare` → `pnpm build` → `pnpm lint` → `pnpm typecheck` → `pnpm --filter @codent/app test` → `build:app:release` → `codent validate:self-contained`. The release workflow (`.github/workflows/release.yml`, `v*` tag or manual dispatch) runs the same checks before `pnpm --filter codent run publish:beta`.
 
 ## Code Style Guidelines
 

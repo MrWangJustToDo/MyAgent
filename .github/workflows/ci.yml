@@ -76,10 +76,27 @@ jobs:
         # its own dist entry, so it must run after the build above.
         run: pnpm --filter @codent/app test
 
+      - name: Build the release configuration of @codent/app
+        # `Build` above runs the DEFAULT app config, which keeps dependencies
+        # external. The release config (`tsdown.config.release.ts`) is a second,
+        # separate code path that only the release/publish scripts use — so
+        # without this step a broken release config is first discovered at tag
+        # time, after the tag is pushed, and the tagged commit is already
+        # immutable. Building it here is cheap (it shares `tsdown.shared.ts`
+        # with the default config, so the entry list cannot drift), and it
+        # leaves `packages/app/dist` in the inlined state that the
+        # self-containment check below must see.
+        run: pnpm run build:app:release
+
       - name: Verify the bundled release CLI is self-contained
         # guards the release contract on every PR, not just at tag time: the
         # built `codent` tarball must contain no `@codent/*` specifier and must
         # declare only the four externals that cannot be inlined. Without this,
         # a new `@codent/*` import inside app/core/node would only be caught by
         # the release workflow, after the tag is already pushed.
+        #
+        # The script builds `codent` itself (`validate:self-contained` is
+        # `pnpm run build && node ./scripts/...`), so do NOT wrap it in
+        # `pnpm build:codent` — that would rebuild the release app config a
+        # second time on top of the step above.
         run: pnpm --filter codent validate:self-contained

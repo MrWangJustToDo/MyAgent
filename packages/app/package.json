@@ -43,7 +43,8 @@
   ],
   "scripts": {
     "build": "tsdown",
-    "prepublishOnly": "pnpm run build",
+    "build:release": "tsdown --config tsdown.config.release.ts",
+    "prepublishOnly": "pnpm run build:release",
     "dev": "tsdown --watch",
     "test": "pnpm run build && node --test test/*.test.mjs",
     "typecheck": "tsc --noEmit",
@@ -53,6 +54,9 @@
     "validate:session-only-smoke": "pnpm run build && pnpm --filter @codent/core build && pnpm --filter @codent/node build && node ./scripts/validate-session-only-smoke.mjs",
     "validate:render-smoke": "tsdown --config ./scripts/render-smoke/tsdown.config.ts && node ./scripts/render-smoke/run.mjs"
   },
+  "//": "Two build configurations. `build` (default) keeps third-party dependencies external so",
+  "//bundling": "in-repo hosts resolve each one once and in the form they need; `build:release`",
+  "//release": "inlines them for the fully bundled release / publishing paths. See tsdown.shared.ts.",
   "dependencies": {
     "@codent/core": "workspace:*",
     "@my-react/react": "^0.3.30",

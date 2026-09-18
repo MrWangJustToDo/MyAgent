@@ -146,7 +146,14 @@ const AgentBootstrap = memo(() => {
       termOptions={{ fontSize: 14 }}
       inkRenderOptions={{ exitOnCtrlC: false }}
       onReady={(api) => {
-        api.term.loadAddon(new WebglAddon());
+        // Optional GPU acceleration. `activate()` throws on a host without WebGL2 (headless
+        // Chrome, a blocked/blacklisted driver, software-rendering VMs); xterm falls back to
+        // its DOM renderer, so the unhandled rejection is noise rather than a failure.
+        try {
+          api.term.loadAddon(new WebglAddon());
+        } catch {
+          // DOM renderer fallback — nothing to do.
+        }
       }}
     >
       <AdapterProvider value={adapter}>

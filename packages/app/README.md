@@ -41,6 +41,28 @@ Remote session Host bootstrap (`createRemoteAgentSessionHost`) replaces the Loca
 
 The presentation helpers (activity summaries, input/output formatting, tool-part state, row rules) live in **core** (`src/agent/tools/presentation/`) and the app re-exports them — hosts must not keep their own tool-name tables, which drifted and cannot be seen by a host that renders off-process (remote session / extension hosts).
 
+## Two build configurations
+
+This package ships **two** tsdown configs. They differ in exactly one dimension — dependency handling — and share their entries and dependency lists in `tsdown.shared.ts` so they cannot drift.
+
+| Config | Script | Dependencies | Consumers |
+|--------|--------|--------------|-----------|
+| `tsdown.config.ts` | `pnpm build` (default) | external | every host in this repo (playground, extension, cli, codent) |
+| `tsdown.config.release.ts` | `pnpm build:release` | inlined | the fully bundled release paths (`build:codent`, `pnpm publish:*`) |
+
+### Why the default leaves dependencies external
+
+Two reasons, and the second is the one that bites:
+
+1. **Avoid duplicate builds.** Whatever is inlined here gets bundled *again* by each host that inlines `@codent/app`. Leaving a dependency external means it is built once, by whoever owns it.
+2. **Let the host pick the module form.** Inlining freezes one form into the artifact before any host has a say. `reactivity-store` is the worked example: the release config resolves it on the Node platform target, so it lands as its **CJS** entry, whose `require("react")` becomes a `createRequire` call — and the playground's `node:module` stub turns that into a thrown `require() is not available in the browser`. A host resolving the package itself picks the `module` (ESM) entry and the problem does not exist.
+
+### Renderer is external under its real name
+
+The `rewriteRendererSpecifiers` plugin rewrites bare `react` / `ink` to `@my-react/react` / `@my-react/react-terminal` at resolve time, so the published graph never contains the bare names (npm does not dedupe an alias against the real package name, which produced two hook dispatchers and a blank TUI).
+
+A consequence hosts must handle: the emitted specifier is `@my-react/react-terminal`, **not** `ink`. A browser host therefore has to alias *both* spellings to the package's `/web` entry — aliasing only `ink` silently resolves the Node entry, which imports `signal-exit` and reads `process.platform` at module scope (`process is not defined`). See `packages/playground/vite.config.ts` and `packages/extension/wxt.config.ts`.
+
 ## Validate
 
 ```bash
