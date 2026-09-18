@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import { StreamMarkdown } from "ink-stream-markdown";
 
+import { useStaticContext } from "../context/static-context.js";
 import { useSize } from "../hooks";
 import { COLORS } from "../theme/colors.js";
 import { markdownTheme } from "../theme/markdown-theme.js";
@@ -36,18 +37,30 @@ const STREAMING_PARSE_OPTIONS = { streamParse: "auto", reuseStableTopLevelNodes:
  *
  * Passing `streaming` restores the previous semantics exactly (`final` resolves to `false`).
  * No `height` is set, so the tail-anchored window that `streaming` also drives is inert.
+ *
+ * It is passed conditionally, not as a constant: a row already promoted into
+ * `MessageList`'s static region is finished content, and re-parsing it incrementally there
+ * would only pay the streaming bookkeeping for text that can no longer change. Those rows
+ * render above the boundary, and `StaticContext` is what tells them apart — see
+ * `MessageList`'s `staticMessage` wrappers.
  */
 
 /** Render a text part for assistant messages (user messages are handled by UserMessageView) */
 export const TextPartView = ({ part }: TextPartViewProps) => {
   const width = useSize((s) => s.state.screenWidth);
 
+  const { staticMessage } = useStaticContext();
+
   return (
     <Box flexDirection="row">
       <Box flexShrink={0}>
         <Text color={COLORS.accent}>{"✦ "}</Text>
       </Box>
-      <StreamMarkdown theme={{ ...markdownTheme, width: width - 6 }} parseOptions={STREAMING_PARSE_OPTIONS} streaming>
+      <StreamMarkdown
+        theme={{ ...markdownTheme, width: width - 6 }}
+        parseOptions={STREAMING_PARSE_OPTIONS}
+        streaming={!staticMessage}
+      >
         {part.content.trimEnd()}
       </StreamMarkdown>
     </Box>

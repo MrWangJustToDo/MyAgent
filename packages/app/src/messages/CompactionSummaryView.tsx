@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import { StreamMarkdown } from "ink-stream-markdown";
 import { memo } from "react";
 
+import { useStaticContext } from "../context/static-context.js";
 import { useSize } from "../hooks";
 import { BG } from "../theme/colors";
 import { markdownTheme } from "../theme/markdown-theme.js";
@@ -27,6 +28,8 @@ export const CompactionSummaryView = memo(function CompactionSummaryView({ messa
   const screenWidth = useSize((s) => s.state.screenWidth);
   const contentWidth = screenWidth - 2;
 
+  const { staticMessage } = useStaticContext();
+
   const part = message.parts[0] as TextPart;
   // Strip the outer [CONVERSATION SUMMARY] / [END SUMMARY] markers and
   // "Continue if you have next steps..." instruction — we already have our
@@ -49,9 +52,12 @@ export const CompactionSummaryView = memo(function CompactionSummaryView({ messa
       <StreamMarkdown
         theme={{ ...markdownTheme, width: contentWidth - 2 }}
         height={COMPACT_SUMMARY_MAX_LINES}
-        // Static, finished content: `final` one-shot parse (the library default) with the
-        // fold indicator at the bottom. `streaming` is for content still arriving.
-        streaming={false}
+        // Two different messages reach this view and they want opposite parse modes. The
+        // finished checkpoint is static content: `final` one-shot parse with the fold at the
+        // bottom, so it reads from its own start. The summary `MessageViewWithCompact`
+        // injects WHILE compaction runs is still arriving, and wants the streaming path —
+        // otherwise a growing summary renders as if it had already finished.
+        streaming={!staticMessage}
       >
         {displayContent.trimEnd()}
       </StreamMarkdown>
