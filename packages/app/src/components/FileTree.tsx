@@ -127,17 +127,41 @@ function formatDirStatus(summary: DirStatusSummary | undefined): string | null {
 // useFileTree
 // ============================================================================
 
+/**
+ * Ancestor directories of `path` within the workspace, root first.
+ *
+ * Excludes the file itself: expanding a tree means expanding its directories.
+ * Returns `[]` for the root or a path outside the workspace.
+ */
+function ancestorDirs(rootPath: string, path: string): string[] {
+  if (!rootPath) return [];
+  const rel = workspaceRelativePath(rootPath, path);
+  if (!rel || rel === ".") return [];
+  const parts = rel.split("/");
+  const dirs: string[] = [rootPath];
+  let cur = rootPath;
+  for (let i = 0; i < parts.length - 1; i++) {
+    cur = joinWorkspacePath(cur, parts[i]!);
+    dirs.push(cur);
+  }
+  return dirs;
+}
+
 export function useFileTree(rootPath: string): {
   items: FlatTreeItem[];
   loading: boolean;
   toggleDir: (path: string) => Promise<void>;
   reload: () => void;
   revealPath: (path: string) => Promise<void>;
+  /** Path with an outstanding reveal request, or null. See `consumePendingReveal`. */
+  pendingReveal: string | null;
+  consumePendingReveal: (path: string) => void;
 } {
   const [dirData, setDirData] = useState<Map<string, FileEntry[]>>(new Map());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
+  const [pendingReveal, setPendingReveal] = useState<string | null>(null);
 
   const loadDir = useCallback(async (path: string): Promise<void> => {
     if (dirCache.has(path)) {
@@ -175,41 +199,57 @@ export function useFileTree(rootPath: string): {
     clearDirCache();
     setDirData(new Map());
     setExpanded(new Set());
+    setPendingReveal(null);
     setReloadToken((token) => token + 1);
   }, []);
 
   /**
-   * Expand the ancestor directory chain of `path` (loading each dir) so the
-   * target file becomes part of the flat tree. Used to auto-reveal a file that
-   * was selected in diff mode after switching to the full-tree view, and to
-   * jump `[`/`]` to a changed file whose directory is currently collapsed.
+   * Load a path's ancestor directories and request that its chain be expanded.
+   *
+   * The expansion itself is deliberately NOT done here — it happens in
+   * {@link consumePendingReveal}, applied by whichever view owns the expand
+   * policy. That split exists because "this file was just selected, show it" and
+   * "this file's row is absent" are not the same condition: only the caller can
+   * tell a selection from a directory the user collapsed themselves, and doing it
+   * here made a collapse impossible to keep (see `WorkspaceFileMode`).
    */
   const revealPath = useCallback(
-    async (path: string) => {
-      if (!rootPath) return;
-      const rel = workspaceRelativePath(rootPath, path);
-      if (!rel || rel === ".") return;
-      const parts = rel.split("/");
-      const dirs: string[] = [rootPath];
-      let cur = rootPath;
-      for (let i = 0; i < parts.length - 1; i++) {
-        cur = joinWorkspacePath(cur, parts[i]!);
-        dirs.push(cur);
-      }
+    async (path: string): Promise<void> => {
+      const dirs = ancestorDirs(rootPath, path);
+      if (dirs.length === 0) return;
       await Promise.all(dirs.map((dir) => loadDir(dir)));
+      setPendingReveal(path);
+    },
+    [rootPath, loadDir]
+  );
+
+  /**
+   * Apply the outstanding reveal request for `path`: expand its ancestor chain
+   * and clear the request.
+   *
+   * Idempotent — a chain that is already expanded leaves `expanded` untouched (the
+   * same Set reference is returned), so calling it for a row that turned out to be
+   * already visible costs nothing.
+   */
+  const consumePendingReveal = useCallback(
+    (path: string): void => {
+      const dirs = ancestorDirs(rootPath, path);
       setExpanded((prev) => {
+        if (dirs.length === 0 || dirs.every((dir) => prev.has(dir))) return prev;
         const next = new Set(prev);
         for (const dir of dirs) next.add(dir);
         return next;
       });
+      setPendingReveal(null);
     },
-    [rootPath, loadDir]
+    [rootPath]
   );
 
   useEffect(() => {
     if (!rootPath) return;
     let cancelled = false;
     setLoading(true);
+    setPendingReveal(null);
     loadDir(rootPath).then(() => {
       if (cancelled) return;
       setExpanded(new Set([rootPath]));
@@ -245,7 +285,7 @@ export function useFileTree(rootPath: string): {
     return result;
   }, [dirData, expanded, rootPath]);
 
-  return { items, loading, toggleDir, reload, revealPath };
+  return { items, loading, toggleDir, reload, revealPath, pendingReveal, consumePendingReveal };
 }
 
 // ============================================================================

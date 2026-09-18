@@ -113,6 +113,7 @@ export const ENTRIES = [
   "src/utils/workspace-diff-stats.ts",
   "src/utils/workspace-diff-tree.ts",
   "src/utils/workspace-file-search.ts",
+  "src/utils/workspace-reveal.ts",
   "src/utils/streaming-output-lines.ts",
   "src/utils/format-usage.ts",
   "src/utils/usage-heatmap.ts",

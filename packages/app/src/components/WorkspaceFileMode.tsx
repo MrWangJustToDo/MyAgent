@@ -11,6 +11,7 @@ import { changedFileJumpTarget } from "../utils/workspace-diff-tree.js";
 import { clearWorkspaceFileListCache } from "../utils/workspace-file-search.js";
 import { clearWorkspaceDiffCache } from "../utils/workspace-git-diff.js";
 import { clearGitStatusCache } from "../utils/workspace-git-status.js";
+import { decideReveal } from "../utils/workspace-reveal.js";
 import { ensureIndexVisible } from "../utils/workspace-scroll.js";
 
 import { clearContentCache } from "./FileContent.js";
@@ -48,9 +49,6 @@ export const WorkspaceFileMode = () => {
 
   const previewRef = useRef<CodeViewRef>(null);
   const diffRef = useRef<DiffViewRef>(null);
-  // Paths we've already asked revealPath to expand, so the reveal effect resolves
-  // once `items` recomputes without re-firing the async load every render.
-  const revealedRef = useRef<Set<string>>(new Set());
 
   const [rootPath, setRootPath] = useState("");
   const [cursorIndex, setCursorIndex] = useState(0);
@@ -68,7 +66,15 @@ export const WorkspaceFileMode = () => {
 
   const isDiffMode = mode === "diff";
 
-  const { items: fullItems, loading: treeLoading, toggleDir, reload, revealPath } = useFileTree(rootPath);
+  const {
+    items: fullItems,
+    loading: treeLoading,
+    toggleDir,
+    reload,
+    revealPath,
+    pendingReveal,
+    consumePendingReveal,
+  } = useFileTree(rootPath);
   const {
     items: diffItems,
     toggleDir: toggleDiffDir,
@@ -131,42 +137,63 @@ export const WorkspaceFileMode = () => {
     setCursorIndex((prev) => Math.min(prev, Math.max(0, items.length - 1)));
   }, [items.length]);
 
-  // Full-tree view: expand the target's ancestor chain so it becomes a row.
+  // A **selection** raises the reveal request; the effect below consumes it.
   //
-  // `revealedRef` holds only paths whose reveal is unconfirmed — it is cleared
-  // once the row appears (below) rather than being a permanent "already done"
-  // marker. That way a reveal that did not produce a row is retried, while one
-  // that did is never repeated: the second run sees the row and clears the flag
-  // without re-adding it. (Permanent markers are what make a failed reveal
-  // unrecoverable; retrying unconditionally would instead loop, since
-  // `revealPath` always writes new Sets into `useFileTree` and those `items` are
-  // this effect's dependency.)
+  // Split from consumption on purpose: the request must be raised exactly once per
+  // selection, while consumption has to re-run on every `items` change (the expand
+  // it triggers is itself an `items` change). Raising it here rather than inferring
+  // it from a missing row is what lets the two cases be told apart — see
+  // `decideReveal`.
+  //
+  // `revealPath` awaits the ancestor directories' loads before posting the request,
+  // so consumption only ever expands a chain whose data is already in hand.
+  useEffect(() => {
+    if (!selectedPath || isDiffMode) return;
+    void revealPath(selectedPath);
+  }, [selectedPath, isDiffMode, revealPath]);
+
+  // Full-tree view: act on the tree's reveal state.
+  //
+  // Reveal intent is created by a **selection**, not by a missing row. The two are
+  // not the same condition, and conflating them made a directory impossible to
+  // collapse: once a file was selected, collapsing its directory removed the file's
+  // row, the "row missing" branch fired, and the directory was expanded again — the
+  // collapse flickered for one render and came straight back.
+  //
+  // So a row that is absent **without** an outstanding request is left alone: that is
+  // the user's own collapse, and the expand state is theirs to own. `decideReveal`
+  // holds the rule; this applies it.
+  //
+  // Consuming the request is also what keeps this effect from looping. Expanding
+  // changes `expanded`, which rebuilds `items`, which re-runs this effect — but the
+  // request is consumed by the first run, so the re-run has nothing left to do. That
+  // is the property the old `revealedRef` marker provided; `pendingReveal` replaces
+  // it at the only point where the intent is actually known.
   //
   // Diff mode does not reveal here: a `[`/`]` jump calls `revealDiffDirs` before
   // selecting, because the row it would read the chain from is exactly the row a
   // collapsed ancestor removed.
   useEffect(() => {
-    if (!selectedPath) return;
-    const index = items.findIndex((item) => item.path === selectedPath);
+    const action = decideReveal({
+      rowIndex: selectedPath ? items.findIndex((item) => item.path === selectedPath) : -1,
+      selectedPath,
+      pendingReveal,
+      isDiffMode,
+    });
 
-    // Row is present: the reveal (if any) is confirmed done.
-    if (index >= 0) {
-      revealedRef.current.delete(selectedPath);
-      setCursorIndex(index);
-      const currentScroll = useWorkspaceView.getReadonlyState().treeScrollTop;
-      setTreeScrollTop(ensureIndexVisible(index, currentScroll, paneBodyLines, items.length));
+    if (action.kind === "none") return;
+    if (action.kind === "consume") {
+      consumePendingReveal(selectedPath!);
       return;
     }
 
-    // Row missing: reveal it (once per unconfirmed path). The settle-after-commit
-    // re-run then either finds the row or retries a reveal that failed.
-    if (!isDiffMode && !revealedRef.current.has(selectedPath)) {
-      revealedRef.current.add(selectedPath);
-      void revealPath(selectedPath);
-    }
-    // Re-run when items change (post-reveal / mode switch) so the reveal + scroll
-    // settle on a location the file is actually present in.
-  }, [selectedPath, items, isDiffMode, revealPath, paneBodyLines, setTreeScrollTop]);
+    setCursorIndex(action.index);
+    const currentScroll = useWorkspaceView.getReadonlyState().treeScrollTop;
+    setTreeScrollTop(ensureIndexVisible(action.index, currentScroll, paneBodyLines, items.length));
+    // A satisfied request is retired here so the post-expand re-run is a no-op
+    // instead of expanding again forever.
+    if (pendingReveal === selectedPath) consumePendingReveal(selectedPath!);
+  }, [selectedPath, items, isDiffMode, pendingReveal, consumePendingReveal, paneBodyLines, setTreeScrollTop]);
 
   // Full manual refresh: drop every cache, reload the tree, reset pane scroll,
   // collapse state in BOTH trees, and re-fetch git state.
@@ -184,7 +211,6 @@ export const WorkspaceFileMode = () => {
     resetDiffCollapsed();
     scrollActivePane("top");
     setRefreshToken((t) => t + 1);
-    revealedRef.current.clear();
     void refreshGit(rootPath);
   }, [reload, scrollActivePane, refreshGit, rootPath, resetDiffCollapsed]);
 
