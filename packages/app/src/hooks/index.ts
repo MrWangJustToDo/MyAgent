@@ -32,5 +32,6 @@ export { useSummaryStream, type UseSummaryStreamOptions, type UseSummaryStreamRe
 export { useCompactSummaryText } from "./use-compact-summary-text.js";
 export { useToolElapsed } from "./use-tool-elapsed.js";
 export { useTranscriptDisplay, type TranscriptDisplayMode } from "./use-transcript-display.js";
+export { useWorkspaceInfo } from "./use-workspace-info.js";
 
 export type { UIMessage, TextPart, ToolCallPart, ToolResultPart, ThinkingPart, MessagePart } from "@tanstack/ai";

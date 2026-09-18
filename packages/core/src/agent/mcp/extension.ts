@@ -72,6 +72,23 @@ async function activateMcp(ctx: ExtensionContext, mcpManager: McpManager, config
       description: tool.description ?? `MCP tool "${name}"`,
       inputSchema: tool.inputSchema,
       outputSchema: tool.outputSchema,
+      // MCP tools are the runtime case this descriptor exists for: their names and
+      // schemas come from a remote server, so there is no `defineServerTool` call site
+      // to declare presentation at. Without it the tool resolves no descriptor at all,
+      // which costs it both its row and its result block — the name is not in the
+      // built-in table either, so the fallback cannot cover it.
+      //
+      // The flags are the ones the renderer actually branches on, not preferences:
+      //   keepRow  — the row survives compact display instead of folding into a count
+      //   detailed — `ToolOutputView` only skips its "no renderer" guard for a detailed
+      //              tool; with keepRow alone `isDetailed` is false and the block is
+      //              dropped even though the row is kept
+      // `category` is deliberately generic: an MCP name is server-defined, so nothing
+      // here can tell whether the call was a read or a write, and a wrong bucket
+      // misreports what happened. No `text` renderer — that field claims a single
+      // curated line exists, which is a contract this repo cannot define for output a
+      // server produced.
+      present: { category: "other", keepRow: true, detailed: true },
       execute: async (input, options) =>
         tool.execute?.(input, {
           toolCallId: options.toolCallId,

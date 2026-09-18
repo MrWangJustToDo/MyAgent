@@ -1,4 +1,4 @@
-import { getToolPresentation } from "@codent/core";
+import { getToolPresentation, keepsCompactRow as coreKeepsCompactRow } from "@codent/core";
 import chalk from "chalk";
 
 import { COLORS } from "../theme/colors.js";
@@ -36,14 +36,22 @@ export function hasDetailedOutputBlock(toolName: string): boolean {
 }
 
 /**
- * Whether a tool owns its compact presentation: structured UI
- * ({@link ALWAYS_VISIBLE_TOOL_NAMES}) or a registered `present.text` renderer. That
- * string is a single curated line by contract — exactly compact density — so such a
- * tool keeps its row (instead of folding into an activity count) and renders that one
- * line as its output block.
+ * Whether a tool owns its compact presentation.
+ *
+ * Core owns this rule — a descriptor that declares `keepRow` (structured result), `clientSide`
+ * (the host supplies the result) or `text` (a curated line *is* the row's content) keeps its row.
+ * This function must not restate that rule: it previously tested only `text`, so a descriptor with
+ * `keepRow` but no renderer — which is what a runtime tool gets when there is no sensible line to
+ * render — was judged "folds" here while core judged it "keeps its row", and the two hosts
+ * disagreed about the same tool.
+ *
+ * {@link ALWAYS_VISIBLE_TOOL_NAMES} stays in front as the documented fallback, not as a second
+ * rule: a host whose process never created the tools (a remote renderer, before the snapshot
+ * catalog is wired into the views) has no descriptors at all, and would otherwise fold the
+ * interactive rows away. It only ever adds visibility, so it cannot mask core's decision.
  */
 export function keepsCompactRow(toolName: string): boolean {
-  return ALWAYS_VISIBLE_TOOL_NAMES.has(toolName) || getToolPresentation(toolName)?.text !== undefined;
+  return ALWAYS_VISIBLE_TOOL_NAMES.has(toolName) || coreKeepsCompactRow(toolName);
 }
 
 /** Get status color for tool invocation state. */

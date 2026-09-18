@@ -17,24 +17,6 @@ function shortenPath(rootPath: string): string {
   return rootPath.length > 40 ? `...${rootPath.slice(-37)}` : rootPath;
 }
 
-export const useWorkspaceInfo = createState(
-  () => ({
-    workspaceInfo: {
-      path: "",
-      git: undefined,
-    } as WorkspaceInfo,
-  }),
-  {
-    withActions: (s) => ({
-      setWorkspaceInfo: (workspaceInfo: WorkspaceInfo) => {
-        s.workspaceInfo = workspaceInfo;
-      },
-    }),
-    withDeepSelector: false,
-    withStableSelector: true,
-  }
-);
-
 export const getWorkSpaceInfo = async () => {
   let path = "";
   let git: WorkspaceGitInfo | undefined;
@@ -66,3 +48,22 @@ export const getWorkSpaceInfo = async () => {
 
   useWorkspaceInfo.getActions().setWorkspaceInfo({ path, git });
 };
+
+export const useWorkspaceInfo = createState(
+  () => ({
+    workspaceInfo: {
+      path: "",
+      git: undefined,
+    } as WorkspaceInfo,
+  }),
+  {
+    withActions: (s) => ({
+      setWorkspaceInfo: (workspaceInfo: WorkspaceInfo) => {
+        s.workspaceInfo = workspaceInfo;
+      },
+      init: getWorkSpaceInfo,
+    }),
+    withDeepSelector: false,
+    withStableSelector: true,
+  }
+);

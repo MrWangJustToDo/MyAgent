@@ -107,7 +107,10 @@ export {
   forgetToolPresentation,
   forgetToolPresentationOwner,
   getToolPresentation,
+  hydrateToolPresentations,
 } from "../agent/tools/presentation/registry.js";
+// The row rule a host branches on — asserted alongside the MCP descriptor it consumes.
+export { keepsCompactRow } from "../agent/tools/presentation/row-rules.js";
 export type {
   AgentRunOutcome,
   AgentRunOutcomeKind,

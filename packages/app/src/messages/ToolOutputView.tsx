@@ -70,6 +70,8 @@ export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState:
     if (!hasRenderer || !output.trim()) return null;
   }
 
+  const hasCanceld = isCancelledToolCall(part);
+
   const outputLines = splitStreamingLines(output);
   // Structured tools (row-keeping, no result renderer) keep their full block in both
   // modes; anything else allowed to render in compact is one clamped line.
@@ -81,9 +83,7 @@ export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState:
   // choice the glyph makes, and it survives the part being rewritten (the synthetic cancel
   // payload and the tool's own catch both leave `success: false`).
   const failed =
-    toolName === "run_command" &&
-    (part.output as { success?: boolean } | undefined)?.success === false &&
-    !isCancelledToolCall(part);
+    toolName === "run_command" && (part.output as { success?: boolean } | undefined)?.success === false && !hasCanceld;
   const lineColor = failed ? COLORS.danger : COLORS.muted;
 
   return (

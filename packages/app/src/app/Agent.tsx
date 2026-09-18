@@ -32,6 +32,7 @@ export const Agent = () => {
   const adapter = useAdapter();
 
   useSize.getActions().useInitTerminalSize();
+
   const screenWidth = useSize((s) => s.state.screenWidth);
 
   useStatic.getActions().useInitStdout();

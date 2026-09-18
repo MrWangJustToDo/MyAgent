@@ -15,6 +15,8 @@ import { runCommandOutputSchema } from "./util/types.js";
 
 import type { RunCommandOutput } from "./util/types.js";
 
+const COMMAND_CANCELLED_NOTICE = "[Command cancelled by user.]";
+
 export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
   const subagentSafe = options?.subagentSafe ?? false;
   return defineServerTool({
@@ -166,7 +168,7 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
         return {
           command,
           stdout: stdoutResult.content,
-          stderr: stderrResult.content,
+          stderr: stderrResult.content + "\n\n" + COMMAND_CANCELLED_NOTICE,
           // No exit code exists for a killed process; -1 is the schema's "not finished"
           // value and `success: false` keeps the run from reading as a clean exit.
           exitCode: -1,

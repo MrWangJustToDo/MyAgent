@@ -8,6 +8,7 @@ import {
   configureEnv,
   useConfig,
   useSize,
+  useWorkspaceInfo,
 } from "@codent/app";
 import {
   createDirectModelProvider,
@@ -161,6 +162,7 @@ const needsConfigEditor =
 
 if (!needsConfigEditor) {
   await initConfig(appConfig);
+  await useWorkspaceInfo.getActions().init();
 }
 
 const adapter = new LocalAgentAdapter({
