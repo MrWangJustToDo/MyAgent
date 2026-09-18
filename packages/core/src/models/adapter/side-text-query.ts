@@ -5,6 +5,7 @@ import { sharedUsageHistory } from "../../agent/usage/usage-history-service.js";
 import { calculateCost, extractTanStackUsage, type TokenUsage } from "../../runtime-types/token-usage.js";
 import { maxTokensOption } from "../max-tokens-option.js";
 
+import { extractJsonDocument, renderSchemaContract } from "./schema-prompt.js";
 import { isStructuredOutputComplete } from "./structured-output-chunk.js";
 
 import type { TextAdapterConfig } from "./adapter-factory.js";
@@ -68,6 +69,23 @@ const SIDE_QUERY_LOG_CATEGORY = "side-query";
 /** Cap on the raw-response excerpt attached to a failure warning. */
 const RAW_EXCERPT_LIMIT = 500;
 
+type QueryMode = "structured" | "text";
+
+/**
+ * What a failure record carries.
+ *
+ * `fallback` is set on a failure that triggers a retry in the other mode, so the
+ * one record for that attempt says both what happened and what is being tried
+ * next — instead of a second "retrying" entry that would restate the same failure.
+ */
+interface FailureContext {
+  mode: QueryMode;
+  /** Raw response excerpt, when the failure has one. */
+  raw?: string;
+  /** The mode this failure is about to be retried in. */
+  fallback?: QueryMode;
+}
+
 // ============================================================================
 // Side text query
 // ============================================================================
@@ -95,6 +113,63 @@ export async function runSideTextQuery<TSchema extends SchemaInput>(
   return options.schema
     ? runStructuredQuery(textAdapter, { ...options, schema: options.schema })
     : runTextQuery(textAdapter, options);
+}
+
+/**
+ * Run a structured query, choosing its mechanism against declared model capability.
+ *
+ * Three paths, and each one exists for a measured reason (models.dev: 54.6% of
+ * entries declare `structured_output`, 14.5% declare it **false**, 30.8% are silent):
+ *
+ * | Declared | Path | Why |
+ * |---|---|---|
+ * | present, or unknown | structured, then one text retry on failure | the common case; a declared-support-but-broken endpoint is covered by the retry |
+ * | positively absent | text only | a decision, not a guess — the structured request is known to be unsupported, and its failure mode varies by provider (a 400, or a silent no-event) |
+ *
+ * A schema that cannot be rendered as a text contract needs text mode to work, so
+ * it is checked before the mode is chosen rather than after a structured failure —
+ * otherwise the retry would throw from where the caller expects a fallback.
+ */
+async function runStructuredQuery<TSchema extends SchemaInput>(
+  textAdapter: TextAdapterConfig,
+  options: StructuredQueryOptions<TSchema>
+): Promise<StructuredQueryResult<InferSchemaType<TSchema>>> {
+  assertObjectRootSchema(options.schema);
+
+  const declaredUnsupported = textAdapter.structuredOutput === "unsupported";
+  // Fail a schema the renderer cannot express before any request is issued, on
+  // every path — it is a caller bug, not a capability question.
+  const contract = renderSchemaContract(options.schema);
+
+  if (declaredUnsupported) {
+    logModeDecision(textAdapter, options, "text", "the model's capabilities declare no structured output");
+    return runTextModeQuery(textAdapter, options, contract);
+  }
+
+  try {
+    return await runStructuredModeQuery(textAdapter, options, { fallback: "text" });
+  } catch (structuredError) {
+    // The fallback exists for the case no metadata can rule out: a model that
+    // *declares* support and whose endpoint nevertheless rejects or silently
+    // ignores the request. The structured failure has already been recorded, with
+    // `fallback: "text"` on it, so nothing is restated here.
+    try {
+      return await runTextModeQuery(textAdapter, options, contract);
+    } catch (textError) {
+      // Both reasons, because the log is optional: a caller with no `log` would
+      // otherwise see only the text-mode reason and never learn that the model was
+      // asked for structured output first — the single most useful fact about the
+      // failure.
+      throw new Error(
+        `structured attempt failed: ${reasonOf(structuredError)}; ` +
+          `text fallback also failed: ${reasonOf(textError)}`
+      );
+    }
+  }
+}
+
+function reasonOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 // ============================================================================
@@ -125,7 +200,9 @@ async function runTextQuery(
       recordUsage(textAdapter, usage);
     }
     if (chunk.type === "RUN_ERROR") {
-      throw new Error(sideQueryError(extractRunErrorMessage(chunk), textAdapter, options.log, startTime, false));
+      throw new Error(
+        sideQueryError(extractRunErrorMessage(chunk), textAdapter, options.log, startTime, { mode: "text" })
+      );
     }
   }
 
@@ -175,11 +252,12 @@ function assertObjectRootSchema(schema: SchemaInput): void {
   );
 }
 
-async function runStructuredQuery<TSchema extends SchemaInput>(
+/** The structured mechanism. Throws on any failure — the caller decides on the fallback. */
+async function runStructuredModeQuery<TSchema extends SchemaInput>(
   textAdapter: TextAdapterConfig,
-  options: StructuredQueryOptions<TSchema>
+  options: StructuredQueryOptions<TSchema>,
+  failureContext: { fallback?: QueryMode }
 ): Promise<StructuredQueryResult<InferSchemaType<TSchema>>> {
-  assertObjectRootSchema(options.schema);
   const startTime = Date.now();
 
   // `stream: true` is required, not stylistic. The `Promise<T>` form of
@@ -214,7 +292,12 @@ async function runStructuredQuery<TSchema extends SchemaInput>(
       recordUsage(textAdapter, usage);
     }
     if (chunk.type === "RUN_ERROR") {
-      throw new Error(sideQueryError(extractRunErrorMessage(chunk), textAdapter, options.log, startTime, true));
+      throw new Error(
+        sideQueryError(extractRunErrorMessage(chunk), textAdapter, options.log, startTime, {
+          mode: "structured",
+          ...failureContext,
+        })
+      );
     }
   }
 
@@ -222,7 +305,13 @@ async function runStructuredQuery<TSchema extends SchemaInput>(
 
   if (!capture) {
     const reason = "no structured-output completion event was emitted";
-    throw new Error(sideQueryError(reason, textAdapter, options.log, startTime, true, text));
+    throw new Error(
+      sideQueryError(reason, textAdapter, options.log, startTime, {
+        mode: "structured",
+        raw: text,
+        ...failureContext,
+      })
+    );
   }
 
   // Narrow for the closure below: `capture` is reassigned inside the loop, so TS
@@ -235,7 +324,13 @@ async function runStructuredQuery<TSchema extends SchemaInput>(
   const validation = validateAgainstSchema(options.schema, result.object);
   if (!validation.ok) {
     const reason = `response failed schema validation: ${validation.issue}`;
-    throw new Error(sideQueryError(reason, textAdapter, options.log, startTime, true, result.raw));
+    throw new Error(
+      sideQueryError(reason, textAdapter, options.log, startTime, {
+        mode: "structured",
+        raw: result.raw,
+        ...failureContext,
+      })
+    );
   }
 
   return {
@@ -298,6 +393,94 @@ function formatIssue(issue: ValidationIssue): string {
 }
 
 // ============================================================================
+// Text mode (constrained by a rendered schema contract)
+// ============================================================================
+
+/**
+ * Ask for the schema's shape in prose, then locate a complete JSON document in the
+ * reply and validate it with the caller's schema.
+ *
+ * This is the path for a model that cannot do structured output, so it must not
+ * weaken the contract to compensate: the parsed value goes through the **same**
+ * {@link validateAgainstSchema} as the structured path, transforms included, so a
+ * caller cannot observe which mechanism ran. What is given up is provider-side
+ * enforcement, and the rendered contract in the prompt is what replaces it.
+ *
+ * A reply with no single complete JSON document — or with two, or with one that
+ * fails validation — is a failure. Nothing is repaired or partially accepted.
+ */
+async function runTextModeQuery<TSchema extends SchemaInput>(
+  textAdapter: TextAdapterConfig,
+  options: StructuredQueryOptions<TSchema>,
+  contract: string
+): Promise<StructuredQueryResult<InferSchemaType<TSchema>>> {
+  const startTime = Date.now();
+  const systemPrompt = options.systemPrompt ? `${options.systemPrompt}\n\n${contract}` : contract;
+
+  const stream = chat({
+    adapter: textAdapter.adapter,
+    messages: [{ role: "user", content: options.userPrompt }],
+    systemPrompts: [systemPrompt],
+    ...createQueryRequest(textAdapter, options),
+  });
+
+  let text = "";
+  let usage: TokenUsage | undefined;
+
+  for await (const chunk of stream) {
+    if (chunk.type === "TEXT_MESSAGE_CONTENT" && chunk.delta) {
+      text += chunk.delta;
+    }
+    if (chunk.type === "RUN_FINISHED" && chunk.usage) {
+      usage = extractTanStackUsage(chunk.usage);
+      recordUsage(textAdapter, usage);
+    }
+    if (chunk.type === "RUN_ERROR") {
+      throw new Error(
+        sideQueryError(extractRunErrorMessage(chunk), textAdapter, options.log, startTime, { mode: "text" })
+      );
+    }
+  }
+
+  const durationMs = Date.now() - startTime;
+  const extracted = extractJsonDocument(text);
+  if (!extracted) {
+    const reason = "no complete JSON document was found in the reply";
+    throw new Error(sideQueryError(reason, textAdapter, options.log, startTime, { mode: "text", raw: text }));
+  }
+
+  const validation = validateAgainstSchema(options.schema, extracted.value);
+  if (!validation.ok) {
+    const reason = `response failed schema validation: ${validation.issue}`;
+    throw new Error(sideQueryError(reason, textAdapter, options.log, startTime, { mode: "text", raw: extracted.raw }));
+  }
+
+  return {
+    data: validation.value as InferSchemaType<TSchema>,
+    raw: extracted.raw,
+    usage,
+    durationMs,
+  };
+}
+
+// ============================================================================
+// Mode reporting
+// ============================================================================
+
+/** Record a mode chosen from declared capability — never the implicit common case. */
+function logModeDecision<TSchema extends SchemaInput>(
+  textAdapter: TextAdapterConfig,
+  options: StructuredQueryOptions<TSchema>,
+  mode: QueryMode,
+  reason: string
+): void {
+  options.log?.info(SIDE_QUERY_LOG_CATEGORY, `Side query using ${mode} mode: ${reason}`, {
+    model: textAdapter.model,
+    mode,
+  });
+}
+
+// ============================================================================
 // Shared helpers
 // ============================================================================
 
@@ -353,14 +536,13 @@ function sideQueryError(
   textAdapter: TextAdapterConfig,
   log: AgentLog | undefined,
   startTime: number,
-  structured: boolean,
-  raw?: string
+  context: FailureContext
 ): string {
-  log?.warn(SIDE_QUERY_LOG_CATEGORY, `Side query failed: ${message}`, {
+  log?.warn(SIDE_QUERY_LOG_CATEGORY, `Side query failed in ${context.mode} mode: ${message}`, {
     model: textAdapter.model,
     durationMs: Date.now() - startTime,
-    structured,
-    ...(raw ? { raw: excerpt(raw) } : {}),
+    ...context,
+    ...(context.raw ? { raw: excerpt(context.raw) } : {}),
   });
   return message;
 }

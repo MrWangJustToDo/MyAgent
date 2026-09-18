@@ -1,12 +1,73 @@
-# internal-structured-query Specification
+## ADDED Requirements
 
-## Purpose
+### Requirement: Output mode is negotiated against declared model capability
 
-The one-shot LLM port used for internal, non-conversational work — memory selection, session
-titles, session summaries, memory extraction and consolidation. It defines how those calls
-request a structured result, how token usage is attributed, and how a failure is made visible,
-so every such call shares one contract instead of each caller recovering JSON on its own.
-## Requirements
+The port SHALL select exactly one output mechanism per call — structured output or constrained
+text — from the model's declared `json_output` capability, and SHALL NOT issue both for the same
+attempt.
+
+The capability follows the project-wide three-state contract: a **declared absence** (capabilities
+resolved, `json_output` not among them) selects text mode directly; a **declared presence** and an
+**unknown** capability (nothing declared) both start in structured mode. Unknown MUST NOT be
+treated as absent, because routing an undescribable model through the weaker mechanism is the more
+damaging default.
+
+#### Scenario: A model that declares no structured output goes straight to text mode
+
+- **WHEN** a caller issues a structured query against a model whose resolved capabilities do not
+  include `json_output`
+- **THEN** the port issues a plain text request, renders the schema contract into the prompt, and
+  never calls the adapter's structured-output method
+
+#### Scenario: An unknown capability still attempts structured output
+
+- **WHEN** a caller issues a structured query against a model whose capabilities are unknown
+  (no metadata resolved, offline launch)
+- **THEN** the port attempts structured output first, so a capable model is not silently downgraded
+
+#### Scenario: The mode decision is observable
+
+- **WHEN** the port selects a mode because of declared capability
+- **THEN** it records which mode was chosen and why, so a provider that silently ignores a
+  structured-output request is distinguishable from a model that returns nothing
+
+## MODIFIED Requirements
+
+### Requirement: Structured query failure is explicit and fallback-friendly
+
+When the model cannot satisfy the schema, the port SHALL fail in a way the caller can detect and
+recover from, and SHALL NOT return a partially-parsed or coerced object.
+
+When structured output was attempted and fails (a transport error, a rejected request, or a reply
+that does not validate), the port SHALL retry the same query **once** in constrained text mode
+before reporting failure. It MUST NOT retry structured output, and MUST NOT retry more than once.
+A call that selected text mode from the start (declared absence) is not a fallback and is not
+retried.
+
+#### Scenario: Model output violates the schema
+
+- **WHEN** the model returns text that does not satisfy the requested schema in the selected mode
+- **THEN** the port raises an error rather than returning an object that did not validate
+
+#### Scenario: A structured failure falls back to text once
+
+- **WHEN** a structured-output attempt fails for any reason and the model's capability did not
+  declare structured output absent
+- **THEN** the port issues one text-mode attempt with the rendered schema contract, and a failure
+  of that attempt is reported as the call's failure
+
+#### Scenario: No repeated retry
+
+- **WHEN** both modes have been attempted and the query still fails
+- **THEN** the port reports the failure without further attempts, so a broken model cannot turn one
+  internal call into an unbounded number of requests
+
+#### Scenario: Caller falls back
+
+- **WHEN** a caller catches a structured-query failure
+- **THEN** it MUST degrade to a defined non-LLM path rather than propagating the error into
+  the conversation
+
 ### Requirement: Structured one-shot query port
 
 The system SHALL provide a one-shot internal query port that accepts a Zod schema and
@@ -86,69 +147,6 @@ from a flaky model after the fact, so it is refused up front instead.
 - **THEN** it passes an empty tool set and does not run the agentic tool loop, so a schema
   request cannot be interrupted by tool phases
 
-### Requirement: Token usage is preserved on the structured path
-
-The port SHALL report token usage for every structured query and SHALL record it in the
-shared usage history, so internal structured calls remain visible in usage and cost
-reporting exactly as their text counterparts are today.
-
-#### Scenario: Structured query records usage
-
-- **WHEN** a structured query completes and the adapter reported usage
-- **THEN** the usage is returned to the caller and recorded against the internal
-  side-query contributor in the shared usage history
-
-#### Scenario: Usage is not silently dropped
-
-- **WHEN** the port is implemented by consuming the structured-output event stream
-- **THEN** token usage MUST be taken from a stream event that carries it, and the port MUST
-  NOT be implemented by a call shape that discards usage while still returning the object
-
-### Requirement: Structured query failure is explicit and fallback-friendly
-
-When the model cannot satisfy the schema, the port SHALL fail in a way the caller can detect and
-recover from, and SHALL NOT return a partially-parsed or coerced object.
-
-When structured output was attempted and fails (a transport error, a rejected request, or a reply
-that does not validate), the port SHALL retry the same query **once** in constrained text mode
-before reporting failure. It MUST NOT retry structured output, and MUST NOT retry more than once.
-A call that selected text mode from the start (declared absence) is not a fallback and is not
-retried.
-
-#### Scenario: Model output violates the schema
-
-- **WHEN** the model returns text that does not satisfy the requested schema in the selected mode
-- **THEN** the port raises an error rather than returning an object that did not validate
-
-#### Scenario: A structured failure falls back to text once
-
-- **WHEN** a structured-output attempt fails for any reason and the model's capability did not
-  declare structured output absent
-- **THEN** the port issues one text-mode attempt with the rendered schema contract, and a failure
-  of that attempt is reported as the call's failure
-
-#### Scenario: No repeated retry
-
-- **WHEN** both modes have been attempted and the query still fails
-- **THEN** the port reports the failure without further attempts, so a broken model cannot turn one
-  internal call into an unbounded number of requests
-
-#### Scenario: Caller falls back
-
-- **WHEN** a caller catches a structured-query failure
-- **THEN** it MUST degrade to a defined non-LLM path rather than propagating the error into
-  the conversation
-
-### Requirement: Caller abort is honoured
-
-The port SHALL accept an abort signal and SHALL cancel the in-flight model request when it
-fires.
-
-#### Scenario: Abort during a structured query
-
-- **WHEN** a caller's abort signal fires while a structured query is in flight
-- **THEN** the underlying request is aborted and the port settles without emitting a result
-
 ### Requirement: Internal query failures are observable
 
 The port SHALL accept an optional agent log and SHALL record a warning when a query fails,
@@ -186,52 +184,3 @@ means something different in each.
 - **WHEN** a caller swallows a query failure and falls back to a non-LLM path
 - **THEN** the fallback is recorded, and a silent `catch` with no log entry is not an
   acceptable implementation
-
-### Requirement: The port logs under its own category
-
-The port SHALL log under a dedicated log category rather than reusing an existing one, and
-that category MUST be accepted by the persisted log-entry schema so entries are not
-dropped at write time.
-
-#### Scenario: Dedicated category is accepted by the schema
-
-- **WHEN** the port writes a log entry under its own category
-- **THEN** the log-entry schema accepts the category and the entry survives serialization
-
-#### Scenario: No existing category is repurposed
-
-- **WHEN** the port's log entries are inspected
-- **THEN** they are not filed under a caller's category (for example the memory
-  subsystem's), so a consumer filtering by category sees the port's own activity
-
-### Requirement: Output mode is negotiated against declared model capability
-
-The port SHALL select exactly one output mechanism per call — structured output or constrained
-text — from the model's declared `json_output` capability, and SHALL NOT issue both for the same
-attempt.
-
-The capability follows the project-wide three-state contract: a **declared absence** (capabilities
-resolved, `json_output` not among them) selects text mode directly; a **declared presence** and an
-**unknown** capability (nothing declared) both start in structured mode. Unknown MUST NOT be
-treated as absent, because routing an undescribable model through the weaker mechanism is the more
-damaging default.
-
-#### Scenario: A model that declares no structured output goes straight to text mode
-
-- **WHEN** a caller issues a structured query against a model whose resolved capabilities do not
-  include `json_output`
-- **THEN** the port issues a plain text request, renders the schema contract into the prompt, and
-  never calls the adapter's structured-output method
-
-#### Scenario: An unknown capability still attempts structured output
-
-- **WHEN** a caller issues a structured query against a model whose capabilities are unknown
-  (no metadata resolved, offline launch)
-- **THEN** the port attempts structured output first, so a capable model is not silently downgraded
-
-#### Scenario: The mode decision is observable
-
-- **WHEN** the port selects a mode because of declared capability
-- **THEN** it records which mode was chosen and why, so a provider that silently ignores a
-  structured-output request is distinguishable from a model that returns nothing
-

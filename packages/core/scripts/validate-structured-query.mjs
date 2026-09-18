@@ -330,9 +330,14 @@ const makeCapturingLog = () => {
     "a RUN_ERROR chunk is converted into a throw"
   );
 
-  assert.equal(log.entries.length, 1, "the failure is logged exactly once");
+  // Two records, because the structured failure is retried once in text mode and
+  // each attempt reports its own outcome. The first must still carry the
+  // transport reason, so the fallback does not hide what the provider did.
+  assert.equal(log.entries.length, 2, "both attempts are logged");
   assert.equal(log.entries[0].category, "side-query", "logged under the port's dedicated category");
   assert.match(log.entries[0].message, /provider exploded/, "the reason is carried");
+  assert.equal(log.entries[0].data.mode, "structured", "the first record names the mode it failed in");
+  assert.equal(log.entries[0].data.fallback, "text", "and the mode it is about to retry in");
   assert.equal(log.entries[0].data.model, "fake-model");
   assert.equal(typeof log.entries[0].data.durationMs, "number");
 
@@ -351,9 +356,9 @@ const makeCapturingLog = () => {
 
   await assert.rejects(() => runSideTextQuery(textAdapter, { userPrompt: "x", schema: personSchema, log }));
 
-  assert.equal(log.entries.length, 1, "the validation failure is logged");
+  assert.equal(log.entries.length, 2, "the validation failure is logged for both attempts");
   assert.equal(log.entries[0].category, "side-query");
-  assert.equal(log.entries[0].data.structured, true);
+  assert.equal(log.entries[0].data.mode, "structured");
   assert.match(String(log.entries[0].data.raw), /Ada/, "a raw-response excerpt is attached for diagnosis");
 
   console.log("✓ schema failure logged with reason + excerpt");

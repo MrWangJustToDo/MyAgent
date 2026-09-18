@@ -157,14 +157,22 @@ const expiresAtSchema = z
  * `type` is validated against the known set rather than defaulted, so a model
  * that invents a fifth type is rejected instead of silently filed as `user`
  * (the old code substituted `"user"` for anything unrecognized).
+ *
+ * The `.describe()` strings are not documentation — they are the field contract
+ * text mode renders into the prompt (`renderSchemaContract`), so the wording a
+ * model sees and the shape the validator enforces come from this one place. The
+ * system prompt keeps a hand-written example for readability; the descriptions
+ * are what guarantee completeness.
  */
 const extractedMemorySchema = z.object({
-  name: z.string().min(1),
-  type: memoryTypeSchema,
-  description: z.string().min(1),
-  body: z.string().min(1),
-  importance: importanceSchema,
-  expiresAt: expiresAtSchema,
+  name: z.string().min(1).describe('short kebab-case identifier (e.g. "user-prefers-tabs")'),
+  type: memoryTypeSchema.describe("memory category — must be one of the listed values"),
+  description: z.string().min(1).describe("one-line summary for index lookup"),
+  body: z.string().min(1).describe("full detail in markdown"),
+  importance: importanceSchema.describe(
+    "number 0–1 rating how valuable this memory is across future sessions; omit for typical entries"
+  ),
+  expiresAt: expiresAtSchema.describe("ISO timestamp when this memory stops being relevant; omit for durable memories"),
 });
 
 /**
@@ -190,7 +198,7 @@ const extractedMemorySchema = z.object({
  * contract behind partial results.
  */
 const extractionSchema = z.object({
-  memories: z.array(extractedMemorySchema),
+  memories: z.array(extractedMemorySchema).describe("the extracted entries; an empty array means nothing new"),
 });
 
 /**
@@ -199,7 +207,7 @@ const extractionSchema = z.object({
  * the merged entry and its sources would both be listed.
  */
 const mergedMemorySchema = extractedMemorySchema.extend({
-  replaces: z.array(z.string()),
+  replaces: z.array(z.string()).describe("the source filenames this merged entry replaces"),
 });
 
 /**
@@ -217,8 +225,8 @@ const mergedMemorySchema = extractedMemorySchema.extend({
  * as "nothing to do".
  */
 const consolidationSchema = z.object({
-  merged: z.array(mergedMemorySchema),
-  deleted: z.array(z.string()),
+  merged: z.array(mergedMemorySchema).describe("entries to fold together; empty when nothing needs merging"),
+  deleted: z.array(z.string()).describe("filenames to remove outright (outdated or contradicted)"),
 });
 
 // ============================================================================

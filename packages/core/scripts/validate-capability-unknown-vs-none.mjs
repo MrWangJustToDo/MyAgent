@@ -214,6 +214,101 @@ await check("a text-only model is actually stripped (the behaviour this change f
 });
 
 // ============================================================================
+// 3. The same distinction must survive into the side-query decision
+// ============================================================================
+//
+// `createTextAdapter` collapses the three-state capability into the two-state
+// `structuredOutput` decision the port gates on, and it has to collapse it the
+// same way: a **declared absence** is the only thing that may route a call to text
+// mode. Getting this backwards is silent — every undeclared model (offline
+// launches, catalog gaps) would quietly take the weaker mechanism, and no
+// assertion elsewhere would notice because the request still succeeds.
+
+const { createTextAdapter } = await import("../dist/dev.mjs");
+
+const fakeModelInfo = (capabilities) => ({
+  id: "probe/model",
+  name: "Probe",
+  style: "openai",
+  apiModel: "probe-model",
+  ...(capabilities === undefined ? {} : { capabilities }),
+});
+
+await check("a declared absence resolves to `unsupported` (text mode)", () => {
+  const config = createTextAdapter({
+    style: "openai",
+    model: "probe-model",
+    baseURL: "http://localhost",
+    modelInfo: fakeModelInfo(["tool_calling", "reasoning"]),
+  });
+  assert.equal(
+    config.structuredOutput,
+    "unsupported",
+    "capabilities were resolved and exclude json_output — that is a decision, not a hint"
+  );
+});
+
+await check("a declared presence resolves to `supported`", () => {
+  const config = createTextAdapter({
+    style: "openai",
+    model: "probe-model",
+    baseURL: "http://localhost",
+    modelInfo: fakeModelInfo(["json_output", "tool_calling"]),
+  });
+  assert.equal(config.structuredOutput, "supported");
+});
+
+await check("an unknown capability resolves to `supported` — never silently downgraded", () => {
+  // `undefined` is "nothing was declared". Collapsing it to `unsupported` would be the damaging
+  // direction: it would route every undescribable model through the weaker mechanism.
+  for (const [label, modelInfo] of [
+    ["no metadata at all", null],
+    ["metadata without a capabilities field", fakeModelInfo(undefined)],
+  ]) {
+    const config = createTextAdapter({
+      style: "openai",
+      model: "probe-model",
+      baseURL: "http://localhost",
+      modelInfo,
+    });
+    assert.equal(config.structuredOutput, "supported", `${label} must still attempt structured output`);
+  }
+});
+
+await check("a resolved-but-empty declaration is strict, not unknown", () => {
+  // The mirror of the `[]` case above, one hop further along: an empty declaration
+  // must deny structured output rather than falling back to the permissive default.
+  const config = createTextAdapter({
+    style: "openai",
+    model: "probe-model",
+    baseURL: "http://localhost",
+    modelInfo: fakeModelInfo([]),
+  });
+  assert.equal(config.structuredOutput, "unsupported", "`[]` means resolved-and-none, so json_output is absent");
+});
+
+await check("the anthropic style resolves the decision identically", () => {
+  // The style must not change the decision: both adapters are gated by the same field, and only
+  // one of them even has a structured stream, which is exactly why the gate is capability-based.
+  const unsupported = createTextAdapter({
+    style: "anthropic",
+    model: "probe-model",
+    baseURL: "http://localhost",
+    apiKey: "test-key",
+    modelInfo: fakeModelInfo(["tool_calling"]),
+  });
+  const supported = createTextAdapter({
+    style: "anthropic",
+    model: "probe-model",
+    baseURL: "http://localhost",
+    apiKey: "test-key",
+    modelInfo: fakeModelInfo(["json_output"]),
+  });
+  assert.equal(unsupported.structuredOutput, "unsupported");
+  assert.equal(supported.structuredOutput, "supported");
+});
+
+// ============================================================================
 
 console.log("");
 if (failures.length > 0) {

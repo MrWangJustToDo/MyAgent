@@ -490,8 +490,17 @@ const readBody = async (manager, filename) => manager.readMemory(filename);
     before,
     "a rejected merge must not let its deletions run — no source file is lost"
   );
-  assert.equal(entries.length, 1, "the rejection is logged rather than silent");
-  assert.match(entries[0], /merged\.0\.type/, "the log names the offending field, so the bad entry is locatable");
+  assert.equal(entries.length, 2, "both attempts are logged rather than silent");
+  // The structured record carries the offending field path and names the mode it
+  // failed in; the text record follows it. Two records, not one, because a
+  // structured failure now falls back to exactly one text attempt — each attempt
+  // reports its own outcome instead of the pair collapsing into a single line.
+  assert.match(entries[0], /mode: .*merged\.0\.type/, "the first record names the offending field and its mode");
+  assert.match(entries[0], /failed in structured mode/, "the first record is the structured attempt");
+  assert.match(entries[1], /failed in text mode/, "the second record is the text fallback");
+  for (const entry of entries) {
+    assert.match(entry, /^side-query: /, "every record uses the port's own category");
+  }
 
   console.log("✓ a rejected merge does not delete its sources");
 }

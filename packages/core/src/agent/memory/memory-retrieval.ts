@@ -78,9 +78,13 @@ Rules:
  * the schema guarantees only "an array of strings" and leaves the manifest
  * lookup where it is.
  */
-const SELECTION_SCHEMA = z.object({
-  selected_memories: z.array(z.string()),
-});
+const SELECTION_SCHEMA = z
+  .object({
+    selected_memories: z
+      .array(z.string())
+      .describe("filenames (or bare names) of the memories judged relevant; empty when none are"),
+  })
+  .describe("the memory selection result");
 
 // ============================================================================
 // Manifest Formatting

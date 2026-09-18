@@ -21,7 +21,31 @@ export interface TextAdapterConfig {
   reasoning?: boolean;
   /** Pricing from the resolved ModelInfo (models.dev) — lets side queries cost + record their own usage. */
   pricing?: ModelPricing;
+  /**
+   * Whether a structured (`outputSchema`) request may be attempted against this model.
+   *
+   * Resolved from `ModelInfo.capabilities` where metadata is read, and **defaults to
+   * `"supported"`** so a hand-built config (validators construct one directly) keeps the
+   * pre-existing behaviour of always attempting structured output.
+   *
+   * `"unsupported"` means the model's capabilities were resolved and positively exclude
+   * `json_output` — 14.5% of the models.dev catalog declares exactly that. It is a decision, not
+   * a hint: `runSideTextQuery` must not send a structured request at all, because the failure it
+   * would produce is provider-specific and hard to tell from a model that merely returned
+   * nothing. Unknown capabilities resolve to `"supported"`, consistent with
+   * `CapabilityProbe.hasCapability` being permissive for `undefined` — assuming a capability is
+   * *missing* would silently route every undescribable model through the weaker path.
+   */
+  structuredOutput?: StructuredOutputSupport;
 }
+
+/**
+ * Resolved structured-output decision — see {@link TextAdapterConfig.structuredOutput}.
+ *
+ * Two states, not three: the `undefined` / `[]` distinction is the *input* to this decision and
+ * is already collapsed the way `UsageTracker.setCapabilities` collapses it.
+ */
+export type StructuredOutputSupport = "supported" | "unsupported";
 
 export interface ModelAdapterConfig {
   style: ModelStyle;
@@ -56,6 +80,14 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
     );
   }
 
+  // A declared absence is the only thing that overrides the default. `undefined` (no metadata)
+  // and a declared presence both leave it `"supported"` — see the field doc.
+  const structuredOutput: StructuredOutputSupport = config.modelInfo?.capabilities?.includes("json_output")
+    ? "supported"
+    : config.modelInfo?.capabilities
+      ? "unsupported"
+      : "supported";
+
   if (style === "anthropic") {
     if (!apiKey) {
       throw new Error("Anthropic style requires an API key (pass apiKey when registering the ModelProvider).");
@@ -69,6 +101,7 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
       modelStyle: "anthropic",
       reasoning: true,
       pricing: config.modelInfo?.pricing,
+      structuredOutput,
     };
   }
 
@@ -84,6 +117,7 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
       modelStyle: "openai",
       reasoning: true,
       pricing: config.modelInfo?.pricing,
+      structuredOutput,
     };
   }
 
@@ -96,5 +130,6 @@ export function createTextAdapter(config: ModelAdapterConfig): TextAdapterConfig
     modelStyle: "openai",
     reasoning: shouldEchoReasoningContent(config.modelInfo),
     pricing: config.modelInfo?.pricing,
+    structuredOutput,
   };
 }

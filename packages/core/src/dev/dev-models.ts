@@ -11,6 +11,7 @@ export {
   shouldEchoReasoningContent,
 } from "../models/adapter/reasoning-echo.js";
 export { runSideTextQuery } from "../models/adapter/side-text-query.js";
+export { extractJsonDocument, renderSchemaContract } from "../models/adapter/schema-prompt.js";
 export { maxTokensOption } from "../models/max-tokens-option.js";
 export { sharedUsageHistory } from "../agent/usage/usage-history-service.js";
 export {

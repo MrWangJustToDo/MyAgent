@@ -5,14 +5,19 @@
 The contract between the memory subsystem and the model: memory retrieval, extraction, and
 consolidation each express their request and response as a Zod schema, degrade without the
 model rather than failing a turn, and run as one-shot structured queries instead of subagents.
-
 ## Requirements
 ### Requirement: Memory model contracts are expressed as schemas
 
 Memory extraction, memory consolidation, and memory retrieval SHALL each express their
 model output contract as a Zod schema, and that schema SHALL be the single source of truth
-for both the request and the validation of the response. These paths MUST NOT recover
-structured model output by pattern-matching raw text.
+for both the request and the validation of the response. These paths MUST NOT obtain a structured
+result by repairing or coercing raw model text.
+
+Obtaining the result from a **complete JSON document** embedded in the reply — a fenced block, or
+a brace-balanced scan — is not repair, and is permitted on the constrained-text path that runs
+when the model's declared capability excludes structured output. Repairing malformed JSON
+(balancing braces, inserting separators, closing a truncated document) and applying per-field
+coercion or defaults before validation remain forbidden on every path.
 
 #### Scenario: Extraction contract is one schema
 
@@ -48,11 +53,27 @@ structured model output by pattern-matching raw text.
 - **THEN** the request and the response validation are both derived from the same schema
   describing the selected-filename list
 
-#### Scenario: No text pattern recovery remains on these paths
+#### Scenario: A JSON document may be located, but never repaired
 
-- **WHEN** the memory extraction, consolidation, and retrieval response paths are inspected
-- **THEN** no regex-based JSON recovery (matching the first `[` to the last `]`, or a
-  brace-delimited substring) is used to obtain the model's structured result
+- **WHEN** the memory response paths are inspected on the constrained-text path
+- **THEN** a complete JSON document may be located inside the reply (fenced, or brace-balanced)
+  and parsed, but no step may alter the text to make it parseable — no brace balancing, no
+  separator insertion, no closing of a truncated document — and the parsed value must pass the
+  same schema validation and transforms as a structured-output reply before any caller sees it
+
+#### Scenario: Only a document, and only one
+
+- **WHEN** the reply contains a document nested inside an **array**, or more than one complete
+  document
+- **THEN** the port treats it as a failure rather than choosing between them: an object reached
+  only through an array is not an object-root document, and picking between two documents is a
+  guess whose wrong answer would be returned as if it were the result
+
+#### Scenario: A parsed document that fails validation is a failure
+
+- **WHEN** a document is successfully parsed out of the reply but does not satisfy the schema
+- **THEN** the call fails and the caller takes its non-LLM fallback, rather than the entries that
+  happened to validate being used
 
 ### Requirement: Memory type and value validation is shared with the schema
 
