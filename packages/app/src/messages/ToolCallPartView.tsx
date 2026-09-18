@@ -20,7 +20,7 @@ import {
   isBudgetCutoffTaskPhase,
   LIVE_DURATION_THRESHOLD_MS,
 } from "../utils/format.js";
-import { getUiToolState, isToolExecuting, parseToolInput } from "../utils/tool-part.js";
+import { getUiToolState, isCancelledToolCall, isToolExecuting, parseToolInput } from "../utils/tool-part.js";
 
 import { StreamingOutputView } from "./StreamingOutputView.js";
 import { SummaryStreamView } from "./SummaryStreamView.js";
@@ -120,6 +120,12 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
 
   const hasOutput = uiState === "output-available" || uiState === "output-error" || uiState === "output-denied";
   const hasDenied = uiState === "output-denied";
+  // A run the user cancelled — either cancel shape (framework `cancelled` marker or the
+  // task tool's own `aborted`). Both settle to states that would otherwise read as failure
+  // (run_command → output-error) or success (task → output-available); the row must say
+  // "stopped" instead. See `isCancelledToolCall`. Only a settled output can carry the
+  // marker, which is what `hasOutput` gates.
+  const stoppedByCancel = hasOutput && isCancelledToolCall(part);
   const durationMs = hasOutput ? getDurationMs(part.output) : null;
   const showDuration = durationMs !== null && durationMs >= DURATION_THRESHOLD_MS;
 
@@ -134,6 +140,10 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
   // Density compact: skip success one-liners; keep failure hints. A cut-off task
   // is treated as a failure hint: it must not read as a clean finish.
   const stateColor = errorText || outputFailed || stoppedByLimit ? COLORS.danger : getToolCallColor(uiState);
+  // A user cancel is neither failure nor success: the header keeps its state color but the
+  // row's parenthetical already says "cancelled" (via getInlineSummary), and the icon turns
+  // the neutral warning glyph.
+  const headerColor = stoppedByCancel ? COLORS.warning : stateColor;
 
   // Compact display: errored/denied tools are handled by the compact projection
   // (errors fold into an activity summary count; denied rows are filtered). This
@@ -172,13 +182,18 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
     );
   }
   const parenText = parenParts.length > 0 ? ` (${parenParts.join(", ")})` : "";
-  const headerText = buildToolHeader(toolName, displayInput, parenText, stateColor);
+  const headerText = buildToolHeader(toolName, displayInput, parenText, headerColor);
 
   return (
     <Box flexDirection="column" paddingLeft={2}>
       <Box flexDirection="row">
         <Box flexShrink={0} width={2}>
-          <ToolStatusIcon state={uiState} toolName={toolName} stoppedByLimit={stoppedByLimit} />
+          <ToolStatusIcon
+            state={uiState}
+            toolName={toolName}
+            stoppedByLimit={stoppedByLimit}
+            stoppedByCancel={stoppedByCancel}
+          />
         </Box>
         <Text wrap="wrap">{headerText}</Text>
       </Box>

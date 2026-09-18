@@ -77,6 +77,13 @@ export const runCommandOutputSchema = z.object({
     .optional()
     .describe("Background job status when run_in_background was used."),
   runInBackground: z.boolean().optional().describe("True when the command was started in the background."),
+  /**
+   * Present when the USER aborted the run while this command was executing. The tool
+   * returns a normal result carrying this marker instead of letting the abort surface as a
+   * thrown error, so the row renders as "cancelled" (same contract as the `task` tool's
+   * `aborted` flag) rather than as a tool failure.
+   */
+  cancelled: z.boolean().optional().describe("True when the user aborted the run while this command was executing."),
   ...toolOutputBaseSchema.shape,
 });
 

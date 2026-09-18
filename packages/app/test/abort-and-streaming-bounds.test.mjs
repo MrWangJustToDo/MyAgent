@@ -76,6 +76,47 @@ const part = (name, output) => ({
 }
 
 // ============================================================================
+// Both cancel shapes read as cancelled — and neither wears success nor failure
+//
+// Two layers settle aborts, on opposite tool states: the framework fallback writes
+// `cancelled: true` onto a part settled as `error` (run_command before its execute caught
+// the abort), while the task tool returns a normal result with `aborted: true` settled as
+// `complete`. `isCancelledToolCall` is the one predicate for both; the glyph must be the
+// neutral warning for either, because the user stopped the run — it neither failed nor
+// finished cleanly.
+// ============================================================================
+{
+  const { isCancelledToolCall } = await import("@codent/core");
+  const { getToolStatusGlyph } = await import("../dist/index.mjs");
+
+  // Framework shape: `cancelled` on an error-settled part (the pre-fix run_command abort).
+  const frameworkCancelled = part("run_command", { success: false, error: "Command aborted", cancelled: true });
+  assert.equal(isCancelledToolCall(frameworkCancelled), true, "the framework cancel marker is recognized");
+  // Task shape: `aborted` on a complete-settled part (the tool's own contract).
+  const taskCancelled = part("task", { summary: "[Task cancelled by user.]", aborted: true });
+  assert.equal(isCancelledToolCall(taskCancelled), true, "the task tool's aborted flag is recognized");
+  // ...and neither flag, neither shape.
+  assert.equal(isCancelledToolCall(part("grep", { matches: [] })), false, "a clean finish is not a cancel");
+  assert.equal(
+    isCancelledToolCall(part("grep", { success: false, error: "boom" })),
+    false,
+    "a real failure is not a cancel"
+  );
+  assert.equal(isCancelledToolCall(part("grep", undefined)), false, "no output is not a cancel");
+
+  // The glyph outranks the settled state in BOTH directions: the cancelled run_command
+  // (output-error) must not wear the failure cross, and the cancelled task
+  // (output-available) must not wear the success check.
+  assert.equal(getToolStatusGlyph("output-error", false, true), "⚠", "a cancelled run_command is not a failure");
+  assert.equal(getToolStatusGlyph("output-available", false, true), "⚠", "a cancelled task is not a success");
+  // The budget-cutoff case keeps priority semantics: both flags together still warn.
+  assert.equal(getToolStatusGlyph("output-available", true, true), "⚠");
+  // Without either flag the old mapping is untouched.
+  assert.equal(getToolStatusGlyph("output-available"), "✓");
+  assert.equal(getToolStatusGlyph("output-error"), "✗");
+}
+
+// ============================================================================
 // The streaming retention is bounded, and a finished call is released
 //
 // Two independent holes behind the command-tool OOM:

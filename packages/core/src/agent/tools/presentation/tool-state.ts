@@ -18,6 +18,30 @@ export function isToolCallPart(part: { type?: string } | null | undefined): part
   return part != null && part.type === "tool-call";
 }
 
+/**
+ * Whether this settled part represents a run the USER cut short, not a tool failure.
+ *
+ * Two shapes exist because two layers settle aborts:
+ *
+ *  - `output.cancelled === true` — written by the framework fallback
+ *    (`cancelInFlightToolCalls` / `cancelIncompleteToolCalls`), which settles a call that was
+ *    still in flight (or whose args never finished streaming) when the run was torn down.
+ *  - `output.aborted === true` — written by the `task` tool itself, which catches its
+ *    subagent's cancellation and returns a normal result carrying the
+ *    `[Task cancelled by user.]` notice, so the parent model learns of the cancel.
+ *
+ * The distinction matters to every consumer that renders a settled row: both shapes read as
+ * "finished" to `getUiToolState` (one as `output-error`, one as `output-available`), so a row
+ * the user cancelled would otherwise wear the failure cross or the success check. This is the
+ * one predicate for that — inline summaries, status glyphs and colors all branch through it
+ * rather than re-matching the output shapes.
+ */
+export function isCancelledToolCall(part: ToolCallPart | { output?: unknown }): boolean {
+  const output = part?.output;
+  if (typeof output !== "object" || output === null) return false;
+  return (output as { cancelled?: boolean }).cancelled === true || (output as { aborted?: boolean }).aborted === true;
+}
+
 export function parseToolInput(part: ToolCallPart): unknown {
   if (!part.arguments) return undefined;
   try {

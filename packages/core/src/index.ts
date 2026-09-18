@@ -246,6 +246,7 @@ export {
 } from "./agent/tools/presentation/activity-summary.js";
 export {
   getUiToolState,
+  isCancelledToolCall,
   isImagePart,
   isPendingToolApproval,
   isToolCallPart,

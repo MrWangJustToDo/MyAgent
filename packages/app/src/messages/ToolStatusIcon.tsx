@@ -16,10 +16,24 @@ export interface ToolStatusIconProps {
    * live `taskPhase` distinguishes the two.
    */
   stoppedByLimit?: boolean;
+  /**
+   * A run the USER cancelled. The two cancel shapes settle on opposite states — a
+   * cancelled `task` as `output-available` (the tool returns a normal result), a
+   * cancelled `run_command` as `output-error` (the abort surfaced as a thrown
+   * error) — so `state` alone paints the success check on one and the failure
+   * cross on the other. Neither is right: the user stopped it. See
+   * `isCancelledToolCall` for the two output shapes.
+   */
+  stoppedByCancel?: boolean;
 }
 
 /** Get status icon for tool invocation */
-export const ToolStatusIcon = ({ state, toolName, stoppedByLimit = false }: ToolStatusIconProps) => {
+export const ToolStatusIcon = ({
+  state,
+  toolName,
+  stoppedByLimit = false,
+  stoppedByCancel = false,
+}: ToolStatusIconProps) => {
   // Lifecycle states render a spinner or a question mark rather than a status
   // glyph, so they never reach the glyph table.
   switch (state) {
@@ -33,11 +47,12 @@ export const ToolStatusIcon = ({ state, toolName, stoppedByLimit = false }: Tool
       break;
   }
 
-  const glyph = getToolStatusGlyph(state, stoppedByLimit);
+  const glyph = getToolStatusGlyph(state, stoppedByLimit, stoppedByCancel);
   if (!glyph) return null;
 
-  // A cutoff outranks the underlying state: the run did not fail, but it must not
-  // wear the success colour either.
-  const color = stoppedByLimit ? COLORS.warning : state === "output-available" ? COLORS.success : COLORS.danger;
+  // A cutoff or a user cancel outranks the underlying state: neither failed, but
+  // neither may wear the success colour either.
+  const color =
+    stoppedByLimit || stoppedByCancel ? COLORS.warning : state === "output-available" ? COLORS.success : COLORS.danger;
   return <Text color={color}>{glyph}</Text>;
 };

@@ -1,6 +1,7 @@
 import { DISCOVERY_TOOL_NAME } from "@tanstack/ai";
 import { z } from "zod";
 
+import { ExecutionError } from "../../env-types.js";
 import { getEnv } from "../../env.js";
 
 import { analyzeCommand, createAnalysisContext } from "./command-safety/command-analyzer.js";
@@ -130,20 +131,55 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
 
       const encoder = new TextEncoder();
 
-      const result = await getEnv().runCommand(command, {
-        cwd,
-        env,
-        timeout,
-        signal: abortSignal,
-        onStdout: (chunk) => {
-          stdoutAccumulator.append(encoder.encode(chunk));
-          if (agentId) emitStreamingChunk(toolCallId, "stdout", chunk, { agentId });
-        },
-        onStderr: (chunk) => {
-          stderrAccumulator.append(encoder.encode(chunk));
-          if (agentId) emitStreamingChunk(toolCallId, "stderr", chunk, { agentId });
-        },
-      });
+      // The user aborting the run is not a tool failure. CoreEnv surfaces it as an
+      // ExecutionError("aborted") (native) or an equivalent throw (remote), which TanStack
+      // would otherwise settle as `output-error` — a red cross on a row the USER stopped,
+      // and no `cancelled` marker for the UI to read. Catch it and return a normal result
+      // carrying `cancelled: true`, the same contract as the `task` tool's `aborted` flag;
+      // `getInlineSummary` / `isCancelledToolCall` render both shapes as "cancelled".
+      // Everything else still throws, so genuine failures keep their error row.
+      let result;
+      try {
+        result = await getEnv().runCommand(command, {
+          cwd,
+          env,
+          timeout,
+          signal: abortSignal,
+          onStdout: (chunk) => {
+            stdoutAccumulator.append(encoder.encode(chunk));
+            if (agentId) emitStreamingChunk(toolCallId, "stdout", chunk, { agentId });
+          },
+          onStderr: (chunk) => {
+            stderrAccumulator.append(encoder.encode(chunk));
+            if (agentId) emitStreamingChunk(toolCallId, "stderr", chunk, { agentId });
+          },
+        });
+      } catch (err) {
+        const isAbort =
+          abortSignal?.aborted === true ||
+          (err instanceof ExecutionError && err.code === "aborted") ||
+          (err instanceof Error && err.name === "ExecutionError" && (err as { code?: string }).code === "aborted");
+        if (!isAbort) throw err;
+
+        stdoutAccumulator.finish();
+        stderrAccumulator.finish();
+        const stdoutRaw = stdoutAccumulator.snapshot().content;
+        const stderrRaw = stderrAccumulator.snapshot().content;
+        const stdoutResult = await maybeCacheOutput(stdoutRaw, `${toolCallId}-stdout`);
+        const stderrResult = await maybeCacheOutput(stderrRaw, `${toolCallId}-stderr`);
+        return {
+          command,
+          stdout: stdoutResult.content,
+          stderr: stderrResult.content,
+          // No exit code exists for a killed process; -1 is the schema's "not finished"
+          // value and `success: false` keeps the run from reading as a clean exit.
+          exitCode: -1,
+          durationMs: 0,
+          success: false,
+          cancelled: true,
+          cachedOutputPath: stdoutResult.cachedOutputPath ?? stderrResult.cachedOutputPath ?? null,
+        };
+      }
 
       stdoutAccumulator.finish();
       stderrAccumulator.finish();
@@ -183,6 +219,21 @@ export const createRunCommandTool = (options?: { subagentSafe?: boolean }) => {
                 ? `Full output is appended to ${output.cachedOutputPath} — read it with read_file ` +
                   `(a missing "[exit ...]" footer means the job is still running). `
                 : ""),
+          },
+        ];
+      }
+      // A user abort is not a command result: without this the model reads `exit code: -1`
+      // and diagnoses a crash that never happened. Mirror the task tool's contract, where
+      // the cancel notice reaches the parent model rather than only a flag.
+      if (output.cancelled) {
+        return [
+          {
+            type: "text" as const,
+            content:
+              `[Command cancelled by user.] The run was stopped while this command was executing; ` +
+              `the partial output below is what it produced before the stop.\n` +
+              (output.stderr?.trim?.() ? `stderr:\n${output.stderr}\n` : "") +
+              output.stdout,
           },
         ];
       }

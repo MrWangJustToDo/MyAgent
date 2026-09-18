@@ -85,10 +85,16 @@ export function isBudgetCutoffTaskPhase(phase: TaskRowPhase): boolean {
   return phase === "limit";
 }
 
-/** Status glyph for a tool row, resolving the budget-cutoff case before `state`. */
-export function getToolStatusGlyph(state: UiToolState | string, stoppedByLimit = false): string {
-  // Ordered first, not last: a cut-off `task` is `output-available` too.
+/** Status glyph for a tool row, resolving the user-cancel and budget-cutoff cases before `state`. */
+export function getToolStatusGlyph(
+  state: UiToolState | string,
+  stoppedByLimit = false,
+  stoppedByCancel = false
+): string {
+  // Ordered first, not last: a cut-off `task` is `output-available` and a cancelled
+  // `run_command` is `output-error`, so neither reads from the state alone.
   if (stoppedByLimit) return "⚠";
+  if (stoppedByCancel) return "⚠";
   switch (state) {
     case "output-available":
       return "✓";
