@@ -100,3 +100,14 @@ jobs:
         # `pnpm build:codent` — that would rebuild the release app config a
         # second time on top of the step above.
         run: pnpm --filter codent validate:self-contained
+
+      - name: Verify no bundle references an undeclared specifier
+        # The other half of the contract, and the half `validate:self-contained`
+        # cannot see: a lazy `import()` of a package that is neither inlined nor
+        # in `dependencies`. That resolves inside this monorepo — devDependencies
+        # are installed here — and throws ERR_MODULE_NOT_FOUND for a consumer, on
+        # whichever code path reaches it.
+        #
+        # Deliberately after the self-containment step: that one rebuilds
+        # `dist`, so scanning earlier would scan a stale bundle.
+        run: pnpm --filter codent validate:runtime-specifiers

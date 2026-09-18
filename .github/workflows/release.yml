@@ -85,6 +85,13 @@ jobs:
         # who installs nothing else — refuse to publish.
         run: pnpm --filter codent validate:self-contained
 
+      - name: Verify no bundle references an undeclared specifier
+        # The companion check: a lazy `import()` of a package that is neither
+        # inlined nor declared resolves here (devDependencies are installed) and
+        # fails for a consumer. A tag is immutable, so this has to fail before
+        # the publish step rather than after it.
+        run: pnpm --filter codent validate:runtime-specifiers
+
       - name: Publish to npm
         # `codent` is the only published package (see the header note). It has
         # no `@codent/*` runtime dependency, so there is no ordering to respect

@@ -268,7 +268,20 @@ The release config exists because those third-party deps (`reactivity-store`, `c
 
 Tests: `@codent/app` owns the only `node:test` suite — `pnpm --filter @codent/app test` builds the package, then runs `node --test test/*.test.mjs` against its `dist` output. Core is covered by the `validate:*` scripts instead (see step 3 of the Task Completion Checklist).
 
-CI: `.github/workflows/ci.yml` runs on every pull request and on pushes to `main` — `wxt prepare` → `pnpm build` → `pnpm lint` → `pnpm typecheck` → `pnpm --filter @codent/app test` → `build:app:release` → `codent validate:self-contained`. The release workflow (`.github/workflows/release.yml`, `v*` tag or manual dispatch) runs the same checks before `pnpm --filter codent run publish:beta`.
+CI: `.github/workflows/ci.yml` runs on every pull request and on pushes to `main` — `wxt prepare` → `pnpm build` → `pnpm lint` → `pnpm typecheck` → `pnpm --filter @codent/app test` → `build:app:release` → `codent validate:self-contained` → `codent validate:runtime-specifiers`. The release workflow (`.github/workflows/release.yml`, `v*` tag or manual dispatch) runs the same checks before `pnpm --filter codent run publish:beta`.
+
+### Two release-contract checks (`packages/codent/scripts/`)
+
+`codent` inlines `@codent/app` / `core` / `node` into a single tarball, and that property is invisible at build time — tsdown leaves a bare specifier in the output and the build still succeeds. So it has two assertions, and they cover different failures:
+
+| Script | Asserts |
+|--------|---------|
+| `validate-self-contained.mjs` | no `@codent/*` specifier survives into `dist`, and `dependencies` is exactly the four externals that cannot be inlined |
+| `validate-runtime-specifiers.mjs` | every dynamic `import()` / `require()` in the bundle resolves to an inlined package or a declared dependency |
+
+The second exists because "it resolves here" proves nothing about a consumer: this repo installs `devDependencies`, so an undeclared package is importable in CI and throws `ERR_MODULE_NOT_FOUND` for a user. The check is therefore against `dependencies`, not the local `node_modules`. Its allowlist (`INERT_PATTERNS`) names the four codegen templates that look like imports but are never evaluated (`ajv`, `ajv-formats`, `react-hot-loader`, `web-worker`) — each with a reason, so a real call site cannot hide behind a blanket disable.
+
+A `devDependencies` entry in a host package is **not** a publish blocker: npm packs from `dependencies` alone, so `workspace:*` siblings there are build-time inputs, not install requirements. `npm pack` also auto-includes `LICENSE` / `README.md` regardless of `files`, so those need no entry either.
 
 ## Code Style Guidelines
 

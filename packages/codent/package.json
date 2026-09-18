@@ -46,6 +46,7 @@
     "start": "node dist/index.mjs",
     "typecheck": "tsc --noEmit",
     "validate:self-contained": "pnpm run build && node ./scripts/validate-self-contained.mjs",
+    "validate:runtime-specifiers": "node ./scripts/validate-runtime-specifiers.mjs",
     "publish:beta": "node ./scripts/publish.mjs"
   },
   "//": "Fully bundled release package. `dependencies` is exactly the four externals that cannot",
