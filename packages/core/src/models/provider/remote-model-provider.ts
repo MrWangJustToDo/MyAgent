@@ -4,9 +4,9 @@
  *
  * Orthogonal to CoreEnv — pass any server base URL that exposes `/api/provider/info`.
  *
- * Lives in `@my-agent/core` (not the server) so any host — CLI, extension, or the
+ * Lives in `@codent/core` (not the server) so any host — CLI, extension, or the
  * browser playground — can register a remote-mode provider without depending on
- * `@my-agent/server`. Only uses `fetch` + core types, safe for Node and browsers.
+ * `@codent/server`. Only uses `fetch` + core types, safe for Node and browsers.
  */
 
 import type { ModelProvider } from "./model-provider.js";

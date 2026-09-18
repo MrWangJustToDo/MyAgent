@@ -1,6 +1,6 @@
-# @my-agent/playground
+# @codent/playground
 
-Browser playground that boots a **WebContainer** as `CoreEnv` and renders the shared `@my-agent/app` UI the same way the Chrome extension does (`AdapterProvider` + `InkTerminalBox` + `App`).
+Browser playground that boots a **WebContainer** as `CoreEnv` and renders the shared `@codent/app` UI the same way the Chrome extension does (`AdapterProvider` + `InkTerminalBox` + `App`).
 
 ## Quick start
 
@@ -15,7 +15,7 @@ Open http://localhost:5177 — set model / base URL / API key in **Settings**, t
 
 ### Remote provider
 
-Instead of entering an API key, set **Settings → Provider server URL** to a running `@my-agent/server`
+Instead of entering an API key, set **Settings → Provider server URL** to a running `@codent/server`
 (or any server exposing `/api/provider/*`). The browser then talks to that server in **remote mode**: the
 real API key stays on the server, and model / style / base URL are taken from `GET /api/provider/info`.
 Local model / base URL / API key fields are ignored while the URL is set.
@@ -36,13 +36,13 @@ GitHub Pages deployment.
 
 ```
 Browser
- ├─ Vite host + InkTerminalBox + @my-agent/app
+ ├─ Vite host + InkTerminalBox + @codent/app
  ├─ PlaygroundAgentAdapter → createAgentFromConfig()
  └─ createWebContainerEnv() → registerCoreEnv()
       └─ WebContainer (fs + jsh spawn + fetch)
 ```
 
-Unlike the extension, there is **no** remote `@my-agent/server` — CoreEnv is local to the tab.
+Unlike the extension, there is **no** remote `@codent/server` — CoreEnv is local to the tab.
 
 On boot the WebContainer mounts a starter tree (`package.json`, `README.md`, **`AGENTS.md`**). `AGENTS.md` is loaded as project instructions so the agent knows this is an in-browser WebContainer (CORS limits, no MCP stdio, ephemeral FS, prefer `webfetch` over in-container `curl`).
 
@@ -98,7 +98,7 @@ Yes — set `VITE_FETCH_PROXY_URL` at **build** time (Vite inlines it). Users do
 
 ```bash
 # local production build
-VITE_FETCH_PROXY_URL=https://my-agent-fetch-proxy.<you>.workers.dev pnpm build:playground
+VITE_FETCH_PROXY_URL=https://codent-fetch-proxy.<you>.workers.dev pnpm build:playground
 ```
 
 GitHub Pages workflow reads **Repository** Variable **or** Secret `VITE_FETCH_PROXY_URL`:
@@ -135,5 +135,5 @@ The workflow runs `pnpm build:core && pnpm build:app && pnpm build:playground` a
 ## Validate path helper
 
 ```bash
-pnpm --filter @my-agent/playground validate:workspace-path
+pnpm --filter @codent/playground validate:workspace-path
 ```

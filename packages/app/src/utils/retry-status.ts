@@ -1,4 +1,4 @@
-import type { AgentRetryState } from "@my-agent/core";
+import type { AgentRetryState } from "@codent/core";
 
 /** Human label per retry strategy (shared by footer / task UI / panels). */
 export const RETRY_STRATEGY_LABEL: Record<AgentRetryState["strategy"], string> = {

@@ -4,7 +4,7 @@
  * 1-based {@link AgentIterationState} and reports the run's iteration budget;
  * plus the retained `iteration` channel / meta wiring.
  *
- * Run: pnpm --filter @my-agent/core run validate:agent-iteration-progress
+ * Run: pnpm --filter @codent/core run validate:agent-iteration-progress
  */
 
 import assert from "node:assert/strict";

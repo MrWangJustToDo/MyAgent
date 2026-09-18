@@ -1,6 +1,6 @@
 import { createState, markRaw } from "reactivity-store";
 
-import type { AgentSession, AgentSessionHost } from "@my-agent/core";
+import type { AgentSession, AgentSessionHost } from "@codent/core";
 
 /**
  * Active Session + Host for the UI. No ManagedAgent.

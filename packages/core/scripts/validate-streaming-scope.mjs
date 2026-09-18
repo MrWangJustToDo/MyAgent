@@ -1,7 +1,7 @@
 /**
  * Validates agent-scoped streaming callback isolation through the unified bus.
  *
- * Run: pnpm --filter @my-agent/core run validate:streaming-scope
+ * Run: pnpm --filter @codent/core run validate:streaming-scope
  */
 
 import assert from "node:assert/strict";

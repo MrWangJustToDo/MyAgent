@@ -6,7 +6,7 @@
  * - subagent kind whitelist (context isolation)
  * - shared injection helper (channel persistence + dedupe)
  *
- * Run: pnpm --filter @my-agent/core run validate:turn-context
+ * Run: pnpm --filter @codent/core run validate:turn-context
  */
 
 import assert from "node:assert/strict";
@@ -63,7 +63,7 @@ const sections = buildTurnContextSections({
   relevantMemoryContent: "<relevant_memories>m</relevant_memories>",
   todoNagReminder: "<reminder>nag</reminder>",
   modeContent: '<plan_mode phase="planning">plan</plan_mode>',
-  extensionTurnContextSections: [{ id: "my-agent-memory", content: "<memory_index>m</memory_index>" }],
+  extensionTurnContextSections: [{ id: "codent-memory", content: "<memory_index>m</memory_index>" }],
 });
 // Built-in kinds come from the catalog so a rename cannot silently pass here.
 assert.deepEqual(
@@ -74,11 +74,11 @@ assert.deepEqual(
     TURN_CONTEXT_KINDS.relevantMemories,
     TURN_CONTEXT_KINDS.reminder,
     TURN_CONTEXT_KINDS.mode,
-    "my-agent-memory",
+    "codent-memory",
   ]
 );
 // Each extension gets its own kind tag (enable/disable share the same tag).
-const memorySection = sections.find((s) => s.key === "my-agent-memory");
+const memorySection = sections.find((s) => s.key === "codent-memory");
 assert.ok(memorySection?.content.includes("<memory_index>"), "extension content kept under its own kind");
 const modeSection = sections.find((s) => s.key === TURN_CONTEXT_KINDS.mode);
 assert.ok(modeSection?.content.startsWith("<plan_mode"));
@@ -344,7 +344,7 @@ for (const budget of [4, 20, 100]) {
 assert.deepEqual([...SUBAGENT_ALLOWED_KINDS].sort(), ["current_date", "git_status", "project_instructions"]);
 assert.ok(!SUBAGENT_ALLOWED_KINDS.has("relevant_memories"), "no memory for subagents");
 assert.ok(!SUBAGENT_ALLOWED_KINDS.has("mode"), "no plan/auto for subagents");
-assert.ok(!SUBAGENT_ALLOWED_KINDS.has("my-agent-memory"), "no extension context for subagents");
+assert.ok(!SUBAGENT_ALLOWED_KINDS.has("codent-memory"), "no extension context for subagents");
 assert.ok(!SUBAGENT_ALLOWED_KINDS.has("instruction_context"), "no instruction context for subagents");
 assert.ok(!SUBAGENT_ALLOWED_KINDS.has("extension_system_append"), "no extension append channel for subagents");
 

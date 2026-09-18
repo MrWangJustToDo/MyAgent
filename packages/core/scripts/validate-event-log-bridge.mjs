@@ -4,7 +4,7 @@
  * size + preview (never inlined), memory debug streams are silent, and
  * approval resolution events are bridged.
  *
- * Run: pnpm --filter @my-agent/core run validate:event-log-bridge
+ * Run: pnpm --filter @codent/core run validate:event-log-bridge
  */
 
 import assert from "node:assert/strict";

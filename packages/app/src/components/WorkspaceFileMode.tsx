@@ -124,7 +124,7 @@ export const WorkspaceFileMode = () => {
   );
 
   useEffect(() => {
-    import("@my-agent/core").then(({ getEnv }) => setRootPath(getEnv().rootPath)).catch(() => {});
+    import("@codent/core").then(({ getEnv }) => setRootPath(getEnv().rootPath)).catch(() => {});
   }, []);
 
   useEffect(() => {

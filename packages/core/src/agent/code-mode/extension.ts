@@ -147,7 +147,7 @@ function toExtensionTool(tool: AnyServerTool, log: ExtensionContext["logger"]): 
  */
 export function createCodeModeExtension(options: CodeModeExtensionConfig = {}): ExtensionAPI {
   return {
-    id: "my-agent-code-mode",
+    id: "codent-code-mode",
     name: "Code Mode",
     version: "1.0.0",
     description: "Sandboxed TypeScript execution (TanStack ai-code-mode)",

@@ -1,7 +1,7 @@
 /**
  * Smoke-test Local AgentSessionHost: create → list → connect child → destroy.
  *
- * Run: pnpm --filter @my-agent/core run validate:agent-session-host
+ * Run: pnpm --filter @codent/core run validate:agent-session-host
  */
 import assert from "node:assert/strict";
 

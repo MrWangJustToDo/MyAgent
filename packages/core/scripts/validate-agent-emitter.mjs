@@ -1,7 +1,7 @@
 /**
  * Validates typed Emitter + domain migrations (todos / usage / log).
  *
- * Run: pnpm --filter @my-agent/core run validate:agent-emitter
+ * Run: pnpm --filter @codent/core run validate:agent-emitter
  */
 import assert from "node:assert/strict";
 

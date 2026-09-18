@@ -1,10 +1,10 @@
-import { parseModelStyle, resolveModelConnection } from "@my-agent/core";
+import { parseModelStyle, resolveModelConnection } from "@codent/core";
 import { createRequire } from "node:module";
 
 import { parseModelInfoFromEnv } from "./model-env.js";
 
-import type { AppConfig } from "@my-agent/app";
-import type { ModelStyle } from "@my-agent/core";
+import type { AppConfig } from "@codent/app";
+import type { ModelStyle } from "@codent/core";
 
 // ============================================================================
 // Argument Parsing
@@ -208,7 +208,7 @@ export const isHelpRequested = (argv: string[]): boolean => {
 const requireFromCli = createRequire(import.meta.url);
 
 /**
- * Version string of the installed `@my-agent/cli` package. `dist/index.mjs`
+ * Version string of the installed `@codent/cli` package. `dist/index.mjs`
  * sits next to `package.json` both in the monorepo and in the published
  * tarball, so this resolves correctly before and after `npm install -g`.
  */

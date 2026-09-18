@@ -81,7 +81,7 @@ export function fetchWorkspaceDiffStats(rootPath: string, untracked: string[]): 
 }
 
 async function loadWorkspaceDiffStats(rootPath: string, untracked: string[]): Promise<WorkspaceDiffStats> {
-  const { getEnv } = await import("@my-agent/core");
+  const { getEnv } = await import("@codent/core");
   const env = getEnv();
 
   const files = new Map<string, WorkspaceFileDiffStat>();
@@ -115,7 +115,7 @@ async function loadWorkspaceDiffStats(rootPath: string, untracked: string[]): Pr
 
 async function countUntrackedLines(rootPath: string, rel: string): Promise<WorkspaceFileDiffStat | null> {
   try {
-    const { getEnv } = await import("@my-agent/core");
+    const { getEnv } = await import("@codent/core");
     const content = await getEnv().fs.readFile(joinWorkspacePath(rootPath, rel));
     const capped = content.slice(0, MAX_UNTRACKED_STAT_CHARS);
     const added = capped.split("\n").length;

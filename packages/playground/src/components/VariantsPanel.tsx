@@ -1,5 +1,5 @@
-import { useAgent } from "@my-agent/app";
-import { isActiveStatus } from "@my-agent/core";
+import { useAgent } from "@codent/app";
+import { isActiveStatus } from "@codent/core";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useVariants } from "../hooks/use-variants.js";

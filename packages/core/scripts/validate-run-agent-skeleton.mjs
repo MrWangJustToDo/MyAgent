@@ -1,7 +1,7 @@
 /**
  * Validates shared run skeleton consume + UI attach helper.
  *
- * Run: pnpm --filter @my-agent/core run validate:run-agent-skeleton
+ * Run: pnpm --filter @codent/core run validate:run-agent-skeleton
  */
 
 import assert from "node:assert/strict";

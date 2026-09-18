@@ -4,7 +4,7 @@
  * `createRemoteEnv` client (fs / exec / runCommand / startCommand polling /
  * fetch proxy / MCP init failure / error deserialization).
  *
- * Run: pnpm --filter @my-agent/server run validate:coreenv-http
+ * Run: pnpm --filter @codent/server run validate:coreenv-http
  */
 /* eslint-disable no-undef */
 import assert from "node:assert/strict";

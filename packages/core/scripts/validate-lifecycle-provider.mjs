@@ -7,7 +7,7 @@
  * a provider (openai-base adapters map token fields only; rebuildTokenUsage
  * folds arrays before onUsage).
  *
- * Run: pnpm --filter @my-agent/core run validate:lifecycle-provider
+ * Run: pnpm --filter @codent/core run validate:lifecycle-provider
  */
 
 import assert from "node:assert/strict";

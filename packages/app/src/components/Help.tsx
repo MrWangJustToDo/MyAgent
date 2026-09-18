@@ -1,4 +1,4 @@
-import { DEFAULT_BASE_URLS, DEFAULT_LOCAL_OPENAI_BASE_URL, getEnv } from "@my-agent/core";
+import { DEFAULT_BASE_URLS, DEFAULT_LOCAL_OPENAI_BASE_URL, getEnv } from "@codent/core";
 import { Box, Text } from "ink";
 
 import { useConfig } from "../hooks/use-config.js";
@@ -8,13 +8,17 @@ import { getKeyboardShortcutSections } from "../utils/keyboard-labels.js";
 export const Help = () => {
   const config = useConfig((s) => s.config);
   const shortcutSections = getKeyboardShortcutSections();
+  // Cosmetic host identity: the dev CLI is `codent`, the bundled release host
+  // is `codent`. `remotePlanes: false` hides flags the host cannot honour.
+  const name = config.productName || "codent";
+  const remotePlanes = config.remotePlanes !== false;
 
   return (
     <Box flexDirection="column" padding={1}>
       {/* Header */}
       <Box marginBottom={1}>
         <Text bold color={COLORS.primary}>
-          my-agent
+          {name}
         </Text>
         <Text> - AI-powered coding assistant</Text>
       </Box>
@@ -25,8 +29,8 @@ export const Help = () => {
           USAGE
         </Text>
         <Box paddingLeft={2} flexDirection="column">
-          <Text>my-agent [options] [prompt]</Text>
-          <Text>my-agent -h, --help</Text>
+          <Text>{name} [options] [prompt]</Text>
+          <Text>{name} -h, --help</Text>
         </Box>
       </Box>
 
@@ -72,24 +76,28 @@ export const Help = () => {
             </Box>
             <Text>Max agent loop iterations (default: 50)</Text>
           </Box>
-          <Box>
-            <Box width={24}>
-              <Text color={COLORS.success}>-R, --remote-env</Text>
-            </Box>
-            <Text>Remote CoreEnv server URL (workspace)</Text>
-          </Box>
-          <Box>
-            <Box width={24}>
-              <Text color={COLORS.success}>--remote-provider</Text>
-            </Box>
-            <Text>Remote LLM provider URL (orthogonal to --remote-env)</Text>
-          </Box>
-          <Box>
-            <Box width={24}>
-              <Text color={COLORS.success}>--remote-session</Text>
-            </Box>
-            <Text>Remote Agent Session URL (orthogonal to --remote-env)</Text>
-          </Box>
+          {remotePlanes && (
+            <>
+              <Box>
+                <Box width={24}>
+                  <Text color={COLORS.success}>-R, --remote-env</Text>
+                </Box>
+                <Text>Remote CoreEnv server URL (workspace)</Text>
+              </Box>
+              <Box>
+                <Box width={24}>
+                  <Text color={COLORS.success}>--remote-provider</Text>
+                </Box>
+                <Text>Remote LLM provider URL (orthogonal to --remote-env)</Text>
+              </Box>
+              <Box>
+                <Box width={24}>
+                  <Text color={COLORS.success}>--remote-session</Text>
+                </Box>
+                <Text>Remote Agent Session URL (orthogonal to --remote-env)</Text>
+              </Box>
+            </>
+          )}
           <Box>
             <Box width={24}>
               <Text color={COLORS.success}>-d, --debug</Text>
@@ -124,9 +132,13 @@ export const Help = () => {
             <Text color={COLORS.primary}>BASE_URL=https://openrouter.ai/api/v1</Text>
             <Text color={COLORS.primary}>API_KEY=sk-or-v1-xxx</Text>
             <Text color={COLORS.primary}>maxIterations=30</Text>
-            <Text color={COLORS.primary}>REMOTE_ENV=http://localhost:3100</Text>
-            <Text color={COLORS.primary}>REMOTE_PROVIDER=http://localhost:3100</Text>
-            <Text color={COLORS.primary}>REMOTE_SESSION=http://localhost:3100</Text>
+            {remotePlanes && (
+              <>
+                <Text color={COLORS.primary}>REMOTE_ENV=http://localhost:3100</Text>
+                <Text color={COLORS.primary}>REMOTE_PROVIDER=http://localhost:3100</Text>
+                <Text color={COLORS.primary}>REMOTE_SESSION=http://localhost:3100</Text>
+              </>
+            )}
           </Box>
           <Box marginTop={1}>
             <Text color={COLORS.muted}>
@@ -198,16 +210,15 @@ export const Help = () => {
           EXAMPLES
         </Text>
         <Box flexDirection="column" paddingLeft={2}>
-          <Text color={COLORS.muted}>{'$ my-agent "Create a hello world function"'}</Text>
+          <Text color={COLORS.muted}>{`$ ${name} "Create a hello world function"`}</Text>
           <Text color={COLORS.muted}>
-            {
-              '$ my-agent --style openai --base-url https://openrouter.ai/api/v1 -m anthropic/claude-3.5-sonnet -k sk-or-... "Review code"'
-            }
+            {`$ ${name} --style openai --base-url https://openrouter.ai/api/v1 -m anthropic/claude-3.5-sonnet -k sk-or-... "Review code"`}
           </Text>
-          <Text color={COLORS.muted}>{'$ my-agent --remote-env http://localhost:3100 "Fix the bug"'}</Text>
-          <Text color={COLORS.muted}>
-            {'$ my-agent --remote-env http://localhost:3100 --remote-provider http://localhost:3100 "Fix the bug"'}
-          </Text>
+          {remotePlanes && (
+            <Text color={COLORS.muted}>
+              {`$ ${name} --remote-env http://localhost:3100 --remote-provider http://localhost:3100 "Fix the bug"`}
+            </Text>
+          )}
         </Box>
       </Box>
 

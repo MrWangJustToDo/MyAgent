@@ -6,7 +6,7 @@ import { listNavHint, pressEscToReturnHint } from "../utils/keyboard-labels.js";
 import { resolveAgentSession } from "../utils/session-resolve.js";
 import { getStatusColor, getStatusIcon, getTaskLabel, isSubagentActiveStatus } from "../utils/subagent-status.js";
 
-import type { AgentSessionSubagentSummary } from "@my-agent/core";
+import type { AgentSessionSubagentSummary } from "@codent/core";
 
 /**
  * One row in the subagent task list.

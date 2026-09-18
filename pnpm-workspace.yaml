@@ -8,6 +8,10 @@ allowBuilds:
   unrs-resolver: false
 
 minimumReleaseAgeExclude:
+  # The release package itself. pnpm's supply-chain policy quarantines any
+  # version younger than the default window, which rejects the freshly published
+  # `codent` tarball a smoke test installs seconds later.
+  - codent
   - "@my-react/react-dom@0.3.30"
   - "@my-react/react-jsx@0.3.30"
   - "@my-react/react-refresh@0.3.30"
@@ -34,7 +38,7 @@ publicHoistPattern:
   - "*eslint-*"
   - "*@heroui/*"
   - "*@my-react/*"
-  - "*@my-agent/*"
+  - "*@codent/*"
 
 # Force isolated-vm to a Node 26 (abi 147) compatible build.
 # ai-isolate-node declares ^6.0.2, whose prebuilds stop at abi 137 (Node 24) and

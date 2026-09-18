@@ -6,7 +6,7 @@
  * 3. Every display-name write path broadcasts: LLM auto-title (`onTitleResolved`),
  *    `getSessionPersistInput` wiring, and resume (`restoreManagedSession`).
  *
- * Run: pnpm --filter @my-agent/core run validate:l1-state-display-name
+ * Run: pnpm --filter @codent/core run validate:l1-state-display-name
  */
 
 import assert from "node:assert/strict";

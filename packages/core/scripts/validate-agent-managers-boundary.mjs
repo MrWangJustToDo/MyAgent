@@ -3,7 +3,7 @@
  *
  * Shared types/host surfaces live under `src/runtime-types/`.
  *
- * Run: pnpm --filter @my-agent/core run validate:agent-managers-boundary
+ * Run: pnpm --filter @codent/core run validate:agent-managers-boundary
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";

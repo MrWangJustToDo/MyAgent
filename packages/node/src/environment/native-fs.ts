@@ -2,12 +2,12 @@
  * Native Node.js filesystem scoped to a workspace root.
  */
 
-import { FileError } from "@my-agent/core";
+import { FileError } from "@codent/core";
 import * as fsSync from "fs";
 import * as fs from "fs/promises";
 import * as path from "path";
 
-import type { CoreEnvFs } from "@my-agent/core";
+import type { CoreEnvFs } from "@codent/core";
 
 export interface NativeFilesystemHandle {
   readonly rootPath: string;

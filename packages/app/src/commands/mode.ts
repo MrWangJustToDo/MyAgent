@@ -4,7 +4,7 @@ import { isPendingToolApproval, isToolCallPart } from "../utils/tool-part.js";
 import { registerCommand } from "./utils/registry.js";
 
 import type { CommandOption, CommandResult } from "./utils/types.js";
-import type { AgentMode } from "@my-agent/core";
+import type { AgentMode } from "@codent/core";
 
 const PLAN_LOAD_LIMIT = 15;
 

@@ -6,7 +6,7 @@
  *    divider) instead of a transient `.agents/logs/{newId}` dir.
  * 3. No stray log dirs are created for the reused launch.
  *
- * Run: pnpm --filter @my-agent/core run validate:session-reuse-log
+ * Run: pnpm --filter @codent/core run validate:session-reuse-log
  */
 
 import assert from "node:assert/strict";

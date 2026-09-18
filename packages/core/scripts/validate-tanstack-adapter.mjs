@@ -1,7 +1,7 @@
 /**
  * Smoke validation for TanStack text adapter factory.
  *
- * Run: pnpm --filter @my-agent/core run validate:tanstack-adapter
+ * Run: pnpm --filter @codent/core run validate:tanstack-adapter
  *
  * Requires an OpenAI-compatible endpoint at BASE_URL (default http://localhost:11434/v1).
  * Set VALIDATE_TANSTACK_MODEL to override the model name (default: qwen3).

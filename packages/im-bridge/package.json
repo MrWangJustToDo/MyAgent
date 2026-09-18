@@ -1,7 +1,7 @@
 {
-  "name": "@my-agent/im-bridge",
+  "name": "@codent/im-bridge",
   "version": "0.0.1",
-  "description": "Generic IM bridge for My Agent — connects chat platforms (Telegram, …) to an AgentSession server",
+  "description": "Generic IM bridge for Codent — connects chat platforms (Telegram, …) to an AgentSession server",
   "license": "MIT",
   "author": {
     "name": "MrWangJustToDo",
@@ -36,7 +36,7 @@
     }
   },
   "bin": {
-    "my-agent-im-bridge": "./dist/cli.mjs"
+    "codent-im-bridge": "./dist/cli.mjs"
   },
   "files": [
     "dist",
@@ -51,9 +51,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@my-agent/core": "workspace:*",
-    "@my-agent/node": "workspace:*",
-    "@my-agent/server": "workspace:*",
+    "@codent/core": "workspace:*",
+    "@codent/node": "workspace:*",
+    "@codent/server": "workspace:*",
     "@tanstack/ai": "^0.54.0",
     "dotenv": "^17.4.2",
     "grammy": "^1.36.3",

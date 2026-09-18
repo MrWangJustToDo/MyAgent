@@ -1,4 +1,4 @@
-import { clearToolPresentation, registerToolPresentation } from "@my-agent/core";
+import { clearToolPresentation, registerToolPresentation } from "@codent/core";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { URL } from "node:url";

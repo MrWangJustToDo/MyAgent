@@ -1,7 +1,7 @@
 /**
  * Grep gate: core must not resolve LLM/tool secrets from env bags or CoreEnv.getEnv() digs.
  *
- * Run: pnpm --filter @my-agent/core run validate:core-no-env-config
+ * Run: pnpm --filter @codent/core run validate:core-no-env-config
  *
  * Uses ripgrep when available, otherwise falls back to a Node-native recursive
  * scan so the gate runs in any environment (no external binary dependency).

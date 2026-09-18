@@ -1,7 +1,7 @@
 /**
  * Validates MCP multimodal content preference (structuredContent vs content[] images).
  *
- * Run: pnpm --filter @my-agent/core run validate:mcp-prefer-multimodal
+ * Run: pnpm --filter @codent/core run validate:mcp-prefer-multimodal
  */
 
 import assert from "node:assert/strict";

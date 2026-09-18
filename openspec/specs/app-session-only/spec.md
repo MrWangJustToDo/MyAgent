@@ -6,7 +6,7 @@ The app layer builds its agent control surface on AgentSession only, so a host n
 
 ## Requirements
 ### Requirement: App holds Session not ManagedAgent
-`@my-agent/app` runtime hooks, layout, and slash commands SHALL NOT import or hold `ManagedAgent`, `agentManager`, live `TodoManager`, or live `AgentLog` instances. Agent observation and control MUST go through `AgentSession` / `AgentSessionHost`.
+`@codent/app` runtime hooks, layout, and slash commands SHALL NOT import or hold `ManagedAgent`, `agentManager`, live `TodoManager`, or live `AgentLog` instances. Agent observation and control MUST go through `AgentSession` / `AgentSessionHost`.
 
 #### Scenario: useAgent store
 - **WHEN** an agent is initialized
@@ -33,7 +33,7 @@ The app MAY import serializable types and pure presentation helpers from core (o
 
 #### Scenario: Lint or documented allowlist
 - **WHEN** the change is complete
-- **THEN** documentation SHALL list the allowed `@my-agent/core` import allowlist for app
+- **THEN** documentation SHALL list the allowed `@codent/core` import allowlist for app
 - **AND** a validate script or lint check SHOULD fail on forbidden runtime imports
 
 ### Requirement: CoreEnv remains optional for agent control

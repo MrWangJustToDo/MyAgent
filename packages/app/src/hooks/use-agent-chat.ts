@@ -1,4 +1,4 @@
-import { isActiveStatus } from "@my-agent/core";
+import { isActiveStatus } from "@codent/core";
 import { throttle } from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toRaw } from "reactivity-store";
@@ -19,7 +19,7 @@ import { getWorkSpaceInfo } from "./use-workspace-info.js";
 
 import type { AppConfig } from "../adapter/types.js";
 import type { Attachment } from "../types/attachment.js";
-import type { AgentStatus, QueuedMessagesSnapshot, SessionInteractionsSnapshot } from "@my-agent/core";
+import type { AgentStatus, QueuedMessagesSnapshot, SessionInteractionsSnapshot } from "@codent/core";
 import type { ContentPart, UIMessage } from "@tanstack/ai";
 
 // ============================================================================

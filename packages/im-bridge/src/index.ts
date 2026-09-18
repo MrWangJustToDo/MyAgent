@@ -1,5 +1,5 @@
 /**
- * @my-agent/im-bridge — generic IM bridge for My Agent.
+ * @codent/im-bridge — generic IM bridge for Codent.
  *
  * Connects chat platforms (Telegram today, Slack/Discord/Feishu adapters share
  * the same {@link ChatAdapter} contract) to an AgentSession server via

@@ -18,7 +18,7 @@
  * - consolidation applies merges and deletions, and leaves everything alone
  *   when the response cannot satisfy the schema
  *
- * Run: pnpm --filter @my-agent/core run validate:memory-llm-contract
+ * Run: pnpm --filter @codent/core run validate:memory-llm-contract
  */
 
 import assert from "node:assert/strict";
@@ -28,7 +28,7 @@ import { basename, dirname, extname, isAbsolute, join, normalize, parse, resolve
 
 import { MemoryManager, consolidateMemories, extractMemories, registerCoreEnv } from "../dist/dev.mjs";
 
-const root = await mkdtemp(join(tmpdir(), "myagent-memory-llm-contract-"));
+const root = await mkdtemp(join(tmpdir(), "codent-memory-llm-contract-"));
 
 // Minimal CoreEnv backed by the real filesystem, scoped to `root`.
 registerCoreEnv({

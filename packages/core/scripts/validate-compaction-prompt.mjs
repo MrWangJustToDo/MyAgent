@@ -6,7 +6,7 @@
  * the core template structure (<previous-summary>, ## Goal, segment rules)
  * must survive future edits.
  *
- * Run: pnpm --filter @my-agent/core run validate:compaction-prompt
+ * Run: pnpm --filter @codent/core run validate:compaction-prompt
  */
 
 import assert from "node:assert/strict";

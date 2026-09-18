@@ -1,7 +1,7 @@
 /**
  * Validates emitAgentTelemetry sessionId injection and dispatch wiring.
  *
- * Run: pnpm --filter @my-agent/core run validate:emit-agent-event
+ * Run: pnpm --filter @codent/core run validate:emit-agent-event
  */
 
 import assert from "node:assert/strict";

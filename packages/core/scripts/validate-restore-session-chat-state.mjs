@@ -1,7 +1,7 @@
 /**
  * Validates mid-session restore chat alignment (clear queues + sync interaction).
  *
- * Run: pnpm --filter @my-agent/core run validate:restore-session-chat-state
+ * Run: pnpm --filter @codent/core run validate:restore-session-chat-state
  */
 import assert from "node:assert/strict";
 

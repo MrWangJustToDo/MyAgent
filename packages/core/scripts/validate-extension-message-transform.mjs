@@ -15,7 +15,7 @@
  * 4. Zero-overhead: with no transformer registered the middleware returns no config
  *    change at all.
  *
- * Run: pnpm --filter @my-agent/core run validate:extension-message-transform
+ * Run: pnpm --filter @codent/core run validate:extension-message-transform
  */
 
 import assert from "node:assert/strict";

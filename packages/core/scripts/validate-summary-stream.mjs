@@ -1,7 +1,7 @@
 /**
  * Validates SummaryStreamHub + line-buffer / display-window helpers.
  *
- * Run: pnpm --filter @my-agent/core run validate:summary-stream
+ * Run: pnpm --filter @codent/core run validate:summary-stream
  */
 
 import assert from "node:assert/strict";

@@ -7,7 +7,7 @@
  * generic notice; that an empty string opts out entirely; and that re-enabling
  * clears the notice.
  *
- * Run: pnpm --filter @my-agent/core run validate:extension-disable-notice
+ * Run: pnpm --filter @codent/core run validate:extension-disable-notice
  */
 
 import assert from "node:assert/strict";

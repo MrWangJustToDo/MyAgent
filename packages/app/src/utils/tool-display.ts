@@ -1,4 +1,4 @@
-import { getToolPresentation } from "@my-agent/core";
+import { getToolPresentation } from "@codent/core";
 import chalk from "chalk";
 
 import { COLORS } from "../theme/colors.js";
@@ -110,7 +110,7 @@ export {
   getCompactOutput,
   getDurationMs,
   getInlineSummary,
-} from "@my-agent/core";
+} from "@codent/core";
 
 export function buildToolHeader(
   toolName: string,

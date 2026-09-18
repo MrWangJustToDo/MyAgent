@@ -10,7 +10,7 @@
  *   inside the turn and reaches the summarizer, so a few-but-large-turn
  *   conversation can never get stuck.
  *
- * Run: pnpm --filter @my-agent/core run validate:auto-compact-noop
+ * Run: pnpm --filter @codent/core run validate:auto-compact-noop
  */
 import assert from "node:assert/strict";
 

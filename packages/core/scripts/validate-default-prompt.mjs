@@ -6,7 +6,7 @@
  * verification, commit discipline, code references, context efficiency,
  * proactiveness) and must not balloon past a sane length cap.
  *
- * Run: pnpm --filter @my-agent/core run validate:default-prompt
+ * Run: pnpm --filter @codent/core run validate:default-prompt
  */
 
 import assert from "node:assert/strict";

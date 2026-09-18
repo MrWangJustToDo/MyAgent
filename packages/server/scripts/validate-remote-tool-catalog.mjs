@@ -6,13 +6,13 @@
  * covers the constructor path (an initial snapshot); `doResync` and the
  * `session:tool-presentation` event go through the same `hydrateToolPresentations` call.
  *
- * Run via `pnpm --filter @my-agent/server validate:remote-tool-catalog`.
+ * Run via `pnpm --filter @codent/server validate:remote-tool-catalog`.
  */
 
 import assert from "node:assert/strict";
 
 const { RemoteSessionClient } = await import("../dist/remote-session-client.mjs");
-const core = await import("@my-agent/core");
+const core = await import("@codent/core");
 
 const ownerCatalog = [
   { name: "owner_only_tool", category: "read", keepRow: true, hasText: true },

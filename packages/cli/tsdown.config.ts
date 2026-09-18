@@ -1,12 +1,44 @@
 import { defineConfig } from "tsdown";
 
+// Same resolve-time rewrite as @codent/app: the published graph must not contain the bare
+// names `react` / `ink`, because npm does not dedupe an alias against the real package name
+// and the consumer then gets two physical copies of the renderer (two hook dispatchers → the
+// TUI renders nothing). See the note in packages/app/tsdown.config.ts for the measurements.
+const RENDERER_SPECIFIERS: Record<string, string> = {
+  react: "@my-react/react",
+  "react/jsx-runtime": "@my-react/react/jsx-runtime",
+  "react/jsx-dev-runtime": "@my-react/react/jsx-dev-runtime",
+  ink: "@my-react/react-terminal",
+};
+
+const rewriteRendererSpecifiers = () => ({
+  name: "rewrite-renderer-specifiers",
+  resolveId(source: string) {
+    const real = RENDERER_SPECIFIERS[source];
+    return real ? { id: real, external: true } : null;
+  },
+});
+
 export default defineConfig({
   entry: ["src/index.tsx"],
   format: ["esm"],
   dts: true,
   clean: true,
   shims: true,
+  plugins: [rewriteRendererSpecifiers()],
   deps: {
-    neverBundle: ["ink", "react", "react/jsx-runtime", "react/jsx-dev-runtime"],
+    // The logic layer and the rendering primitives stay real dependencies, named directly:
+    // core owns the agent loop and is shared with the server, and the renderer must resolve to
+    // ONE copy in the host process.
+    neverBundle: [
+      "@codent/core",
+      "@codent/node",
+      "@codent/server",
+      "@my-react/react",
+      "@my-react/react/jsx-runtime",
+      "@my-react/react/jsx-dev-runtime",
+      "@my-react/react-terminal",
+    ],
+    alwaysBundle: ["@codent/app"],
   },
 });

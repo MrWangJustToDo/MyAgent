@@ -2,21 +2,21 @@
  * Shared agent initialization — binds an {@link AgentSession} into the app.
  *
  * The host process owns session-plane wiring: it constructs the
- * {@link AgentSessionHost} (local via `@my-agent/core`'s
- * `createLocalAgentSessionHost`, or remote via `@my-agent/server`'s
+ * {@link AgentSessionHost} (local via `@codent/core`'s
+ * `createLocalAgentSessionHost`, or remote via `@codent/server`'s
  * `createRemoteAgentSessionHost`) and injects it here. CoreEnv / model
  * provider registration likewise happens in the host process before render —
  * this module stays free of core runtime singletons.
  */
 
-import { buildDefaultSystemPrompt, resolveModelConfigFromProvider } from "@my-agent/core";
+import { buildDefaultSystemPrompt, resolveModelConfigFromProvider } from "@codent/core";
 
 import { clearExtensionCommands, syncExtensionCommands } from "../commands";
 import { useAgent } from "../hooks/use-agent.js";
 import { useConfig } from "../hooks/use-config.js";
 
 import type { AppConfig, InitResult } from "./types.js";
-import type { AgentSession, AgentSessionHost } from "@my-agent/core";
+import type { AgentSession, AgentSessionHost } from "@codent/core";
 
 /** Wire AgentSession (+ Host) into the app store. */
 export function bindAgentSession(session: AgentSession | null, host?: AgentSessionHost | null): void {
@@ -36,7 +36,7 @@ export interface CreateAgentOptions {
   /**
    * Session plane owner, constructed by the host process (required).
    * Local: `createLocalAgentSessionHost({ manager: agentManager })`.
-   * Remote: `createRemoteAgentSessionHost(baseUrl)` (`@my-agent/server`).
+   * Remote: `createRemoteAgentSessionHost(baseUrl)` (`@codent/server`).
    */
   host: AgentSessionHost;
 }

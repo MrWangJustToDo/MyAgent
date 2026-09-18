@@ -1,7 +1,7 @@
 import type { AgentAdapter, CommandResult } from "../../adapter/types.js";
 import type { UseAgentChatReturn } from "../../hooks/use-agent-chat.js";
 import type { useUserInput } from "../../hooks/use-user-input.js";
-import type { AgentSession } from "@my-agent/core";
+import type { AgentSession } from "@codent/core";
 import type { UIMessage } from "@tanstack/ai";
 
 /**

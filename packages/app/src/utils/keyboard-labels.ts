@@ -14,7 +14,7 @@
  * - Platform comes from CoreEnv (`getPlatform`), never `process.platform`.
  */
 
-import { getEnv, hasCoreEnv } from "@my-agent/core";
+import { getEnv, hasCoreEnv } from "@codent/core";
 
 /** Cached CoreEnv platform id (`darwin`, `linux`, `win32`, …). */
 let cachedPlatform: string | undefined;

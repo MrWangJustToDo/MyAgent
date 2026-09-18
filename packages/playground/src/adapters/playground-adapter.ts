@@ -1,8 +1,8 @@
-import { clearAgentStore, createAgentFromConfig } from "@my-agent/app";
-import { agentManager, createLocalAgentSessionHost } from "@my-agent/core";
+import { clearAgentStore, createAgentFromConfig } from "@codent/app";
+import { agentManager, createLocalAgentSessionHost } from "@codent/core";
 
-import type { AgentAdapter, AppConfig, ClipboardImageResult, InitResult } from "@my-agent/app";
-import type { AgentSessionHost } from "@my-agent/core";
+import type { AgentAdapter, AppConfig, ClipboardImageResult, InitResult } from "@codent/app";
+import type { AgentSessionHost } from "@codent/core";
 
 export class PlaygroundAgentAdapter implements AgentAdapter {
   private host: AgentSessionHost | null = null;
@@ -14,7 +14,7 @@ export class PlaygroundAgentAdapter implements AgentAdapter {
     // Session plane: remote HTTP host when configured, else the in-browser
     // local manager running against the WebContainer CoreEnv.
     const host = config.remoteSession
-      ? (await import("@my-agent/server/client")).createRemoteAgentSessionHost({ baseUrl: config.remoteSession })
+      ? (await import("@codent/server/client")).createRemoteAgentSessionHost({ baseUrl: config.remoteSession })
       : createLocalAgentSessionHost({ manager: agentManager });
     const result = await createAgentFromConfig({ config, name: "playground-chat", host });
     this.host = host;

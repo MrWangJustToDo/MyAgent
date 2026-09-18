@@ -8,7 +8,7 @@
  * - a late subscriber replays retained slots
  * - disabling the extension clears its slot through the channel
  *
- * Run: pnpm --filter @my-agent/core run validate:extension-ui-channel
+ * Run: pnpm --filter @codent/core run validate:extension-ui-channel
  */
 
 import assert from "node:assert/strict";

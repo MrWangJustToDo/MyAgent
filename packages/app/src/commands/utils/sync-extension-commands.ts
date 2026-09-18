@@ -5,7 +5,7 @@
 import { clearExtensionCommands, registerExtensionCommand } from "./registry.js";
 
 import type { Command } from "./types.js";
-import type { AgentSession } from "@my-agent/core";
+import type { AgentSession } from "@codent/core";
 
 /** Split `/cmd a b` args string into argv for extension handlers. */
 export function splitExtensionCommandArgs(args: string): string[] {

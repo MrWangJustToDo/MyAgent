@@ -1,7 +1,7 @@
 /**
  * Validation for PendingMessageQueue drain modes.
  *
- * Run: pnpm --filter @my-agent/core run validate:pending-message-queue
+ * Run: pnpm --filter @codent/core run validate:pending-message-queue
  */
 
 import assert from "node:assert/strict";

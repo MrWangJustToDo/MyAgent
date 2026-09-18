@@ -19,7 +19,7 @@
  *    message of every candidate, and skips one still inside its `reservedAt`
  *    window.
  *
- * Run: pnpm --filter @my-agent/core run validate:session-store-lifecycle
+ * Run: pnpm --filter @codent/core run validate:session-store-lifecycle
  */
 
 import assert from "node:assert/strict";

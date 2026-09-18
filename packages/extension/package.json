@@ -1,6 +1,6 @@
 {
-  "name": "@my-agent/extension",
-  "description": "Browser extension for My Agent",
+  "name": "@codent/extension",
+  "description": "Browser extension for Codent",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -16,9 +16,9 @@
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.96",
-    "@my-agent/app": "workspace:*",
-    "@my-agent/core": "workspace:*",
-    "@my-agent/server": "workspace:*",
+    "@codent/app": "workspace:*",
+    "@codent/core": "workspace:*",
+    "@codent/server": "workspace:*",
     "@my-react/react": "^0.3.30",
     "@my-react/react-dom": "^0.3.30",
     "@my-react/react-terminal": "^0.0.31",

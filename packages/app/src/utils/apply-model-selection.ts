@@ -21,7 +21,7 @@ import {
   resolveModelInfoFromModelsDev,
   type AgentSession,
   type LoadedModelsState,
-} from "@my-agent/core";
+} from "@codent/core";
 import { toRaw } from "reactivity-store";
 
 import { useConfig } from "../hooks/use-config.js";

@@ -1,7 +1,7 @@
 /**
  * Validation: LSP server lifecycle — session:start/session:shutdown cleanup.
  *
- * Run: pnpm --filter @my-agent/core run validate:lsp-lifecycle
+ * Run: pnpm --filter @codent/core run validate:lsp-lifecycle
  *
  * Server startup is LAZY (triggered by an LSP tool call, not by read_file —
  * read_file only didOpen's an already-running server). This validation:
@@ -61,8 +61,8 @@ for (const p of [projectA, projectB]) {
 }
 
 // ---- Wire up ----
-const nodePkg = await import("@my-agent/node");
-const core = await import("@my-agent/core");
+const nodePkg = await import("@codent/node");
+const core = await import("@codent/core");
 const env = nodePkg.createNodeEnv({ rootPath: projectA, cwd: projectA, platform: "linux" });
 core.registerCoreEnv(env);
 

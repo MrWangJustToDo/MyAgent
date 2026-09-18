@@ -8,7 +8,7 @@
  *    max-retries) project onto the `lifecycle` channel so the numbers / give-up
  *    state stop being log-only.
  *
- * Run: pnpm --filter @my-agent/core run validate:media-missing-and-compaction
+ * Run: pnpm --filter @codent/core run validate:media-missing-and-compaction
  */
 
 import assert from "node:assert/strict";

@@ -9,7 +9,7 @@
  *
  * @example
  * ```typescript
- * import { TodoManager } from '@my-agent/core';
+ * import { TodoManager } from '@codent/core';
  *
  * const todoManager = new TodoManager();
  *

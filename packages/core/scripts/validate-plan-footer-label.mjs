@@ -1,7 +1,7 @@
 /**
  * Validation for plan Footer phase labels.
  *
- * Run: pnpm --filter @my-agent/core run validate:plan-footer-label
+ * Run: pnpm --filter @codent/core run validate:plan-footer-label
  */
 
 import assert from "node:assert/strict";

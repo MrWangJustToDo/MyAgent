@@ -5,7 +5,7 @@
  * - `memory_list` tool: list memory files (name + description from the index)
  * - `memory_read` tool: read the full content of a specific memory
  * - `memory_write` tool: create / update a memory (user preference, project fact, ...)
- * - Turn-context injection of the MEMORY.md index into its own `<ctx kind=my-agent-memory>` section
+ * - Turn-context injection of the MEMORY.md index into its own `<ctx kind=codent-memory>` section
  *   (progressive disclosure: names + descriptions are always visible; the full
  *   body is loaded on demand via `memory_read`).
  *
@@ -13,7 +13,7 @@
  * end-of-turn extraction/consolidation remain in the run lifecycle
  * (`MemoryService`), driven by the same injected `MemoryManager`. This extension
  * only owns the *presentation* layer: tools, index injection, and the `/memory`
- * command — matching how `my-agent-skills` wraps `SkillRegistry`.
+ * command — matching how `codent-skills` wraps `SkillRegistry`.
  *
  * Runtime-agnostic: all I/O goes through the injected `MemoryManager`, which
  * uses the global CoreEnv (`getEnv()`).
@@ -55,7 +55,7 @@ export interface CreateMemoryExtensionOptions {
 export function createMemoryExtension(options: CreateMemoryExtensionOptions): ExtensionAPI {
   const { memoryManager, config } = options;
   return {
-    id: "my-agent-memory",
+    id: "codent-memory",
     name: "Memory",
     version: "1.0.0",
     description:

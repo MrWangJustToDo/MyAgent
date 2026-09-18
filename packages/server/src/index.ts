@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
+import { installAgentLogProcessGuards, registerCoreEnv } from "@codent/core";
+import { createNodeEnv } from "@codent/node";
 import { serve } from "@hono/node-server";
-import { installAgentLogProcessGuards, registerCoreEnv } from "@my-agent/core";
-import { createNodeEnv } from "@my-agent/node";
 import "dotenv/config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";

@@ -1,13 +1,5 @@
 #!/usr/bin/env node
-import {
-  AdapterProvider,
-  App,
-  ConfigEditor,
-  initConfig,
-  initHighlighter,
-  configureEnv,
-  useConfig,
-} from "@my-agent/app";
+import { AdapterProvider, App, ConfigEditor, initConfig, initHighlighter, configureEnv, useConfig } from "@codent/app";
 import {
   createDirectModelProvider,
   installAgentLogProcessGuards,
@@ -16,8 +8,8 @@ import {
   registerCoreEnv,
   registerModelProvider,
   saveModelsConfig,
-} from "@my-agent/core";
-import { createNodeEnv } from "@my-agent/node";
+} from "@codent/core";
+import { createNodeEnv } from "@codent/node";
 import { config as loadEnv } from "dotenv";
 import { render } from "ink";
 import { useEffect, useState } from "react";
@@ -67,7 +59,7 @@ if (appConfig.remoteSession && (appConfig.remoteEnv || appConfig.remoteProvider)
 const remoteEnv = appConfig.remoteEnv;
 if (remoteEnv) {
   try {
-    const { createRemoteEnv } = await import("@my-agent/server/client");
+    const { createRemoteEnv } = await import("@codent/server/client");
     const remoteEnvInstance = await createRemoteEnv(remoteEnv);
     registerCoreEnv(remoteEnvInstance);
     console.log(`[cli] Connected to remote CoreEnv: ${remoteEnv} (rootPath=${remoteEnvInstance.rootPath})`);
@@ -83,7 +75,7 @@ if (remoteEnv) {
   // too, not the CLI's local one. Reuse the same remote CoreEnv client as
   // `--remote-env`; a explicit `--remote-env` above still takes precedence.
   try {
-    const { createRemoteEnv } = await import("@my-agent/server/client");
+    const { createRemoteEnv } = await import("@codent/server/client");
     const remoteEnvInstance = await createRemoteEnv(appConfig.remoteSession);
     registerCoreEnv(remoteEnvInstance);
     console.log(
@@ -118,7 +110,7 @@ if (appConfig.remoteSession && !remoteProvider && !appConfig.modelExplicit) {
 
 if (remoteProvider) {
   try {
-    const { createRemoteProvider } = await import("@my-agent/server/client");
+    const { createRemoteProvider } = await import("@codent/server/client");
     registerModelProvider(await createRemoteProvider(remoteProvider));
     console.log(`[cli] Using remote model provider: ${remoteProvider}`);
   } catch (err) {
@@ -139,7 +131,7 @@ if (remoteProvider) {
 
 if (appConfig.remoteSession) {
   // Remote session plane is distinct from CoreEnv `--remote-env`. Full RemoteSessionClient
-  // chat wiring can bind via `@my-agent/server/agent-session` when hosts opt in.
+  // chat wiring can bind via `@codent/server/agent-session` when hosts opt in.
   console.log(`[cli] Remote Agent Session configured: ${appConfig.remoteSession}`);
 }
 

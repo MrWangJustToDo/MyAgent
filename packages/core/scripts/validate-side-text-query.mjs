@@ -1,7 +1,7 @@
 /**
  * Validation for side-text-query stream accumulation (no network).
  *
- * Run: pnpm --filter @my-agent/core run validate:side-text-query
+ * Run: pnpm --filter @codent/core run validate:side-text-query
  */
 
 import { streamToText } from "@tanstack/ai";

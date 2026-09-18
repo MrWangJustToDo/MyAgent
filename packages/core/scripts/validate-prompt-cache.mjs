@@ -1,7 +1,7 @@
 /**
  * Validation for prompt-cache helpers (Anthropic breakpoints + OpenAI key + tool sort).
  *
- * Run: pnpm --filter @my-agent/core run validate:prompt-cache
+ * Run: pnpm --filter @codent/core run validate:prompt-cache
  */
 
 import assert from "node:assert/strict";

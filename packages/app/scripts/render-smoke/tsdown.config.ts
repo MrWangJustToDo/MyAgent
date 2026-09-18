@@ -3,7 +3,7 @@
  * mount the real `MessageList` / `Content` (mixed .ts/.tsx, not part of `dist`) while
  * sharing ONE module instance with the stores they read.
  *
- * Run through `pnpm --filter @my-agent/app run validate:render-smoke`.
+ * Run through `pnpm --filter @codent/app run validate:render-smoke`.
  */
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,7 +51,7 @@ export default defineConfig({
       "react",
       "react/jsx-runtime",
       "react/jsx-dev-runtime",
-      "@my-agent/core",
+      "@codent/core",
       "chalk",
       "ink-stream-markdown",
       "lodash-es",

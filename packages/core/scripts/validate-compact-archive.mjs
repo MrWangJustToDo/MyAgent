@@ -1,7 +1,7 @@
 /**
  * Validates compact transcript archive helpers (format, pointer, write/omit).
  *
- * Run: pnpm --filter @my-agent/core run validate:compact-archive
+ * Run: pnpm --filter @codent/core run validate:compact-archive
  */
 /* eslint-disable no-undef */
 import assert from "node:assert/strict";

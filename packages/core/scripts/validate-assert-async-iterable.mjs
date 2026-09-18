@@ -1,7 +1,7 @@
 /**
  * Validates assertAsyncIterable and formatAgentStreamError.
  *
- * Run: pnpm --filter @my-agent/core run validate:assert-async-iterable
+ * Run: pnpm --filter @codent/core run validate:assert-async-iterable
  */
 
 import assert from "node:assert/strict";

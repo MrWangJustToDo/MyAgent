@@ -3,7 +3,7 @@
  * Validates workspace export selection helpers.
  * Mirrors packages/playground/src/webcontainer/workspace-export-selection.ts
  *
- * Run: pnpm --filter @my-agent/playground validate:workspace-export-selection
+ * Run: pnpm --filter @codent/playground validate:workspace-export-selection
  */
 import assert from "node:assert/strict";
 /* global console: readonly */

@@ -7,7 +7,7 @@
  * `shouldSuppressStaleTextChunk` then drops every remaining TEXT delta for it — the
  * model's summary after the tool disappears. Case A is the regression; B/C are controls.
  *
- * Run via `pnpm --filter @my-agent/core validate:mid-run-tool-display`.
+ * Run via `pnpm --filter @codent/core validate:mid-run-tool-display`.
  */
 
 import { EventType } from "@tanstack/ai/client";

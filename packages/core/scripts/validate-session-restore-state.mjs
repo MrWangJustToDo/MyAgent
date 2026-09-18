@@ -15,7 +15,7 @@
  * - approvals are derived from the folded messages, keeping the recorded
  *   decision time (`approvalAt`).
  *
- * Run: pnpm --filter @my-agent/core run validate:session-restore-state
+ * Run: pnpm --filter @codent/core run validate:session-restore-state
  */
 
 import assert from "node:assert/strict";

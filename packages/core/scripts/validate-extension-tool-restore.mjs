@@ -1,7 +1,7 @@
 /**
  * Validates that disabling an extension restores what its tool registration displaced.
  *
- * Run: pnpm --filter @my-agent/core run validate:extension-tool-restore
+ * Run: pnpm --filter @codent/core run validate:extension-tool-restore
  *
  * Background. `ExtensionRegistryService.registerTool` writes straight into the agent's live
  * tools record, which is the ONLY holder of the previous tool — nothing keeps a copy of the

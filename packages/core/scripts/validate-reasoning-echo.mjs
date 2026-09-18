@@ -1,7 +1,7 @@
 /**
  * Validation for DeepSeek reasoning_content echo helpers + adapter cache.
  *
- * Run: pnpm --filter @my-agent/core run validate:reasoning-echo
+ * Run: pnpm --filter @codent/core run validate:reasoning-echo
  */
 
 import assert from "node:assert/strict";

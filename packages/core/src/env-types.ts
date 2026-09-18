@@ -1,7 +1,7 @@
 /**
  * CoreEnv companion types — errors and fs/command result shapes.
  *
- * Used by {@link CoreEnv} and tools. Implementations live in `@my-agent/node` / server.
+ * Used by {@link CoreEnv} and tools. Implementations live in `@codent/node` / server.
  */
 
 // ============================================================================

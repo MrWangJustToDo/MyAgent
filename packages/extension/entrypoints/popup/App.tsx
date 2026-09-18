@@ -1,9 +1,9 @@
-import { DEFAULT_BASE_URLS, DEFAULT_LOCAL_OPENAI_BASE_URL } from "@my-agent/core";
+import { DEFAULT_BASE_URLS, DEFAULT_LOCAL_OPENAI_BASE_URL } from "@codent/core";
 import { useCallback, useEffect, useState } from "react";
 
 import { checkServerHealth, useServerConfig } from "@/hooks/useServerConfig";
 
-import type { ModelStyle } from "@my-agent/core";
+import type { ModelStyle } from "@codent/core";
 import type { ChangeEvent } from "react";
 
 const STYLES = [

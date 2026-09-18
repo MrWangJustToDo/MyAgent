@@ -1,7 +1,7 @@
 /**
  * Validates summary-first message-chain projection.
  *
- * Run: pnpm --filter @my-agent/core run validate:message-chain-projection
+ * Run: pnpm --filter @codent/core run validate:message-chain-projection
  */
 import { convertMessagesToModelMessages } from "@tanstack/ai";
 import assert from "node:assert/strict";

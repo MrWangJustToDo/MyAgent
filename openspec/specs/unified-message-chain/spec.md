@@ -68,7 +68,7 @@ The transcript SHALL render compaction summary rows as checkpoint UI. `<turn_con
 The system SHALL NOT export `AgentContext` or APIs that mirror the old dual-store compact model (`getSummaryMessage`, `getCompactIndex`, `syncContextFromUIMessages`, Context `getMessagesForLLM`). Session persistence SHALL NOT write `summaryMessage` or `compactIndex`.
 
 #### Scenario: Public API
-- **WHEN** hosts import `@my-agent/core`
+- **WHEN** hosts import `@codent/core`
 - **THEN** conversation history is accessed via the UI channel / session `uiMessages`, not `AgentContext`
 
 #### Scenario: No compact field persistence

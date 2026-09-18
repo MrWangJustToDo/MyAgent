@@ -1,0 +1,29 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true,
+    // Off on purpose: tsdown forces `sourcemap: true` whenever the tsconfig sets
+    // `declarationMap`, which would grow this 700-chunk bundle by ~35 MB of .map
+    // files. Declaration maps for a fully bundled CLI entry have no consumer.
+    "declarationMap": false,
+    "composite": true,
+    "noEmit": false,
+    // `react` / `ink` are build-time specifier aliases, not installed packages:
+    // the app layer removed the npm aliases (npm does not dedupe an alias against
+    // the real name, so a published graph gets two copies of the renderer) and
+    // tsdown rewrites the specifiers at resolve time. Types therefore need their
+    // own mapping — `react` keeps the real @types/react, while `ink` resolves to
+    // the terminal renderer's bundled declarations.
+    "paths": {
+      "react": ["./node_modules/@types/react"],
+      "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"],
+      "react/jsx-dev-runtime": ["./node_modules/@types/react/jsx-dev-runtime"],
+      "ink": ["./node_modules/@my-react/react-terminal"],
+      "ink/jsx-runtime": ["./node_modules/@my-react/react-terminal/jsx-runtime"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

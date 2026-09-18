@@ -6,7 +6,7 @@
  * - `session.resume` and `session.new` re-emit the retained `state` channel, so a
  *   live subscriber sees the switch (not just the command caller).
  *
- * Run: pnpm --filter @my-agent/core run validate:session-identity
+ * Run: pnpm --filter @codent/core run validate:session-identity
  */
 
 import assert from "node:assert/strict";

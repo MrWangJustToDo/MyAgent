@@ -6,17 +6,17 @@ See @AGENTS.md for full architecture, code conventions, and detailed guidelines.
 
 ## Quick Reference
 
-**Project:** "My Agent" — an AI coding agent built on TanStack AI. pnpm monorepo:
+**Project:** "Codent" — an AI coding agent built on TanStack AI. pnpm monorepo:
 
-- **`@my-agent/core`** — Runtime-agnostic core: ManagedAgent, AgentSession, tools, models, CoreEnv
-- **`@my-agent/app`** — Shared UI: React, hooks, commands. Session-only for agent control
-- **`@my-agent/cli`** — Terminal host using @my-react/react-terminal
-- **`@my-agent/node`** — Node.js CoreEnv implementation (filesystem, shell, OS sandbox, code-mode `createIsolateDriver` via `isolated-vm`)
-- **`@my-agent/server`** — CoreEnv HTTP + provider proxy + Agent Session routes
-- **`@my-agent/extension`** — Chrome extension host using WXT (needs a server)
-- **`@my-agent/playground`** — In-browser WebContainer host
-- **`@my-agent/mcp-server`** — MCP server for external tool integration
-- **`@my-agent/im-bridge`** — Generic IM bridge (Telegram adapter); AgentSession client — remote mode (server resolves model) or in-process local mode
+- **`@codent/core`** — Runtime-agnostic core: ManagedAgent, AgentSession, tools, models, CoreEnv
+- **`@codent/app`** — Shared UI: React, hooks, commands. Session-only for agent control
+- **`@codent/cli`** — Terminal host using @my-react/react-terminal
+- **`@codent/node`** — Node.js CoreEnv implementation (filesystem, shell, OS sandbox, code-mode `createIsolateDriver` via `isolated-vm`)
+- **`@codent/server`** — CoreEnv HTTP + provider proxy + Agent Session routes
+- **`@codent/extension`** — Chrome extension host using WXT (needs a server)
+- **`@codent/playground`** — In-browser WebContainer host
+- **`@codent/mcp-server`** — MCP server for external tool integration
+- **`@codent/im-bridge`** — Generic IM bridge (Telegram adapter); AgentSession client — remote mode (server resolves model) or in-process local mode
 
 ## Commands
 
@@ -50,8 +50,8 @@ After completing a task, validate **once** (not after every edit): format/lint *
 
 ```
 Hosts (CLI / Extension / Playground)
-  └─ App Layer (@my-agent/app) — Session-only UI, AgentAdapter
-      └─ Core Layer (@my-agent/core) — ManagedAgent, AgentSession, CoreEnv
+  └─ App Layer (@codent/app) — Session-only UI, AgentAdapter
+      └─ Core Layer (@codent/core) — ManagedAgent, AgentSession, CoreEnv
           └─ CoreEnv Adapter (node local | server remote | WebContainer)
 ```
 

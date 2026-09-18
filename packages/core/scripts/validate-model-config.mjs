@@ -1,7 +1,7 @@
 /**
  * Unit validation for model connection resolution (no network).
  *
- * Run: pnpm --filter @my-agent/core run validate:model-config
+ * Run: pnpm --filter @codent/core run validate:model-config
  */
 
 import assert from "node:assert/strict";

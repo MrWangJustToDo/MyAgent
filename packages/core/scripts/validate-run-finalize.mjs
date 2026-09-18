@@ -1,7 +1,7 @@
 /**
  * Validates turn-level finalize is idempotent and clears continuation marks.
  *
- * Run: pnpm --filter @my-agent/core run validate:run-finalize
+ * Run: pnpm --filter @codent/core run validate:run-finalize
  */
 
 import assert from "node:assert/strict";

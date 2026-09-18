@@ -1,7 +1,7 @@
 /**
  * Validates media dehydrate/hydrate round-trip and session persistence.
  *
- * Run: pnpm --filter @my-agent/core run validate:media-store
+ * Run: pnpm --filter @codent/core run validate:media-store
  */
 
 /* eslint-disable no-undef */

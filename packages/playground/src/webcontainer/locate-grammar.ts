@@ -7,10 +7,10 @@
  * `LANGUAGE_TO_GRAMMAR` are globbed, so build output stays small.
  *
  * Injected into CoreEnv as `locateTreeSitterGrammar`, consumed by
- * `@my-agent/core`'s TreeSitterManager (`locateGrammar`).
+ * `@codent/core`'s TreeSitterManager (`locateGrammar`).
  */
 
-import type { CoreEnv } from "@my-agent/core";
+import type { CoreEnv } from "@codent/core";
 
 /**
  * Same-origin URLs for each grammar, resolved by Vite at build time.

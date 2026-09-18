@@ -1,7 +1,7 @@
 /**
- * Fail if @my-agent/app UI code imports forbidden @my-agent/core runtime APIs.
+ * Fail if @codent/app UI code imports forbidden @codent/core runtime APIs.
  *
- * Run: pnpm --filter @my-agent/app run validate:core-imports
+ * Run: pnpm --filter @codent/app run validate:core-imports
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -35,7 +35,7 @@ const FORBIDDEN_IDENTIFIERS = [
 ];
 
 const CORE_IMPORT_RE =
-  /(?:import\s+(?:type\s+)?(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+|import\s*\(\s*)["']@my-agent\/core(?:\/[^"']*)?["']/;
+  /(?:import\s+(?:type\s+)?(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+|import\s*\(\s*)["']@codent\/core(?:\/[^"']*)?["']/;
 
 function walkTsFiles(dir) {
   const out = [];
@@ -72,8 +72,8 @@ for (const file of walkTsFiles(srcRoot)) {
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (!CORE_IMPORT_RE.test(line) && !line.includes("@my-agent/core")) continue;
-    // Multi-line import: check following lines until from "@my-agent/core"
+    if (!CORE_IMPORT_RE.test(line) && !line.includes("@codent/core")) continue;
+    // Multi-line import: check following lines until from "@codent/core"
     let block = line;
     if (line.includes("import") && line.includes("{") && !line.includes("}")) {
       for (let j = i + 1; j < Math.min(i + 12, lines.length); j++) {
@@ -81,7 +81,7 @@ for (const file of walkTsFiles(srcRoot)) {
         if (lines[j].includes("}")) break;
       }
     }
-    if (!block.includes("@my-agent/core")) continue;
+    if (!block.includes("@codent/core")) continue;
 
     const names = extractNamedImports(block);
     for (const name of names) {
@@ -100,7 +100,7 @@ for (const file of walkTsFiles(srcRoot)) {
 }
 
 if (violations.length > 0) {
-  console.error("@my-agent/app forbidden @my-agent/core imports:");
+  console.error("@codent/app forbidden @codent/core imports:");
   for (const v of violations) {
     console.error(`  ${v.file}:${v.line}  imports "${v.name}"`);
   }

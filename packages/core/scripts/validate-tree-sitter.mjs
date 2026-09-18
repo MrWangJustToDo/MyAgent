@@ -1,7 +1,7 @@
 /**
  * Validation: tree-sitter grammar layer (node's locateTreeSitterGrammar).
  *
- * Run: pnpm --filter @my-agent/core run validate:tree-sitter
+ * Run: pnpm --filter @codent/core run validate:tree-sitter
  *
  * Verifies the same mechanism the LSP extension's TreeSitterManager relies on:
  *   - locateTreeSitterGrammar resolves real .wasm grammar bytes from tree-sitter-wasms
@@ -14,13 +14,13 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
-const nodePkg = await import("@my-agent/node");
+const nodePkg = await import("@codent/node");
 const env = nodePkg.createNodeEnv({ rootPath: "/tmp", cwd: "/tmp", platform: "linux" });
 
-// web-tree-sitter is a dependency of @my-agent/node (not hoisted to repo root),
+// web-tree-sitter is a dependency of @codent/node (not hoisted to repo root),
 // so resolve it relative to the node package. Use createRequire from the resolved
-// @my-agent/node module to find it in the pnpm store.
-const nodeModulePath = (await import.meta.resolve("@my-agent/node")).replace("file://", "");
+// @codent/node module to find it in the pnpm store.
+const nodeModulePath = (await import.meta.resolve("@codent/node")).replace("file://", "");
 const req = createRequire(nodeModulePath);
 const webTreeSitterUrl = req.resolve("web-tree-sitter");
 const { Parser, Language } = await import(webTreeSitterUrl);

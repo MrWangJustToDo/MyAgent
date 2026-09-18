@@ -1,7 +1,7 @@
 /**
  * Validates mid-run queue deferral (pumpDepth vs stale status).
  *
- * Run: pnpm --filter @my-agent/core run validate:pump-continuation
+ * Run: pnpm --filter @codent/core run validate:pump-continuation
  */
 import assert from "node:assert/strict";
 

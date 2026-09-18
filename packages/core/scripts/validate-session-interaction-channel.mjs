@@ -4,7 +4,7 @@
  * terminal/approved calls excluded) plus the channel/meta wiring so hosts can
  * stop re-scanning messages for pending approvals / `ask_user`.
  *
- * Run: pnpm --filter @my-agent/core run validate:session-interaction-channel
+ * Run: pnpm --filter @codent/core run validate:session-interaction-channel
  */
 
 import assert from "node:assert/strict";

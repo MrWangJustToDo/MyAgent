@@ -14,10 +14,10 @@
  * a store + event handler.
  */
 
-import { getToolPresentation } from "@my-agent/core";
+import { getToolPresentation } from "@codent/core";
 import { createState } from "reactivity-store";
 
-import type { AgentEvent } from "@my-agent/core";
+import type { AgentEvent } from "@codent/core";
 
 // ============================================================================
 // Types

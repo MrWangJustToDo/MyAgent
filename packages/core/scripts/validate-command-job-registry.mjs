@@ -3,7 +3,7 @@
  * per-job log: creation, arrival order, stderr marking, terminal footer,
  * unbounded size, eviction/teardown deletion, stale sweep and degraded hosts.
  *
- * Run: pnpm --filter @my-agent/core run validate:command-job-registry
+ * Run: pnpm --filter @codent/core run validate:command-job-registry
  */
 
 import assert from "node:assert/strict";

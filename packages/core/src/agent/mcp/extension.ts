@@ -31,7 +31,7 @@ export interface McpExtensionConfig {
 export function createMcpExtension(options: CreateMcpExtensionOptions): ExtensionAPI {
   const { mcpManager, configPath } = options;
   return {
-    id: "my-agent-mcp",
+    id: "codent-mcp",
     name: "MCP",
     version: "1.0.0",
     description:

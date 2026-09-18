@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Mock LSP server for validating @my-agent LSP integration.
+ * Mock LSP server for validating @codent LSP integration.
  *
  * Speaks LSP over stdio (Content-Length framed JSON-RPC). Tracks opened
  * documents and emits `textDocument/publishDiagnostics` for any document whose

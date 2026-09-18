@@ -1,4 +1,4 @@
-import type { AgentIterationState } from "@my-agent/core";
+import type { AgentIterationState } from "@codent/core";
 
 /** The frozen pair a finished `task` part carries in its output. */
 export interface TaskTurnCounts {

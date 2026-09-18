@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ReactNode } from "react";
 
-const SPLIT_STORAGE_KEY = "my-agent-playground-split";
+const SPLIT_STORAGE_KEY = "codent-playground-split";
 
 interface SplitPaneProps {
   left: ReactNode;

@@ -1,6 +1,6 @@
-# @my-agent/core — Runtime Architecture
+# @codent/core — Runtime Architecture
 
-This document describes how `@my-agent/core` boots, initializes agents, and runs the main loops: session, tools (including approval), compaction, and memory.
+This document describes how `@codent/core` boots, initializes agents, and runs the main loops: session, tools (including approval), compaction, and memory.
 
 For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports see [src/index.ts](./src/index.ts).
 
@@ -41,7 +41,7 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 └────────────────────────────┬────────────────────────────────────┘
                              │ getSnapshot / dispatch / subscribe
 ┌────────────────────────────▼────────────────────────────────────┐
-│ @my-agent/core                                                  │
+│ @codent/core                                                  │
 │  AgentSession ← AgentEventBus channel projection (AGENT_EVENT_META)  │
 │  AgentManager ──► ManagedAgent (run semantics unchanged)         │
 │  AgentEventBus (root) ──► Event→Log (only "*" observer consumer)    │
@@ -69,7 +69,7 @@ packages/cli/src/index.tsx
   render(<App />)
 ```
 
-**Rule:** `registerCoreEnv()` must run before any `@my-agent/core` API that touches filesystem, shell, or platform. `registerModelProvider()` must run before agent creation / `resolveModelConfigFromProvider`.
+**Rule:** `registerCoreEnv()` must run before any `@codent/core` API that touches filesystem, shell, or platform. `registerModelProvider()` must run before agent creation / `resolveModelConfigFromProvider`.
 
 ### 1.2 App agent creation
 
@@ -93,7 +93,7 @@ packages/app/src/adapter/create-agent.ts
 
 ### 1.4 Public vs internal APIs
 
-| Symbol                                                            | Exported from `@my-agent/core`?                                                     |
+| Symbol                                                            | Exported from `@codent/core`?                                                     |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | `agentManager`, `AgentManager`                                    | Yes — bootstrap / CLI; **UI hosts must use AgentSession**                           |
 | `ManagedAgent`, `ManagedAgentConfig`                              | Yes — bootstrap only; app forbids importing ManagedAgent                            |
@@ -163,7 +163,7 @@ agent-manager.ts
 | 7    | `setCompactionConfig` from model context window                                                                                                                                                                                                                                             |
 | 8    | Create `McpManager` + `MemoryManager` data layers (connected / registered later by the built-in extensions below)                                                                                                                                                                           |
 | 9    | `ExtensionLoader` / `ExtensionRunner` — scan `.agents/extension` then `~/.agents/extension` (plus `AGENT_EXTENSION_DIRS` / `config.extensionDirs` / `--extension-dirs`); programmatic `config.extensions` last                                                                              |
-| 10   | Built-in extensions through the runner — LSP (`my-agent-lsp`), Skills (`my-agent-skills`), Memory (`my-agent-memory`), MCP (`my-agent-mcp`: `McpManager.initialize` on activate, tools kept as `mcp__<server>_<tool>` with multimodal `content[]`, `/mcp` command; deactivate → `shutdown`) |
+| 10   | Built-in extensions through the runner — LSP (`codent-lsp`), Skills (`codent-skills`), Memory (`codent-memory`), MCP (`codent-mcp`: `McpManager.initialize` on activate, tools kept as `mcp__<server>_<tool>` with multimodal `content[]`, `/mcp` command; deactivate → `shutdown`) |
 | 11   | `SessionStore` → `setSessionStore({ modelStyle, model })`                                                                                                                                                                                                                                   |
 
 **Subagent** (`parentId` set): inherits parent config via `spawnSubagent`; skips docs, skills, MCP, memory, extensions, session, and most root-only tools.
@@ -339,7 +339,7 @@ no error and no other guard noticing. Rules:
   compact, memory extraction, run-outcome previews), over the agent's single `WireProjectionCache`. A second
   projection is what would let a reader disagree with the window the model actually receives.
 
-Validate: `pnpm --filter @my-agent/core run validate:message-ops-purity`.
+Validate: `pnpm --filter @codent/core run validate:message-ops-purity`.
 
 TanStack runs tools sequentially but emits batched `TOOL_CALL_END` results only after the whole tool phase. `early-tool-result-ui` calls `AgentUIChannel.addToolResult` in `onAfterToolCall` so finished tools (e.g. the first of two `task` calls) show complete while later tools still run. The later stream chunks re-apply the same output idempotently.
 
@@ -367,7 +367,7 @@ Status logic is centralized in `AgentStatusController` (`managers/agent-status-c
 
 ## 4. Tool approval flow
 
-Core **declares** which tools need approval and **owns agent status** during the approval pause. **Execution blocking** and resume are still handled by TanStack AI + `@my-agent/app` (`addToolApprovalResponse`).
+Core **declares** which tools need approval and **owns agent status** during the approval pause. **Execution blocking** and resume are still handled by TanStack AI + `@codent/app` (`addToolApprovalResponse`).
 
 ### 4.1 Core: `needsApproval: true` + status middleware
 
@@ -736,7 +736,7 @@ Recovery / continuation always re-reads `managed.ui.getMessages()` (not a closed
 ```
 MemoryManager.initialize()     // .agents/memory/*.md + MEMORY.md
 createMemoryExtension → ctx.registerContextProvider({ content: () => <memory_index> })
-collectBeforeAgentStart (per user turn) → <ctx kind=my-agent-memory> section
+collectBeforeAgentStart (per user turn) → <ctx kind=codent-memory> section
 ```
 
 The memory index (`<memory_index>`) is **not** frozen into the system prompt — it is
@@ -938,7 +938,7 @@ The ExtensionEventBus also carries **session lifecycle events** (distinct from t
 
 There is no system-prompt append channel (`extension_system_append` was removed): extensions inject exclusively through `registerContextProvider`, so the frozen system prompt stays byte-stable and cacheable.
 
-## Repo demos live in `examples/extensions/` and are **opt-in** via `AGENT_EXTENSION_DIRS`, `ManagedAgentConfig.extensionDirs`, or CLI `--extension-dirs` (not in core defaults). Extension `registerCommand()` is mirrored onto `ManagedAgent` and synced into app slash commands after bootstrap (`syncExtensionCommands`). Built-in names (`/help`, …) win over extension conflicts. `registerTool()` converts definitions via `defineServerTool` before they enter the TanStack tool set. Tool schemas may use **`ctx.z`** (host Zod) or any Standard-Schema / JSON-Schema-compliant schema (the `inputSchema`/`outputSchema` type is the widened `SchemaInput`). `tool:after:*` interceptors can set `event.payload.modifiedResult` to replace the model-facing result. `ExtensionUI.render(surface, key, payload)` publishes a `render` notification into a named host surface (currently `footer`, rendered as the bottom-most footer region) — the payload is either raw text (ANSI sequences and line breaks preserved) or a generic layout tree built from the closed primitive set `text` / `row` / `column` / `box`, and the host renders it with a single generic renderer. There are deliberately **no predefined extension components**: no status API, no widget vocabulary, no confirm dialog, no color helper. Slots are keyed (extensions never overwrite one another), retained so late subscribers reconcile, cleared when the owning extension is disabled/destroyed, and coalesced (~100ms) with identical-payload dedupe. `ctx.ui.getContext()` returns a live snapshot (model / status / usage / workspace / session name / mode) that is also pushed to subscribers as a `context` notification when relevant state changes; `ctx.ui.notify(message, level)` stays the host-native notification path. Each `ExtensionContext` also exposes `ctx.coreEnv` (the runtime CoreEnv: `rootPath`, `fs`, `runCommand`, `exec`, `fetch`, `path`, `getEnv`) so extensions do real I/O without importing host-specific APIs — `agent-factory.ts` wires it from the global `getEnv()`. `ExtensionRunner.getExtensionInfos()` + `setEnabled(id, enabled)` power the app **Extensions panel** (`Ctrl+Y`, list / toggle enable-disable); disabling calls `deactivate()` and unregisters the extension's tools, commands, interceptors, and turn-context providers (wired via `onUnregisterTool`/`onUnregisterCommand` → `ManagedAgent.unregisterExtensionTool/Command`). Tool unregistration **restores what the registration shadowed** rather than deleting the name: `ExtensionRegistryService` keeps a **stack per tool name** (bottom = what was there before the first extension, top = live), where each entry stores its own tool so nothing has to remember what it covered. Disabling an extension removes that owner's entries and re-reads the top, which is the same operation whether the owner was live or buried — so a disable that hands the name back to an earlier extension and one that removes it outright are one code path. That single operation is what makes the runner unable to get the case wrong: it reports one `onUnregisterTool(name, ownerId)` per registration and keeps **no ownership map of its own** (a per-runner `name → owner` map cannot answer "is this name still mine?" — two agents loading the same extension share an id — so asking it either deleted a live owner's tool or left the built-in shadowed). That is why disabling an extension that shadowed `read_file` gives the built-in back instead of removing it until restart. The model-output handler and the **presentation descriptor** are stacked by the same owner (`ToModelOutputRegistry`, `presentation/registry.ts`), and `defineServerTool` / `defineClientTool` pass the registering extension as `ownerId` so both are dropped with it and the restored tool's own shaping and display flags take over again — releasing a buried owner leaves the surviving owner's descriptor alone (clearing the whole entry would leave a live tool described by the fallback table, or by nothing, which drops its historical rows out of the compact view). The tool stack itself is per agent, and the two process-global registries are keyed by an owner id that `ManagedAgent` **namespaces by agent** (`agentId:extensionId`) — an extension loaded onto two agents offers the same id twice, and without that scope a disable on one agent released the other's handler and descriptor as well. Scope is applied at the `ManagedAgent` boundary rather than in `defineServerTool` because that is the only place that knows which agent a registration belongs to (the tool factories are shared and never told). Validate: `pnpm --filter @my-agent/core run validate:extension-tool-restore`.
+## Repo demos live in `examples/extensions/` and are **opt-in** via `AGENT_EXTENSION_DIRS`, `ManagedAgentConfig.extensionDirs`, or CLI `--extension-dirs` (not in core defaults). Extension `registerCommand()` is mirrored onto `ManagedAgent` and synced into app slash commands after bootstrap (`syncExtensionCommands`). Built-in names (`/help`, …) win over extension conflicts. `registerTool()` converts definitions via `defineServerTool` before they enter the TanStack tool set. Tool schemas may use **`ctx.z`** (host Zod) or any Standard-Schema / JSON-Schema-compliant schema (the `inputSchema`/`outputSchema` type is the widened `SchemaInput`). `tool:after:*` interceptors can set `event.payload.modifiedResult` to replace the model-facing result. `ExtensionUI.render(surface, key, payload)` publishes a `render` notification into a named host surface (currently `footer`, rendered as the bottom-most footer region) — the payload is either raw text (ANSI sequences and line breaks preserved) or a generic layout tree built from the closed primitive set `text` / `row` / `column` / `box`, and the host renders it with a single generic renderer. There are deliberately **no predefined extension components**: no status API, no widget vocabulary, no confirm dialog, no color helper. Slots are keyed (extensions never overwrite one another), retained so late subscribers reconcile, cleared when the owning extension is disabled/destroyed, and coalesced (~100ms) with identical-payload dedupe. `ctx.ui.getContext()` returns a live snapshot (model / status / usage / workspace / session name / mode) that is also pushed to subscribers as a `context` notification when relevant state changes; `ctx.ui.notify(message, level)` stays the host-native notification path. Each `ExtensionContext` also exposes `ctx.coreEnv` (the runtime CoreEnv: `rootPath`, `fs`, `runCommand`, `exec`, `fetch`, `path`, `getEnv`) so extensions do real I/O without importing host-specific APIs — `agent-factory.ts` wires it from the global `getEnv()`. `ExtensionRunner.getExtensionInfos()` + `setEnabled(id, enabled)` power the app **Extensions panel** (`Ctrl+Y`, list / toggle enable-disable); disabling calls `deactivate()` and unregisters the extension's tools, commands, interceptors, and turn-context providers (wired via `onUnregisterTool`/`onUnregisterCommand` → `ManagedAgent.unregisterExtensionTool/Command`). Tool unregistration **restores what the registration shadowed** rather than deleting the name: `ExtensionRegistryService` keeps a **stack per tool name** (bottom = what was there before the first extension, top = live), where each entry stores its own tool so nothing has to remember what it covered. Disabling an extension removes that owner's entries and re-reads the top, which is the same operation whether the owner was live or buried — so a disable that hands the name back to an earlier extension and one that removes it outright are one code path. That single operation is what makes the runner unable to get the case wrong: it reports one `onUnregisterTool(name, ownerId)` per registration and keeps **no ownership map of its own** (a per-runner `name → owner` map cannot answer "is this name still mine?" — two agents loading the same extension share an id — so asking it either deleted a live owner's tool or left the built-in shadowed). That is why disabling an extension that shadowed `read_file` gives the built-in back instead of removing it until restart. The model-output handler and the **presentation descriptor** are stacked by the same owner (`ToModelOutputRegistry`, `presentation/registry.ts`), and `defineServerTool` / `defineClientTool` pass the registering extension as `ownerId` so both are dropped with it and the restored tool's own shaping and display flags take over again — releasing a buried owner leaves the surviving owner's descriptor alone (clearing the whole entry would leave a live tool described by the fallback table, or by nothing, which drops its historical rows out of the compact view). The tool stack itself is per agent, and the two process-global registries are keyed by an owner id that `ManagedAgent` **namespaces by agent** (`agentId:extensionId`) — an extension loaded onto two agents offers the same id twice, and without that scope a disable on one agent released the other's handler and descriptor as well. Scope is applied at the `ManagedAgent` boundary rather than in `defineServerTool` because that is the only place that knows which agent a registration belongs to (the tool factories are shared and never told). Validate: `pnpm --filter @codent/core run validate:extension-tool-restore`.
 
 ## 9. End-to-end run diagram
 
@@ -994,7 +994,7 @@ executeManagedAgentRun
 
 Domain-owned tools live next to their domain (same pattern as `subagent/begin-summary-tool` and `subagent/task-tool`). Universal workspace tools stay under `agent/tools/`.
 
-**Verification contract:** `create_plan` / `update_plan` require a non-empty `verification` checklist (content quality is prompt guidance, not a hardcoded command blacklist). Plan markdown gets a `**Verification:**` section. In retro, `complete_plan` requires `verificationResults: { item, passed, evidence }[]` covering every parsed checklist item (all `passed: true`). Legacy plans with no Verification section accept a single passing smoke/N/A result. User `/mode done` bypasses the agent gate. Helpers: `parseVerificationItemsFrom*`, `gateCompletePlanVerification`. Validate: `pnpm --filter @my-agent/core run validate:plan-verification`.
+**Verification contract:** `create_plan` / `update_plan` require a non-empty `verification` checklist (content quality is prompt guidance, not a hardcoded command blacklist). Plan markdown gets a `**Verification:**` section. In retro, `complete_plan` requires `verificationResults: { item, passed, evidence }[]` covering every parsed checklist item (all `passed: true`). Legacy plans with no Verification section accept a single passing smoke/N/A result. User `/mode done` bypasses the agent gate. Helpers: `parseVerificationItemsFrom*`, `gateCompletePlanVerification`. Validate: `pnpm --filter @codent/core run validate:plan-verification`.
 
 ---
 
@@ -1023,42 +1023,42 @@ Domain-owned tools live next to their domain (same pattern as `subagent/begin-su
 | Tools               | `agent/tools/*.ts` (universal), `agent/tools/runtime/define-tool.ts`; domain tools under `plan/` / `skills/` / `subagent/` / `todo/`                     |
 | Subagent            | `agent/subagent/run-subagent.ts`, `agent/subagent/task-tool.ts`                                                                              |
 | Models              | `models/model-config.ts`, `models/adapter-factory.ts`, `models/prompt-cache.ts`                                                              |
-| CoreEnv             | `env.ts` (+ `@my-agent/node` / `@my-agent/server`)                                                                                           |
+| CoreEnv             | `env.ts` (+ `@codent/node` / `@codent/server`)                                                                                           |
 
 ---
 
 ## 12. Validation scripts
 
 ```bash
-pnpm --filter @my-agent/core run validate:emit-agent-event
-pnpm --filter @my-agent/core run validate:event-log-bridge
-pnpm --filter @my-agent/core run validate:extensions-middleware
-pnpm --filter @my-agent/core run validate:agent-ui-channel
-pnpm --filter @my-agent/core run validate:suppress-replayed-tool-chunks
-pnpm --filter @my-agent/core run validate:early-tool-result-ui
-pnpm --filter @my-agent/core run validate:extension-prompt-hooks
-pnpm --filter @my-agent/core run validate:extension-pi-like
-pnpm --filter @my-agent/core run validate:streaming-scope
-pnpm --filter @my-agent/core run validate:summary-stream
-pnpm --filter @my-agent/core run validate:local-agent-session
-pnpm --filter @my-agent/core run validate:run-agent-skeleton
-pnpm --filter @my-agent/core run validate:tanstack-tools
-pnpm --filter @my-agent/core run validate:compaction-messages
-pnpm --filter @my-agent/core run validate:message-chain-projection
-pnpm --filter @my-agent/core run validate:suppress-messages-snapshot
-pnpm --filter @my-agent/core run validate:reactive-compact
-pnpm --filter @my-agent/core run validate:run-stream-recovery
-pnpm --filter @my-agent/core run validate:agent-run-finalization
-pnpm --filter @my-agent/core run validate:agent-managers-boundary
-pnpm --filter @my-agent/core run validate:models-managers-boundary
-pnpm --filter @my-agent/core run validate:agent-status
-pnpm --filter @my-agent/core run validate:prompt-cache
-pnpm --filter @my-agent/core run validate:subagent-run-stats
-pnpm --filter @my-agent/core run validate:model-config
-pnpm --filter @my-agent/core run validate:tool-phase-utils
-pnpm --filter @my-agent/core run validate:session-sync-tracker
-pnpm --filter @my-agent/core run validate:tool-approval-resume
-pnpm --filter @my-agent/core run validate:restore-session-chat-state
+pnpm --filter @codent/core run validate:emit-agent-event
+pnpm --filter @codent/core run validate:event-log-bridge
+pnpm --filter @codent/core run validate:extensions-middleware
+pnpm --filter @codent/core run validate:agent-ui-channel
+pnpm --filter @codent/core run validate:suppress-replayed-tool-chunks
+pnpm --filter @codent/core run validate:early-tool-result-ui
+pnpm --filter @codent/core run validate:extension-prompt-hooks
+pnpm --filter @codent/core run validate:extension-pi-like
+pnpm --filter @codent/core run validate:streaming-scope
+pnpm --filter @codent/core run validate:summary-stream
+pnpm --filter @codent/core run validate:local-agent-session
+pnpm --filter @codent/core run validate:run-agent-skeleton
+pnpm --filter @codent/core run validate:tanstack-tools
+pnpm --filter @codent/core run validate:compaction-messages
+pnpm --filter @codent/core run validate:message-chain-projection
+pnpm --filter @codent/core run validate:suppress-messages-snapshot
+pnpm --filter @codent/core run validate:reactive-compact
+pnpm --filter @codent/core run validate:run-stream-recovery
+pnpm --filter @codent/core run validate:agent-run-finalization
+pnpm --filter @codent/core run validate:agent-managers-boundary
+pnpm --filter @codent/core run validate:models-managers-boundary
+pnpm --filter @codent/core run validate:agent-status
+pnpm --filter @codent/core run validate:prompt-cache
+pnpm --filter @codent/core run validate:subagent-run-stats
+pnpm --filter @codent/core run validate:model-config
+pnpm --filter @codent/core run validate:tool-phase-utils
+pnpm --filter @codent/core run validate:session-sync-tracker
+pnpm --filter @codent/core run validate:tool-approval-resume
+pnpm --filter @codent/core run validate:restore-session-chat-state
 ```
 
 Full package validation: `pnpm build:core` + `pnpm typecheck` (core tools typecheck clean as of recent fixes).

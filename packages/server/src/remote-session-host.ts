@@ -8,7 +8,7 @@
 
 import { RemoteSessionClient } from "./remote-session-client.js";
 
-import type { AgentSessionHost, AgentSessionSnapshot } from "@my-agent/core";
+import type { AgentSessionHost, AgentSessionSnapshot } from "@codent/core";
 
 function joinUrl(base: string, path: string): string {
   return `${base.replace(/\/$/, "")}${path}`;

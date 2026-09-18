@@ -5,7 +5,7 @@
  * read-only delegation boundary, a language-matching instruction, structured
  * result guidance, and must not balloon past a sane length cap.
  *
- * Run: pnpm --filter @my-agent/core run validate:subagent-prompt
+ * Run: pnpm --filter @codent/core run validate:subagent-prompt
  */
 
 import assert from "node:assert/strict";

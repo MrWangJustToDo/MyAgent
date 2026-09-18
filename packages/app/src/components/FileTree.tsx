@@ -7,7 +7,7 @@ import { buildDiffTreeItems, type FlatTreeItem } from "../utils/workspace-diff-t
 import { joinWorkspacePath, workspaceRelativePath } from "../utils/workspace-path.js";
 
 import type { WorkspaceFileDiffStat } from "../utils/workspace-diff-stats.js";
-import type { FileEntry } from "@my-agent/core";
+import type { FileEntry } from "@codent/core";
 
 // ============================================================================
 // Dir Cache
@@ -145,7 +145,7 @@ export function useFileTree(rootPath: string): {
       return;
     }
     try {
-      const { getEnv } = await import("@my-agent/core");
+      const { getEnv } = await import("@codent/core");
       const entries = sortEntries(await getEnv().fs.readdir(path));
       dirCache.set(path, entries);
       setDirData((prev) => new Map(prev).set(path, entries));

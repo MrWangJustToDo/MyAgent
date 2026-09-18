@@ -1,4 +1,4 @@
-import { type LoadedModelsState } from "@my-agent/core";
+import { type LoadedModelsState } from "@codent/core";
 
 import { applyModelSelection, getLoadedModelsState } from "../utils/apply-model-selection.js";
 import { getActiveSession } from "../utils/session-resolve.js";

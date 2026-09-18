@@ -2,7 +2,7 @@
  * Validation for extension per-extension turn-context injection
  * (`registerContextProvider` + `collectBeforeAgentStart`).
  *
- * Run: pnpm --filter @my-agent/core run validate:extension-prompt-hooks
+ * Run: pnpm --filter @codent/core run validate:extension-prompt-hooks
  */
 
 import assert from "node:assert/strict";

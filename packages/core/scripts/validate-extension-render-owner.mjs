@@ -10,7 +10,7 @@
  * - raw text and layout-tree payloads both round-trip untouched
  * - destroyAll clears every slot
  *
- * Run: pnpm --filter @my-agent/core run validate:extension-render-owner
+ * Run: pnpm --filter @codent/core run validate:extension-render-owner
  */
 
 import assert from "node:assert/strict";

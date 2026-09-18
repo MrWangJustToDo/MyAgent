@@ -1,7 +1,7 @@
 /**
  * Validates subagent summary extraction and begin_summary-gated streaming.
  *
- * Run: pnpm --filter @my-agent/core run validate:extract-assistant-text
+ * Run: pnpm --filter @codent/core run validate:extract-assistant-text
  */
 
 import assert from "node:assert/strict";

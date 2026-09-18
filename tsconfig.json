@@ -20,6 +20,7 @@
     { "path": "./packages/node" },
     { "path": "./packages/app" },
     { "path": "./packages/cli" },
+    { "path": "./packages/codent" },
     { "path": "./packages/extension" },
     { "path": "./packages/server" }
   ],

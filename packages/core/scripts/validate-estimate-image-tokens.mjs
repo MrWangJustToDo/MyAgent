@@ -1,7 +1,7 @@
 /**
  * Validation for vision token estimates + PNG dimension parsing.
  *
- * Run: pnpm --filter @my-agent/core run validate:estimate-image-tokens
+ * Run: pnpm --filter @codent/core run validate:estimate-image-tokens
  */
 
 import assert from "node:assert/strict";

@@ -6,7 +6,7 @@
  * session's own `tool` channel subscription) and serves summary-stream
  * snapshots so a reconnecting client can reconstruct in-flight state.
  *
- * Runtime imports from `@my-agent/core` are dynamic so server dts bundling does not
+ * Runtime imports from `@codent/core` are dynamic so server dts bundling does not
  * pull TanStack AI types into the CoreEnv server entry.
  */
 
@@ -19,7 +19,7 @@ import { createMessagesDeltaWriter } from "../messages-delta.js";
 
 import { readServerModelEnv } from "./provider.js";
 
-import type { ModelsConfig, ModelsConfigEntry } from "@my-agent/core";
+import type { ModelsConfig, ModelsConfigEntry } from "@codent/core";
 
 interface SummarySnapshotLike {
   key: string;
@@ -183,7 +183,7 @@ const createBodySchema = z.object({
 });
 
 async function loadCore() {
-  return import("@my-agent/core");
+  return import("@codent/core");
 }
 
 /** Load the server's own models.json (`.agents/config/models.json`), if any. */

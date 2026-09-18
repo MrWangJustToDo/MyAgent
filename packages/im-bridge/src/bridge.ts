@@ -15,8 +15,8 @@
  * default — the same path as the CLI's `--remote-session`.
  */
 
-import { isActiveStatus } from "@my-agent/core";
-import { createRemoteAgentSessionHost } from "@my-agent/server/client";
+import { isActiveStatus } from "@codent/core";
+import { createRemoteAgentSessionHost } from "@codent/server/client";
 import { appendFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -29,7 +29,7 @@ import { RunRenderer } from "./streaming/run-renderer.js";
 
 import type { BridgeConfig } from "./config.js";
 import type { ButtonCallback, ChatAdapter, ChatTarget, InboundMessage } from "./types.js";
-import type { AgentSession, AgentSessionCommand, AgentSessionHost } from "@my-agent/core";
+import type { AgentSession, AgentSessionCommand, AgentSessionHost } from "@codent/core";
 import type { ContentPart, UIMessage } from "@tanstack/ai";
 
 export interface BridgeRuntimeOptions {

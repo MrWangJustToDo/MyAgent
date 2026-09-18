@@ -4,7 +4,7 @@
  * Verifies the probe returns true for a known binary and false for a
  * guaranteed-absent command, and that `createNodeEnv` wires it up.
  *
- * Run: pnpm --filter @my-agent/node run validate:lsp-command-exists
+ * Run: pnpm --filter @codent/node run validate:lsp-command-exists
  */
 
 import assert from "node:assert/strict";

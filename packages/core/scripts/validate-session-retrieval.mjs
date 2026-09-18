@@ -16,7 +16,7 @@
  *      it; this session's paths come from the compaction summary instead
  *   6. The kind is NOT in SUBAGENT_ALLOWED_KINDS (root-agent decision)
  *
- * Run: pnpm --filter @my-agent/core run validate:session-retrieval
+ * Run: pnpm --filter @codent/core run validate:session-retrieval
  */
 
 import assert from "node:assert/strict";

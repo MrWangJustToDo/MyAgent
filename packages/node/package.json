@@ -1,7 +1,7 @@
 {
-  "name": "@my-agent/node",
+  "name": "@codent/node",
   "version": "0.0.1",
-  "description": "Node.js runtime environment for @my-agent/core",
+  "description": "Node.js runtime environment for @codent/core",
   "keywords": [
     "ai",
     "agent",
@@ -53,7 +53,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sandbox-runtime": "^0.0.75",
-    "@my-agent/core": "workspace:*",
+    "@codent/core": "workspace:*",
     "@tanstack/ai-code-mode": "^0.4.9",
     "@tanstack/ai-mcp": "^0.3.10",
     "mime-types": "^3.0.2",

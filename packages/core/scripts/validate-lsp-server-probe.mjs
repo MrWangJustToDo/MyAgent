@@ -7,7 +7,7 @@
  * - Present binary → proceeds past the probe to the connection factory
  * - Spawn ENOENT → translated to a friendly actionable message
  *
- * Run: pnpm --filter @my-agent/core run validate:lsp-server-probe
+ * Run: pnpm --filter @codent/core run validate:lsp-server-probe
  */
 
 import assert from "node:assert/strict";

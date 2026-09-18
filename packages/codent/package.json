@@ -1,0 +1,73 @@
+{
+  "name": "codent",
+  "version": "0.0.1-beta.1",
+  "description": "AI coding agent for your terminal — local workspace, local model keys, one install",
+  "keywords": [
+    "ai",
+    "agent",
+    "cli",
+    "coding-assistant",
+    "terminal",
+    "tui",
+    "local"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "MrWangJustToDo",
+    "url": "https://github.com/MrWangJustToDo"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MrWangJustToDo/MyAgent.git",
+    "directory": "packages/codent"
+  },
+  "bugs": {
+    "url": "https://github.com/MrWangJustToDo/MyAgent/issues"
+  },
+  "homepage": "https://github.com/MrWangJustToDo/MyAgent#readme",
+  "engines": {
+    "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "bin": {
+    "codent": "./dist/index.mjs"
+  },
+  "main": "./dist/index.mjs",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "prepublishOnly": "pnpm run build",
+    "dev": "tsdown --watch",
+    "start": "node dist/index.mjs",
+    "typecheck": "tsc --noEmit",
+    "validate:self-contained": "pnpm run build && node ./scripts/validate-self-contained.mjs",
+    "publish:beta": "node ./scripts/publish.mjs"
+  },
+  "//": "Fully bundled release package. `dependencies` is exactly the four externals that cannot",
+  "//runtime": "be inlined — the single-copy renderer and the packages that read their own assets",
+  "//bundle": "through `import.meta.url`. Everything else (including all `@codent/*` sources) is",
+  "//verify": "inlined into `dist` by tsdown; `pnpm validate:self-contained` asserts it.",
+  "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "^0.0.75",
+    "@my-react/react": "^0.3.30",
+    "@my-react/react-terminal": "^0.0.31",
+    "web-tree-sitter": "^0.25.10"
+  },
+  "devDependencies": {
+    "@crosscopy/clipboard": "^0.3.6",
+    "@codent/app": "workspace:*",
+    "@codent/core": "workspace:*",
+    "@codent/node": "workspace:*",
+    "@types/node": "^26.4.1",
+    "@types/react": "^19.2.14",
+    "dotenv": "^17.3.1",
+    "tsdown": "^0.21.10",
+    "typescript": "^5.6.3",
+    "zod": "^4.5.4"
+  }
+}

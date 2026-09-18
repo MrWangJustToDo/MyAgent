@@ -11,7 +11,7 @@
  *   empty message (sticker / voice) is dropped instead of opening an empty turn.
  *
  * Run (builds first):
- *   pnpm --filter @my-agent/im-bridge validate:bridge
+ *   pnpm --filter @codent/im-bridge validate:bridge
  */
 
 import assert from "node:assert/strict";

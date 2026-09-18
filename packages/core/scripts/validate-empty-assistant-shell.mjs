@@ -1,7 +1,7 @@
 /**
  * Validation for empty TanStack assistant shell detection and cleanup.
  *
- * Run: pnpm --filter @my-agent/core run validate:empty-assistant-shell
+ * Run: pnpm --filter @codent/core run validate:empty-assistant-shell
  */
 
 import assert from "node:assert/strict";

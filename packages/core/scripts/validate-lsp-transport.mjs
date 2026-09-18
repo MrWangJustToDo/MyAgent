@@ -1,7 +1,7 @@
 /**
  * Validation: LSP transport layer (node's createLspConnection) against a mock server.
  *
- * Run: pnpm --filter @my-agent/core run validate:lsp-transport
+ * Run: pnpm --filter @codent/core run validate:lsp-transport
  *
  * Verifies the full client chain that the LSP extension relies on:
  *   - spawn mock LSP server over stdio
@@ -19,8 +19,8 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOCK_SERVER = resolve(__dirname, "mock-lsp-server.mjs");
 
-// Import the production transport via the built @my-agent/node package.
-const nodePkg = await import("@my-agent/node");
+// Import the production transport via the built @codent/node package.
+const nodePkg = await import("@codent/node");
 const env = nodePkg.createNodeEnv({ rootPath: "/tmp", cwd: "/tmp", platform: "linux" });
 assert.equal(typeof env.createLspConnection, "function", "createNodeEnv must expose createLspConnection");
 assert.equal(typeof env.locateTreeSitterGrammar, "function", "createNodeEnv must expose locateTreeSitterGrammar");

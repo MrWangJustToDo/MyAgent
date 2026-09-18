@@ -1,5 +1,5 @@
 /**
- * Validation for the built-in Skills extension (`my-agent-skills`).
+ * Validation for the built-in Skills extension (`codent-skills`).
  *
  * Covers:
  * - SkillRegistry loads SKILL.md files from `.agents/skills` (progressive disclosure)
@@ -10,7 +10,7 @@
  * - createSkillsExtension config can disable tools / index independently
  * - ManagedAgentConfig.skills accepts boolean | SkillsExtensionConfig (typecheck)
  *
- * Run: pnpm --filter @my-agent/core run validate:skills-extension
+ * Run: pnpm --filter @codent/core run validate:skills-extension
  */
 
 import assert from "node:assert/strict";
@@ -72,7 +72,7 @@ assert.ok(loaded.body.length > 0, "skill body is non-empty");
 // 2. Extension factory shape
 // ---------------------------------------------------------------------------
 const api = createSkillsExtension({ skillRegistry: registry });
-assert.equal(api.id, "my-agent-skills", "extension id is my-agent-skills");
+assert.equal(api.id, "codent-skills", "extension id is codent-skills");
 assert.equal(typeof api.activate, "function", "extension has activate");
 
 // ---------------------------------------------------------------------------

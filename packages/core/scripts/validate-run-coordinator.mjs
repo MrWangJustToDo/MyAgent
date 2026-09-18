@@ -2,7 +2,7 @@
  * Validates RunCoordinator abort wiring and pending abort, plus the
  * CompactionService reactive-compact retry budget.
  *
- * Run: pnpm --filter @my-agent/core run validate:run-coordinator
+ * Run: pnpm --filter @codent/core run validate:run-coordinator
  */
 /* eslint-disable no-undef */
 import assert from "node:assert/strict";

@@ -1,4 +1,4 @@
-import { getToolPresentation } from "@my-agent/core";
+import { getToolPresentation } from "@codent/core";
 import { Box, Text } from "ink";
 
 import { HalfLinePaddedBox } from "../components/HalfLinePaddedBox.js";
@@ -12,7 +12,7 @@ import { hasDetailedOutputBlock, keepsCompactRow } from "../utils/tool-display.j
 import { TodoToolOutputView } from "./TodoToolOutputView.js";
 
 import type { UiToolState } from "../utils/tool-part.js";
-import type { TodoItem } from "@my-agent/core";
+import type { TodoItem } from "@codent/core";
 import type { ToolCallPart } from "@tanstack/ai";
 
 /** Max chars kept for a compact single-line result block. */

@@ -110,7 +110,7 @@ export class McpManager {
 
           const client = await createMCPClient({
             transport,
-            name: `my-agent-mcp-${name}`,
+            name: `codent-mcp-${name}`,
             prefix: `mcp__${name}_`,
           });
 

@@ -1,7 +1,7 @@
 /**
  * Validates TanStack tool bridging and subagent read-only subsets.
  *
- * Run: pnpm --filter @my-agent/core run validate:tanstack-tools
+ * Run: pnpm --filter @codent/core run validate:tanstack-tools
  */
 
 import assert from "node:assert/strict";

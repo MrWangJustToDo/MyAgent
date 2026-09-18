@@ -7,7 +7,7 @@
  * 5. Approval resolution: ToolApprovalTable emits resolved callbacks exactly
  *    once per pending → approved/denied transition (never on restore/downgrade).
  *
- * Run: pnpm --filter @my-agent/core run validate:agent-log-timeline
+ * Run: pnpm --filter @codent/core run validate:agent-log-timeline
  */
 
 import assert from "node:assert/strict";

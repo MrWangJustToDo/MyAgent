@@ -4,7 +4,7 @@
  * Covers Host.create → snapshot fields → plan / mcp / session.list → destroy.
  * Interactive CLI chat/subagent panel remains a manual checklist (see README).
  *
- * Run: pnpm --filter @my-agent/app run validate:session-only-smoke
+ * Run: pnpm --filter @codent/app run validate:session-only-smoke
  */
 
 import assert from "node:assert/strict";
@@ -12,7 +12,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const root = mkdtempSync(join(tmpdir(), "my-agent-session-smoke-"));
+const root = mkdtempSync(join(tmpdir(), "codent-session-smoke-"));
 
 const { createNodeEnv } = await import(new URL("../../node/dist/index.mjs", import.meta.url).href);
 const { agentManager, clearCoreEnv, createLocalAgentSessionHost, registerCoreEnv } = await import(

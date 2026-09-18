@@ -1,7 +1,7 @@
 /**
  * Validates tool denial reason attachment for approval responses.
  *
- * Run: pnpm --filter @my-agent/core run validate:tool-denial-reason
+ * Run: pnpm --filter @codent/core run validate:tool-denial-reason
  */
 
 import { uiMessageToModelMessages } from "@tanstack/ai";

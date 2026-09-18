@@ -11,7 +11,7 @@
  *   stream for `HEARTBEAT_TIMEOUT_MS` triggers a reconnect.
  */
 
-import { hydrateToolPresentations } from "@my-agent/core";
+import { hydrateToolPresentations } from "@codent/core";
 
 import type {
   AgentSession,
@@ -22,7 +22,7 @@ import type {
   AgentSessionSubscribeOptions,
   AgentSessionSubscriber,
   SummaryStreamSnapshot,
-} from "@my-agent/core";
+} from "@codent/core";
 
 export interface RemoteSessionClientOptions {
   baseUrl: string;

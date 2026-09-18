@@ -1,7 +1,7 @@
 /**
  * Validation for plan-mode tool exclusions, planning prompts, and structured plans.
  *
- * Run: pnpm --filter @my-agent/core run validate:plan-tools
+ * Run: pnpm --filter @codent/core run validate:plan-tools
  */
 import assert from "node:assert/strict";
 

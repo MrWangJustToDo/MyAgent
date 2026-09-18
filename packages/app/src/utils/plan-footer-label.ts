@@ -1,4 +1,4 @@
-import type { PlanModePhase, PlanModeState } from "@my-agent/core";
+import type { PlanModePhase, PlanModeState } from "@codent/core";
 
 export interface PlanTodoProgress {
   completed: number;

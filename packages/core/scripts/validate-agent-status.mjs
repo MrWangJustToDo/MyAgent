@@ -1,7 +1,7 @@
 /**
  * Validates agent status helpers and ManagedAgent lifecycle ownership.
  *
- * Run: pnpm --filter @my-agent/core run validate:agent-status
+ * Run: pnpm --filter @codent/core run validate:agent-status
  */
 
 import assert from "node:assert/strict";

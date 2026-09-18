@@ -1,19 +1,19 @@
 /**
- * @my-agent/node — Node.js runtime bindings for @my-agent/core.
+ * @codent/node — Node.js runtime bindings for @codent/core.
  *
  * Provides:
  * - {@link createNodeEnv} — a {@link CoreEnv} implementation backed by Node.js APIs
  *
  * @example
  * ```typescript
- * import { registerCoreEnv } from "@my-agent/core";
- * import { createNodeEnv } from "@my-agent/node";
+ * import { registerCoreEnv } from "@codent/core";
+ * import { createNodeEnv } from "@codent/node";
  *
  * registerCoreEnv(createNodeEnv({ rootPath: "/path/to/project" }));
  * ```
  */
 
-import { destroyAllCommandJobs } from "@my-agent/core";
+import { destroyAllCommandJobs } from "@codent/core";
 import { stdioTransport } from "@tanstack/ai-mcp/stdio";
 import mime from "mime-types";
 import { exec } from "node:child_process";
@@ -30,7 +30,7 @@ import { resolveCommandPath } from "./lsp/resolve-command.js";
 import { createLspConnection as createNodeLspConnection } from "./lsp/transport.js";
 
 import type { LocalEnvironmentConfig } from "./environment/local.js";
-import type { CoreEnv, CoreEnvExecResult } from "@my-agent/core";
+import type { CoreEnv, CoreEnvExecResult } from "@codent/core";
 import type { ChildProcess } from "node:child_process";
 
 // Re-export environment implementations
@@ -48,13 +48,13 @@ export interface CreateNodeEnvOptions extends LocalEnvironmentConfig {
 /**
  * Create a {@link CoreEnv} implementation backed by Node.js built-in APIs.
  *
- * LLM credentials are not part of CoreEnv — register a {@link import("@my-agent/core").ModelProvider}
- * separately via {@link import("@my-agent/core").registerModelProvider}.
+ * LLM credentials are not part of CoreEnv — register a {@link import("@codent/core").ModelProvider}
+ * separately via {@link import("@codent/core").registerModelProvider}.
  *
  * @example
  * ```typescript
- * import { registerCoreEnv, registerModelProvider, createDirectModelProvider } from "@my-agent/core";
- * import { createNodeEnv } from "@my-agent/node";
+ * import { registerCoreEnv, registerModelProvider, createDirectModelProvider } from "@codent/core";
+ * import { createNodeEnv } from "@codent/node";
  *
  * registerCoreEnv(createNodeEnv({ rootPath: "/path/to/project" }));
  * registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey }));

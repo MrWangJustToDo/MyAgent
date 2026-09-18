@@ -2,7 +2,7 @@
  * Validates lifecycle middleware side-effects (usage, memory commit, thinking).
  * Turn-level finalizeRun is owned by the chat pump / detached runners — not this middleware.
  *
- * Run: pnpm --filter @my-agent/core run validate:lifecycle-middleware
+ * Run: pnpm --filter @codent/core run validate:lifecycle-middleware
  */
 
 import assert from "node:assert/strict";

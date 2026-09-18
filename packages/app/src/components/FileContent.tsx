@@ -15,7 +15,7 @@ function fetchFileContent(path: string): Promise<string> {
   const cached = contentCache.get(path);
   if (cached) return cached;
 
-  const promise = import("@my-agent/core")
+  const promise = import("@codent/core")
     .then(({ getEnv }) => getEnv().fs.readFile(path))
     .catch((error: unknown) => {
       contentCache.delete(path);

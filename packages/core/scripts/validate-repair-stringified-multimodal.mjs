@@ -1,7 +1,7 @@
 /**
  * Validates repair of TanStack MESSAGES_SNAPSHOT stringified multimodal content.
  *
- * Run: pnpm --filter @my-agent/core run validate:repair-stringified-multimodal
+ * Run: pnpm --filter @codent/core run validate:repair-stringified-multimodal
  */
 
 import assert from "node:assert/strict";

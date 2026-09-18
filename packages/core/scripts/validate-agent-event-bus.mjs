@@ -3,7 +3,7 @@
  * (interceptor-excluded) delivery, intercept ordering/mutation/cancel/await,
  * retained replay, and scope isolation + up-flow.
  *
- * Run: pnpm --filter @my-agent/core run validate:agent-event-bus
+ * Run: pnpm --filter @codent/core run validate:agent-event-bus
  */
 
 import assert from "node:assert/strict";

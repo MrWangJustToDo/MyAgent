@@ -1,4 +1,4 @@
-import { destroyAllCommandJobs } from "@my-agent/core";
+import { destroyAllCommandJobs } from "@codent/core";
 import { WebContainer } from "@webcontainer/api";
 
 import { createWebContainerFs } from "./create-fs.js";
@@ -7,7 +7,7 @@ import { locateTreeSitterGrammar } from "./locate-grammar.js";
 import { mimeFromPath } from "./mime.js";
 import { execWebContainerCommand, runWebContainerCommand, startWebContainerCommand } from "./run-command.js";
 
-import type { CoreEnv } from "@my-agent/core";
+import type { CoreEnv } from "@codent/core";
 import type { FileSystemTree } from "@webcontainer/api";
 
 const ROOT_PATH = "/home/workspace";
@@ -26,7 +26,7 @@ export function getBootedWebContainer(): WebContainer | null {
  */
 const AGENTS_MD = `# Playground workspace (WebContainer)
 
-You are running inside **My Agent Playground**: a browser-hosted Linux-like workspace
+You are running inside **Codent Playground**: a browser-hosted Linux-like workspace
 backed by [WebContainers](https://webcontainers.io/). The UI is the shared agent app;
 this filesystem and shell are the only project the tools can see.
 

@@ -1,7 +1,7 @@
 {
-  "name": "@my-agent/cli",
+  "name": "@codent/cli",
   "version": "0.0.1",
-  "description": "CLI for My Agent",
+  "description": "CLI for Codent",
   "keywords": [
     "ai",
     "agent",
@@ -31,7 +31,7 @@
   },
   "type": "module",
   "bin": {
-    "my-agent": "./dist/index.mjs"
+    "codent": "./dist/index.mjs"
   },
   "main": "./dist/index.mjs",
   "files": [
@@ -46,22 +46,22 @@
   },
   "dependencies": {
     "@crosscopy/clipboard": "^0.3.6",
-    "@my-agent/app": "workspace:*",
-    "@my-agent/core": "workspace:*",
-    "@my-agent/node": "workspace:*",
-    "@my-agent/server": "workspace:*",
+    "@codent/core": "workspace:*",
+    "@codent/node": "workspace:*",
+    "@codent/server": "workspace:*",
     "@my-react/react": "^0.3.30",
-    "@my-react/react-terminal": "^0.0.31",
-    "dotenv": "^17.3.1",
-    "ink": "npm:@my-react/react-terminal@^0.0.31",
-    "react": "npm:@my-react/react@^0.3.30",
-    "reactivity-store": "^0.4.0",
-    "zod": "^4.5.4"
+    "@my-react/react-terminal": "^0.0.31"
   },
   "devDependencies": {
+    "@codent/app": "workspace:*",
+    "@my-react/react": "^0.3.30",
+    "@my-react/react-terminal": "^0.0.31",
     "@types/node": "^26.4.1",
     "@types/react": "^19.2.14",
+    "dotenv": "^17.3.1",
+    "reactivity-store": "^0.4.0",
     "tsdown": "^0.21.10",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "zod": "^4.5.4"
   }
 }

@@ -2,7 +2,7 @@
  * Validates streaming tool output routing through the unified bus
  * (`tool:chunk` / `tool:clear` observer events, agent-scoped).
  *
- * Run: pnpm --filter @my-agent/core run validate:streaming-callback
+ * Run: pnpm --filter @codent/core run validate:streaming-callback
  */
 
 import assert from "node:assert/strict";

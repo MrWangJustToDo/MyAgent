@@ -10,7 +10,7 @@ import { formatDuration } from "../utils/format.js";
 import { approvalKeysHint, busyQueueHint, freeformSubmitHint, selectListHint } from "../utils/keyboard-labels.js";
 import { formatRetryStatus } from "../utils/retry-status.js";
 
-import type { AgentRetryState, AgentStatus } from "@my-agent/core";
+import type { AgentRetryState, AgentStatus } from "@codent/core";
 
 /** Live LLM-retry visibility — single compact line (attempt counts + wait). */
 const RetryStatus = ({ retry }: { retry: AgentRetryState }) => <Spinner text={formatRetryStatus(retry)} />;

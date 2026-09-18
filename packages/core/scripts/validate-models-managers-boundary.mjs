@@ -3,7 +3,7 @@
  *
  * Prompt-cache ownership and side-text helpers live under models/runtime-types.
  *
- * Run: pnpm --filter @my-agent/core run validate:models-managers-boundary
+ * Run: pnpm --filter @codent/core run validate:models-managers-boundary
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";

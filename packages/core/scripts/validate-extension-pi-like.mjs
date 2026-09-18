@@ -6,7 +6,7 @@
  *   - modifiedResult applied to model-facing results via onToolPhaseComplete
  *   - existing observe-only tool:after stays unchanged (backward compat)
  *
- * Run: pnpm --filter @my-agent/core run validate:extension-pi-like
+ * Run: pnpm --filter @codent/core run validate:extension-pi-like
  */
 
 import assert from "node:assert/strict";

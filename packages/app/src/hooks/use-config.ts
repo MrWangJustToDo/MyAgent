@@ -6,7 +6,7 @@ import {
   type LoadedModelEntry,
   type LoadedModelsState,
   type ModelStyle,
-} from "@my-agent/core";
+} from "@codent/core";
 import { createState } from "reactivity-store";
 
 import { applyOptionalAppConfig, clearOptionalAppConfig } from "../utils/apply-app-config.js";

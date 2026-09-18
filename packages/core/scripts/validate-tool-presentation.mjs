@@ -1,7 +1,7 @@
 /**
  * Validation: tool presentation descriptors live with their tools.
  *
- * Run: pnpm --filter @my-agent/core run validate:tool-presentation
+ * Run: pnpm --filter @codent/core run validate:tool-presentation
  *
  * `packages/core/src/agent/tools/presentation/builtin-table.ts` keeps a fallback copy
  * of the built-in presentation (a remote host that renders before the snapshot catalog

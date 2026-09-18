@@ -1,7 +1,7 @@
 /**
  * Validation for extension path helpers + export normalization.
  *
- * Run: pnpm --filter @my-agent/core run validate:extension-loader
+ * Run: pnpm --filter @codent/core run validate:extension-loader
  */
 
 import assert from "node:assert/strict";

@@ -26,11 +26,11 @@ import {
   registerModelProviderForEntry,
   resolveModelConfig,
   resolveModelConfigFromProvider,
-} from "@my-agent/core";
-import { createNodeEnv } from "@my-agent/node";
+} from "@codent/core";
+import { createNodeEnv } from "@codent/node";
 
 import type { BridgeConfig } from "./config.js";
-import type { AgentSessionHost, ModelStyle } from "@my-agent/core";
+import type { AgentSessionHost, ModelStyle } from "@codent/core";
 
 function parseModelStyle(value: string | undefined): ModelStyle | undefined {
   return value === "openai" || value === "anthropic" ? value : undefined;

@@ -1,22 +1,22 @@
 /**
  * Lightweight CoreEnv client that connects to a CoreEnv HTTP server via Hono RPC.
  *
- * Only imports `hono/client` and `@my-agent/core` types — no server dependencies.
+ * Only imports `hono/client` and `@codent/core` types — no server dependencies.
  *
  * LLM provider is orthogonal — use {@link createRemoteProvider} separately when
  * keys should stay on a remote provider server.
  *
  * @example
  * ```typescript
- * import { registerCoreEnv, registerModelProvider } from "@my-agent/core";
- * import { createRemoteEnv, createRemoteProvider } from "@my-agent/server/client";
+ * import { registerCoreEnv, registerModelProvider } from "@codent/core";
+ * import { createRemoteEnv, createRemoteProvider } from "@codent/server/client";
  *
  * registerCoreEnv(await createRemoteEnv("http://localhost:3100"));
  * registerModelProvider(await createRemoteProvider("http://localhost:3100"));
  * ```
  */
 
-import { ExecutionError, FileError, defaultPath } from "@my-agent/core";
+import { ExecutionError, FileError, defaultPath } from "@codent/core";
 import { hc } from "hono/client";
 
 import type { AppType } from ".";
@@ -34,7 +34,7 @@ import type {
   RunCommandOptions,
   StartCommandHandle,
   StartCommandOptions,
-} from "@my-agent/core";
+} from "@codent/core";
 
 export { createRemoteProvider } from "./remote-provider.js";
 export { createRemoteAgentSessionHost } from "./remote-session-host.js";

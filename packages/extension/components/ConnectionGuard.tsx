@@ -111,7 +111,7 @@ export const ConnectionGuard = ({ children }: { children: React.ReactNode }) => 
         <div className="text-center">
           <h2 className="text-[17px] font-semibold text-[#e0e0e0]">Connect to Server</h2>
           <p className="mt-1.5 text-sm leading-relaxed text-[#777]">
-            Enter your server URL to start working with My Agent
+            Enter your server URL to start working with Codent
           </p>
         </div>
 

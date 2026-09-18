@@ -1,5 +1,5 @@
 /**
- * Offline validation for @my-agent/im-bridge — mock ChatAdapter + fake
+ * Offline validation for @codent/im-bridge — mock ChatAdapter + fake
  * AgentSession, no server / no Telegram required.
  *
  * Covers: inbound → dispatch, approval button → respondApproval (buttons ride
@@ -12,7 +12,7 @@
  * validate-bridge-tool-preview.mjs.
  *
  * Run (builds first):
- *   pnpm --filter @my-agent/im-bridge validate:bridge
+ *   pnpm --filter @codent/im-bridge validate:bridge
  *   node packages/im-bridge/scripts/validate-bridge.mjs
  */
 

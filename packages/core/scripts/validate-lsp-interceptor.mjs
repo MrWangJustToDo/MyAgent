@@ -1,7 +1,7 @@
 /**
  * Validation for LSP tool:after interceptors (args parsing + modifiedResult injection).
  *
- * Run: pnpm --filter @my-agent/core run validate:lsp-interceptor
+ * Run: pnpm --filter @codent/core run validate:lsp-interceptor
  */
 
 import assert from "node:assert/strict";

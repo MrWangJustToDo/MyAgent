@@ -2,7 +2,7 @@
  * LSP transport types — runtime-agnostic abstraction for a Language Server.
  *
  * The actual JSON-RPC transport (spawn + Content-Length framing) is provided by
- * the runtime host (e.g. `@my-agent/node` via `CoreEnv.createLspConnection`).
+ * the runtime host (e.g. `@codent/node` via `CoreEnv.createLspConnection`).
  * Core only defines the interface and consumes whatever the host injects, so the
  * agent core stays runtime-agnostic (browser / WebContainer hosts simply omit
  * `createLspConnection` and LSP tools degrade gracefully).

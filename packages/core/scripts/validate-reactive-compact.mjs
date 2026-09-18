@@ -4,7 +4,7 @@
  * Requires a prior package build (`pnpm run build`) so imports resolve from `dist/dev.mjs`.
  * This smoke does not call a live model — it only checks status/event wiring.
  *
- * Run: pnpm --filter @my-agent/core run validate:reactive-compact
+ * Run: pnpm --filter @codent/core run validate:reactive-compact
  */
 
 import assert from "node:assert/strict";

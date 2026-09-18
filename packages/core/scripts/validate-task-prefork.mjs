@@ -1,7 +1,7 @@
 /**
  * Validates the task pre-fork coordinator (rolling-window parallel spawning).
  *
- * Run: pnpm --filter @my-agent/core run validate:task-prefork
+ * Run: pnpm --filter @codent/core run validate:task-prefork
  */
 
 import assert from "node:assert/strict";

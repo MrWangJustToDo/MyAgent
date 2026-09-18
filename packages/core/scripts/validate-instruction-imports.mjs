@@ -6,7 +6,7 @@
  *
  *   1. `@AGENTS.md` in CLAUDE.md is inlined (the reason this exists at all)
  *   2. references inside fenced blocks / inline code are left literal
- *   3. npm-scoped prose (`@my-agent/app`) is not treated as a file reference
+ *   3. npm-scoped prose (`@codent/app`) is not treated as a file reference
  *   4. a cycle (a→b→a) is cut, and reported instead of silently dropped
  *   5. depth and byte budgets stop runaway expansion
  *   6. imports cannot escape the workspace root
@@ -14,7 +14,7 @@
  *   8. discovery is first-wins, and the turn-context digest covers imports —
  *      editing an imported file is detected as a change
  *
- * Run: pnpm --filter @my-agent/core run validate:instruction-imports
+ * Run: pnpm --filter @codent/core run validate:instruction-imports
  */
 
 import assert from "node:assert/strict";
@@ -110,9 +110,9 @@ await (async () => {
 // 3. npm-scoped and extensionless tokens are not file references
 // ---------------------------------------------------------------------------
 await (async () => {
-  const r = await expand("@my-agent/core and @tanstack/ai and @scope and plain @NOTICE stay put.\n");
+  const r = await expand("@codent/core and @tanstack/ai and @scope and plain @NOTICE stay put.\n");
 
-  assert.equal(r.content, "@my-agent/core and @tanstack/ai and @scope and plain @NOTICE stay put.\n");
+  assert.equal(r.content, "@codent/core and @tanstack/ai and @scope and plain @NOTICE stay put.\n");
   assert.deepEqual(r.notices, [], "non-file tokens are not even reported");
 
   console.log("✓ scoped-package prose is not treated as an import");

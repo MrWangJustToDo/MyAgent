@@ -10,7 +10,7 @@ import { COLORS } from "../theme/colors.js";
 import { markdownTheme } from "../theme/markdown-theme.js";
 import { KeyLabel } from "../utils/keyboard-labels.js";
 
-import type { PlanModeState } from "@my-agent/core";
+import type { PlanModeState } from "@codent/core";
 
 /**
  * Ready-state banner: Build/revise hints + optional full-plan markdown preview.

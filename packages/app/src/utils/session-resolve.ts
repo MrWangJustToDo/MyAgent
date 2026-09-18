@@ -10,7 +10,7 @@ import { toRaw } from "reactivity-store";
 
 import { useAgent } from "../hooks/use-agent.js";
 
-import type { AgentSession, AgentSessionHost } from "@my-agent/core";
+import type { AgentSession, AgentSessionHost } from "@codent/core";
 
 function unwrapHandle<T extends object>(value: T | null | undefined): T | null {
   if (value == null) return null;

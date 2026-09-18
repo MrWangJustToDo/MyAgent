@@ -176,7 +176,7 @@ Usage notes:
           if (response.status === 403 && response.headers.get("cf-mitigated") === "challenge") {
             response = await envFetch(url, {
               signal: controller.signal,
-              headers: { ...headers, "User-Agent": "my-agent-webfetch" },
+              headers: { ...headers, "User-Agent": "codent-webfetch" },
               redirect: "follow",
             });
           }

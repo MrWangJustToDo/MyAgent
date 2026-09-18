@@ -17,7 +17,7 @@ The system SHALL NOT depend on the `ai` package or any `@ai-sdk/*` package in an
 
 ### Requirement: No Vercel types in public core exports
 
-The system SHALL NOT re-export Vercel AI SDK types or transports from `@my-agent/core`.
+The system SHALL NOT re-export Vercel AI SDK types or transports from `@codent/core`.
 
 #### Scenario: Core index exports
 
@@ -63,7 +63,7 @@ The system SHALL NOT use `@ai-sdk/mcp` for MCP stdio transport.
 
 #### Scenario: Node MCP stdio
 
-- **WHEN** `@my-agent/node` creates an MCP stdio transport
+- **WHEN** `@codent/node` creates an MCP stdio transport
 - **THEN** it uses TanStack `@tanstack/ai-mcp` or a custom transport implementation
 - **AND** does not import from `@ai-sdk/mcp`
 

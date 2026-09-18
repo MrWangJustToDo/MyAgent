@@ -1,7 +1,7 @@
 /**
  * Validates compaction helpers against TanStack ModelMessage shape.
  *
- * Run: pnpm --filter @my-agent/core run validate:compaction-messages
+ * Run: pnpm --filter @codent/core run validate:compaction-messages
  */
 /* eslint-disable no-undef */
 import assert from "node:assert/strict";

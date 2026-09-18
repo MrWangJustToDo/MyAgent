@@ -1,5 +1,5 @@
 /**
- * @my-agent/node LSP transport — spawn a Language Server and speak JSON-RPC over
+ * @codent/node LSP transport — spawn a Language Server and speak JSON-RPC over
  * its stdio streams using `vscode-languageserver-protocol/node` (vscode-jsonrpc).
  *
  * This is the Node.js implementation of `CoreEnv.createLspConnection`. The agent
@@ -20,7 +20,7 @@ import {
   type MessageConnection,
 } from "vscode-languageserver-protocol/node";
 
-import type { LspConnection, LspServerConfig } from "@my-agent/core";
+import type { LspConnection, LspServerConfig } from "@codent/core";
 import type {
   InitializeParams,
   InitializeResult,

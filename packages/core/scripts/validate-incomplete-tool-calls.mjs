@@ -1,7 +1,7 @@
 /**
  * Validates cancelIncompleteToolCalls cleanup used after abort.
  *
- * Run: pnpm --filter @my-agent/core run validate:incomplete-tool-calls
+ * Run: pnpm --filter @codent/core run validate:incomplete-tool-calls
  */
 
 import assert from "node:assert/strict";

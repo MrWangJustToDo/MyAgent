@@ -6,7 +6,7 @@
  * / summary streams), state-channel sync (incl. rename without refetch), and
  * RemoteSessionClient reconnect behavior.
  *
- * Run: pnpm --filter @my-agent/server run validate:agent-session-http
+ * Run: pnpm --filter @codent/server run validate:agent-session-http
  */
 /* eslint-disable no-undef */
 import assert from "node:assert/strict";

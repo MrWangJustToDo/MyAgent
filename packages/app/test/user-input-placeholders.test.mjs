@@ -5,8 +5,8 @@
  *  - image/file attachment: placeholder character -> [Image #N: file] ref
  *  - coexistence of both, placeholder deletion pruning, and submit clearing
  *
- * Run: pnpm --filter @my-agent/app test
- *      (or: pnpm --filter @my-agent/app build && node packages/app/test/user-input-placeholders.test.mjs)
+ * Run: pnpm --filter @codent/app test
+ *      (or: pnpm --filter @codent/app build && node packages/app/test/user-input-placeholders.test.mjs)
  */
 import assert from "node:assert/strict";
 import test from "node:test";

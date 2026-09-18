@@ -2,7 +2,7 @@
  * Native shell command execution (with optional OS sandbox wrapping).
  */
 
-import { ExecutionError } from "@my-agent/core";
+import { ExecutionError } from "@codent/core";
 
 import {
   annotateOsSandboxStderr,
@@ -12,7 +12,7 @@ import {
 } from "./os-sandbox.js";
 import { spawnCommand, spawnDetachedCommand } from "./shell.js";
 
-import type { RunCommandOptions, CommandResult, StartCommandHandle, StartCommandOptions } from "@my-agent/core";
+import type { RunCommandOptions, CommandResult, StartCommandHandle, StartCommandOptions } from "@codent/core";
 
 type ResolvePath = (inputPath: string) => string;
 

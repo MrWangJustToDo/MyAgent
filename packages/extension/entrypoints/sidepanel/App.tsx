@@ -1,12 +1,12 @@
-import { AdapterProvider, App, configureEnv, initConfig, initHighlighter } from "@my-agent/app";
+import { AdapterProvider, App, configureEnv, initConfig, initHighlighter } from "@codent/app";
 import {
   clearCoreEnv,
   clearModelProvider,
   createDirectModelProvider,
   registerCoreEnv,
   registerModelProvider,
-} from "@my-agent/core";
-import { createRemoteEnv, createRemoteProvider } from "@my-agent/server/client";
+} from "@codent/core";
+import { createRemoteEnv, createRemoteProvider } from "@codent/server/client";
 import { InkTerminalBox } from "@my-react/react-terminal/web";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -15,7 +15,7 @@ import { ConnectionGuard } from "@/components/ConnectionGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useServerConfig } from "@/hooks/useServerConfig";
 
-import type { AgentAdapter } from "@my-agent/app";
+import type { AgentAdapter } from "@codent/app";
 
 configureEnv({ allowNonBrowserUpdates: true });
 

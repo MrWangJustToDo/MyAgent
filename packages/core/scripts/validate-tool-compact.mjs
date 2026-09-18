@@ -1,7 +1,7 @@
 /**
  * Validates tool-compact middleware helpers (toModelOutput path only).
  *
- * Run: pnpm --filter @my-agent/core run validate:tool-compact
+ * Run: pnpm --filter @codent/core run validate:tool-compact
  */
 /* eslint-disable no-undef */
 import assert from "node:assert/strict";

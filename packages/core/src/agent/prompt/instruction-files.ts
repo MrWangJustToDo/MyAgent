@@ -251,7 +251,7 @@ const TRAILING_PUNCTUATION_RE = /[.,;:!?)\]}'"`]+$/;
  * - References inside fenced code blocks and inline code spans are **not**
  *   expanded — they are usually prose about a file, not a request to inline it.
  * - A token is only a candidate when it ends in a file extension. This is what
- *   keeps npm-style prose (`@my-agent/app`, `@tanstack/ai`) inert.
+ *   keeps npm-style prose (`@codent/app`, `@tanstack/ai`) inert.
  * - A candidate whose target does not exist, escapes `rootPath`, or is a
  *   directory is **not** inlined: the original text is left untouched and a
  *   notice is recorded, so a typo is visible instead of silently dropped.

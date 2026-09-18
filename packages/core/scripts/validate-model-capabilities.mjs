@@ -15,7 +15,7 @@
  * tests the mapping rather than a restatement of it. When the cache is absent (fresh clone,
  * offline) the corpus checks are skipped with a notice — the invariant checks still run.
  *
- * Run: pnpm --filter @my-agent/core run validate:model-capabilities
+ * Run: pnpm --filter @codent/core run validate:model-capabilities
  */
 
 import assert from "node:assert/strict";

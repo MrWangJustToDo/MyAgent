@@ -4,7 +4,7 @@
  * Auto-persist path is covered when CoreEnv is available via applyStructuredPlan;
  * this script focuses on pure helpers + controller phase machine with a mock todo manager.
  *
- * Run: pnpm --filter @my-agent/core run validate:plan-lifecycle
+ * Run: pnpm --filter @codent/core run validate:plan-lifecycle
  */
 import assert from "node:assert/strict";
 

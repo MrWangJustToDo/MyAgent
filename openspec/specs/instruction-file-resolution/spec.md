@@ -36,7 +36,7 @@ The system SHALL replace an `@`-prefixed file reference with the referenced file
 
 #### Scenario: A token without a file extension is not a reference
 
-- **WHEN** the text contains an npm-scoped name such as `@my-agent/core` or `@tanstack/ai`
+- **WHEN** the text contains an npm-scoped name such as `@codent/core` or `@tanstack/ai`
 - **THEN** it is left as written and no notice is recorded
 
 #### Scenario: References inside code regions are not expanded

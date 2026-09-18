@@ -20,7 +20,7 @@
  * `validate:model-capabilities` covers the mapping (metadata → list). This covers the transports
  * (merge, probe), because a correct mapping piped through a collapsing hop is still wrong.
  *
- * Run: pnpm --filter @my-agent/core run validate:capability-unknown-vs-none
+ * Run: pnpm --filter @codent/core run validate:capability-unknown-vs-none
  */
 
 import assert from "node:assert/strict";

@@ -1,4 +1,4 @@
-# @my-agent/app
+# @codent/app
 
 Shared UI layer (CLI + extension). Agent control is **Session-only**: hooks, layout, and slash commands use `AgentSession` / `AgentSessionHost`, not `ManagedAgent` / `agentManager`.
 
@@ -6,7 +6,7 @@ Shared UI layer (CLI + extension). Agent control is **Session-only**: hooks, lay
 
 **Multiple live sessions.** `useAgent` also keeps a live-session registry: `sessions` (`Record<agentId, AgentSession>`), `activeSessionId`, and the actions `registerSession`, `activateSession`, `removeSession`. `session` always reflects the currently **active** handle, so existing selectors (`useAgent((s) => s.session)`) and `getActiveSession()` keep working when switching. `createSessionOnHost()` (`adapter/create-agent.ts`) boots an additional live session from the active config and registers/activates it; `getSessionById()` looks up a registered handle by id. `use-agent-chat` re-subscribes to the active handle on switch (re-filling messages/status/todos/queues from the snapshot) without destroying the old session.
 
-## `@my-agent/core` import allowlist
+## `@codent/core` import allowlist
 
 ### Allowed (session-safe / presentation / CoreEnv)
 
@@ -44,10 +44,10 @@ The presentation helpers (activity summaries, input/output formatting, tool-part
 ## Validate
 
 ```bash
-pnpm --filter @my-agent/app run validate:core-imports
-pnpm --filter @my-agent/app run validate:presentation-helpers
-pnpm --filter @my-agent/app run validate:session-only-smoke
-pnpm --filter @my-agent/app test
+pnpm --filter @codent/app run validate:core-imports
+pnpm --filter @codent/app run validate:presentation-helpers
+pnpm --filter @codent/app run validate:session-only-smoke
+pnpm --filter @codent/app test
 ```
 
 ### Manual Local CLI checklist (3.7)

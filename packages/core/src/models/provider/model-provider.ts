@@ -42,7 +42,7 @@ export interface ModelProvider {
 let _provider: ModelProvider | null = null;
 
 /**
- * Register the model provider for `@my-agent/core`.
+ * Register the model provider for `@codent/core`.
  *
  * Must be called before {@link getModelProvider} / agent creation that resolves models.
  */

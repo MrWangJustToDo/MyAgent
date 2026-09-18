@@ -15,7 +15,7 @@ import { SessionPicker } from "./SessionPicker.js";
 import { Spinner } from "./Spinner.js";
 
 import type { SessionListItem } from "../utils/session-list-item.js";
-import type { AgentSession } from "@my-agent/core";
+import type { AgentSession } from "@codent/core";
 import type { UIMessage } from "@tanstack/ai";
 
 interface SessionResumePickerProps {

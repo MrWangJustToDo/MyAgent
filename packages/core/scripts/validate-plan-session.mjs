@@ -1,7 +1,7 @@
 /**
  * Validation for plan-mode session restore + approval auto-approve gating.
  *
- * Run: pnpm --filter @my-agent/core run validate:plan-session
+ * Run: pnpm --filter @codent/core run validate:plan-session
  */
 
 import assert from "node:assert/strict";

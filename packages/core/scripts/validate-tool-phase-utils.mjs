@@ -1,7 +1,7 @@
 /**
  * Validation for tool-phase continuation helpers.
  *
- * Run: pnpm --filter @my-agent/core run validate:tool-phase-utils
+ * Run: pnpm --filter @codent/core run validate:tool-phase-utils
  */
 
 import assert from "node:assert/strict";

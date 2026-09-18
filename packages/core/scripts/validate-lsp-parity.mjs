@@ -1,7 +1,7 @@
 /**
  * Validation for LSP parity helpers (Lombok discovery, synthetic dot, tool output).
  *
- * Run: pnpm --filter @my-agent/core run validate:lsp-parity
+ * Run: pnpm --filter @codent/core run validate:lsp-parity
  */
 
 import assert from "node:assert/strict";

@@ -9,7 +9,7 @@
  * Tree-sitter parsing itself is host-provided (CoreEnv.locateTreeSitterGrammar);
  * this script intentionally avoids it so it runs in any runtime.
  *
- * Run: pnpm --filter @my-agent/core run validate:safe-command
+ * Run: pnpm --filter @codent/core run validate:safe-command
  */
 
 import assert from "node:assert/strict";

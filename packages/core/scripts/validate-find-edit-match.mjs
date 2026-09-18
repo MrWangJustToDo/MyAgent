@@ -1,7 +1,7 @@
 /**
  * Validates edit match resolution (exact / unescape / fuzzy / startLine / hints).
  *
- * Run: pnpm --filter @my-agent/core run validate:find-edit-match
+ * Run: pnpm --filter @codent/core run validate:find-edit-match
  */
 import assert from "node:assert/strict";
 

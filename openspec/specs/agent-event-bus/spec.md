@@ -5,7 +5,7 @@ TBD - created by archiving change unified-agent-event-bus. Update Purpose after 
 ## Requirements
 ### Requirement: Single unified event bus
 
-`@my-agent/core` SHALL provide exactly one event mechanism, `AgentEventBus`, and MUST NOT expose parallel notification systems (domain-owned multicast emitters, a separate interceptor bus, or a global streaming-callback registry) as public APIs. All core notification paths (lifecycle telemetry, domain state, streaming output, extension UI, extension interception) SHALL route through `AgentEventBus`.
+`@codent/core` SHALL provide exactly one event mechanism, `AgentEventBus`, and MUST NOT expose parallel notification systems (domain-owned multicast emitters, a separate interceptor bus, or a global streaming-callback registry) as public APIs. All core notification paths (lifecycle telemetry, domain state, streaming output, extension UI, extension interception) SHALL route through `AgentEventBus`.
 
 #### Scenario: No parallel notification systems remain
 
@@ -165,7 +165,7 @@ The extension-facing API SHALL keep its existing hook names and its existing `ct
 
 ### Requirement: Non-bus extension surfaces are explicitly declared
 
-`@my-agent/core` SHALL enumerate the extension-facing members that are deliberately not routed through `AgentEventBus`, and SHALL state for each why the bus dispatch modes are unsuitable. The enumeration MUST be part of the architecture documentation so the "single unified event bus" contract is not read as "every extension capability is an event".
+`@codent/core` SHALL enumerate the extension-facing members that are deliberately not routed through `AgentEventBus`, and SHALL state for each why the bus dispatch modes are unsuitable. The enumeration MUST be part of the architecture documentation so the "single unified event bus" contract is not read as "every extension capability is an event".
 
 #### Scenario: Enumeration exists in architecture docs
 

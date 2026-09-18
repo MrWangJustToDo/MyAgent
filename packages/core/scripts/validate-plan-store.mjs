@@ -1,7 +1,7 @@
 /**
  * Validation for plan-store path helpers (no CoreEnv required).
  *
- * Run: pnpm --filter @my-agent/core run validate:plan-store
+ * Run: pnpm --filter @codent/core run validate:plan-store
  */
 import assert from "node:assert/strict";
 

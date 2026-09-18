@@ -1,6 +1,6 @@
 import { COLORS } from "../theme/colors.js";
 
-import type { AgentSessionSubagentSummary } from "@my-agent/core";
+import type { AgentSessionSubagentSummary } from "@codent/core";
 
 const STATUS_ICON: Record<string, string> = {
   running: ">",

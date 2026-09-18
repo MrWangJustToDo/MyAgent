@@ -1,4 +1,4 @@
-export { formatDuration } from "@my-agent/core";
+export { formatDuration } from "@codent/core";
 
 export function formatFileSize(dataUrl: string): string {
   const base64Match = dataUrl.match(/;base64,(.+)/);

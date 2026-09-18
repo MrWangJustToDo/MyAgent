@@ -1,7 +1,7 @@
 /**
  * Ensure app presentation helpers stay aligned with core writers (markers).
  *
- * Run: pnpm --filter @my-agent/app run validate:presentation-helpers
+ * Run: pnpm --filter @codent/app run validate:presentation-helpers
  */
 
 import assert from "node:assert/strict";

@@ -1,7 +1,7 @@
 /**
  * Validates segmented summarization prompt construction (labels + cut index).
  *
- * Run: pnpm --filter @my-agent/core run validate:summarization-segments
+ * Run: pnpm --filter @codent/core run validate:summarization-segments
  */
 
 import assert from "node:assert/strict";

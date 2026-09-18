@@ -11,7 +11,7 @@
  * eventually: an eventual-agreement loop would also accept a marker that is stale now and
  * corrected on a later frame — exactly the regression the caller is guarding.
  *
- * Run through `pnpm --filter @my-agent/app run validate:render-smoke`.
+ * Run through `pnpm --filter @codent/app run validate:render-smoke`.
  */
 
 /**

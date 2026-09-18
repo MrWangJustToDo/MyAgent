@@ -1,7 +1,7 @@
 /**
  * Validates websearch helpers: domain filter, abort-timeout wiring, provider fallback naming.
  *
- * Run: pnpm --filter @my-agent/core run validate:websearch-providers
+ * Run: pnpm --filter @codent/core run validate:websearch-providers
  */
 
 import assert from "node:assert/strict";

@@ -3,7 +3,7 @@
  * `session:save-error`. The per-session lock chain must stay healthy after a
  * failure so later saves still run.
  *
- * Run: pnpm --filter @my-agent/core run validate:session-store-errors
+ * Run: pnpm --filter @codent/core run validate:session-store-errors
  */
 
 import assert from "node:assert/strict";

@@ -1,5 +1,5 @@
 /**
- * Validation for the built-in Memory extension (`my-agent-memory`).
+ * Validation for the built-in Memory extension (`codent-memory`).
  *
  * Covers:
  * - createMemoryExtension is exported and produces an extension API
@@ -10,7 +10,7 @@
  * - MemoryExtensionConfig can disable tools / index independently
  * - ManagedAgentConfig.memory accepts boolean | MemoryExtensionConfig (typecheck)
  *
- * Run: pnpm --filter @my-agent/core run validate:memory-extension
+ * Run: pnpm --filter @codent/core run validate:memory-extension
  */
 
 import assert from "node:assert/strict";
@@ -20,7 +20,7 @@ import { basename, dirname, extname, isAbsolute, join, normalize, parse, resolve
 
 import { registerCoreEnv, MemoryManager, createMemoryExtension } from "../dist/dev.mjs";
 
-const root = await mkdtemp(join(tmpdir(), "myagent-memory-ext-"));
+const root = await mkdtemp(join(tmpdir(), "codent-memory-ext-"));
 
 // Minimal CoreEnv backed by the real filesystem, scoped to `root`.
 registerCoreEnv({
@@ -78,7 +78,7 @@ await manager.writeMemory("user-prefers-tabs", "user", "Prefers tabs over spaces
 await manager.flushIndex(); // writeMemory debounces index refresh — flush synchronously for the test
 
 const api = createMemoryExtension({ memoryManager: manager });
-assert.equal(api.id, "my-agent-memory", "extension id is my-agent-memory");
+assert.equal(api.id, "codent-memory", "extension id is codent-memory");
 assert.equal(typeof api.activate, "function", "extension has activate");
 
 // ---------------------------------------------------------------------------

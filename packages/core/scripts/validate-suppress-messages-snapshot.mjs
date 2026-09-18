@@ -2,7 +2,7 @@
  * Validates that every MESSAGES_SNAPSHOT is dropped so the chronological UI
  * channel is never replaced by TanStack engine wire (summary-first or ordinary).
  *
- * Run: pnpm --filter @my-agent/core run validate:suppress-messages-snapshot
+ * Run: pnpm --filter @codent/core run validate:suppress-messages-snapshot
  */
 
 import { EventType } from "@tanstack/ai/client";

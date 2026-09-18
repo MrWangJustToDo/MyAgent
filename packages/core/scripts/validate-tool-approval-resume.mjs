@@ -1,7 +1,7 @@
 /**
  * Validates session-backed tool-approval resume (table → resumeToolState).
  *
- * Run: pnpm --filter @my-agent/core run validate:tool-approval-resume
+ * Run: pnpm --filter @codent/core run validate:tool-approval-resume
  */
 
 import assert from "node:assert/strict";

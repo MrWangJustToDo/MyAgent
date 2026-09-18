@@ -3,7 +3,7 @@ import { createState, toRaw } from "reactivity-store";
 
 import { useAgent } from "./use-agent.js";
 
-import type { AgentSession, TokenUsage, UsageChangeSnapshot } from "@my-agent/core";
+import type { AgentSession, TokenUsage, UsageChangeSnapshot } from "@codent/core";
 
 export interface AgentUsageSnapshot {
   total: TokenUsage;

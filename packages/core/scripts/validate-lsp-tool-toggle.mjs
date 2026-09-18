@@ -9,7 +9,7 @@
  * only called when the tool is not in the disabled set); that path is covered
  * by typecheck/build and the full LSP validate suite.
  *
- * Run: pnpm --filter @my-agent/core run validate:lsp-tool-toggle
+ * Run: pnpm --filter @codent/core run validate:lsp-tool-toggle
  */
 
 import assert from "node:assert/strict";
@@ -36,13 +36,13 @@ for (const tool of ["lsp_diagnostics", "lsp_hover", "lsp_definition", "lsp_refer
 
 // createLspExtension produces an ExtensionAPI (accepts optional config).
 const apiNoConfig = createLspExtension();
-assert.equal(apiNoConfig.id, "my-agent-lsp", "extension id is my-agent-lsp");
+assert.equal(apiNoConfig.id, "codent-lsp", "extension id is codent-lsp");
 assert.equal(typeof apiNoConfig.activate, "function", "extension has activate");
 
 const apiWithConfig = createLspExtension({ enableAll: true });
-assert.equal(apiWithConfig.id, "my-agent-lsp", "createLspExtension accepts config");
+assert.equal(apiWithConfig.id, "codent-lsp", "createLspExtension accepts config");
 
 const apiWithDisabledTools = createLspExtension({ disabledTools: ["lsp_rename"] });
-assert.equal(apiWithDisabledTools.id, "my-agent-lsp", "createLspExtension accepts disabledTools config");
+assert.equal(apiWithDisabledTools.id, "codent-lsp", "createLspExtension accepts disabledTools config");
 
 console.log("lsp-tool-toggle validation passed");

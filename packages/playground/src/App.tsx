@@ -1,4 +1,4 @@
-import { AdapterProvider, App, configureEnv, initConfig, initHighlighter } from "@my-agent/app";
+import { AdapterProvider, App, configureEnv, initConfig, initHighlighter } from "@codent/app";
 import {
   clearCoreEnv,
   clearModelProvider,
@@ -7,7 +7,7 @@ import {
   hasCoreEnv,
   registerCoreEnv,
   registerModelProvider,
-} from "@my-agent/core";
+} from "@codent/core";
 import { InkTerminalBox } from "@my-react/react-terminal/web";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
@@ -22,7 +22,7 @@ import { getBootedWebContainer, getWebContainerEnv } from "./webcontainer/create
 import { resolveFetchProxyUrl, setFetchProxyUrl } from "./webcontainer/create-proxy-fetch.js";
 import { subscribePreviewPorts } from "./webcontainer/subscribe-preview-ports.js";
 
-import type { AgentAdapter } from "@my-agent/app";
+import type { AgentAdapter } from "@codent/app";
 
 configureEnv({ allowNonBrowserUpdates: true });
 

@@ -1,7 +1,7 @@
 /**
  * Validates unified status middleware approval transitions.
  *
- * Run: pnpm --filter @my-agent/core run validate:status-middleware
+ * Run: pnpm --filter @codent/core run validate:status-middleware
  */
 
 import assert from "node:assert/strict";

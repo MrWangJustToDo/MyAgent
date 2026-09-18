@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Ownership rules for where tool factories and tool helpers live under `@my-agent/core`.
+Ownership rules for where tool factories and tool helpers live under `@codent/core`.
 
 ## Requirements
 

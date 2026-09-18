@@ -1,7 +1,7 @@
 /**
  * Validates stream recovery orchestrator (runStreamWithRecovery + helpers).
  *
- * Run: pnpm --filter @my-agent/core run validate:run-stream-recovery
+ * Run: pnpm --filter @codent/core run validate:run-stream-recovery
  */
 
 import assert from "node:assert/strict";

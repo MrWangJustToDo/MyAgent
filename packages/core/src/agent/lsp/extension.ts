@@ -124,7 +124,7 @@ function notifyServerLifecycle(
 /** Create the built-in LSP extension. */
 export function createLspExtension(options?: LspExtensionConfig): ExtensionAPI {
   return {
-    id: "my-agent-lsp",
+    id: "codent-lsp",
     name: "LSP Integration",
     version: "1.0.0",
     description:

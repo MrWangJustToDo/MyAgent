@@ -11,7 +11,7 @@ import { usageHeatmapWindow } from "../utils/usage-heatmap.js";
 import { registerCommand } from "./utils/registry.js";
 
 import type { CommandContext } from "./utils/types.js";
-import type { DailyUsageBucket, ModelUsageTotal } from "@my-agent/core";
+import type { DailyUsageBucket, ModelUsageTotal } from "@codent/core";
 import type { ReactNode } from "react";
 
 /** Maximum span of the global activity graph — one full year of weekly columns. */

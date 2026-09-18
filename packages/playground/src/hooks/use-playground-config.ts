@@ -1,8 +1,8 @@
 import { createState } from "reactivity-store";
 
-import type { ModelStyle } from "@my-agent/core";
+import type { ModelStyle } from "@codent/core";
 
-const STORAGE_KEY = "my-agent-playground-config";
+const STORAGE_KEY = "codent-playground-config";
 
 export interface PlaygroundConfig {
   model: string;

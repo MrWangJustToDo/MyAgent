@@ -8,7 +8,7 @@
  * actually executing — a tool keying per-agent resources (caches, sandboxes) would otherwise
  * attribute every subagent run to the parent.
  *
- * Run: pnpm --filter @my-agent/core run validate:tool-run-agentid
+ * Run: pnpm --filter @codent/core run validate:tool-run-agentid
  */
 
 import assert from "node:assert/strict";

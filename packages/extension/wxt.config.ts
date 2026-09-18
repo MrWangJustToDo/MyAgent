@@ -30,7 +30,7 @@ export default defineConfig({
       default_path: "sidepanel.html",
     },
     action: {
-      default_title: "My Agent",
+      default_title: "Codent",
     },
   },
   outDir: "dist",

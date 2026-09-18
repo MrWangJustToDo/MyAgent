@@ -1,7 +1,7 @@
 /**
  * Validation: end-to-end LSP extension activation through the production path.
  *
- * Run: pnpm --filter @my-agent/core run validate:lsp-extension
+ * Run: pnpm --filter @codent/core run validate:lsp-extension
  *
  * Uses the SAME wiring as production (agent-factory):
  *   - registerCoreEnv(createNodeEnv(...)) → global CoreEnv
@@ -80,8 +80,8 @@ writeFileSync(
 );
 
 // Register CoreEnv (node)
-const nodePkg = await import("@my-agent/node");
-const core = await import("@my-agent/core");
+const nodePkg = await import("@codent/node");
+const core = await import("@codent/core");
 const env = nodePkg.createNodeEnv({ rootPath: projectDir, cwd: projectDir, platform: "linux" });
 core.registerCoreEnv(env);
 

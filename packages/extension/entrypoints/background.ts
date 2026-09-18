@@ -1,5 +1,5 @@
 export default defineBackground(() => {
-  console.log("My Agent extension background ready", { id: browser.runtime.id });
+  console.log("Codent extension background ready", { id: browser.runtime.id });
 
   // Open side panel when extension icon is clicked
   browser.action.onClicked.addListener(async (tab) => {

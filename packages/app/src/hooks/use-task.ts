@@ -5,7 +5,7 @@ import { isToolCallPart, parseToolInput } from "../utils/tool-part.js";
 
 import { useSubAgents } from "./use-sub-agents.js";
 
-import type { AgentSession, TokenUsage } from "@my-agent/core";
+import type { AgentSession, TokenUsage } from "@codent/core";
 import type { ToolCallState, UIMessage } from "@tanstack/ai";
 
 const BEGIN_SUMMARY_TOOL_NAME = "begin_summary";

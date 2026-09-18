@@ -5,7 +5,7 @@
  * missed while status is still catching up. Return "" unless `enabled`.
  */
 
-import { compactSummaryStreamId, summaryStreamKey, type SummaryStreamEvent } from "@my-agent/core";
+import { compactSummaryStreamId, summaryStreamKey, type SummaryStreamEvent } from "@codent/core";
 import { useEffect, useRef, useState } from "react";
 
 import { resolveAgentSession } from "../utils/session-resolve.js";

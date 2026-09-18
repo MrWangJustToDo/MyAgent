@@ -32,7 +32,7 @@ module.exports = [
   //      per-directory `import/no-unresolved: "off"` blocks below cover those
   //      script trees, including the `../dist/utils/*` entry-point imports in
   //      packages/app/test.
-  //   2. Bare workspace specifiers (`@my-agent/core`, `@my-agent/server/client`, …)
+  //   2. Bare workspace specifiers (`@codent/core`, `@codent/server/client`, …)
   //      — the TS resolver follows `exports` → `./dist/index.mjs`, and the
   //      node resolver never reaches the package at all, so `alwaysTryTypes`
   //      alone does not save a dist-less tree. ~86 of these, spread across
@@ -54,6 +54,7 @@ module.exports = [
             "./packages/core/tsconfig.json",
             "./packages/app/tsconfig.json",
             "./packages/cli/tsconfig.json",
+            "./packages/codent/tsconfig.json",
             "./packages/node/tsconfig.json",
             "./packages/server/tsconfig.json",
             "./packages/extension/tsconfig.json",
@@ -70,7 +71,12 @@ module.exports = [
   },
   // React config for app, cli, and extension packages
   {
-    files: ["packages/app/src/**/*.{ts,tsx}", "packages/cli/src/**/*.{ts,tsx}", "packages/extension/**/*.{ts,tsx}"],
+    files: [
+      "packages/app/src/**/*.{ts,tsx}",
+      "packages/cli/src/**/*.{ts,tsx}",
+      "packages/codent/src/**/*.{ts,tsx}",
+      "packages/extension/**/*.{ts,tsx}",
+    ],
     ...reactLint.reduce((acc, config) => {
       return {
         ...acc,
@@ -95,6 +101,7 @@ module.exports = [
     files: [
       "packages/app/test/**",
       "packages/app/scripts/**",
+      "packages/codent/scripts/**",
       "packages/core/scripts/**",
       "packages/node/scripts/**",
       "packages/server/scripts/**",

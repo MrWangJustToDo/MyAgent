@@ -12,7 +12,7 @@ import { dirname, join } from "node:path";
 
 import type { BridgeConfig } from "./config.js";
 import type { ChatTarget } from "./types.js";
-import type { AgentSession, AgentSessionHost, ModelInfo } from "@my-agent/core";
+import type { AgentSession, AgentSessionHost, ModelInfo } from "@codent/core";
 
 export interface SessionEntry {
   key: string;

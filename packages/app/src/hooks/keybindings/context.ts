@@ -15,7 +15,7 @@ import type { AgentAdapter } from "../../adapter/types.js";
 import type { CommandContext } from "../../commands";
 import type { UseAgentChatReturn } from "../use-agent-chat.js";
 import type { InputMode, useInputMode } from "../use-input-mode.js";
-import type { AgentSession } from "@my-agent/core";
+import type { AgentSession } from "@codent/core";
 import type { MutableRefObject } from "react";
 
 export interface DenyingToolInfo {

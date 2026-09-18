@@ -1,8 +1,8 @@
-import { FileError } from "@my-agent/core";
+import { FileError } from "@codent/core";
 
 import { resolveWorkspacePath, toWorkdirPath } from "./workspace-path.js";
 
-import type { CoreEnvFs } from "@my-agent/core";
+import type { CoreEnvFs } from "@codent/core";
 import type { FileSystemAPI, WebContainer } from "@webcontainer/api";
 
 function wrapFsError(err: unknown, path: string): never {

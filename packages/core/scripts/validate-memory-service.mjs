@@ -1,7 +1,7 @@
 /**
  * Validates memory prefetch helpers and selected-filename resolution.
  *
- * Run: pnpm --filter @my-agent/core run validate:memory-service
+ * Run: pnpm --filter @codent/core run validate:memory-service
  */
 
 import assert from "node:assert/strict";

@@ -1,4 +1,4 @@
-import { getEnv } from "@my-agent/core";
+import { getEnv } from "@codent/core";
 import { createState } from "reactivity-store";
 
 import { refreshKeyboardPlatform } from "../utils/keyboard-labels.js";

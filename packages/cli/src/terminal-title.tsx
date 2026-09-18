@@ -1,5 +1,5 @@
-import { useAgent } from "@my-agent/app";
-import { getEnv, type AgentStatus } from "@my-agent/core";
+import { useAgent } from "@codent/app";
+import { getEnv, type AgentStatus } from "@codent/core";
 import { useEffect } from "react";
 
 // OSC 0 — set the terminal window title (and icon name, on terminals that
@@ -8,7 +8,7 @@ import { useEffect } from "react";
 const OSC_TITLE = "\x1b]0;";
 const OSC_END = "\x07";
 
-const APP_NAME = "MyAgent";
+const APP_NAME = "Codent";
 
 const STATUS_SUFFIX: Record<AgentStatus, string> = {
   idle: "",

@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 const { registerCoreEnv } = await import(new URL("../../core/dist/index.mjs", import.meta.url).href);
 registerCoreEnv({ rootPath: "/repo" });
 
-const { getInlineSummary } = await import("@my-agent/core");
+const { getInlineSummary } = await import("@codent/core");
 
 const part = (name, output) => ({
   type: "tool-call",
@@ -258,7 +258,7 @@ const part = (name, output) => ({
     );
   }
   // And the payload carries the call id the release is keyed by.
-  const { DEFAULT_AGENT_SESSION_CHANNELS } = await import("@my-agent/core");
+  const { DEFAULT_AGENT_SESSION_CHANNELS } = await import("@codent/core");
   assert.ok(
     DEFAULT_AGENT_SESSION_CHANNELS.includes("lifecycle"),
     "lifecycle must be a default channel, or a host that omits it would leak again"

@@ -9,7 +9,7 @@
  * fire-and-forget (`void …persist…`) — an unhandled rejection with no global
  * handler crashes the Node host.
  *
- * Run: pnpm --filter @my-agent/core run validate:session-persist-media-failure
+ * Run: pnpm --filter @codent/core run validate:session-persist-media-failure
  */
 
 /* eslint-disable no-undef */

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * my-agent-im-bridge — bin entry.
+ * codent-im-bridge — bin entry.
  *
  * Env (see .env at the repo root, same dotenv convention as the server):
  * - REMOTE_SESSION            agent server base URL (optional) — absent ⇒ local mode
@@ -18,7 +18,7 @@
 
 import "dotenv/config";
 
-import { installAgentLogProcessGuards } from "@my-agent/core";
+import { installAgentLogProcessGuards } from "@codent/core";
 import { appendFileSync } from "node:fs";
 
 import { TelegramAdapter } from "./adapters/telegram.js";

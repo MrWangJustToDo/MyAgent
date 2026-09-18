@@ -1,7 +1,7 @@
 /**
  * Validates AgentUIChannel stream → UIMessage[] conversion (text, tool-call, tool-result).
  *
- * Run: pnpm --filter @my-agent/core run validate:agent-ui-channel
+ * Run: pnpm --filter @codent/core run validate:agent-ui-channel
  */
 
 import { EventType } from "@tanstack/ai/client";

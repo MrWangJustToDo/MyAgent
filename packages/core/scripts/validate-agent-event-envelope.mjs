@@ -1,7 +1,7 @@
 /**
  * Validates typed AgentEvent envelope (ts, sessionId, payload) and JSON round-trip.
  *
- * Run: pnpm --filter @my-agent/core run validate:agent-event-envelope
+ * Run: pnpm --filter @codent/core run validate:agent-event-envelope
  */
 
 import assert from "node:assert/strict";

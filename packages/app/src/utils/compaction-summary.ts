@@ -1,6 +1,6 @@
 /**
  * Compaction summary markers and UI detectors (presentation-only).
- * Markers must stay in sync with `@my-agent/core` compaction writers.
+ * Markers must stay in sync with `@codent/core` compaction writers.
  */
 
 import type { UIMessage } from "@tanstack/ai";

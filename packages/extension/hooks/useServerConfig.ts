@@ -1,4 +1,4 @@
-import { DEFAULT_LOCAL_OPENAI_BASE_URL, type ModelStyle } from "@my-agent/core";
+import { DEFAULT_LOCAL_OPENAI_BASE_URL, type ModelStyle } from "@codent/core";
 import { createState } from "reactivity-store";
 
 export const DEFAULT_SERVER_URL = "http://localhost:3100";

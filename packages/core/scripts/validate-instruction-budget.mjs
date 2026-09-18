@@ -5,7 +5,7 @@
  * exceeds the byte budget, the re-injected `<instruction_context>` section must
  * surface a truncation notice instead of silently cutting off the content.
  *
- * Run: pnpm --filter @my-agent/core run validate:instruction-budget
+ * Run: pnpm --filter @codent/core run validate:instruction-budget
  */
 
 import assert from "node:assert/strict";

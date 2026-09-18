@@ -1,7 +1,7 @@
 /**
  * Validates resolveModelConfigFromProvider remote vs direct merge rules.
  *
- * Run: pnpm --filter @my-agent/core run validate:resolve-from-provider
+ * Run: pnpm --filter @codent/core run validate:resolve-from-provider
  */
 
 import assert from "node:assert/strict";

@@ -1,6 +1,6 @@
 /**
  * Internal re-exports for core validation scripts (`pnpm validate:*`).
- * Not part of the public `@my-agent/core` package API.
+ * Not part of the public `@codent/core` package API.
  */
 
 export * from "./dev/dev-agent.js";

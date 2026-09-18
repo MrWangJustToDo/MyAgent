@@ -35,7 +35,7 @@ export function fetchWorkspaceFileDiff(rootPath: string, filePath: string): Prom
 async function loadWorkspaceFileDiff(rootPath: string, filePath: string): Promise<WorkspaceFileDiff> {
   const relativePath = workspaceRelativePath(rootPath, filePath);
   const fileName = filePath.split("/").pop() || filePath;
-  const { getEnv } = await import("@my-agent/core");
+  const { getEnv } = await import("@codent/core");
   const env = getEnv();
 
   let oldContent = "";

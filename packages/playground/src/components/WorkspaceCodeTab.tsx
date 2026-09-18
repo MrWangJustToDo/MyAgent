@@ -10,7 +10,7 @@ import type { WebContainer } from "@webcontainer/api";
 
 const MonacoEditor = lazy(() => import("@monaco-editor/react").then((m) => ({ default: m.Editor })));
 
-const SIDEBAR_STORAGE_KEY = "my-agent-playground-sidebar";
+const SIDEBAR_STORAGE_KEY = "codent-playground-sidebar";
 const MIN_SIDEBAR_WIDTH = 140;
 const MAX_SIDEBAR_WIDTH = 500;
 

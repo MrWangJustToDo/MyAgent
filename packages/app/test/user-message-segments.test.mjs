@@ -3,7 +3,7 @@
  * `<skill>` / `<memory>` blocks injected by `/skill` and `/memory`, which the
  * transcript collapses into compact chips.
  *
- * Run: pnpm --filter @my-agent/app build && node packages/app/test/user-message-segments.test.mjs
+ * Run: pnpm --filter @codent/app build && node packages/app/test/user-message-segments.test.mjs
  */
 import assert from "node:assert/strict";
 import test from "node:test";

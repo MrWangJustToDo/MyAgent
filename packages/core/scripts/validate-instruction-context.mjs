@@ -6,7 +6,7 @@
  *   4. buildTurnContextSections includes the <instruction_context> section and
  *      keeps the other sections' existing semantic tags
  *
- * Run: pnpm --filter @my-agent/core run validate:instruction-context
+ * Run: pnpm --filter @codent/core run validate:instruction-context
  */
 
 import assert from "node:assert/strict";
@@ -168,7 +168,7 @@ setFile("CLAUDE.override.md", "# personal override\n");
     gitBranch: "main",
     gitStatus: "M file.ts",
     modeContent: '<plan_mode phase="planning">…</plan_mode>',
-    extensionTurnContextSections: [{ id: "my-agent-lsp", content: "ext activity" }],
+    extensionTurnContextSections: [{ id: "codent-lsp", content: "ext activity" }],
     instructionContext,
   })
     .map((section) => section.content)

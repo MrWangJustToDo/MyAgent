@@ -1,7 +1,7 @@
 /**
  * Validates RUN_ERROR fail-fast helpers used by main chat and subagents.
  *
- * Run: pnpm --filter @my-agent/core run validate:stream-errors
+ * Run: pnpm --filter @codent/core run validate:stream-errors
  */
 
 import assert from "node:assert/strict";

@@ -1,1 +1,1 @@
-import "@my-agent/cli";
+import "@codent/cli";

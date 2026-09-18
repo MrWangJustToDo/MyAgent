@@ -6,7 +6,7 @@
  * `structured-output.complete` CUSTOM event, and `RUN_FINISHED` carrying usage —
  * so the port's behaviour is asserted without an API key.
  *
- * Run: pnpm --filter @my-agent/core run validate:structured-query
+ * Run: pnpm --filter @codent/core run validate:structured-query
  */
 
 import assert from "node:assert/strict";

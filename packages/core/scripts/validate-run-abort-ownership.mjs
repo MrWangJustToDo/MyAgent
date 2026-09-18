@@ -9,7 +9,7 @@
  * 3. Parent → child cascade — ManagedAgent.abort() aborts running child
  *    subagents via cascadeAbortToChildren (serial `task` path regression lock).
  *
- * Run: pnpm --filter @my-agent/core run validate:run-abort-ownership
+ * Run: pnpm --filter @codent/core run validate:run-abort-ownership
  */
 
 import assert from "node:assert/strict";

@@ -1,7 +1,7 @@
 /**
  * Validates early-tool-result-ui middleware mirrors each tool finish into the UI channel.
  *
- * Run: pnpm --filter @my-agent/core run validate:early-tool-result-ui
+ * Run: pnpm --filter @codent/core run validate:early-tool-result-ui
  */
 
 import assert from "node:assert/strict";

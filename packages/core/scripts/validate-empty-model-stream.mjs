@@ -1,7 +1,7 @@
 /**
  * Validation for empty-model-stream detection (SSO/HTML → zero chunk streams).
  *
- * Run: pnpm --filter @my-agent/core run validate:empty-model-stream
+ * Run: pnpm --filter @codent/core run validate:empty-model-stream
  */
 
 import assert from "node:assert/strict";

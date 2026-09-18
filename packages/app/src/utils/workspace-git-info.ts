@@ -21,7 +21,7 @@ export type WorkspaceGitInfo = {
 export async function fetchWorkspaceGitInfo(rootPath: string): Promise<WorkspaceGitInfo | null> {
   if (!rootPath) return null;
 
-  const { getEnv } = await import("@my-agent/core");
+  const { getEnv } = await import("@codent/core");
   const env = getEnv();
 
   try {

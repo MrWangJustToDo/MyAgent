@@ -5,7 +5,7 @@ import { getActiveSession } from "../utils/session-resolve.js";
 
 import { useAgent } from "./use-agent.js";
 
-import type { AgentSessionSubagentSummary } from "@my-agent/core";
+import type { AgentSessionSubagentSummary } from "@codent/core";
 
 function findSubagentByTask(taskId: string): AgentSessionSubagentSummary | undefined {
   if (!taskId) return undefined;

@@ -2,7 +2,7 @@ import { Box, Text } from "ink";
 
 import { COLORS } from "../theme/colors.js";
 
-import type { TodoItem, TodoPriority, TodoStatus } from "@my-agent/core";
+import type { TodoItem, TodoPriority, TodoStatus } from "@codent/core";
 
 // ============================================================================
 // Visual constants — kept in sync with components/TodoList.tsx

@@ -11,7 +11,7 @@
  * - an unprimed store rewrites instead of appending into an unknown log;
  * - approvals are derived from messages, with the decision time on the part.
  *
- * Run: pnpm --filter @my-agent/core run validate:session-message-log
+ * Run: pnpm --filter @codent/core run validate:session-message-log
  */
 
 import assert from "node:assert/strict";

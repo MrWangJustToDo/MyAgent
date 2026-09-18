@@ -3,7 +3,7 @@
  * Validates preview-port list helpers (open / ready / close + active fallback).
  * Mirrors packages/playground/src/hooks/use-preview-ports.ts pure helpers.
  *
- * Run: pnpm --filter @my-agent/playground validate:preview-ports
+ * Run: pnpm --filter @codent/playground validate:preview-ports
  */
 import assert from "node:assert/strict";
 /* global console: readonly */

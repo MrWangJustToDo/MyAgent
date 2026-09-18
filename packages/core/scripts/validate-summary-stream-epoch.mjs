@@ -9,7 +9,7 @@
  *     re-opens an ended entry that shares the same epoch).
  *   - A plain append after end (no epoch) is still ignored (existing contract).
  *
- * Run: pnpm --filter @my-agent/core run validate:summary-stream-epoch
+ * Run: pnpm --filter @codent/core run validate:summary-stream-epoch
  */
 
 import assert from "node:assert/strict";

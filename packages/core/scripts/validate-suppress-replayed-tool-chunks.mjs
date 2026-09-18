@@ -1,7 +1,7 @@
 /**
  * Validates suppression of TanStack continuation TOOL_CALL_START/ARGS replays.
  *
- * Run: pnpm --filter @my-agent/core run validate:suppress-replayed-tool-chunks
+ * Run: pnpm --filter @codent/core run validate:suppress-replayed-tool-chunks
  */
 
 import { EventType } from "@tanstack/ai/client";

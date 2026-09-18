@@ -5,7 +5,7 @@
  * Boots the real server on an ephemeral port rooted at a freshly created git
  * worktree (with one dirty file) and asserts the full git metadata shape.
  *
- * Run: pnpm --filter @my-agent/server run validate:env-workspace
+ * Run: pnpm --filter @codent/server run validate:env-workspace
  */
 /* eslint-disable no-undef */
 import assert from "node:assert/strict";

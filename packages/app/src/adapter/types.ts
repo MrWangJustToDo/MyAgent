@@ -1,4 +1,4 @@
-import type { AgentSession, AgentSessionHost, AgentToolConfig, ModelInfo, ModelStyle } from "@my-agent/core";
+import type { AgentSession, AgentSessionHost, AgentToolConfig, ModelInfo, ModelStyle } from "@codent/core";
 import type { UIMessage } from "@tanstack/ai";
 import type { ReactNode } from "react";
 
@@ -9,8 +9,7 @@ import type { ReactNode } from "react";
 export interface AppConfig {
   model: string;
   /** API style: OpenAI-compatible or Anthropic Messages */
-  style: ModelStyle;
-  /** API base URL (defaults per style when empty) */
+  style: ModelStyle; /** API base URL (defaults per style when empty) */
   baseURL: string;
   apiKey: string;
   systemPrompt: string;
@@ -26,11 +25,23 @@ export interface AppConfig {
   continueSession: boolean;
   resumeSession: string;
   /**
+   * Display name of the running host (`codent` for the dev CLI, `codent` for
+   * the bundled release host). Purely cosmetic — it feeds the help screen, the
+   * OSC-0 terminal title, and nothing else. Undefined falls back to `codent`.
+   */
+  productName?: string;
+  /**
+   * Whether this host can talk to the remote planes (`--remote-env` /
+   * `--remote-provider` / `--remote-session`). Undefined means yes — every
+   * development host has them. The bundled release host sets `false`, and the
+   * help screen then omits flags it cannot honour.
+   */
+  remotePlanes?: boolean;
+  /**
    * Optional remote CoreEnv (workspace) base URL (`--remote-env` / REMOTE_ENV).
    * When set, hosts register a remote CoreEnv instead of the local Node env.
    */
-  remoteEnv?: string;
-  /**
+  remoteEnv?: string; /**
    * Optional remote model provider base URL (`--remote-provider` / REMOTE_PROVIDER).
    * Keys stay on the provider server; API key is not a local secret.
    */

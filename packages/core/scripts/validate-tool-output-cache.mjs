@@ -5,7 +5,7 @@
  * plus the wiring that makes `cacheToolOutput` trigger it on first write, and
  * the unchanged `maybeCacheOutput` threshold contract.
  *
- * Run: pnpm --filter @my-agent/core run validate:tool-output-cache
+ * Run: pnpm --filter @codent/core run validate:tool-output-cache
  */
 
 import assert from "node:assert/strict";

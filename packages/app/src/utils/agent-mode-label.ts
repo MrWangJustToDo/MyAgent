@@ -1,6 +1,6 @@
 import { formatPlanModeFooterLabel, todoProgressFromItems } from "./plan-footer-label.js";
 
-import type { AgentMode, AgentSessionSnapshot } from "@my-agent/core";
+import type { AgentMode, AgentSessionSnapshot } from "@codent/core";
 
 export type StatusBarModeSource = Pick<AgentSessionSnapshot, "mode" | "plan" | "todos">;
 

@@ -18,7 +18,7 @@ Update CLI package to work with the new Agent and AgentContext architecture wher
 // ============================================================================
 
 // Re-export useAgent from core
-export { useAgent, getAgentActions, type AgentState } from "@my-agent/core";
+export { useAgent, getAgentActions, type AgentState } from "@codent/core";
 
 // CLI-specific hooks
 export {
@@ -54,7 +54,7 @@ export type {
   ToolStatus,
   TokenUsage,
   ContextData,
-} from "@my-agent/core";
+} from "@codent/core";
 ```
 
 ---
@@ -66,7 +66,7 @@ export type {
 ```typescript
 import { Box, Text } from "ink";
 
-import type { Message, UserMessage, AssistantMessage, ToolMessage, ToolCall } from "@my-agent/core";
+import type { Message, UserMessage, AssistantMessage, ToolMessage, ToolCall } from "@codent/core";
 
 import { Spinner } from "../Spinner.js";
 

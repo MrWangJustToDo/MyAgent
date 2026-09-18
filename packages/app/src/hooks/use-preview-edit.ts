@@ -1,4 +1,4 @@
-import { previewEdit, type PreviewEditResult } from "@my-agent/core";
+import { previewEdit, type PreviewEditResult } from "@codent/core";
 import { useEffect, useState } from "react";
 
 /**

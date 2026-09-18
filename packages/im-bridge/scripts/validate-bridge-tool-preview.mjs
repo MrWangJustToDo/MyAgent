@@ -1,5 +1,5 @@
 /**
- * Offline validation for the file-tool content previews in @my-agent/im-bridge —
+ * Offline validation for the file-tool content previews in @codent/im-bridge —
  * mock ChatAdapter + fake AgentSession, no server / no Telegram required.
  *
  * These previews are the one deliberate exception to the one-line tool status
@@ -15,7 +15,7 @@
  * - failure → error excerpt instead of a preview (nothing was written).
  *
  * Run (builds first):
- *   pnpm --filter @my-agent/im-bridge validate:bridge
+ *   pnpm --filter @codent/im-bridge validate:bridge
  *   node packages/im-bridge/scripts/validate-bridge-tool-preview.mjs
  */
 

@@ -2,7 +2,7 @@
  * Validates extensions middleware always emits lifecycle tool-end/error
  * even when no ExtensionRunner is configured.
  *
- * Run: pnpm --filter @my-agent/core run validate:extensions-middleware
+ * Run: pnpm --filter @codent/core run validate:extensions-middleware
  */
 
 import assert from "node:assert/strict";

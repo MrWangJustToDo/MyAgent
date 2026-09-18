@@ -12,7 +12,9 @@
     "paths": {
       "react": ["./node_modules/@types/react"],
       "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"],
-      "react/jsx-dev-runtime": ["./node_modules/@types/react/jsx-dev-runtime"]
+      "react/jsx-dev-runtime": ["./node_modules/@types/react/jsx-dev-runtime"],
+      "ink": ["./node_modules/@my-react/react-terminal"],
+      "ink/jsx-runtime": ["./node_modules/@my-react/react-terminal/jsx-runtime"]
     }
   },
   "include": ["src/**/*"],

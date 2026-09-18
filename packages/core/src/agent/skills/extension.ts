@@ -4,7 +4,7 @@
  * Provides:
  * - `list_skills` tool: list available skills (name + description)
  * - `load_skill` tool: load the full SKILL.md content for a skill
- * - Turn-context injection of the available-skills index into its own `<ctx kind=my-agent-skills>` section
+ * - Turn-context injection of the available-skills index into its own `<ctx kind=codent-skills>` section
  *   (progressive disclosure: only names + descriptions are always visible; the
  *   full body is loaded on demand via `load_skill`).
  *
@@ -53,7 +53,7 @@ export interface CreateSkillsExtensionOptions {
 export function createSkillsExtension(options: CreateSkillsExtensionOptions): ExtensionAPI {
   const { skillRegistry, config } = options;
   return {
-    id: "my-agent-skills",
+    id: "codent-skills",
     name: "Skills",
     version: "1.0.0",
     description:

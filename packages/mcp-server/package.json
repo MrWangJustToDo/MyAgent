@@ -1,7 +1,7 @@
 {
-  "name": "@my-agent/mcp-server",
+  "name": "@codent/mcp-server",
   "version": "0.0.1",
-  "description": "MCP server for My Agent",
+  "description": "MCP server for Codent",
   "license": "MIT",
   "author": {
     "name": "MrWangJustToDo",
@@ -32,7 +32,7 @@
     }
   },
   "bin": {
-    "my-agent-mcp-server": "./dist/index.mjs"
+    "codent-mcp-server": "./dist/index.mjs"
   },
   "files": [
     "dist",

@@ -12,7 +12,7 @@
  * for an initial `state` event before dispatching, to ensure its SSE stream is
  * live.
  *
- * Run: pnpm --filter @my-agent/server run validate:agent-session-channels
+ * Run: pnpm --filter @codent/server run validate:agent-session-channels
  */
 /* eslint-disable no-undef */
 import assert from "node:assert/strict";
@@ -28,7 +28,7 @@ const { createServer } = await import("../dist/index.mjs");
 const { createRemoteAgentSessionHost } = await import("../dist/remote-session-host.mjs");
 const { RemoteSessionClient } = await import("../dist/remote-session-client.mjs");
 
-// The server externalizes `@my-agent/core`, so this import resolves to the SAME
+// The server externalizes `@codent/core`, so this import resolves to the SAME
 // module instances the server uses internally (shared agentManager / bus).
 const { agentManager, summaryStreamKey } = await import(new URL("../../core/dist/index.mjs", import.meta.url).href);
 

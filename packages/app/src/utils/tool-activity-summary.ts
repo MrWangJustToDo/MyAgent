@@ -21,4 +21,4 @@ export {
   type ActivityLabel,
   type ToolActivityBucket,
   type ToolActivityCounts,
-} from "@my-agent/core";
+} from "@codent/core";

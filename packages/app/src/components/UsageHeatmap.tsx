@@ -8,7 +8,7 @@ import {
   usageHeatmapWindow,
 } from "../utils/usage-heatmap.js";
 
-import type { DailyUsageBucket } from "@my-agent/core";
+import type { DailyUsageBucket } from "@codent/core";
 
 // ============================================================================
 // GitHub-style contribution heatmap for /usage.

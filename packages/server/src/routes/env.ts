@@ -1,4 +1,4 @@
-import { getEnv } from "@my-agent/core";
+import { getEnv } from "@codent/core";
 import { Hono } from "hono";
 
 import { destroyAllServerJobs } from "./command.js";

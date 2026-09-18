@@ -11,7 +11,7 @@
  * The isolate driver used for path 1 is a lightweight stub so this script has no
  * native dependency on isolated-vm; it only exercises extension wiring.
  *
- * Run: pnpm --filter @my-agent/core run validate:code-mode-extension
+ * Run: pnpm --filter @codent/core run validate:code-mode-extension
  */
 
 import { createCodeModeExtension } from "../dist/dev.mjs";

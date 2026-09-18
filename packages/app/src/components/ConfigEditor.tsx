@@ -10,7 +10,7 @@ import { FullBox } from "./FullBox.js";
 import { Spinner } from "./Spinner.js";
 import { TextInput } from "./TextInput.js";
 
-import type { ModelsConfig } from "@my-agent/core";
+import type { ModelsConfig } from "@codent/core";
 
 // ============================================================================
 // ConfigEditor — first-run model configuration editor

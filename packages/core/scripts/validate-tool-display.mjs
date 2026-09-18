@@ -1,7 +1,7 @@
 /**
  * Validation: per-call tool display payload (core-owned presentation).
  *
- * Run: pnpm --filter @my-agent/core run validate:tool-display
+ * Run: pnpm --filter @codent/core run validate:tool-display
  *
  * Covers the contract of `computeToolDisplay` + `AgentUIChannel.attachToolDisplay`:
  *   1. a built-in renders its text/summary from the stored output

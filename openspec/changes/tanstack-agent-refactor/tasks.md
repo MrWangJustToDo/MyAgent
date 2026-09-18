@@ -31,7 +31,7 @@
 - [x] 4.2 Implement `AgentManager.runAgentStream(agentId, input)` returning `AsyncIterable<StreamChunk>` (yields from `AgentRunner.run()`)
 - [x] 4.3 Wire `runAgentStream` to update `ManagedAgent.status`, `usage`, and lifecycle events
 - [x] 4.4 Add validation script: `localConnect` + mock stream produces `UIMessage[]` via `ChatClient`
-- [x] 4.5 Export `localConnect` from `@my-agent/core`
+- [x] 4.5 Export `localConnect` from `@codent/core`
 
 ## 5. AgentUIChannel (subagent preview)
 

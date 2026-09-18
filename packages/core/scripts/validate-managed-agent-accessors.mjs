@@ -1,7 +1,7 @@
 /**
  * Validates ManagedAgent host-facing status/context/ui accessors and internal wiring.
  *
- * Run: pnpm --filter @my-agent/core run validate:managed-agent-accessors
+ * Run: pnpm --filter @codent/core run validate:managed-agent-accessors
  */
 
 import assert from "node:assert/strict";

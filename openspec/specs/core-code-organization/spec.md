@@ -2,7 +2,7 @@
 
 ## Purpose
 
-How `@my-agent/core` is organised: module ownership and directory layout, the naming conventions a module must follow, and the import boundaries that keep subsystems independent.
+How `@codent/core` is organised: module ownership and directory layout, the naming conventions a module must follow, and the import boundaries that keep subsystems independent.
 
 ## Requirements
 ### Requirement: Built-in extensions expose one canonical factory

@@ -6,7 +6,7 @@
  * don't get English titles/summaries), and the PR summary prompt must keep its
  * section structure.
  *
- * Run: pnpm --filter @my-agent/core run validate:session-summary-prompt
+ * Run: pnpm --filter @codent/core run validate:session-summary-prompt
  */
 
 import assert from "node:assert/strict";

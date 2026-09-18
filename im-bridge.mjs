@@ -1,1 +1,1 @@
-import "@my-agent/im-bridge/cli";
+import "@codent/im-bridge/cli";

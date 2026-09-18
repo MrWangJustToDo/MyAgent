@@ -6,7 +6,7 @@
  * 2. AgentManager.spawnSubagent inherits the parent session dir and writes an
  *    independent `{subagentId}.log`.
  *
- * Run: pnpm --filter @my-agent/core run validate:agent-log-host-sink
+ * Run: pnpm --filter @codent/core run validate:agent-log-host-sink
  */
 
 import assert from "node:assert/strict";

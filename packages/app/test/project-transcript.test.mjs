@@ -3,7 +3,7 @@
  *
  * Run: node packages/app/test/project-transcript.test.mjs
  */
-import { clearToolPresentation, registerToolPresentation } from "@my-agent/core";
+import { clearToolPresentation, registerToolPresentation } from "@codent/core";
 import assert from "node:assert/strict";
 
 import {

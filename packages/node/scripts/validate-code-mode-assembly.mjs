@@ -9,10 +9,10 @@
  *      external subset is exposed inside the sandbox).
  *   3. With `codeMode: false`, no code-mode tools are registered (disable path).
  *
- * Run: pnpm --filter @my-agent/node run validate:code-mode-assembly
+ * Run: pnpm --filter @codent/node run validate:code-mode-assembly
  */
-import { agentManager, clearCoreEnv, registerCoreEnv } from "@my-agent/core";
-import { createNodeEnv } from "@my-agent/node";
+import { agentManager, clearCoreEnv, registerCoreEnv } from "@codent/core";
+import { createNodeEnv } from "@codent/node";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

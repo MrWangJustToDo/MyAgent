@@ -52,7 +52,7 @@ function warnSandboxDowngrade(message: string): void {
     return;
   }
   downgradeWarned = true;
-  process.stderr.write(`[my-agent] ${message}\n`);
+  process.stderr.write(`[codent] ${message}\n`);
 }
 
 /**
@@ -110,7 +110,7 @@ export async function ensureOsSandbox(rootPath: string): Promise<boolean> {
 
     if (deps.warnings.length > 0 && process.env.MY_AGENT_SANDBOX_QUIET !== "1") {
       for (const warning of deps.warnings) {
-        process.stderr.write(`[my-agent] sandbox warning: ${warning}\n`);
+        process.stderr.write(`[codent] sandbox warning: ${warning}\n`);
       }
     }
 

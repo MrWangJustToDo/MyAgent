@@ -5,9 +5,9 @@ import { usePlaygroundConfig } from "../hooks/use-playground-config.js";
 
 import { ExportWorkspaceDialog } from "./ExportWorkspaceDialog.js";
 
-import type { ModelStyle } from "@my-agent/core";
+import type { ModelStyle } from "@codent/core";
 
-const BUBBLE_STORAGE_KEY = "my-agent-playground-settings-bubble";
+const BUBBLE_STORAGE_KEY = "codent-playground-settings-bubble";
 
 export const ConfigPanel = () => {
   const model = usePlaygroundConfig((s) => s.model);

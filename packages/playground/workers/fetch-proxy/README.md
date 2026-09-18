@@ -15,7 +15,7 @@ npx wrangler deploy
 Example bake:
 
 ```bash
-VITE_FETCH_PROXY_URL=https://my-agent-fetch-proxy.<account>.workers.dev pnpm build:playground
+VITE_FETCH_PROXY_URL=https://codent-fetch-proxy.<account>.workers.dev pnpm build:playground
 ```
 
 Or set GitHub Actions variable `VITE_FETCH_PROXY_URL` — the Pages workflow passes it into the Vite build.

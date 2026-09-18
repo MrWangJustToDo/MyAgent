@@ -1,7 +1,7 @@
 {
-  "name": "@my-agent/server",
+  "name": "@codent/server",
   "version": "0.0.1",
-  "description": "CoreEnv-compatible HTTP server backed by @my-agent/node, with type-safe RPC client",
+  "description": "CoreEnv-compatible HTTP server backed by @codent/node, with type-safe RPC client",
   "keywords": [
     "ai",
     "agent",
@@ -47,7 +47,7 @@
     }
   },
   "bin": {
-    "my-agent-server": "./dist/index.mjs"
+    "codent-server": "./dist/index.mjs"
   },
   "files": [
     "dist",
@@ -70,8 +70,8 @@
   "dependencies": {
     "@hono/node-server": "^2.1.1",
     "@hono/zod-validator": "^0.9.1",
-    "@my-agent/core": "workspace:*",
-    "@my-agent/node": "workspace:*",
+    "@codent/core": "workspace:*",
+    "@codent/node": "workspace:*",
     "dotenv": "^17.4.2",
     "hono": "^4.13.7",
     "zod": "^4.5.4"

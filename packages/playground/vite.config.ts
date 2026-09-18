@@ -27,7 +27,7 @@ export default defineConfig({
       path: nodePathShim,
       "tree-sitter-wasms": treeSitterWasms,
     },
-    // One chalk instance so force-chalk-color covers Ink + @my-agent/app
+    // One chalk instance so force-chalk-color covers Ink + @codent/app
     dedupe: ["ink", "@my-react/react-terminal", "ink-stream-markdown", "chalk"],
   },
 

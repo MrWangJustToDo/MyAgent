@@ -10,7 +10,7 @@ import { listNavHint, pressEscToReturnHint } from "../utils/keyboard-labels.js";
 
 import { PanelOverlay } from "./PanelOverlay.js";
 
-import type { ExtensionInfo } from "@my-agent/core";
+import type { ExtensionInfo } from "@codent/core";
 
 const ExtensionPanelList = ({
   infos,

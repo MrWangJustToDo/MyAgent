@@ -2,7 +2,7 @@
  * Validation: mid-startup shutdown — no child-process leak when a session ends
  * while an LSP server is still performing its initialize handshake.
  *
- * Run: pnpm --filter @my-agent/core run validate:lsp-midstartup-shutdown
+ * Run: pnpm --filter @codent/core run validate:lsp-midstartup-shutdown
  *
  * Uses a slow-initializing mock server (SLOW_MS=2000). Sequence:
  *   1. activate extension with slow mock server for "typescript"
@@ -52,8 +52,8 @@ writeFileSync(
 );
 writeFileSync(resolve(projectDir, "a.ts"), "export const a = 1;\n");
 
-const nodePkg = await import("@my-agent/node");
-const core = await import("@my-agent/core");
+const nodePkg = await import("@codent/node");
+const core = await import("@codent/core");
 const env = nodePkg.createNodeEnv({ rootPath: projectDir, cwd: projectDir, platform: "linux" });
 core.registerCoreEnv(env);
 

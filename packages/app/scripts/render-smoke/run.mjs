@@ -13,7 +13,7 @@
  * the components that read them share an instance. Importing `src` through a second entry
  * would resolve two copies of each store and produce false failures.
  *
- * Run: pnpm --filter @my-agent/app run validate:render-smoke
+ * Run: pnpm --filter @codent/app run validate:render-smoke
  *      node scripts/render-smoke/run.mjs [session.jsonl]
  */
 

@@ -14,7 +14,7 @@ import { FooterExtensionSurface } from "./FooterExtensionSurface.js";
 import { FooterInput } from "./FooterInput.js";
 import { FooterStatusBar } from "./FooterStatusBar.js";
 
-import type { AgentStatus, QueuedMessagesSnapshot } from "@my-agent/core";
+import type { AgentStatus, QueuedMessagesSnapshot } from "@codent/core";
 
 export const Footer = ({
   status,

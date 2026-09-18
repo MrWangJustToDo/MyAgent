@@ -28,7 +28,7 @@ The agent server SHALL expose catalog operations for create, list, connect/snaps
 - **THEN** `GET /api/agent/:childId/snapshot` and SSE/command routes SHALL work for that id
 
 ### Requirement: Remote Host factory
-`@my-agent/server` SHALL export `createRemoteSessionHost(baseUrl)` (name may vary) that implements AgentSessionHost over HTTP.
+`@codent/server` SHALL export `createRemoteSessionHost(baseUrl)` (name may vary) that implements AgentSessionHost over HTTP.
 
 #### Scenario: App uses remote host only
 - **WHEN** CLI/extension is configured with `--remote-session`

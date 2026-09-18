@@ -1,7 +1,7 @@
 /**
  * Validates plan verification parse + complete_plan gate helpers.
  *
- * Run: pnpm --filter @my-agent/core run validate:plan-verification
+ * Run: pnpm --filter @codent/core run validate:plan-verification
  */
 
 import assert from "node:assert/strict";
@@ -14,11 +14,11 @@ import {
 } from "../dist/dev.mjs";
 
 const items = parseVerificationItemsFromText(`- resume shows images
-- pnpm --filter @my-agent/core run validate:media-store
+- pnpm --filter @codent/core run validate:media-store
 1. session JSON has no inline base64`);
 assert.deepEqual(items, [
   "resume shows images",
-  "pnpm --filter @my-agent/core run validate:media-store",
+  "pnpm --filter @codent/core run validate:media-store",
   "session JSON has no inline base64",
 ]);
 

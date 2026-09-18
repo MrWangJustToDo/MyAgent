@@ -1,7 +1,7 @@
 /**
- * Fail if forbidden symbols appear on the published `@my-agent/core` entry.
+ * Fail if forbidden symbols appear on the published `@codent/core` entry.
  *
- * Run: pnpm --filter @my-agent/core run validate:core-public-exports
+ * Run: pnpm --filter @codent/core run validate:core-public-exports
  */
 import assert from "node:assert/strict";
 import path from "node:path";

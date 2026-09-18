@@ -29,15 +29,16 @@ A pnpm monorepo with nine packages organized in a layered architecture.
 
 | Package | Role |
 |---------|------|
-| `@my-agent/core` | Runtime-agnostic core: agent loop, tools, LLM model factory, CoreEnv interface |
-| `@my-agent/app` | Shared UI layer: React components, hooks, commands, AgentAdapter interface. **Session-only** for agent control — keeps a live-session registry (`sessions`/`activeSessionId` + `registerSession`/`activateSession`) so multiple live agents can coexist and be switched. See [`packages/app/README.md`](packages/app/README.md) import allowlist |
-| `@my-agent/cli` | Terminal host — thin shell that registers CoreEnv and renders `@my-agent/app` |
-| `@my-agent/node` | Node.js CoreEnv implementation: native filesystem, shell, OS sandbox |
-| `@my-agent/server` | CoreEnv HTTP server (Hono RPC) + remote client factory |
-| `@my-agent/extension` | Chrome extension host using WXT framework |
-| `@my-agent/playground` | In-browser WebContainer host (Vite) |
-| `@my-agent/mcp-server` | MCP server for external tool integration |
-| `@my-agent/im-bridge` | Generic IM bridge (Telegram adapter) — a headless AgentSession client like the remote CLI; no CoreEnv/ModelProvider of its own in remote mode, in-process local mode otherwise |
+| `@codent/core` | Runtime-agnostic core: agent loop, tools, LLM model factory, CoreEnv interface |
+| `@codent/app` | Shared UI layer: React components, hooks, commands, AgentAdapter interface. **Session-only** for agent control — keeps a live-session registry (`sessions`/`activeSessionId` + `registerSession`/`activateSession`) so multiple live agents can coexist and be switched. See [`packages/app/README.md`](packages/app/README.md) import allowlist |
+| `@codent/cli` | Terminal host — thin shell that registers CoreEnv and renders `@codent/app` |
+| `@codent/node` | Node.js CoreEnv implementation: native filesystem, shell, OS sandbox |
+| `@codent/server` | CoreEnv HTTP server (Hono RPC) + remote client factory |
+| `@codent/extension` | Chrome extension host using WXT framework |
+| `@codent/playground` | In-browser WebContainer host (Vite) |
+| `@codent/mcp-server` | MCP server for external tool integration |
+| `@codent/im-bridge` | Generic IM bridge (Telegram adapter) — a headless AgentSession client like the remote CLI; no CoreEnv/ModelProvider of its own in remote mode, in-process local mode otherwise |
+| `codent` | **Release host.** Local-only terminal CLI (no remote planes) published as one fully bundled, self-contained tarball — `@codent/app` / `core` / `node` are inlined, so no sibling has to be on the registry. See `packages/codent/tsdown.config.ts`. |
 
 ## Architecture
 
@@ -47,36 +48,36 @@ A pnpm monorepo with nine packages organized in a layered architecture.
 ┌─────────────────────────────────────────────────────────┐
 │  Runtime Hosts                                          │
 │  ┌──────────────────┐  ┌────────────────────────────┐   │
-│  │  @my-agent/cli   │  │  @my-agent/extension       │   │
+│  │  @codent/cli   │  │  @codent/extension       │   │
 │  │  (Ink terminal)  │  │  (WXT Chrome extension)    │   │
 │  └────────┬─────────┘  └─────────────┬──────────────┘   │
 │           │     AgentAdapter          │                  │
 │           │  (+ playground WebContainer host)            │
 │  ┌────────┴───────────────────────────┴──────────────┐   │
-│  │  @my-agent/app  (Session-only UI, hooks, commands)│   │
+│  │  @codent/app  (Session-only UI, hooks, commands)│   │
 │  └────────────────────────┬──────────────────────────┘   │
 │                           │  AgentSession                │
 │  ┌────────────────────────┴──────────────────────────┐   │
-│  │  @my-agent/core  (agent loop, tools, CoreEnv)     │   │
+│  │  @codent/core  (agent loop, tools, CoreEnv)     │   │
 │  └────────────────────────┬──────────────────────────┘   │
 │                           │  CoreEnv interface           │
 │  ┌────────────────────────┴──────────────────────────┐   │
 │  │  CoreEnv Adapter Layer                            │   │
 │  │  ┌──────────────────┐  ┌────────────────────────┐ │   │
-│  │  │ @my-agent/node   │  │ @my-agent/server       │ │   │
+│  │  │ @codent/node   │  │ @codent/server       │ │   │
 │  │  │ (local Node.js)  │  │ (remote HTTP client)   │ │   │
 │  │  └──────────────────┘  └───────────┬────────────┘ │   │
 │  └────────────────────────────────────┼──────────────┘   │
 │                                       │ Hono RPC         │
 │  ┌────────────────────────────────────┴──────────────┐   │
-│  │  @my-agent/server (HTTP server, uses @my-agent/node)  │
+│  │  @codent/server (HTTP server, uses @codent/node)  │
 │  └───────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ### CoreEnv — Runtime Abstraction
 
-`CoreEnv` is the central abstraction that decouples `@my-agent/core` from any specific runtime. All filesystem, shell, fetch, and platform APIs go through this interface.
+`CoreEnv` is the central abstraction that decouples `@codent/core` from any specific runtime. All filesystem, shell, fetch, and platform APIs go through this interface.
 
 ```typescript
 interface CoreEnv {
@@ -98,7 +99,7 @@ interface CoreEnv {
 
 **Registry pattern:**
 ```typescript
-import { registerCoreEnv, getEnv, clearCoreEnv, hasCoreEnv } from "@my-agent/core";
+import { registerCoreEnv, getEnv, clearCoreEnv, hasCoreEnv } from "@codent/core";
 
 registerCoreEnv(env);   // Set the global CoreEnv (must be called before any core usage)
 getEnv();               // Get resolved env with defaults applied
@@ -107,8 +108,8 @@ hasCoreEnv();           // Check if registered
 ```
 
 **Implementations:**
-- `createNodeEnv()` from `@my-agent/node` — local Node.js APIs, optional OS sandbox
-- `createRemoteEnv(url)` from `@my-agent/server/client` — HTTP RPC to a remote CoreEnv server
+- `createNodeEnv()` from `@codent/node` — local Node.js APIs, optional OS sandbox
+- `createRemoteEnv(url)` from `@codent/server/client` — HTTP RPC to a remote CoreEnv server
 
 ### ModelProvider — LLM plane (orthogonal to CoreEnv)
 
@@ -119,8 +120,8 @@ import {
   registerModelProvider,
   createDirectModelProvider,
   resolveModelConfigFromProvider,
-} from "@my-agent/core";
-import { createRemoteProvider } from "@my-agent/server/client";
+} from "@codent/core";
+import { createRemoteProvider } from "@codent/server/client";
 
 registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey }));
 // or
@@ -137,7 +138,7 @@ The exclusivity is a **client** rule: a server (`pnpm start:server`) may itself 
 
 `createAgentFromConfig` uses `resolveModelConfigFromProvider()`. All hosts share one model-config pipeline (`models-config.ts`): a local `.agents/config/models.json` (file), a remote provider (`/api/provider/info`), or a remote-session server (`/api/agent/models`) — `/models` switches the active entry/model. Remote mode forces `baseURL`/`apiKey` from the provider (re-forced after models.dev so upstream URLs cannot bypass). `/api/env/vars` strips `API_KEY` / `*_API_KEY`. Footer shows `model · remote` when `providerMode === "remote"`.
 
-**Model capabilities** have one source of truth — `MODEL_CAPABILITIES` in `packages/core/src/models/types.ts`, from which the `ModelCapability` union and the extension `MODEL_CAPABILITY_FLAGS` are both derived. **Every member must be evidenceable** from metadata `deriveCapabilities` actually reads (`streaming` was granted to all entries with no field behind it, and `computer_use` had no source at all — both removed). `parseModelsDevModel` fills the list: `modalities.input` is authoritative per modality (`image`→`vision`, `audio`, `video`, `pdf`→`document`); `attachment` is a fallback used only when `modalities` is absent and grants `vision` alone (it cannot distinguish modalities, so it never implies `document`); `reasoning` / `tool_call` / `structured_output` map one-to-one; cache pricing implies `prompt_caching`. **Reasoning echo** is a separate `ModelInfo` concern, not a capability: `interleaved` (models.dev) sets `reasoningInterleaved` (the **adapter routing** signal — `capabilities.includes("reasoning")` alone is not enough) and `reasoningEchoField` (**only** the non-default `reasoning_details`; 15 of 7842 entries). The field is not consumed yet — TanStack's `extractReasoning` seam is `{ text: string }`, so structured/signed blocks cannot be carried. **`undefined` means "unknown" (permissive) and `[]` means "declared, none apply" (strict)** — `UsageTracker` holds `null` for the former, and a successful parse must return `[]`, never `undefined`, for a plain text model, so its modalities are stripped instead of sent to an endpoint that rejects them. Three hops preserve the distinction (`deriveCapabilities`, `mergeModelInfo`, `setCapabilities`). Validate: `pnpm --filter @my-agent/core run validate:model-capabilities`, `validate:capability-unknown-vs-none`, and `validate:reasoning-echo`.
+**Model capabilities** have one source of truth — `MODEL_CAPABILITIES` in `packages/core/src/models/types.ts`, from which the `ModelCapability` union and the extension `MODEL_CAPABILITY_FLAGS` are both derived. **Every member must be evidenceable** from metadata `deriveCapabilities` actually reads (`streaming` was granted to all entries with no field behind it, and `computer_use` had no source at all — both removed). `parseModelsDevModel` fills the list: `modalities.input` is authoritative per modality (`image`→`vision`, `audio`, `video`, `pdf`→`document`); `attachment` is a fallback used only when `modalities` is absent and grants `vision` alone (it cannot distinguish modalities, so it never implies `document`); `reasoning` / `tool_call` / `structured_output` map one-to-one; cache pricing implies `prompt_caching`. **Reasoning echo** is a separate `ModelInfo` concern, not a capability: `interleaved` (models.dev) sets `reasoningInterleaved` (the **adapter routing** signal — `capabilities.includes("reasoning")` alone is not enough) and `reasoningEchoField` (**only** the non-default `reasoning_details`; 15 of 7842 entries). The field is not consumed yet — TanStack's `extractReasoning` seam is `{ text: string }`, so structured/signed blocks cannot be carried. **`undefined` means "unknown" (permissive) and `[]` means "declared, none apply" (strict)** — `UsageTracker` holds `null` for the former, and a successful parse must return `[]`, never `undefined`, for a plain text model, so its modalities are stripped instead of sent to an endpoint that rejects them. Three hops preserve the distinction (`deriveCapabilities`, `mergeModelInfo`, `setCapabilities`). Validate: `pnpm --filter @codent/core run validate:model-capabilities`, `validate:capability-unknown-vs-none`, and `validate:reasoning-echo`.
 
 ### AgentAdapter — Host Abstraction
 
@@ -153,7 +154,7 @@ interface AgentAdapter {
 }
 ```
 
-Shared initialization logic is in `createAgentFromConfig()` (`@my-agent/app/adapter/create-agent.ts`). Both `LocalAgentAdapter` (CLI) and `ExtensionAgentAdapter` delegate to this helper. `initConfig` must keep host fields such as `toolConfig` (Brave / websearch) and `remoteSession` so they reach `Host.create`. The CLI `LocalAgentAdapter` tracks live sessions through the host and, on `destroy`, iterates `host.list()` to tear down **every** live agent owned by the host (the bootstrap session plus any created via `createSessionOnHost`) so no agent leaks on exit.
+Shared initialization logic is in `createAgentFromConfig()` (`@codent/app/adapter/create-agent.ts`). Both `LocalAgentAdapter` (CLI) and `ExtensionAgentAdapter` delegate to this helper. `initConfig` must keep host fields such as `toolConfig` (Brave / websearch) and `remoteSession` so they reach `Host.create`. The CLI `LocalAgentAdapter` tracks live sessions through the host and, on `destroy`, iterates `host.list()` to tear down **every** live agent owned by the host (the bootstrap session plus any created via `createSessionOnHost`) so no agent leaks on exit.
 
 ### Bootstrap Sequences
 
@@ -182,7 +183,7 @@ ConnectionGuard(/health) → createRemoteEnv(url) → registerCoreEnv
   → initConfig → render(App)
 ```
 
-### @my-agent/core Public API
+### @codent/core Public API
 
 `packages/core/src/index.ts` exports a **curated** surface for hosts and adapters — not a barrel of every internal module:
 
@@ -201,7 +202,7 @@ Internal modules (tools, middleware, subagent runner, hook registry, session-syn
 
 ### TanStack AI Integration
 
-`@my-agent/core` uses **TanStack AI** (`@tanstack/ai`, provider adapters) for agent execution.
+`@codent/core` uses **TanStack AI** (`@tanstack/ai`, provider adapters) for agent execution.
 
 Key integration points:
 - `core/src/models/model-config.ts` — connection resolution (`openai` | `anthropic` style, baseURL, apiKey, models.dev metadata)
@@ -224,6 +225,7 @@ pnpm build:cli        # Build CLI package only
 pnpm build:server     # Build server package only
 pnpm build:extension  # Build extension only
 pnpm build:im-bridge  # Build im-bridge package only
+pnpm build:codent      # Build the release host (fully bundled, self-contained)
 
 pnpm dev              # Run all packages in watch mode (parallel)
 pnpm dev:core         # Watch core package
@@ -234,6 +236,7 @@ pnpm dev:extension    # Run extension dev server
 pnpm start:cli        # Run CLI after build
 pnpm start:server     # Run CoreEnv HTTP server
 pnpm start:im-bridge  # Run the IM bridge (Telegram)
+pnpm publish:codent   # Build + publish the release host (no sibling packages needed)
 
 pnpm typecheck        # Type check all packages
 pnpm lint             # Run ESLint (after a build — see below)
@@ -242,11 +245,11 @@ pnpm format           # Format with Prettier
 
 Per-package type check: `cd packages/<pkg> && pnpm tsc --noEmit` (e.g. `core`, `app`, `cli`).
 
-**Build first.** `pnpm lint` and `pnpm typecheck` only pass against a built checkout: the `validate:*` / test / render-smoke scripts import their own package's `dist` output (`../dist/dev.mjs`), and bare workspace specifiers (`@my-agent/core`) resolve through each package's `exports` map, which points at `dist`. In a fresh clone both commands report ~280 phantom `import/no-unresolved` / `TS2307` errors until `pnpm build` has run once. That is why CI builds before linting.
+**Build first.** `pnpm lint` and `pnpm typecheck` only pass against a built checkout: the `validate:*` / test / render-smoke scripts import their own package's `dist` output (`../dist/dev.mjs`), and bare workspace specifiers (`@codent/core`) resolve through each package's `exports` map, which points at `dist`. In a fresh clone both commands report ~280 phantom `import/no-unresolved` / `TS2307` errors until `pnpm build` has run once. That is why CI builds before linting.
 
-Tests: `@my-agent/app` owns the only `node:test` suite — `pnpm --filter @my-agent/app test` builds the package, then runs `node --test test/*.test.mjs` against its `dist` output. Core is covered by the `validate:*` scripts instead (see step 3 of the Task Completion Checklist).
+Tests: `@codent/app` owns the only `node:test` suite — `pnpm --filter @codent/app test` builds the package, then runs `node --test test/*.test.mjs` against its `dist` output. Core is covered by the `validate:*` scripts instead (see step 3 of the Task Completion Checklist).
 
-CI: `.github/workflows/ci.yml` runs on every pull request and on pushes to `main` — `wxt prepare` → `pnpm build` → `pnpm lint` → `pnpm typecheck` → `pnpm --filter @my-agent/app test`. The release workflow (`.github/workflows/release.yml`, `v*` tag or manual dispatch) runs the same checks before `pnpm run publish:only`.
+CI: `.github/workflows/ci.yml` runs on every pull request and on pushes to `main` — `wxt prepare` → `pnpm build` → `pnpm lint` → `pnpm typecheck` → `pnpm --filter @codent/app test`. The release workflow (`.github/workflows/release.yml`, `v*` tag or manual dispatch) runs the same checks before `pnpm run publish:only`.
 
 ## Code Style Guidelines
 
@@ -337,9 +340,9 @@ try {
 }
 ```
 
-**Typed errors:** Use `FileError` / `ExecutionError` (from `@my-agent/core`) for structured errors across local/remote boundaries — they serialize/deserialize over HTTP.
+**Typed errors:** Use `FileError` / `ExecutionError` (from `@codent/core`) for structured errors across local/remote boundaries — they serialize/deserialize over HTTP.
 ```typescript
-import { FileError, ExecutionError } from "@my-agent/core";
+import { FileError, ExecutionError } from "@codent/core";
 throw new FileError("not_found", "File not found", "/path/to/file");          // fs
 throw new ExecutionError("timeout", "Command timed out after 30s");            // exec
 ```
@@ -451,7 +454,7 @@ Use section separators in large files:
 
 ## Agent Session API (host-facing)
 
-Hosts should prefer `AgentSession` (`getSnapshot` / `dispatch` / `subscribe`) over reading `ManagedAgent` fields. Local: `createLocalAgentSession`. HTTP: `@my-agent/server/agent-session` / `@my-agent/server/client`'s `createRemoteAgentSessionHost` against `/api/agent/*`. Subagents reuse the same Session contract by id.
+Hosts should prefer `AgentSession` (`getSnapshot` / `dispatch` / `subscribe`) over reading `ManagedAgent` fields. Local: `createLocalAgentSession`. HTTP: `@codent/server/agent-session` / `@codent/server/client`'s `createRemoteAgentSessionHost` against `/api/agent/*`. Subagents reuse the same Session contract by id.
 
 **Host-owned session plane:** hosts construct the `AgentSessionHost` (local manager, or remote HTTP when `--remote-session`) and inject it into `createAgentFromConfig`; the UI layer never imports core runtime singletons (enforced by app's `validate:core-imports`). Remote client features: SSE auto-reconnect with exponential backoff, server heartbeat ping + client watchdog, remount seeds (`/tool-buffers`, `/summary-streams`) so in-flight tool output and summary streams survive reconnects; the retained `state` channel carries the session identity (`name`, `sessionId`) plus model identity (`model` / `modelInfo` / `reasoningEffort`), so commands and model switches sync without a full-snapshot refetch.
 
@@ -461,7 +464,7 @@ All domain updates route through a single unified `AgentEventBus` (`agent/agent-
 
 ## CoreEnv Server (Remote Mode)
 
-The `@my-agent/server` package exposes CoreEnv APIs over HTTP using Hono RPC for end-to-end type safety. Agent Session routes are a **separate plane** under `/api/agent/*` (not CoreEnv).
+The `@codent/server` package exposes CoreEnv APIs over HTTP using Hono RPC for end-to-end type safety. Agent Session routes are a **separate plane** under `/api/agent/*` (not CoreEnv).
 
 ### Server Routes
 
@@ -494,8 +497,8 @@ The `@my-agent/server` package exposes CoreEnv APIs over HTTP using Hono RPC for
 ### Client Usage
 
 ```typescript
-import { registerCoreEnv, registerModelProvider, createDirectModelProvider } from "@my-agent/core";
-import { createRemoteEnv, createRemoteProvider } from "@my-agent/server/client";
+import { registerCoreEnv, registerModelProvider, createDirectModelProvider } from "@codent/core";
+import { createRemoteEnv, createRemoteProvider } from "@codent/server/client";
 
 registerCoreEnv(await createRemoteEnv("http://localhost:3100"));
 registerModelProvider(await createRemoteProvider("http://localhost:3100"));
@@ -550,7 +553,7 @@ All synthetic injections (turn-context sections, memory, background-command comp
 - **OpenAI-compatible** — `prompt_cache_key` from session id (≤64 chars)
 - **All styles** — tools sorted by name for stable schemas
 
-Helpers: `packages/core/src/models/prompt-cache.ts`. Validate: `pnpm --filter @my-agent/core run validate:prompt-cache`.
+Helpers: `packages/core/src/models/prompt-cache.ts`. Validate: `pnpm --filter @codent/core run validate:prompt-cache`.
 
 ### Message-operation ownership (writers on the wire are pure)
 
@@ -561,13 +564,13 @@ Helpers: `packages/core/src/models/prompt-cache.ts`. Validate: `pnpm --filter @m
 100 KB payloads (what remains is the O(results) scan + Map lookups).
 - **One projection.** `projectWireFromChannel` (`managers/middleware/wire-projection.ts`) is shared by the compaction middleware and `ManagedAgent.getMessagesForLLM` (manual `/compact`, reactive compact, memory extraction), over the agent's single `WireProjectionCache`. A second implementation is what would let a reader disagree with the window the model receives.
 
-Validate: `pnpm --filter @my-agent/core run validate:message-ops-purity`.
+Validate: `pnpm --filter @codent/core run validate:message-ops-purity`.
 
 **Durability rule — what is wire-only must never become durable.** The wire and the UI channel are not independent: `getModelVisibleMessages` builds fresh message objects but the content-part objects inside them are the **same references** as the channel's. One in-place edit to a part downstream of the projection is therefore written to disk, so a wire-only transform applied in place would destroy the user's attachment in the persisted session. Every transform on the wire is copy-on-write for this reason — `stripMultimodalFromChatMessages` filters into a new `parts` / `content` array and returns the original when nothing is dropped; `liftToolMediaForChatCompletions`, `applyAnthropicToolCacheBreakpoint` and `applyAnthropicLatestUserCacheBreakpoint` all rebuild rather than mutate.
 
 The persisted session is written from `channel.getMessages()` (`AgentChatController.persistMessages` → `maybeSaveSessionUIMessages` → `SessionService.persistSession` → `dehydrateUIMessages` → `SessionStore`), never from the wire. The two rules meet on the synthetic `<ctx kind=...>` messages, which are the one thing a middleware injects that **must** be durable: `injectSyntheticMessages` appends to the channel *and* to the wire, and the stable content-hash id makes the injection idempotent across a restore (so a resumed session never re-injects, and the prefix cache stays stable).
 
-Validate: `pnpm --filter @my-agent/core run validate:wire-override-reaches-adapter` (sections 8-10 persist through a real `SessionService` + `SessionStore` and assert on the log bytes and the reload: no strip placeholder on disk, no continuation prompt on disk, the image still there, the ctx present exactly once, and the same after a restore + re-run).
+Validate: `pnpm --filter @codent/core run validate:wire-override-reaches-adapter` (sections 8-10 persist through a real `SessionService` + `SessionStore` and assert on the log bytes and the reload: no strip placeholder on disk, no continuation prompt on disk, the image still there, the ctx present exactly once, and the same after a restore + re-run).
 
 ### Project instructions (`<project_instructions>`)
 
@@ -577,12 +580,12 @@ The project instruction file is loaded once at agent creation and frozen into th
 
 - relative paths resolve against the file that contains the reference; a leading `/` means **project-root-relative** (`@/openspec/AGENTS.md`)
 - references inside fenced blocks and inline code spans are left literal
-- a token only counts when it ends in a file extension, so npm-style prose (`@my-agent/app`) is inert
+- a token only counts when it ends in a file extension, so npm-style prose (`@codent/app`) is inert
 - a missing target, an escape via `../`, or a cycle is **left as written and reported** (logged at bootstrap, listed in `<instruction_context>` on re-injection) rather than silently dropped. A cycle is detected per chain (`visited` set), so the same file referenced twice in different branches still expands in both.
 
 Discovery and expansion live in `packages/core/src/agent/prompt/instruction-files.ts` — one module shared by `agent-doc-loader.ts` (system prompt) and `turn-context/instruction-context.ts` (change detection + re-injection). They must not drift: the change-detection digest covers the **expanded** text, so editing an `@`-imported file re-injects the instruction block like any other edit. Both the result and the expansion notices are part of that digest.
 
-The expanded content is bounded by a **65536-byte** budget, counted in bytes (not characters — a CJK character is 3 bytes), cut on a line boundary and reported when truncation occurs. Validate: `pnpm --filter @my-agent/core run validate:instruction-imports` (plus `validate:instruction-context` and `validate:instruction-budget`).
+The expanded content is bounded by a **65536-byte** budget, counted in bytes (not characters — a CJK character is 3 bytes), cut on a line boundary and reported when truncation occurs. Validate: `pnpm --filter @codent/core run validate:instruction-imports` (plus `validate:instruction-context` and `validate:instruction-budget`).
 
 ## Plan Mode
 
@@ -598,7 +601,7 @@ Cursor-like lifecycle: explore → review → Build → forced retro → complet
 
 **App:** `Shift+Tab` cycles modes (normal → auto → plan → normal → …); `/mode` is the slash-command entry point (contextual menu + subcommands `plan` / `auto` / `off` / `switch plan` / `switch auto` / `status` / `execute` / `done` / `cancel` / `save` / `load` / `list`; empty `/mode` cycles like `Shift+Tab`). When **review** (`ready`), press `p` (empty input) to toggle a bordered markdown plan preview in the banner (`Esc` closes). `/mode execute` Builds from review; `/mode cancel` pauses building → review; `/mode done` finishes retro (user force — no agent verification gate); `/mode status` reports phase; `/mode save` / `load` / `list` for named persistence (create/update already auto-save). Footer shows mode name (`Normal` / `Auto` / `planning` / `review · /mode execute` / `building n/m` / `retro`). `create_plan` / `update_plan` do not dump plan text into the tool transcript — review is via the banner preview.
 
-**Core:** `ManagedAgent.planMode` (`PlanModeController`), tool filter in `run-agent`, `createPlanModeMiddleware`, prompts via turn context, `plan-verification` parse/gate helpers. See `packages/core/src/agent/plan/`. Validate: `pnpm --filter @my-agent/core run validate:plan-verification`.
+**Core:** `ManagedAgent.planMode` (`PlanModeController`), tool filter in `run-agent`, `createPlanModeMiddleware`, prompts via turn context, `plan-verification` parse/gate helpers. See `packages/core/src/agent/plan/`. Validate: `pnpm --filter @codent/core run validate:plan-verification`.
 
 **Auto mode:** `/mode auto` skips all tool approvals. Footer shows `Auto`. Mutually exclusive with plan mode (entering one clears the other). Cleared on `/clear` / reset; persisted as `SessionData.autoMode` (legacy sessions may still have `autoApprove`). While auto is on, turn context includes an `<auto_mode>` block.
 
@@ -724,11 +727,11 @@ ctx.registerMessageTransformer((c) => {
 
 It is deliberately **not** an `AgentEventBus` interceptor: interceptor mode is a shared mutable payload with cancel short-circuit, whereas a transform returns a replacement array. `AgentEventBus` gains no third dispatch mode, and no `message-transform` name appears in the interceptor pattern list.
 
-Validate: `pnpm --filter @my-agent/core run validate:extension-message-transform` (registration/ownership/wire-only/zero-overhead/placement), `validate:extension-tool-restore` (a disabled extension gives back the tool it shadowed — including the built-in it overwrote and that tool's `toModelOutput` handler — in every disable order, and the same extension id loaded onto two agents stays two independent claims — the two registries are process-global, so `ManagedAgent` namespaces the owner id by agent), `validate:wire-override-reaches-adapter` (drives a real `AgentRunner` + `chat()` and asserts the capability strip and continuation prompt reach the adapter), and `validate:middleware-order` (the adjacency is asserted against the pipeline `buildAgentRunner` actually assembles — phase sorting cannot order same-phase middlewares, so the array position decides it).
+Validate: `pnpm --filter @codent/core run validate:extension-message-transform` (registration/ownership/wire-only/zero-overhead/placement), `validate:extension-tool-restore` (a disabled extension gives back the tool it shadowed — including the built-in it overwrote and that tool's `toModelOutput` handler — in every disable order, and the same extension id loaded onto two agents stays two independent claims — the two registries are process-global, so `ManagedAgent` namespaces the owner id by agent), `validate:wire-override-reaches-adapter` (drives a real `AgentRunner` + `chat()` and asserts the capability strip and continuation prompt reach the adapter), and `validate:middleware-order` (the adjacency is asserted against the pipeline `buildAgentRunner` actually assembles — phase sorting cannot order same-phase middlewares, so the array position decides it).
 
 ## Built-in LSP Extension
 
-CLI local mode enables the built-in LSP extension when `ManagedAgentConfig.lsp !== false` (`createLspExtension()` in `agent-factory.ts`). Requires `@my-agent/node` (`CoreEnv.createLspConnection`); remote/extension hosts degrade gracefully.
+CLI local mode enables the built-in LSP extension when `ManagedAgentConfig.lsp !== false` (`createLspExtension()` in `agent-factory.ts`). Requires `@codent/node` (`CoreEnv.createLspConnection`); remote/extension hosts degrade gracefully.
 
 | Tool | Purpose |
 |------|---------|
@@ -769,13 +772,13 @@ Workspace-root `.lsp.json` customizes which language servers run and how. All fi
 
 **Parity notes (vs pi-lsp-extension):** Java jdtls gets Lombok via `findLombokJar()` (`LOMBOK_JAR`, explicit path, or `env/Lombok-*` auto-detect). `lsp_symbols` and `lsp_definition` fall back to `WorkspaceIndex` / `findDefinition`. `lsp_completions` supports synthetic-dot member completion with `FileSync` version coordination. Auto-injected write/edit diagnostics (`tool:after:*` interceptors parse JSON-string args and set `modifiedResult` for the extensions middleware) wait for the `publishDiagnostics` notification that follows the write instead of polling for errors — a clean file publishes an empty list, so a successful edit returns as soon as analysis finishes rather than always burning the settle timeout. A write whose server is still starting waits at most `FIRST_SYNC_WAIT_MS`; the missed sync is replayed by `FileSync.flushPendingSync` when the server reports ready, so the file is deferred to the server, never dropped. LSP tool results use plain-text `toModelOutput` (`output.text`).
 
-Validate: `pnpm --filter @my-agent/core run validate:lsp-parity`, `validate:lsp-interceptor`, `validate:lsp-server-probe`, `validate:lsp-tool-toggle`, `validate:lsp-transport`, `validate:lsp-lifecycle`, `validate:lsp-midstartup-shutdown`, `validate:lsp-extension`, `validate:lsp-real-server` (needs a real `typescript-language-server`, skips otherwise), `validate:tree-sitter`; `pnpm --filter @my-agent/node run validate:lsp-command-exists`. The `validate-lsp-*.mjs` scripts and their mock servers live in `packages/core/scripts/`.
+Validate: `pnpm --filter @codent/core run validate:lsp-parity`, `validate:lsp-interceptor`, `validate:lsp-server-probe`, `validate:lsp-tool-toggle`, `validate:lsp-transport`, `validate:lsp-lifecycle`, `validate:lsp-midstartup-shutdown`, `validate:lsp-extension`, `validate:lsp-real-server` (needs a real `typescript-language-server`, skips otherwise), `validate:tree-sitter`; `pnpm --filter @codent/node run validate:lsp-command-exists`. The `validate-lsp-*.mjs` scripts and their mock servers live in `packages/core/scripts/`.
 
 ## Built-in Code Mode Extension
 
 Sandboxed TypeScript execution via TanStack [`ai-code-mode`](https://tanstack.com/ai) — lets the model write and run TypeScript inside a secure isolated V8 context instead of only issuing read-only tool calls.
 
-Enabled when `ManagedAgentConfig.codeMode !== false` (`createCodeModeExtension()` in `agent-factory.ts`). The extension **feature-detects** the optional CoreEnv capability `createIsolateDriver()`: if the host provides one, code mode is wired up; otherwise it warns and registers nothing (graceful degrade, no native deps in `@my-agent/core`). The Node host implements it via `@tanstack/ai-isolate-node` (backed by `isolated-vm`); browser/WebContainer hosts omit it and code mode stays off.
+Enabled when `ManagedAgentConfig.codeMode !== false` (`createCodeModeExtension()` in `agent-factory.ts`). The extension **feature-detects** the optional CoreEnv capability `createIsolateDriver()`: if the host provides one, code mode is wired up; otherwise it warns and registers nothing (graceful degrade, no native deps in `@codent/core`). The Node host implements it via `@tanstack/ai-isolate-node` (backed by `isolated-vm`); browser/WebContainer hosts omit it and code mode stays off.
 
 | Tool | Purpose |
 |------|---------|
@@ -788,7 +791,7 @@ Enabled when `ManagedAgentConfig.codeMode !== false` (`createCodeModeExtension()
 
 **Config:** `ManagedAgentConfig.codeMode` accepts `boolean` (default `true`) or `{ timeout?, memoryLimit?, lazyToolsConfig? }`. The isolate backend must be a CoreEnv optional capability: `createIsolateDriver?(): Promise<IsolateDriver | null> | IsolateDriver | null` (`IsolateDriver` from `@tanstack/ai-code-mode`, type-only — zero native deps in core). Module map: `packages/core/src/agent/code-mode/` (`extension.ts`, `index.ts`); Node host: `packages/node/src/environment/isolate-driver.ts` (lazy-loads `ai-isolate-node`, returns `null` on failure).
 
-Validate: `pnpm --filter @my-agent/core run validate:code-mode-extension` and `pnpm --filter @my-agent/node run validate:code-mode-assembly`.
+Validate: `pnpm --filter @codent/core run validate:code-mode-extension` and `pnpm --filter @codent/node run validate:code-mode-assembly`.
 
 ## Skill System
 
@@ -797,12 +800,12 @@ Skills provide on-demand domain knowledge via progressive disclosure — only th
 
 | Layer | Mechanism | Tokens |
 |-------|-----------|--------|
-| Index | `<skills>` injected into per-turn `<extension_context>` by `my-agent-skills` | ~100/skill |
+| Index | `<skills>` injected into per-turn `<extension_context>` by `codent-skills` | ~100/skill |
 | Discovery | `list_skills` tool | ~100/skill |
 | Content | `load_skill` tool for full SKILL.md | ~2000+/skill |
 
 Skills are defined in `SKILL.md` files with YAML frontmatter (name + description required).
-The built-in **`my-agent-skills` extension** (`config.skills`, default on) registers the
+The built-in **`codent-skills` extension** (`config.skills`, default on) registers the
 `list_skills`/`load_skill` tools and injects the available-skills index into each turn's
 `<extension_context>` — it no longer lives in the frozen system prompt.
 
@@ -811,7 +814,7 @@ The built-in **`my-agent-skills` extension** (`config.skills`, default on) regis
 `AGENT_SKILL_DIRS`, `~/.agents/skills`, `.agents/skills`) — e.g. add `.cursor/skills` or
 `.opencode/skills` to reuse skills written for other harnesses. Module map:
 `packages/core/src/agent/skills/` (`extension.ts`, `skill-loader.ts`, `skill-registry.ts`, `index.ts`).
-Validate: `pnpm --filter @my-agent/core run validate:skills-extension`.
+Validate: `pnpm --filter @codent/core run validate:skills-extension`.
 
 ## Context Compaction System
 
@@ -918,7 +921,7 @@ Programmatic equivalent: `createNodeEnv({ rootPath, mode: "os" | "native" })`. E
 
 This is also how a code-mode sandbox reads background output: `read_file` is exposed there, `get_command_output` is not.
 
-### Streaming UI (`@my-agent/app`)
+### Streaming UI (`@codent/app`)
 - **Transcript static region (per-row caching):** every completed row in `MessageList` is its own
   `<StaticRender>` leaf, keyed on a **per-row** signature (`getMessages` returns `staticSignatures`,
   one entry per row, built from `computeMessageRenderSignature`). So one row's state advancing
@@ -1012,7 +1015,7 @@ Note: In the TUI, modifier chords use **Ctrl** (not Cmd/⌘). On macOS, prefer `
 
 ```
 packages/
-├── core/src/                          # @my-agent/core — runtime-agnostic core
+├── core/src/                          # @codent/core — runtime-agnostic core
 │   ├── env.ts                         # CoreEnv interface, registry (registerCoreEnv/getEnv/clearCoreEnv)
 │   ├── env-types.ts                   # FileError / ExecutionError / fs+command result types
 │   ├── agent/
@@ -1050,7 +1053,7 @@ packages/
 │   ├── index.ts                       # Curated public API exports (hosts / adapters)
 │   └── dev*.ts                        # Internal-only re-exports for `pnpm validate:*` scripts
 │
-├── app/src/                           # @my-agent/app — shared UI layer
+├── app/src/                           # @codent/app — shared UI layer
 │   ├── adapter/
 │   │   ├── types.ts                   # AgentAdapter, AppConfig, InitResult interfaces
 │   │   └── create-agent.ts            # Shared createAgentFromConfig() helper
@@ -1066,13 +1069,13 @@ packages/
 │   ├── utils/                         # Format utilities, clipboard, file attachment
 │   └── index.ts                       # Public API exports
 │
-├── cli/src/                           # @my-agent/cli — terminal host (thin shell)
+├── cli/src/                           # @codent/cli — terminal host (thin shell)
 │   ├── index.tsx                      # Entry point: arg parsing, CoreEnv registration, render
 │   ├── args.ts                        # CLI argument parser (sync, no CoreEnv dependency)
 │   ├── model-env.ts                   # MODEL_* env → ModelInfo (host-owned, not core)
 │   └── local-adapter.ts              # LocalAgentAdapter (delegates to createAgentFromConfig)
 │
-├── node/src/                          # @my-agent/node — Node.js CoreEnv implementation
+├── node/src/                          # @codent/node — Node.js CoreEnv implementation
 │   ├── index.ts                       # createNodeEnv() factory
 │   └── environment/
 │       ├── local.ts                   # LocalEnvironmentConfig, mode resolution
@@ -1081,7 +1084,7 @@ packages/
 │       ├── os-sandbox.ts             # OS sandbox via @anthropic-ai/sandbox-runtime
 │       └── shell.ts                   # Shell/PTY management
 │
-├── server/src/                        # @my-agent/server — CoreEnv HTTP server + client
+├── server/src/                        # @codent/server — CoreEnv HTTP server + client
 │   ├── index.ts                       # Hono server entry point
 │   ├── client.ts                      # createRemoteEnv() — RPC client factory (+ createRemoteAgentSessionHost re-export)
 │   ├── remote-provider.ts             # createRemoteProvider()
@@ -1096,7 +1099,7 @@ packages/
 │       ├── provider.ts                # /api/provider/* (OpenAI/Anthropic streaming proxy)
 │       └── agent-session.ts           # /api/agent/* (catalog, snapshot, command, events, remount seeds)
 │
-├── extension/                         # @my-agent/extension — Chrome extension host
+├── extension/                         # @codent/extension — Chrome extension host
 │   ├── adapters/
 │   │   └── extension-adapter.ts      # ExtensionAgentAdapter
 │   ├── entrypoints/
@@ -1109,10 +1112,10 @@ packages/
 │   └── hooks/
 │       └── useServerConfig.ts        # Persistent config via chrome.storage
 │
-└── mcp-server/src/                    # @my-agent/mcp-server — MCP tool server
+└── mcp-server/src/                    # @codent/mcp-server — MCP tool server
     └── index.ts
 
-playground/                            # @my-agent/playground — WebContainer host (Vite)
+playground/                            # @codent/playground — WebContainer host (Vite)
 ```
 
 ## Runtime Combinations
@@ -1145,7 +1148,7 @@ Validate **once at the end of the task** (not after every small edit). Prefer sc
    ```
    Run full `pnpm build` only for shared contracts, lockfile/workspace config, or unclear multi-package impact.
 
-3. **Package validate scripts** when you touched a utility that has one (e.g. `pnpm --filter @my-agent/core run validate:media-store`).
+3. **Package validate scripts** when you touched a utility that has one (e.g. `pnpm --filter @codent/core run validate:media-store`).
 
 4. **Fix errors before marking the task complete.** Do not loop lint→format→build after each intermediate edit.
 
@@ -1156,5 +1159,5 @@ Validate **once at the end of the task** (not after every small edit). Prefer sc
 3. **Build Order** — Core → App → rest (`pnpm build` handles this).
 4. **Type Exports** — Use `export type` for type-only exports.
 5. **CoreEnv is the single source of truth** — `rootPath` comes only from `getEnv().rootPath`, never from config objects. Tools access all platform APIs via `getEnv()`.
-6. **Tests** — The only `node:test` suite lives in `@my-agent/app` (`pnpm --filter @my-agent/app test`, which imports its own `dist`); everything else is validated by `validate:*` scripts and `pnpm typecheck`. CI runs lint + typecheck + build + the app suite on every PR.
-7. **Adapter pattern** — Both hosts (CLI, extension) implement `AgentAdapter` and delegate shared init logic to `createAgentFromConfig()` in `@my-agent/app`.
+6. **Tests** — The only `node:test` suite lives in `@codent/app` (`pnpm --filter @codent/app test`, which imports its own `dist`); everything else is validated by `validate:*` scripts and `pnpm typecheck`. CI runs lint + typecheck + build + the app suite on every PR.
+7. **Adapter pattern** — Both hosts (CLI, extension) implement `AgentAdapter` and delegate shared init logic to `createAgentFromConfig()` in `@codent/app`.

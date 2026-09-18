@@ -39,7 +39,7 @@
  * is silently durable. Sections 8-10 therefore persist through a real
  * `SessionService` + `SessionStore` and assert on the log bytes and the reload.
  *
- * Run: pnpm --filter @my-agent/core run validate:wire-override-reaches-adapter
+ * Run: pnpm --filter @codent/core run validate:wire-override-reaches-adapter
  */
 
 "use strict";

@@ -16,7 +16,7 @@ import { createState, toRaw } from "reactivity-store";
 import { useAgent } from "./use-agent.js";
 import { useUserInput } from "./use-user-input.js";
 
-import type { ExtensionRenderPayload } from "@my-agent/core";
+import type { ExtensionRenderPayload } from "@codent/core";
 
 /** surface → key → payload. */
 export type ExtensionSurfaceSlots = Record<string, Record<string, ExtensionRenderPayload>>;

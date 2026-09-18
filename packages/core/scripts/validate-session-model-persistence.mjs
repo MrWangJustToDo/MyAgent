@@ -7,7 +7,7 @@
  * - `session.resume` adopts the persisted model (except under remote-provider,
  *   where the provider server owns the model).
  *
- * Run: pnpm --filter @my-agent/core run validate:session-model-persistence
+ * Run: pnpm --filter @codent/core run validate:session-model-persistence
  */
 
 import assert from "node:assert/strict";

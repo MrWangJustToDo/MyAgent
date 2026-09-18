@@ -1,7 +1,7 @@
 /**
  * Validation for Chat Completions tool-media lifting.
  *
- * Run: pnpm --filter @my-agent/core run validate:lift-tool-media
+ * Run: pnpm --filter @codent/core run validate:lift-tool-media
  */
 
 import assert from "node:assert/strict";

@@ -1,7 +1,7 @@
 /**
  * Smoke-test LocalAgentSession snapshot / dispatch / subscribe / child session.
  *
- * Run: pnpm --filter @my-agent/core run validate:local-agent-session
+ * Run: pnpm --filter @codent/core run validate:local-agent-session
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";

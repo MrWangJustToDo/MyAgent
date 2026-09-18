@@ -5,7 +5,7 @@
  *
  * Requires a prior package build (`pnpm run build`) so imports resolve from `dist/dev.mjs`.
  *
- * Run: pnpm --filter @my-agent/core run validate:compaction-keep-policy
+ * Run: pnpm --filter @codent/core run validate:compaction-keep-policy
  */
 
 import { convertMessagesToModelMessages } from "@tanstack/ai";

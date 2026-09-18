@@ -1,7 +1,7 @@
 /**
  * Validation for read_file / webfetch model shaping (multimodal tool results).
  *
- * Run: pnpm --filter @my-agent/core run validate:read-file-model-output
+ * Run: pnpm --filter @codent/core run validate:read-file-model-output
  */
 
 import assert from "node:assert/strict";

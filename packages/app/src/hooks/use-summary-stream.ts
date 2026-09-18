@@ -11,7 +11,7 @@ import {
   type SummaryDisplayWindow,
   type SummaryStreamEvent,
   type SummaryStreamSource,
-} from "@my-agent/core";
+} from "@codent/core";
 import { useEffect, useMemo, useState } from "react";
 
 import { resolveAgentSession } from "../utils/session-resolve.js";

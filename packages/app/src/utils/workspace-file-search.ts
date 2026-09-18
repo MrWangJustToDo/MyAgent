@@ -116,7 +116,7 @@ const SKIP_FS_DIRS = new Set([
 export async function fetchWorkspaceFileList(rootPath: string): Promise<string[]> {
   if (fileListCache && fileListCache.rootPath === rootPath) return fileListCache.files;
 
-  const { getEnv } = await import("@my-agent/core");
+  const { getEnv } = await import("@codent/core");
   const env = getEnv();
 
   const files = new Set<string>();
@@ -153,7 +153,7 @@ export async function fetchWorkspaceFileList(rootPath: string): Promise<string[]
 
 /** Bounded recursive fs walk (non-git fallback). */
 async function walkWorkspaceFiles(rootPath: string): Promise<string[]> {
-  const { getEnv } = await import("@my-agent/core");
+  const { getEnv } = await import("@codent/core");
   const env = getEnv();
   const out: string[] = [];
   const stack: string[] = [""];

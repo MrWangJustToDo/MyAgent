@@ -11,7 +11,7 @@
  * (d) deriveSubagentRunStats integration — a step-budget cutoff yields
  *     reachedLimit=true + incomplete=true (the scenario this fallback serves).
  *
- * Run: pnpm --filter @my-agent/core run validate:subagent-progress-summary
+ * Run: pnpm --filter @codent/core run validate:subagent-progress-summary
  */
 
 import assert from "node:assert/strict";

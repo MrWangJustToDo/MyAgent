@@ -1,14 +1,14 @@
 /**
  * CoreEnv — runtime-agnostic environment abstraction.
  *
- * All Node.js (or browser/other runtime) APIs used by @my-agent/core are
+ * All Node.js (or browser/other runtime) APIs used by @codent/core are
  * accessed through this interface. The consumer registers an implementation
  * via {@link registerCoreEnv} before using any core functionality.
  *
  * @example
  * ```typescript
- * import { registerCoreEnv } from "@my-agent/core";
- * import { createNodeEnv } from "@my-agent/node";
+ * import { registerCoreEnv } from "@codent/core";
+ * import { createNodeEnv } from "@codent/node";
  *
  * registerCoreEnv(createNodeEnv({ rootPath: "/path/to/project" }));
  * ```
@@ -179,7 +179,7 @@ export interface McpProcessHandle {
 
 /**
  * Runtime host hook for creating a Language Server connection.
- * Implemented by Node hosts (`@my-agent/node`); omitted by hosts without a
+ * Implemented by Node hosts (`@codent/node`); omitted by hosts without a
  * process/stdio runtime (browser, WebContainer). LSP tools feature-detect this
  * and degrade gracefully when absent.
  */
@@ -332,7 +332,7 @@ export interface ResolvedCoreEnv extends CoreEnv {
 }
 
 /**
- * Register the runtime environment for @my-agent/core.
+ * Register the runtime environment for @codent/core.
  *
  * Must be called before using any core functionality.
  * The consumer (CLI, browser app, etc.) provides all platform-specific APIs.
@@ -370,7 +370,7 @@ export function clearCoreEnv(): void {
 export function getEnv(): ResolvedCoreEnv {
   if (!_env) {
     throw new Error(
-      "CoreEnv not registered. Call registerCoreEnv() before using @my-agent/core. " +
+      "CoreEnv not registered. Call registerCoreEnv() before using @codent/core. " +
         "See the CoreEnv interface for the required API surface."
     );
   }

@@ -5,7 +5,20 @@
     "rootDir": "./src",
     "declaration": true,
     "composite": true,
-    "noEmit": false
+    "noEmit": false,
+    // `react` / `ink` are build-time specifier aliases, not installed packages:
+    // the npm aliases were removed because npm does not dedupe an alias against
+    // the real name (a published graph then got two renderer copies), and
+    // tsdown rewrites the specifiers at resolve time. Types need their own
+    // mapping — `react` keeps the real @types/react, `ink` resolves to the
+    // terminal renderer's bundled declarations.
+    "paths": {
+      "react": ["./node_modules/@types/react"],
+      "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"],
+      "react/jsx-dev-runtime": ["./node_modules/@types/react/jsx-dev-runtime"],
+      "ink": ["./node_modules/@my-react/react-terminal"],
+      "ink/jsx-runtime": ["./node_modules/@my-react/react-terminal/jsx-runtime"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

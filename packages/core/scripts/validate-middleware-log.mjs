@@ -4,7 +4,7 @@
  * (sync + async/promise) pass through untouched in both modes, and
  * high-frequency onChunk and nested sandbox hooks are never wrapped.
  *
- * Run: pnpm --filter @my-agent/core run validate:middleware-log
+ * Run: pnpm --filter @codent/core run validate:middleware-log
  */
 
 import assert from "node:assert/strict";

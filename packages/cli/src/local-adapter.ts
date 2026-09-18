@@ -1,7 +1,7 @@
-import { agentManager, createLocalAgentSessionHost } from "@my-agent/core";
+import { agentManager, createLocalAgentSessionHost } from "@codent/core";
 
-import type { AgentAdapter, AppConfig, ClipboardImageResult, InitResult } from "@my-agent/app";
-import type { AgentSessionHost } from "@my-agent/core";
+import type { AgentAdapter, AppConfig, ClipboardImageResult, InitResult } from "@codent/app";
+import type { AgentSessionHost } from "@codent/core";
 
 export class LocalAgentAdapter implements AgentAdapter {
   private host: AgentSessionHost | null = null;
@@ -14,11 +14,11 @@ export class LocalAgentAdapter implements AgentAdapter {
   }
 
   async initialize(config: AppConfig): Promise<InitResult> {
-    const { createAgentFromConfig } = await import("@my-agent/app");
+    const { createAgentFromConfig } = await import("@codent/app");
     // Session-plane wiring is host-process owned: local manager, or a remote
     // HTTP host when --remote-session is configured (agent loop runs server-side).
     const host = config.remoteSession
-      ? (await import("@my-agent/server/client")).createRemoteAgentSessionHost({ baseUrl: config.remoteSession })
+      ? (await import("@codent/server/client")).createRemoteAgentSessionHost({ baseUrl: config.remoteSession })
       : createLocalAgentSessionHost({ manager: agentManager });
     const result = await createAgentFromConfig({ config, name: "local-chat", host });
     this.host = host;
@@ -37,7 +37,7 @@ export class LocalAgentAdapter implements AgentAdapter {
       }
       this.host = null;
     }
-    const { clearAgentStore } = await import("@my-agent/app");
+    const { clearAgentStore } = await import("@codent/app");
     clearAgentStore();
   }
 

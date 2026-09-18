@@ -1,7 +1,7 @@
 /**
  * Validation for explicit-trigger session UIMessage persistence.
  *
- * Run: pnpm --filter @my-agent/core run validate:session-sync-tracker
+ * Run: pnpm --filter @codent/core run validate:session-sync-tracker
  */
 
 import assert from "node:assert/strict";

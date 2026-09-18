@@ -1,7 +1,7 @@
 /**
  * Validates capability-gated multimodal message sanitization.
  *
- * Run: pnpm --filter @my-agent/core run validate:capability-message-utils
+ * Run: pnpm --filter @codent/core run validate:capability-message-utils
  */
 
 import assert from "node:assert/strict";

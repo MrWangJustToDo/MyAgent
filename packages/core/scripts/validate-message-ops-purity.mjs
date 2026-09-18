@@ -19,7 +19,7 @@
  *      compaction middleware and `ManagedAgent.getMessagesForLLM`, so a reader can
  *      never disagree with the window the model gets.
  *
- * Run: pnpm --filter @my-agent/core run validate-message-ops-purity
+ * Run: pnpm --filter @codent/core run validate-message-ops-purity
  */
 
 "use strict";

@@ -9,6 +9,8 @@ export function applyOptionalAppConfig(target: AppConfig, source: Partial<AppCon
   target.modelInfo = source.modelInfo;
   target.providerMode = source.providerMode;
   target.toolConfig = source.toolConfig;
+  target.productName = source.productName;
+  target.remotePlanes = source.remotePlanes;
   target.remoteEnv = source.remoteEnv;
   target.remoteProvider = source.remoteProvider;
   target.remoteSession = source.remoteSession;
@@ -19,6 +21,8 @@ export function clearOptionalAppConfig(target: AppConfig): void {
   target.modelInfo = undefined;
   target.providerMode = undefined;
   target.toolConfig = undefined;
+  target.productName = undefined;
+  target.remotePlanes = undefined;
   target.remoteEnv = undefined;
   target.remoteProvider = undefined;
   target.remoteSession = undefined;

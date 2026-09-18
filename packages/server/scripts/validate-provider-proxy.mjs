@@ -1,7 +1,7 @@
 /**
  * Validates provider path mapping, env secret filtering, and streaming proxy.
  *
- * Run: pnpm --filter @my-agent/server run validate:provider-proxy
+ * Run: pnpm --filter @codent/server run validate:provider-proxy
  */
 
 import { Hono } from "hono";

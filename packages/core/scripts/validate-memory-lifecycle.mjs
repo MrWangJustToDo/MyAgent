@@ -8,7 +8,7 @@
  * - refreshIndex excludes expired memories from MEMORY.md
  * - writeMemory options are backward compatible (no options = plain memory)
  *
- * Run: pnpm --filter @my-agent/core run validate:memory-lifecycle
+ * Run: pnpm --filter @codent/core run validate:memory-lifecycle
  */
 
 import assert from "node:assert/strict";
@@ -18,7 +18,7 @@ import { basename, dirname, extname, isAbsolute, join, normalize, parse, resolve
 
 import { MemoryManager, findRelevantMemories, formatRelevantMemories, registerCoreEnv } from "../dist/dev.mjs";
 
-const root = await mkdtemp(join(tmpdir(), "myagent-memory-lifecycle-"));
+const root = await mkdtemp(join(tmpdir(), "codent-memory-lifecycle-"));
 
 // Minimal CoreEnv backed by the real filesystem, scoped to `root`.
 registerCoreEnv({

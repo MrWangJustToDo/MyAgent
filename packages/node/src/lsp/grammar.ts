@@ -1,5 +1,5 @@
 /**
- * @my-agent/node tree-sitter grammar locator.
+ * @codent/node tree-sitter grammar locator.
  *
  * Resolves grammar `.wasm` files from the `tree-sitter-wasms` package and returns
  * their bytes. Injected into CoreEnv as `locateTreeSitterGrammar` so core's

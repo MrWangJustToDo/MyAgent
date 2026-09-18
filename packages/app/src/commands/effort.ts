@@ -3,7 +3,7 @@ import { getActiveSession } from "../utils/session-resolve.js";
 
 import { registerCommand } from "./utils/registry.js";
 
-import type { ReasoningEffort } from "@my-agent/core";
+import type { ReasoningEffort } from "@codent/core";
 
 const EFFORT_VALUES: readonly ReasoningEffort[] = ["none", "low", "medium", "high", "xhigh", "max", "minimal"];
 

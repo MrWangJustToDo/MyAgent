@@ -7,7 +7,7 @@
  *    exactly the historical array order (zero-behavior-change guarantee).
  * 3. Undeclared-phase middlewares fall through the sort and surface a warning.
  *
- * Run: pnpm --filter @my-agent/core run validate:middleware-order
+ * Run: pnpm --filter @codent/core run validate:middleware-order
  */
 
 "use strict";

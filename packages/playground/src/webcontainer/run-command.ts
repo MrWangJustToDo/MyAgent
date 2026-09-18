@@ -1,4 +1,4 @@
-import { ExecutionError } from "@my-agent/core";
+import { ExecutionError } from "@codent/core";
 
 import { toWebContainerSpawnCwd } from "./workspace-path.js";
 
@@ -9,7 +9,7 @@ import type {
   RunCommandOptions,
   StartCommandHandle,
   StartCommandOptions,
-} from "@my-agent/core";
+} from "@codent/core";
 import type { WebContainer, WebContainerProcess } from "@webcontainer/api";
 
 /** WebContainer / jsh often emits CRLF; keep LF for Ink + consistent tool output. */

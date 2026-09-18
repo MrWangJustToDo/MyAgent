@@ -1,7 +1,7 @@
 /**
  * Validates the per-task run-phase state machine (TaskRunState).
  *
- * Run: pnpm --filter @my-agent/core run validate:task-run-state
+ * Run: pnpm --filter @codent/core run validate:task-run-state
  */
 
 import assert from "node:assert/strict";

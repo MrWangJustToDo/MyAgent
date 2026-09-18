@@ -2,7 +2,7 @@ import { Box, Text } from "ink";
 
 import { COLORS } from "../theme/colors.js";
 
-import type { ExtensionRenderPayload } from "@my-agent/core";
+import type { ExtensionRenderPayload } from "@codent/core";
 import type { ReactNode } from "react";
 
 /**

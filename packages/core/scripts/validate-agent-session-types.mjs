@@ -1,7 +1,7 @@
 /**
  * Validates AgentSession command/channel discriminants round-trip JSON.
  *
- * Run: pnpm --filter @my-agent/core run validate:agent-session-types
+ * Run: pnpm --filter @codent/core run validate:agent-session-types
  */
 import assert from "node:assert/strict";
 

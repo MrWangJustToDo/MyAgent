@@ -13,7 +13,7 @@ import {
   type ModelConnection,
   type ModelsConfig,
   type ModelsConfigEntry,
-} from "@my-agent/core";
+} from "@codent/core";
 import { Hono } from "hono";
 
 import { REMOTE_PROVIDER_API_KEY } from "../provider-constants.js";

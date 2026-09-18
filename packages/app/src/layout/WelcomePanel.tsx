@@ -16,15 +16,15 @@ import type { WorkspaceGitInfo } from "../utils/workspace-git-info.js";
 
 // prettier-ignore
 const LOGO_LINES = [
-  " █▀▄▀█ █ █   ▄▀█ █▀▀ █▀▀ █▄ █ ▀█▀",
-  " █ ▀ █ ▀▄▀   █▀█ █▄█ ██▄ █ ▀█  █ ",
+  " █▀▀ █▀█ █▀▄ █▀▀ █▄ █ ▀█▀",
+  " █▄▄ █▄█ █▄▀ ██▄ █ ▀█  █ ",
 ];
 
 /** Rendered width of the block-letter wordmark (used for tier thresholds). */
 const LOGO_WIDTH = LOGO_LINES[0].length;
 
 /** Compact wordmark shown when the block letters would not fit. */
-const NARROW_WORDMARK = "MY AGENT";
+const NARROW_WORDMARK = "CODENT";
 
 // ============================================================================
 // Responsive tiers

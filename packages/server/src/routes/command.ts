@@ -1,9 +1,9 @@
+import { ExecutionError, getEnv } from "@codent/core";
 import { zValidator } from "@hono/zod-validator";
-import { ExecutionError, getEnv } from "@my-agent/core";
 import { Hono } from "hono";
 import { z } from "zod";
 
-import type { CommandJobStatus, StartCommandHandle } from "@my-agent/core";
+import type { CommandJobStatus, StartCommandHandle } from "@codent/core";
 
 const runCommandSchema = z.object({
   command: z.string(),

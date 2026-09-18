@@ -1,8 +1,8 @@
 {
-  "name": "@my-agent/playground",
+  "name": "@codent/playground",
   "version": "0.0.1",
   "private": true,
-  "description": "Browser playground — WebContainer CoreEnv + shared @my-agent/app",
+  "description": "Browser playground — WebContainer CoreEnv + shared @codent/app",
   "type": "module",
   "scripts": {
     "dev": "vite --force",
@@ -18,9 +18,9 @@
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
     "@monaco-editor/react": "^4.7.0",
-    "@my-agent/app": "workspace:*",
-    "@my-agent/core": "workspace:*",
-    "@my-agent/server": "workspace:*",
+    "@codent/app": "workspace:*",
+    "@codent/core": "workspace:*",
+    "@codent/server": "workspace:*",
     "@my-react/react": "^0.3.30",
     "@my-react/react-dom": "^0.3.30",
     "@my-react/react-terminal": "^0.0.31",

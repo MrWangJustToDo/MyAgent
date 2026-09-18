@@ -3,7 +3,7 @@
  * entries, size-based rotation, silent degradation when the env fs has no
  * appendFile, and detach semantics.
  *
- * Run: pnpm --filter @my-agent/core run validate:agent-log-file-sink
+ * Run: pnpm --filter @codent/core run validate:agent-log-file-sink
  */
 
 import assert from "node:assert/strict";

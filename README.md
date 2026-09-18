@@ -1,4 +1,4 @@
-# MyAgent
+# Codent
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-24%2B-339933?logo=node.js)](https://nodejs.org)
@@ -9,9 +9,9 @@ A **runtime-agnostic** AI coding agent — same core logic, runs in terminal, Ch
 
 ---
 
-## Why MyAgent?
+## Why Codent?
 
-| Traditional AI IDEs | MyAgent |
+| Traditional AI IDEs | Codent |
 |---------------------|---------|
 | Tied to specific editors | Works with any editor + terminal |
 | Cloud black box | Fully local, or remote only what you choose |
@@ -54,19 +54,19 @@ A **runtime-agnostic** AI coding agent — same core logic, runs in terminal, Ch
 
 ## Extensions
 
-MyAgent's extension model works like [Pi](https://pi.dev) (the `pi-lsp` / `pi-*` extension ecosystem): capabilities are delivered as **declarative extension modules** rather than hard-coded feature flags. Each extension registers tools, slash commands, and lifecycle hooks through one `ExtensionAPI` surface, so the same model powers both the built-ins below and third-party modules under `.agents/extension` (browse with `Ctrl+Y`).
+Codent's extension model works like [Pi](https://pi.dev) (the `pi-lsp` / `pi-*` extension ecosystem): capabilities are delivered as **declarative extension modules** rather than hard-coded feature flags. Each extension registers tools, slash commands, and lifecycle hooks through one `ExtensionAPI` surface, so the same model powers both the built-ins below and third-party modules under `.agents/extension` (browse with `Ctrl+Y`).
 
 ### Built-in extensions
 
 | Extension | ID | What it provides | Data / config |
 |-----------|----|------------------|---------------|
-| **LSP Integration** | `my-agent-lsp` | 8 LSP tools (`lsp_diagnostics`, `lsp_hover`, `lsp_definition`, `lsp_references`, `lsp_symbols`, `lsp_rename`, `lsp_completions`, `lsp_code_actions`) + 3 tree-sitter tools (`code_overview`, `ast_search`, `code_rewrite`) + commands `/lsp`, `/lsp-restart`, `/lsp-config`; auto file-sync and diagnostics injection | `.lsp.json` |
-| **Memory** | `my-agent-memory` | `memory_list`, `memory_read`, `memory_write`; MEMORY.md index injected into turn context | `.agents/memory/` |
-| **Skills** | `my-agent-skills` | `list_skills`, `load_skill`; available-skills index injected into turn context | `.agents/skills/` |
-| **MCP** | `my-agent-mcp` | Connect external MCP servers (stdio/SSE/HTTP); each tool exposed as `mcp__<server>_<tool>` + `/mcp` status command; per-server failure isolation | `.agents/mcp.json` (fallback `.mcp.json`) |
-| **Code Mode** | `my-agent-code-mode` | `execute_typescript` (run model-written TS in a secure V8 isolate via `isolated-vm`) + `discover_tools` (lazy-tool discovery); sandbox exposes a curated subset of agent tools as `external_*` — read-only fs (`read_file`/`grep`/`glob`/`list_file`/`tree`) eager, shell (`run_command`) + `websearch` lazy; injects code-mode system prompt each turn. Requires the host to provide a CoreEnv `createIsolateDriver` (Node host does; degrades gracefully when absent) | — (Node host built-in) |
+| **LSP Integration** | `codent-lsp` | 8 LSP tools (`lsp_diagnostics`, `lsp_hover`, `lsp_definition`, `lsp_references`, `lsp_symbols`, `lsp_rename`, `lsp_completions`, `lsp_code_actions`) + 3 tree-sitter tools (`code_overview`, `ast_search`, `code_rewrite`) + commands `/lsp`, `/lsp-restart`, `/lsp-config`; auto file-sync and diagnostics injection | `.lsp.json` |
+| **Memory** | `codent-memory` | `memory_list`, `memory_read`, `memory_write`; MEMORY.md index injected into turn context | `.agents/memory/` |
+| **Skills** | `codent-skills` | `list_skills`, `load_skill`; available-skills index injected into turn context | `.agents/skills/` |
+| **MCP** | `codent-mcp` | Connect external MCP servers (stdio/SSE/HTTP); each tool exposed as `mcp__<server>_<tool>` + `/mcp` status command; per-server failure isolation | `.agents/mcp.json` (fallback `.mcp.json`) |
+| **Code Mode** | `codent-code-mode` | `execute_typescript` (run model-written TS in a secure V8 isolate via `isolated-vm`) + `discover_tools` (lazy-tool discovery); sandbox exposes a curated subset of agent tools as `external_*` — read-only fs (`read_file`/`grep`/`glob`/`list_file`/`tree`) eager, shell (`run_command`) + `websearch` lazy; injects code-mode system prompt each turn. Requires the host to provide a CoreEnv `createIsolateDriver` (Node host does; degrades gracefully when absent) | — (Node host built-in) |
 
-Beyond the built-ins, drop your own extension modules into `.agents/extension` (hooks, custom tools, slash commands), or point the `my-agent-mcp` built-in at external MCP servers for more tools.
+Beyond the built-ins, drop your own extension modules into `.agents/extension` (hooks, custom tools, slash commands), or point the `codent-mcp` built-in at external MCP servers for more tools.
 
 ---
 
@@ -80,11 +80,11 @@ Beyond the built-ins, drop your own extension modules into `.agents/extension` (
 │  └──────┬─────┘  └────────┬─────────┘  └────────┬────────┘  │
 │         │   AgentAdapter   │                     │          │
 │  ┌──────┴──────────────────┴─────────────────────┴───────┐  │
-│  │  @my-agent/app  (Session-only UI, hooks, commands)    │  │
+│  │  @codent/app  (Session-only UI, hooks, commands)    │  │
 │  └──────────────────────────┬────────────────────────────┘  │
 │                             │  AgentSession                 │
 │  ┌──────────────────────────┴────────────────────────────┐  │
-│  │  @my-agent/core  (agent loop, tools, models, MCP)     │  │
+│  │  @codent/core  (agent loop, tools, models, MCP)     │  │
 │  └──────────────────────────┬────────────────────────────┘  │
 │                             │                              │
 │   ┌─────────────┐  ┌────────┴───────┐  ┌───────────────┐   │
@@ -95,7 +95,7 @@ Beyond the built-ins, drop your own extension modules into `.agents/extension` (
 │          └──────────────────┴──────────────────┘           │
 │                            │ Hono RPC                      │
 │  ┌─────────────────────────┴────────────────────────────┐  │
-│  │  @my-agent/server (uses @my-agent/node)              │  │
+│  │  @codent/server (uses @codent/node)              │  │
 │  │  /api/env · /api/fs · /api/command · /api/fetch ·    │  │
 │  │  /api/provider · /api/agent                          │  │
 │  └──────────────────────────────────────────────────────┘  │
@@ -104,22 +104,22 @@ Beyond the built-ins, drop your own extension modules into `.agents/extension` (
 
 ### Three Planes — Workspace · LLM · Agent Session
 
-Hosts talk to the agent through three **independent, orthogonal planes**. Each can run locally or be proxied through `@my-agent/server` (`pnpm start:server`, default `:3100`). On the CLI client, `--remote-env` and `--remote-provider` combine freely, but `--remote-session` is **exclusive** — see [Combinations](#combinations) for the boundary rules.
+Hosts talk to the agent through three **independent, orthogonal planes**. Each can run locally or be proxied through `@codent/server` (`pnpm start:server`, default `:3100`). On the CLI client, `--remote-env` and `--remote-provider` combine freely, but `--remote-session` is **exclusive** — see [Combinations](#combinations) for the boundary rules.
 
 | Plane | Local | Remote (HTTP) |
 |-------|-------|---------------|
-| **Workspace** — CoreEnv (fs, shell, fetch, platform) | `createNodeEnv()` (`@my-agent/node`) | `createRemoteEnv(url)` → `/api/env · /api/fs · /api/command · /api/fetch` |
+| **Workspace** — CoreEnv (fs, shell, fetch, platform) | `createNodeEnv()` (`@codent/node`) | `createRemoteEnv(url)` → `/api/env · /api/fs · /api/command · /api/fetch` |
 | **LLM** — ModelProvider (model keys / baseURL) | `createDirectModelProvider()` (host-held keys) | `createRemoteProvider(url)` → `/api/provider/*` (keys on server) |
 | **Agent** — AgentSession (messages, todos, approvals, plan) | `createLocalAgentSessionHost()` (in-process) | `createRemoteAgentSessionHost(url)` → `/api/agent` (REST + SSE) |
 
 ### CoreEnv — Workspace Plane
 
-`CoreEnv` is the central interface that decouples `@my-agent/core` from any specific runtime. All filesystem, shell, fetch, and platform APIs go through it — making the core truly runtime-agnostic.
+`CoreEnv` is the central interface that decouples `@codent/core` from any specific runtime. All filesystem, shell, fetch, and platform APIs go through it — making the core truly runtime-agnostic.
 
 | Implementation | Package | Use Case |
 |:--------------|:--------|:---------|
-| `createNodeEnv()` | `@my-agent/node` | Local workspace — Node.js APIs with optional OS sandbox |
-| `createRemoteEnv(url)` | `@my-agent/server` (client) | Remote workspace (`--remote-env` / `REMOTE_ENV`) — Hono RPC to a CoreEnv server |
+| `createNodeEnv()` | `@codent/node` | Local workspace — Node.js APIs with optional OS sandbox |
+| `createRemoteEnv(url)` | `@codent/server` (client) | Remote workspace (`--remote-env` / `REMOTE_ENV`) — Hono RPC to a CoreEnv server |
 
 ### ModelProvider — LLM Plane (orthogonal to CoreEnv)
 
@@ -127,8 +127,8 @@ LLM credentials are **not** part of CoreEnv — the workspace and the model keys
 
 | Implementation | Package | Use Case |
 |:--------------|:--------|:---------|
-| `createDirectModelProvider()` | `@my-agent/core` | Local LLM keys / baseURL (default) |
-| `createRemoteProvider(url)` | `@my-agent/server` (client) | Remote LLM provider (`--remote-provider` / `REMOTE_PROVIDER`) — keys live on the server, requests proxied through `/api/provider/*` |
+| `createDirectModelProvider()` | `@codent/core` | Local LLM keys / baseURL (default) |
+| `createRemoteProvider(url)` | `@codent/server` (client) | Remote LLM provider (`--remote-provider` / `REMOTE_PROVIDER`) — keys live on the server, requests proxied through `/api/provider/*` |
 
 ### AgentSession — Agent Loop Plane
 
@@ -161,15 +161,15 @@ Client planes combine per the boundary rules below; every row is a working confi
 
 | Package | Description |
 |---------|-------------|
-| `@my-agent/core` | Runtime-agnostic core: `ManagedAgent`, AgentSession, tools, models, MCP, skills, memory, compaction, telemetry |
-| `@my-agent/app` | Shared UI: React components, hooks, commands. **Session-only** for agent control |
-| `@my-agent/cli` | Terminal host using [@my-react/react-terminal](https://github.com/MrWangJustToDo/MyReact) |
-| `@my-agent/node` | Node.js CoreEnv: native filesystem, shell, OS sandbox |
-| `@my-agent/server` | CoreEnv HTTP + provider proxy + Agent Session routes + type-safe clients |
-| `@my-agent/extension` | Chrome extension host (WXT); requires a running server |
-| `@my-agent/playground` | In-browser WebContainer host (Vite); see [packages/playground/README.md](packages/playground/README.md) |
-| `@my-agent/mcp-server` | Standalone MCP server for external tool integration |
-| `@my-agent/im-bridge` | Generic IM bridge — connects chat platforms (Telegram, …) to an AgentSession server; per-chat sessions, streaming replies, ask_user/approval buttons, allowlist |
+| `@codent/core` | Runtime-agnostic core: `ManagedAgent`, AgentSession, tools, models, MCP, skills, memory, compaction, telemetry |
+| `@codent/app` | Shared UI: React components, hooks, commands. **Session-only** for agent control |
+| `@codent/cli` | Terminal host using [@my-react/react-terminal](https://github.com/MrWangJustToDo/MyReact) |
+| `@codent/node` | Node.js CoreEnv: native filesystem, shell, OS sandbox |
+| `@codent/server` | CoreEnv HTTP + provider proxy + Agent Session routes + type-safe clients |
+| `@codent/extension` | Chrome extension host (WXT); requires a running server |
+| `@codent/playground` | In-browser WebContainer host (Vite); see [packages/playground/README.md](packages/playground/README.md) |
+| `@codent/mcp-server` | Standalone MCP server for external tool integration |
+| `@codent/im-bridge` | Generic IM bridge — connects chat platforms (Telegram, …) to an AgentSession server; per-chat sessions, streaming replies, ask_user/approval buttons, allowlist |
 
 > **Deep dive:** See [AGENTS.md](AGENTS.md) for full architecture, code conventions, and detailed guidelines. See [packages/core/ARCHITECTURE.md](packages/core/ARCHITECTURE.md) for the core runtime startup, initialization, session, memory, compaction, and approval flows.
 
@@ -258,7 +258,7 @@ Built with [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools
 
 ### Playground
 
-Check the link https://mrwangjusttodo.github.io/MyAgent/, you can create your own site
+Check the link https://mrwangjusttodo.github.io/Codent/, you can create your own site
 ![Playground start](playground-start.png)
 ![Playground end](playground-end.png)
 ![Playground devtool](playground-devtool.png)
@@ -272,11 +272,11 @@ Check the link https://mrwangjusttodo.github.io/MyAgent/, you can create your ow
 Install the CLI globally and run it in any directory:
 
 ```bash
-npm install -g @my-agent/cli
+npm install -g @codent/cli
 
-my-agent                                 # start in the current directory
-my-agent "Explain this codebase"          # start with a prompt
-my-agent --version                        # print installed version
+codent                                 # start in the current directory
+codent "Explain this codebase"          # start with a prompt
+codent --version                        # print installed version
 ```
 
 Runtime data (sessions, memory, plans, transcripts, …) is written to `./.agents/` in the directory you run from.
@@ -288,7 +288,7 @@ Runtime data (sessions, memory, plans, transcripts, …) is written to `./.agent
 
 ```bash
 git clone https://github.com/MrWangJustToDo/MyAgent.git
-cd MyAgent
+cd Codent
 pnpm install
 pnpm build
 ```
@@ -377,7 +377,7 @@ pnpm start:im-bridge
 
 ### IM Bridge (Telegram)
 
-`@my-agent/im-bridge` is a generic chat bridge — each platform is a `ChatAdapter`
+`@codent/im-bridge` is a generic chat bridge — each platform is a `ChatAdapter`
 (Telegram ships first; Slack/Discord/飞书 adapters can reuse the same contract).
 It is an AgentSession client with two modes:
 
@@ -499,7 +499,7 @@ pnpm clean        # Remove build artifacts
 
 ### Build Order
 
-`@my-agent/core` → `@my-agent/app` → `cli` / `node` / `server` / `extension` / `playground`. Handled automatically by `pnpm build`.
+`@codent/core` → `@codent/app` → `cli` / `node` / `server` / `extension` / `playground`. Handled automatically by `pnpm build`.
 
 > **Code style:** ESM-only with `.js` imports, double quotes, semicolons, 2-space indent, 120-char width, Zod v4 schemas, `workspace:*` deps — see [CLAUDE.md](CLAUDE.md).
 

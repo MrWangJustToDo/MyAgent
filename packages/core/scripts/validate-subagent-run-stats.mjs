@@ -1,7 +1,7 @@
 /**
  * Validates subagent iteration counting and run-stat derivation.
  *
- * Run: pnpm --filter @my-agent/core run validate:subagent-run-stats
+ * Run: pnpm --filter @codent/core run validate:subagent-run-stats
  */
 
 import assert from "node:assert/strict";

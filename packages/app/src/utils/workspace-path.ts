@@ -1,4 +1,4 @@
-import { getEnv } from "@my-agent/core";
+import { getEnv } from "@codent/core";
 
 /** Join paths using CoreEnv path utilities (POSIX-safe). */
 export function joinWorkspacePath(...parts: string[]): string {

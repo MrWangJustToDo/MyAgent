@@ -1,6 +1,6 @@
 ## Context
 
-The agent runtime in `@my-agent/core` currently centers on `Agent extends Base`, which implements the Vercel AI SDK `Agent` interface. The loop is driven by `streamText()`, tools are defined with `tool()`, models are Vercel `LanguageModel` instances, and the CLI connects UI via `DirectChatTransport` + `@ai-sdk/react useChat`. State (status, session, memory, usage, hooks, compaction) lives on or near the `Agent` instance even though `AgentManager` already wraps agents as `ManagedAgent`.
+The agent runtime in `@codent/core` currently centers on `Agent extends Base`, which implements the Vercel AI SDK `Agent` interface. The loop is driven by `streamText()`, tools are defined with `tool()`, models are Vercel `LanguageModel` instances, and the CLI connects UI via `DirectChatTransport` + `@ai-sdk/react useChat`. State (status, session, memory, usage, hooks, compaction) lives on or near the `Agent` instance even though `AgentManager` already wraps agents as `ManagedAgent`.
 
 TanStack AI (`@tanstack/ai` v0.40) provides a function-based alternative:
 
@@ -28,7 +28,7 @@ A cloned reference repo lives at `tmp/tanstack-ai` for API analysis. Prior refac
 - Keeping Vercel AI SDK as a fallback or compatibility layer (the `USE_TANSTACK_LOOP` flag is a **temporary** migration aid only and MUST be deleted before the change is considered complete)
 - Maintaining Vercel `UIMessage` / `ToolSet` / `LanguageModel` type aliases in public API
 - Rewriting compaction algorithms (logic moves to middleware, behavior unchanged)
-- Replacing custom `McpManager` with TanStack built-in MCP (remote CoreEnv constraints remain; but `@ai-sdk/mcp` transport MUST still be removed from `@my-agent/node`)
+- Replacing custom `McpManager` with TanStack built-in MCP (remote CoreEnv constraints remain; but `@ai-sdk/mcp` transport MUST still be removed from `@codent/node`)
 - Migrating extension UI to `@tanstack/ai-react useChat` in the first pass (CLI first; extension follows)
 - Supporting dual Vercel + TanStack runtimes indefinitely (parallel flag is temporary for migration only; **completion criterion is zero Vercel deps**)
 - Changing subagent isolation semantics (fresh context, summary-only return)
@@ -164,11 +164,11 @@ const chat = useChat({
 
 | Package | Vercel usage today | Replacement |
 |---------|-------------------|-------------|
-| `@my-agent/core` | `streamText`, `tool()`, `Agent`, `LanguageModel`, `convertToModelMessages`, `DirectChatTransport` re-export | TanStack `chat()`, `toolDefinition()`, `AgentRunner`, `createTextAdapter()` |
-| `@my-agent/app` | Vercel `@ai-sdk/react useChat`, Vercel `UIMessage` helpers | `@tanstack/ai-react useChat` + `localConnect(agentId)` |
-| `@my-agent/cli` | `ai` peer dep, `DirectChatTransport` | `localConnect` in-process; no HTTP transport |
-| `@my-agent/extension` | `@ai-sdk/react`, `ChatTransport<UIMessage>` | `fetchServerSentEvents` / SSE RPC adapter (HTTP connect, not local) |
-| `@my-agent/node` | `@ai-sdk/mcp` stdio transport | TanStack `@tanstack/ai-mcp` or custom stdio transport without Vercel types |
+| `@codent/core` | `streamText`, `tool()`, `Agent`, `LanguageModel`, `convertToModelMessages`, `DirectChatTransport` re-export | TanStack `chat()`, `toolDefinition()`, `AgentRunner`, `createTextAdapter()` |
+| `@codent/app` | Vercel `@ai-sdk/react useChat`, Vercel `UIMessage` helpers | `@tanstack/ai-react useChat` + `localConnect(agentId)` |
+| `@codent/cli` | `ai` peer dep, `DirectChatTransport` | `localConnect` in-process; no HTTP transport |
+| `@codent/extension` | `@ai-sdk/react`, `ChatTransport<UIMessage>` | `fetchServerSentEvents` / SSE RPC adapter (HTTP connect, not local) |
+| `@codent/node` | `@ai-sdk/mcp` stdio transport | TanStack `@tanstack/ai-mcp` or custom stdio transport without Vercel types |
 
 **Rationale:** Dual SDK maintenance is explicitly rejected. TanStack is the single source of truth for loop, tools, messages, and providers.
 
@@ -243,7 +243,7 @@ This change is **not done** until all of the following are true:
 
 1. No `import ... from "ai"` or `import ... from "@ai-sdk/*"` in `packages/`
 2. No `ai` or `@ai-sdk/*` entries in any workspace `package.json`
-3. `@my-agent/core` does not re-export Vercel types or transports
+3. `@codent/core` does not re-export Vercel types or transports
 4. `pnpm build` and manual regression pass on TanStack-only path
 5. `AGENTS.md` documents TanStack AI as the sole LLM SDK
 
@@ -252,4 +252,4 @@ This change is **not done** until all of the following are true:
 1. **Extension timing:** Migrate extension in Phase 4 or defer to a follow-up change?
 2. **Session persistence format:** Store TanStack `UIMessage[]` in session files directly, or keep ModelMessage[] on disk with conversion at load?
 3. **DeepSeek adapter:** Use openai-compatible endpoint or wait for `@tanstack/ai` DeepSeek package?
-4. **Public API exports:** Should `@my-agent/core` re-export TanStack types or expose thin aliases?
+4. **Public API exports:** Should `@codent/core` re-export TanStack types or expose thin aliases?

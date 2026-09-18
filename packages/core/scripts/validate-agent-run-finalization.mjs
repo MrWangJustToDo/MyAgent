@@ -2,7 +2,7 @@
  * Validates shared applyRunOutcome for chat vs detached paths, including
  * approval-count sync and idempotent error handling.
  *
- * Run: pnpm --filter @my-agent/core run validate:agent-run-finalization
+ * Run: pnpm --filter @codent/core run validate:agent-run-finalization
  */
 
 import assert from "node:assert/strict";

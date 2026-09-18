@@ -18,8 +18,8 @@ The current `Agent` class is tightly coupled to the Vercel AI SDK (`streamText`,
 - **Fully remove Vercel AI SDK** from all packages — **BREAKING**:
   - Remove `ai`, `@ai-sdk/react`, `@ai-sdk/openai`, `@ai-sdk/deepseek`, `@ai-sdk/mcp`, `@ai-sdk/provider`, `@ai-sdk/provider-utils`, `@ai-sdk/devtools`, `@openrouter/ai-sdk-provider`, `ai-sdk-ollama` from workspace dependencies
   - Remove all `import ... from "ai"` and `import ... from "@ai-sdk/*"` across core, app, cli, extension, node
-  - Remove `DirectChatTransport`, `ToolLoopAgent`, `streamText`, `tool()`, `convertToModelMessages`, Vercel `UIMessage` / `ToolSet` / `LanguageModel` from public `@my-agent/core` exports
-  - Replace `@ai-sdk/mcp` stdio transport in `@my-agent/node` with TanStack MCP or retained custom transport (no Vercel MCP types)
+  - Remove `DirectChatTransport`, `ToolLoopAgent`, `streamText`, `tool()`, `convertToModelMessages`, Vercel `UIMessage` / `ToolSet` / `LanguageModel` from public `@codent/core` exports
+  - Replace `@ai-sdk/mcp` stdio transport in `@codent/node` with TanStack MCP or retained custom transport (no Vercel MCP types)
 
 ## Capabilities
 

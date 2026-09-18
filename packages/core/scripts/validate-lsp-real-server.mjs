@@ -5,7 +5,7 @@
  * real TLS server + real node transport: writing a file with syntax errors via the
  * write interceptor injects `_lspDiagnostics` into the tool result.
  *
- * Run: pnpm --filter @my-agent/core run validate:lsp-real-server
+ * Run: pnpm --filter @codent/core run validate:lsp-real-server
  */
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
@@ -42,8 +42,8 @@ function greet(u: User): string {
 );
 
 // Register CoreEnv (node)
-const nodePkg = await import("@my-agent/node");
-const core = await import("@my-agent/core");
+const nodePkg = await import("@codent/node");
+const core = await import("@codent/core");
 const env = nodePkg.createNodeEnv({ rootPath: projectDir, cwd: projectDir, platform: "linux" });
 core.registerCoreEnv(env);
 

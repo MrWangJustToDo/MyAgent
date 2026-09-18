@@ -1,7 +1,7 @@
 {
-  "name": "@my-agent/core",
+  "name": "@codent/core",
   "version": "0.0.1",
-  "description": "Core logic for My Agent",
+  "description": "Core logic for Codent",
   "keywords": [
     "ai",
     "agent",

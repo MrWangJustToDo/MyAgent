@@ -36,7 +36,7 @@ export async function fetchGitStatus(rootPath: string): Promise<Map<string, stri
     return gitStatusCache.status;
   }
   try {
-    const { getEnv } = await import("@my-agent/core");
+    const { getEnv } = await import("@codent/core");
     const result = await getEnv().runCommand("git status --porcelain", {
       cwd: rootPath,
     });
