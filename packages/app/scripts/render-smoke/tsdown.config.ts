@@ -9,15 +9,29 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "tsdown";
 
+import { RENDERER_EXTERNAL, rewriteRendererSpecifiers, TYPES_EXTERNAL } from "../../tsdown.shared.ts";
+
 const here = dirname(fileURLToPath(import.meta.url));
 const src = resolve(here, "../../src");
 
 export default defineConfig({
+  // The same renderer rewrite the two package builds apply. Without it this bundle keeps the
+  // bare `ink` / `react` specifiers that `src` writes, and Node resolves neither: the app has
+  // no `ink` dependency to resolve (its package.json points that name at the fork), and the
+  // bare names only ever resolved in-repo through the pnpm aliases `f8a7c83` removed.
+  //
+  // The failure mode is why this matters: an unresolvable specifier kills the smoke at IMPORT
+  // time, so it reports `ERR_MODULE_NOT_FOUND` instead of a bad frame, and every frame
+  // assertion in the file goes unreported. A broken harness reads as "a check failed".
+  plugins: [rewriteRendererSpecifiers()],
   entry: [
     `${src}/messages/MessageView.tsx`,
     // Mounted directly by the smoke to pin the compact summary's fold window.
     `${src}/messages/CompactionSummaryView.tsx`,
     `${src}/components/MessageList.tsx`,
+    // The smoke wraps the compact-summary fixture in this provider, so the view it mounts is
+    // the finished checkpoint rather than the live summary `MessageViewWithCompact` injects.
+    `${src}/context/static-context.ts`,
     `${src}/layout/Content.tsx`,
     `${src}/layout/Header.tsx`,
     `${src}/layout/WelcomePanel.tsx`,
@@ -47,16 +61,25 @@ export default defineConfig({
   shims: true,
   deps: {
     neverBundle: [
-      "ink",
-      "react",
-      "react/jsx-runtime",
-      "react/jsx-dev-runtime",
+      // The rewritten renderer names, not the bare ones this config used to list. The plugin
+      // above rewrites `react` / `ink` to these, so listing the bare spellings would leave the
+      // real specifiers free to be inlined — and an inlined renderer would be a SECOND copy,
+      // which is the two-hooks-dispatchers bug this repo keeps re-learning.
+      ...RENDERER_EXTERNAL,
+      ...TYPES_EXTERNAL,
       "@codent/core",
       "chalk",
-      "ink-stream-markdown",
       "lodash-es",
       "diff",
       "@m234/nerd-fonts",
     ],
+    // `ink-stream-markdown` is deliberately NOT in the list above, unlike in the package
+    // builds. It imports the bare `react` / `ink` names itself, so leaving it external means
+    // Node runs a SECOND module — its own copy, resolved through pnpm's `react@19.2.8` /
+    // `ink@7.1.0` peers — and two Reacts is exactly the dispatcher mismatch that shows up as
+    // `Cannot read properties of null (reading 'useMemo')`. Inlined, its imports go through
+    // the rewrite plugin above like any other and one renderer survives. A real host does the
+    // same thing for the same reason (`@codent/cli` inlines it too).
+    alwaysBundle: ["ink-stream-markdown"],
   },
 });

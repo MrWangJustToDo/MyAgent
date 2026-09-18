@@ -15,17 +15,31 @@
  *
  * Run: pnpm --filter @codent/app run validate:render-smoke
  *      node scripts/render-smoke/run.mjs [session.jsonl]
+ *
+ * Renderer and React are imported here by their REAL package names, not the bare `react` /
+ * `ink` the source writes: the app has no such dependencies (its package.json points those
+ * names at the forks, and only the pnpm aliases `f8a7c83` removed ever made them resolve
+ * in-repo). Importing the forks directly is what `tsdown.config.ts`'s rewrite plugin emits
+ * for `src`, so this module and the bundle share ONE renderer and ONE React — and therefore
+ * one hook dispatcher.
+ *
+ * Getting this wrong does not fail loudly. Importing real React alongside a fork-based bundle
+ * surfaces as `Cannot read properties of null (reading 'useMemo')`, because the components
+ * write to one dispatcher while this module's `createElement` established the other. The
+ * render still "works", it just throws per component — so the failure reads as a dozen
+ * unrelated frame assertions rather than as two bad imports.
  */
 
-import { render } from "ink";
+import { createElement } from "@my-react/react";
+import { render } from "@my-react/react-terminal";
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import { Readable } from "node:stream";
-import { createElement } from "react";
 
 import { awaitStableMarker } from "./await-stable-marker.mjs";
 import { checks as budgetChecks } from "./budget-fixtures.mjs";
 import { MessageList, selectVisibleRows, MAX_STATIC_LINES } from "./dist/components/MessageList.mjs";
+import { StaticContext } from "./dist/context/static-context.mjs";
 import { useAgentStatus } from "./dist/hooks/use-agent-status.mjs";
 import { useAgent } from "./dist/hooks/use-agent.mjs";
 import { useDiffRenderer } from "./dist/hooks/use-diff-renderer.mjs";
@@ -932,13 +946,25 @@ instance.unmount();
   const compactMessage = { id: "compact-fixture", role: "user", parts: [{ type: "text", content: longSummary }] };
 
   const compactStdout = new FakeStdout();
-  const compactInstance = render(createElement(CompactionSummaryView, { message: compactMessage }), {
-    stdout: compactStdout,
-    stdin: fakeStdin(),
-    exitOnCtrlC: false,
-    patchConsole: false,
-    maxFps: 30,
-  });
+  // Wrapped in `StaticContext`, because the view derives its parse mode from where the row
+  // lives. This fixture is the FINISHED checkpoint — what `MessageList` marks with
+  // `staticMessage: true`. Mounted bare it would default to false and stream, and a streaming
+  // window is tail-anchored: the assertion below would fold the digest's BEGINNING away and
+  // fail for the right reason on the wrong fixture.
+  const compactInstance = render(
+    createElement(
+      StaticContext,
+      { value: { staticMessage: true } },
+      createElement(CompactionSummaryView, { message: compactMessage })
+    ),
+    {
+      stdout: compactStdout,
+      stdin: fakeStdin(),
+      exitOnCtrlC: false,
+      patchConsole: false,
+      maxFps: 30,
+    }
+  );
   await settle(400);
   compactInstance.unmount();
 
@@ -961,13 +987,41 @@ instance.unmount();
   );
   // ...and it is not passing because nothing rendered at all.
   record("and the folded summary still renders its own content", painted > 200, { nonSpaceChars: painted });
-  // The fold is at the BOTTOM and content renders from the START. This is what pins
-  // `streaming={false}`: the streaming window is tail-anchored, so on a
-  // finished summary it would fold the beginning away and show the digest's tail instead.
+  // The fold is at the BOTTOM and content renders from the START. This is what pins the STATIC
+  // parse mode: the streaming window is tail-anchored, so a finished summary parsed as
+  // streaming would fold the beginning away and show the digest's tail instead. It passes only
+  // because the fixture registers `staticMessage: true` above.
   record(
     "the folded summary renders from the start, keeping its heading visible",
     compactLines.some((l) => /Conversation Summary/.test(l)),
     { hasHeading: compactLines.some((l) => /Conversation Summary/.test(l)), firstLines: compactLines.slice(0, 3) }
+  );
+
+  // The other direction of the same conditional, and the one a user actually watches: the SAME
+  // component, same message, mounted WITHOUT the provider — the live summary that
+  // `MessageViewWithCompact` injects while compaction runs. It must stream, because a summary
+  // still arriving rendered as `final` is treated as already complete. Pinning this here is
+  // what stops `streaming` from being "simplified" back to the constant it used to be: the
+  // static fixture above cannot tell the two apart, so without this the constant passes green.
+  const liveStdout = new FakeStdout();
+  const liveInstance = render(createElement(CompactionSummaryView, { message: compactMessage }), {
+    stdout: liveStdout,
+    stdin: fakeStdin(),
+    exitOnCtrlC: false,
+    patchConsole: false,
+    maxFps: 30,
+  });
+  await settle(400);
+  liveInstance.unmount();
+
+  const liveLines = frameLines(liveStdout);
+  // `streaming` drives the tail-anchored window, so a live summary drops the digest's head and
+  // keeps its newest lines. That is the exact inverse of the static assertion above, and it is
+  // observable on the frame — which is why this is a frame check and not a source one.
+  record(
+    "the same summary mounted without StaticContext streams instead (the live half)",
+    !liveLines.some((l) => /Conversation Summary/.test(l)) && (liveStdout.text.match(/\S/g) ?? []).length > 200,
+    { hasHeading: liveLines.some((l) => /Conversation Summary/.test(l)), firstLines: liveLines.slice(0, 2) }
   );
 }
 
@@ -984,9 +1038,11 @@ instance.unmount();
 {
   const textPartSource = fs.readFileSync(new URL("../../src/messages/TextPartView.tsx", import.meta.url), "utf8");
   const code = textPartSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  // A bare boolean prop (`streaming`) or an explicit one (`streaming={true}`). Matched as a
-  // whole prop token so `STREAMING_PARSE_OPTIONS` and prose cannot satisfy it.
-  const hasStreamingProp = /(?:^|\s)streaming(?:=\{true\})?(?=[\s/>])/.test(code);
+  // A bare boolean prop (`streaming`) or an explicit conditional (`streaming={!staticMessage}`).
+  // Matched as a whole prop token so `STREAMING_PARSE_OPTIONS` and prose cannot satisfy it, and
+  // the conditional form is accepted because that is what the component passes: the flag is
+  // derived from `StaticContext` so rows promoted into the static region stop streaming.
+  const hasStreamingProp = /(?:^|\s)streaming(?:=\{(?:true|!staticMessage)\})?(?=[\s/>])/.test(code);
   record("the live text part still asks for incremental stream parsing", hasStreamingProp, { hasStreamingProp });
   record(
     "and it passes the streamParse options that incremental parsing needs",

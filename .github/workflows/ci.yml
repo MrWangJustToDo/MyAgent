@@ -76,6 +76,20 @@ jobs:
         # its own dist entry, so it must run after the build above.
         run: pnpm --filter @codent/app test
 
+      - name: Render smoke (long-session transcript)
+        # This step replaces the manual TUI check, and until now nothing ran it:
+        # it existed as an npm script no workflow called, so it silently rotted
+        # into `ERR_MODULE_NOT_FOUND` when the workspace dropped the `react` /
+        # `ink` aliases — the harness resolved bare names that no longer existed.
+        # A smoke that cannot load still reports "a check failed", which is why
+        # its absence went unnoticed. Checked here so it cannot rot again.
+        #
+        # Bundles its own `scripts/render-smoke/dist` from `src` (sharing one
+        # module instance with the stores), so it needs the build above but is
+        # independent of the release config below; run before that one so a
+        # failure is attributed to the source rather than to the release build.
+        run: pnpm --filter @codent/app validate:render-smoke
+
       - name: Build the release configuration of @codent/app
         # `Build` above runs the DEFAULT app config, which keeps dependencies
         # external. The release config (`tsdown.config.release.ts`) is a second,

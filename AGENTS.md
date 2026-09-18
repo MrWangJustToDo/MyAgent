@@ -268,7 +268,9 @@ The release config exists because those third-party deps (`reactivity-store`, `c
 
 Tests: `@codent/app` owns the only `node:test` suite — `pnpm --filter @codent/app test` builds the package, then runs `node --test test/*.test.mjs` against its `dist` output. Core is covered by the `validate:*` scripts instead (see step 3 of the Task Completion Checklist).
 
-CI: `.github/workflows/ci.yml` runs on every pull request and on pushes to `main` — `wxt prepare` → `pnpm build` → `pnpm lint` → `pnpm typecheck` → `pnpm --filter @codent/app test` → `build:app:release` → `codent validate:self-contained` → `codent validate:runtime-specifiers`. The release workflow (`.github/workflows/release.yml`, `v*` tag or manual dispatch) runs the same checks before `pnpm --filter codent run publish:beta`.
+`@codent/app` has a second, separate suite: `pnpm --filter @codent/app validate:render-smoke` bundles `scripts/render-smoke/` from `src` and mounts the real transcript in a fake terminal, asserting on rendered frames (the row budget, the fold window, cache invalidation). It is the only coverage that renders, so it is in `ci.yml` — and was a script no workflow called until then, which is how it rotted into `ERR_MODULE_NOT_FOUND` when `f8a7c83` dropped the `react` / `ink` aliases it imported by bare name. Anything named `validate:*` that no workflow invokes is a script that will rot; check for callers before trusting one.
+
+CI: `.github/workflows/ci.yml` runs on every pull request and on pushes to `main` — `wxt prepare` → `pnpm build` → `pnpm lint` → `pnpm typecheck` → `pnpm --filter @codent/app test` → `pnpm --filter @codent/app validate:render-smoke` → `build:app:release` → `codent validate:self-contained` → `codent validate:runtime-specifiers`. The release workflow (`.github/workflows/release.yml`, `v*` tag or manual dispatch) runs the same checks before `pnpm --filter codent run publish:beta`.
 
 ### Two release-contract checks (`packages/codent/scripts/`)
 
