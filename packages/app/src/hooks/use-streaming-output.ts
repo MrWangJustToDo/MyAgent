@@ -55,15 +55,20 @@ function acquireStreamingBridge(agentId: string): boolean {
 
   // The event → buffer mapping lives in `classifyStreamEvent` so it is testable: the
   // subscription itself needs a live session, and a source-text assertion on it cannot
-  // tell an unconditional release from a dead one. `lifecycle` is where
-  // `agent:tool-end` / `agent:tool-error` project, and they are the only "this call is
-  // over" signal that ever fires — nothing emits `tool:clear` at runtime.
+  // tell an unconditional release from a dead one. Three channels are needed:
+  //   `tool`      — the streamed chunks.
+  //   `lifecycle` — `agent:tool-end` / `agent:tool-error` (the only "call is over" signal
+  //                 that ever fires; nothing emits `tool:clear` at runtime).
+  //   `messages`  — where the call's RESULT lands, which is what actually releases the
+  //                 buffer. Releasing on `lifecycle` alone blanked the row: that event is
+  //                 emitted before `early-tool-result-ui` writes the output, and
+  //                 `StreamingOutputView` stays mounted while the part is still executing.
   const unsubscribe = session.subscribe(
     (event: Parameters<Parameters<typeof session.subscribe>[0]>[0]) => {
       const action = classifyStreamEvent(event as { channel: string; payload: { type?: string } });
       if (action) applyStreamEventAction(action);
     },
-    { channels: ["tool", "lifecycle"] }
+    { channels: ["tool", "lifecycle", "messages"] }
   );
 
   bridges.set(agentId, {

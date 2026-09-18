@@ -138,17 +138,27 @@ const part = (name, output) => ({
   applyStreamEventAction(classifyStreamEvent(chunkEvent("c1", "world")));
   assert.equal(getStreamingStoreOutput("c1")?.stdout, "hello world", "chunks must reach the store");
 
-  // ...and is fully dropped once the call ends. (`undefined` — the store has no entry.)
+  // ...the end event MARKs it (and must NOT release yet)...
   const end = classifyStreamEvent(endEvent("c1"));
-  assert.deepEqual(end, { kind: "finished", toolCallId: "c1" }, "agent:tool-end must map to a release");
+  assert.deepEqual(end, { kind: "tool-end", toolCallId: "c1" }, "agent:tool-end must mark the call");
   applyStreamEventAction(end);
   assert.equal(
-    getStreamingStoreOutput("c1"),
-    undefined,
-    "a finished call must be released (this is the OOM fix; the lifecycle channel carries it)"
+    getStreamingStoreOutput("c1")?.stdout,
+    "hello world",
+    "the end event must NOT release: its result is not on the channel yet, so the row " +
+      "would blank for a frame while StreamingOutputView is still mounted (the flash)"
   );
 
-  // tool-error releases too, and unrelated lifecycle events are ignored.
+  // ...and the RESULT frame releases it.
+  const release = classifyStreamEvent({
+    channel: "messages",
+    payload: [{ role: "assistant", parts: [{ type: "tool-call", id: "c1", state: "complete", output: { ok: 1 } }] }],
+  });
+  assert.deepEqual(release, { kind: "release", toolCallId: "c1" }, "the result frame must release the call");
+  applyStreamEventAction(release);
+  assert.equal(getStreamingStoreOutput("c1"), undefined, "a finished call must be released (this is the OOM fix)");
+
+  // A call that errored settles the same way and must release too.
   ingestStreamingChunk("c2", "stdout", "partial");
   applyStreamEventAction(
     classifyStreamEvent({
@@ -156,14 +166,51 @@ const part = (name, output) => ({
       payload: { type: "agent:tool-error", payload: { tool_call_id: "c2" } },
     })
   );
+  assert.equal(getStreamingStoreOutput("c2")?.stdout, "partial", "an errored call holds until its result frame");
+  applyStreamEventAction(
+    classifyStreamEvent({
+      channel: "messages",
+      payload: [{ parts: [{ type: "tool-call", id: "c2", state: "error", output: { error: "boom" } }] }],
+    })
+  );
   assert.equal(getStreamingStoreOutput("c2"), undefined, "an errored call must be released too");
+
+  // Events that must NOT release: an unrelated lifecycle event, and a message frame whose
+  // matching part has not settled yet.
+  ingestStreamingChunk("c5", "stdout", "live");
   assert.equal(
     classifyStreamEvent({ channel: "lifecycle", payload: { type: "agent:tool-start", payload: {} } }),
     null,
     "other lifecycle events must not touch the buffers"
   );
+  applyStreamEventAction(classifyStreamEvent(endEvent("c5")));
+  assert.equal(
+    classifyStreamEvent({
+      channel: "messages",
+      payload: [{ parts: [{ type: "tool-call", id: "c5", state: "input-complete" }] }],
+    }),
+    null,
+    "a still-executing part must hold its buffer (releasing here is what flashed the row)"
+  );
+  assert.equal(getStreamingStoreOutput("c5")?.stdout, "live", "so the buffer is still there");
+  // A frame about some OTHER tool must not release this one.
+  assert.equal(
+    classifyStreamEvent({
+      channel: "messages",
+      payload: [{ parts: [{ type: "tool-call", id: "other", state: "complete", output: {} }] }],
+    }),
+    null,
+    "an unrelated tool's result must not release a pending call"
+  );
+  applyStreamEventAction(
+    classifyStreamEvent({
+      channel: "messages",
+      payload: [{ parts: [{ type: "tool-call", id: "c5", state: "complete", output: { done: true } }] }],
+    })
+  );
+  assert.equal(getStreamingStoreOutput("c5"), undefined, "and it releases when its own result lands");
 
-  // A `tool:clear` frame (the retry path) still clears.
+  // A `tool:clear` frame (the retry path) still clears immediately.
   ingestStreamingChunk("c3", "stdout", "stale");
   applyStreamEventAction(classifyStreamEvent({ channel: "tool", payload: { toolCallId: "c3" } }));
   assert.equal(getStreamingStoreOutput("c3"), undefined, "a tool:clear frame must still clear");
@@ -185,8 +232,8 @@ const part = (name, output) => ({
   // (mutation `// if (action) applyStreamEventAction(action);` passed) until this existed.
   const code = hook.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   assert.ok(
-    /channels: \["tool", "lifecycle"\]/.test(code),
-    "the hook must subscribe to `lifecycle`, where agent:tool-end / agent:tool-error project"
+    /channels: \["tool", "lifecycle", "messages"\]/.test(code),
+    "the hook must subscribe to `lifecycle` (ends) AND `messages` (results) — releasing needs both"
   );
   assert.ok(/applyStreamEventAction\(action\)/.test(code), "and must route every event through the tested mapping");
 }
