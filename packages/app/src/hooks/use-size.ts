@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { createState } from "reactivity-store";
 
-import { useTerminalSize } from "./use-terminal-size.js";
+import { getSize, useTerminalSize } from "./use-terminal-size.js";
 
 export const useSize = createState(
   () => ({
@@ -20,8 +20,17 @@ export const useSize = createState(
         return { columns, rows };
       };
 
+      const init = () => {
+        if (typeof process !== "undefined") {
+          const size = getSize(process.stdout);
+          s.state.screenHeight = size.rows;
+          s.state.screenWidth = size.columns;
+        }
+      };
+
       return {
         useInitTerminalSize,
+        init,
       };
     },
     withDeepSelector: false,

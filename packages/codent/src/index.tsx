@@ -1,5 +1,14 @@
 #!/usr/bin/env node
-import { AdapterProvider, App, ConfigEditor, initConfig, initHighlighter, configureEnv, useConfig } from "@codent/app";
+import {
+  AdapterProvider,
+  App,
+  ConfigEditor,
+  initConfig,
+  initHighlighter,
+  configureEnv,
+  useConfig,
+  useSize,
+} from "@codent/app";
 import {
   createDirectModelProvider,
   installAgentLogProcessGuards,
@@ -123,6 +132,8 @@ function Bootstrap() {
   }
   return <App />;
 }
+
+useSize.getActions().init();
 
 initHighlighter()
   .then(() => {

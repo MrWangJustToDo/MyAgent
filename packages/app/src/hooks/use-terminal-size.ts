@@ -12,22 +12,23 @@ const getValidSize = (size: number): number => {
   }
 };
 
+export const getSize = (stdout: NodeJS.WriteStream) => {
+  return {
+    columns: getValidSize(stdout?.columns || 60 - TERMINAL_PADDING_X),
+    rows: stdout?.rows || 24,
+  };
+};
+
 export function useTerminalSize(): { columns: number; rows: number } {
   const { stdout } = useStdout();
 
-  const [size, setSize] = useState(() => ({
-    columns: getValidSize(stdout?.columns || 60 - TERMINAL_PADDING_X),
-    rows: stdout?.rows || 24,
-  }));
+  const [size, setSize] = useState(() => getSize(stdout));
 
   useLayoutEffect(() => {
     if (!stdout) return;
 
     function updateSize() {
-      setSize({
-        columns: getValidSize(stdout?.columns || 60 - TERMINAL_PADDING_X),
-        rows: stdout?.rows || 24,
-      });
+      setSize(getSize(stdout));
     }
 
     updateSize();
