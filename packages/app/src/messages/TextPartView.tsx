@@ -20,9 +20,23 @@ export interface TextPartViewProps {
  * (plus stable top-level node reuse) makes the underlying parser cache safe-markdown
  * transforms, line offsets and previously parsed stable nodes while only re-parsing
  * the appended tail. Static views (plan preview, compaction summary) intentionally
- * keep the library default `{ final: true }` one-shot parse.
+ * keep the one-shot parse.
  */
 const STREAMING_PARSE_OPTIONS = { streamParse: "auto", reuseStableTopLevelNodes: true } as const;
+
+/**
+ * `streaming` is REQUIRED here, not decorative.
+ *
+ * 0.0.11 resolves the parse mode as `parseOptions?.final ?? !streaming`, and its default is
+ * `streaming = false`. Before then the resolver was "use `parseOptions` verbatim once it
+ * mentions `final` OR `streamParse`" — which `STREAMING_PARSE_OPTIONS` satisfies via
+ * `streamParse`, keeping the incremental path. Under the new resolver that same object
+ * reports no `final`, so the default flips to `final: true` and every live text part is
+ * re-parsed whole on every chunk: the streaming cache never engages.
+ *
+ * Passing `streaming` restores the previous semantics exactly (`final` resolves to `false`).
+ * No `height` is set, so the tail-anchored window that `streaming` also drives is inert.
+ */
 
 /** Render a text part for assistant messages (user messages are handled by UserMessageView) */
 export const TextPartView = ({ part }: TextPartViewProps) => {
@@ -33,7 +47,7 @@ export const TextPartView = ({ part }: TextPartViewProps) => {
       <Box flexShrink={0}>
         <Text color={COLORS.accent}>{"✦ "}</Text>
       </Box>
-      <StreamMarkdown theme={{ ...markdownTheme, width: width - 6 }} parseOptions={STREAMING_PARSE_OPTIONS}>
+      <StreamMarkdown theme={{ ...markdownTheme, width: width - 6 }} parseOptions={STREAMING_PARSE_OPTIONS} streaming>
         {part.content.trimEnd()}
       </StreamMarkdown>
     </Box>

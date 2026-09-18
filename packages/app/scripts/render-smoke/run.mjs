@@ -39,6 +39,7 @@ import { useTranscriptDisplay } from "./dist/hooks/use-transcript-display.mjs";
 import { useWorkspaceInfo } from "./dist/hooks/use-workspace-info.mjs";
 import { Content } from "./dist/layout/Content.mjs";
 import { Header } from "./dist/layout/Header.mjs";
+import { CompactionSummaryView } from "./dist/messages/CompactionSummaryView.mjs";
 import { getMessages } from "./dist/utils/get-messages.mjs";
 import { flattenNamespaceFor, getStaticFlattenSnapshot } from "./dist/utils/message-flat-cache.mjs";
 
@@ -913,6 +914,87 @@ instance.rerender(createElement(Screen, { messages: all }));
 await settle(120);
 
 instance.unmount();
+
+// ── the compact summary's fold window ────────────────────────────────────────
+// A compact summary is the whole conversation's digest, so it is easily hundreds of
+// lines. `MessageList` budgets the static region by MEASURED height, so an unbounded one
+// crowds real messages out of the scrollback (and can exceed the viewport alone). Mounted
+// directly rather than through `Screen` so it does not depend on the transcript fixture
+// containing a compaction message. The rendered frame is the only thing that can prove
+// the fold: a source-text assertion cannot tell a working `height` from an ignored one.
+{
+  // Long enough to be far past any plausible cap, in BOTH directions: 200 bullet lines is
+  // hundreds of rendered lines once wrapped.
+  const longSummary = `# Conversation Summary\n\n${Array.from(
+    { length: 200 },
+    (_, i) => `- digest line ${i + 1} with enough text to wrap around the pane width`
+  ).join("\n")}`;
+  const compactMessage = { id: "compact-fixture", role: "user", parts: [{ type: "text", content: longSummary }] };
+
+  const compactStdout = new FakeStdout();
+  const compactInstance = render(createElement(CompactionSummaryView, { message: compactMessage }), {
+    stdout: compactStdout,
+    stdin: fakeStdin(),
+    exitOnCtrlC: false,
+    patchConsole: false,
+    maxFps: 30,
+  });
+  await settle(400);
+  compactInstance.unmount();
+
+  const compactLines = frameLines(compactStdout);
+  const foldLines = compactLines.filter((l) => /folded/.test(l));
+  const painted = (compactStdout.text.match(/\S/g) ?? []).length;
+
+  // Bound is generous (the component's cap is 40) but still far below what 200 wrapped
+  // bullets produce — the assertion is "a fold happened", not "the constant is 40".
+  record("a long compact summary folds instead of painting hundreds of lines", compactLines.length <= 80, {
+    renderedLines: compactLines.length,
+    foldIndicator: foldLines.at(-1) ?? null,
+  });
+  record(
+    "the folded compact summary renders a fold indicator naming the hidden lines",
+    foldLines.some((l) => /\d+ lines folded/.test(l)),
+    {
+      foldLines,
+    }
+  );
+  // ...and it is not passing because nothing rendered at all.
+  record("and the folded summary still renders its own content", painted > 200, { nonSpaceChars: painted });
+  // The fold is at the BOTTOM and content renders from the START. This is what pins
+  // `streaming={false}`: the streaming window is tail-anchored, so on a
+  // finished summary it would fold the beginning away and show the digest's tail instead.
+  record(
+    "the folded summary renders from the start, keeping its heading visible",
+    compactLines.some((l) => /Conversation Summary/.test(l)),
+    { hasHeading: compactLines.some((l) => /Conversation Summary/.test(l)), firstLines: compactLines.slice(0, 3) }
+  );
+}
+
+// ── the live text part must keep incremental stream parsing ──────────────────
+// ink-stream-markdown 0.0.11 resolves the parse mode as `parseOptions?.final ?? !streaming`
+// with `streaming` defaulting to FALSE, so a live text part that passes only
+// `parseOptions` gets `final: true` and re-parses the whole message on every chunk — the
+// streaming cache never engages. Up to 0.0.10 the resolver was "use `parseOptions` as-is
+// once it mentions `final` OR `streamParse`", which the `streamParse` option satisfied.
+//
+// This one CANNOT be behavioural: the parse mode changes only the work done, never the
+// rendered string, so there is no frame to assert on. It is a source assertion, and
+// comments are stripped first so a commented-out prop cannot satisfy it.
+{
+  const textPartSource = fs.readFileSync(new URL("../../src/messages/TextPartView.tsx", import.meta.url), "utf8");
+  const code = textPartSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  // A bare boolean prop (`streaming`) or an explicit one (`streaming={true}`). Matched as a
+  // whole prop token so `STREAMING_PARSE_OPTIONS` and prose cannot satisfy it.
+  const hasStreamingProp = /(?:^|\s)streaming(?:=\{true\})?(?=[\s/>])/.test(code);
+  record("the live text part still asks for incremental stream parsing", hasStreamingProp, { hasStreamingProp });
+  record(
+    "and it passes the streamParse options that incremental parsing needs",
+    /parseOptions=\{STREAMING_PARSE_OPTIONS\}/.test(code),
+    {}
+  );
+}
+
 console.error = realConsoleError;
 const pass = results.every((r) => r.pass);
 console.log(

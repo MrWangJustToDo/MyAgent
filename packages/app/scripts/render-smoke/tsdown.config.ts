@@ -15,6 +15,8 @@ const src = resolve(here, "../../src");
 export default defineConfig({
   entry: [
     `${src}/messages/MessageView.tsx`,
+    // Mounted directly by the smoke to pin the compact summary's fold window.
+    `${src}/messages/CompactionSummaryView.tsx`,
     `${src}/components/MessageList.tsx`,
     `${src}/layout/Content.tsx`,
     `${src}/layout/Header.tsx`,

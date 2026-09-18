@@ -9,6 +9,20 @@ import { extractCompactionSummaryBody } from "../utils/compaction-summary.js";
 
 import type { TextPart, UIMessage } from "../hooks";
 
+/**
+ * Visible lines for the summary body. Longer summaries fold behind the library's
+ * fold-indicator line rather than growing without bound.
+ *
+ * A compact summary is the full conversation's digest, so it is easily hundreds of lines
+ * — and `MessageList` budgets the static region by MEASURED height (`MAX_STATIC_LINES`),
+ * so an unbounded one crowds real messages out of the scrollback and can exceed the
+ * viewport on its own. This is display-only: the model still receives the whole summary.
+ *
+ * Same idea as `LiteDiff`'s `maxLines`; deliberately a single named constant so the
+ * budget is one line to tune.
+ */
+const COMPACT_SUMMARY_MAX_LINES = 40;
+
 export const CompactionSummaryView = memo(function CompactionSummaryView({ message }: { message: UIMessage }) {
   const screenWidth = useSize((s) => s.state.screenWidth);
   const contentWidth = screenWidth - 2;
@@ -32,7 +46,15 @@ export const CompactionSummaryView = memo(function CompactionSummaryView({ messa
       <Box justifyContent="center" width={"100%"}>
         <Text>── compact checkpoint ──</Text>
       </Box>
-      <StreamMarkdown theme={{ ...markdownTheme, width: contentWidth - 2 }}>{displayContent.trimEnd()}</StreamMarkdown>
+      <StreamMarkdown
+        theme={{ ...markdownTheme, width: contentWidth - 2 }}
+        height={COMPACT_SUMMARY_MAX_LINES}
+        // Static, finished content: `final` one-shot parse (the library default) with the
+        // fold indicator at the bottom. `streaming` is for content still arriving.
+        streaming={false}
+      >
+        {displayContent.trimEnd()}
+      </StreamMarkdown>
     </Box>
   );
 });
