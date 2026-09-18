@@ -101,10 +101,15 @@ function applyToolCallCancellation(
       if (!isToolCallPart(part) || !isCancellable(part)) continue;
 
       partsChanged = true;
+      // Carry the `cancelled` marker on the PART's output too, not only on the appended
+      // `tool-result`: the part output is what the UI renders (and what a host reads),
+      // while the tool-result content is consumed by the model wire. Without it here, a
+      // cancelled call was indistinguishable from a tool that failed mid-flight, so
+      // `getInlineSummary` could not tell the user the run was cut short.
       parts[i] = {
         ...part,
         state: options.state,
-        output: { success: false, error: message },
+        output: { success: false, error: message, cancelled: options.cancelled === true },
       };
 
       if (

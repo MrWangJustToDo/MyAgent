@@ -146,7 +146,6 @@ export class OutputAccumulator {
   private finished = false;
 
   private tempFilePath: string | undefined;
-  private pendingChunks: Uint8Array[] = [];
 
   constructor(options: OutputAccumulatorOptions = {}) {
     this.maxLines = options.maxLines ?? DEFAULT_MAX_LINES;
@@ -166,9 +165,6 @@ export class OutputAccumulator {
 
     this.totalDecodedBytes += data.byteLength;
     this.appendDecodedText(this.decoder.decode(data, { stream: true }));
-
-    // Store chunks for later file writing (if needed)
-    this.pendingChunks.push(data);
   }
 
   /**
@@ -209,24 +205,10 @@ export class OutputAccumulator {
   }
 
   /**
-   * Get the pending chunks for file writing (if needed by the caller).
-   */
-  getPendingChunks(): Uint8Array[] {
-    return this.pendingChunks;
-  }
-
-  /**
    * Get the temp file path (if truncated content needs to be persisted).
    */
   getTempFilePath(): string | undefined {
     return this.tempFilePath;
-  }
-
-  /**
-   * Get the number of bytes in the current line (for partial line detection).
-   */
-  getLastLineBytes(): number {
-    return this.currentLineBytes;
   }
 
   private appendDecodedText(text: string): void {

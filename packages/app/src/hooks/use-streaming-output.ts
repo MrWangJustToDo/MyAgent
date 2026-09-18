@@ -8,7 +8,7 @@
 import { useEffect } from "react";
 
 import { resolveAgentSession } from "../utils/session-resolve.js";
-import { clearStreamingIngest, ingestStreamingChunk, registerStreamingThrottle } from "../utils/streaming-ingest.js";
+import { applyStreamEventAction, classifyStreamEvent, registerStreamingThrottle } from "../utils/streaming-ingest.js";
 
 import { useAgent } from "./use-agent.js";
 import { useStreamingStore } from "./use-streaming-store.js";
@@ -53,17 +53,17 @@ function acquireStreamingBridge(agentId: string): boolean {
   const session = resolveAgentSession(agentId);
   if (!session) return false;
 
+  // The event → buffer mapping lives in `classifyStreamEvent` so it is testable: the
+  // subscription itself needs a live session, and a source-text assertion on it cannot
+  // tell an unconditional release from a dead one. `lifecycle` is where
+  // `agent:tool-end` / `agent:tool-error` project, and they are the only "this call is
+  // over" signal that ever fires — nothing emits `tool:clear` at runtime.
   const unsubscribe = session.subscribe(
-    (event) => {
-      if (event.channel !== "tool") return;
-      if (event.payload.kind === "chunk") {
-        const { toolCallId, type, chunk } = event.payload.chunk;
-        ingestStreamingChunk(toolCallId, type, chunk);
-        return;
-      }
-      clearStreamingIngest(event.payload.toolCallId);
+    (event: Parameters<Parameters<typeof session.subscribe>[0]>[0]) => {
+      const action = classifyStreamEvent(event as { channel: string; payload: { type?: string } });
+      if (action) applyStreamEventAction(action);
     },
-    { channels: ["tool"] }
+    { channels: ["tool", "lifecycle"] }
   );
 
   bridges.set(agentId, {

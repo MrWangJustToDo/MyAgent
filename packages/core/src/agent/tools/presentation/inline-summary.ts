@@ -22,9 +22,18 @@ export function getDurationMs(output: unknown): number | null {
  * Returns null if the tool has no meaningful inline summary.
  */
 export function getInlineSummary(part: ToolCallPart, toolName: string): string | null {
-  if (part.state !== "complete") return null;
   const output = part.output as Record<string, unknown> | undefined;
   if (!output) return null;
+
+  // Generic cancel marker, written by the framework for ANY tool whose call was cut
+  // short by an abort (`cancelInFlightToolCalls` / `cancelIncompleteToolCalls`). It is
+  // checked BEFORE the state guard and before the per-tool switch, because a truncation
+  // cancel settles the part as `error` (state guard would bail) and only `task` has a
+  // switch case of its own (a cancelled `run_command` / `grep` / `read_file` matched
+  // nothing and rendered as a clean finish with an `(error)` body).
+  if (output.cancelled === true) return "cancelled";
+
+  if (part.state !== "complete") return null;
 
   switch (toolName) {
     case "read_file": {
