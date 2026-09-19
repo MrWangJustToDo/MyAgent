@@ -40,7 +40,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && node ./scripts/copy-tree-sitter-grammars.mjs",
     "prepublishOnly": "pnpm run build",
     "dev": "tsdown --watch",
     "start": "node dist/index.mjs",
@@ -58,6 +58,10 @@
     "@my-react/react": "^0.3.30",
     "@my-react/react-terminal": "^0.0.31",
     "web-tree-sitter": "^0.25.10"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.35.4",
+    "isolated-vm": "7.0.1"
   },
   "devDependencies": {
     "@codent/app": "workspace:*",

@@ -206,6 +206,13 @@ importers:
       zod:
         specifier: ^4.5.4
         version: 4.5.4
+    optionalDependencies:
+      isolated-vm:
+        specifier: 7.0.1
+        version: 7.0.1
+      sharp:
+        specifier: ^0.35.4
+        version: 0.35.4(@types/node@26.4.1)
 
   packages/core:
     dependencies:
@@ -418,9 +425,6 @@ importers:
       mime-types:
         specifier: ^3.0.2
         version: 3.0.2
-      sharp:
-        specifier: ^0.35.4
-        version: 0.35.4(@types/node@26.4.1)
       tree-sitter-wasms:
         specifier: ^0.1.13
         version: 0.1.13
@@ -447,6 +451,9 @@ importers:
       '@tanstack/ai-isolate-node':
         specifier: ^0.1.51
         version: 0.1.51(@tanstack/ai-code-mode@0.4.9(@tanstack/ai@0.54.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(zod@4.5.4))
+      sharp:
+        specifier: ^0.35.4
+        version: 0.35.4(@types/node@26.4.1)
 
   packages/playground:
     dependencies:

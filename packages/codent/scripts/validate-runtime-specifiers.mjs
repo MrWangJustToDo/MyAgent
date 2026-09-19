@@ -12,6 +12,19 @@
  * resolve here" is the whole trick: the repo installs `devDependencies`, so
  * resolvability proves nothing about a consumer's install.
  *
+ * `optionalDependencies` counts as declared. A native module cannot be inlined,
+ * so it lives there deliberately: npm installs it when the platform has a
+ * prebuilt binding and silently skips it otherwise, which is exactly the
+ * degrade-not-crash behaviour the host wants. `validate:self-contained` keeps
+ * those out of `dependencies` on purpose (they must not be required), so
+ * ignoring the field here would report every one of them as undeclared.
+ *
+ * What this scan cannot see: a native addon resolved by *path* rather than by
+ * package name. `node-gyp-build` does `require(path.join(__dirname, …))`, so a
+ * bundle that inlines it leaves no bare specifier behind — `isolated-vm`
+ * (code-mode) is exactly that case and is invisible to this check. Those are
+ * covered by the external allowlist plus the install-and-run smoke test.
+ *
  * Only dynamic `import()` / `require()` calls are scanned. That is where a
  * lazy-loaded dependency hides; a static `import` at the top of a chunk is
  * covered structurally by the bundle graph, and the validator's own smoke test
@@ -69,23 +82,36 @@ const BUILTINS = new Set([...builtinModules, ...builtinModules.map((name) => `no
  * precisely the failure this guard exists to catch — while reporting the
  * artifact clean.
  *
+ * `\w*require` alone still misses rolldown's *per-file* rename. When the same
+ * module ends up inlined more than once, rolldown disambiguates the helpers by
+ * appending `$n` to the identifier itself — `require$1("pkg")`,
+ * `require$2("pkg")`. `$` is a valid identifier character, so the whole thing
+ * is one identifier; `\b\w*require` matches the `require` part and then expects
+ * whitespace or `(`, but finds `$`, and the call goes unseen. That is how
+ * sharp's twenty-plus `@img/sharp-*` bindings got through: every one of them is
+ * reached only via a `require$2` template, so the gate called the artifact clean
+ * while image resizing was broken for every consumer.
+ *
  * The second pattern covers the other statically-unreachable shape,
  * `` __require(`pkg-${expr}`) ``, where only the literal prefix before the
  * interpolation is visible. The prefix is trimmed of its trailing separator so
  * it can still be allowlisted by the package it is being built for.
  */
 const SPECIFIER = /[@a-zA-Z][a-zA-Z0-9._@/-]*/;
+const REQUIRE_HELPER = String.raw`\b\w*require(?:\$\d+)?`;
 const PATTERNS = [
   {
     re: new RegExp(String.raw`\bimport\s*\(\s*["'](${SPECIFIER.source})["']\s*\)`, "g"),
     template: false,
   },
   {
-    re: new RegExp(String.raw`\b\w*require\s*\(\s*["'](${SPECIFIER.source})["']\s*\)`, "g"),
+    re: new RegExp(`${REQUIRE_HELPER}\\s*\\(\\s*["'](${SPECIFIER.source})["']\\s*\\)`, "g"),
     template: false,
   },
   {
-    re: new RegExp("\\b\\w*require\\s*\\(\\s*`(" + SPECIFIER.source + ")", "g"),
+    // A template `require`; the opening backtick is written as `\x60` so this
+    // line needs no backtick of its own.
+    re: new RegExp(`${REQUIRE_HELPER}\\s*\\(\\s*\\x60(${SPECIFIER.source})`, "g"),
     template: true,
   },
 ];
@@ -111,7 +137,9 @@ async function collectBundleFiles(dir) {
 }
 
 const pkg = JSON.parse(await readFile(join(pkgRoot, "package.json"), "utf8"));
-const declared = new Set(Object.keys(pkg.dependencies ?? {}));
+// `optionalDependencies` is a real install target, so it satisfies the check as
+// much as `dependencies` does — see the header note on native modules.
+const declared = new Set([...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.optionalDependencies ?? {})]);
 
 const files = await collectBundleFiles(distDir);
 if (files.length === 0) {
@@ -141,7 +169,7 @@ for (const file of files) {
 if (seen.size > 0) {
   console.error("[codent] validate:runtime-specifiers FAILED\n");
   for (const [name, where] of seen) {
-    console.error(`  - "${name}" is neither inlined nor declared in dependencies`);
+    console.error(`  - "${name}" is neither inlined nor declared in dependencies/optionalDependencies`);
     console.error(`      reached from: ${[...where].slice(0, 3).join(", ")}`);
   }
   console.error(
@@ -153,5 +181,5 @@ if (seen.size > 0) {
 
 console.log(
   `[codent] validate:runtime-specifiers OK — ${files.length} bundle files, ` +
-    `${declared.size} declared externals, ${INERT_PATTERNS.size} inert codegen patterns allowlisted`
+    `${declared.size} declared externals (incl. optional), ${INERT_PATTERNS.size} inert codegen patterns allowlisted`
 );

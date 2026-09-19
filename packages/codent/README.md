@@ -74,7 +74,7 @@ The remote planes live in `@codent/server` and stay on the dev CLI.
 ## Why the bundle looks the way it does
 
 Two groups of dependencies must stay **external**, and are the only four packages a consumer
-installs (see `dependencies` in `package.json`):
+is guaranteed to install (see `dependencies` in `package.json`):
 
 1. **Renderer** — `@my-react/react` + `@my-react/react-terminal`. The host must resolve exactly
    one copy; two physical copies means two hook dispatchers and the TUI renders nothing. npm
@@ -84,7 +84,41 @@ installs (see `dependencies` in `package.json`):
    binaries under `vendor/`) and `web-tree-sitter` (`tree-sitter.wasm`). Both locate their
    assets relative to their own module URL, which only works from a real on-disk layout.
 
-Everything else is inlined, including dynamic `import()`s such as PDF text extraction and the
-code-mode isolate, so those degrade gracefully instead of failing to resolve.
+Two more are external **and optional** (`optionalDependencies`). They are native addons, which
+cannot be inlined at all — the binary is not JavaScript — and whose loader must not be inlined
+either, because it resolves relative to itself and would look for `prebuilds/` beside our `dist`:
 
-`pnpm validate:self-contained` asserts both properties against `dist`.
+| Package | Used by | When it is missing |
+|---------|---------|--------------------|
+| `sharp` | `resizeImage` — downscales oversized images to fit the vision-token budget | Images over budget are rejected instead of resized |
+| `isolated-vm` | `execute_typescript` (code mode) | The extension registers nothing instead of the tool |
+
+Being optional is the point: npm installs them where a prebuilt binding exists for the platform
+and skips them otherwise, so the install always succeeds and the affected feature degrades on its
+own. Putting either in `dependencies` would turn "image resizing is unavailable" into "the install
+fails" — `pnpm validate:self-contained` fails the build if that happens.
+
+### tree-sitter grammars: copied in, not depended on
+
+`tree-sitter-wasms` is a third kind. Its grammars back `code_overview` / `ast_search` /
+`code_rewrite` **and** the `run_command` safety analysis, which parses each command with the `bash`
+grammar to decide whether it can be auto-approved. So they are load-bearing, not optional.
+
+They still cannot be a dependency. The package is a 50 MB aggregate of 36 grammars and the host
+parses with 18 (22.8 MB) — a runtime dependency would ship the other 27.2 MB to every consumer.
+They cannot be inlined either: they are `.wasm`, not JavaScript, so there is nothing for the
+bundler to inline.
+
+So they are a **build-time input**. `scripts/copy-tree-sitter-grammars.mjs` copies exactly the
+grammars named by core's `LANGUAGE_TO_GRAMMAR` into `dist/tree-sitter/`, and the runtime resolves
+them from there first (`grammar.ts` falls back to the installed package for the workspace layout).
+The package itself never reaches the tarball — `validate:self-contained` asserts the 18 grammars are
+present, because their absence is invisible at build time: the bundle is valid, and every
+tree-sitter call simply returns `null` for a user.
+
+Everything else is inlined, including dynamic `import()`s such as PDF text extraction, so those
+degrade gracefully instead of failing to resolve.
+
+`pnpm validate:self-contained` asserts all of the above against `dist`, and
+`pnpm validate:runtime-specifiers` asserts that no inlined chunk reaches for a package that is
+neither bundled nor declared.

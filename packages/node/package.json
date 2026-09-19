@@ -57,13 +57,13 @@
     "@tanstack/ai-code-mode": "^0.4.9",
     "@tanstack/ai-mcp": "^0.3.10",
     "mime-types": "^3.0.2",
-    "sharp": "^0.35.4",
     "tree-sitter-wasms": "^0.1.13",
     "vscode-languageserver-protocol": "^3.18.2",
     "web-tree-sitter": "^0.25.10"
   },
   "optionalDependencies": {
-    "@tanstack/ai-isolate-node": "^0.1.51"
+    "@tanstack/ai-isolate-node": "^0.1.51",
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@types/mime-types": "^3.0.1",
