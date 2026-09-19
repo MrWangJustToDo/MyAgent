@@ -132,9 +132,6 @@ importers:
       '@codent/server':
         specifier: workspace:*
         version: link:../server
-      '@crosscopy/clipboard':
-        specifier: ^0.3.6
-        version: 0.3.6
       '@my-react/react':
         specifier: ^0.3.30
         version: 0.3.30(react@19.2.8)
@@ -191,9 +188,6 @@ importers:
       '@codent/node':
         specifier: workspace:*
         version: link:../node
-      '@crosscopy/clipboard':
-        specifier: ^0.3.6
-        version: 0.3.6
       '@types/node':
         specifier: ^26.4.1
         version: 26.4.1
@@ -767,35 +761,6 @@ packages:
 
   '@cacheable/utils@2.4.1':
     resolution: {integrity: sha512-eiFgzCbIneyMlLOmNG4g9xzF7Hv3Mga4LjxjcSC/ues6VYq2+gUbQI8JqNuw/ZM8tJIeIaBGpswAsqV2V7ApgA==}
-
-  '@crosscopy/clipboard-darwin-arm64@0.3.6':
-    resolution: {integrity: sha512-l2FtoiefGpYIWL8Fvku/pEth8KlI4j4andtn8WveumMiNx/0TNI2OEhSe+mX4X/me0+b5le/PTVrOPXrxvZuiA==}
-    engines: {node: '>= 10.20.0 < 11 || >= 12.17.0 < 13 || >= 14.0.0'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@crosscopy/clipboard-darwin-x64@0.3.6':
-    resolution: {integrity: sha512-fXVk7oLUkCyjVakW6VZc1JIeUcXH0/edJXAUREFpWastMlcZAp4AF/7njtlimWmANxtAQu3R2YI3ziFzEF4Neg==}
-    engines: {node: '>= 10.20.0 < 11 || >= 12.17.0 < 13 || >= 14.0.0'}
-    cpu: [x64]
-    os: [darwin]
-
-  '@crosscopy/clipboard-linux-x64-gnu@0.3.6':
-    resolution: {integrity: sha512-bPKMdbmPM6wa9smgpA9RSpIfWhQxd93XWmRQf9vkwrmvnP43shgXegV+vO8SyDd3ZPZy/OvHe3p/YyWNBC4S6g==}
-    engines: {node: '>= 10.20.0 < 11 || >= 12.17.0 < 13 || >= 14.0.0'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@crosscopy/clipboard-win32-x64-msvc@0.3.6':
-    resolution: {integrity: sha512-GZ0i9XoPYQV5DhTQWiHjArE3ZTuovHmHNL7yE6Pm/91icOtrm9Mk9tVnpU/rQR9bzOn3MqN8+AFsp5NKZqTg7Q==}
-    engines: {node: '>= 10.20.0 < 11 || >= 12.17.0 < 13 || >= 14.0.0'}
-    cpu: [x64]
-    os: [win32]
-
-  '@crosscopy/clipboard@0.3.6':
-    resolution: {integrity: sha512-h/LlfI5t/xsxLr63g3Os0mjoeITj7/8x8Goy5PZ+f4bk3DDgc1r5VXO462U3e8/+LjHixtvS9sTk/MoKEwSutw==}
-    engines: {node: '>= 10.20.0 < 11 || >= 12.17.0 < 13 || >= 14.0.0'}
 
   '@csstools/css-calc@3.2.1':
     resolution: {integrity: sha512-DtdHlgXh5ZkA43cwBcAm+huzgJiwx3ZTWVjBs94kwz2xKqSimDA3lBgCjphYgwgVUMWatSM0pDd8TILB1yrVVg==}
@@ -6532,25 +6497,6 @@ snapshots:
     dependencies:
       hashery: 1.5.1
       keyv: 5.6.0
-
-  '@crosscopy/clipboard-darwin-arm64@0.3.6':
-    optional: true
-
-  '@crosscopy/clipboard-darwin-x64@0.3.6':
-    optional: true
-
-  '@crosscopy/clipboard-linux-x64-gnu@0.3.6':
-    optional: true
-
-  '@crosscopy/clipboard-win32-x64-msvc@0.3.6':
-    optional: true
-
-  '@crosscopy/clipboard@0.3.6':
-    optionalDependencies:
-      '@crosscopy/clipboard-darwin-arm64': 0.3.6
-      '@crosscopy/clipboard-darwin-x64': 0.3.6
-      '@crosscopy/clipboard-linux-x64-gnu': 0.3.6
-      '@crosscopy/clipboard-win32-x64-msvc': 0.3.6
 
   '@csstools/css-calc@3.2.1(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)':
     dependencies:

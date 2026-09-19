@@ -45,7 +45,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@crosscopy/clipboard": "^0.3.6",
     "@codent/core": "workspace:*",
     "@codent/node": "workspace:*",
     "@codent/server": "workspace:*",

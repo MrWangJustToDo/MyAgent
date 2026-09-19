@@ -60,7 +60,6 @@
     "web-tree-sitter": "^0.25.10"
   },
   "devDependencies": {
-    "@crosscopy/clipboard": "^0.3.6",
     "@codent/app": "workspace:*",
     "@codent/core": "workspace:*",
     "@codent/node": "workspace:*",
