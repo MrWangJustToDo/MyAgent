@@ -22,7 +22,7 @@ import type { TextPart, UIMessage } from "../hooks";
  * Same idea as `LiteDiff`'s `maxLines`; deliberately a single named constant so the
  * budget is one line to tune.
  */
-const COMPACT_SUMMARY_MAX_LINES = 40;
+const COMPACT_SUMMARY_MAX_LINES = 30;
 
 export const CompactionSummaryView = memo(function CompactionSummaryView({ message }: { message: UIMessage }) {
   const screenWidth = useSize((s) => s.state.screenWidth);
