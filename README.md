@@ -1,6 +1,7 @@
 # Codent
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![npm](https://img.shields.io/npm/v/codent-cli?label=npm)](https://www.npmjs.com/package/codent-cli)
 [![Node](https://img.shields.io/badge/Node-24%2B-339933?logo=node.js)](https://nodejs.org)
 [![pnpm](https://img.shields.io/badge/pnpm-9%2B-F69220?logo=pnpm)](https://pnpm.io)
 [![TanStack AI](https://img.shields.io/badge/TanStack%20AI-0.48-000000?logo=vercel)](https://tanstack.com/ai)
@@ -278,6 +279,9 @@ codent                                 # start in the current directory
 codent "Explain this codebase"          # start with a prompt
 codent --version                        # print installed version
 ```
+
+> Published as **`codent-cli`** on npm (the command is still `codent`). Currently a
+> **pre-release** — `0.0.1-beta.1`. Requires **Node.js 24+**.
 
 Runtime data (sessions, memory, plans, transcripts, …) is written to `./.agents/` in the directory you run from.
 
