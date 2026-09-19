@@ -41,19 +41,60 @@ const INERT_PATTERNS = new Map([
   ["ajv-formats", "same generator; the formats module is a codegen template"],
   ["react-hot-loader", "projen writes these into generated HMR prefix code"],
   ["web-worker", "ELK's layout worker template; also guarded by try/catch around require.resolve"],
+  [
+    "@img/sharp-libvips-dev",
+    "sharp's *build-time* helper (buildSharpLibvipsIncludeDir / ...LibDir) probing a dev-only " +
+      'package for C headers and libs; every call sits in try/catch and falls back to "". sharp ' +
+      "itself is inlined, and the `-dev` packages are not runnable, so this must stay inert rather " +
+      "than become a dependency",
+  ],
+  [
+    "@img/sharp-libvips",
+    "the second fallback inside that same helper (buildSharpLibvipsLibDir tries `-dev-<arch>` " +
+      'then `<arch>`, both in try/catch, returning ""). The prebuilt runtime path never calls it',
+  ],
 ]);
 
 const BUILTINS = new Set([...builtinModules, ...builtinModules.map((name) => `node:${name}`)]);
 
-/** `import("x")` / `require("x")`, matched with a valid npm specifier shape only. */
+/**
+ * `import("x")` / `require("x")`, matched with a valid npm specifier shape only.
+ *
+ * The identifier before `require` is deliberately `\w*` rather than a word
+ * boundary. A bundler cannot statically follow every call, so it emits a helper
+ * for the ones it cannot — tsdown and esbuild both write `__require("pkg")` —
+ * and `\brequire` does **not** match `__require`: `_` is a word character, so
+ * there is no word boundary in front of it. That blind spot hid all 53
+ * specifiers of `@crosscopy/clipboard`'s platform bindings in a single chunk —
+ * precisely the failure this guard exists to catch — while reporting the
+ * artifact clean.
+ *
+ * The second pattern covers the other statically-unreachable shape,
+ * `` __require(`pkg-${expr}`) ``, where only the literal prefix before the
+ * interpolation is visible. The prefix is trimmed of its trailing separator so
+ * it can still be allowlisted by the package it is being built for.
+ */
 const SPECIFIER = /[@a-zA-Z][a-zA-Z0-9._@/-]*/;
 const PATTERNS = [
-  new RegExp(String.raw`\bimport\s*\(\s*["'](${SPECIFIER.source})["']\s*\)`, "g"),
-  new RegExp(String.raw`\brequire\s*\(\s*["'](${SPECIFIER.source})["']\s*\)`, "g"),
+  {
+    re: new RegExp(String.raw`\bimport\s*\(\s*["'](${SPECIFIER.source})["']\s*\)`, "g"),
+    template: false,
+  },
+  {
+    re: new RegExp(String.raw`\b\w*require\s*\(\s*["'](${SPECIFIER.source})["']\s*\)`, "g"),
+    template: false,
+  },
+  {
+    re: new RegExp("\\b\\w*require\\s*\\(\\s*`(" + SPECIFIER.source + ")", "g"),
+    template: true,
+  },
 ];
 
 /** Strip block comments so JSDoc `@typedef {import("pkg")}` never reads as a call. */
 const stripComments = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "");
+
+/** `` `pkg-${expr}` `` leaves a trailing separator on the prefix; drop it to allowlist by package. */
+const trimPartialSpecifier = (specifier) => specifier.replace(/[-/]+$/, "");
 
 const packageOf = (specifier) =>
   specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
@@ -83,9 +124,9 @@ if (files.length === 0) {
 const seen = new Map(); // package -> Set(relative file)
 for (const file of files) {
   const text = stripComments(await readFile(file, "utf8"));
-  for (const pattern of PATTERNS) {
-    for (const match of text.matchAll(pattern)) {
-      const specifier = match[1];
+  for (const { re, template } of PATTERNS) {
+    for (const match of text.matchAll(re)) {
+      const specifier = template ? trimPartialSpecifier(match[1]) : match[1];
       if (specifier.startsWith(".") || specifier.startsWith("/") || BUILTINS.has(specifier)) continue;
 
       const name = packageOf(specifier);
