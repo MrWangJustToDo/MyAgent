@@ -1144,12 +1144,27 @@ instance.unmount();
       record(`cancelled run_command (${label}) leaks no undefined`, !/undefined/.test(text), {
         line: where(/undefined/),
       });
-      // The partial output it did produce must survive — a cancel is not "no output".
-      if (output.stdout) {
-        record(`cancelled run_command (${label}) still shows its partial output`, text.includes("19:01:47"), {
-          line: where(/19:01:47/),
-        });
-      }
+      // TEMPORARILY DISABLED — deliberate behavior change, not a defect to fix here.
+      //
+      // A cancel-marked output collapses to the bare `TOOL_CANCELLED_MESSAGE` in BOTH render
+      // paths — `computeToolDisplay` (which produces this row's body, via `display.text`) and
+      // `formatToolOutput` — so the partial stdout this case produced is intentionally not
+      // painted. The two assertions above still hold under those guards (no exit code, no
+      // `undefined` leaked); only the partial-output reachability changed.
+      //
+      // This is the render-smoke twin of the assertion disabled in `test/abort-and-streaming-bounds
+      // .test.mjs` (see b1c68cf) and of the section-3 pair in validate-cancel-semantics.mjs.
+      //
+      // NOTE: neither is this harness part of the CI sequence, nor does any remaining assertion
+      // here detect that guard — mutating `computeToolDisplay` to skip its short-circuit leaves
+      // the smoke fully green (only `a real failure still reports its exit code` catches a
+      // blanket `isCancelledOutputMarker` regression). So this disable is not just a skipped
+      // check: for this behavior, the harness now has no coverage at all.
+      // if (output.stdout) {
+      //   record(`cancelled run_command (${label}) still shows its partial output`, text.includes("19:01:47"), {
+      //     line: where(/19:01:47/),
+      //   });
+      // }
     }
   }
 }
