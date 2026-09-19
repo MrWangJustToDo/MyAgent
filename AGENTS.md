@@ -38,7 +38,7 @@ A pnpm monorepo with nine packages organized in a layered architecture.
 | `@codent/playground` | In-browser WebContainer host (Vite) |
 | `@codent/mcp-server` | MCP server for external tool integration |
 | `@codent/im-bridge` | Generic IM bridge (Telegram adapter) — a headless AgentSession client like the remote CLI; no CoreEnv/ModelProvider of its own in remote mode, in-process local mode otherwise |
-| `codent` | **Release host.** Local-only terminal CLI (no remote planes) published as one fully bundled, self-contained tarball — `@codent/app` / `core` / `node` are inlined, so no sibling has to be on the registry. See `packages/codent/tsdown.config.ts`. |
+| `codent-cli` | **Release host.** Local-only terminal CLI (no remote planes) published as one fully bundled, self-contained tarball — `@codent/app` / `core` / `node` are inlined, so no sibling has to be on the registry. The npm name is `codent-cli` (plain `codent` is rejected as too similar to `code` / `dedent`); the installed command is still `codent`. See `packages/codent/tsdown.config.ts`. |
 
 ## Architecture
 
@@ -270,7 +270,7 @@ Tests: `@codent/app` owns the only `node:test` suite — `pnpm --filter @codent/
 
 `@codent/app` has a second, separate suite: `pnpm --filter @codent/app validate:render-smoke` bundles `scripts/render-smoke/` from `src` and mounts the real transcript in a fake terminal, asserting on rendered frames (the row budget, the fold window, cache invalidation). It is the only coverage that renders, and it is **local-only — deliberately not in CI**: the terminal renderer reads `CI` / `CONTINUOUS_INTEGRATION` through `is-in-ci` at module load and, when set, switches to a write mode without the erase/repaint sequences that `frameLines()` reconstructs frames from — so under GitHub Actions every frame reads as empty and a dozen unrelated assertions fail with `frameLines: 0`. The harness deletes both variables before the renderer loads (`neutralize-ci-env.mjs`, which must stay the first import), so the smoke now passes in any environment; it stays out of the workflows anyway because its value is as a deep local check, not a per-PR gate. It rotted once before — `f8a7c83` dropped the `react` / `ink` aliases it imported by bare name and nobody noticed for two commits, because no workflow ever invoked it. The rule that survives: a `validate:*` script nobody calls is a script that rots, and it rots into a failure that looks like a check failing rather than a harness that cannot run — so when touching the render layer, run the smoke locally even though CI will not.
 
-CI: `.github/workflows/ci.yml` runs on every pull request and on pushes to `main` — `wxt prepare` → `pnpm build` → `pnpm lint` → `pnpm typecheck` → `pnpm --filter @codent/app test` → `build:app:release` → `codent validate:self-contained` → `codent validate:runtime-specifiers`. The release workflow (`.github/workflows/release.yml`, `v*` tag or manual dispatch) runs the same checks before `pnpm --filter codent run publish:beta`.
+CI: `.github/workflows/ci.yml` runs on every pull request and on pushes to `main` — `wxt prepare` → `pnpm build` → `pnpm lint` → `pnpm typecheck` → `pnpm --filter @codent/app test` → `build:app:release` → `codent validate:self-contained` → `codent validate:runtime-specifiers`. The release workflow (`.github/workflows/release.yml`, `v*` tag or manual dispatch) runs the same checks before `pnpm --filter codent-cli run publish:beta`.
 
 ### Two release-contract checks (`packages/codent/scripts/`)
 

@@ -272,7 +272,7 @@ Check the link https://mrwangjusttodo.github.io/Codent/, you can create your own
 Install the CLI globally and run it in any directory:
 
 ```bash
-npm install -g @codent/cli
+npm install -g codent-cli
 
 codent                                 # start in the current directory
 codent "Explain this codebase"          # start with a prompt

@@ -10,7 +10,7 @@ package from the registry.
 ## Install
 
 ```bash
-npm install -g codent
+npm install -g codent-cli
 codent
 ```
 
@@ -47,9 +47,13 @@ codent --resume             # pick a session
 
 ## Difference from `@codent/cli`
 
+> The published name is **`codent-cli`**; it is *not* `@codent/cli`. `@codent/cli` is the
+> internal development host in `packages/cli` and is never published on its own, so
+> `npm install -g @codent/cli` does not work. The installed *command* is `codent` either way.
+
 This package is intentionally narrower than the development CLI in `packages/cli`:
 
-| | `codent` | `@codent/cli` |
+| | published `codent-cli` | internal `@codent/cli` |
 |---|---|---|
 | Workspace | local Node.js only | local **or** `--remote-env` |
 | Model keys | local `.env` / flags | local **or** `--remote-provider` |

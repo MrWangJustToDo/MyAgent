@@ -99,7 +99,7 @@ jobs:
         # `pnpm run build && node ./scripts/...`), so do NOT wrap it in
         # `pnpm build:codent` — that would rebuild the release app config a
         # second time on top of the step above.
-        run: pnpm --filter codent validate:self-contained
+        run: pnpm --filter codent-cli validate:self-contained
 
       - name: Verify no bundle references an undeclared specifier
         # The other half of the contract, and the half `validate:self-contained`
@@ -110,4 +110,4 @@ jobs:
         #
         # Deliberately after the self-containment step: that one rebuilds
         # `dist`, so scanning earlier would scan a stale bundle.
-        run: pnpm --filter codent validate:runtime-specifiers
+        run: pnpm --filter codent-cli validate:runtime-specifiers
