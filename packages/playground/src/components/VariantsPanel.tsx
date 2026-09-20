@@ -2,21 +2,29 @@ import { useAgent } from "@codent/app";
 import { isActiveStatus } from "@codent/core";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { EDITOR_OPTIONS, definePlaygroundTheme } from "../editor/monaco-theme.js";
+import { useShellState } from "../hooks/use-shell-state.js";
 import { useVariants } from "../hooks/use-variants.js";
+import { Button } from "../ui/Button.js";
+import { cx } from "../ui/cx.js";
+import { Field, Segmented } from "../ui/Field.js";
+import {
+  IconCode,
+  IconDownload,
+  IconExternal,
+  IconEye,
+  IconGrid,
+  IconRefresh,
+  IconSparkle,
+  IconTrash,
+} from "../ui/icons.js";
+import { State } from "../ui/State.js";
 import { getBootedWebContainer } from "../webcontainer/create-env.js";
 import { scanVariants } from "../webcontainer/scan-variants.js";
 
 import type { OnMount } from "@monaco-editor/react";
 
 const MonacoEditor = lazy(() => import("@monaco-editor/react").then((m) => ({ default: m.Editor })));
-
-const EXT_LANG: Record<string, string> = { html: "html" };
-
-function extToLang(filename: string): string {
-  const dotIdx = filename.lastIndexOf(".");
-  if (dotIdx === -1) return "plaintext";
-  return EXT_LANG[filename.slice(dotIdx + 1).toLowerCase()] ?? "plaintext";
-}
 
 const MIN_COUNT = 1;
 const MAX_COUNT = 4;
@@ -32,8 +40,11 @@ function downloadText(filename: string, text: string): void {
 }
 
 /**
- * v0-like "Variants" panel: generate N self-contained HTML variants via the
- * agent, compare them as live previews, toggle preview↔code, and iterate.
+ * Variant exploration: generate N self-contained HTML variants through the agent,
+ * then compare them side by side or inspect one in the stage.
+ *
+ * Comparison is the point of this panel, so the grid is a first-class mode rather
+ * than a list of thumbnails above a single preview.
  */
 export const VariantsPanel = () => {
   const session = useAgent((s) => s.session);
@@ -42,10 +53,14 @@ export const VariantsPanel = () => {
   const activeVariantId = useVariants((s) => s.activeVariantId);
   const { setVariants, setActive } = useVariants.getActions();
 
+  const compare = useShellState((s) => s.variantsCompare);
+  const { setVariantsCompare, showToast } = useShellState.getActions();
+
   const [prompt, setPrompt] = useState("");
   const [count, setCount] = useState(2);
   const [busy, setBusy] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [scanning, setScanning] = useState(true);
 
   const [view, setView] = useState<"preview" | "code">("preview");
   const [iterate, setIterate] = useState("");
@@ -55,7 +70,7 @@ export const VariantsPanel = () => {
 
   const active = useMemo(() => variants.find((v) => v.id === activeVariantId) ?? null, [variants, activeVariantId]);
 
-  // Track agent busy state from the session snapshot.
+  // Agent busy state drives the iterate affordance.
   useEffect(() => {
     if (!session) {
       setBusy(false);
@@ -68,12 +83,19 @@ export const VariantsPanel = () => {
 
   const rescan = useCallback(async () => {
     const wc = getBootedWebContainer();
-    if (!wc) return;
-    const found = await scanVariants(wc.fs, "/");
-    setVariants(found);
+    if (!wc) {
+      setScanning(false);
+      return;
+    }
+    setScanning(true);
+    try {
+      setVariants(await scanVariants(wc.fs, "/"));
+    } finally {
+      setScanning(false);
+    }
   }, [setVariants]);
 
-  // Discover variants whenever the agent mutates the workspace, plus initial.
+  // Discover variants whenever the agent mutates the workspace, plus once on mount.
   useEffect(() => {
     void rescan();
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -88,7 +110,7 @@ export const VariantsPanel = () => {
     };
   }, [rescan]);
 
-  // Poll once if the WebContainer wasn't booted yet (same pattern as WorkspacePanel).
+  // The WebContainer may not be booted yet when this panel first mounts.
   useEffect(() => {
     if (getBootedWebContainer()) return;
     const id = setInterval(() => {
@@ -112,27 +134,26 @@ export const VariantsPanel = () => {
     void session.dispatch({ type: "send", content: message }).finally(() => setGenerating(false));
   }, [session, prompt, count, generating]);
 
-  const deleteActive = useCallback(async () => {
-    if (!active) return;
-    const wc = getBootedWebContainer();
-    if (!wc) return;
-    await wc.fs.rm(active.id, { force: true }).catch(() => {});
-    window.dispatchEvent(new CustomEvent("agent:action"));
-    await rescan();
-  }, [active, rescan]);
+  const deleteVariant = useCallback(
+    async (id: string) => {
+      const wc = getBootedWebContainer();
+      if (!wc) return;
+      await wc.fs.rm(id, { force: true }).catch(() => {});
+      window.dispatchEvent(new CustomEvent("agent:action"));
+      await rescan();
+      showToast(`Deleted ${id.split("/").pop() ?? id}`);
+    },
+    [rescan, showToast]
+  );
 
-  const exportActive = useCallback(() => {
-    if (!active) return;
-    downloadText(active.name, active.html);
-  }, [active]);
+  const exportVariant = useCallback((id: string, html: string) => {
+    downloadText(id.split("/").pop() ?? "variant.html", html);
+  }, []);
 
-  const refreshPreview = useCallback(() => setIframeKey((k) => k + 1), []);
-
-  const openExternal = useCallback(() => {
-    if (!active) return;
-    const blob = new Blob([active.html], { type: "text/html" });
+  const openExternal = useCallback((html: string) => {
+    const blob = new Blob([html], { type: "text/html" });
     window.open(URL.createObjectURL(blob), "_blank", "noopener,noreferrer");
-  }, [active]);
+  }, []);
 
   const sendIterate = useCallback(() => {
     if (!session || !active || !iterate.trim() || busy) return;
@@ -144,209 +165,207 @@ export const VariantsPanel = () => {
     void session.dispatch({ type: "send", content: message });
   }, [session, active, iterate, busy]);
 
-  const editorValue = active?.html ?? "";
-
   const handleEditorMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
-    monaco.editor.defineTheme("playground-dark", {
-      base: "vs-dark",
-      inherit: true,
-      rules: [],
-      colors: {
-        "editor.background": "#111116",
-        "editor.foreground": "#f5f5f7",
-        "editorLineNumber.foreground": "#3f3f48",
-        "editorLineNumber.activeForeground": "#a3a3ae",
-        "editor.selectionBackground": "#8f8dff33",
-        "editor.inactiveSelectionBackground": "#8f8dff1a",
-        "editor.lineHighlightBackground": "#ffffff06",
-        "editorCursor.foreground": "#cbc9ff",
-        "editorWidget.background": "#18181e",
-        "editorWidget.border": "#ffffff12",
-        "dropdown.background": "#18181e",
-        "input.background": "#0d0d11",
-        focusBorder: "#8f8dff66",
-      },
-    });
-    monaco.editor.setTheme("playground-dark");
+    definePlaygroundTheme(monaco);
   }, []);
 
+  const disabledReason = !session ? "Agent is still booting…" : !prompt.trim() ? "Describe a UI to generate." : "";
+
   return (
-    <div className="variants-panel">
-      {/* Composer */}
-      <div className="variants-panel__composer">
-        <span className="variants-panel__composer-label">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path
-              d="M8 1.5l1.9 3.85 4.25.62-3.07 3 0.73 4.23L8 11.36l-3.8 2 .72-4.23-3.07-3 4.25-.62L8 1.5Z"
-              stroke="currentColor"
-              strokeWidth="1.3"
-              strokeLinejoin="round"
+    <div className="variants">
+      <div className="variants__composer">
+        <div className="variants__composer-head">
+          <span className="variants__composer-title">
+            <IconSparkle size={13} />
+            Generate variants
+          </span>
+          {variants.length > 0 && (
+            <Segmented
+              label="Variant layout"
+              size="sm"
+              options={[
+                { value: "stage", label: "Stage", icon: <IconEye size={12} /> },
+                { value: "compare", label: "Compare", icon: <IconGrid size={12} /> },
+              ]}
+              value={compare ? "compare" : "stage"}
+              onChange={(v) => setVariantsCompare(v === "compare")}
             />
-          </svg>
-          Generate variants
-        </span>
+          )}
+        </div>
+
         <textarea
-          className="variants-panel__input"
+          className="variants__input"
           placeholder="Describe the UI you want to build…"
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
           rows={2}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") generate();
+          }}
         />
-        <div className="variants-panel__composer-row">
-          <label className="variants-panel__count">
-            Variants
-            <select value={count} onChange={(e) => setCount(Number(e.target.value))}>
-              {[1, 2, 3, 4].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="variants-panel__generate"
-            onClick={generate}
+
+        <div className="variants__composer-row">
+          <Field label="Variants" inline>
+            <Segmented
+              label="Number of variants"
+              size="sm"
+              options={[
+                { value: "1", label: "1" },
+                { value: "2", label: "2" },
+                { value: "3", label: "3" },
+                { value: "4", label: "4" },
+              ]}
+              value={String(count)}
+              onChange={(v) => setCount(Number(v))}
+            />
+          </Field>
+
+          <Button
+            variant="primary"
+            icon={<IconSparkle size={13} />}
             disabled={!session || !prompt.trim() || generating}
+            onClick={generate}
           >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M13 8a5 5 0 1 1-1.46-3.54M13 2.5V5h-2.5"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
             {generating ? "Generating…" : "Generate"}
-          </button>
+          </Button>
         </div>
-        {!session && <span className="variants-panel__hint">Agent is still booting…</span>}
+
+        {disabledReason && <p className="variants__hint">{disabledReason}</p>}
       </div>
 
-      {/* Card strip */}
-      {variants.length > 0 ? (
-        <div className="variants-panel__strip" role="tablist" aria-label="Variants">
+      {scanning && variants.length === 0 ? (
+        <State loading title="Looking for variants" hint="Scanning the workspace for top-level HTML files…" />
+      ) : variants.length === 0 ? (
+        <State
+          icon={<IconGrid size={19} />}
+          title="No variants yet"
+          hint="Describe a UI above. Each variant lands as a self-contained HTML file at the workspace root and appears here automatically."
+        />
+      ) : compare ? (
+        <div className="variants__grid" role="list">
           {variants.map((v) => (
-            <button
+            <div
               key={v.id}
-              type="button"
-              role="tab"
-              aria-selected={v.id === activeVariantId}
-              className={
-                v.id === activeVariantId ? "variants-panel__card variants-panel__card--active" : "variants-panel__card"
-              }
-              onClick={() => setActive(v.id)}
+              role="listitem"
+              className={cx("variant-card", v.id === activeVariantId && "variant-card--active")}
             >
-              <span className="variants-panel__thumb">
-                <iframe title={v.name} srcDoc={v.html} sandbox="" loading="lazy" tabIndex={-1} aria-hidden="true" />
-              </span>
-              <span className="variants-panel__card-name">{v.name.replace(/\.html$/i, "")}</span>
-            </button>
+              <div className="variant-card__head">
+                <span className="variant-card__name truncate" title={v.id}>
+                  {v.name}
+                </span>
+                <div className="variant-card__actions">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    iconOnly
+                    icon={<IconExternal size={12} />}
+                    aria-label={`Open ${v.name} in a new tab`}
+                    onClick={() => openExternal(v.html)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    iconOnly
+                    icon={<IconDownload size={12} />}
+                    aria-label={`Download ${v.name}`}
+                    onClick={() => exportVariant(v.id, v.html)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    iconOnly
+                    icon={<IconEye size={12} />}
+                    aria-label={`Inspect ${v.name}`}
+                    onClick={() => {
+                      setActive(v.id);
+                      setVariantsCompare(false);
+                    }}
+                  />
+                </div>
+              </div>
+              <iframe
+                className="variant-card__frame"
+                title={v.name}
+                srcDoc={v.html}
+                sandbox=""
+                loading="lazy"
+                tabIndex={-1}
+                aria-hidden="true"
+              />
+            </div>
           ))}
         </div>
-      ) : (
-        <div className="variants-panel__empty">
-          <span className="variants-panel__empty-title">No variants yet</span>
-          <span>Generate variants and they will appear here automatically.</span>
-        </div>
-      )}
-
-      {/* Active variant */}
-      {active ? (
-        <div className="variants-panel__stage">
-          <div className="variants-panel__stage-bar">
-            <div className="variants-panel__toggle" role="tablist">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={view === "preview"}
-                className={
-                  view === "preview"
-                    ? "variants-panel__toggle-btn variants-panel__toggle-btn--active"
-                    : "variants-panel__toggle-btn"
-                }
-                onClick={() => setView("preview")}
-              >
-                Preview
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={view === "code"}
-                className={
-                  view === "code"
-                    ? "variants-panel__toggle-btn variants-panel__toggle-btn--active"
-                    : "variants-panel__toggle-btn"
-                }
-                onClick={() => setView("code")}
-              >
-                Code
-              </button>
-            </div>
-            <span className="variants-panel__stage-name">{active.name}</span>
-            <div className="variants-panel__stage-spacer" />
-            <button type="button" className="workspace-panel__btn" onClick={refreshPreview} title="Refresh preview">
-              Refresh
-            </button>
-            <button type="button" className="workspace-panel__btn" onClick={openExternal} title="Open in new tab">
-              Open
-            </button>
-            <button type="button" className="workspace-panel__btn" onClick={exportActive} title="Download HTML">
-              Export
-            </button>
-            <button
-              type="button"
-              className="variants-panel__delete"
-              onClick={() => void deleteActive()}
-              title="Delete variant"
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
+      ) : active ? (
+        <div className="variants__stage">
+          <div className="variants__stage-bar">
+            <Segmented
+              label="Variant view"
+              size="sm"
+              options={[
+                { value: "preview", label: "Preview", icon: <IconEye size={12} /> },
+                { value: "code", label: "Code", icon: <IconCode size={12} /> },
+              ]}
+              value={view}
+              onChange={(v) => setView(v)}
+            />
+            <span className="variants__stage-name truncate" title={active.id}>
+              {active.name}
+            </span>
+            <div className="variants__stage-spacer" />
+            <Button
+              size="sm"
+              variant="ghost"
+              iconOnly
+              icon={<IconRefresh size={13} />}
+              aria-label="Reload preview"
+              onClick={() => setIframeKey((k) => k + 1)}
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              iconOnly
+              icon={<IconExternal size={13} />}
+              aria-label="Open variant in a new tab"
+              onClick={() => openExternal(active.html)}
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              iconOnly
+              icon={<IconTrash size={13} />}
+              aria-label={`Delete ${active.name}`}
+              onClick={() => void deleteVariant(active.id)}
+            />
           </div>
 
-          <div className="variants-panel__stage-body">
+          <div className="variants__stage-body">
             {view === "preview" ? (
               <iframe
                 key={`${active.id}-${iframeKey}`}
-                className="variants-panel__preview"
+                className="variants__preview"
                 title={active.name}
                 srcDoc={active.html}
                 allow="accelerometer; camera; encrypted-media; geolocation; gyroscope; microphone; midi; clipboard-read; clipboard-write"
               />
             ) : (
-              <Suspense fallback={<div className="variants-panel__loading">Loading editor…</div>}>
+              <Suspense fallback={<State loading title="Loading editor" />}>
                 <MonacoEditor
                   key={active.id}
-                  value={editorValue}
-                  language={extToLang(active.name)}
+                  value={active.html}
+                  language="html"
                   theme="playground-dark"
                   onMount={handleEditorMount}
-                  options={{
-                    readOnly: true,
-                    minimap: { enabled: false },
-                    fontSize: 13,
-                    fontFamily: "'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace",
-                    lineNumbers: "on",
-                    renderWhitespace: "selection",
-                    tabSize: 2,
-                    scrollBeyondLastLine: false,
-                    automaticLayout: true,
-                    padding: { top: 8 },
-                    wordWrap: "on",
-                  }}
+                  options={{ ...EDITOR_OPTIONS, readOnly: true }}
+                  loading={<State loading title="Loading editor" />}
                 />
               </Suspense>
             )}
           </div>
 
-          {/* Iterate */}
-          <div className="variants-panel__iterate">
+          <div className="variants__iterate">
             <input
-              className="variants-panel__iterate-input"
+              className="input"
               placeholder={`Tweak ${active.name}…`}
               value={iterate}
               onChange={(e) => setIterate(e.target.value)}
@@ -354,23 +373,9 @@ export const VariantsPanel = () => {
                 if (e.key === "Enter") sendIterate();
               }}
             />
-            <button
-              type="button"
-              className="variants-panel__iterate-btn"
-              onClick={sendIterate}
-              disabled={!iterate.trim() || busy}
-            >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path
-                  d="M13 8a5 5 0 1 1-1.46-3.54M13 2.5V5h-2.5"
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              Iterate
-            </button>
+            <Button icon={<IconSparkle size={13} />} disabled={!iterate.trim() || busy} onClick={sendIterate}>
+              {busy ? "Agent busy" : "Iterate"}
+            </Button>
           </div>
         </div>
       ) : null}

@@ -11,7 +11,7 @@ pnpm install
 pnpm dev:playground
 ```
 
-Open http://localhost:5177 — set model / base URL / API key in **Settings**, then chat. The agent workspace is an in-browser Linux-like env (same FS for tools and shell).
+Open http://localhost:5177 — set model / base URL / API key in **Settings** (top bar, or `Cmd/Ctrl+,`), then chat. The agent workspace is an in-browser Linux-like env (same FS for tools and shell).
 
 ### Remote provider
 
@@ -50,13 +50,64 @@ File tools and `run_command` share the WebContainer **project workdir** (tools s
 
 ### Preview panel
 
-When a process inside the WebContainer **listens on a TCP port**, the host UI opens a **Preview** side panel (iframe) using the URL from WebContainer `port` / `server-ready` events. Multiple ports appear as tabs; collapse/reopen with the **Preview** toggle. Refresh / Open / Copy act on the active preview URL.
+When a process inside the WebContainer **listens on a TCP port**, the workspace panel's **Preview** tab
+shows an iframe using the URL from WebContainer `port` / `server-ready` events. Multiple ports appear
+as pills; **Reload / Open / Copy** act on the active preview.
 
-For long-running processes (`npm run dev`, static servers), set `run_command(run_in_background: true)` so the agent continues without blocking. Poll logs with `get_command_output` and stop with `kill_command`. Preview still auto-opens via port events.
+For long-running processes (`npm run dev`, static servers), set `run_command(run_in_background: true)`
+so the agent continues without blocking. Poll logs with `get_command_output` and stop with
+`kill_command`. Preview still auto-opens via port events.
+
+### Shell, layout and shortcuts
+
+The playground renders one shell: a top bar (brand, agent status, workspace + settings), the work
+area, and a status bar. There is no floating settings bubble.
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd/Ctrl+K` | Command palette (host actions) |
+| `Cmd/Ctrl+,` | Settings |
+| `Cmd/Ctrl+B` | Toggle the workspace panel |
+| `Cmd/Ctrl+S` | Save the file open in the code tab |
+| `Cmd/Ctrl+Enter` | Generate variants from the composer |
+
+**Responsive behaviour** is owned by a single breakpoint hook (`useBreakpoint`), not by ad-hoc media
+queries:
+
+| Viewport | Layout |
+|----------|--------|
+| `< 768px` | Workspace is a bottom sheet; top-bar actions collapse to icons; status bar hidden |
+| `768–1279px` | Workspace is a resizable side pane |
+| `≥ 1280px` | Wider default pane; full status telemetry |
+
+The splitter and the file-tree resizer are pointer-driven (mouse/touch/pen, with pointer capture) and
+keyboard-resizable: focus them and use `←` / `→` (`Shift` for larger steps, `Home` to reset,
+double-click to restore the default width).
+
+### Styling
+
+Styles live in `src/styles/` as layers:
+
+| File | Owns |
+|------|------|
+| `tokens.css` | custom properties only |
+| `base.css` | reset, scrollbars, focus, motion preferences |
+| `primitives.css` | the control layer (button, field, input, switch, segmented) |
+| `overlays.css` | dialog, sheet, scrim |
+| `feedback.css` | state, toast, badge, kbd, spinner |
+| `shell.css` | top bar, work area, side panel, status bar, command palette |
+| `workspace.css` | workspace panel, preview, file tree, code tab |
+| `settings.css` | settings + export dialogs |
+| `variants.css` | variants panel |
+
+Component controls come from `src/ui/`; add a variant there rather than styling a one-off button in a
+feature file.
 
 ### Export workspace
 
-**Settings → Export workspace…** opens a file picker over the WebContainer tree. Choose paths (checking a directory selects its children), then **Download ZIP**. Default selection skips `node_modules` and `.git`.
+**Settings → Export workspace**, the code tab's **Export** action, or the command palette opens a file
+picker over the WebContainer tree. Choose paths (checking a directory selects its children), then
+**Download ZIP**. Default selection skips `node_modules` and `.git`.
 
 **Colors in Firefox:** chalk’s browser color detection only enables Chromium. The playground sets `chalk.level = 3` on startup (`force-chalk-color.ts`) so xterm receives ANSI in all browsers.
 

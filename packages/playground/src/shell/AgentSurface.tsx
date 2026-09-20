@@ -12,35 +12,46 @@ import { InkTerminalBox } from "@my-react/react-terminal/web";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 
-import { PlaygroundAgentAdapter } from "./adapters/playground-adapter.js";
-import { ConfigPanel } from "./components/ConfigPanel.js";
-import { SplitPane } from "./components/SplitPane.js";
-import { WorkspacePanel } from "./components/WorkspacePanel.js";
-import { usePlaygroundConfig } from "./hooks/use-playground-config.js";
-import { usePreviewPorts } from "./hooks/use-preview-ports.js";
-import { getBootedWebContainer, getWebContainerEnv } from "./webcontainer/create-env.js";
-import { resolveFetchProxyUrl, setFetchProxyUrl } from "./webcontainer/create-proxy-fetch.js";
-import { subscribePreviewPorts } from "./webcontainer/subscribe-preview-ports.js";
+import { PlaygroundAgentAdapter } from "../adapters/playground-adapter.js";
+import { usePlaygroundConfig } from "../hooks/use-playground-config.js";
+import { useShellState } from "../hooks/use-shell-state.js";
+import { Button } from "../ui/Button.js";
+import { IconRefresh, IconWarning } from "../ui/icons.js";
+import { State } from "../ui/State.js";
+import { getWebContainerEnv } from "../webcontainer/create-env.js";
+import { resolveFetchProxyUrl, setFetchProxyUrl } from "../webcontainer/create-proxy-fetch.js";
 
 import type { AgentAdapter } from "@codent/app";
 
 configureEnv({ allowNonBrowserUpdates: true });
 
-const AgentBootstrap = memo(() => {
+/**
+ * Owns the agent lifecycle and the terminal.
+ *
+ * The terminal instance is recreated by `InkTerminalBox` whenever `termOptions`
+ * changes, so `fit` is a debounced breakpoint value (see `useTerminalFit`) and
+ * must not be derived from raw resize or pane-drag events.
+ *
+ * `fit` deliberately reports the *wide* metrics on compact viewports so the
+ * font size no longer varies with the breakpoint. Crossing the compact boundary
+ * relocates this element (pane ⇄ sheet), which unmounts and remounts it, and a
+ * font-size change at the same moment would double the churn. A single stable
+ * size keeps that relocation the only remount, so the running agent survives it.
+ */
+export const AgentSurface = memo(() => {
   const model = usePlaygroundConfig((s) => s.model);
   const style = usePlaygroundConfig((s) => s.style);
   const baseURL = usePlaygroundConfig((s) => s.baseURL);
   const apiKey = usePlaygroundConfig((s) => s.apiKey);
   const providerServerUrl = usePlaygroundConfig((s) => s.providerServerUrl);
   const fetchProxyUrl = usePlaygroundConfig((s) => s.fetchProxyUrl);
+  const { setBoot, setAgentRestart } = useShellState.getActions();
 
   const [adapter, setAdapter] = useState<AgentAdapter | null>(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState("Booting WebContainer…");
   const adapterRef = useRef<AgentAdapter | null>(null);
   const containerReadyRef = useRef(false);
   const initIdRef = useRef(0);
+  const boot = useShellState((s) => s.boot);
 
   const ensureCoreEnv = useCallback(async () => {
     setFetchProxyUrl(resolveFetchProxyUrl(fetchProxyUrl));
@@ -56,8 +67,7 @@ const AgentBootstrap = memo(() => {
     const currentInitId = ++initIdRef.current;
 
     try {
-      setLoading(true);
-      setError("");
+      setBoot({ phase: "booting", message: containerReadyRef.current ? "Restarting agent…" : "Booting WebContainer…" });
 
       if (adapterRef.current) {
         await adapterRef.current.destroy();
@@ -65,7 +75,10 @@ const AgentBootstrap = memo(() => {
         setAdapter(null);
       }
 
-      setStatus(containerReadyRef.current ? "Restarting agent…" : "Booting WebContainer…");
+      setBoot({
+        phase: "booting",
+        message: containerReadyRef.current ? "Restarting agent…" : "Booting WebContainer…",
+      });
       await ensureCoreEnv();
       if (currentInitId !== initIdRef.current) return;
 
@@ -73,14 +86,14 @@ const AgentBootstrap = memo(() => {
       const remoteMode = Boolean(serverUrl);
       if (remoteMode) {
         // Remote mode: keys stay on the provider server; model/style/baseURL/apiKey come from /api/provider/info.
-        setStatus("Connecting to provider server…");
+        setBoot({ phase: "booting", message: "Connecting to provider server…" });
         registerModelProvider(await createRemoteProvider(serverUrl));
       } else {
         registerModelProvider(createDirectModelProvider({ model, style, baseURL, apiKey }));
       }
       if (currentInitId !== initIdRef.current) return;
 
-      setStatus("Initializing agent…");
+      setBoot({ phase: "booting", message: "Initializing agent…" });
       // Remote mode ignores local model/style/baseURL/apiKey (server is the single source of truth),
       // so only pass them in direct mode — otherwise the UI config would show the wrong model.
       await initConfig(
@@ -97,15 +110,18 @@ const AgentBootstrap = memo(() => {
 
       adapterRef.current = playground;
       setAdapter(playground);
+      setBoot({ phase: "ready", message: "Ready" });
     } catch (err) {
       if (currentInitId !== initIdRef.current) return;
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      if (currentInitId === initIdRef.current) {
-        setLoading(false);
-      }
+      const message = err instanceof Error ? err.message : String(err);
+      setBoot({ phase: "error", message: "Initialization failed", error: message });
     }
-  }, [model, style, baseURL, apiKey, providerServerUrl, fetchProxyUrl, ensureCoreEnv]);
+  }, [model, style, baseURL, apiKey, providerServerUrl, fetchProxyUrl, ensureCoreEnv, setBoot]);
+
+  useEffect(() => {
+    setAgentRestart(() => () => void runBootstrap());
+    return () => setAgentRestart(null);
+  }, [runBootstrap, setAgentRestart]);
 
   useEffect(() => {
     void runBootstrap();
@@ -119,31 +135,36 @@ const AgentBootstrap = memo(() => {
     };
   }, [runBootstrap]);
 
-  if (error) {
+  if (boot.phase === "error") {
     return (
-      <div className="center-panel">
-        <h2>Initialization error</h2>
-        <p>{error}</p>
-        <button type="button" onClick={() => void runBootstrap()}>
-          Retry
-        </button>
+      <div className="workarea__state">
+        <State
+          icon={<IconWarning size={19} />}
+          title="Could not start the playground"
+          hint={boot.error}
+          action={
+            <Button variant="primary" icon={<IconRefresh size={13} />} onClick={() => void runBootstrap()}>
+              Retry
+            </Button>
+          }
+        />
       </div>
     );
   }
 
-  if (loading || !adapter) {
+  if (!adapter) {
     return (
-      <div className="center-panel">
-        <span className="spinner" />
-        <span>{status}</span>
+      <div className="workarea__state">
+        <State loading title={boot.message} hint="Preparing the in-browser workspace and agent runtime." />
       </div>
     );
   }
 
   return (
     <InkTerminalBox
+      className="surface-terminal"
       style={{ height: "100%" }}
-      termOptions={{ fontSize: 14 }}
+      termOptions={{ fontSize: 14, letterSpacing: 0, lineHeight: 1.2 }}
       inkRenderOptions={{ exitOnCtrlC: false }}
       onReady={(api) => {
         // Optional GPU acceleration. `activate()` throws on a host without WebGL2 (headless
@@ -163,63 +184,4 @@ const AgentBootstrap = memo(() => {
   );
 });
 
-AgentBootstrap.displayName = "AgentBootstrap";
-
-function useSubscribePreviewPorts(fetchProxyUrl: string) {
-  useEffect(() => {
-    let cancelled = false;
-    let unsub: (() => void) | undefined;
-
-    void getWebContainerEnv({ fetchProxyUrl }).then(() => {
-      if (cancelled) return;
-      const wc = getBootedWebContainer();
-      if (!wc) return;
-      const { upsertOpen, markReady, remove } = usePreviewPorts.getActions();
-      unsub = subscribePreviewPorts(wc, {
-        onOpen: (port, url) => upsertOpen(port, url),
-        onClose: (port) => remove(port),
-        onReady: (port, url) => markReady(port, url),
-      });
-    });
-
-    return () => {
-      cancelled = true;
-      unsub?.();
-    };
-  }, [fetchProxyUrl]);
-}
-
-export const PlaygroundApp = () => {
-  const fetchProxyUrl = usePlaygroundConfig((s) => s.fetchProxyUrl);
-  const workspaceVisible = usePlaygroundConfig((s) => s.workspaceVisible);
-  const { setConfig } = usePlaygroundConfig.getActions();
-
-  const [autoOpened, setAutoOpened] = useState(false);
-
-  useSubscribePreviewPorts(fetchProxyUrl);
-
-  useEffect(() => {
-    if (autoOpened) return;
-    if (hasCoreEnv()) {
-      setConfig({ workspaceVisible: true });
-      setAutoOpened(true);
-    }
-  }, [autoOpened, setConfig]);
-
-  return (
-    <div className="playground-shell">
-      <ConfigPanel />
-      <div className="playground-main">
-        <SplitPane
-          left={
-            <div className="playground-terminal">
-              <AgentBootstrap />
-            </div>
-          }
-          right={<WorkspacePanel />}
-          visible={workspaceVisible}
-        />
-      </div>
-    </div>
-  );
-};
+AgentSurface.displayName = "AgentSurface";

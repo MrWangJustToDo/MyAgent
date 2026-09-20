@@ -1,0 +1,206 @@
+/* ============================================================================
+   Overlays — Dialog + Sheet share the scrim and the dismissal contract.
+   ============================================================================ */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: var(--bg-scrim);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: overlay-in var(--duration) var(--ease);
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: min(80vh, 720px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: dialog-in var(--duration) var(--ease-out);
+}
+
+.dialog--sm {
+  width: min(420px, 100%);
+}
+
+.dialog--lg {
+  width: min(760px, 100%);
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.dialog__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dialog__heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.dialog__title {
+  color: var(--text);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.dialog__description {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.dialog__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4);
+}
+
+.dialog__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+}
+
+.dialog__footer .btn--primary {
+  margin-left: auto;
+}
+
+/* A left-aligned footer note plus a right-aligned primary action. */
+.dialog__footer .export__count {
+  order: -1;
+}
+
+/* --- Sheet ---------------------------------------------------------------- */
+.sheet {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.sheet--bottom {
+  align-self: flex-end;
+  width: 100%;
+  height: min(78vh, 720px);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  border-bottom: none;
+  animation: sheet-up var(--duration) var(--ease-out);
+}
+
+.sheet--right {
+  align-self: stretch;
+  margin-left: auto;
+  width: min(92vw, 480px);
+  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
+  border-right: none;
+  animation: sheet-in-right var(--duration) var(--ease-out);
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes sheet-in-right {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.sheet__header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sheet__grabber {
+  display: none;
+}
+
+.sheet--bottom .sheet__grabber {
+  display: block;
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: var(--border-strong);
+}
+
+.sheet__title {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.sheet__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.sheet__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+

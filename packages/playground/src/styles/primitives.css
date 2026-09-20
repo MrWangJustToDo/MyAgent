@@ -1,0 +1,371 @@
+/* ============================================================================
+   Controls — Button, Field/Input/Select/Textarea, Switch, Segmented.
+   ----------------------------------------------------------------------------
+   The control layer. Overlays (dialog/sheet) live in `overlays.css` and feedback
+   (state/toast/badge/kbd) in `feedback.css`, so no file carries the whole system.
+   ============================================================================ */
+/* ============================================================================
+   Button
+   ============================================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--control-h-md);
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease),
+    opacity var(--duration-fast) var(--ease);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn--sm {
+  height: var(--control-h-sm);
+  padding: 0 9px;
+  font-size: var(--text-xs);
+}
+
+.btn--lg {
+  height: var(--control-h-lg);
+  padding: 0 14px;
+  font-size: var(--text-md);
+}
+
+.btn--icon-only {
+  padding: 0;
+  width: var(--control-h-md);
+  gap: 0;
+}
+
+.btn--icon-only.btn--sm {
+  width: var(--control-h-sm);
+}
+
+.btn--icon-only.btn--lg {
+  width: var(--control-h-lg);
+}
+
+.btn__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Secondary — the default: a hairline outline on the current surface. */
+.btn--secondary {
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+}
+
+.btn--secondary:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.btn--secondary:active:not(:disabled) {
+  background: var(--surface-4);
+}
+
+/* Ghost — no chrome until hover; used in dense headers. */
+.btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.btn--ghost:active:not(:disabled) {
+  background: var(--bg-active);
+}
+
+/* Primary — exactly one per surface. */
+.btn--primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: var(--shadow-inset);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn--primary:active:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+/* Danger — destructive actions only. */
+.btn--danger {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* ============================================================================
+   Field / Input / Select
+   ============================================================================ */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field--inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.field--muted .field__label {
+  color: var(--text-faint);
+}
+
+.field__label {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: 0.005em;
+}
+
+.field__control {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.field--inline .field__control {
+  flex-shrink: 0;
+}
+
+.field__message {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.field__message--error {
+  color: var(--danger);
+}
+
+.input,
+.select {
+  width: 100%;
+  height: var(--control-h-lg);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--text-md);
+  outline: none;
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    background var(--duration-fast) var(--ease),
+    box-shadow var(--duration-fast) var(--ease);
+}
+
+.input::placeholder {
+  color: var(--text-faint);
+}
+
+.input:hover:not(:disabled),
+.select:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.input:focus,
+.select:focus,
+.input--invalid {
+  border-color: var(--accent-border);
+}
+
+.input:focus,
+.select:focus {
+  box-shadow: 0 0 0 3px var(--accent-softer);
+}
+
+.input:disabled,
+.select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.select-wrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+.select {
+  appearance: none;
+  padding-right: 28px;
+  cursor: pointer;
+}
+
+.select-wrap__caret {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* ============================================================================
+   Switch
+   ============================================================================ */
+.switch {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.switch__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch__input:disabled {
+  cursor: not-allowed;
+}
+
+.switch__track {
+  display: block;
+  width: 36px;
+  height: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  background: var(--bg-inset);
+  transition:
+    background var(--duration) var(--ease),
+    border-color var(--duration) var(--ease);
+}
+
+.switch__thumb {
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 2px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  transition:
+    transform var(--duration) var(--ease),
+    background var(--duration) var(--ease);
+}
+
+.switch__input:checked + .switch__track {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.switch__input:checked + .switch__track .switch__thumb {
+  transform: translateX(16px);
+  background: #fff;
+}
+
+.switch__input:focus-visible + .switch__track {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.switch__input:hover:not(:disabled) + .switch__track {
+  border-color: var(--accent-border);
+}
+
+/* ============================================================================
+   Segmented
+   ============================================================================ */
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+}
+
+.segmented--sm {
+  padding: 2px;
+}
+
+.segmented__item {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.segmented--sm .segmented__item {
+  height: 22px;
+  padding: 0 8px;
+  font-size: var(--text-xs);
+}
+
+.segmented__item:hover {
+  color: var(--text-secondary);
+}
+
+.segmented__item--active {
+  background: var(--surface-3);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.segmented__item--active:hover {
+  color: var(--text);
+}
+

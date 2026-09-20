@@ -1,0 +1,130 @@
+/* ============================================================================
+   Settings + export dialogs.
+   ============================================================================ */
+
+.settings__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+}
+
+.settings__section + .settings__section {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.settings__section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings__section-head h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.settings__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.settings__grid--muted {
+  opacity: 0.5;
+}
+
+.settings__secret {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings__note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+/* ============================================================================
+   Export
+   ============================================================================ */
+.export__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--space-3);
+}
+
+.export__count {
+  margin-right: auto;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.export__list {
+  max-height: 340px;
+  min-height: 160px;
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+}
+
+.export__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 10px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease);
+}
+
+.export__row:hover {
+  background: var(--bg-hover);
+}
+
+.export__row--dir {
+  color: var(--text-muted);
+  font-weight: 550;
+}
+
+.export__row input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.export__status {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.export__warn {
+  margin: var(--space-3) 0 0;
+  color: var(--warning);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+.export__error {
+  margin: var(--space-3) 0 0;
+  color: var(--danger);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+@media (max-width: 560px) {
+  .settings__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

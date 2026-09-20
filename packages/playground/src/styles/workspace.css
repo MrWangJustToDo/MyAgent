@@ -1,0 +1,549 @@
+/* ============================================================================
+   Workspace — panel frame, preview, file tree, code tab.
+   ============================================================================ */
+
+.workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  background: var(--surface-1);
+}
+
+.workspace__header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  height: 40px;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+}
+
+.workspace__header .segmented {
+  flex: 0 0 auto;
+}
+
+.workspace__header-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.workspace__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace__fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Inside a sheet the header sits under the grabber. */
+.workspace__header--sheet {
+  padding-left: var(--space-3);
+  padding-top: var(--space-1);
+}
+
+/* Preview / Variants / Code share one chrome height in both placements. */
+.workspace__header .btn--icon-only {
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   Preview
+   ============================================================================ */
+.preview {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview__bar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.preview__ports {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.preview__ports::-webkit-scrollbar {
+  display: none;
+}
+
+.preview__ports-empty {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.port {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.port:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.port--active {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.port__dot {
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.port__dot--ready {
+  background: var(--success);
+}
+
+.port__dot--pending {
+  background: var(--warning);
+  animation: pulse 1.4s var(--ease) infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.preview__actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+}
+
+.preview__frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  /* Shell surface, not white: until a real page renders, a white slab in an
+     otherwise dark shell reads as a broken panel. The iframe below owns the
+     white backdrop an actual document expects. */
+  background: var(--surface-2);
+}
+
+.preview__iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: #fff;
+}
+
+.preview__flash {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: var(--surface-4);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+/* ============================================================================
+   File tree
+   ============================================================================ */
+/*
+ * Deliberately *not* a scroll container: `.code__tree` is the single scroller.
+ *
+ * Rows never overflow it — the indent column is fixed and the name ellipsizes — so
+ * there is nothing to scroll horizontally and therefore no scrollbar that could
+ * appear on expand and take width from the rows.
+ */
+.tree {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 4px 0 12px;
+}
+
+.tree--skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 10px;
+}
+
+.skeleton {
+  border-radius: var(--radius-xs);
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: skeleton 1.4s var(--ease) infinite;
+}
+
+.skeleton--row {
+  height: 14px;
+}
+
+@keyframes skeleton {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/*
+ * `.tree__name` carries `flex: 1; min-width: 0`, which is what makes truncation
+ * work here — the `.truncate` helper alone cannot, because the sibling guides are
+ * `flex-shrink: 0` and would otherwise push the name past the container edge.
+ */
+.tree__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 25px;
+  padding: 0 8px 0 4px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.tree__row--dir {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.tree__row:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.tree__row--selected {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.tree__row--selected:hover {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.tree__row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+/*
+ * Leading indent column.
+ *
+ * `flex: 0 0 auto` keeps its inline `width: depth * INDENT` exact. This must NOT be
+ * shrinkable: with `flex-shrink: 1`, flex distributes a width deficit across the
+ * indent and the name in proportion to their base sizes, so deeper rows lose more
+ * indent than shallow ones and every row's icon lands at a different x. Fixed
+ * indent + a truncating name keeps all glyphs in one column.
+ */
+.tree__guides {
+  display: flex;
+  flex: 0 0 auto;
+  align-self: stretch;
+  overflow: hidden;
+}
+
+.tree__guide {
+  position: relative;
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.tree__guide::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tree__row:hover .tree__guide::before,
+.tree__row--selected .tree__guide::before {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.tree__chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+  border-radius: var(--radius-xs);
+  transition:
+    transform var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.tree__chevron--open {
+  transform: rotate(90deg);
+  color: var(--text-muted);
+}
+
+.tree__chevron--spacer {
+  visibility: hidden;
+}
+
+.tree__row:hover .tree__chevron:not(.tree__chevron--spacer) {
+  color: var(--text-muted);
+}
+
+.tree__icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  opacity: 0.92;
+}
+
+/* Icon placeholder for unknown types: no `display: inline-block`, which would
+   override the row's `display: flex` item sizing. */
+.tree__icon--fallback {
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tree__name {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================================================================
+   Code tab
+   ============================================================================ */
+.code {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.code__sidebar {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+}
+
+.code__sidebar-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  height: 34px;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.code__sidebar-actions {
+  display: flex;
+  gap: 1px;
+}
+
+.code__tree {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* Symmetric overflow. Only setting `overflow-y` lets the computed `overflow-x`
+     become `auto`, which is how a too-wide row ends up producing a horizontal
+     scrollbar that shifts every row sideways. */
+  overflow: hidden auto;
+}
+
+.code__resizer {
+  position: relative;
+  z-index: var(--z-panel);
+  flex: 0 0 5px;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+
+.code__resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--border-subtle);
+  transition:
+    width var(--duration-fast) var(--ease),
+    background var(--duration-fast) var(--ease);
+}
+
+.code__resizer:hover::after,
+.code__resizer:focus-visible::after {
+  width: 2px;
+  background: var(--accent);
+}
+
+.code__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--surface-1);
+}
+
+.code__bar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  height: 34px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.code__filename {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.code__filename--muted {
+  color: var(--text-faint);
+  font-family: var(--font);
+}
+
+.code__modified {
+  flex-shrink: 0;
+  color: var(--warning);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.code__bar-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.code__editor {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.code__loading-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 40% 100%;
+  animation: loading-bar 1s var(--ease) infinite;
+}
+
+@keyframes loading-bar {
+  from {
+    background-position: -40% 0;
+  }
+  to {
+    background-position: 140% 0;
+  }
+}
+
+.code__dropzone {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 1.5px dashed var(--accent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  color: var(--accent-text);
+  font-size: var(--text-md);
+  pointer-events: none;
+}
+
+/* ============================================================================
+   Sheet placement
+   ============================================================================ */
+.sheet .workspace {
+  background: var(--surface-2);
+}
+
+@media (max-width: 767px) {
+  .code__sidebar {
+    max-width: 40%;
+  }
+}

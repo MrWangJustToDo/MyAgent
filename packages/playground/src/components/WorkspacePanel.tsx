@@ -1,83 +1,103 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { usePlaygroundConfig } from "../hooks/use-playground-config.js";
 import { usePreviewPorts } from "../hooks/use-preview-ports.js";
+import { useShellState } from "../hooks/use-shell-state.js";
+import { Button } from "../ui/Button.js";
+import { cx } from "../ui/cx.js";
+import { Segmented } from "../ui/Field.js";
+import { IconClose, IconCode, IconCopy, IconExternal, IconGrid, IconPlay, IconRefresh } from "../ui/icons.js";
+import { State } from "../ui/State.js";
 import { getBootedWebContainer } from "../webcontainer/create-env.js";
 
 import { VariantsPanel } from "./VariantsPanel.js";
 import { WorkspaceCodeTab } from "./WorkspaceCodeTab.js";
 
+import type { WorkspaceTab } from "../hooks/use-shell-state.js";
 import type { WebContainer } from "@webcontainer/api";
+import type { ReactNode } from "react";
 
 const ROOT_PATH = "/";
 
-type TabId = "preview" | "variants" | "code";
+const TAB_OPTIONS: { value: WorkspaceTab; label: string; icon: ReactNode }[] = [
+  { value: "preview", label: "Preview", icon: <IconPlay size={12} /> },
+  { value: "variants", label: "Variants", icon: <IconGrid size={12} /> },
+  { value: "code", label: "Code", icon: <IconCode size={12} /> },
+];
 
-export const WorkspacePanel = () => {
-  const { setConfig } = usePlaygroundConfig.getActions();
-  const [activeTab, setActiveTab] = useState<TabId>("code");
-  const [wc, setWc] = useState<WebContainer | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const rootPath = ROOT_PATH;
+/** Files written by the agent/editor bump this so the tree and editor re-read. */
+function useAgentRefreshKey() {
+  const [key, setKey] = useState(0);
+  useEffect(() => {
+    const handler = () => setKey((k) => k + 1);
+    window.addEventListener("agent:action", handler);
+    return () => window.removeEventListener("agent:action", handler);
+  }, []);
+  return key;
+}
 
-  const close = useCallback(() => {
-    setConfig({ workspaceVisible: false });
-  }, [setConfig]);
+function useWebContainer(): WebContainer | null {
+  const [wc, setWc] = useState<WebContainer | null>(() => getBootedWebContainer());
+  useEffect(() => {
+    if (wc) return;
+    const check = setInterval(() => {
+      const booted = getBootedWebContainer();
+      if (booted) setWc(booted);
+    }, 500);
+    return () => clearInterval(check);
+  }, [wc]);
+  return wc;
+}
 
-  // Preview tab state
+export interface WorkspacePanelProps {
+  /** True when the shell renders this inside a `Sheet` (compact viewport). */
+  asSheet?: boolean;
+  onClose: () => void;
+}
+
+/**
+ * Workspace surface: Preview / Variants / Code.
+ *
+ * The shell owns *where* it lives (side pane vs sheet); this component owns only
+ * its tabs and header, so one body renders in both placements.
+ */
+export const WorkspacePanel = ({ asSheet = false, onClose }: WorkspacePanelProps) => {
+  const activeTab = useShellState((s) => s.workspaceTab);
+  const previewNonce = useShellState((s) => s.previewNonce);
+  const { setWorkspaceTab, bumpPreviewNonce, setPreviewUrl, setExportOpen } = useShellState.getActions();
+
+  const wc = useWebContainer();
+  const refreshKey = useAgentRefreshKey();
+
   const ports = usePreviewPorts((s) => s.ports);
   const activePort = usePreviewPorts((s) => s.activePort);
   const { setActive } = usePreviewPorts.getActions();
 
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [iframeKey, setIframeKey] = useState(0);
   const [copyFlash, setCopyFlash] = useState(false);
 
-  // Get WebContainer instance
-  useEffect(() => {
-    const wc = getBootedWebContainer();
-    if (wc) setWc(wc);
-    const check = setInterval(() => {
-      const wc = getBootedWebContainer();
-      if (wc) {
-        setWc(wc);
-        clearInterval(check);
-      }
-    }, 500);
-    return () => clearInterval(check);
-  }, []);
-
-  // Listen for agent actions
-  useEffect(() => {
-    const handler = () => {
-      setRefreshKey((k) => k + 1);
-    };
-    window.addEventListener("agent:action", handler);
-    return () => window.removeEventListener("agent:action", handler);
-  }, []);
-
   const active = useMemo(() => ports.find((p) => p.port === activePort) ?? null, [ports, activePort]);
-  const iframeSrc = active?.ready ? active.url : (active?.url ?? "");
+  const iframeSrc = active?.url ?? "";
 
-  const refresh = useCallback(() => {
-    setIframeKey((k) => k + 1);
-  }, []);
+  // Publish the active preview URL so shell-level actions (palette, status bar) can use it.
+  useEffect(() => {
+    setPreviewUrl(iframeSrc || null);
+    return () => setPreviewUrl(null);
+  }, [iframeSrc, setPreviewUrl]);
+
+  const refresh = useCallback(() => bumpPreviewNonce(), [bumpPreviewNonce]);
 
   const openExternal = useCallback(() => {
-    if (active?.url) {
-      window.open(active.url, "_blank", "noopener,noreferrer");
-    }
-  }, [active?.url]);
+    if (iframeSrc) window.open(iframeSrc, "_blank", "noopener,noreferrer");
+  }, [iframeSrc]);
 
   const copyUrl = useCallback(async () => {
-    if (!active?.url) return;
+    if (!iframeSrc) return;
     try {
-      await navigator.clipboard.writeText(active.url);
+      await navigator.clipboard.writeText(iframeSrc);
       setCopyFlash(true);
     } catch {
-      // ignore
+      // clipboard unavailable (permissions / insecure context)
     }
-  }, [active?.url]);
+  }, [iframeSrc]);
 
   useEffect(() => {
     if (!copyFlash) return;
@@ -86,205 +106,132 @@ export const WorkspacePanel = () => {
   }, [copyFlash]);
 
   return (
-    <aside className="workspace-panel" aria-label="Workspace panel">
-      <header className="workspace-panel__header">
-        <div className="workspace-panel__tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "preview"}
-            className={
-              activeTab === "preview" ? "workspace-panel__tab workspace-panel__tab--active" : "workspace-panel__tab"
-            }
-            onClick={() => setActiveTab("preview")}
-          >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="1.5" y="2.5" width="13" height="11" rx="2" stroke="currentColor" strokeWidth="1.3" />
-              <path d="M1.5 5.5h13" stroke="currentColor" strokeWidth="1.3" />
-              <circle cx="3.5" cy="4" r="0.5" fill="currentColor" />
-              <circle cx="5.5" cy="4" r="0.5" fill="currentColor" />
-            </svg>
-            Preview
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "variants"}
-            className={
-              activeTab === "variants" ? "workspace-panel__tab workspace-panel__tab--active" : "workspace-panel__tab"
-            }
-            onClick={() => setActiveTab("variants")}
-          >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.3" stroke="currentColor" strokeWidth="1.3" />
-              <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.3" stroke="currentColor" strokeWidth="1.3" />
-              <rect x="1.5" y="9" width="5.5" height="5.5" rx="1.3" stroke="currentColor" strokeWidth="1.3" />
-              <rect x="9" y="9" width="5.5" height="5.5" rx="1.3" stroke="currentColor" strokeWidth="1.3" />
-            </svg>
-            Variants
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "code"}
-            className={
-              activeTab === "code" ? "workspace-panel__tab workspace-panel__tab--active" : "workspace-panel__tab"
-            }
-            onClick={() => setActiveTab("code")}
-          >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M6 4.5 2.5 8 6 11.5"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M10 4.5 13.5 8 10 11.5"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Code
-          </button>
-        </div>
-        <button
-          type="button"
-          className="workspace-panel__close"
-          onClick={close}
-          title="Close workspace panel"
-          aria-label="Close workspace panel"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
+    <section className="workspace" aria-label="Workspace">
+      <header className={asSheet ? "workspace__header workspace__header--sheet" : "workspace__header"}>
+        <Segmented
+          label="Workspace view"
+          size="sm"
+          options={TAB_OPTIONS}
+          value={activeTab}
+          onChange={(tab) => setWorkspaceTab(tab)}
+        />
+        <div className="workspace__header-spacer" />
+        {activeTab === "code" && (
+          <Button size="sm" variant="ghost" icon={<IconExternal size={13} />} onClick={() => setExportOpen(true)}>
+            Export
+          </Button>
+        )}
+        {/* The sheet supplies its own close affordance. */}
+        {!asSheet && (
+          <Button
+            size="sm"
+            variant="ghost"
+            iconOnly
+            icon={<IconClose size={13} />}
+            aria-label="Close workspace panel"
+            onClick={onClose}
+          />
+        )}
       </header>
 
-      {activeTab === "preview" && (
-        <div className="workspace-panel__body">
-          <div className="workspace-panel__preview-actions">
-            <div className="workspace-panel__preview-tabs" role="tablist">
-              {ports.length === 0 ? (
-                <span className="workspace-panel__empty-tab">No ports</span>
+      <div className="workspace__body">
+        {activeTab === "preview" && (
+          <div className="preview">
+            <div className="preview__bar">
+              <div className="preview__ports" role="tablist" aria-label="Preview ports">
+                {ports.length === 0 ? (
+                  <span className="preview__ports-empty">No server listening</span>
+                ) : (
+                  ports.map((p) => (
+                    <button
+                      key={p.port}
+                      type="button"
+                      role="tab"
+                      aria-selected={p.port === activePort}
+                      className={cx("port", p.port === activePort && "port--active")}
+                      onClick={() => setActive(p.port)}
+                      title={p.url}
+                    >
+                      <span className={`port__dot port__dot--${p.ready ? "ready" : "pending"}`} aria-hidden="true" />:
+                      {p.port}
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <div className="preview__actions">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  iconOnly
+                  icon={<IconRefresh size={13} />}
+                  aria-label="Reload preview"
+                  disabled={!iframeSrc}
+                  onClick={refresh}
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  iconOnly
+                  icon={<IconExternal size={13} />}
+                  aria-label="Open preview in a new tab"
+                  disabled={!iframeSrc}
+                  onClick={openExternal}
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  iconOnly
+                  icon={<IconCopy size={13} />}
+                  aria-label="Copy preview URL"
+                  disabled={!iframeSrc}
+                  onClick={() => void copyUrl()}
+                />
+              </div>
+            </div>
+
+            <div className="preview__frame">
+              {iframeSrc ? (
+                <iframe
+                  key={`${activePort}-${active?.ready ? "ready" : "open"}-${previewNonce}`}
+                  className="preview__iframe"
+                  title={`Preview on port ${activePort ?? ""}`}
+                  src={iframeSrc}
+                  allow="accelerometer; camera; encrypted-media; geolocation; gyroscope; microphone; midi; clipboard-read; clipboard-write"
+                />
               ) : (
-                ports.map((p) => (
-                  <button
-                    key={p.port}
-                    type="button"
-                    role="tab"
-                    aria-selected={p.port === activePort}
-                    className={
-                      p.port === activePort
-                        ? "workspace-panel__preview-tab workspace-panel__preview-tab--active"
-                        : "workspace-panel__preview-tab"
-                    }
-                    onClick={() => setActive(p.port)}
-                  >
-                    <span
-                      className={`workspace-panel__preview-dot ${p.ready ? "workspace-panel__preview-dot--ready" : "workspace-panel__preview-dot--pending"}`}
-                      aria-hidden="true"
-                    />
-                    :{p.port}
-                    {p.ready ? "" : "…"}
-                  </button>
-                ))
+                <State
+                  icon={<IconPlay size={19} />}
+                  title="No preview yet"
+                  hint={
+                    <>
+                      Start a server inside the workspace — for example <code>npm run dev</code> — and its port shows up
+                      here automatically.
+                    </>
+                  }
+                />
               )}
             </div>
-            <div className="workspace-panel__preview-actions-btns">
-              <button
-                type="button"
-                className="workspace-panel__btn"
-                onClick={refresh}
-                disabled={!iframeSrc}
-                title="Refresh"
-              >
-                Refresh
-              </button>
-              <button
-                type="button"
-                className="workspace-panel__btn"
-                onClick={openExternal}
-                disabled={!iframeSrc}
-                title="Open in new tab"
-              >
-                Open
-              </button>
-              <button
-                type="button"
-                className="workspace-panel__btn"
-                onClick={() => void copyUrl()}
-                disabled={!iframeSrc}
-                title="Copy preview URL"
-              >
-                {copyFlash ? "Copied" : "Copy"}
-              </button>
+
+            {copyFlash && <div className="preview__flash">URL copied</div>}
+          </div>
+        )}
+
+        {activeTab === "variants" && (
+          <div className="workspace__fill">
+            <VariantsPanel />
+          </div>
+        )}
+
+        {activeTab === "code" &&
+          (wc ? (
+            <div className="workspace__fill">
+              <WorkspaceCodeTab wc={wc} rootPath={ROOT_PATH} refreshKey={refreshKey} />
             </div>
-          </div>
-          <div className="workspace-panel__preview-body">
-            {iframeSrc ? (
-              <iframe
-                key={`${activePort}-${active?.ready ? "ready" : "open"}-${iframeKey}`}
-                ref={iframeRef}
-                className="workspace-panel__iframe"
-                title={`Preview :${activePort ?? ""}`}
-                src={iframeSrc}
-                allow="accelerometer; camera; encrypted-media; geolocation; gyroscope; microphone; midi; clipboard-read; clipboard-write"
-              />
-            ) : (
-              <div className="workspace-panel__placeholder">
-                <div className="workspace-panel__placeholder-icon" aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                    <rect x="2.5" y="3.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-                    <path d="M2.5 6.5h13" stroke="currentColor" strokeWidth="1.4" />
-                    <circle cx="5" cy="5" r="0.7" fill="currentColor" />
-                    <circle cx="7.2" cy="5" r="0.7" fill="currentColor" />
-                  </svg>
-                </div>
-                <div className="workspace-panel__placeholder-title">No preview yet</div>
-                <span>
-                  Start a server (e.g. <code>npm run dev</code>) to preview.
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {activeTab === "code" && wc && (
-        <div className="workspace-panel__body">
-          <WorkspaceCodeTab wc={wc} rootPath={rootPath} refreshKey={refreshKey} />
-        </div>
-      )}
-
-      {activeTab === "code" && !wc && (
-        <div className="workspace-panel__body">
-          <div className="workspace-panel__placeholder">
-            <div className="workspace-panel__placeholder-icon" aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path
-                  d="M9 2.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13Z"
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                  opacity="0.35"
-                />
-                <path d="M9 2.5a6.5 6.5 0 0 1 6.5 6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-              </svg>
-            </div>
-            <div className="workspace-panel__placeholder-title">Booting workspace</div>
-            <span>Waiting for WebContainer…</span>
-          </div>
-        </div>
-      )}
-
-      {activeTab === "variants" && (
-        <div className="workspace-panel__body">
-          <VariantsPanel />
-        </div>
-      )}
-    </aside>
+          ) : (
+            <State loading title="Booting workspace" hint="Waiting for the WebContainer filesystem…" />
+          ))}
+      </div>
+    </section>
   );
 };

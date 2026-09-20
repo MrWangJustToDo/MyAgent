@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useShellState } from "../hooks/use-shell-state.js";
+import { Button } from "../ui/Button.js";
+import { Dialog } from "../ui/Dialog.js";
+import { IconDownload } from "../ui/icons.js";
 import { buildWorkspaceZip, downloadUint8Array } from "../webcontainer/build-workspace-zip.js";
 import { getBootedWebContainer } from "../webcontainer/create-env.js";
 import {
@@ -16,6 +20,7 @@ type Props = {
 };
 
 export const ExportWorkspaceDialog = ({ onClose }: Props) => {
+  const { showToast } = useShellState.getActions();
   const [entries, setEntries] = useState<WorkspaceEntry[]>([]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(true);
@@ -31,9 +36,7 @@ export const ExportWorkspaceDialog = ({ onClose }: Props) => {
       setError("");
       try {
         const wc = getBootedWebContainer();
-        if (!wc) {
-          throw new Error("WebContainer is not ready yet.");
-        }
+        if (!wc) throw new Error("WebContainer is not ready yet.");
         const listed = await listWorkspaceEntries(wc.fs, "/", { maxEntries: 5000 });
         if (cancelled) return;
         setTruncated(listed.length >= 5000);
@@ -42,9 +45,7 @@ export const ExportWorkspaceDialog = ({ onClose }: Props) => {
         const initial = new Set(listed.map((e) => e.path));
         setSelected(deselectByDirName(deselectByDirName(initial, listed, "node_modules"), listed, ".git"));
       } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
-        }
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -55,37 +56,12 @@ export const ExportWorkspaceDialog = ({ onClose }: Props) => {
     };
   }, []);
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
   const fileCount = useMemo(() => selectedFilePaths(selected, entries).length, [selected, entries]);
 
   const toggle = useCallback(
-    (path: string, checked: boolean) => {
-      setSelected((prev) => togglePathSelection(prev, entries, path, checked));
-    },
+    (path: string, checked: boolean) => setSelected((prev) => togglePathSelection(prev, entries, path, checked)),
     [entries]
   );
-
-  const selectAll = useCallback(() => {
-    setSelected(new Set(entries.map((e) => e.path)));
-  }, [entries]);
-
-  const selectNone = useCallback(() => {
-    setSelected(new Set());
-  }, []);
-
-  const skipHeavy = useCallback(() => {
-    setSelected((prev) => deselectByDirName(deselectByDirName(prev, entries, "node_modules"), entries, ".git"));
-  }, [entries]);
 
   const runExport = useCallback(async () => {
     const wc = getBootedWebContainer();
@@ -105,99 +81,90 @@ export const ExportWorkspaceDialog = ({ onClose }: Props) => {
       const zip = await buildWorkspaceZip(wc.fs, files);
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
       downloadUint8Array(`playground-workspace-${stamp}.zip`, zip);
+      showToast(`Exported ${files.length} file${files.length === 1 ? "" : "s"}`, "success");
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setExporting(false);
     }
-  }, [entries, onClose, selected]);
-
-  const handleBackdropClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.target === e.currentTarget) {
-        onClose();
-      }
-    },
-    [onClose]
-  );
+  }, [entries, onClose, selected, showToast]);
 
   return (
-    <div className="export-dialog-backdrop" onClick={handleBackdropClick}>
-      <div className="export-dialog" role="dialog" aria-modal="true" aria-label="Export workspace">
-        <div className="export-dialog__header">
-          <strong>Export workspace</strong>
-          <button type="button" onClick={onClose}>
-            Close
-          </button>
-        </div>
-
-        <p className="export-dialog__hint">
-          Choose files to download as a ZIP. Directories include their children when checked. Default selection skips{" "}
-          <code>node_modules</code> and <code>.git</code>.
-        </p>
-
-        <div className="export-dialog__toolbar">
-          <button type="button" onClick={selectAll} disabled={loading || entries.length === 0}>
-            Select all
-          </button>
-          <button type="button" onClick={selectNone} disabled={loading}>
-            None
-          </button>
-          <button type="button" onClick={skipHeavy} disabled={loading || entries.length === 0}>
-            Skip node_modules / .git
-          </button>
-          <span className="export-dialog__count">
-            {fileCount} file{fileCount === 1 ? "" : "s"}
+    <Dialog
+      open
+      onClose={onClose}
+      title="Export workspace"
+      description="Download a ZIP of the WebContainer filesystem"
+      leading={
+        <span className="dialog__chip" aria-hidden="true">
+          <IconDownload size={15} />
+        </span>
+      }
+      size="md"
+      footer={
+        <>
+          <span className="export__count">
+            {fileCount} file{fileCount === 1 ? "" : "s"} selected
           </span>
-        </div>
-
-        <div className="export-dialog__list">
-          {loading && <div className="export-dialog__status">Scanning workspace…</div>}
-          {!loading && entries.length === 0 && !error && (
-            <div className="export-dialog__status">Workspace is empty.</div>
-          )}
-          {!loading &&
-            entries.map((entry) => {
-              const depth = pathDepth(entry.path);
-              const label = entry.path === "/" ? "/" : entry.path.slice(entry.path.lastIndexOf("/") + 1);
-              return (
-                <label
-                  key={entry.path}
-                  className={
-                    entry.type === "directory" ? "export-dialog__row export-dialog__row--dir" : "export-dialog__row"
-                  }
-                  style={{ paddingLeft: 10 + depth * 14 }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.has(entry.path)}
-                    onChange={(e) => toggle(entry.path, e.target.checked)}
-                  />
-                  <span title={entry.path}>{entry.type === "directory" ? `${label}/` : label}</span>
-                </label>
-              );
-            })}
-        </div>
-
-        {truncated && (
-          <p className="export-dialog__warn">
-            Listing stopped at 5000 entries — trim the workspace or export in batches.
-          </p>
-        )}
-        {error && <p className="export-dialog__error">{error}</p>}
-
-        <div className="export-dialog__footer">
-          <button
-            type="button"
-            className="export-dialog__primary"
-            disabled={exporting || loading}
-            onClick={() => void runExport()}
-          >
-            {exporting ? "Exporting…" : "Download ZIP"}
-          </button>
-        </div>
+          <Button variant="primary" disabled={exporting || loading || fileCount === 0} onClick={() => void runExport()}>
+            {exporting ? "Packaging…" : "Download ZIP"}
+          </Button>
+        </>
+      }
+    >
+      <div className="export__toolbar">
+        <Button size="sm" onClick={() => setSelected(new Set(entries.map((e) => e.path)))} disabled={loading}>
+          Select all
+        </Button>
+        <Button size="sm" onClick={() => setSelected(new Set())} disabled={loading}>
+          Select none
+        </Button>
+        <Button
+          size="sm"
+          onClick={() =>
+            setSelected((prev) => deselectByDirName(deselectByDirName(prev, entries, "node_modules"), entries, ".git"))
+          }
+          disabled={loading}
+        >
+          Skip node_modules / .git
+        </Button>
       </div>
-    </div>
+
+      <div className="export__list">
+        {loading && <div className="export__status">Scanning workspace…</div>}
+        {!loading && entries.length === 0 && !error && <div className="export__status">Workspace is empty.</div>}
+        {!loading &&
+          entries.map((entry) => {
+            const depth = pathDepth(entry.path);
+            const label = entry.path === "/" ? "/" : entry.path.slice(entry.path.lastIndexOf("/") + 1);
+            return (
+              <label
+                key={entry.path}
+                className={entry.type === "directory" ? "export__row export__row--dir" : "export__row"}
+                style={{ paddingLeft: 10 + depth * 14 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(entry.path)}
+                  onChange={(e) => toggle(entry.path, e.target.checked)}
+                />
+                <span className="truncate" title={entry.path}>
+                  {entry.type === "directory" ? `${label}/` : label}
+                </span>
+              </label>
+            );
+          })}
+      </div>
+
+      {truncated && (
+        <p className="export__warn">Listing stopped at 5000 entries — trim the workspace or export in batches.</p>
+      )}
+      {error && (
+        <p className="export__error" role="alert">
+          {error}
+        </p>
+      )}
+    </Dialog>
   );
 };

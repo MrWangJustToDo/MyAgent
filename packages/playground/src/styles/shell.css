@@ -1,0 +1,420 @@
+/* ============================================================================
+   Shell — top bar, work area, split, status bar, command palette.
+   ============================================================================ */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+}
+
+/* ============================================================================
+   Top bar
+   ============================================================================ */
+.topbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--topbar-h);
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+  z-index: var(--z-topbar);
+}
+
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.topbar__mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  background: var(--accent-softer);
+  color: var(--accent-text);
+}
+
+.topbar__title {
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.topbar__subtitle {
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.topbar__status {
+  margin-left: var(--space-2);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar__spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar__palette {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-h-md);
+  min-width: 220px;
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease),
+    background var(--duration-fast) var(--ease);
+}
+
+.topbar__palette:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+}
+
+.topbar__palette-label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+/* ============================================================================
+   Work area + side panel
+   ----------------------------------------------------------------------------
+   `.workarea__main` is the terminal and stays the first child in every mode, so
+   React reconciles it in place when the panel appears/disappears or the layout
+   switches between pane and sheet. That is what keeps the running agent alive.
+   ============================================================================ */
+.workarea {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.workarea__main {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.workarea__state {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  background: var(--surface-1);
+}
+
+.surface-terminal {
+  background: var(--bg);
+}
+
+/* --- Side panel ---------------------------------------------------------- */
+.side-panel {
+  display: flex;
+  flex: 0 0 auto;
+  min-height: 0;
+}
+.side-panel__body {
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+  animation: aside-in var(--duration) var(--ease-out);
+}
+
+@keyframes aside-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 7px hit area, 1px visible line. */
+.side-panel__handle {
+  position: relative;
+  z-index: var(--z-panel);
+  flex: 0 0 var(--splitter-w);
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+
+.side-panel__handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--border-subtle);
+  transition:
+    width var(--duration-fast) var(--ease),
+    background var(--duration-fast) var(--ease);
+}
+
+.side-panel__handle:hover::after,
+.side-panel__handle:focus-visible::after {
+  width: 2px;
+  background: var(--accent);
+}
+
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* A drag that crosses the preview iframe must not hand it the pointer stream. */
+body.is-resizing iframe {
+  pointer-events: none;
+}
+
+/* ============================================================================
+   Status bar
+   ============================================================================ */
+.statusbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--statusbar-h);
+  padding: 0 var(--space-3);
+  overflow: hidden;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.statusbar__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.statusbar__item--muted {
+  color: var(--text-faint);
+}
+
+.statusbar__spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ============================================================================
+   Command palette
+   ============================================================================ */
+.overlay--top {
+  align-items: flex-start;
+  padding-top: min(14vh, 120px);
+}
+
+/* Edge-anchored overlays (sheet): hug the chosen edge, no centring padding. */
+.overlay--edge {
+  align-items: flex-end;
+  justify-content: stretch;
+  padding: 0;
+}
+
+.overlay--edge.overlay--right {
+  align-items: stretch;
+  justify-content: flex-end;
+}
+
+.palette {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: min(60vh, 460px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: dialog-in var(--duration) var(--ease-out);
+}
+
+.palette__search {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  height: 44px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.palette__input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--text-lg);
+  outline: none;
+}
+
+.palette__input::placeholder {
+  color: var(--text-faint);
+}
+
+.palette__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-1);
+}
+
+/*
+ * No `contain: paint`:
+ * the rows use an inset box-shadow ring, which containment would clip.
+ */
+
+.palette__empty {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.palette__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* border-box + width:100% inside the padded list: no horizontal overflow, so the
+     rows cannot pick up a shifting scrollbar. */
+  box-sizing: border-box;
+  width: 100%;
+  height: 34px;
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+  /* No layout- or paint-shifting transition: only colour changes, so a highlight
+     can never move the row. */
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+/*
+ * Hover is pure CSS and never touches React state. Driving it from a handler meant
+ * a re-render on every pointer move into a row, which is what made the row appear
+ * to shift/settle under the cursor.
+ */
+.palette__item:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* Keyboard highlight. Drawn *inside* the row (inset ring, not `outline`) so it
+   can never change the row's box or trigger a scrollbar. */
+.palette__item--active {
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--accent-border);
+}
+
+.palette__item:focus {
+  outline: none;
+}
+
+.palette__item:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent-border);
+}
+
+.palette__item-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.palette__item-group {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+/* ============================================================================
+   Dialog chip (shared by settings + export headers)
+   ============================================================================ */
+.dialog__chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-md);
+  background: var(--accent-softer);
+  color: var(--accent-text);
+}
+
+/* ============================================================================
+   Responsive trims — layout structure is owned by useBreakpoint, not by CSS.
+   ============================================================================ */
+@media (max-width: 1023px) {
+  .statusbar {
+    gap: var(--space-2);
+  }
+
+  .topbar__palette {
+    min-width: 160px;
+  }
+}
+
+@media (max-width: 767px) {
+  .topbar {
+    padding: 0 var(--space-2);
+  }
+
+  .topbar__status {
+    max-width: 130px;
+  }
+
+  kbd {
+    display: none;
+  }
+}

@@ -1,0 +1,226 @@
+/* ============================================================================
+   Variants — composer, comparison grid, single stage.
+   ============================================================================ */
+
+.variants {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--surface-1);
+}
+
+/* ============================================================================
+   Composer
+   ============================================================================ */
+.variants__composer {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.variants__composer-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.variants__composer-title {
+  display: inline-flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.variants__input {
+  width: 100%;
+  min-height: 62px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  resize: vertical;
+  outline: none;
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    box-shadow var(--duration-fast) var(--ease);
+}
+
+.variants__input::placeholder {
+  color: var(--text-faint);
+}
+
+.variants__input:hover {
+  border-color: var(--border-strong);
+}
+
+.variants__input:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-softer);
+}
+
+.variants__composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.variants__composer-row .field {
+  flex: 1;
+}
+
+.variants__hint {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+/* ============================================================================
+   Comparison grid
+   ============================================================================ */
+.variants__grid {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-3);
+  overflow-y: auto;
+  align-content: start;
+}
+
+.variant-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  overflow: hidden;
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    box-shadow var(--duration-fast) var(--ease);
+}
+
+.variant-card:hover {
+  border-color: var(--border-strong);
+}
+
+.variant-card--active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-softer);
+}
+
+.variant-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 4px 4px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.variant-card__name {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.variant-card__actions {
+  display: flex;
+  gap: 1px;
+}
+
+.variant-card__frame {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 0;
+  display: block;
+  background: #fff;
+  pointer-events: none;
+}
+
+/* ============================================================================
+   Single stage
+   ============================================================================ */
+.variants__stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.variants__stage-bar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  height: 40px;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.variants__stage-name {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  max-width: 30%;
+}
+
+.variants__stage-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.variants__stage-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.variants__preview {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  display: block;
+  background: #fff;
+}
+
+.variants__iterate {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.variants__iterate .input {
+  flex: 1;
+  height: var(--control-h-md);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 900px) {
+  .variants__composer-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .variants__composer-row .field--inline {
+    justify-content: space-between;
+  }
+}
