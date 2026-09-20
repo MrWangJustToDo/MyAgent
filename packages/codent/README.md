@@ -23,6 +23,31 @@ codent
 npm install -g codent-cli@beta    # pin the pre-release explicitly
 ```
 
+### Optional features
+
+Two capabilities ship as `optionalDependencies`, so a platform that cannot provide them
+installs cleanly and the feature reports itself as unavailable at runtime instead of
+failing the install. Both print a `[node] … (degrading)` line the first time they are
+needed, and neither blocks anything else.
+
+| Feature | Needs | Without it |
+|---------|-------|------------|
+| Code mode (`execute_typescript`) | Node **24+** — `isolated-vm` declares `engines.node >=24` and ships prebuilds for Node 24 and 26 only | The extension registers no code-mode tools. On Node < 24 npm **skips the package silently**, so the warning says so rather than reporting a missing package |
+| Image downscaling | `sharp`, which has a prebuilt binding for most platforms | Images over the vision-token budget are rejected instead of resized |
+
+### OS sandbox (Linux)
+
+On Linux the sandbox needs two binaries that are **not** npm packages:
+
+```bash
+sudo apt-get install -y bubblewrap socat    # Debian / Ubuntu / WSL
+```
+
+Without them `codent` starts normally but prints
+`OS sandbox initialization failed (Sandbox dependencies not available: …); shell commands run unsandboxed.`
+and every command runs **unsandboxed** — the agent still works, but commands are no longer
+restricted to the workspace. Set `SANDBOX_ENV=native` to skip the attempt and the warning.
+
 ## Configure
 
 First run opens a config editor and writes `.agents/config/models.json`. You can also use a

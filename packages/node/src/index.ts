@@ -37,6 +37,40 @@ import type { ChildProcess } from "node:child_process";
 export * from "./environment";
 
 // ============================================================================
+// Image resizing degradation
+// ============================================================================
+
+/**
+ * Set once the first resize failure is reported.
+ *
+ * `resizeImage` runs per oversized image, so an unguarded warning would repeat for
+ * every read in a session. One line is enough to tell the reader the capability is
+ * missing; the caller's own "image would overflow the budget" error carries the
+ * per-image detail.
+ */
+let warnedResizeUnavailable = false;
+
+/**
+ * Explain why `sharp` could not resize, in terms the reader can act on.
+ *
+ * `sharp` ships as an `optionalDependency`, so a platform with no prebuilt binding
+ * has the package omitted by npm rather than failing the install. That case has a
+ * fix (install the matching `@img/sharp-*` or build it) and should read differently
+ * from a decoder that rejected the specific bytes.
+ */
+function describeResizeFailure(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/Cannot find (package|module) 'sharp'/.test(message)) {
+    return (
+      `the optional dependency "sharp" is not installed. npm omits it on platforms ` +
+      `without a prebuilt binding, so images over the token budget are rejected instead ` +
+      `of downscaled.`
+    );
+  }
+  return message;
+}
+
+// ============================================================================
 // createNodeEnv
 // ============================================================================
 
@@ -190,7 +224,18 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
           .jpeg({ quality })
           .toBuffer();
         return new Uint8Array(resized);
-      } catch {
+      } catch (err) {
+        // Degrade to `null` (the caller then rejects the image and reports its
+        // size) — but say why. Returning `null` silently made the only
+        // completely unobservable failure in this file: an oversized image was
+        // refused with no hint that resizing was the missing capability, so a
+        // platform without a `sharp` prebuild was indistinguishable from a
+        // genuinely too-large image. Reported once: this is reached per image,
+        // and a chatty warning per read would be worse than none.
+        if (!warnedResizeUnavailable) {
+          warnedResizeUnavailable = true;
+          console.warn(`[node] image resizing unavailable (degrading): ${describeResizeFailure(err)}`);
+        }
         return null;
       }
     },
