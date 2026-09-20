@@ -1,8 +1,7 @@
-# workspace-panel Specification
+# workspace-panel Specification (delta)
 
-## Purpose
-TBD - created by archiving change extend-workspace-panel. Update Purpose after archive.
-## Requirements
+## MODIFIED Requirements
+
 ### Requirement: Multi-tab panel header
 
 The workspace panel SHALL have a header with a tab bar containing at least the "Preview", "Variants"
@@ -50,54 +49,7 @@ right. The file tree SHALL be navigable by keyboard.
 - **THEN** the expanded directories stay expanded
 - **AND** the tree does not reset to a loading placeholder
 
-### Requirement: Monaco save to WebContainer
-
-The Monaco editor SHALL save modified content back to the WebContainer filesystem.
-
-#### Scenario: Ctrl+S saves
-- **WHEN** the user presses Ctrl+S / Cmd+S while editing in Monaco
-- **THEN** the content is written to the WebContainer file via `fs.writeFile`
-- **AND** a brief "Saved" indicator appears
-
-#### Scenario: Tab switch auto-saves
-- **WHEN** the user switches from the Code tab to the Preview tab (or vice versa)
-- **THEN** the currently open file, if modified, is auto-saved to WebContainer before the tab switch
-
-### Requirement: Agent action auto-refresh
-
-The file tree and Monaco editor SHALL automatically refresh when the agent performs file writes or runs commands through CoreEnv, without causing infinite refresh loops.
-
-#### Scenario: File tree refreshes after agent write
-- **WHEN** the agent calls `fs.writeFile` via CoreEnv
-- **THEN** the file tree re-reads the affected directory
-- **AND** the editor, if showing the written file, re-reads the new content
-
-#### Scenario: File tree refreshes after agent command
-- **WHEN** an agent `run_command` completes
-- **THEN** the file tree re-reads the root directory
-- **AND** any open editor file is re-read from disk
-
-#### Scenario: No loop from refresh reads
-- **WHEN** the auto-refresh reads files from WebContainer
-- **THEN** these read operations MUST NOT trigger another auto-refresh
-- **AND** only write operations and command executions (from agent tools) trigger the refresh
-
-### Requirement: JetBrains icons for file tree
-
-The file tree SHALL use the existing JetBrains icon set in `public/assets/` for file and folder icons, mapping file extensions to the appropriate SVG icon.
-
-#### Scenario: Common file types have icons
-- **WHEN** a `.ts`, `.js`, `.tsx`, `.jsx`, `.css`, `.json`, `.md` file is shown
-- **THEN** the corresponding JetBrains icon SVG is displayed next to the filename
-
-#### Scenario: Unknown file types use fallback
-- **WHEN** a file type has no matching icon
-- **THEN** the generic `text_dark.svg` icon is used
-
-#### Scenario: Folder icons vary by name
-- **WHEN** a folder named `src`, `test`, `node_modules`, etc. is shown
-- **THEN** the corresponding JetBrains folder icon variant is displayed
-- **AND** unknown folders use the default `folder_dark.svg`
+## ADDED Requirements
 
 ### Requirement: Workspace Panel visibility
 
@@ -134,3 +86,16 @@ The Monaco editor SHALL use a theme derived from the shell design tokens.
 - **AND** the accent token is used for selection and focus
 - **AND** the language mode is auto-detected from the file extension
 - **AND** the editor is read-write (user can edit)
+
+## REMOVED Requirements
+
+### Requirement: Workspace Panel always visible
+
+**Reason**: The panel is no longer unconditionally visible. It is now a user preference that renders
+as a side pane on regular/wide viewports and as an overlay sheet on compact viewports, so
+"always visible" is false — and the requirement it stated (no mechanism may hide the panel) directly
+contradicts the responsive behaviour and the explicit dismissal path.
+
+**Migration**: Replaced by "Workspace Panel visibility" (above), which keeps the persisted
+visibility preference and the draggable splitter while adding the compact-viewport sheet. The
+`PreviewToggle` floating-button prohibition is carried over unchanged.
