@@ -65,7 +65,8 @@
     "validate:env-workspace": "pnpm run build && node scripts/validate-env-workspace.mjs",
     "validate:messages-delta": "pnpm run build && node scripts/validate-messages-delta.mjs",
     "validate:provider-proxy": "pnpm run build && node scripts/validate-provider-proxy.mjs",
-    "validate:remote-tool-catalog": "pnpm run build && node scripts/validate-remote-tool-catalog.mjs"
+    "validate:remote-tool-catalog": "pnpm run build && node scripts/validate-remote-tool-catalog.mjs",
+    "validate:remote-exec-degradation": "pnpm build && node scripts/validate-remote-exec-degradation.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",

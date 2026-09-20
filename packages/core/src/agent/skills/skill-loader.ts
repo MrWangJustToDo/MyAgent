@@ -76,6 +76,11 @@ export class SkillLoader {
 
   /**
    * Find SKILL.md files in a directory.
+   *
+   * Uses the recursive `env.fs` walk in both cases. It previously shelled out to
+   * `find "<path>" -name SKILL.md -type f 2>/dev/null`, which is POSIX-only: the stderr
+   * redirection is a syntax error under cmd.exe (`2>nul`) and PowerShell, so skill loading
+   * broke outright on Windows. The walk is also simpler — it needs no external binary.
    */
   private async findSkillFiles(dirPath: string): Promise<string[]> {
     const env = getEnv();
@@ -84,13 +89,7 @@ export class SkillLoader {
       return this.findSkillFilesRecursive(dirPath);
     }
 
-    const resolvedPath = env.path.join(this.rootPath, dirPath);
-    const findResult = await env.runCommand(`find "${resolvedPath}" -name "SKILL.md" -type f 2>/dev/null`);
-
-    return findResult.stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
+    return this.findSkillFilesRecursive(env.path.join(this.rootPath, dirPath));
   }
 
   /**

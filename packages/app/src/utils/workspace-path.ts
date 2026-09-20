@@ -8,9 +8,23 @@ export function joinWorkspacePath(...parts: string[]): string {
 
 /** Convert an absolute workspace path to a root-relative path for git status lookup. */
 export function workspaceRelativePath(rootPath: string, fullPath: string): string {
-  const root = rootPath.endsWith("/") ? rootPath.slice(0, -1) : rootPath;
-  if (fullPath === root) return ".";
+  // Normalize separators and strip a trailing one, so a Windows root (`C:\repo`) matches a
+  // forward-slash path and a root given as `/repo/` still works. The previous version only
+  // handled the trailing-slash case and compared raw strings, so a Windows root never matched
+  // and the function silently returned the absolute path — which the git-status lookup then
+  // could not resolve to an entry.
+  //
+  // The result is deliberately forward-slashed rather than echoing the input's separator.
+  // Every consumer keys on `/`: `workspace-diff-stats` normalizes its map keys with
+  // `replace(/\\/g, "/")`, and `FileTree` looks `diffStats` up with no fallback, so returning a
+  // `\`-separated relative path on Windows would miss every entry. The one consumer that needs
+  // the other flavour already tries both (`FileTree`'s git-status lookup falls back to the
+  // normalized form), which is the direction that tolerates either.
+  const normalize = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
+  const root = normalize(rootPath);
+  const full = normalize(fullPath);
+  if (full === root) return ".";
   const prefix = `${root}/`;
-  if (fullPath.startsWith(prefix)) return fullPath.slice(prefix.length);
+  if (full.startsWith(prefix)) return full.slice(prefix.length);
   return fullPath;
 }

@@ -144,6 +144,22 @@ export interface CommandResult {
 }
 
 /**
+ * Platform-native paths of the resolved command shell.
+ *
+ * Hosts rarely need this: tools must never branch on the shell binary directly. It
+exists so command-safety can pick the grammar matching the shell that will actually
+run a command, because the platform alone does not answer that question — a Windows
+host with Git Bash resolved at `C:\\Program Files\\Git\\bin\\bash.exe` genuinely runs
+bash, so `win32` must not imply "no bash grammar".
+ */
+export interface CoreEnvShellInfo {
+  /** Executable that will run command strings (e.g. `/bin/bash`, `powershell.exe`). */
+  shell?: string;
+  /** Absolute paths of every shell candidate the host resolved, most preferred first. */
+  candidates?: string[];
+}
+
+/**
  * Status of a background shell job started via {@link StartCommandOptions}.
  */
 export type CommandJobStatus = "running" | "exited" | "killed" | "failed";

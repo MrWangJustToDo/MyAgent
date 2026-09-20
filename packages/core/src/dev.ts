@@ -9,11 +9,24 @@ export * from "./dev/dev-models.js";
 
 // Command safety (internal validation exports — not part of public API)
 export { analyzeCommand, createAnalysisContext } from "./agent/tools/command-safety/command-analyzer.js";
+export { classifyShell, isShellParsable, resolveShellKind } from "./agent/tools/command-safety/command-parser.js";
+export { tokenizeCommandString } from "./agent/tools/command-safety/command-tokenizer.js";
+export { walkTree } from "./agent/tools/tree-tool.js";
+// Tool factories for behavioural validators. These live here (not in the published entry) so a
+// validator can exercise the real tool code with a stubbed CoreEnv — the alternative is testing
+// a replica, which is how a semantic regression (a deleted fallback rule) went unseen while the
+// regex-based shell-ism check stayed green.
+export { createGlobTool } from "./agent/tools/glob-tool.js";
+export { createGrepTool } from "./agent/tools/grep-tool.js";
+export { createTreeTool } from "./agent/tools/tree-tool.js";
+export { execArgsCapture, canExecArgs } from "./agent/tools/util/exec-args.js";
+export { fileUriToPath, formatLocation, formatLocationLink, pathToFileUri } from "./agent/lsp/shared/format.js";
 export {
   evaluateCommandApproval,
   SUBAGENT_DENY_MESSAGE,
 } from "./agent/tools/command-safety/command-approval-policy.js";
 export { commandPrefix, normalizedCommand } from "./agent/tools/command-safety/command-arity.js";
+export { defaultPath } from "./env.js";
 
 // Root-level modules
 export { Emitter } from "./utils/emitter.js";

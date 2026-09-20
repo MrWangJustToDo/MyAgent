@@ -6,6 +6,8 @@
  */
 
 import { SandboxManager, type SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 /** Domains commonly needed for local coding-agent workflows */
 const DEFAULT_ALLOWED_DOMAINS = [
@@ -56,10 +58,24 @@ function warnSandboxDowngrade(message: string): void {
 }
 
 /**
+ * Sensitive directories under the home directory that must stay unreadable.
+ *
+ * Stored as home-relative segments and joined at call time. They used to be emitted as literal
+ * `~/.ssh` strings, which relies on the sandbox library expanding `~` itself — an assumption
+ * about someone else's implementation rather than something this code controls.
+ */
+const DENIED_HOME_SEGMENTS = [".ssh", ".aws", ".config/gcloud", ".gnupg"];
+
+/**
  * Build sandbox-runtime config for a workspace root.
  * Paths use "." relative to spawn cwd (the workspace root).
+ *
+ * `denyRead` is derived from the real home directory. On Windows this is latent rather than
+ * active — `SandboxManager.isSupportedPlatform()` gates the sandbox off there — but resolving
+ * `~` explicitly keeps the rule correct wherever the sandbox does run.
  */
 export function buildOsSandboxConfig(_rootPath: string): SandboxRuntimeConfig {
+  const home = homedir();
   return {
     network: {
       allowedDomains: DEFAULT_ALLOWED_DOMAINS,
@@ -67,7 +83,7 @@ export function buildOsSandboxConfig(_rootPath: string): SandboxRuntimeConfig {
       allowLocalBinding: true,
     },
     filesystem: {
-      denyRead: ["~/.ssh", "~/.aws", "~/.config/gcloud", "~/.gnupg"],
+      denyRead: DENIED_HOME_SEGMENTS.map((segment) => join(home, segment)),
       allowWrite: [".", "/tmp", "/private/tmp", "/var/tmp"],
       denyWrite: [],
     },

@@ -3,8 +3,14 @@ import { z } from "zod";
 import { getEnv } from "../../env.js";
 
 import { defineServerTool } from "./runtime/define-tool.js";
+import { canExecArgs, execArgsCapture } from "./util/exec-args.js";
 import { OUTPUT_LIMITS, withDuration } from "./util/helpers.js";
-import { DEFAULT_EXCLUDE_DIRS, runSearchCommand } from "./util/search-command.js";
+import {
+  DEFAULT_EXCLUDE_DIRS,
+  isCommandNotFound,
+  SEARCH_COMMAND_TIMEOUT,
+  truncateLines,
+} from "./util/search-command.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { grepOutputSchema } from "./util/types.js";
 
@@ -81,7 +87,7 @@ function stripOuterQuotes(pattern: string): { pattern: string; hadQuotes: boolea
   return { pattern, hadQuotes };
 }
 
-function buildRgCommand(
+function buildRgArgs(
   pattern: string,
   searchPath: string,
   options: {
@@ -89,10 +95,10 @@ function buildRgCommand(
     include: string | undefined;
     outputMode: string;
     context: number;
-    fetchCount: number;
     searchPathIsFile: boolean;
+    fetchCount: number;
   }
-): string {
+): string[] {
   const args: string[] = ["--color=never"];
 
   if (options.ignoreCase) {
@@ -116,23 +122,114 @@ function buildRgCommand(
   // since rg does not brace-expand its own --glob values.
   if (options.include && !options.searchPathIsFile) {
     for (const glob of expandBraceGlobs(options.include)) {
-      args.push("--glob", `"${glob}"`);
+      args.push("--glob", glob);
     }
   }
 
   if (!options.searchPathIsFile) {
     for (const dir of DEFAULT_EXCLUDE_DIRS) {
-      args.push("--glob", `"!**/${dir}/**"`);
+      args.push("--glob", `!**/${dir}/**`);
     }
   }
 
-  const escapedPattern = pattern.replace(/"/g, '\\"');
-  args.push("--", `"${escapedPattern}"`, searchPath);
-
-  return `set -o pipefail; rg ${args.join(" ")} 2>/dev/null | head -n ${options.fetchCount}`;
+  // `--` then the pattern as a single argv entry: no quoting, no escaping, and no shell
+  // to reinterpret it, so a pattern containing quotes or metacharacters arrives intact.
+  //
+  // `--max-count` bounds the work at the source. Truncation to `fetchCount` happens in JS
+  // either way (there is no `| head` any more), but without a source-side cap a search in a
+  // large repository streams every match before all but the first few are discarded.
+  args.push("--max-count", String(options.fetchCount));
+  args.push("--", pattern, searchPath);
+  return args;
 }
 
-function buildGrepCommand(
+function buildGrepArgs(
+  pattern: string,
+  searchPath: string,
+  options: {
+    ignoreCase: boolean;
+    include: string | undefined;
+    outputMode: string;
+    context: number;
+    searchPathIsFile: boolean;
+    fetchCount: number;
+  }
+): string[] {
+  const args: string[] = ["--color=never"];
+
+  // Use -r (recursive) only when searching a directory; for a single file, plain grep
+  // avoids conflicts between --include and a direct file path.
+  if (!options.searchPathIsFile) {
+    args.push("-r");
+  }
+
+  if (options.ignoreCase) {
+    args.push("-i");
+  }
+
+  if (options.outputMode === "files_with_matches") {
+    args.push("-l");
+  } else if (options.outputMode === "count") {
+    args.push("-c");
+  } else {
+    args.push("-n");
+  }
+
+  if (options.outputMode === "content" && options.context > 0) {
+    args.push("-C", String(options.context));
+  }
+
+  // --include and --exclude-dir are only meaningful for directory searches; skip them when
+  // searching a single file to avoid conflicts. Brace groups are expanded to one --include
+  // per alternative since grep does not brace-expand its own --include values.
+  if (options.include && !options.searchPathIsFile) {
+    for (const glob of expandBraceGlobs(options.include)) {
+      args.push("--include", glob);
+    }
+  }
+
+  if (!options.searchPathIsFile) {
+    for (const dir of DEFAULT_EXCLUDE_DIRS) {
+      args.push("--exclude-dir", dir);
+    }
+  }
+
+  args.push("-E", pattern, searchPath);
+  // `-m` restores the source-side cap the previous `| head -n` pipeline provided (task 2.7 lists
+  // pagination parity as a requirement). Without it the fallback reads the entire tree and the
+  // JS-side truncation discards almost all of it — on GNU grep this is a bigger deal than with
+  // ripgrep because there is no default match limit.
+  args.push("-m", String(options.fetchCount));
+  return args;
+}
+
+/**
+ * Quote one argument for the legacy shell path.
+ *
+ * Reached only when the host cannot execute with an argv vector (a remote environment on a
+ * server predating the exec-file route). POSIX quoting is kept because that is the
+ * assumption the previous implementation already made — but no `pipefail` prefix, no stderr
+ * redirection, and no `head` pipeline: truncation stays in JS on both paths.
+ */
+function quoteForShell(arg: string): string {
+  if (/^[A-Za-z0-9_\-./=*?[\]]+$/.test(arg)) return arg;
+  return `'${arg.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Parse a positive integer line number; rejects NaN (JSON.stringify(NaN) → null).
+ */
+/**
+ * Run the content search, preferring ripgrep and falling back to grep.
+ *
+ * Availability drives the choice: binaries are probed rather than relying on exit code 127,
+ * which is POSIX-only for "command not found" (cmd.exe reports 9009, PowerShell reports 1),
+ * so the code-based fallback never fired on Windows.
+ *
+ * Truncation to `fetchCount` happens in JS on both paths, replacing the previous `head`
+ * pipeline — the shell is never responsible for correctness.
+ */
+async function runGrepSearch(
   pattern: string,
   searchPath: string,
   options: {
@@ -143,59 +240,28 @@ function buildGrepCommand(
     fetchCount: number;
     searchPathIsFile: boolean;
   }
-): string {
-  let command = "grep";
-
-  // Use -r (recursive) only when searching a directory; for a single file,
-  // plain grep avoids conflicts between --include and a direct file path.
-  if (!options.searchPathIsFile) {
-    command += " -r";
+): Promise<string> {
+  if (canExecArgs()) {
+    const rgStdout = await execArgsCapture("rg", buildRgArgs(pattern, searchPath, options));
+    if (rgStdout !== undefined) return truncateLines(rgStdout, options.fetchCount);
+    const grepStdout = await execArgsCapture("grep", buildGrepArgs(pattern, searchPath, options));
+    if (grepStdout !== undefined) return truncateLines(grepStdout, options.fetchCount);
+    // Neither binary is available — an empty result is the honest answer.
+    return "";
   }
 
-  if (options.ignoreCase) {
-    command += " -i";
-  }
-
-  if (options.outputMode === "files_with_matches") {
-    command += " -l";
-  } else if (options.outputMode === "count") {
-    command += " -c";
-  } else {
-    command += " -n";
-  }
-
-  command += " --color=never";
-  command += ` -m ${options.fetchCount}`;
-
-  if (options.outputMode === "content" && options.context > 0) {
-    command += ` -C ${options.context}`;
-  }
-
-  // --include and --exclude-dir are only meaningful for directory searches;
-  // skip them when searching a single file to avoid conflicts.
-  // Brace groups like `*.{ts,tsx}` are expanded to one --include per alternative
-  // since grep does not brace-expand its own --include values.
-  if (options.include && !options.searchPathIsFile) {
-    for (const glob of expandBraceGlobs(options.include)) {
-      command += ` --include="${glob}"`;
-    }
-  }
-
-  if (!options.searchPathIsFile) {
-    for (const dir of DEFAULT_EXCLUDE_DIRS) {
-      command += ` --exclude-dir="${dir}"`;
-    }
-  }
-
-  const escapedPattern = pattern.replace(/"/g, '\\"');
-  command += ` -E "${escapedPattern}" ${searchPath}`;
-
-  return `set -o pipefail; ${command} 2>/dev/null | head -n ${options.fetchCount}`;
+  // Legacy path for hosts without argument-vector execution (task 1.7): the same argv,
+  // joined and quoted, with truncation still in JS.
+  const env = getEnv();
+  const timeout = SEARCH_COMMAND_TIMEOUT;
+  const rgArgv = buildRgArgs(pattern, searchPath, options).map(quoteForShell);
+  const rgResult = await env.runCommand(`rg ${rgArgv.join(" ")}`, { timeout });
+  if (!isCommandNotFound(rgResult.exitCode)) return truncateLines(rgResult.stdout, options.fetchCount);
+  const grepArgv = buildGrepArgs(pattern, searchPath, options).map(quoteForShell);
+  const grepResult = await env.runCommand(`grep ${grepArgv.join(" ")}`, { timeout });
+  return truncateLines(grepResult.stdout, options.fetchCount);
 }
 
-/**
- * Parse a positive integer line number; rejects NaN (JSON.stringify(NaN) → null).
- */
 function parseLineNumber(value: string): number | null {
   const lineNumber = Number(value);
   if (!Number.isFinite(lineNumber) || lineNumber < 0 || !Number.isInteger(lineNumber)) {
@@ -370,10 +436,7 @@ export const createGrepTool = () => {
           searchPathIsFile,
         };
 
-        const rawOutput = await runSearchCommand(
-          buildRgCommand(searchPattern, searchPath, searchOptions),
-          buildGrepCommand(searchPattern, searchPath, searchOptions)
-        );
+        const rawOutput = await runGrepSearch(searchPattern, searchPath, searchOptions);
 
         const lines = rawOutput
           .split("\n")

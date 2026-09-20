@@ -3,15 +3,102 @@ import { z } from "zod";
 import { getEnv } from "../../env.js";
 
 import { defineServerTool } from "./runtime/define-tool.js";
+import { canExecArgs, execArgs } from "./util/exec-args.js";
 import { OUTPUT_LIMITS, truncateString, withDuration } from "./util/helpers.js";
+import { isCommandNotFound, quoteForShell } from "./util/search-command.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
 import { toolOutputBaseSchema } from "./util/types.js";
+
+import type { CoreEnvFs } from "../../env.js";
 
 /** Maximum characters for tree output */
 const MAX_TREE_CHARS = OUTPUT_LIMITS.MAX_CONTENT_CHARS;
 
 /** Maximum entries to show in tree */
 const MAX_TREE_ENTRIES = OUTPUT_LIMITS.MAX_ARRAY_ITEMS;
+
+/** Options for the native directory walk used when no `tree` binary is available. */
+export interface WalkTreeOptions {
+  maxDepth: number;
+  dirsOnly: boolean;
+  showHidden: boolean;
+  pattern: string | undefined;
+  ignore: string[];
+  /** Injectable for testing; defaults to the registered environment's filesystem. */
+  fs?: CoreEnvFs;
+  /** Injectable for testing; the separator to join with, so win32 paths can be walked on Linux. */
+  join?: (parent: string, child: string) => string;
+}
+
+/**
+ * Walk a directory tree, returning sorted root-relative paths.
+ *
+ * Used as the `tree` fallback. Implemented over `env.fs` rather than `find` because the
+ * `-maxdepth` flag the previous version relied on is a GNU extension that BSD `find` (macOS)
+ * and BusyBox reject — a fallback that only works on one platform is not a fallback.
+ *
+ * Depth counts entries below the root, matching `tree -L <n>`. The root itself is not an
+ * entry, so an empty (or fully filtered) directory yields an empty list, which is the honest
+ * answer and what `tree` prints for such a directory.
+ */
+export async function walkTree(rootPath: string, options: WalkTreeOptions): Promise<string[]> {
+  const fs = options.fs ?? getEnv().fs;
+  const join = options.join ?? ((parent: string, child: string) => `${parent.replace(/[/\\]+$/, "")}/${child}`);
+  const results: string[] = [];
+
+  const visit = async (dir: string, relativeDir: string, depth: number): Promise<void> => {
+    if (depth > options.maxDepth || results.length >= MAX_TREE_ENTRIES) return;
+
+    let entries;
+    try {
+      entries = await fs.readdir(dir);
+    } catch {
+      // Unreadable directory (permissions, race) is skipped rather than failing the whole
+      // walk — `find` printed a warning and continued, and a partial tree is more useful than
+      // an error.
+      return;
+    }
+
+    for (const entry of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
+      if (results.length >= MAX_TREE_ENTRIES) return;
+
+      const isDirectory = entry.type === "directory";
+      const relative = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+
+      // Pruning filters, matching `find -not -path '*/X/*'`: a hidden or ignored entry is
+      // removed *with its subtree*. This is what makes them different from the two filters
+      // below, which only decide whether to report an entry.
+      if (!options.showHidden && entry.name.startsWith(".")) continue;
+      if (options.ignore.some((ig) => entry.name === ig)) continue;
+
+      // Report filters. These MUST NOT skip the recursion: `find -name '*.ts'` descends into
+      // every directory and matches at any depth, so a directory whose own name does not match
+      // is still walked. Pruning here instead silently yielded an empty tree for any pattern
+      // that no directory happens to match (e.g. `*.ts`).
+      const reported =
+        !(options.dirsOnly && !isDirectory) && !(options.pattern && !matchesGlobPattern(entry.name, options.pattern));
+      if (reported) results.push(relative);
+
+      if (isDirectory) await visit(join(dir, entry.name), relative, depth + 1);
+    }
+  };
+
+  await visit(rootPath, "", 1);
+  return results.sort().slice(0, MAX_TREE_ENTRIES);
+}
+
+/**
+ * Match a basename against the glob `tree -P` accepts: `*` and `?` wildcards, literal rest.
+ *
+ * A bare pattern with no wildcard is an exact match, which is also how `tree -P` treats it.
+ */
+function matchesGlobPattern(name: string, pattern: string): boolean {
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*")
+    .replace(/\?/g, ".");
+  return new RegExp(`^${escaped}$`).test(name);
+}
 
 /**
  * Creates a tree tool for displaying directory structure.
@@ -59,65 +146,80 @@ export const createTreeTool = () => {
         const rootPath = path ?? ".";
         const depth = maxDepth ?? 3;
 
-        // Build tree command (try 'tree' first, fall back to 'find' based approach)
-        let treeCommand = `tree "${rootPath}" -L ${depth}`;
+        // Build `tree` arguments. argv, not a command string — the previous version
+        // appended `2>/dev/null` and quoted values into a shell command, which is a parse
+        // error outside POSIX shells (cmd.exe uses `2>nul`, PowerShell uses neither form).
+        const treeArgs: string[] = [rootPath, "-L", String(depth)];
 
         if (!showHidden) {
-          treeCommand += " -I '.*'";
+          treeArgs.push("-I", ".*");
         }
 
         if (dirsOnly) {
-          treeCommand += " -d";
+          treeArgs.push("-d");
         }
 
         if (pattern) {
-          treeCommand += ` -P '${pattern}'`;
+          treeArgs.push("-P", pattern);
         }
 
         if (ignore && ignore.length > 0) {
-          const ignorePattern = ignore.join("|");
-          treeCommand += ` -I '${ignorePattern}'`;
+          treeArgs.push("-I", ignore.join("|"));
         }
 
-        // Add file count summary
-        treeCommand += " --noreport";
+        treeArgs.push("--noreport");
 
-        const env = getEnv();
-        let result = await env.runCommand(treeCommand + " 2>/dev/null");
+        // `exitCode` is deliberately not carried: the fallback below keys on `missing`/`killed`
+        // only, and `tree` exits non-zero in normal operation (see the comment there), so a
+        // status field here would be write-only.
+        let result: { stdout: string; stderr: string; missing: boolean; killed: boolean };
+        if (canExecArgs()) {
+          const argsResult = await execArgs("tree", treeArgs);
+          result = {
+            stdout: argsResult.stdout,
+            stderr: argsResult.stderr,
+            missing: argsResult.missing,
+            killed: argsResult.killed,
+          };
+        } else {
+          const env = getEnv();
+          const envResult = await env.runCommand(`tree ${treeArgs.map(quoteForShell).join(" ")}`);
+          // The string path has no kill signal of its own; a shell reports a killed child as a
+          // non-zero status, so there is nothing extra to distinguish here.
+          result = {
+            stdout: envResult.stdout,
+            stderr: envResult.stderr,
+            missing: isCommandNotFound(envResult.exitCode),
+            killed: false,
+          };
+        }
 
-        // If tree command not available, use find-based fallback
-        if (result.exitCode !== 0 || result.stdout.trim() === "") {
-          // Fallback using find command
-          let findCommand = `find "${rootPath}" -maxdepth ${depth}`;
-
-          if (dirsOnly) {
-            findCommand += " -type d";
-          }
-
-          if (!showHidden) {
-            findCommand += " -not -path '*/.*'";
-          }
-
-          if (pattern) {
-            findCommand += ` -name '${pattern}'`;
-          }
-
-          if (ignore && ignore.length > 0) {
-            for (const ig of ignore) {
-              findCommand += ` -not -path '*/${ig}/*' -not -name '${ig}'`;
-            }
-          }
-
-          findCommand += ` | sort | head -${MAX_TREE_ENTRIES}`;
-
-          result = await env.runCommand(findCommand);
-
-          if (result.exitCode !== 0) {
-            throw new Error(`Failed to list directory tree: ${result.stderr}`);
-          }
-
-          // Convert find output to tree-like format
-          const paths = result.stdout.split("\n").filter((p) => p.trim());
+        // Fall back when `tree` could not run. Two conditions, deliberately narrow:
+        //
+        //   - `missing` — the binary is not installed
+        //   - `killed` — the call was terminated, so there is no usable output
+        //
+        // A non-zero exit is NOT one of them. `tree` exits non-zero in normal operation
+        // (the manpage notes that `-I`/`-P`/`--filelimit` pruning "will lead to incorrect
+        // file/directory count reports", and it also warns on unreadable directories), and
+        // its stdout is still the tree the user asked for. Falling back there would replace
+        // it with `walkTree`, whose `-I`-equivalent ignore only matches exact names — a
+        // different tree with a different meaning. An empty stdout is an answer too: a bare
+        // directory legitimately produces none.
+        if (result.missing || result.killed) {
+          // The fallback walks the filesystem directly instead of spawning `find`.
+          //
+          // `-maxdepth` is the reason: it is a GNU extension. BSD `find` (macOS) and BusyBox
+          // reject it outright, so the fallback could not work on two of the three platforms
+          // this tool runs on. `env.fs.readdir` is the same primitive the skill loader already
+          // uses, and it removes an external dependency rather than adding a platform branch.
+          const paths = await walkTree(rootPath, {
+            maxDepth: depth,
+            dirsOnly: dirsOnly ?? false,
+            showHidden: showHidden ?? false,
+            pattern,
+            ignore: ignore ?? [],
+          });
           const rawTree = formatAsTree(paths, rootPath);
 
           const cached = await maybeCacheOutput(rawTree, `${toolCallId}-tree`);

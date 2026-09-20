@@ -49,7 +49,9 @@
     "dev": "tsdown --watch",
     "typecheck": "tsc --noEmit",
     "validate:lsp-command-exists": "pnpm run build && node scripts/validate-lsp-command-exists.mjs",
-    "validate:code-mode-assembly": "node scripts/validate-code-mode-assembly.mjs"
+    "validate:command-lookup": "pnpm run build && node scripts/validate-command-lookup.mjs",
+    "validate:code-mode-assembly": "node scripts/validate-code-mode-assembly.mjs",
+    "validate:exec-file-status": "pnpm build && node scripts/validate-exec-file-status.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sandbox-runtime": "^0.0.75",

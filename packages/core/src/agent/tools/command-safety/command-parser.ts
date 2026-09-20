@@ -1,5 +1,5 @@
 /**
- * Command parser — parse shell command strings into an AST via tree-sitter bash.
+ * Command parser — parse shell command strings into an AST via tree-sitter.
  *
  * Uses the existing {@link TreeSitterManager} (web-tree-sitter WASM) with the
  * `bash` grammar, mirroring how opencode parses shell commands
@@ -7,9 +7,11 @@
  * singleton built exclusively from CoreEnv (via `getEnv()`), so it stays
  * runtime-agnostic: no direct `process`/`os`/global access.
  *
- * Only bash is supported for now. PowerShell/cmd parsing (opencode supports
- * tree-sitter-powershell) is intentionally not ported — bash is the primary
- * host shell.
+ * Only the bash grammar ships today. PowerShell/cmd are recognised as distinct shells and
+ * reported as unparsed rather than being fed to the bash grammar, which would mis-read them:
+ * a Windows command that "parses" as bash produces wrong classification, and one that does
+ * not parse used to produce an empty command list that silently denied subagents every
+ * `run_command`. See `command-analyzer.ts` for the table-driven fallback.
  */
 
 import { getEnv, defaultPath } from "../../../env.js";
@@ -17,6 +19,61 @@ import { TreeSitterManager } from "../../lsp/tree-sitter/parser-manager.js";
 
 import type { TreeSitterEnv } from "../../lsp/tree-sitter/parser-manager.js";
 import type { Node, Tree } from "web-tree-sitter";
+
+// ============================================================================
+// Shell kinds
+// ============================================================================
+
+/**
+ * Shell family a command will run under.
+ *
+ * `unknown` is a real state, not a default to be guessed: when the host does not report its
+ * shell, the analysis must stay conservative rather than assume bash.
+ */
+export type ShellKind = "bash" | "powershell" | "cmd" | "unknown";
+
+/** Grammars this build can actually parse with. PowerShell/cmd are not included. */
+const PARSABLE_SHELLS: ReadonlySet<ShellKind> = new Set<ShellKind>(["bash"]);
+
+/** Whether a grammar is bundled for this shell kind. */
+export function isShellParsable(kind: ShellKind): boolean {
+  return PARSABLE_SHELLS.has(kind);
+}
+
+/**
+ * Classify a shell path into a shell family.
+ *
+ * Matches on the executable name so the result does not depend on path separators or on
+ * which absolute path the host resolved (`/bin/bash`, `C:\\Program Files\\Git\\bin\\bash.exe`,
+ * and a bare `bash` must all classify identically).
+ */
+export function classifyShell(shell: string | undefined): ShellKind {
+  if (!shell) return "unknown";
+  const name = shell.toLowerCase().split(/[\\/]/).pop() ?? "";
+  const bare = name.replace(/\.exe$/, "");
+  if (["bash", "sh", "zsh", "dash", "ksh", "git-bash", "busybox"].includes(bare)) return "bash";
+  if (["pwsh", "powershell"].includes(bare)) return "powershell";
+  if (["cmd", "command"].includes(bare)) return "cmd";
+  return "unknown";
+}
+
+/**
+ * Resolve which shell a command will run under, from the host's own resolution.
+ *
+ * Platform alone is deliberately not used: a Windows host with Git Bash resolved genuinely
+ * runs bash, so `win32` must not imply "no bash grammar". Returns `unknown` when the host
+ * does not report a shell, which callers must treat conservatively.
+ */
+export async function resolveShellKind(): Promise<ShellKind> {
+  const env = getEnv();
+  if (!env.getShellInfo) return "unknown";
+  try {
+    const info = await env.getShellInfo();
+    return classifyShell(info.shell);
+  } catch {
+    return "unknown";
+  }
+}
 
 // ============================================================================
 // Parsed command shape
@@ -77,6 +134,10 @@ async function getCommandTreeSitterManager(): Promise<TreeSitterManager | null> 
 /**
  * Parse a shell command string into a tree-sitter AST, or null when
  * tree-sitter is unavailable or parsing fails. Callers treat null conservatively.
+ *
+ * Only call this for a bash shell — see {@link isShellParsable}. It is named `parseCommandTree`
+ * rather than `parseBashCommandTree` for call-site stability, but the grammar is bash and a
+ * non-bash command will either fail to parse or parse into misleading nodes.
  */
 export async function parseCommandTree(command: string): Promise<Tree | null> {
   if (!command || !command.trim()) return null;

@@ -27,6 +27,18 @@ const execSchema = z.object({
     .optional(),
 });
 
+const execFileSchema = z.object({
+  file: z.string(),
+  args: z.array(z.string()).default([]),
+  options: z
+    .object({
+      cwd: z.string().optional(),
+      timeout: z.number().int().min(0).optional(),
+      env: z.record(z.string(), z.string().optional()).optional(),
+    })
+    .optional(),
+});
+
 const startCommandSchema = z.object({
   command: z.string(),
   options: z
@@ -90,6 +102,34 @@ export const commandRoutes = new Hono()
     try {
       const { command, options } = c.req.valid("json");
       const result = await getEnv().exec(command, options);
+      return c.json(result);
+    } catch (err) {
+      const { body, status } = handleCommandError(err);
+      return c.json(body, status);
+    }
+  })
+  .post("/exec-file", zValidator("json", execFileSchema), async (c) => {
+    try {
+      const { file, args, options } = c.req.valid("json");
+      const coreEnv = getEnv();
+      // Feature-detect rather than assume: a server whose environment has no process
+      // runtime cannot exec, and the client falls back to the string path in that case.
+      if (!coreEnv.execFile) {
+        return c.json(
+          {
+            error: true,
+            name: "Error",
+            code: "unsupported",
+            message: "Argument-vector execution not supported on this server.",
+          },
+          400
+        );
+      }
+      const result = await coreEnv.execFile(file, args, {
+        cwd: options?.cwd,
+        timeout: options?.timeout,
+        env: options?.env,
+      });
       return c.json(result);
     } catch (err) {
       const { body, status } = handleCommandError(err);

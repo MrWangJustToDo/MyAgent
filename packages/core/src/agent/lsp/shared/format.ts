@@ -6,7 +6,13 @@ function uriToPath(uri: string): string {
   try {
     const url = new URL(uri);
     if (url.protocol === "file:") {
-      return decodeURIComponent(url.pathname);
+      const pathname = decodeURIComponent(url.pathname);
+      // `new URL("file:///C:/dir/f.ts").pathname` is `/C:/dir/f.ts` — a leading separator
+      // before a Windows drive letter, which is not a valid path. Left alone it produced
+      // `/C:/...` in every LSP location string, and the root-strip below could never match a
+      // `C:\...` root, so locations rendered as absolute POSIX-looking paths.
+      if (/^\/[A-Za-z]:/.test(pathname)) return pathname.slice(1);
+      return pathname;
     }
     return uri;
   } catch {
@@ -14,12 +20,22 @@ function uriToPath(uri: string): string {
   }
 }
 
+/** Normalize separators so a Windows root and a POSIX-style path can be compared. */
+function normalizeSeparators(p: string): string {
+  return p.replace(/\\/g, "/");
+}
+
 /** Convert a file URI to a filesystem path (relative to rootDir when possible). */
 export function fileUriToPath(uri: string, rootDir: string): string {
   const abs = uriToPath(uri);
   try {
-    if (abs.startsWith(rootDir)) {
-      return abs.slice(rootDir.length).replace(/^[\\/]/, "") || ".";
+    // Compare on normalized separators and without a trailing separator, so a `C:\repo` root
+    // matches `C:/repo/f.ts` and `/repo/` matches `/repo/f.ts`.
+    const normalizedRoot = normalizeSeparators(rootDir).replace(/\/+$/, "");
+    const normalizedAbs = normalizeSeparators(abs);
+    if (normalizedAbs === normalizedRoot) return ".";
+    if (normalizedAbs.startsWith(`${normalizedRoot}/`)) {
+      return normalizedAbs.slice(normalizedRoot.length + 1);
     }
   } catch {
     // fall through
@@ -43,9 +59,14 @@ export function formatLocationLink(link: LocationLink, rootDir: string): string 
   return `${path}:${line}:${col}`;
 }
 
-/** Convert a file path to a `file://` URI. */
+/**
+ * Convert a file path to a `file://` URI.
+ *
+ * Windows drive paths need three slashes (`file:///C:/dir/f.ts`): two would make `C:` parse as
+ * the host. POSIX paths already start with `/`, so two slashes are correct for them.
+ */
 export function pathToFileUri(absPath: string): string {
-  const normalized = absPath.replace(/\\/g, "/");
+  const normalized = normalizeSeparators(absPath);
   if (normalized.startsWith("/")) {
     return `file://${normalized}`;
   }

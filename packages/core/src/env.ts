@@ -21,6 +21,7 @@ import { commandJobRegistry } from "./agent/tools/util/command-job-registry.js";
 import type { LspServerConfig, LspConnection } from "./agent/lsp/lsp-transport.js";
 import type {
   CommandResult,
+  CoreEnvShellInfo,
   FileEntry,
   RunCommandOptions,
   StartCommandHandle,
@@ -151,7 +152,35 @@ export interface CoreEnvExecOptions {
 export interface CoreEnvExecResult {
   stdout: string;
   stderr: string;
+  /**
+   * Process exit status, or `null` when the process never produced one.
+   *
+   * `null` is a real answer, not a placeholder: a killed child (timeout or abort) has no exit
+   * status, and a binary that could not be launched never ran. Reporting a made-up number for
+   * those cases is what let a timeout be read as the status `127` — which in turn read as
+   * "binary not found". A host that cannot distinguish should say `null`, never a guess.
+   */
   code: number | null;
+  /**
+   * True when the binary could not be launched at all — absent (`ENOENT`) or not executable
+   * (`EACCES`). Distinct from a non-zero exit: the program never ran.
+   */
+  missing?: boolean;
+  /** True when the child was terminated by a signal (timeout, abort, crash). */
+  killed?: boolean;
+}
+
+/**
+ * Options for {@link CoreEnv.execFile}.
+ *
+ * Deliberately does not include a shell: the point of `execFile` is that no shell is
+ * involved, so arguments are never re-parsed, re-quoted, or subject to expansion.
+ */
+export interface CoreEnvExecFileOptions {
+  cwd?: string;
+  timeout?: number;
+  env?: Record<string, string | undefined>;
+  signal?: AbortSignal;
 }
 
 // ============================================================================
@@ -250,6 +279,29 @@ export interface CoreEnv {
 
   /** Execute a simple shell command */
   exec(command: string, options?: CoreEnvExecOptions): Promise<CoreEnvExecResult>;
+
+  /**
+   * Execute a process directly with an explicit argument vector — no shell involved.
+   *
+   * Exists so tools can launch external binaries without constructing shell command
+   * strings. String-based execution cannot be made portable: shell syntax that is valid
+   * for one shell is a parse error for another (e.g. `set -o pipefail` is not a
+   * PowerShell option), so any tool that builds a command string has silently committed
+   * to a single shell family. Arguments passed here are never re-parsed, quoted, or
+   * expanded.
+   *
+   * Optional — hosts without a process runtime omit it, and tools must feature-detect and
+   * fall back rather than assume it exists.
+   */
+  execFile?(file: string, args: string[], options?: CoreEnvExecFileOptions): Promise<CoreEnvExecResult>;
+
+  /**
+   * The shell this host will use to run command strings (optional).
+   *
+   * Used by command-safety to select a matching parser. Not a substitute for
+   * {@link execFile}: it describes how `runCommand` behaves, not how tools should exec.
+   */
+  getShellInfo?(): Promise<CoreEnvShellInfo>;
 
   /** HTTP fetch (replaces global fetch for runtime agnosticism) */
   fetch(input: string | URL | Request, init?: RequestInit): Promise<Response>;

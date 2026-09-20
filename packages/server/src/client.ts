@@ -174,6 +174,48 @@ function serializeRunOptions(options?: RunCommandOptions) {
 }
 
 /**
+ * Ask the server whether it implements the argv-execution route.
+ *
+ * The probe sends a binary name that cannot exist (`codent-probe-…`, namespaced so it cannot
+ * collide with anything on the server's PATH). This is what makes the answer trustworthy on a
+ * *real* current server, not just on the fakes a validator stands up:
+ *
+ *   - a server with the route resolves the request through its env; a missing binary is a
+ *     normal outcome there, so the route answers `200` with `missing: true` and support is
+ *     confirmed
+ *   - a server from an earlier release has no route: `404` with a plain-text body, so
+ *     `res.json()` fails
+ *   - a proxy or a different service answers with HTML, or anything else in the 4xx range
+ *     that means "no such route"
+ *
+ * An earlier probe sent `file: ""`, which a real server turned into a Node `execFile("")`
+ * throw → a `500` — read here as "not unsupported", so the capability was silently absent for
+ * every remote client. A `5xx` is deliberately NOT treated as "unsupported": that is a working
+ * server failing, and silently degrading would hide it. Only "this server does not have the
+ * route" counts.
+ */
+async function probeExecFileSupport(client: ReturnType<typeof hc<AppType>>, baseUrl: string): Promise<boolean> {
+  try {
+    const res = await client.command["exec-file"].$post({
+      json: { file: "codent-probe-exec-file-absent", args: [] },
+    });
+    if (res.ok) return true;
+    // A server that knows the route but rejects this probe (a 400 for a bad file name, say)
+    // still has the route, which is all this needs to establish.
+    if (res.status === 400) {
+      const payload = (await res.json().catch(() => null)) as { code?: string } | null;
+      return payload?.code !== "unsupported";
+    }
+    return false;
+  } catch {
+    // A transport-level failure (DNS, connection refused, HTML body) is not evidence of
+    // support, and must not break env creation.
+    console.warn(`[server] could not probe argv execution at ${baseUrl}; falling back to shell commands`);
+    return false;
+  }
+}
+
+/**
  * Create a {@link CoreEnv} that delegates to a remote CoreEnv HTTP server via Hono RPC.
  *
  * Synchronous utilities (`path`, `byteLength`, `base64*`) use core defaults locally.
@@ -191,6 +233,20 @@ export async function createRemoteEnv(serverUrl: string): Promise<CoreEnv> {
   );
 
   const serverSep = info.sep || "/";
+
+  // Probe once whether the server can execute an argv directly, and only advertise `execFile`
+  // when it can.
+  //
+  // The previous version always defined `execFile` and mapped only `400 + code:"unsupported"`
+  // to `null`. A server from an earlier release answers an unknown route with a `404` and a
+  // plain-text body, so `res.json()` failed and the error propagated out of the call: the tools
+  // saw a function to feature-detect, took the argv path, and threw instead of falling back to
+  // the string path — the opposite of the "degrade rather than break" contract.
+  //
+  // Probing up front means the capability is a property of the env rather than a question asked
+  // per call, which is also what `canExecArgs()` assumes when it checks for the function.
+  const supportsExecFile = await probeExecFileSupport(client, baseUrl);
+
   const path: CoreEnvPath =
     serverSep === "/"
       ? defaultPath
@@ -234,6 +290,29 @@ export async function createRemoteEnv(serverUrl: string): Promise<CoreEnv> {
       const res = await client.command.exec.$post({ json: { command, options } });
       return await unwrap<CoreEnvExecResult>(res);
     },
+
+    // Argument-vector execution over the same transport as the other command primitives.
+    //
+    // Undefined when the probed capability is missing, so `canExecArgs()` is false and the tools
+    // take the string path. Defined only when the server really has the route, so a call cannot
+    // throw the way it did when the function always existed.
+    execFile: supportsExecFile
+      ? ((async (file: string, args: string[], options?): Promise<CoreEnvExecResult | null> => {
+          const res = await client.command["exec-file"].$post({
+            json: { file, args, options: { cwd: options?.cwd, timeout: options?.timeout, env: options?.env } },
+          });
+          if (!res.ok) {
+            // The capability was probed at construction, so an `unsupported` answer here is a
+            // server that changed underneath us. Returning null keeps the tools' existing
+            // fallback behaviour instead of turning it into an exception; the other calls have
+            // already had their chance by this point, so this is the graceful ending.
+            const payload = (await res.json().catch(() => null)) as { code?: string } | null;
+            if (payload?.code === "unsupported" || res.status === 404) return null;
+            return await unwrap<CoreEnvExecResult>(res);
+          }
+          return await unwrap<CoreEnvExecResult>(res);
+        }) as CoreEnv["execFile"])
+      : undefined,
 
     startCommand: async (command: string, options?: StartCommandOptions): Promise<StartCommandHandle> => {
       const res = await client.command.start.$post({

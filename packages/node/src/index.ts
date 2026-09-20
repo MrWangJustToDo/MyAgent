@@ -16,15 +16,17 @@
 import { destroyAllCommandJobs } from "@codent/core";
 import { stdioTransport } from "@tanstack/ai-mcp/stdio";
 import mime from "mime-types";
-import { exec } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { scanPathForCommand } from "./environment/command-lookup.js";
 import { createNodeIsolateDriver } from "./environment/isolate-driver.js";
 import { resolveLocalEnvironmentMode } from "./environment/local.js";
 import { createNativeFilesystem } from "./environment/native-fs.js";
 import { runNativeCommand, startNativeCommand } from "./environment/native-run.js";
 import { resetOsSandbox } from "./environment/os-sandbox.js";
+import { findGitBash, getShellConfig } from "./environment/shell.js";
 import { locateTreeSitterGrammar } from "./lsp/grammar.js";
 import { resolveCommandPath } from "./lsp/resolve-command.js";
 import { createLspConnection as createNodeLspConnection } from "./lsp/transport.js";
@@ -35,6 +37,53 @@ import type { ChildProcess } from "node:child_process";
 
 // Re-export environment implementations
 export * from "./environment";
+
+/**
+ * Build the reported result for a `child_process` callback's error branch.
+ *
+ * Shared by `execFile` and `exec` so the two cannot describe the same failure differently. The
+ * rule is: report what actually happened, and never invent an exit status.
+ *
+ *   - a numeric `err.code` is the process's own exit status — preserve it
+ *   - `ENOENT`/`EACCES`/`ENOTDIR` mean nothing ran — `code: null` plus `missing: true`
+ *   - a kill sets `killed` with no status
+ *
+ * A previous version returned one synthesised code for all of these, which erased real exit
+ * statuses and made a timeout indistinguishable from a missing binary.
+ */
+function describeProcessFailure(
+  err: { code?: string | number | null; killed?: boolean; signal?: string | null; message: string },
+  stdout: string | Buffer | undefined,
+  stderr: string | Buffer | undefined
+): CoreEnvExecResult {
+  const out = typeof stdout === "string" ? stdout : "";
+  const errText = typeof stderr === "string" && stderr.length > 0 ? stderr : "";
+
+  if (typeof err.code === "number") {
+    return { stdout: out, stderr: errText || err.message, code: err.code };
+  }
+
+  const spawnErrorCode = typeof err.code === "string" ? err.code : "";
+  if (spawnErrorCode === "ENOENT" || spawnErrorCode === "EACCES" || spawnErrorCode === "ENOTDIR") {
+    return { stdout: out, stderr: errText || err.message, code: null, missing: true };
+  }
+
+  return {
+    stdout: out,
+    stderr: errText || err.message,
+    code: null,
+    killed: true,
+  };
+}
+
+/**
+ * stdout/stderr buffer ceiling for {@link CoreEnv.execFile}.
+ *
+ * `child_process.execFile` defaults to 1 MB and kills the child on overflow, which an
+ * unbounded `rg`/`fd` result can exceed on a large tree. Callers truncate in-process
+ * anyway, so this only needs to be generous enough not to truncate mid-result.
+ */
+const EXEC_FILE_MAX_BUFFER = 32 * 1024 * 1024;
 
 // ============================================================================
 // Image resizing degradation
@@ -146,11 +195,10 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
           },
           (err, stdout, stderr) => {
             if (err) {
-              resolve({
-                stdout: typeof stdout === "string" ? stdout : "",
-                stderr: typeof stderr === "string" ? stderr : "",
-                code: typeof err.code === "number" ? err.code : 1,
-              });
+              // Same classification as execFile — a shell command can fail to launch or be
+              // killed just as a direct binary can, and the two paths must not describe it
+              // differently.
+              resolve(describeProcessFailure(err, stdout, stderr));
               return;
             }
             resolve({
@@ -164,16 +212,72 @@ export function createNodeEnv(options: CreateNodeEnvOptions): CoreEnv {
       });
     },
 
+    // Execute a process with an explicit argv and no shell. This is what lets tools run
+    // external binaries without writing shell command strings, which is the only way to
+    // stay shell-agnostic: a string that is valid bash can be a parse error in PowerShell.
+    execFile: (file: string, args: string[], fileOptions?) => {
+      return new Promise<CoreEnvExecResult>((resolve) => {
+        // Resolve a project-local install first, so a devDependency binary is usable
+        // without a global install (same rule as `commandExists` and the LSP spawn path).
+        const resolved = resolveCommandPath(file, rootPath);
+        const child = execFile(
+          resolved,
+          args,
+          {
+            cwd: fileOptions?.cwd,
+            timeout: fileOptions?.timeout,
+            env: fileOptions?.env ? { ...process.env, ...fileOptions.env } : process.env,
+            signal: fileOptions?.signal,
+            maxBuffer: EXEC_FILE_MAX_BUFFER,
+            windowsHide: true,
+          },
+          (err, stdout, stderr) => {
+            // `err` covers every non-zero outcome, which is several genuinely different things.
+            // `describeProcessFailure` classifies them in one place so this path and `exec`
+            // cannot disagree — an earlier revision duplicated the logic here, which is how the
+            // classification ended up applied to one path and silently not the other.
+            if (err) {
+              resolve(describeProcessFailure(err, stdout, stderr));
+              return;
+            }
+            resolve({
+              stdout: typeof stdout === "string" ? stdout : "",
+              stderr: typeof stderr === "string" ? stderr : "",
+              code: 0,
+            });
+          }
+        );
+        child.on("error", () => {});
+      });
+    },
+
+    // Report the shell that command strings will run under, so command-safety can pick a
+    // matching parser. Platform alone is the wrong answer: a Windows host with Git Bash
+    // resolved genuinely runs bash.
+    getShellInfo: async () => {
+      const envShell = process.env.SHELL;
+      const isWindows = os.platform() === "win32";
+      const candidates: string[] = [];
+      if (envShell) candidates.push(envShell);
+      if (isWindows) {
+        const gitBash = await findGitBash();
+        if (gitBash) candidates.push(gitBash);
+        candidates.push("powershell.exe", "pwsh.exe", "cmd.exe");
+      } else {
+        candidates.push("/bin/bash", "/bin/sh");
+      }
+      const resolved = await getShellConfig();
+      return { shell: resolved.shell, candidates };
+    },
+
     commandExists: async (command: string): Promise<boolean> => {
       // Prefer a project-local install so a devDependency server is usable
       // without a global install (kept in sync with the LSP spawn path).
       if (resolveCommandPath(command, rootPath) !== command) return true;
-      const probe = `command -v "${command}" >/dev/null 2>&1`;
-      return new Promise<boolean>((resolve) => {
-        exec(probe, (err) => {
-          resolve(!err);
-        });
-      });
+      // Resolve against PATH directly rather than probing with `command -v`, which is a
+      // POSIX shell builtin: under PowerShell or cmd.exe every binary looked absent, so the
+      // LSP extension skipped servers that were actually installed.
+      return scanPathForCommand(command) !== undefined;
     },
 
     destroy: async () => {

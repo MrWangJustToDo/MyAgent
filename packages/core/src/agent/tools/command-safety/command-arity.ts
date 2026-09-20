@@ -64,6 +64,26 @@ const ARITY: Record<string, number> = {
   yarn: 2,
   "yarn dlx": 3,
   "yarn run": 3,
+
+  // ---- Windows-native commands (cmd.exe) ----
+  // Additive: entries sit beside the POSIX ones so classification is not Unix-only. Without
+  // them a Windows command normalizes to a prefix the read-only set cannot match, so every
+  // such command looked unrecognised and a subagent's `run_command` was denied outright.
+  dir: 1,
+  type: 1,
+  where: 1,
+  findstr: 1,
+  copy: 1,
+  del: 1,
+  erase: 1,
+  md: 1,
+  rd: 1,
+  ren: 1,
+  rename: 1,
+  move: 1,
+  more: 1,
+  tasklist: 1,
+  taskkill: 1,
 };
 
 /**
@@ -76,13 +96,39 @@ const ARITY: Record<string, number> = {
 export function commandPrefix(tokens: string[]): string[] {
   for (let len = Math.min(tokens.length, 8); len > 0; len--) {
     const prefix = tokens.slice(0, len).join(" ");
-    const arity = ARITY[prefix];
+    // Look the prefix up under both spellings of the first token, and return the *canonical*
+    // spelling of that first token while keeping the rest of the matched prefix intact.
+    //
+    // Canonicalizing the joined string instead (and pushing it as one element) is what introduced
+    // a regression here: a multi-word prefix like `npm exec` became a single token, so the
+    // returned array lost its shape — `["npm exec", "exec", "vite"]` where callers expect
+    // `["npm", "exec", "vite"]`. Only the command name is ever canonicalized; subcommands and
+    // arguments are left exactly as written.
+    const firstCanonical = canonicalizeCommandName(tokens[0] ?? "");
+    const canonicalLookup = [firstCanonical, ...tokens.slice(1, len)].join(" ");
+    const arity = ARITY[prefix] ?? ARITY[canonicalLookup];
     if (arity !== undefined) {
-      return tokens.slice(0, arity);
+      return [firstCanonical, ...tokens.slice(1, Math.max(arity, 1))];
     }
   }
   if (tokens.length === 0) return [];
-  return tokens.slice(0, 1);
+  return [canonicalizeCommandName(tokens[0] ?? "")];
+}
+
+/**
+ * The lookup spelling of a command name: lowercase, without a Windows executable extension.
+ *
+ * `.exe` is stripped rather than kept as a separate table entry so `where` and `where.exe` cannot
+ * drift apart — the previous table listed only `where`, and the `.exe` spelling that cmd.exe
+ * actually reports was denied.
+ *
+ * Only `.exe` is stripped. `.cmd`/`.bat` wrappers are a *different* program with different
+ * behaviour (`npm` is a `.cmd` shim), so folding them into their bare name would grant read-only
+ * status to something that was never classified.
+ */
+export function canonicalizeCommandName(name: string): string {
+  const lower = name.toLowerCase();
+  return lower.endsWith(".exe") ? lower.slice(0, -4) : lower;
 }
 
 /** Normalized prefix joined as a string (e.g. `"git status"`). */

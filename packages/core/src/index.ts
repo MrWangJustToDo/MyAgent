@@ -295,6 +295,8 @@ export type { TaskOutput } from "./agent/subagent/task-tool.js";
 // ============================================================================
 
 export { FileError, ExecutionError } from "./env-types.js";
+export type { CoreEnvExecFileOptions } from "./env.js";
+export type { CoreEnvShellInfo } from "./env-types.js";
 export type {
   FileEntry,
   FileStat,
