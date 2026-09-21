@@ -53,6 +53,8 @@ export const WorkspaceFileMode = () => {
   const [rootPath, setRootPath] = useState("");
   const [cursorIndex, setCursorIndex] = useState(0);
   const [refreshToken, setRefreshToken] = useState(0);
+  /** Transient footer message (`[]` with nowhere to go), auto-cleared. */
+  const [jumpNotice, setJumpNotice] = useState<string | null>(null);
 
   const { gitStatus, gitInfo, diffStats, refreshGit } = useWorkspaceGit(rootPath);
 
@@ -122,12 +124,24 @@ export const WorkspaceFileMode = () => {
   const jumpToChanged = useCallback(
     (direction: 1 | -1) => {
       const jump = changedFileJumpTarget(gitStatus, rootPath, selectedPath, direction);
-      if (!jump) return;
+      if (!jump) {
+        // A silent no-op reads as a dead key. Say why: no changed files at all
+        // (the git status may predate the edit the user is looking for — `r`
+        // refreshes it), or the walk is already on the only changed file.
+        setJumpNotice(gitStatus.size === 0 ? "no changed files — press r to refresh" : "no other changed files");
+        return;
+      }
       if (isDiffMode) revealDiffDirs(jump.revealKeys);
       selectFile(jump.target);
     },
     [gitStatus, rootPath, selectedPath, selectFile, isDiffMode, revealDiffDirs]
   );
+
+  useEffect(() => {
+    if (!jumpNotice) return;
+    const timer = setTimeout(() => setJumpNotice(null), 2000);
+    return () => clearTimeout(timer);
+  }, [jumpNotice]);
 
   useEffect(() => {
     import("@codent/core").then(({ getEnv }) => setRootPath(getEnv().rootPath)).catch(() => {});
@@ -365,7 +379,7 @@ export const WorkspaceFileMode = () => {
 
       <Box flexShrink={0} height={FOOTER_LINES} paddingX={1}>
         <Text color={COLORS.muted} dimColor>
-          {workspacePanelHint()}
+          {jumpNotice ?? workspacePanelHint()}
         </Text>
       </Box>
     </Box>
