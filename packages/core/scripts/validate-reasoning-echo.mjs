@@ -31,6 +31,37 @@ assert.equal(
 );
 assert.equal(extractReasoningContentFromStreamChunk({ choices: [{ delta: { content: "hi" } }] }), undefined);
 
+// --- the second field spelling --------------------------------------------------------------
+//
+// Some gateways send `delta.reasoning` instead of `delta.reasoning_content`. Reading only
+// `reasoning_content` dropped the whole chain of thought behind those gateways with no error,
+// because the stream itself still succeeds. The upstream fix for this lives in
+// `@tanstack/ai-openai`'s `openaiCompatible`, which we do not use — we build on
+// `@tanstack/openai-base` and override `extractReasoning` — so it has to be handled in our
+// extractor.
+assert.equal(
+  extractReasoningContentFromStreamChunk({ choices: [{ delta: { reasoning: "gateway thinking" } }] }),
+  "gateway thinking",
+  "`delta.reasoning` gateways must not have their thinking silently dropped"
+);
+assert.equal(
+  extractReasoningContentFromStreamChunk({
+    choices: [{ delta: { reasoning_content: "specific", reasoning: "generic" } }],
+  }),
+  "specific",
+  "`reasoning_content` wins when a gateway sends both"
+);
+assert.equal(
+  extractReasoningContentFromStreamChunk({ choices: [{ delta: { reasoning_content: "", reasoning: "fallback" } }] }),
+  "fallback",
+  "an empty `reasoning_content` must not mask a populated `reasoning`"
+);
+assert.equal(
+  extractReasoningContentFromStreamChunk({ choices: [{ delta: { reasoning: null } }] }),
+  undefined,
+  "a null `reasoning` is not reasoning text"
+);
+
 assert.equal(shouldEchoReasoningContent({ capabilities: ["reasoning"] }), true);
 assert.equal(shouldEchoReasoningContent({ capabilities: ["tool_calling"] }), false);
 assert.equal(shouldEchoReasoningContent({ capabilities: [] }), false);
