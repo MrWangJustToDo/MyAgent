@@ -10,6 +10,7 @@ import path from "node:path";
 
 import {
   AgentUIChannel,
+  BUILTIN_SKILLS,
   SummaryStreamHub,
   TodoManager,
   UsageTracker,
@@ -351,6 +352,115 @@ assert.ok(withSubs.subagents[0].usage);
 
   e2eManager.destroyAgent(sub.id);
   e2eManager.destroyAgent(parent.id);
+  await fs.promises.rm(rootPath, { recursive: true, force: true });
+}
+
+// ----------------------------------------------------------------------------
+// End-to-end: a real AgentManager bootstrap registers the built-in skills.
+//
+// The builtin-skills validator covers the registry and the extension in isolation;
+// this is the seam it cannot reach — whether `buildManagedAgent` actually calls
+// `registerAll(BUILTIN_SKILLS)`, and whether a same-named workspace skill still
+// wins over it. A build that ships the content but never wires it would pass every
+// other check and be useless to a user.
+// ----------------------------------------------------------------------------
+{
+  const rootPath = await fs.promises.mkdtemp(path.join(os.tmpdir(), "builtin-skills-bootstrap-"));
+  const toAbs = (p) => (path.isAbsolute(p) ? p : path.join(rootPath, p));
+
+  const shadowName = BUILTIN_SKILLS[0].name;
+  const workspaceSkillDir = path.join(rootPath, ".agents", "skills", shadowName);
+
+  registerCoreEnv({
+    rootPath,
+    getPlatform: async () => "linux",
+    getArch: async () => "arm64",
+    getEnv: async () => ({}),
+    // Deliberately NOT rootPath: `getDefaultSkillDirs()` also loads
+    // `~/.agents/skills`, so pointing home at the workspace would make the
+    // `user` and `project` directories the same path and mask which one won.
+    homedir: async () => path.join(rootPath, "home"),
+    fs: {
+      // Default the encoding: skill loading reads SKILL.md as text, and a Buffer
+      // return would make frontmatter parsing throw (and be swallowed to "no skills").
+      readFile: async (p, encoding) => fs.promises.readFile(toAbs(p), encoding ?? "utf8"),
+      writeFile: async (p, content) => fs.promises.writeFile(toAbs(p), content),
+      appendFile: async (p, content) => fs.promises.appendFile(toAbs(p), content, "utf8"),
+      mkdir: async (p) => fs.promises.mkdir(toAbs(p), { recursive: true }),
+      exists: async (p) =>
+        fs.promises.access(toAbs(p)).then(
+          () => true,
+          () => false
+        ),
+      readdir: async (p) => {
+        try {
+          const entries = await fs.promises.readdir(toAbs(p), { withFileTypes: true });
+          return entries.map((e) => ({ name: e.name, type: e.isDirectory() ? "directory" : "file" }));
+        } catch {
+          return [];
+        }
+      },
+      stat: async (p) => {
+        const st = await fs.promises.stat(toAbs(p));
+        return { isDirectory: st.isDirectory(), isFile: st.isFile(), size: st.size, mtime: st.mtime };
+      },
+      remove: async (p) => fs.promises.rm(toAbs(p), { recursive: true, force: true }),
+    },
+    runCommand: async () => ({ stdout: "", stderr: "", code: 0 }),
+    exec: async () => ({ stdout: "", stderr: "", code: 0 }),
+    fetch: async () => new Response(),
+  });
+
+  const expectedNames = BUILTIN_SKILLS.map((s) => s.name).sort();
+
+  // --- 1. Clean workspace: built-ins must be registered by the bootstrap ---
+  const builtinManager = new AgentManager();
+  const withBuiltins = await builtinManager.createManagedAgent({ name: "builtin-on", model: "test-model" });
+  const registry = withBuiltins.getSkillRegistry();
+  assert.ok(registry, "root agent has a skill registry");
+
+  assert.deepEqual(registry.builtinNames().sort(), expectedNames, "bootstrap registers every built-in skill");
+  for (const builtin of BUILTIN_SKILLS) {
+    assert.equal(registry.get(builtin.name)?.source, "builtin", `"${builtin.name}" is builtin-sourced`);
+    assert.ok(registry.get(builtin.name).body.length > 0, `"${builtin.name}" body survived registration`);
+  }
+
+  // --- 2. A workspace skill of the same name must shadow the built-in ---
+  await fs.promises.mkdir(workspaceSkillDir, { recursive: true });
+  await fs.promises.writeFile(
+    path.join(workspaceSkillDir, "SKILL.md"),
+    `---\nname: ${shadowName}\ndescription: workspace override\n---\n\nWORKSPACE BODY WINS\n`
+  );
+
+  const shadowManager = new AgentManager();
+  const withShadow = await shadowManager.createManagedAgent({ name: "builtin-shadowed", model: "test-model" });
+  const shadowRegistry = withShadow.getSkillRegistry();
+  const shadowed = shadowRegistry.get(shadowName);
+
+  assert.ok(shadowed, `"${shadowName}" resolves`);
+  assert.equal(shadowed.source, "project", "the workspace skill is the one that survived");
+  assert.ok(shadowed.body.includes("WORKSPACE BODY WINS"), "workspace body wins over the built-in body");
+  assert.ok(!shadowed.body.includes("Writing a codent extension"), "built-in body must not leak through");
+  assert.ok(!shadowRegistry.builtinNames().includes(shadowName), "shadowed built-in is gone from builtinNames()");
+
+  // --- 3. The switch drops built-ins without breaking the agent ---
+  const offManager = new AgentManager();
+  const withoutBuiltins = await offManager.createManagedAgent({
+    name: "builtin-off",
+    model: "test-model",
+    skills: { builtinsDisabled: true },
+  });
+  const offRegistry = withoutBuiltins.getSkillRegistry();
+  assert.ok(offRegistry, "skill registry exists with built-ins disabled");
+  assert.equal(offRegistry.builtinNames().length, 0, "no builtin-sourced skills when disabled");
+  for (const builtin of BUILTIN_SKILLS) {
+    assert.notEqual(offRegistry.get(builtin.name)?.source, "builtin", `"${builtin.name}" is not builtin-sourced`);
+  }
+  assert.ok(offRegistry.has(shadowName), "workspace skills survive the switch");
+
+  builtinManager.destroyAgent(withBuiltins.id);
+  shadowManager.destroyAgent(withShadow.id);
+  offManager.destroyAgent(withoutBuiltins.id);
   await fs.promises.rm(rootPath, { recursive: true, force: true });
 }
 

@@ -1,30 +1,41 @@
 /**
- * Demo: per-turn extension context via `before_agent_start` + turn-context provider.
+ * Demo: per-turn extension context via `registerContextProvider` + `before_agent_start`.
+ *
+ * A provider registers ONE per-turn section, emitted each user turn as
+ * `<ctx kind=demo-turn-context>` — the tag is the extension id, so enable/disable is
+ * expressed symmetrically under the same tag. `disabledContent` is what replaces the
+ * section while the extension is disabled at runtime.
+ *
+ * `before_agent_start` is observe-only: it fires once per user prompt before the
+ * turn-context snapshot and its payload carries exactly `prompt` and `sessionId`.
+ * There is no `appendSystemPrompt` / `appendTurnContext` field on the event — per-turn
+ * model-visible text belongs in the context provider above.
  *
  * Try:
- * - `/ext-turn on` then ask the agent anything — it should see extension_context in system prompt
- * - `/ext-turn off` to disable
+ * - `/ext-turn on` then ask the agent anything — the active_tab line is injected
+ * - `/ext-turn off` to stop injecting it
  * - `/ext-turn tab example.com` to set a fake active-tab label
+ * - disable this extension from the Ctrl+Y panel and ask again — the disabled notice
+ *   replaces the active_tab line under the same <ctx kind=...> tag
  */
 export default {
   id: "demo-turn-context",
   name: "Demo Turn Context",
   version: "1.0.0",
-  description: "Injects per-turn extension_context / appendSystemPrompt for prompt-hook testing",
+  description: "Injects per-turn context via registerContextProvider for prompt-hook testing",
   activate(ctx) {
     let enabled = true;
     let tabLabel = "demo-tab.local";
 
-    ctx.registerTurnContextProvider(() => {
-      if (!enabled) return undefined;
-      return `active_tab: ${tabLabel}`;
+    // The single unified injection API: one section per extension, per user turn.
+    ctx.registerContextProvider({
+      content: () => (enabled ? `active_tab: ${tabLabel}` : undefined),
+      disabledContent: () => "Turn-context demo is disabled — the active_tab line is not injected.",
     });
 
+    // Observe-only lifecycle hook. `prompt` and `sessionId` are the whole payload.
     ctx.registerInterceptor("before_agent_start", (event) => {
-      if (!enabled) return;
-      event.appendTurnContext = `demo-turn-context: prompt length=${event.payload.prompt.length}`;
-      event.appendSystemPrompt =
-        "Extension demo: prefer acknowledging the active_tab from <extension_context> when relevant.";
+      ctx.logger.info(`[demo-turn-context] before_agent_start prompt length=${event.payload.prompt.length}`);
     });
 
     ctx.registerCommand({
@@ -51,6 +62,6 @@ export default {
       },
     });
 
-    ctx.logger.info("registered turn-context hooks + /ext-turn");
+    ctx.logger.info("registered turn-context provider + /ext-turn");
   },
 };

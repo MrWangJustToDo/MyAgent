@@ -12,6 +12,7 @@ import { bridgeTelemetryToAgentLog } from "./telemetry/event-log-bridge.js";
 import type { ManagedAgent, ManagedAgentConfig } from "./managed-agent.js";
 import type { AgentEventListener, AgentEventBus, AgentEventType } from "../agent/agent-event-bus";
 import type { ResumeResult, SessionData } from "../agent/persistence/types.js";
+import type { SkillDirectory } from "../agent/skills/skill-registry.js";
 import type { ToolsRecord } from "../agent/tools/runtime/tools-record.js";
 import type { StreamChunk } from "@tanstack/ai";
 
@@ -27,18 +28,21 @@ export type { RunAgentStreamInput } from "./run-agent.js";
 export const SKILL_DIRS_ENV_VAR = "AGENT_SKILL_DIRS";
 
 /**
- * Get default skill directories to load.
+ * Default skill directories to load, tagged with the source they are attributed to.
  *
- * Default load order (first loaded wins for duplicate skill names):
- * 1. Environment variable paths (AGENT_SKILL_DIRS, comma-separated)
- * 2. User home directory: ~/.agents/skills
- * 3. Current project directory: .agents/skills
+ * Load order (first loaded wins for duplicate skill names):
+ * 1. Environment variable paths (AGENT_SKILL_DIRS, comma-separated) — `user`
+ * 2. User home directory: ~/.agents/skills — `user`
+ * 3. Current project directory: .agents/skills — `project`
  *
- * @returns Array of skill directory paths (absolute or relative)
+ * Built-ins are registered **after** these (see `agent-factory.ts`), so they have the
+ * lowest priority and a same-named user/project skill always wins.
+ *
+ * @returns Array of tagged skill directories (absolute or relative)
  */
-export async function getDefaultSkillDirs(): Promise<string[]> {
+export async function getDefaultSkillDirs(): Promise<SkillDirectory[]> {
   const env = getEnv();
-  const dirs: string[] = [];
+  const dirs: SkillDirectory[] = [];
 
   const runEnv = await env.getEnv();
 
@@ -48,14 +52,14 @@ export async function getDefaultSkillDirs(): Promise<string[]> {
       .split(",")
       .map((d) => d.trim())
       .filter((d) => d.length > 0);
-    dirs.push(...parsedDirs);
+    dirs.push(...parsedDirs.map((path) => ({ path, source: "user" as const })));
   }
 
   const userSkillDir = env.path.join(await env.homedir(), ".agents", "skills");
 
-  dirs.push(userSkillDir);
+  dirs.push({ path: userSkillDir, source: "user" });
 
-  dirs.push(".agents/skills");
+  dirs.push({ path: ".agents/skills", source: "project" });
 
   return dirs;
 }

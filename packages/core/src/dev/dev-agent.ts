@@ -401,7 +401,11 @@ export { createMemoryExtension, type MemoryExtensionConfig, type CreateMemoryExt
 export {
   SkillRegistry,
   SkillLoader,
+  BUILTIN_SKILLS,
+  skillSchema,
   createSkillsExtension,
+  type SkillSource,
+  type SkillDirectory,
   type SkillsExtensionConfig,
   type CreateSkillsExtensionOptions,
 } from "../agent/skills";

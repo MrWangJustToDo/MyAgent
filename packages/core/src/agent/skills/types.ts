@@ -34,6 +34,15 @@ export const skillMetadataSchema = z.object({
 });
 
 /**
+ * Where a skill was loaded from.
+ *
+ * - `builtin` — shipped with the package (`agent/skills/builtin`), lowest priority.
+ * - `user` — a user-scoped directory (`AGENT_SKILL_DIRS`, `~/.agents/skills`).
+ * - `project` — the workspace directory (`.agents/skills`).
+ */
+export type SkillSource = "builtin" | "user" | "project";
+
+/**
  * Schema for a complete skill (metadata + body).
  */
 export const skillSchema = z.object({
@@ -43,8 +52,10 @@ export const skillSchema = z.object({
   description: z.string(),
   /** Full skill content (markdown body) */
   body: z.string(),
-  /** Path to the SKILL.md file */
+  /** Path to the SKILL.md file — `builtin:<name>` for a built-in skill. */
   path: z.string(),
+  /** Where the skill was loaded from. */
+  source: z.enum(["builtin", "user", "project"]),
   /** Full metadata from frontmatter */
   metadata: skillMetadataSchema,
 });
@@ -71,4 +82,6 @@ export interface SkillSummary {
   name: string;
   /** Brief description */
   description: string;
+  /** Where the skill was loaded from, so built-ins are distinguishable. */
+  source: SkillSource;
 }

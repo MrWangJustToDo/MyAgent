@@ -10,8 +10,9 @@ import { MemoryManager } from "../agent/memory/memory-manager.js";
 import { SessionStore } from "../agent/persistence/session-store.js";
 import { createCompletePlanTool, createCreatePlanTool, createUpdatePlanTool } from "../agent/plan/create-plan-tool.js";
 import { loadAgentDoc } from "../agent/prompt/agent-doc-loader.js";
+import { BUILTIN_SKILLS } from "../agent/skills/builtin";
 import { createSkillsExtension } from "../agent/skills/extension.js";
-import { SkillRegistry } from "../agent/skills/skill-registry.js";
+import { SkillRegistry, type SkillDirectory } from "../agent/skills/skill-registry.js";
 import { createTaskTool } from "../agent/subagent/task-tool.js";
 import { TodoManager } from "../agent/todo";
 import { createTodoTool } from "../agent/todo/todo-tool.js";
@@ -36,7 +37,7 @@ export interface BuildManagedAgentOptions {
   config: ManagedAgentConfig;
   parentId?: string;
   manager: AgentManager;
-  getDefaultSkillDirs: () => Promise<string[]>;
+  getDefaultSkillDirs: () => Promise<SkillDirectory[]>;
 }
 
 /**
@@ -136,11 +137,25 @@ export async function buildManagedAgent({
   let extensionsFailed = 0;
 
   if (!parentId) {
-    skillRegistry = new SkillRegistry({ rootPath: fsRootPath });
+    const skillsConfig = typeof config.skills === "object" && config.skills !== null ? config.skills : undefined;
+
+    skillRegistry = new SkillRegistry({
+      rootPath: fsRootPath,
+      logger: { warn: (message) => log.warn("system", message) },
+    });
     managed.setSkillRegistry(skillRegistry);
 
-    const dirsToLoad = skillDirs ?? (await getDefaultSkillDirs());
+    const dirsToLoad: SkillDirectory[] = skillDirs
+      ? skillDirs.map((path) => ({ path, source: "project" as const }))
+      : await getDefaultSkillDirs();
     await skillRegistry.loadFromDirectories(dirsToLoad);
+
+    // Built-ins are registered LAST so every directory skill keeps priority —
+    // the bundled defaults must never shadow a skill the user wrote. (Note this
+    // is the opposite of extension discovery, where later dirs win.)
+    if (skillsConfig?.builtinsDisabled !== true) {
+      skillRegistry.registerAll(BUILTIN_SKILLS);
+    }
     // Skill count is logged once via the bridged `session:skill` event — no direct log.
 
     toolsRecord.task = createTaskTool({ parentAgentId: managed.id, manager });
@@ -254,7 +269,7 @@ export async function buildManagedAgent({
 
     // Built-in Skills extension (enabled unless explicitly disabled).
     // `config.skills` may be `true`/undefined (defaults) or a fine-grained
-    // SkillsExtensionConfig object ({ toolsDisabled, indexDisabled }).
+    // SkillsExtensionConfig object ({ toolsDisabled, indexDisabled, builtinsDisabled }).
     if (config.skills !== false && skillRegistry) {
       try {
         const skillsConfig = typeof config.skills === "object" && config.skills !== null ? config.skills : undefined;

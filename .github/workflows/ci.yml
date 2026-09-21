@@ -76,6 +76,17 @@ jobs:
         # its own dist entry, so it must run after the build above.
         run: pnpm --filter @codent/app test
 
+      - name: Validate the built-in skills
+        # The built-in skills are prompt content the agent acts on, and their whole
+        # value is being *accurate* about the extension API. A renamed hook, a
+        # removed ctx member, or a stale claim in the body silently turns the agent
+        # into a confident liar — nothing else in the pipeline reads this text.
+        #
+        # `validate:builtin-skills` is self-contained (it parses BUILTIN_SKILLS and
+        # invokes createSkillsExtension against a stub ctx), so it needs nothing but
+        # the core build above.
+        run: pnpm --filter @codent/core run validate:builtin-skills
+
       - name: Build the release configuration of @codent/app
         # `Build` above runs the DEFAULT app config, which keeps dependencies
         # external. The release config (`tsdown.config.release.ts`) is a second,

@@ -183,6 +183,7 @@
     "validate:lsp-real-server": "pnpm run build && node scripts/validate-lsp-real-server.mjs",
     "validate:tree-sitter": "pnpm run build && node scripts/validate-tree-sitter.mjs",
     "validate:skills-extension": "pnpm run build && node scripts/validate-skills-extension.mjs",
+    "validate:builtin-skills": "pnpm run build && node scripts/validate-builtin-skills.mjs",
     "validate:memory-extension": "pnpm run build && node scripts/validate-memory-extension.mjs",
     "validate:extension-render-owner": "pnpm run build && node scripts/validate-extension-render-owner.mjs",
     "validate:extension-ui-channel": "pnpm run build && node scripts/validate-extension-ui-channel.mjs",

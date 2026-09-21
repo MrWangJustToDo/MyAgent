@@ -20,7 +20,7 @@ import { getEnv } from "../../env.js";
 
 import { skillMetadataSchema } from "./types.js";
 
-import type { Skill, SkillMetadata } from "./types.js";
+import type { Skill, SkillMetadata, SkillSource } from "./types.js";
 
 // ============================================================================
 // Types
@@ -175,12 +175,13 @@ export class SkillLoader {
    * Load skills from a directory.
    *
    * Scans recursively for SKILL.md files. Each skill is identified by its
-   * parent directory name.
+   * parent directory name, and attributed to `source` (default `project`).
    *
    * @param dirPath - Directory path to scan (absolute or relative to rootPath)
+   * @param source - Which source the loaded skills are attributed to
    * @returns Map of skill name to Skill object
    */
-  async loadFromDirectory(dirPath: string): Promise<Map<string, Skill>> {
+  async loadFromDirectory(dirPath: string, source: SkillSource = "project"): Promise<Map<string, Skill>> {
     const skills = new Map<string, Skill>();
 
     const dirExists = await this.directoryExists(dirPath);
@@ -210,6 +211,7 @@ export class SkillLoader {
           description,
           body,
           path: filePath,
+          source,
           metadata: metadata || {
             name,
             description,

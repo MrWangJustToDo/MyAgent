@@ -36,6 +36,11 @@ export interface SkillsExtensionConfig {
    * (index injected when skills exist).
    */
   indexDisabled?: boolean;
+  /**
+   * Drop the built-in skills (e.g. `write-extension`) while keeping skills loaded
+   * from directories. Default: false (built-ins registered).
+   */
+  builtinsDisabled?: boolean;
 }
 
 // ============================================================================
@@ -71,6 +76,13 @@ async function activateSkills(
 ): Promise<void> {
   const z = ctx.z;
 
+  // Built-ins never appear when disabled. Filtering here (rather than at the
+  // registry) keeps `/skill`, the index, and list_skills consistent — a disabled
+  // built-in must not be loadable by name either.
+  const visibleSkills = () =>
+    skillRegistry.list().filter((s) => config?.builtinsDisabled !== true || s.source !== "builtin");
+  const visibleNames = () => visibleSkills().map((s) => s.name);
+
   if (config?.toolsDisabled !== true) {
     ctx.registerTool({
       name: "list_skills",
@@ -81,11 +93,11 @@ Prefer the <skills> index already in the turn context. Call this only to refresh
 Then use load_skill to load the full content of a specific skill.`,
       inputSchema: z.object({}),
       outputSchema: z.object({
-        skills: z.array(z.object({ name: z.string(), description: z.string() })),
+        skills: z.array(z.object({ name: z.string(), description: z.string(), source: z.string() })),
         count: z.number(),
       }),
       execute: async () => {
-        const skills = skillRegistry.list();
+        const skills = visibleSkills().map((s) => ({ name: s.name, description: s.description, source: s.source }));
         return {
           skills,
           count: skills.length,
@@ -93,8 +105,8 @@ Then use load_skill to load the full content of a specific skill.`,
       },
       // Only send skills to the LLM — count is derived, avoid extra tokens.
       toModelOutput({ output }) {
-        const { skills } = output as { skills?: Array<{ name: string; description: string }> };
-        const lines = skills?.map((s) => `- ${s.name}: ${s.description}`) ?? [];
+        const { skills } = output as { skills?: Array<{ name: string; description: string; source: string }> };
+        const lines = skills?.map((s) => `- ${s.name} (${s.source}): ${s.description}`) ?? [];
         return `Available skills:\n${lines.join("\n")}`;
       },
     });
@@ -119,8 +131,8 @@ that help you complete specific types of tasks.`,
       execute: async (input) => {
         const { name } = (input ?? {}) as { name?: string };
         const skill = skillRegistry.get(String(name));
-        if (!skill) {
-          const available = skillRegistry.names();
+        if (!skill || (config?.builtinsDisabled === true && skill.source === "builtin")) {
+          const available = visibleNames();
           const availableList =
             available.length > 0 ? `Available skills: ${available.join(", ")}` : "No skills are currently loaded.";
           throw new Error(`Unknown skill '${String(name)}'. ${availableList}`);
@@ -139,8 +151,9 @@ that help you complete specific types of tasks.`,
   if (config?.indexDisabled !== true) {
     ctx.registerContextProvider({
       content: () => {
-        if (skillRegistry.size === 0) return undefined;
-        const lines = skillRegistry.list().map((s) => `- ${s.name}: ${s.description}`);
+        const skills = visibleSkills();
+        if (skills.length === 0) return undefined;
+        const lines = skills.map((s) => `- ${s.name} (${s.source}): ${s.description}`);
         return [
           "<skills>",
           "Use `load_skill` to load any of these skills when relevant to the user's task.",
@@ -161,7 +174,7 @@ that help you complete specific types of tasks.`,
     name: "skill",
     description: "Load a skill and let the agent act on it: /skill <name>. With no name, lists available skills.",
     getOptions: () =>
-      skillRegistry.list().map((s) => ({
+      visibleSkills().map((s) => ({
         label: s.name,
         value: s.name,
         description: s.description,
@@ -169,12 +182,12 @@ that help you complete specific types of tasks.`,
     execute: async (args) => {
       const name = args[0]?.trim();
       if (!name) {
-        const available = skillRegistry.names();
+        const available = visibleNames();
         return available.length > 0 ? `Available skills: ${available.join(", ")}` : "No skills are currently loaded.";
       }
       const skill = skillRegistry.get(name);
-      if (!skill) {
-        const available = skillRegistry.names();
+      if (!skill || (config?.builtinsDisabled === true && skill.source === "builtin")) {
+        const available = visibleNames();
         const availableList =
           available.length > 0 ? `Available skills: ${available.join(", ")}` : "No skills are currently loaded.";
         return `Unknown skill '${name}'. ${availableList}`;
@@ -189,7 +202,7 @@ that help you complete specific types of tasks.`,
       const name = args[0]?.trim();
       if (!name) return undefined;
       const skill = skillRegistry.get(name);
-      if (!skill) return undefined;
+      if (!skill || (config?.builtinsDisabled === true && skill.source === "builtin")) return undefined;
       const followup = args.slice(1).join(" ").trim();
       const body = `<skill name="${skill.name}">\n${skill.body}\n</skill>`;
       if (!followup) return body;
