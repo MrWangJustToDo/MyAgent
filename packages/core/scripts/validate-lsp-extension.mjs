@@ -412,13 +412,12 @@ if (failed.length > 0) {
 }
 console.log("All extension checks passed ✅");
 
-// Diagnostic: show what keeps the event loop alive before forcing exit.
-const activeHandles = process._getActiveHandles?.() ?? [];
-const types = activeHandles
-  .map((h) => h.constructor?.name)
-  .reduce((acc, t) => {
-    acc[t] = (acc[t] ?? 0) + 1;
-    return acc;
-  }, {});
-console.log("Active handles:", JSON.stringify(types));
-process.exit(0);
+// Exit without `process.exit()`.
+//
+// A forced exit while handles are still closing trips libuv's shutdown assertion on Windows
+// (`!(handle->flags & UV_HANDLE_CLOSING)`, src/win/async.c) — observed here with the mock LSP
+// child and several sockets still live, *after* the success line, so the script reported
+// "all checks passed" and still exited non-zero. Letting the event loop drain avoids it; the
+// timer is a backstop for a handle that outlives its owner, in which case the exit code stays
+// 0 and the run is reported as a timeout by the suite rather than as a false pass.
+setTimeout(() => process.exit(0), 500).unref();

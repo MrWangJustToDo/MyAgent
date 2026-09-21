@@ -62,4 +62,8 @@ server.closeAllConnections?.();
 await new Promise((resolve) => server.close(resolve));
 rmSync(ws, { recursive: true, force: true });
 console.log("env-workspace validation passed");
-process.exit(0);
+
+// No `process.exit()`: forcing one while an async stdout/handle is closing trips libuv's
+// shutdown assertion on Windows (`!(handle->flags & UV_HANDLE_CLOSING)`), which made this
+// script print "passed" and then abort. Draining is enough once the server is closed.
+setTimeout(() => process.exit(0), 500).unref();
