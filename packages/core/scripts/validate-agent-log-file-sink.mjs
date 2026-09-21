@@ -11,9 +11,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { waitFor } from "./helpers/log-capture.mjs";
-
 import { AgentLog, clearCoreEnv, registerCoreEnv } from "../dist/dev.mjs";
+
+import { waitFor } from "./helpers/log-capture.mjs";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
