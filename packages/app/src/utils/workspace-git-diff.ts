@@ -1,3 +1,4 @@
+import { namesAFile } from "./workspace-git-paths.js";
 import { workspaceRelativePath } from "./workspace-path.js";
 
 export type WorkspaceFileDiff = {
@@ -33,7 +34,24 @@ export function fetchWorkspaceFileDiff(rootPath: string, filePath: string): Prom
 }
 
 async function loadWorkspaceFileDiff(rootPath: string, filePath: string): Promise<WorkspaceFileDiff> {
+  // The caller passes an absolute path taken from a diff-tree row, and the tree excludes
+  // directory-shaped paths (`workspace-git-paths`), so this is unreachable with a directory
+  // today. Guarded anyway: it is the third consumer of git output in this view, and it is the
+  // one that *reads* the path, so a directory here would silently produce an empty diff rather
+  // than an error. Recorded so the next reader does not have to re-derive reachability.
   const relativePath = workspaceRelativePath(rootPath, filePath);
+  if (!namesAFile(relativePath)) {
+    // No throw: this module reports "no changes" for anything it cannot read, and the caller
+    // renders an empty diff. A directory is not an error to surface — it should simply never
+    // have been asked about.
+    return {
+      relativePath,
+      fileName: filePath.split("/").pop() || filePath,
+      oldContent: "",
+      newContent: "",
+      hasChanges: false,
+    };
+  }
   const fileName = filePath.split("/").pop() || filePath;
   const { getEnv } = await import("@codent/core");
   const env = getEnv();

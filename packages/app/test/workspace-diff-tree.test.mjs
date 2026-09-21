@@ -88,6 +88,54 @@ const names = (items) => items.map((i) => `${i.name}${i.type === "directory" ? "
   assert.deepEqual(names(items), ["src/@0", "win.ts@1"]);
 }
 
+// A directory-shaped key must not become a row. `git status` without `--untracked-files=all`
+// reports an untracked directory as `dir/`; split on "/" that ends in an empty segment, which
+// `isLast` classified as a FILE — so the tree rendered a nameless row pointing at the directory
+// and none of the files inside it ever appeared. This is the reported symptom.
+{
+  const items = buildDiffTreeItems(status([["brand-new/", "??"]]), "/repo", new Set());
+  assert.deepEqual(items, [], "an untracked directory key must produce no row at all");
+}
+
+// The same guard for a Windows-style directory key.
+{
+  const items = buildDiffTreeItems(status([["brand-new\\", "??"]]), "/repo", new Set());
+  assert.deepEqual(items, []);
+}
+
+// The regression proper: with the directory expanded (as `-uall` now does), every file inside
+// is its own row — previously none of them were listed.
+{
+  const items = buildDiffTreeItems(
+    status([
+      ["brand-new/sub/deep/file.ts", "??"],
+      ["brand-new/top.txt", "??"],
+    ]),
+    "/repo",
+    new Set()
+  );
+  // Directories sort before files, so `sub/` is emitted before `top.txt`.
+  assert.deepEqual(names(items), ["brand-new/@0", "sub/deep/@1", "file.ts@2", "top.txt@1"]);
+}
+
+// No row may ever have an empty name — the invariant the reported symptom violated.
+{
+  const items = buildDiffTreeItems(
+    status([
+      ["brand-new/", "??"],
+      ["has space.ts", "M"],
+      ["a/b.ts", "M"],
+    ]),
+    "/repo",
+    new Set()
+  );
+  assert.equal(
+    items.filter((i) => i.type === "file" && i.name === "").length,
+    0,
+    "a file row with an empty name is the defect"
+  );
+}
+
 // Renamed paths (old -> new) render both sides as rows.
 {
   const items = buildDiffTreeItems(

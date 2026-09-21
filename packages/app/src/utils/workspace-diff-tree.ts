@@ -1,3 +1,4 @@
+import { namesAFile } from "./workspace-git-paths.js";
 import { joinWorkspacePath } from "./workspace-path.js";
 
 // ============================================================================
@@ -47,6 +48,11 @@ function buildDiffTree(gitStatus: Map<string, string>, rootPath: string): DiffTr
 
   const relPaths = new Set<string>();
   for (const rel of gitStatus.keys()) {
+    // Last line of defence. The status parse already rejects directory-shaped paths, but this
+    // is the only place a nameless `file` row can be created: a trailing `/` splits into an
+    // empty last segment, which `isLast` then classifies as a file. Guarded here too so a
+    // future caller cannot reintroduce the defect by handing over a raw git path.
+    if (!namesAFile(rel)) continue;
     relPaths.add(rel.replace(/\\/g, "/"));
   }
 

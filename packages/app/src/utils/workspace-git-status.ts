@@ -1,28 +1,23 @@
-import { splitStreamingLines } from "./streaming-output-lines.js";
+import { parseGitStatusZ } from "./workspace-git-paths.js";
 
 // ============================================================================
 // Git Status
 // ============================================================================
 
+/**
+ * Parse a `git status --porcelain -z` payload into `path → status`.
+ *
+ * The parsing itself lives in `workspace-git-paths`, shared with the diff-stats parse —
+ * both consumers had independently taken git's *quoted* line-oriented output literally,
+ * which produced paths that do not exist for any path containing a space, a quote, or
+ * (with git's default `core.quotePath`) a non-ASCII byte. Keeping the rule in one place is
+ * what stops the next consumer from re-deriving it wrongly.
+ *
+ * @example
+ * parseGitStatus("M  src/a.ts\0") // Map { "src/a.ts" => "M" }
+ */
 export function parseGitStatus(raw: string): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const line of splitStreamingLines(raw)) {
-    if (line.length < 3) continue;
-    const status = line.slice(0, 2).trim();
-    const filepath = line.slice(3).trim();
-    if (!filepath) continue;
-    // Rename rows look like "R  old/path -> new/path" — index both sides so the
-    // tree can render the old (deleted) and new (added) paths as separate rows.
-    const rename = filepath.match(/^(.*) -> (.*)$/);
-    const normalized = (p: string) => p.replace(/\\/g, "/");
-    if (rename) {
-      map.set(normalized(rename[1]!), status);
-      map.set(normalized(rename[2]!), status);
-    } else {
-      map.set(normalized(filepath), status);
-    }
-  }
-  return map;
+  return parseGitStatusZ(raw);
 }
 
 let gitStatusCache: { rootPath: string; status: Map<string, string> } | null = null;
@@ -37,7 +32,11 @@ export async function fetchGitStatus(rootPath: string): Promise<Map<string, stri
   }
   try {
     const { getEnv } = await import("@codent/core");
-    const result = await getEnv().runCommand("git status --porcelain", {
+    // `-z` (NUL-delimited, never quoted) and `--untracked-files=all` (expand untracked
+    // directories into their files). Without `-uall` git reports one record for a wholly
+    // untracked directory, which has no file behind it and no name of its own — the
+    // nameless row this parsing exists to avoid.
+    const result = await getEnv().runCommand("git status --porcelain -z --untracked-files=all", {
       cwd: rootPath,
     });
     const status = parseGitStatus(result.stdout);
