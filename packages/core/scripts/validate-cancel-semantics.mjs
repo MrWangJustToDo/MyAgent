@@ -271,7 +271,9 @@ function walk(dir) {
   for (const file of walk(join(SRC, "agent"))) {
     const src = readFileSync(file, "utf8");
     if (!/define(?:Server|Client)Tool\(/.test(src)) continue;
-    for (const match of src.matchAll(/\bname: "([a-z_]+)",\n/g)) defined.push({ name: match[1], file });
+    // `\r?\n`, not `\n`: a Windows checkout has CRLF, and a literal `\n` matches nothing
+    // there — which silently reported "found 0" tool definitions.
+    for (const match of src.matchAll(/\bname: "([a-z_]+)",\r?\n/g)) defined.push({ name: match[1], file });
   }
   const names = defined.map((d) => d.name);
   assert.ok(names.length >= 12, `expected the built-in tool set, found ${names.length}: ${names.join(",")}`);
