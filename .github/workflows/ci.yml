@@ -38,7 +38,7 @@ jobs:
       - name: Cache pnpm store
         uses: actions/cache@v4
         with:
-          path: ${{ runner.os == 'Linux' && '/home/runner/.local/share/pnpm/store' || '~/Library/pnpm/store' }}
+          path: ${{ runner.os == 'Linux' && '/home/runner/.local/share/pnpm/store' || runner.os == 'Windows' && '~/AppData/Local/pnpm/store' || '~/Library/pnpm/store' }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
@@ -76,16 +76,20 @@ jobs:
         # its own dist entry, so it must run after the build above.
         run: pnpm --filter @codent/app test
 
-      - name: Validate the built-in skills
-        # The built-in skills are prompt content the agent acts on, and their whole
-        # value is being *accurate* about the extension API. A renamed hook, a
-        # removed ctx member, or a stale claim in the body silently turns the agent
-        # into a confident liar — nothing else in the pipeline reads this text.
+      - name: Run all validators
+        # Every `validate-*.mjs` in the repo, discovered by glob rather than listed:
+        # a new validator is covered by existing, and one with no `validate:*` npm
+        # entry still runs (`validate-format-read-file-result` had neither an entry
+        # nor a caller, and had gone unrun while reading as coverage in review).
         #
-        # `validate:builtin-skills` is self-contained (it parses BUILTIN_SKILLS and
-        # invokes createSkillsExtension against a stub ctx), so it needs nothing but
-        # the core build above.
-        run: pnpm --filter @codent/core run validate:builtin-skills
+        # This drives the files directly instead of `pnpm run validate:*`, because 151
+        # of the 156 core definitions embed `pnpm run build &&` — going through npm
+        # would pay a 3.2s rebuild per validator (~483s) against the 34s the whole
+        # core suite costs when it reuses the build above.
+        #
+        # Replaces the dedicated `validate:builtin-skills` step that used to sit
+        # here: the suite includes it and reports it by name.
+        run: pnpm run validate:all
 
       - name: Build the release configuration of @codent/app
         # `Build` above runs the DEFAULT app config, which keeps dependencies
@@ -122,3 +126,49 @@ jobs:
         # Deliberately after the self-containment step: that one rebuilds
         # `dist`, so scanning earlier would scan a stale bundle.
         run: pnpm --filter codent-cli validate:runtime-specifiers
+
+  # The same validator suite on Windows.
+  #
+  # A separate job rather than a matrix over `check`: the question here is whether the
+  # *validators* hold up on Windows, and re-running lint/typecheck there would double the
+  # cost while answering a different question with its own failure modes. `check` covers
+  # Linux; together the two give per-platform coverage without duplicating either.
+  #
+  # Windows is the only mechanism that catches a POSIX-only validator, and there are
+  # several: `pgrep` does not exist, so the LSP reaping assertions that counted children
+  # with it used to pass vacuously ("no processes" == "cannot count"); `sh -c command -v`
+  # could never find the language server, so that check always skipped silently; and any
+  # validator building paths with a hardcoded "/" would read the wrong place. Those now
+  # report themselves as skips rather than as passes, so a green run here means the
+  # assertions that *can* run on Windows did run.
+  validators-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26.4.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts --prefer-offline
+
+      - name: Generate WXT types (extension .wxt)
+        run: pnpm --filter @codent/extension exec wxt prepare
+
+      - name: Build
+        run: pnpm build
+
+      - name: Run all validators
+        # `--quiet` keeps the log to the per-package summaries and any failure: on
+        # Windows many validators legitimately skip (no language server, no
+        # `pgrep`), and the individual `ok` lines would bury the skips.
+        run: node scripts/run-all-validators.mjs --quiet
