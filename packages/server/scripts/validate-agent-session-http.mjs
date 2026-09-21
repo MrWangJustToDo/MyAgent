@@ -189,7 +189,10 @@ const gone = await fetch(`${baseUrl}/api/agent/${snap.agentId}/snapshot`);
 assert.equal(gone.status, 404);
 
 stateUnsub();
-server.close();
+// Await the close: fire-and-forget `server.close()` + `process.exit(0)` leaves the handle
+// closing during exit, which on Windows trips a libuv assertion
+// (`!(handle->flags & UV_HANDLE_CLOSING)`) after the success line was already printed.
+await new Promise((resolve) => server.close(resolve));
 rmSync(process.env.ROOT_PATH, { recursive: true, force: true });
 console.log("agent-session-http validation passed");
 process.exit(0);

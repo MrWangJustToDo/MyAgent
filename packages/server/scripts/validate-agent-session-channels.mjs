@@ -221,7 +221,10 @@ assert.equal(postUnsub, countAfterUnsub, "unsubscribed handler must not receive 
 
 unsub();
 await host.destroy(session.getSnapshot().agentId);
-server.close();
+// Await the close: fire-and-forget `server.close()` + `process.exit(0)` leaves the handle
+// closing during exit, which on Windows trips a libuv assertion
+// (`!(handle->flags & UV_HANDLE_CLOSING)`) after the success line was already printed.
+await new Promise((resolve) => server.close(resolve));
 rmSync(process.env.ROOT_PATH, { recursive: true, force: true });
 console.log("agent-session-channels validation passed");
 process.exit(0);

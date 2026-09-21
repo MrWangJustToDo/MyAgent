@@ -153,6 +153,9 @@ await env.fs.remove("blob.bin");
 assert.equal(await env.fs.exists("hello.txt"), false);
 await env.destroy();
 
-server.close();
+// Await the close: fire-and-forget `server.close()` + `process.exit(0)` leaves the handle
+// closing during exit, which on Windows trips a libuv assertion
+// (`!(handle->flags & UV_HANDLE_CLOSING)`) after the success line was already printed.
+await new Promise((resolve) => server.close(resolve));
 rmSync(ws, { recursive: true, force: true });
 console.log("coreenv-http validation passed");

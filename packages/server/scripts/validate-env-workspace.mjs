@@ -53,7 +53,11 @@ assert.equal(typeof body.git.ahead, "number", "ahead is a number");
 assert.equal(typeof body.git.behind, "number", "behind is a number");
 console.log("workspace:", JSON.stringify(body));
 
-server.close();
+// Await the close before exiting. Fire-and-forget `server.close()` followed by `process.exit(0)`
+// leaves the handle closing during exit, which on Windows trips a libuv assertion
+// (`!(handle->flags & UV_HANDLE_CLOSING)`) *after* the success line — so the script printed
+// "passed" and still exited non-zero.
+await new Promise((resolve) => server.close(resolve));
 rmSync(ws, { recursive: true, force: true });
 console.log("env-workspace validation passed");
 process.exit(0);
