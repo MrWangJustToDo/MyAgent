@@ -47,6 +47,7 @@
     "prepublishOnly": "pnpm run build",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.typecheck.json",
+    "validate:all:core": "node ../../scripts/run-all-validators.mjs --dir packages/core",
     "validate:agent-emitter": "pnpm run build && node scripts/validate-agent-emitter.mjs",
     "validate:agent-session-types": "pnpm run build && node scripts/validate-agent-session-types.mjs",
     "validate:local-agent-session": "pnpm run build && node scripts/validate-local-agent-session.mjs",

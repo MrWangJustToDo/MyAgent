@@ -48,6 +48,7 @@
     "prepublishOnly": "pnpm run build",
     "dev": "tsdown --watch",
     "typecheck": "tsc --noEmit",
+    "validate:all:node": "node ../../scripts/run-all-validators.mjs --dir packages/node",
     "validate:lsp-command-exists": "pnpm run build && node scripts/validate-lsp-command-exists.mjs",
     "validate:command-lookup": "pnpm run build && node scripts/validate-command-lookup.mjs",
     "validate:code-mode-assembly": "node scripts/validate-code-mode-assembly.mjs",

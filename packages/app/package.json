@@ -48,6 +48,7 @@
     "dev": "tsdown --watch",
     "test": "pnpm run build && node --test test/*.test.mjs",
     "typecheck": "tsc --noEmit",
+    "validate:all:app": "node ../../scripts/run-all-validators.mjs --dir packages/app",
     "validate:theme-palettes": "node ./scripts/validate-theme-palettes.mjs",
     "validate:core-imports": "node ./scripts/validate-core-imports.mjs",
     "validate:presentation-helpers": "node ./scripts/validate-presentation-helpers.mjs",

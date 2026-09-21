@@ -51,6 +51,7 @@
     "publish:codent": "pnpm run build:codent && pnpm --filter codent-cli run publish:beta",
     "publish:packages": "pnpm --filter @codent/core publish --no-git-checks && pnpm --filter @codent/app publish --no-git-checks && pnpm --filter @codent/node publish --no-git-checks && pnpm --filter @codent/server publish --no-git-checks && pnpm --filter @codent/cli publish --no-git-checks",
     "typecheck": "pnpm -r typecheck",
+    "validate:all": "node scripts/run-all-validators.mjs --all",
     "lint": "eslint .",
     "format": "prettier --write .",
     "clean": "pnpm -p -r -c exec rm -rf dist dev .cache .next tsconfig.build.tsbuildinfo",

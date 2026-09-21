@@ -47,6 +47,7 @@
     "prepublishOnly": "pnpm run build",
     "dev": "tsdown --watch",
     "start": "node dist/cli.mjs",
+    "validate:all:im-bridge": "node ../../scripts/run-all-validators.mjs --dir packages/im-bridge",
     "validate:bridge": "pnpm run build && node scripts/validate-bridge.mjs && node scripts/validate-bridge-groups.mjs && node scripts/validate-bridge-tool-preview.mjs",
     "typecheck": "tsc --noEmit"
   },

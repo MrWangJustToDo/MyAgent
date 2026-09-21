@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "validate:all:playground": "node ../../scripts/run-all-validators.mjs --dir packages/playground",
     "validate:workspace-path": "node ./scripts/validate-workspace-path.mjs",
     "validate:resolve-fetch-proxy": "node ./scripts/validate-resolve-fetch-proxy.mjs",
     "validate:preview-ports": "node ./scripts/validate-preview-ports.mjs",
