@@ -100,7 +100,9 @@ if (extensions.length > 0) {
   // restore original state
   await session.dispatch({ type: "extension.toggle", id: first.id, enabled: first.enabled });
 } else {
-  console.log("(no extensions loaded on temp root; skipping extension.toggle branch)");
+  // The suite reads the shared skip marker to report this as a skip rather than silently
+  // folding an unexercised branch into a pass.
+  console.log("[validator-skip] no extensions loaded on temp root; extension.toggle branch not exercised");
 }
 
 // ── 6. Channel filtering: a state-only subscriber must not see mode events ──

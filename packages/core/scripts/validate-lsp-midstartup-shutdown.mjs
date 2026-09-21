@@ -11,10 +11,11 @@
  *   4. wait until initialize would have resolved → child must be torn down (0 processes)
  */
 
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+
+import { observeMockProcesses } from "./process-count.mjs";
 
 const SLOW_SERVER = resolve(import.meta.dirname, "slow-mock-lsp-server.mjs");
 const results = [];
@@ -23,13 +24,11 @@ function record(name, ok, detail = "") {
   console.log(`${ok ? "✔" : "✘"} ${name}${detail ? ` — ${detail}` : ""}`);
 }
 
+// Reaping is only assertable where processes are observable. `observeMockProcesses` reports
+// the skip itself; a null count means assert nothing rather than compare against a fabricated
+// 0 (the value that means "none running").
 function countSlowProcesses() {
-  try {
-    const out = execFileSync("pgrep", ["-f", "node.*slow-mock-lsp-server\\.mjs$"], { encoding: "utf-8" });
-    return out.trim().split("\n").filter(Boolean).length;
-  } catch {
-    return 0;
-  }
+  return observeMockProcesses("slow-mock-lsp-server\\.mjs");
 }
 
 function waitForCount(target, attempts, delayMs) {
@@ -75,14 +74,19 @@ const diag = tools.find((t) => t.name === "lsp_diagnostics");
 const p = diag.execute({ path: resolve(projectDir, "a.ts") }, { toolCallId: "t1" }).catch(() => null);
 await new Promise((r) => setTimeout(r, 300)); // enough for spawn; handshake still in flight
 const midStart = countSlowProcesses();
-record("slow server spawned (handshake in progress)", midStart === 1, `${midStart} process(es)`);
+const canCount = midStart !== null;
+if (canCount) {
+  record("slow server spawned (handshake in progress)", midStart === 1, `${midStart} process(es)`);
+}
 
 // ---- 2. Shutdown mid-startup ----
 await runner.emitSessionShutdown("sess-1");
 
 // ---- 3. Wait past the handshake delay; child must be cleaned up ----
 const after = await waitForCount(0, 30, 250); // up to ~7.5s > 2s handshake + teardown
-record("mid-startup shutdown leaves no lingering child", after === 0, `${after} process(es)`);
+if (canCount) {
+  record("mid-startup shutdown leaves no lingering child", after === 0, `${after} process(es)`);
+}
 
 await p; // let the diag promise settle (it should reject/resolve harmlessly)
 await runner.destroyAll();

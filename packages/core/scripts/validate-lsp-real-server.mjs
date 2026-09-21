@@ -7,7 +7,6 @@
  *
  * Run: pnpm --filter @codent/core run validate:lsp-real-server
  */
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -18,13 +17,23 @@ function record(name, ok, detail = "") {
   console.log(`${ok ? "✔" : "✘"} ${name}${detail ? ` — ${detail}` : ""}`);
 }
 
-// This validation needs a real typescript-language-server. Skip gracefully
-// instead of failing when it is absent (no global install, no project-local bin).
-function commandExists(command) {
-  return spawnSync("sh", ["-c", `command -v "${command}" >/dev/null 2>&1`]).status === 0;
-}
-if (!commandExists("typescript-language-server")) {
-  console.log("⚠️  typescript-language-server not found on PATH — skipping real-server validation");
+/**
+ * Printed when this validator is skipping rather than verifying. The suite reads this marker
+ * to report a skip instead of counting the `exit 0` as a pass — without it, a run where the
+ * language server is absent is indistinguishable from a run that checked everything.
+ */
+const SKIP_MARKER = "[validator-skip]";
+
+// This validation needs a real typescript-language-server. Skip explicitly (not silently)
+// when it is absent (no global install, no project-local bin).
+//
+// The probe goes through production code (`CoreEnv.commandExists`) rather than
+// `spawnSync("sh", ["-c", "command -v ..."])`: that form is POSIX-only, so on Windows it
+// could never find the server and the run degraded to a silent pass — a false green.
+const probeEnv = (await import("@codent/node")).createNodeEnv({ rootPath: process.cwd() });
+const hasServer = await probeEnv.commandExists?.("typescript-language-server").catch(() => false);
+if (!hasServer) {
+  console.log(`${SKIP_MARKER} typescript-language-server not found on PATH — real-server validation skipped`);
   process.exit(0);
 }
 

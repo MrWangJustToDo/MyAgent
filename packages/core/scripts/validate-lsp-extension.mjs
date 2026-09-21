@@ -19,23 +19,21 @@
  *   - commands execute (/lsp status)
  */
 
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { observeMockProcesses } from "./process-count.mjs";
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOCK_SERVER = resolve(__dirname, "mock-lsp-server.mjs");
 
-/** Live mock-server children (this script's server, plus leftovers from other runs). */
+// Reaping is only assertable where processes are observable. `observeMockProcesses` reports
+// the skip itself; a null count means assert nothing — 0 is the value that means "all gone",
+// which is how the reaping assertions below passed vacuously on a platform without `pgrep`.
 function countMockServers() {
-  try {
-    const out = execFileSync("pgrep", ["-f", "node.*mock-lsp-server\\.mjs$"], { encoding: "utf-8" });
-    return out.trim().split("\n").filter(Boolean).length;
-  } catch {
-    return 0; // pgrep exits 1 when nothing matches
-  }
+  return observeMockProcesses();
 }
 
 function waitForMockServers(target, attempts = 40, delayMs = 200) {
@@ -51,6 +49,9 @@ function waitForMockServers(target, attempts = 40, delayMs = 200) {
 }
 
 const mockBaseline = countMockServers();
+// null = platform cannot count processes; the reaping assertions below must not run against
+// a fabricated 0.
+const canCount = mockBaseline !== null;
 const results = [];
 function record(name, ok, detail = "") {
   results.push({ name, ok, detail });
@@ -306,11 +307,13 @@ await runner.emitSessionStart(projectDir, "sess-1");
 // mid-teardown and orphans the mock server child.
 const afterStart = await waitForMockServers(mockBaseline);
 record("session:start handler runs without throwing", true);
-record(
-  "session:start leaves no orphaned mock server",
-  afterStart <= mockBaseline,
-  `${afterStart} alive (baseline ${mockBaseline})`
-);
+if (canCount) {
+  record(
+    "session:start leaves no orphaned mock server",
+    afterStart <= mockBaseline,
+    `${afterStart} alive (baseline ${mockBaseline})`
+  );
+}
 
 // ---- 13. tree-sitter structural tools actually work ----
 // ast_search: find function declarations in the sample TS file.
@@ -384,17 +387,21 @@ record(
 // mid-shutdown (that is what used to orphan the mock server child).
 await runner.emitSessionShutdown("sess-1");
 const afterShutdown = await waitForMockServers(mockBaseline, 60, 200);
-record(
-  "session:shutdown shuts down LSP servers (no lingering children)",
-  afterShutdown <= mockBaseline,
-  `${afterShutdown} alive (baseline ${mockBaseline})`
-);
+if (canCount) {
+  record(
+    "session:shutdown shuts down LSP servers (no lingering children)",
+    afterShutdown <= mockBaseline,
+    `${afterShutdown} alive (baseline ${mockBaseline})`
+  );
+}
 
 // ---- Cleanup ----
 await runner.destroyAll();
 core.clearCoreEnv();
 const atExit = await waitForMockServers(mockBaseline, 10, 200);
-record("no orphaned mock server at exit", atExit <= mockBaseline, `${atExit} alive (baseline ${mockBaseline})`);
+if (canCount) {
+  record("no orphaned mock server at exit", atExit <= mockBaseline, `${atExit} alive (baseline ${mockBaseline})`);
+}
 
 const failed = results.filter((r) => !r.ok);
 console.log("\n=== LSP EXTENSION VALIDATION ===");

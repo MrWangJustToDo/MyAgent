@@ -6,7 +6,7 @@
  * Requires an OpenAI-compatible endpoint at BASE_URL (default http://localhost:11434/v1).
  * Set VALIDATE_TANSTACK_MODEL to override the model name (default: qwen3).
  * Set VALIDATE_TANSTACK_REQUIRED=1 to fail when the endpoint/model is unavailable
- * (default: soft-skip with exit 0).
+ * (default: explicit skip, reported as a skip by the suite rather than a pass).
  */
 
 import { chat } from "@tanstack/ai";
@@ -22,7 +22,10 @@ function softSkip(reason) {
   if (required) {
     throw new Error(reason);
   }
-  console.log(`tanstack-adapter validation skipped: ${reason}`);
+  // The suite reads this marker to count a skip instead of a pass. `exit 0` alone cannot
+  // distinguish "no endpoint available" from "adapter verified", which is how a run with no
+  // model server could read as full coverage.
+  console.log(`[validator-skip] tanstack-adapter validation skipped: ${reason}`);
   process.exit(0);
 }
 
