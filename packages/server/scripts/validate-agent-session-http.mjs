@@ -189,9 +189,12 @@ const gone = await fetch(`${baseUrl}/api/agent/${snap.agentId}/snapshot`);
 assert.equal(gone.status, 404);
 
 stateUnsub();
-// Await the close: fire-and-forget `server.close()` + `process.exit(0)` leaves the handle
-// closing during exit, which on Windows trips a libuv assertion
-// (`!(handle->flags & UV_HANDLE_CLOSING)`) after the success line was already printed.
+// Await the close, and destroy keep-alive sockets first. `server.close()` only fires its
+// callback once every connection has ended, and undici's `fetch` keeps connections alive — so
+// awaiting close() alone can hang forever (caught by CI as a validator timeout). Firing the
+// callback without awaiting would instead exit mid-close, which trips a libuv assertion on
+// Windows (`!(handle->flags & UV_HANDLE_CLOSING)`) after the success line was already printed.
+server.closeAllConnections?.();
 await new Promise((resolve) => server.close(resolve));
 rmSync(process.env.ROOT_PATH, { recursive: true, force: true });
 console.log("agent-session-http validation passed");

@@ -53,10 +53,12 @@ assert.equal(typeof body.git.ahead, "number", "ahead is a number");
 assert.equal(typeof body.git.behind, "number", "behind is a number");
 console.log("workspace:", JSON.stringify(body));
 
-// Await the close before exiting. Fire-and-forget `server.close()` followed by `process.exit(0)`
-// leaves the handle closing during exit, which on Windows trips a libuv assertion
-// (`!(handle->flags & UV_HANDLE_CLOSING)`) *after* the success line — so the script printed
-// "passed" and still exited non-zero.
+// Await the close, and destroy keep-alive sockets first. `server.close()` only fires its
+// callback once every connection has ended, and undici's `fetch` keeps connections alive — so
+// awaiting close() alone can hang forever (caught by CI as a validator timeout). Firing the
+// callback without awaiting would instead exit mid-close, which trips a libuv assertion on
+// Windows (`!(handle->flags & UV_HANDLE_CLOSING)`) after the success line was already printed.
+server.closeAllConnections?.();
 await new Promise((resolve) => server.close(resolve));
 rmSync(ws, { recursive: true, force: true });
 console.log("env-workspace validation passed");

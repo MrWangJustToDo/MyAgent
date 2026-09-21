@@ -153,9 +153,12 @@ await env.fs.remove("blob.bin");
 assert.equal(await env.fs.exists("hello.txt"), false);
 await env.destroy();
 
-// Await the close: fire-and-forget `server.close()` + `process.exit(0)` leaves the handle
-// closing during exit, which on Windows trips a libuv assertion
-// (`!(handle->flags & UV_HANDLE_CLOSING)`) after the success line was already printed.
+// Await the close, and destroy keep-alive sockets first. `server.close()` only fires its
+// callback once every connection has ended, and undici's `fetch` keeps connections alive — so
+// awaiting close() alone can hang forever (caught by CI as a validator timeout). Firing the
+// callback without awaiting would instead exit mid-close, which trips a libuv assertion on
+// Windows (`!(handle->flags & UV_HANDLE_CLOSING)`) after the success line was already printed.
+server.closeAllConnections?.();
 await new Promise((resolve) => server.close(resolve));
 rmSync(ws, { recursive: true, force: true });
 console.log("coreenv-http validation passed");
