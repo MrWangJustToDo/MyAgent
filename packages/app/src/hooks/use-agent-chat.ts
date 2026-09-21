@@ -8,6 +8,7 @@ import { useAdapter } from "../context/adapter-context.js";
 import { relinkSessionModel } from "../utils/apply-model-selection.js";
 import { clearFlatMessageCache } from "../utils/message-flat-cache.js";
 import { getActiveHost, resolveAgentSession } from "../utils/session-resolve.js";
+import { resolveStopDecision } from "../utils/stop-decision.js";
 import { handleToolLifecycleEvent } from "../utils/tool-timing-store.js";
 
 import { useAgentStatus } from "./use-agent-status.js";
@@ -346,10 +347,16 @@ export function useAgentChat(config: AppConfig): UseAgentChatReturn {
   const stop = useCallback(() => {
     const host = getActiveHost();
     if (session && host) {
-      const activeChildren = session.getSnapshot().subagents.filter((child) => isActiveStatus(child.status));
-      if (activeChildren.length > 0) {
-        for (const child of activeChildren) {
-          void resolveAgentSession(child.id)?.dispatch({ type: "stop" });
+      // Only a user-visible `task` delegation takes the subagent-first branch: the task
+      // subagent is stopped first so its cancellation reaches the parent, and the parent
+      // run is left to finish the turn. Internal workers (compaction / memory summarizers)
+      // share the `subagents` snapshot but have no such contract, so they must not decide
+      // this — an unfiltered active set is satisfied by the summarizer itself, which made
+      // `stop()` a no-op for the session and let compaction restart on its own.
+      const decision = resolveStopDecision(session.getSnapshot().subagents);
+      if (!decision.stopSession) {
+        for (const childId of decision.taskSubagentIds) {
+          void resolveAgentSession(childId)?.dispatch({ type: "stop" });
         }
         return;
       }

@@ -34,3 +34,5 @@ export {
   type CreateLocalAgentSessionHostOptions,
   type LocalAgentSessionHostManager,
 } from "./local-agent-session-host.js";
+
+export { isUserVisibleTaskRow, type SubagentRowLike } from "./subagent-row.js";
