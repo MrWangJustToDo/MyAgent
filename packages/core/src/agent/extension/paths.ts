@@ -3,6 +3,7 @@
  */
 
 import { getEnv } from "../../env.js";
+import { toPosixPath } from "../../utils/posix-path.js";
 
 /** Project-local extension directory (relative to CoreEnv rootPath). */
 export const DEFAULT_EXTENSION_DIR = ".agents/extension";
@@ -65,7 +66,7 @@ export function isExtensionModuleFile(name: string): boolean {
 
 /** Build a `file://` URL for dynamic import without depending on `node:url`. */
 export function pathToFileUrl(absPath: string): string {
-  const normalized = absPath.replace(/\\/g, "/");
+  const normalized = toPosixPath(absPath);
   if (normalized.startsWith("/")) {
     return `file://${normalized}`;
   }

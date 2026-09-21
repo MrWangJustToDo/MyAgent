@@ -1,3 +1,5 @@
+import { toPosixPath } from "@codent/core";
+
 import { namesAFile, parseGitNumstatZ } from "./workspace-git-paths.js";
 import { joinWorkspacePath } from "./workspace-path.js";
 
@@ -79,7 +81,7 @@ async function loadWorkspaceDiffStats(rootPath: string, untracked: string[]): Pr
   for (const rel of untracked) {
     const stat = await countUntrackedLines(rootPath, rel);
     if (!stat) continue;
-    const key = rel.replace(/\\/g, "/");
+    const key = toPosixPath(rel);
     files.set(key, stat);
     totalAdded += stat.added;
     totalDeleted += stat.deleted;

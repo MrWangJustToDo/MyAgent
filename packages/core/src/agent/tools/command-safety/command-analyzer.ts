@@ -14,6 +14,7 @@
  */
 
 import { defaultPath, getEnv } from "../../../env.js";
+import { toPosixPathKey } from "../../../utils/posix-path.js";
 
 import { canonicalizeCommandName, commandName, commandPrefix } from "./command-arity.js";
 import { extractCommands, parseCommandTree, resolveShellKind } from "./command-parser.js";
@@ -247,14 +248,13 @@ function pathArgs(tokens: string[]): string[] {
  * while reporting `\` as its separator — so building a prefix from a normalized path and a
  * separator of a different flavour produced a false "outside the root" verdict for Windows
  * paths. Comparing in one canonical form is immune to which flavour produced the values, and
- * matches the convention the rest of the codebase already uses for path keys
- * (`workspace-diff-stats` and `FileTree` both normalise with `replace(/\\/g, "/")`).
+ * it is the shared path rule rather than a convention re-stated here.
  *
  * The host's own `normalize` is still used, so a Windows env resolves `C:\a\..\b` correctly;
  * only the separator used for the comparison is fixed.
  */
 function containsPath(parent: string, child: string, path: CoreEnvPath): boolean {
-  const canonical = (p: string) => path.normalize(p).replace(/\\/g, "/").replace(/\/+$/, "");
+  const canonical = (p: string) => toPosixPathKey(path.normalize(p));
   const normalizedParent = canonical(parent);
   const normalizedChild = canonical(child);
   if (normalizedChild === normalizedParent) return true;

@@ -1,3 +1,5 @@
+import { toPosixPath } from "@codent/core";
+
 import { namesAFile } from "./workspace-git-paths.js";
 import { joinWorkspacePath } from "./workspace-path.js";
 
@@ -53,7 +55,7 @@ function buildDiffTree(gitStatus: Map<string, string>, rootPath: string): DiffTr
     // empty last segment, which `isLast` then classifies as a file. Guarded here too so a
     // future caller cannot reintroduce the defect by handing over a raw git path.
     if (!namesAFile(rel)) continue;
-    relPaths.add(rel.replace(/\\/g, "/"));
+    relPaths.add(toPosixPath(rel));
   }
 
   for (const relPath of relPaths) {

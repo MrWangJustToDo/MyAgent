@@ -349,5 +349,6 @@ export type {
 // ============================================================================
 
 export { generateId } from "./utils/generate-id.js";
+export { toPosixPath, toPosixPathKey } from "./utils/posix-path.js";
 export type { GenerateIdOptions } from "./utils/generate-id.js";
 export { destroyAllCommandJobs } from "./agent/tools/util/command-job-registry.js";

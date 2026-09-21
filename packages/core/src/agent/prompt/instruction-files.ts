@@ -20,6 +20,7 @@
  */
 
 import { getEnv } from "../../env.js";
+import { toPosixPathKey } from "../../utils/posix-path.js";
 
 // ============================================================================
 // Constants
@@ -420,7 +421,7 @@ function isInside(rootPath: string, candidate: string): boolean {
   // outside the workspace (the same class of bug `workspaceRelativePath` and the
   // file-URI helpers in this package already normalize away). Canonicalizing is
   // immune to which flavour produced the values.
-  const canonical = (p: string) => env.path.resolve(p).replace(/\\/g, "/").replace(/\/+$/, "");
+  const canonical = (p: string) => toPosixPathKey(env.path.resolve(p));
   const root = canonical(rootPath);
   const target = canonical(candidate);
   if (target === root) return true;

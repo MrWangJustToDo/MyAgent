@@ -1,4 +1,5 @@
 export { Emitter, type EmitterListener } from "./emitter.js";
+export { toPosixPath, toPosixPathKey } from "./posix-path.js";
 export {
   createSequentialIdGenerator,
   generateId,

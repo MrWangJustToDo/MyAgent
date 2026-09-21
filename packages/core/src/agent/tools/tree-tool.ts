@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
+import { toPosixPath, toPosixPathKey } from "../../utils/posix-path.js";
 
 import { defineServerTool } from "./runtime/define-tool.js";
 import { canExecArgs, execArgs } from "./util/exec-args.js";
@@ -288,13 +289,13 @@ export function formatAsTree(paths: string[], rootPath: string): string {
   // so for it this is a no-op; the normalization is what makes the function safe
   // for a caller handing it absolute paths — which is exactly what the
   // `validate:path-portability` case does, with win32-shaped backslash input.
-  const root = rootPath.replace(/\\/g, "/").replace(/\/+$/, "");
+  const root = toPosixPathKey(rootPath);
 
   // Sort paths
   const sortedPaths = paths.sort();
 
   for (const fullPath of sortedPaths) {
-    const normalized = fullPath.replace(/\\/g, "/");
+    const normalized = toPosixPath(fullPath);
     const relativePath = normalized.startsWith(`${root}/`)
       ? normalized.slice(root.length + 1)
       : normalized === root

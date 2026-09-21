@@ -1,12 +1,15 @@
-import { splitStreamingLines } from "./streaming-output-lines.js";
+import { parseGitPathList } from "./workspace-git-paths.js";
 import { joinWorkspacePath } from "./workspace-path.js";
 
 // ============================================================================
 // Quick-open file search
 //
-// File list comes from `git ls-files` (tracked + untracked, respects
+// File list comes from `git ls-files -z` (tracked + untracked, respects
 // .gitignore) — instant even on huge repos. Non-git workspaces fall back to a
 // bounded fs walk. Matching is a lightweight fzf-style subsequence scorer.
+//
+// The list is parsed from NUL records, not lines: `ls-files` output is consumed as a name,
+// so a git-quoted or octal-escaped path is a file the picker cannot find by its own name.
 // ============================================================================
 
 export interface FuzzyFileResult {
@@ -121,19 +124,13 @@ export async function fetchWorkspaceFileList(rootPath: string): Promise<string[]
 
   const files = new Set<string>();
   try {
-    const tracked = await env.runCommand("git ls-files", { cwd: rootPath });
+    const tracked = await env.runCommand("git ls-files -z", { cwd: rootPath });
     if (tracked.exitCode === 0) {
-      for (const line of splitStreamingLines(tracked.stdout)) {
-        const p = line.replace(/\\/g, "/").trim();
-        if (p) files.add(p);
-      }
+      for (const p of parseGitPathList(tracked.stdout)) files.add(p);
     }
-    const untracked = await env.runCommand("git ls-files --others --exclude-standard", { cwd: rootPath });
+    const untracked = await env.runCommand("git ls-files -z --others --exclude-standard", { cwd: rootPath });
     if (untracked.exitCode === 0) {
-      for (const line of splitStreamingLines(untracked.stdout)) {
-        const p = line.replace(/\\/g, "/").trim();
-        if (p) files.add(p);
-      }
+      for (const p of parseGitPathList(untracked.stdout)) files.add(p);
     }
   } catch {
     // Fall through to the fs walk below.

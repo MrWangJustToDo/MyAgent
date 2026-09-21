@@ -1,3 +1,4 @@
+import { toPosixPath } from "@codent/core";
 import { fromPath, icons } from "@m234/nerd-fonts";
 
 import { COLORS } from "../theme/colors.js";
@@ -152,7 +153,7 @@ function basenameOf(filePath: string): string {
 
 /** Last path segment with original casing (Seti base map keys are case-sensitive). */
 function pathBase(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, "/");
+  const normalized = toPosixPath(filePath);
   return normalized.split("/").pop() || normalized;
 }
 

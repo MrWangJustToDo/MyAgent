@@ -1,3 +1,4 @@
+import { toPosixPath } from "@codent/core";
 import { Box, Text } from "ink";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -38,7 +39,7 @@ export function lookupGitStatus(
   fullPath: string
 ): string | undefined {
   const relative = workspaceRelativePath(rootPath, fullPath);
-  return gitStatus.get(relative) ?? gitStatus.get(relative.replace(/\\/g, "/"));
+  return gitStatus.get(relative) ?? gitStatus.get(toPosixPath(relative));
 }
 
 // ============================================================================
@@ -89,7 +90,7 @@ export function computeDirStatuses(gitStatus: Map<string, string>, rootPath: str
   };
 
   for (const [filepath, status] of gitStatus) {
-    const parts = filepath.replace(/\\/g, "/").split("/");
+    const parts = toPosixPath(filepath).split("/");
     // Accumulate status into every ancestor directory, using absolute paths
     for (let i = 1; i < parts.length; i++) {
       const relativeDir = parts.slice(0, i).join("/");

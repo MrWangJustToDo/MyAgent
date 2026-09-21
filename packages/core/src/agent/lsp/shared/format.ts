@@ -1,5 +1,7 @@
 /** Format LSP locations / location links into `file:line:col` strings. */
 
+import { toPosixPath, toPosixPathKey } from "../../../utils/posix-path.js";
+
 import type { Location, LocationLink } from "vscode-languageserver-protocol";
 
 function uriToPath(uri: string): string {
@@ -20,10 +22,8 @@ function uriToPath(uri: string): string {
   }
 }
 
-/** Normalize separators so a Windows root and a POSIX-style path can be compared. */
-function normalizeSeparators(p: string): string {
-  return p.replace(/\\/g, "/");
-}
+// Separator normalization and trailing-separator removal are the shared path rules; keeping
+// local copies here is what a validator now rejects.
 
 /** Convert a file URI to a filesystem path (relative to rootDir when possible). */
 export function fileUriToPath(uri: string, rootDir: string): string {
@@ -31,8 +31,8 @@ export function fileUriToPath(uri: string, rootDir: string): string {
   try {
     // Compare on normalized separators and without a trailing separator, so a `C:\repo` root
     // matches `C:/repo/f.ts` and `/repo/` matches `/repo/f.ts`.
-    const normalizedRoot = normalizeSeparators(rootDir).replace(/\/+$/, "");
-    const normalizedAbs = normalizeSeparators(abs);
+    const normalizedRoot = toPosixPathKey(rootDir);
+    const normalizedAbs = toPosixPath(abs);
     if (normalizedAbs === normalizedRoot) return ".";
     if (normalizedAbs.startsWith(`${normalizedRoot}/`)) {
       return normalizedAbs.slice(normalizedRoot.length + 1);
@@ -66,7 +66,7 @@ export function formatLocationLink(link: LocationLink, rootDir: string): string 
  * the host. POSIX paths already start with `/`, so two slashes are correct for them.
  */
 export function pathToFileUri(absPath: string): string {
-  const normalized = normalizeSeparators(absPath);
+  const normalized = toPosixPath(absPath);
   if (normalized.startsWith("/")) {
     return `file://${normalized}`;
   }

@@ -1,4 +1,4 @@
-import { getEnv } from "@codent/core";
+import { getEnv, toPosixPathKey } from "@codent/core";
 
 /** Join paths using CoreEnv path utilities (POSIX-safe). */
 export function joinWorkspacePath(...parts: string[]): string {
@@ -15,14 +15,13 @@ export function workspaceRelativePath(rootPath: string, fullPath: string): strin
   // could not resolve to an entry.
   //
   // The result is deliberately forward-slashed rather than echoing the input's separator.
-  // Every consumer keys on `/`: `workspace-diff-stats` normalizes its map keys with
-  // `replace(/\\/g, "/")`, and `FileTree` looks `diffStats` up with no fallback, so returning a
-  // `\`-separated relative path on Windows would miss every entry. The one consumer that needs
-  // the other flavour already tries both (`FileTree`'s git-status lookup falls back to the
-  // normalized form), which is the direction that tolerates either.
-  const normalize = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
-  const root = normalize(rootPath);
-  const full = normalize(fullPath);
+  // Every consumer keys on `/` (the shared path rule in core), and `FileTree` looks `diffStats`
+  // up with no fallback, so returning a `\`-separated relative path on Windows would miss
+  // every entry. The one consumer that needs the other flavour already tries both (`FileTree`'s
+  // git-status lookup falls back to the normalized form), which is the direction that tolerates
+  // either.
+  const root = toPosixPathKey(rootPath);
+  const full = toPosixPathKey(fullPath);
   if (full === root) return ".";
   const prefix = `${root}/`;
   if (full.startsWith(prefix)) return full.slice(prefix.length);

@@ -20,12 +20,16 @@
  * ## Why the boundary lives here
  *
  * Neither consumer can be trusted to filter, and neither can the next one be: the same
- * defect existed twice already, once per consumer. A path that does not name a file is
+ * defect existed three times — twice in this view's commands, and once more in
+ * `workspace-file-search`, which read `git ls-files` line-oriented in a different view and
+ * was found only by surveying every git invocation. A path that does not name a file is
  * rejected at extraction instead, so no consumer has to know the rule.
  *
  * @see `docs` — the inputs these functions are pinned against are taken from git's own
  * output rather than hand-written, so a change in git's escaping fails the tests.
  */
+
+import { toPosixPathKey } from "@codent/core";
 
 /** Record separator git uses for `-z` output. */
 export const GIT_RECORD_SEPARATOR = "\0";
@@ -74,12 +78,31 @@ export function splitGitRecords(raw: string): string[] {
 /**
  * Normalize a path git just reported: forward slashes, and no trailing separator.
  *
- * Windows git emits `\` in some paths; every consumer keys on `/` (the stats map is
- * normalized the same way, and `FileTree` looks stats up with no fallback). The trailing
- * separator is what an unexpanded untracked directory carries.
+ * A thin alias for the shared path rule (`@codent/core`), kept under this name because the
+ * git parse reads more clearly against "a git path" than against the general primitive. It
+ * deliberately does not carry its own copy of the substitution — that copy is what the
+ * anti-drift validator rejects.
  */
-export function normalizeGitPath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/\/+$/, "");
+export const normalizeGitPath = toPosixPathKey;
+
+/**
+ * Parse a `git ls-files -z` / `git ls-files -z --others` payload into file paths.
+ *
+ * Records are bare paths — no status prefix, no counts — so this is the simplest shape, and
+ * the one where line-oriented reading hurt most: `ls-files` output is consumed as a *name*
+ * (the quick-open picker matches a query against it), so an octal-escaped non-ASCII path does
+ * not merely display wrong, it makes the file unfindable by its own name.
+ *
+ * Paths git reports as directories are rejected here too, for the same reason as elsewhere:
+ * a consumer should never be handed something it cannot read.
+ */
+export function parseGitPathList(raw: string): string[] {
+  const paths: string[] = [];
+  for (const record of splitGitRecords(raw)) {
+    const path = filePathFromRecord(record);
+    if (path !== null) paths.push(path);
+  }
+  return paths;
 }
 
 /**

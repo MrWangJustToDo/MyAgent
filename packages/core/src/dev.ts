@@ -38,6 +38,7 @@ export {
   sessionForSubagent,
 } from "./agent-session";
 export { generateId, resetGeneratedIdsForTesting } from "./utils/generate-id.js";
+export { toPosixPath, toPosixPathKey } from "./utils/posix-path.js";
 export { clearCoreEnv, registerCoreEnv } from "./env.js";
 export type { CoreEnv } from "./env.js";
 
