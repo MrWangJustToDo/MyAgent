@@ -140,18 +140,18 @@ check("builtinNames() lists exactly the built-ins", () => {
 // ============================================================================
 
 const builtinName = BUILTIN_SKILLS[0].name;
-const userSkill = {
+const shadowingUserSkill = {
   name: builtinName,
   description: "user override",
   body: "USER BODY WINS",
-  path: `${root}/.agents/skills/${builtinName}/SKILL.md`,
+  path: `builtin-shadow/${builtinName}/SKILL.md`,
   source: "user",
   metadata: { name: builtinName, description: "user override" },
 };
 
 const warnings = [];
 const precedenceRegistry = new SkillRegistry({ rootPath: root, logger: { warn: (m) => warnings.push(m) } });
-precedenceRegistry.register(userSkill);
+precedenceRegistry.register(shadowingUserSkill);
 precedenceRegistry.registerAll(BUILTIN_SKILLS);
 
 check("a user skill overrides a same-named built-in", () => {
@@ -169,8 +169,8 @@ check("the override is reported, not silent", () => {
 check("directory-vs-directory collisions are reported too", () => {
   const dirWarnings = [];
   const dirRegistry = new SkillRegistry({ rootPath: root, logger: { warn: (m) => dirWarnings.push(m) } });
-  dirRegistry.register({ ...userSkill, source: "user" });
-  dirRegistry.register({ ...userSkill, path: "/other/SKILL.md", source: "project" });
+  dirRegistry.register({ ...shadowingUserSkill, source: "user" });
+  dirRegistry.register({ ...shadowingUserSkill, path: "/other/SKILL.md", source: "project" });
   assert.equal(dirWarnings.length, 1, "second registration must warn");
   assert.equal(dirRegistry.size, 1);
 });
@@ -178,28 +178,63 @@ check("directory-vs-directory collisions are reported too", () => {
 // ============================================================================
 // 4. Source attribution from real directories
 // ============================================================================
+// 4. Source attribution from real directories
+// ============================================================================
+// Uses a temp fixture, NOT `.agents/skills`: that directory is covered by the
+// `.gitignore` `.agents` entry, so it does not exist on a fresh clone. This
+// validator runs in CI, where depending on it made the whole file fail with
+// "the repo's own .agents/skills must load" — and masked the rest.
 
-const sourceRegistry = new SkillRegistry({ rootPath: root });
+const { mkdtemp, mkdir, writeFile, rm } = await import("node:fs/promises");
+const { tmpdir } = await import("node:os");
+
+const fixtureRoot = await mkdtemp(path.join(tmpdir(), "builtin-skills-fixture-"));
+const fixtureSkillsDir = path.join(fixtureRoot, "skills");
+
+async function writeFixtureSkill(name, body) {
+  const dir = path.join(fixtureSkillsDir, name);
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: ${name} fixture\n---\n\n${body}\n`);
+}
+
+await writeFixtureSkill("fixture-alpha", "FIXTURE ALPHA BODY");
+await writeFixtureSkill("fixture-beta", "FIXTURE BETA BODY");
+
+const userTaggedSkill = {
+  name: "fixture-gamma",
+  description: "fixture-gamma fixture",
+  body: "FIXTURE GAMMA BODY",
+  path: `${fixtureRoot}/home/.agents/skills/fixture-gamma/SKILL.md`,
+  source: "user",
+  metadata: { name: "fixture-gamma", description: "fixture-gamma fixture" },
+};
+
+const sourceRegistry = new SkillRegistry({ rootPath: fixtureRoot });
 await sourceRegistry.loadFromDirectories([
-  { path: path.join(root, ".agents", "skills"), source: "project" },
-  path.join(root, ".agents", "skills"), // bare string form → "project"
+  { path: fixtureSkillsDir, source: "project" },
+  path.join(fixtureRoot, "other-skills"), // bare string form → "project" (absent on purpose)
 ]);
 
 check("directory-loaded skills carry a source", () => {
   const loaded = sourceRegistry.list();
-  assert.ok(loaded.length >= 1, "the repo's own .agents/skills must load");
+  assert.equal(loaded.length, 2, `expected the two fixture skills, got ${loaded.map((s) => s.name).join(", ")}`);
   for (const s of loaded) {
     assert.ok(["user", "project"].includes(s.source), `"${s.name}" has source ${s.source}`);
     assert.equal(typeof s.source, "string");
   }
+  assert.deepEqual(loaded.map((s) => s.name).sort(), ["fixture-alpha", "fixture-beta"], "both fixture skills loaded");
 });
-
-await sourceRegistry.loadFromDirectories([{ path: path.join(root, ".agents", "skills"), source: "user" }]);
 
 check("directory skills are never attributed to builtin", () => {
   for (const s of sourceRegistry.list()) {
     assert.notEqual(s.source, "builtin", `"${s.name}" came from a directory but claims builtin`);
   }
+});
+
+check("a directory skill's source is the tag it was loaded with", () => {
+  const userTagged = new SkillRegistry({ rootPath: fixtureRoot });
+  userTagged.register(userTaggedSkill);
+  assert.equal(userTagged.get("fixture-gamma").source, "user");
 });
 
 // ============================================================================
@@ -224,10 +259,14 @@ async function activate(skillRegistry, config) {
   return { tools, commands, provider };
 }
 
-// A registry with one directory skill + all built-ins, so both sources coexist.
-const mixed = new SkillRegistry({ rootPath: root });
-await mixed.loadFromDirectories([{ path: path.join(root, ".agents", "skills"), source: "project" }]);
-const dirNames = mixed.names();
+// A registry with one project skill + one user skill + all built-ins, so every source
+// is represented and the index can be asserted on all three.
+const mixed = new SkillRegistry({ rootPath: fixtureRoot });
+await mixed.loadFromDirectories([{ path: fixtureSkillsDir, source: "project" }]);
+const projectNames = mixed.names();
+mixed.register(userTaggedSkill);
+const userNames = [userTaggedSkill.name];
+const dirNames = [...projectNames, ...userNames];
 mixed.registerAll(BUILTIN_SKILLS);
 
 const on = await activate(mixed, undefined);
@@ -244,9 +283,10 @@ check("index distinguishes built-ins from user/project skills", () => {
     `built-in origin missing from index:\n${onIndex.slice(0, 400)}`
   );
   for (const name of dirNames) {
-    assert.ok(onIndex.includes(`(${name === "write-extension" ? "x" : ""}`) || onIndex.includes(name), "name listed");
+    assert.ok(onIndex.includes(name), `directory skill "${name}" missing from index`);
   }
-  assert.ok(/\(project\)/.test(onIndex), "project origin missing from index");
+  assert.ok(/\(project\)/.test(onIndex), `project origin missing from index:\n${onIndex.slice(0, 400)}`);
+  assert.ok(/\(user\)/.test(onIndex), `user origin missing from index:\n${onIndex.slice(0, 400)}`);
 });
 
 check("list_skills reports source", async () => {
@@ -263,11 +303,23 @@ const off = await activate(mixed, { builtinsDisabled: true });
 const offIndex = await off.provider.content();
 
 check("builtinsDisabled removes built-ins from the index", () => {
+  assert.ok(typeof offIndex === "string", `expected an index when directory skills remain, got ${typeof offIndex}`);
   assert.ok(!offIndex.includes("write-extension"), "built-in must not be listed");
-  assert.ok(/\(builtin\)/.test(offIndex) === false, "no builtin origins when disabled");
+  assert.ok(!/\(builtin\)/.test(offIndex), "no builtin origins when disabled");
   for (const name of dirNames) {
     assert.ok(offIndex.includes(name), `directory skill "${name}" must survive`);
   }
+});
+
+// With built-ins disabled AND no directory skill present, the index must vanish
+// entirely rather than render an empty <skills> block. The provider returns
+// `undefined`, so a caller that assumes a string breaks here — this was a real
+// regression that only CI caught (locally `.agents/skills` always existed).
+check("builtinsDisabled with no directory skills drops the index section", async () => {
+  const empty = new SkillRegistry({ rootPath: fixtureRoot });
+  empty.registerAll(BUILTIN_SKILLS);
+  const offEmpty = await activate(empty, { builtinsDisabled: true });
+  assert.equal(await offEmpty.provider.content(), undefined, "no section when nothing is visible");
 });
 
 check("builtinsDisabled removes built-ins from list_skills", async () => {
@@ -404,6 +456,8 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`  - ${f}`);
   process.exit(1);
 }
+
+await rm(fixtureRoot, { recursive: true, force: true });
 
 console.log(
   `builtin-skills validation passed — ${BUILTIN_SKILLS.length} built-in skill(s): ${BUILTIN_SKILLS.map((s) => s.name).join(", ")}`
