@@ -414,11 +414,17 @@ function resolveReference(reference: string, baseDir: string, rootPath: string):
 /** Whether `candidate` is `rootPath` itself or lives beneath it. */
 function isInside(rootPath: string, candidate: string): boolean {
   const env = getEnv();
-  const root = env.path.resolve(rootPath);
-  const target = env.path.resolve(candidate);
+  // Compare in one canonical forward-slash form. The host's `path.resolve` is
+  // separator-flavoured — `node:path` on win32 returns `C:\repo` — so a prefix
+  // built with a hardcoded `/` never matched and every `@import` was rejected as
+  // outside the workspace (the same class of bug `workspaceRelativePath` and the
+  // file-URI helpers in this package already normalize away). Canonicalizing is
+  // immune to which flavour produced the values.
+  const canonical = (p: string) => env.path.resolve(p).replace(/\\/g, "/").replace(/\/+$/, "");
+  const root = canonical(rootPath);
+  const target = canonical(candidate);
   if (target === root) return true;
-  const sep = root.endsWith("/") ? "" : "/";
-  return target.startsWith(`${root}${sep}`);
+  return target.startsWith(`${root}/`);
 }
 
 // ============================================================================

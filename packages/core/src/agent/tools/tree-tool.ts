@@ -26,7 +26,11 @@ export interface WalkTreeOptions {
   ignore: string[];
   /** Injectable for testing; defaults to the registered environment's filesystem. */
   fs?: CoreEnvFs;
-  /** Injectable for testing; the separator to join with, so win32 paths can be walked on Linux. */
+  /**
+   * Injectable for testing only — the production call path never sets it, because the
+   * `relative` list this builds is separator-agnostic by construction (see the `join`
+   * default). It exists so a test can drive a win32-shaped walk on Linux.
+   */
   join?: (parent: string, child: string) => string;
 }
 
@@ -275,21 +279,27 @@ export const createTreeTool = () => {
 /**
  * Format flat path list into tree-like structure
  */
-function formatAsTree(paths: string[], rootPath: string): string {
+export function formatAsTree(paths: string[], rootPath: string): string {
   if (paths.length === 0) return "(empty)";
 
   const lines: string[] = [];
-  const root = rootPath.replace(/\/$/, "");
+  // Canonical form so the prefix compare works for either separator flavour.
+  // `walkTree` (the production producer) returns root-relative, "/"-joined paths,
+  // so for it this is a no-op; the normalization is what makes the function safe
+  // for a caller handing it absolute paths — which is exactly what the
+  // `validate:path-portability` case does, with win32-shaped backslash input.
+  const root = rootPath.replace(/\\/g, "/").replace(/\/+$/, "");
 
   // Sort paths
   const sortedPaths = paths.sort();
 
   for (const fullPath of sortedPaths) {
-    const relativePath = fullPath.startsWith(root + "/")
-      ? fullPath.slice(root.length + 1)
-      : fullPath === root
+    const normalized = fullPath.replace(/\\/g, "/");
+    const relativePath = normalized.startsWith(`${root}/`)
+      ? normalized.slice(root.length + 1)
+      : normalized === root
         ? "."
-        : fullPath;
+        : normalized;
 
     if (!relativePath || relativePath === ".") {
       lines.push(root);

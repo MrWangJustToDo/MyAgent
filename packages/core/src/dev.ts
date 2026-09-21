@@ -11,7 +11,7 @@ export * from "./dev/dev-models.js";
 export { analyzeCommand, createAnalysisContext } from "./agent/tools/command-safety/command-analyzer.js";
 export { classifyShell, isShellParsable, resolveShellKind } from "./agent/tools/command-safety/command-parser.js";
 export { tokenizeCommandString } from "./agent/tools/command-safety/command-tokenizer.js";
-export { walkTree } from "./agent/tools/tree-tool.js";
+export { walkTree, formatAsTree } from "./agent/tools/tree-tool.js";
 // Tool factories for behavioural validators. These live here (not in the published entry) so a
 // validator can exercise the real tool code with a stubbed CoreEnv — the alternative is testing
 // a replica, which is how a semantic regression (a deleted fallback rule) went unseen while the

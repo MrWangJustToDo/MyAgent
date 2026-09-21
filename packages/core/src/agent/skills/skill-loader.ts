@@ -183,6 +183,7 @@ export class SkillLoader {
    */
   async loadFromDirectory(dirPath: string, source: SkillSource = "project"): Promise<Map<string, Skill>> {
     const skills = new Map<string, Skill>();
+    const env = getEnv();
 
     const dirExists = await this.directoryExists(dirPath);
     if (!dirExists) {
@@ -200,8 +201,12 @@ export class SkillLoader {
           continue;
         }
 
-        const pathParts = filePath.split("/");
-        const skillDir = pathParts[pathParts.length - 2] || "unknown";
+        // The skill's directory name is the fallback when frontmatter omits `name`.
+        // Resolved through `env.path` rather than `split("/")`: the walk builds paths
+        // with `env.path.join`, which on win32 produces backslashes — a hardcoded
+        // separator split collapsed the whole path into one element and every
+        // unnamed skill was named "unknown" (colliding, first-wins, silently lost).
+        const skillDir = env.path.basename(env.path.dirname(filePath)) || "unknown";
 
         const name = metadata?.name || skillDir;
         const description = metadata?.description || "";

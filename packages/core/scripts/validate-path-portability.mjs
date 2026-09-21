@@ -22,18 +22,40 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { buildOsSandboxConfig } from "../../node/dist/index.mjs";
-import { fileUriToPath, formatLocation, pathToFileUri } from "../dist/dev.mjs";
+import {
+  clearCoreEnv,
+  expandInstructionImports,
+  formatAsTree,
+  registerCoreEnv,
+  walkTree,
+  fileUriToPath,
+  formatLocation,
+  pathToFileUri,
+} from "../dist/dev.mjs";
 
 let failures = 0;
 function check(label, fn) {
   try {
-    fn();
+    const result = fn();
+    // Async cases return a promise; the caller `await`s it so failures settle
+    // before the exit check at the bottom of the file.
+    if (result instanceof Promise) {
+      return result.then(
+        () => console.log(`PASS  ${label}`),
+        (err) => {
+          failures += 1;
+          console.log(`FAIL  ${label}`);
+          console.log(`      ${err.message.split("\n")[0]}`);
+        }
+      );
+    }
     console.log(`PASS  ${label}`);
   } catch (err) {
     failures += 1;
     console.log(`FAIL  ${label}`);
     console.log(`      ${err.message.split("\n")[0]}`);
   }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +134,145 @@ check("sandbox: no literal tilde survives in denyRead", () => {
 check("sandbox: ssh key directory is still denied", () => {
   const config = buildOsSandboxConfig("/repo");
   assert.ok(config.filesystem.denyRead.includes(join(homedir(), ".ssh")));
+});
+
+// ---------------------------------------------------------------------------
+// instruction files — `@import` containment under win32 path semantics
+// ---------------------------------------------------------------------------
+// `isInside` used to compare with a hardcoded `/` prefix. Under `node:path` on
+// win32, `resolve` returns backslash paths, so the prefix never matched and
+// every `@import` was rejected as outside the workspace — silently, in both
+// consumers (the doc loader and the turn-context change detector). These cases
+// register a stub env whose `path` follows `node:path/win32` so the win32
+// behaviour is exercisable on Linux.
+//
+// The async cases are awaited **sequentially**: each registers its own env and
+// clears it in `finally`, so running them concurrently let one case tear down
+// another's env mid-flight (and the sync exit-check below would also run
+// before any of them settled).
+
+const win32Path = await import("node:path").then((m) => m.win32);
+const win32Env = {
+  rootPath: "C:\\repo",
+  path: {
+    join: win32Path.join,
+    dirname: win32Path.dirname,
+    basename: win32Path.basename,
+    resolve: win32Path.resolve,
+    isAbsolute: win32Path.isAbsolute,
+  },
+  fs: {
+    exists: async (p) => p === "C:\\repo\\docs\\guide.md",
+    stat: async () => ({ isDirectory: false, isFile: true }),
+    readFile: async () => "guide content",
+  },
+  byteLength: (s) => Buffer.byteLength(s, "utf-8"),
+};
+
+await check("instruction: win32 @import inside the root is expanded", async () => {
+  clearCoreEnv();
+  registerCoreEnv(win32Env);
+  try {
+    const { content, notices } = await expandInstructionImports("see @docs/guide.md here", {
+      baseDir: "C:\\repo",
+      rootPath: "C:\\repo",
+    });
+    assert.equal(content.includes("guide content"), true, JSON.stringify({ content, notices }));
+    assert.deepEqual(notices, []);
+  } finally {
+    clearCoreEnv();
+  }
+});
+
+await check("instruction: win32 @/ root-relative import is expanded", async () => {
+  clearCoreEnv();
+  registerCoreEnv(win32Env);
+  try {
+    const { content, notices } = await expandInstructionImports("see @/docs/guide.md here", {
+      baseDir: "C:\\repo",
+      rootPath: "C:\\repo",
+    });
+    assert.equal(content.includes("guide content"), true, JSON.stringify({ content, notices }));
+    assert.deepEqual(notices, []);
+  } finally {
+    clearCoreEnv();
+  }
+});
+
+await check("instruction: win32 import outside the root is still rejected", async () => {
+  clearCoreEnv();
+  registerCoreEnv(win32Env);
+  try {
+    const { content, notices } = await expandInstructionImports("see @..\\outside.md here", {
+      baseDir: "C:\\repo",
+      rootPath: "C:\\repo",
+    });
+    assert.equal(content.includes("guide content"), false);
+    assert.equal(
+      notices.some((n) => n.includes("outside the workspace")),
+      true,
+      JSON.stringify(notices)
+    );
+  } finally {
+    clearCoreEnv();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// tree fallback — formatAsTree with win32-shaped absolute paths
+// ---------------------------------------------------------------------------
+// `formatAsTree` is exported for this case. The walk is separator-agnostic by
+// construction, so the function's prefix-strip cannot be reached through it with
+// backslashes — the only way to pin the fix is to call the formatter directly.
+
+await check("tree: formatAsTree strips a win32 root prefix", async () => {
+  const tree = formatAsTree(["C:\\repo\\src", "C:\\repo\\src\\a.ts", "C:\\repo\\README.md"], "C:\\repo");
+  // The prefix is stripped (no `C:\repo\` survives) and the bare root collapses to
+  // the root label. The default formatter prints names indented, not the root name.
+  assert.ok(!tree.includes("C:"), `the root prefix leaked into the tree:\n${tree}`);
+  assert.equal(tree, ["README.md", "src", "  a.ts"].join("\n"), tree);
+});
+
+await check("tree: formatAsTree strips a POSIX root prefix", async () => {
+  assert.equal(formatAsTree(["/repo/src", "/repo/src/a.ts"], "/repo"), ["src", "  a.ts"].join("\n"));
+  assert.equal(formatAsTree(["/repo"], "/repo"), "/repo", "a bare root renders the root name");
+});
+
+// ---------------------------------------------------------------------------
+// tree walk — a win32-shaped filesystem is walked correctly
+// ---------------------------------------------------------------------------
+
+await check("tree: walkTree walks a win32-shaped fs", async () => {
+  clearCoreEnv();
+  registerCoreEnv({
+    rootPath: "C:\\repo",
+    fs: {
+      readdir: async (dir) =>
+        dir === "C:\\repo" ? [{ name: "src", type: "directory" }] : [{ name: "a.ts", type: "file" }],
+    },
+  });
+  try {
+    // The injected join makes the FS lookups win32-shaped. `walkTree`'s return
+    // value is root-relative and always "/"-joined (its `relative` build does
+    // not use the injected join), so what this pins is that the walk reaches the
+    // nested directory on a backslash-flavoured fs and feeds the formatter paths
+    // it can render.
+    const paths = await walkTree("C:\\repo", {
+      maxDepth: 2,
+      dirsOnly: false,
+      showHidden: false,
+      pattern: undefined,
+      ignore: [],
+      join: (parent, child) => `${parent}\\${child}`,
+    });
+    assert.deepEqual(paths, ["src", "src/a.ts"]);
+
+    // End to end through the real formatter: `walkTree` hands it root-relative
+    // paths, which is the production shape, and they render as a tree.
+    assert.equal(formatAsTree(paths, "C:\\repo"), ["src", "  a.ts"].join("\n"));
+  } finally {
+    clearCoreEnv();
+  }
 });
 
 if (failures > 0) {
