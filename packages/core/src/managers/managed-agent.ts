@@ -939,12 +939,19 @@ export class ManagedAgent {
   }
 
   /**
-   * Land any buffered log entries synchronously and stop tracking this log for
-   * crash flushes. Called from `destroyAgent` so a quit right after teardown
-   * still records the abort instead of losing it to the 250 ms batch timer.
+   * Land any buffered log entries synchronously and detach the file sink. Called
+   * from `destroyAgent`.
+   *
+   * Detaching (not just flushing) matters: the sink owns a periodic flush timer, and
+   * leaving it armed after the agent is destroyed keeps writing into the session's log
+   * directory. That is a leak in any runtime, and on Windows it is fatal to teardown —
+   * a directory cannot be removed while a handle is open in it, so a cleanup `rm` over
+   * the workspace fails with ENOTEMPTY.
    */
   flushLogOnDestroy(): void {
     this.log.flushSync();
+    this.detachLogSink?.();
+    this.detachLogSink = null;
     unregisterActiveAgentLog(this.log);
   }
 
