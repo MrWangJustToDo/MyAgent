@@ -27,6 +27,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // The render-layer readers are public (`@codent/core`) — a host uses them to render a part it
 // was handed; the producers and the projection registry are internal (`dev.mjs`).
@@ -47,7 +48,7 @@ import {
   isSyntheticCancelOutput,
 } from "../dist/index.mjs";
 
-const SRC = new URL("../src/", import.meta.url).pathname;
+const SRC = fileURLToPath(new URL("../src/", import.meta.url));
 
 // ============================================================================
 // 1. The marker tables: one semantic, two field names

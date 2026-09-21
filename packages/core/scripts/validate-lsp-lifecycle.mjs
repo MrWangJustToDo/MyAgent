@@ -15,6 +15,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { observeMockProcesses } from "./process-count.mjs";
 
@@ -59,7 +60,7 @@ const env = nodePkg.createNodeEnv({ rootPath: projectA, cwd: projectA, platform:
 core.registerCoreEnv(env);
 
 const coreDistDir = resolve(import.meta.dirname, "..", "dist");
-const dev = await import(resolve(coreDistDir, "dev.mjs"));
+const dev = await import(pathToFileURL(resolve(coreDistDir, "dev.mjs")).href);
 const { ExtensionRunner } = dev;
 
 const registeredTools = [];

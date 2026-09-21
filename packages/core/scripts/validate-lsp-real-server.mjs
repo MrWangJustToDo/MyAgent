@@ -10,6 +10,7 @@
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const results = [];
 function record(name, ok, detail = "") {
@@ -57,7 +58,7 @@ const env = nodePkg.createNodeEnv({ rootPath: projectDir, cwd: projectDir, platf
 core.registerCoreEnv(env);
 
 const coreDistDir = resolve(import.meta.dirname, "..", "dist");
-const dev = await import(resolve(coreDistDir, "dev.mjs"));
+const dev = await import(pathToFileURL(resolve(coreDistDir, "dev.mjs")).href);
 const { ExtensionRunner } = dev;
 
 const registeredTools = [];

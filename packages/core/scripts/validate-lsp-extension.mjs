@@ -22,7 +22,7 @@
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { observeMockProcesses } from "./process-count.mjs";
 
@@ -88,7 +88,7 @@ core.registerCoreEnv(env);
 
 // dev.mjs is not exposed via package exports; load it directly from the built dist.
 const coreDistDir = resolve(import.meta.dirname, "..", "dist");
-const dev = await import(resolve(coreDistDir, "dev.mjs"));
+const dev = await import(pathToFileURL(resolve(coreDistDir, "dev.mjs")).href);
 const { ExtensionRunner } = dev;
 
 const registeredTools = [];

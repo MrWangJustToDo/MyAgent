@@ -38,6 +38,10 @@ import {
 // ---------------------------------------------------------------------------
 
 const ws = mkdtempSync(join(tmpdir(), "instr-imports-"));
+
+/** Compare paths in one canonical form: `source` is pathe-joined (forward slashes) while
+ *  native `join()` uses the platform separator, so a raw comparison is Windows-hostile. */
+const normPath = (p) => p.replace(/\\/g, "/").replace(/\/+$/, "");
 const outside = mkdtempSync(join(tmpdir(), "instr-outside-"));
 
 registerCoreEnv({
@@ -285,7 +289,7 @@ await (async () => {
   write("AGENTS.md", "# AGENTS.md\n\nVERSION_ONE\n");
 
   const loaded = await loadAgentDoc({ rootPath: ws });
-  assert.equal(loaded.source, join(ws, "CLAUDE.md"), "CLAUDE.md wins discovery");
+  assert.equal(normPath(loaded.source), normPath(join(ws, "CLAUDE.md")), "CLAUDE.md wins discovery");
   assert.ok(loaded.content.includes("VERSION_ONE"), "loadAgentDoc inlines the referenced AGENTS.md");
   assert.deepEqual(loaded.importNotices, []);
 
@@ -315,12 +319,16 @@ await (async () => {
     !loaded.content.includes("## Quick Reference") || loaded.content.includes("VERSION_TWO"),
     "only the winning file is loaded"
   );
-  assert.equal(loaded.source, join(ws, "CLAUDE.md"));
+  assert.equal(normPath(loaded.source), normPath(join(ws, "CLAUDE.md")));
 
   // With no CLAUDE.md, AGENTS.md is still discovered normally.
   rmSync(join(ws, "CLAUDE.md"), { force: true });
   const fallback = await loadAgentDoc({ rootPath: ws });
-  assert.equal(fallback.source, join(ws, "AGENTS.md"), "AGENTS.md is used when CLAUDE.md is absent");
+  assert.equal(
+    normPath(fallback.source),
+    normPath(join(ws, "AGENTS.md")),
+    "AGENTS.md is used when CLAUDE.md is absent"
+  );
   assert.ok(fallback.content.includes("VERSION_TWO"));
 
   console.log("✓ discovery is first-wins with no implicit fallback");

@@ -13,6 +13,7 @@
 
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
 const nodePkg = await import("@codent/node");
 const env = nodePkg.createNodeEnv({ rootPath: "/tmp", cwd: "/tmp", platform: "linux" });
@@ -20,7 +21,9 @@ const env = nodePkg.createNodeEnv({ rootPath: "/tmp", cwd: "/tmp", platform: "li
 // web-tree-sitter is a dependency of @codent/node (not hoisted to repo root),
 // so resolve it relative to the node package. Use createRequire from the resolved
 // @codent/node module to find it in the pnpm store.
-const nodeModulePath = (await import.meta.resolve("@codent/node")).replace("file://", "");
+// `fileURLToPath`, not `.replace("file://", "")`: on Windows the stripped string starts with
+// "/D:/...", which `createRequire` cannot resolve.
+const nodeModulePath = fileURLToPath(await import.meta.resolve("@codent/node"));
 const req = createRequire(nodeModulePath);
 const webTreeSitterUrl = req.resolve("web-tree-sitter");
 const { Parser, Language } = await import(webTreeSitterUrl);

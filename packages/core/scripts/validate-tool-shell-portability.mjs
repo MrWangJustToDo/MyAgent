@@ -13,11 +13,12 @@
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // `scripts/` is one level below the package root, so `..` from this file resolves to
 // `packages/core/`. Getting this wrong is not a cosmetic bug: the scan would find no files
 // and report success, which is a green light over an empty set.
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SCAN_DIRS = ["src/agent/tools", "src/agent/skills"];
 
 /**

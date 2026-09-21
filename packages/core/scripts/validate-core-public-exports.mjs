@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const indexPath = path.join(root, "dist/index.mjs");
@@ -31,7 +31,7 @@ const DENY = [
   "CONVERSATION_SUMMARY_END",
 ];
 
-const mod = await import(indexPath);
+const mod = await import(pathToFileURL(indexPath).href);
 const leaked = DENY.filter((name) => name in mod);
 
 assert.equal(leaked.length, 0, `Forbidden public exports found: ${leaked.join(", ")}`);
