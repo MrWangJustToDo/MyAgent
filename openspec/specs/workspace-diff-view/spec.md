@@ -32,6 +32,8 @@ The diff view SHALL derive its paths from a parse that yields the real path of e
 
 Git escapes paths it considers special when asked for line-oriented output — spaces and quotes are quoted, and non-ASCII bytes are octal-escaped by default. A parse that takes such a record literally produces a path that does not exist, so the view SHALL NOT rely on line-oriented output for path extraction.
 
+This applies to **every** command whose output is parsed for paths, not only the commands the diff view itself issues. A path-extracting consumer added later, in this view or another, is covered by the same rule; the survey that established the current set is part of this requirement rather than an assumption behind it.
+
 #### Scenario: A path containing a space
 
 - **WHEN** a changed file's path contains a space
@@ -56,6 +58,12 @@ Git escapes paths it considers special when asked for line-oriented output — s
 
 - **WHEN** a record names a directory rather than a file
 - **THEN** it produces no row, and no row is produced whose name is empty
+
+#### Scenario: A later consumer in another view is covered
+
+- **WHEN** a consumer outside this view extracts a path from git output
+- **THEN** it reads that output NUL-delimited for the same reason
+- **AND** the requirement is not read as binding only the commands listed above
 
 ### Requirement: Every registered path is one the view can read
 
