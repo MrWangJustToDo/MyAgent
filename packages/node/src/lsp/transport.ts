@@ -109,10 +109,20 @@ class NodeLspConnection implements LspConnection {
   private async spawnDirect(): Promise<void> {
     const env = { ...process.env, ...this.config.env };
 
+    // A project-local install resolves to Node's `node_modules/.bin`, which on Windows is a
+    // `.cmd` shim. Since Node's CVE-2024-27980 hardening, `spawn` refuses to execute a
+    // `.cmd`/`.bat` without `shell: true` and rejects with EINVAL — so an LSP server installed
+    // as a devDependency could never start there. Only these extensions need the shell; every
+    // other command (including `process.execPath`) is spawned directly, so the shell surface
+    // stays as small as possible.
+    const useShell = process.platform === "win32" && /\.(cmd|bat)$/i.test(this.config.command);
+
     this.process = spawn(this.config.command, this.config.args, {
       stdio: ["pipe", "pipe", "pipe"],
       env,
       cwd: this.config.cwd,
+      shell: useShell,
+      windowsHide: true,
     });
 
     if (!this.process.stdout || !this.process.stdin) {

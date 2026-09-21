@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 
 import { AgentLog, ToolApprovalTable, createAgentStatusController, summarizePayload } from "../dist/dev.mjs";
 
-import { createLogCapture, sleep } from "./helpers/log-capture.mjs";
+import { createLogCapture, waitFor } from "./helpers/log-capture.mjs";
 
 // ----------------------------------------------------------------------------
 // 1. Persistence-only surface: query/emitter/serialization APIs are gone.
@@ -50,8 +50,9 @@ console.log("persistence-only surface: OK");
   runLog.setRun(null);
   runLog.info("system", "post-run entry");
 
-  await sleep(60);
-  const entries = await readEntries();
+  // Poll rather than sleep: the sink flushes on an interval, so a fixed sleep is a race that
+  // passed locally and failed on a loaded runner (observed as `0 !== 3`).
+  const entries = await waitFor(readEntries, (e) => e.length >= 3);
   assert.equal(entries.length, 3);
   assert.equal(entries[0].run, undefined, "bootstrap entry has no run id");
   assert.equal(entries[1].run, "run00001", "run entry stamped with run id");

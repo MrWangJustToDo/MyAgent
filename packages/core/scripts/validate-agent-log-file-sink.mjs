@@ -11,6 +11,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { waitFor } from "./helpers/log-capture.mjs";
+
 import { AgentLog, clearCoreEnv, registerCoreEnv } from "../dist/dev.mjs";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -81,9 +83,19 @@ const detach = log.attachFileSink({
 log.info("system", "hello-1");
 log.warn("agent", "warn-2", { n: 2 });
 log.error("agent", "boom-3", new Error("test error"));
-await sleep(80);
-
-const lines = (await fs.promises.readFile(filePath, "utf-8")).trim().split("\n");
+// Poll for the flush instead of sleeping a fixed 80ms: the interval-based flush had not run
+// yet on a loaded runner, which surfaced as an ENOENT reading a file that was about to exist.
+const flushedLines = await waitFor(
+  async () => {
+    try {
+      return (await fs.promises.readFile(filePath, "utf-8")).trim().split("\n");
+    } catch {
+      return [];
+    }
+  },
+  (l) => l.filter(Boolean).length >= 3
+);
+const lines = flushedLines.filter(Boolean);
 assert.equal(lines.length, 3, `pre-attach entries dropped, expected 3 lines, got ${lines.length}`);
 
 const first = JSON.parse(lines[0]);

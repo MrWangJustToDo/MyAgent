@@ -53,6 +53,25 @@ export function createFsEnv(rootPath, { withAppendFile = true } = {}) {
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Wait until `read()` satisfies `predicate`, or give up.
+ *
+ * The file sink flushes on an interval, so a fixed `sleep()` before reading is a race: it
+ * passed on a fast machine and failed on a loaded CI runner, where the flush had not run yet.
+ * Polling converges as soon as the sink catches up and cannot pass vacuously — the caller
+ * still asserts on the value afterwards, so a genuine failure surfaces as a failed assertion
+ * rather than as this helper timing out silently.
+ */
+export async function waitFor(read, predicate, { attempts = 100, delayMs = 25 } = {}) {
+  let value;
+  for (let i = 0; i < attempts; i++) {
+    value = await read();
+    if (predicate(value)) return value;
+    await sleep(delayMs);
+  }
+  return value;
+}
+
+/**
  * Create an AgentLog attached to a temp-dir JSONL sink.
  * Returns `{ log, rootPath, dir, filePath, detach, readEntries, sleep }` where
  * `readEntries()` flushes, reads the JSONL file and returns parsed LogEntry
