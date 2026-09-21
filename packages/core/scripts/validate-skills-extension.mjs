@@ -50,16 +50,39 @@ registerCoreEnv({
 });
 
 // ---------------------------------------------------------------------------
-// 1. SkillRegistry loads real SKILL.md content from .agents/skills
+// 1. SkillRegistry loads real SKILL.md content
 // ---------------------------------------------------------------------------
-const registry = new SkillRegistry({ rootPath: root });
-await registry.loadFromDirectories([path.join(root, ".agents", "skills")]);
+// A temp fixture, not `.agents/skills`: `.agents` is gitignored, so that directory
+// is absent on a fresh clone and this assertion could only ever pass on a machine
+// that happened to have it populated. (The sibling `validate:builtin-skills` had
+// the identical bug and it broke CI the moment it was wired up.)
+const { mkdtemp, mkdir, writeFile, rm } = await import("node:fs/promises");
+const { tmpdir } = await import("node:os");
+
+const fixtureRoot = await mkdtemp(path.join(tmpdir(), "skills-extension-fixture-"));
+for (const name of ["fixture-one", "fixture-two"]) {
+  const dir = path.join(fixtureRoot, name);
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    path.join(dir, "SKILL.md"),
+    `---\nname: ${name}\ndescription: ${name} description\n---\n\n# ${name}\n\nBody for ${name}.\n`
+  );
+}
+
+const registry = new SkillRegistry({ rootPath: fixtureRoot });
+await registry.loadFromDirectories([fixtureRoot]);
 assert.ok(registry.size >= 1, `SkillRegistry loaded at least 1 skill (got ${registry.size})`);
+assert.deepEqual(
+  registry.names().sort(),
+  ["fixture-one", "fixture-two"],
+  `expected the fixture skills, got ${registry.names().join(", ")}`
+);
 
 const summaries = registry.list();
 for (const s of summaries) {
   assert.equal(typeof s.name, "string", `skill name is string: ${s.name}`);
   assert.equal(typeof s.description, "string", `skill description is string: ${s.name}`);
+  assert.ok(["user", "project"].includes(s.source), `directory skill "${s.name}" carries a source`);
 }
 
 // Loading a skill body returns wrapped <skill> content.
@@ -204,5 +227,7 @@ assert.ok(
   indexOnlyCommands.some((c) => c.name === "skill"),
   "toolsDisabled still registers /skill command"
 );
+
+await rm(fixtureRoot, { recursive: true, force: true });
 
 console.log("skills-extension validation passed");
