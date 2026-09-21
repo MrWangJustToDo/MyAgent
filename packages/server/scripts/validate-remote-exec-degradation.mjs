@@ -21,13 +21,13 @@
 
 import { clearCoreEnv, registerCoreEnv } from "@codent/core";
 import { createServer } from "node:http";
-import { fileURLToPath } from "node:url";
 
 import { createRemoteEnv } from "../dist/client.mjs";
 
 // The argv helper and the tool factory are internal, so they come from core's dev entry —
 // deliberately outside the published export map. See core's dev.ts.
-const devEntry = fileURLToPath(new URL("../../core/dist/dev.mjs", import.meta.url));
+// Already a URL — `.href` is directly importable; no path conversion needed.
+const devEntry = new URL("../../core/dist/dev.mjs", import.meta.url).href;
 const { canExecArgs, createGlobTool } = await import(devEntry);
 
 let failures = 0;

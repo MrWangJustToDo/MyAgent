@@ -14,7 +14,8 @@
  * missing" — so a killed search looked like an absent binary, and (before the companion fix in
  * exec-args) as a successful empty result.
  *
- * Runs anywhere: it uses `/bin/sh` for the successful-exit cases and a non-existent path for the
+ * Runs anywhere: the successful-exit cases are driven through `node` itself (a fake shell string
+ * would need `/bin/sh`, which does not exist on Windows), and a non-existent path for the
  * spawn failure, so no platform-specific binary is required.
  */
 
@@ -30,14 +31,19 @@ function check(label, condition, detail = "") {
 }
 
 const env = createNodeEnv({ rootPath: process.cwd() });
-const SH = "/bin/sh";
+// `process.execPath` with `-e` rather than `/bin/sh -c`: the semantics under test are exit-code
+// reporting, stdout capture and timeout handling, none of which need a shell — and `/bin/sh` is
+// POSIX-only, so a shell-based version of this test cannot run on Windows at all.
+const SHELL_ARGS = (script) => ["-e", script];
 
 // ---------------------------------------------------------------------------
 // real exit codes survive
 // ---------------------------------------------------------------------------
 
 for (const code of [1, 2, 127]) {
-  const result = await env.execFile(SH, ["-c", `echo output; exit ${code}`], { timeout: 5000 });
+  const result = await env.execFile(process.execPath, SHELL_ARGS(`console.log("output"); process.exit(${code})`), {
+    timeout: 5000,
+  });
   check(
     `exit ${code} is reported as ${code} (not collapsed)`,
     result.code === code,
@@ -47,14 +53,14 @@ for (const code of [1, 2, 127]) {
 }
 
 // A clean exit is still 0.
-const ok = await env.execFile(SH, ["-c", "echo fine"], { timeout: 5000 });
+const ok = await env.execFile(process.execPath, SHELL_ARGS('console.log("fine")'), { timeout: 5000 });
 check("exit 0 is reported as 0", ok.code === 0, JSON.stringify(ok));
 
 // ---------------------------------------------------------------------------
 // a killed child is distinguishable from a process that exited
 // ---------------------------------------------------------------------------
 
-const timedOut = await env.execFile(SH, ["-c", "sleep 5"], { timeout: 150 });
+const timedOut = await env.execFile(process.execPath, SHELL_ARGS("setTimeout(() => {}, 5000)"), { timeout: 150 });
 check(
   "a timeout does not masquerade as a real exit code",
   timedOut.code === null || timedOut.code === "timeout",

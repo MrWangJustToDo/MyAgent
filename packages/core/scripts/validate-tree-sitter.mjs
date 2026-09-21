@@ -13,7 +13,7 @@
 
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const nodePkg = await import("@codent/node");
 const env = nodePkg.createNodeEnv({ rootPath: "/tmp", cwd: "/tmp", platform: "linux" });
@@ -25,7 +25,8 @@ const env = nodePkg.createNodeEnv({ rootPath: "/tmp", cwd: "/tmp", platform: "li
 // "/D:/...", which `createRequire` cannot resolve.
 const nodeModulePath = fileURLToPath(await import.meta.resolve("@codent/node"));
 const req = createRequire(nodeModulePath);
-const webTreeSitterUrl = req.resolve("web-tree-sitter");
+// `req.resolve` returns an absolute path; `import()` needs a URL on Windows.
+const webTreeSitterUrl = pathToFileURL(req.resolve("web-tree-sitter")).href;
 const { Parser, Language } = await import(webTreeSitterUrl);
 
 const results = [];

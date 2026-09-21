@@ -63,6 +63,21 @@ process.stdin.on("data", (chunk) => {
   }
 });
 `;
+// On Windows a `node_modules/.bin` entry is a `.cmd` / `.exe` shim, which is exactly why
+// `resolveCommandPath` appends those extensions on win32. Writing only the extension-less
+// POSIX form makes the probe and the spawn fail there for a reason that is not a defect.
+const isWindows = process.platform === "win32";
+const shimNames = isWindows
+  ? ["fake-local-language-server.cmd", "fake-local-language-server.exe"]
+  : ["fake-local-language-server"];
+for (const shimName of shimNames) {
+  // A `.cmd` needs a different body: cmd.exe does not read the `#!` line.
+  const body = shimName.endsWith(".cmd")
+    ? `@echo off\r\n"${process.execPath}" "%~dp0fake-local-language-server" %*\r\n`
+    : serverSource;
+  writeFileSync(join(binDir, shimName), body, { mode: 0o755 });
+}
+// The script the `.cmd` delegates to is needed on every platform.
 writeFileSync(join(binDir, "fake-local-language-server"), serverSource, { mode: 0o755 });
 
 const localEnv = createNodeEnv({ rootPath: projectDir });

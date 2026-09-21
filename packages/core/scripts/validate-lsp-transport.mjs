@@ -13,15 +13,21 @@
  */
 
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOCK_SERVER = resolve(__dirname, "mock-lsp-server.mjs");
 
+// `"/tmp"` exists on POSIX but not on Windows, where a spawn with that cwd fails ENOENT —
+// which reads as an LSP transport failure. Use a real directory on both platforms.
+const WORK_DIR = mkdtempSync(resolve(tmpdir(), "lsp-transport-"));
+
 // Import the production transport via the built @codent/node package.
 const nodePkg = await import("@codent/node");
-const env = nodePkg.createNodeEnv({ rootPath: "/tmp", cwd: "/tmp", platform: "linux" });
+const env = nodePkg.createNodeEnv({ rootPath: WORK_DIR, cwd: WORK_DIR, platform: "linux" });
 assert.equal(typeof env.createLspConnection, "function", "createNodeEnv must expose createLspConnection");
 assert.equal(typeof env.locateTreeSitterGrammar, "function", "createNodeEnv must expose locateTreeSitterGrammar");
 
@@ -35,7 +41,7 @@ function record(name, ok, detail = "") {
 const config = {
   command: process.execPath, // node
   args: [MOCK_SERVER],
-  cwd: "/tmp",
+  cwd: WORK_DIR,
 };
 const conn = env.createLspConnection(config);
 
@@ -142,7 +148,7 @@ assert.equal(conn.disposed, true, "disposed after shutdown");
 const crashConn = env.createLspConnection({
   command: process.execPath,
   args: ["-e", "process.exit(0)"],
-  cwd: "/tmp",
+  cwd: WORK_DIR,
 });
 const exitCode = await new Promise((resolveExit) => {
   crashConn.onUnexpectedExit((code) => resolveExit(code));
