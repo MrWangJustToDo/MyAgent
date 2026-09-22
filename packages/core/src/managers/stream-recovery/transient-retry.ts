@@ -32,6 +32,41 @@ function isNonRetryableQuota(text: string): boolean {
 }
 
 /**
+ * Network-transport sentinels, matched against the flattened `name message` text.
+ *
+ * The list is kept here rather than inline because the reason it carries
+ * `connection error` is not obvious. That string is the OpenAI SDK's **generic**
+ * `APIConnectionError` message (`openai/core/error.mjs`: `super(undefined, undefined,
+ * message || 'Connection error.')`) — it is what the SDK reports when the request
+ * never got a response at all, and it is deliberately uninformative: the cause of the
+ * connection failure lives on `error.cause`.
+ *
+ * That cause chain never reaches this function. TanStack's `toRunErrorPayload()`
+ * (`@tanstack/ai` `activities/error-payload.js`) converts a thrown SDK error into a
+ * `RUN_ERROR` event carrying only `{ message, code }` — its docstring names the reason:
+ * "Never leaks the full error object (which may carry request/response state from an
+ * SDK)". So by the time recovery sees the failure, `cause` is gone and `message` is
+ * the bare sentinel; walking `cause` here would find nothing. Measured: a run against an
+ * unreachable port yields `{ message: 'Connection error.', code: 'undefined' }` with no
+ * `cause` property at all.
+ *
+ * Without `connection error` in this list such a failure matched **no** branch, so
+ * `isTransientRetryableError` returned false and the run died on the spot instead of
+ * retrying — the recovery loop never ran (0 `agent:retry` events in a 9,571-line log
+ * covering two such failures, one of which had already burned 932s).
+ *
+ * `code` is not usable as a signal either: `extractCode()` only reads a string `code` or a
+ * numeric `status`, so this path stringifies `undefined` into the literal `"undefined"`.
+ *
+ * Deliberately absent: the bare word `error` (would match `invalid api key`) and
+ * provider `5xx` phrases that do not name a specific transient status (`internal server
+ * error` is a legitimate permanent rejection from some gateways, and `isNonRetryableQuota`
+ * already guards the billing cases).
+ */
+const NETWORK_FAILURE_PATTERN =
+  /connection error|econnreset|econnrefused|etimedout|enotfound|eai_again|ehostunreach|enetunreach|epipe|socket hang up|network error|fetch failed|other side closed|terminated/i;
+
+/**
  * Whether the failure is likely transient (429 / overload / gateway / network).
  * Used by {@link runStreamWithRecovery} before giving up.
  */
@@ -45,9 +80,7 @@ export function isTransientRetryableError(error: unknown): boolean {
 
   if (/\b429\b|rate[_\s-]?limit|too many requests|overloaded|server_busy/i.test(text)) return true;
   if (/\b503\b|service unavailable|\b502\b|bad gateway|\b504\b|gateway timeout/i.test(text)) return true;
-  if (/econnreset|etimedout|econnrefused|socket hang up|network error|fetch failed/i.test(text)) return true;
-
-  return false;
+  return NETWORK_FAILURE_PATTERN.test(text);
 }
 
 /**

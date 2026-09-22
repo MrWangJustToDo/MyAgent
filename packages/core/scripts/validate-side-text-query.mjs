@@ -9,7 +9,14 @@ import { streamToText } from "@tanstack/ai";
 import assert from "node:assert/strict";
 import { z } from "zod";
 
-import { extractJsonDocument, renderSchemaContract, runSideTextQuery } from "../dist/dev.mjs";
+import {
+  extractJsonDocument,
+  renderSchemaContract,
+  runSideTextQuery,
+  SIDE_QUERY_MIN_OUTPUT_TOKENS,
+  applySideQueryOutputFloor,
+  maxTokensOption,
+} from "../dist/dev.mjs";
 
 const chunks = [
   { type: "TEXT_MESSAGE_CONTENT", delta: "hello " },
@@ -492,6 +499,80 @@ const PERSON_RAW = '{"name":"Ada","age":36}';
   assert.equal(extractJsonDocument('```json\n{"a":1\n```'), null, "a truncated fenced document is refused");
 
   console.log("✓ the extractor locates complete documents and refuses to repair");
+}
+
+// ---------------------------------------------------------------------------
+// The output-token floor: a cap below the thinking length starves the ANSWER
+// ---------------------------------------------------------------------------
+//
+// `max_tokens` bounds thinking AND the answer, and thinking is emitted first and cannot be
+// dropped. A caller whose cap matches its job ("a title is ~10 tokens") therefore gets **no**
+// text on a reasoning model — measured on `zhipu/glm-5.3-flash` (an endpoint that rejects the
+// `thinking` disable, so it always thinks): cap 30/60/128/256 produced zero text on every run,
+// and a title-shaped prompt needed 1024 to succeed 4/4 (512 managed 3/4 — close enough to the
+// thinking length to fail a quarter of the time).
+//
+// This is what silently degraded session titles: the caller asked for 30, got a cutoff, and
+// `generateSessionTitle`'s catch fell back to a truncated first message that looks normal.
+//
+// The floor is applied in `createQueryRequest` rather than in `maxTokensOption`, because the
+// latter is the pure wire-shape mapping (`validate-structured-query` asserts `20 -> { max_tokens:
+// 20 }` exactly). Both are asserted below so the two concerns stay separable.
+
+{
+  assert.equal(SIDE_QUERY_MIN_OUTPUT_TOKENS, 1024, "the floor is the Anthropic thinking-budget minimum");
+  assert.equal(applySideQueryOutputFloor(30), 1024, "a job-sized cap is raised to the floor");
+  assert.equal(applySideQueryOutputFloor(1024), 1024, "a cap already at the floor is unchanged");
+  assert.equal(applySideQueryOutputFloor(2000), 2000, "a larger cap is never lowered");
+  assert.equal(applySideQueryOutputFloor(undefined), undefined, "no requested cap stays no cap");
+
+  // The pure wire mapping must stay pure — the floor is the port's concern, not its.
+  assert.deepEqual(maxTokensOption("anthropic", 20), { max_tokens: 20 });
+  assert.deepEqual(maxTokensOption("openai", 20), { max_completion_tokens: 20 });
+
+  /** Records the options the port actually handed to the adapter. */
+  const capturing = (modelStyle) => {
+    const seen = [];
+    return {
+      seen,
+      model: "fake-model",
+      modelStyle,
+      adapter: {
+        kind: "text",
+        name: "fake",
+        model: "fake-model",
+        "~types": {},
+        chatStream(options) {
+          seen.push(options.modelOptions ?? {});
+          return (async function* () {
+            yield { type: "TEXT_MESSAGE_CONTENT", delta: "ok" };
+            yield usageChunk(1, 1);
+          })();
+        },
+      },
+    };
+  };
+
+  // The exact shape that was broken: title generation's 30 tokens, anthropic style.
+  const titleAdapter = capturing("anthropic");
+  await runSideTextQuery(titleAdapter, { userPrompt: "x", maxOutputTokens: 30 });
+  assert.equal(
+    titleAdapter.seen[0].max_tokens,
+    1024,
+    "the title query no longer sends a cap that thinking can consume entirely"
+  );
+
+  // And the openai-style spelling goes through the same floor.
+  const openaiTitle = capturing("openai");
+  await runSideTextQuery(openaiTitle, { userPrompt: "x", maxOutputTokens: 30 });
+  assert.equal(openaiTitle.seen[0].max_completion_tokens, 1024, "the openai spelling is floored too");
+
+  // A call site with no cap must still send none — the floor is not a default cap.
+  const uncapped = capturing("anthropic");
+  await runSideTextQuery(uncapped, { userPrompt: "x" });
+  assert.equal("max_tokens" in uncapped.seen[0], false, "an uncapped query stays uncapped");
+
+  console.log("✓ the output cap is floored above the thinking budget");
 }
 
 console.log("side-text-query validation passed");

@@ -25,6 +25,50 @@ assert.equal(isTransientRetryableError(new Error("quota exceeded")), false);
 assert.equal(isTransientRetryableError(new Error("insufficient_quota")), false);
 assert.equal(isTransientRetryableError(new Error("invalid api key")), false);
 
+// --- transport failures that arrive as the SDK's GENERIC sentinel ---------------
+//
+// The OpenAI SDK reports "the request never got a response" as the uninformative
+// `Connection error.` and puts the actual cause on `error.cause`. That cause chain is
+// dropped at the TanStack boundary (`toRunErrorPayload` keeps only `{ message, code }`,
+// deliberately — it must not leak SDK state), so this predicate is the last place that can
+// recognize the failure at all. These two assertions are the measured shapes: the first is
+// literally what a run against an unreachable port produced, `code` included.
+
+assert.equal(
+  isTransientRetryableError({ message: "Connection error.", code: "undefined" }),
+  true,
+  "the SDK's generic connection sentinel is transient (code is stringified undefined)"
+);
+assert.equal(
+  isTransientRetryableError(new Error("Connection error.")),
+  true,
+  "the bare Error form of the same sentinel is transient"
+);
+
+// A `cause`-only failure must still be caught — not by reading `cause` (it never reaches
+// here), but because the SDK's own message for this case is the sentinel above.
+assert.equal(
+  isTransientRetryableError(Object.assign(new Error("Connection error."), { cause: new TypeError("fetch failed") })),
+  true,
+  "a cause-carrying connection error is matched on its message, not by walking cause"
+);
+
+// The undici / socket-level codes that survive as text when a provider passes them through.
+for (const transport of [
+  "ECONNREFUSED",
+  "UND_ERR_SOCKET: other side closed",
+  "socket hang up",
+  "getaddrinfo ENOTFOUND upstream",
+]) {
+  assert.equal(isTransientRetryableError(new Error(transport)), true, `\`${transport}\` is transient`);
+}
+
+// The bare word "error" must NOT be swept up — a permanent rejection has to stay permanent,
+// or a bad key turns into three pointless retries.
+assert.equal(isTransientRetryableError(new Error("there was an error with your request")), false);
+assert.equal(isTransientRetryableError(new Error("connection reset by peer is not a sentinel")), false);
+assert.equal(isTransientRetryableError(new Error("billing hard limit reached")), false);
+
 assert.equal(extractRetryAfterSeconds(new Error("please retry after 12 seconds")), 12);
 assert.equal(extractRetryAfterSeconds({ retryAfter: 3, message: "429" }), 3);
 assert.equal(extractRetryAfterSeconds(new Error("no hint")), undefined);
@@ -54,6 +98,48 @@ try {
   assert.equal(error instanceof Error ? error.message : String(error), "quota exceeded");
 }
 assert.equal(threw, true);
+
+// --- the PRODUCTION shape: a transient RUN_ERROR chunk retries instead of dying ---
+//
+// The case above proves a permanent failure still throws. This is its counterpart, and it
+// is the shape that actually reaches recovery in production: TanStack reports a failed
+// request as a `RUN_ERROR` *chunk* (not a throw), carrying only `{ message, code }` after
+// `toRunErrorPayload` drops the SDK error. Before the network sentinel covered `Connection
+// error.`, this run died — two real turns were lost to exactly this, one after 932s.
+
+let sentinelAttempts = 0;
+async function* sentinelThenOk() {
+  sentinelAttempts += 1;
+  if (sentinelAttempts === 1) {
+    yield { type: "RUN_ERROR", message: "Connection error.", code: "undefined" };
+    return;
+  }
+  yield { type: "TEXT_MESSAGE_CONTENT", delta: "recovered" };
+  yield { type: "RUN_FINISHED", finishReason: "stop" };
+}
+
+const sentinelManaged = {
+  parentId: "sub-agent",
+  run: makeRunCoordinatorStub(),
+  usage: null,
+  log: { warn() {}, debug() {}, error() {} },
+  setError() {},
+  setRetry() {},
+  emitEvent() {},
+};
+
+const sentinelOut = [];
+for await (const chunk of runStreamWithRecovery({
+  managed: sentinelManaged,
+  manager: {},
+  getMessages: () => [{ role: "user", content: "hi" }],
+  run: () => sentinelThenOk(),
+})) {
+  sentinelOut.push(chunk.type);
+}
+
+assert.equal(sentinelAttempts, 2, "the connection sentinel triggered a retry rather than ending the run");
+assert.deepEqual(sentinelOut, ["TEXT_MESSAGE_CONTENT", "RUN_FINISHED"], "the retried stream is forwarded");
 
 // --- 429 retries then succeeds (subagent-shaped managed; short Retry-After) ---
 

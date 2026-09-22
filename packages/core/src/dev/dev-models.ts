@@ -13,6 +13,7 @@ export {
 export { runSideTextQuery } from "../models/adapter/side-text-query.js";
 export { extractJsonDocument, renderSchemaContract } from "../models/adapter/schema-prompt.js";
 export { maxTokensOption } from "../models/max-tokens-option.js";
+export { SIDE_QUERY_MIN_OUTPUT_TOKENS, applySideQueryOutputFloor } from "../models/side-query-budget.js";
 export { sharedUsageHistory } from "../agent/usage/usage-history-service.js";
 export {
   SYSTEM_PROMPT_DYNAMIC_BOUNDARY,

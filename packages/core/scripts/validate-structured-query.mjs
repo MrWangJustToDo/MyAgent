@@ -14,6 +14,7 @@ import { z } from "zod";
 
 import {
   runSideTextQuery,
+  SIDE_QUERY_MIN_OUTPUT_TOKENS,
   sharedUsageHistory,
   logCategorySchema,
   logEntrySchema,
@@ -157,6 +158,12 @@ const makeCapturingLog = () => {
 // as "no adapter reads it"). A cap sent under the wrong name is silently
 // ignored, so the bound this port advertises would not exist. Pinning the key
 // here is what keeps that from regressing unnoticed.
+//
+// The cap goes through the port's thinking-aware floor (`applySideQueryOutputFloor`, see
+// `side-query-budget.ts`), so the *value* is intentionally not what the caller passed — a
+// below-floor cap is raised so thinking cannot consume the whole budget. What this section
+// guards is the **key**, which is the part that silently does nothing when it is wrong; the
+// floor's own value is asserted in `validate-side-text-query`.
 
 {
   const openaiAdapter = makeTextAdapterConfig({
@@ -164,9 +171,13 @@ const makeCapturingLog = () => {
   });
   await runSideTextQuery(openaiAdapter, { userPrompt: "x", schema: personSchema, maxOutputTokens: 20 });
   assert.deepEqual(
-    openaiAdapter.seen[0],
-    { max_completion_tokens: 20 },
+    Object.keys(openaiAdapter.seen[0]),
+    ["max_completion_tokens"],
     "an openai-style structured query caps output with `max_completion_tokens`"
+  );
+  assert.ok(
+    openaiAdapter.seen[0].max_completion_tokens >= SIDE_QUERY_MIN_OUTPUT_TOKENS,
+    "the openai cap is floored above the thinking budget"
   );
 
   const anthropicAdapter = makeTextAdapterConfig({
@@ -175,9 +186,13 @@ const makeCapturingLog = () => {
   });
   await runSideTextQuery(anthropicAdapter, { userPrompt: "x", schema: personSchema, maxOutputTokens: 20 });
   assert.deepEqual(
-    anthropicAdapter.seen[0],
-    { max_tokens: 20 },
+    Object.keys(anthropicAdapter.seen[0]),
+    ["max_tokens"],
     "an anthropic-style structured query caps output with `max_tokens`"
+  );
+  assert.ok(
+    anthropicAdapter.seen[0].max_tokens >= SIDE_QUERY_MIN_OUTPUT_TOKENS,
+    "the anthropic cap is floored above the thinking budget"
   );
 
   // Omitting the cap must not invent one.

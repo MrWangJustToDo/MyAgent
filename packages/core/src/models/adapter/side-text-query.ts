@@ -4,6 +4,7 @@ import { extractRunErrorMessage } from "../../agent/stream/stream-errors.js";
 import { sharedUsageHistory } from "../../agent/usage/usage-history-service.js";
 import { calculateCost, extractTanStackUsage, type TokenUsage } from "../../runtime-types/token-usage.js";
 import { maxTokensOption } from "../max-tokens-option.js";
+import { applySideQueryOutputFloor } from "../side-query-budget.js";
 
 import { extractJsonDocument, renderSchemaContract } from "./schema-prompt.js";
 import { isStructuredOutputComplete } from "./structured-output-chunk.js";
@@ -518,7 +519,10 @@ function createQueryRequest(
     abortController,
     debug: false,
     modelOptions: {
-      ...maxTokensOption(textAdapter.modelStyle, options.maxOutputTokens),
+      // The cap goes through the thinking-aware floor: `max_tokens` bounds thinking AND the
+      // answer, so a job-sized cap starves the answer on a reasoning model. See
+      // `side-query-budget.ts` for the measurements behind the number.
+      ...maxTokensOption(textAdapter.modelStyle, applySideQueryOutputFloor(options.maxOutputTokens)),
       ...reasoningOptions,
     },
   };
