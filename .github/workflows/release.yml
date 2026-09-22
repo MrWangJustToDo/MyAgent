@@ -16,7 +16,31 @@ on:
       - "v*"
 
 permissions:
+  # `id-token: write` is what makes trusted publishing work: the npm CLI detects the OIDC
+  # environment, exchanges the workflow's identity token for a short-lived publish token, and
+  # generates a provenance attestation automatically. There is no `NPM_TOKEN` secret, and
+  # there is deliberately nothing to rotate — a long-lived write token is exactly the credential
+  # this replaces.
+  #
+  # SETUP ONCE, OUTSIDE THIS REPO: npm cannot configure a trusted publisher from CI, so the
+  # package's page on npmjs.com must list it (Settings → Trusted publishing → GitHub Actions):
+  #
+  #   Organization or user   MrWangJustToDo
+  #   Repository             MyAgent
+  #   Workflow filename      release.yml
+  #
+  # All three are matched exactly and case-sensitively against the *running* workflow. Get one
+  # wrong and the publish fails with ENEEDAUTH — npm does not validate the fields when they are
+  # saved, so a typo surfaces only at release time. `packages/codent/package.json`'s
+  # `repository.url` must also keep matching this GitHub repository, which is a second way to
+  # reach the same error.
+  #
+  # This requires npm CLI >= 11.5.1 and Node >= 22.14.0; the job pins Node 26.4.0, whose bundled
+  # npm is newer. pnpm also has to be >= 11.1.3 — `pnpm publish` treated the
+  # `${NODE_AUTH_TOKEN}` placeholder `setup-node` writes into `.npmrc` as a literal token, which
+  # made an OIDC publish fail with a 404 (pnpm#11513, fixed by pnpm#11526). The job pins 11.9.0.
   contents: read
+  id-token: write
 
 jobs:
   release:
@@ -36,6 +60,12 @@ jobs:
           node-version: 26.4.0
           registry-url: https://registry.npmjs.org
           cache: pnpm
+          # Prevent setup-node from writing an `.npmrc` auth line that references a secret this
+          # workflow no longer has. Its default is now "always" for any non-empty value when
+          # `registry-url` is set; "never" is the correct setting for OIDC, where authentication
+          # comes from the workflow's identity rather than a stored value. The registry itself is
+          # still configured by `registry-url`.
+          always-auth: false
 
       - name: Cache pnpm store
         uses: actions/cache@v4
@@ -100,6 +130,11 @@ jobs:
         # The dist-tag is derived from the version by the script, not passed
         # here: `0.0.1-beta.1` must land on `beta`, and a stray `--tag latest`
         # would promote a prerelease to the default install for every user.
+        #
+        # No `env:` and no token. The npm CLI picks OIDC up from the environment, so an empty
+        # `NODE_AUTH_TOKEN` would be strictly worse than none: `setup-node`'s
+        # `registry-url` writes an `.npmrc` containing `${NODE_AUTH_TOKEN}`, and pnpm before
+        # 11.1.3 read that placeholder as a literal token rather than falling through to OIDC
+        # (pnpm#11526). Passing the secret here is removed for the same reason it is no longer
+        # needed — authentication is not a value this job holds.
         run: pnpm --filter codent-cli run publish:beta
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
