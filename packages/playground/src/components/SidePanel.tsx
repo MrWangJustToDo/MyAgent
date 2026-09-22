@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { usePointerDrag } from "../hooks/use-pointer-drag.js";
+
 import type { ReactNode } from "react";
 
 const WIDTH_STORAGE_KEY = "codent-playground-split";
@@ -50,6 +52,8 @@ function persistWidth(width: number): void {
  * Sizing uses Pointer Events with capture so a drag cannot "stick" when the
  * pointer leaves the window or crosses the preview iframe; `role="separator"` +
  * `aria-valuenow` make it keyboard-operable; double-click restores the default.
+ * The drag lifecycle itself (including every way a release can be lost) lives in
+ * `usePointerDrag`, shared with the file tree's resizer.
  */
 export const SidePanel = ({
   children,
@@ -62,7 +66,6 @@ export const SidePanel = ({
   const [width, setWidth] = useState(() => loadWidth(defaultWidth, minWidth));
 
   const hostRef = useRef<HTMLDivElement>(null);
-  const draggingRef = useRef(false);
   const liveWidthRef = useRef(width);
 
   liveWidthRef.current = width;
@@ -80,35 +83,17 @@ export const SidePanel = ({
     [bounds]
   );
 
-  const onPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    draggingRef.current = true;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    document.body.classList.add("is-resizing");
-  }, []);
-
-  const onPointerMove = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (!draggingRef.current || !hostRef.current) return;
-      const parentRect = hostRef.current.parentElement?.getBoundingClientRect();
-      if (!parentRect) return;
-      commit(parentRect.right - event.clientX);
-    },
-    [commit]
-  );
-
-  const endDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (!draggingRef.current) return;
-    draggingRef.current = false;
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      // already released
-    }
-    document.body.classList.remove("is-resizing");
-    persistWidth(liveWidthRef.current);
-  }, []);
+  const { handlers } = usePointerDrag({
+    onMove: useCallback(
+      (clientX: number) => {
+        const parentRect = hostRef.current?.parentElement?.getBoundingClientRect();
+        if (!parentRect) return;
+        commit(parentRect.right - clientX);
+      },
+      [commit]
+    ),
+    onEnd: useCallback(() => persistWidth(liveWidthRef.current), []),
+  });
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -137,8 +122,6 @@ export const SidePanel = ({
     return () => window.removeEventListener("resize", onResize);
   }, [bounds]);
 
-  useEffect(() => () => document.body.classList.remove("is-resizing"), []);
-
   return (
     <div ref={hostRef} className="side-panel">
       <div
@@ -149,10 +132,7 @@ export const SidePanel = ({
         aria-valuenow={Math.round(width)}
         aria-valuemin={minWidth}
         tabIndex={0}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
+        {...handlers}
         onDoubleClick={() => commit(defaultWidth)}
         onKeyDown={onKeyDown}
       />

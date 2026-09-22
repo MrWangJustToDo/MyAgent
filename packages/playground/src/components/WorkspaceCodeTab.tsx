@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 
 import { EDITOR_OPTIONS, definePlaygroundTheme } from "../editor/monaco-theme.js";
+import { usePointerDrag } from "../hooks/use-pointer-drag.js";
 import { useShellState } from "../hooks/use-shell-state.js";
 import { Button } from "../ui/Button.js";
 import { cx } from "../ui/cx.js";
@@ -39,6 +40,10 @@ function persistSidebarWidth(width: number): void {
   } catch {
     // ignore
   }
+}
+
+function clampSidebarWidth(width: number): number {
+  return Math.max(MIN_SIDEBAR_WIDTH, Math.min(width, MAX_SIDEBAR_WIDTH));
 }
 
 const EXT_LANG: Record<string, string> = {
@@ -99,6 +104,17 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
   const currentContentRef = useRef<string>("");
   const currentPathRef = useRef<string | null>(null);
   const modifiedRef = useRef(false);
+  /**
+   * Sequence of the newest `loadFile` call. A read is only allowed to publish its
+   * result when it is still the newest one.
+   *
+   * Reads are independent async operations whose latency depends on file size, so
+   * selecting a large file and then a small one lets the second read resolve first
+   * and the first — now stale — overwrite it. The tab would then show the previous
+   * file's contents under the new file's name. The same guard covers the
+   * `refreshKey` re-read of the open file being superseded by a click.
+   */
+  const loadSeqRef = useRef(0);
 
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -106,7 +122,6 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
-  const sidebarResizeRef = useRef(false);
   const sidebarLiveRef = useRef(sidebarWidth);
   sidebarLiveRef.current = sidebarWidth;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -115,21 +130,25 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
 
   const loadFile = useCallback(
     async (path: string) => {
+      const seq = ++loadSeqRef.current;
       setFileLoading(true);
       try {
         const content = await wc.fs.readFile(path, "utf-8");
+        if (seq !== loadSeqRef.current) return;
         setFileContent(content);
         currentContentRef.current = content;
         setFileLang(extToLang(path.split("/").pop() ?? ""));
         setModified(false);
         currentPathRef.current = path;
       } catch {
+        if (seq !== loadSeqRef.current) return;
         setFileContent("// Could not read this file (binary or removed).");
         setFileLang("plaintext");
         setModified(false);
         currentPathRef.current = path;
       } finally {
-        setFileLoading(false);
+        // A superseded read must not clear the newer read's loading state.
+        if (seq === loadSeqRef.current) setFileLoading(false);
       }
     },
     [wc.fs]
@@ -244,42 +263,25 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Sidebar resize (pointer capture + keyboard)
+  // Sidebar resize (shared pointer-drag lifecycle + keyboard)
   // ---------------------------------------------------------------------------
-  const onSidebarPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    sidebarResizeRef.current = true;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    document.body.classList.add("is-resizing");
-  }, []);
-
-  const onSidebarPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (!sidebarResizeRef.current || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    setSidebarWidth(Math.max(MIN_SIDEBAR_WIDTH, Math.min(event.clientX - rect.left, MAX_SIDEBAR_WIDTH)));
-  }, []);
-
-  const onSidebarPointerUp = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (!sidebarResizeRef.current) return;
-    sidebarResizeRef.current = false;
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      // already released
-    }
-    document.body.classList.remove("is-resizing");
-    persistSidebarWidth(sidebarLiveRef.current);
-  }, []);
+  const { handlers: sidebarDragHandlers } = usePointerDrag({
+    onMove: useCallback((clientX: number) => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setSidebarWidth(clampSidebarWidth(clientX - rect.left));
+    }, []),
+    onEnd: useCallback(() => persistSidebarWidth(sidebarLiveRef.current), []),
+  });
 
   const onSidebarKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     const step = event.shiftKey ? 48 : 12;
     if (event.key === "ArrowLeft") {
       event.preventDefault();
-      setSidebarWidth((w) => Math.max(MIN_SIDEBAR_WIDTH, w - step));
+      setSidebarWidth((w) => clampSidebarWidth(w - step));
     } else if (event.key === "ArrowRight") {
       event.preventDefault();
-      setSidebarWidth((w) => Math.min(MAX_SIDEBAR_WIDTH, w + step));
+      setSidebarWidth((w) => clampSidebarWidth(w + step));
     } else if (event.key === "Home") {
       event.preventDefault();
       setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
@@ -368,10 +370,7 @@ export const WorkspaceCodeTab = ({ wc, rootPath, refreshKey }: WorkspaceCodeTabP
         aria-valuemin={MIN_SIDEBAR_WIDTH}
         aria-valuemax={MAX_SIDEBAR_WIDTH}
         tabIndex={0}
-        onPointerDown={onSidebarPointerDown}
-        onPointerMove={onSidebarPointerMove}
-        onPointerUp={onSidebarPointerUp}
-        onPointerCancel={onSidebarPointerUp}
+        {...sidebarDragHandlers}
         onDoubleClick={() => setSidebarWidth(DEFAULT_SIDEBAR_WIDTH)}
         onKeyDown={onSidebarKeyDown}
       />
