@@ -49,7 +49,7 @@ const required = [
   "/effort",
   "/resume",
   "/compact",
-  "/appearance",
+  "/settings",
   "/usage",
   "Ctrl+J", // newline while idle
   "Ctrl+U",

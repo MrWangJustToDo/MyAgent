@@ -6,7 +6,7 @@ export type DiffRendererMode = "lite" | "full";
 
 /**
  * Runtime diff-renderer selection for the message view (toggled via
- * `/appearance`). `USE_LITE_DIFF` only seeds the initial value — both
+ * `/settings`). `USE_LITE_DIFF` only seeds the initial value — both
  * renderers stay bundled because `EditDiff` is statically imported anyway.
  */
 export const useDiffRenderer = createState(

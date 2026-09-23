@@ -50,7 +50,7 @@ export const INPUT_HINTS: readonly string[] = [
   "/help lists commands and keyboard shortcuts",
   "/mode switches normal / auto / plan",
   "/models switches the model · /effort sets reasoning depth",
-  "/appearance sets theme and transcript density",
+  "/settings sets theme, density, diff renderer and the model config",
   "/resume continues a previous session · /compact compresses context",
   "/usage shows token usage and cost · /clear starts a new session",
   "/rename retitles this session",

@@ -10,10 +10,10 @@ import { FullBox } from "./FullBox.js";
 import { Spinner } from "./Spinner.js";
 import { TextInput } from "./TextInput.js";
 
-import type { ModelsConfig } from "@codent/core";
+import type { ModelsConfig, ModelsConfigEntry } from "@codent/core";
 
 // ============================================================================
-// ConfigEditor — first-run model configuration editor
+// ConfigEditor — model configuration editor
 //
 // Shared by all hosts (CLI etc.). A multi-step form that builds a minimal
 // `models.json` with a single `direct` entry. The write/parse functions are
@@ -21,6 +21,14 @@ import type { ModelsConfig } from "@codent/core";
 // implementation (core is a peer dependency); the CLI supplies core's
 // parseModelsConfig / saveModelsConfig. After completion the config is written
 // and the rest of startup reads it back through the same unified pipeline.
+//
+// Two modes, one form:
+// - `firstRun` (default, host bootstrap): nothing exists yet, so the written
+//   config IS the file, and `Step N/M` plus the "First-Run" copy set that up.
+// - `edit` (`/settings config` mid-session): the host seeds the draft from the
+//   current `models.json` and treats the form's output as the edited entry's
+//   connection (see `utils/merge-models-config.ts`), so the save keeps the rest
+//   of the file. The chrome drops the first-run framing.
 // ============================================================================
 
 type StyleChoice = "openai" | "anthropic";
@@ -42,7 +50,17 @@ export interface ConfigEditorProps {
   saveModelsConfig: (config: ModelsConfig) => Promise<void>;
   /** Validate + normalize a draft into a ModelsConfig, or null when invalid. */
   parseModelsConfig: (raw: string) => ModelsConfig;
+  /**
+   * `firstRun` (default) writes the whole file; `edit` is a re-edit of an
+   * existing config and says so in the chrome. The merge itself happens in the
+   * caller's `saveModelsConfig`, which receives only the draft.
+   */
+  mode?: ConfigEditorMode;
+  /** Seed the form from the entry being edited (defaults to a blank draft). */
+  initialEntry?: ModelsConfigEntry;
 }
+
+export type ConfigEditorMode = "firstRun" | "edit";
 
 interface Draft {
   style: StyleChoice;
@@ -57,6 +75,22 @@ const DEFAULT_DRAFT: Draft = {
   apiKey: "",
   modelsCsv: "",
 };
+
+/**
+ * Seed the draft from the entry being edited. Only a `direct` entry has
+ * connection fields to show; a `remote-provider` entry is proxied server-side and
+ * has none, so it falls back to the blank draft (the user is creating the direct
+ * entry that replaces it).
+ */
+function draftFromEntry(entry: ModelsConfigEntry | undefined): Draft {
+  if (!entry || entry.type !== "direct") return DEFAULT_DRAFT;
+  return {
+    style: entry.style,
+    baseURL: entry.baseURL,
+    apiKey: entry.apiKey ?? "",
+    modelsCsv: (entry.models ?? []).join(", "),
+  };
+}
 
 function styleLabel(style: StyleChoice): string {
   return style === "openai" ? "openai" : "anthropic";
@@ -100,10 +134,20 @@ const SummaryRow = ({ label, value }: { label: string; value: string }) => (
   </Box>
 );
 
-export const ConfigEditor = ({ onDone, onCancel, saveModelsConfig, parseModelsConfig }: ConfigEditorProps) => {
+export const ConfigEditor = ({
+  onDone,
+  onCancel,
+  saveModelsConfig,
+  parseModelsConfig,
+  mode = "firstRun",
+  initialEntry,
+}: ConfigEditorProps) => {
+  const editing = mode === "edit";
   const [step, setStep] = useState<Step>("style");
-  const [draft, setDraft] = useState<Draft>(DEFAULT_DRAFT);
-  const [styleIndex, setStyleIndex] = useState(0);
+  const [draft, setDraft] = useState<Draft>(() => draftFromEntry(initialEntry));
+  const [styleIndex, setStyleIndex] = useState(() =>
+    Math.max(0, STYLE_OPTIONS.indexOf(draftFromEntry(initialEntry).style))
+  );
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -203,7 +247,13 @@ export const ConfigEditor = ({ onDone, onCancel, saveModelsConfig, parseModelsCo
 
   const stepNo = STEP_ORDER.indexOf(step) + 1;
 
-  const pageTitle = compactChrome ? "First-Run Setup" : "First-Run Model Configuration";
+  const pageTitle = editing
+    ? compactChrome
+      ? "Model Config"
+      : "Model Configuration"
+    : compactChrome
+      ? "First-Run Setup"
+      : "First-Run Model Configuration";
 
   const stepTitle =
     step === "style"
@@ -218,7 +268,9 @@ export const ConfigEditor = ({ onDone, onCancel, saveModelsConfig, parseModelsCo
             : "API key (empty to skip)"
           : step === "models"
             ? "Model ids"
-            : "Ready to write config";
+            : editing
+              ? "Ready to save"
+              : "Ready to write config";
 
   const stepHint =
     step === "style"
@@ -321,7 +373,9 @@ export const ConfigEditor = ({ onDone, onCancel, saveModelsConfig, parseModelsCo
             <Box flexDirection="column" marginTop={1}>
               <Text color={BG.border}>{"─".repeat(innerWidth)}</Text>
               <Box marginTop={1}>
-                <Text color={COLORS.primary}>{KeyLabel.enter} to save &amp; start</Text>
+                <Text color={COLORS.primary}>
+                  {KeyLabel.enter} {editing ? "to save" : "to save & start"}
+                </Text>
                 <Text dimColor>
                   {compactChrome ? ` · e edit · ${KeyLabel.esc} cancel` : ` · e to edit · ${KeyLabel.esc} to cancel`}
                 </Text>

@@ -26,7 +26,7 @@ A **runtime-agnostic** AI coding agent — same core logic, runs in terminal, Ch
 | Category | Description |
 |----------|-------------|
 | **Multi-Model** | OpenAI, Anthropic, DeepSeek, Ollama, OpenRouter — any LLM provider via model adapter |
-| **Terminal UI** | React-powered TUI with Shiki syntax highlighting, a lightweight LiteDiff renderer for message-stream diffs (hunk-highlighted, full/lite toggle via `/appearance diff`), streaming markdown, and theme support |
+| **Terminal UI** | React-powered TUI with Shiki syntax highlighting, a lightweight LiteDiff renderer for message-stream diffs (hunk-highlighted, full/lite toggle via `/settings diff`), streaming markdown, and theme support |
 | **Workspace Browser** | Full-screen file tree (`Ctrl+E`) with git status, Seti/Nerd Font icons, scrollable file preview, and HEAD diff view |
 | **Chrome Extension** | Full agent UI running in the browser via remote CoreEnv (WXT + HeroUI) |
 | **Local / Remote** | Independent planes: workspace (`--remote-env`), LLM provider (`--remote-provider`), Agent Session (`--remote-session`) — all three support HTTP remoting with SSE auto-reconnect |
@@ -205,7 +205,7 @@ Interactive questions with arrow-key selection, multi-select toggles, and option
 
 ### Code Edits with Diff View
 
-`edit_file` / `write_file` tool previews render inline through the **LiteDiff** renderer — whole-file add/delete collapse the gutter, and hunk regions are highlighted for accurate multi-line syntax. Approve / deny a pending edit with **y** / **n**. Toggle the renderer at runtime with `/appearance diff` (`lite` hunk rows vs `full` git-diff-view Split/Unified). For interactive diff scrolling, open the workspace browser (`Ctrl+E`) and use the **Diff vs HEAD** view (**↑↓** scrolls when the right pane is focused).
+`edit_file` / `write_file` tool previews render inline through the **LiteDiff** renderer — whole-file add/delete collapse the gutter, and hunk regions are highlighted for accurate multi-line syntax. Approve / deny a pending edit with **y** / **n**. Toggle the renderer at runtime with `/settings diff` (`lite` hunk rows vs `full` git-diff-view Split/Unified). For interactive diff scrolling, open the workspace browser (`Ctrl+E`) and use the **Diff vs HEAD** view (**↑↓** scrolls when the right pane is focused).
 
 ![Edit diff view](edit-diff.png)
 
@@ -484,7 +484,7 @@ The CLI has **4 input modes** — shortcuts adapt to the current mode:
 | `Ctrl+V` | Paste image | — | — | — |
 | `Ctrl+C` | Exit | Exit | Exit | Exit |
 
-Slash commands: `/help` (shortcuts + commands merged), `/mode`, `/compact`, `/clear`, `/rename`, `/resume`, `/usage`, `/appearance` (theme · display · diff), `/models`, `/effort`, `/quit` — plus extension commands: `/mcp`, `/skill [name]`, `/memory [name]`, `/lsp`, `/lsp-restart`, `/lsp-config`
+Slash commands: `/help` (shortcuts + commands merged), `/mode`, `/compact`, `/clear`, `/rename`, `/resume`, `/usage`, `/settings` (theme · display · diff · model config), `/models`, `/effort`, `/quit` — plus extension commands: `/mcp`, `/skill [name]`, `/memory [name]`, `/lsp`, `/lsp-restart`, `/lsp-config`
 
 ---
 

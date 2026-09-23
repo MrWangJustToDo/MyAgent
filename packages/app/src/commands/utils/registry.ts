@@ -35,7 +35,11 @@ export function clearExtensionCommands(): void {
 }
 
 export function getCommand(name: string): Command | undefined {
-  return builtinCommands.find((c) => c.name === name) ?? extensionCommands.get(name);
+  return (
+    builtinCommands.find((c) => c.name === name) ??
+    builtinCommands.find((c) => c.aliases?.includes(name)) ??
+    extensionCommands.get(name)
+  );
 }
 
 export function getAllCommands(): readonly Command[] {

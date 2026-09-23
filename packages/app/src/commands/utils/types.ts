@@ -36,6 +36,12 @@ export interface CommandOption {
 
 export interface Command {
   name: string;
+  /**
+   * Extra names this command answers to (dispatch + autocomplete). Kept for
+   * renames users have in muscle memory — e.g. `/appearance` after the command
+   * became `/settings`. Aliases are not listed by `/help`.
+   */
+  aliases?: readonly string[];
   description: string;
   usage: string;
   execute: (args: string, ctx: CommandContext) => CommandResult | Promise<CommandResult>;

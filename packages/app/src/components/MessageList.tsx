@@ -165,7 +165,7 @@ export const MessageList = ({ messages }: MessageListProps) => {
   const heights = useStaticHeights((s) => s.heights);
   // Diff renderer choice reaches rows through `ToolInputView` -> `MessageDiffView`, which is a
   // subscription inside the row rather than a prop, so it has to be part of the row's cache
-  // deps: without it, switching `/appearance diff lite|full` leaves every cached diff row
+  // deps: without it, switching the diff renderer (`/settings diff lite|full`) leaves every cached diff row
   // rendering through the previous renderer (and with a different height, the stale height).
   // Re-caching every row on a diff switch is correct — the switch does affect every diff row.
   const diffMode = useDiffRenderer((s) => `${s.mode}:${s.key}`);

@@ -3,7 +3,7 @@ import "./clear.js";
 import "./resume.js";
 import "./compact.js";
 import "./rename.js";
-import "./appearance.js";
+import "./settings.js";
 import "./mode.js";
 import "./effort.js";
 import "./models.js";

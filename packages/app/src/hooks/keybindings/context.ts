@@ -6,6 +6,7 @@
  * (`isAnyPanelOpen`).
  */
 
+import { useConfigEditor } from "../use-config-editor.js";
 import { useExtensionPanel } from "../use-extension-panel.js";
 import { useSubagentPanel } from "../use-subagent-panel.js";
 import { useWorkspaceView } from "../use-workspace-view.js";
@@ -63,6 +64,7 @@ export interface KeybindingContext {
  */
 export function isAnyPanelOpen(): boolean {
   return (
+    useConfigEditor.getReadonlyState().view === "open" ||
     useWorkspaceView.getReadonlyState().view === "workspace" ||
     useSubagentPanel.getReadonlyState().view !== "closed" ||
     useExtensionPanel.getReadonlyState().view !== "closed"

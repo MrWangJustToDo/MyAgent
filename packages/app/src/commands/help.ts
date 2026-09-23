@@ -18,7 +18,7 @@ registerCommand({
         "Available commands:",
         ...commandLines,
         "",
-        "Tip: /appearance, /mode, /resume open option menus after Tab/Enter.",
+        "Tip: /settings, /mode, /resume open option menus after Tab/Enter.",
       ].join("\n"),
     };
   },

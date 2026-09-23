@@ -70,6 +70,16 @@ function commandToSuggestion(cmd: Command): AutocompleteSuggestion {
   };
 }
 
+/**
+ * The command a fully-typed name refers to, including aliases. Autocomplete
+ * matches on the typed prefix only, so without this a user typing the alias
+ * (`/appearance`) would land in options mode with no options to filter.
+ */
+function resolveCommandByName(name: string): Command | undefined {
+  const commands = getAllCommands();
+  return commands.find((c) => c.name === name) ?? commands.find((c) => c.aliases?.includes(name));
+}
+
 function optionToSuggestion(opt: CommandOption, command: Command): AutocompleteSuggestion {
   return {
     label: opt.label,
@@ -162,19 +172,44 @@ export const useAutocomplete = createState(() => ({ ...initialState }), {
       }
 
       if (spaceIndex !== -1) {
-        // User typed space but not in options mode - hide suggestions
+        // The command is already chosen but the option list is not open yet —
+        // a typed alias, or a command submitted straight through. Open the
+        // options so aliases behave like the canonical name.
+        const typedName = input.slice(1, spaceIndex).toLowerCase();
+        const command = resolveCommandByName(typedName);
+        if (command?.getOptions) {
+          state.mode = "options";
+          state.currentCommand = command;
+          const optionPrefix = input
+            .slice(spaceIndex + 1)
+            .toLowerCase()
+            .trim();
+          const options = command.getOptions();
+          if (options instanceof Promise) {
+            options.then((opts) => {
+              if (state.currentCommand !== command) return;
+              applyOptionsToState(state, command, opts, optionPrefix);
+            });
+          } else {
+            applyOptionsToState(state, command, options, optionPrefix);
+          }
+          return;
+        }
+        // Command with no options (e.g. a fully-typed `/help <args>`).
         state.suggestions = [];
         state.selectedIndex = 0;
         state.visible = false;
         return;
       }
 
-      // Commands mode - filter by prefix
+      // Commands mode - filter by prefix (name or alias)
       state.mode = "commands";
       state.currentCommand = null;
       const prefix = input.slice(1).toLowerCase();
       const commands = getAllCommands();
-      const filtered = prefix ? commands.filter((c) => c.name.startsWith(prefix)) : [...commands];
+      const filtered = prefix
+        ? commands.filter((c) => c.name.startsWith(prefix) || c.aliases?.some((a) => a.startsWith(prefix)))
+        : [...commands];
 
       state.suggestions = filtered.map(commandToSuggestion);
       state.selectedIndex = filtered.length > 0 ? Math.min(state.selectedIndex, filtered.length - 1) : 0;

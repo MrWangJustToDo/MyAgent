@@ -143,6 +143,19 @@ export const useConfig = createState(
         state.config[key] = value;
       },
 
+      /**
+       * Adopt a freshly loaded models config (entries + active) after a mid-session
+       * `models.json` rewrite. The connection fields (`config.model` / `style` /
+       * `baseURL` / `apiKey`) are deliberately NOT written here: they are
+       * `useAgentChat`'s rebuild deps-adjacent state and the running session keeps
+       * its own connection until the user picks a model with `/models` (which
+       * routes through `applyModelSelection`). `modelsConfig` is what `/models`
+       * lists and what the next `relinkSessionModel` resolves against.
+       */
+      setModelsConfig: (loaded: LoadedModelsState) => {
+        state.modelsConfig = loaded;
+      },
+
       updateConfig: (updates: Partial<AppConfig>) => {
         Object.assign(state.config, updates);
       },

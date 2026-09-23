@@ -14,6 +14,7 @@ export { useAgent } from "./use-agent.js";
 export { bumpAgentUsage, useAgentUsage } from "./use-agent-usage.js";
 export { useAutocomplete } from "./use-autocomplete.js";
 export { useCommandOutput } from "./use-command-output.js";
+export { useConfigEditor, type ConfigEditorView } from "./use-config-editor.js";
 export { useDiffFileCache } from "./use-diff-file-cache.js";
 export { useDynamic } from "./use-dynamic.js";
 export { useFlattenCacheCleanup } from "./use-flatten-cache-cleanup.js";
