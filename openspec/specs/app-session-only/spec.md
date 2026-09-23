@@ -28,6 +28,31 @@ The app layer builds its agent control surface on AgentSession only, so a host n
 - **WHEN** the CLI starts with `--remote-session <url>`
 - **THEN** the UI process SHALL create a Remote AgentSessionHost against that URL and MUST NOT call `agentManager.createManagedAgent` in the UI process
 
+### Requirement: Model config editor is reachable after initialization
+`@codent/app` SHALL expose a slash-command entry point that opens the model-configuration editor (`ConfigEditor`) over a running local session, so provider / model settings are editable without restarting the host. Saving SHALL merge the edited connection into the existing `.agents/config/models.json` and SHALL preserve the rest of the document: other entries, the `global` block, and **every key the schema does not declare** (`$schema`, per-entry fields such as `headers`, future settings). The save SHALL reload the unified model pipeline in place. The entry point SHALL refuse to open when the connection is server-owned (`--remote-session` / `--remote-provider`).
+
+#### Scenario: Edit config mid-session
+- **WHEN** the user runs the settings command's `config` option on a local session
+- **THEN** the app SHALL open `ConfigEditor` seeded from the session's active models.json entry
+- **AND** saving SHALL write the merged config and reload the provider without tearing down the session
+
+#### Scenario: Unknown keys survive a save
+- **WHEN** the document being edited contains keys the schema does not declare (a `$schema`, an entry's `headers`, an unread `global` setting)
+- **THEN** those keys SHALL still be present and unchanged after saving
+- **AND** only the fields the editor owns (`type`, `style`, `baseURL`, `apiKey`, `models`) SHALL be rewritten on the edited entry
+
+#### Scenario: Reload failure does not discard the edit
+- **WHEN** the file is written but the pipeline cannot be reloaded (e.g. a sibling remote-provider entry is unreachable)
+- **THEN** the save SHALL remain committed and be reported as saved-but-not-live, and SHALL NOT be rolled back
+
+#### Scenario: First-run wizard is unchanged
+- **WHEN** the host bootstrap finds no `.agents/config/models.json`
+- **THEN** the editor SHALL still run in its first-run mode, writing the whole file
+
+#### Scenario: Server-owned connection
+- **WHEN** the session is `--remote-session` or `--remote-provider`
+- **THEN** the entry point SHALL refuse with an explanation instead of opening the editor
+
 ### Requirement: Allowed residual core imports
 The app MAY import serializable types and pure presentation helpers from core (or a future session-types package), and MAY use CoreEnv for workspace UI. The app MUST NOT import agent runtime control APIs (`agentManager`, `createManagedAgent`, compaction executors, side-LLM runners that need ManagedAgent).
 

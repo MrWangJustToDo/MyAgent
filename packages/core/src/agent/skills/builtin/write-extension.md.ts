@@ -168,7 +168,7 @@ ctx.registerCommand({
 
 Command names must not collide with a **built-in** slash command — a conflicting
 extension command is skipped with a console warning (\`/clear\`, \`/compact\`, \`/mode\`,
-\`/models\`, \`/resume\`, \`/rename\`, \`/usage\`, \`/help\`, \`/quit\`, \`/appearance\`,
+\`/models\`, \`/resume\`, \`/rename\`, \`/usage\`, \`/help\`, \`/quit\`, \`/settings\`,
 \`/effort\`). Prefer a short prefix such as \`/my-\`.
 
 ### \`ctx.registerInterceptor(hook, handler)\` — observe or intercept
