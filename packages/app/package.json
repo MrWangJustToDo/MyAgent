@@ -79,7 +79,7 @@
     "@types/react": "^19.2.14",
     "chalk": "^5.6.2",
     "diff": "^9.0.0",
-    "ink-stream-markdown": "^0.0.11",
+    "ink-stream-markdown": "^0.0.12",
     "reactivity-store": "^0.4.0",
     "socket.io-client": "^4.8.3",
     "tsdown": "^0.21.10",
