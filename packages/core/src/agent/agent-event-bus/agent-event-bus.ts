@@ -55,7 +55,22 @@ function interceptorMatches(pattern: string, name: string): boolean {
  *   event, cancel short-circuit).
  */
 export class DefaultAgentEventBus implements AgentEventBus {
-  constructor(private readonly node: EventBusScopeNode) {}
+  constructor(
+    private readonly node: EventBusScopeNode,
+    /**
+     * Reports an interceptor that threw. Interceptors are the channel third-party
+     * extensions write most, so an exception there must not fail the tool call or
+     * turn it wraps — but silently swallowing it hides a broken extension. The
+     * host wires this to its log; without it the failure is only counted.
+     */
+    private readonly onInterceptorError?: (info: {
+      pattern: string;
+      event: string;
+      /** Scope the interceptor was registered on (an agent id for scoped buses). */
+      scopeId: string;
+      error: unknown;
+    }) => void
+  ) {}
 
   get scopeId(): string {
     return this.node.id;
@@ -124,7 +139,9 @@ export class DefaultAgentEventBus implements AgentEventBus {
   }
 
   scope(id: string): AgentEventBus {
-    return new DefaultAgentEventBus(new EventBusScopeNode(id, this.node));
+    // Child scopes share the parent's error sink: a scoped bus is the same bus
+    // with a narrower view, not a separate pipeline.
+    return new DefaultAgentEventBus(new EventBusScopeNode(id, this.node), this.onInterceptorError);
   }
 
   // --------------------------------------------------------------------------
@@ -135,7 +152,18 @@ export class DefaultAgentEventBus implements AgentEventBus {
     for (let node: EventBusScopeNode | null = this.node; node; node = node.parent) {
       for (const registration of node.interceptors) {
         if (!interceptorMatches(registration.pattern, event.type)) continue;
-        const result = await registration.handler(event as InterceptableEvent);
+        // Isolated like the observer wildcards: a throwing interceptor must not
+        // propagate into the tool call it wraps (one broken extension would fail
+        // every tool it touches). The observer/transformer/context-provider
+        // channels are already isolated — this one is the most-written and was
+        // the only one that was not.
+        let result: unknown;
+        try {
+          result = await registration.handler(event as InterceptableEvent);
+        } catch (error) {
+          this.onInterceptorError?.({ pattern: registration.pattern, event: event.type, scopeId: node.id, error });
+          continue;
+        }
         // `cancel` = return false or set `skipDefault`; stop the chain.
         if (result === false || (event as { skipDefault?: boolean }).skipDefault) {
           return undefined;
@@ -196,6 +224,9 @@ export class DefaultAgentEventBus implements AgentEventBus {
 }
 
 /** Create a root event bus (no parent scope). */
-export function createAgentEventBus(id = "root"): AgentEventBus {
-  return new DefaultAgentEventBus(new EventBusScopeNode(id, null));
+export function createAgentEventBus(
+  id = "root",
+  onInterceptorError?: (info: { pattern: string; event: string; scopeId: string; error: unknown }) => void
+): AgentEventBus {
+  return new DefaultAgentEventBus(new EventBusScopeNode(id, null), onInterceptorError);
 }

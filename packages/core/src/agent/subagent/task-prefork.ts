@@ -102,6 +102,14 @@ export class TaskPreforkCoordinator {
     entry.promise = this.drive(entry, factory, onRunStart);
     this.entries.set(toolCallId, entry);
 
+    // The registry owns this promise for its whole life, but nothing joins it when
+    // the run is aborted/queued away (`abortAll` settles the gate, not the promise)
+    // — and an unobserved rejection has no global handler, so a failing pre-fork
+    // would crash the host process instead of surfacing through the task tool.
+    // Attach a no-op catch: `join` still observes the real rejection through
+    // `entry.promise`, and this only marks the rejection as handled.
+    void entry.promise.catch(() => {});
+
     if (this.active < MAX_ACTIVE_TASK_PREFORKS) {
       this.admit(entry);
     } else {

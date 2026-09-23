@@ -69,6 +69,10 @@ export async function dispatchLocalAgentSessionCommand(
       case "clear": {
         // In-place message clear only. Brand-new agent sessions use Host.create.
         if (!chat) return { ok: false, code: "failed", error: "Chat controller not initialized" };
+        // Stop first: a live pump would keep streaming chunks into the channel we
+        // are about to empty (and re-persist the transcript the user just cleared).
+        // No-op when idle.
+        chat.stopIfActive?.("clear");
         chat.clearMessages();
         return { ok: true };
       }
@@ -87,6 +91,18 @@ export async function dispatchLocalAgentSessionCommand(
         return { ok: true };
       }
       case "compact": {
+        // Manual compaction builds a summary checkpoint from the transcript and
+        // appends it to the channel. Mid-run that interleaves with the pump's own
+        // messages (the checkpoint lands inside a half-finished turn, and the
+        // pump's finally block restores `running` over `compacting`). Refuse while a
+        // run is live; auto-compaction already covers that case.
+        if (chat?.isRunActive?.()) {
+          return {
+            ok: false,
+            code: "failed",
+            error: "Cannot compact while the agent is running — stop it first (Esc).",
+          };
+        }
         const result = await managed.compact({ focus: command.focus });
         return result.ok ? { ok: true, data: result } : { ok: false, code: "failed", error: result.error };
       }

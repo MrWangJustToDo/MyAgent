@@ -18,12 +18,34 @@ export function registerCommand(command: Command): void {
 }
 
 /**
+ * Every token that resolves to a built-in: names plus aliases.
+ *
+ * Aliases must be included: `getCommand` resolves an alias to its built-in, so an
+ * extension command registered under a built-in's alias would be shadowed — or,
+ * worse, resolve to the extension while the user meant the built-in. Only `name`
+ * used to be checked, which is how `/appearance` (an alias of `/settings`) stayed
+ * claimable by an extension.
+ */
+function builtinTokens(): Set<string> {
+  const tokens = new Set<string>();
+  for (const command of builtinCommands) {
+    tokens.add(command.name);
+    for (const alias of command.aliases ?? []) tokens.add(alias);
+  }
+  return tokens;
+}
+
+/**
  * Register an extension-provided slash command.
- * Built-in names win — conflicting extension commands are skipped.
+ * Built-in names AND aliases win — conflicting extension commands are skipped.
  */
 export function registerExtensionCommand(command: Command): boolean {
-  if (builtinCommands.some((c) => c.name === command.name)) {
-    console.warn(`[commands] Extension command "/${command.name}" skipped — conflicts with built-in`);
+  const tokens = builtinTokens();
+  const conflicts = [command.name, ...(command.aliases ?? [])].filter((token) => tokens.has(token));
+  if (conflicts.length > 0) {
+    console.warn(
+      `[commands] Extension command "/${command.name}" skipped — conflicts with built-in (${conflicts.join(", ")})`
+    );
     return false;
   }
   extensionCommands.set(command.name, command);

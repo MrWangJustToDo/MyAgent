@@ -52,6 +52,8 @@ export class AgentChatController {
   private currentToken: RunToken | null = null;
   /** Nested-safe depth; reset only by the single interrupt owner (see interruptCurrentRun). */
   private pumpDepth = 0;
+  /** Pumps queued on {@link runChain} but not yet started (see {@link runPending}). */
+  private pendingRuns = 0;
 
   private readonly steeringQueue = new PendingMessageQueue<QueuedMessageContent>();
   private readonly followUpQueue = new PendingMessageQueue<QueuedMessageContent>();
@@ -100,6 +102,11 @@ export class AgentChatController {
 
   stop(): void {
     this.interruptCurrentRun("user-cancelled");
+  }
+
+  /** Whether a pump is currently executing (used to refuse conflicting commands). */
+  isRunActive(): boolean {
+    return this.pumpDepth > 0;
   }
 
   /**
@@ -240,7 +247,7 @@ export class AgentChatController {
     this.applyCancelledIncompleteTools();
     this.channel.addUserMessage(content);
     this.persistMessages("user-message");
-    return this.enqueueRun();
+    return this.enqueueRunOnce();
   }
 
   respondToToolApproval(approvalId: string, approved: boolean, reason?: string): Promise<void> {
@@ -259,19 +266,25 @@ export class AgentChatController {
     });
     this.managed.statusController.reconcileWithPolicy(this.channel.getMessages(), "during-run");
     this.persistMessages("pump-complete");
-    return this.enqueueRun();
+    // Join a queued pump when one exists rather than scheduling a second for the
+    // same decision (see `enqueueRunOnce`).
+    return this.enqueueRunOnce();
   }
 
   addToolResult(toolCallId: string, output: Record<string, unknown>): Promise<void> {
     this.channel.addToolResult(toolCallId, output);
-    return this.enqueueRun();
+    return this.enqueueRunOnce();
   }
 
   private shouldDeferQueue(): boolean {
     // A stale (interrupted/superseded) pump still unwinding must not swallow new
     // input into the queues — new submissions execute immediately.
     if (this.currentToken && !this.currentToken.isCurrent) return false;
-    return shouldDeferMidRunQueue({ pumpDepth: this.pumpDepth, status: this.managed.status });
+    // `runPending` closes the same-tick window `pumpDepth` misses: a pump is queued
+    // but has not started, so `pumpDepth` is still 0 while the status is already
+    // waiting. Deferring here queues the message for that pump instead of enqueueing
+    // a second one that would find nothing to do.
+    return this.runPending() || shouldDeferMidRunQueue({ pumpDepth: this.pumpDepth, status: this.managed.status });
   }
 
   private notifyQueueListeners(): void {
@@ -284,6 +297,35 @@ export class AgentChatController {
   private enqueueRun(): Promise<void> {
     // Recover from a previous rejected pump so later sendMessage/approval calls still run.
     const run = () => this.pumpToolPhases();
+    this.runChain = this.runChain.then(run, run);
+    return this.runChain;
+  }
+
+  /**
+   * Whether a pump is queued on {@link runChain} but has not started yet.
+   *
+   * `pumpDepth` alone cannot answer "will a pump start?": it increments only once
+   * the pump begins, so two state changes in the same tick both see 0, each
+   * enqueue a pump, and the second finds nothing left to do — status is no longer
+   * waiting and tools are done — yet still executes a model turn, producing a reply
+   * nobody asked for. Counting the pending chain closes that window.
+   */
+  private runPending(): boolean {
+    return this.pendingRuns > 0;
+  }
+
+  /**
+   * Enqueue a pump unless one is already queued. The queued pump re-reads the
+   * channel, so a change made after it was scheduled (an approval response, a tool
+   * result) is handled by that run rather than needing a second one.
+   */
+  private enqueueRunOnce(): Promise<void> {
+    if (this.pendingRuns > 0) return this.runChain;
+    this.pendingRuns += 1;
+    const run = () => {
+      this.pendingRuns -= 1;
+      return this.pumpToolPhases();
+    };
     this.runChain = this.runChain.then(run, run);
     return this.runChain;
   }

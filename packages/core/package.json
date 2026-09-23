@@ -86,6 +86,7 @@
     "validate:reactive-compact": "pnpm run build && node scripts/validate-reactive-compact.mjs",
     "validate:auto-compact-noop": "pnpm run build && node scripts/validate-auto-compact-noop.mjs",
     "validate:run-stream-recovery": "pnpm run build && node scripts/validate-run-stream-recovery.mjs",
+    "validate:run-recovery-gaps": "pnpm run build && node scripts/validate-run-recovery-gaps.mjs",
     "validate:stream-errors": "pnpm run build && node scripts/validate-stream-errors.mjs",
     "validate:structured-query": "pnpm run build && node scripts/validate-structured-query.mjs",
     "validate:capability-message-utils": "pnpm run build && node scripts/validate-capability-message-utils.mjs",

@@ -271,6 +271,16 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
         countsAsRecoveryAttempt = truncationResult.countsAsRecoveryAttempt;
         lastErrorMessage = "";
         retryStrategy = "max_tokens";
+      } else {
+        // Truncation budget exhausted. The original RUN_FINISHED was swallowed by
+        // the `break` above, so without this the stream ends with no terminal chunk
+        // at all — consumers that read the finish reason (subagent run stats) then
+        // see a clean stop and report a cut-off run as a complete one. Re-emit the
+        // truncation as the terminal chunk so "we stopped because the output hit the
+        // limit" survives, which is exactly what `reachedLimit`/`incomplete` need.
+        truncationDetected = false;
+        yield { type: "RUN_FINISHED", finishReason: "length" } as StreamChunk;
+        return;
       }
     }
 

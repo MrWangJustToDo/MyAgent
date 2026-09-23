@@ -60,6 +60,12 @@ function fingerprintPart(part: UIMessage["parts"][number]): string {
         part.name,
         part.arguments,
         part.state,
+        // The core-rendered display payload is attached *after* the tool part
+        // settles (`attachToolDisplay`) and the message body never changes again —
+        // so without it here the fingerprint matches, `shouldPersist` says no-op,
+        // and the display never reaches disk. A restored transcript then renders
+        // the raw output instead of the folded row.
+        (part as { display?: unknown }).display ? "display" : "",
         (part.approval as ToolCallApproval | undefined)?.id ?? "",
         (part.approval as ToolCallApproval | undefined)?.approved === true
           ? "1"
@@ -100,7 +106,16 @@ function fingerprintPart(part: UIMessage["parts"][number]): string {
       return `${part.type}:${source.type}:${fingerprint}`;
     }
     default:
-      return part.type;
+      // An unhandled part type must still be content-sensitive: returning just the
+      // type name made every content change to a part this switch does not know
+      // (a future `file` / `source-url`) look like "no change", so it was never
+      // written. Serialize defensively — a non-serializable part degrades to a
+      // type-only marker rather than throwing inside a persist check.
+      try {
+        return `${part.type}:${JSON.stringify(part)}`;
+      } catch {
+        return part.type;
+      }
   }
 }
 

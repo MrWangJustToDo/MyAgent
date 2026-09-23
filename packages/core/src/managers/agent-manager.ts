@@ -82,8 +82,19 @@ export class AgentManager {
    */
   private sessionOwners: Map<string, string> = new Map();
 
-  /** Unified event bus root — single source for every agent event. */
-  private readonly rootEventBus = createAgentEventBus();
+  /**
+   * Unified event bus root — single source for every agent event. An interceptor
+   * that throws is reported to the owning agent's log rather than surfacing as a
+   * tool failure (see `DefaultAgentEventBus.intercept`).
+   */
+  private readonly rootEventBus = createAgentEventBus("root", ({ pattern, event, scopeId, error }) => {
+    const message = error instanceof Error ? error.message : String(error);
+    // Log on the agent that owns the scope the interceptor was registered on, so
+    // the failure lands next to the run it affected. Falls back to any agent with
+    // a log (root-scoped interceptors belong to no single agent).
+    const owner = this.agents.get(scopeId) ?? [...this.agents.values()].find((agent) => agent.log);
+    owner?.log?.warn("hooks", "interceptor threw; continuing without it", { pattern, event, error: message });
+  });
 
   /** Process-wide observer bus (the unified root; events up-flow from agent scopes). */
   private readonly eventBus: AgentEventBus = this.rootEventBus;
