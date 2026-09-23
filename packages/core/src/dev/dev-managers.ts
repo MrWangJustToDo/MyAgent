@@ -33,6 +33,7 @@ export { ManagedAgent } from "../managers/managed-agent.js";
 export { RunCoordinator, type RunToken } from "../managers/run-coordinator.js";
 export { CompactionService } from "../managers/services/compaction-service.js";
 export { SessionService } from "../managers/services/session-service.js";
+export { ExtensionRegistryService } from "../managers/services/extension-registry-service.js";
 export { resolveTextAdapterForManaged } from "../managers/run-agent.js";
 export {
   armCapabilityStrip,

@@ -194,6 +194,23 @@ export interface ExtensionToolDefinition {
   /** Optional model-facing output transform (registered on the TanStack tool). */
   toModelOutput?: (ctx: ToModelOutputContext) => Promise<ModelToolContent> | ModelToolContent;
   /**
+   * Require explicit user approval before this tool runs (the same gate built-in
+   * tools use). Without it the approval system was closed to third-party tools:
+   * `isToolNeedsApproval` read this field, but nothing registered it, so an
+   * extension could never ask the user first.
+   */
+  needsApproval?: boolean;
+  /**
+   * Abort this tool's `execute` after this many milliseconds.
+   *
+   * Nothing upstream bounds an extension tool: a handler that awaits a request that
+   * never settles hangs the turn forever, with no way to recover short of killing
+   * the process. On timeout the tool fails with a message naming the budget, so the
+   * model can see why and the user is not left with a spinner. Omit for no limit
+   * (the historical behaviour).
+   */
+  timeoutMs?: number;
+  /**
    * Lazy tools are excluded from the initial request; the model discovers them by
    * name via the synthetic `__lazy__tool__discovery__` tool. Keeps low-usage tools
    * available without per-turn token cost. Defaults to false (eager).

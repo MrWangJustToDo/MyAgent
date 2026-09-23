@@ -20,10 +20,36 @@ import type {
   ExtensionRunner,
   ExtensionToolDefinition,
 } from "../../agent/extension";
+import type { ToolCallResult } from "../../agent/extension/types.js";
 import type { McpManager } from "../../agent/mcp/manager.js";
 import type { SkillRegistry } from "../../agent/skills";
 import type { TodoManager } from "../../agent/todo";
 import type { ToolsRecord } from "../../agent/tools/runtime/tools-record.js";
+
+/**
+ * Bound an extension tool's `execute` by a wall-clock budget.
+ *
+ * The extension keeps running (there is no way to cancel a promise), but the tool
+ * call fails with a message naming the budget instead of hanging the turn forever,
+ * and the caller is free to continue. The late result is discarded.
+ */
+async function withTimeout(
+  result: Promise<ToolCallResult>,
+  timeoutMs: number,
+  toolName: string
+): Promise<ToolCallResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      result,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`Tool "${toolName}" timed out after ${timeoutMs}ms`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 /** Callbacks the caller (ManagedAgent) supplies for tool registration. */
 export interface ExtensionToolRegistrationContext {
@@ -159,7 +185,6 @@ export class ExtensionRegistryService {
   // ---------------------------------------------------------------------------
   // Extension tools
   // ---------------------------------------------------------------------------
-
   registerTool(def: ExtensionToolDefinition, ctx: ExtensionToolRegistrationContext): void {
     const existing = (ctx.tools as Record<string, unknown>)[def.name];
     if (existing) {
@@ -179,16 +204,20 @@ export class ExtensionRegistryService {
       inputSchema: def.inputSchema,
       outputSchema: def.outputSchema,
       lazy: def.lazy,
-      execute: async (args, toolCtx) =>
-        def.execute(args, {
-          toolCallId: toolCtx.toolCallId,
-          abortSignal: toolCtx.abortSignal,
-          // Fallback ONLY. `defineServerTool` already resolves the id from the run context
-          // (`ToolRunContext.agentId`, set per run by the runner), and that value describes
-          // the run actually executing while this one merely records which agent the tool was
-          // registered on. Keep the run's value when present.
-          agentId: toolCtx.agentId ?? ctx.agentId,
-        }),
+      needsApproval: def.needsApproval,
+      execute: async (args, toolCtx) => {
+        const run = () =>
+          def.execute(args, {
+            toolCallId: toolCtx.toolCallId,
+            abortSignal: toolCtx.abortSignal,
+            // Fallback ONLY. `defineServerTool` already resolves the id from the run context
+            // (`ToolRunContext.agentId`, set per run by the runner), and that value describes
+            // the run actually executing while this one merely records which agent the tool was
+            // registered on. Keep the run's value when present.
+            agentId: toolCtx.agentId ?? ctx.agentId,
+          });
+        return def.timeoutMs === undefined ? run() : withTimeout(run(), def.timeoutMs, def.name);
+      },
       present: def.present,
       toModelOutput: def.toModelOutput,
       // The handler belongs to the registering extension, not to the tool name, so disabling
