@@ -15,6 +15,9 @@ import {
   registerCoreEnv,
   resetWebsearchProviders,
 } from "../dist/dev.mjs";
+// The cancel verdict is a render-layer reader and lives on the public entry, not the
+// internal one — same split as validate-cancel-semantics.mjs.
+import { isAbortError } from "../dist/index.mjs";
 
 // Domain filter
 const results = [
@@ -54,6 +57,39 @@ assert.equal(
   const { controller, cleanup } = createTimeoutAbort({ timeoutMs: 60_000, signal: external.signal });
   assert.equal(controller.signal.aborted, true);
   cleanup();
+}
+
+// The timeout must abort with a REASON that is not a cancel.
+//
+// A bare `controller.abort()` makes `fetch` reject with the platform's `AbortError`, and
+// `isAbortError` accepts that by `name` alone — so a pure timeout settled as "cancelled by
+// user" and the model was told `[Search cancelled by user.] <query>` for a search nobody
+// stopped. Asserting `isAbortError` on the signal's reason is what pins it: it is the same
+// predicate the tools and the presentation layer use to decide "cancel or failure".
+{
+  const external = new AbortController();
+  const { controller, cleanup } = createTimeoutAbort({ timeoutMs: 1, signal: external.signal });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(controller.signal.aborted, true, "the timeout still aborts");
+  assert.equal(
+    isAbortError(controller.signal.reason, external.signal),
+    false,
+    "a timeout must NOT read as a user cancel (the run signal is still live)"
+  );
+  cleanup();
+
+  // …and the user-abort path must keep reading as a cancel, or the fix traded one
+  // false negative for a false positive.
+  const run = new AbortController();
+  const aborted = createTimeoutAbort({ timeoutMs: 60_000, signal: run.signal });
+  run.abort();
+  assert.equal(aborted.controller.signal.aborted, true, "an external abort still aborts");
+  assert.equal(
+    isAbortError(aborted.controller.signal.reason, run.signal),
+    true,
+    "a user abort must still read as a cancel"
+  );
+  aborted.cleanup();
 }
 
 // Provider manager: without braveApiKey, duckduckgo is selected

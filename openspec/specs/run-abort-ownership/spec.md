@@ -43,6 +43,20 @@ When a run is aborted, tool invocations that have not reached a terminal state S
 - **WHEN** a run is aborted while tool rows are in-flight
 - **THEN** those tool rows are transitioned to a cancelled terminal state and included in the persisted messages for the aborted turn
 
+### Requirement: A local timeout is not a user cancellation
+
+A tool that enforces its own timeout SHALL NOT be reported as a user cancellation. Such a tool MUST abort its locally-owned controller with a reason that carries the failure kind (e.g. `ExecutionError("timeout", …)`), rather than a bare `abort()` — because a bare abort makes `fetch` reject with the platform's default `AbortError`, and the shared predicate `isAbortError` accepts that by `name` alone, without consulting the signal. The user-cancel verdict SHALL remain reserved for an abort of the run signal, and the model-facing text MUST NOT tell the model that the user stopped work the user never stopped.
+
+#### Scenario: Timeout while the run signal is live
+
+- **WHEN** `webfetch` or `websearch` exceeds its own timeout while the run signal is not aborted
+- **THEN** the call settles as a failure rather than `cancelled: true`, and the model receives the timeout error instead of a "cancelled by user" notice
+
+#### Scenario: User abort still reads as a cancel
+
+- **WHEN** the run signal is aborted while a tool with a local timeout is in flight
+- **THEN** the call still settles as cancelled, because the signal is checked before the error shape
+
 ### Requirement: Parent abort cascades to in-flight task tools
 
 When a run is aborted, any in-flight `task` tool invocation — preforked or serially executed — SHALL be cancelled: the subagent's LLM stream stops and the tool settles as aborted. The cascade SHALL flow through `ManagedAgent.abort` → child-agent abort (child registration + running-status gating), not through host-layer cooperation, and the serial path MUST NOT depend on the parent signal being passed through the tool execute context.

@@ -13,6 +13,7 @@
 import { z } from "zod";
 
 import { getEnv } from "../../env.js";
+import { ExecutionError } from "../../env-types.js";
 import { isAbortError } from "../../runtime-types/abort.js";
 
 import { defineServerTool } from "./runtime/define-tool.js";
@@ -143,9 +144,15 @@ Usage notes:
 
         const timeoutMs = Math.min((timeout ?? DEFAULT_TIMEOUT) * 1000, MAX_TIMEOUT * 1000);
 
-        // Create abort controller for timeout
+        // Create abort controller for timeout. The reason matters: a bare `abort()` makes
+        // `fetch` reject with the platform's `AbortError`, which `isAbortError` accepts by
+        // `name` alone — so a 30s timeout was reported to the model as
+        // `[Fetch cancelled by user.]`.
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        const timeoutId = setTimeout(
+          () => controller.abort(new ExecutionError("timeout", `Fetch timed out after ${timeoutMs}ms`)),
+          timeoutMs
+        );
 
         const managedAgent = managed;
 
