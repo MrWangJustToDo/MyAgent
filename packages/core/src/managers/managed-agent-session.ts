@@ -54,6 +54,12 @@ export interface SessionHost {
   resetAdmittedTurnContext?: () => void;
   /** Drop steer/follow-up queues without clearing the transcript (no-op before initChat). */
   clearQueuedMessages: () => void;
+  /**
+   * Stop an in-flight pump before its transcript is replaced. No-op when idle.
+   * Without it a restore swaps the channel under a live pump, whose stale chunks
+   * then interleave with the resumed history and get persisted as one session.
+   */
+  stopActiveRun?: (reason: string) => void;
   /** Reconcile approval / ask_user pause from restored UIMessages. */
   syncInteractionStateFromUIMessages: (
     messages: TanStackUIMessage[],
@@ -82,15 +88,29 @@ export function getSessionPersistInput(host: SessionHost, uiMessages?: TanStackU
 
 export async function saveSessionUIMessages(host: SessionHost, uiMessages: TanStackUIMessage[]): Promise<void> {
   if (uiMessages.length === 0) return;
-  await host.session.persistSession(getSessionPersistInput(host, uiMessages));
-  host.sessionSyncTracker.markPersisted(uiMessages);
+  // Only mark persisted when the write actually landed. Marking a failed save
+  // would make the fingerprint match, so every later persist of the same content
+  // is skipped as a no-op and the loss never converges (the store's own baseline
+  // still points at the older successful save).
+  //
+  // The input is resolved lazily: this call may sit behind another queued persist,
+  // and by the time it runs the ambient state may have moved on (a mode switch
+  // during the same turn). Re-reading it here keeps the newest state on the last
+  // write; the message snapshot stays exactly the caller's.
+  const persisted = await host.session.persistSession(() => getSessionPersistInput(host, uiMessages));
+  if (persisted) host.sessionSyncTracker.markPersisted(uiMessages);
 }
 
 export async function persistSessionModelState(host: SessionHost): Promise<void> {
-  await host.session.persistSession(getSessionPersistInput(host));
+  await host.session.persistSession(() => getSessionPersistInput(host));
 }
 
 export async function restoreManagedSession(host: SessionHost, sessionId: string): Promise<SessionData> {
+  // The transcript is about to be replaced, so any run still pumping into the
+  // current channel must stop first: its later chunks would interleave with the
+  // restored history and its pump-complete persist would write that mixture as the
+  // resumed session. No-op when idle, so a plain resume is unaffected.
+  host.stopActiveRun?.("session-switch");
   host.toolCompactCache.clear();
   // Read-side dual of `session:save-error`: media files referenced by the
   // transcript can be gone (cache cleared / media dir removed). Hydration

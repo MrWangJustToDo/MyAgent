@@ -20,22 +20,30 @@ export interface PromptCacheMiddlewareDeps {
 }
 
 /**
- * Stable fingerprint for a tool set so the sorted array can be memoized:
- * the sort only depends on names, but the *array content* (schemas) must be
- * part of the key too — otherwise a same-name/different-schema swap would
- * return stale tool objects. Falls back to `name` alone when a schema is not
- * JSON-serializable.
+ * Stable fingerprint for a tool set so the sorted array can be memoized.
+ *
+ * The sort only depends on names, but the memo hands back the *tool objects* — so
+ * everything the model can see has to be in the key. Schema-only was not enough:
+ * swapping a tool's `description` (or `title`) while keeping its name and schema
+ * returned the stale object, and the model kept receiving the old description.
+ * Falls back to a marker when a field is not JSON-serializable.
  */
 function toolSetFingerprint(tools: ServerTool[]): string {
   return tools
     .map((t) => {
       let schema = "";
+      let description = "";
       try {
         schema = JSON.stringify(t.inputSchema ?? null);
       } catch {
         schema = "(non-serializable)";
       }
-      return `${t.name}:${schema}`;
+      try {
+        description = JSON.stringify(t.description ?? null);
+      } catch {
+        description = "(non-serializable)";
+      }
+      return `${t.name}:${(t as { title?: string }).title ?? ""}:${description}:${schema}`;
     })
     .join("\u0001");
 }

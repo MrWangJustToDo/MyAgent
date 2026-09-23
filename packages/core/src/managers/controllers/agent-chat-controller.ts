@@ -93,10 +93,27 @@ export class AgentChatController {
     this.managed.resetAdmittedTurnContext();
     this.managed.resetSessionSyncTracker();
     this.managed.statusController.resetToIdle();
+    // The cleared transcript must also leave disk, or a later resume brings the
+    // conversation the user just discarded back.
+    this.persistEmpty();
   }
 
   stop(): void {
     this.interruptCurrentRun("user-cancelled");
+  }
+
+  /**
+   * Stop the in-flight pump only when one is actually running.
+   *
+   * The transcript is about to be replaced (session switch); an interrupted
+   * pump would otherwise keep writing chunks into the new session's channel and
+   * persist the interleaved result. Unlike {@link stop} this is a no-op when
+   * idle, so a plain resume does not emit a spurious abort/finalize or cancel
+   * tool calls that merely *look* incomplete in a restored transcript.
+   */
+  stopIfActive(reason = "session-switch"): void {
+    if (this.pumpDepth <= 0) return;
+    this.interruptCurrentRun(reason);
   }
 
   /**
@@ -525,6 +542,18 @@ export class AgentChatController {
     if (messages.length > 0) {
       this.managed.maybeSaveSessionUIMessages(messages, reason);
     }
+  }
+
+  /**
+   * Persist an empty transcript over the current session file.
+   *
+   * `persistMessages` above is a no-op on an empty channel, and the persist
+   * helpers early-return on an empty array too — so `/clear` used to leave the
+   * cleared messages on disk and a later resume resurrected them. This is the one
+   * path that must write the empty list.
+   */
+  persistEmpty(): void {
+    this.managed.clearPersistedSession();
   }
 
   /** Extract ## Plan / [DONE:n] from the latest assistant text while plan mode is active. */

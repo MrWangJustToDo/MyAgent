@@ -15,6 +15,7 @@ import {
   buildAnthropicCachedSystemPrompts,
   buildFrozenSystemPrompt,
   buildSystemPromptWithTurnContext,
+  createPromptCacheMiddleware,
   resolvePromptCacheKey,
   shouldApplyAnthropicCacheBreakpoints,
   shouldApplyOpenAIPromptCacheKey,
@@ -91,5 +92,42 @@ assert.deepEqual(messages[0]?.content?.[0]?.metadata?.cache_control, EPHEMERAL_C
 
 const again = applyAnthropicLatestUserCacheBreakpoint(messages);
 assert.deepEqual(again[0]?.content?.[0]?.metadata?.cache_control, EPHEMERAL_CACHE_CONTROL);
+
+// ============================================================================
+// Tool-set memo must key on everything the model can see (P0-4)
+// ============================================================================
+// The middleware memoizes the *sorted tool objects*: a key that ignores a
+// model-visible field hands the model a stale description after a same-name,
+// same-schema edit. Assert object identity, because that is what the memo
+// controls — a deep-equal check would pass even with a stale object.
+{
+  const middleware = createPromptCacheMiddleware({
+    getModelStyle: () => "openai",
+    getPromptCacheKey: () => "ses_test",
+  });
+
+  const makeTools = (description) => [
+    { name: "read_file", description, inputSchema: { type: "object" } },
+    { name: "glob", description: "glob", inputSchema: { type: "object" } },
+  ];
+
+  const runConfig = async (tools) => {
+    const patch = await middleware.onConfig({}, { tools });
+    return patch.tools;
+  };
+
+  const first = await runConfig(makeTools("read a file"));
+  assert.equal(first.find((t) => t.name === "read_file").description, "read a file");
+
+  // Same name + same schema, changed description: must NOT reuse the memoized array.
+  const second = await runConfig(makeTools("read a file, newest version"));
+  const readFile = second.find((t) => t.name === "read_file");
+  assert.equal(
+    readFile.description,
+    "read a file, newest version",
+    "a changed description must reach the wire (memo key must include it)"
+  );
+  assert.notEqual(first[0], readFile, "a changed description must not return the memoized tool object");
+}
 
 console.log("validate:prompt-cache OK");

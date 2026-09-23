@@ -64,6 +64,7 @@ import {
   prepareManagedAgentForRun,
 } from "./managed-agent-run-lifecycle.js";
 import {
+  getSessionPersistInput,
   persistSessionModelState,
   restoreManagedSession,
   saveSessionUIMessages as saveSessionUIMessagesHelper,
@@ -807,7 +808,12 @@ export class ManagedAgent {
     this.emitStateChange();
   }
 
-  setModelInfo(info: ModelInfo): void {
+  /** Replace the model metadata. Pass `null` to clear it (unknown model). */
+  setModelInfo(info: ModelInfo | null): void {
+    if (!info) {
+      this.modelInfo = null;
+      return;
+    }
     this.log?.debug("agent", "Setting model info", {
       id: info.id,
       style: info.style,
@@ -854,6 +860,13 @@ export class ManagedAgent {
         this.usage.setPricing(next.modelInfo.pricing);
       }
       this.usage.setCapabilities(next.modelInfo.capabilities);
+    } else {
+      // No metadata for the new model (unknown id / offline) means "unknown", not
+      // "same as the previous model": keeping the old gate would strip media the
+      // new model accepts (old `[]`) or send media it rejects (old `[vision]`).
+      // `undefined` restores the permissive default.
+      this.setModelInfo(null);
+      this.usage.setCapabilities(undefined);
     }
 
     // Keep new on-disk sessions (`/clear`, session.new) on the switched model.
@@ -1002,6 +1015,30 @@ export class ManagedAgent {
    */
   saveSessionUIMessages(uiMessages: TanStackUIMessage[]): void {
     void saveSessionUIMessagesHelper(this, uiMessages).catch((err) => this.reportBackgroundPersistError(err));
+  }
+
+  /**
+   * Persist an **empty** transcript as the session's content (`/clear`).
+   *
+   * `saveSessionUIMessages` refuses to write an empty array (`persistSession`
+   * delegates to `store.save`, whose empty-list path also guards against wiping a
+   * session), so clearing in memory left the messages on disk — and resuming
+   * afterwards brought back the conversation the user had discarded. Here the
+   * empty write is intentional: it is what "clear" means, and the store rewrites
+   * the log to its empty form. The sync tracker is reset to empty so a later
+   * persist is not deduped against the pre-clear fingerprint.
+   */
+  clearPersistedSession(): void {
+    void this.session
+      .persistSession(() => ({
+        ...getSessionPersistInput(this),
+        uiMessages: [],
+        forceEmptyMessages: true,
+      }))
+      .then((persisted) => {
+        if (persisted) this.sessionSyncTracker.reset([]);
+      })
+      .catch((err) => this.reportBackgroundPersistError(err));
   }
 
   /** Reset fingerprint tracking after restore, clear, or new chat bootstrap. */
@@ -1626,6 +1663,14 @@ export class ManagedAgent {
   /** Drop steer/follow-up queues without clearing the transcript. */
   clearQueuedMessages(): void {
     this.chatController?.clearQueuedMessages();
+  }
+
+  /**
+   * Stop the in-flight run if one exists (session switch). Idle hosts are a
+   * no-op, so resuming a session does not fire a spurious abort.
+   */
+  stopActiveRun(reason = "session-switch"): void {
+    this.chatController?.stopIfActive(reason);
   }
 
   reset(): void {

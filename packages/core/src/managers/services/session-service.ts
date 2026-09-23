@@ -43,6 +43,14 @@ export interface SessionPersistInput {
    */
   onTitleResolved?: (name: string) => void;
   uiMessages?: UIMessage[];
+  /**
+   * Allow `uiMessages: []` to be written.
+   *
+   * An empty list is normally refused (an empty persist must not erase a session
+   * whose messages simply were not passed), but `/clear` must: it is the one
+   * caller whose intent *is* "the transcript is now empty".
+   */
+  forceEmptyMessages?: boolean;
 }
 
 export interface SessionRestoreInput {
@@ -56,6 +64,10 @@ export class SessionService {
   private store: SessionStore | null = null;
   private data: SessionData | null = null;
   private config: { modelStyle: string; model: string } | null = null;
+  /**
+   * Per-session persist serialization. See {@link persistSession}.
+   */
+  private persistQueue: Promise<void> = Promise.resolve();
   setStore(store: SessionStore, config: { modelStyle: string; model: string }): void {
     this.store = store;
     this.config = config;
@@ -143,23 +155,51 @@ export class SessionService {
   /**
    * Single save + error-emit path used by both the main persist and the
    * async title save, so a failure is always surfaced (never silently dropped).
+   *
+   * Returns whether the write landed. A caller that tracks persist state (the
+   * session-sync fingerprint) must only mark content persisted on `true`: a
+   * failed write that still marks it persisted suppresses every later retry of
+   * the same content, so the loss never converges. `false` also covers
+   * "no store / no data", where there is nothing to persist.
    */
-  private async saveToStore(emitEvent: EmitAgentTelemetryFn | undefined, target: string): Promise<void> {
-    if (!this.store || !this.data) return;
+  private async saveToStore(emitEvent: EmitAgentTelemetryFn | undefined, target: string): Promise<boolean> {
+    if (!this.store || !this.data) return false;
     try {
       await this.store.save(this.data);
+      return true;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       emitEvent?.("session:save-error", { target, error: errorMsg });
+      return false;
     }
   }
 
   /**
-   * Persist session model state. Pass `uiMessages` only from the app `useChat` layer.
-   * When uiMessages are provided, they are dehydrated (clone → extract base64 → media:// refs)
-   * before writing. The original uiMessages array is never mutated.
+   * Persist session MESSAGES and/or state.
+   *
+   * Accepts a thunk so the payload can be resolved when the queued write actually
+   * runs. That matters for state-only persists: a mode switch dispatches one while
+   * an earlier one is still queued (`dehydrateUIMessages` is async), and a payload
+   * captured at dispatch time would write the *pre-switch* state over the newer
+   * one. Resolving late means the last write always carries the newest state.
+   *
+   * Callers with a message snapshot that must not move (`saveSessionUIMessages`)
+   * still pass the exact messages; only the ambient state is re-read.
+   *
+   * @returns whether everything the caller asked for reached disk. Callers that
+   * mark the content persisted (see {@link saveToStore}) must gate on this.
    */
-  async persistSession(input: SessionPersistInput): Promise<void> {
+  async persistSession(input: SessionPersistInput | (() => SessionPersistInput)): Promise<boolean> {
+    const run = this.persistQueue.then(() => this.persistSessionInner(typeof input === "function" ? input() : input));
+    // Keep the stored chain non-rejecting so one failure cannot stall later saves.
+    this.persistQueue = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  }
+
+  private async persistSessionInner(input: SessionPersistInput): Promise<boolean> {
     const {
       usage,
       todoManager,
@@ -172,13 +212,11 @@ export class SessionService {
       uiMessages,
       log,
     } = input;
-    if (!this.store) return;
+    if (!this.store) return false;
     if (!this.data) {
       this.ensureSession();
-      await this.persistSession(input);
-      return;
+      return this.persistSessionInner(input);
     }
-
     this.data.usage = { ...usage.getTotal() };
     this.data.cost = usage.getTotalCostUsd();
     this.data.contextTokens = usage.getWindowUsage().inputTokens;
@@ -202,21 +240,33 @@ export class SessionService {
       this.data.reasoningEffort = reasoningEffort;
     }
 
+    // `messagesPersisted` stays false when dehydrate fails: the messages (the
+    // part the caller asked for) never reached `data.uiMessages`, so the caller
+    // must not mark them persisted — otherwise the retry is suppressed too.
+    let messagesPersisted = true;
     if (uiMessages !== undefined) {
-      // Dehydrate extracts base64 assets to the media store (disk writes). This
-      // runs BEFORE saveToStore, so a media IO failure would reject persistSession
-      // and — for fire-and-forget hosts (`void …persist…`) — escape as an
-      // unhandled rejection. Keep persist best-effort: surface it like any save
-      // failure and fall through with the previous messages, still saving the rest
-      // of the session state.
-      try {
-        const dehydrated = await dehydrateUIMessages(uiMessages);
-        this.data.uiMessages = dehydrated;
-      } catch (err) {
-        emitEvent?.("session:save-error", {
-          target: "session+uiMessages",
-          error: err instanceof Error ? err.message : String(err),
-        });
+      // An empty list is only written when the caller says so (`/clear`); every
+      // other caller omits `uiMessages` entirely rather than passing an empty one,
+      // so guarding here keeps a stray `[]` from erasing a real transcript.
+      if (uiMessages.length === 0 && !input.forceEmptyMessages) {
+        messagesPersisted = false;
+      } else {
+        // Dehydrate extracts base64 assets to the media store (disk writes). This
+        // runs BEFORE saveToStore, so a media IO failure would reject persistSession
+        // and — for fire-and-forget hosts (`void …persist…`) — escape as an
+        // unhandled rejection. Keep persist best-effort: surface it like any save
+        // failure and fall through with the previous messages, still saving the rest
+        // of the session state.
+        try {
+          const dehydrated = await dehydrateUIMessages(uiMessages);
+          this.data.uiMessages = dehydrated;
+        } catch (err) {
+          messagesPersisted = false;
+          emitEvent?.("session:save-error", {
+            target: "session+uiMessages",
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     }
 
@@ -256,7 +306,8 @@ export class SessionService {
     const saveTarget = uiMessages !== undefined ? "session+uiMessages" : "session";
     // Await so callers that `await persistSession` observe durability; emit on
     // failure (do not rethrow — persist remains best-effort for fire-and-forget hosts).
-    await this.saveToStore(emitEvent, saveTarget);
+    const saved = await this.saveToStore(emitEvent, saveTarget);
+    return messagesPersisted && saved;
   }
 
   /**
