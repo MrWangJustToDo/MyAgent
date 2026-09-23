@@ -120,5 +120,31 @@ const nextId = newSession.data.sessionId;
 assert.notEqual(nextId, target.id, "session.new allocates a new disk session");
 assertIdentity(nextId, "session.new");
 
-await fs.promises.rm(rootPath, { recursive: true, force: true });
+// ============================================================================
+// Teardown
+// ============================================================================
+// The session/agent persistence (SessionStore journal, AgentLog JSONL sink) writes
+// `.agents/**` files as fire-and-forget async operations. Those writes can still be
+// landing when we delete the temp root, which makes `rm` throw ENOTEMPTY on a busy
+// directory. This is a teardown race, not a validation failure, so wait a beat for
+// the in-flight writes to drain and retry the removal before giving up.
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function removeRoot(root, attempts = 10) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await fs.promises.rm(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      // ENOTEMPTY means the directory is still being written to; retry after a
+      // short drain window so in-flight async persistence can finish. Any other
+      // error is unexpected and should surface.
+      if (error?.code !== "ENOTEMPTY" || attempt === attempts) throw error;
+      await wait(50 * attempt);
+    }
+  }
+}
+
+await removeRoot(rootPath);
 console.log("session-identity validation passed");
