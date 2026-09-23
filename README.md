@@ -259,7 +259,7 @@ Built with [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools
 
 ### Playground
 
-Check the link https://mrwangjusttodo.github.io/Codent/, you can create your own site
+Check the link https://mrwangjusttodo.github.io/MyAgent/, you can create your own site
 ![Playground start](playground-start.png)
 ![Playground end](playground-end.png)
 ![Playground devtool](playground-devtool.png)
@@ -292,7 +292,7 @@ Runtime data (sessions, memory, plans, transcripts, …) is written to `./.agent
 
 ```bash
 git clone https://github.com/MrWangJustToDo/MyAgent.git
-cd Codent
+cd MyAgent
 pnpm install
 pnpm build
 ```
