@@ -34,11 +34,13 @@ export {
   loadModels,
   loadModelsConfigFromFile,
   parseModelsConfig,
+  readModelsConfigFile,
   registerModelProviderForEntry,
   resolveModelInfoFromModelsDev,
   resolveModelsConfig,
   resolveModelsConfigFromProvider,
   saveModelsConfig,
+  writeModelsConfigFile,
   type DirectModelsConfigEntry,
   type LoadedModelEntry,
   type LoadedModelsState,
@@ -48,6 +50,7 @@ export {
   type ModelsConfigGlobal,
   type ModelsConfigSource,
   type ProviderInfo,
+  type RawModelsConfig,
   type RemoteProviderConfigEntry,
 } from "./config/models-config.js";
 

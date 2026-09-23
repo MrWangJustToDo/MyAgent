@@ -169,7 +169,15 @@ export interface ProviderInfo {
 // ============================================================================
 
 export function parseModelsConfig(raw: string): ModelsConfig {
-  const parsed = modelsConfigSchema.safeParse(JSON.parse(raw));
+  return validateModelsConfig(JSON.parse(raw));
+}
+
+/**
+ * Validate an already-parsed document. Unknown keys are stripped — see
+ * {@link RawModelsConfig} for why that matters to writers.
+ */
+function validateModelsConfig(data: unknown): ModelsConfig {
+  const parsed = modelsConfigSchema.safeParse(data);
   if (!parsed.success) {
     throw new Error(`Invalid models.json: ${z.prettifyError(parsed.error)}`);
   }
@@ -177,27 +185,80 @@ export function parseModelsConfig(raw: string): ModelsConfig {
 }
 
 // ============================================================================
+// Raw file access (round-trip preserving)
+// ============================================================================
+
+/**
+ * The on-disk document before validation: the known shape plus **every key the
+ * schema does not know about** (`$schema`, a hand-written `headers` on an entry,
+ * a `global` setting a newer build reads, …).
+ *
+ * `parseModelsConfig` strips unknown keys — zod objects drop what they do not
+ * declare — which is right for *reading* a config (nothing downstream can use an
+ * undeclared field) and destructive for *writing* one: a writer that validated
+ * first would silently delete everything it cannot represent. Cast to
+ * {@link ModelsConfig} to read the known fields typed; never hand a raw document
+ * to `saveModelsConfig` by accident — a round trip is what preserves the rest.
+ */
+export type RawModelsConfig = ModelsConfig & Record<string, unknown>;
+
+function modelsConfigPaths(rootPath?: string): { env: ReturnType<typeof getEnv>; dir: string; configPath: string } {
+  const env = getEnv();
+  const base = rootPath ?? env.rootPath;
+  const dir = env.path.join(base, MODELS_CONFIG_DIR);
+  return { env, dir, configPath: env.path.join(dir, MODELS_CONFIG_FILE) };
+}
+
+/**
+ * Read `.agents/config/models.json` without validating or stripping it.
+ *
+ * Returns the parsed JSON as-is (unknown keys included), or `null` when the file
+ * does not exist. Throws on malformed JSON: callers deciding whether a config
+ * exists want {@link loadModelsConfigFromFile}; callers about to rewrite the file
+ * want this one, so what they did not touch survives.
+ */
+export async function readModelsConfigFile(rootPath?: string): Promise<RawModelsConfig | null> {
+  const { env, configPath } = modelsConfigPaths(rootPath);
+  const exists = await env.fs.exists(configPath);
+  if (!exists) return null;
+  return JSON.parse(await env.fs.readFile(configPath)) as RawModelsConfig;
+}
+
+/**
+ * Write a document to `.agents/config/models.json`.
+ *
+ * Takes `unknown` deliberately: the round-trip case must be allowed to write back
+ * keys this package's types do not declare. Validation belongs to the producer
+ * (`parseModelsConfig` for a draft), not to the writer.
+ */
+export async function writeModelsConfigFile(config: unknown, rootPath?: string): Promise<void> {
+  const { env, dir, configPath } = modelsConfigPaths(rootPath);
+  const dirExists = await env.fs.exists(dir);
+  if (!dirExists) await env.fs.mkdir(dir);
+  await env.fs.writeFile(configPath, JSON.stringify(config, null, 2));
+}
+
+// ============================================================================
 // File I/O (local mode)
 // ============================================================================
 
 export async function loadModelsConfigFromFile(rootPath?: string): Promise<ModelsConfig | null> {
-  const env = getEnv();
-  const base = rootPath ?? env.rootPath;
-  const configPath = env.path.join(base, MODELS_CONFIG_DIR, MODELS_CONFIG_FILE);
-  const exists = await env.fs.exists(configPath);
-  if (!exists) return null;
-  const raw = await env.fs.readFile(configPath);
-  return parseModelsConfig(raw);
+  const raw = await readModelsConfigFile(rootPath);
+  if (raw === null) return null;
+  return validateModelsConfig(raw);
 }
 
+/**
+ * Persist a **validated** config.
+ *
+ * Writes exactly what it is given, so a caller that took a validated document
+ * through a round trip must have used {@link readModelsConfigFile} rather than
+ * {@link loadModelsConfigFromFile} — otherwise unknown keys were already stripped
+ * before this saw them. Rewriting callers should prefer
+ * {@link writeModelsConfigFile} with a round-tripped raw document.
+ */
 export async function saveModelsConfig(config: ModelsConfig, rootPath?: string): Promise<void> {
-  const env = getEnv();
-  const base = rootPath ?? env.rootPath;
-  const dir = env.path.join(base, MODELS_CONFIG_DIR);
-  const configPath = env.path.join(dir, MODELS_CONFIG_FILE);
-  const dirExists = await env.fs.exists(dir);
-  if (!dirExists) await env.fs.mkdir(dir);
-  await env.fs.writeFile(configPath, JSON.stringify(config, null, 2));
+  await writeModelsConfigFile(config, rootPath);
 }
 
 // ============================================================================

@@ -165,6 +165,7 @@ export {
   MODELS_CONFIG_FILE,
   parseModelStyle,
   parseModelsConfig,
+  readModelsConfigFile,
   registerModelProviderForEntry,
   resolveModelConfig,
   resolveModelConfigFromProvider,
@@ -173,6 +174,7 @@ export {
   resolveModelsConfig,
   resolveModelsConfigFromProvider,
   saveModelsConfig,
+  writeModelsConfigFile,
 } from "./models";
 
 /**
@@ -199,6 +201,7 @@ export type {
   ModelsConfigGlobal,
   ModelsConfigSource,
   ProviderInfo,
+  RawModelsConfig,
   ReasoningConfig,
   ReasoningEffort,
   RemoteProviderConfigEntry,
