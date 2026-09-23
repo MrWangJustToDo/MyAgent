@@ -54,8 +54,8 @@
     "validate:all": "node scripts/run-all-validators.mjs --all",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "clean": "pnpm -p -r -c exec rm -rf dist dev .cache .next tsconfig.build.tsbuildinfo",
-    "purge": "pnpm -p -r -c exec rm -rf node_modules && rm -rf node_modules"
+    "clean": "pnpm -r -c exec rm -rf dist dev .cache .next tsconfig.build.tsbuildinfo",
+    "purge": "pnpm -r -c exec rm -rf node_modules && rm -rf node_modules"
   },
   "devDependencies": {
     "@codent/app": "workspace:*",
