@@ -107,7 +107,7 @@ function createFake(id, parentId) {
       return managed.autoModeEnabled ? "auto" : "normal";
     },
     getMcpManager() {
-      return managed.getMcpManager();
+      return null;
     },
     getExtensionCommands() {
       return [];

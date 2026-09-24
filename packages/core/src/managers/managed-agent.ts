@@ -63,6 +63,7 @@ import {
   finalizeManagedAgentRun,
   prepareManagedAgentForRun,
 } from "./managed-agent-run-lifecycle.js";
+import { RunnerWiring } from "./managed-agent-runner-wiring.js";
 import {
   getSessionPersistInput,
   persistSessionModelState,
@@ -301,13 +302,16 @@ export class ManagedAgent {
   // Run / UI / model wiring
   // ============================================================================
 
+  /**
+   * Runner cache + text adapter + UI channel, as one cluster: the cached
+   * {@link AgentRunner} is only valid for the config it was built from, so the
+   * cache and its invalidation rule live together (see
+   * `managed-agent-runner-wiring.ts`).
+   */
+  private readonly runnerWiring: RunnerWiring;
+
   /** Package-internal TanStack runner wiring — not part of the host-facing surface. */
-  private runner?: AgentRunner;
-  private runnerConfigKey?: string;
-  private textAdapter?: TextAdapterConfig;
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
-  private uiChannel?: AgentUIChannel;
-  private approvalRequestUnsub?: () => void;
   /** Task / compact summary streams for the session `summary` channel. */
   readonly summaryStreams: SummaryStreamHub;
   private chatController?: AgentChatController;
@@ -377,6 +381,17 @@ export class ManagedAgent {
     }
   ) {
     this.id = init.id ?? config.id ?? generateId("agent");
+    // Runner cache / adapter / UI channel are one cluster (see managed-agent-runner-wiring.ts).
+    this.runnerWiring = new RunnerWiring({
+      getEventBus: () => this.eventBus,
+      onApprovalRequest: (request) => {
+        this.approvals.upsert({
+          id: request.approvalId!,
+          toolCallId: request.toolCallId!,
+          status: "pending",
+        });
+      },
+    });
     this.name = config.name;
     // Single source of truth: shallow-copy the agent extras, then overlay the
     // zod-parsed AgentConfig subset (validation + defaults, e.g. maxIterations).
@@ -506,7 +521,7 @@ export class ManagedAgent {
 
   /** Host-facing UI channel when present (read-only; package-internal {@link setUIChannel}). */
   getUI(): AgentUIChannel | undefined {
-    return this.uiChannel;
+    return this.runnerWiring.getUI();
   }
 
   getError(): string {
@@ -1695,61 +1710,42 @@ export class ManagedAgent {
 
   /** @internal Used by run-agent / stream recovery. */
   getRunner(): AgentRunner | undefined {
-    return this.runner;
+    return this.runnerWiring.getRunner();
   }
 
   /** @internal */
   setRunner(runner: AgentRunner | undefined): void {
-    this.runner = runner;
+    this.runnerWiring.setRunner(runner);
   }
 
   /** @internal */
   getRunnerConfigKey(): string | undefined {
-    return this.runnerConfigKey;
+    return this.runnerWiring.getRunnerConfigKey();
   }
 
   /** @internal */
   setRunnerConfigKey(key: string | undefined): void {
-    this.runnerConfigKey = key;
+    this.runnerWiring.setRunnerConfigKey(key);
   }
 
   /** @internal Invalidate cached AgentRunner (tools / plan phase / prompt changed). */
   invalidateRunner(): void {
-    this.runner = undefined;
-    this.runnerConfigKey = undefined;
+    this.runnerWiring.invalidateRunner();
   }
 
   /** @internal */
   getTextAdapter(): TextAdapterConfig | undefined {
-    return this.textAdapter;
+    return this.runnerWiring.getTextAdapter();
   }
 
   /** @internal */
   setTextAdapter(adapter: TextAdapterConfig | undefined): void {
-    this.textAdapter = adapter;
+    this.runnerWiring.setTextAdapter(adapter);
   }
 
-  /** @internal Wire chat / subagent UI channel (hosts read via {@link ui}). */
+  /** @internal Wire chat / subagent UI channel (hosts read via {@link getUI}). */
   setUIChannel(ui: AgentUIChannel | undefined): void {
-    this.approvalRequestUnsub?.();
-    this.approvalRequestUnsub = undefined;
-    this.uiChannel = ui;
-    if (ui) {
-      // Every channel — root chat or subagent preview — must project its
-      // `session:messages` onto the agent's scoped bus (the single change
-      // mechanism since the domain Emitter was removed). Without this, a
-      // subagent preview channel created by `ensureUIChannel` never reaches
-      // its AgentSession `messages` channel.
-      if (this.eventBus) ui.setEventBus(this.eventBus);
-      this.approvalRequestUnsub = ui.subscribeApprovalRequests((request) => {
-        if (!request.approvalId || !request.toolCallId) return;
-        this.approvals.upsert({
-          id: request.approvalId,
-          toolCallId: request.toolCallId,
-          status: "pending",
-        });
-      });
-    }
+    this.runnerWiring.setUIChannel(ui);
   }
 }
 
