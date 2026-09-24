@@ -34,7 +34,6 @@ import { runStreamWithRecovery } from "./run-stream-recovery.js";
 import { createEmitTelemetryFn } from "./telemetry/emit-agent-telemetry.js";
 
 import type { AgentManager } from "./agent-manager.js";
-import type { AgentRunDeps } from "./agent-run-deps.js";
 import type { ManagedAgent } from "./managed-agent.js";
 import type { TextAdapterConfig } from "../models/adapter/adapter-factory.js";
 import type { ModelMessage, ServerTool, StreamChunk, UIMessage } from "@tanstack/ai";
@@ -109,10 +108,6 @@ function resolveTanStackTools(managed: ManagedAgent): ServerTool[] {
   return resolveToolsRecord(managed.tools, { exclude }) as ServerTool[];
 }
 
-function buildRunDeps(managed: ManagedAgent, manager: AgentManager): AgentRunDeps {
-  return buildManagedAgentDeps(managed, manager);
-}
-
 // ============================================================================
 // AgentRunner factory
 // ============================================================================
@@ -122,130 +117,139 @@ export function buildAgentRunner(
   textAdapter: TextAdapterConfig,
   manager: AgentManager
 ): AgentRunner {
-  const deps = buildRunDeps(managed, manager);
-  const systemPrompt = managed.getSystemPrompt();
+  // `deps` is the single collaborator surface this assembly reads from, so no factory
+  // argument below reaches into `managed` directly.
+  const deps = buildManagedAgentDeps(managed, manager);
+  // Set-once collaborators are captured once here as local aliases; everything that can
+  // change while the (cached) runner is alive stays behind a `deps.getX()` call at the
+  // consumer, mirroring the liveness contract on `AgentRunDeps`.
+  const { config, parentId, session, usage, usageHistory, statusController, approvals, run, planMode } = deps;
+  // `systemPrompt` is genuinely build-time (memoized on the agent and part of the runner
+  // key's inputs), so it is read once and passed on.
+  const systemPrompt = deps.getSystemPrompt();
   const emitEvent = createEmitTelemetryFn(managed);
+  const midIterationMax = config.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS;
 
   const middleware = sortMiddlewaresByPhase([
     createStatusMiddleware({
-      status: managed.statusController,
+      status: statusController,
       onApprovalRequested: (approvalId, toolCallId) => {
-        managed.approvals.upsert({ id: approvalId, toolCallId, status: "pending" });
+        approvals.upsert({ id: approvalId, toolCallId, status: "pending" });
       },
     }),
     createApprovalResumeMiddleware({
-      getApprovals: () => managed.approvals.toArray(),
+      getApprovals: () => approvals.toArray(),
     }),
     createLifecycleMiddleware({
-      usage: deps.usage,
-      getPricing: () => deps.usage.getPricing(),
+      usage: usage,
+      getPricing: () => usage.getPricing(),
       onThinking: () => emitEvent("agent:thinking"),
-      onFirstModelOutput: () => deps.memory.commitSurfacedMemories(),
+      onFirstModelOutput: deps.commitSurfacedMemories,
       emitEvent,
-      recordUsage: (input) => managed.usageHistory.record({ agentId: managed.id, ...input }),
-      maxIterations: managed.config.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS,
-      onIteration: (state) => managed.setIterationProgress(state),
+      recordUsage: (input) => usageHistory.record({ agentId: deps.agentId, ...input }),
+      maxIterations: midIterationMax,
+      onIteration: deps.setIterationProgress,
     }),
     createCompactionMiddleware({
       agentId: deps.agentId,
       manager: deps.manager,
-      getCompactionConfig: () => deps.compactionConfig,
+      getCompactionConfig: deps.getCompactionConfig,
       // Read live so late-arriving ModelInfo (models.dev lookup) stays in sync
       // with ManagedAgent.getMessagesForLLM's keep-policy resolution.
-      getContextWindow: () => managed.getModelInfo()?.contextWindow,
-      getUIChannel: () => deps.getUIChannel(),
-      getUsage: () => deps.usage,
-      getTodoManager: () => managed.getTodoManager(),
+      getContextWindow: () => deps.getModelInfo()?.contextWindow,
+      getUIChannel: deps.getUIChannel,
+      getUsage: () => usage,
+      getTodoManager: deps.getTodoManager,
       shouldTriggerAutoCompact: deps.shouldTriggerAutoCompact,
-      status: managed.statusController,
-      log: deps.log,
+      status: statusController,
+      log: deps.getLog(),
       emitEvent,
-      getWireProjectionCache: () => managed.getWireProjectionCache(),
+      getWireProjectionCache: deps.getWireProjectionCache,
     }),
     // Extension message transformers. Sits right after `compaction` so it sees the
     // channel-projected wire — running earlier would be discarded by that projection.
     createMessageTransformMiddleware({
       agentId: deps.agentId,
-      getExtensionRunner: () => managed.getExtensionRunner(),
-      getUsage: () => deps.usage,
-      getAbortSignal: () => managed.run.currentAbortController?.signal,
+      getExtensionRunner: deps.getExtensionRunner,
+      getUsage: () => usage,
+      getAbortSignal: () => run.currentAbortController?.signal,
     }),
     // Per-run wire overrides that must outlive the channel projection (capability
     // strip + `max_tokens` continuation). Sits after `message-transform` so a
     // capability strip cannot hide the real media part from an extension transformer.
     createWireRecoveryMiddleware({
-      getRun: () => managed.run,
+      getRun: () => run,
     }),
     createToolCompactMiddleware({
-      getCompactionConfig: () => deps.compactionConfig,
-      getToolCompactCache: () => managed.getToolCompactCache(),
+      getCompactionConfig: deps.getCompactionConfig,
+      getToolCompactCache: deps.getToolCompactCache,
       getManagedAgent: () => managed,
     }),
     createTurnContextMiddleware({
       getFrozenSystemPrompt: deps.getFrozenSystemPrompt,
-      getSections: () => managed.getDynamicTurnContextSections(),
-      getUIChannel: () => managed.getUI(),
-      persistMessages: (next) => managed.maybeSaveSessionUIMessages(next, "user-message"),
+      getSections: deps.getDynamicTurnContextSections,
+      getUIChannel: () => deps.getUIChannel() ?? undefined,
+      persistMessages: (next) => deps.shouldPersistUIMessage(next, "user-message"),
       getManagedAgent: () => managed,
       // Subagents get the parent's agent doc (their own is not loaded).
       getProjectInstructions: () => {
-        if (!managed.parentId) return undefined;
-        return manager.getAgent(managed.parentId)?.getAgentDocContent() || undefined;
+        if (!parentId) return undefined;
+        return deps.manager.getAgent(parentId)?.getAgentDocContent() || undefined;
       },
-      getAdmittedHashes: () => managed.getAdmittedContextHashes(),
-      setAdmittedHashes: (hashes) => managed.setAdmittedContextHashes(hashes),
-      getAdmitMessageCount: () => managed.getTurnContextAdmitMessageCount(),
-      setAdmitMessageCount: (count) => managed.setTurnContextAdmitMessageCount(count),
+      getAdmittedHashes: deps.getAdmittedContextHashes,
+      setAdmittedHashes: deps.setAdmittedContextHashes,
+      getAdmitMessageCount: deps.getTurnContextAdmitMessageCount,
+      setAdmitMessageCount: deps.setTurnContextAdmitMessageCount,
     }),
     createExtensionsMiddleware({
-      getExtensionRunner: () => managed.getExtensionRunner(),
-      getSessionId: () => deps.session.getSessionData()?.id ?? deps.agentId,
-      getTodoManager: () => managed.getTodoManager(),
+      getExtensionRunner: deps.getExtensionRunner,
+      getSessionId: () => session.getSessionData()?.id ?? deps.agentId,
+      getTodoManager: deps.getTodoManager,
       emitEvent,
-      getAbortSignal: () => managed.run.currentAbortController?.signal,
+      getAbortSignal: () => run.currentAbortController?.signal,
     }),
     // TanStack batches TOOL_CALL_END until all tools finish; mirror each result into UI early.
     createEarlyToolResultUiMiddleware({
-      getUIChannel: () => managed.getUI(),
+      getUIChannel: deps.getUIChannel,
     }),
     // Pre-start task subagents while args stream so parallel task calls run concurrently.
     createTaskPreforkMiddleware({
       getManagedAgent: () => managed,
-      manager,
+      manager: deps.manager,
       emitEvent,
-      getUIChannel: () => managed.getUI(),
+      getUIChannel: () => deps.getUIChannel() ?? undefined,
     }),
     createPlanModeMiddleware({
-      getPlanMode: () => managed.planMode,
+      getPlanMode: () => planMode,
     }),
     // Surface finished background jobs as a lightweight notification before each LLM call.
     // Both injects the notification into the current run's messages AND persists it as an
     // independent synthetic UIMessage so it survives across turns (prompt-cache friendly).
     createBackgroundNotificationMiddleware({
-      getUIChannel: () => managed.getUI(),
-      persistMessages: (next) => managed.maybeSaveSessionUIMessages(next, "user-message"),
+      getUIChannel: () => deps.getUIChannel() ?? undefined,
+      persistMessages: (next) => deps.shouldPersistUIMessage(next, "user-message"),
     }),
     createPromptCacheMiddleware({
-      getModelStyle: () => managed.config.modelStyle,
-      getPromptCacheKey: () => resolvePromptCacheKey(deps.session.getSessionData()?.id, deps.agentId),
+      getModelStyle: () => config.modelStyle,
+      getPromptCacheKey: () => resolvePromptCacheKey(session.getSessionData()?.id, deps.agentId),
     }),
   ]);
-  assertCanonicalMiddlewareOrder(middleware, (message: string) => deps.log?.warn("agent", message));
+  assertCanonicalMiddlewareOrder(middleware, (message: string) => deps.getLog().warn("agent", message));
 
-  const maxOutputTokens = managed.getConfig().maxTokens ?? deps.modelInfo?.defaultMaxTokens;
+  const maxOutputTokens = config.maxTokens ?? deps.getModelInfo()?.defaultMaxTokens;
 
   return new AgentRunner({
     adapter: textAdapter.adapter,
     model: textAdapter.model,
-    maxIterations: managed.config.maxIterations ?? DEFAULT_AGENT_MAX_ITERATIONS,
+    maxIterations: midIterationMax,
     systemPrompts: systemPrompt ? [systemPrompt] : undefined,
     tools: resolveTanStackTools(managed),
-    middleware: instrumentMiddlewareLog(middleware, deps.log),
-    temperature: managed.config.temperature,
+    middleware: instrumentMiddlewareLog(middleware, deps.getLog()),
+    temperature: config.temperature,
     maxOutputTokens,
-    reasoningEffort: managed.config.reasoningEffort ?? deps.modelInfo?.reasoningConfig?.defaultEffort,
-    modelStyle: managed.config.modelStyle,
-    lazyToolsConfig: managed.config.lazyToolsConfig,
+    reasoningEffort: config.reasoningEffort ?? deps.getModelInfo()?.reasoningConfig?.defaultEffort,
+    modelStyle: config.modelStyle,
+    lazyToolsConfig: config.lazyToolsConfig,
   });
 }
 

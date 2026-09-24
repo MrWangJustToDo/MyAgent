@@ -158,7 +158,7 @@ managers/ — runtime orchestration (agent/ imports managers types + injected de
 | ID | Item | Location | Status | Suggested direction |
 |----|------|----------|--------|---------------------|
 | P2-9 | `lifecycle-middleware` does too much | status + usage + session save + memory extraction + emit | `[ ]` | Split middlewares |
-| P2-10 | Three deps patterns overlap | `ServiceDeps`, `AgentRunDeps`, per-middleware getter bags | `[~]` | `buildManagedAgentDeps()` unifies service + run; middleware getters remain |
+| P2-10 | Three deps patterns overlap | `ServiceDeps`, `AgentRunDeps`, per-middleware getter bags | `[~]` | `buildManagedAgentDeps()` is now the **complete** runner surface: every factory argument in `buildAgentRunner` reads it (no direct `managed.X`), guarded by `validate:run-deps-completeness`. Middleware still declare their own narrow `XxxMiddlewareDeps` — passing the whole bag to them stays open |
 | P2-11 | `prepareForRun` vs middleware overlap | memory prefetch + prompt:submit in ManagedAgent; compaction in middleware | `[~]` | `RunCoordinator` now owns run-lifecycle flags/timing (7d0b195); `prepare()` pre-run consolidation still open |
 
 ### Exports
