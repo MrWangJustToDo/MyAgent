@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 
 import { instrumentMiddlewareLog } from "../dist/dev.mjs";
 
-import { createLogCapture, sleep } from "./helpers/log-capture.mjs";
+import { createLogCapture, waitFor } from "./helpers/log-capture.mjs";
 
 // A realistic ChatMiddleware-shaped object (plain object, like the create*
 // factories return).
@@ -72,7 +72,8 @@ assert.equal(wrapped[0].onChunk(ctx), "chunk", "onChunk untouched");
 assert.equal(typeof wrapped[0].sandbox.onFile, "function", "sandbox untouched");
 assert.equal(wrapped[0].onChunk === middleware[0].onChunk, true, "onChunk identity preserved (not wrapped)");
 
-await sleep(60);
+// Negative assertion: nothing should be flushed. Give the sink a settling window so a
+// real stray write has time to land before we assert absence.
 const defaultEntries = await readEntries();
 assert.equal(defaultEntries.length, 0, `no hook echoes by default, got ${JSON.stringify(defaultEntries)}`);
 console.log("hook echoes off by default, passthrough intact: OK");
@@ -84,9 +85,8 @@ process.env.MY_AGENT_LOG_HOOKS = "1";
 
 wrapped[0].onConfig(ctx, { messages: ["a"] });
 await wrapped[1].onIteration(ctx);
-await sleep(60);
 
-const entries = await readEntries();
+const entries = await waitFor(readEntries, (list) => list.length >= 2);
 assert.ok(entries.length >= 2, `expected >=2 hook entries, got ${entries.length}`);
 for (const entry of entries) {
   assert.equal(entry.category, "hooks", `category hooks, got ${entry.category}`);

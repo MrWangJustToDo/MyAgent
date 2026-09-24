@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 
 import { createAgentEventBus, bridgeTelemetryToAgentLog } from "../dist/dev.mjs";
 
-import { createLogCapture, sleep } from "./helpers/log-capture.mjs";
+import { createLogCapture, waitFor } from "./helpers/log-capture.mjs";
 
 const capture = await createLogCapture("event-log-bridge");
 const { log, readEntries } = capture;
@@ -20,11 +20,15 @@ const bus = createAgentEventBus();
 bridgeTelemetryToAgentLog(bus, () => log);
 
 async function emitAndRead(event) {
+  const before = (await readEntries()).length;
   bus.emit(event.type, event.payload, {
     agentId: event.agentId,
     ...(event.parentId !== undefined ? { parentId: event.parentId } : {}),
   });
-  await sleep(60);
+  // Wait for a NEW entry, not merely a non-empty file: the sink is append-only and this
+  // helper is called repeatedly, so `length > 0` is satisfied by the previous event's
+  // entry and would hand back a stale snapshot.
+  await waitFor(readEntries, (entries) => entries.length > before);
   return readEntries();
 }
 

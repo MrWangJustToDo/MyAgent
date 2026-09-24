@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { createAgentEventBus, Emitter, TodoManager, UsageTracker } from "../dist/dev.mjs";
 
 // --- AgentLog (persistence-only: no in-memory emitter, entries go to the sink) ---
-import { createLogCapture, sleep } from "./helpers/log-capture.mjs";
+import { createLogCapture, waitFor } from "./helpers/log-capture.mjs";
 
 // --- primitive ---
 const emitter = new Emitter();
@@ -72,12 +72,13 @@ assert.equal(usagePayloads.length, 1);
 const capture = await createLogCapture("agent-emitter");
 assert.equal(typeof capture.log.on, "undefined", "AgentLog has no event emitter (persistence-only)");
 capture.log.info("system", "hello emitter");
-await sleep(60);
-const logEntries = await capture.readEntries();
+// Poll instead of sleeping: `flush()` clears its buffer synchronously and only then does
+// the async fs work, so a fixed sleep can read the file inside that window and see 0
+// entries on a loaded runner (the sink flushes on an interval, not on write).
+const logEntries = await waitFor(capture.readEntries, (entries) => entries.length >= 1);
 assert.equal(logEntries.length, 1);
 assert.equal(logEntries[0].message, "hello emitter");
 capture.log.info("system", "after check");
-await sleep(60);
-assert.equal((await capture.readEntries()).length, 2);
+assert.equal((await waitFor(capture.readEntries, (entries) => entries.length >= 2)).length, 2);
 
 console.log("agent-emitter validation passed");
