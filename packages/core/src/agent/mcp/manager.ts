@@ -7,6 +7,7 @@ import { resolveMcpModelOutput, wrapMcpToolForMultimodalContent } from "./prefer
 
 import type { McpConfig, McpServerConfig } from "./types.js";
 import type { McpProcessHandle } from "../../env.js";
+import type { McpServerStatus } from "../../runtime-types/mcp-status.js";
 import type { AnyServerTool } from "@tanstack/ai";
 import type { MCPClient, TransportInput } from "@tanstack/ai-mcp";
 
@@ -14,16 +15,9 @@ import type { MCPClient, TransportInput } from "@tanstack/ai-mcp";
 // McpServerStatus — public data for display in CLI /mcp command
 // ============================================================================
 
-export interface McpServerStatus {
-  name: string;
-  transport: string;
-  toolCount: number;
-  status: "connected" | "failed";
-  error?: string;
-  command?: string;
-  args?: string[];
-  url?: string;
-}
+// Declared in runtime-types (the shared leaf) so event payloads can name it without
+// importing this module; re-exported here because this is where it is produced.
+export type { McpServerStatus };
 
 export type McpToolsRecord = Record<string, AnyServerTool>;
 

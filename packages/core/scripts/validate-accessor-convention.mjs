@@ -1,0 +1,159 @@
+/**
+ * Accessor-convention gate.
+ *
+ * Core classes must expose ONE way to read a value: either a property-like getter
+ * (`get foo()`) or a method (`getFoo()`), never both for the same concept — and, for
+ * the classes named below, never a bare getter at all.
+ *
+ * Why a gate instead of a convention note: `ManagedAgent` had both
+ * `get todoManager()` and `getTodoManager()` (identical bodies), so a reader had to
+ * know which spelling was "the" one, and the surface grew variants
+ * (`skillRegister` vs `getSkillRegistry`). A convention nobody checks is a
+ * convention that drifts back — this repository's own history (`findCutPoint`
+ * documented long after deletion, a boundary gate that covered 2 of 6 edges) is the
+ * evidence.
+ *
+ * Two rules:
+ *
+ * 1. **No duplicates.** A class may not declare a getter and a method that resolve to
+ *    the same concept (same name, or `foo` + `getFoo`).
+ * 2. **Method form on the frozen list.** Classes on {@link METHOD_ONLY_CLASSES} must
+ *    not use property getters for state access at all: the write side is already
+ *    methods (`setTodoManager`, `setUIChannel`), and state here is a *snapshot*, not
+ *    a plain field — `managed.status` reads as data while `getStatus()` reads as a
+ *    call, which is the honest signal.
+ *
+ * Run: pnpm --filter @codent/core run validate:accessor-convention
+ */
+
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const srcRoot = join(scriptDir, "../src");
+
+/**
+ * Classes that must not declare property getters for state access.
+ *
+ * Scope is deliberately narrow: the inconsistency lives in `ManagedAgent` (the
+ * composition root that grew accessor shortcuts), and the audit confirmed every
+ * other class in core is already method-only. Rule 1 (no duplicates) still applies
+ * everywhere, so a new class that introduces `get x()` + `getX()` is caught even
+ * though it is not listed here.
+ */
+const METHOD_ONLY_CLASSES = new Set(["ManagedAgent"]);
+
+/** `get foo()` / `set foo(...)` declarations inside a class body. */
+const GETTER_RE = /^\s{2}get ([A-Za-z_$][\w$]*)\(\)/;
+/** Method declarations: `foo(...)` or `getFoo()` at class-body indentation. */
+const METHOD_RE = /^\s{2}([A-Za-z_$][\w$]*)\([^)]*\)\s*(?::[^{;]+)?\{/;
+/** `class X {` / `export class X {` — including `abstract`/generics. */
+const CLASS_RE = /^\s*(?:export\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)/;
+
+function walkTsFiles(dir) {
+  const out = [];
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    const st = statSync(full);
+    if (st.isDirectory()) out.push(...walkTsFiles(full));
+    else if (name.endsWith(".ts") || name.endsWith(".tsx")) out.push(full);
+  }
+  return out;
+}
+
+/**
+ * Parse class bodies shallowly: collect getters and methods per class. Nesting is
+ * not tracked — a nested class is rare enough here that attributing its members to
+ * the outer class only ever over-reports, which is the safe direction for a gate
+ * (it still names the file and line).
+ */
+function collectClasses(file) {
+  const lines = readFileSync(file, "utf8").split("\n");
+  const classes = [];
+  let current = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    const classMatch = CLASS_RE.exec(line);
+    if (classMatch) {
+      current = { name: classMatch[1], line: i + 1, getters: [], methods: [] };
+      classes.push(current);
+      continue;
+    }
+    if (!current) continue;
+
+    const getter = GETTER_RE.exec(line);
+    if (getter) {
+      current.getters.push({ name: getter[1], line: i + 1 });
+      continue;
+    }
+
+    const method = METHOD_RE.exec(line);
+    if (method) {
+      const name = method[1];
+      // Control flow inside a method body can look like a call at this indent;
+      // exclude the obvious keywords rather than tracking brace depth.
+      if (!["if", "for", "while", "switch", "catch", "return", "else", "do"].includes(name)) {
+        current.methods.push({ name, line: i + 1 });
+      }
+    }
+  }
+
+  return classes;
+}
+
+const violations = [];
+const methodOnlyViolations = [];
+
+for (const file of walkTsFiles(srcRoot)) {
+  const rel = relative(join(scriptDir, ".."), file);
+  for (const cls of collectClasses(file)) {
+    const methodNames = new Set(cls.methods.map((m) => m.name));
+
+    for (const getter of cls.getters) {
+      // Rule 1a: `get foo()` next to `getFoo()`.
+      const methodSpelling = `get${getter.name[0].toUpperCase()}${getter.name.slice(1)}`;
+      if (methodNames.has(methodSpelling)) {
+        violations.push({
+          file: rel,
+          cls: cls.name,
+          detail: `get ${getter.name}() (line ${getter.line}) duplicates ${methodSpelling}()`,
+        });
+      }
+      // Rule 1b: `get foo()` next to `foo()` — two spellings of the same read.
+      if (methodNames.has(getter.name)) {
+        violations.push({
+          file: rel,
+          cls: cls.name,
+          detail: `get ${getter.name}() (line ${getter.line}) duplicates ${getter.name}()`,
+        });
+      }
+      // Rule 2: frozen classes must not use property getters for state access.
+      if (METHOD_ONLY_CLASSES.has(cls.name)) {
+        methodOnlyViolations.push({
+          file: rel,
+          cls: cls.name,
+          detail: `get ${getter.name}() (line ${getter.line}) — ${cls.name} must expose reads as getXxx()`,
+        });
+      }
+    }
+  }
+}
+
+const all = [...violations, ...methodOnlyViolations];
+
+if (all.length > 0) {
+  console.error("accessor convention violated:\n");
+  for (const v of violations) console.error(`  [duplicate] ${v.file} — ${v.cls}: ${v.detail}`);
+  for (const v of methodOnlyViolations) console.error(`  [getter-not-allowed] ${v.file} — ${v.cls}: ${v.detail}`);
+  console.error(
+    "\nReads must have ONE spelling per concept. In these classes use getXxx() / setXxx()" +
+      " — the write side is already method-form, and a getter makes snapshot state read as plain data."
+  );
+  process.exit(1);
+}
+
+console.log("accessor convention validation passed (no duplicate reads, no getters in frozen classes)");

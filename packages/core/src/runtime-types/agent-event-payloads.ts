@@ -7,7 +7,7 @@
 
 import type { AgentEventType } from "./agent-events.js";
 import type { AgentRetryStrategy } from "./agent-retry.js";
-import type { McpServerStatus } from "../agent/mcp/manager.js";
+import type { McpServerStatus } from "./mcp-status.js";
 
 /** Explicit empty object for events with no fields. */
 export type EmptyAgentEventPayload = Record<string, never>;

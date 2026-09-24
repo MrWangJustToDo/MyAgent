@@ -10,12 +10,17 @@ import { extractJsonDocument, renderSchemaContract } from "./schema-prompt.js";
 import { isStructuredOutputComplete } from "./structured-output-chunk.js";
 
 import type { TextAdapterConfig } from "./adapter-factory.js";
-import type { AgentLog } from "../../agent/agent-log";
 import type { InferSchemaType, SchemaInput } from "@tanstack/ai";
 
 // ============================================================================
 // Types
 // ============================================================================
+
+/** Minimal log sink a side query writes to (structurally satisfied by `AgentLog`). */
+export interface SideQueryLog {
+  info(category: string, message: string, data?: Record<string, unknown>): unknown;
+  warn(category: string, message: string, data?: Record<string, unknown>): unknown;
+}
 
 export interface SideTextQueryOptions {
   systemPrompt?: string;
@@ -28,14 +33,17 @@ export interface SideTextQueryOptions {
    */
   disableThinking?: boolean;
   /**
-   * Optional agent log for failure visibility. The port is otherwise silent: a
+   * Optional log sink for failure visibility. The port is otherwise silent: a
    * failed side query used to leave no trace anywhere, and one caller
    * (`session-service` title generation) swallowed it with a bare `catch {}`.
    *
    * Only failures are logged — a success writes nothing, so there is no line per
    * title/summary/memory-selection.
+   *
+   * Structural rather than the `AgentLog` class: models/ must not depend on
+   * `agent/`, and the port only ever calls `info` / `warn`. `AgentLog` satisfies it.
    */
-  log?: AgentLog;
+  log?: SideQueryLog;
 }
 
 export interface SideTextQueryResult {
@@ -538,7 +546,7 @@ function createQueryRequest(
 function sideQueryError(
   message: string,
   textAdapter: TextAdapterConfig,
-  log: AgentLog | undefined,
+  log: SideQueryLog | undefined,
   startTime: number,
   context: FailureContext
 ): string {

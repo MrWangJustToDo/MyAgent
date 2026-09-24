@@ -16,9 +16,9 @@
 
 import * as pathe from "pathe";
 
-import { commandJobRegistry } from "./agent/tools/util/command-job-registry.js";
+import { runEnvTeardownHooks } from "./env-teardown.js";
 
-import type { LspServerConfig, LspConnection } from "./agent/lsp/lsp-transport.js";
+import type { LspServerConfig, LspConnection } from "./env-lsp.js";
 import type {
   CommandResult,
   CoreEnvShellInfo,
@@ -410,7 +410,7 @@ export function registerCoreEnv(env: CoreEnv): void {
  * Also best-effort kills any background command jobs.
  */
 export function clearCoreEnv(): void {
-  void commandJobRegistry.destroyAll();
+  runEnvTeardownHooks();
   _env = null;
 }
 

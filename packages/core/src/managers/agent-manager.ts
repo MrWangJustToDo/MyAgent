@@ -272,7 +272,7 @@ export class AgentManager {
    */
   getActiveSubagents(rootAgentId: string): ManagedAgent[] {
     return this._collectSubagents(rootAgentId, {
-      filter: (managed) => managed.parentId != null && ACTIVE_STATUSES.has(managed.status),
+      filter: (managed) => managed.parentId != null && ACTIVE_STATUSES.has(managed.getStatus()),
     });
   }
 
@@ -342,7 +342,7 @@ export class AgentManager {
     }
 
     // Force-kill MCP child processes synchronously to prevent orphans on exit
-    managedAgent.mcpManager?.forceKill();
+    managedAgent.getMcpManager()?.forceKill();
 
     managedAgent.abort("Agent destroyed");
 
@@ -364,7 +364,7 @@ export class AgentManager {
     // Teardown extensions: emit interceptable session:shutdown first (so extensions can
     // release resources, e.g. kill LSP daemons), then deactivate/destroy all extensions.
     // This fixes a pre-existing leak where extensionRunner.destroyAll() was never called.
-    const runner = managedAgent.extensionRunner;
+    const runner = managedAgent.getExtensionRunner();
     if (runner) {
       runner.emitSessionShutdown(id);
       void runner.destroyAll();

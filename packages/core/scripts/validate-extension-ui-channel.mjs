@@ -24,9 +24,9 @@ const managed = {
   parentId: undefined,
   name: "agent-1",
   getEventBus: () => bus,
-  extensionRunner: runner,
+  getExtensionRunner: () => runner,
   log: null,
-  status: "idle",
+  getStatus: () => "idle",
   error: "",
   pendingApprovalCount: 0,
   childIds: [],
@@ -49,8 +49,8 @@ const managed = {
   getLastStreamDurationMs: () => 0,
   getAgentMode: () => "normal",
   usage: { snapshot: () => null },
-  todoManager: { snapshot: () => ({ items: [], title: null }) },
-  mcpManager: null,
+  getTodoManager: () => ({ snapshot: () => ({ items: [], title: null }) }),
+  getMcpManager: () => null,
 };
 
 const session = createLocalAgentSession({ managed });

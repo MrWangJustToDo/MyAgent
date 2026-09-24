@@ -21,9 +21,9 @@ import type { ModelStyle, ReasoningEffort } from "../models/types.js";
 import type { UIMessage as TanStackUIMessage } from "@tanstack/ai";
 
 export interface SessionHost {
-  ui?: AgentUIChannel;
+  getUI?: () => AgentUIChannel | undefined;
   usage: UsageTracker;
-  todoManager: TodoManager | null;
+  getTodoManager: () => TodoManager | null;
   planMode: PlanModeController;
   isAutoModeEnabled: () => boolean;
   setAutoModeEnabled: (enabled: boolean) => void;
@@ -71,7 +71,7 @@ export function getSessionPersistInput(host: SessionHost, uiMessages?: TanStackU
   const planOn = host.planMode.getPhase() !== "off";
   return {
     usage: host.usage,
-    todoManager: host.todoManager,
+    todoManager: host.getTodoManager(),
     planMode: host.planMode.getState(),
     // Mutual exclusivity: never persist auto while plan is active.
     autoMode: planOn ? false : host.isAutoModeEnabled(),
@@ -119,7 +119,7 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
   let mediaMissing = 0;
   const session = await host.session.restoreFromStore(sessionId, {
     usage: host.usage,
-    todoManager: host.todoManager,
+    todoManager: host.getTodoManager(),
     onMissingMedia: () => {
       mediaMissing += 1;
     },
@@ -158,8 +158,8 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
   host.setReasoningEffort?.(session.reasoningEffort);
 
   // Hydrate UI channel when present; hosts also apply uiMessages via resume APIs.
-  if (host.ui) {
-    host.ui.setMessages(session.uiMessages);
+  if (host.getUI) {
+    host.getUI()?.setMessages(session.uiMessages);
   }
   applyRestoredSessionChatState(host, session.uiMessages);
   host.resetAdmittedTurnContext?.();

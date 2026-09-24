@@ -18,7 +18,7 @@ import type { SummaryStreamHub } from "../summary-stream";
 import type { ModelMessage, StreamChunk, UIMessage } from "@tanstack/ai";
 
 export interface EnsureUIChannelOptions {
-  /** Used only when creating a new channel (no existing `managed.ui`). */
+  /** Used only when creating a new channel (no existing `managed.getUI()`). */
   initialMessages?: UIMessage[];
 }
 
@@ -27,7 +27,7 @@ export interface EnsureUIChannelOptions {
  * Sole UI attach helper for skeleton / UI runs.
  */
 export function ensureUIChannel(managed: ManagedAgent, options?: EnsureUIChannelOptions): AgentUIChannel {
-  const existing = managed.ui;
+  const existing = managed.getUI();
   if (existing) return existing;
   const channel = new AgentUIChannel({ initialMessages: options?.initialMessages });
   managed.setUIChannel(channel);

@@ -287,28 +287,6 @@ export class ManagedAgent {
   /** Extension / tool / integration registration domain (todo, MCP, skills, extensions). */
   readonly extensions: ExtensionRegistryService;
 
-  // Set-once managers + extension runtime — owned by {@link extensions}, exposed
-  // as getters so external readers keep the field-like syntax.
-  get todoManager(): TodoManager | null {
-    return this.extensions.getTodoManager();
-  }
-
-  get mcpManager(): McpManager | null {
-    return this.extensions.getMcpManager();
-  }
-
-  get skillRegister(): SkillRegistry | null {
-    return this.extensions.getSkillRegistry();
-  }
-
-  get extensionRunner(): ExtensionRunner | null {
-    return this.extensions.getExtensionRunner();
-  }
-
-  get extensionLoader(): ExtensionLoader | null {
-    return this.extensions.getExtensionLoader();
-  }
-
   // ============================================================================
   // Agent tree + timestamps
   // ============================================================================
@@ -425,7 +403,7 @@ export class ManagedAgent {
     this.updatedAt = Date.now();
     this.extensions.setManagedToolsProvider(() => this.tools);
     this.statusController = createAgentStatusController({
-      getStatus: () => this.status,
+      getStatus: () => this.getStatus(),
       setStatus: (status, trigger) => this.setStatus(status, trigger),
       getError: () => this.error,
       setError: (error) => this.setError(error),
@@ -434,7 +412,7 @@ export class ManagedAgent {
     });
 
     this.planMode = new PlanModeController({
-      getTodoManager: () => this.todoManager,
+      getTodoManager: () => this.getTodoManager(),
       onPhaseChange: () => {
         this.invalidateRunner();
         this.emitStateChange();
@@ -522,12 +500,12 @@ export class ManagedAgent {
   // ============================================================================
 
   /** Host-facing status (read-only; use {@link setStatus} to mutate). */
-  get status(): AgentStatus {
+  getStatus(): AgentStatus {
     return this.currentStatus;
   }
 
   /** Host-facing UI channel when present (read-only; package-internal {@link setUIChannel}). */
-  get ui(): AgentUIChannel | undefined {
+  getUI(): AgentUIChannel | undefined {
     return this.uiChannel;
   }
 
@@ -669,7 +647,7 @@ export class ManagedAgent {
    * messages to discover what the agent is waiting on.
    */
   readInteractions(): SessionInteractionsSnapshot {
-    const messages = this.getChatController()?.getMessages() ?? this.ui?.getMessages() ?? [];
+    const messages = this.getChatController()?.getMessages() ?? this.getUI()?.getMessages() ?? [];
     return {
       approvals: collectPendingApprovals(messages),
       askUser: collectPendingAskUser(messages),
@@ -721,11 +699,13 @@ export class ManagedAgent {
     this.usage.setEventBus(bus);
     this.summaryStreams.setEventBus(bus);
     this.planMode.setEventBus(bus);
-    this.todoManager?.setEventBus(bus);
+    this.getTodoManager()?.setEventBus(bus);
     this.chatController?.setEventBus(bus);
     bus.retain("agent:state", () => this.getL1State());
     bus.retain("session:mode", () => this.modeState());
-    bus.retain("session:extensions", () => ({ extensions: this.extensionRunner?.getExtensionInfos() ?? [] }));
+    bus.retain("session:extensions", () => ({
+      extensions: this.extensions.getExtensionRunner()?.getExtensionInfos() ?? [],
+    }));
     bus.retain("session:tool-presentation", () => ({ descriptors: describeToolPresentations() }));
     bus.retain("session:mcp", () => ({ servers: this.getMcpManager()?.getServerStatuses() ?? [] }));
     bus.retain("session:interaction", () => this.readInteractions());
@@ -883,7 +863,7 @@ export class ManagedAgent {
 
   /** Canonical model messages from the UI channel only. */
   getCanonicalFromUI(): ModelMessage[] {
-    const uiMessages = this.ui?.getMessages() ?? [];
+    const uiMessages = this.getUI()?.getMessages() ?? [];
     if (uiMessages.length === 0) return [];
     return convertMessagesToModelMessages(uiMessages);
   }
@@ -905,7 +885,7 @@ export class ManagedAgent {
       );
     }
 
-    const channel = this.ui;
+    const channel = this.getUI();
     if (!channel) return [];
 
     return projectWireFromChannel(
@@ -1122,6 +1102,14 @@ export class ManagedAgent {
     return this.extensions.getMcpManager();
   }
 
+  getExtensionRunner(): ExtensionRunner | null {
+    return this.extensions.getExtensionRunner();
+  }
+
+  getExtensionLoader(): ExtensionLoader | null {
+    return this.extensions.getExtensionLoader();
+  }
+
   /**
    * Register a tool on THIS agent.
    *
@@ -1250,7 +1238,7 @@ export class ManagedAgent {
   async collectExtensionPromptHooks(prompt: string): Promise<void> {
     this.pendingExtensionTurnContextSections = undefined;
 
-    const runner = this.extensionRunner;
+    const runner = this.extensions.getExtensionRunner();
     if (!runner) return;
 
     const collected = await runner.collectBeforeAgentStart(prompt, this.id);
@@ -1289,10 +1277,10 @@ export class ManagedAgent {
   /** Build the ordered dynamic turn-context sections for the current user turn. */
   async getDynamicTurnContextSections(): Promise<TurnContextSection[]> {
     let todoNagReminder: string | undefined;
-    if (this.todoManager?.shouldNag()) {
-      todoNagReminder = this.todoManager.getNagReminder(this.todoManager.getRoundsSinceUpdate());
+    if (this.getTodoManager()?.shouldNag()) {
+      todoNagReminder = this.getTodoManager()!.getNagReminder(this.getTodoManager()!.getRoundsSinceUpdate());
       this.log?.debug("todo", "Capturing nag reminder in turn context snapshot", {
-        roundsSinceUpdate: this.todoManager.getRoundsSinceUpdate(),
+        roundsSinceUpdate: this.getTodoManager()!.getRoundsSinceUpdate(),
       });
     }
 
@@ -1551,7 +1539,7 @@ export class ManagedAgent {
     for (const childId of [...this.childIds]) {
       const child = manager.getAgent(childId);
       if (!child) continue;
-      const status = child.status;
+      const status = child.getStatus();
       if (status !== "running" && status !== "compacting" && status !== "thinking" && status !== "responding") {
         continue;
       }
@@ -1577,7 +1565,7 @@ export class ManagedAgent {
   }
 
   /** Model input context window in tokens, if known (compaction keep policy). */
-  get contextWindow(): number | undefined {
+  getContextWindow(): number | undefined {
     return this.modelInfo?.contextWindow ?? undefined;
   }
   /**
@@ -1600,14 +1588,14 @@ export class ManagedAgent {
     return runManualCompact(
       {
         id: this.id,
-        status: this.status,
+        getStatus: () => this.getStatus(),
         setStatus: (status, trigger) => this.setStatus(status, trigger ?? "manual-compact"),
-        ui: this.ui,
+        getUI: () => this.getUI(),
         usage: this.usage,
-        todoManager: this.todoManager,
+        getTodoManager: () => this.getTodoManager(),
         statusController: this.statusController,
         compactionConfig: this.compaction.getConfig(),
-        contextWindow: this.modelInfo?.contextWindow,
+        getContextWindow: () => this.getContextWindow(),
         resetAdmittedTurnContext: () => this.resetAdmittedTurnContext(),
         resetSystemPrompt: () => this.resetSystemPrompt(),
         persistSession: () => this.persistSession(),
@@ -1674,10 +1662,10 @@ export class ManagedAgent {
   }
 
   reset(): void {
-    const prevStatus = this.status;
+    const prevStatus = this.getStatus();
     this.log?.info("agent", "Resetting agent", {
       previousStatus: prevStatus,
-      hadTodos: this.todoManager?.hasTodos() ?? false,
+      hadTodos: this.getTodoManager()?.hasTodos() ?? false,
     });
     // Exit plan / auto-approve first so approval bypass cannot stick across sessions.
     this.planMode.disable();
@@ -1692,7 +1680,7 @@ export class ManagedAgent {
     this.memory.resetState();
     this.pendingExtensionTurnContextSections = undefined;
     this.usage.reset();
-    this.todoManager?.reset();
+    this.getTodoManager()?.reset();
     this.run.resetTurnLifecycle();
     // Keep chatController + uiChannel alive — /clear calls clearMessages() separately.
     // Resetting these would break subsequent sendMessage() calls.

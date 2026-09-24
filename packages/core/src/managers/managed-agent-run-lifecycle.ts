@@ -25,7 +25,7 @@ import type { TextAdapterConfig } from "../models/adapter/adapter-factory.js";
 export interface RunLifecycleHost {
   readonly id: string;
   parentId?: string;
-  status: AgentStatus;
+  getStatus: () => AgentStatus;
   setStatus: (status: AgentStatus) => void;
   /** Track the active run id (log run-scoping); pass null to clear. */
   setCurrentRunId: (runId: string | null) => void;
@@ -43,7 +43,7 @@ export interface RunLifecycleHost {
   resolveTextAdapter?: () => Promise<TextAdapterConfig | null>;
   log: AgentLog | null;
   usage: UsageTracker;
-  ui?: AgentUIChannel;
+  getUI?: () => AgentUIChannel | undefined;
   run: RunCoordinator;
   compaction: CompactionService;
   memory: MemoryService;
@@ -68,7 +68,7 @@ export async function prepareManagedAgentForRun(
 
   // Always consume the flag (avoid `||` short-circuit leaving a stale continuation mark).
   const flaggedContinuation = host.consumePrepareAsContinuation() === true;
-  const isToolContinuation = isToolContinuationPrepare(host.status, options.messages) || flaggedContinuation;
+  const isToolContinuation = isToolContinuationPrepare(host.getStatus(), options.messages) || flaggedContinuation;
   if (!isToolContinuation || host.getStreamStartedAt() === 0) {
     host.setStreamStartedAt(Date.now());
   }
@@ -99,7 +99,7 @@ export async function prepareManagedAgentForRun(
     const userMsg = typeof options.prompt === "string" ? options.prompt : "(structured)";
     host.emitEvent("prompt:submit", {
       prompt: userMsg,
-      contextMessageCount: (host.ui?.getMessages() ?? inputMessages).length,
+      contextMessageCount: (host.getUI?.()?.getMessages() ?? inputMessages).length,
     });
   }
 }
@@ -152,7 +152,8 @@ export function finalizeManagedAgentRun(host: RunLifecycleHost, reason: RunFinal
 export function abortManagedAgentRun(host: RunLifecycleHost, reason?: string): void {
   host.emitEvent("agent:abort", { reason: reason ?? "(no reason)" });
   host.run.abort(reason ?? "user-cancelled");
-  if (host.status !== "aborted" && host.status !== "idle" && host.status !== "completed") {
+  const status = host.getStatus();
+  if (status !== "aborted" && status !== "idle" && status !== "completed") {
     host.setStatus("aborted");
   }
 }

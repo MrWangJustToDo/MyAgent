@@ -53,7 +53,7 @@ assert.equal(AGENT_EVENT_META["subagent:error"]?.channel, "lifecycle");
       },
       log: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, agent: () => {}, clear: () => {} },
       tools: {},
-      todoManager: null,
+      getTodoManager: () => null,
     }
   );
 
@@ -90,7 +90,7 @@ assert.equal(AGENT_EVENT_META["subagent:error"]?.channel, "lifecycle");
   const titles = [];
   await service.persistSession({
     usage: fakeUsage(),
-    todoManager: null,
+    getTodoManager: () => null,
     // No adapter → title falls back to the first user text.
     resolveTextAdapter: async () => null,
     onTitleResolved: (name) => titles.push(name),
@@ -109,7 +109,7 @@ assert.equal(AGENT_EVENT_META["subagent:error"]?.channel, "lifecycle");
   const seen = [];
   const input = getSessionPersistInput({
     usage: fakeUsage(),
-    todoManager: null,
+    getTodoManager: () => null,
     planMode: { getPhase: () => "off", getState: () => null },
     isAutoModeEnabled: () => false,
     getReasoningEffort: () => undefined,
@@ -133,13 +133,13 @@ assert.equal(AGENT_EVENT_META["subagent:error"]?.channel, "lifecycle");
       toolCompactCache: { clear: () => {} },
       session: { restoreFromStore: async () => restored },
       usage: fakeUsage(),
-      todoManager: null,
+      getTodoManager: () => null,
       planMode: { restoreState: () => {}, getPhase: () => "off", getState: () => null },
       setAutoModeEnabled: () => {},
       isAutoModeEnabled: () => false,
       approvals: { restore: () => {} },
       sessionSyncTracker: { reset: () => {} },
-      ui: { setMessages: () => {} },
+      getUI: () => ({ setMessages: () => {} }),
       clearQueuedMessages: () => {},
       syncInteractionStateFromUIMessages: () => {},
       emitEvent: () => {},

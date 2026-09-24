@@ -168,7 +168,7 @@ class LocalAgentSessionImpl implements AgentSession {
     // Per-subscriber reconcile: replay the extension render slots that were
     // published before this subscription mounted.
     if (selected.has("extension-ui")) {
-      const slots = this.managed.extensionRunner?.getUISlots();
+      const slots = this.managed.getExtensionRunner()?.getUISlots();
       if (slots) {
         for (const [surface, entries] of Object.entries(slots)) {
           for (const [key, payload] of Object.entries(entries)) {

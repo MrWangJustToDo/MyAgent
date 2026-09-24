@@ -317,8 +317,10 @@ function walk(dir) {
     /applySubagentCancelNotice\(output, aborted\)/.test(runSubagentSrc),
     "run-subagent: a cancelled run appends the notice to the summary it hands back"
   );
+  // The child status is read through the accessor (see validate-accessor-convention.mjs),
+  // so accept either spelling — what matters is that the *status* is one of the two inputs.
   assert.ok(
-    /aborted \|\|[\s\S]{0,200}status === "aborted"/.test(runSubagentSrc),
+    /aborted \|\|[\s\S]{0,200}(?:getStatus\(\)|status) === "aborted"/.test(runSubagentSrc),
     "run-subagent: derives the flag from the child status AND the abort signal, not one of them"
   );
   const planSrc = readFileSync(join(SRC, "agent/plan/create-plan-tool.ts"), "utf8");

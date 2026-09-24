@@ -164,7 +164,7 @@ export async function dispatchLocalAgentSessionCommand(
         return { ok: true, data: { servers } };
       }
       case "extension.toggle": {
-        const runner = managed.extensionRunner;
+        const runner = managed.getExtensionRunner();
         if (!runner) {
           return { ok: false, code: "failed", error: "No extension runner" };
         }

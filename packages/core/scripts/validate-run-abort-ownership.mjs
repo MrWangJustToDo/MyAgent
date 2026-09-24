@@ -135,7 +135,7 @@ function createManaged(id) {
       },
       log: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, agent: () => {}, clear: () => {} },
       tools: {},
-      todoManager: null,
+      getTodoManager: () => null,
     }
   );
   managed.setUIChannel(new AgentUIChannel());
@@ -161,7 +161,7 @@ function createManaged(id) {
 
   parent.abort("user-cancelled");
   assert.equal(childAborted, 1, "running child is aborted exactly once by parent abort");
-  assert.equal(child.status, "aborted", "child settles in aborted terminal state");
+  assert.equal(child.getStatus(), "aborted", "child settles in aborted terminal state");
   // Parent without an active run stays idle by design (status gate in abortManagedAgentRun).
 
   // Idle children are untouched.
@@ -169,7 +169,7 @@ function createManaged(id) {
   parent.childIds.push(idle.id);
   idle.setStatus("idle");
   parent.abort("user-cancelled-2");
-  assert.equal(idle.status, "idle", "idle child must not be aborted");
+  assert.equal(idle.getStatus(), "idle", "idle child must not be aborted");
 }
 
 console.log("run-abort-ownership validation passed");

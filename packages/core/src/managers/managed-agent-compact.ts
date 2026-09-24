@@ -26,7 +26,7 @@ import type { ModelMessage, UIMessage as TanStackUIMessage } from "@tanstack/ai"
 export interface ReactiveCompactHost {
   id: string;
   parentId?: string;
-  ui?: AgentUIChannel;
+  getUI: () => AgentUIChannel | undefined;
   usage: UsageTracker;
   compaction: CompactionService;
   statusController: AgentStatusController;
@@ -36,7 +36,7 @@ export interface ReactiveCompactHost {
   resetAdmittedTurnContext?: () => void;
   compactionConfig?: { keepRecentTokens?: number } | null;
   /** Model input context window in tokens, if known (drives the reactive tail budget). */
-  contextWindow?: number;
+  getContextWindow: () => number | undefined;
   /** Current run abort signal, so a cancel also cancels the summarizer. */
   getAbortSignal?: () => AbortSignal | undefined;
 }
@@ -53,7 +53,7 @@ export async function handleManagedReactiveCompact(
     return false;
   }
 
-  const channel = host.ui;
+  const channel = host.getUI();
   if (!channel) return false;
 
   const retry = host.compaction.recordReactiveCompactRetry();
@@ -70,7 +70,7 @@ export async function handleManagedReactiveCompact(
       ...(host.compactionConfig?.keepRecentTokens != null
         ? { keepRecentTokens: host.compactionConfig.keepRecentTokens }
         : {}),
-      ...(host.contextWindow && host.contextWindow > 0 ? { contextWindow: host.contextWindow } : {}),
+      ...(host.getContextWindow() && host.getContextWindow()! > 0 ? { contextWindow: host.getContextWindow() } : {}),
       ...(abortSignal ? { abortSignal } : {}),
     });
 
@@ -78,7 +78,7 @@ export async function handleManagedReactiveCompact(
     const tokensBefore = host.usage.getWindowUsage().inputTokens ?? 0;
 
     applyReactiveCompactionResult(canon, channel, host.usage, compactedMessages, {
-      ...keepPolicyProjectionOptions(resolveKeepPolicy(host.compactionConfig ?? {}, host.contextWindow)),
+      ...keepPolicyProjectionOptions(resolveKeepPolicy(host.compactionConfig ?? {}, host.getContextWindow())),
       onCacheCleanupError: (err) => {
         host.emitEvent("compaction:reactive-error", {
           phase: "cache-cleanup",
@@ -118,15 +118,15 @@ export async function handleManagedReactiveCompact(
 
 export interface ManualCompactHost {
   id: string;
-  status: AgentStatus;
+  getStatus: () => AgentStatus;
   setStatus: (status: AgentStatus, trigger?: string) => void;
-  ui?: AgentUIChannel;
+  getUI: () => AgentUIChannel | undefined;
   usage: UsageTracker;
-  todoManager: TodoManager | null;
+  getTodoManager: () => TodoManager | null;
   statusController: AgentStatusController;
   compactionConfig: CompactionConfig | null;
   /** Model input context window in tokens, if known (drives the keep policy). */
-  contextWindow?: number;
+  getContextWindow: () => number | undefined;
   resetAdmittedTurnContext: () => void;
   resetSystemPrompt: () => void;
   persistSession: () => void;
@@ -147,7 +147,7 @@ export async function runManualCompact(
   manager: AgentManager,
   options?: { focus?: string; messages?: TanStackUIMessage[] }
 ): Promise<ManualCompactResult> {
-  const channel = host.ui;
+  const channel = host.getUI();
   if (!channel) {
     return { ok: false, error: "Agent UI channel not available" };
   }
@@ -157,20 +157,23 @@ export async function runManualCompact(
   }
 
   const allModelMessages = convertMessagesToModelMessages(channel.getMessages());
-  const keepOptions = keepPolicyProjectionOptions(resolveKeepPolicy(host.compactionConfig ?? {}, host.contextWindow));
+  const keepOptions = keepPolicyProjectionOptions(
+    resolveKeepPolicy(host.compactionConfig ?? {}, host.getContextWindow())
+  );
   const messages = getModelVisibleMessages(allModelMessages, keepOptions);
   if (messages.length === 0) {
     return { ok: false, error: "No messages to compact" };
   }
 
-  const incompleteTodos = host.todoManager?.getIncompleteTodos() ?? [];
+  const incompleteTodos: Array<{ content: string; status: string; priority: string }> =
+    host.getTodoManager()?.getIncompleteTodos() ?? [];
   const todos = incompleteTodos.map((t) => ({
     content: t.content,
     status: t.status as "pending" | "in_progress" | "completed",
     priority: t.priority as "high" | "medium" | "low",
   }));
 
-  const previousStatus = host.status;
+  const previousStatus = host.getStatus();
   const tokensBeforeEstimate = estimateTokens(messages);
   const actualTokens = host.usage.getWindowUsage().inputTokens ?? 0;
 
@@ -183,7 +186,7 @@ export async function runManualCompact(
       focus: options?.focus,
       todos: todos.length > 0 ? todos : undefined,
       actualTokens: actualTokens || undefined,
-      contextWindow: host.contextWindow,
+      contextWindow: host.getContextWindow(),
       ...(abortSignal ? { abortSignal } : {}),
     });
 

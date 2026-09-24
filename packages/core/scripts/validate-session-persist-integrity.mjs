@@ -212,10 +212,14 @@ function newService() {
   // parked writes newest-first makes the *older* snapshot land last — the exact
   // interleaving that used to leave A's shorter list in `data.uiMessages` and make
   // the store rewrite the log, physically dropping B's appended tail.
-  const a = service.persistSession({ usage: new UsageTracker(), todoManager: null, uiMessages: [imageMessage("m1")] });
+  const a = service.persistSession({
+    usage: new UsageTracker(),
+    getTodoManager: () => null,
+    uiMessages: [imageMessage("m1")],
+  });
   const b = service.persistSession({
     usage: new UsageTracker(),
-    todoManager: null,
+    getTodoManager: () => null,
     uiMessages: [imageMessage("m1"), textMessage("m2", "mid"), textMessage("m3", "later")],
   });
 
@@ -245,7 +249,11 @@ function newService() {
   const { service } = newService();
   const messages = [textMessage("m1", "hello")];
 
-  const failed = await service.persistSession({ usage: new UsageTracker(), todoManager: null, uiMessages: messages });
+  const failed = await service.persistSession({
+    usage: new UsageTracker(),
+    getTodoManager: () => null,
+    uiMessages: messages,
+  });
   assert.equal(failed, false, "a failed write reports failure to the caller");
 
   // Retry with the same content: it must be attempted again, not skipped. The gate
@@ -253,7 +261,11 @@ function newService() {
   setupEnv({ failWrites: false });
   const { store, service: service2, data: data2 } = newService();
   data2.name = "gate";
-  const ok = await service2.persistSession({ usage: new UsageTracker(), todoManager: null, uiMessages: messages });
+  const ok = await service2.persistSession({
+    usage: new UsageTracker(),
+    getTodoManager: () => null,
+    uiMessages: messages,
+  });
   assert.equal(ok, true, "same content persists again after a failure (not deduped away)");
   const reloaded = await store.load(data2.id);
   assert.deepEqual(
@@ -272,7 +284,7 @@ function newService() {
 
   await service.persistSession({
     usage: new UsageTracker(),
-    todoManager: null,
+    getTodoManager: () => null,
     uiMessages: [textMessage("m1", "first"), textMessage("m2", "second")],
   });
   assert.deepEqual(
@@ -283,7 +295,7 @@ function newService() {
 
   const cleared = await service.persistSession({
     usage: new UsageTracker(),
-    todoManager: null,
+    getTodoManager: () => null,
     uiMessages: [],
     forceEmptyMessages: true,
   });
@@ -303,11 +315,11 @@ function newService() {
 
   await service.persistSession({
     usage: new UsageTracker(),
-    todoManager: null,
+    getTodoManager: () => null,
     uiMessages: [textMessage("m1", "keep me")],
   });
 
-  const stray = await service.persistSession({ usage: new UsageTracker(), todoManager: null, uiMessages: [] });
+  const stray = await service.persistSession({ usage: new UsageTracker(), getTodoManager: () => null, uiMessages: [] });
   assert.equal(stray, false, "an unforced empty persist reports failure");
   assert.deepEqual(
     (await store.load(data.id)).uiMessages.map((m) => m.id),
@@ -330,7 +342,7 @@ function newService() {
   const tracker = createSessionSyncTracker();
   const host = {
     usage: new UsageTracker(),
-    todoManager: null,
+    getTodoManager: () => null,
     planMode: { getPhase: () => "off", getState: () => null },
     isAutoModeEnabled: () => false,
     setAutoModeEnabled: () => {},
@@ -366,7 +378,7 @@ function newService() {
   const tracker = createSessionSyncTracker();
   const host = {
     usage: new UsageTracker(),
-    todoManager: null,
+    getTodoManager: () => null,
     planMode: { getPhase: () => "off", getState: () => null },
     isAutoModeEnabled: () => false,
     setAutoModeEnabled: () => {},

@@ -339,8 +339,8 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
  * Wire `messages` stay as set by the recovery strategy (may be capability-stripped).
  */
 function prepareRestartStyleRetry(options: RecoveryOptions): void {
-  if (options.managed.parentId && options.managed.ui) {
-    options.managed.ui.resetForStreamRetry();
+  if (options.managed.parentId && options.managed.getUI()) {
+    options.managed.getUI()!.resetForStreamRetry();
   }
   options.managed.setError("");
   options.managed.statusController?.onRecoveryRetry?.();

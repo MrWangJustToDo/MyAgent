@@ -6,6 +6,7 @@
  * trimming and stays readable from surfaces that cannot poll a job.
  */
 
+import { registerEnvTeardownHook } from "../../../env-teardown.js";
 import { generateId } from "../../../utils/generate-id.js";
 
 import { createCommandJobLogWriter, sweepStaleJobLogs } from "./command-output-log.js";
@@ -345,3 +346,10 @@ export const commandJobRegistry = new CommandJobRegistry();
 export async function destroyAllCommandJobs(): Promise<void> {
   await commandJobRegistry.destroyAll();
 }
+
+// Teardown is registered rather than called: `env.ts` sits at the bottom of the layer
+// stack and importing this module from there closes a cycle (this module → its log
+// writer → env). The hook is fire-and-forget because `clearCoreEnv()` is synchronous.
+registerEnvTeardownHook(() => {
+  void commandJobRegistry.destroyAll();
+});

@@ -39,7 +39,7 @@ function toListEntry(managed: ManagedAgent): AgentSessionListEntry {
     agentId: managed.id,
     name: managed.name,
     ...(managed.parentId ? { parentId: managed.parentId } : {}),
-    status: managed.status,
+    status: managed.getStatus(),
     ...(managed.getSessionData?.()?.id ? { sessionId: managed.getSessionData()!.id } : {}),
     createdAt: managed.createdAt,
     updatedAt: managed.updatedAt,

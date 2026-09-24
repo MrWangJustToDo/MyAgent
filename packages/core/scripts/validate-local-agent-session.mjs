@@ -33,7 +33,10 @@ function createFake(id, parentId) {
     name: id,
     parentId,
     getEventBus: () => bus,
+    // ManagedAgent reads are method-form (see validate-accessor-convention.mjs); the
+    // fake keeps plain fields and exposes them through the same accessors.
     status: "idle",
+    getStatus: () => managed.status,
     error: "",
     pendingApprovalCount: 0,
     lastStreamDurationMs: 0,
@@ -41,10 +44,9 @@ function createFake(id, parentId) {
     childIds: [],
     usage,
     log: null,
-    todoManager,
+    getTodoManager: () => todoManager,
     summaryStreams: new SummaryStreamHub(),
-    mcpManager: null,
-    extensionRunner: null,
+    getExtensionRunner: () => null,
     readInteractions: () => ({ approvals: [], askUser: [] }),
     readIteration: () => ({ current: 0, max: 0 }),
     planMode: {
@@ -61,7 +63,7 @@ function createFake(id, parentId) {
     },
     autoModeEnabled: false,
     manager: null,
-    ui: undefined,
+    getUI: () => undefined,
     chatController: {
       getMessages: () => [],
       getQueuedMessages: () => ({ steer: [], followUp: [] }),
@@ -105,7 +107,7 @@ function createFake(id, parentId) {
       return managed.autoModeEnabled ? "auto" : "normal";
     },
     getMcpManager() {
-      return managed.mcpManager;
+      return managed.getMcpManager();
     },
     getExtensionCommands() {
       return [];
@@ -229,7 +231,7 @@ const unsub = session.subscribe((event) => {
   channels.push(event.channel);
 });
 managed.usage.updateWindowUsage({ inputTokens: 3, outputTokens: 1, totalTokens: 4 });
-managed.todoManager.update([{ content: "x", status: "pending", priority: "medium" }], "work");
+managed.getTodoManager().update([{ content: "x", status: "pending", priority: "medium" }], "work");
 assert.ok(channels.includes("usage"));
 assert.ok(channels.includes("todos"));
 unsub();

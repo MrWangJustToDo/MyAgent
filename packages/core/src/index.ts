@@ -26,7 +26,7 @@ export {
 // LSP transport (optional, Node.js only — feature-detected by LSP extension)
 // ============================================================================
 
-export type { LspServerConfig, LspConnection, LspMessage } from "./agent/lsp/lsp-transport.js";
+export type { LspServerConfig, LspConnection, LspMessage } from "./env-lsp.js";
 export type { LspConnectionFactory } from "./env.js";
 export {
   LspManager,

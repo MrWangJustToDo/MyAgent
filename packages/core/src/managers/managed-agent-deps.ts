@@ -11,12 +11,12 @@ export function buildManagedAgentDeps(managed: ManagedAgent, manager: AgentManag
     memory: managed.memory,
     session: managed.session,
     log: managed.log,
-    todoManager: managed.todoManager,
-    extensionRunner: managed.extensionRunner,
+    todoManager: managed.getTodoManager(),
+    extensionRunner: managed.getExtensionRunner(),
     compactionConfig: managed.getCompactionConfig(),
     modelInfo: managed.getModelInfo(),
     getFrozenSystemPrompt: () => managed.getFrozenSystemPrompt(),
-    getUIChannel: () => managed.ui ?? null,
+    getUIChannel: () => managed.getUI() ?? null,
     shouldTriggerAutoCompact: (messages) => managed.shouldTriggerAutoCompact(messages),
   };
 }

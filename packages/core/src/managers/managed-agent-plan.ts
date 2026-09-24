@@ -15,7 +15,7 @@ import type {
 
 export interface PlanApiHost {
   planMode: PlanModeController;
-  status: AgentStatus;
+  getStatus: () => AgentStatus;
   getChatController: () => AgentChatController | undefined;
 }
 
@@ -35,7 +35,7 @@ export function beginPlanExecution(host: PlanApiHost, options: { sendSteer?: boo
   const result = host.planMode.beginExecution();
   if (!result.ok || !result.steerMessage) return result;
 
-  const queued = options.sendSteer !== false && host.getChatController() != null && isActiveStatus(host.status);
+  const queued = options.sendSteer !== false && host.getChatController() != null && isActiveStatus(host.getStatus());
 
   if (options.sendSteer !== false && host.getChatController()) {
     void host.getChatController()!.sendMessage(result.steerMessage);

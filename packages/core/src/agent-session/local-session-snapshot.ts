@@ -29,7 +29,7 @@ export function buildSubagentSummaries(
   // panel doubles as an observability surface for hidden agents.
   return manager.getSubagents(managed.id).map((child) => ({
     id: child.id,
-    status: child.status,
+    status: child.getStatus(),
     name: child.name,
     taskPhase: readTaskRunPhase(managed, child.parentTaskId),
     ...(subagentDescription(child.name) ? { description: subagentDescription(child.name) } : {}),
@@ -43,12 +43,12 @@ export function readLocalAgentSessionSnapshot(
   manager: SubagentCatalog | null | undefined
 ): AgentSessionSnapshot {
   const chat = managed.getChatController();
-  const todos = managed.todoManager;
+  const todos = managed.getTodoManager();
   return {
     agentId: managed.id,
     ...(managed.parentId ? { parentId: managed.parentId } : {}),
     name: managed.name,
-    status: managed.status,
+    status: managed.getStatus(),
     ...(managed.getSessionData()?.id ? { sessionId: managed.getSessionData()!.id } : {}),
     error: managed.getError(),
     pendingApprovalCount: managed.getPendingApprovalCount(),
@@ -60,7 +60,7 @@ export function readLocalAgentSessionSnapshot(
     ...(typeof managed.getReasoningEffort === "function" && managed.getReasoningEffort()
       ? { reasoningEffort: managed.getReasoningEffort() }
       : {}),
-    messages: chat?.getMessages() ?? managed.ui?.getMessages() ?? [],
+    messages: chat?.getMessages() ?? managed.getUI()?.getMessages() ?? [],
     queues: chat?.getQueuedMessages() ?? { steer: [], followUp: [] },
     usage: managed.usage.getChangeSnapshot(),
     todos: todos?.getItems() ?? [],
@@ -68,7 +68,7 @@ export function readLocalAgentSessionSnapshot(
     plan: managed.getPlanModeState(),
     autoMode: managed.isAutoModeEnabled(),
     mcp: { servers: managed.getMcpManager()?.getServerStatuses() ?? [] },
-    extensions: { extensions: managed.extensionRunner?.getExtensionInfos() ?? [] },
+    extensions: { extensions: managed.getExtensionRunner()?.getExtensionInfos() ?? [] },
     toolDescriptors: describeToolPresentations(),
     interactions: managed.readInteractions(),
     iteration: managed.readIteration(),

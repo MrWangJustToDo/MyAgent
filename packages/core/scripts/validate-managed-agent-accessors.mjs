@@ -25,25 +25,25 @@ const managed = new ManagedAgent(
   }
 );
 
-assert.equal(managed.status, "idle");
+assert.equal(managed.getStatus(), "idle");
 managed.setStatus("running");
-assert.equal(managed.status, "running");
+assert.equal(managed.getStatus(), "running");
 
 assert.equal(managed.getRunner(), undefined);
-assert.equal(managed.ui, undefined);
+assert.equal(managed.getUI(), undefined);
 
 const channel = new AgentUIChannel();
 managed.setUIChannel(channel);
-assert.equal(managed.ui, channel);
+assert.equal(managed.getUI(), channel);
 
 managed.setUIChannel(undefined);
-assert.equal(managed.ui, undefined);
+assert.equal(managed.getUI(), undefined);
 
 managed.syncRunStatusFromUIMessages([
   { id: "u1", role: "user", parts: [{ type: "text", content: "hi" }] },
   { id: "a1", role: "assistant", parts: [{ type: "text", content: "hello" }] },
 ]);
-assert.equal(managed.status, "completed");
+assert.equal(managed.getStatus(), "completed");
 
 managed.setStatus("running");
 managed.syncInteractionStateFromUIMessages(
@@ -70,6 +70,6 @@ managed.syncInteractionStateFromUIMessages(
   ],
   { whenClear: "running" }
 );
-assert.equal(managed.status, "waiting");
+assert.equal(managed.getStatus(), "waiting");
 
 console.log("managed-agent-accessors validation passed");

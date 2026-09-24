@@ -22,9 +22,9 @@ const uiMsgs = await consumeAgentStream({
 assert.ok(Array.isArray(uiMsgs));
 
 const host = {
-  ui: undefined,
+  getUI: () => host.uiChannel,
   setUIChannel(next) {
-    this.ui = next;
+    host.uiChannel = next;
   },
 };
 const attached = ensureUIChannel(host, {
@@ -38,7 +38,7 @@ const attached = ensureUIChannel(host, {
   ],
 });
 assert.ok(attached instanceof AgentUIChannel);
-assert.equal(host.ui, attached);
+assert.equal(host.uiChannel, attached);
 assert.equal(ensureUIChannel(host), attached);
 
 // Outcome path discriminants used by InteractiveChat vs Worker profiles.

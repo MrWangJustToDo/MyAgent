@@ -46,14 +46,14 @@ const managed = new ManagedAgent(
   }
 );
 
-assert.equal(managed.status, "idle");
+assert.equal(managed.getStatus(), "idle");
 managed.setStatus("running");
-assert.equal(managed.status, "running");
+assert.equal(managed.getStatus(), "running");
 
 managed.setClientToolWaiting(true);
-assert.equal(managed.status, "awaiting_user");
+assert.equal(managed.getStatus(), "awaiting_user");
 managed.setClientToolWaiting(false);
-assert.equal(managed.status, "completed");
+assert.equal(managed.getStatus(), "completed");
 
 // Regression: while already awaiting_user, a repeated setClientToolWaiting(true)
 // must be a no-op (no setStatus → no re-emit). The app re-dispatches whenever a
@@ -90,7 +90,7 @@ managed.syncRunStatusFromUIMessages([
     parts: [{ type: "text", content: "hello" }],
   },
 ]);
-assert.equal(managed.status, "completed");
+assert.equal(managed.getStatus(), "completed");
 
 managed.setStatus("running");
 managed.syncRunStatusFromUIMessages([
@@ -114,7 +114,7 @@ managed.syncRunStatusFromUIMessages([
     ],
   },
 ]);
-assert.equal(managed.status, "waiting");
+assert.equal(managed.getStatus(), "waiting");
 
 {
   let current = "aborted";

@@ -155,7 +155,7 @@ export function buildAgentRunner(
       getContextWindow: () => managed.getModelInfo()?.contextWindow,
       getUIChannel: () => deps.getUIChannel(),
       getUsage: () => deps.usage,
-      getTodoManager: () => deps.todoManager,
+      getTodoManager: () => managed.getTodoManager(),
       shouldTriggerAutoCompact: deps.shouldTriggerAutoCompact,
       status: managed.statusController,
       log: deps.log,
@@ -166,7 +166,7 @@ export function buildAgentRunner(
     // channel-projected wire — running earlier would be discarded by that projection.
     createMessageTransformMiddleware({
       agentId: deps.agentId,
-      getExtensionRunner: () => deps.extensionRunner,
+      getExtensionRunner: () => managed.getExtensionRunner(),
       getUsage: () => deps.usage,
       getAbortSignal: () => managed.run.currentAbortController?.signal,
     }),
@@ -184,7 +184,7 @@ export function buildAgentRunner(
     createTurnContextMiddleware({
       getFrozenSystemPrompt: deps.getFrozenSystemPrompt,
       getSections: () => managed.getDynamicTurnContextSections(),
-      getUIChannel: () => managed.ui,
+      getUIChannel: () => managed.getUI(),
       persistMessages: (next) => managed.maybeSaveSessionUIMessages(next, "user-message"),
       getManagedAgent: () => managed,
       // Subagents get the parent's agent doc (their own is not loaded).
@@ -198,22 +198,22 @@ export function buildAgentRunner(
       setAdmitMessageCount: (count) => managed.setTurnContextAdmitMessageCount(count),
     }),
     createExtensionsMiddleware({
-      getExtensionRunner: () => deps.extensionRunner,
+      getExtensionRunner: () => managed.getExtensionRunner(),
       getSessionId: () => deps.session.getSessionData()?.id ?? deps.agentId,
-      getTodoManager: () => deps.todoManager,
+      getTodoManager: () => managed.getTodoManager(),
       emitEvent,
       getAbortSignal: () => managed.run.currentAbortController?.signal,
     }),
     // TanStack batches TOOL_CALL_END until all tools finish; mirror each result into UI early.
     createEarlyToolResultUiMiddleware({
-      getUIChannel: () => managed.ui,
+      getUIChannel: () => managed.getUI(),
     }),
     // Pre-start task subagents while args stream so parallel task calls run concurrently.
     createTaskPreforkMiddleware({
       getManagedAgent: () => managed,
       manager,
       emitEvent,
-      getUIChannel: () => managed.ui,
+      getUIChannel: () => managed.getUI(),
     }),
     createPlanModeMiddleware({
       getPlanMode: () => managed.planMode,
@@ -222,7 +222,7 @@ export function buildAgentRunner(
     // Both injects the notification into the current run's messages AND persists it as an
     // independent synthetic UIMessage so it survives across turns (prompt-cache friendly).
     createBackgroundNotificationMiddleware({
-      getUIChannel: () => managed.ui,
+      getUIChannel: () => managed.getUI(),
       persistMessages: (next) => managed.maybeSaveSessionUIMessages(next, "user-message"),
     }),
     createPromptCacheMiddleware({
@@ -303,7 +303,7 @@ async function executeManagedAgentRun(
     abortSignal: input.abortSignal,
   });
 
-  if (!managed.ui) {
+  if (!managed.getUI()) {
     throw new Error(`Agent "${agentId}" requires a UI channel before LLM runs`);
   }
 
@@ -319,7 +319,7 @@ async function executeManagedAgentRun(
     managed,
     manager,
     signal: abortController.signal,
-    getMessages: () => managed.ui?.getMessages() ?? [],
+    getMessages: () => managed.getUI()?.getMessages() ?? [],
     run: (runMessages) =>
       runner.run({
         agentId,

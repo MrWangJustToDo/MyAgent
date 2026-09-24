@@ -6,6 +6,11 @@
  * Core only defines the interface and consumes whatever the host injects, so the
  * agent core stays runtime-agnostic (browser / WebContainer hosts simply omit
  * `createLspConnection` and LSP tools degrade gracefully).
+ *
+ * Lives beside `env.ts` rather than under `agent/lsp/` because it is part of the
+ * CoreEnv *port*: `env.ts` names these types in `createLspConnection`, and LSP is
+ * consumed by `agent/` — so the shared declaration belongs below both, not inside
+ * the consumer. The LSP *implementation* is still `agent/lsp/*`.
  */
 
 /**

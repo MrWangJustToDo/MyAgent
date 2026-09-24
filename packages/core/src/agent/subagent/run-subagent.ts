@@ -215,7 +215,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       output = extractAssistantText(previewMessages)?.trim() || "(no summary)";
     } catch (err) {
       const managed = manager.getAgent(subagentId);
-      if (managed?.status === "aborted" || managed?.isAbortError(err)) {
+      if (managed?.getStatus() === "aborted" || managed?.isAbortError(err)) {
         aborted = true;
         previewMessages = channel?.getMessages() ?? previewMessages;
         output = extractAssistantText(previewMessages)?.trim() || "(no summary)";
@@ -255,7 +255,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     // Esc → managed.abort() sets status during consume; stream often completes without throw.
     aborted =
       aborted ||
-      subagentManaged.status === "aborted" ||
+      subagentManaged.getStatus() === "aborted" ||
       Boolean(subagentManaged.run.currentAbortController?.signal.aborted);
 
     const outcomeKind = aborted ? "aborted" : "finished";
@@ -274,7 +274,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       finishReason,
       output: finalOutput,
       aborted,
-      status: subagentManaged.status,
+      status: subagentManaged.getStatus(),
       // The child's own loop progress. Authoritative for `iterations` and for the
       // step-budget comparison behind `reachedLimit`; the message-derived count is
       // the fallback for callers that lack it.

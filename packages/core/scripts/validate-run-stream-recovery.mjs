@@ -123,6 +123,7 @@ const sentinelManaged = {
   run: makeRunCoordinatorStub(),
   usage: null,
   log: { warn() {}, debug() {}, error() {} },
+  getUI: () => undefined,
   setError() {},
   setRetry() {},
   emitEvent() {},
@@ -190,6 +191,7 @@ const managed = {
   run: makeRunCoordinatorStub(),
   usage: null,
   log: { warn() {}, debug() {}, error() {} },
+  getUI: () => undefined,
   setError() {},
   setRetry(state) {
     retryStates.push(state);
@@ -211,6 +213,7 @@ const stripRun = makeRunCoordinatorStub();
 const stripManaged = {
   parentId: "sub-agent",
   run: stripRun,
+  getUI: () => undefined,
   usage: { hasCapability: (cap) => cap !== "vision" },
   log: { warn() {}, debug() {}, error() {} },
 };
@@ -268,11 +271,11 @@ const subManaged = {
   setError(error) {
     lastError = error;
   },
-  ui: {
+  getUI: () => ({
     resetForStreamRetry() {
       resetCalls += 1;
     },
-  },
+  }),
   statusController: {
     onRecoveryRetry() {
       recoveryRetryCalls += 1;
@@ -305,11 +308,11 @@ const rootManaged = {
   usage: null,
   log: { warn() {}, debug() {}, error() {} },
   setError() {},
-  ui: {
+  getUI: () => ({
     resetForStreamRetry() {
       resetCalls += 1;
     },
-  },
+  }),
   statusController: {
     onRecoveryRetry() {
       recoveryRetryCalls += 1;

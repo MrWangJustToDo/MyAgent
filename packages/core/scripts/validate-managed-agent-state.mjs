@@ -130,7 +130,7 @@ registerCoreEnv({
   assert.equal(stopActiveRunCalls, 1, "restoreSession consults stopActiveRun before swapping the transcript");
 
   // Idle ⇒ the call is the no-op guard, not a real interrupt.
-  assert.equal(agent.status, "idle", "an idle restore does not move the agent into aborted");
+  assert.equal(agent.getStatus(), "idle", "an idle restore does not move the agent into aborted");
 }
 
 console.log("managed-agent-state validation passed");

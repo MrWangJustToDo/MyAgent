@@ -17,7 +17,7 @@ import type { ManagedAgent } from "../managed-agent.js";
  * unwinds the retry-scoped state so the restarted stream starts clean.
  */
 async function finalizeReactiveCompactRetry(managed: ManagedAgent): Promise<boolean> {
-  if (!managed.ui) return false;
+  if (!managed.getUI()) return false;
   managed.statusController.endCompaction();
   managed.setError("");
   return true;

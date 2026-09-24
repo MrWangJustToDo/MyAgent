@@ -284,7 +284,7 @@ export class AgentChatController {
     // but has not started, so `pumpDepth` is still 0 while the status is already
     // waiting. Deferring here queues the message for that pump instead of enqueueing
     // a second one that would find nothing to do.
-    return this.runPending() || shouldDeferMidRunQueue({ pumpDepth: this.pumpDepth, status: this.managed.status });
+    return this.runPending() || shouldDeferMidRunQueue({ pumpDepth: this.pumpDepth, status: this.managed.getStatus() });
   }
 
   private notifyQueueListeners(): void {
@@ -422,7 +422,7 @@ export class AgentChatController {
 
         await this.executeStream(currentMessages, token);
         toolPhases = toolPhase + 1;
-        if (this.managed.status === "error") {
+        if (this.managed.getStatus() === "error") {
           hasError = true;
         }
         if (!token.isCurrent) {
@@ -453,9 +453,9 @@ export class AgentChatController {
         const keepPumping = !waitingForUser && this.shouldKeepPumping(messages);
         // Prefer status already set by executeStream (error/abort) over message-derived waits.
         const outcomeKind =
-          this.managed.status === "aborted"
+          this.managed.getStatus() === "aborted"
             ? "aborted"
-            : hasError || this.managed.status === "error"
+            : hasError || this.managed.getStatus() === "error"
               ? "error"
               : waitingForUser
                 ? "waiting"
@@ -476,7 +476,7 @@ export class AgentChatController {
           path: "chat",
           // Only supply a message when status is not already error (avoids duplicate stream-error).
           errorMessage:
-            outcomeKind === "error" && this.managed.status !== "error"
+            outcomeKind === "error" && this.managed.getStatus() !== "error"
               ? this.managed.getError() || "Stream execution failed"
               : undefined,
         });
@@ -526,7 +526,7 @@ export class AgentChatController {
         channel: this.channel,
         transformStream: throwOnRunError,
       });
-      if (!token.isCurrent || this.managed.status === "aborted") {
+      if (!token.isCurrent || this.managed.getStatus() === "aborted") {
         this.applyCancelledIncompleteTools(true);
         return;
       }
@@ -534,7 +534,7 @@ export class AgentChatController {
       // OpenAI-compatible streaming against SSO/HTML (HTTP 200) can yield zero chunks
       // without throwing. Treat "no model progress" as an error instead of Completed.
       const messagesAfter = this.channel.getMessages();
-      if (shouldFlagEmptyModelStream(messagesBefore, messagesAfter) && this.managed.status !== "error") {
+      if (shouldFlagEmptyModelStream(messagesBefore, messagesAfter) && this.managed.getStatus() !== "error") {
         this.managed.statusController.onRunError(EMPTY_MODEL_STREAM_MESSAGE);
         this.managed.log?.error("agent", EMPTY_MODEL_STREAM_MESSAGE);
         return;
@@ -542,7 +542,7 @@ export class AgentChatController {
 
       this.managed.statusController.reconcileWithPolicy(messagesAfter, "during-run");
     } catch (err) {
-      if (!token.isCurrent || this.managed.status === "aborted") {
+      if (!token.isCurrent || this.managed.getStatus() === "aborted") {
         this.applyCancelledIncompleteTools(true);
         return;
       }
