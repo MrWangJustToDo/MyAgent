@@ -1,3 +1,16 @@
+> **Status: proposal superseded (2026-09-24).** Do not implement this text as written.
+>
+> Its `Why` section describes files that **do not exist**: `Agent.ts` / `Base.ts`
+> (~690 lines) and `AgentLoopHost` were removed by the TanStack migration it
+> followed, so "delete them" is not actionable. Its goals did land, by other means
+> — `AgentRunDeps` is the single injection point, `AgentRunner` is cached (see
+> `managed-agent-runner-wiring.ts`), and `ManagedAgent` is the one runtime object.
+>
+> The live document is [`architecture-debt-tracker.md`](./architecture-debt-tracker.md),
+> which tracks what is actually left (P1-15: `ManagedAgent` size, reopened).
+> Rewriting this as a fresh architecture proposal is a new change, per
+> `openspec/AGENTS.md` — not an edit here.
+
 ## Why
 
 TanStack migration (Phases 1–10) replaced the Vercel runtime (`streamText`, `tool()`, `LanguageModel`) but **did not finish the structural refactor** promised in the original design. The agent loop is gone, yet the old object graph remains:
