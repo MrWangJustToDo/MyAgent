@@ -4,7 +4,7 @@ Tracking redundant, overlapping, and unclear responsibilities in `packages/core`
 
 **Related:** [design.md](./design.md) · [tasks.md](./tasks.md) · [proposal.md](./proposal.md)
 
-**Last reviewed:** 2026-07-07
+**Last reviewed:** 2026-09-24
 
 ---
 
@@ -121,7 +121,7 @@ managers/ — runtime orchestration (agent/ imports managers types + injected de
 
 | ID | Item | Location | Status | Suggested direction |
 |----|------|----------|--------|---------------------|
-| P1-15 | `ManagedAgent` too large | `managed-agent.ts` | `[x]` | Extracted `RunCoordinator` (`run-coordinator.ts`) |
+| P1-15 | `ManagedAgent` too large | `managed-agent.ts` | `[~]` | **Reopened 2026-09-24.** The `[x]` above was true of a 514-line snapshot (the `RunCoordinator` extraction); the file is now ~1750 lines across ~129 methods, carrying `/* eslint-disable max-lines */` with no written exemption. Landed so far: accessor unification (8 property getters removed, one spelling per concept, `validate:accessor-convention`), and the layer-boundary generalization that `validate:layer-boundaries` enforces. Remaining: extract the 611-line "Config & resources" region and the 246-line "Status & events" region behind host interfaces, delete the extension-registry pass-through, then either drop the `max-lines` disable or write the `.cursor/rules/040` exemption. |
 | P1-16 | `AgentManager.createManagedAgent` factory blob | `agent-factory.ts` | `[x]` | Extracted `buildManagedAgent()` |
 | P1-17 | Session restore in Manager, not Service | `session-service.ts` | `[x]` | `SessionService.restoreFromStore(sessionId)` |
 
