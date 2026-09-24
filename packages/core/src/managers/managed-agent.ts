@@ -1,4 +1,47 @@
-/* eslint-disable max-lines */
+/* eslint-disable max-lines -- composition root; the justification is in the file header. */
+/**
+ * # ManagedAgent
+ *
+ * ## Why this file exceeds the 400-line rule (`.cursor/rules/040`)
+ *
+ * This is the **composition root** for one live agent: it owns the object graph
+ * (services, controllers, channel, caches) and the identity/lifecycle state that
+ * every other module reads through a host interface. The file is long because the
+ * graph is wide, not because one responsibility is sprawling — and the graph is
+ * wide because splitting it further would mean either duplicating the accessors or
+ * introducing a second placeholder for most of them.
+ *
+ * Concretely, four questions a reviewer should ask before adding to this file:
+ *
+ * 1. **Is it a field cluster with one invariant?** Then it belongs in its own
+ *    module behind a host interface, and this file only delegates.
+ *    `run-coordinator.ts` (run id / abort / timing), `managed-agent-runner-wiring.ts`
+ *    (runner cache + adapter + UI channel, where "change the tools without dropping
+ *    the cached runner" must be unexpressible), `managed-agent-compact.ts`,
+ *    `managed-agent-session.ts`, `managed-agent-plan.ts` and
+ *    `managed-agent-run-lifecycle.ts` all exist for this reason.
+ * 2. **Is it pure computation over inputs?** Then it belongs in `agent/**` (e.g.
+ *    `agent/turn-context/*`, `agent/compaction/*`) — this file should call it, not
+ *    contain it.
+ * 3. **Is it a middleware/host seam?** Then it is a `getXxx: () => ...` accessor, and
+ *    the implementation moves to the seam's consumer.
+ * 4. **Is it policy that reads and writes this same object graph?** Then it stays
+ *    here for now. This is the honest limit of the split: the remaining ~610-line
+ *    "Config & resources" region and ~245-line "Status & events" region are not
+ *    field moves, they *are* the graph's mutation surface. Extracting them means
+ *    moving policy and re-validating concurrency behaviour — tracked as P1-15 in
+ *    `openspec/changes/core-structure-convergence/architecture-debt-tracker.md`.
+ *
+ * The disable above is deliberately unexplained-by-default in the linter and
+ * justified here instead, because the previous one carried no justification at all
+ * — which is how this file was marked "done" in the tracker at 514 lines and never
+ * revisited at 1750.
+ *
+ * ## Accessor convention
+ *
+ * Reads are `getXxx()` / `setXxx()`; no property getters (see
+ * `scripts/validate-accessor-convention.mjs`).
+ */
 import {
   convertMessagesToModelMessages,
   type LazyToolsConfig,
