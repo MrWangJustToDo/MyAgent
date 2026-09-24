@@ -16,7 +16,6 @@ export {
   buildPlanModePrompt,
   buildPlanModeReadyPrompt,
   buildPlanModeRetroPrompt,
-  buildPlanRetroSteerMessage,
 } from "./plan-prompts.js";
 export {
   getPlanModeToolBlockReason,

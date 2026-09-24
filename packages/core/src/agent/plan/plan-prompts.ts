@@ -112,12 +112,6 @@ export function buildPlanModeRetroPrompt(planMarkdown: string | null, planFilePa
   return parts.join("\n");
 }
 
-/** Steer message when entering retro (optional chat injection). */
-export function buildPlanRetroSteerMessage(planFilePath?: string | null): string {
-  const pathLine = planFilePath?.trim() ? ` Plan file: \`${planFilePath.trim()}\`.` : "";
-  return `All plan steps are done. Report Verification pass/fail with evidence, then call \`complete_plan\` with verificationResults (or the user may run \`/mode done\`).${pathLine}`;
-}
-
 export function buildPlanModePrompt(
   phase: PlanModePhase,
   planMarkdown: string | null,

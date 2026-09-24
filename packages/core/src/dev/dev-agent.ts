@@ -346,7 +346,6 @@ export {
   buildPlanModePlanningPrompt,
   buildPlanModeReadyPrompt,
   buildPlanModeRetroPrompt,
-  buildPlanRetroSteerMessage,
   gateCompletePlanVerification,
   isUsableVerification,
   parseVerificationItemsFromPlanMarkdown,

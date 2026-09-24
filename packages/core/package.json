@@ -68,6 +68,7 @@
     "validate:accessor-convention": "node scripts/validate-accessor-convention.mjs",
     "validate:layer-boundaries": "node scripts/validate-layer-boundaries.mjs",
     "validate:run-deps-completeness": "node scripts/validate-run-deps-completeness.mjs",
+    "validate:plan-retro-continuation": "node scripts/validate-plan-retro-continuation.mjs",
     "validate:runner-wiring": "node scripts/validate-runner-wiring.mjs",
     "validate:managed-agent-state": "pnpm run build && node scripts/validate-managed-agent-state.mjs",
     "validate:tool-shell-portability": "node scripts/validate-tool-shell-portability.mjs",

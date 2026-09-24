@@ -64,11 +64,7 @@ import {
 } from "../agent/persistence/session-sync-tracker.js";
 import { AGENT_LOG_DIR, type SessionData } from "../agent/persistence/types.js";
 import { PlanModeController } from "../agent/plan/plan-mode-controller.js";
-import {
-  buildModeInactivePrompt,
-  buildPlanModePrompt,
-  buildPlanRetroSteerMessage,
-} from "../agent/plan/plan-prompts.js";
+import { buildModeInactivePrompt, buildPlanModePrompt } from "../agent/plan/plan-prompts.js";
 import { collectPendingApprovals, collectPendingAskUser } from "../agent/stream/tool-phase-utils.js";
 import { SummaryStreamHub } from "../agent/summary-stream/summary-stream-hub.js";
 import { describeToolPresentations } from "../agent/tools/presentation/registry.js";
@@ -474,17 +470,6 @@ export class ManagedAgent {
       onPhaseChange: () => {
         this.invalidateRunner();
         this.emitStateChange();
-      },
-      onEnterRetro: (state) => {
-        const steer = buildPlanRetroSteerMessage(state.planFilePath);
-        if (this.chatController) {
-          // followUp, not sendMessage: retro entry fires mid-run (last todo
-          // completed via the todo tool), and the running pump's tool snapshot
-          // was resolved in `executing` where complete_plan is excluded. A
-          // steer would deliver inside the same run → "Unknown tool".
-          // followUp starts a fresh run whose toolset includes complete_plan.
-          this.chatController.followUp(steer);
-        }
       },
     });
     // A mode switch is session state (autoMode is persisted with every save), so

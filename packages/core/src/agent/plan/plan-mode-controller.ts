@@ -30,8 +30,6 @@ export interface PlanModeControllerDeps {
   getTodoManager: () => TodoManager | null;
   /** Invalidate runner / notify UI when phase changes. */
   onPhaseChange?: () => void;
-  /** Optional steer when entering retro (e.g. send chat message). */
-  onEnterRetro?: (state: PlanModeState) => void;
 }
 
 export interface BeginPlanExecutionResult {
@@ -491,7 +489,6 @@ export class PlanModeController {
       planFilePath: this.planFilePath,
     });
     this.notifyChange();
-    this.deps.onEnterRetro?.(this.getState());
   }
 
   private attachTodoListener(): void {
