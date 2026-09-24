@@ -115,14 +115,24 @@ hosts / app  →  managers (orchestration)  →  agent/* (domain)  →  models /
                        runtime-types/   (shared status, events, TokenUsage — no manager deps)
 ```
 
-**Rules (enforced by validate scripts):**
+**Rules (enforced by `validate:layer-boundaries`):**
 
-- `agent/**` MUST NOT import `managers/**`
+That gate derives the edges from the imports rather than from a pattern: it resolves
+every relative specifier to its top-level layer and checks the pair against an edge
+table. Each entry carries a reason, and a `type-only` entry additionally forbids a
+runtime value from crossing — a re-exported type is an edge, but a weaker one.
+
+- `agent/**` MUST NOT import `managers/**` (the manager-side ports it needs are declared in `runtime-types/hosts.ts`)
 - `models/**` MUST NOT import `managers/**`
-- Shared cross-layer types live in `runtime-types/`
+- `runtime-types/**` may only reach upward from `hosts.ts` (the port file), type-only
+- `env.ts` is the bottom of the stack and must not import upward — process-scoped teardown is registered via `env-teardown.ts` hooks instead
+- Edges that must stay type-only: `agent → agent-session`, `models → agent` (narrowed to two leaf modules), `runtime-types → {managers, agent, models}`
 - Package-wide stream helpers live in `agent/stream/` (not under `subagent/`)
 - UI channel lives in `agent/ui-channel.ts`
 - Run middleware lives in `managers/middleware/` (wired by `run-agent`); plan-mode middleware stays in `agent/plan/`
+- The LSP transport port lives in `env-lsp.ts`, beside the `CoreEnv.createLspConnection` that names it
+
+> History: this replaced two gates that shared one regex (a specifier containing `/managers/`), so `models → agent`, `runtime-types → *`, `env → agent` and `agent → agent-session` had no coverage at all. Two gates covering two of six edges reads as coverage and is not.
 
 ### 1.6 ManagedAgent host surface
 
@@ -1011,7 +1021,7 @@ Domain-owned tools live next to their domain (same pattern as `subagent/begin-su
 | Stream helpers      | `agent/stream/*`                                                                                                                             |
 | UI channel          | `agent/ui-channel.ts`                                                                                                                        |
 | Shared types        | `runtime-types/*`                                                                                                                            |
-| Telemetry           | `managers/telemetry/agent-telemetry-bus.ts`, `managers/telemetry/emit-agent-telemetry.ts`, `managers/telemetry/event-log-bridge.ts`                                   |
+| Telemetry           | `agent/agent-event-bus/*` (the unified bus), `managers/telemetry/emit-agent-telemetry.ts`, `managers/telemetry/event-log-bridge.ts`                                   |
 | Persistence         | `managers/services/session-service.ts`, `agent/persistence/session-store.ts`                                                                          |
 | Services (extracted) | `managers/services/` — session / memory / compaction / extension-registry / usage-history; `managers/run-coordinator.ts` (run lifecycle)               |
 | Usage               | `agent/usage/usage-store.ts` (pure IO), `managers/services/usage-history-service.ts` (global history)                                                   |
@@ -1049,8 +1059,9 @@ pnpm --filter @codent/core run validate:suppress-messages-snapshot
 pnpm --filter @codent/core run validate:reactive-compact
 pnpm --filter @codent/core run validate:run-stream-recovery
 pnpm --filter @codent/core run validate:agent-run-finalization
-pnpm --filter @codent/core run validate:agent-managers-boundary
-pnpm --filter @codent/core run validate:models-managers-boundary
+pnpm --filter @codent/core run validate:layer-boundaries
+pnpm --filter @codent/core run validate:accessor-convention
+pnpm --filter @codent/core run validate:runner-wiring
 pnpm --filter @codent/core run validate:agent-status
 pnpm --filter @codent/core run validate:prompt-cache
 pnpm --filter @codent/core run validate:subagent-run-stats

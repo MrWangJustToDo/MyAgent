@@ -23,7 +23,7 @@ This file provides guidelines for AI coding agents working in this repository.
 
 ## Project Overview
 
-A pnpm monorepo with nine packages organized in a layered architecture.
+A pnpm monorepo with ten packages organized in a layered architecture.
 
 **Core runtime deep-dive:** [packages/core/ARCHITECTURE.md](packages/core/ARCHITECTURE.md) — startup, initialization, session/memory/compaction/approval flows.
 
@@ -354,7 +354,7 @@ Rules that keep `packages/core` internally consistent. Deviations need a reason 
 **Class members / accessors**
 
 - No underscore-prefixed members (`_status` ✗ → `currentStatus` ✓). Getter backing fields use descriptive names.
-- Read accessors: property-like hot reads may be getters (`get status`); everything else uses `getXxx()` / `setXxx()` methods. Pick one form per feature area and stay consistent.
+- Read accessors: `getXxx()` / `setXxx()` methods. A bare property getter for state access is not used — `get status(): AgentStatus { return this.currentStatus; }` is gone, and `validate:accessor-convention` fails any class that reintroduces one alongside its `getStatus()`. A class may not offer two spellings for one read. (Plain computed properties over private data, e.g. `get size(): number` on a cache, are a different thing and are not what this rule targets — the rule is about exposing *state* two ways.)
 
 **Barrels**
 
@@ -366,7 +366,12 @@ Rules that keep `packages/core` internally consistent. Deviations need a reason 
 
 - Keep files ≤ 400 lines where a cohesive boundary exists (`.cursor/rules/040`). Files that
   legitimately exceed it (`managed-agent.ts` as composition root) document the trade-off
-  instead of being cut arbitrarily.
+  instead of being cut arbitrarily: the `/* eslint-disable max-lines */` at the top of such a
+  file must be paired with a written justification naming what the file composes and which
+  parts were extracted instead (`run-coordinator.ts`, `managed-agent-runner-wiring.ts`,
+  `managed-agent-compact.ts`). An unexplained disable is a silent exemption, and this file's
+  carried one long enough for the tracker to mark it done at 514 lines and never revisit it at
+  1750.
 
 ### Error Handling
 ```typescript
@@ -585,7 +590,7 @@ registerModelProvider(await createRemoteProvider("http://localhost:3100"));
 Frozen system text ends with `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` and stays byte-stable across turns.
 Per-turn dynamic context is injected as synthetic `<ctx kind=...>` user messages by the turn-context middleware `onConfig` (after compaction) whenever a section's content hash changes (persisted in `uiMessages`, hidden in the transcript UI; per-kind supersede notices mark refreshed sections).
 `<current_date>` uses **day** granularity (not hour/minute) so the payload stays stable within a calendar day.
-`findCutPoint` / `findCutPointByBudget` skip synthetic `<ctx kind=...>` messages (turn counting / budget walk respectively).
+`findCutPointByBudget` skips synthetic `<ctx kind=...>` messages when walking the token-budget boundary.
 All synthetic injections (turn-context sections, memory, background-command completion notifications) share one helper (`managers/middleware/synthetic-injection.ts`): stable `ctx-<kind>-<hash>` ids, channel + wire in sync, persisted to the session (no cross-turn prefix divergence). Background notifications use `append` position and `<ctx kind=background_notification>`; any future injection must reuse this helper and shell.
 `prompt-cache-middleware` then:
 
@@ -886,17 +891,17 @@ Three-layer context compaction (plus reactive compaction) for infinite agent ses
 ```typescript
 compaction: {
   tokenThreshold: 100000,   // legacy absolute trigger (fallback when model window unknown)
-  keepRecentFlows: 2,       // legacy keep policy (fallback when model window unknown)
+  keepRecentTokens: 40_000, // token budget for the kept window (the only keep policy)
   // keepRecentTokens: 24000,  // explicit kept-window token budget (optional)
   // reserveTokens: 16384,     // headroom for summary + next turn (kept-window derivation)
 }
 ```
 
-**Keep policy — token budget first:** The kept window is decided by `resolveKeepPolicy()` (`keep-policy.ts`): explicit `keepRecentTokens` > derived from the model context window (`min((window - reserveTokens) * 0.25, 32k)`) > legacy `keepRecentFlows` turn counting when no window is known. Compact-time and wire-projection-time always share the same resolved policy.
+**Keep policy — token budget only:** The kept window is decided by `resolveKeepPolicy()` (`keep-policy.ts`), which always returns a token budget (`kind: "tokens"`): explicit `keepRecentTokens` > derived from the model context window (a bounded fraction, `KEEP_RECENT_WINDOW_MIN`..`KEEP_RECENT_WINDOW_CAP`) > derived from `DEFAULT_SUMMARIZATION_CONTEXT_WINDOW` when the window is unknown. The turn-counting policy (`keepRecentFlows`) and its `findCutPoint()` were removed — there is no legacy fallback, so every session compacts on the same rule. Compact-time and wire-projection-time always share the same resolved policy.
 
 **Auto-compact trigger:** The trigger base is the **working budget** — `tokenThreshold`, the same number the UI percentage uses. The agent factory auto-fills it as `min(contextWindow, MAX_THRESHOLD=200k)` when unset, so a huge models.dev window (e.g. 1M) never defers compaction past the displayed budget; the threshold is clamped to the real window so an oversized config cannot defer past what the model accepts (`shouldTriggerAutoCompact`, `resolveAutoCompactTrigger`). Trigger point = `min(tokenThreshold, contextWindow) * compactAtPercent / 100`.
 
-**Auto-compact cut-point strategy:** With a token-budget policy, `findCutPointByBudget()` walks backward accumulating estimated tokens until the budget is reached and cuts at the nearest pairing-safe boundary (user/assistant only — never on a tool result, so call/result pairs stay intact). If the cut lands inside a turn (**split turn**), the discarded turn prefix is summarized separately under `<turn_prefix>` and merged into the SUMMARY; the suffix stays intact. Legacy `findCutPoint()` counts recent *user turns* from the end and keeps the latest N (default: 2 via `keepRecentFlows`). Both skip in-chain summaries and synthetic `<ctx kind=...>` messages. Everything before the cut is summarized; the kept portion remains in the main agent context.
+**Auto-compact cut-point strategy:** `findCutPointByBudget()` walks backward accumulating estimated tokens until the budget is reached and cuts at the nearest pairing-safe boundary (user/assistant only — never on a tool result, so call/result pairs stay intact). If the cut lands inside a turn (**split turn**), the discarded turn prefix is summarized separately under `<turn_prefix>` and merged into the SUMMARY; the suffix stays intact. It skips in-chain summaries and synthetic `<ctx kind=...>` messages. Everything before the cut is summarized; the kept portion remains in the main agent context.
 
 **Summarizer input:** The summarization subagent receives labeled segments — `<to_compress>` (pre-cut history), `<turn_prefix>` (split-turn prefix, dedicated prompt), and `<still_in_context>` (kept turns) — plus optional `<previous-summary>` for incremental updates. Prompt rules tell the model to summarize the compressed segment thoroughly and use the kept segment only to align Goal/Next (no detailed restatement).
 
@@ -906,7 +911,7 @@ compaction: {
 
 **How the model is told to search past conversation** lives in exactly one place: the `session_retrieval` turn-context section (`agent/turn-context/session-retrieval.ts`), emitted when the workspace has history. It is the only site with usage guidance — the summary list and the archive header deliberately carry none, because a guidance copy in the archive header is frozen at write time and cannot be revised for archives already on disk (it had already drifted). The gate is evaluated once per agent, and the body holds no counts, so the section stays byte-stable and does not churn the prompt cache.
 
-> Module map: `packages/core/src/agent/compaction/` — `tool-compact/` (Layer 1 transforms), `auto-compact.ts` (Layer 3), `keep-policy.ts` (`resolveKeepPolicy`), `cut-point.ts` (`findCutPoint` / `findCutPointByBudget`), `reactive-compact.ts`, `apply-compaction-result.ts`, `compaction-summary.ts`, `message-chain-projection.ts` (`getModelVisibleMessages`), `compaction-prompt.ts`, `write-compact-archive.ts`, `serialize-conversation.ts`, `token-estimator.ts`, `index.ts`.
+> Module map: `packages/core/src/agent/compaction/` — `tool-compact/` (Layer 1 transforms), `auto-compact.ts` (Layer 3), `keep-policy.ts` (`resolveKeepPolicy`), `cut-point.ts` (`findCutPointByBudget` / `extractExistingSummary`), `reactive-compact.ts`, `apply-compaction-result.ts`, `compaction-summary.ts`, `message-chain-projection.ts` (`getModelVisibleMessages`), `compaction-prompt.ts`, `write-compact-archive.ts`, `serialize-conversation.ts`, `token-estimator.ts`, `index.ts`.
 
 **Reasoning stripping (Layer 2)** is disabled in `compaction-middleware.ts` because DeepSeek thinking mode requires `reasoning_content` echo-back. DeepSeek endpoints use `ReasoningChatCompletionsTextAdapter`, which maps stream `reasoning_content` into `thinking` and writes it back on subsequent requests.
 

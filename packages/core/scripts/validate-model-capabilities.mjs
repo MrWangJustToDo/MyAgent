@@ -3,13 +3,17 @@
  * (change: add-extension-message-transform)
  *
  * `parseModelsDevModel` translates provider metadata into our `ModelCapability[]`, and every
- * downstream gate reads that list through `hasCapability` — which is **permissive** when the
- * list is empty. So both failure directions matter:
+ * downstream gate reads that list through `hasCapability`. The two empty-ish states are
+ * deliberately different (see `ModelInfo.capabilities`): `undefined` means **unknown** and is
+ * permissive, while `[]` means **declared, none apply** and is strict. So both failure
+ * directions matter:
  *
  *   - a capability granted without metadata evidence is a silent authorization (the caller
  *     believes the model supports something nobody checked);
- *   - a capability list that comes back EMPTY after a successful parse flips every gate to
- *     "unknown → allow", because empty means unknown to the probe.
+ *   - a capability list that comes back EMPTY (`[]`) after a successful parse makes every gate
+ *     strict, so a vision-capable model silently loses its images; the mirror-image bug is
+ *     returning `undefined` for a plain text model, which flips the gates back to permissive and
+ *     sends modalities to an endpoint that rejects them.
  *
  * This drives the real `deriveCapabilities` against the real cached models.dev payload, so it
  * tests the mapping rather than a restatement of it. When the cache is absent (fresh clone,
