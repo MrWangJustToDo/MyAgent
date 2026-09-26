@@ -36,6 +36,14 @@ registerCoreEnv({
     readFile: async (p, encoding) => fs.promises.readFile(toAbs(p), encoding ?? "utf-8"),
     writeFile: async (p, content) => fs.promises.writeFile(toAbs(p), content),
     appendFile: async (p, content) => fs.promises.appendFile(toAbs(p), content, "utf8"),
+    // `SessionStore.writeLog` writes a temp file and renames it onto the log, so a concurrent
+    // reader observes either the old file or the new one — never a truncated one. Omitting
+    // `rename` silently degrades the store to `writeFile`-in-place (`session-journal.ts`),
+    // which truncates to zero bytes before writing: a `load()` landing in that window read an
+    // empty file, and an empty log folds to no state, so it returned `null` *while the log was
+    // on disk and correct* — the intermittent `Cannot read properties of null` on Windows CI.
+    // Mirrors `createNodeEnv` (packages/node `native-fs.ts`), which every real host provides.
+    rename: async (from, to) => fs.promises.rename(toAbs(from), toAbs(to)),
     mkdir: async (p) => fs.promises.mkdir(toAbs(p), { recursive: true }),
     exists: async (p) =>
       fs.promises.access(toAbs(p)).then(

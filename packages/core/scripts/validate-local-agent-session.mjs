@@ -285,6 +285,10 @@ assert.ok(withSubs.subagents[0].usage);
       readFile: async (p, encoding) => fs.promises.readFile(toAbs(p), encoding),
       writeFile: async (p, content) => fs.promises.writeFile(toAbs(p), content),
       appendFile: async (p, content) => fs.promises.appendFile(toAbs(p), content, "utf8"),
+      // Atomic log replace (`SessionStore.writeLog` writes a temp file and renames it).
+      // Without `rename` the store falls back to an in-place `writeFile`, which truncates
+      // the log first — a concurrent `load()` can then read an empty file and return `null`.
+      rename: async (from, to) => fs.promises.rename(toAbs(from), toAbs(to)),
       mkdir: async (p) => fs.promises.mkdir(toAbs(p), { recursive: true }),
       exists: async (p) =>
         fs.promises.access(toAbs(p)).then(
@@ -388,6 +392,10 @@ assert.ok(withSubs.subagents[0].usage);
       readFile: async (p, encoding) => fs.promises.readFile(toAbs(p), encoding ?? "utf8"),
       writeFile: async (p, content) => fs.promises.writeFile(toAbs(p), content),
       appendFile: async (p, content) => fs.promises.appendFile(toAbs(p), content, "utf8"),
+      // Atomic log replace (`SessionStore.writeLog` writes a temp file and renames it).
+      // Without `rename` the store falls back to an in-place `writeFile`, which truncates
+      // the log first — a concurrent `load()` can then read an empty file and return `null`.
+      rename: async (from, to) => fs.promises.rename(toAbs(from), toAbs(to)),
       mkdir: async (p) => fs.promises.mkdir(toAbs(p), { recursive: true }),
       exists: async (p) =>
         fs.promises.access(toAbs(p)).then(
