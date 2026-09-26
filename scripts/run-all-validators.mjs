@@ -199,6 +199,43 @@ function tail(text, lines = 12) {
 }
 
 /**
+ * Whether a validator drives `SessionStore` with an fs mock that cannot replace the log atomically.
+ *
+ * `SessionStore.writeLog` writes a temp file and renames it onto the log so a concurrent reader
+ * sees the old file or the new one, never a truncated one. A mock that omits `rename` silently
+ * falls back to an in-place `writeFile`, which truncates the log to zero bytes first — and since
+ * the window is microseconds wide, the resulting `load() === null` surfaces only on a slow,
+ * load-contended runner, as an intermittent `Cannot read properties of null` in a polling
+ * validator. That is a property of the mock, not of the product, and it is decidable from the
+ * source before anything runs.
+ *
+ * Scoped to `SessionStore` because it is the only writer that needs `rename` for correctness: a
+ * real `writeFile` mock no store uses is not a hazard, and an in-memory mock
+ * (`writeFile: async () => {}`) never truncates a file at all.
+ */
+export function mutatesWritableFsWithoutRename(source) {
+  // Only validators that drive `SessionStore` are exposed: it is the one writer that relies on
+  // `rename` for atomic replace. Another writer with a real `writeFile` mock is out of scope.
+  const drivesStore = /getSessionStore\(|new SessionStore\(|store\.load\(|SessionService/.test(source);
+  if (!drivesStore) return false;
+  // A real write (`writeFile: async (p, c) => …`), not the in-memory no-op `writeFile: async () => {}`.
+  const writable = /writeFile:\s*(?:async\s*)?\(\s*[A-Za-z_$][\w$]*/.test(source);
+  if (!writable) return false;
+  // A two-parameter `rename(from, to)` — the shape every env uses (`createNodeEnv` and the
+  // validators that already mock it). Comments are skipped so a docblock naming `rename:`
+  // does not count as providing it.
+  const providesRename = source
+    .split("\n")
+    .some(
+      (line) =>
+        !line.trim().startsWith("//") &&
+        !line.trim().startsWith("*") &&
+        /rename:\s*(?:async\s*)?\(\s*[A-Za-z_$][\w$]*\s*,\s*[A-Za-z_$][\w$]*/.test(line)
+    );
+  return !providesRename;
+}
+
+/**
  * Run every `validate-*.mjs` in one package's `scripts/` directory.
  *
  * Returns counts so the dispatcher can aggregate; the per-package report is printed here,
@@ -218,12 +255,15 @@ async function runPackageValidators({ scriptsDir, concurrency, timeoutMs, quiet 
     return summary;
   }
 
-  // Guard: reject before running, so a violation is attributed to the source rather than
-  // surfacing as a confusing runtime failure on a fresh clone.
+  // Guards reject before running, so a violation is attributed to the source rather than
+  // surfacing as a confusing runtime failure on a fresh clone (or as a flake on a slow runner).
   for (const file of files) {
     const source = await readFile(join(scriptsDir, file), "utf8");
     const prefix = readsUntrackedRepoPath(source);
-    if (prefix) summary.guardViolations.push({ file, prefix });
+    if (prefix) summary.guardViolations.push({ file, kind: "untracked", detail: prefix });
+    if (mutatesWritableFsWithoutRename(source)) {
+      summary.guardViolations.push({ file, kind: "fs-mock", detail: "SessionStore fs mock lacks `rename`" });
+    }
   }
 
   const results = [];
@@ -273,16 +313,25 @@ async function runPackageValidators({ scriptsDir, concurrency, timeoutMs, quiet 
     console.log(tail(r.output));
   }
 
-  // A validator that reads a gitignored path passes locally and fails in CI. Report it as a
-  // failure of this suite, attributed to the source, so it is fixed before it reaches CI.
+  // A validator that reads a gitignored path passes locally and fails in CI; an incomplete fs
+  // mock passes on a fast machine and fails on a slow, load-contended one. Both are reported as
+  // failures of this suite, attributed to the source, so they are fixed before they reach CI.
   if (summary.guardViolations.length > 0) {
     console.log(`\n${"-".repeat(72)}`);
-    console.log(`[validators] FAILED: validator(s) read a repository path git does not track`);
+    console.log(`[validators] FAILED: ${summary.guardViolations.length} guard violation(s)`);
     for (const v of summary.guardViolations) {
-      console.log(
-        `[validators]   ${v.file} reads "${v.prefix}" relative to the repo — absent on a fresh clone.\n` +
-          `[validators]   Build the fixture at run time (os.tmpdir()) instead.`
-      );
+      if (v.kind === "untracked") {
+        console.log(
+          `[validators]   ${v.file} reads "${v.detail}" relative to the repo — absent on a fresh clone.\n` +
+            `[validators]   Build the fixture at run time (os.tmpdir()) instead.`
+        );
+      } else {
+        console.log(
+          `[validators]   ${v.file}: ${v.detail} — ` +
+            "the store then rewrites the log in place, so a concurrent `load()` can read a truncated file.\n" +
+            '[validators]   Add `rename: async (from, to) => fs.promises.rename(from, to)` to the fs mock.'
+        );
+      }
     }
   }
 
