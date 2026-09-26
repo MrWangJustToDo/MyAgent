@@ -154,8 +154,8 @@ const READONLY_PREFIXES = new Set([
   "ps",
   // Text filters that are read-only on their own. `sed` / `sort` / `awk` are deliberately NOT
   // here: each has a write mode (`-i` / `-o` / `system()`), so they are classified separately by
-  // {@link isReadOnlyFilter}. Listing them alongside `cat` auto-approved `sed -i` and `sort -o`,
-  // i.e. an in-place edit and a file write wearing a filter's name.
+  // {@link classifyReadOnly}. Listing `sort` alongside `cat` auto-approved `sort -o`, i.e. a file
+  // write wearing a filter's name; `sed -i` was likewise one `sed` entry away from the same hole.
   "cut",
   "uniq",
   "test",
