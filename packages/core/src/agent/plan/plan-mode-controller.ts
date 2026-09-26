@@ -103,11 +103,20 @@ export class PlanModeController {
   }
 
   /**
-   * Auto-approve pending `needsApproval` tools only while actively building a seeded plan.
-   * Requires both `executing` and `todosSeeded` so a stuck phase alone cannot bypass approval.
+   * Auto-approve pending `needsApproval` tools while the approved plan is being built,
+   * and during the forced retrospective that closes it.
+   *
+   * Both phases are the same run of the same approved plan, and retro is where the plan's
+   * Verification checklist has to be executed (`buildPlanModeRetroPrompt` asks for a command,
+   * validate script, or observed behaviour as evidence per item) — leaving it un-approved
+   * prompted on exactly the commands the lifecycle requires, while the identical commands ran
+   * unprompted one phase earlier.
+   *
+   * `todosSeeded` stays required in both: a phase stuck without the seeded list must not bypass
+   * approval (see `validate:plan-session`).
    */
   shouldAutoApproveTools(): boolean {
-    return this.phase === "executing" && this.todosSeeded;
+    return (this.phase === "executing" || this.phase === "retro") && this.todosSeeded;
   }
 
   /**

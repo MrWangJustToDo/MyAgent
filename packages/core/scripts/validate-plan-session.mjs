@@ -71,7 +71,25 @@ restoredTodos.update(
   PLAN_TODO_TITLE
 );
 assert.equal(restored.getPhase(), "retro");
-assert.equal(restored.shouldAutoApproveTools(), false);
+// Retro auto-approves too: it is the same run of the same approved plan, and it is where the
+// plan's Verification checklist is executed. This expectation used to be `false`, which meant
+// the identical commands ran unprompted in `executing` and then prompted again in `retro`.
+assert.equal(restored.shouldAutoApproveTools(), true);
+
+// Retro WITHOUT seeded todos must not auto-approve — the seeded guard is what stops a phase
+// alone from bypassing approval, and it applies to retro exactly as it does to executing.
+const retroUnseeded = new PlanModeController({ getTodoManager: () => new TodoManager() });
+retroUnseeded.restoreState({
+  phase: "retro",
+  planMarkdown: "## Plan\n1. x",
+  steps: [{ step: 1, text: "x" }],
+  enabledAt: Date.now(),
+  todosSeeded: false,
+  preservedExistingTodos: false,
+  planFilePath: null,
+});
+assert.equal(retroUnseeded.getPhase(), "retro");
+assert.equal(retroUnseeded.shouldAutoApproveTools(), false);
 
 // Off snapshot clears phase without wiping unrelated todos.
 const otherTodos = new TodoManager();
