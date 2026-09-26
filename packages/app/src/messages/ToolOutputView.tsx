@@ -45,7 +45,7 @@ export const ToolOutputView = ({ part, uiState }: { part: ToolCallPart; uiState:
     if (!output.items) return null;
     return (
       <HalfLinePaddedBox backgroundColor={BG.toolResult} width={boxWidth}>
-        <TodoToolOutputView items={output.items} title={output.title} source={output.source} />
+        <TodoToolOutputView items={output.items} source={output.source} />
       </HalfLinePaddedBox>
     );
   }

@@ -26,9 +26,6 @@ const PRIORITY_LABELS: Record<TodoPriority, string | null> = {
   low: "low",
 };
 
-/** Fallback for older tool parts that only stored title. */
-const PLAN_TODO_TITLE = "Plan";
-
 // ============================================================================
 // Types
 // ============================================================================
@@ -37,8 +34,6 @@ export interface TodoToolOutputViewProps {
   items: TodoItem[];
   /** Explicit marker from todo tool output (`source=plan`). */
   source?: "plan" | "agent" | null;
-  /** Fallback when `source` is missing (pre-marker transcripts). */
-  title?: string | null;
 }
 
 // ============================================================================
@@ -80,21 +75,22 @@ const TodoRow = ({ item, stepIndex, showStep }: { item: TodoItem; stepIndex: num
 // Main component
 // ============================================================================
 
-function isPlanTodoSource(source?: string | null, title?: string | null): boolean {
-  if (source === "plan") return true;
-  if (source === "agent") return false;
-  return title === PLAN_TODO_TITLE;
+function isPlanTodoSource(source?: string | null): boolean {
+  // Ownership is the `source` marker only. Older transcripts predate the marker, but
+  // falling back to the title made any agent list named "Plan" render as plan steps —
+  // and a persisted `todoPlanBound` then kept that rendering for every later list.
+  return source === "plan";
 }
 
 /**
  * Rich todo list renderer for the `todo` tool output.
  *
- * Plan-sourced lists (`source=plan`, or legacy title `"Plan"`) get step numbers.
+ * Plan-sourced lists (`source=plan`) get step numbers.
  */
-export const TodoToolOutputView = ({ items, source, title }: TodoToolOutputViewProps) => {
+export const TodoToolOutputView = ({ items, source }: TodoToolOutputViewProps) => {
   if (items.length === 0) return null;
 
-  const showStep = isPlanTodoSource(source, title);
+  const showStep = isPlanTodoSource(source);
   const completed = items.filter((i) => i.status === "completed").length;
 
   return (
