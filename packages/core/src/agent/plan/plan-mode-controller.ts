@@ -125,6 +125,12 @@ export class PlanModeController {
       this.todosSeeded = false;
       this.preservedExistingTodos = false;
       this.planFilePath = null;
+      // A resumed file can carry `todoPlanBound: true` with no plan phase (the flag is
+      // persisted independently of `planMode`). Clearing it here is what stops that stale
+      // binding from tagging every later list as plan-owned.
+      if (!snapshot) {
+        this.deps.getTodoManager()?.setPlanBound(false);
+      }
       this.notifyChange();
       return;
     }
@@ -519,6 +525,12 @@ export class PlanModeController {
     if (this.todosSeeded && todoManager.getSource() === "plan") {
       todoManager.clear();
     } else if (this.todosSeeded) {
+      todoManager.setPlanBound(false);
+    } else {
+      // Nothing was seeded by this controller, but a resumed session can still carry a
+      // stale `todoPlanBound` (it is persisted per todo-manager, not per plan phase).
+      // Releasing it unconditionally is what makes the binding owner-consistent: a
+      // binding only means anything while plan mode is live, and it is no longer live.
       todoManager.setPlanBound(false);
     }
     this.todosSeeded = false;

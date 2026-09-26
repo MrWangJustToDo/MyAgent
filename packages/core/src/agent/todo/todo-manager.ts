@@ -375,11 +375,19 @@ export class TodoManager {
     return this.planBound;
   }
 
-  /** Resolve UI/tool source marker for the current list. */
+  /**
+   * Resolve the UI/tool source marker for the current list.
+   *
+   * Plan ownership is `planBound` ALONE — the binding plan mode sets when it seeds a
+   * list and clears when it exits. The title is deliberately NOT consulted: it is
+   * authorable (the model passes it on every `todo` call), so a title match made
+   * any agent list named "Plan" render as plan steps, and — because
+   * `todoPlanBound` is persisted independently — a resume of a file that still
+   * carried `todoPlanBound: true` latched every later list to `plan` forever.
+   * `clear()` and {@link setPlanBound} are what own the flag.
+   */
   getSource(): "plan" | "agent" {
-    if (this.planBound) return "plan";
-    if (this.title === "Plan") return "plan";
-    return "agent";
+    return this.planBound ? "plan" : "agent";
   }
 
   /**

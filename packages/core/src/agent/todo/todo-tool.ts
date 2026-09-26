@@ -1,4 +1,3 @@
-import { PLAN_TODO_TITLE } from "../plan/plan-mode-controller.js";
 import { defineServerTool } from "../tools/runtime/define-tool.js";
 import { withDuration } from "../tools/util/helpers.js";
 import { todoOutputSchema } from "../tools/util/types.js";
@@ -8,6 +7,17 @@ import { todoToolInputSchema } from "./types.js";
 import type { TodoManager } from "./todo-manager.js";
 import type { TodoOutput } from "../tools/util/types.js";
 
+/**
+ * The `todo` tool manages ONE list, whose plan ownership is not its business.
+ *
+ * There is deliberately no title argument anywhere in this file: the title is text the model
+ * writes, so it cannot be an input to plan ownership. The binding is minted by the plan seed
+ * path (`PlanModeController.seedTodosFromSteps` → `TodoManager.setPlanBound`) and released by
+ * `PlanModeController.clearPlanTodos`; `TodoManager.update` only replaces items + title. A
+ * tool that re-asserted the binding from its own title would be a second, weaker authority for
+ * a decision that already has one — and the weaker one is what made an agent list named "Plan"
+ * render as plan steps for the rest of the session.
+ */
 export const createTodoTool = ({ todoManager }: { todoManager: TodoManager }) => {
   return defineServerTool({
     name: "todo",
@@ -23,8 +33,7 @@ export const createTodoTool = ({ todoManager }: { todoManager: TodoManager }) =>
  - Keep the user informed of your progress
 
 IMPORTANT RULES:
- - Always include a short title for the current todo set
- - While building an approved plan, keep title "${PLAN_TODO_TITLE}" so progress stays linked to the plan
+ - Always include a short title for the current todo set: it labels the list for the user
  - Only ONE task can be in_progress at a time
  - Update todos frequently - mark tasks complete immediately when done
  - Each call REPLACES all todos, so include the full updated list
@@ -34,10 +43,6 @@ IMPORTANT RULES:
     execute: async ({ todos, title }) => {
       return withDuration(async () => {
         todoManager.update(todos, title);
-        // Keep plan binding when the model updates under the plan title during building.
-        if (title.trim() === PLAN_TODO_TITLE) {
-          todoManager.setPlanBound(true);
-        }
         const stats = todoManager.getStats();
         const items = todoManager.getItems();
         const source = todoManager.getSource();
@@ -50,7 +55,7 @@ IMPORTANT RULES:
         };
       });
     },
-    // Send title + source + items so the model keeps plan linkage across turns.
+    // Send title + source + items so the model can see the current list and its ownership.
     toModelOutput({ output }: { toolCallId: string; input: unknown; output: TodoOutput }) {
       const lines = output.items?.map?.((item) => {
         const icon = item.status === "completed" ? "[x]" : item.status === "in_progress" ? "[>]" : "[ ]";

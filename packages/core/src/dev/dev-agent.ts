@@ -362,6 +362,7 @@ export type {
   VerificationResultItem,
 } from "../agent/plan";
 export { TodoManager } from "../agent/todo";
+export { createTodoTool } from "../agent/todo/todo-tool.js";
 export {
   getMediaStore,
   resetMediaStore,
