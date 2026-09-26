@@ -146,13 +146,19 @@ const READONLY_PREFIXES = new Set([
   "echo",
   "printf",
   "wc",
-  "sort",
   "which",
   "uname",
   "env",
   "dirname",
   "basename",
   "ps",
+  // Text filters that are read-only on their own. `sed` / `sort` / `awk` are deliberately NOT
+  // here: each has a write mode (`-i` / `-o` / `system()`), so they are classified separately by
+  // {@link isReadOnlyFilter}. Listing them alongside `cat` auto-approved `sed -i` and `sort -o`,
+  // i.e. an in-place edit and a file write wearing a filter's name.
+  "cut",
+  "uniq",
+  "test",
   "git status",
   "git log",
   "git diff",
@@ -230,14 +236,28 @@ function globPrefix(text: string): string | undefined {
   return text.slice(0, match.index);
 }
 
-/** Collect path arguments for a command, dropping flags (opencode `pathArgs`). */
+/** Commands whose first non-flag argument is a search pattern, not a path. */
+const PATTERN_FIRST_COMMANDS = new Set(["grep", "rg", "ag", "ack"]);
+
+/**
+ * Collect path arguments for a command, dropping flags (opencode `pathArgs`).
+ *
+ * `grep`-family commands are also skipped over their leading *pattern* argument, which is not a
+ * path. Treating it as one produced a bogus external-dir verdict — and therefore an approval
+ * prompt — for an ordinary read-only search: the pattern `\.todoManager\b` "resolved" to
+ * `/.todoManager/b`, i.e. outside the root. The pattern carries no shell meaning that a path
+ * check could act on, so dropping it is strictly more correct; the files it is searched for
+ * are still checked normally.
+ */
 function pathArgs(tokens: string[]): string[] {
   const name = tokens[0]?.toLowerCase() ?? "";
-  return tokens.slice(1).filter((item) => {
+  const args = tokens.slice(1).filter((item) => {
     if (item.startsWith("-")) return false;
     if (name === "chmod" && item.startsWith("+")) return false;
     return true;
   });
+  if (PATTERN_FIRST_COMMANDS.has(name)) return args.slice(1);
+  return args;
 }
 
 /**
@@ -262,16 +282,98 @@ function containsPath(parent: string, child: string, path: CoreEnvPath): boolean
 }
 
 /**
+ * Output redirections that cannot create, truncate, or modify a file — so they are not writes.
+ *
+ * - `2>&1` / `1>&2` / `>&2` — duplicate a descriptor onto another *descriptor*.
+ * - `>/dev/null` / `2>/dev/null` — the null device discards the stream.
+ *
+ * Everything else containing `>` keeps the conservative write verdict. A `>` inside a quoted
+ * argument (`grep ">" file`) is not shell syntax and is still counted as one; the whole-string
+ * scan cannot tell, and the asymmetry is deliberate — a false positive costs one approval
+ * prompt, while a false negative would auto-approve a real write.
+ *
+ * Only these two forms qualify: a redirection to a *named* target is exactly how a shell
+ * creates or truncates a file, so it must keep asking. `2>&1` was the single most common cause
+ * of spurious prompts in real plan/debug sessions (`cmd 2>&1 | tail`), i.e. shell noise that
+ * every command carries and none of it writes.
+ */
+const BENIGN_REDIRECTION = /(?:[12]?&>|[12]?>)\s*(&[12-]|\/dev\/null|[12][>&]?)/g;
+
+/**
  * Whether a command string redirects to a file (a write).
  *
  * `>>>` is not a redirection (it is not shell syntax); everything else containing `>` is
- * treated as one. Input redirection (`<`) is not a write.
+ * treated as one. Input redirection (`<`) is not a write. Known-benign output redirections
+ * ({@link BENIGN_REDIRECTION}) are removed before the scan.
  *
  * Only consulted when the *per-command* source is unavailable — see
  * {@link hasWriteRedirectionAcrossCommands} for why a whole-string scan is wrong.
  */
 function hasWriteRedirection(source: string): boolean {
-  return />/.test(source.replace(/<<<?/g, ""));
+  return />/.test(source.replace(BENIGN_REDIRECTION, " ").replace(/<<<?/g, ""));
+}
+
+/**
+ * Filters that are read-only *unless* given a flag that writes.
+ *
+ * These names are otherwise pure stdin→stdout transforms, which is why they appear all over
+ * read-only inspection pipelines (`grep … | sed -n '1,20p' | head`). Their whole-command
+ * read-only status is therefore conditional: `sed -i` edits in place, `sort -o` writes a file,
+ * and `awk` can shell out. A name-only allowlist would have granted write access to all three,
+ * so the flag is part of the classification.
+ */
+const MUTATING_FILTER_FLAGS: Record<string, (token: string) => boolean> = {
+  sed: (token) => token === "-i" || token.startsWith("-i") || token === "--in-place" || token.startsWith("--in-place"),
+  sort: (token) => token === "-o" || token.startsWith("-o") || token === "--output" || token.startsWith("--output"),
+  // `awk` may run arbitrary commands from its program: `awk 'BEGIN{system("rm -rf x")}'`.
+  // `print > "file"` is caught separately by the write-redirection scan.
+  awk: (token) => /system\s*\(/.test(token),
+};
+
+/** True when a would-be read-only filter carries a flag that makes it write. */
+function usesMutatingFilterFlag(name: string, tokens: string[]): boolean {
+  const probe = MUTATING_FILTER_FLAGS[name];
+  return probe ? tokens.slice(1).some(probe) : false;
+}
+
+/**
+ * Whether a single command is read-only, given it already carries no write op, no write
+ * redirection, and no background marker.
+ *
+ * Three cases, all conservative:
+ *
+ * - {@link READONLY_PREFIXES} — the command is read-only by name (`cat`, `ls`, `git status`).
+ * - `cd` — read-only by nature: it changes only the shell's working directory, and it is the
+ *   one command whose path argument must be checked here instead of via the generic file-arg
+ *   scan. That check is what keeps `cd /etc` (an *absolute* path outside the project) asking;
+ *   a bare `cd` or an in-root relative one is not a write by any reading.
+ * - {@link MUTATING_FILTER_FLAGS} names — read-only *unless* the write flag is present.
+ *
+ * The `cd` case exists because it is in every chained inspection command (`cd repo && grep …`)
+ * but in neither READONLY_PREFIXES nor — as a path argument — `FILE_COMMANDS`, so an entire
+ * read-only exploration chain was blocked by its first segment.
+ */
+function classifyReadOnly(
+  name: string,
+  prefix: string[],
+  normalized: string,
+  tokens: string[],
+  ctx: CommandAnalysisContext
+): boolean {
+  if (name === "cd") {
+    const target = pathArgs(tokens)[0];
+    if (target === undefined) return true;
+    const expanded = expandArg(target, ctx);
+    const globbed = globPrefix(expanded);
+    if (isDynamicArg(target) || expanded.includes("$") || expanded === "" || globbed === undefined) return false;
+    const resolved = ctx.path.isAbsolute(globbed) ? ctx.path.normalize(globbed) : ctx.path.resolve(ctx.cwd, globbed);
+    return containsPath(ctx.rootPath, resolved, ctx.path);
+  }
+
+  if (normalized in MUTATING_FILTER_FLAGS) return !usesMutatingFilterFlag(normalized, tokens);
+
+  // `node -v` style prefixes are the only multi-token entries; keep the original lookup for them.
+  return READONLY_PREFIXES.has(normalized) || READONLY_PREFIXES.has(prefix.join(" "));
 }
 
 /**
@@ -298,13 +400,27 @@ function hasWriteRedirection(source: string): boolean {
  * for.
  */
 function hasWriteRedirectionAcrossCommands(command: string): boolean {
-  return command.split(/&&|\|\||[;|\n]|&/).some((segment) => hasWriteRedirection(segment));
+  // Strip benign redirections BEFORE splitting on `&` / `|`: the separators cut `2>&1` into
+  // `2>` and `1`, and the orphaned `>` then reads as a write in an otherwise read-only line.
+  return command
+    .replace(BENIGN_REDIRECTION, " ")
+    .split(/&&|\|\||[;|\n]|&/)
+    .some((segment) => hasWriteRedirection(segment));
 }
 
 /** Background marker (` & ` / trailing `&`), excluding `&&`. */
+/**
+ * Background marker (` & ` / trailing `&`), excluding `&&`.
+ *
+ * A `&` that is part of a redirection is not a background marker: `2>&1` duplicated a
+ * descriptor, it did not put the command in the background. Reading it as one was the reason
+ * `cmd 2>&1` — shell noise every inspection command carries — was classified as a background
+ * write and promoted the *other* commands in the same line to non-read-only as well.
+ */
 function isBackgroundCommand(command: string, source: string): boolean {
-  if (/(^|[^&])&([^&]|$)/.test(command)) return true;
-  return /&\s*$/.test(source);
+  const stripped = command.replace(BENIGN_REDIRECTION, " ");
+  if (/(^|[^&])&([^&]|$)/.test(stripped)) return true;
+  return /&\s*$/.test(source.replace(BENIGN_REDIRECTION, " "));
 }
 
 // ============================================================================
@@ -401,7 +517,8 @@ function analyzeParsedCommands(
     const isWriteCmd = WRITE_OPS.has(name);
     const writeRedirection = overrides.globalWriteRedirection ?? hasWriteRedirection(cmd.source);
     const background = overrides.globalBackground ?? isBackgroundCommand(originalCommand, cmd.source);
-    const isReadOnly = !isWriteCmd && !writeRedirection && !background && READONLY_PREFIXES.has(normalized);
+    const harmless = !isWriteCmd && !writeRedirection && !background;
+    const isReadOnly = harmless && classifyReadOnly(name, prefix, normalized, cmd.tokens, ctx);
 
     const fileOps: FileOpAnalysis[] = [];
     if (FILE_COMMANDS.has(name)) {

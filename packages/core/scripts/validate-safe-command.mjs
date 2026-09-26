@@ -14,7 +14,16 @@
 
 import assert from "node:assert/strict";
 
-import { SUBAGENT_DENY_MESSAGE, commandPrefix, evaluateCommandApproval, normalizedCommand } from "../dist/dev.mjs";
+import {
+  SUBAGENT_DENY_MESSAGE,
+  commandPrefix,
+  evaluateCommandApproval,
+  normalizedCommand,
+  registerCoreEnv,
+} from "../dist/dev.mjs";
+
+/** Workspace root the analyzer resolves paths against. */
+const ROOT = "/home/user/project";
 
 // ---------------------------------------------------------------------------
 // Arity normalization (pure)
@@ -101,5 +110,82 @@ assert.equal(allowRules.action, "allow");
 
 // Subagent deny message is exported for the model-facing tool error.
 assert.ok(typeof SUBAGENT_DENY_MESSAGE === "string" && SUBAGENT_DENY_MESSAGE.length > 0);
+
+// ---------------------------------------------------------------------------
+// Analyzer — read-only classification of real command shapes
+//
+// These need a CoreEnv (the analyzer resolves cwd/root/homedir/env from it) and the bash
+// grammar for anything that must parse. Both are supplied here, so the assertions cover the
+// full `analyzeCommand` → `evaluateCommandApproval` path rather than a hand-built report.
+//
+// Two directions, and both matter: the left column is read-only inspection that every session
+// runs constantly and must NOT prompt; the right column is a write wearing a read-only name,
+// which must keep asking. A false allow here is a security bug, not an annoyance.
+// ---------------------------------------------------------------------------
+
+registerCoreEnv({
+  rootPath: ROOT,
+  getPlatform: async () => "linux",
+  getArch: async () => "arm64",
+  getEnv: async () => ({ HOME: "/home/user" }),
+  homedir: async () => "/home/user",
+  fs: {},
+  runCommand: async () => ({}),
+  exec: async () => ({}),
+  fetch: async () => new Response(""),
+});
+const { createAnalysisContext, analyzeCommand } = await import("../dist/dev.mjs");
+const cmdCtx = await createAnalysisContext();
+
+/** Decision for a command, via the real analyzer. */
+async function decide(command) {
+  const report = await analyzeCommand(command, cmdCtx);
+  return { action: evaluateCommandApproval(report, { agentKind: "root" }).action, report };
+}
+
+// Read-only inspection → allow.
+const READ_ONLY_COMMANDS = [
+  // `cd` into the project, bare or as the head of a chained inspection command.
+  "cd packages/core && grep -rn foo .",
+  `cd ${ROOT} && ls`,
+  // Benign output redirection: fd duplication and the null device write no file.
+  "echo hi 2>&1",
+  "ls -la 2>/dev/null",
+  // Filter stages inside an inspection pipeline.
+  'grep -rn foo . | sed -n "1,20p" | head',
+  "sort file.txt | uniq -c | head",
+  "cat file.ts | cut -d: -f1 | head",
+  "test -f a.ts && echo yes",
+  "cat file.ts | wc -l",
+  // A grep *pattern* is not a path: `\\.foo\\b` used to resolve to `/.foo/b` (outside the root)
+  // and forced an approval for an ordinary search.
+  'grep -rn "\\.todoManager\\b" packages/core/src',
+  'grep -rn --include="*.ts" "x" packages/core/src',
+];
+for (const command of READ_ONLY_COMMANDS) {
+  const { action } = await decide(command);
+  assert.equal(action, "allow", `expected read-only (no prompt) for: ${command}`);
+}
+
+// Writes that hide behind a read-only spelling → must still ask.
+const MUTATING_COMMANDS = [
+  "rm -rf node_modules",
+  "sed -i s/a/b/ file.ts",
+  "sort -o out.txt in.txt",
+  'awk "BEGIN{system(\\"touch pwned\\")}"',
+  "echo a > /tmp/x",
+  "echo a >> out.txt",
+  "echo hi 2> out.txt",
+  "grep -rn x . | tee out.txt",
+  `cd /etc && ls`,
+  "cd ../.. && ls",
+  "cat /etc/passwd",
+  "git checkout -- file.ts",
+  "pnpm build",
+];
+for (const command of MUTATING_COMMANDS) {
+  const { action } = await decide(command);
+  assert.notEqual(action, "allow", `expected approval for: ${command}`);
+}
 
 console.log("validate:safe-command OK");
