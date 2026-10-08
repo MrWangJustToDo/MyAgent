@@ -198,6 +198,7 @@
     "validate:task-prefork": "pnpm run build && node scripts/validate-task-prefork.mjs",
     "validate:task-run-state": "pnpm run build && node scripts/validate-task-run-state.mjs",
     "validate:code-mode-extension": "pnpm run build && node scripts/validate-code-mode-extension.mjs",
+    "validate:code-mode-binding-names": "pnpm run build && node scripts/validate-code-mode-binding-names.mjs",
     "validate:run-abort-ownership": "pnpm run build && node scripts/validate-run-abort-ownership.mjs",
     "validate:middleware-order": "pnpm run build && node scripts/validate-middleware-order.mjs",
     "validate:wire-override-reaches-adapter": "pnpm run build && node scripts/validate-wire-override-reaches-adapter.mjs",

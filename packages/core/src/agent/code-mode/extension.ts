@@ -11,6 +11,11 @@
  *   bindings (progressive disclosure: lazy tools appear in a catalog, not as
  *   full type stubs).
  *
+ * Binding names: every tool name is normalised to a legal JS identifier before it
+ * reaches `createCodeMode` (see `binding-names.ts`). Upstream derives the binding
+ * name verbatim, so a hyphenated name would otherwise emit an unusable stub — the
+ * same bug fixed upstream in pi v0.99.2.
+ *
  * Runtime-agnostic: the isolate backend is NOT imported here. The extension
  * feature-detects the optional CoreEnv capability `createIsolateDriver`. If the
  * host provides one (Node via `@tanstack/ai-isolate-node`, browser/WebContainer
@@ -18,6 +23,8 @@
  * gracefully (warns and registers nothing) with zero native deps in core.
  */
 import { createCodeMode } from "@tanstack/ai-code-mode";
+
+import { normalizeBindingName, renameCodeModeTools } from "./binding-names.js";
 
 import type { ExtensionAPI, ExtensionContext, ExtensionToolDefinition, ToolCallResult } from "../extension/types.js";
 import type { AnyServerTool, LazyToolsConfig, SchemaInput } from "@tanstack/ai";
@@ -180,9 +187,21 @@ export function createCodeModeExtension(options: CodeModeExtensionConfig = {}): 
       }
 
       // Mark the requested tools lazy so only the curated eager subset gets full
-      // type stubs in the system prompt.
-      const lazyNames = new Set(options.lazyToolNames ?? []);
-      const codeModeTools = tools.map((t) => (lazyNames.has(t.name) ? { ...t, lazy: true } : t)) as Array<CodeModeTool>;
+      // type stubs in the system prompt. Normalise binding names first (before the
+      // lazy check keys off `t.name`), so the lazy set is expressed in the same
+      // identifier space the sandbox actually exposes.
+      const lazyNames = new Set((options.lazyToolNames ?? []).map(normalizeBindingName));
+      const { tools: renamedTools, renames } = renameCodeModeTools(tools, ctx.logger);
+      if (renames.size > 0) {
+        ctx.logger.info(
+          `Code Mode: normalised ${renames.size} binding name(s) to legal identifiers — ${[...renames]
+            .map(([from, to]) => `${from} → ${to}`)
+            .join(", ")}`
+        );
+      }
+      const codeModeTools = renamedTools.map((t) =>
+        lazyNames.has(t.name) ? { ...t, lazy: true } : t
+      ) as Array<CodeModeTool>;
 
       const { tool, discoveryTool, systemPrompt } = createCodeMode({
         driver,

@@ -67,3 +67,6 @@ export { LANGUAGE_TO_GRAMMAR } from "./agent/lsp/tree-sitter/parser-manager.js";
 // Built-in Code Mode extension (internal validation exports — not part of public API)
 // ============================================================================
 export { createCodeModeExtension, type CodeModeExtensionConfig } from "./agent/code-mode/extension.js";
+// Binding-name normalisation: a validator must exercise the real helper against the
+// real upstream `createCodeMode`, not a replica of the rename rule.
+export { normalizeBindingName, renameCodeModeTools } from "./agent/code-mode/binding-names.js";
