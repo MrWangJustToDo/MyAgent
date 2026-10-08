@@ -105,6 +105,7 @@
     "validate:capability-unknown-vs-none": "pnpm run build && node scripts/validate-capability-unknown-vs-none.mjs",
     "validate:model-config": "pnpm run build && node scripts/validate-model-config.mjs",
     "validate:core-no-env-config": "node scripts/validate-core-no-env-config.mjs",
+    "validate:context-fill-tokens": "pnpm run build && node scripts/validate-context-fill-tokens.mjs",
     "validate:core-public-exports": "pnpm run build && node scripts/validate-core-public-exports.mjs",
     "validate:resolve-from-provider": "pnpm run build && node scripts/validate-resolve-from-provider.mjs",
     "validate:provider-model-list": "pnpm run build && node scripts/validate-provider-model-list.mjs",
