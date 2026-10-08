@@ -55,11 +55,11 @@
     "@codent/app": "workspace:*",
     "@my-react/react": "^0.3.30",
     "@my-react/react-terminal": "^0.0.31",
-    "@types/node": "^26.4.1",
+    "@types/node": "^26.6.4",
     "@types/react": "^19.2.14",
-    "dotenv": "^17.3.1",
+    "dotenv": "^18.0.6",
     "reactivity-store": "^0.4.0",
-    "tsdown": "^0.21.10",
+    "tsdown": "^0.23.0",
     "typescript": "^5.6.3",
     "zod": "^4.5.4"
   }

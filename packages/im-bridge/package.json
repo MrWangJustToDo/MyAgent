@@ -56,13 +56,13 @@
     "@codent/node": "workspace:*",
     "@codent/server": "workspace:*",
     "@tanstack/ai": "^0.65.1",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.6",
     "grammy": "^1.36.3",
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@types/node": "^26.4.1",
-    "tsdown": "^0.21.10",
+    "@types/node": "^26.6.4",
+    "tsdown": "^0.23.0",
     "typescript": "^5.6.3"
   }
 }
