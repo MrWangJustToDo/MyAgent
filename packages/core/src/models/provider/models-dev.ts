@@ -100,6 +100,8 @@ interface ModelsDevModel {
   experimental?: Record<string, unknown>;
   provider?: Record<string, unknown>;
   status?: string;
+  /** Upstream-added alias linking variant models to their canonical record; unread. */
+  canonical_model_id?: string;
 }
 
 /**
@@ -137,6 +139,7 @@ export const MODELS_DEV_MODEL_FIELDS = [
   "experimental",
   "provider",
   "status",
+  "canonical_model_id",
 ] as const satisfies readonly (keyof ModelsDevModel)[];
 
 /** Keys of {@link ModelsDevCost}, checked by the same guard (same drift trap, nested). */
