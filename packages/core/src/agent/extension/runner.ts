@@ -380,7 +380,7 @@ export class ExtensionRunner {
           ? {
               percent: usage.percent,
               tokenLimit: usage.tokenLimit,
-              windowTokens: usage.window.totalTokens,
+              windowTokens: usage.contextFillTokens,
               costUsd: usage.cost,
             }
           : null),

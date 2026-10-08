@@ -172,7 +172,7 @@ export async function restoreManagedSession(host: SessionHost, sessionId: string
   host.emitEvent("session:restore", {
     sessionId,
     messageCount: session.uiMessages.length,
-    tokenEstimate: session.contextTokens ?? host.usage.getWindowUsage().inputTokens ?? 0,
+    tokenEstimate: session.contextTokens ?? host.usage.getContextFillTokens() ?? 0,
     planPhase: host.planMode.getPhase(),
     autoMode: host.isAutoModeEnabled(),
     ...(mediaMissing > 0 ? { mediaMissing } : {}),

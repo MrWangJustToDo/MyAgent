@@ -52,7 +52,15 @@ function emptySnapshot(agentId: string): AgentSessionSnapshot {
     messages: [],
     queues: { steer: [], followUp: [] },
     // UsageChangeSnapshot shape — the shell must stay valid before first resync.
-    usage: { total: { ...emptyTokens }, window: { ...emptyTokens }, percent: 0, tokenLimit: 0, cost: 0 },
+    usage: {
+      total: { ...emptyTokens },
+      window: { ...emptyTokens },
+      percent: 0,
+      contextFillTokens: 0,
+      billedInputTokens: 0,
+      tokenLimit: 0,
+      cost: 0,
+    },
     todos: [],
     todosTitle: null,
     plan: { phase: "off" },

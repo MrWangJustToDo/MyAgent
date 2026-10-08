@@ -90,6 +90,23 @@ export interface UsageChangeSnapshot {
   total: TokenUsage;
   window: TokenUsage;
   percent: number;
+  /**
+   * True context-window fill in tokens (uncached + cached prompt).
+   *
+   * `window.inputTokens` alone is not the fill: an exclusive upstream (Anthropic/DeepSeek
+   * native) reports only the cache-miss part there, while an inclusive one (OpenAI, gateways)
+   * reports the whole prompt. Hosts that render "how full is the window" must use this,
+   * never `window.inputTokens` — see `UsageTracker.getContextFillTokens()`.
+   */
+  contextFillTokens: number;
+  /**
+   * Billed prompt tokens across the session lifetime — the denominator for cache share.
+   *
+   * Not `total.inputTokens`, which under an exclusive upstream (Anthropic/DeepSeek native)
+   * holds only the cache-miss part, so `cacheRead / inputTokens` reads as >100% (observed
+   * at 428.5%). See `UsageTracker.getBilledInputTokens()`.
+   */
+  billedInputTokens: number;
   tokenLimit: number;
   cost: number;
   /** Cumulative wall-clock time of measured main-loop LLM calls (ms). */

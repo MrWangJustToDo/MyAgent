@@ -75,7 +75,7 @@ export async function handleManagedReactiveCompact(
     });
 
     // Capture window fill before apply (usage is reset by applyReactiveCompactionResult).
-    const tokensBefore = host.usage.getWindowUsage().inputTokens ?? 0;
+    const tokensBefore = host.usage.getContextFillTokens();
 
     applyReactiveCompactionResult(canon, channel, host.usage, compactedMessages, {
       ...keepPolicyProjectionOptions(resolveKeepPolicy(host.compactionConfig ?? {}, host.getContextWindow())),
@@ -92,7 +92,7 @@ export async function handleManagedReactiveCompact(
       originalCount: llmMessages.length,
       compactedCount: compactedMessages.length,
       tokensBefore,
-      tokensAfter: host.usage.getWindowUsage().inputTokens ?? 0,
+      tokensAfter: host.usage.getContextFillTokens(),
     });
 
     host.statusController.endCompaction();
@@ -175,7 +175,7 @@ export async function runManualCompact(
 
   const previousStatus = host.getStatus();
   const tokensBeforeEstimate = estimateTokens(messages);
-  const actualTokens = host.usage.getWindowUsage().inputTokens ?? 0;
+  const actualTokens = host.usage.getContextFillTokens();
 
   host.statusController.beginCompaction();
 

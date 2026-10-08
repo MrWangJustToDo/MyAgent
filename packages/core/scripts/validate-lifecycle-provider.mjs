@@ -23,6 +23,7 @@ function createHarness() {
       getLastCallReasoningTokens: () => 0,
       getLastCallCostUsd: () => 0.001,
       getWindowUsage: () => ({ inputTokens: 100, outputTokens: 50, cacheReadTokens: 0, cacheWriteTokens: 0 }),
+      getContextFillTokens: () => 100,
     },
     getPricing: () => null,
     emitEvent: (type, data) => events.push({ type, data }),

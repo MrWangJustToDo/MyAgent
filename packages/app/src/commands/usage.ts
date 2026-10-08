@@ -132,8 +132,11 @@ registerCommand({
       lines.push(`  Model:        ${displayModel}`);
     }
 
-    // Overall cache hit ratio across the session lifetime (cumulative).
-    const cacheHitRatio = totalUsage.inputTokens > 0 ? (totalUsage.cacheReadTokens ?? 0) / totalUsage.inputTokens : 0;
+    // Overall cache hit ratio across the session lifetime (cumulative). The denominator is
+    // the *billed prompt*, not `totalUsage.inputTokens`: on an exclusive-cache upstream the
+    // latter is only the cache-miss part, so the read divided by it printed 428.5%.
+    const billedInput = usage.billedInputTokens;
+    const cacheHitRatio = billedInput > 0 ? (totalUsage.cacheReadTokens ?? 0) / billedInput : 0;
     if (cacheHitRatio > 0) {
       lines.push("");
       lines.push(`  Cache hit:    ${(cacheHitRatio * 100).toFixed(1)}%`);
@@ -146,10 +149,10 @@ registerCommand({
     const totalCacheRead = totalUsage.cacheReadTokens ?? 0;
     const totalCacheWrite = totalUsage.cacheWriteTokens ?? 0;
     if (totalCacheRead > 0) {
-      lines.push(`    Cache read:   ${fmt(totalCacheRead)}${pct(totalCacheRead, totalUsage.inputTokens)}`);
+      lines.push(`    Cache read:   ${fmt(totalCacheRead)}${pct(totalCacheRead, billedInput)}`);
     }
     if (totalCacheWrite > 0) {
-      lines.push(`    Cache write:  ${fmt(totalCacheWrite)}${pct(totalCacheWrite, totalUsage.inputTokens)}`);
+      lines.push(`    Cache write:  ${fmt(totalCacheWrite)}${pct(totalCacheWrite, billedInput)}`);
     }
 
     lines.push(`  Output:       ${fmt(totalUsage.outputTokens)} tokens`);
@@ -171,7 +174,9 @@ registerCommand({
       lines.push(`  Speed:        ${rate.toFixed(1)} tok/s (output)`);
     }
 
-    const contextInput = currentUsage.inputTokens;
+    // Real window fill — not `window.inputTokens`, which on an exclusive-cache
+    // upstream (Anthropic/DeepSeek native) holds only the cache-miss part.
+    const contextInput = usage.contextFillTokens;
     if (contextInput > 0) {
       const contextCacheRead = currentUsage.cacheReadTokens ?? 0;
       const pctText =
@@ -182,6 +187,9 @@ registerCommand({
       lines.push(`  ── Current Context ──`);
       lines.push(`  Context:      ${fmt(contextInput)} tokens${pctText}`);
       if (contextCacheRead > 0 && totalCacheRead > 0) {
+        // Share of the current *billed* prompt that was cached. `contextInput` is exactly
+        // that prompt (see `UsageTracker.getContextFillTokens`), so it is the "hit" reading —
+        // dividing by it is what makes this a rate rather than a fraction of the window.
         lines.push(`    Cache read:   ${fmt(contextCacheRead)}${pct(contextCacheRead, contextInput)}`);
       }
     }

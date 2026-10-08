@@ -9,6 +9,10 @@ export interface AgentUsageSnapshot {
   total: TokenUsage;
   window: TokenUsage;
   percent: number;
+  /** True context-window fill (uncached + cached prompt); see `contextFillTokens`. */
+  contextFillTokens: number;
+  /** Billed prompt across the session lifetime — denominator for cache share. */
+  billedInputTokens: number;
   tokenLimit: number;
   cost: number;
 }
@@ -23,6 +27,8 @@ const toView = (snap: UsageChangeSnapshot): AgentUsageSnapshot => ({
   total: { ...snap.total },
   window: { ...snap.window },
   percent: snap.percent,
+  contextFillTokens: snap.contextFillTokens,
+  billedInputTokens: snap.billedInputTokens,
   tokenLimit: snap.tokenLimit,
   cost: snap.cost,
 });

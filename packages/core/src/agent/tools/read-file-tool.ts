@@ -104,7 +104,9 @@ export const createReadFileTool = ({ usage }: { usage?: UsageTracker } = {}) => 
     if (!usage) return Infinity;
     const limit = usage.getTokenLimit();
     if (limit <= 0) return Infinity;
-    const used = usage.getWindowUsage().inputTokens;
+    // Context fill, not the raw input field — an exclusive-cache upstream reports only the
+    // cache-miss part there, which would vastly overstate the remaining budget.
+    const used = usage.getContextFillTokens();
     return Math.max(0, Math.floor((limit - used) * 0.8));
   };
 

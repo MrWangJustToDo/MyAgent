@@ -219,7 +219,7 @@ export class SessionService {
     }
     this.data.usage = { ...usage.getTotal() };
     this.data.cost = usage.getTotalCostUsd();
-    this.data.contextTokens = usage.getWindowUsage().inputTokens;
+    this.data.contextTokens = usage.getContextFillTokens();
 
     if (todoManager) {
       this.data.todos = todoManager.getItems();

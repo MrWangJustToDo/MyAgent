@@ -14,7 +14,8 @@ function formatCost(cost: number): string {
 
 /**
  * Footer usage: lifetime in/out (billing) · context fill · cost.
- * Context % is window.input / tokenLimit — not derived from lifetime totals.
+ * Context % is the real window fill (uncached + cached prompt) over tokenLimit —
+ * `window.inputTokens` alone under-reports on an exclusive-cache upstream.
  */
 export const LLMUsage = () => {
   const { usage } = useAgentUsage();
@@ -22,7 +23,7 @@ export const LLMUsage = () => {
   if (!usage) return null;
 
   const contextLabel = formatContextUsage({
-    windowInputTokens: usage.window.inputTokens,
+    windowInputTokens: usage.contextFillTokens,
     tokenLimit: usage.tokenLimit,
     percent: usage.percent,
   });

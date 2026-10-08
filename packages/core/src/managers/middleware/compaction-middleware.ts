@@ -81,7 +81,8 @@ export function createCompactionMiddleware(deps: CompactionMiddlewareDeps): Chat
           }));
 
           const usage = deps.getUsage();
-          const actualTokens = usage.getWindowUsage().inputTokens ?? 0;
+          // The context fill, not the raw input field — see UsageTracker.getContextFillTokens().
+          const actualTokens = usage.getContextFillTokens() ?? 0;
           const fromChannel = convertMessagesToModelMessages(channel.getMessages());
           // Cancel the summarizer with the run so an Esc mid-compaction does not
           // leave a half-written checkpoint.

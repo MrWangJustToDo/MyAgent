@@ -29,6 +29,7 @@ const middleware = createLifecycleMiddleware({
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
     }),
+    getContextFillTokens: () => 3,
     getPricing: () => null,
   },
   getPricing: () => null,

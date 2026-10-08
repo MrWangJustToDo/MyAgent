@@ -225,7 +225,7 @@ function makeCompactionDeps(channel, cache = new WireProjectionCache()) {
     getCompactionConfig: () => ({}),
     getContextWindow: () => undefined,
     getUIChannel: () => channel,
-    getUsage: () => ({ getWindowUsage: () => ({ inputTokens: 1 }) }),
+    getUsage: () => ({ getWindowUsage: () => ({ inputTokens: 1 }), getContextFillTokens: () => 1 }),
     getTodoManager: () => undefined,
     shouldTriggerAutoCompact: () => false,
     status: { beginCompaction: noop, endCompaction: noop },

@@ -1536,17 +1536,13 @@ export class ManagedAgent {
   }
 
   shouldTriggerAutoCompact(messages?: ModelMessage[]): boolean {
+    // The context fill, not `window.inputTokens`: an exclusive upstream reports only the
+    // cache-miss part there, which would keep the trigger from ever firing.
     return this.compaction.shouldTriggerAutoCompact({
-      windowInputTokens: this.usage.getWindowUsage().inputTokens,
+      windowInputTokens: this.usage.getContextFillTokens(),
       messages,
       contextWindow: this.modelInfo?.contextWindow,
     });
-  }
-
-  getCacheHitRatio(): number {
-    const total = this.usage.getTotal();
-    if (total.inputTokens <= 0) return 0;
-    return (total.cacheReadTokens ?? 0) / total.inputTokens;
   }
 
   /**
