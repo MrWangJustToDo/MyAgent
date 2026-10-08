@@ -600,6 +600,25 @@ All synthetic injections (turn-context sections, memory, background-command comp
 
 Helpers: `packages/core/src/models/prompt-cache.ts`. Validate: `pnpm --filter @codent/core run validate:prompt-cache`.
 
+### Context-window fill has ONE reading (`getContextFillTokens()`)
+
+`input_tokens` means two different things depending on the upstream, and both are in this repo's own logs:
+
+| Convention | Who | `input` vs cache | True prompt |
+|---|---|---|---|
+| **inclusive** | OpenAI, Gemini, most gateways | `cached_tokens` ⊆ `prompt_tokens` | `input` |
+| **exclusive** | Anthropic native, DeepSeek native | `cache_read`/`cache_write` are **disjoint** | `input + cache` |
+
+A gateway can also **switch conventions between requests with no notice** — observed here on 2026-10-08 18:50, mid-process, between two adjacent calls. So the reading is decided **per sample, not per config**: the cache counters cannot exceed a prompt that already contains them, so `cache > input` means disjoint. Deciding it per sample is what makes the formula self-healing; a hardcoded either/or breaks the other half of the fleet. The heuristic can only ever **under**-count (an exclusive upstream whose fresh tokens outweigh the cached ones reads as inclusive), never over-count — and over-counting is what would misfire compaction.
+
+`UsageTracker.getContextFillTokens()` is the single source, consumed by `getTokenLimitPercent()` (footer context %), `shouldTriggerAutoCompact` (via `ManagedAgent`), `compaction-middleware`'s `actualTokens`, the persisted `SessionData.contextTokens`, the restore path (`setWindowUsage` keeps `window.totalTokens` consistent), and `ExtensionUiContext.usage.windowTokens`. **Never read `window.inputTokens` for "how full is the window".**
+
+The bug this replaced: the percentage divided `window.inputTokens` by the limit, which is correct only under the inclusive convention. Adopting an exclusive upstream made a fully-cached prompt (176 fresh tokens over a 212,992-token cached prompt) render as **0.04%**, and because `shouldTriggerAutoCompact` read the same field, the trigger never fired. Replaying 422 logged `llm:response` rows through both formulas: the old one reported <1% on **238** of them; the fixed one on **none**.
+
+⚠️ Do **not** "fix" this by using `cacheReadTokens` in place of `inputTokens` — that collapses to ~0% whenever the cache is cold, which is strictly worse. The two are **added**, never swapped. Validate: `pnpm --filter @codent/core run validate:context-fill-tokens`.
+
+**The lifetime view has the same trap, and for a while had its own fix.** `/usage`'s `Cache hit:` divided cumulative `total.cacheReadTokens` by `total.inputTokens` — the cache-miss sum on an exclusive upstream — and printed **428.5%** on a real session (125.4k cache read over 29.3k input). The denominator is the *billed prompt*, and it **cannot be recovered from the aggregate**: `total.inputTokens` is already a miss-sum, so "take the max" under-reports (a session with 2.64M miss + 39.2M cached is a true 93.7% hit, not 100%). `UsageTracker` therefore accumulates `billedInputTotal` **per sample** through the same `promptTokensOf()` the window fill uses — one rule, exact under both conventions, written by `accumulateTotal` and cleared by `reset()`. `getCacheHitRatio()` is that ratio (`billedInputTotal` is the denominator, so it stays inside (0,1]). ⚠️ `accumulateTotal` is shared with subagent aggregation and restored totals, so an inflated per-sample prompt would skew cost-adjacent surfaces too.
+
 ### Message-operation ownership (writers on the wire are pure)
 
 `compaction` rebuilds the wire from the channel, and `WireProjectionCache` returns the **same array reference** on every hit within a run. The projected array is therefore shared, long-lived state: a writer that edits its input instead of returning a replacement corrupts every later call of the run, silently. Two shipped writers follow the replacement contract —
