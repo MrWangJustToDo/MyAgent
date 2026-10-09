@@ -1,5 +1,6 @@
 export { ExtensionRunner } from "./runner.js";
 export { ExtensionLoader, normalizeExtensionExport } from "./loader.js";
+export { EXTENSION_EVENT_VISIBILITY, observableExtensionEvents } from "./types.js";
 export {
   DEFAULT_EXTENSION_DIR,
   EXTENSION_DIRS_ENV_VAR,
@@ -18,6 +19,11 @@ export type {
   ExtensionToolDefinition,
   ExtensionCommand,
   ExtensionEventBus,
+  ExtensionObserverSurface,
+  ExtensionObserverOptions,
+  ExtensionEventObserver,
+  ExtensionEventVisibility,
+  ObservableExtensionEvent,
   ExtensionUI,
   ExtensionZod,
   InterceptableEvent,

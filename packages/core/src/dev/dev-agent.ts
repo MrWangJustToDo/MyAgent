@@ -174,6 +174,8 @@ export {
   pathToFileUrl,
   DEFAULT_EXTENSION_DIR,
   getDefaultExtensionDirs,
+  EXTENSION_EVENT_VISIBILITY,
+  observableExtensionEvents,
 } from "../agent/extension";
 export { buildAutoModePrompt } from "../agent/approval/auto-mode-prompt.js";
 export {

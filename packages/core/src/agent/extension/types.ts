@@ -2,6 +2,7 @@ import type { ExtensionZod } from "./extension-zod.js";
 import type { CoreEnv } from "../../env.js";
 import type { MultimodalPartType } from "../../models/adapter/capability-message-utils.js";
 import type { ModelCapability } from "../../models/types.js";
+import type { AgentEvent, AgentEventType, AgentEvents } from "../agent-event-bus/types.js";
 import type { ToolPresentation } from "../tools/presentation/types.js";
 import type { ModelToolContent, ToModelOutputContext } from "../tools/runtime/to-model-output-registry.js";
 import type { ModelMessage, SchemaInput } from "@tanstack/ai";
@@ -406,6 +407,180 @@ export interface ExtensionEventBus {
 }
 
 // ============================================================================
+// Observer accessors (the extension's read side of the bus)
+// ============================================================================
+//
+// The facade above is *interception*: async, ordered, shared mutable event,
+// cancel short-circuits. These three are *observation*: the bus's existing
+// observer dispatch mode (synchronous, registration-ordered, fire-and-forget),
+// exposed so an extension can react to agent events instead of only changing
+// them. A separate accessor name rather than overloading `on` keeps the two
+// dispatch modes from being confused at the call site.
+//
+// Deliberate non-wildcard: `observeAny` expands the declared observable set
+// below instead of subscribing to the bus's `"*"`. Two reasons — `"*"` would
+// ship internal high-frequency events to extensions, and the
+// `agent-event-bus` contract keeps the Event→Log bridge as the only wildcard
+// consumer in core.
+
+/**
+ * Visibility of one observer event to extensions.
+ *
+ * - `observable` — an extension may subscribe to it or read its retained value.
+ * - `internal` — deliberately withheld; the reason is recorded next to the row.
+ */
+export type ExtensionEventVisibility = "observable" | "internal";
+
+/**
+ * The observable set, exhaustively keyed by `AgentEventType`.
+ *
+ * `satisfies Record<AgentEventType, …>` is the guard that matters: adding an
+ * event to the registry breaks compilation HERE until it is classified, so a
+ * new event can neither become observable by accident nor be silently missing
+ * from `observeAny`. The default is `observable`; an `internal` row must state
+ * why, so a blanket hide cannot creep in.
+ */
+export const EXTENSION_EVENT_VISIBILITY = {
+  // Session lifecycle
+  "session:start": "observable",
+  "session:doc": "observable",
+  "session:skill": "observable",
+  "session:mcp": "observable",
+  "session:memory": "observable",
+  "session:restore": "observable",
+  "session:save-error": "observable",
+  // Turn lifecycle
+  "prompt:submit": "observable",
+  "prompt:before": "observable",
+  "turn:summary": "observable",
+  // Agent lifecycle / tools / approvals
+  "agent:thinking": "observable",
+  "agent:tool-start": "observable",
+  "agent:tool-approval-request": "observable",
+  "agent:tool-approval-resolved": "observable",
+  "agent:tool-end": "observable",
+  "agent:tool-error": "observable",
+  "agent:abort": "observable",
+  "agent:retry": "observable",
+  "agent:stream-error": "observable",
+  "agent:stop": "observable",
+  "agent:extension-error": "observable",
+  // Memory
+  "memory:prefetch": "observable",
+  "memory:extract": "observable",
+  "memory:consolidate": "observable",
+  // LLM
+  "llm:request": "observable",
+  "llm:response": "observable",
+  // Compaction
+  "compaction:auto-start": "observable",
+  "compaction:auto-complete": "observable",
+  "compaction:auto-error": "observable",
+  "compaction:reactive-start": "observable",
+  "compaction:reactive-complete": "observable",
+  "compaction:reactive-error": "observable",
+  "compaction:reactive-max-retries": "observable",
+  // Subagents
+  "subagent:created": "observable",
+  "subagent:started": "observable",
+  "subagent:completed": "observable",
+  "subagent:error": "observable",
+  "subagent:destroyed": "observable",
+  "subagent:phase": "observable",
+  "subagent:progress-summary-error": "observable",
+  // Plan mode
+  "plan:enter": "observable",
+  "plan:ready": "observable",
+  "plan:execute": "observable",
+  "plan:cancel-execution": "observable",
+  "plan:todo-replaced": "observable",
+  "plan:retro": "observable",
+  "plan:complete": "observable",
+  "plan:exit": "observable",
+  // Session channel projection
+  "agent:state": "observable",
+  "session:messages": "observable",
+  "session:queues": "observable",
+  "session:usage": "observable",
+  "session:todos": "observable",
+  "session:plan": "observable",
+  "session:summary": "observable",
+  "session:mode": "observable",
+  "session:extensions": "observable",
+  "session:tool-presentation": "observable",
+  "session:interaction": "observable",
+  "agent:iteration": "observable",
+  // Deliberately withheld (each needs a reason).
+  // token-by-token streaming already has a dedicated UI path; observing it invites
+  // per-chunk extension work on the hot path.
+  "tool:chunk": "internal",
+  "tool:clear": "internal",
+  // the extension-UI channel is how extensions publish to the host; making it
+  // observable would couple unrelated extensions through each other's output.
+  "extension:ui": "internal",
+} as const satisfies Record<AgentEventType, ExtensionEventVisibility>;
+
+/** Every event an extension may observe. */
+export type ObservableExtensionEvent = {
+  [K in keyof typeof EXTENSION_EVENT_VISIBILITY]: (typeof EXTENSION_EVENT_VISIBILITY)[K] extends "observable"
+    ? K
+    : never;
+}[keyof typeof EXTENSION_EVENT_VISIBILITY];
+
+/**
+ * The observable set as a runtime list, in declaration order.
+ *
+ * Used by `observeAny` to expand into per-event subscriptions; exported so a
+ * validator can assert the expansion matches the table rather than reproducing
+ * the filter.
+ */
+export function observableExtensionEvents(): ObservableExtensionEvent[] {
+  return (Object.keys(EXTENSION_EVENT_VISIBILITY) as AgentEventType[]).filter(
+    (type) => EXTENSION_EVENT_VISIBILITY[type] === "observable"
+  ) as ObservableExtensionEvent[];
+}
+
+/**
+ * Observer handler. The payload is the **same object** every in-scope consumer
+ * receives (the session channel projection, the Event→Log bridge), so it MUST be
+ * treated as read-only: mutating it mutates live state.
+ */
+export type ExtensionEventObserver<T extends ObservableExtensionEvent = ObservableExtensionEvent> = (
+  event: AgentEvent<T>
+) => void | Promise<void>;
+
+export interface ExtensionObserverOptions {
+  /**
+   * For a retained event, deliver the current value once, synchronously, at
+   * subscription time. Defaults to `true` for `observe` and `false` for
+   * `observeAny` (a broad subscriber must not be hit with a burst of snapshots).
+   */
+  replay?: boolean;
+}
+
+/**
+ * Observation half of the extension event surface. `ExtensionContext.events`
+ * carries this alongside {@link ExtensionEventBus}.
+ *
+ * Failure containment: a synchronous throw is contained by the observer
+ * dispatch mode (other observers still run), and a returned rejected promise is
+ * caught here and reported as `agent:extension-error` with phase
+ * `event-observer`, so an observer can never abort a run.
+ */
+export interface ExtensionObserverSurface {
+  /** Subscribe to one observable event. Returns a disposer. */
+  observe<T extends ObservableExtensionEvent>(
+    type: T,
+    handler: ExtensionEventObserver<T>,
+    options?: ExtensionObserverOptions
+  ): () => void;
+  /** Subscribe to every observable event. Returns a disposer. */
+  observeAny(handler: ExtensionEventObserver, options?: ExtensionObserverOptions): () => void;
+  /** Current retained value for an observable event, or `undefined`. */
+  retained<T extends ObservableExtensionEvent>(type: T): AgentEvents[T] | undefined;
+}
+
+// ============================================================================
 // UI bridge (app-layer only)
 // ============================================================================
 
@@ -570,7 +745,15 @@ export interface ExtensionContext {
    */
   registerMessageTransformer(transformer: MessageTransformer): () => void;
 
-  events: ExtensionEventBus;
+  /**
+   * Interception (`on` / `off` / `emit`) **and** observation (`observe` /
+   * `observeAny` / `retained`).
+   *
+   * `on` and `observe` are two dispatch modes, not two spellings: `on` is an
+   * async interceptor that can rewrite or cancel the operation; `observe` is a
+   * synchronous observer that only reads what happened.
+   */
+  events: ExtensionEventBus & ExtensionObserverSurface;
   ui: ExtensionUI;
 
   logger: {
@@ -610,6 +793,8 @@ export interface ExtensionRegistrations {
   commands: string[];
   /** Unsubscribe callbacks for event-bus interceptors. */
   unsubInterceptors: Array<() => void>;
+  /** Unsubscribe callbacks for observer subscriptions (`observe` / `observeAny`). */
+  unsubObservers: Array<() => void>;
   /** Unsubscribe callbacks for turn-context providers. */
   unsubTurnContext: Array<() => void>;
   /**

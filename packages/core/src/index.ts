@@ -324,6 +324,11 @@ export type {
   ExtensionToolDefinition,
   ExtensionCommand,
   ExtensionEventBus,
+  ExtensionObserverSurface,
+  ExtensionObserverOptions,
+  ExtensionEventObserver,
+  ExtensionEventVisibility,
+  ObservableExtensionEvent,
   ExtensionUI,
   ExtensionZod,
   InterceptableEvent,
@@ -346,6 +351,13 @@ export type {
   MessageTransformer,
   MultimodalPartType,
 } from "./agent/extension";
+
+/**
+ * Every observable extension event, as a runtime value — the single source of
+ * truth the `ObservableExtensionEvent` union is derived from. Enumerate this
+ * instead of keeping a second list.
+ */
+export { EXTENSION_EVENT_VISIBILITY, observableExtensionEvents } from "./agent/extension/types.js";
 
 // ============================================================================
 // Shared utilities
