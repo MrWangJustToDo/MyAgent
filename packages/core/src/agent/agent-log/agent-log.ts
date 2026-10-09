@@ -233,8 +233,16 @@ export class AgentLog {
     this.fileSinkDir = sink.dir ?? null;
   }
 
-  /** Detach the active sink (used by the log extension's disposer). */
-  detachSink(): void {
+  /**
+   * Detach the active sink (used by the log extension's disposer).
+   *
+   * Pass the sink's `handleEntry` to make the detach conditional on *that* sink still being the
+   * active one. Without it, a stale handle from a binding that has since been superseded would
+   * unbind the live sink and silently swallow every later entry. Guarding here rather than at each
+   * call site keeps `attachFileSink`'s handle and the log extension's detach on one implementation.
+   */
+  detachSink(ifStillBound?: (entry: LogEntry) => void): void {
+    if (ifStillBound && this.sinkEntry !== ifStillBound) return;
     this.sinkEntry = null;
     this.sinkFlush = null;
     this.sinkFlushSync = null;
@@ -256,7 +264,7 @@ export class AgentLog {
    *
    * The implementation lives in the log extension (`createJsonlFileSink`), but the handle is kept
    * on the seam so the module that owns the log still owns the one-call way to persist it — that is
-   * what keeps the `70`-odd call sites and the log validators independent of the extension wiring.
+   * what keeps the 76 call sites and the log validators independent of the extension wiring.
    * Prefer `createLogExtension(...).attachSink(log, options)` in production paths, which also
    * records the sink for teardown.
    */
@@ -265,7 +273,7 @@ export class AgentLog {
     this.attachSink(sink);
     return () => {
       sink.detach();
-      if (this.sinkEntry === sink.handleEntry) this.detachSink();
+      this.detachSink(sink.handleEntry);
     };
   }
 

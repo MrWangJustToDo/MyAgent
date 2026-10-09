@@ -272,7 +272,7 @@ registerCoreEnv(createFsEnv(rootPath));
   assert.ok(content.includes("buffered-at-exit"), "the log extension's pending batch lands on the exit path");
 
   ext.dispose();
-  assert.equal(ext.attachedSinkCount(), 0, "dispose releases every registered sink");
+  assert.equal(ext.getAttachedSinkCount(), 0, "dispose releases every registered sink");
 
   const before = content.length;
   log.info("system", "after-dispose");
@@ -349,7 +349,7 @@ registerCoreEnv(createFsEnv(rootPath));
   const parentId = result.session.getSnapshot().agentId;
 
   const sub = await manager.spawnSubagent(parentId, { name: "sub" });
-  const registrySize = () => manager.getLogExtension().attachedSinkCount();
+  const registrySize = () => manager.getLogExtension().getAttachedSinkCount();
 
   await sleep(300); // let the parent's session sink bind
   const withSub = registrySize();

@@ -170,6 +170,19 @@ console.log("pre-attach retention + JSONL OK:", lines.length, "lines");
   assert.equal(replayed, 0, "drained entries are not replayed by a later attach");
   assert.equal(afterReattach.filter((l) => l.includes("after-reattach")).length, 1, "post-reattach entry written once");
   secondDetach();
+
+  // A *late* call on a superseded handle must not unbind the live sink. Both handles come from
+  // `attachFileSink`, whose detach is conditional on the sink still being the active one — without
+  // that guard the stale call clears the seam and every later entry is neither written nor
+  // retained (verified by unguarding `detachSink` and watching this assertion fail).
+  const staleHandle = capLog.attachFileSink({ dir: capDir, filename: "agent.log", flushIntervalMs: 10 });
+  const liveHandle = capLog.attachFileSink({ dir: capDir, filename: "agent.log", flushIntervalMs: 10 });
+  staleHandle(); // A's handle, called after B replaced it — the late/superseded call
+  capLog.info("system", "after-stale-detach");
+  capLog.flushSync();
+  const afterStale = await fs.promises.readFile(capFile, "utf-8");
+  assert.ok(afterStale.includes("after-stale-detach"), "a superseded detach handle must not unbind the live sink");
+  liveHandle();
   console.log("pending-buffer cap + one-shot drain OK:", capLines.length, "retained of", overflow);
 }
 

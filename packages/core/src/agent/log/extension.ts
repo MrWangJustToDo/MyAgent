@@ -77,7 +77,7 @@ export interface LogExtension {
    * is the only externally visible evidence that a sink was released rather than merely detached
    * from the seam.
    */
-  attachedSinkCount(): number;
+  getAttachedSinkCount(): number;
   /** Start consuming bus events. Idempotent; a no-op when the policy disables logging. */
   start(): void;
   /** Stop consuming, release the exit-path registration, and detach every sink attached. */
@@ -123,7 +123,9 @@ export function createLogExtension(options: LogExtensionOptions): LogExtension {
         if (sinks.get(log) !== detach) return; // superseded — nothing of ours to release
         sinks.delete(log);
         sink.detach();
-        log.detachSink();
+        // Conditional: a superseded handle must not unbind the live binding (the `sinks.get` check
+        // above covers this registry, the seam guard covers the seam itself).
+        log.detachSink(sink.handleEntry);
       };
       sinks.set(log, detach);
       log.attachSink(sink);
@@ -137,7 +139,7 @@ export function createLogExtension(options: LogExtensionOptions): LogExtension {
       unregisterExitFlush = registerExtensionExitFlush(flushSinksSync);
     },
 
-    attachedSinkCount: () => sinks.size,
+    getAttachedSinkCount: () => sinks.size,
 
     dispose() {
       unsubscribe?.();
