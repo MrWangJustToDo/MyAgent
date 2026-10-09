@@ -251,7 +251,9 @@ export class AgentManager {
     const parentLogDir = parent.getLog()?.getFileSinkDir?.();
     const subagentLog = subagent.getLog();
     if (parentLogDir && subagentLog) {
-      this.logExtension.attachSink(subagentLog, { dir: parentLogDir, filename: `${subagent.id}.log` });
+      subagent.setLogSinkDetach(
+        this.logExtension.attachSink(subagentLog, { dir: parentLogDir, filename: `${subagent.id}.log` })
+      );
     }
 
     return subagent;
@@ -403,6 +405,13 @@ export class AgentManager {
     // async, and landing the log sink while a deactivate() flush could still be pending
     // loses the final batch. Chaining also keeps `destroyAgent` synchronous for its
     // subagent/dispose callers while making the order unconditional.
+    //
+    // ⚠️ The sink must stay bound across the whole chain. `session:shutdown` is how an
+    // extension lands its final work through `ctx.logger`, so releasing the binding before
+    // the interception runs sends that write into the seam's retained buffer, where nothing
+    // can ever drain it — the log file then lags `destroy()` by one entry or more.
+    // Release therefore happens exactly once, at the end of the chain (via
+    // `flushLogOnDestroy`), never up front.
     const runner = managedAgent.getExtensionRunner();
     const teardown = (async () => {
       if (runner) {

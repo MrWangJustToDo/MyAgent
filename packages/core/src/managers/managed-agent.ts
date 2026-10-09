@@ -322,8 +322,8 @@ export class ManagedAgent {
 
   tools: ToolsRecord;
   log: AgentLog;
-  /** Detach handle for the active session log sink (lets a rebind dispose it). */
-  private detachLogSink: (() => void) | null = null;
+  /** Detach handle for the active log sink (lets a rebind or teardown dispose it). */
+  private logSinkDetach: (() => void) | null = null;
   /** Extension / tool / integration registration domain (todo, MCP, skills, extensions). */
   readonly extensions: ExtensionRegistryService;
 
@@ -968,30 +968,51 @@ export class ManagedAgent {
     const sessionId = this.getSessionData()?.id ?? this.id;
     const dir = `${AGENT_LOG_DIR}/${sessionId}`;
     if (this.log.getFileSinkDir() === dir) return;
-    this.detachLogSink?.();
+    this.logSinkDetach?.();
     // Bind through the built-in log extension (which tracks the sink for teardown); fall back to
     // the seam's own convenience attach for a standalone log with no manager.
     const options = { dir };
-    this.detachLogSink =
+    this.logSinkDetach =
       this.manager?.getLogExtension()?.attachSink(this.log, options) ?? this.log.attachFileSink(options);
     // Track for the process-level crash/exit guards.
     registerActiveAgentLog(this.log);
   }
 
   /**
-   * Land any buffered log entries synchronously and detach the file sink. Called
-   * from `destroyAgent`.
+   * Record the release handle for a sink bound outside {@link bindSessionLogSink} — the subagent
+   * path, where `spawnSubagent` owns the options (parent dir + `{subagentId}.log`) and core has to
+   * defer release until that agent is destroyed.
+   */
+  setLogSinkDetach(detach: () => void): void {
+    this.logSinkDetach?.();
+    this.logSinkDetach = detach;
+  }
+
+  /**
+   * Release the active log sink binding (registry entry + sink + seam), landing its buffered batch
+   * first. Idempotent — the handle is cleared, so a second call is a no-op.
    *
-   * Detaching (not just flushing) matters: the sink owns a periodic flush timer, and
-   * leaving it armed after the agent is destroyed keeps writing into the session's log
-   * directory. That is a leak in any runtime, and on Windows it is fatal to teardown —
-   * a directory cannot be removed while a handle is open in it, so a cleanup `rm` over
-   * the workspace fails with ENOTEMPTY.
+   * Called from {@link flushLogOnDestroy} at the end of the teardown chain — *after* the
+   * `session:shutdown` interception, which is how an extension lands its final work through
+   * `ctx.logger`. Releasing earlier would send that write into the seam's retained buffer, where
+   * nothing can drain it. Release (not just a flush) is required: the sink owns a periodic flush
+   * timer, and leaving it armed after the agent is gone keeps writing into the session's log
+   * directory — a leak in any runtime, and on Windows fatal to teardown, because a directory
+   * cannot be removed while a handle is open in it (`rm` then fails with ENOTEMPTY).
+   */
+  detachLogSink(): void {
+    const detach = this.logSinkDetach;
+    this.logSinkDetach = null;
+    detach?.();
+  }
+
+  /**
+   * Land any buffered log entries synchronously and release the file sink. Called
+   * from `destroyAgent`.
    */
   flushLogOnDestroy(): void {
     this.log.flushSync();
-    this.detachLogSink?.();
-    this.detachLogSink = null;
+    this.detachLogSink();
     unregisterActiveAgentLog(this.log);
   }
 
