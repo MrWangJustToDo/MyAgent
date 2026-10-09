@@ -31,8 +31,10 @@ import {
   writeModelsConfigFile,
   type LoadedModelsState,
   type ModelsConfig,
+  type ModelsConfigEntry,
   type RawModelsConfig,
 } from "@codent/core";
+import { toRaw } from "reactivity-store";
 
 import { useConfig } from "../hooks/use-config.js";
 
@@ -104,4 +106,38 @@ export async function applyModelsConfigEdit(
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+/**
+ * The `models.json` entry a mid-session re-edit should start from: the active one, or none.
+ *
+ * Unwrapped with `toRaw` (the store hands out readonly proxies) and deep-cloned, because the
+ * editor seeds React state from it — a shared reference would let the draft mutate the live
+ * store mid-edit. A `remote-provider` entry has no connection fields, so the editor falls back
+ * to a blank draft for it.
+ *
+ * Lives beside {@link applyModelsConfigEdit} because it is the read half of the same edit: it
+ * answers "what am I editing", that one answers "what happens when I save".
+ */
+export function selectEditedEntry(): { entry: ModelsConfigEntry | undefined; entryIndex: number } {
+  const loaded = toRaw(useConfig.getReadonlyState().modelsConfig) as LoadedModelsState | null;
+  const entryIndex = loaded?.active.entryIndex ?? 0;
+  const raw = loaded?.config.models[entryIndex] as ModelsConfigEntry | undefined;
+  const entry = raw ? (JSON.parse(JSON.stringify(raw)) as ModelsConfigEntry) : undefined;
+  return { entry, entryIndex };
+}
+
+/**
+ * A saved edit's entry described for the confirmation line — e.g. `direct:anthropic@https://…`.
+ *
+ * `session` and `remote` have no connection fields worth printing, so they report the kind
+ * instead. Takes the `loaded` state {@link applyModelsConfigEdit} returns rather than reading the
+ * store, because the caller already holds the result of its own save.
+ */
+export function describeEditedEntry(loaded: LoadedModelsState | null, index: number): string {
+  const entry = loaded?.entries[index];
+  if (!entry) return "unknown";
+  if (entry.type === "session") return "session-server";
+  if (entry.type === "remote") return "remote-provider";
+  return `direct:${entry.style}@${entry.baseURL.replace(/\/+$/, "")}`;
 }
