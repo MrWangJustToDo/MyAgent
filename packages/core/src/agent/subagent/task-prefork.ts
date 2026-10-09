@@ -29,7 +29,7 @@ function cancelledStubResult(): SubagentResult {
     // No run happened, so there is no budget to report against the count.
     maxIterations: 0,
     durationMs: 0,
-    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, billedInputTokens: 0 },
     reachedLimit: false,
     // `incomplete` means "finished, but not cleanly" — `deriveSubagentRunStats` only ever
     // sets it on the `!aborted` path, so a cancel can never carry it. This stub is

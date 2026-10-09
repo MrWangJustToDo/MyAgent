@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SubagentPreviewView } from "../messages/SubagentPreviewView.js";
 import { formatTaskTurns } from "../messages/task-turns.js";
 import { COLORS } from "../theme/colors.js";
-import { formatUsageBrief } from "../utils/format-usage.js";
+import { formatUsageBrief, resolvePromptTokens } from "../utils/format-usage.js";
 import { KeyLabel } from "../utils/keyboard-labels.js";
 import { formatRetryStatus } from "../utils/retry-status.js";
 import { resolveAgentSession } from "../utils/session-resolve.js";
@@ -48,7 +48,10 @@ export const SubagentDetailPanel = ({ subagentId, onBack }: { subagentId: string
 
   const usage = snap?.usage.total;
 
-  const usageLabel = usage && (usage.inputTokens > 0 || usage.outputTokens > 0) ? formatUsageBrief(usage) : null;
+  // Guard on the same cache-aware reading the label prints, so a fully cached run
+  // (exclusive upstream → `inputTokens` ~0) still shows its cost-bearing row.
+  const usageLabel =
+    usage && resolvePromptTokens(usage) + (usage.outputTokens ?? 0) > 0 ? formatUsageBrief(usage) : null;
 
   // Subagent loop progress, e.g. `3/50`, from the child's retained `iteration`
   // channel. Live only: once the child is gone the frozen pair on the task output takes

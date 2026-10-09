@@ -7,7 +7,7 @@ import { useSummaryStream } from "../hooks/use-summary-stream.js";
 import { useTask } from "../hooks/use-task.js";
 import { useToolElapsed } from "../hooks/use-tool-elapsed.js";
 import { BG, COLORS } from "../theme/colors.js";
-import { formatUsageBrief } from "../utils/format-usage.js";
+import { formatUsageBrief, resolvePromptTokens } from "../utils/format-usage.js";
 import {
   buildToolHeader,
   DURATION_THRESHOLD_MS,
@@ -30,7 +30,21 @@ import { ToolOutputView } from "./ToolOutputView.js";
 import { ToolStatusIcon } from "./ToolStatusIcon.js";
 
 import type { TaskTurnCounts } from "./task-turns.js";
+import type { TokenUsage } from "@codent/core";
 import type { ToolCallPart } from "@tanstack/ai";
+
+/**
+ * Token fields the task row reads. `billedInputTokens` is the cache-aware prompt a
+ * completed task carries on its frozen tool output; the cache fields are only present
+ * on the live Session fallback.
+ */
+type TaskUsageLike = {
+  inputTokens?: number;
+  outputTokens?: number;
+  billedInputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+};
 
 function extractErrorText(part: ToolCallPart): string | null {
   const uiState = getUiToolState(part);
@@ -155,10 +169,23 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
 
   const outputUsage =
     isTask && hasOutput && part.output && typeof part.output === "object" && "usage" in part.output
-      ? (part.output as { usage?: { inputTokens?: number; outputTokens?: number } }).usage
+      ? (part.output as { usage?: TaskUsageLike }).usage
       : null;
   // Completed tasks: prefer frozen tool-output usage over live Session totals.
-  const displayUsage = hasOutput ? (outputUsage ?? taskUsage) : taskUsage;
+  // The frozen output carries the subagent's cache-aware `billedInputTokens`; the live
+  // fallback carries the raw cache fields instead, which `formatUsageBrief` reads
+  // through the same rule. Merging keeps `displayUsage` uniformly addressable.
+  const displayUsage: TaskUsageLike | null =
+    outputUsage != null
+      ? outputUsage
+      : taskUsage != null
+        ? {
+            inputTokens: taskUsage.inputTokens,
+            outputTokens: taskUsage.outputTokens,
+            cacheReadTokens: (taskUsage as TokenUsage).cacheReadTokens,
+            cacheWriteTokens: (taskUsage as TokenUsage).cacheWriteTokens,
+          }
+        : null;
 
   const parenParts: string[] = [];
   if (inlineSummary) parenParts.push(inlineSummary);
@@ -173,11 +200,27 @@ export const ToolCallPartView = ({ part, streamingThrottleMs }: ToolCallPartView
   } else if (liveElapsedMs != null) {
     parenParts.push(formatDuration(liveElapsedMs));
   }
-  if (isTask && displayUsage && ((displayUsage.inputTokens ?? 0) > 0 || (displayUsage.outputTokens ?? 0) > 0)) {
+  // A billing reading is whichever token is non-zero: `billedInputTokens` is the
+  // cache-aware prompt, and a run can hold cost with only cache reads (exclusive
+  // upstream) or only fresh input (inclusive).
+  const hasBillableUsage =
+    displayUsage != null &&
+    resolvePromptTokens({
+      inputTokens: displayUsage.inputTokens ?? 0,
+      billedInputTokens: displayUsage.billedInputTokens,
+      cacheReadTokens: displayUsage.cacheReadTokens,
+      cacheWriteTokens: displayUsage.cacheWriteTokens,
+    }) +
+      (displayUsage.outputTokens ?? 0) >
+      0;
+  if (isTask && hasBillableUsage) {
     parenParts.push(
       formatUsageBrief({
         inputTokens: displayUsage.inputTokens ?? 0,
         outputTokens: displayUsage.outputTokens ?? 0,
+        billedInputTokens: displayUsage.billedInputTokens,
+        cacheReadTokens: displayUsage.cacheReadTokens,
+        cacheWriteTokens: displayUsage.cacheWriteTokens,
       })
     );
   }

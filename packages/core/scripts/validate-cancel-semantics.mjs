@@ -163,7 +163,7 @@ assert.ok(
       reachedLimit: false,
       incomplete: false,
       aborted: true,
-      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, billedInputTokens: 2 },
       durationMs: 1,
       cachedOutputPath: null,
     },

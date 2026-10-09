@@ -349,6 +349,10 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     }
 
     const usage = subagentManaged.usage.getTotal();
+    // The cache-aware prompt reading, taken alongside the raw aggregate because a
+    // subagent's prompt is almost entirely cache reads: `usage.inputTokens` alone is the
+    // miss part on an exclusive upstream, so host rendering must not use it.
+    const billedInputTokens = subagentManaged.usage.getBilledInputTokens();
     const durationMs = Math.max(0, Date.now() - runStartedAt);
 
     if (aggregateUsageToParent && parentManaged) {
@@ -408,6 +412,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
         inputTokens: usage.inputTokens ?? 0,
         outputTokens: usage.outputTokens ?? 0,
         totalTokens: usage.totalTokens ?? 0,
+        billedInputTokens,
       },
       reachedLimit: statusFlags.reachedLimit,
       incomplete: statusFlags.incomplete,

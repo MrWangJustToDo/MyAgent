@@ -15,8 +15,39 @@ export function formatCompactNumber(n: number): string {
   return `${rounded.toFixed(2)}M`;
 }
 
-export function formatUsageBrief(usage: { inputTokens: number; outputTokens: number }): string {
-  return `${formatCompactNumber(usage.inputTokens)} in / ${formatCompactNumber(usage.outputTokens)} out`;
+/**
+ * The prompt-token reading this label must print.
+ *
+ * `inputTokens` alone is NOT the prompt: under an exclusive upstream
+ * (Anthropic/DeepSeek native) it holds only the cache-miss part, so a fully cached
+ * subagent run reads as ~0. Mirrors `promptTokensOf` in core, mirrored here rather
+ * than imported because `@codent/app` must not reach into core internals and the
+ * rule is two lines. Prefer an explicit `billedInputTokens` whenever the producer
+ * supplied one — a subagent's own tracker already accumulated the exact sum, and
+ * re-deriving it from an *aggregate* is lossy (see AGENTS.md "Context-window fill").
+ */
+export function resolvePromptTokens(usage: {
+  inputTokens: number;
+  billedInputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+}): number {
+  if (typeof usage.billedInputTokens === "number" && Number.isFinite(usage.billedInputTokens)) {
+    return usage.billedInputTokens;
+  }
+  const cached = (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0);
+  const input = Number.isFinite(usage.inputTokens) ? usage.inputTokens : 0;
+  return cached > input ? input + cached : input;
+}
+
+export function formatUsageBrief(usage: {
+  inputTokens: number;
+  outputTokens: number;
+  billedInputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+}): string {
+  return `${formatCompactNumber(resolvePromptTokens(usage))} in / ${formatCompactNumber(usage.outputTokens)} out`;
 }
 
 /**

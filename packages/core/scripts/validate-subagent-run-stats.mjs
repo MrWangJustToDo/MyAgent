@@ -370,7 +370,7 @@ assert.equal(noBudget.maxIterations, 0, "an unknown budget stays 0 so the readou
       iterations: 7,
       maxIterations: 50,
       durationMs: 12,
-      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3, billedInputTokens: 3 },
       reachedLimit: false,
       incomplete: false,
       aborted: false,

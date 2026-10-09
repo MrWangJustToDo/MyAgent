@@ -96,6 +96,7 @@
     "validate:capability-message-utils": "pnpm run build && node scripts/validate-capability-message-utils.mjs",
     "validate:run-coordinator": "pnpm run build && node scripts/validate-run-coordinator.mjs",
     "validate:subagent-run-stats": "pnpm run build && node scripts/validate-subagent-run-stats.mjs",
+    "validate:subagent-usage-pricing": "pnpm run build && node scripts/validate-subagent-usage-pricing.mjs",
     "validate:subagent-cancel-notice": "pnpm run build && node scripts/validate-subagent-cancel-notice.mjs",
     "validate:subagent-progress-summary": "pnpm run build && node scripts/validate-subagent-progress-summary.mjs",
     "validate:compaction-messages": "pnpm run build && node scripts/validate-compaction-messages.mjs",

@@ -73,6 +73,11 @@ export const taskOutputSchema = z.object({
       inputTokens: z.number(),
       outputTokens: z.number(),
       totalTokens: z.number(),
+      /**
+       * Billed prompt tokens (cache-aware). Hosts must render this, not `inputTokens`:
+       * under an exclusive upstream `inputTokens` is only the cache-miss part.
+       */
+      billedInputTokens: z.number(),
     })
     .describe("Token usage for this subtask"),
   /** Execution duration in milliseconds */

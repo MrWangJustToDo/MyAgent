@@ -116,6 +116,14 @@ export interface SubagentResult {
     inputTokens: number;
     outputTokens: number;
     totalTokens: number;
+    /**
+     * Billed prompt tokens (cache-aware). `inputTokens` is NOT the prompt under an
+     * exclusive upstream (Anthropic/DeepSeek native), where it holds only the cache-miss
+     * part — a fully cached subagent run reads as ~0. Surfacing it here keeps host
+     * rendering on the tracker's single convention-aware reading
+     * (`UsageTracker.getBilledInputTokens()`); see AGENTS.md "Context-window fill".
+     */
+    billedInputTokens: number;
   };
   /** Whether iteration limit was reached */
   reachedLimit: boolean;

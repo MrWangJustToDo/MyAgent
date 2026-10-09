@@ -224,7 +224,16 @@ export class AgentManager {
     if (!parent) {
       throw new Error(`Parent agent not found: ${parentId}`);
     }
-    const finalConfig = { ...parent.config, ...config };
+    // Inherit the parent's *live* model metadata, not just its stored config:
+    // `parent.config` is frozen at construction, while a late models.dev lookup or a
+    // `/model` switch updates only `parent.modelInfo` (and its usage pricing). Without
+    // this the subagent's own tracker has no pricing and books every call at $0.
+    const inheritedModelInfo = config.modelInfo ?? parent.getModelInfo();
+    const finalConfig = {
+      ...parent.config,
+      ...config,
+      ...(inheritedModelInfo ? { modelInfo: inheritedModelInfo } : {}),
+    };
     const subagent = await this.createManagedAgent(finalConfig, parentId);
 
     const customTools = (config as { subagentTools?: ToolsRecord | null }).subagentTools;

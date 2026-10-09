@@ -901,7 +901,7 @@ const restoredTask = {
         iterations: FROZEN_USED,
         maxIterations: FROZEN_BUDGET,
         durationMs: 4200,
-        usage: { inputTokens: 1200, outputTokens: 300, totalTokens: 1500 },
+        usage: { inputTokens: 1200, outputTokens: 300, totalTokens: 1500, billedInputTokens: 1500 },
         reachedLimit: false,
         incomplete: false,
         aborted: false,

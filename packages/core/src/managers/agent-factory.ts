@@ -67,7 +67,11 @@ export async function buildManagedAgent({
   const todoManager = parentId ? null : new TodoManager();
 
   const managed = new ManagedAgent(
-    { ...restConfig, name },
+    // `modelInfo` is destructured out above, so it must be put back explicitly: the
+    // resolved metadata is not reconstruction-able from `restConfig`, and a subagent
+    // inherits its parent's stored config rather than re-resolving the model. Dropping
+    // it left every subagent's usage tracker without pricing (`$0` at record time).
+    { ...restConfig, ...(explicitModelInfo ? { modelInfo: explicitModelInfo } : {}), name },
     {
       id: customId,
       log,
