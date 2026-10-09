@@ -6,9 +6,15 @@ Three things write entries:
 
 | Path | Mechanism | Count |
 |---|---|---|
-| Direct `log.*` in core | `log.debug/info/warn/error/eventEntry` | **69** call sites across 20 files |
+| Direct `log.*` in core | `log.debug/info/warn/error/eventEntry` | **76** call sites across 22 files |
 | Extension `ctx.logger` | `runner.ts:646-650` funnels into the same `AgentLog` | 7 extensions + memory/skill internals |
 | Bus events | `bridgeTelemetryToAgentLog` — `bus.on("*")`, `event-log-bridge.ts:213` | the only wildcard consumer in core |
+
+Both counts are regex measurements over `packages/core/src` (excluding the seam's own module,
+`agent/agent-log/agent-log.ts`), not estimates: `\.(debug|info|warn|error|eventEntry)\(` with the
+receiver read back from the prefix. The direct count includes optional-chain receivers
+(`managed.log?.warn(`), which is why a plain `log\.` grep under-reports it. Re-measure before
+trusting either number — the previous figures drifted for exactly that reason.
 
 Policy lives in `event-log-rules.ts`: `TELEMETRY_EVENT_LOG_RULES` is typed `Record<keyof AgentEventPayloadMap, EventLogRule | false>`, so **every payload-mapped event must be classified at compile time** (`false` = deliberately not logged). Most events route through a rule; six need multi-entry custom handlers (session:mcp, memory:*, compaction:auto-*).
 
@@ -21,7 +27,7 @@ Also relevant, and constraining: `installAgentLogProcessGuards` (`lifecycle-guar
 **Goals:**
 
 - One owner for log *policy* (rules, formatting, summarizing, sink, rotation, path resolution) — the built-in log extension.
-- One non-removable *emission seam* that keeps the ~69 core call sites and `ctx.logger` working, including before extensions load and when extensions fail.
+- One non-removable *emission seam* that keeps the ~76 core call sites and `ctx.logger` working, including before extensions load and when extensions fail.
 - Teardown that cannot lose buffered entries, with a synchronous path for hard process exit.
 - The on-disk product contract (JSONL schema and the event→entry mapping) unchanged.
 - Fix the two defects that a naive move would either preserve or make worse (pre-attach loss, unawaited teardown).
@@ -29,7 +35,7 @@ Also relevant, and constraining: `installAgentLogProcessGuards` (`lifecycle-guar
 **Non-Goals:**
 
 - Changing the JSONL schema, entry fields, categories, rotation limits, or the per-event mapping.
-- Making the 69 call sites observable/interceptable by third parties, or making the log extension disableable (a disabled log extension would just re-create the always-on path).
+- Making the 76 call sites observable/interceptable by third parties, or making the log extension disableable (a disabled log extension would just re-create the always-on path).
 - Extension packaging/trust (P5) or ordering (P3) — the log extension is in-tree and has no ordering requirement.
 - Exposing log entries to the session/UI as a channel — `agent-log-timeline` forbids that and nothing here changes it.
 - Redaction. There is no secret redaction in `AgentLog` today (only large-payload summarizing); adding it is a separate concern and out of scope, but the extension boundary is the natural place for it later.
@@ -38,7 +44,7 @@ Also relevant, and constraining: `installAgentLogProcessGuards` (`lifecycle-guar
 
 ### D1 — `AgentLog` stays, as a thin *seam* rather than an owner
 
-The 69 call sites are not refactorable into events, for three independent reasons:
+The 76 call sites are not refactorable into events, for three independent reasons:
 
 1. **Availability.** `agent-factory.ts:64-368` logs before `ExtensionRunner` exists (it is what *creates* the runner, at `:195`). An event emitted there with no subscriber is a silently dropped diagnostic.
 2. **Bootstrapping.** `runner.ts:389` logs "Failed to activate extension …" — if logging required an active extension, a runner that cannot activate anything would also be unable to say so.
@@ -52,11 +58,11 @@ So `AgentLog` becomes an emitter: it keeps level/minLevel filtering, `setRun`, e
 
 **Rejected (and this reverses the original design):** emitting a `log:entry` event and having the log extension subscribe to it. It cannot be delivered. The only two subscription surfaces are wildcard delivery and the observation surface, and D3 withholds internal events from *both* — so `log:entry` would have to be observable, which makes the recursion real rather than hypothetical: the log extension both produces and consumes the stream, so an observable entry event is a note written, observed, written again (line 59's worry, arrived at the other way round). Publishing a log entry to a surface extensions can see is also a payload/API commitment (a per-entry broadcast) that `agent-log-timeline` deliberately declines to make.
 
-The seam therefore calls the sink the extension built: `AgentLog.attachSink({ handleEntry, flush, flushSync, dir? })`. Recursion is impossible **by construction** — the sink never emits, so there is no mechanism, not a rule to remember. The cost is that the seam is a privileged core→own-component pipe with no third-party-visible notification, which is the price of guarantee-by-construction; the log extension is in-tree by design (non-goal: third-party observability of the 69 call sites).
+The seam therefore calls the sink the extension built: `AgentLog.attachSink({ handleEntry, flush, flushSync, dir? })`. Recursion is impossible **by construction** — the sink never emits, so there is no mechanism, not a rule to remember. The cost is that the seam is a privileged core→own-component pipe with no third-party-visible notification, which is the price of guarantee-by-construction; the log extension is in-tree by design (non-goal: third-party observability of the 76 call sites).
 
 This also resolves the "emit into the bus or call a sink directly" open question, and it is why the seam keeps a thin `attachFileSink` convenience: the log validators and `log-capture.mjs` drive the seam directly, so the one-call way to persist a log must survive independently of the extension wiring.
 
-### D3 — The log extension reuses the bridge's wildcard subscription; the rule survives with a new subject
+### D2b — The log extension reuses the bridge's wildcard subscription; the rule survives with a new subject
 
 `agent-event-bus` currently reads: "The Event→Log bridge SHALL be the only core wildcard consumer." After this change, the log subscription is still the only wildcard consumer, but it now lives in an extension. Two consequences:
 

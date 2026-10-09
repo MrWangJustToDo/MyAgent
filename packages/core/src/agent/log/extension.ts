@@ -15,7 +15,7 @@
  *
  * Two entry paths, and they are deliberately different mechanisms:
  *
- * 1. **The seam** — `AgentLog.debug/info/warn/error/eventEntry` (the ~69 call sites plus the
+ * 1. **The seam** — `AgentLog.debug/info/warn/error/eventEntry` (the ~76 call sites plus the
  *    `ctx.logger` facade). These pass assembled entries straight through; their routing is decided
  *    at the call site, not by a rule.
  * 2. **The bus** — every observable event, turned into entries by the rule table. This is the

@@ -2,7 +2,7 @@
 
 ### Requirement: Log policy is owned by a built-in extension
 
-The system SHALL provide a built-in log extension (`createLogExtension`) that owns log **policy**: the event→entry rule table, per-event message formatting, payload summarizing, the JSONL file sink, size-based rotation, session-boundary markers, and JSONL validation of accepted entries. Core MUST NOT retain a second owner of that policy. Log policy MUST be reachable through the extension registration surface used by every other built-in extension.
+The system SHALL provide a built-in log extension (`createLogExtension`) that owns log **policy**: the event→entry rule table, per-event message formatting, payload summarizing, the JSONL file sink, size-based rotation, session-boundary markers, and JSONL validation of accepted entries. Core MUST NOT retain a second owner of that policy. Log policy MUST be reachable through one canonical `createLogExtension` factory, which core constructs and owns exactly as it owns the other built-in extensions.
 
 The on-disk product contract SHALL NOT change as part of this move: entry field names, `level` / `category` vocabularies, the `.agents/logs/<sessionId>/agent.log` path shape, `agent.log.{n}` rotation files, the 5 MiB / 5 file / 250 ms defaults, and the session-boundary divider line MUST be identical before and after.
 
@@ -17,6 +17,10 @@ The on-disk product contract SHALL NOT change as part of this move: entry field 
 #### Scenario: Entry accepted by the persisted schema
 - **WHEN** the log extension admits an entry for writing
 - **THEN** the entry MUST validate against the persisted log-entry schema, and an entry that fails validation MUST be rejected rather than written
+
+#### Scenario: The log extension is not a registered extension
+- **WHEN** a consumer inspects the registered extensions, or disables every one of them
+- **THEN** the log extension is not among them and log policy is unaffected — it needs no tools, commands or interceptors, so core constructs it directly instead of loading it through the extension runner, and it MUST NOT be disableable (a disabled log extension would just re-create the always-on path the seam exists to avoid)
 
 ### Requirement: Log entries are emitted through a non-removable seam
 
