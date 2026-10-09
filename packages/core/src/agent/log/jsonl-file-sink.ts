@@ -150,7 +150,19 @@ export function createJsonlFileSink(options: AgentLogFileSinkOptions): LogFileSi
       );
       return;
     }
-    buffer.push(JSON.stringify(entry));
+    // Serialize inside the guard, not after it: `JSON.stringify` throws on a `BigInt`, a circular
+    // reference, or a `toJSON` that throws, and this function is called *synchronously* from
+    // `AgentLog.log()` on the agent's own path. An unguarded throw would turn a diagnostic into a
+    // run failure — the one thing log persistence must never do. Reported, never thrown.
+    try {
+      buffer.push(JSON.stringify(entry));
+    } catch (error) {
+      console.error(
+        `[agent] log entry is not serializable (${entry.level}/${entry.category}):`,
+        error instanceof Error ? error.message : String(error)
+      );
+      return;
+    }
     schedule();
   };
 

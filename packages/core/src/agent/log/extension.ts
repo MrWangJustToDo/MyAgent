@@ -37,7 +37,7 @@ import { createAgentEventBus } from "../agent-event-bus";
 import { registerExtensionExitFlush } from "../agent-log/lifecycle-guards.js";
 
 import { bridgeTelemetryToAgentLog } from "./event-log-bridge.js";
-import { createJsonlFileSink, type LogFileSink } from "./jsonl-file-sink.js";
+import { createJsonlFileSink } from "./jsonl-file-sink.js";
 
 // Registered with the process-exit guards so a hard exit lands pending batches; see the module note.
 
@@ -61,12 +61,23 @@ export interface LogExtension {
   /** The bus this instance consumes. */
   readonly bus: AgentEventBus;
   /**
-   * Attach this extension's sink to a log (root or subagent). Returns the detach function.
+   * Attach this extension's sink to a log (root or subagent). Returns the detach function, which
+   * releases the registry entry, the sink, and the log's seam binding — all three, because a
+   * half-release (registry dropped, seam still bound) silently swallows entries.
    *
    * Bind every log the agent writes through — including subagent logs — because a subagent has no
-   * extension runner of its own and would otherwise lose its file.
+   * extension runner of its own and would otherwise lose its file. The caller owns the returned
+   * handle: `destroyAgent` releases the log it bound, so a subagent sink does not outlive its agent.
    */
   attachSink(log: AgentLog, options: AgentLogFileSinkOptions): () => void;
+  /**
+   * How many logs currently hold a sink from this extension.
+   *
+   * Exposed for the lifecycle assertions: a released agent must shrink this by exactly one, which
+   * is the only externally visible evidence that a sink was released rather than merely detached
+   * from the seam.
+   */
+  attachedSinkCount(): number;
   /** Start consuming bus events. Idempotent; a no-op when the policy disables logging. */
   start(): void;
   /** Stop consuming, release the exit-path registration, and detach every sink attached. */
@@ -83,7 +94,11 @@ export interface LogExtension {
  */
 export function createLogExtension(options: LogExtensionOptions): LogExtension {
   const bus = options.bus ?? createAgentEventBus("root");
-  const sinks = new Map<AgentLog, LogFileSink>();
+  // The detach closure is the key, not a sink object: `attachSink` already returns exactly the
+  // handle that releases a binding (registry entry + sink + seam), so storing a second, weaker
+  // handle here is what would let the two diverge — `dispose()` detached the sink and forgot the
+  // seam, and the log then wrote into a dead buffer while its entries were retained by nobody.
+  const sinks = new Map<AgentLog, () => void>();
   let unsubscribe: (() => void) | null = null;
   // Process-exit path: the sink owns a flush timer, so a hard exit must land the pending batch
   // itself. Registered on the same guards that flush the active logs, and released with the
@@ -92,24 +107,27 @@ export function createLogExtension(options: LogExtensionOptions): LogExtension {
   let started = false;
 
   const flushSinksSync = (): void => {
-    for (const sink of sinks.values()) sink.flushSync();
+    for (const log of sinks.keys()) log.flushSync();
   };
 
   return {
     bus,
 
     attachSink(log, sinkOptions) {
-      // Re-pointing an already-attached log must land the old sink's batch first.
-      sinks.get(log)?.detach();
+      // Re-pointing an already-attached log must release the previous binding first (its batch is
+      // landed by `detach()`), including the seam side — otherwise the seam keeps feeding a sink
+      // that is no longer in this registry.
+      sinks.get(log)?.();
       const sink = createJsonlFileSink(sinkOptions);
-      sinks.set(log, sink);
-      log.attachSink(sink);
-      return () => {
-        if (sinks.get(log) !== sink) return; // superseded — nothing of ours to detach
+      const detach = (): void => {
+        if (sinks.get(log) !== detach) return; // superseded — nothing of ours to release
         sinks.delete(log);
         sink.detach();
         log.detachSink();
       };
+      sinks.set(log, detach);
+      log.attachSink(sink);
+      return detach;
     },
 
     start() {
@@ -119,13 +137,18 @@ export function createLogExtension(options: LogExtensionOptions): LogExtension {
       unregisterExitFlush = registerExtensionExitFlush(flushSinksSync);
     },
 
+    attachedSinkCount: () => sinks.size,
+
     dispose() {
       unsubscribe?.();
       unsubscribe = null;
       unregisterExitFlush?.();
       unregisterExitFlush = null;
       started = false;
-      for (const sink of [...sinks.values()]) sink.detach();
+      // Release through the same handle `attachSink` returned: it detaches the sink *and* the
+      // seam, so a disposed extension cannot leave a log bound to a dead sink (which would swallow
+      // entries without retaining or writing them).
+      for (const detach of [...sinks.values()]) detach();
       sinks.clear();
     },
   };
