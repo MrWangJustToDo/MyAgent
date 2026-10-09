@@ -11,10 +11,23 @@ Three things write entries:
 | Bus events | `bridgeTelemetryToAgentLog` — `bus.on("*")`, `event-log-bridge.ts:213` | the only wildcard consumer in core |
 
 Both counts are regex measurements over `packages/core/src` (excluding the seam's own module,
-`agent/agent-log/agent-log.ts`), not estimates: `\.(debug|info|warn|error|eventEntry)\(` with the
-receiver read back from the prefix. The direct count includes optional-chain receivers
-(`managed.log?.warn(`), which is why a plain `log\.` grep under-reports it. Re-measure before
-trusting either number — the previous figures drifted for exactly that reason.
+`agent/agent-log/agent-log.ts`), not estimates. The pipeline is a subtraction, so it can be re-run:
+
+```bash
+grep -rEoh '\.(debug|info|warn|error|eventEntry)\(' packages/core/src --include='*.ts'  # 96
+# minus `console.*` (7) and minus the literal `ctx.logger.*` receiver (13) → 76, across 22 files
+```
+
+The subtraction is what makes the number checkable: a plain `log\.` grep sees only 38, because the
+receiver is spelled many ways (`this.log`, `managed.log?`, `log?`, `deps.getLog()?`, `logger?`, …).
+Re-measure before trusting either number — the previous figures drifted for lack of a recipe.
+
+⚠️ The three rows are not a partition, so do not read "76 direct" as "76 calls that bypass the
+facade". Fifteen of them are the `ctx.logger` facade reached through a differently-named parameter
+(`binding-names.ts` takes an `ExtensionContext["logger"]` under the name `log`; `run-agent.ts`
+passes `deps.getLog()?`, `session-lifecycle-commands.ts` passes `managed.getLog()?`), which a static
+receiver match cannot tell from a genuine seam call. The count is exact; the *routing* of a given
+call is not statically decidable.
 
 Policy lives in `event-log-rules.ts`: `TELEMETRY_EVENT_LOG_RULES` is typed `Record<keyof AgentEventPayloadMap, EventLogRule | false>`, so **every payload-mapped event must be classified at compile time** (`false` = deliberately not logged). Most events route through a rule; six need multi-entry custom handlers (session:mcp, memory:*, compaction:auto-*).
 

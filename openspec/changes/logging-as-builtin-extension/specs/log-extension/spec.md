@@ -2,7 +2,7 @@
 
 ### Requirement: Log policy is owned by a built-in extension
 
-The system SHALL provide a built-in log extension (`createLogExtension`) that owns log **policy**: the event→entry rule table, per-event message formatting, payload summarizing, the JSONL file sink, size-based rotation, session-boundary markers, and JSONL validation of accepted entries. Core MUST NOT retain a second owner of that policy. Log policy MUST be reachable through one canonical `createLogExtension` factory, which core constructs and owns exactly as it owns the other built-in extensions.
+The system SHALL provide a built-in log extension (`createLogExtension`) that owns log **policy**: the event→entry rule table, per-event message formatting, payload summarizing, the JSONL file sink, size-based rotation, session-boundary markers, and JSONL validation of accepted entries. Core MUST NOT retain a second owner of that policy. Log policy MUST be reachable through one canonical `createLogExtension` factory, constructed once by core directly and unconditionally — without the extension runner.
 
 The on-disk product contract SHALL NOT change as part of this move: entry field names, `level` / `category` vocabularies, the `.agents/logs/<sessionId>/agent.log` path shape, `agent.log.{n}` rotation files, the 5 MiB / 5 file / 250 ms defaults, and the session-boundary divider line MUST be identical before and after.
 
