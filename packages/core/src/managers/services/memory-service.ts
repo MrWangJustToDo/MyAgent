@@ -29,6 +29,13 @@ export interface MemoryExtractionInput {
   getMessagesForLLM: () => ModelMessage[];
   log: AgentLog | null;
   /**
+   * Owning agent's usage tracker. Extraction and consolidation are real LLM calls, so
+   * their tokens belong in the session's lifetime totals — they reached only the global
+   * usage store before this. Optional so a host can opt out, but any host with a tracker
+   * should pass it.
+   */
+  usage?: UsageTracker;
+  /**
    * Text adapter for the extraction and consolidation queries. Resolved by the
    * host so extraction runs through the same provider/model as the turn.
    */
@@ -156,7 +163,7 @@ export class MemoryService {
 
     const messages = llmMessages.slice(-80);
     const memoryManager = this.manager;
-    const { emitEvent, log, resolveTextAdapter, abortSignal } = input;
+    const { emitEvent, log, resolveTextAdapter, abortSignal, usage } = input;
 
     this.extractionInProgress = true;
     emitEvent?.("memory:extract", { status: "start" });
@@ -170,7 +177,7 @@ export class MemoryService {
           return;
         }
 
-        const count = await extractMemories(messages, memoryManager, textAdapter, log ?? undefined, abortSignal);
+        const count = await extractMemories(messages, memoryManager, textAdapter, log ?? undefined, abortSignal, usage);
         if (count > 0) {
           await memoryManager.flushIndex();
           emitEvent?.("memory:extract", { status: "complete", count });
@@ -181,7 +188,7 @@ export class MemoryService {
         const memoryCount = await memoryManager.getMemoryCount();
         if (memoryCount >= memoryManager.getConsolidateThreshold()) {
           emitEvent?.("memory:consolidate", { status: "start", count: memoryCount });
-          const result = await consolidateMemories(memoryManager, textAdapter, log ?? undefined);
+          const result = await consolidateMemories(memoryManager, textAdapter, log ?? undefined, usage);
           if (result.changed) {
             await memoryManager.flushIndex();
             emitEvent?.("memory:consolidate", {

@@ -116,6 +116,9 @@ export function finalizeManagedAgentRun(host: RunLifecycleHost, reason: RunFinal
     host.memory.runExtraction({
       getMessagesForLLM: () => host.getMessagesForLLM(),
       log: host.log,
+      // Extraction and consolidation are real LLM spend; the tracker is what makes it
+      // show up in the session's lifetime totals.
+      usage: host.usage,
       resolveTextAdapter: host.resolveTextAdapter,
       emitEvent: (type, data) => host.emitEvent(type, data),
       // Best-effort pass-through of the run's controller. Note the limit: this

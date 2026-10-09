@@ -11,10 +11,10 @@
  *
  * @example
  * ```typescript
- * const count = await extractMemories(messages, memoryManager, textAdapter, log);
+ * const count = await extractMemories(messages, memoryManager, textAdapter, log, undefined, usage);
  * // Returns number of newly extracted memories
  *
- * await consolidateMemories(memoryManager, textAdapter, log);
+ * await consolidateMemories(memoryManager, textAdapter, log, usage);
  * // Merges/deduplicates when threshold exceeded
  * ```
  */
@@ -29,6 +29,7 @@ import { DEFAULT_HARD_MAX_MEMORIES, memoryTypeSchema } from "./types.js";
 import type { MemoryManager } from "./memory-manager.js";
 import type { Memory } from "./types.js";
 import type { TextAdapterConfig } from "../../models/adapter/adapter-factory.js";
+import type { UsageTracker } from "../../runtime-types/hosts.js";
 import type { AgentLog } from "../agent-log/agent-log.js";
 import type { ModelMessage } from "@tanstack/ai";
 
@@ -271,6 +272,10 @@ type ConsolidationDecisions = z.infer<typeof consolidationSchema>;
  * @param textAdapter - Text adapter for the extraction query
  * @param log - Optional agent log for failure visibility
  * @param abortSignal - Aborts the query when the triggering turn is cancelled
+ * @param usage - Owning agent's tracker, so the extraction query is accounted for. Its
+ *   tokens are real spend: without this the call reaches the global usage store but no
+ *   session's lifetime totals (`memory-retrieval.selectWithLLM` does the same for the
+ *   prefetch selection query).
  * @returns Number of newly extracted memories
  */
 export async function extractMemories(
@@ -278,7 +283,8 @@ export async function extractMemories(
   memoryManager: MemoryManager,
   textAdapter: TextAdapterConfig,
   log?: AgentLog,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  usage?: UsageTracker | null
 ): Promise<number> {
   // Take only recent messages
   const recentMessages = messages.slice(-EXTRACTION_WINDOW);
@@ -311,7 +317,7 @@ export async function extractMemories(
 
   let extracted: ExtractedMemory[];
   try {
-    const { data } = await runSideTextQuery(textAdapter, {
+    const { data, usage: queryUsage } = await runSideTextQuery(textAdapter, {
       systemPrompt: EXTRACTION_SYSTEM_PROMPT,
       userPrompt: prompt,
       maxOutputTokens: MEMORY_EXTRACT_MAX_TOKENS,
@@ -320,6 +326,11 @@ export async function extractMemories(
       schema: extractionSchema,
     });
     extracted = data.memories;
+    // Side queries record themselves in the global usage store, but that store is
+    // observability — not the owning agent's lifetime totals. Accounting for the call
+    // here is what keeps memory extraction from being the one LLM call in the run no
+    // `UsageTracker` ever sees. Same contract as `memory-retrieval.selectWithLLM`.
+    if (usage && queryUsage) usage.addTotal(queryUsage);
   } catch {
     // Transport and schema failures both land here. The port has already logged
     // the reason; an abort is expected, not a fault, so neither is re-reported.
@@ -370,7 +381,8 @@ export interface ConsolidationResult {
 export async function consolidateMemories(
   memoryManager: MemoryManager,
   textAdapter: TextAdapterConfig,
-  log?: AgentLog
+  log?: AgentLog,
+  usage?: UsageTracker | null
 ): Promise<ConsolidationResult> {
   const memories = await memoryManager.listMemories();
   if (memories.length < memoryManager.getConsolidateThreshold()) {
@@ -380,7 +392,7 @@ export async function consolidateMemories(
   // Phase 1: LLM consolidation via lightweight catalog (frontmatter only).
   // This avoids the token-truncation problem where sending full bodies would
   // exceed the context and cause the LLM to only see a subset of memories.
-  const llmChanged = await llmConsolidate(memories, memoryManager, textAdapter, log);
+  const llmChanged = await llmConsolidate(memories, memoryManager, textAdapter, log, usage);
 
   // Phase 2: Hard-cap eviction. If LLM consolidation didn't reduce enough,
   // evict oldest memories by updatedAt to stay under the hard limit.
@@ -402,7 +414,8 @@ async function llmConsolidate(
   memories: Memory[],
   memoryManager: MemoryManager,
   textAdapter: TextAdapterConfig,
-  log?: AgentLog
+  log?: AgentLog,
+  usage?: UsageTracker | null
 ): Promise<boolean> {
   // Build a lightweight catalog: filename + name + type + description (no body).
   // 59 memories × ~80 chars each ≈ 5KB — well within token limits.
@@ -417,7 +430,7 @@ async function llmConsolidate(
 
   let decisions: ConsolidationDecisions;
   try {
-    const { data } = await runSideTextQuery(textAdapter, {
+    const { data, usage: queryUsage } = await runSideTextQuery(textAdapter, {
       systemPrompt: CONSOLIDATION_SYSTEM_PROMPT,
       userPrompt: prompt,
       maxOutputTokens: MEMORY_CONSOLIDATE_MAX_TOKENS,
@@ -425,6 +438,8 @@ async function llmConsolidate(
       schema: consolidationSchema,
     });
     decisions = data as ConsolidationDecisions;
+    // Accounted for the same reason as the extraction query — see `extractMemories`.
+    if (usage && queryUsage) usage.addTotal(queryUsage);
   } catch {
     // The port logged the reason. Reporting "no change" keeps the existing
     // memories exactly as they are rather than half-applying a failed response.
