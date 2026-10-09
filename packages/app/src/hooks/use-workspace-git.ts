@@ -9,6 +9,16 @@ import type { WorkspaceGitInfo } from "../utils/workspace-git-info.js";
 
 const GIT_REFRESH_INTERVAL_MS = 10_000;
 
+/** Two status maps describe the same worktree when their entries all agree. */
+function sameStatus(a: Map<string, string>, b: Map<string, string>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const [path, status] of a) {
+    if (b.get(path) !== status) return false;
+  }
+  return true;
+}
+
 /**
  * Git status / branch info / diff stats for a workspace root.
  *
@@ -23,11 +33,24 @@ const GIT_REFRESH_INTERVAL_MS = 10_000;
  * call is an HTTP round trip, the window is wide). A remount never loses this
  * race because the stale closure's setState lands on an unmounted component;
  * the generation guard gives the mounted hook the same property.
+ *
+ * A refresh that finds the worktree unchanged deliberately keeps the PREVIOUS
+ * `gitStatus` reference instead of writing the freshly fetched one. The two maps
+ * are equal, so nothing on screen should change — but a NEW map identity is not
+ * nothing: the diff tree derives its rows from it, and every derived row list is
+ * a new array that re-runs the consumers effectful on row identity (the reveal
+ * effect snaps the tree cursor back to the selected file). A 10s tick was
+ * therefore enough to yank the cursor out from under the user with no edit and
+ * no key pressed. `statusVersion` separates the two questions the consumers
+ * actually ask: "did the git state change" (the state) from "did we read it
+ * again" (the version).
  */
 export const useWorkspaceGit = (rootPath: string) => {
   const [gitStatus, setGitStatus] = useState<Map<string, string>>(new Map());
   const [gitInfo, setGitInfo] = useState<WorkspaceGitInfo | null>(null);
   const [diffStats, setDiffStats] = useState<WorkspaceDiffStats | null>(null);
+  /** Incremented on every completed refresh, even one that found nothing changed. */
+  const [statusVersion, setStatusVersion] = useState(0);
   const generationRef = useRef(0);
 
   const refresh = useCallback(async (path: string) => {
@@ -43,14 +66,17 @@ export const useWorkspaceGit = (rootPath: string) => {
       // are the ones the user asked for. Discard ours entirely (state AND the
       // module cache the newer call already cleared and repopulated).
       if (generation !== generationRef.current) return;
-      setGitStatus(status);
+      // Keep the previous reference when the worktree is unchanged — see the hook doc.
+      setGitStatus((prev) => (sameStatus(prev, status) ? prev : status));
       setGitInfo(info);
       setDiffStats(stats);
+      setStatusVersion((version) => version + 1);
     } catch {
       if (generation !== generationRef.current) return;
       setGitStatus(new Map());
       setGitInfo(null);
       setDiffStats(null);
+      setStatusVersion((version) => version + 1);
     }
   }, []);
 
@@ -67,5 +93,5 @@ export const useWorkspaceGit = (rootPath: string) => {
     return () => clearInterval(interval);
   }, [rootPath, refresh]);
 
-  return { gitStatus, gitInfo, diffStats, refreshGit: refresh };
+  return { gitStatus, gitInfo, diffStats, statusVersion, refreshGit: refresh };
 };

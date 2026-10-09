@@ -1,6 +1,6 @@
 import { toPosixPath } from "@codent/core";
 import { Box, Text } from "ink";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { BG, COLORS } from "../theme/colors.js";
 import { formatFolderGlyph, formatIconGlyph, getFileIconStyle, getFolderIconStyle } from "../utils/file-icons.js";
@@ -148,7 +148,11 @@ function ancestorDirs(rootPath: string, path: string): string[] {
   return dirs;
 }
 
-export function useFileTree(rootPath: string): {
+export function useFileTree(
+  rootPath: string,
+  /** Bumped by the git refresh on every read attempt, changed or not. See the effect below. */
+  statusVersion = 0
+): {
   items: FlatTreeItem[];
   loading: boolean;
   toggleDir: (path: string) => Promise<void>;
@@ -163,9 +167,11 @@ export function useFileTree(rootPath: string): {
   const [loading, setLoading] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
   const [pendingReveal, setPendingReveal] = useState<string | null>(null);
+  /** Last `statusVersion` this hook has already reconciled `dirData` against. */
+  const reconciledVersionRef = useRef(statusVersion);
 
-  const loadDir = useCallback(async (path: string): Promise<void> => {
-    if (dirCache.has(path)) {
+  const loadDir = useCallback(async (path: string, options?: { force?: boolean }): Promise<void> => {
+    if (!options?.force && dirCache.has(path)) {
       setDirData((prev) => new Map(prev).set(path, dirCache.get(path)!));
       return;
     }
@@ -179,6 +185,23 @@ export function useFileTree(rootPath: string): {
       setDirData((prev) => new Map(prev).set(path, []));
     }
   }, []);
+
+  /**
+   * Re-list every directory whose entries are already in hand (`dirCache`), keeping `expanded`.
+   *
+   * This is what makes a file the agent just created inside an already-listed directory a ROW.
+   * The tree's rows are not derived from git status: the status only decorates rows that exist, so
+   * `src/ [3M]` could raise its count while the new file had no row at all — and `[` / `]` would
+   * still *select* it, so the jump changed the preview while the cursor had nowhere to land and the
+   * scroll did not move. That read as the key being broken until `r`, which clears the whole cache.
+   *
+   * Driven by the git refresh's version rather than by a change in the status, deliberately: a new
+   * file in an ignored directory leaves the status untouched, and it should still appear.
+   */
+  const refreshLoadedDirs = useCallback(async (): Promise<void> => {
+    const loaded = [...dirCache.keys()];
+    await Promise.all(loaded.map((dir) => loadDir(dir, { force: true })));
+  }, [loadDir]);
 
   const toggleDir = useCallback(
     async (path: string): Promise<void> => {
@@ -260,6 +283,16 @@ export function useFileTree(rootPath: string): {
       cancelled = true;
     };
   }, [rootPath, reloadToken, loadDir]);
+
+  // Reconcile the listed rows with the worktree on each git refresh. `reconciledVersionRef` starts
+  // at the version the hook mounted with, so the mount itself is not double-read (the effect above
+  // loads the root) and only LATER refreshes trigger the re-list.
+  useEffect(() => {
+    if (!rootPath) return;
+    if (reconciledVersionRef.current === statusVersion) return;
+    reconciledVersionRef.current = statusVersion;
+    void refreshLoadedDirs();
+  }, [rootPath, statusVersion, refreshLoadedDirs]);
 
   const items = useMemo(() => {
     const result: FlatTreeItem[] = [];

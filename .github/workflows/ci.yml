@@ -91,6 +91,16 @@ jobs:
         # here: the suite includes it and reports it by name.
         run: pnpm run validate:all
 
+      - name: Workspace panel refresh check
+        # The suite above deliberately SKIPS this one: its subject is the panel's real 10s refresh
+        # timer, so it costs ~40s of genuine waiting and is the only check that renders the TUI.
+        # The gate is opt-in for exactly that reason, and this step is what closes the loop — a
+        # skipped check that nothing ever enables is a check that rots. Runs after the build above,
+        # which the suite and this both rely on.
+        env:
+          WATCH_WORKSPACE_REFRESH: "1"
+        run: pnpm --filter @codent/app run validate:workspace-refresh
+
       - name: Build the release configuration of @codent/app
         # `Build` above runs the DEFAULT app config, which keeps dependencies
         # external. The release config (`tsdown.config.release.ts`) is a second,

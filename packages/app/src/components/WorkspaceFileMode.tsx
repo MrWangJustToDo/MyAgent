@@ -55,8 +55,23 @@ export const WorkspaceFileMode = () => {
   const [refreshToken, setRefreshToken] = useState(0);
   /** Transient footer message (`[]` with nowhere to go), auto-cleared. */
   const [jumpNotice, setJumpNotice] = useState<string | null>(null);
+  /**
+   * The selected path the tree cursor has already been aligned to.
+   *
+   * The reveal effect must move the cursor when a selection ARRIVES (a `[` / `]` jump, a quick-open
+   * pick, a Right on a file), and must not move it just because `items` was rebuilt. Rows are rebuilt
+   * whenever the git status or the diff tree changes, and the reveal effect runs on every identity
+   * change — so without this gate a 10s refresh tick re-ran it with a `select` action and yanked the
+   * cursor back to the selected file, discarding wherever ↑/↓ had put it.
+   *
+   * "A selection arrived" is not the same condition as "a row is missing": the mount has no
+   * selection yet, and a selection is not raised for every rebuild. Tracking the path the cursor was
+   * last aligned to is what separates the two — a ref, because it is bookkeeping for an effect, not
+   * rendered state.
+   */
+  const alignedSelectionRef = useRef<string | null>(null);
 
-  const { gitStatus, gitInfo, diffStats, refreshGit } = useWorkspaceGit(rootPath);
+  const { gitStatus, gitInfo, diffStats, statusVersion, refreshGit } = useWorkspaceGit(rootPath);
 
   const screenWidth = useSize((s) => s.state.screenWidth);
   const screenHeight = useSize((s) => s.state.screenHeight) || 24;
@@ -76,7 +91,7 @@ export const WorkspaceFileMode = () => {
     revealPath,
     pendingReveal,
     consumePendingReveal,
-  } = useFileTree(rootPath);
+  } = useFileTree(rootPath, statusVersion);
   const {
     items: diffItems,
     toggleDir: toggleDiffDir,
@@ -201,6 +216,12 @@ export const WorkspaceFileMode = () => {
       return;
     }
 
+    // `select` fires on every `items` identity change, not only on a new selection. Align the cursor
+    // only the first time a given selection is seen; after that the cursor is the user's.
+    const alreadyAligned = alignedSelectionRef.current === selectedPath;
+    alignedSelectionRef.current = selectedPath;
+    if (alreadyAligned) return;
+
     setCursorIndex(action.index);
     const currentScroll = useWorkspaceView.getReadonlyState().treeScrollTop;
     setTreeScrollTop(ensureIndexVisible(action.index, currentScroll, paneBodyLines, items.length));
@@ -223,6 +244,10 @@ export const WorkspaceFileMode = () => {
     // `reload()` above does not touch it — without this the diff tree would keep
     // directories collapsed across a refresh while the full tree resets.
     resetDiffCollapsed();
+    // The cursor/scroll reset with the trees, so the reveal effect must be allowed to place the
+    // cursor on the selected file again — otherwise `r` would leave the cursor wherever the row
+    // indices happened to land after the re-list.
+    alignedSelectionRef.current = null;
     scrollActivePane("top");
     setRefreshToken((t) => t + 1);
     void refreshGit(rootPath);
