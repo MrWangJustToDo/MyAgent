@@ -9,6 +9,21 @@ import type { AgentLogFileSinkOptions, LogCategory, LogEntry, LogLevel } from ".
 
 export const generateLogId = createSequentialIdGenerator("log");
 
+/**
+ * Entries retained while no sink is bound.
+ *
+ * Bootstrap logs before the session sink exists (`agent-factory.ts` emits the
+ * extension load results and the bootstrap summary, then `AgentManager.createManagedAgent`
+ * attaches the sink). With no retention those entries — including every extension
+ * activation failure — were silently discarded. The buffer is drained into the first
+ * sink that attaches, and capped so a session that never binds a sink (or binds one
+ * only at the very end) cannot grow memory without bound.
+ *
+ * The cap only has to exceed a bootstrap's emission count (~15 today); it is not a
+ * history buffer, and nothing reads it back for queried entries.
+ */
+export const MAX_PENDING_LOG_ENTRIES = 200;
+
 // ============================================================================
 // AgentLog Class
 // ============================================================================
@@ -18,7 +33,9 @@ export const generateLogId = createSequentialIdGenerator("log");
  *
  * Every accepted entry is serialized and streamed straight to the attached
  * file sink (JSONL, one entry per line). There is no in-memory history: the
- * log file is the single source of log observability.
+ * log file is the single source of log observability. Entries emitted before a
+ * sink is bound are retained in a small bounded buffer and drained into the
+ * first sink that attaches.
  *
  * Features:
  * 1. **Structured entries** - LogEntry with level, category, data, error, run id
@@ -40,6 +57,13 @@ export class AgentLog {
 
   /** Active sink's synchronous flush, or null when no sink is attached. */
   private sinkFlushSync: (() => void) | null = null;
+
+  /**
+   * Entries emitted before a sink was bound, in emission order. Drained into the
+   * first sink that attaches, and bounded by {@link MAX_PENDING_LOG_ENTRIES}. Empty in
+   * steady state — every entry goes straight to the sink once one is bound.
+   */
+  private pendingEntries: LogEntry[] = [];
 
   private static readonly levelPriority: Record<LogLevel, number> = {
     debug: 0,
@@ -116,8 +140,15 @@ export class AgentLog {
       };
     }
 
-    // Persistence-only: hand the entry to the attached sink (if any) and drop it.
-    this.sinkEntry?.(entry);
+    // Persistence-only: hand the entry to the attached sink, or retain it (bounded)
+    // until one attaches. Bootstrap emits before the session sink exists, and those
+    // entries are the ones that explain how bootstrap went.
+    if (this.sinkEntry) {
+      this.sinkEntry(entry);
+    } else {
+      this.pendingEntries.push(entry);
+      if (this.pendingEntries.length > MAX_PENDING_LOG_ENTRIES) this.pendingEntries.shift();
+    }
 
     return entry;
   }
@@ -174,8 +205,7 @@ export class AgentLog {
   /**
    * Persist log entries to a JSONL file (one LogEntry per line) with size-based
    * rotation. Silent no-op when the env fs lacks `appendFile`. Entries logged
-   * before attach are not retained — attach at session creation, before the
-   * first log call. Returns an unsubscribe function.
+   * Returns an unsubscribe function.
    */
   attachFileSink(options: AgentLogFileSinkOptions): () => void {
     let fs: ReturnType<typeof getEnv>["fs"];
@@ -310,6 +340,15 @@ export class AgentLog {
         // Non-fatal: best-effort final flush on a crash path.
       }
     };
+
+    // Drain entries emitted before this sink existed (bootstrap) before anything
+    // emitted from here on — so binding a sink never loses the diagnostics that
+    // explain how the bind happened. Cleared on drain: a re-attach must not replay.
+    if (this.pendingEntries.length > 0) {
+      const retained = this.pendingEntries;
+      this.pendingEntries = [];
+      for (const entry of retained) handleEntry(entry);
+    }
 
     // Replace any previous sink (one active sink per log).
     this.sinkEntry = handleEntry;

@@ -1,7 +1,8 @@
 /**
- * Validates AgentLog.attachFileSink: JSONL writes, backfill of pre-attach
- * entries, size-based rotation, silent degradation when the env fs has no
- * appendFile, and detach semantics.
+ * Validates AgentLog.attachFileSink: JSONL writes, retention of pre-attach
+ * entries (bounded, drained on attach), the cap's overflow behavior,
+ * size-based rotation, silent degradation when the env fs has no appendFile,
+ * and detach semantics.
  *
  * Run: pnpm --filter @codent/core run validate:agent-log-file-sink
  */
@@ -11,7 +12,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { AgentLog, clearCoreEnv, registerCoreEnv } from "../dist/dev.mjs";
+import { AgentLog, MAX_PENDING_LOG_ENTRIES, clearCoreEnv, registerCoreEnv } from "../dist/dev.mjs";
 
 import { waitFor } from "./helpers/log-capture.mjs";
 
@@ -65,11 +66,14 @@ const logDir = path.join(rootPath, ".agents/logs/ses_test");
 const filePath = path.join(logDir, "agent.log");
 
 // ----------------------------------------------------------------------------
-// 1. Persistence-only: pre-attach entries are dropped; post-attach entries are
-//    persisted with data + error fields.
+// 1. Pre-attach entries are retained (bounded) and drained into the first sink,
+//    in emission order, exactly once. Post-attach entries persist with data +
+//    error fields.
+//    Regression guard: bootstrap emits before `bindSessionLogSink` attaches, so
+//    dropping pre-attach entries silently lost every extension-load failure.
 // ----------------------------------------------------------------------------
 const log = new AgentLog();
-log.info("system", "pre-attach-dropped");
+log.info("system", "pre-attach-kept");
 log.error("agent", "boom-3", new Error("test error"));
 
 const detach = log.attachFileSink({
@@ -93,21 +97,76 @@ const flushedLines = await waitFor(
       return [];
     }
   },
-  (l) => l.filter(Boolean).length >= 3
+  (l) => l.filter(Boolean).length >= 5
 );
 const lines = flushedLines.filter(Boolean);
-assert.equal(lines.length, 3, `pre-attach entries dropped, expected 3 lines, got ${lines.length}`);
+assert.equal(lines.length, 5, `pre-attach entries retained + drained, expected 5 lines, got ${lines.length}`);
 
-const first = JSON.parse(lines[0]);
-assert.equal(first.message, "hello-1", "post-attach entry persisted first");
-assert.equal(first.category, "system");
+// The drain precedes anything emitted after attach, so the retained bootstrap lines
+// are the first thing in the file — never interleaved or reordered behind live entries.
+assert.equal(JSON.parse(lines[0]).message, "pre-attach-kept", "retained entry drained first, in emission order");
+assert.equal(JSON.parse(lines[0]).category, "system");
+assert.equal(JSON.parse(lines[1]).message, "boom-3", "retained entries keep emission order");
+assert.equal(JSON.parse(lines[1]).error?.message, "test error", "retained entry keeps its error field");
+assert.equal(JSON.parse(lines[2]).message, "hello-1", "post-attach entry follows the drained ones");
 
-const boom = JSON.parse(lines.find((l) => l.includes("boom-3")));
+const boom = JSON.parse(lines.find((l) => l.includes("boom-3") && l.includes("error")) ?? lines[1]);
 assert.ok(boom.error?.message === "test error", "error field serialized as JSONL");
 
 const warn = JSON.parse(lines.find((l) => l.includes("warn-2")));
 assert.equal(warn.data.n, 2, "data object serialized");
-console.log("backfill + JSONL OK:", lines.length, "lines");
+console.log("pre-attach retention + JSONL OK:", lines.length, "lines");
+
+// ----------------------------------------------------------------------------
+// 1b. Retention is bounded and drains exactly once.
+//    - Overflow past the cap keeps the newest entries and stays finite.
+//    - Re-attaching must not replay already-drained entries.
+// ----------------------------------------------------------------------------
+{
+  const capRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), "agent-log-pending-cap-"));
+  const capDir = path.join(capRoot, ".agents/logs/ses_cap");
+  const capFile = path.join(capDir, "agent.log");
+
+  const capLog = new AgentLog();
+  const overflow = MAX_PENDING_LOG_ENTRIES + 25;
+  for (let i = 0; i < overflow; i++) capLog.info("system", `pending-${i}`);
+
+  const capDetach = capLog.attachFileSink({ dir: capDir, filename: "agent.log", flushIntervalMs: 10 });
+  const capLines = (
+    await waitFor(
+      async () => {
+        try {
+          return (await fs.promises.readFile(capFile, "utf-8")).trim().split("\n");
+        } catch {
+          return [];
+        }
+      },
+      (l) => l.filter(Boolean).length >= MAX_PENDING_LOG_ENTRIES
+    )
+  ).filter(Boolean);
+
+  assert.equal(
+    capLines.length,
+    MAX_PENDING_LOG_ENTRIES,
+    `cap must bound retention to ${MAX_PENDING_LOG_ENTRIES}, got ${capLines.length}`
+  );
+  const first = JSON.parse(capLines[0]).message;
+  const last = JSON.parse(capLines[capLines.length - 1]).message;
+  assert.equal(last, `pending-${overflow - 1}`, "newest entry is retained (oldest dropped at the cap)");
+  assert.equal(first, `pending-${overflow - MAX_PENDING_LOG_ENTRIES}`, "the oldest entries are the ones dropped");
+
+  // Drain is one-shot: a second sink must not replay the first sink's entries.
+  capDetach();
+  const secondDetach = capLog.attachFileSink({ dir: capDir, filename: "agent.log", flushIntervalMs: 10 });
+  capLog.info("system", "after-reattach");
+  await sleep(40);
+  const afterReattach = (await fs.promises.readFile(capFile, "utf-8")).split("\n").filter(Boolean);
+  const replayed = afterReattach.filter((l) => l.includes('pending-0"') || l.includes('pending-1"')).length;
+  assert.equal(replayed, 0, "drained entries are not replayed by a later attach");
+  assert.equal(afterReattach.filter((l) => l.includes("after-reattach")).length, 1, "post-reattach entry written once");
+  secondDetach();
+  console.log("pending-buffer cap + one-shot drain OK:", capLines.length, "retained of", overflow);
+}
 
 // ----------------------------------------------------------------------------
 // 2. Rotation: small batches push the file past maxBytes → segment files.
