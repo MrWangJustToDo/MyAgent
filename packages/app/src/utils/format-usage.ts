@@ -58,15 +58,15 @@ export function formatUsageBrief(usage: {
  * - Otherwise: `35%/1M`
  */
 export function formatContextUsage(options: {
-  windowInputTokens: number;
+  contextFillTokens: number;
   tokenLimit: number;
   percent: number;
 }): string {
-  const { windowInputTokens, tokenLimit, percent } = options;
+  const { contextFillTokens, tokenLimit, percent } = options;
   if (!Number.isFinite(tokenLimit) || tokenLimit <= 0) return "";
 
   const limitLabel = formatCompactNumber(tokenLimit);
-  if (!Number.isFinite(windowInputTokens) || windowInputTokens <= 0) {
+  if (!Number.isFinite(contextFillTokens) || contextFillTokens <= 0) {
     return `?/${limitLabel}`;
   }
 

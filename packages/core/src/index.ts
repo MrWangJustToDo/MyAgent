@@ -80,8 +80,8 @@ export type { LogEntry, LogCategory, LogLevel } from "./agent/agent-log";
 export { installAgentLogProcessGuards } from "./agent/agent-log";
 export type { TodoItem, TodoStatus, TodoPriority } from "./agent/todo";
 export type { SessionMeta, SessionData, ResumeResult, ToolApprovalRecord } from "./agent/persistence";
-export type { UsageRecord, UsageRecordInput } from "./agent/usage/usage-store";
-export type { DailyUsageBucket, ModelUsageTotal, UsageHistoryResult } from "./agent/usage/usage-store";
+export type { UsageRecord, UsageRecordInput } from "./agent/usage";
+export type { DailyUsageBucket, ModelUsageTotal, UsageHistoryResult } from "./agent/usage";
 
 // ============================================================================
 // Agent Session API (host-facing transport-agnostic surface)

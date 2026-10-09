@@ -42,9 +42,9 @@ assert.equal(
   "1.23k in / 44 out"
 );
 
-assert.equal(formatContextUsage({ windowInputTokens: 350_000, tokenLimit: 1_000_000, percent: 35 }), "35%/1.00M");
-assert.equal(formatContextUsage({ windowInputTokens: 0, tokenLimit: 1_000_000, percent: 0 }), "?/1.00M");
-assert.equal(formatContextUsage({ windowInputTokens: 100, tokenLimit: 0, percent: 0 }), "");
-assert.equal(formatContextUsage({ windowInputTokens: 90_000, tokenLimit: 128_000, percent: 70.3 }), "70%/128.00k");
+assert.equal(formatContextUsage({ contextFillTokens: 350_000, tokenLimit: 1_000_000, percent: 35 }), "35%/1.00M");
+assert.equal(formatContextUsage({ contextFillTokens: 0, tokenLimit: 1_000_000, percent: 0 }), "?/1.00M");
+assert.equal(formatContextUsage({ contextFillTokens: 100, tokenLimit: 0, percent: 0 }), "");
+assert.equal(formatContextUsage({ contextFillTokens: 90_000, tokenLimit: 128_000, percent: 70.3 }), "70%/128.00k");
 
 console.log("format-usage validation passed");

@@ -69,15 +69,19 @@ export { extractExistingSummary, findCutPointByBudget, type BudgetedCutPointResu
  * working budget is `tokenThreshold` (auto-filled by the agent factory as
  * `min(contextWindow, MAX_THRESHOLD)`), clamped to the real context window.
  * This keeps the trigger consistent with the UI percentage base.
+ *
+ * `contextFillTokens` is the tracker's window fill (`UsageTracker.getContextFillTokens()`),
+ * i.e. the cache-aware prompt — **not** `window.inputTokens`, which on an exclusive upstream
+ * holds only the cache-miss part and would keep the trigger from ever firing.
  */
 export function shouldTriggerAutoCompact(
   config: Partial<CompactionConfig>,
-  options: { windowInputTokens?: number; messages?: ModelMessage[]; contextWindow?: number } = {}
+  options: { contextFillTokens?: number; messages?: ModelMessage[]; contextWindow?: number } = {}
 ): boolean {
   const { triggerAt } = resolveAutoCompactTrigger(config, options.contextWindow);
-  const { windowInputTokens = 0, messages } = options;
+  const { contextFillTokens = 0, messages } = options;
 
-  if (windowInputTokens > 0) return windowInputTokens >= triggerAt;
+  if (contextFillTokens > 0) return contextFillTokens >= triggerAt;
   if (messages) return estimateTokens(messages) >= triggerAt;
   return false;
 }

@@ -27,7 +27,7 @@ export const LLMUsage = () => {
   if (!usage) return null;
 
   const contextLabel = formatContextUsage({
-    windowInputTokens: usage.contextFillTokens,
+    contextFillTokens: usage.contextFillTokens,
     tokenLimit: usage.tokenLimit,
     percent: usage.percent,
   });

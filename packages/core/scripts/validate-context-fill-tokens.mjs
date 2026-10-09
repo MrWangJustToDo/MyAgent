@@ -187,7 +187,9 @@ const mk = () => {
 // ---------------------------------------------------------------------------
 // `/usage` printed `Cache hit: 428.5%` on a real session: 125.4k cache read divided by
 // 29.3k cumulative inputTokens, i.e. the cache-miss part. The billed prompt is the
-// denominator, and it takes the LARGER of the two readings — never the sum.
+// denominator, and it is the per-sample sum — `promptTokensOf` on each reading, never the
+// larger of the two aggregate fields and never a sum of the aggregates (the section 5/6
+// note at the top of this file says why: the convention is decided per sample).
 {
   // Exclusive upstream, reproduced from the reported session.
   const exclusive = new UsageTracker();

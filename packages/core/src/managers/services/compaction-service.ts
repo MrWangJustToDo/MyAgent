@@ -32,7 +32,7 @@ export class CompactionService {
 
   /** Evaluate the auto-compact trigger against the agent's live usage/window. */
   shouldTriggerAutoCompact(options: {
-    windowInputTokens?: number;
+    contextFillTokens?: number;
     messages?: ModelMessage[];
     contextWindow?: number;
   }): boolean {
