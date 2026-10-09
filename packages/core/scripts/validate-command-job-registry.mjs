@@ -94,6 +94,18 @@ async function waitForLog(relPath, needle, timeoutMs = 3000) {
   }
 }
 
+/**
+ * Wait until a log no longer exists. Deletions are asynchronous — the registry's log
+ * `remove()` awaits an in-flight flush before unlinking — so a fixed settle sleep is a
+ * flake under load (too short) or dead time when idle. Polling is neither.
+ */
+async function waitForLogGone(relPath, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while ((await logExists(relPath)) && Date.now() < deadline) {
+    await sleep(25);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 1. Create a job
 // ---------------------------------------------------------------------------
@@ -252,14 +264,22 @@ console.log("teardown log deletion OK");
   for (let i = 0; i < 51; i++) {
     const j = registry.create(`evict-${i}`);
     registry.appendStdout(j.id, `out-${i}\n`);
-    if (i === 0) await waitForLog(j.logPath, "out-0"); // ensure the file exists before eviction
+    if (i === 0) {
+      // The file must exist before eviction, or the deletion assertion below passes
+      // vacuously ("deleted" is indistinguishable from "never created").
+      const seeded = await waitForLog(j.logPath, "out-0");
+      assert.ok(seeded.includes("out-0"), "eviction candidate log exists before eviction");
+    }
     registry.markExited(j.id, 0);
     registry.collectCompleted(); // notified finished jobs are the evictable ones
     created.push(j);
   }
-  await sleep(400); // let the eviction removal settle
+  await waitForLogGone(created[0].logPath);
   assert.equal(await logExists(created[0].logPath), false, "evicted job log deleted");
-  assert.equal(await logExists(created[50].logPath), true, "retained job log kept");
+  // Poll for the retained log's content too: asserting merely that the path exists could
+  // race the writer's flush on a slow runner.
+  const kept = await waitForLog(created[50].logPath, "out-50");
+  assert.ok(kept.includes("out-50"), "retained job log kept");
   console.log("eviction log deletion OK");
 }
 
