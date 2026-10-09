@@ -16,20 +16,23 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { observeMockProcesses } from "./process-count.mjs";
+import { createMockServerCounter } from "./process-count.mjs";
 
 const SLOW_SERVER = resolve(import.meta.dirname, "slow-mock-lsp-server.mjs");
+// Scope the process count to THIS run's children — see process-count.mjs. Named for the slow
+// basename, so a concurrent fast-server validator can never be counted here either.
+const serverCounter = createMockServerCounter("lsp-midstartup", "slow-mock-lsp-server.mjs");
 const results = [];
 function record(name, ok, detail = "") {
   results.push({ name, ok, detail });
   console.log(`${ok ? "✔" : "✘"} ${name}${detail ? ` — ${detail}` : ""}`);
 }
 
-// Reaping is only assertable where processes are observable. `observeMockProcesses` reports
-// the skip itself; a null count means assert nothing rather than compare against a fabricated
-// 0 (the value that means "none running").
+// Reaping is only assertable where processes are observable. The counter emits the skip itself;
+// a null count means assert nothing rather than compare against a fabricated 0 (the value that
+// means "none running").
 function countSlowProcesses() {
-  return observeMockProcesses("slow-mock-lsp-server\\.mjs");
+  return serverCounter.observe("slow mock-server reaping");
 }
 
 function waitForCount(target, attempts, delayMs) {
@@ -48,7 +51,9 @@ function waitForCount(target, attempts, delayMs) {
 const projectDir = mkdtempSync(resolve(tmpdir(), "lsp-midstart-"));
 writeFileSync(
   resolve(projectDir, ".lsp.json"),
-  JSON.stringify({ servers: { typescript: { command: process.execPath, args: [SLOW_SERVER] } } })
+  JSON.stringify({
+    servers: { typescript: { command: process.execPath, args: [SLOW_SERVER, ...serverCounter.getTagArgs()] } },
+  })
 );
 writeFileSync(resolve(projectDir, "a.ts"), "export const a = 1;\n");
 

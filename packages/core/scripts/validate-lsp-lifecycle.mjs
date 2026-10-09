@@ -9,7 +9,7 @@
  *   2. call lsp_diagnostics → lazy-start mock server (child process)
  *   3. session:start (new cwd) → old manager shutdownAll (old child gone)
  *   4. call lsp_diagnostics in new cwd → new server starts
- *   5. session:shutdown → all children gone (ps shows 0 mock-lsp-server)
+ *   5. session:shutdown → all children gone (this run's tagged mock servers, count 0)
  */
 
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -17,24 +17,28 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { observeMockProcesses } from "./process-count.mjs";
+import { createMockServerCounter } from "./process-count.mjs";
 
 const MOCK_SERVER = resolve(import.meta.dirname, "mock-lsp-server.mjs");
+// Scope the process count to THIS run's children. The fast mock server is spawned by several LSP
+// validators at once, so an unscoped `pgrep` baseline mixes concurrent runs together and goes
+// stale mid-run (observed as `-1 left (baseline 1)`). The counter tags the spawned child's argv.
+const serverCounter = createMockServerCounter("lsp-lifecycle");
 const results = [];
 function record(name, ok, detail = "") {
   results.push({ name, ok, detail });
   console.log(`${ok ? "✔" : "✘"} ${name}${detail ? ` — ${detail}` : ""}`);
 }
 
-// Reaping is only assertable where processes are observable. `observeMockProcesses` reports
-// the skip itself; a null count means assert nothing rather than compare against a fabricated
-// 0, which is the value that means "all children gone".
+// Reaping is only assertable where processes are observable. The counter emits the skip itself;
+// a null count means assert nothing rather than compare against a fabricated 0, which is the
+// value that means "all children gone".
 
 function waitForCount(target, attempts = 20, delayMs = 250) {
   return new Promise((resolveP) => {
     let n = 0;
     const tick = () => {
-      const c = observeMockProcesses();
+      const c = serverCounter.count();
       if (c === null || c === target || n++ >= attempts) return resolveP(c);
       setTimeout(tick, delayMs);
     };
@@ -48,7 +52,9 @@ const projectB = mkdtempSync(resolve(tmpdir(), "lsp-lifecycle-b-"));
 for (const p of [projectA, projectB]) {
   writeFileSync(
     resolve(p, ".lsp.json"),
-    JSON.stringify({ servers: { typescript: { command: process.execPath, args: [MOCK_SERVER] } } })
+    JSON.stringify({
+      servers: { typescript: { command: process.execPath, args: [MOCK_SERVER, ...serverCounter.getTagArgs()] } },
+    })
   );
   writeFileSync(resolve(p, "a.ts"), "export const a: number = 1;\n");
 }
@@ -73,10 +79,10 @@ const runner = new ExtensionRunner({
 await runner.loadExtension(await dev.createLspExtension());
 const diagTool = registeredTools.find((t) => t.name === "lsp_diagnostics");
 
-// Other LSP validators use the same mock server, and a crashed run can leave one
-// behind. Count deltas against this run's baseline instead of absolute counts so
-// an unrelated leftover process cannot fail these assertions.
-const baseline = observeMockProcesses();
+// The count is scoped to this run's tagged children (see process-count.mjs), so a peer
+// validator's mock server can never enter the baseline. The delta-against-baseline form is kept
+// as a second guard: a crashed earlier run can still leave *this* tag behind (tag = pid + random).
+const baseline = serverCounter.observe();
 // `null` = this platform cannot count processes. Assert nothing rather than comparing
 // against a fabricated 0, which is the value that means "all children gone".
 const canCount = baseline !== null;

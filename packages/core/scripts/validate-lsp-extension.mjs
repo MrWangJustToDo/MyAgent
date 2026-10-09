@@ -24,16 +24,19 @@ import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { observeMockProcesses } from "./process-count.mjs";
+import { createMockServerCounter } from "./process-count.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOCK_SERVER = resolve(__dirname, "mock-lsp-server.mjs");
+// Scope the process count to THIS run's children: the fast mock server is spawned by several LSP
+// validators at once, so an unscoped `pgrep` baseline mixes concurrent runs together.
+const serverCounter = createMockServerCounter("lsp-extension");
 
-// Reaping is only assertable where processes are observable. `observeMockProcesses` reports
-// the skip itself; a null count means assert nothing — 0 is the value that means "all gone",
-// which is how the reaping assertions below passed vacuously on a platform without `pgrep`.
+// Reaping is only assertable where processes are observable. The counter reports the skip
+// itself; a null count means assert nothing — 0 is the value that means "all gone", which is
+// how the reaping assertions below passed vacuously on a platform without `pgrep`.
 function countMockServers() {
-  return observeMockProcesses();
+  return serverCounter.observe();
 }
 
 function waitForMockServers(target, attempts = 40, delayMs = 200) {
@@ -75,7 +78,7 @@ writeFileSync(
   resolve(projectDir, ".lsp.json"),
   JSON.stringify({
     servers: {
-      typescript: { command: process.execPath, args: [MOCK_SERVER] },
+      typescript: { command: process.execPath, args: [MOCK_SERVER, ...serverCounter.getTagArgs()] },
     },
   })
 );
