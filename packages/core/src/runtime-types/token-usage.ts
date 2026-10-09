@@ -27,11 +27,25 @@ export interface TokenUsage {
  * Calculate the cost of a token usage entry given pricing info.
  * Accounts for cache read/write tokens billed at their own rates.
  * Returns cost in USD.
+ *
+ * The uncached share is resolved the same way {@link promptTokensOf} resolves the prompt:
+ * `cache > inputTokens` means the counters are *disjoint* from `inputTokens` (exclusive
+ * upstream), so nothing may be subtracted from it. The previous form subtracted
+ * unconditionally — `max(0, input - cache - cacheWrite)` — on the inclusive assumption, which
+ * clamps the fresh input to **0** on every exclusive sample (a real row:
+ * `input=307, cacheRead=337920`), billing those tokens at nothing while `promptTokensOf`, in
+ * this same module, counted them in the prompt. One reading of one `TokenUsage`, twice.
+ *
+ * The share billed at the cache rate is the counter itself, never `inputTokens`:
+ * an inclusive upstream reports the cached prefix *inside* `inputTokens` **and** in the
+ * counter, and the counter is the authoritative one (it is the value the endpoint bills at
+ * the cache rate, and it survives an upstream that under-reports it).
  */
 export function calculateCost(usage: TokenUsage, pricing: ModelPricing): number {
   const cacheRead = usage.cacheReadTokens ?? 0;
   const cacheWrite = usage.cacheWriteTokens ?? 0;
-  const normalInput = Math.max(0, usage.inputTokens - cacheRead - cacheWrite);
+  const disjointCache = cacheRead + cacheWrite > usage.inputTokens;
+  const normalInput = disjointCache ? usage.inputTokens : Math.max(0, usage.inputTokens - cacheRead - cacheWrite);
 
   const inputCost = normalInput * pricing.inputPerM;
   const cacheReadCost = cacheRead * (pricing.cacheReadPerM ?? pricing.inputPerM);
@@ -43,6 +57,14 @@ export function calculateCost(usage: TokenUsage, pricing: ModelPricing): number 
 
 /**
  * Billed prompt tokens: the one convention-aware reading of "how much prompt was sent".
+ *
+ * **This is the "billed prompt" the whole repo refers to.** The name differs by where it is
+ * carried, which is worth knowing before grepping for one of them: the *rule* is
+ * `promptTokensOf`, the accumulated field is `UsageTracker.billedInputTotal`, the read accessor
+ * is `getBilledInputTokens()`, and the snapshot / subagent-output field is
+ * `billedInputTokens` (`UsageChangeSnapshot`, `SubagentResult.usage`). One concept, one value —
+ * only the spelling moves with the layer, because each is already published to hosts or
+ * persisted in a session file and none of them may be renamed unilaterally.
  *
  * `inputTokens` alone is not it, because the field means two different things depending
  * on the upstream, and both conventions are in this repo's own logs:
