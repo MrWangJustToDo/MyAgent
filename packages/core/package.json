@@ -99,6 +99,7 @@
     "validate:subagent-usage-pricing": "pnpm run build && node scripts/validate-subagent-usage-pricing.mjs",
     "validate:memory-extraction-usage": "pnpm run build && node scripts/validate-memory-extraction-usage.mjs",
     "validate:lifetime-total-tokens": "pnpm run build && node scripts/validate-lifetime-total-tokens.mjs",
+    "validate:cost-convention": "pnpm run build && node scripts/validate-cost-convention.mjs",
     "validate:subagent-cancel-notice": "pnpm run build && node scripts/validate-subagent-cancel-notice.mjs",
     "validate:subagent-progress-summary": "pnpm run build && node scripts/validate-subagent-progress-summary.mjs",
     "validate:compaction-messages": "pnpm run build && node scripts/validate-compaction-messages.mjs",
