@@ -205,6 +205,7 @@
     "validate:wire-override-reaches-adapter": "pnpm run build && node scripts/validate-wire-override-reaches-adapter.mjs",
     "validate:message-ops-purity": "pnpm run build && node scripts/validate-message-ops-purity.mjs",
     "validate:extension-message-transform": "pnpm run build && node scripts/validate-extension-message-transform.mjs",
+    "validate:extension-event-observation": "pnpm run build && node scripts/validate-extension-event-observation.mjs",
     "validate:tool-presentation": "node scripts/validate-tool-presentation.mjs",
     "validate:tool-display": "pnpm run build && node scripts/validate-tool-display.mjs",
     "validate:mcp-tool-presentation": "pnpm run build && node scripts/validate-mcp-tool-presentation.mjs",
