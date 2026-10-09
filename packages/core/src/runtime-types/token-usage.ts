@@ -5,8 +5,18 @@
 import type { ModelPricing } from "../models/types.js";
 
 export interface TokenUsage {
+  /**
+   * Prompt tokens, in the upstream's own convention: the whole prompt when the cache
+   * counters are a subset of it (OpenAI, Gemini, gateways), or only the cache-*miss* part
+   * when they are disjoint (Anthropic native, DeepSeek native). Never read it as "the
+   * prompt" — use {@link promptTokensOf}, which resolves the convention per sample.
+   */
   inputTokens: number;
   outputTokens: number;
+  /**
+   * Lifetime total = billed prompt + output. **Not** `inputTokens + outputTokens`, which
+   * omits every cached token (see {@link totalTokensOf}).
+   */
   totalTokens: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
@@ -29,6 +39,48 @@ export function calculateCost(usage: TokenUsage, pricing: ModelPricing): number 
   const outputCost = usage.outputTokens * pricing.outputPerM;
 
   return (inputCost + cacheReadCost + cacheWriteCost + outputCost) / 1_000_000;
+}
+
+/**
+ * Billed prompt tokens: the one convention-aware reading of "how much prompt was sent".
+ *
+ * `inputTokens` alone is not it, because the field means two different things depending
+ * on the upstream, and both conventions are in this repo's own logs:
+ *
+ * - **inclusive** (OpenAI, Gemini, most gateways) — `cacheReadTokens` is a *subset* of
+ *   `inputTokens`, so the prompt is `inputTokens`.
+ * - **exclusive** (Anthropic native, DeepSeek native) — the cache counters are *disjoint*
+ *   from `inputTokens`, so the prompt is the sum.
+ *
+ * The cache counters cannot exceed a prompt that already contains them, so `cache >
+ * inputTokens` identifies the disjoint convention. The judgement is made **per sample**: a
+ * gateway can switch conventions between requests with no notice (observed mid-process
+ * between two adjacent calls), which is why this is applied to each call rather than to a
+ * config or a session.
+ *
+ * The heuristic can only ever *under*-count (an exclusive sample whose fresh tokens
+ * outweigh its cached ones reads as inclusive), never over-count — and over-counting is
+ * what would misfire compaction. Applying it to an *aggregate* is a different thing and a
+ * weaker one: sums of a mixed session land on one side, which is why lifetime totals must
+ * accumulate per sample (see `UsageTracker`).
+ *
+ * Lives here, beside {@link calculateCost}, so both the tracker and the usage store can
+ * share it without an `agent → managers` or `models → agent` edge.
+ */
+export function promptTokensOf(usage: TokenUsage): number {
+  const cache = (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0);
+  return cache > usage.inputTokens ? usage.inputTokens + cache : usage.inputTokens;
+}
+
+/**
+ * Lifetime total tokens for one usage sample: the billed prompt plus the output.
+ *
+ * Deliberately **not** `inputTokens + outputTokens`, which omits every cached prompt token
+ * and therefore reports ~1% of a cache-heavy session's real volume (measured here: 0.78M
+ * against 50.88M on one session, and 1.4× understated across the whole global store).
+ */
+export function totalTokensOf(usage: TokenUsage): number {
+  return promptTokensOf(usage) + (usage.outputTokens ?? 0);
 }
 
 /**

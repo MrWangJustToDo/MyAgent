@@ -16,6 +16,10 @@ function formatCost(cost: number): string {
  * Footer usage: lifetime in/out (billing) · context fill · cost.
  * Context % is the real window fill (uncached + cached prompt) over tokenLimit —
  * `window.inputTokens` alone under-reports on an exclusive-cache upstream.
+ *
+ * The in/out pair is the billed prompt against the output, not `total.inputTokens`: on an
+ * exclusive upstream that field is the cache-miss part alone, so the footer read `523↓`
+ * where `50.63M↓` were billed.
  */
 export const LLMUsage = () => {
   const { usage } = useAgentUsage();
@@ -31,7 +35,7 @@ export const LLMUsage = () => {
   return (
     <Box gap={1}>
       <Text color={COLORS.muted} dimColor wrap="truncate">
-        <AnimateNumber number={usage.total.inputTokens} />
+        <AnimateNumber number={usage.billedInputTokens} />
         ↓/
         <AnimateNumber number={usage.total.outputTokens} />↑{contextLabel ? ` · ${contextLabel}` : ""}
       </Text>

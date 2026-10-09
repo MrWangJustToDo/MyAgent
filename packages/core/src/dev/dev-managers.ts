@@ -31,6 +31,10 @@ export { createLogExtension } from "../agent/log/extension.js";
 export type { LogExtension, LogExtensionOptions, EventLogPolicy } from "../agent/log/extension.js";
 export { emitAgentTelemetry } from "../managers/telemetry/emit-agent-telemetry.js";
 export { UsageTracker } from "../managers/telemetry/usage-tracker.js";
+export { UsageStore } from "../agent/usage/usage-store.js";
+// The one convention-aware reading of prompt/total tokens, so a validation can assert a
+// display surface against the rule rather than against a formatted string.
+export { promptTokensOf, totalTokensOf } from "../runtime-types/token-usage.js";
 export { AgentChatController } from "../managers/controllers/agent-chat-controller.js";
 export { finalizeManagedAgentRun } from "../managers/managed-agent-run-lifecycle.js";
 export { ManagedAgent } from "../managers/managed-agent.js";

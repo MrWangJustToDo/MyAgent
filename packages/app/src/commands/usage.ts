@@ -144,7 +144,12 @@ registerCommand({
 
     lines.push("");
     lines.push(`  ── Session Lifetime ──`);
-    lines.push(`  Input:        ${fmt(totalUsage.inputTokens)} tokens (cumulative)`);
+    // The billed prompt, not `totalUsage.inputTokens`: on an exclusive-cache upstream that
+    // field is only the cache-miss part, so this read printed 523.2k against a 50.63M prompt
+    // — 1.0% of the real figure, under a "(cumulative)" label. `pct()` below already used
+    // this same denominator, so the block was showing a share of a total it never printed.
+    lines.push(`  Prompt:       ${fmt(billedInput)} tokens (cumulative, billed)`);
+    lines.push(`    Input:      ${fmt(totalUsage.inputTokens)} (uncached)`);
 
     const totalCacheRead = totalUsage.cacheReadTokens ?? 0;
     const totalCacheWrite = totalUsage.cacheWriteTokens ?? 0;
@@ -164,7 +169,10 @@ registerCommand({
       lines.push(`    Text:         ${fmt(text)}`);
     }
 
-    lines.push(`  Total:        ${fmt(totalUsage.totalTokens)} tokens`);
+    // Prompt + output. Sourced from the same reading as `Prompt:` above rather than read off
+    // `totalUsage.totalTokens`, whose per-call producers build it as `input + output` and so
+    // drop every cached token (this line printed 781.1k where the real volume was 50.88M).
+    lines.push(`  Total:        ${fmt(billedInput + totalUsage.outputTokens)} tokens (prompt + output)`);
 
     // Average LLM generation rate across main-loop calls (cumulative output tokens /
     // cumulative model time). Side queries (titles, summaries, memory selection) are

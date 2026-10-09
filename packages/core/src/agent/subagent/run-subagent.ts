@@ -411,7 +411,8 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       usage: {
         inputTokens: usage.inputTokens ?? 0,
         outputTokens: usage.outputTokens ?? 0,
-        totalTokens: usage.totalTokens ?? 0,
+        // Billed prompt + output, not `usage.totalTokens` — see `totalTokensOf`.
+        totalTokens: billedInputTokens + (usage.outputTokens ?? 0),
         billedInputTokens,
       },
       reachedLimit: statusFlags.reachedLimit,

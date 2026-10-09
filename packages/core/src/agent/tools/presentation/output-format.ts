@@ -237,7 +237,9 @@ function formatTaskOutput(output: TaskOutput): string {
   const statusParts: string[] = [];
 
   if (typeof iterations === "number") statusParts.push(`${iterations} iteration${iterations !== 1 ? "s" : ""}`);
-  if (usage) statusParts.push(`${usage.totalTokens} tokens`);
+  // Billed prompt + output — `usage.totalTokens` omits the cached prompt, which for a
+  // subagent is nearly the whole thing (one real run: 1.95k reported against 2.70M sent).
+  if (usage) statusParts.push(`${(usage.billedInputTokens ?? 0) + (usage.outputTokens ?? 0)} tokens`);
   // Disk cache preview (large summary) vs length truncation (maxOutputLength) are different.
   if (cachedOutputPath) statusParts.push("cached");
   else if (truncated) statusParts.push("truncated");

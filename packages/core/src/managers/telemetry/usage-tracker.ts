@@ -1,10 +1,11 @@
-import { calculateCost, type TokenUsage } from "../../runtime-types/token-usage.js";
+import { calculateCost, promptTokensOf, totalTokensOf, type TokenUsage } from "../../runtime-types/token-usage.js";
 
 import type { AgentEventBus } from "../../agent/agent-event-bus";
 import type { ModelCapability, ModelPricing } from "../../models/types.js";
 import type { UsageChangeSnapshot } from "../../runtime-types/session-payloads.js";
 
 export { extractTanStackProvider, extractTanStackUsage } from "../../runtime-types/token-usage.js";
+export { promptTokensOf } from "../../runtime-types/token-usage.js";
 
 // ============================================================================
 // UsageTracker
@@ -22,26 +23,10 @@ const emptyUsage = (): TokenUsage => ({
 /**
  * Billed prompt of one usage reading — the number the cache counters are a share of.
  *
- * `inputTokens` means two different things depending on the upstream, and the same
- * repository talks to both:
- *
- * - **Exclusive** (Anthropic native, DeepSeek native): `inputTokens` counts only the
- *   cache-*miss* part, and `cache_read`/`cache_write` are *disjoint* from it — the prompt
- *   is the sum.
- * - **Inclusive** (OpenAI, Gemini, many gateways): `inputTokens` is the whole prompt and
- *   the cache counters are a *subset* of it — the sum would double-count.
- *
- * The cache counters cannot exceed a prompt that already contains them, so `cache > input`
- * decides it per reading. Used both on a single sample (where it is the exact rule) and on
- * a restored lifetime aggregate (where it is the conservative best available — the persisted
- * `TokenUsage` carries no per-sample breakdown). That reading can only ever *under*-count an
- * exclusive aggregate, never over-count — and over-counting is what would misfire compaction.
+ * The rule itself lives in `runtime-types/token-usage.js` (beside `calculateCost`), so the
+ * tracker and the usage store read the same one rather than each restating it. Re-exported
+ * here because this module has been its public home.
  */
-export function promptTokensOf(usage: TokenUsage): number {
-  const cache = (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0);
-  return cache > usage.inputTokens ? usage.inputTokens + cache : usage.inputTokens;
-}
-
 export interface UsageSnapshot {
   usage: TokenUsage;
   costUsd?: number;
@@ -131,7 +116,7 @@ export class UsageTracker {
     this.window = {
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
-      totalTokens: usage.inputTokens + usage.outputTokens,
+      totalTokens: 0,
       cacheReadTokens: usage.cacheReadTokens ?? 0,
       cacheWriteTokens: usage.cacheWriteTokens ?? 0,
       reasoningTokens: usage.reasoningTokens ?? 0,
@@ -195,7 +180,7 @@ export class UsageTracker {
       cacheWriteTokens: (this.total.cacheWriteTokens ?? 0) + (usage.cacheWriteTokens ?? 0),
       reasoningTokens: (this.total.reasoningTokens ?? 0) + (usage.reasoningTokens ?? 0),
     };
-    this.total.totalTokens = this.total.inputTokens + this.total.outputTokens;
+    this.total.totalTokens = totalTokensOf(this.total);
 
     if (!pricing) return 0;
     const callCost = calculateCost(usage, pricing);

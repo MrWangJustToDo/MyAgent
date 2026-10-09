@@ -12,6 +12,7 @@
  */
 
 import { getEnv } from "../../env.js";
+import { totalTokensOf } from "../../runtime-types/token-usage.js";
 
 import type { TokenUsage } from "../../runtime-types/token-usage.js";
 
@@ -105,7 +106,11 @@ export function toDayKey(ts: number): string {
 function buildRecord(input: UsageRecordInput): Omit<UsageRecord, "v"> | null {
   const ts = input.ts ?? Date.now();
   const usage = input.usage;
-  const totalTokens = usage.totalTokens || (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
+  // Not `usage.totalTokens`: that field is written by every producer of a `TokenUsage`,
+  // and the per-call ones build it as `input + output`, which drops the cached prompt.
+  // Computing it here from the parts keeps the global graph on the same reading as the
+  // session's own totals.
+  const totalTokens = totalTokensOf(usage);
   if (!Number.isFinite(totalTokens) || totalTokens <= 0) return null;
   return {
     ts,
