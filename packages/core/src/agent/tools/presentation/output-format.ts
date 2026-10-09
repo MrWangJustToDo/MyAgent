@@ -1,4 +1,5 @@
 import { isCancelledOutputMarker } from "../../../runtime-types/abort.js";
+import { promptTokensOf } from "../../../runtime-types/token-usage.js";
 import { TOOL_CANCELLED_MESSAGE } from "../../stream/incomplete-tool-calls.js";
 
 import { splitStreamingLines } from "./lines.js";
@@ -239,7 +240,15 @@ function formatTaskOutput(output: TaskOutput): string {
   if (typeof iterations === "number") statusParts.push(`${iterations} iteration${iterations !== 1 ? "s" : ""}`);
   // Billed prompt + output — `usage.totalTokens` omits the cached prompt, which for a
   // subagent is nearly the whole thing (one real run: 1.95k reported against 2.70M sent).
-  if (usage) statusParts.push(`${(usage.billedInputTokens ?? 0) + (usage.outputTokens ?? 0)} tokens`);
+  if (usage) {
+    // `billedInputTokens` was added after this output shape shipped, so a task result read
+    // back from an older session does not carry it (49 such outputs exist in this workspace's
+    // sessions). Read the cached counters then — the same convention-aware sum the tracker
+    // uses — rather than defaulting to 0, which rendered `[1 iteration, 300 tokens]` for a
+    // 27k-token run: not the prompt, but at least the part of it the data still holds.
+    const billedInput = usage.billedInputTokens ?? promptTokensOf(usage);
+    statusParts.push(`${billedInput + (usage.outputTokens ?? 0)} tokens`);
+  }
   // Disk cache preview (large summary) vs length truncation (maxOutputLength) are different.
   if (cachedOutputPath) statusParts.push("cached");
   else if (truncated) statusParts.push("truncated");

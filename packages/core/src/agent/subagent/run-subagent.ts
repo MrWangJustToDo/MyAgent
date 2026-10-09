@@ -414,6 +414,10 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
         // Billed prompt + output, not `usage.totalTokens` — see `totalTokensOf`.
         totalTokens: billedInputTokens + (usage.outputTokens ?? 0),
         billedInputTokens,
+        // Stored so a reader of this persisted result can recompute the prompt if
+        // `billedInputTokens` is ever absent — see `formatTaskOutput`.
+        cacheReadTokens: usage.cacheReadTokens ?? 0,
+        cacheWriteTokens: usage.cacheWriteTokens ?? 0,
       },
       reachedLimit: statusFlags.reachedLimit,
       incomplete: statusFlags.incomplete,

@@ -6,6 +6,7 @@ import { UsageHeatmap } from "../components/UsageHeatmap.js";
 import { useConfig } from "../hooks/use-config.js";
 import { useSize } from "../hooks/use-size.js";
 import { BG } from "../theme/colors.js";
+import { formatCompactNumber } from "../utils/format-usage.js";
 import { usageHeatmapWindow } from "../utils/usage-heatmap.js";
 
 import { registerCommand } from "./utils/registry.js";
@@ -32,9 +33,10 @@ function defaultWeeks(): number {
 }
 
 function fmt(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
+  // One compact formatter for the whole app — `format-usage.ts` owns it, and a second copy
+  // here had drifted to different precision (`1.0k` where the footer printed `1.00k`), so the
+  // same number read differently in the `/usage` block and the footer above it.
+  return formatCompactNumber(n);
 }
 
 function formatCost(cost: number): string {
@@ -172,7 +174,10 @@ registerCommand({
     // Prompt + output. Sourced from the same reading as `Prompt:` above rather than read off
     // `totalUsage.totalTokens`, whose per-call producers build it as `input + output` and so
     // drop every cached token (this line printed 781.1k where the real volume was 50.88M).
-    lines.push(`  Total:        ${fmt(billedInput + totalUsage.outputTokens)} tokens (prompt + output)`);
+    // `outputTokens` is the last line of defence: if a producer ever omits it the row reads
+    // `0` rather than `NaN`, which is what an unguarded sum would render here.
+    const totalTokens = billedInput + (totalUsage.outputTokens ?? 0);
+    lines.push(`  Total:        ${fmt(totalTokens)} tokens (prompt + output)`);
 
     // Average LLM generation rate across main-loop calls (cumulative output tokens /
     // cumulative model time). Side queries (titles, summaries, memory selection) are

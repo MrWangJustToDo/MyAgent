@@ -24,6 +24,7 @@
 import assert from "node:assert/strict";
 
 import { UsageStore, UsageTracker, promptTokensOf, totalTokensOf, registerCoreEnv } from "../dist/dev.mjs";
+import { formatToolOutput } from "../dist/index.mjs";
 
 // A minimal env. `path` is the synchronous one CoreEnv requires (a hand-written fixture
 // without it exercises a degraded code path); `exists` starts false and `readFile` returns
@@ -248,6 +249,55 @@ registerCoreEnv({
     tracker.getTotal().totalTokens,
     totalTokensOf(sample),
     "and its lifetime total must come from the shared total rule"
+  );
+}
+
+// ============================================================================
+// 5. A task row read back from an older session still shows its prompt
+// ============================================================================
+
+{
+  // `billedInputTokens` was added to the task output after the shape shipped, so 49 outputs
+  // persisted in this workspace's own sessions do not carry it (nor the cache counters).
+  // `formatTaskOutput` used to default it to 0 and render `[1 iteration, 300 tokens]` for a
+  // 27k-token run — a plausible number, which is why it survived.
+  const taskOutput = (usage) => ({
+    subagentId: "subagent_test",
+    summary: "done",
+    truncated: false,
+    iterations: 1,
+    maxIterations: 50,
+    reachedLimit: false,
+    incomplete: false,
+    aborted: false,
+    usage,
+  });
+  const statusLine = (usage) => formatToolOutput(taskOutput(usage), "task").split("\n")[0];
+
+  // A current result carries the tracker's own reading, and it is what the row prints.
+  const current = { inputTokens: 1_200, outputTokens: 300, totalTokens: 1_500, billedInputTokens: 27_000 };
+  assert.equal(
+    statusLine(current),
+    "[1 iteration, 27300 tokens]",
+    "a current result prints its billed prompt + output"
+  );
+
+  // A pre-migration result has no `billedInputTokens`. Falling back to 0 renders the output
+  // alone; the honest reading of what the row still holds is `promptTokensOf(usage)`.
+  const legacy = { inputTokens: 1_200, outputTokens: 300, totalTokens: 1_500 };
+  const legacyLine = statusLine(legacy);
+  assert.notEqual(legacyLine, "[1 iteration, 300 tokens]", "a legacy row must not read as the output alone");
+  assert.equal(
+    legacyLine,
+    `[1 iteration, ${promptTokensOf(legacy) + legacy.outputTokens} tokens]`,
+    "it falls back to the same convention-aware sum the tracker uses"
+  );
+  // Which is what the host transcript already shows for the same part, so the two surfaces
+  // agree on a restored session instead of contradicting each other.
+  assert.equal(
+    promptTokensOf(legacy) + legacy.outputTokens,
+    1_500,
+    "control: with no cache counters the fallback is input + output, not a fabricated prompt"
   );
 }
 

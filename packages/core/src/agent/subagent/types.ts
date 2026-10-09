@@ -124,6 +124,13 @@ export interface SubagentResult {
      * (`UsageTracker.getBilledInputTokens()`); see AGENTS.md "Context-window fill".
      */
     billedInputTokens: number;
+    /**
+     * Cache counters, carried so a persisted result stays self-describing: a reader that
+     * meets an older output without `billedInputTokens` reconstructs the prompt from these
+     * instead of showing 0 (`formatTaskOutput`).
+     */
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
   };
   /** Whether iteration limit was reached */
   reachedLimit: boolean;
