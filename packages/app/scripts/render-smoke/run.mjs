@@ -40,6 +40,7 @@ import { Readable } from "node:stream";
 
 import { awaitStableMarker } from "./await-stable-marker.mjs";
 import { checks as budgetChecks } from "./budget-fixtures.mjs";
+import { ExitSummary } from "./dist/components/ExitSummary.mjs";
 import { MessageList, selectVisibleRows, MAX_STATIC_LINES } from "./dist/components/MessageList.mjs";
 import { StaticContext } from "./dist/context/static-context.mjs";
 import { useAgentStatus } from "./dist/hooks/use-agent-status.mjs";
@@ -216,6 +217,22 @@ function frameLines(stdout) {
     .split("\n")
     .map((l) => l.replace(/\s+$/, ""))
     .filter((l) => l.trim().length > 0);
+}
+
+/**
+ * Same last-frame slice as {@link frameLines}, but keeping blank rows.
+ *
+ * `frameLines` drops empty lines because most assertions want the visible text; layout checks
+ * (does this element still occupy a row?) need the opposite, since a collapsed zero-height row
+ * and a filtered-out blank are indistinguishable once the empties are gone.
+ */
+function rawFrameLines(stdout) {
+  const substantial = stdout.chunks.filter((c) => c.length > 20);
+  const last = substantial.length ? substantial[substantial.length - 1] : "";
+  return last
+    .replace(ANSI, "")
+    .split("\n")
+    .map((l) => l.replace(/\s+$/, ""));
 }
 
 const results = [];
@@ -1170,6 +1187,74 @@ instance.unmount();
 }
 
 console.error = realConsoleError;
+
+// ── footer-relative exit summary ─────────────────────────────────────────────
+// The exit summary is appended BELOW the footer, set off by its own top border. Mounted with a
+// stand-in for the first line rather than the real transcript: the question is whether the
+// summary lands under whatever precedes it, separated by the border, and a real `MessageList`
+// would make "which rule is whose" ambiguous.
+{
+  // `useInitTerminalSize` is a hook, so it has to run inside a render — same shape as `Screen`.
+  // The sentinel is a full literal line so "is it gone" is answerable without substring games.
+  const FIRST_LINE_MARKER = "FIRSTLINE_LIVE_TRANSCRIPT_MARKER";
+  const ExitSummaryScreen = () => {
+    useSize.getActions().useInitTerminalSize();
+    return createElement("ink-box", { flexDirection: "column" }, [
+      createElement("ink-text", { key: "first-line" }, FIRST_LINE_MARKER),
+      createElement(ExitSummary, { key: "summary" }),
+    ]);
+  };
+
+  const footerStdout = new FakeStdout();
+  const footerInstance = render(createElement(ExitSummaryScreen, {}), {
+    stdout: footerStdout,
+    stdin: fakeStdin(),
+    exitOnCtrlC: false,
+    patchConsole: false,
+    maxFps: 30,
+  });
+  await settle(120);
+  useAgent.getActions().beginExit(["Session:   local-chat (ses_abc)", "", "Cost:      $0.12"]);
+  await settle(220);
+
+  const summaryLines = frameLines(footerStdout);
+  const text = summaryLines.join("\n");
+  const borderIdx = summaryLines.findIndex((l) => /─{20,}/.test(l));
+  // No heading row: the summary opens straight on its first line, so the border's job is to
+  // separate it from whatever is above, and "below the border" is the first captured line.
+  const firstLineIdx = summaryLines.findIndex((l) => l.trim().startsWith("Session:"));
+
+  // The border must come BEFORE the summary's first line and span the width — that is what makes
+  // it a divider from whatever is above rather than a rule floating inside the block, and it is
+  // the only thing here that can fail: deleting the border drops `borderIdx` to -1, and
+  // `width="full"` is what makes it reach the screen edge like the footer's own rule.
+  // Deliberately NOT asserted as "below the sentinel": this wrapper puts the sentinel first,
+  // so such a check could not fail. Placement under the footer is `Agent`'s literal ordering.
+  record(
+    "the summary opens with a full-width border above its first line",
+    borderIdx !== -1 && firstLineIdx !== -1 && borderIdx < firstLineIdx && summaryLines[borderIdx].length >= 100,
+    { firstLines: summaryLines.slice(0, 4), borderWidth: summaryLines[borderIdx]?.length }
+  );
+  record("the summary keeps its captured lines verbatim", text.includes("Session:   local-chat (ses_abc)"), {});
+  record("no heading is painted above the summary", !summaryLines.some((l) => /Session summary/i.test(l)), {
+    firstLines: summaryLines.slice(0, 3),
+  });
+  // The builder emits a blank string between groups, and `frameLines` filters empties — so the
+  // gap has to be read from the RAW frame. This is a real regression risk: an empty `<Text>` is
+  // a zero-height row, so rendering every line as a plain `<Text>{line}</Text>` silently drops
+  // the gap and pushes the groups together.
+  const raw = rawFrameLines(footerStdout);
+  const rawFirst = raw.findIndex((l) => l.includes("Session:"));
+  record(
+    "a blank group line still occupies a row",
+    rawFirst !== -1 && raw[rawFirst + 1].trim() === "" && raw[rawFirst + 2].includes("Cost:"),
+    { rows: raw.slice(rawFirst, rawFirst + 3).map((l) => JSON.stringify(l)) }
+  );
+
+  footerInstance.unmount();
+  useAgent.getActions().beginExit(null);
+}
+
 const pass = results.every((r) => r.pass);
 console.log(
   JSON.stringify({ source: sessionPath ?? "fixture(60 turns x 4 tools)", messages: all.length, results, pass }, null, 2)

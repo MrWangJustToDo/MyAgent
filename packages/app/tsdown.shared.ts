@@ -118,6 +118,8 @@ export const ENTRIES = [
   "src/utils/workspace-reveal.ts",
   "src/utils/streaming-output-lines.ts",
   "src/utils/format-usage.ts",
+  "src/utils/exit-summary.ts",
+  "src/utils/exit-with-summary.ts",
   "src/utils/usage-heatmap.ts",
   "src/utils/file-icons.ts",
   "src/utils/tool-activity-summary.ts",

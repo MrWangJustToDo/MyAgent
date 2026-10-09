@@ -3,6 +3,7 @@
 import { useInput } from "ink";
 
 import { clipboardImageFilename } from "../../utils/attachment-hash.js";
+import { exitWithSummary } from "../../utils/exit-with-summary.js";
 import { getActiveHost, cycleActiveSession } from "../../utils/session-resolve.js";
 import { useAutocomplete } from "../use-autocomplete.js";
 import { useCommandOutput } from "../use-command-output.js";
@@ -28,12 +29,11 @@ export function useGlobalKeybindings(ctx: KeybindingContext): void {
     }
 
     if (inputKey.ctrl && inputChar === "c") {
-      const host = getActiveHost();
-      const session = ctx.getSession();
-      if (host && session) {
-        void host.destroy(session.id);
-      }
-      adapter.exit();
+      exitWithSummary({
+        adapter,
+        session: ctx.getSession(),
+        destroySession: (sessionId) => void getActiveHost()?.destroy(sessionId),
+      });
       return;
     }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 
 import { dispatchCommand } from "../commands";
+import { exitWithSummary } from "../utils/exit-with-summary.js";
 import { getActiveHost, getActiveSession } from "../utils/session-resolve.js";
 
 import { useAgentKeybindings } from "./use-agent-keybindings.js";
@@ -172,12 +173,11 @@ export function useAgentInputControls({
     saveSessionFromChat,
     setMessages: setMessages as (messages: UIMessage[]) => void,
     exit: () => {
-      const host = getActiveHost();
-      const session = getActiveSession();
-      if (host && session) {
-        void host.destroy(session.id);
-      }
-      adapter.exit();
+      exitWithSummary({
+        adapter,
+        session: getActiveSession(),
+        destroySession: (sessionId) => void getActiveHost()?.destroy(sessionId),
+      });
     },
     adapter,
     addToolApprovalResponse,

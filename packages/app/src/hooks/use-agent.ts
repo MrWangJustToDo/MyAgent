@@ -22,6 +22,15 @@ export const useAgent = createState(
     sessions: {} as Record<string, AgentSession>,
     /** Id of the active session (matches `session.id`). */
     activeSessionId: null as string | null,
+    /**
+     * Lines for the exit summary, captured while the session is still live.
+     *
+     * The exit path destroys the session before `process.exit` lands, so the summary cannot be
+     * read from the snapshot at paint time — `ctx.exit()` builds it first and stashes it here.
+     * `null` when there is nothing worth printing (no model traffic, or no session at all), which
+     * is also what keeps `ExitSummary` from rendering an empty frame.
+     */
+    exitSummaryLines: null as string[] | null,
   }),
   {
     withActions: (s) => ({
@@ -72,6 +81,13 @@ export const useAgent = createState(
           s.activeSessionId = null;
           s.sessions = {};
         }
+      },
+      /**
+       * Announce that the host is about to exit, carrying the summary lines to paint.
+       * Idempotent: `/quit` and Ctrl+C both call it, and a user can hit Ctrl+C twice.
+       */
+      beginExit: (lines: string[] | null) => {
+        s.exitSummaryLines = lines;
       },
     }),
 
