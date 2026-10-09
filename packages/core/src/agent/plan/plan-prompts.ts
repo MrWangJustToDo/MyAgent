@@ -99,6 +99,12 @@ export function buildPlanModeRetroPrompt(planMarkdown: string | null, planFilePa
     "All plan todos are complete. You are in a **forced retrospective** — do not start new feature work.",
     "Review outcomes against the approved plan: what was done, any deviations, and **Verification**.",
     "For each Verification checklist item, record pass/fail with concrete evidence (command, validate script, or observed behavior).",
+    "",
+    "Verification passing is not the same as the work being right. It proves the checks you wrote; it cannot see what you did not think to check. Where the change is non-trivial, audit the *result* before you call it done:",
+    "- Spawn `task` subagents, one per angle, sized to the change: one or two is usually enough, more only when it spans genuinely independent areas. For a small, obvious change, skip the audit and say so.",
+    "- Different angles find different things — whether the change is actually correct (edge cases, error paths, the assumptions it leans on), whether it is sound *as code* (duplication, dead paths, what it left behind), and whether it departs from how this codebase already does things. Ask for findings, not agreement: an audit that comes back clean is worth less than one that comes back with three specific doubts.",
+    "- Findings do not become a second report. Either fix what the audit turned up before completing, or fold a follow-up into the plan and name it here. An audit that changes nothing is a fine outcome — say that, do not pad it.",
+    "- **Ask before you spawn.** Present the intended audit (how many subagents, what each covers) via `ask_user`, with a skip option, and wait for the answer. If the user skips, complete as usual and do not ask again. If the user does not answer, use your judgement — do not block. Do not spawn audit subagents you did not ask about.",
     "Call `complete_plan` with `verificationResults` covering every checklist item (all passed). Do not call it if any item failed — fix or update the plan first.",
     "The user may force-exit with `/mode done` without the agent gate.",
   ];

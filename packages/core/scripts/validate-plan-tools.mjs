@@ -12,6 +12,7 @@ import {
   PlanModeController,
   buildPlanModePlanningPrompt,
   buildPlanModeReadyPrompt,
+  buildPlanModeRetroPrompt,
   createAgentEventBus,
   formatStructuredPlanMarkdown,
   isPlanModeForbiddenTool,
@@ -45,6 +46,38 @@ assert.ok(ready.includes("task"));
 assert.ok(ready.includes("update_plan"));
 assert.ok(ready.includes("/mode execute"));
 assert.ok(/review/i.test(ready));
+// Review is where a plan gets read and revised, not where it gets audited: the audit belongs to
+// the phase where there is a *result* to audit. So the ready block must stay free of the spawn
+// machinery — otherwise a plain plan edit starts a subagent fleet before any code exists.
+assert.ok(!/ask_user/i.test(ready), "ready must not gate on a spawn consent question");
+assert.ok(!/spawn/i.test(ready), "ready must not ask the model to spawn audit subagents");
+
+// ---------------------------------------------------------------------------
+// Retro: the completed-work audit
+// ---------------------------------------------------------------------------
+const retro = buildPlanModeRetroPrompt("## Plan\n1. Do thing", ".agents/plans/x.md");
+assert.ok(retro.includes("complete_plan"), "retro prompt must keep the completion gate");
+assert.ok(/verification/i.test(retro), "retro prompt must require verification evidence");
+
+// The audit hangs off the retro phase because that is where `task` is useful for more than
+// reading the plan back — there is implemented work to examine by then. These pin the same three
+// properties as any spawn instruction: consent, a size bound, and a non-blocking skip.
+assert.ok(retro.includes("task"), "retro prompt must offer the subagent audit");
+assert.ok(retro.includes("ask_user"), "retro prompt must route the audit through ask_user");
+assert.ok(/ask before you spawn/i.test(retro), "retro prompt must require consent before spawning");
+assert.ok(/with a skip option/i.test(retro), "the skip must be offered inside the consent question");
+assert.ok(/do not ask again/i.test(retro), "a skip must be one-shot, not re-asked");
+assert.ok(/do not block/i.test(retro), "an unanswered question must not stall completion");
+assert.ok(/do not spawn audit subagents you did not ask about/i.test(retro), "consent gate must be explicit");
+assert.ok(/one or two/i.test(retro), "retro prompt must bound the audit size (one or two by default)");
+assert.ok(/skip the audit/i.test(retro), "retro prompt must allow skipping the audit for small changes");
+assert.ok(/findings, not agreement/i.test(retro), "retro prompt must ask for findings rather than agreement");
+assert.ok(/different angles/i.test(retro), "retro prompt must require distinct audit angles");
+assert.ok(/do not become a second report/i.test(retro), "audit findings must not become a second artifact");
+assert.ok(/changes nothing is a fine outcome/i.test(retro), "an audit may conclude the work is sound");
+// The audit is prompted by "Verification passed" not being "the work is right" — that framing is
+// the whole reason the phase needs it, so it is worth a guard of its own.
+assert.ok(/not the same as the work being right/i.test(retro), "retro must state why verification is not enough");
 
 const md = formatStructuredPlanMarkdown({
   goal: "Add worktree support",
