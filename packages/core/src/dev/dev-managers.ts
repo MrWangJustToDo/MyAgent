@@ -24,7 +24,11 @@ export type {
   AgentEventType,
   AgentEventPayloadMap,
 } from "../agent/agent-event-bus/index.js";
-export { bridgeTelemetryToAgentLog, summarizePayload } from "../managers/telemetry/event-log-bridge.js";
+export { bridgeTelemetryToAgentLog, summarizePayload } from "../agent/log/event-log-bridge.js";
+export { DEFAULT_EVENT_LOG_RULES } from "../agent/log/event-log-rules.js";
+export { createJsonlFileSink } from "../agent/log/jsonl-file-sink.js";
+export { createLogExtension } from "../agent/log/extension.js";
+export type { LogExtension, LogExtensionOptions, EventLogPolicy } from "../agent/log/extension.js";
 export { emitAgentTelemetry } from "../managers/telemetry/emit-agent-telemetry.js";
 export { UsageTracker } from "../managers/telemetry/usage-tracker.js";
 export { AgentChatController } from "../managers/controllers/agent-chat-controller.js";

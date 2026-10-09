@@ -969,7 +969,11 @@ export class ManagedAgent {
     const dir = `${AGENT_LOG_DIR}/${sessionId}`;
     if (this.log.getFileSinkDir() === dir) return;
     this.detachLogSink?.();
-    this.detachLogSink = this.log.attachFileSink({ dir });
+    // Bind through the built-in log extension (which tracks the sink for teardown); fall back to
+    // the seam's own convenience attach for a standalone log with no manager.
+    const options = { dir };
+    this.detachLogSink =
+      this.manager?.getLogExtension()?.attachSink(this.log, options) ?? this.log.attachFileSink(options);
     // Track for the process-level crash/exit guards.
     registerActiveAgentLog(this.log);
   }

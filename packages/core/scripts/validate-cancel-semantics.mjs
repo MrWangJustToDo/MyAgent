@@ -480,13 +480,13 @@ assert.equal(taskOutputSchema.shape.cancelled, undefined, "task declares ONE mar
 
   // The log wording follows the flag on all three, so the flag cannot be set without the
   // log changing with it.
-  const rulesSrc = readFileSync(join(SRC, "managers/telemetry/event-log-rules.ts"), "utf8");
+  const rulesSrc = readFileSync(join(SRC, "agent/log/event-log-rules.ts"), "utf8");
   assert.ok(/Tool cancelled:/.test(rulesSrc) && /Tool end:/.test(rulesSrc), "tool-end has both wordings");
   assert.ok(/Subagent cancelled:/.test(rulesSrc), "subagent:error has both wordings");
 
   // And a cancel must not be written through the error path, which synthesizes an Error
   // from the payload — for a cancelled subagent that text is a paragraph of narration.
-  const bridgeSrc = readFileSync(join(SRC, "managers/telemetry/event-log-bridge.ts"), "utf8");
+  const bridgeSrc = readFileSync(join(SRC, "agent/log/event-log-bridge.ts"), "utf8");
   assert.ok(
     /rule\.level === "error"[\s\S]{0,300}p\(event\)\.cancelled === true/.test(bridgeSrc),
     "the bridge short-circuits a cancelled payload BEFORE synthesizing an Error from it"

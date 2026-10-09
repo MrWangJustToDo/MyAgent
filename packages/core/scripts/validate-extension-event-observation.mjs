@@ -13,8 +13,14 @@
  *      suppresses it; `retained` reads on demand.
  *   4. `observeAny` receives declared events and does NOT receive `tool:chunk` / `extension:ui`,
  *      and does not replay retained values at subscribe time.
- *   5. The bus wildcard invariant: core still has exactly one `on("*")` (the Event→Log bridge).
- *      A second one would falsify `agent-event-bus` and would also defeat (4).
+ *   5. The bus wildcard invariant: core has exactly one `on("*")` (the log consumer, which
+ *      still owns the bridge's subscription while the bridge is being moved).
+ *   6. Wildcard delivery excludes internal events: a wildcard listener never receives one, which
+ *      is what keeps a subscriber that produces internal events from observing its own output.
+ *   7. The declared internal set matches this validator's list in both directions, and no
+ *      internal event carries an event→entry rule (the rule could never run — wildcard delivery
+ *      withholds internal events — so the two tables must not disagree).
+ *
  *   6. A throwing observer does not stop a second observer on the same event.
  *   7. A rejected observer promise is reported as `agent:extension-error` (observer phase) and
  *      never surfaces as an unhandled rejection.
@@ -34,6 +40,7 @@ import {
   createAgentEventBus,
   observableExtensionEvents,
   registerCoreEnv,
+  DEFAULT_EVENT_LOG_RULES,
 } from "../dist/dev.mjs";
 
 // The runner resolves CoreEnv lazily; a stub keeps `getEnv()` from throwing in a host that builds
@@ -178,6 +185,65 @@ console.log("3. retained replay semantics: ok");
 }
 console.log("4. observeAny scope: ok");
 
+// --- 6. wildcard delivery excludes internal events -------------------------
+// The bus applies the visibility classification to wildcard fan-out, so a wildcard subscriber can
+// never receive an internal event. That is what keeps a subscriber which itself produces internal
+// events from observing its own output, and it makes wildcard delivery equivalent to
+// `observeAny` — both mean "every observable event".
+{
+  const wildcard = [];
+  const bus = createAgentEventBus();
+  bus.on("*", (event) => wildcard.push(event.type));
+
+  bus.emit("llm:response", { model: "m" });
+  bus.emit("agent:stop", {});
+  bus.emit("tool:chunk", { kind: "chunk", chunk: { type: "text", text: "x" } });
+  bus.emit("extension:ui", { type: "notify", message: "hi" });
+
+  assert.ok(wildcard.includes("llm:response"), "wildcard still receives business events");
+  assert.ok(wildcard.includes("agent:stop"), "wildcard still receives business events (agent:stop)");
+  for (const type of INTERNAL_EVENTS) {
+    assert.ok(!wildcard.includes(type), `wildcard must NOT receive internal ${type}`);
+  }
+  console.log("6. wildcard excludes internal events: ok");
+}
+
+// --- 7. the declared internal set matches this validator's list ------------
+// Both directions, so adding an internal event in core without adding it here fails — the
+// property `extension-event-observation` promises for the classification table.
+{
+  const declaredInternal = Object.entries(EXTENSION_EVENT_VISIBILITY)
+    .filter(([, v]) => v === "internal")
+    .map(([k]) => k);
+  assert.deepEqual(
+    [...new Set(declaredInternal)].sort(),
+    [...INTERNAL_EVENTS].sort(),
+    "the internal set must match exactly — a new internal event must be added to this validator too"
+  );
+  console.log("7. internal set asserted both ways: ok");
+}
+
+// --- 7b. no internal event carries an event→entry rule ---------------------
+// Wildcard delivery withholds internal events, and the event→entry consumer is the wildcard
+// subscriber. So an internal event *with* a rule is an inconsistency: the rule exists, reads as if
+// the event is logged, and can never run. Asserted here because the failure mode is silent — the
+// event simply never appears in the log, which is indistinguishable from "nothing happened".
+{
+  const offenders = INTERNAL_EVENTS.filter((type) => {
+    const rule = DEFAULT_EVENT_LOG_RULES[type];
+    return rule !== undefined && rule !== false;
+  });
+  assert.deepEqual(
+    offenders,
+    [],
+    `internal events must not carry an entry rule (the rule could never run): ${offenders.join(", ")}`
+  );
+  // Inversion: the lookup must be reading the real table, so a rule added to an internal event
+  // would be found. `session:start` is the canary — it must have a rule.
+  assert.ok(DEFAULT_EVENT_LOG_RULES["session:start"], "rule table lookup is live");
+  console.log("7b. no internal event carries an entry rule: ok");
+}
+
 // --- 5. wildcard consumer invariant (source scan) --------------------------
 {
   const srcRoot = path.resolve(process.cwd(), "src");
@@ -200,13 +266,21 @@ console.log("4. observeAny scope: ok");
   walk(srcRoot);
 
   // Inversion: the scan must find the one legitimate consumer, or it is scanning the wrong tree and
-  // would pass vacuously if the rule moved.
+  // would pass vacuously if the rule moved. The consumer stays a wildcard under the amended design
+  // (D3): the bus now excludes internal events from wildcard delivery, so the recursion guard is
+  // structural and no ~50-subscription expansion is needed.
   assert.equal(
     hits.length,
     1,
     `expected exactly one wildcard consumer in core, got ${hits.length}:\n${hits.join("\n")}`
   );
-  assert.match(hits[0], /event-log-bridge\.ts/, `the wildcard consumer must be the Event→Log bridge, got ${hits[0]}`);
+  if (!/event-log-bridge\.ts/.test(hits[0])) {
+    assert.match(
+      hits[0],
+      /log\/extension\.ts/,
+      `the wildcard consumer must be the log consumer (bridge or log extension), got ${hits[0]}`
+    );
+  }
   console.log("5. wildcard consumer invariant (source scan): ok");
 }
 

@@ -2,9 +2,9 @@
  * Default event → AgentLog mapping for {@link bridgeTelemetryToAgentLog}.
  */
 
-import type { AgentEvent, AgentEventType } from "../../agent/agent-event-bus";
-import type { LogCategory, LogLevel } from "../../agent/agent-log/types.js";
 import type { AgentEventPayloadMap } from "../../runtime-types/agent-event-payloads.js";
+import type { AgentEvent, AgentEventType } from "../agent-event-bus";
+import type { LogCategory, LogLevel } from "../agent-log/types.js";
 
 /** Read payload fields for logging formatters. */
 function p(event: AgentEvent): Record<string, unknown> {

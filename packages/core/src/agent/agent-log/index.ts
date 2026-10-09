@@ -5,7 +5,7 @@ export type { LogLevel, LogCategory, LogEntry } from "./types.js";
 export { logLevelSchema, logCategorySchema, logEntrySchema } from "./schemas.js";
 
 // AgentLog class
-export { AgentLog, generateLogId } from "./agent-log.js";
+export { AgentLog, generateLogId, MAX_PENDING_LOG_ENTRIES } from "./agent-log.js";
 
 // Crash/exit lifecycle guards (active-log registry + process handlers)
 export {
@@ -13,4 +13,6 @@ export {
   registerActiveAgentLog,
   unregisterActiveAgentLog,
   flushActiveAgentLogsSync,
+  registerExtensionExitFlush,
+  flushExtensionExitFlushesSync,
 } from "./lifecycle-guards.js";

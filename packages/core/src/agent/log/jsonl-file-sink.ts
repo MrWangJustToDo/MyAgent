@@ -1,0 +1,204 @@
+/**
+ * JSONL file sink for the log seam.
+ *
+ * Deliberately its own module, depending only on `env` and the log entry **types**: both the seam
+ * (`agent-log.ts`) and the log extension (`agent/log/extension.ts`) build this sink, and routing it
+ * through either one would make the other import it and close a cycle
+ * (`agent/agent-log ↔ agent/log`).
+ *
+ * Behaviour: one `LogEntry` per line, size-based rotation, writes coalesced behind a flush timer,
+ * and a visible divider when re-attaching to a file that already has content (a resumed session
+ * must not blend launches). Degrades silently when the environment lacks `appendFile` — the agent
+ * must never fail because logging could not be wired up.
+ */
+
+import { getEnv } from "../../env.js";
+import { logEntrySchema } from "../agent-log/schemas.js";
+
+import type { AgentLogFileSinkOptions, LogEntry } from "../agent-log/types.js";
+
+/** Rotate when the active file exceeds this size (5 MiB). */
+export const DEFAULT_LOG_MAX_BYTES = 5 * 1024 * 1024;
+/** Keep at most this many rotated segments (including the active file). */
+export const DEFAULT_LOG_MAX_FILES = 5;
+/** Coalesce writes for this long before flushing (ms). */
+export const DEFAULT_LOG_FLUSH_INTERVAL_MS = 250;
+/** Default log file name inside the bound directory. */
+export const DEFAULT_LOG_FILENAME = "agent.log";
+
+export interface LogFileSink {
+  handleEntry: (entry: LogEntry) => void;
+  /** Awaitable flush of the pending batch. */
+  flush: () => Promise<void>;
+  /** Best-effort synchronous flush for exit paths that cannot await. */
+  flushSync: () => void;
+  /** Land the pending batch and stop the timer. Idempotent. */
+  detach: () => void;
+  /** Directory written to — **absent** on an inert sink, so callers never record a dead path. */
+  dir?: string;
+}
+
+/** A sink that does nothing — used when the environment cannot write. */
+function inertSink(): LogFileSink {
+  const noop = (): void => {};
+  return { handleEntry: noop, flush: async () => {}, flushSync: noop, detach: noop };
+}
+
+/** Build a JSONL file sink writing to `options.dir`. */
+export function createJsonlFileSink(options: AgentLogFileSinkOptions): LogFileSink {
+  let fs: ReturnType<typeof getEnv>["fs"] | null;
+  try {
+    fs = getEnv().fs;
+  } catch {
+    return inertSink(); // CoreEnv not registered
+  }
+  const envFs = fs;
+  const appendFile = envFs.appendFile;
+  if (!appendFile) return inertSink(); // no append support
+
+  const dir = options.dir;
+  const filename = options.filename ?? DEFAULT_LOG_FILENAME;
+  const maxBytes = options.maxBytes ?? DEFAULT_LOG_MAX_BYTES;
+  const maxFiles = options.maxFiles ?? DEFAULT_LOG_MAX_FILES;
+  const flushIntervalMs = options.flushIntervalMs ?? DEFAULT_LOG_FLUSH_INTERVAL_MS;
+  const filePath = `${dir}/${filename}`;
+
+  let buffer: string[] = [];
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let disposed = false;
+  /** Whether the session-boundary divider has been decided for this sink. */
+  let boundaryWritten = false;
+
+  /** Shift segments `{file}.{maxFiles-1}` → drop, ..., `{file}` → `{file}.1`, then truncate. */
+  const rotate = async (): Promise<void> => {
+    const oldest = `${filePath}.${maxFiles - 1}`;
+    if (await envFs.exists(oldest)) await envFs.remove(oldest);
+    for (let i = maxFiles - 2; i >= 1; i--) {
+      const from = `${filePath}.${i}`;
+      const to = `${filePath}.${i + 1}`;
+      if (await envFs.exists(from)) {
+        const content = await envFs.readFile(from);
+        await envFs.writeFile(to, content);
+        await envFs.remove(from);
+      }
+    }
+    if (await envFs.exists(filePath)) {
+      const content = await envFs.readFile(filePath);
+      await envFs.writeFile(`${filePath}.1`, content);
+    }
+    await envFs.writeFile(filePath, "");
+  };
+
+  const flush = async (): Promise<void> => {
+    if (buffer.length === 0) return;
+    const lines = buffer;
+    buffer = [];
+    try {
+      await envFs.mkdir(dir);
+      const existed = await envFs.exists(filePath);
+      if (!existed) {
+        await envFs.writeFile(filePath, "");
+      }
+      // Reused log file (session resumed/continued): mark the new launch with a clearly
+      // visible divider before the first batch of this session.
+      if (!boundaryWritten) {
+        boundaryWritten = true;
+        if (existed) {
+          lines.unshift(`---------- ${new Date().toISOString()} new session ----------`);
+        }
+      }
+      const content = lines.join("\n") + "\n";
+      const contentBytes = new TextEncoder().encode(content).length;
+      // Rotate when the active file already meets maxBytes, or when the pending batch would push
+      // it past the limit — so a large batch never leaves the active file over budget. Size comes
+      // from stat (restart-safe).
+      let currentBytes = 0;
+      try {
+        currentBytes = (await envFs.stat(filePath)).size;
+      } catch {
+        currentBytes = 0;
+      }
+      if (currentBytes > 0 && currentBytes + contentBytes >= maxBytes) {
+        await rotate();
+      }
+      await appendFile(filePath, content);
+    } catch {
+      // Non-fatal: log persistence must never break agent execution.
+    }
+  };
+
+  const schedule = (): void => {
+    if (timer || disposed) return;
+    timer = setTimeout(() => {
+      timer = null;
+      void flush();
+    }, flushIntervalMs);
+  };
+
+  const handleEntry = (entry: LogEntry): void => {
+    // The persisted schema is the last gate before the bytes: an entry outside it is not written,
+    // because a caller reading the file back cannot tell "this entry is malformed" from "this
+    // never happened" once it is on disk. Reported, not thrown — the sink is on the agent's path.
+    //
+    // ⚠️ The cost is that a new `LogCategory` must be added to *both* the `LogCategory` union and
+    // `schemas.ts`'s list; missing the second now drops the entries instead of writing them.
+    const parsed = logEntrySchema.safeParse(entry);
+    if (!parsed.success) {
+      console.error(
+        `[agent] log entry rejected by the persisted schema (${entry.level}/${entry.category}):`,
+        parsed.error.issues[0]?.message
+      );
+      return;
+    }
+    buffer.push(JSON.stringify(entry));
+    schedule();
+  };
+
+  /**
+   * Synchronous best-effort write of the pending buffer, for crash/exit paths that cannot await an
+   * async flush. Requires sync fs primitives (`appendFileSync`); otherwise falls back to an async
+   * flush. Skips rotation — the goal is to land the final lines, not to enforce size.
+   */
+  const flushSync = (): void => {
+    if (buffer.length === 0) return;
+    const appendFileSync = envFs.appendFileSync;
+    if (!appendFileSync) {
+      void flush();
+      return;
+    }
+    const lines = buffer;
+    buffer = [];
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    try {
+      envFs.mkdirSync?.(dir);
+      if (!boundaryWritten) {
+        boundaryWritten = true;
+        if (envFs.existsSync?.(filePath)) {
+          lines.unshift(`---------- ${new Date().toISOString()} new session ----------`);
+        }
+      }
+      appendFileSync(filePath, lines.join("\n") + "\n");
+    } catch {
+      // Non-fatal: best-effort final flush on a crash path.
+    }
+  };
+
+  return {
+    handleEntry,
+    flush,
+    flushSync,
+    dir,
+    detach: () => {
+      disposed = true;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      flushSync(); // best-effort final flush that survives exit
+      void flush(); // and drain anything a sync-unaware runtime failed to write
+    },
+  };
+}

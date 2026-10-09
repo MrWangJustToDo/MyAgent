@@ -1,4 +1,5 @@
 import { createAgentEventBus } from "../agent/agent-event-bus";
+import { createLogExtension, type LogExtension } from "../agent/log/extension.js";
 import { createSubagentTools } from "../agent/subagent/subagent-tools.js";
 import { unregisterStreamingEventBus } from "../agent/tools/util/streaming-callback.js";
 import { getEnv } from "../env.js";
@@ -7,7 +8,6 @@ import { ACTIVE_STATUSES } from "../runtime-types/agent-status.js";
 import { buildManagedAgent } from "./agent-factory.js";
 import { runManagedAgent, runManagedAgentStream, type RunAgentStreamInput } from "./run-agent.js";
 import { emitSessionBootstrapEvents } from "./session-bootstrap-events.js";
-import { bridgeTelemetryToAgentLog } from "./telemetry/event-log-bridge.js";
 
 import type { ManagedAgent, ManagedAgentConfig } from "./managed-agent.js";
 import type { AgentEventListener, AgentEventBus, AgentEventType } from "../agent/agent-event-bus";
@@ -102,7 +102,11 @@ export class AgentManager {
   /** Per-agent scoped buses (cached by agent id). */
   private readonly agentBusScopes = new Map<string, AgentEventBus>();
 
-  private readonly _detachEventLogBridge: () => void;
+  /**
+   * Built-in log extension. It owns log policy (event→entry rules, message formatting, the JSONL
+   * sink) while `AgentLog` remains the emission seam.
+   */
+  private logExtension: LogExtension;
 
   /**
    * In-flight awaited extension teardowns (`destroyAgent`). Teardown is async
@@ -114,10 +118,19 @@ export class AgentManager {
   private pendingTeardowns = new Set<Promise<void>>();
 
   constructor() {
-    this._detachEventLogBridge = bridgeTelemetryToAgentLog(this.eventBus, (event) => {
-      const managed = this.agents.get(event.agentId) ?? (event.parentId ? this.agents.get(event.parentId) : undefined);
-      return managed?.log ?? null;
+    // The log extension consumes the bus (its policy half) and provides the file sink; agent
+    // scopes up-flow to the root, so one subscription covers subagents too.
+    this.logExtension = createLogExtension({
+      bus: this.eventBus,
+      resolveLog: (event) =>
+        this.agents.get(event.agentId)?.log ?? (event.parentId ? this.agents.get(event.parentId)?.log : null) ?? null,
     });
+    this.logExtension.start();
+  }
+
+  /** The root log extension (sink provider + event→entry consumer). */
+  getLogExtension(): LogExtension {
+    return this.logExtension;
   }
 
   // ============================================================================
@@ -224,9 +237,12 @@ export class AgentManager {
 
     // Subagents share the parent's session log directory but write an
     // independent file ({subagentId}.log) so per-agent entries stay attributable.
+    // Bound through the log extension (not `log.attachFileSink`) so the sink is registered for
+    // teardown: a subagent has no extension runner, so nothing else would release it.
     const parentLogDir = parent.getLog()?.getFileSinkDir?.();
-    if (parentLogDir) {
-      subagent.getLog()?.attachFileSink({ dir: parentLogDir, filename: `${subagent.id}.log` });
+    const subagentLog = subagent.getLog();
+    if (parentLogDir && subagentLog) {
+      this.logExtension.attachSink(subagentLog, { dir: parentLogDir, filename: `${subagent.id}.log` });
     }
 
     return subagent;
@@ -373,12 +389,12 @@ export class AgentManager {
     // Teardown extensions: emit interceptable session:shutdown first (so extensions can
     // release resources, e.g. kill LSP daemons), then deactivate/destroy all extensions.
     // This fixes a pre-existing leak where extensionRunner.destroyAll() was never called.
-    const runner = managedAgent.getExtensionRunner();
     //
     // The flush is chained onto the teardown promise rather than called here: teardown is
     // async, and landing the log sink while a deactivate() flush could still be pending
     // loses the final batch. Chaining also keeps `destroyAgent` synchronous for its
     // subagent/dispose callers while making the order unconditional.
+    const runner = managedAgent.getExtensionRunner();
     const teardown = (async () => {
       if (runner) {
         // Awaited: the shutdown hook is how an extension lands final work, and the

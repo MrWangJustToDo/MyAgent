@@ -1,5 +1,5 @@
-import { getEnv } from "../../env.js";
 import { createSequentialIdGenerator } from "../../utils/generate-id.js";
+import { createJsonlFileSink } from "../log/jsonl-file-sink.js";
 
 import type { AgentLogFileSinkOptions, LogCategory, LogEntry, LogLevel } from "./types.js";
 
@@ -24,6 +24,21 @@ export const generateLogId = createSequentialIdGenerator("log");
  */
 export const MAX_PENDING_LOG_ENTRIES = 200;
 
+/** A sink the seam hands assembled log entries to. */
+export interface LogSink {
+  handleEntry: (entry: LogEntry) => void;
+  /** Awaitable durability hook, used by `AgentLog.flush()`. */
+  flush?: () => Promise<void>;
+  /** Best-effort synchronous durability hook, used by exit paths. */
+  flushSync?: () => void;
+  /**
+   * Directory this sink writes to, when it is a file sink. Surfaced by `getFileSinkDir()` — the
+   * seam does not decide it, because a sink that cannot write (no `appendFile`) must not report a
+   * directory: core reads that value to place a subagent's log next to its parent's.
+   */
+  dir?: string;
+}
+
 // ============================================================================
 // AgentLog Class
 // ============================================================================
@@ -32,10 +47,10 @@ export const MAX_PENDING_LOG_ENTRIES = 200;
  * AgentLog - persistence-only event timeline for agent operations.
  *
  * Every accepted entry is serialized and streamed straight to the attached
- * file sink (JSONL, one entry per line). There is no in-memory history: the
- * log file is the single source of log observability. Entries emitted before a
- * sink is bound are retained in a small bounded buffer and drained into the
- * first sink that attaches.
+ * file sink (JSONL, one entry per line). There is no queryable in-memory
+ * history: the log file is the single source of log observability. Entries
+ * emitted before a sink is bound are retained in a small bounded buffer and
+ * drained into the first sink that attaches.
  *
  * Features:
  * 1. **Structured entries** - LogEntry with level, category, data, error, run id
@@ -197,179 +212,60 @@ export class AgentLog {
 
   private fileSinkDir: string | null = null;
 
-  /** Directory the active file sink writes to, or null when none is attached. */
+  /**
+   * Attach a sink: entries are handed to `handleEntry` from here on, and the pending buffer
+   * (bootstrap entries, bounded by {@link MAX_PENDING_LOG_ENTRIES}) is drained into it first, in
+   * emission order. `sinkFlush` / `sinkFlushSync` are the sink's durability hooks used by the
+   * seam's flush paths. Replaces any previous sink.
+   */
+  attachSink(sink: LogSink): void {
+    // Drain entries emitted before this sink existed (bootstrap), before anything emitted from
+    // here on — so binding a sink never loses the diagnostics that explain how the bind
+    // happened. Cleared on drain: a later re-attach must not replay them.
+    if (this.pendingEntries.length > 0) {
+      const retained = this.pendingEntries;
+      this.pendingEntries = [];
+      for (const entry of retained) sink.handleEntry(entry);
+    }
+    this.sinkEntry = sink.handleEntry;
+    this.sinkFlush = sink.flush ?? null;
+    this.sinkFlushSync = sink.flushSync ?? null;
+    this.fileSinkDir = sink.dir ?? null;
+  }
+
+  /** Detach the active sink (used by the log extension's disposer). */
+  detachSink(): void {
+    this.sinkEntry = null;
+    this.sinkFlush = null;
+    this.sinkFlushSync = null;
+    this.fileSinkDir = null;
+  }
+
+  /**
+   * Directory the active sink writes to, or null when none is attached.
+   *
+   * Retained as seam state (rather than sink state) because core reads it to place a subagent's
+   * log inside its parent session's directory.
+   */
   getFileSinkDir(): string | null {
     return this.fileSinkDir;
   }
 
   /**
-   * Persist log entries to a JSONL file (one LogEntry per line) with size-based
-   * rotation. Silent no-op when the env fs lacks `appendFile`. Entries logged
-   * Returns an unsubscribe function.
+   * Convenience: attach this log's JSONL file sink at `options.dir`.
+   *
+   * The implementation lives in the log extension (`createJsonlFileSink`), but the handle is kept
+   * on the seam so the module that owns the log still owns the one-call way to persist it — that is
+   * what keeps the `70`-odd call sites and the log validators independent of the extension wiring.
+   * Prefer `createLogExtension(...).attachSink(log, options)` in production paths, which also
+   * records the sink for teardown.
    */
   attachFileSink(options: AgentLogFileSinkOptions): () => void {
-    let fs: ReturnType<typeof getEnv>["fs"];
-    try {
-      fs = getEnv().fs;
-    } catch {
-      return () => {}; // CoreEnv not registered — degrade silently
-    }
-    if (!fs.appendFile) return () => {}; // no append support — degrade silently
-
-    const appendFile = fs.appendFile;
-    if (!appendFile) return () => {};
-    const dir = options.dir;
-    const filename = options.filename ?? "agent.log";
-    const maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
-    const maxFiles = options.maxFiles ?? 5;
-    const flushIntervalMs = options.flushIntervalMs ?? 250;
-    const filePath = `${dir}/${filename}`;
-
-    let buffer: string[] = [];
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let disposed = false;
-
-    /**
-     * Whether the session-boundary marker has been written. When the sink is
-     * attached to an existing file (same session reused across launches), the
-     * first flush prepends a visible divider so the new launch's log lines do
-     * not blend into the previous one's.
-     */
-    let boundaryWritten = false;
-
-    /** Shift segments `{file}.{maxFiles-1}` → drop, ..., `{file}` → `{file}.1`, then truncate. */
-    const rotate = async (): Promise<void> => {
-      const oldest = `${filePath}.${maxFiles - 1}`;
-      if (await fs.exists(oldest)) await fs.remove(oldest);
-      for (let i = maxFiles - 2; i >= 1; i--) {
-        const from = `${filePath}.${i}`;
-        const to = `${filePath}.${i + 1}`;
-        if (await fs.exists(from)) {
-          const content = await fs.readFile(from);
-          await fs.writeFile(to, content);
-          await fs.remove(from);
-        }
-      }
-      if (await fs.exists(filePath)) {
-        const content = await fs.readFile(filePath);
-        await fs.writeFile(`${filePath}.1`, content);
-      }
-      await fs.writeFile(filePath, "");
-    };
-
-    const flush = async (): Promise<void> => {
-      if (buffer.length === 0) return;
-      const lines = buffer;
-      buffer = [];
-      try {
-        await fs.mkdir(dir);
-        const existed = await fs.exists(filePath);
-        if (!existed) {
-          await fs.writeFile(filePath, "");
-        }
-        // Reused log file (session resumed/continued): mark the new launch with
-        // a clearly visible divider before the first batch of this session.
-        if (!boundaryWritten) {
-          boundaryWritten = true;
-          if (existed) {
-            lines.unshift(`---------- ${new Date().toISOString()} new session ----------`);
-          }
-        }
-        const content = lines.join("\n") + "\n";
-        const contentBytes = new TextEncoder().encode(content).length;
-        // Rotate when the active file already meets maxBytes, or when the pending
-        // batch would push it past the limit — so a large batch never leaves the
-        // active file over budget. Size comes from stat (restart-safe).
-        let currentBytes = 0;
-        try {
-          currentBytes = (await fs.stat(filePath)).size;
-        } catch {
-          currentBytes = 0;
-        }
-        if (currentBytes > 0 && currentBytes + contentBytes >= maxBytes) {
-          await rotate();
-        }
-        await appendFile(filePath, content);
-      } catch {
-        // Non-fatal: log persistence must never break agent execution.
-      }
-    };
-
-    const schedule = (): void => {
-      if (timer || disposed) return;
-      timer = setTimeout(() => {
-        timer = null;
-        void flush();
-      }, flushIntervalMs);
-    };
-
-    const handleEntry = (entry: LogEntry): void => {
-      buffer.push(JSON.stringify(entry));
-      schedule();
-    };
-
-    /**
-     * Synchronous best-effort write of the pending buffer, for crash/exit paths
-     * that cannot await an async flush. Requires a runtime with sync fs
-     * primitives (`appendFileSync`); otherwise falls back to an async flush.
-     * Skips rotation — the goal is to land the final lines, not to enforce size.
-     */
-    const flushSync = (): void => {
-      if (buffer.length === 0) return;
-      const appendFileSync = fs.appendFileSync;
-      if (!appendFileSync) {
-        void flush();
-        return;
-      }
-      const lines = buffer;
-      buffer = [];
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      try {
-        fs.mkdirSync?.(dir);
-        if (!boundaryWritten) {
-          boundaryWritten = true;
-          if (fs.existsSync?.(filePath)) {
-            lines.unshift(`---------- ${new Date().toISOString()} new session ----------`);
-          }
-        }
-        appendFileSync(filePath, lines.join("\n") + "\n");
-      } catch {
-        // Non-fatal: best-effort final flush on a crash path.
-      }
-    };
-
-    // Drain entries emitted before this sink existed (bootstrap) before anything
-    // emitted from here on — so binding a sink never loses the diagnostics that
-    // explain how the bind happened. Cleared on drain: a re-attach must not replay.
-    if (this.pendingEntries.length > 0) {
-      const retained = this.pendingEntries;
-      this.pendingEntries = [];
-      for (const entry of retained) handleEntry(entry);
-    }
-
-    // Replace any previous sink (one active sink per log).
-    this.sinkEntry = handleEntry;
-    this.sinkFlush = flush;
-    this.sinkFlushSync = flushSync;
-    this.fileSinkDir = dir;
-
+    const sink = createJsonlFileSink(options);
+    this.attachSink(sink);
     return () => {
-      disposed = true;
-      if (this.sinkEntry === handleEntry) {
-        this.sinkEntry = null;
-        this.sinkFlush = null;
-        this.sinkFlushSync = null;
-        this.fileSinkDir = null;
-      }
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      flushSync(); // best-effort final flush that survives exit
-      void flush(); // and drain anything a sync-unaware runtime failed to write
+      sink.detach();
+      if (this.sinkEntry === sink.handleEntry) this.detachSink();
     };
   }
 

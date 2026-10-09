@@ -1,8 +1,8 @@
 import { DEFAULT_EVENT_LOG_RULES, type EventLogRule } from "./event-log-rules.js";
 
-import type { AgentEvent, AgentEventBus, AgentEventType } from "../../agent/agent-event-bus";
-import type { AgentLog } from "../../agent/agent-log/agent-log.js";
-import type { McpServerStatus } from "../../agent/mcp/manager.js";
+import type { AgentEvent, AgentEventBus, AgentEventType } from "../agent-event-bus";
+import type { AgentLog } from "../agent-log/agent-log.js";
+import type { McpServerStatus } from "../mcp/manager.js";
 
 export type { EventLogRule } from "./event-log-rules.js";
 
