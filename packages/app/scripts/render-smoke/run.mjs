@@ -42,6 +42,7 @@ import { awaitStableMarker } from "./await-stable-marker.mjs";
 import { checks as budgetChecks } from "./budget-fixtures.mjs";
 import { ExitSummary } from "./dist/components/ExitSummary.mjs";
 import { MessageList, selectVisibleRows, MAX_STATIC_LINES } from "./dist/components/MessageList.mjs";
+import { SubagentPanel } from "./dist/components/SubagentPanel.mjs";
 import { StaticContext } from "./dist/context/static-context.mjs";
 import { useAgentStatus } from "./dist/hooks/use-agent-status.mjs";
 import { useAgent } from "./dist/hooks/use-agent.mjs";
@@ -51,6 +52,7 @@ import { useFlattenCacheCleanup } from "./dist/hooks/use-flatten-cache-cleanup.m
 import { useSize } from "./dist/hooks/use-size.mjs";
 import { useStaticHeights } from "./dist/hooks/use-static-heights.mjs";
 import { useStatic } from "./dist/hooks/use-static.mjs";
+import { useSubagentPanel } from "./dist/hooks/use-subagent-panel.mjs";
 import { useTheme } from "./dist/hooks/use-theme.mjs";
 import { useTranscriptDisplay } from "./dist/hooks/use-transcript-display.mjs";
 import { useWorkspaceInfo } from "./dist/hooks/use-workspace-info.mjs";
@@ -1253,6 +1255,98 @@ console.error = realConsoleError;
 
   footerInstance.unmount();
   useAgent.getActions().beginExit(null);
+}
+
+// ── task list cursor memory across a list↔detail round-trip ──────────────────
+// The row cursor lives outside the list component on purpose: the list unmounts while the detail
+// view is shown, so a component-local index resets on every return. Driving the real key
+// handlers (not the store's actions directly) is the point — a store-only test stays green even
+// if the list goes back to its own `useState(0)`.
+{
+  const tasks = [
+    { id: "task-a", name: "subagent-alpha", status: "completed" },
+    { id: "task-b", name: "subagent-bravo", status: "completed" },
+    { id: "task-c", name: "subagent-charlie", status: "completed" },
+  ];
+  // Rows come from the root session's snapshot, so the smoke needs a root session. Hand-rolled:
+  // the subject here is the cursor, not a live agent.
+  const fakeRoot = {
+    id: "root-session",
+    getSnapshot: () => ({ subagents: tasks }),
+    subscribe: () => () => {},
+  };
+
+  useSubagentPanel.getActions().close();
+  useAgent.getActions().setSession(fakeRoot);
+  useSubagentPanel.getActions().openList();
+
+  const listStdout = new FakeStdout();
+  const listStdin = fakeStdin();
+  const listInstance = render(createElement(SubagentPanel, {}), {
+    stdout: listStdout,
+    stdin: listStdin,
+    exitOnCtrlC: false,
+    patchConsole: false,
+    maxFps: 30,
+  });
+  await settle(200);
+
+  const press = async (seq, wait = 80) => {
+    // `useInput` reads through `stdin.read()` on the `"readable"` event, so input has to be
+    // pushed into the Readable — emitting `"data"` never reaches it (and would put the stream in
+    // flowing mode).
+    listStdin.push(seq);
+    await settle(wait);
+  };
+  const rows = () => frameLines(listStdout).filter((l) => /\b(alpha|bravo|charlie)\b/.test(l));
+  // The cursor row is the one carrying the `❯` marker; its task label is the identity we track.
+  // Labels are `getTaskLabel`'s — the `subagent-` prefix is stripped, so these read `alpha`.
+  const cursorLabel = () => {
+    const marked = frameLines(listStdout).find((l) => l.includes("❯"));
+    const match = marked?.match(/\b(alpha|bravo|charlie)\b/);
+    return match ? match[0] : null;
+  };
+
+  record("the task list renders a row per task", rows().length === 3, { rows: rows() });
+  record("the cursor starts on the first row", cursorLabel() === "alpha", { cursor: cursorLabel() });
+
+  await press("\u001B[B"); // ↓
+  record("down moves the cursor to the second row", cursorLabel() === "bravo", {
+    cursor: cursorLabel(),
+  });
+
+  await press("\r"); // ⏎ → detail
+  record(
+    "enter opens the detail view for the selected row",
+    useSubagentPanel.getReadonlyState().view === "detail" &&
+      useSubagentPanel.getReadonlyState().selectedSubagentId === "task-b",
+    { view: useSubagentPanel.getReadonlyState().view, id: useSubagentPanel.getReadonlyState().selectedSubagentId }
+  );
+  record("the detail view replaces the list", rows().length === 0, { rows: rows() });
+
+  await press("\u001B"); // Esc → back to list
+  record("esc returns to the list", useSubagentPanel.getReadonlyState().view === "list", {
+    view: useSubagentPanel.getReadonlyState().view,
+  });
+  record("the list is rendered again after coming back", rows().length === 3, { rows: rows() });
+  // The regression this whole block exists for: a fresh open starts at row 0, so a local index
+  // would leave the cursor on alpha here.
+  record("the cursor is still on the row it was on before detail", cursorLabel() === "bravo", {
+    cursor: cursorLabel(),
+    rows: rows(),
+  });
+
+  // Rows can vanish (a subagent is destroyed) while the cursor sits past the new end. The stored
+  // index is deliberately left out of range, so what keeps the panel sane is the clamp on read.
+  useSubagentPanel.getActions().setSelectedIndex(99);
+  await settle(120);
+  record("an out-of-range cursor is clamped to the last row", cursorLabel() === "charlie", {
+    cursor: cursorLabel(),
+  });
+
+  listInstance.unmount();
+  useSubagentPanel.getActions().close();
+  useAgent.getActions().setSession(null);
 }
 
 const pass = results.every((r) => r.pass);

@@ -1,6 +1,7 @@
 import { Box, Text, useInput } from "ink";
 import { useEffect, useMemo, useState } from "react";
 
+import { useSubagentPanel } from "../hooks/use-subagent-panel.js";
 import { COLORS } from "../theme/colors.js";
 import { listNavHint, pressEscToReturnHint } from "../utils/keyboard-labels.js";
 import { resolveAgentSession } from "../utils/session-resolve.js";
@@ -64,15 +65,23 @@ export const SubagentListPanel = ({
   onSelect: (id: string) => void;
   onClose: () => void;
 }) => {
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const storedIndex = useSubagentPanel((s) => s.selectedIndex);
+  const setStoredIndex = useSubagentPanel.getActions().setSelectedIndex;
+
+  // Clamped on read, not on write: rows can disappear while the cursor sits in the detail view,
+  // and only the list knows the count. Deriving it here (rather than storing a corrected value)
+  // keeps Enter and the arrow keys in agreement even in the render where the list just shrank.
+  // The stored value is left as-is on purpose — it costs nothing, and if the list grows back the
+  // cursor lands near where the user left it instead of snapping to the top.
+  const selectedIndex = Math.min(storedIndex, Math.max(0, tasks.length - 1));
 
   useInput((_input, key) => {
     if (key.upArrow) {
-      setSelectedIndex((i) => Math.max(0, i - 1));
+      setStoredIndex(Math.max(0, selectedIndex - 1));
       return;
     }
     if (key.downArrow) {
-      setSelectedIndex((i) => Math.min(tasks.length - 1, i + 1));
+      setStoredIndex(Math.min(tasks.length - 1, selectedIndex + 1));
       return;
     }
     if (key.return && tasks[selectedIndex]) {

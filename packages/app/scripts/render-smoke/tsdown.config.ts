@@ -32,6 +32,9 @@ export default defineConfig({
     // Mounted directly to pin that the exit summary sits BELOW the footer behind its own
     // top border — the layout the user asked for, which nothing else renders.
     `${src}/components/ExitSummary.tsx`,
+    // Mounted to pin the task list's cursor memory across a list↔detail round-trip.
+    `${src}/components/SubagentPanel.tsx`,
+    `${src}/hooks/use-subagent-panel.ts`,
     // The smoke wraps the compact-summary fixture in this provider, so the view it mounts is
     // the finished checkpoint rather than the live summary `MessageViewWithCompact` injects.
     `${src}/context/static-context.ts`,
