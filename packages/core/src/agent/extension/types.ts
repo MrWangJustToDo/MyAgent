@@ -1,8 +1,8 @@
+import type { ExtensionObserverSurface } from "./event-visibility.js";
 import type { ExtensionZod } from "./extension-zod.js";
 import type { CoreEnv } from "../../env.js";
 import type { MultimodalPartType } from "../../models/adapter/capability-message-utils.js";
 import type { ModelCapability } from "../../models/types.js";
-import type { AgentEvent, AgentEventType, AgentEvents } from "../agent-event-bus/types.js";
 import type { ToolPresentation } from "../tools/presentation/types.js";
 import type { ModelToolContent, ToModelOutputContext } from "../tools/runtime/to-model-output-registry.js";
 import type { ModelMessage, SchemaInput } from "@tanstack/ai";
@@ -418,167 +418,31 @@ export interface ExtensionEventBus {
 // dispatch modes from being confused at the call site.
 //
 // Deliberate non-wildcard: `observeAny` expands the declared observable set
-// below instead of subscribing to the bus's `"*"`. Two reasons — `"*"` would
-// ship internal high-frequency events to extensions, and the
-// `agent-event-bus` contract keeps the Event→Log bridge as the only wildcard
+// in `event-visibility.ts` instead of subscribing to the bus's `"*"`. Two reasons — `"*"`
+// would ship internal high-frequency events to extensions, and the
+// `agent-event-bus` contract keeps the log extension as the only wildcard
 // consumer in core.
+//
+// The visibility table, the observable-set expansion and the three accessor types live in
+// `event-visibility.ts` (this module hit the file-size limit, and the table is the one place a new
+// event must be classified). Re-exported here so consumers keep one import site.
 
-/**
- * Visibility of one observer event to extensions.
- *
- * - `observable` — an extension may subscribe to it or read its retained value.
- * - `internal` — deliberately withheld; the reason is recorded next to the row.
- */
-export type ExtensionEventVisibility = "observable" | "internal";
+export {
+  EXTENSION_EVENT_VISIBILITY,
+  INTERNAL_EXTENSION_EVENTS,
+  observableExtensionEvents,
+} from "./event-visibility.js";
+export type {
+  ExtensionEventObserver,
+  ExtensionEventVisibility,
+  ExtensionObserverOptions,
+  ExtensionObserverSurface,
+  ObservableExtensionEvent,
+} from "./event-visibility.js";
 
-/**
- * The observable set, exhaustively keyed by `AgentEventType`.
- *
- * `satisfies Record<AgentEventType, …>` is the guard that matters: adding an
- * event to the registry breaks compilation HERE until it is classified, so a
- * new event can neither become observable by accident nor be silently missing
- * from `observeAny`. The default is `observable`; an `internal` row must state
- * why, so a blanket hide cannot creep in.
- */
-export const EXTENSION_EVENT_VISIBILITY = {
-  // Session lifecycle
-  "session:start": "observable",
-  "session:doc": "observable",
-  "session:skill": "observable",
-  "session:mcp": "observable",
-  "session:memory": "observable",
-  "session:restore": "observable",
-  "session:save-error": "observable",
-  // Turn lifecycle
-  "prompt:submit": "observable",
-  "prompt:before": "observable",
-  "turn:summary": "observable",
-  // Agent lifecycle / tools / approvals
-  "agent:thinking": "observable",
-  "agent:tool-start": "observable",
-  "agent:tool-approval-request": "observable",
-  "agent:tool-approval-resolved": "observable",
-  "agent:tool-end": "observable",
-  "agent:tool-error": "observable",
-  "agent:abort": "observable",
-  "agent:retry": "observable",
-  "agent:stream-error": "observable",
-  "agent:stop": "observable",
-  "agent:extension-error": "observable",
-  // Memory
-  "memory:prefetch": "observable",
-  "memory:extract": "observable",
-  "memory:consolidate": "observable",
-  // LLM
-  "llm:request": "observable",
-  "llm:response": "observable",
-  // Compaction
-  "compaction:auto-start": "observable",
-  "compaction:auto-complete": "observable",
-  "compaction:auto-error": "observable",
-  "compaction:reactive-start": "observable",
-  "compaction:reactive-complete": "observable",
-  "compaction:reactive-error": "observable",
-  "compaction:reactive-max-retries": "observable",
-  // Subagents
-  "subagent:created": "observable",
-  "subagent:started": "observable",
-  "subagent:completed": "observable",
-  "subagent:error": "observable",
-  "subagent:destroyed": "observable",
-  "subagent:phase": "observable",
-  "subagent:progress-summary-error": "observable",
-  // Plan mode
-  "plan:enter": "observable",
-  "plan:ready": "observable",
-  "plan:execute": "observable",
-  "plan:cancel-execution": "observable",
-  "plan:todo-replaced": "observable",
-  "plan:retro": "observable",
-  "plan:complete": "observable",
-  "plan:exit": "observable",
-  // Session channel projection
-  "agent:state": "observable",
-  "session:messages": "observable",
-  "session:queues": "observable",
-  "session:usage": "observable",
-  "session:todos": "observable",
-  "session:plan": "observable",
-  "session:summary": "observable",
-  "session:mode": "observable",
-  "session:extensions": "observable",
-  "session:tool-presentation": "observable",
-  "session:interaction": "observable",
-  "agent:iteration": "observable",
-  // Deliberately withheld (each needs a reason).
-  // token-by-token streaming already has a dedicated UI path; observing it invites
-  // per-chunk extension work on the hot path.
-  "tool:chunk": "internal",
-  "tool:clear": "internal",
-  // the extension-UI channel is how extensions publish to the host; making it
-  // observable would couple unrelated extensions through each other's output.
-  "extension:ui": "internal",
-} as const satisfies Record<AgentEventType, ExtensionEventVisibility>;
-
-/** Every event an extension may observe. */
-export type ObservableExtensionEvent = {
-  [K in keyof typeof EXTENSION_EVENT_VISIBILITY]: (typeof EXTENSION_EVENT_VISIBILITY)[K] extends "observable"
-    ? K
-    : never;
-}[keyof typeof EXTENSION_EVENT_VISIBILITY];
-
-/**
- * The observable set as a runtime list, in declaration order.
- *
- * Used by `observeAny` to expand into per-event subscriptions; exported so a
- * validator can assert the expansion matches the table rather than reproducing
- * the filter.
- */
-export function observableExtensionEvents(): ObservableExtensionEvent[] {
-  return (Object.keys(EXTENSION_EVENT_VISIBILITY) as AgentEventType[]).filter(
-    (type) => EXTENSION_EVENT_VISIBILITY[type] === "observable"
-  ) as ObservableExtensionEvent[];
-}
-
-/**
- * Observer handler. The payload is the **same object** every in-scope consumer
- * receives (the session channel projection, the Event→Log bridge), so it MUST be
- * treated as read-only: mutating it mutates live state.
- */
-export type ExtensionEventObserver<T extends ObservableExtensionEvent = ObservableExtensionEvent> = (
-  event: AgentEvent<T>
-) => void | Promise<void>;
-
-export interface ExtensionObserverOptions {
-  /**
-   * For a retained event, deliver the current value once, synchronously, at
-   * subscription time. Defaults to `true` for `observe` and `false` for
-   * `observeAny` (a broad subscriber must not be hit with a burst of snapshots).
-   */
-  replay?: boolean;
-}
-
-/**
- * Observation half of the extension event surface. `ExtensionContext.events`
- * carries this alongside {@link ExtensionEventBus}.
- *
- * Failure containment: a synchronous throw is contained by the observer
- * dispatch mode (other observers still run), and a returned rejected promise is
- * caught here and reported as `agent:extension-error` with phase
- * `event-observer`, so an observer can never abort a run.
- */
-export interface ExtensionObserverSurface {
-  /** Subscribe to one observable event. Returns a disposer. */
-  observe<T extends ObservableExtensionEvent>(
-    type: T,
-    handler: ExtensionEventObserver<T>,
-    options?: ExtensionObserverOptions
-  ): () => void;
-  /** Subscribe to every observable event. Returns a disposer. */
-  observeAny(handler: ExtensionEventObserver, options?: ExtensionObserverOptions): () => void;
-  /** Current retained value for an observable event, or `undefined`. */
-  retained<T extends ObservableExtensionEvent>(type: T): AgentEvents[T] | undefined;
-}
+// ============================================================================
+// UI bridge (app-layer only)
+// ============================================================================
 
 // ============================================================================
 // UI bridge (app-layer only)
@@ -705,8 +569,7 @@ export interface ExtensionContext {
   id: string;
   env: Record<string, string>;
   /** Working directory (rootPath) of the agent session. */
-  cwd: string;
-  /**
+  cwd: string; /**
    * Runtime-agnostic environment: filesystem, shell, fetch, path utilities, env vars,
    * and rootPath — the single source of truth for host capabilities. Lets extensions
    * perform real I/O (read files, run commands, fetch) without importing host-specific APIs.
@@ -746,6 +609,28 @@ export interface ExtensionContext {
   registerMessageTransformer(transformer: MessageTransformer): () => void;
 
   /**
+   * Register an async flush, run in teardown **before** core releases what this extension may write
+   * through (see {@link ExtensionAPI} for the exact phase order).
+   *
+   * This is not `deactivate()`: deactivate releases the extension, while flush *lands* what it has
+   * already produced. The distinction is load-bearing for anything that buffers behind a timer or
+   * debounce, where the last batch would otherwise be dropped by a fire-and-forget teardown. A
+   * throwing flush is reported as `agent:extension-error` with phase `flush` and does not stop the
+   * remaining teardown phases.
+   *
+   * Registering again replaces the previous flush for this extension. Returns a disposer that only
+   * clears the registration while it is still the active one.
+   */
+  registerFlush(flush: () => Promise<void> | void): () => void;
+
+  /**
+   * Register a **synchronous** flush for the process-exit path (`process.on("exit")` and the fatal
+   * handlers), which cannot await. Best-effort: it must not throw, and a throw is contained so it
+   * cannot prevent the process from exiting. Use this for the state a crash report needs.
+   */
+  registerExitFlush(flush: () => void): () => void;
+
+  /**
    * Interception (`on` / `off` / `emit`) **and** observation (`observe` /
    * `observeAny` / `retained`).
    *
@@ -774,6 +659,11 @@ export interface ExtensionAPI {
   description: string;
 
   activate(ctx: ExtensionContext): Promise<void> | void;
+  /**
+   * Release this extension's resources. Runs **after** the flush phase, so anything buffered has
+   * already landed — land state in `ctx.registerFlush(...)` instead of here if teardown can be
+   * asynchronous.
+   */
   deactivate?(): Promise<void> | void;
 }
 
@@ -802,6 +692,15 @@ export interface ExtensionRegistrations {
    * disabled extension stops rewriting the wire.
    */
   messageTransformers: string[];
+  /**
+   * Awaited flush phase, run on teardown before core releases what the extension writes through.
+   * One per extension (re-registration replaces it); cleared with the rest of the registrations.
+   */
+  flush: (() => Promise<void> | void) | null;
+  /** Synchronous exit-path flush, for hooks that cannot await. */
+  exitFlush: (() => void) | null;
+  /** Disposer for the process-wide exit registrations `exitFlush` was registered through. */
+  exitFlushRef: (() => void) | null;
 }
 
 export interface ExtensionInstance {

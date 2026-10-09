@@ -12,6 +12,10 @@
 //   2. Process-level handlers that record a fatal error into every active log
 //      and then flush synchronously before the process goes down.
 //   3. A `process.on("exit")` flush so a normal quit also drains the buffer.
+//
+// The same two exit moments also run the *extensions'* synchronous flush registrations
+// (`ctx.registerExitFlush`): an extension that buffers state for persistence has the same window,
+// and unlike a log it has no core-side registry to fall back on.
 
 import type { AgentLog } from "./agent-log.js";
 
@@ -41,6 +45,36 @@ export function flushActiveAgentLogsSync(): void {
       log.flushSync();
     } catch {
       // Non-fatal: log persistence must never break teardown.
+    }
+  }
+}
+
+/**
+ * Synchronous exit flushes registered by extensions (`ctx.registerExitFlush`).
+ *
+ * Process-wide rather than per-agent because the path that needs them most — a hard exit with a
+ * live session — never runs agent teardown, so there is no per-agent registry to consult.
+ */
+const extensionExitFlushes = new Set<() => void>();
+
+/** Register an extension's synchronous exit flush. Returns the disposer (idempotent). */
+export function registerExtensionExitFlush(flush: () => void): () => void {
+  extensionExitFlushes.add(flush);
+  return () => {
+    extensionExitFlushes.delete(flush);
+  };
+}
+
+/**
+ * Run every registered extension exit flush. Never throws: a failing flush is contained so it
+ * cannot prevent the process from exiting.
+ */
+export function flushExtensionExitFlushesSync(): void {
+  for (const flush of [...extensionExitFlushes]) {
+    try {
+      flush();
+    } catch {
+      // Non-fatal: a failing extension flush must not block the exit path.
     }
   }
 }
@@ -93,6 +127,7 @@ export function installAgentLogProcessGuards(): void {
         }
       }
       flushActiveAgentLogsSync();
+      flushExtensionExitFlushesSync();
     } finally {
       proc.exit(1);
     }
@@ -100,5 +135,8 @@ export function installAgentLogProcessGuards(): void {
 
   proc.on("uncaughtException", (err) => handleFatal("uncaughtException", err));
   proc.on("unhandledRejection", (reason) => handleFatal("unhandledRejection", reason));
-  proc.on("exit", () => flushActiveAgentLogsSync());
+  proc.on("exit", () => {
+    flushActiveAgentLogsSync();
+    flushExtensionExitFlushesSync();
+  });
 }

@@ -104,6 +104,15 @@ export class AgentManager {
 
   private readonly _detachEventLogBridge: () => void;
 
+  /**
+   * In-flight awaited extension teardowns (`destroyAgent`). Teardown is async
+   * (extensions may flush/await on deactivate), but `destroyAgent` keeps a
+   * synchronous signature for its callers. The log flush is therefore chained
+   * onto this promise so it can never race the teardown, and `settleTeardowns()`
+   * lets an ordered shutdown (SessionHost close) wait for the whole sequence.
+   */
+  private pendingTeardowns = new Set<Promise<void>>();
+
   constructor() {
     this._detachEventLogBridge = bridgeTelemetryToAgentLog(this.eventBus, (event) => {
       const managed = this.agents.get(event.agentId) ?? (event.parentId ? this.agents.get(event.parentId) : undefined);
@@ -365,14 +374,28 @@ export class AgentManager {
     // release resources, e.g. kill LSP daemons), then deactivate/destroy all extensions.
     // This fixes a pre-existing leak where extensionRunner.destroyAll() was never called.
     const runner = managedAgent.getExtensionRunner();
-    if (runner) {
-      runner.emitSessionShutdown(id);
-      void runner.destroyAll();
-    }
-
-    // Land the buffered teardown/abort entries before the sink is dropped, so a
-    // process exit immediately after destroy does not lose them to the batch timer.
-    managedAgent.flushLogOnDestroy();
+    //
+    // The flush is chained onto the teardown promise rather than called here: teardown is
+    // async, and landing the log sink while a deactivate() flush could still be pending
+    // loses the final batch. Chaining also keeps `destroyAgent` synchronous for its
+    // subagent/dispose callers while making the order unconditional.
+    const teardown = (async () => {
+      if (runner) {
+        // Awaited: the shutdown hook is how an extension lands final work, and the
+        // teardown below unregisters its interceptor — so it must not still be running.
+        await runner.emitSessionShutdown(id);
+        await runner.destroyAll();
+      }
+    })()
+      .catch(() => {
+        // Teardown failures are reported per phase on the bus; never block the flush below.
+      })
+      .then(() => {
+        // Land the buffered teardown/abort entries before the sink is dropped, so a
+        // process exit immediately after destroy does not lose them to the batch timer.
+        managedAgent.flushLogOnDestroy();
+      });
+    this.trackTeardown(teardown);
 
     this.agents.delete(id);
   }
@@ -478,6 +501,28 @@ export class AgentManager {
     for (const agent of this.getRootAgents()) {
       this.destroyAgent(agent.id);
     }
+  }
+
+  /**
+   * Wait for every in-flight `destroyAgent` teardown (extension flush/deactivate +
+   * the log flush chained after it) to settle.
+   *
+   * Synchronous destroy paths cannot await their own teardown, so an ordered
+   * shutdown that must not exit mid-flush awaits this instead — otherwise a buffered
+   * final batch can be lost when the process goes down right after closing a session.
+   */
+  async settleTeardowns(): Promise<void> {
+    // `destroyAgent` can enqueue more teardowns while these settle (subagent cascades),
+    // so drain until the set stops growing.
+    while (this.pendingTeardowns.size > 0) {
+      await Promise.allSettled([...this.pendingTeardowns]);
+    }
+  }
+
+  /** Track a teardown promise so {@link settleTeardowns} can await it. */
+  private trackTeardown(promise: Promise<void>): void {
+    this.pendingTeardowns.add(promise);
+    void promise.finally(() => this.pendingTeardowns.delete(promise));
   }
 }
 

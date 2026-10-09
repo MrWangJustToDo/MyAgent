@@ -1,5 +1,8 @@
 import { getEnv, hasCoreEnv } from "../../env.js";
+// The extension exit-flush registry lives with the other process-exit guards, so a hard exit runs
+// it on the same two hooks (fatal handler + `exit`) that already land the active logs.
 import { createAgentEventBus } from "../agent-event-bus";
+import { registerExtensionExitFlush } from "../agent-log/lifecycle-guards.js";
 
 import { BusExtensionEventBus } from "./bus-extension-event-bus.js";
 import { DefaultExtensionUI } from "./default-extension-ui.js";
@@ -283,11 +286,15 @@ export class ExtensionRunner {
 
   /**
    * Emit `session:shutdown` to registered interceptors before teardown.
+   *
+   * Awaited by the caller (the teardown sequence) because the hook exists so an extension
+   * can release resources — kill an LSP daemon, disconnect a client, land buffered writes.
+   * Dropping the promise meant `destroyAll()` could unregister the interceptor while its
+   * async handler was still running. Rejections are swallowed here: a failing interceptor
+   * must not break teardown.
    */
-  emitSessionShutdown(sessionId: string): void {
-    // Fire-and-forget interception: interceptor errors must not surface as
-    // unhandled rejections or break teardown.
-    this.eventBus
+  async emitSessionShutdown(sessionId: string): Promise<void> {
+    await this.eventBus
       .emit({
         type: "session:shutdown",
         payload: { sessionId },
@@ -364,6 +371,9 @@ export class ExtensionRunner {
       unsubObservers: [],
       unsubTurnContext: [],
       messageTransformers: [],
+      flush: null,
+      exitFlush: null,
+      exitFlushRef: null,
     };
     const ctx = this.createContext(api, config, registrations);
 
@@ -398,6 +408,11 @@ export class ExtensionRunner {
   }
 
   async destroyExtension(instance: ExtensionInstance): Promise<void> {
+    // Flush phase first: land anything the extension buffered (behind a timer or debounce) while
+    // the resources it writes through are still held. Not folded into `deactivate()` — deactivate
+    // *releases* the extension, and a fire-and-forget teardown would drop the last batch. A
+    // failing flush is reported and the sequence continues (the extension still gets deactivated).
+    await this.flushExtension(instance);
     if (instance.api.deactivate) {
       try {
         await instance.api.deactivate();
@@ -417,6 +432,25 @@ export class ExtensionRunner {
     // footer surface).
     this.ui.clearSlotsByOwner(instance.api.id);
     instance.state = "inactive";
+  }
+
+  /**
+   * Run an extension's registered flush phase, reporting a failure as `agent:extension-error`
+   * with phase `flush` rather than letting it skip the remaining teardown phases.
+   */
+  private async flushExtension(instance: ExtensionInstance): Promise<void> {
+    const flush = instance.registrations.flush;
+    if (!flush) return;
+    try {
+      await flush();
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.rawBus.emit("agent:extension-error", {
+        extensionId: instance.api.id,
+        phase: "flush",
+        error: error.message,
+      });
+    }
   }
 
   async destroyAll(): Promise<void> {
@@ -555,6 +589,12 @@ export class ExtensionRunner {
     instance.registrations.unsubObservers.length = 0;
     instance.registrations.unsubTurnContext.length = 0;
     instance.registrations.messageTransformers.length = 0;
+    // One flush per extension, and the sync one is registered process-wide too — so releasing it
+    // here is what stops a destroyed extension from running on `process.on("exit")`.
+    instance.registrations.flush = null;
+    instance.registrations.exitFlushRef?.();
+    instance.registrations.exitFlushRef = null;
+    instance.registrations.exitFlush = null;
   }
 
   private createContext(
@@ -603,6 +643,29 @@ export class ExtensionRunner {
         };
         registrations?.unsubTurnContext.push(unsub);
         return unsub;
+      },
+
+      registerFlush: (flush: () => Promise<void> | void): (() => void) => {
+        if (!registrations) return () => {};
+        registrations.flush = flush;
+        // Identity-checked: a stale disposer from a replaced flush must not clear
+        // the newer registration (mirrors `registerContextProvider` above).
+        return () => {
+          if (registrations.flush === flush) registrations.flush = null;
+        };
+      },
+
+      registerExitFlush: (flush: () => void): (() => void) => {
+        if (!registrations) return () => {};
+        registrations.exitFlush = flush;
+        // Also registered process-wide: an exit with a live session never runs agent teardown,
+        // and that is exactly the case where the final batch matters most.
+        registrations.exitFlushRef = registerExtensionExitFlush(flush);
+        return () => {
+          if (registrations.exitFlush === flush) registrations.exitFlush = null;
+          registrations.exitFlushRef?.();
+          registrations.exitFlushRef = null;
+        };
       },
 
       registerMessageTransformer: (transformer: MessageTransformer): (() => void) => {

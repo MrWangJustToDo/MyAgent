@@ -1,6 +1,10 @@
 export { ExtensionRunner } from "./runner.js";
 export { ExtensionLoader, normalizeExtensionExport } from "./loader.js";
-export { EXTENSION_EVENT_VISIBILITY, observableExtensionEvents } from "./types.js";
+export {
+  EXTENSION_EVENT_VISIBILITY,
+  observableExtensionEvents,
+  INTERNAL_EXTENSION_EVENTS,
+} from "./event-visibility.js";
 export {
   DEFAULT_EXTENSION_DIR,
   EXTENSION_DIRS_ENV_VAR,

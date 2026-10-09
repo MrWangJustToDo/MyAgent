@@ -28,6 +28,12 @@ export interface LocalAgentSessionHostManager extends LocalAgentSessionManager {
   createManagedAgent(config: ManagedAgentConfig, parentId?: string): Promise<ManagedAgent>;
   getAgents(): ManagedAgent[];
   destroyAgent(id: string): void;
+  /**
+   * Await every in-flight teardown (extension flush/deactivate + the log flush chained
+   * after it). Optional so the minimal manager surface stays minimal; when absent, the
+   * destroy path simply returns without waiting for the teardown to settle.
+   */
+  settleTeardowns?(): Promise<void>;
 }
 
 export interface CreateLocalAgentSessionHostOptions {
@@ -166,6 +172,11 @@ class LocalAgentSessionHostImpl implements AgentSessionHost {
       }
     }
     this.manager.destroyAgent(agentId);
+
+    // `destroyAgent` is synchronous but tears extensions down asynchronously; settle here so
+    // an awaiting caller (CLI exit, `/clear`, tests) is guaranteed the log's final batch is on
+    // disk before this returns. Without it the flush races session teardown.
+    await this.manager.settleTeardowns?.();
 
     // Release the startup reservation for a still-empty root session so a later
     // launch reuses it instead of piling up a fresh empty session. Best-effort:

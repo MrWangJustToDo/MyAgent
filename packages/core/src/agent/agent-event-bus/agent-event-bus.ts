@@ -1,4 +1,5 @@
 import { Emitter } from "../../utils/emitter.js";
+import { INTERNAL_EXTENSION_EVENTS } from "../extension/event-visibility.js";
 
 import type {
   AgentEvent,
@@ -117,8 +118,16 @@ export class DefaultAgentEventBus implements AgentEventBus {
 
   emit<T extends AgentEventType>(type: T, payload: AgentEvent<T>["payload"], meta?: AgentEventMetaInput): void {
     const event = this.buildEvent(type, payload, meta) as AgentEvent;
+    // Internal events are withheld from the wildcard fan-out: "internal" means "the caller must not
+    // observe this", and wildcard delivery is an observation path, so the exclusion is applied
+    // here rather than left to each subscriber's discipline. It also makes wildcard delivery equal
+    // to `observeAny` (already "wildcard over the observable set") by construction. Typed observers
+    // still receive internal events, so "internal" narrows *how* an event is consumed, never
+    // whether it is emitted.
+    const deliverToWildcards = !INTERNAL_EXTENSION_EVENTS.has(type);
     for (let node: EventBusScopeNode | null = this.node; node; node = node.parent) {
       node.observers.emit(type, event);
+      if (!deliverToWildcards) continue;
       for (const listener of [...node.wildcards]) {
         try {
           listener(event);

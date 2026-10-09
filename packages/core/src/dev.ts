@@ -47,6 +47,8 @@ export {
   installAgentLogProcessGuards,
   registerActiveAgentLog,
   unregisterActiveAgentLog,
+  registerExtensionExitFlush,
+  flushExtensionExitFlushesSync,
   flushActiveAgentLogsSync,
 } from "./agent/agent-log/lifecycle-guards.js";
 // ============================================================================
