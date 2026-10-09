@@ -128,7 +128,7 @@ export default {
 };
 \`\`\`
 
-## The five registration channels
+## The six registration channels
 
 Every registration lives on \`ctx\` and is scoped to this extension: disabling the
 extension unregisters everything it added.
@@ -194,6 +194,38 @@ Match is on the literal prefix, so \`tool:before:run_*\` works too.
 | \`tool:before:<name>\` | \`{ toolName, args, sessionId }\`. Set \`event.skip = true\` to cancel (add \`event.reason\` to explain), or \`event.modifiedArgs = …\` to rewrite the arguments. |
 | \`tool:after:<name>\` | \`{ toolName, args, result, durationMs }\`. Set \`event.payload.modifiedResult = …\` to replace the result the model receives. |
 | \`tool:error:<name>\` | \`{ toolName, args, error }\`. Observe-only; use it to log or alert. |
+
+### \`ctx.events.observe(type, handler)\` — react to what happened
+
+Interceptors **change** an operation; observers **read** one. They are two dispatch modes with
+similar-looking names, so mind which you want:
+
+| | \`ctx.registerInterceptor(hook, h)\` / \`ctx.events.on\` | \`ctx.events.observe(type, h)\` |
+|---|---|---|
+| Mode | async, ordered, awaited | sync, fire-and-forget |
+| Can change the run | yes — cancel, rewrite args, replace a result | no — read-only |
+| Names | the six hook names above | the agent's observer events (\`llm:response\`, \`subagent:completed\`, \`session:usage\`, …) |
+
+\`\`\`js
+const off = ctx.events.observe("llm:response", (event) => {
+  console.log(event.payload.model, event.payload.costUsd);
+});
+
+// Broad: every observable event (streaming chunks and the extension-UI channel are excluded).
+ctx.events.observeAny((event) => exporter.push(event));
+
+// Retained events (usage / todos / plan / mode / state / messages …) replay their current
+// value once on subscribe, so a late observer does not have to wait for the next change.
+ctx.events.observe("session:usage", ({ payload }) => render(payload));
+ctx.events.observe("session:usage", handler, { replay: false });  // opt out of the replay
+const usage = ctx.events.retained("session:usage");               // on-demand read, no subscription
+\`\`\`
+
+- Both accessors return a disposer, and disabling the extension unsubscribes everything anyway.
+- **Treat a payload as read-only.** It is the same object every other consumer sees, so
+  mutating it corrupts live session state.
+- A throwing or rejecting handler is contained and reported as \`agent:extension-error\`; it can
+  never abort the run.
 
 ### \`ctx.registerContextProvider({ content, disabledContent })\` — per-turn context
 
@@ -284,7 +316,9 @@ await ctx.coreEnv.runCommand("git", ["status"])   // or the command API the host
 await ctx.coreEnv.fetch("https://…")
 ctx.z                      // the host's zod — always use this, never \`import "zod"\`
 ctx.logger.info("…")       // / .warn / .error → the agent log
-ctx.events.on("session:start", handler)           // raw bus subscription
+ctx.events.on("session:start", handler)            // intercept (the six hook names)
+ctx.events.observe("llm:response", handler)        // observe (observer events)
+ctx.events.retained("session:usage")               // current retained value
 \`\`\`
 
 \`ctx.coreEnv\` is the runtime-agnostic environment: filesystem, shell, fetch, path

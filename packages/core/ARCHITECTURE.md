@@ -923,6 +923,8 @@ Extension interception (`tool:before:*` / `tool:after:*` / `tool:error:*` / `bef
 
 **Message transformers (`ctx.registerMessageTransformer`) are deliberately NOT one of those interceptor patterns.** They are a named registration method with a different shape: interceptor mode is a shared mutable payload with cancel short-circuitness, whereas a message transformer receives the model-facing message array and returns a replacement. The interceptor pattern lists above and below do not gain a message-transform entry, and `AgentEventBus` gains no third dispatch mode.
 
+The non-bus extension surfaces are therefore exactly: `registerTool`, `registerCommand`, `registerContextProvider`, `registerMessageTransformer`, and `ui.render` / `ui.notify` / `ui.getContext` — each a registration or projection API, none a dispatch mode. **Observation (`ctx.events.observe` / `observeAny` / `retained`) is NOT on that list**: it is bus-backed, delivered by the observer dispatch mode the bus already had, which is why the observation section above documents it under the bus rather than under the non-bus surfaces.
+
 | Property | Behaviour |
 | -------- | --------- |
 | Registration | `ctx.registerMessageTransformer(fn)` returns a disposer. At most one per extension (re-registering replaces; a stale disposer is inert). Cleared on disable / destroy. |
@@ -939,6 +941,18 @@ Extension interception (`tool:before:*` / `tool:after:*` / `tool:error:*` / `bef
 Same-phase ordering note: `compaction` and `message-transform` declare the same phase, so the phase sort cannot order them — their relative order comes from the array position in `buildAgentRunner`, which is why `validate:middleware-order` asserts the adjacency against the pipeline the runner **actually assembles** rather than a copied factory list.
 
 The ExtensionEventBus also carries **session lifecycle events** (distinct from the L2 `session:start` telemetry): `session:start` (emitted at the end of `emitSessionBootstrapEvents`, payload `{ cwd, sessionId }`) and `session:shutdown` (emitted in `AgentManager.destroyAgent()` before `extensionRunner.destroyAll()`, so extensions can release resources first).
+
+**Observation (`ctx.events.observe` / `observeAny` / `retained`).** Interception lets an extension *change* an operation; observation lets it *read* one. The three accessors reuse the bus's existing **observer** dispatch mode (synchronous, registration-ordered, fire-and-forget, throw-isolated) — they are not a third dispatch mode, and `ctx.events.on` (the interceptor spelling) is unchanged. They register on the extension's **scoped** bus, so a root-scope extension receives subagent events up-flow with no `agentId`/`parentId` comparison.
+
+The observable set is declared once, in `agent/extension/types.ts`, as `EXTENSION_EVENT_VISIBILITY` — an exhaustive table over `AgentEventType` (`as const satisfies Record<AgentEventType, "observable" | "internal">`). Adding an event to the registry therefore fails compilation until it is classified, so a new event can neither become observable by accident nor be silently absent from `observeAny`. `internal` rows must state their reason; today they are `tool:chunk` / `tool:clear` (token-by-token streaming already has a dedicated UI path) and `extension:ui` (observing it would couple extensions through each other's publishes).
+
+**`observeAny` expands the declared set; it does not use the bus's `"*"`.** Two reasons, and the second is a hard contract: `"*"` would ship the internal events above to extensions, and `agent-event-bus` requires the Event→Log bridge to remain the **only** wildcard consumer in core. `observe` replays a retained event's current value once on subscribe (opt out with `{ replay: false }`); `observeAny` never replays, so a broad subscriber is not hit with a burst of snapshots; `retained(type)` reads on demand. Every disposer is recorded in `ExtensionRegistrations.unsubObservers` and released on disable/destroy.
+
+**Failure containment:** a synchronous throw is contained by the observer dispatch mode itself; a returned **rejected promise** is caught by the extension observer facade and reported as `agent:extension-error` with `phase: "event-observer"` — the bus's observer path is synchronous, so without that catch a rejecting handler would become an unhandled rejection and, under `installAgentLogProcessGuards`, a fatal one.
+
+**Payloads are shared references and read-only by contract.** An observed payload is the *same object* the session channel projection and the Event→Log bridge receive, so an extension that mutates it mutates live state. The contract is documented rather than enforced by freezing — deep-freezing would add per-emit work on the hot path and change behaviour for existing in-core consumers.
+
+Validate: `pnpm --filter @codent/core run validate:extension-event-observation`.
 
 **Per-turn prompt hooks:** On each root user prompt (not tool continuations / subagents), `prepareForRun` calls `ExtensionRunner.collectBeforeAgentStart`, which:
 
