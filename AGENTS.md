@@ -192,7 +192,7 @@ ConnectionGuard(/health) → createRemoteEnv(url) → registerCoreEnv
 | CoreEnv | `registerCoreEnv`, `getEnv`, `CoreEnv` types |
 | ModelProvider | `registerModelProvider`, `createDirectModelProvider`, `resolveModelConfigFromProvider` |
 | Runtime | `agentManager`, `AgentManager`, `ManagedAgent`, `AgentSession` / `AgentSessionHost` |
-| UI / state | Session-safe types (`TodoItem`, `LogEntry`, …); `AgentLog`/`TodoManager`/`SessionStore` classes are package-private (AgentLog is a persistence-only JSONL sink — `.agents/logs/<sessionId>/agent.log`) |
+| UI / state | Session-safe types (`TodoItem`, `LogEntry`, …); `AgentLog`/`TodoManager`/`SessionStore` classes are package-private (AgentLog is the emission seam — the built-in log extension owns policy and writes `.agents/logs/<sessionId>/agent.log`) |
 | Compaction | Session `compact` command; executors (`autoCompact`, …) stay on `dev.ts` |
 | Bootstrap | `buildDefaultSystemPrompt`, `resolveModelConfig`, `resolveModelConfigFromProvider` |
 | UI helpers | `previewEdit`, AgentSession `tool` channel (run_command stdout/stderr), tool output types |
@@ -584,7 +584,7 @@ registerModelProvider(await createRemoteProvider("http://localhost:3100"));
 
 **Vision note:** On OpenAI-compatible Chat Completions, multimodal tool results are lifted to a synthetic user `image_url` message (`liftToolMediaForChatCompletions`) so base64 is not stringified into `role: "tool"`. Anthropic keeps native multimodal `tool_result` parts. Official DeepSeek Chat Completions may still reject `image_url` (text-only schema); capability sanitization strips unsupported `image` / `audio` / `video` / `document` parts on the wire and retries once — use a vision-capable provider for real media understanding. Session/UI history always keeps structured image parts (and `.agents/media` binary files); wire stripping must not change persisted message shape.
 
-**Event → Log bridge:** `bridgeTelemetryToAgentLog()` in `AgentManager` subscribes the unified bus `"*"` (its only wildcard consumer) and maps telemetry events to `AgentLog` entries — each stamped with the originating event type (`event`) and scoped to the in-flight run (`run`). Policy lives in `managers/telemetry/event-log-bridge.ts` (`DEFAULT_EVENT_LOG_RULES`); override per event type with `EventLogPolicy`. Emit sites should not duplicate lifecycle logs covered by events. The sink persists every entry to `.agents/logs/<sessionId>/agent.log` (size-rotated).
+**Logging (built-in extension):** the emission **seam** is `AgentLog` (`agent/agent-log/agent-log.ts`) — level filtering, `run` stamping, envelope construction, then a direct hand-off to the attached sink. It is deliberately **not** an extension and not disableable: ~69 core call sites plus `ctx.logger` write through it, and they must work during workspace construction, before extensions load, and while an extension is failing to activate. Log **policy** belongs to the built-in log extension (`agent/log/extension.ts` = `createLogExtension`, with `event-log-bridge.ts` for the rules, `event-log-rules.ts` for the table, `jsonl-file-sink.ts` for the sink + rotation). `AgentManager` constructs and `start()`s it; its `bus.on("*")` subscription is the only wildcard consumer in core, and it maps telemetry events to entries — each stamped with the originating event type (`event`) and scoped to the in-flight run (`run`). Override per event type with `EventLogPolicy`. Emit sites should not duplicate lifecycle logs covered by the table. Entries emitted before a sink is bound are retained (bounded, `MAX_PENDING_LOG_ENTRIES`) and drained into the first sink that attaches, so bootstrap diagnostics reach disk. The sink persists every entry to `.agents/logs/<sessionId>/agent.log` (size-rotated), validated against `logEntrySchema` at the write boundary. Subagents have no extension runner but do log, so core hands **each** `AgentLog` to the extension's sink (`attachSink`); the extension's `dispose()` releases them.
 
 ## Prompt Cache (prefix)
 Frozen system text ends with `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` and stays byte-stable across turns.
@@ -943,7 +943,7 @@ Runtime data under the project root is grouped under a single gitignored `.agent
 | Path | Purpose |
 |------|---------|
 | `.agents/sessions/` | Session message log (`*.session.jsonl`, one line per message + state; timestamps live on the message) |
-| `.agents/logs/<sessionId>/` | AgentLog JSONL event timeline (`agent.log`, size-rotated) |
+| `.agents/logs/<sessionId>/` | AgentLog JSONL event timeline (`agent.log`, size-rotated; written by the built-in log extension) |
 | `.agents/usage/` | Global usage history (`usage-<year>.jsonl`, per-LLM-call records) |
 | `.agents/config/models.json` | Unified model config (global settings + provider entries) |
 | `.agents/memory/` | Cross-session memory markdown + `MEMORY.md` |
@@ -1098,7 +1098,8 @@ packages/
 │   ├── env.ts                         # CoreEnv interface, registry (registerCoreEnv/getEnv/clearCoreEnv)
 │   ├── env-types.ts                   # FileError / ExecutionError / fs+command result types
 │   ├── agent/
-│   │   ├── agent-log/                 # AgentLog — run-scoped event timeline + JSONL file sink
+│   │   ├── agent-log/                 # AgentLog — emission seam (filter/stamp/envelope) + JSONL sink access
+│   │   ├── log/                       # Built-in log extension: rules, bridge ("*" consumer), JSONL sink
 │   │   ├── approval/                  # Auto-mode controller + tool-approval table
 │   │   ├── compaction/                # Append SUMMARY + summary-first wire projection
 │   │   ├── extension/                 # Extension API (loader, runner, EventBus interception)
@@ -1125,7 +1126,7 @@ packages/
 │   ├── managers/                      # AgentManager, ManagedAgent, RunCoordinator, services/, middleware
 │   │   ├── run-coordinator.ts          # Run lifecycle flags/timing (prepare/run/finalize)
 │   │   ├── services/                   # Session / memory / compaction / extension-registry / usage-history services
-│   │   └── telemetry/                  # Event→Log bridge (event-log-bridge.ts); bus lives in agent/agent-event-bus
+│   │   └── telemetry/                  # Usage tracking + telemetry emit helpers (bus lives in agent/agent-event-bus)
 │   ├── models/                        # Model config (model-config.ts), adapters, models.dev lookup
 │   ├── runtime-types/                 # Shared status / event / usage types (no manager deps)
 │   ├── utils/                         # Cross-cutting helpers (Emitter, generateId)

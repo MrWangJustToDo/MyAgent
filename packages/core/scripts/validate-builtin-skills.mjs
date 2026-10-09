@@ -378,6 +378,8 @@ const CONTEXT_MEMBERS = [
   "registerInterceptor",
   "registerContextProvider",
   "registerMessageTransformer",
+  "registerFlush",
+  "registerExitFlush",
   "events",
   "ui",
   "logger",

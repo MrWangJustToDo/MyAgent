@@ -357,7 +357,7 @@ const part = (name, output) => ({
   );
 
   // The log bridge must word a cancel as a cancel, not as a tool error.
-  const rules = readFileSync(new URL("../../core/src/managers/telemetry/event-log-rules.ts", import.meta.url), "utf8");
+  const rules = readFileSync(new URL("../../core/src/agent/log/event-log-rules.ts", import.meta.url), "utf8");
   assert.ok(/Tool cancelled:/.test(rules), "a cancel must not be logged under the `Tool error:` wording");
 }
 

@@ -316,6 +316,8 @@ await ctx.coreEnv.runCommand("git", ["status"])   // or the command API the host
 await ctx.coreEnv.fetch("https://…")
 ctx.z                      // the host's zod — always use this, never \`import "zod"\`
 ctx.logger.info("…")       // / .warn / .error → the agent log
+ctx.registerFlush(async () => { await saveState(); })  // awaited before teardown releases resources
+ctx.registerExitFlush(() => saveStateSync())           // sync, for process exit / crash
 ctx.events.on("session:start", handler)            // intercept (the six hook names)
 ctx.events.observe("llm:response", handler)        // observe (observer events)
 ctx.events.retained("session:usage")               // current retained value

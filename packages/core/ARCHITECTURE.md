@@ -13,7 +13,7 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 | CoreEnv abstraction                       | **Done**         | `registerCoreEnv` / `getEnv`                                                                                            |
 | Agent factory & manager                   | **Done**         | Root vs subagent split                                                                                                  |
 | TanStack agent loop                       | **Done**         | `AgentRunner` + middleware stack                                                                                        |
-| Event protocol + Event→Log bridge         | **Done**         | Unified `AgentEventBus` (one bus, emit/intercept, retain/scope); Event→Log is its only `"*"` consumer                       |
+| Event protocol + log extension              | **Done**         | Unified `AgentEventBus` (one bus, emit/intercept, retain/scope); the built-in log extension is its only `"*"` consumer                     |
 | Model config (`openai` / `anthropic`)     | **Done**         | `resolveModelConfig`, `createTextAdapter`                                                                               |
 | Session persistence                       | **Done**         | Unified `persistSession`; save failures reject + emit `session:save-error`                                              |
 | Agent Session API                         | **Done**         | Snapshot/commands + Local/Remote Host; **app is Session-only** (no ManagedAgent in UI)                                  |
@@ -44,7 +44,7 @@ For monorepo-wide context see [AGENTS.md](../../AGENTS.md). For public exports s
 │ @codent/core                                                  │
 │  AgentSession ← AgentEventBus channel projection (AGENT_EVENT_META)  │
 │  AgentManager ──► ManagedAgent (run semantics unchanged)         │
-│  AgentEventBus (root) ──► Event→Log (only "*" observer consumer)    │
+│  AgentEventBus (root) ──► log extension (only "*" observer consumer)│
 └────────────────────────────┬────────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────────┐
@@ -102,7 +102,7 @@ packages/app/src/adapter/create-agent.ts
 | `AgentSession`, `AgentSessionHost`, `createLocalAgentSessionHost` | Yes — **preferred host/UI control surface**                                         |
 | `buildManagedAgent`, `getDefaultSkillDirs`                        | **No** — package-internal / `dev.ts`                                                |
 | Session-sync tracker helpers, tool-phase pump helpers             | **No** — `dev.ts` / package-private                                                 |
-| `bridgeTelemetryToAgentLog`                                       | **No** — wired in `AgentManager` constructor                                        |
+| The built-in log extension                                        | **No** — a `StreamConsumer` in the `agent/log` domain (it owns the `"*"` subscription via `start()`)                                          |
 | `SessionStore`                                                    | **No** — DENY list; use Session / SessionService                                    |
 
 See `scripts/validate-core-public-exports.mjs` for the authoritative DENY/EXPECT lists.
@@ -183,7 +183,8 @@ agent-manager.ts
 ```
 AgentManager constructor
   rootEventBus = createAgentEventBus()            // single process-wide root
-  bridgeTelemetryToAgentLog(rootEventBus, resolveLog)  // only "*" observer consumer
+  createLogExtension({ bus, resolveLog }).start()  // only "*" observer consumer
+                                                 // (bridgeTelemetryToAgentLog is its policy half)
 
 ManagedAgent.setEventBus(manager.of(agentId, parentId))  // per-agent scoped bus
   agent:state / session:* retained providers registered here
@@ -206,7 +207,7 @@ siblings stay isolated.
 
 ### 2.4 Session bootstrap events (`session-bootstrap-events.ts`)
 
-Emitted **after** the agent is registered (so Event→Log bridge can resolve `managed.log`):
+Emitted **after** the agent is registered (so the log extension can resolve `managed.log`):
 
 | Event            | When                       |
 | ---------------- | -------------------------- |
@@ -865,14 +866,14 @@ emitAgentTelemetry(managed, type, data);  // envelope-construction helper (same 
 bus.emit("session:summary", payload);     // domain objects hold the scoped bus and emit
 ```
 
-Observer `emit` is synchronous fire-and-forget with per-listener error containment; interceptor `intercept` (`{ type, payload, defaultReturn }`) is async, ordered, shared-mutable, and can short-circuit. The Event→Log bridge is the single `"*"` observer on the root scope.
+Observer `emit` is synchronous fire-and-forget with per-listener error containment; interceptor `intercept` (`{ type, payload, defaultReturn }`) is async, ordered, shared-mutable, and can short-circuit. The built-in log extension is the single `"*"` observer on the root scope, and internal events are withheld from wildcard delivery (so wildcard ≡ `observeAny`).
 
 ### 8.2 Observation layers (L1–L4)
 
 | Layer | Event source (unified bus)                                                                      | Host surface                                                                       |
 | ----- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | L1    | `ManagedAgent.emitStateChange` → `agent:state` (retained) + `session:mode` + `session:interaction`; `setIterationProgress` → `agent:iteration` (retained) | Session `state` / `mode` / `interaction` / `iteration` channels                                                  |
-| L2    | Telemetry envelope helpers → scoped bus (root `"*"` observer: Event→Log)                        | Session `lifecycle` channel (declarative projection)                               |
+| L2    | Telemetry envelope helpers → scoped bus (root `"*"` observer: the log extension)                | Session `lifecycle` channel (declarative projection)                               |
 | L3    | Domain objects emit declared observer events (todos/usage/plan/summary/messages/queues/tool)     | Session `messages`/`tool`/`summary`/`todos`/`usage`/`plan`/`queues`/`extensions`/`mcp` |
 | L4    | Extension interception (`tool:before:*` / `tool:after:*` / `tool:error:*` / `before_agent_start`) + `extension:ui` | Session `extension-ui` channel; host `ctx.ui` facade                        |
 
@@ -900,22 +901,45 @@ Task / compact summary text uses `ManagedAgent.summaryStreams` (`SummaryStreamHu
 | Compaction        | `compaction:auto-*`, `compaction:reactive-*` (start kind matches path)                                                                 |
 | Subagent          | `subagent:created`, `subagent:started`, `subagent:completed` (`summary` + `iterations`/`maxIterations`/`durationMs`/`usage`), `subagent:error`, `subagent:destroyed`, `subagent:phase`, `subagent:progress-summary-error` |
 
-### 8.4 Event → Log bridge
+### 8.4 The log extension
 
-**File:** `managers/telemetry/event-log-bridge.ts`
+**Files:** `agent/log/extension.ts` (the built-in extension), `agent/log/event-log-bridge.ts` (policy), `agent/log/event-log-rules.ts` (the rule table), `agent/log/jsonl-file-sink.ts` (the sink).
 
-- Attached in `AgentManager` constructor
-- `DEFAULT_EVENT_LOG_RULES` controls level/category/message per event
-- Complex events (MCP, memory, compaction) use dedicated log handlers (no UI notify)
-- Emit sites should **not** duplicate `log.info` / `log.approval` for lifecycle events covered by the bridge
+Logging has **two halves and two owners**, and the split is the point of the feature:
 
-**Persistence-only log:** `AgentLog` writes every accepted entry straight to the JSONL file sink (`.agents/logs/{sessionId}/agent.log`, size-based rotation) — no in-memory ring, query API, or UI channel. The sink is attached in `AgentManager.createManagedAgent` **before** bootstrap events fire, so the timeline includes `session:*` entries. Entries logged while an agent run is in flight carry a short `run` id (`prepareManagedAgentForRun` sets it, finalize clears it).
+| Half | Owner | Does |
+| ---- | ----- | ---- |
+| Emission **seam** | `agent/agent-log/agent-log.ts` (core, not an extension) | level filtering, `run` stamping, envelope construction (`id`/`timestamp`/error shaping); hands the assembled entry to the attached sink |
+| **Policy** | the built-in log extension | the event→entry rule table, message formatting, payload summarizing, the JSONL sink + rotation, the session-boundary divider, disk binding |
 
-**Payload summarization:** the bridge summarizes event payloads via `summarizePayload` — large fields (`tool_input` / `tool_output` / unknown objects) become `{field}Bytes` + `{field}Preview` (≤200 chars); scalar observability fields (ids/names/counts/bytes/tokens/ms) pass through; the redundant `eventType` is dropped.
+The seam is deliberately non-removable: ~69 core call sites plus `ctx.logger` write through it, and they must keep working during workspace construction, before extensions load, and while an extension is failing to activate. It is a **direct injection** (`log.attachSink({ handleEntry, flush, flushSync, dir? })`), not a bus event — an internal event could not be delivered to its only consumer anyway (internal events are withheld from wildcard delivery and from `observeAny`), and injection makes self-observation impossible by construction. `log.attachFileSink(options)` stays as a thin delegate over `createJsonlFileSink` so the log validators and `scripts/helpers/log-capture.mjs` drive the seam directly.
+
+**Wiring:** `AgentManager` builds the instance in its constructor (`getLogExtension()`) and `start()`s it — that is the single `"*"` observer in core. Root sinks bind through `ManagedAgent.bindSessionLogSink()` → `getLogExtension().attachSink(...)`; subagent sinks bind in `spawnSubagent` → `logExtension.attachSink(subagentLog, { dir: parentDir, filename: `${id}.log` })`. Subagents have **no** extension runner (`agent-factory.ts` creates one only for roots) but do write logs, which is why the sink is handed to each `AgentLog` by core instead of being owned by a per-agent extension instance.
+
+- `DEFAULT_EVENT_LOG_RULES` controls level/category/message per event, with dedicated multi-entry handlers for MCP / memory / compaction
+- Emit sites should **not** duplicate `log.info` / `log.approval` for lifecycle events covered by the table
+- **Entries emitted before a sink is bound are retained**, bounded by `MAX_PENDING_LOG_ENTRIES` (200), and drained into the first sink that attaches — so bootstrap diagnostics (including every extension activation failure) reach disk. Beyond the cap the oldest are dropped: this is a window, not a history buffer.
+
+**Persistence-only log:** `AgentLog` writes every accepted entry straight to the JSONL file sink (`.agents/logs/{sessionId}/agent.log`, size-based rotation at 5 MiB / 5 files, 250 ms flush interval) — no in-memory ring, query API, or UI channel. Each entry is validated against `logEntrySchema` at the write boundary (a non-conforming entry is rejected with a `console.error` rather than written, so the file never contains an entry a reader would reject). Entries logged while an agent run is in flight carry a short `run` id (`prepareManagedAgentForRun` sets it, finalize clears it).
+
+**Payload summarization:** `summarizePayload` turns large fields (`tool_input` / `tool_output` / unknown objects) into `{field}Bytes` + `{field}Preview` (≤200 chars); scalar observability fields (ids/names/counts/bytes/tokens/ms) pass through; the redundant `eventType` is dropped. A `cancelled` payload is written without a synthesized `Error` — a cancelled subagent's `error` text is its partial narration, not a fault.
 
 **Opt-in hook echoes:** middleware hook-call echoes (`middleware:{name}:{hook}`) are off by default and only written when `MY_AGENT_LOG_HOOKS` is truthy.
 
 **Timeline metrics:** `llm:request`/`llm:response` carry `model`/`iteration`; `llm:response` adds `reasoningTokens`, `costUsd`, `roundElapsedMs`, `firstTokenMs` (from `UsageTracker` per-call tracking). Status transitions are logged from `ManagedAgent.setStatus` (`from`/`to` + controller-supplied `trigger`); approval resolutions are emitted as `agent:tool-approval-resolved` by `ToolApprovalTable.upsert` (pending → approved/denied only).
+
+### 8.4a Teardown and the exit path
+
+An extension that buffers state needs two exits, and they are different mechanisms:
+
+| Registration | When it runs | Awaited? |
+| ------------ | ------------ | -------- |
+| `ctx.registerFlush(fn)` | `destroyExtension` / `destroyAll` / disable — **before** `deactivate()` | yes, per extension |
+| `ctx.registerExitFlush(fn)` | `process.on("exit")` and the fatal handlers | no (best-effort, contained) |
+
+Order per extension: `session:shutdown` (interceptors) → `flush` → `deactivate` → unregister registrations + clear UI slots. A throwing flush is reported as `agent:extension-error` with phase `flush` and does not skip the remaining phases. The runner releases both registrations in `unregisterInstanceArtifacts`, so a destroyed extension stops running on `exit`.
+
+`AgentManager.destroyAgent` keeps its synchronous signature: teardown is tracked as a promise and the log flush is chained onto its continuation, with `settleTeardowns()` for an ordered shutdown (which `LocalAgentSessionHost.destroy()` awaits). The log extension registers a sync exit flush over every sink it attached, so a hard exit with a live session still lands the pending batch.
 
 ### 8.5 Extension interception (L4)
 
@@ -946,11 +970,11 @@ The ExtensionEventBus also carries **session lifecycle events** (distinct from t
 
 The observable set is declared once, in `agent/extension/types.ts`, as `EXTENSION_EVENT_VISIBILITY` — an exhaustive table over `AgentEventType` (`as const satisfies Record<AgentEventType, "observable" | "internal">`). Adding an event to the registry therefore fails compilation until it is classified, so a new event can neither become observable by accident nor be silently absent from `observeAny`. `internal` rows must state their reason; today they are `tool:chunk` / `tool:clear` (token-by-token streaming already has a dedicated UI path) and `extension:ui` (observing it would couple extensions through each other's publishes).
 
-**`observeAny` expands the declared set; it does not use the bus's `"*"`.** Two reasons, and the second is a hard contract: `"*"` would ship the internal events above to extensions, and `agent-event-bus` requires the Event→Log bridge to remain the **only** wildcard consumer in core. `observe` replays a retained event's current value once on subscribe (opt out with `{ replay: false }`); `observeAny` never replays, so a broad subscriber is not hit with a burst of snapshots; `retained(type)` reads on demand. Every disposer is recorded in `ExtensionRegistrations.unsubObservers` and released on disable/destroy.
+**`observeAny` expands the declared set; it does not use the bus's `"*"`.** Two reasons, and the second is a hard contract: `"*"` would ship the internal events above to extensions, and `agent-event-bus` requires the log extension to remain the **only** wildcard consumer in core. `observe` replays a retained event's current value once on subscribe (opt out with `{ replay: false }`); `observeAny` never replays, so a broad subscriber is not hit with a burst of snapshots; `retained(type)` reads on demand. Every disposer is recorded in `ExtensionRegistrations.unsubObservers` and released on disable/destroy.
 
 **Failure containment:** a synchronous throw is contained by the observer dispatch mode itself; a returned **rejected promise** is caught by the extension observer facade and reported as `agent:extension-error` with `phase: "event-observer"` — the bus's observer path is synchronous, so without that catch a rejecting handler would become an unhandled rejection and, under `installAgentLogProcessGuards`, a fatal one.
 
-**Payloads are shared references and read-only by contract.** An observed payload is the *same object* the session channel projection and the Event→Log bridge receive, so an extension that mutates it mutates live state. The contract is documented rather than enforced by freezing — deep-freezing would add per-emit work on the hot path and change behaviour for existing in-core consumers.
+**Payloads are shared references and read-only by contract.** An observed payload is the *same object* the session channel projection and the log extension receive, so an extension that mutates it mutates live state. The contract is documented rather than enforced by freezing — deep-freezing would add per-emit work on the hot path and change behaviour for existing in-core consumers.
 
 Validate: `pnpm --filter @codent/core run validate:extension-event-observation`.
 
@@ -1035,7 +1059,7 @@ Domain-owned tools live next to their domain (same pattern as `subagent/begin-su
 | Stream helpers      | `agent/stream/*`                                                                                                                             |
 | UI channel          | `agent/ui-channel.ts`                                                                                                                        |
 | Shared types        | `runtime-types/*`                                                                                                                            |
-| Telemetry           | `agent/agent-event-bus/*` (the unified bus), `managers/telemetry/emit-agent-telemetry.ts`, `managers/telemetry/event-log-bridge.ts`                                   |
+| Telemetry           | `agent/agent-event-bus/*` (the unified bus), `managers/telemetry/emit-agent-telemetry.ts`, `agent/log/*` (the log extension)                                        |
 | Persistence         | `managers/services/session-service.ts`, `agent/persistence/session-store.ts`                                                                          |
 | Services (extracted) | `managers/services/` — session / memory / compaction / extension-registry / usage-history; `managers/run-coordinator.ts` (run lifecycle)               |
 | Usage               | `agent/usage/usage-store.ts` (pure IO), `managers/services/usage-history-service.ts` (global history)                                                   |
