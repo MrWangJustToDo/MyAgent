@@ -2,7 +2,7 @@
  * Validates AgentLog.attachFileSink: JSONL writes, retention of pre-attach
  * entries (bounded, drained on attach), the cap's overflow behavior,
  * size-based rotation, silent degradation when the env fs has no appendFile,
- * and detach semantics.
+ * detach semantics, and serializer failures contained on the sync exit path.
  *
  * Run: pnpm --filter @codent/core run validate:agent-log-file-sink
  */
@@ -45,6 +45,11 @@ function createEnv(rootPath, { withAppendFile }) {
   };
   if (withAppendFile) {
     fsImpl.appendFile = async (p, content) => fs.promises.appendFile(p, content, "utf8");
+    // The sync primitives are what the exit path uses; a host that has them must be modelled with
+    // them, or `flushSync()` silently degrades to the async path and a sync assertion tests nothing.
+    fsImpl.appendFileSync = (p, content) => fs.appendFileSync(p, content, "utf8");
+    fsImpl.mkdirSync = (p) => fs.mkdirSync(p, { recursive: true });
+    fsImpl.existsSync = (p) => fs.existsSync(p);
   }
   return {
     rootPath,
@@ -245,4 +250,44 @@ detach2();
 console.log("reused-file divider OK");
 
 await fs.promises.rm(rootPath, { recursive: true, force: true });
+// ----------------------------------------------------------------------------
+// 6. An entry the serializer cannot handle is contained.
+//    `handleEntry` runs *synchronously* from `AgentLog.log()`, on the agent's own execution path,
+//    so a `JSON.stringify` throw (circular reference, BigInt, a throwing `toJSON`) would turn a
+//    diagnostic into a run failure. Asserted on the sync path too (`flushSync`), because that is
+//    the exit path where a throw would escape into a process-exit handler.
+// ----------------------------------------------------------------------------
+{
+  const badRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), "agent-log-unserializable-"));
+  const badDir = path.join(badRoot, ".agents/logs/ses_bad");
+  const badFile = path.join(badDir, "agent.log");
+
+  const badLog = new AgentLog();
+  badLog.attachFileSink({ dir: badDir, filename: "agent.log", flushIntervalMs: 10_000 });
+
+  const circular = { name: "loop" };
+  circular.self = circular;
+  assert.doesNotThrow(
+    () => badLog.info("system", "circular", { data: circular }),
+    "an unserializable entry must not throw into the caller (the agent's own path)"
+  );
+
+  badLog.info("system", "still-alive");
+  badLog.flushSync(); // the exit path — a throw here would escape into `process.on("exit")`
+
+  const written = fs
+    .readFileSync(badFile, "utf-8")
+    .split("\n")
+    .filter(Boolean)
+    .map((l) => JSON.parse(l));
+  assert.equal(written.length, 1, `only the serializable entry is persisted, got ${written.length}`);
+  assert.equal(written[0].message, "still-alive", "the sink keeps working after a rejected entry");
+  assert.equal(
+    written.filter((e) => e.message === "circular").length,
+    0,
+    "the unserializable entry is dropped, never written as a placeholder"
+  );
+  console.log("unserializable entry is contained OK:", written.length, "of 2 persisted");
+}
+
 console.log("agent-log-file-sink validation passed");

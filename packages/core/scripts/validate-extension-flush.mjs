@@ -21,18 +21,19 @@
  */
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 import {
-  ExtensionRunner,
-  createAgentEventBus,
-  registerCoreEnv,
-  clearCoreEnv,
   AgentLog,
+  ExtensionRunner,
+  clearCoreEnv,
+  createAgentEventBus,
   createLogExtension,
   flushExtensionExitFlushesSync,
+  registerCoreEnv,
   registerExtensionExitFlush,
 } from "../dist/dev.mjs";
 
@@ -40,31 +41,43 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Minimal real-fs CoreEnv: the sink needs appendFile (+ sync variants for the exit path). */
 function createFsEnv(rootPath) {
+  // AgentManager binds the *relative* `.agents/logs/<id>` path, so the fixture must resolve like a
+  // real host does (absolute paths pass through) — otherwise the sink writes into the cwd.
+  const toAbs = (p) => (path.isAbsolute(p) ? p : path.join(rootPath, p));
   return {
     rootPath,
-    path: { join: (...p) => p.join("/"), dirname: (p) => p.split("/").slice(0, -1).join("/") || "/" },
+    path: {
+      join: (...p) => p.join("/"),
+      dirname: (p) => p.split("/").slice(0, -1).join("/") || "/",
+      // The extension loader walks the extension dir with these, so a partial `path` shape fails
+      // later (in a different module) rather than here.
+      isAbsolute: path.isAbsolute,
+      normalize: path.normalize,
+      relative: path.relative,
+      resolve: (...p) => path.resolve(...p),
+    },
     getPlatform: async () => "linux",
     getArch: async () => "x64",
     getEnv: async () => ({}),
     homedir: async () => rootPath,
     fs: {
-      readFile: async (p, encoding) => fs.promises.readFile(p, encoding),
-      writeFile: async (p, content) => fs.promises.writeFile(p, content),
-      appendFile: async (p, content) => fs.promises.appendFile(p, content, "utf8"),
-      appendFileSync: (p, content) => fs.appendFileSync(p, content, "utf8"),
-      mkdir: async (p) => void (await fs.promises.mkdir(p, { recursive: true })),
-      mkdirSync: (p) => fs.mkdirSync(p, { recursive: true }),
+      readFile: async (p, encoding) => fs.promises.readFile(toAbs(p), encoding),
+      writeFile: async (p, content) => fs.promises.writeFile(toAbs(p), content),
+      appendFile: async (p, content) => fs.promises.appendFile(toAbs(p), content, "utf8"),
+      appendFileSync: (p, content) => fs.appendFileSync(toAbs(p), content, "utf8"),
+      mkdir: async (p) => void (await fs.promises.mkdir(toAbs(p), { recursive: true })),
+      mkdirSync: (p) => fs.mkdirSync(toAbs(p), { recursive: true }),
       exists: async (p) =>
-        fs.promises.access(p).then(
+        fs.promises.access(toAbs(p)).then(
           () => true,
           () => false
         ),
-      existsSync: (p) => fs.existsSync(p),
+      existsSync: (p) => fs.existsSync(toAbs(p)),
       stat: async (p) => {
-        const st = await fs.promises.stat(p);
+        const st = await fs.promises.stat(toAbs(p));
         return { isDirectory: st.isDirectory(), isFile: st.isFile(), size: st.size, mtime: st.mtime };
       },
-      remove: async (p) => fs.promises.rm(p, { recursive: true, force: true }),
+      remove: async (p) => fs.promises.rm(toAbs(p), { recursive: true, force: true }),
       readdir: async () => [],
     },
     runCommand: async () => ({ stdout: "", stderr: "", code: 0 }),
@@ -259,6 +272,8 @@ registerCoreEnv(createFsEnv(rootPath));
   assert.ok(content.includes("buffered-at-exit"), "the log extension's pending batch lands on the exit path");
 
   ext.dispose();
+  assert.equal(ext.attachedSinkCount(), 0, "dispose releases every registered sink");
+
   const before = content.length;
   log.info("system", "after-dispose");
   flushExtensionExitFlushesSync();
@@ -267,7 +282,118 @@ registerCoreEnv(createFsEnv(rootPath));
     before,
     "a disposed log extension must not keep flushing"
   );
+
+  // The registry being empty is not enough: the *seam* has to be unbound too. Otherwise the log
+  // keeps feeding a sink nobody owns — entries are neither written nor retained, and no later
+  // flush can recover them. The log's own flush path is the probe, because it is independent of
+  // the extension registry (which `dispose()` has already cleared either way).
+  log.flushSync();
+  assert.equal(
+    fs.readFileSync(path.join(dir, "agent.log"), "utf-8").length,
+    before,
+    "a disposed log extension must leave the seam unbound (the sink must not be reachable)"
+  );
   console.log("7. log extension flushes on the exit path, and stops after dispose: ok");
+}
+
+// ----------------------------------------------------------------------------
+// 8. `settleTeardowns` drains a growable set: a teardown that enqueues *more* teardowns
+//    (exactly what a subagent cascade does) is still awaited.
+//    The assertion has to be "it did not resolve yet", not "the late one eventually ran" — a late
+//    promise settles on its own either way. So generation 2 is gated: with a single
+//    `Promise.allSettled` the call returns while it is still pending, which is the failure.
+// ----------------------------------------------------------------------------
+{
+  const { AgentManager } = await import("../dist/index.mjs");
+  const manager = new AgentManager();
+
+  const settled = [];
+  let releaseLate;
+  const lateGate = new Promise((resolve) => {
+    releaseLate = resolve;
+  });
+
+  // The snapshot `Promise.allSettled([...])` takes happens synchronously, before the first await,
+  // so a teardown enqueued right after the call is *not* in generation 1 — only the loop can see it.
+  manager.trackTeardown(Promise.resolve());
+  const settling = manager.settleTeardowns();
+  manager.trackTeardown(lateGate.then(() => settled.push("late")));
+
+  let resolved = false;
+  settling.then(() => {
+    resolved = true;
+  });
+  await sleep(20);
+  assert.equal(resolved, false, "settleTeardowns must not resolve while a during-settling teardown is still pending");
+
+  releaseLate();
+  await settling;
+  assert.deepEqual(settled, ["late"], `the late teardown must be awaited, got [${settled.join(", ")}]`);
+  console.log("8. settleTeardowns drains a growing set: ok");
+}
+
+// ----------------------------------------------------------------------------
+// 9. A destroyed subagent releases its log sink (the extension registry shrinks).
+//    Regression: `spawnSubagent` discarded the detach handle, so a subagent's sink stayed
+//    registered for the life of the process and the parent log dir could never be removed.
+// ----------------------------------------------------------------------------
+{
+  const { AgentManager, createLocalAgentSessionHost } = await import("../dist/index.mjs");
+  const cascadeRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), "ext-cascade-"));
+  clearCoreEnv();
+  registerCoreEnv(createFsEnv(cascadeRoot));
+
+  const manager = new AgentManager();
+  const host = createLocalAgentSessionHost({ manager });
+  const result = await host.create({ name: "cascade", model: "test-model" });
+  const parentId = result.session.getSnapshot().agentId;
+
+  const sub = await manager.spawnSubagent(parentId, { name: "sub" });
+  const registrySize = () => manager.getLogExtension().attachedSinkCount();
+
+  await sleep(300); // let the parent's session sink bind
+  const withSub = registrySize();
+  assert.ok(withSub >= 1, `subagent sink must be registered, got ${withSub}`);
+
+  manager.destroyAgent(sub.id);
+  await manager.settleTeardowns();
+  assert.equal(
+    registrySize(),
+    withSub - 1,
+    `destroying a subagent must release its sink (registry ${withSub} → ${registrySize()})`
+  );
+
+  manager.destroyAgent(parentId);
+  await manager.settleTeardowns();
+  assert.equal(registrySize(), 0, `destroying every agent must empty the sink registry, got ${registrySize()}`);
+
+  // The regression's second half: with the sink released, the log directory can be removed.
+  await fs.promises.rm(cascadeRoot, { recursive: true, force: true });
+  console.log("9. subagent destroy releases its sink: ok");
+}
+
+// 10. The real `exit` wiring is exercised in a child process.
+//     Sections 4/5 call `flushExtensionExitFlushesSync()` directly, which proves the registry but
+//     not that `installAgentLogProcessGuards` is wired to it — deleting that call used to fail
+//     nothing. The guards install `process.on("exit")`, so this runs in a child whose only job is
+//     to leave a buffered entry and exit normally.
+// ----------------------------------------------------------------------------
+{
+  const logDir = path.join(rootPath, ".agents/logs/ses_exit_wiring");
+  fs.mkdirSync(logDir, { recursive: true });
+
+  execFileSync(process.execPath, [path.resolve("scripts/helpers/exit-wiring-child.mjs"), rootPath, logDir], {
+    cwd: path.resolve("."),
+    stdio: "pipe",
+  });
+
+  const wrote = path.join(logDir, "agent.log");
+  assert.ok(
+    fs.existsSync(wrote),
+    "the guards' real `exit` hook must flush the log extension (deleting the wiring call must fail here)"
+  );
+  assert.ok(fs.readFileSync(wrote, "utf-8").includes("written-on-real-exit"), "the buffered entry must land on exit");
+  console.log("10. installAgentLogProcessGuards wires the extension flush on real exit: ok");
 }
 
 console.log("\nextension-flush validation passed");
