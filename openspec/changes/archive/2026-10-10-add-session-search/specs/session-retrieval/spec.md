@@ -1,9 +1,10 @@
-# session-retrieval Specification
+## RENAMED Requirements
 
-## Purpose
+- FROM: `### Requirement: Guidance states how each on-disk shape is read`
+- TO: `### Requirement: Guidance states how past conversation is read`
 
-Define what the agent is told about reaching past conversations: that earlier sessions exist on disk, the two shapes they take, how each is read, and where that guidance lives. It is the single owner of usage guidance — the compaction summary carries path data and the archive header carries metadata, precisely so this stays one place that is always current and never needs revising for artifacts already written.
-## Requirements
+## MODIFIED Requirements
+
 ### Requirement: Retrieval guidance has a single home
 
 The system SHALL state how to search past conversation in exactly one place — a turn-context section — and SHALL NOT also state it in the compaction summary or in shipped project instructions.
@@ -37,34 +38,6 @@ The system SHALL omit the retrieval section when the workspace has no conversati
 - **WHEN** the sessions directory exists but contains nothing
 - **THEN** no section is emitted
 
-### Requirement: Guidance is stable across turns
-
-The section content SHALL NOT vary with volatile or per-session state, so that a single admission settles it and it does not invalidate the prompt cache or re-inject repeatedly.
-
-#### Scenario: No volatile figures
-
-- **WHEN** the section is rendered
-- **THEN** it contains no counts, timestamps, or other values that change as sessions are created or pruned
-
-#### Scenario: No per-session content
-
-- **WHEN** the current session compacts and gains an archive
-- **THEN** the rendered section is unchanged, because the section depends only on whether workspace history exists
-
-#### Scenario: Repeated evaluation is byte-identical
-
-- **WHEN** the section is computed twice in the same workspace
-- **THEN** both renderings are byte-identical
-
-### Requirement: Subagents do not receive the guidance
-
-The retrieval section SHALL NOT be injected for subagents.
-
-#### Scenario: Subagent turn context
-
-- **WHEN** a subagent assembles its turn context
-- **THEN** the `session_retrieval` kind is filtered out, because cross-session recall is a root-agent decision
-
 ### Requirement: Guidance states how past conversation is read
 
 The retrieval section SHALL state that past conversations are complete session logs on disk and
@@ -88,3 +61,10 @@ SHALL name the `session_search` / `session_read` tools as the way to search and 
 - **THEN** it states that the current session's own files are already represented by the live
   conversation, so re-reading them duplicates context
 
+## REMOVED Requirements
+
+### Requirement: The current session's archives are supplied by the summary, not the section
+
+**Reason**: The transcript archive was removed (see the removed `compaction-archive` capability); the session log is the complete record, so there is no per-session archive list for the summary to carry.
+
+**Migration**: None. Recall of compacted-away detail goes through `session_search` / `session_read` over the session log.

@@ -5,11 +5,20 @@
  * essential context for continued agent work.
  */
 
-import { stripCompactArchiveSections } from "./write-compact-archive.js";
-
 // ============================================================================
 // Constants
 // ============================================================================
+
+/**
+ * Strip any runtime-managed `## Compact archives` section from a summary.
+ *
+ * The archive system is gone, but sessions persisted before its removal still carry the section in
+ * their stored summary. Dropping it here keeps a stale path list from being fed to the summarizer
+ * (or restated) on an incremental update.
+ */
+function stripCompactArchiveSections(text: string): string {
+  return text.replace(/\n*## Compact archives?\b[\s\S]*?(?=\n## [^#]|\s*$)/gi, "").trimEnd();
+}
 
 /**
  * System prompt for the compaction subagent.
@@ -86,7 +95,6 @@ When constructing the summary, stick to this template:
 ---
 
 Be concise but complete. Include specific file paths, function names, and technical details.
-Do NOT include a "## Compact archive" or "## Compact archives" section — the runtime appends archive paths after your summary.
 
 Respond in the same language as the conversation being summarized.`;
 
@@ -145,8 +153,6 @@ Update the existing structured summary with new information. RULES:
 - UPDATE "Next Steps" based on what was accomplished
 - PRESERVE exact file paths, function names, and error messages
 - If something is no longer relevant, you may remove it
-- Do NOT include a "## Compact archive" or "## Compact archives" section — the runtime strips prior archive lists from <previous-summary> and re-appends a merged list after your summary
-- Do NOT copy or restate archive file paths or transcript excerpts from cold storage
 
 When constructing the summary, stick to this template:
 ---

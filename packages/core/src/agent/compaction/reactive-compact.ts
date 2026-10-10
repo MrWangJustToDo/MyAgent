@@ -14,9 +14,8 @@
  */
 
 import { createCompactedMessages, summarizeConversation } from "./auto-compact.js";
-import { extractExistingSummary, findCutPointByBudget } from "./cut-point.js";
+import { findCutPointByBudget } from "./cut-point.js";
 import { deriveKeepRecentTokens } from "./keep-policy.js";
-import { maybeAppendCompactArchive } from "./write-compact-archive.js";
 
 import type { AgentManager } from "../../runtime-types/hosts.js";
 import type { ModelMessage } from "@tanstack/ai";
@@ -161,27 +160,6 @@ export async function reactiveCompact(
     // If summarization fails, use a simple fallback so the session isn't lost
     summary = `[Emergency reactive compaction performed. ${summaryMessages.length} messages summarized. Full history is preserved in session storage. Please read relevant files to re-establish detailed context.]`;
   }
-
-  const { existingSummary, cleanMessages } = extractExistingSummary(summaryMessages);
-  const archiveMessages = cleanMessages.length > 0 ? cleanMessages : summaryMessages;
-
-  // Archive path lookup must not break emergency compaction when the agent
-  // registry is unavailable.
-  let sessionId = parentAgentId;
-  try {
-    sessionId = manager.getAgent(parentAgentId)?.getSessionData()?.id ?? parentAgentId;
-  } catch {
-    // Fall through with the agent id as session id.
-  }
-  summary = await maybeAppendCompactArchive(
-    summary,
-    {
-      sessionId,
-      messages: archiveMessages,
-      cutIndex: archiveMessages.length,
-    },
-    existingSummary
-  );
 
   // Build compacted messages: summary + recent tail
   const compacted = createCompactedMessages(`[Reactive Compact]\n\n${summary}`);

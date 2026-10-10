@@ -121,17 +121,13 @@ export { buildDefaultSystemPrompt } from "../agent/prompt/default-prompt.js";
 export { PR_SUMMARY_SYSTEM_PROMPT, TITLE_SYSTEM_PROMPT } from "../agent-session/session-summary-prompt.js";
 export { assertNotCompactionSummaryInput, applyToolCompact, ToolCompactCache, toModelOutputRegistry } from "../agent/compaction";
 export {
-  buildCompactArchiveMarkdown,
   buildCompactionPrompt,
   buildSegmentedConversationText,
   buildSummarizationUserPrompt,
-  COMPACT_TRANSCRIPT_ROOT,
   COMPACTION_PROMPT,
   COMPACTION_SYSTEM_PROMPT,
   deriveKeepRecentTokens,
-  extractCompactArchivePaths,
   findCutPointByBudget,
-  formatCompactArchivesSection,
   createCompactionSummaryUIMessage,
   createCompactionConfig,
   findLatestSummaryIndex,
@@ -144,19 +140,15 @@ export {
   isLatestDurableMessageCompactionSummary,
   keepPolicyProjectionOptions,
   lastMessageContentLen,
-  maybeAppendCompactArchive,
-  parseCompactSequence,
   policyKeyFromOptions,
   resolveAutoCompactTrigger,
   resolveKeepPolicy,
   serializeConversation,
   STILL_IN_CONTEXT_RULES,
-  stripCompactArchiveSections,
   TURN_PREFIX_INSTRUCTION,
   UPDATE_COMPACTION_PROMPT,
   WireProjectionCache,
   wireSourceFingerprint,
-  writeCompactArchive,
 } from "../agent/compaction";
 export { extractTextFromContent } from "../agent/compaction/message-utils.js";
 export {
@@ -230,7 +222,6 @@ export {
   formatSessionRetrievalSection,
   renderStaticRetrievalBody,
   hasSessionHistory,
-  listCompactArchives,
 } from "../agent/turn-context";
 export {
   MAX_INSTRUCTION_IMPORT_DEPTH,
@@ -249,6 +240,18 @@ export { loadAgentDoc, formatAgentDocResult } from "../agent/prompt/agent-doc-lo
 export type { AgentDocLoadResult, AgentDocLoaderConfig } from "../agent/prompt/agent-doc-loader.js";
 export { toolsToArray } from "../agent/tools/runtime/tools-record.js";
 export { defineServerTool } from "../agent/tools/runtime/define-tool.js";
+export { createSessionSearchTool, sessionSearchOutputSchema } from "../agent/tools/session-search-tool.js";
+export { createSessionReadTool, sessionReadOutputSchema } from "../agent/tools/session-read-tool.js";
+export {
+  DEFAULT_SEARCH_ROLES,
+  MAX_MATCHES_COLLECTED,
+  listSessionIds,
+  makeSnippet,
+  messageText,
+  readSessionMessages,
+  searchHistory,
+  sessionExists,
+} from "../agent/tools/session-search/session-reader.js";
 export {
   DEFAULT_REFRESH_MESSAGE_THRESHOLD,
   SUBAGENT_ALLOWED_KINDS,

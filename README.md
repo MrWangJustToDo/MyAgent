@@ -34,7 +34,7 @@ A **runtime-agnostic** AI coding agent — same core logic, runs in terminal, Ch
 | **Ask User** | Agent asks questions with selectable options or freeform answers |
 | **Subagents** | Context-isolated read-only tasks (50-step cap) with live `Ctrl+T` preview; eager pre-fork runs parallel tasks concurrently (rolling window), per-task phase machine (`running` → `summary`), streaming progress summaries, and LLM retry status surfaced in the task UI |
 | **Skills** | On-demand domain knowledge injection (list → load workflow) |
-| **Context Compaction** | `toModelOutput` tool shaping + auto/reactive LLM summarization; cut-away transcripts under `.agents/transcripts/` |
+| **Context Compaction** | `toModelOutput` tool shaping + auto/reactive LLM summarization; compacted-away detail stays in the session log and is reachable via `session_search` |
 | **Session Persistence** | Save/resume conversations under `.agents/sessions/` with auto-save |
 | **Usage Tracking** | Global per-LLM-call usage history (`/usage`, `.agents/usage/`) with a contribution graph, per-model totals, and cost rollups |
 | **Multiple Live Sessions** | Several live agent sessions can coexist and be switched on the fly (`Ctrl+X`) without losing state; core dedups disk-session ownership (a bound session can't be resumed twice) and the header shows the active session count |
@@ -239,7 +239,7 @@ Plan Mode (`/mode plan`, `Shift+Tab`) — explore → review → Build → force
 
 ### Context Compaction
 
-Auto/reactive LLM summarization compresses the conversation into a streaming summary — cut-away transcripts are archived under `.agents/transcripts/` for later inspection.
+Auto/reactive LLM summarization compresses the conversation into a streaming summary. Compaction only appends the summary — the compacted-away messages remain in `.agents/sessions/` and are reachable through the `session_search` / `session_read` tools.
 
 ![Compact — summary stream](compact.png)
 
@@ -283,7 +283,7 @@ codent --version                        # print installed version
 > Published as **`codent-cli`** on npm (the command is still `codent`). Currently a
 > **pre-release** — `0.0.1-beta.4`. Requires **Node.js 24+**.
 
-Runtime data (sessions, memory, plans, transcripts, …) is written to `./.agents/` in the directory you run from.
+Runtime data (sessions, memory, plans, …) is written to `./.agents/` in the directory you run from.
 
 ### From source
 
@@ -332,7 +332,7 @@ SANDBOX_ENV=native
 SERVER_PORT=3100
 ```
 
-Runtime data (sessions, usage history, memory, logs, cache, plans, compaction transcripts, skills, extensions, MCP config, unified model config) lives under a single gitignored **`.agents/`** directory. See [AGENTS.md — Workspace `.agents/` layout](AGENTS.md#workspace-agents-layout).
+Runtime data (sessions, usage history, memory, logs, cache, plans, skills, extensions, MCP config, unified model config) lives under a single gitignored **`.agents/`** directory. See [AGENTS.md — Workspace `.agents/` layout](AGENTS.md#workspace-agents-layout).
 
 ### Running
 

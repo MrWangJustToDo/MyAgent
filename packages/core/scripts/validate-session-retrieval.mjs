@@ -3,17 +3,15 @@
  *
  * Guards the contract that makes this the single home for "how to search past
  * conversation" — the knowledge previously spread across the compaction summary,
- * the archive file header, `AGENTS.md`, and `ARCHITECTURE.md`, two of which are
- * frozen and had already drifted apart:
+ * the (removed) archive file header, `AGENTS.md`, and `ARCHITECTURE.md`, two of which
+ * were frozen and had already drifted apart:
  *
  *   1. Gated on history existing; absent entirely on a fresh workspace
- *   2. Both on-disk shapes described, with the reading difference stated
- *      (compacted slices are greppable text; uncompacted sessions are one long
- *      JSON line, so grep only locates the session)
+ *   2. The session-log shape described (JSONL, one message per line, complete) and
+ *      the `session_search` / `session_read` tools named
  *   3. The current session's own files called out as redundant
  *   4. No volatile content (counts/versions), so the section hash is stable
- *   5. The body is fully static — no per-session paths — so one admission settles
- *      it; this session's paths come from the compaction summary instead
+ *   5. The body is fully static — no per-session paths — so one admission settles it
  *   6. The kind is NOT in SUBAGENT_ALLOWED_KINDS (root-agent decision)
  *
  * Run: pnpm --filter @codent/core run validate:session-retrieval
@@ -29,7 +27,6 @@ import {
   SESSION_RETRIEVAL_KIND,
   formatSessionRetrievalSection,
   hasSessionHistory,
-  listCompactArchives,
   registerCoreEnv,
   renderStaticRetrievalBody,
 } from "../dist/dev.mjs";
@@ -92,7 +89,7 @@ await (async () => {
   assert.equal(await hasSessionHistory(), false, "empty sessions dir is not history");
 
   // A single session is history.
-  writeFileSync(join(workspace, ".agents", "sessions", "ses_a.session.json"), "{}");
+  writeFileSync(join(workspace, ".agents", "sessions", "ses_a.session.jsonl"), "{}");
   assert.equal(await hasSessionHistory(), true, "one session counts as history");
 
   console.log("✓ the section is gated on history existing");
@@ -108,14 +105,11 @@ await (async () => {
   assert.ok(section.startsWith("<session_retrieval>"), "opens with its tag");
   assert.ok(section.endsWith("</session_retrieval>"), "closes with its tag");
 
-  assert.match(section, /compact-<N>\.md/, "names the compacted-slice shape");
-  assert.match(section, /plain\s+text|plain text/, "states slices are plain text");
-  assert.match(section, /newest → oldest/, "states the newest-first search order");
-
-  assert.match(section, /\.session\.json/, "names the uncompacted shape");
-  assert.match(section, /JSON line/, "states a session is one long JSON line");
-  assert.match(section, /uiMessages/, "says to filter uiMessages");
-  assert.match(section, /parts\[\]\.content/, "says where message text lives");
+  assert.match(section, /\.session\.jsonl/, "names the session-log shape (JSONL, not the legacy .json)");
+  assert.match(section, /one message per line/, "states the JSONL shape is one message per line");
+  assert.match(section, /complete/i, "states the log is the complete conversation");
+  assert.match(section, /session_search/, "names the retrieval tool as the primary path");
+  assert.match(section, /session_read/, "names the read tool");
 
   console.log("✓ both on-disk shapes and their reading difference are stated");
 })();
@@ -154,37 +148,19 @@ await (async () => {
 // 5. The body is fully static — one admission settles it (no per-session paths)
 // ---------------------------------------------------------------------------
 await (async () => {
-  // The section must not vary with this session's compaction state: paths are
-  // delivered by the compaction summary's `## Compact archives` block, so listing
-  // them here too would change the hash on every compaction and re-inject the whole
-  // block for information the summary already carries.
-  const beforeCompacting = formatSessionRetrievalSection({ hasHistory: true });
+  // The section must not vary with the workspace's on-disk state: it names no concrete
+  // session path, so creating one cannot change its hash and re-inject the whole block.
+  const before = formatSessionRetrievalSection({ hasHistory: true });
 
   resetWorkspace();
-  const dir = join(workspace, ".agents", "transcripts", "ses_x");
-  mkdirSync(dir, { recursive: true });
-  for (const n of [1, 2, 3]) writeFileSync(join(dir, `compact-${n}.md`), "x");
+  mkdirSync(join(workspace, ".agents", "sessions"), { recursive: true });
+  writeFileSync(join(workspace, ".agents", "sessions", "ses_x.session.jsonl"), "{}");
 
-  const afterCompacting = formatSessionRetrievalSection({ hasHistory: true });
-  assert.equal(
-    afterCompacting,
-    beforeCompacting,
-    "the section does not change when this session gains archives (hash must settle)"
-  );
-  assert.doesNotMatch(afterCompacting, /\.agents\/transcripts\/ses_/, "no concrete session path in the section");
-  assert.doesNotMatch(afterCompacting, /This session's compacted slices/, "no per-session path list in the section");
+  const after = formatSessionRetrievalSection({ hasHistory: true });
+  assert.equal(after, before, "the section does not change as sessions appear (hash must settle)");
+  assert.doesNotMatch(after, /\.agents\/sessions\/ses_/, "no concrete session path in the section");
 
-  // Discovery still works for anything that needs it, and degrades safely.
-  const found = await listCompactArchives("ses_x");
-  assert.deepEqual(
-    found,
-    [1, 2, 3].map((n) => `.agents/transcripts/ses_x/compact-${n}.md`),
-    `paths are numeric-ascending, got ${JSON.stringify(found)}`
-  );
-  assert.deepEqual(await listCompactArchives("ses_missing"), [], "missing session dir → empty list");
-  assert.deepEqual(await listCompactArchives(undefined), [], "no session id → empty list");
-
-  console.log("✓ the section is fully static; archive paths come from the summary");
+  console.log("✓ the section is fully static");
 })();
 
 // ---------------------------------------------------------------------------

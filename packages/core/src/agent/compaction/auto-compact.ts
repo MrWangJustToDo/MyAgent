@@ -35,7 +35,6 @@ import {
   SUMMARIZATION_CHARS_PER_TOKEN,
 } from "./summarization-budget.js";
 import { estimateTokens } from "./token-estimator.js";
-import { maybeAppendCompactArchive } from "./write-compact-archive.js";
 
 import type { CompactionTodoItem } from "./compaction-prompt.js";
 import type { CompactionConfig, CompactionResult } from "./types.js";
@@ -483,19 +482,7 @@ export async function autoCompact(
     }
 
     const fileOps = extractFileOpsFromMessages(toSummarize);
-    let summaryWithFileOps = summary + formatFileOperations(fileOps);
-
-    const managed = manager.getAgent(parentAgentId);
-    const sessionId = managed?.getSessionData()?.id ?? parentAgentId;
-    summaryWithFileOps = await maybeAppendCompactArchive(
-      summaryWithFileOps,
-      {
-        sessionId,
-        messages: toSummarize,
-        cutIndex,
-      },
-      prevSummary
-    );
+    const summaryWithFileOps = summary + formatFileOperations(fileOps);
 
     const keptTokens = estimateTokens(keptMessages);
     const summaryTokens = estimateTokens(createCompactedMessages(summaryWithFileOps));

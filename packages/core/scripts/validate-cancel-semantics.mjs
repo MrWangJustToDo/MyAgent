@@ -256,6 +256,8 @@ const NO_MARKER_REASON = {
   todo: "local state mutation; nothing to report when cut short",
   complete_plan: "local state mutation; nothing to report when cut short",
   ask_user: "blocks on the user, not on the run; a cancel is the interaction layer's story",
+  session_search: "read-only history scan; no partial output worth keeping, the fallback marks the row",
+  session_read: "read-only history render; no partial output worth keeping, the fallback marks the row",
 };
 
 function walk(dir) {

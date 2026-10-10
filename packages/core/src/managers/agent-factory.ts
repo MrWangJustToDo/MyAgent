@@ -81,7 +81,7 @@ export async function buildManagedAgent({
     }
   );
 
-  const toolsRecord: ToolsRecord = { ...(await createTools({ usage: managed.usage })) };
+  const toolsRecord: ToolsRecord = { ...(await createTools({ usage: managed.usage, managed })) };
   managed.tools = toolsRecord;
   managed.resolveTextAdapter = () => resolveTextAdapterForManaged(managed);
   // Scoped unified event bus for this agent. Routes session-channel projections

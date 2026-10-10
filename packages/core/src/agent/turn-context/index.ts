@@ -35,6 +35,5 @@ export {
   formatSessionRetrievalSection,
   renderStaticRetrievalBody,
   hasSessionHistory,
-  listCompactArchives,
 } from "./session-retrieval.js";
 export type { SessionRetrievalSection } from "./session-retrieval.js";

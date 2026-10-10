@@ -112,20 +112,6 @@ export {
   type ApplyCompactionResultOptions,
 } from "./apply-compaction-result.js";
 
-// Compact transcript archive
-export {
-  COMPACT_TRANSCRIPT_ROOT,
-  buildCompactArchiveMarkdown,
-  extractCompactArchivePaths,
-  formatCompactArchivesSection,
-  maybeAppendCompactArchive,
-  parseCompactSequence,
-  stripCompactArchiveSections,
-  writeCompactArchive,
-  type CompactArchiveWriteResult,
-  type WriteCompactArchiveOptions,
-} from "./write-compact-archive.js";
-
 // Reactive compaction (Emergency)
 export { isPromptTooLongError, reactiveCompact, getMaxReactiveRetries } from "./reactive-compact.js";
 export type { ReactiveCompactConfig } from "./reactive-compact.js";

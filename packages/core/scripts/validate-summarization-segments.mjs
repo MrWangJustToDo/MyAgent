@@ -56,7 +56,8 @@ assert.doesNotMatch(withoutStill, /Segment rules/);
 const instruction = buildCompactionPrompt({ hasStillInContext: true });
 assert.match(instruction, /Do NOT restate/);
 
-// Prior ## Compact archives must not be fed into <previous-summary> (instruction text may still mention the section name).
+// A legacy ## Compact archives section (written before the archive removal) must still be kept
+// out of <previous-summary>, so an incremental update never restates a stale path list.
 const withArchives = buildCompactionPrompt({
   existingSummary: `## Goal\n\nShip it\n\n## Compact archives\n\n- \`.agents/transcripts/ses/compact-1.md\``,
 });
@@ -65,7 +66,6 @@ const prevBlock = withArchives.match(/<previous-summary>\n([\s\S]*?)\n<\/previou
 assert.match(prevBlock, /## Goal/);
 assert.doesNotMatch(prevBlock, /## Compact archives/);
 assert.doesNotMatch(prevBlock, /compact-1\.md/);
-assert.match(withArchives, /Do NOT copy or restate archive file paths/);
 
 // Cut index must stay relative to input messages for applyCompactionResult.
 const cutIndex = llmCutIndex; // no previous summary offset
