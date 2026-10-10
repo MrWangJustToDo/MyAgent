@@ -30,6 +30,7 @@ export type ExtensionEventVisibility = "observable" | "internal";
 export const EXTENSION_EVENT_VISIBILITY = {
   // Session lifecycle
   "session:start": "observable",
+  "session:new": "observable",
   "session:doc": "observable",
   "session:skill": "observable",
   "session:mcp": "observable",

@@ -37,6 +37,12 @@ export type AgentEventPayloadMap = {
   "session:start": {
     cwd?: string;
   };
+  "session:new": {
+    /** The on-disk id of the session that was just created (replaces the previous one). */
+    sessionId?: string;
+    /** Why the switch happened — `/clear` is the only producer today. */
+    reason?: string;
+  };
   "session:restore": {
     sessionId?: string;
     messageCount?: number;

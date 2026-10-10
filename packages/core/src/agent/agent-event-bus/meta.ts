@@ -25,6 +25,7 @@ export const AGENT_EVENT_META: Record<AgentEventType, AgentEventMeta> = {
   // Session lifecycle
   // ==========================================================================
   "session:start": { mode: "emit" },
+  "session:new": { mode: "emit" },
   "session:doc": { mode: "emit" },
   "session:skill": { mode: "emit" },
   "session:mcp": { mode: "emit", channel: "mcp", retained: true },

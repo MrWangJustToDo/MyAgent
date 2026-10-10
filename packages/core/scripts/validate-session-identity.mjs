@@ -83,6 +83,19 @@ session.subscribe(
   { channels: ["state"] }
 );
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Session-scoped log routing. The sink is bound per session id, and both a resume and `/clear`
+// change that id mid-process — so these helpers are how the validator holds the binding to the
+// session it claims to be logging.
+const logsRoot = path.join(rootPath, ".agents/logs");
+const readLog = async (id) => {
+  try {
+    return await fs.promises.readFile(path.join(logsRoot, id, "agent.log"), "utf-8");
+  } catch {
+    return "";
+  }
+};
 const assertIdentity = (expected, label) => {
   assert.equal(session.getSnapshot().sessionId, expected, `${label}: snapshot.sessionId`);
   assert.equal(managed.getL1State().sessionId, expected, `${label}: L1 sessionId`);
@@ -114,6 +127,21 @@ assert.notEqual(target.id, first, "resume targets a different disk session");
 assertIdentity(target.id, "resume");
 assert.equal(managed.name, "Resumed Target", "resume mirrors the restored display name");
 
+// The resume must also ROUTE the log, not just the state: `session:restore` is the entry that says
+// which session was adopted, so it belongs in the restored session's own file. Regression — it was
+// emitted inside `restoreManagedSession`, which ran BEFORE `bindSessionLogSink` re-pointed the sink;
+// the entry therefore landed in the transient bootstrap id's directory and the resumed session's
+// file received only what came later (in the reported case, a single exit line).
+await wait(450); // default log flush interval is 250ms
+assert.ok(
+  (await readLog(target.id)).includes("Session restored"),
+  "resume routes `session:restore` into the restored session's log"
+);
+assert.ok(
+  !(await readLog(first)).includes("Session restored"),
+  "the transient bootstrap session's log does not receive the resume entry"
+);
+
 // ----------------------------------------------------------------------------
 // 3. `session.new` swaps it again and broadcasts
 // ----------------------------------------------------------------------------
@@ -124,6 +152,17 @@ const nextId = newSession.data.sessionId;
 assert.notEqual(nextId, target.id, "session.new allocates a new disk session");
 assertIdentity(nextId, "session.new");
 
+// `/clear` changes the id the same way a resume does, so the sink must follow here too — a fixed
+// `session:restore` alone would have left this path writing into the session it replaced. The
+// announcement is the new log's only header: the session is written to disk on first save, and a
+// cleared session that never gets a message saves nothing, so there is no `session:start` for it.
+await wait(450);
+assert.ok(
+  (await readLog(nextId)).includes("Session started (new)"),
+  "session.new announces itself in the new session's log"
+);
+assert.ok(!(await readLog(target.id)).includes("Session started (new)"), "…and not in the session it replaced");
+
 // ============================================================================
 // Teardown
 // ============================================================================
@@ -132,8 +171,6 @@ assertIdentity(nextId, "session.new");
 // landing when we delete the temp root, which makes `rm` throw ENOTEMPTY on a busy
 // directory. This is a teardown race, not a validation failure, so wait a beat for
 // the in-flight writes to drain and retry the removal before giving up.
-
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function removeRoot(root, attempts = 10) {
   for (let attempt = 1; attempt <= attempts; attempt++) {

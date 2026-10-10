@@ -165,6 +165,12 @@ export async function startNewDiskSession(
   managed.resetAdmittedTurnContext();
   managed.resetSystemPrompt();
   managed.getTodoManager()?.reset();
+  // Announce the switch on the bus *after* the session data is adopted: `setSessionData` re-points
+  // the log sink at the new id, so this entry lands in the new session's log — the only header it
+  // gets, since the new session is written to disk only on its first save and `/clear` may leave
+  // the process before that happens. Emitted through the same telemetry path as `session:start`
+  // (`emitEvent` → scoped bus → up-flow to root), so it reaches the log bridge without a host hook.
+  managed.emitEvent("session:new", { sessionId: newSession.id, reason: "clear" });
   // Broadcast the new on-disk session id (agent identity is unchanged).
   managed.refreshState();
 

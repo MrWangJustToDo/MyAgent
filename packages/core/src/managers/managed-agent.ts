@@ -984,15 +984,21 @@ export class ManagedAgent {
 
   /**
    * Attach (or re-point) the session JSONL log sink to the current session id's
-   * directory. Called once the session id is fixed at bootstrap and again after
-   * a restore, so logs follow the reused/resumed session rather than the
-   * transient id allocated before restore. No-op for subagents (they write an
-   * independent file into the parent's dir via `spawnSubagent`).
+   * directory. Called once the session id is fixed at bootstrap, again after a
+   * restore, and whenever the active session id changes — so logs follow the
+   * reused/resumed session rather than the transient id allocated before restore.
+   * No-op for subagents (they write an independent file into the parent's dir via
+   * `spawnSubagent`).
+   *
+   * `sessionId` overrides the id taken from the session data, for the one caller that
+   * knows the target before the restore has run: `restoreSession` binds ahead of
+   * `restoreManagedSession`, so the restore's own `session:restore` entry lands in the
+   * session being restored instead of the transient bootstrap dir.
    */
-  bindSessionLogSink(): void {
+  bindSessionLogSink(sessionId?: string): void {
     if (this.parentId) return;
-    const sessionId = this.getSessionData()?.id ?? this.id;
-    const dir = `${AGENT_LOG_DIR}/${sessionId}`;
+    const resolved = sessionId ?? this.getSessionData()?.id ?? this.id;
+    const dir = `${AGENT_LOG_DIR}/${resolved}`;
     if (this.log.getFileSinkDir() === dir) return;
     this.logSinkDetach?.();
     // Bind through the built-in log extension (which tracks the sink for teardown); fall back to
@@ -1066,8 +1072,23 @@ export class ManagedAgent {
     return this.session.getStore();
   }
 
+  /**
+   * Adopt session data for the *active* on-disk session.
+   *
+   * This is the single write point for "which session is active", so the log sink is
+   * re-pointed here rather than at each caller: a resume and `/clear` both change the id
+   * mid-process, and binding at the one place that records the change is what keeps the two
+   * from drifting. Idempotent — same id rebinds to the same dir and returns.
+   *
+   * Skipped while `manager` is unset (factory construction): there the sink is bound by
+   * `AgentManager.add`, which runs after the manager is attached so the binding is registered
+   * with the log extension for teardown. Binding earlier would take the seam's fallback path and
+   * leave a sink the extension does not know about.
+   */
   setSessionData(data: SessionData): void {
+    const previousId = this.getSessionData()?.id;
     this.session.setSessionData(data);
+    if (this.manager && data.id && data.id !== previousId) this.bindSessionLogSink(data.id);
   }
 
   /**
@@ -1707,6 +1728,15 @@ export class ManagedAgent {
       throw new Error(`Session "${sessionId}" is already active in another live session and cannot be resumed here.`);
     }
     try {
+      // Bind ahead of the restore: `restoreManagedSession` emits `session:restore` (and the
+      // restore can log its own failures), so pointing the sink at the target first is what makes
+      // "which session was restored" land in that session's log. The target id is passed
+      // explicitly because the session data still holds the transient bootstrap id here.
+      //
+      // Consequence, deliberate: an entry emitted by the restore itself lands in the *target*
+      // session's file even when the restore then throws. The sink is best-effort either way, and
+      // the alternative is losing the record of the attempt entirely.
+      this.bindSessionLogSink(sessionId);
       const session = await restoreManagedSession(this, sessionId);
       // Re-point the log sink at the restored session's dir so a mid-session
       // switch keeps logging to the session being viewed. A no-op at bootstrap
@@ -1717,6 +1747,10 @@ export class ManagedAgent {
       // Roll back ownership so a failed restore (e.g. missing session) doesn't
       // leave a stale claim.
       manager?.releaseSessionOwnership(sessionId, this.id);
+      // …and the log binding, for the same reason: a failed restore leaves the session data on
+      // the transient id, so the sink must go back there or the agent keeps writing into a
+      // directory belonging to a session it is not running.
+      this.bindSessionLogSink();
       throw err;
     }
   }

@@ -60,6 +60,18 @@ const TELEMETRY_EVENT_LOG_RULES: Record<keyof AgentEventPayloadMap, EventLogRule
     category: "system",
     formatMessage: (event) => `Session started (cwd: ${p(event).cwd ?? "unknown"})`,
   },
+  // A mid-process switch to a brand-new on-disk session (`/clear`). Distinct from `session:start`,
+  // which announces that *a* session started (process bootstrap, or one created by the host);
+  // without this entry the new log dir gets no header at all, because the new id is only written
+  // on first save — after which `/clear` may leave the process before any persist.
+  "session:new": {
+    level: "info",
+    category: "system",
+    formatMessage: (event) => {
+      const d = p(event);
+      return `Session started (new)${d.sessionId ? `: ${d.sessionId}` : ""}`;
+    },
+  },
   "session:doc": {
     level: "info",
     category: "system",
