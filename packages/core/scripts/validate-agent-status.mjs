@@ -5,6 +5,9 @@
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   ACTIVE_STATUSES,
@@ -14,6 +17,8 @@ import {
   ManagedAgent,
   resolveFinishStatus,
 } from "../dist/dev.mjs";
+
+const SRC = fileURLToPath(new URL("../src/", import.meta.url));
 
 assert.equal(isTerminalStatus("aborted"), true);
 assert.equal(isTerminalStatus("waiting"), true);
@@ -208,6 +213,42 @@ assert.equal(managed.getStatus(), "waiting");
   current = "running";
   status.applyRunOutcome({ kind: "aborted", messages: doneMessages, path: "detached" });
   assert.equal(current, "aborted");
+}
+
+// --- the abort listener must not rewrite a terminal status ---
+//
+// Regression: `onAborted` set `aborted` unconditionally, and it fires SYNCHRONOUSLY inside
+// `RunCoordinator.abort()` — so the `status !== "completed"` check that follows in
+// `abortManagedAgentRun` always observed an already-rewritten status and was dead code. Every
+// destroy of a finished agent logged `completed → aborted`, so the session's final status
+// contradicted `resolveFinishStatus` and the task panel rendered completed delegations as
+// cancelled. Asserted at the source because the bug was the *placement* of the guard (before
+// vs after a synchronous call), which no value assertion of the pure helper can see.
+{
+  const src = readFileSync(join(SRC, "managers/managed-agent-run-lifecycle.ts"), "utf8");
+  const listener = /onAborted: \(\) => \{([\s\S]*?)\n {6}\}/.exec(src);
+  assert.ok(listener, "the abort listener is present");
+  const body = listener[1];
+  assert.ok(
+    /isTerminalStatus\(host\.getStatus\(\)\)/.test(body),
+    "the listener guards on the terminal table — an already-finished agent keeps its status"
+  );
+  // The guard must precede the setStatus in the SAME body: a check performed after the write
+  // is the dead-code shape this replaced.
+  assert.ok(
+    body.indexOf("isTerminalStatus") < body.indexOf('setStatus("aborted")'),
+    "the guard must be read BEFORE the status is written (the write is unconditional otherwise)"
+  );
+  // And no unguarded `setStatus("aborted")` may survive in this module's abort paths.
+  for (const match of src.matchAll(/setStatus\("aborted"\)/g)) {
+    const before = src.slice(Math.max(0, match.index - 400), match.index);
+    const chained = before.lastIndexOf("abortManagedAgentRun(");
+    const enclosing = chained >= 0 ? before.slice(chained) : before;
+    assert.ok(
+      /isTerminalStatus/.test(enclosing) || /status !== "aborted"/.test(enclosing),
+      'every `setStatus("aborted")` in the run-lifecycle module is behind a terminal guard'
+    );
+  }
 }
 
 console.log("agent-status validation passed");
