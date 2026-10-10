@@ -123,10 +123,24 @@ const toolNames = registeredTools.map((t) => t.name);
 assert.ok(toolNames.includes("list_skills"), "registers list_skills");
 assert.ok(toolNames.includes("load_skill"), "registers load_skill");
 
+// list_skills is lazy (the <skills> index already carries its whole payload, so the
+// eager schema was per-turn prompt cost for a tool never called in 195 root runs).
+const listDef = registeredTools.find((t) => t.name === "list_skills");
+assert.equal(listDef.lazy, true, "list_skills is registered lazy");
+assert.ok(
+  listDef.description.includes("__lazy__tool__discovery__"),
+  "list_skills description names the discovery tool"
+);
+// load_skill stays eager: it is the second hop the model reaches for mid-task.
+assert.notEqual(registeredTools.find((t) => t.name === "load_skill").lazy, true, "load_skill stays eager");
+
 assert.ok(contextProvider, "registers a context provider");
 const index = await contextProvider.content();
 assert.ok(index.includes("<skills>"), "turn-context index wraps <skills>");
 assert.ok(index.includes(first.name), `turn-context index lists ${first.name}`);
+// A lazy tool only pays off if the model can still find it — the index is the one
+// surface that is always present, so it must advertise the discovery route.
+assert.ok(index.includes("__lazy__tool__discovery__"), "turn-context index names the discovery tool for list_skills");
 
 // list_skills executes and returns summaries.
 const listTool = registeredTools.find((t) => t.name === "list_skills");

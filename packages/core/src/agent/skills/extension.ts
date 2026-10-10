@@ -17,6 +17,8 @@
  * uses the global CoreEnv (`getEnv()`).
  */
 
+import { DISCOVERY_TOOL_NAME } from "@tanstack/ai";
+
 import type { SkillRegistry } from "./skill-registry.js";
 import type { ExtensionAPI, ExtensionContext } from "../extension/types.js";
 
@@ -87,10 +89,18 @@ async function activateSkills(
     ctx.registerTool({
       name: "list_skills",
       present: { category: "searches" as const },
+      // Lazy: the <skills> index in turn context already carries name + source +
+      // description for every skill, so the eager schema was ~396 bytes of prompt
+      // per turn restating what the model can already read. It was never called
+      // across 195 root runs. Both the index (below) and the description name
+      // DISCOVERY_TOOL_NAME, so nothing has to guess how to reach it.
+      lazy: true,
       description: `List available skills (name + brief description).
 
 Prefer the <skills> index already in the turn context. Call this only to refresh the list.
-Then use load_skill to load the full content of a specific skill.`,
+Then use load_skill to load the full content of a specific skill.
+
+This is a lazy tool: discover it via ${DISCOVERY_TOOL_NAME} before calling.`,
       inputSchema: z.object({}),
       outputSchema: z.object({
         skills: z.array(z.object({ name: z.string(), description: z.string(), source: z.string() })),
@@ -158,6 +168,7 @@ that help you complete specific types of tasks.`,
           "<skills>",
           "Use `load_skill` to load any of these skills when relevant to the user's task.",
           "The index lists name + description summaries only — do not infer or follow a skill's instructions until its full content has been loaded via `load_skill`.",
+          `list_skills is a lazy tool — discover it via ${DISCOVERY_TOOL_NAME} before calling.`,
           "",
           ...lines,
           "</skills>",

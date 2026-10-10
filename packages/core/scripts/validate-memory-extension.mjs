@@ -107,10 +107,26 @@ assert.ok(toolNames.includes("memory_list"), "registers memory_list");
 assert.ok(toolNames.includes("memory_read"), "registers memory_read");
 assert.ok(toolNames.includes("memory_write"), "registers memory_write");
 
+// memory_list is lazy (the <memory_index> already carries its whole payload, so the
+// eager schema was per-turn prompt cost for a tool called once in 195 root runs).
+const listDef = registeredTools.find((t) => t.name === "memory_list");
+assert.equal(listDef.lazy, true, "memory_list is registered lazy");
+assert.ok(
+  listDef.description.includes("__lazy__tool__discovery__"),
+  "memory_list description names the discovery tool"
+);
+// The other two stay eager: memory_read is a second hop the model reaches for
+// mid-task, and memory_write is the visible path when the user says "remember".
+assert.notEqual(registeredTools.find((t) => t.name === "memory_read").lazy, true, "memory_read stays eager");
+assert.notEqual(registeredTools.find((t) => t.name === "memory_write").lazy, true, "memory_write stays eager");
+
 assert.ok(contextProvider, "registers a context provider");
 const index = await contextProvider.content();
 assert.ok(index.includes("<memory_index>"), "turn-context index wraps <memory_index>");
 assert.ok(index.includes("user-prefers-tabs"), "turn-context index lists the written memory");
+// A lazy tool only pays off if the model can still find it — the index is the one
+// surface that is always present, so it must advertise the discovery route.
+assert.ok(index.includes("__lazy__tool__discovery__"), "turn-context index names the discovery tool for memory_list");
 
 // memory_list executes and returns summaries.
 const listTool = registeredTools.find((t) => t.name === "memory_list");

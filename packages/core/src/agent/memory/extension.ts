@@ -19,6 +19,8 @@
  * uses the global CoreEnv (`getEnv()`).
  */
 
+import { DISCOVERY_TOOL_NAME } from "@tanstack/ai";
+
 import type { MemoryManager } from "./memory-manager.js";
 import type { ExtensionAPI, ExtensionContext } from "../extension/types.js";
 
@@ -77,11 +79,19 @@ async function activateMemory(
     ctx.registerTool({
       name: "memory_list",
       present: { category: "searches" as const },
+      // Lazy: the <memory_index> in turn context already carries name + type +
+      // description for every memory, so the eager schema was ~471 bytes of prompt
+      // per turn restating what the model can already read. Measured over 195 root
+      // runs it was called once. The index (below) and the description both name
+      // DISCOVERY_TOOL_NAME, so nothing has to guess how to reach it.
+      lazy: true,
       description: `List available memories (name + type + description).
 
 Memories are durable facts extracted from previous sessions (user preferences,
 project conventions, decisions). The <memory_index> in turn context already
-lists them; call this to refresh or enumerate with type/filename detail.`,
+lists them; call this to refresh or enumerate with type/filename detail.
+
+This is a lazy tool: discover it via ${DISCOVERY_TOOL_NAME} before calling.`,
       inputSchema: z.object({}),
       outputSchema: z.object({
         memories: z.array(
@@ -202,6 +212,7 @@ creating a duplicate (check memory_list first).`,
           "<memory_index>",
           "These are memories from previous sessions. Respect user preferences from memory.",
           "When the user says 'remember' or expresses a clear preference, it will be automatically extracted.",
+          `memory_list is a lazy tool — discover it via ${DISCOVERY_TOOL_NAME} before calling.`,
           "",
           index.trim(),
           "</memory_index>",
