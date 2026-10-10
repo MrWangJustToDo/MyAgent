@@ -196,7 +196,7 @@ One registry (`AgentEvents` type map + `AGENT_EVENT_META`), two dispatch modes:
 | Mode         | Mechanism                                                                                     | Role                                    |
 | ------------ | --------------------------------------------------------------------------------------------- | --------------------------------------- |
 | Observer     | `bus.emit` / `bus.on("name"| "*")` — sync, fire-and-forget, error-isolated; `retain` replays current value to late subscribers | state / messages / usage / lifecycle notifications |
-| Interceptor  | `bus.intercept` / `bus.onIntercept` — async, ordered, shared mutable event, cancel short-circuit, `tool:before:*` pattern keys | extension tool before/after/error hooks, `before_agent_start` |
+| Interceptor  | `bus.intercept` / `bus.onIntercept` — async, shared mutable event, cancel short-circuit, `tool:before:*` pattern keys, ordered by declared dispatch order (`ExtensionAPI.order`, §8.5) | extension tool before/after/error hooks, `before_agent_start` |
 
 `AgentSession` subscribes the agent's scoped bus **once** and projects every
 observer event to a session channel declared in `AGENT_EVENT_META[type].channel`;
@@ -866,7 +866,7 @@ emitAgentTelemetry(managed, type, data);  // envelope-construction helper (same 
 bus.emit("session:summary", payload);     // domain objects hold the scoped bus and emit
 ```
 
-Observer `emit` is synchronous fire-and-forget with per-listener error containment; interceptor `intercept` (`{ type, payload, defaultReturn }`) is async, ordered, shared-mutable, and can short-circuit. The built-in log extension is the single `"*"` observer on the root scope, and internal events are withheld from wildcard delivery (so wildcard ≡ `observeAny`).
+Observer `emit` is synchronous fire-and-forget with per-listener error containment; interceptor `intercept` (`{ type, payload, defaultReturn }`) is async, shared-mutable, can short-circuit, and walks the scope chain front-to-back in each node ordered by declared dispatch order (`ExtensionAPI.order`; ties keep load sequence). The built-in log extension is the single `"*"` observer on the root scope, and internal events are withheld from wildcard delivery (so wildcard ≡ `observeAny`).
 
 ### 8.2 Observation layers (L1–L4)
 
@@ -948,6 +948,19 @@ Extension interception (`tool:before:*` / `tool:after:*` / `tool:error:*` / `bef
 **Message transformers (`ctx.registerMessageTransformer`) are deliberately NOT one of those interceptor patterns.** They are a named registration method with a different shape: interceptor mode is a shared mutable payload with cancel short-circuitness, whereas a message transformer receives the model-facing message array and returns a replacement. The interceptor pattern lists above and below do not gain a message-transform entry, and `AgentEventBus` gains no third dispatch mode.
 
 The non-bus extension surfaces are therefore exactly: `registerTool`, `registerCommand`, `registerContextProvider`, `registerMessageTransformer`, and `ui.render` / `ui.notify` / `ui.getContext` — each a registration or projection API, none a dispatch mode. **Observation (`ctx.events.observe` / `observeAny` / `retained`) is NOT on that list**: it is bus-backed, delivered by the observer dispatch mode the bus already had, which is why the observation section above documents it under the bus rather than under the non-bus surfaces.
+
+**Dispatch order (`ExtensionAPI.order`).** Four extension surfaces are observable as a **sequence**, and each was ordered by the same uncontrolled variable — the order extensions load. `order?: number` makes the sequence declarable: **lower runs first**, absent means `0`.
+
+| Read | Surfaces | What the order decides |
+| ---- | -------- | ---------------------- |
+| **Chain** (front-to-back) | interceptor dispatch, message-transformer chaining, turn-context section position | which extension runs **earlier** — a cancelling interceptor suppresses everything after it |
+| **Resolution** (back-to-front) | same-named extension tools | which extension **wins** — the highest order, because a later-running extension supersedes |
+
+Both readings come from one sort on `(order, load sequence)` (`agent/dispatch-order.ts`): chain surfaces read it forward, the resolution surface reads the last entry. Ties keep **load sequence**, recorded by `ExtensionRunner` when the extension loads — so an extension that declares nothing keeps the exact position it would have had, and only declared extensions move. It is a **dispatch** rule (which position an extension runs in) and is deliberately unrelated to the loader's **resolution** rule for a duplicated extension id (`extension/paths.ts`, later directory wins).
+
+It governs **nothing else**: observer delivery stays registration-ordered, `ui.render` slots are combined by key, commands are looked up by name, and the flush phases are phase-scoped. The effective order is reported on `ExtensionInfo` (`order`, plus `declaredOrder` to tell "declared 0" from "defaulted"), and `getExtensionInfos()` returns entries in dispatch order, so the Extensions panel (`Ctrl+Y`) shows where each extension actually runs. The bus's interceptor array is re-sorted **on mutation**, not inside `intercept` (a per-tool-call hot path); the ranked tool stack lives in `ExtensionRegistryService`, whose live entry is re-derived from the ranks so a middle-owner disable promotes the right survivor.
+
+Validate: `pnpm --filter @codent/core run validate:extension-order`.
 
 | Property | Behaviour |
 | -------- | --------- |

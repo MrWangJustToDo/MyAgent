@@ -26,7 +26,10 @@
  * A transformer that wants to change a part returns a new message rather than mutating.
  */
 
+import { compareDispatchRank } from "../dispatch-order.js";
+
 import type { MessageTransformContext, MessageTransformer } from "./types.js";
+import type { DispatchRank } from "../dispatch-order.js";
 import type { ModelMessage } from "@tanstack/ai";
 
 /**
@@ -57,11 +60,11 @@ export interface MessageTransformerRegistryHost {
 
 export class MessageTransformerRegistry {
   /**
-   * Per-extension transformer (extension id → transformer). A Map, not an array,
-   * because the contract is "at most one per extension"; insertion order is extension
-   * load order, which is the chaining order.
+   * Per-extension transformer (extension id → transformer + its dispatch rank). A Map, not an
+   * array, because the contract is "at most one per extension"; the chaining order is the
+   * declared dispatch order (rank), not insertion order.
    */
-  private transformers = new Map<string, MessageTransformer>();
+  private transformers = new Map<string, { transformer: MessageTransformer; rank: DispatchRank }>();
 
   constructor(private readonly host: MessageTransformerRegistryHost) {}
 
@@ -73,9 +76,9 @@ export class MessageTransformerRegistry {
     return this.transformers.size > 0;
   }
 
-  /** Register (or replace) the transformer owned by an extension. */
-  register(extensionId: string, transformer: MessageTransformer): void {
-    this.transformers.set(extensionId, transformer);
+  /** Register (or replace) the transformer owned by an extension, with its dispatch rank. */
+  register(extensionId: string, transformer: MessageTransformer, rank: DispatchRank): void {
+    this.transformers.set(extensionId, { transformer, rank });
   }
 
   /**
@@ -83,7 +86,7 @@ export class MessageTransformerRegistry {
    * one — a stale disposer must not clear a later re-registration.
    */
   dispose(extensionId: string, transformer: MessageTransformer): void {
-    if (this.transformers.get(extensionId) === transformer) {
+    if (this.transformers.get(extensionId)?.transformer === transformer) {
       this.transformers.delete(extensionId);
     }
   }
@@ -110,7 +113,12 @@ export class MessageTransformerRegistry {
     // Fresh outer array + fresh message objects: see the ownership note at the top.
     let current: ModelMessage[] = ctx.messages.map((message) => ({ ...message }));
 
-    for (const [extensionId, transformer] of this.transformers) {
+    // Declared dispatch order, load sequence as the tie-break — not insertion order.
+    const ordered = Array.from(this.transformers, ([extensionId, entry]) => ({ extensionId, ...entry })).sort((a, b) =>
+      compareDispatchRank(a.rank, b.rank)
+    );
+
+    for (const { extensionId, transformer } of ordered) {
       try {
         const result = await transformer({ ...ctx, extensionId, messages: current });
         if (result === undefined) continue;

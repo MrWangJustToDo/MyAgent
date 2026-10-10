@@ -3,6 +3,7 @@ import type { ExtensionZod } from "./extension-zod.js";
 import type { CoreEnv } from "../../env.js";
 import type { MultimodalPartType } from "../../models/adapter/capability-message-utils.js";
 import type { ModelCapability } from "../../models/types.js";
+import type { DispatchRank } from "../dispatch-order.js";
 import type { ToolPresentation } from "../tools/presentation/types.js";
 import type { ModelToolContent, ToModelOutputContext } from "../tools/runtime/to-model-output-registry.js";
 import type { ModelMessage, SchemaInput } from "@tanstack/ai";
@@ -402,7 +403,11 @@ export type ToolLifecycleEvent = ToolBeforeEvent | ToolAfterEvent | ToolErrorEve
 
 export interface ExtensionEventBus {
   emit<T extends InterceptableEvent>(event: T): Promise<T["defaultReturn"] | undefined>;
-  on<T extends InterceptableEvent>(type: string, handler: EventInterceptor<T>): () => void;
+  /**
+   * Register an interceptor. `rank` is the declaring extension's dispatch position — supplied by
+   * the runner so the shared scope node can order interceptors across extensions.
+   */
+  on<T extends InterceptableEvent>(type: string, handler: EventInterceptor<T>, rank?: DispatchRank): () => void;
   off<T extends InterceptableEvent>(type: string, handler: EventInterceptor<T>): void;
 }
 
@@ -657,6 +662,21 @@ export interface ExtensionAPI {
   name: string;
   version: string;
   description: string;
+  /**
+   * Declared dispatch order — **lower runs first**, absent means `0`.
+   *
+   * Governs the extension surfaces whose behavior is observable as a sequence: interceptor
+   * dispatch, message-transformer chaining, same-named tool resolution (where the *highest*
+   * order wins, because a later-running extension supersedes), and turn-context section
+   * order. Ties keep the load sequence. It does **not** touch observer subscriptions,
+   * extension UI render slots, command lookup, or the flush registrations — see
+   * `extension-ordering` in `openspec/specs/` for the contract.
+   *
+   * This is a *dispatch* rule (which position the extension runs in) and is deliberately
+   * unrelated to the loader's *resolution* rule for a duplicated extension id
+   * (`extension/paths.ts`, later directory wins).
+   */
+  order?: number;
 
   activate(ctx: ExtensionContext): Promise<void> | void;
   /**
@@ -723,6 +743,16 @@ export interface ExtensionInfo {
   /** "active" | "error" | "inactive" */
   state: ExtensionInstance["state"];
   error?: string;
+  /**
+   * Effective dispatch order for this extension — the declared `order`, or `0` when undeclared.
+   * Reported so an ordering conflict is observable at runtime; see `extension-ordering`.
+   */
+  order: number;
+  /**
+   * The declared value, or `undefined` when the extension declared none. Distinguishes
+   * "declared `0`" from "defaulted to `0`", which `order` alone cannot.
+   */
+  declaredOrder?: number;
   /** Tools this extension registered (when enabled). */
   tools: string[];
   /** Commands this extension registered (when enabled), with whether each exposes secondary-menu options. */

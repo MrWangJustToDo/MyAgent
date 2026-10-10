@@ -1,6 +1,8 @@
 import { Emitter } from "../../utils/emitter.js";
+import { compareDispatchRank, resolveExtensionOrder } from "../dispatch-order.js";
 import { INTERNAL_EXTENSION_EVENTS } from "../extension/event-visibility.js";
 
+import type { DispatchRank } from "../dispatch-order.js";
 import type {
   AgentEvent,
   AgentEventBus,
@@ -25,7 +27,16 @@ import type {
 class EventBusScopeNode {
   readonly observers = new Emitter<Record<string, AgentEvent>>();
   readonly wildcards = new Set<AgentEventWildcardListener>();
-  readonly interceptors: Array<{ pattern: string; handler: EventInterceptor<InterceptableEvent> }> = [];
+  /**
+   * Interceptors in **dispatch order** (declared order, then load sequence) — kept sorted on
+   * mutation so the hot `intercept` walk stays a plain array scan. A registration that declares
+   * no order carries the default, which preserves insertion sequence via the tie-break.
+   */
+  readonly interceptors: Array<{
+    pattern: string;
+    handler: EventInterceptor<InterceptableEvent>;
+    rank: DispatchRank;
+  }> = [];
   readonly retained = new Map<string, () => unknown>();
 
   constructor(
@@ -182,15 +193,26 @@ export class DefaultAgentEventBus implements AgentEventBus {
     return (event as { defaultReturn?: T["defaultReturn"] }).defaultReturn;
   }
 
-  onIntercept<T extends InterceptableEvent>(pattern: string, handler: EventInterceptor<T>): () => void {
+  onIntercept<T extends InterceptableEvent>(
+    pattern: string,
+    handler: EventInterceptor<T>,
+    rank?: DispatchRank
+  ): () => void {
     const registration = {
       pattern,
       handler: handler as EventInterceptor<InterceptableEvent>,
+      // Default when the caller supplies none (a non-extension interceptor): order 0, and a
+      // sequence past every explicit one so insertion order is preserved as before.
+      rank: rank ?? { order: resolveExtensionOrder(undefined), seq: Number.MAX_SAFE_INTEGER },
     };
-    this.node.interceptors.push(registration);
+    const list = this.node.interceptors;
+    list.push(registration);
+    // Sorted on mutation, not on dispatch: `intercept` runs on every tool call and must keep
+    // walking a plain array. Ties keep insertion order via the rank's sequence tie-break.
+    list.sort((a, b) => compareDispatchRank(a.rank, b.rank));
     return () => {
-      const index = this.node.interceptors.indexOf(registration);
-      if (index >= 0) this.node.interceptors.splice(index, 1);
+      const index = list.indexOf(registration);
+      if (index >= 0) list.splice(index, 1);
     };
   }
 

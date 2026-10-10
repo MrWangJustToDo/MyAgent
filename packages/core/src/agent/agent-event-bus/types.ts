@@ -22,6 +22,7 @@ import type {
   SessionInteractionsSnapshot,
   UsageChangeSnapshot,
 } from "../../runtime-types/session-payloads.js";
+import type { DispatchRank } from "../dispatch-order.js";
 import type {
   EventInterceptor,
   ExtensionInfo,
@@ -176,8 +177,16 @@ export interface AgentEventBus {
   /** Dispatch an interceptor event (async, ordered, shared mutable event). */
   intercept<T extends InterceptableEvent>(event: T): Promise<T["defaultReturn"] | undefined>;
 
-  /** Register an interceptor for an exact name or a `prefix:*` pattern. */
-  onIntercept<T extends InterceptableEvent>(pattern: string, handler: EventInterceptor<T>): () => void;
+  /**
+   * Register an interceptor for an exact name or a `prefix:*` pattern. `rank` is the declaring
+   * extension's dispatch position; omit it for a non-extension interceptor (order 0, inserted
+   * after every ranked one).
+   */
+  onIntercept<T extends InterceptableEvent>(
+    pattern: string,
+    handler: EventInterceptor<T>,
+    rank?: DispatchRank
+  ): () => void;
 
   /** Whether any interceptor (in scope chain) matches `name` (fast-path guard). */
   hasInterceptors(name: string): boolean;

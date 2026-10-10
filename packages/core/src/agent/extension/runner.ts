@@ -3,6 +3,7 @@ import { getEnv, hasCoreEnv } from "../../env.js";
 // it on the same two hooks (fatal handler + `exit`) that already land the active logs.
 import { createAgentEventBus } from "../agent-event-bus";
 import { registerExtensionExitFlush } from "../agent-log/lifecycle-guards.js";
+import { compareDispatchRank, resolveExtensionOrder, sortByDispatchRank } from "../dispatch-order.js";
 
 import { BusExtensionEventBus } from "./bus-extension-event-bus.js";
 import { DefaultExtensionUI } from "./default-extension-ui.js";
@@ -10,6 +11,7 @@ import { z } from "./extension-zod.js";
 import { MessageTransformerRegistry } from "./message-transformer-registry.js";
 import { createObserverSurface } from "./observer-surface.js";
 
+import type { DispatchRank } from "../dispatch-order.js";
 import type {
   ExtensionInstance,
   ExtensionAPI,
@@ -47,7 +49,11 @@ const CONTEXT_THROTTLE_MS = 250;
 
 export interface ExtensionRunnerOptions {
   getEnvVar: (key: string) => string | undefined;
-  onRegisterTool?: (def: ExtensionToolDefinition, ownerId: string) => void;
+  /**
+   * Register a tool on the host. `rank` carries the extension's resolved dispatch position so the
+   * host's authoritative tool stack can pick the live entry when a name is shadowed.
+   */
+  onRegisterTool?: (def: ExtensionToolDefinition, ownerId: string, rank: DispatchRank) => void;
   onRegisterCommand?: (cmd: ExtensionCommand) => void;
   /**
    * Drop one extension's registrations for a tool name.
@@ -92,14 +98,25 @@ export interface ExtensionRunnerOptions {
 
 export class ExtensionRunner {
   private extensions: ExtensionInstance[] = [];
-  /** Per name, the extension tools registered in order — the last one is live. A stack, so a
-   * handover leaves the top pointing at whatever is still registered; see
-   * `validate:extension-tool-restore`. Bookkeeping only — the host's stack is the authority. */
-  private toolStacks = new Map<string, Array<{ ownerId: string; def: ExtensionToolDefinition }>>();
+  /**
+   * Monotonic load sequence, assigned at `loadExtension`. The tie-break within an equal
+   * declared `order`, and the reason an undeclared extension keeps the exact sequence it had
+   * before `order` existed. Assigned once per extension and restored on re-enable, never
+   * re-derived from the loader's discovery order.
+   */
+  private loadSequence = 0;
+  /** Resolved dispatch position per extension id (declared `order` + the load sequence). */
+  private readonly ranks = new Map<string, DispatchRank>();
+  /**
+   * Per name, the extension tools registered with their owner and rank — bookkeeping that mirrors
+   * what the host holds. The authoritative tool stack (which entry is live) lives in the host's
+   * `ExtensionRegistryService`, which receives the same rank through `onRegisterTool`.
+   */
+  private toolStacks = new Map<string, Array<{ ownerId: string; def: ExtensionToolDefinition; rank: DispatchRank }>>();
   private commandRegistry = new Map<string, ExtensionCommand>();
   private commandOwners = new Map<string, string>();
-  /** Per-extension context injection (extension id → provider). */
-  private contextProviders = new Map<string, ExtensionContextProvider>();
+  /** Per-extension context injection (extension id → provider and its rank). */
+  private contextProviders = new Map<string, { provider: ExtensionContextProvider; rank: DispatchRank }>();
   /**
    * Per-extension model-message transform. The registry owns the map, the chaining order
    * and the ownership copy; the runner only wires lifecycle into it.
@@ -303,9 +320,13 @@ export class ExtensionRunner {
       .catch(() => {});
   }
 
-  /** The extension tools this runner still holds, one per name — a mirror of what is registered. */
+  /** The extension tools this runner still holds, one per name — a mirror of what the host holds,
+   * re-derived from each stack's highest rank (the resolution reading of dispatch order). */
   getTools(): ExtensionToolDefinition[] {
-    return Array.from(this.toolStacks.values(), (stack) => stack[stack.length - 1].def);
+    return Array.from(
+      this.toolStacks.values(),
+      (stack) => stack.reduce((top, entry) => (compareDispatchRank(entry.rank, top.rank) > 0 ? entry : top)).def
+    );
   }
 
   getCommands(): ExtensionCommand[] {
@@ -313,7 +334,9 @@ export class ExtensionRunner {
   }
 
   getTool(name: string): ExtensionToolDefinition | undefined {
-    return this.toolStacks.get(name)?.at(-1)?.def;
+    const stack = this.toolStacks.get(name);
+    if (!stack || stack.length === 0) return undefined;
+    return stack.reduce((top, entry) => (compareDispatchRank(entry.rank, top.rank) > 0 ? entry : top)).def;
   }
 
   /**
@@ -330,9 +353,11 @@ export class ExtensionRunner {
     };
     await this.eventBus.emit(event);
 
-    // Each enabled extension with content becomes its own section (kind = id).
+    // Each enabled extension with content becomes its own section (kind = id), ordered by
+    // declared dispatch order so the section sequence is declarable rather than load-determined.
     const turnContextSections: ExtensionTurnContextSection[] = [];
-    for (const [id, provider] of this.contextProviders) {
+    const orderedProviders = sortByDispatchRank(Array.from(this.contextProviders, ([id, entry]) => ({ id, ...entry })));
+    for (const { id, provider } of orderedProviders) {
       try {
         const value = await provider.content?.();
         if (value?.trim()) turnContextSections.push({ id, content: value.trim() });
@@ -375,6 +400,11 @@ export class ExtensionRunner {
       exitFlush: null,
       exitFlushRef: null,
     };
+    // Assign the load sequence once, at load; re-enable reuses the stored rank so an extension
+    // returns to its position instead of moving to the end (see `ranks`).
+    if (!this.ranks.has(api.id)) {
+      this.ranks.set(api.id, { order: resolveExtensionOrder(api.order), seq: this.loadSequence++ });
+    }
     const ctx = this.createContext(api, config, registrations);
 
     const instance: ExtensionInstance = {
@@ -473,24 +503,37 @@ export class ExtensionRunner {
     this.contextUnsubs.length = 0;
   }
 
-  /** Read-only snapshot of loaded extensions for management commands. */
+  /** Read-only snapshot of loaded extensions for management commands, in **dispatch order**. */
   getExtensionInfos(): ExtensionInfo[] {
-    return this.extensions.map((instance) => ({
-      id: instance.api.id,
-      name: instance.api.name,
-      version: instance.api.version,
-      description: instance.api.description,
-      enabled: instance.state === "active",
-      state: instance.state,
-      error: instance.error?.message,
-      tools: [...instance.registrations.tools],
-      // Expose whether each command has a secondary menu (getOptions) so the app
-      // can treat pure-display commands (e.g. /lsp, /mcp) without an options menu.
-      commands: instance.registrations.commands.map((name) => ({
-        name,
-        hasOptions: Boolean(this.commandRegistry.get(name)?.getOptions),
-      })),
-    }));
+    return this.extensions
+      .slice()
+      .sort((a, b) => compareDispatchRank(this.rankOf(a.api.id), this.rankOf(b.api.id)))
+      .map((instance) => ({
+        id: instance.api.id,
+        name: instance.api.name,
+        version: instance.api.version,
+        description: instance.api.description,
+        enabled: instance.state === "active",
+        state: instance.state,
+        error: instance.error?.message,
+        order: this.rankOf(instance.api.id).order,
+        declaredOrder:
+          typeof instance.api.order === "number" && Number.isFinite(instance.api.order)
+            ? instance.api.order
+            : undefined,
+        tools: [...instance.registrations.tools],
+        // Expose whether each command has a secondary menu (getOptions) so the app
+        // can treat pure-display commands (e.g. /lsp, /mcp) without an options menu.
+        commands: instance.registrations.commands.map((name) => ({
+          name,
+          hasOptions: Boolean(this.commandRegistry.get(name)?.getOptions),
+        })),
+      }));
+  }
+
+  /** The resolved dispatch position for an extension id, defaulting for an unloaded id. */
+  private rankOf(id: string): DispatchRank {
+    return this.ranks.get(id) ?? { order: resolveExtensionOrder(undefined), seq: Number.MAX_SAFE_INTEGER };
   }
 
   /**
@@ -526,7 +569,7 @@ export class ExtensionRunner {
     // Capture the provider's disabledContent BEFORE destroy (destroy unsubscribes
     // it). Undefined/absent falls back to a generic notice so non-customizing
     // extensions stay informative; an empty string explicitly opts out.
-    const provider = this.contextProviders.get(instance.api.id);
+    const provider = this.contextProviders.get(instance.api.id)?.provider;
     const custom =
       provider?.disabledContent === undefined ? undefined : ((await provider.disabledContent()) ?? undefined);
 
@@ -609,15 +652,18 @@ export class ExtensionRunner {
       cwd: this.options.cwd ?? "",
       coreEnv: this.resolveCoreEnv(),
       registerTool: (def: ExtensionToolDefinition) => {
+        const rank = this.rankOf(api.id);
         const stack = this.toolStacks.get(def.name);
-        if (!stack) this.toolStacks.set(def.name, [{ ownerId: api.id, def }]);
+        if (!stack) this.toolStacks.set(def.name, [{ ownerId: api.id, def, rank }]);
         else {
           const own = stack.findIndex((entry) => entry.ownerId === api.id);
-          if (own === -1) stack.push({ ownerId: api.id, def });
-          else stack[own] = { ownerId: api.id, def };
+          if (own === -1) stack.push({ ownerId: api.id, def, rank });
+          else stack[own] = { ownerId: api.id, def, rank };
         }
         registrations?.tools.push(def.name);
-        this.options.onRegisterTool?.(def, api.id);
+        // The rank travels with the registration: the authoritative tool stack (which entry is
+        // live) lives in the host's registry, which cannot see the extension's own order.
+        this.options.onRegisterTool?.(def, api.id, rank);
       },
 
       registerCommand: (cmd: ExtensionCommand) => {
@@ -631,15 +677,15 @@ export class ExtensionRunner {
         eventType: string,
         handler: EventInterceptor<T>
       ): (() => void) => {
-        const unsub = this.eventBus.on(eventType, handler);
+        const unsub = this.eventBus.on(eventType, handler, this.rankOf(api.id));
         registrations?.unsubInterceptors.push(unsub);
         return unsub;
       },
 
       registerContextProvider: (provider: ExtensionContextProvider): (() => void) => {
-        this.contextProviders.set(api.id, provider);
+        this.contextProviders.set(api.id, { provider, rank: this.rankOf(api.id) });
         const unsub = () => {
-          if (this.contextProviders.get(api.id) === provider) this.contextProviders.delete(api.id);
+          if (this.contextProviders.get(api.id)?.provider === provider) this.contextProviders.delete(api.id);
         };
         registrations?.unsubTurnContext.push(unsub);
         return unsub;
@@ -669,7 +715,7 @@ export class ExtensionRunner {
       },
 
       registerMessageTransformer: (transformer: MessageTransformer): (() => void) => {
-        this.messageTransformers.register(api.id, transformer);
+        this.messageTransformers.register(api.id, transformer, this.rankOf(api.id));
         if (registrations && !registrations.messageTransformers.includes(api.id)) {
           registrations.messageTransformers.push(api.id);
         }
@@ -685,7 +731,11 @@ export class ExtensionRunner {
         // observer accessors. Not a spread: `BusExtensionEventBus` keeps its
         // methods on the prototype, so spreading the instance would drop them.
         emit: (event) => this.eventBus.emit(event),
-        on: (type, handler) => this.eventBus.on(type, handler),
+        // The `ctx.events.on` accessor is an interceptor registration equivalent to
+        // `ctx.registerInterceptor`, so it must carry the same rank — otherwise an extension
+        // ordering itself with `order` would get its declared position through one entry point
+        // and the default through the other.
+        on: (type, handler) => this.eventBus.on(type, handler, this.rankOf(api.id)),
         off: (type, handler) => this.eventBus.off(type, handler),
         ...this.createObserverSurface(api.id, registrations),
       },

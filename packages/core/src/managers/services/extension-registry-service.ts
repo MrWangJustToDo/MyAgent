@@ -10,10 +10,12 @@
  * caller passes the record plus invalidation callbacks per call.
  */
 
+import { compareDispatchRank, DEFAULT_EXTENSION_ORDER, INCUMBENT_RANK } from "../../agent/dispatch-order.js";
 import { forgetToolPresentationOwner } from "../../agent/tools/presentation/registry.js";
 import { defineServerTool } from "../../agent/tools/runtime/define-tool.js";
 import { toModelOutputRegistry } from "../../agent/tools/runtime/to-model-output-registry.js";
 
+import type { DispatchRank } from "../../agent/dispatch-order.js";
 import type {
   ExtensionCommand,
   ExtensionLoader,
@@ -65,6 +67,15 @@ export interface ExtensionToolRegistrationContext {
   ownerId: string;
   /** Structured warn sink (agent log). */
   warn: (message: string) => void;
+  /**
+   * The registering extension's dispatch rank. When a tool name is shadowed the stack's live
+   * entry is the **highest** rank (the resolution reading of dispatch order), so an extension's
+   * declared `order` decides which definition wins rather than load order.
+   *
+   * Optional: a direct (non-runner) registration gets a fresh default position (order 0, a
+   * monotonic sequence), so it beats the seeded incumbent and a later one still wins.
+   */
+  rank?: DispatchRank;
   /** Called after the tools record changes so cached runners re-resolve. */
   onToolsChanged: () => void;
   /**
@@ -82,7 +93,7 @@ export interface ExtensionToolRegistrationContext {
 const INCUMBENT_TOOL_OWNER = "(incumbent)";
 
 /** A stack of tool entries per name — bottom is what was there before, top is live. */
-type ToolStack = Map<string, Array<{ ownerId: string; tool: unknown }>>;
+type ToolStack = Map<string, Array<{ ownerId: string; tool: unknown; rank: DispatchRank }>>;
 
 export class ExtensionRegistryService {
   // Set-once integration managers
@@ -106,6 +117,13 @@ export class ExtensionRegistryService {
    * entries and re-reading the top is all that "restore" ever needs.
    */
   private readonly toolStacks: ToolStack = new Map();
+  /**
+   * Monotonic sequence for a registration that carries no rank (a direct, non-runner call).
+   * Gives each such registration a distinct position so a later one still supersedes an earlier
+   * one — the insertion-order behaviour that existed before ranks, preserved for callers that
+   * declare nothing.
+   */
+  private registrationSeq = 0;
 
   // ---------------------------------------------------------------------------
   // Integration managers (set-once)
@@ -195,7 +213,9 @@ export class ExtensionRegistryService {
     // the previous tool (nothing keeps a built-in base copy), so a stack that starts empty
     // would have nothing to fall back to when the last extension is disabled.
     if (!this.toolStacks.has(def.name)) {
-      this.toolStacks.set(def.name, [{ ownerId: INCUMBENT_TOOL_OWNER, tool: existing }]);
+      // The incumbent loses to every extension; `INCUMBENT_RANK` is -Infinity so even an
+      // extreme negative `order` overrides a base tool rather than being buried by it.
+      this.toolStacks.set(def.name, [{ ownerId: INCUMBENT_TOOL_OWNER, tool: existing, rank: INCUMBENT_RANK }]);
     }
 
     const serverTool = defineServerTool({
@@ -225,10 +245,26 @@ export class ExtensionRegistryService {
       ownerId: ctx.ownerId,
     });
 
-    // The stack entry carries the tool itself, so nothing has to remember what it covered.
-    this.stackOf(def.name).push({ ownerId: ctx.ownerId, tool: serverTool });
-    (ctx.tools as Record<string, unknown>)[def.name] = serverTool;
+    // The stack entry carries the tool itself and its rank, so nothing has to remember what it
+    // covered and the live entry is derivable from the ranks alone. A caller that supplies no rank
+    // (a direct registration, not through the runner) gets a fresh default position, which both
+    // out-ranks the seeded incumbent and keeps "later registration wins" for the unranked case.
+    const rank = ctx.rank ?? { order: DEFAULT_EXTENSION_ORDER, seq: ++this.registrationSeq };
+    this.stackOf(def.name).push({ ownerId: ctx.ownerId, tool: serverTool, rank });
+    (ctx.tools as Record<string, unknown>)[def.name] = this.liveTool(def.name);
     ctx.onToolsChanged();
+  }
+
+  /**
+   * The live tool for a name: the entry with the highest dispatch rank.
+   * Reading the top of the sorted sequence rather than the last push is what makes a declared
+   * `order` authoritative over load order — a later-loaded extension with a *lower* order is
+   * overridden by an earlier one, and vice versa.
+   */
+  private liveTool(name: string): unknown {
+    const stack = this.toolStacks.get(name);
+    if (!stack || stack.length === 0) return undefined;
+    return stack.reduce((top, entry) => (compareDispatchRank(entry.rank, top.rank) > 0 ? entry : top)).tool;
   }
 
   /**
@@ -252,7 +288,11 @@ export class ExtensionRegistryService {
     // reaches here a second time with nothing left to drop. Bail out instead of re-writing the
     // same tool and re-emitting — a no-op must stay a no-op.
     if (remaining.length === stack.length) return;
-    const top = remaining[remaining.length - 1];
+
+    // Re-derive from the ranks, not from the last entry: removing a middle owner can promote
+    // whichever entry now has the highest rank, which is not necessarily the tail.
+    const sorted = [...remaining].sort((a, b) => compareDispatchRank(a.rank, b.rank));
+    const top = sorted[sorted.length - 1];
 
     if (!top || top.tool === undefined) {
       // Nothing left to fall back to: the name goes away.
@@ -272,7 +312,7 @@ export class ExtensionRegistryService {
     ctx.onToolsChanged();
   }
 
-  private stackOf(name: string): Array<{ ownerId: string; tool: unknown }> {
+  private stackOf(name: string): Array<{ ownerId: string; tool: unknown; rank: DispatchRank }> {
     const stack = this.toolStacks.get(name);
     if (!stack) throw new Error(`tool stack for "${name}" must be seeded before pushing`);
     return stack;

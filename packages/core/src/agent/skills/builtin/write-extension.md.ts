@@ -73,6 +73,30 @@ loader fills defaults when they are missing. Keep \`id\` stable — it names the
 
 \`deactivate()\` is optional and runs when the extension is disabled or destroyed.
 
+\`order\` is an optional number that declares **where this extension runs** — **lower runs
+first**, absent means \`0\`. It sequences the flow-sensitive surfaces: interceptor dispatch,
+message-transformer chaining, turn-context section position, and same-named tool resolution
+(where the **highest** order wins, because a later-running extension supersedes). Leave it
+unset unless you have a reason — an undeclared extension keeps the position it would have had,
+and only extensions that declare one are reordered. Two rules to keep straight:
+
+- **\`order\` is a dispatch rule** (which position you run in). It is unrelated to the loader's
+  **resolution rule** for a duplicated \`id\` above, where the *later* directory wins.
+- A cancelling interceptor (\`return false\`, or set \`skipDefault\`) stops **every** interceptor
+  after it. If you are a permission gate, declare a small \`order\` (e.g. \`-100\`) so nothing can
+  pre-empt you — and know that your own denial suppresses later extensions.
+
+\`\`\`js
+export default {
+  id: "my-gate",
+  name: "My Gate",
+  version: "1.0.0",
+  description: "Denies a tool before anything else sees it",
+  order: -100, // run before every default-ordered extension
+  activate(ctx) { /* … */ },
+};
+\`\`\`
+
 ## Copy-paste skeleton
 
 This registers a tool, a command, a hook, and a per-turn section:

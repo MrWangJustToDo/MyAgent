@@ -125,6 +125,7 @@ import type { AgentEvent, AgentEventBus } from "../agent/agent-event-bus";
 import type { AgentLog } from "../agent/agent-log";
 import type { CodeModeExtensionConfig } from "../agent/code-mode";
 import type { CompactionConfig, CompactionConfigInput } from "../agent/compaction/types.js";
+import type { DispatchRank } from "../agent/dispatch-order.js";
 import type {
   ExtensionCommand,
   ExtensionFactory,
@@ -1186,13 +1187,14 @@ export class ManagedAgent {
    * same extension id twice, and the two entries must stay independent — they describe tools in
    * two different agents' tool sets, and a disable on one agent has to leave the other alone.
    */
-  registerTool(def: ExtensionToolDefinition, extensionId = this.id): void {
+  registerTool(def: ExtensionToolDefinition, extensionId = this.id, rank?: DispatchRank): void {
     this.extensions.registerTool(def, {
       tools: this.tools,
       ownerId: this.scopedOwnerId(extensionId),
       warn: (message) => this.log?.warn("system", message),
       onToolsChanged: () => this.setRunnerConfigKey(undefined),
       agentId: this.id,
+      rank,
     });
   }
 

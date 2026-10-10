@@ -8,6 +8,7 @@
  */
 
 import type { AgentEventBus } from "../agent-event-bus";
+import type { DispatchRank } from "../dispatch-order.js";
 import type { EventInterceptor, ExtensionEventBus, InterceptableEvent } from "./types.js";
 
 export class BusExtensionEventBus implements ExtensionEventBus {
@@ -19,9 +20,9 @@ export class BusExtensionEventBus implements ExtensionEventBus {
     return this.bus.intercept(event);
   }
 
-  on<T extends InterceptableEvent>(type: string, handler: EventInterceptor<T>): () => void {
+  on<T extends InterceptableEvent>(type: string, handler: EventInterceptor<T>, rank?: DispatchRank): () => void {
     const key = handler as EventInterceptor<InterceptableEvent>;
-    const unsub = this.bus.onIntercept(type, handler);
+    const unsub = this.bus.onIntercept(type, handler, rank);
     this.disposers.set(key, unsub);
     return () => {
       this.disposers.delete(key);
