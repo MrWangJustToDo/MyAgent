@@ -83,7 +83,8 @@ const ExtensionPanelList = ({
               </Text>
             ) : null}
             <Text color={COLORS.muted} dimColor>
-              tools: {info.tools.length} · commands: {info.commands.length}
+              tools: {info.tools.length} · commands: {info.commands.length} · order: {info.order}
+              {info.declaredOrder === undefined ? " (default)" : ""}
               {info.state === "inactive" ? " · disabled" : ""}
             </Text>
           </Box>
