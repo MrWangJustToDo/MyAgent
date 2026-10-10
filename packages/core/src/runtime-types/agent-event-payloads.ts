@@ -272,6 +272,16 @@ export type AgentEventPayloadMap = {
     error?: string;
     parentTaskToolCallId?: string;
     /**
+     * Why the run stopped, when it was aborted rather than failing.
+     *
+     * `cancelled` alone merges every abort into one verdict. The reasons differ in
+     * *who* stopped the work: `user` is the operator (Esc), while `parent-run` /
+     * `parent-stop` are the agent's own lifecycle (a discarded run, a stopped parent)
+     * — and a discarded run is what leaves an orphan subagent behind. Reporting a
+     * restart as "cancelled by user" is the misattribution this field exists to end.
+     */
+    stopReason?: "user" | "parent-run" | "parent-stop" | "unknown";
+    /**
      * True when the run was cut short by the user rather than failing.
      *
      * The abort path reuses this event (a cancelled subagent has no other terminal

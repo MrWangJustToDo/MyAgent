@@ -2,6 +2,7 @@
  * Subagent types, interfaces, and constants.
  */
 
+import type { SubagentStopReason } from "./subagent-stop-reason.js";
 import type { ToolsRecord } from "../tools/runtime/tools-record.js";
 import type { ModelMessage } from "@tanstack/ai";
 
@@ -142,4 +143,10 @@ export interface SubagentResult {
   incomplete: boolean;
   /** Whether the subagent was cancelled (aborted) before completing */
   aborted: boolean;
+  /**
+   * Why an aborted run stopped — `user` (Esc), `parent-run` (the parent's run was
+   * discarded, e.g. a stream restart), or `parent-stop` (the parent agent stopped or was
+   * destroyed). Set only when `aborted`; read from the run's abort reason.
+   */
+  stopReason?: SubagentStopReason;
 }

@@ -58,6 +58,7 @@ import { getModelVisibleMessages } from "../agent/compaction/message-chain-proje
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
 import { WireProjectionCache } from "../agent/compaction/wire-projection-cache.js";
 import { projectWireFromChannel } from "../agent/compaction/wire-projection.js";
+import { statusTransitionLogLevel } from "../agent/log/status-transition-log.js";
 import {
   createSessionSyncTracker,
   type SessionSaveReason,
@@ -134,6 +135,7 @@ import type {
   ExtensionToolDefinition,
 } from "../agent/extension";
 import type { ExtensionTurnContextSection } from "../agent/extension/types.js";
+import type { SubagentLogDetails } from "../agent/log/subagent-log-mirror.js";
 import type { LspExtensionConfig } from "../agent/lsp";
 import type { McpExtensionConfig } from "../agent/mcp";
 import type { McpManager } from "../agent/mcp/manager.js";
@@ -573,6 +575,48 @@ export class ManagedAgent {
     return this.run.getLastStreamDurationMs();
   }
 
+  /**
+   * Record a subagent lifecycle line in the PARENT agent's own log.
+   *
+   * Every subagent event is delivered to the subagent's own file (the log bridge scopes
+   * by `event.agentId`), so a `task` call's children are invisible in the parent log —
+   * reconstructing which subagent belongs to which call needed cross-file timestamp
+   * matching. The parent log is where a reader looks for the session's story, so the
+   * child's lifecycle is mirrored here, attributed by call id and subagent id.
+   *
+   * Deliberately a direct write rather than a second bus event: the bus event already
+   * exists and already has one destination, and "log this in my file" is not a fact
+   * other consumers should react to. Subagents have no extension runner, so the mirror
+   * has to be driven from this side anyway.
+   */
+  logSubagentLifecycle(phase: "created" | "started" | "completed" | "stopped", details: SubagentLogDetails): void {
+    const who = details.parentTaskToolCallId
+      ? `subagent ${details.subagentId} [task ${details.parentTaskToolCallId}]`
+      : `subagent ${details.subagentId}`;
+    switch (phase) {
+      case "created":
+        this.log?.debug("system", `Subagent created: ${who}`);
+        return;
+      case "started":
+        this.log?.debug("system", `Subagent started: ${details.description ?? details.subagentId} — ${who}`);
+        return;
+      case "completed":
+        this.log?.info(
+          "system",
+          `Subagent completed: ${details.subagentId}${details.parentTaskToolCallId ? ` [task ${details.parentTaskToolCallId}]` : ""} (${details.iterations ?? 0}/${details.maxIterations ?? 0} iterations, ${details.durationMs ?? 0}ms)`
+        );
+        return;
+      case "stopped":
+        // The user-facing outcome, so it survives the status denoise: a stopped child is
+        // the event a reader is looking for, and the reason is the whole point.
+        this.log?.info(
+          "system",
+          `Subagent ${details.stopReason ?? "stopped"}: ${details.subagentId}${details.parentTaskToolCallId ? ` [task ${details.parentTaskToolCallId}]` : ""}`
+        );
+        return;
+    }
+  }
+
   setStatus(status: AgentStatus, trigger?: string): void {
     const prev = this.currentStatus;
     if (status === "completed" || status === "aborted" || status === "error") {
@@ -581,13 +625,17 @@ export class ManagedAgent {
       this.retryInfo = null;
     }
     this.currentStatus = status;
-    // Timeline: log actual transitions only (no-op sets stay silent).
+    // Timeline: log actual transitions only (no-op sets stay silent). Most transitions are
+    // the pump's own bookkeeping, so the level follows the trigger — see
+    // `statusTransitionLogLevel`. The set is still recorded either way; only its level moves.
     if (prev !== status) {
-      this.log?.info("agent", `Status: ${prev} → ${status}`, {
-        from: prev,
-        to: status,
-        ...(trigger ? { trigger } : {}),
-      });
+      const data = { from: prev, to: status, ...(trigger ? { trigger } : {}) };
+      const message = `Status: ${prev} → ${status}`;
+      if (statusTransitionLogLevel(status, trigger) === "debug") {
+        this.log?.debug("agent", message, data);
+      } else {
+        this.log?.info("agent", message, data);
+      }
     }
     this.emitStateChange();
   }

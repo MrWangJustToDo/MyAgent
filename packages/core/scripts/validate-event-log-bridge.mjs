@@ -165,6 +165,7 @@ entries = await emitAndRead({
     subagentId: "subagent-1",
     error: "Let me check the builtin-table.ts… [Task cancelled by user.]",
     cancelled: true,
+    stopReason: "user",
   },
 });
 const cancelSubEntry = entries.find((entry) => entry.event === "subagent:error");
@@ -178,6 +179,42 @@ assert.equal(
   cancelSubEntry.error,
   undefined,
   "nor attached as a synthesized Error — a cancel is not a fault with a stack"
+);
+
+// The other two ways a run stops are NOT written as a user cancel. This is the misattribution
+// the reason field exists to end: a run the parent discarded was logged as "cancelled by user".
+for (const [stopReason, wording] of [
+  ["parent-run", /^Subagent stopped \(parent run moved on\):/],
+  ["parent-stop", /^Subagent stopped \(parent agent stopped\):/],
+]) {
+  entries = await emitAndRead({
+    type: "subagent:error",
+    ts: Date.now(),
+    agentId: "agent-1",
+    payload: { subagentId: `subagent-${stopReason}`, error: "partial", cancelled: true, stopReason },
+  });
+  const entry = entries.find(
+    (candidate) => candidate.event === "subagent:error" && candidate.data?.subagentId === `subagent-${stopReason}`
+  );
+  assert.ok(entry, `subagent:error bridged for stopReason=${stopReason}`);
+  assert.match(entry.message, wording, `stopReason=${stopReason} has its own wording`);
+  assert.ok(!entry.message.includes("cancelled"), "and none of them claims the user cancelled it");
+}
+
+// A payload from before the field existed still classifies — as "unknown", not as a user cancel.
+entries = await emitAndRead({
+  type: "subagent:error",
+  ts: Date.now(),
+  agentId: "agent-1",
+  payload: { subagentId: "subagent-legacy", error: "partial", cancelled: true },
+});
+const legacyEntry = entries.find(
+  (candidate) => candidate.event === "subagent:error" && candidate.data?.subagentId === "subagent-legacy"
+);
+assert.match(
+  legacyEntry.message,
+  /^Subagent aborted \(no reason recorded\):/,
+  "an unknown reason is admitted, not guessed"
 );
 
 // The real failure path is untouched: a subagent that actually failed still reports one.

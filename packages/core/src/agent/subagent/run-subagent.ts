@@ -12,7 +12,8 @@ import { summaryStreamKey } from "../summary-stream";
 import { buildExploreSystemPrompt } from "./explore-prompt.js";
 import { isProgressSummaryEligible, summarizeProgress } from "./progress-summary.js";
 import { captureStreamFinishReason, deriveSubagentRunStats, hasBeginSummaryCall } from "./run-stats.js";
-import { applySubagentCancelNotice, truncateSummary } from "./subagent-output.js";
+import { applySubagentStopNotice, truncateSummary } from "./subagent-output.js";
+import { resolveSubagentStopReason, type SubagentStopReason } from "./subagent-stop-reason.js";
 import { beginTaskRun, enterTaskPhase } from "./task-run-state.js";
 import { resolveSubagentBridgeUI, SUBAGENT_DEFAULT_MAX_ITERATIONS } from "./types.js";
 
@@ -54,6 +55,7 @@ export function subagentResultToTaskOutput(result: SubagentResult) {
     reachedLimit: result.reachedLimit,
     incomplete: result.incomplete,
     aborted: result.aborted,
+    ...(result.stopReason ? { stopReason: result.stopReason } : {}),
     success: !result.aborted && !result.incomplete,
   };
 }
@@ -170,6 +172,10 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       { subagentId, description, parentTaskToolCallId },
       { parentId: parentAgentId }
     );
+    // Mirror into the parent's file so a `task` call's children are readable without opening
+    // each subagent log (the bus event above only ever lands in the child's own file).
+    parentManaged.logSubagentLifecycle("created", { subagentId, parentTaskToolCallId });
+    parentManaged.logSubagentLifecycle("started", { subagentId, parentTaskToolCallId, description });
 
     subagentManaged.resetTurnLifecycle();
 
@@ -266,6 +272,13 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       subagentManaged.getStatus() === "aborted" ||
       Boolean(subagentManaged.run.currentAbortController?.signal.aborted);
 
+    // Why it stopped, read from the abort reason (the one channel every abort path uses).
+    // Without this the summary claimed a user cancel for *any* abort — including a run the
+    // parent restarted, which is the one case an operator needs to tell apart.
+    const stopReason: SubagentStopReason = resolveSubagentStopReason({
+      aborted,
+      reason: abortSignal?.reason,
+    });
     const outcomeKind = aborted ? "aborted" : "finished";
     subagentManaged.statusController.applyRunOutcome({
       kind: outcomeKind,
@@ -273,7 +286,7 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       path: "detached",
     });
     subagentManaged.finalizeRun(outcomeKind);
-    const noticed = applySubagentCancelNotice(output, aborted);
+    const noticed = applySubagentStopNotice(output, stopReason);
     let { summary: finalOutput, truncated } = truncateSummary(noticed, maxOutputLength);
 
     const runStats = deriveSubagentRunStats({
@@ -377,6 +390,10 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
             // partial narration — a summary of work done, not a fault — and the flag is
             // what tells the log bridge (and any other consumer) which of the two it has.
             cancelled: true,
+            // How the run was stopped. `cancelled` alone merges a user cancel with a run
+            // the parent restarted, which is exactly the attribution the log used to get
+            // wrong (every abort read as "cancelled by user").
+            stopReason,
             subagentId,
             parentTaskToolCallId,
             error: finalOutput,
@@ -404,6 +421,18 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
           },
       { parentId: parentAgentId }
     );
+    // The parent-log mirror for the terminal state (see the `created`/`started` mirror above).
+    if (aborted) {
+      parentManaged.logSubagentLifecycle("stopped", { subagentId, parentTaskToolCallId, stopReason });
+    } else {
+      parentManaged.logSubagentLifecycle("completed", {
+        subagentId,
+        parentTaskToolCallId,
+        iterations: statusFlags.iterations,
+        maxIterations: statusFlags.maxIterations,
+        durationMs,
+      });
+    }
 
     if (autoDestroy) {
       manager.destroyAgent(subagentId);

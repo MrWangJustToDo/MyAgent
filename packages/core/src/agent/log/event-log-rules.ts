@@ -5,6 +5,7 @@
 import type { AgentEventPayloadMap } from "../../runtime-types/agent-event-payloads.js";
 import type { AgentEvent, AgentEventType } from "../agent-event-bus";
 import type { LogCategory, LogLevel } from "../agent-log/types.js";
+import type { SubagentStopReason } from "../subagent/subagent-stop-reason.js";
 
 /** Read payload fields for logging formatters. */
 function p(event: AgentEvent): Record<string, unknown> {
@@ -28,6 +29,22 @@ export interface EventLogRule {
   category: LogCategory;
   formatMessage: (event: AgentEvent) => string;
 }
+
+/**
+ * Human wording for a stopped subagent, keyed by why it stopped.
+ *
+ * A cancel is not a failure (`subagent:error` is reused for it), and the three ways a
+ * run can stop are not the same event: the user cancelled it, the parent's run was
+ * discarded, or the parent agent stopped. The log used to print the user-cancel wording
+ * for all three, which is how a discarded run's orphan came to be recorded as something
+ * the operator never did.
+ */
+const SUBAGENT_STOP_WORDING: Record<SubagentStopReason, string> = {
+  user: "Subagent cancelled",
+  "parent-run": "Subagent stopped (parent run moved on)",
+  "parent-stop": "Subagent stopped (parent agent stopped)",
+  unknown: "Subagent aborted (no reason recorded)",
+};
 
 /**
  * Telemetry-only mapping. Typed against the payload map so every telemetry
@@ -315,7 +332,9 @@ const TELEMETRY_EVENT_LOG_RULES: Record<keyof AgentEventPayloadMap, EventLogRule
     // `agent:tool-error` handles the same two-way payload.
     formatMessage: (event) =>
       p(event).cancelled === true
-        ? `Subagent cancelled: ${p(event).subagentId ?? event.agentId}${taskBindingSuffix(p(event))}`
+        ? `${SUBAGENT_STOP_WORDING[(p(event).stopReason as SubagentStopReason) ?? "unknown"]}: ${
+            p(event).subagentId ?? event.agentId
+          }${taskBindingSuffix(p(event))}`
         : `Subagent error: ${p(event).error ?? "unknown"}${taskBindingSuffix(p(event))}`,
   },
   "subagent:progress-summary-error": {

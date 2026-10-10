@@ -138,7 +138,11 @@ function trySpawn(
   // Tie the subagent to the parent's current run so a parent abort cascades.
   const controller = new AbortController();
   const parentSignal = deps.manager.getAgent(managed.id)?.run.currentAbortController?.signal;
-  const onParentAbort = () => controller.abort();
+  // Forward the parent's abort *reason*, not just the abort: the subagent reads
+  // `signal.reason` to say why it stopped (a user cancel vs the parent run moving on vs the
+  // parent agent stopping). `() => controller.abort()` dropped it, so every cascaded stop
+  // reached the subagent reasonless and was reported as a user cancellation.
+  const onParentAbort = () => controller.abort(parentSignal?.reason);
   parentSignal?.addEventListener("abort", onParentAbort, { once: true });
 
   const started = coordinator.start(

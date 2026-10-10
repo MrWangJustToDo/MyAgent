@@ -67,6 +67,18 @@ export const taskOutputSchema = z.object({
   incomplete: z.boolean().describe("Whether the subagent was force-stopped before producing a final answer"),
   /** Whether the subagent was cancelled (aborted) before completing */
   aborted: z.boolean().describe("Whether the subagent was cancelled before completing"),
+  /**
+   * Why the subagent stopped, when `aborted` is true.
+   *
+   * `aborted` alone says the run did not finish; it does not say who stopped it. The
+   * distinction is the whole point of this field: `user` is the operator, the other two
+   * are the agent's own lifecycle. Optional so outputs persisted before it existed — and
+   * the non-aborted case — stay readable.
+   */
+  stopReason: z
+    .enum(["user", "parent-run", "parent-stop", "unknown"])
+    .optional()
+    .describe("Why an aborted subagent stopped (user / parent-run / parent-stop)"),
   /** Token usage */
   usage: z
     .object({
@@ -216,6 +228,7 @@ Example use cases:
           reachedLimit: result.reachedLimit,
           incomplete: result.incomplete,
           aborted: result.aborted,
+          ...(result.stopReason ? { stopReason: result.stopReason } : {}),
           usage: result.usage,
           cachedOutputPath,
         };

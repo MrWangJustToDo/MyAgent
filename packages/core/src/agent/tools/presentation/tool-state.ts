@@ -31,7 +31,9 @@ export function isImagePart(part: { type?: string } | null | undefined): part is
  *    (`cancelInFlightToolCalls` / `cancelIncompleteToolCalls`) writes the same marker for a
  *    call that never settled at all.
  *  - `output.aborted === true` — the `task` tool, which catches its subagent's cancellation
- *    and reports `[Task cancelled by user.]`, so the parent model learns of the cancel.
+ *    and appends a notice naming *why* it stopped (`[Task cancelled by user.]`,
+ *    `[Task stopped with its parent run.]`, `[Task stopped with its parent agent.]`), so the
+ *    parent model learns of the stop and its cause.
  *
  * The distinction matters to every consumer that renders a settled row: the two shapes settle
  * on opposite states (one `output-error`, one `output-available`), so a row the user cancelled

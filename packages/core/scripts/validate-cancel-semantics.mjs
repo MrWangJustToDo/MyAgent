@@ -314,8 +314,12 @@ function walk(dir) {
   // The subagent side of the task tool: a cancel is recognized there, not in the tool.
   const runSubagentSrc = readFileSync(join(SRC, "agent/subagent/run-subagent.ts"), "utf8");
   assert.ok(
-    /applySubagentCancelNotice\(output, aborted\)/.test(runSubagentSrc),
-    "run-subagent: a cancelled run appends the notice to the summary it hands back"
+    /applySubagentStopNotice\(output, stopReason\)/.test(runSubagentSrc),
+    "run-subagent: a stopped run appends the notice for its recorded reason, not an assumed one"
+  );
+  assert.ok(
+    /resolveSubagentStopReason\(\{[\s\S]{0,120}abortSignal\?\.reason/.test(runSubagentSrc),
+    "run-subagent: the reason comes from the abort signal — the channel every abort path uses"
   );
   // The child status is read through the accessor (see validate-accessor-convention.mjs),
   // so accept either spelling — what matters is that the *status* is one of the two inputs.
@@ -487,7 +491,12 @@ assert.equal(taskOutputSchema.shape.cancelled, undefined, "task declares ONE mar
   // log changing with it.
   const rulesSrc = readFileSync(join(SRC, "agent/log/event-log-rules.ts"), "utf8");
   assert.ok(/Tool cancelled:/.test(rulesSrc) && /Tool end:/.test(rulesSrc), "tool-end has both wordings");
-  assert.ok(/Subagent cancelled:/.test(rulesSrc), "subagent:error has both wordings");
+  assert.ok(/Subagent cancelled/.test(rulesSrc), "subagent:error has both wordings");
+  // ...and the wording follows the recorded reason rather than assuming the user did it.
+  assert.ok(
+    /SUBAGENT_STOP_WORDING/.test(rulesSrc) && /stopReason/.test(rulesSrc),
+    "subagent:error picks its wording from `stopReason` — a discarded run is not a user cancel"
+  );
 
   // And a cancel must not be written through the error path, which synthesizes an Error
   // from the payload — for a cancelled subagent that text is a paragraph of narration.

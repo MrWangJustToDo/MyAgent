@@ -1,11 +1,9 @@
 /**
- * Subagent output truncation / cancel-notice utilities.
+ * Subagent output truncation / stop-notice utilities.
  */
 
+import { subagentStopNotice, SUBAGENT_STOP_NOTICES, type SubagentStopReason } from "./subagent-stop-reason.js";
 import { SUBAGENT_DEFAULT_MAX_OUTPUT_LENGTH } from "./types.js";
-
-/** Appended to task tool summary (and shown to the parent model) when Esc cancels a subagent. */
-export const SUBAGENT_CANCELLED_NOTICE = "[Task cancelled by user.]";
 
 const EMPTY_SUMMARY = "(no summary)";
 
@@ -30,16 +28,30 @@ export const truncateSummary = (
 };
 
 /**
- * Ensure cancelled runs surface a clear notice in the summary text returned to
+ * Ensure a stopped run surfaces a clear notice in the summary text returned to
  * the parent (UI + `toModelOutput`), not only an `aborted` flag.
+ *
+ * The notice names the *reason* (user cancel, parent run moved on, parent agent
+ * stopped) instead of assuming the user did it — see `subagent-stop-reason.ts`.
  */
-export function applySubagentCancelNotice(summary: string, aborted: boolean): string {
-  if (!aborted) return summary;
-
+export function applySubagentStopNotice(summary: string, reason: SubagentStopReason): string {
+  const noticed = subagentStopNotice(reason);
   const trimmed = summary.trim();
   if (!trimmed || trimmed === EMPTY_SUMMARY) {
-    return SUBAGENT_CANCELLED_NOTICE;
+    return noticed;
   }
-  if (trimmed.includes(SUBAGENT_CANCELLED_NOTICE)) return summary;
-  return `${trimmed}\n\n${SUBAGENT_CANCELLED_NOTICE}`;
+  // Any stop notice already in the text is the same class of message; do not stack them.
+  if (SUBAGENT_STOP_NOTICES.some((notice) => trimmed.includes(notice))) return summary;
+  return `${trimmed}\n\n${noticed}`;
+}
+
+/**
+ * Back-compat wrapper: apply the notice for a plain `aborted` flag.
+ *
+ * @deprecated Callers that know *why* the run stopped should classify it with
+ * {@link resolveSubagentStopReason} and call {@link applySubagentStopNotice} — this
+ * wrapper cannot tell a user cancel from a discarded run and defaults to the former.
+ */
+export function applySubagentCancelNotice(summary: string, aborted: boolean): string {
+  return aborted ? applySubagentStopNotice(summary, "user") : summary;
 }

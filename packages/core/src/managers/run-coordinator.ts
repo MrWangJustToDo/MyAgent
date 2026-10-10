@@ -82,13 +82,23 @@ export class RunCoordinator {
     this.pendingAbortControllers = this.pendingAbortControllers.filter((ac) => ac !== abortController);
   }
 
+  /**
+   * Abort the active controller and any pending tool controllers, carrying the reason.
+   *
+   * Passing a string reason through matters beyond bookkeeping: it lands on
+   * `signal.reason`, which is how a child subagent tells a user cancel (`"user-cancelled"`)
+   * apart from its parent's run being reset (`"(no reason)"` / undefined). A bare
+   * `AbortController.abort()` produces an `AbortError` with no reason, and that used to be
+   * reported downstream as a user cancellation.
+   */
   abort(reason?: unknown): void {
+    const effective = typeof reason === "string" && reason.length > 0 ? reason : undefined;
     let pending = this.pendingAbortControllers.pop();
     while (pending) {
-      pending.abort(reason);
+      pending.abort(effective);
       pending = this.pendingAbortControllers.pop();
     }
-    this.currentAbortController?.abort(reason);
+    this.currentAbortController?.abort(effective);
   }
 
   isAbortError(err: unknown): boolean {

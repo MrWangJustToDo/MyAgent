@@ -29,6 +29,7 @@ import { serializeConversation } from "../compaction/serialize-conversation.js";
 import { resolveSummarizationInputBudget, splitMessagesByTokenBudget } from "../compaction/summarization-budget.js";
 
 import { runSubagent } from "./run-subagent.js";
+import { SUBAGENT_STOP_NOTICES } from "./subagent-stop-reason.js";
 
 import type { AgentManager } from "../../runtime-types/hosts.js";
 
@@ -161,9 +162,13 @@ export function isProgressSummaryEligible(
   if (!incomplete || !reachedLimit) return false;
 
   const trimmed = finalOutput.trim();
-  // "(no summary)" or a pure cancel notice means the subagent produced nothing usable.
+  // "(no summary)" or a pure stop notice means the subagent produced nothing usable.
+  // Matched against every notice spelling: which one it is depends on *why* the run
+  // stopped, and all of them mean "no usable report".
   const emptyOutput =
-    trimmed.length === 0 || trimmed === "(no summary)" || trimmed.includes("[Task cancelled by user.]");
+    trimmed.length === 0 ||
+    trimmed === "(no summary)" ||
+    SUBAGENT_STOP_NOTICES.some((notice) => trimmed.includes(notice));
   if (emptyOutput) return true;
 
   // Non-empty output is only a final answer once `begin_summary` was called.

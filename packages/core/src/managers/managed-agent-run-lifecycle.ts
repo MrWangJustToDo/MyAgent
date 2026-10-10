@@ -153,8 +153,14 @@ export function finalizeManagedAgentRun(host: RunLifecycleHost, reason: RunFinal
 }
 
 export function abortManagedAgentRun(host: RunLifecycleHost, reason?: string): void {
-  host.emitEvent("agent:abort", { reason: reason ?? "(no reason)" });
-  host.run.abort(reason ?? "user-cancelled");
+  // "(no reason)" when the caller stated none. `RunCoordinator.abort` now forwards the
+  // reason to the controller, so it reaches child subagent signals, which read it to say
+  // *why* they stopped. A caller that rushes to default `"user-cancelled"` here would
+  // relabel the run-lifecycle reset (a restart) as an operator cancel — the misattribution
+  // this wiring removes; the actual Esc path passes `"user-cancelled"` explicitly.
+  const effectiveReason = reason ?? "(no reason)";
+  host.emitEvent("agent:abort", { reason: effectiveReason });
+  host.run.abort(effectiveReason);
   const status = host.getStatus();
   if (status !== "aborted" && status !== "idle" && status !== "completed") {
     host.setStatus("aborted");

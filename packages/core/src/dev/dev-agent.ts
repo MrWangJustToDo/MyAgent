@@ -66,11 +66,25 @@ export { createTaskTool, taskOutputSchema } from "../agent/subagent/task-tool.js
 export { createRunCommandTool } from "../agent/tools/run-command-tool.js";
 export { createWebfetchTool } from "../agent/tools/webfetch-tool.js";
 export { createWebsearchTool } from "../agent/tools/websearch-tool.js";
+export { applySubagentCancelNotice, applySubagentStopNotice, truncateSummary } from "../agent/subagent/subagent-output.js";
 export {
-  applySubagentCancelNotice,
+  resolveSubagentStopReason,
+  subagentStopNotice,
+  SUBAGENT_ABORTED_NOTICE,
   SUBAGENT_CANCELLED_NOTICE,
-  truncateSummary,
-} from "../agent/subagent/subagent-output.js";
+  SUBAGENT_PARENT_RUN_NOTICE,
+  SUBAGENT_PARENT_STOP_NOTICE,
+  SUBAGENT_STOP_NOTICES,
+  SUBAGENT_STOP_REASONS,
+} from "../agent/subagent/subagent-stop-reason.js";
+export {
+  logSubagentLifecycle,
+  subagentLifecycleLogLine,
+} from "../agent/log/subagent-log-mirror.js";
+export type {
+  SubagentLifecyclePhase,
+  SubagentLogDetails,
+} from "../agent/log/subagent-log-mirror.js";
 export {
   buildProgressSummaryPrompt,
   isProgressSummaryEligible,
