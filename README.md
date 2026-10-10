@@ -281,7 +281,7 @@ codent --version                        # print installed version
 ```
 
 > Published as **`codent-cli`** on npm (the command is still `codent`). Currently a
-> **pre-release** — `0.0.1-beta.1`. Requires **Node.js 24+**.
+> **pre-release** — `0.0.1-beta.4`. Requires **Node.js 24+**.
 
 Runtime data (sessions, memory, plans, transcripts, …) is written to `./.agents/` in the directory you run from.
 
