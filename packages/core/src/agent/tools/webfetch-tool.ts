@@ -17,8 +17,8 @@ import { getEnv } from "../../env.js";
 import { isAbortError } from "../../runtime-types/abort.js";
 
 import { defineServerTool } from "./runtime/define-tool.js";
-import { withDuration } from "./util/helpers.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
+import { withDuration } from "./util/tool-result.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 import { convertHTMLToMarkdown, extractTextFromHTML } from "./util/webfetch-html.js";
 

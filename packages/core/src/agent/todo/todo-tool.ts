@@ -1,5 +1,5 @@
 import { defineServerTool } from "../tools/runtime/define-tool.js";
-import { withDuration } from "../tools/util/helpers.js";
+import { withDuration } from "../tools/util/tool-result.js";
 import { todoOutputSchema } from "../tools/util/types.js";
 
 import { todoToolInputSchema } from "./types.js";

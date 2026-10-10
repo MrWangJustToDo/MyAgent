@@ -4,7 +4,7 @@ import { getEnv } from "../../env.js";
 
 import { defineServerTool } from "./runtime/define-tool.js";
 import { withFileMutationQueue } from "./util/file-mutation-queue.js";
-import { withDuration } from "./util/helpers.js";
+import { withDuration } from "./util/tool-result.js";
 import { writeFileOutputSchema } from "./util/types.js";
 
 import type { WriteFileOutput } from "./util/types.js";

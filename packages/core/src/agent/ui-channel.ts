@@ -11,7 +11,7 @@ import { applyToolApprovalDecision, applyToolDenialReason, approvalStamp } from 
 import { stripEmptyAssistantShells } from "./stream/empty-assistant-shell.js";
 import {
   resolveTaskRunPhase,
-  type TaskRunPhase,
+  type TaskSummaryPhase,
   type TaskSummaryStreamState,
 } from "./stream/extract-assistant-text.js";
 import { isToolCallPart } from "./stream/message-parts.js";
@@ -167,7 +167,7 @@ export class AgentUIChannel {
   private revision = 0;
 
   /** Current task run phase for parent task tool UI (`tools` vs `summary`). */
-  getTaskRunPhase(): TaskRunPhase {
+  getTaskRunPhase(): TaskSummaryPhase {
     return resolveTaskRunPhase(this.getMessages(), this.summaryStreamState);
   }
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { defineServerTool } from "../tools/runtime/define-tool.js";
-import { withDuration } from "../tools/util/helpers.js";
+import { withDuration } from "../tools/util/tool-result.js";
 import { toolOutputBaseSchema } from "../tools/util/types.js";
 
 import { isUsableVerification, gateCompletePlanVerification } from "./plan-verification.js";

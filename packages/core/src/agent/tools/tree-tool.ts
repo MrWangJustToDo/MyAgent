@@ -5,9 +5,10 @@ import { toPosixPath, toPosixPathKey } from "../../utils/posix-path.js";
 
 import { defineServerTool } from "./runtime/define-tool.js";
 import { canExecArgs, execArgs } from "./util/exec-args.js";
-import { OUTPUT_LIMITS, truncateString, withDuration } from "./util/helpers.js";
+import { OUTPUT_LIMITS, truncateString } from "./util/output-limits.js";
 import { isCommandNotFound, quoteForShell } from "./util/search-command.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
+import { withDuration } from "./util/tool-result.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 
 import type { CoreEnvFs } from "../../env.js";

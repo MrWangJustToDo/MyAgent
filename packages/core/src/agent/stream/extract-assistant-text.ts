@@ -131,7 +131,7 @@ export function hasIncompleteToolCalls(messages: UIMessage[]): boolean {
   return false;
 }
 
-export type TaskRunPhase = "tools" | "summary";
+export type TaskSummaryPhase = "tools" | "summary";
 
 /** Tracks whether {@link begin_summary} has unlocked summary streaming. */
 export interface TaskSummaryStreamState {
@@ -149,7 +149,7 @@ export const DEFAULT_TASK_SUMMARY_STREAM_STATE: TaskSummaryStreamState = {
 export function resolveTaskRunPhase(
   messages: UIMessage[],
   streamState: TaskSummaryStreamState = DEFAULT_TASK_SUMMARY_STREAM_STATE
-): TaskRunPhase {
+): TaskSummaryPhase {
   if (hasIncompleteToolCalls(messages)) return "tools";
   return streamState.summaryPhaseUnlocked ? "summary" : "tools";
 }

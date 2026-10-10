@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getEnv } from "../../env.js";
 
 import { defineServerTool } from "./runtime/define-tool.js";
-import { withDuration } from "./util/helpers.js";
+import { withDuration } from "./util/tool-result.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 
 export const createDeleteFileTool = () => {

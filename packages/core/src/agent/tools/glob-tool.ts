@@ -4,7 +4,7 @@ import { getEnv } from "../../env.js";
 
 import { defineServerTool } from "./runtime/define-tool.js";
 import { canExecArgs, execArgsCapture } from "./util/exec-args.js";
-import { OUTPUT_LIMITS, withDuration } from "./util/helpers.js";
+import { OUTPUT_LIMITS } from "./util/output-limits.js";
 import {
   DEFAULT_EXCLUDE_DIRS,
   SEARCH_COMMAND_TIMEOUT,
@@ -12,6 +12,7 @@ import {
   truncateLines,
 } from "./util/search-command.js";
 import { maybeCacheOutput } from "./util/tool-output-cache.js";
+import { withDuration } from "./util/tool-result.js";
 import { globOutputSchema } from "./util/types.js";
 
 import type { GlobOutput } from "./util/types.js";

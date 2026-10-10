@@ -2,6 +2,11 @@ import { isAbortError, isCancelledOutputMarker } from "../../../runtime-types/ab
 
 import type { ImagePart, ToolCallPart, ToolCallState } from "@tanstack/ai";
 
+// Re-exported for this module's public-API consumers (`index.ts`). The definition stays in
+// `agent/stream/message-parts.ts` — the shared UIMessage-predicate layer — so the two copies that
+// had drifted apart (`null`-safe there, non-null-only here) are now one.
+export { isToolCallPart } from "../../stream/message-parts.js";
+
 /** UI-facing tool state labels (terminal rendering). */
 export type UiToolState =
   | "input-streaming"
@@ -14,10 +19,6 @@ export type UiToolState =
 
 export function isImagePart(part: { type?: string } | null | undefined): part is ImagePart {
   return part != null && part.type === "image";
-}
-
-export function isToolCallPart(part: { type?: string } | null | undefined): part is ToolCallPart {
-  return part != null && part.type === "tool-call";
 }
 
 /**

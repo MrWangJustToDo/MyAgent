@@ -13,6 +13,11 @@ import { createCommandJobLogWriter, sweepStaleJobLogs } from "./command-output-l
 
 import type { CommandJobLogWriter } from "./command-output-log.js";
 
+/**
+ * Mirrors `CoreEnv`'s `CommandJobStatus` (`env-types.ts`), which is the one the host contract and
+ * the published surface use. Declared structurally rather than imported so this module stays
+ * dependency-free — but keep the union in sync if the CoreEnv contract grows a state.
+ */
 export type CommandJobStatus = "running" | "exited" | "killed" | "failed";
 
 export interface CommandJobRecord {

@@ -6,7 +6,7 @@ import { defineServerTool } from "./runtime/define-tool.js";
 import { withFileMutationQueue } from "./util/file-mutation-queue.js";
 import { applyResolvedEdit, isErrorResult, resolveEditMatch } from "./util/find-edit-match.js";
 import { normalizeForFuzzyMatch } from "./util/fuzzy-match.js";
-import { getFile, withDuration } from "./util/helpers.js";
+import { getFile, withDuration } from "./util/tool-result.js";
 import { editFileOutputSchema } from "./util/types.js";
 
 import type { EditFileOutput } from "./util/types.js";

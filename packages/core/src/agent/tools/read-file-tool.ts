@@ -6,8 +6,8 @@ import { estimateImageInputTokens, tryReadImageDimensions } from "../../models/e
 import { defineServerTool } from "./runtime/define-tool.js";
 import { extractPdfText } from "./util/extract-pdf-text.js";
 import { formatReadFileToolResult } from "./util/format-read-file-result.js";
-import { getFile, withDuration } from "./util/helpers.js";
 import { detectReadFileType, isBinaryContent } from "./util/read-file-detect.js";
+import { getFile, withDuration } from "./util/tool-result.js";
 import { toolOutputBaseSchema } from "./util/types.js";
 
 import type { FileStat } from "../../env-types.js";

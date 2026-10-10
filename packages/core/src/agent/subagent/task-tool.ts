@@ -21,8 +21,8 @@ import { z } from "zod";
 
 import { generateId } from "../../utils/generate-id.js";
 import { defineServerTool } from "../tools/runtime/define-tool.js";
-import { withDuration } from "../tools/util/helpers.js";
 import { maybeCacheOutput } from "../tools/util/tool-output-cache.js";
+import { withDuration } from "../tools/util/tool-result.js";
 import { toolOutputBaseSchema } from "../tools/util/types.js";
 
 import { runSubagent } from "./run-subagent.js";
