@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toRaw } from "reactivity-store";
 
 import { getActiveSession } from "../utils/session-resolve.js";
+import { resolveTaskSubagent } from "../utils/task-subagent.js";
 
 import { useAgent } from "./use-agent.js";
 
@@ -9,9 +10,7 @@ import type { AgentSessionSubagentSummary } from "@codent/core";
 
 function findSubagentByTask(taskId: string): AgentSessionSubagentSummary | undefined {
   if (!taskId) return undefined;
-  return getActiveSession()
-    ?.getSnapshot()
-    .subagents.find((entry) => entry.parentTaskToolCallId === taskId);
+  return resolveTaskSubagent(getActiveSession()?.getSnapshot().subagents ?? [], taskId);
 }
 
 /** Resolve the subagent summary for a parent task tool call (Session snapshot). */
