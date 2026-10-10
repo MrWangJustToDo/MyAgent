@@ -97,6 +97,22 @@ const inactiveSections = buildTurnContextSections({ modeContent: inactive });
 assert.equal(inactiveSections.length, 1);
 assert.equal(inactiveSections[0].key, "mode");
 
+// Session-id section: emitted for the id, changes with it, never for subagents.
+const sidSection = buildTurnContextSections({ sessionId: "ses_a" }).find((s) => s.key === TURN_CONTEXT_KINDS.sessionId);
+assert.ok(sidSection, "session_id section is emitted when an id is present");
+assert.match(sidSection.content, /<session_id>\nses_a\n<\/session_id>/);
+const sidOther = buildTurnContextSections({ sessionId: "ses_b" }).find((s) => s.key === TURN_CONTEXT_KINDS.sessionId);
+assert.notEqual(
+  hashTurnContextSection(sidSection),
+  hashTurnContextSection(sidOther),
+  "a changed session id hashes differently, so it re-admits after a session switch"
+);
+assert.ok(!SUBAGENT_ALLOWED_KINDS.has(TURN_CONTEXT_KINDS.sessionId), "the session id is filtered from subagents");
+assert.ok(
+  !buildTurnContextSections({}).some((s) => s.key === TURN_CONTEXT_KINDS.sessionId),
+  "no session id → no section"
+);
+
 // Nag reminder content carries the stale-round count so each nag produces a
 // new hash / stable id (constant content would be deduped and never re-fire).
 const { TodoManager } = await import("../dist/dev.mjs");

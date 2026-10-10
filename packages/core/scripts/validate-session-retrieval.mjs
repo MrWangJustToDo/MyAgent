@@ -115,17 +115,18 @@ await (async () => {
 })();
 
 // ---------------------------------------------------------------------------
-// 3. The current session is called out as redundant
+// 3. The current session's own earlier turns are reachable
 // ---------------------------------------------------------------------------
 await (async () => {
   const section = formatSessionRetrievalSection({ hasHistory: true });
-  assert.match(
-    section,
-    /current session's own files/i,
-    "warns that the current session's own files duplicate the live conversation"
-  );
+  // The old "redundant / duplicates the live conversation" claim is gone: the current session's
+  // compacted-away earlier turns are NOT in context, so the guidance must point at them.
+  assert.doesNotMatch(section, /duplicates? (?:what|the live)/i, "no 'current session is redundant' claim");
+  assert.match(section, /sessionId/, "tells the agent to pass its own session id to session_search");
+  assert.match(section, /<session_id>/, "references the session-id context block");
+  assert.match(section, /earlier turns/i, "names the current session's earlier turns as the target");
 
-  console.log("✓ the current session's own files are called out as redundant");
+  console.log("✓ the current session's earlier turns are reachable via session_search");
 })();
 
 // ---------------------------------------------------------------------------

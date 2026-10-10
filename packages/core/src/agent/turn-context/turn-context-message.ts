@@ -43,6 +43,7 @@ export const CONTEXT_CLOSE = "</ctx>";
 export const TURN_CONTEXT_KINDS = {
   currentDate: "current_date",
   gitStatus: "git_status",
+  sessionId: "session_id",
   relevantMemories: "relevant_memories",
   reminder: "reminder",
   mode: "mode",

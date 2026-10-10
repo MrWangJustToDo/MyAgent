@@ -1,41 +1,4 @@
-# session-retrieval Specification
-
-## Purpose
-
-Define what the agent is told about reaching past conversations: that earlier sessions exist on disk, the two shapes they take, how each is read, and where that guidance lives. It is the single owner of usage guidance — the compaction summary carries path data and the archive header carries metadata, precisely so this stays one place that is always current and never needs revising for artifacts already written.
-## Requirements
-### Requirement: Retrieval guidance has a single home
-
-The system SHALL state how to search past conversation in exactly one place — a turn-context section — and SHALL NOT also state it in the compaction summary or in shipped project instructions.
-
-#### Scenario: Guidance is emitted as its own section
-
-- **WHEN** a session runs in a workspace that has conversation history
-- **THEN** the dynamic turn context includes a `session_retrieval` section, injected like any other turn-context kind
-
-#### Scenario: Other sites carry no usage guidance
-
-- **WHEN** a compaction summary is produced
-- **THEN** it contains no instructions for searching past conversation
-
-### Requirement: Guidance is emitted only when history exists
-
-The system SHALL omit the retrieval section when the workspace has no conversation history, and SHALL NOT probe for history on every turn.
-
-#### Scenario: Fresh workspace
-
-- **WHEN** the workspace has no session logs
-- **THEN** no `session_retrieval` section is emitted, and the other turn-context sections are unaffected
-
-#### Scenario: Existence is evaluated once per agent
-
-- **WHEN** the section has been admitted for an agent
-- **THEN** it is not recomputed per turn, so creating or removing a session does not change the section's content
-
-#### Scenario: An empty sessions directory is not history
-
-- **WHEN** the sessions directory exists but contains nothing
-- **THEN** no section is emitted
+## MODIFIED Requirements
 
 ### Requirement: Guidance is stable across turns
 
@@ -55,15 +18,6 @@ The section content SHALL NOT vary with volatile or per-session state, so that a
 
 - **WHEN** the section is computed twice in the same workspace
 - **THEN** both renderings are byte-identical
-
-### Requirement: Subagents do not receive the guidance
-
-The retrieval section SHALL NOT be injected for subagents.
-
-#### Scenario: Subagent turn context
-
-- **WHEN** a subagent assembles its turn context
-- **THEN** the `session_retrieval` kind is filtered out, because cross-session recall is a root-agent decision
 
 ### Requirement: Guidance states how past conversation is read
 
@@ -88,6 +42,8 @@ The retrieval section SHALL state that past conversations are complete session l
   reached by calling `session_search` with the current session id, and that `session_search`
   otherwise covers other sessions
 
+## ADDED Requirements
+
 ### Requirement: The current session id is provided to the model
 
 The system SHALL emit the current session's id as a `<session_id>` turn-context section for the root agent, so the model can address its own history with `session_search` / `session_read`. The section SHALL be absent for subagents and SHALL be re-admitted when the active session changes.
@@ -106,4 +62,3 @@ The system SHALL emit the current session's id as a `<session_id>` turn-context 
 
 - **WHEN** a subagent assembles its turn context
 - **THEN** the `session_id` kind is filtered out
-

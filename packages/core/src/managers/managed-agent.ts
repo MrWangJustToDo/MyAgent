@@ -1422,10 +1422,11 @@ export class ManagedAgent {
     // Retrieval guidance is static and gated on history existing. The gate is
     // evaluated once (see `primeSessionHistoryGate`) rather than per turn: a
     // workspace gaining its first session must not change this section's hash.
-    // This session's own archive paths are omitted on purpose — the compaction
-    // summary already appends them, so naming them here would re-inject the whole
-    // block on every compaction.
     const sessionRetrieval = formatSessionRetrievalSection({ hasHistory: this.sessionHistoryPresent });
+
+    // The live session id, so the model can address its own compacted-away history.
+    // Read per turn (not cached): a resume/clear changes it and the section re-admits.
+    const sessionId = this.getSessionData()?.id;
 
     const sections = buildTurnContextSections({
       relevantMemoryContent: this.memory.getRelevantContent(),
@@ -1434,6 +1435,7 @@ export class ManagedAgent {
       gitBranch,
       gitStatus,
       modeContent,
+      sessionId,
       sessionRetrieval,
       extensionTurnContextSections: this.pendingExtensionTurnContextSections,
       instructionContext,

@@ -67,10 +67,11 @@ export function renderStaticRetrievalBody(): string {
     "",
     "Use the `session_search` tool to find matches by text, and `session_read` to read a session " +
       `in full. Each log at \`${SESSION_DIR}/<id>${SESSION_LOG_SUFFIX}\` holds the whole ` +
-      "conversation (one message per line), including parts the current context has compacted away.",
+      "conversation (one message per line).",
     "",
-    "The current session's own files are already represented by this conversation — re-reading " +
-      "them just duplicates what you already have.",
+    "Your context only shows messages since the last summary, so this session's own earlier turns " +
+      "are not visible. To reach them, call `session_search` with `sessionId` set to the id in the " +
+      "`<session_id>` context block; by default `session_search` covers other sessions only.",
   ].join("\n");
 }
 

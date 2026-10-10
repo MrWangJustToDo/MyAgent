@@ -57,6 +57,11 @@ export interface DynamicTurnContextInput {
   extensionTurnContextSections?: ExtensionTurnContextSection[];
   /** Instruction-context re-injection (nested under `<instruction_context>`). */
   instructionContext?: string;
+  /**
+   * Current session id, so the model can address its own history with
+   * `session_search` / `session_read`. Changes on resume/clear → re-admitted.
+   */
+  sessionId?: string;
   /** Session-retrieval guidance — where past conversations live and how to read
    *  each shape. Absent when the workspace has no history to search. */
   sessionRetrieval?: string;
@@ -101,6 +106,13 @@ export function buildTurnContextSections(input: DynamicTurnContextInput): TurnCo
 
   if (input.instructionContext?.trim()) {
     sections.push({ key: TURN_CONTEXT_KINDS.instructionContext, content: input.instructionContext.trim() });
+  }
+
+  if (input.sessionId) {
+    sections.push({
+      key: TURN_CONTEXT_KINDS.sessionId,
+      content: ["<session_id>", input.sessionId, "</session_id>"].join("\n"),
+    });
   }
 
   if (input.sessionRetrieval?.trim()) {
