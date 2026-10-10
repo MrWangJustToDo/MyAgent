@@ -1,5 +1,6 @@
 import { assertAsyncIterable } from "../agent/stream/assert-async-iterable.js";
 import { extractRunErrorMessage } from "../agent/stream/stream-errors.js";
+import { discardRegisteredPrefork } from "../agent/subagent/task-prefork.js";
 
 import { armCapabilityStrip, tryCapabilitySanitizeRetry } from "./stream-recovery/capability-sanitize.js";
 import {
@@ -337,13 +338,30 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
 }
 
 /**
- * Before a full stream restart: soft-reset subagent UI + clear error status.
+ * Before a full stream restart: soft-reset subagent UI + clear error status, and throw away
+ * any pre-forked `task` runs the dead attempt started.
+ *
+ * The discard belongs HERE rather than on `RUN_STARTED` (where it used to be): that event fires
+ * once per model *iteration*, so it aborted a pre-fork the tool phase was about to join on
+ * every multi-iteration turn. Only a restart actually invalidates the runs of the attempt
+ * that ended; the next iteration's tool phase still joins them.
+ *
  * Wire `messages` stay as set by the recovery strategy (may be capability-stripped).
  */
 function prepareRestartStyleRetry(options: RecoveryOptions): void {
   if (options.managed.parentId && options.managed.getUI()) {
     options.managed.getUI()!.resetForStreamRetry();
   }
+  // Report the orphans the same way the run boundaries do — this is the restart case, and it
+  // is the one that makes an eager run look abandoned. `run-start` names it: the attempt is
+  // being replaced by a fresh stream whose tool calls carry new ids.
+  discardRegisteredPrefork(options.managed, "run-start", (discard) => {
+    options.managed.emitEvent?.("subagent:prefork-discarded", {
+      toolCallId: discard.toolCallId,
+      cause: discard.cause,
+      subagentIds: discard.subagentIds,
+    });
+  });
   options.managed.setError("");
   options.managed.statusController?.onRecoveryRetry?.();
 }

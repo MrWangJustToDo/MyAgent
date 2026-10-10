@@ -7,13 +7,24 @@
  * calls and spawns the subagent right away; the sequential executor later
  * joins the already-running promise via the task tool (task-prefork.ts).
  *
- * Epoch hygiene: `RUN_STARTED` / `onFinish` / `onAbort` drop leftover pre-forked
- * runs — a restart-style retry re-streams tool calls with fresh ids, so orphans
- * from the dead attempt must not keep running.
+ * Epoch hygiene. TanStack fires `RUN_STARTED` once per model **iteration**, not once per
+ * run (`lifecycle-middleware` relies on the same fact for per-round timing), so a single
+ * recovered run streams many `RUN_STARTED`s. A pre-fork started on iteration N is joined
+ * by the tool phase that follows iteration N — the very next `RUN_STARTED` is therefore an
+ * ordinary boundary, and discarding registered runs there aborted a healthy pre-fork that
+ * was about to be joined, leaving it orphaned in the subagent catalog while the tool phase
+ * spawned a second subagent for the same call id. Pre-forks are discarded only where the
+ * attempt is actually over: the run boundaries (`onFinish` / `onAbort` / `onError`) and the
+ * restart-style recovery path, where the tool phase that would have joined them can no
+ * longer arrive.
  */
 
 import { runSubagent, subagentResultToTaskOutput } from "../../agent/subagent/run-subagent.js";
-import { getTaskPreforkCoordinator, type PreforkDiscardCause } from "../../agent/subagent/task-prefork.js";
+import {
+  discardRegisteredPrefork,
+  getTaskPreforkCoordinator,
+  type PreforkDiscardCause,
+} from "../../agent/subagent/task-prefork.js";
 import { SUBAGENT_NO_TRUNCATE } from "../../agent/subagent/types.js";
 import { generateId } from "../../utils/generate-id.js";
 
@@ -39,26 +50,22 @@ interface PendingTaskCall {
 }
 
 export function createTaskPreforkMiddleware(deps: TaskPreforkMiddlewareDeps): ChatMiddleware<ToolRunContext> {
-  // Per-stream-epoch state (reset on RUN_STARTED / finish / abort).
+  // `pendingCalls` accumulates args within ONE model iteration and is disarmed at each
+  // `RUN_STARTED`; registered pre-forks outlive iterations and are discarded only at the
+  // run boundaries.
   let pendingCalls = new Map<string, PendingTaskCall>();
 
-  const resetEpoch = (cause: PreforkDiscardCause) => {
-    pendingCalls = new Map();
-    const managed = deps.getManagedAgent();
-    if (!managed) return;
-    // Report what the discard actually threw away. `abortAll` returns one record per tool
-    // call that still had a live run, and the record carries the subagents already spawned
-    // for it — which are the ones this turns into orphans (aborted here, never re-joined
-    // because the tool phase will spawn a second subagent for the same call id when the
-    // call does execute). Dropping that list is what used to make the orphan
-    // indistinguishable from an unrelated subagent in the log.
-    for (const discard of getTaskPreforkCoordinator(managed).abortAll(cause)) {
+  const discardRegistered = (managed: ManagedAgent, cause: PreforkDiscardCause) => {
+    // Report what the discard actually threw away. The record carries the subagents already
+    // spawned for the call — which are the ones this turns into orphans. Dropping that list
+    // is what used to make the orphan indistinguishable from an unrelated subagent in the log.
+    discardRegisteredPrefork(managed, cause, (discard) => {
       deps.emitEvent?.("subagent:prefork-discarded", {
         toolCallId: discard.toolCallId,
         cause: discard.cause,
         subagentIds: discard.subagentIds,
       });
-    }
+    });
   };
 
   return defineMiddleware("tools", {
@@ -68,7 +75,21 @@ export function createTaskPreforkMiddleware(deps: TaskPreforkMiddlewareDeps): Ch
       if (!managed) return chunk;
 
       if (chunk.type === "RUN_STARTED") {
-        resetEpoch("new-attempt");
+        // A NEW model iteration is starting: the previous iteration's unfinished args will
+        // never be resumed (they belong to a stream that has ended), so drop the bookkeeping.
+        //
+        // Registered pre-forks are deliberately LEFT ALONE. Reaching `RUN_STARTED` again
+        // inside one run means one of two things, and neither is a dead attempt:
+        //
+        // - the next model iteration, whose tool phase is about to `join` what is registered
+        //   (discarding it here is what orphaned a healthy pre-fork — this event is
+        //   per-iteration, not per-run), or
+        // - a restart, whose `abortAll` the recovery path performs itself at
+        //   `prepareRestartStyleRetry`, where a restart is actually known to be happening.
+        //
+        // The run boundaries and the restart path are the only discard points; see
+        // `discardRegisteredPrefork`.
+        pendingCalls = new Map();
         return chunk;
       }
 
@@ -97,10 +118,22 @@ export function createTaskPreforkMiddleware(deps: TaskPreforkMiddlewareDeps): Ch
       return chunk;
     },
     onFinish: async () => {
-      resetEpoch("run-finish");
+      const managed = deps.getManagedAgent();
+      pendingCalls = new Map();
+      if (managed) discardRegistered(managed, "run-finish");
     },
     onAbort: async () => {
-      resetEpoch("run-abort");
+      const managed = deps.getManagedAgent();
+      pendingCalls = new Map();
+      if (managed) discardRegistered(managed, "run-abort");
+    },
+    // A run that ends in an error ends the same way as a clean one: the tool phase that
+    // would have joined the registered pre-forks is not coming, so they would keep running
+    // unobserved. Without this the error path was the one boundary that leaked.
+    onError: async () => {
+      const managed = deps.getManagedAgent();
+      pendingCalls = new Map();
+      if (managed) discardRegistered(managed, "run-error");
     },
   });
 }
@@ -167,7 +200,9 @@ function trySpawn(
     }
   );
   if (!started) {
-    // Duplicate id — nothing to do; the executor joins the existing run.
+    // A duplicate id — the pre-fork for this call is already registered, so this spawn is a
+    // no-op and its own parent-signal listener would leak. Disarm it. (The tool phase joins
+    // the registered entry by call id, so nothing else is needed here.)
     parentSignal?.removeEventListener("abort", onParentAbort);
   }
 }

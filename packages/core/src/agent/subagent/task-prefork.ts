@@ -14,6 +14,8 @@
  * the 5th+ task starts as soon as an earlier one finishes, not serially.
  */
 
+import { SUBAGENT_PARENT_RUN_NOTICE } from "./subagent-stop-reason.js";
+
 import type { SubagentResult } from "./types.js";
 import type { ManagedAgent } from "../../runtime-types/hosts.js";
 
@@ -23,7 +25,11 @@ export const MAX_ACTIVE_TASK_PREFORKS = 4;
 function cancelledStubResult(): SubagentResult {
   return {
     subagentId: "",
-    output: "[Task cancelled.]",
+    // A discard is the run lifecycle moving on — never a user cancel. This used to read
+    // `[Task cancelled.]` with no reason at all, which is the same misattribution the
+    // notice taxonomy exists to fix, one layer down: the caller had no way to say what
+    // happened, so a reader could only assume the operator did it.
+    output: SUBAGENT_PARENT_RUN_NOTICE,
     truncated: false,
     iterations: 0,
     // No run happened, so there is no budget to report against the count.
@@ -34,19 +40,19 @@ function cancelledStubResult(): SubagentResult {
     // `incomplete` means "finished, but not cleanly" — `deriveSubagentRunStats` only ever
     // sets it on the `!aborted` path, so a cancel can never carry it.
     //
-    // This stub IS reachable: it is what a discarded pre-fork settles to. An earlier version
-    // of this comment claimed otherwise ("a registered entry is always joined, and `join`
-    // deletes it before `abortAll` can mark it") — which is exactly the assumption the
-    // stream-restart orphan disproved: the restart aborts the run before its tool call comes
-    // back, so nothing ever joins, `abortAll` discards the entry, and this is the output the
-    // awaiting caller receives. `incomplete` stays false because it is not cancel-aware: a
-    // stale flag here would read as "stalled" rather than "stopped".
+    // This stub IS reachable: it is the result a discarded QUEUED pre-fork settles to (an
+    // admitted one returns its own run's result instead). It is not joined by the tool phase
+    // — `abortAll` clears the entry, so a later `join` gets `null` and spawns a fresh
+    // subagent — but it is the coordinate's declared shape for "this run was thrown away",
+    // so it still has to be honest about why. `incomplete` stays false because it is not
+    // cancel-aware: a stale flag here would read as "stalled" rather than "stopped".
     incomplete: false,
     aborted: true,
+    stopReason: "parent-run",
   };
 }
 
-export type PreforkDiscardCause = "new-attempt" | "run-finish" | "run-abort";
+export type PreforkDiscardCause = "run-start" | "run-finish" | "run-abort" | "run-error";
 
 /** One tool call whose eagerly started run was thrown away. */
 export interface PreforkDiscard {
@@ -66,8 +72,10 @@ interface PreforkEntry {
    * Subagents this entry has spawned so far.
    *
    * Read by {@link TaskPreforkCoordinator.abortAll}'s caller so a discarded pre-fork can
-   * report which children it orphaned. Normally one, but a restart-style retry inside the
-   * run appends another — and an abandoned child is exactly what the report exists for.
+   * report which children it orphaned. Normally one, but the coordinator can be *reused*
+   * for the same tool call id when a duplicate `TOOL_CALL_END` arrives for an id whose
+   * entry was discarded mid-run — and an abandoned child is exactly what the report
+   * exists for.
    */
   spawned: string[];
   gate: Promise<void>;
@@ -254,4 +262,27 @@ export function getTaskPreforkCoordinator(parentManaged: ManagedAgent): TaskPref
     coordinators.set(parentManaged, coordinator);
   }
   return coordinator;
+}
+
+/**
+ * Discard every registered pre-fork, and report each one to the log bridge.
+ *
+ * The one place registered runs may be thrown away, so both producers of a discard go
+ * through it: the run boundaries (`onFinish`/`onAbort`/`onError`, which end the possibility
+ * that a tool phase arrives to join) and the restart-style recovery path (which ends the
+ * attempt that spawned them — see `prepareRestartStyleRetry`).
+ *
+ * `RUN_STARTED` deliberately does NOT: it fires once per model **iteration**, so a healthy
+ * pre-fork started on iteration N and joined right after it would be aborted by iteration
+ * N+1's boundary before anything could join it. That is the orphan this contract exists to
+ * prevent, and it was introduced by treating the per-iteration event as a per-run one.
+ */
+export function discardRegisteredPrefork(
+  managed: ManagedAgent,
+  cause: PreforkDiscardCause,
+  emit: (discard: PreforkDiscard) => void = () => {}
+): void {
+  for (const discard of getTaskPreforkCoordinator(managed).abortAll(cause)) {
+    emit(discard);
+  }
 }

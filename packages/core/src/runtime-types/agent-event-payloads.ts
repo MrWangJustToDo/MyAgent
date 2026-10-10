@@ -245,12 +245,13 @@ export type AgentEventPayloadMap = {
     /** The `task` tool call whose eagerly started run was thrown away. */
     toolCallId?: string;
     /**
-     * Why the run was discarded. `new-attempt` is a restarted stream (the tool calls are
-     * re-stranded with fresh ids), `run-finish`/`run-abort` are the attempt ending. A
-     * discarded run whose tool call is still going to execute means the tool phase will
-     * spawn a *second* subagent for the same call id.
+     * Why the run was discarded — the run boundary that ended it. `run-start` is a
+     * duplicate `TOOL_CALL_END` for an already-registered call during one stream, which
+     * means the tool calls are being re-strand with fresh ids; `run-finish`/`run-abort`/
+     * `run-error` are the attempt ending (a discarded run whose tool call is still going to
+     * execute means the tool phase will spawn a *second* subagent for the same call id).
      */
-    cause?: "new-attempt" | "run-finish" | "run-abort";
+    cause?: "run-start" | "run-finish" | "run-abort" | "run-error";
     /** Subagents already spawned for the call, whose work was aborted (orphaned). */
     subagentIds?: string[];
   };

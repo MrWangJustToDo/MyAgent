@@ -5,8 +5,13 @@
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { MAX_ACTIVE_TASK_PREFORKS, TaskPreforkCoordinator } from "../dist/dev.mjs";
+
+const SRC = fileURLToPath(new URL("../src/", import.meta.url));
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -131,6 +136,104 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   coordinator.abortAll();
   assert.equal(coordinator.size, 0, "entries are dropped after abortAll");
   assert.equal(aborts.length, MAX_ACTIVE_TASK_PREFORKS + 2, "every run's cancel handle fired");
+}
+
+// --- the discard points are the run boundaries + the restart path, NOT RUN_STARTED ---
+//
+// The regression this pins: `RUN_STARTED` fires once per model ITERATION, so discarding its
+// registered pre-forks there aborted a healthy eager run that the NEXT iteration's tool phase
+// was about to join. The orphan it left (aborted, never joined, second subagent spawned for
+// the same call id) is the one the discard record was built to explain — the reporting was
+// right and the trigger was wrong. So: two halves.
+{
+  // (a) An eager run survives an iteration boundary and is joined by the tool phase on the
+  // next one. This is the read-after-boundary contract, and it is the exact shape that used
+  // to be aborted.
+  const coordinator = new TaskPreforkCoordinator();
+  let started = 0;
+  coordinator.start(
+    "iter-2-call",
+    () => {},
+    async () => {
+      started += 1;
+      await sleep(10);
+      return { subagentId: "sub-eager", output: "findings" };
+    }
+  );
+  coordinator.recordSpawn("iter-2-call", "sub-eager");
+  await sleep(2); // the eager run is now in flight, one iteration boundary later
+  const joined = await coordinator.join("iter-2-call");
+  assert.ok(joined, "the tool phase still joins the run started on an earlier iteration");
+  assert.equal(joined.output, "findings", "the joined run's own output survives, not a cancel stub");
+  assert.equal(started, 1, "the run executed exactly once");
+  assert.equal(coordinator.size, 0, "join released it");
+}
+{
+  // (b) An interrupted attempt leaves a registered run, and the RESTART discards it — with
+  // the cause naming the fresh stream, and the orphan still named.
+  const coordinator = new TaskPreforkCoordinator();
+  const aborted = [];
+  coordinator.start(
+    "dead-attempt-call",
+    () => aborted.push("dead-attempt-call"),
+    () => new Promise(() => {})
+  );
+  coordinator.recordSpawn("dead-attempt-call", "sub-orphan");
+  const discarded = coordinator.abortAll("run-start");
+  assert.equal(discarded.length, 1, "the restart reports what it discarded");
+  assert.equal(discarded[0].cause, "run-start", "named as the restarted stream, not a run end");
+  assert.deepEqual(discarded[0].subagentIds, ["sub-orphan"], "the orphan is named");
+  assert.deepEqual(aborted, ["dead-attempt-call"], "and the run was actually cancelled");
+}
+
+// --- the discarded stub is honest about WHY it stopped ---
+//
+// It used to say `[Task cancelled.]` with no reason, which reads as an operator cancel — the
+// same misattribution the notice taxonomy exists to fix, one layer down. A discard is the run
+// lifecycle moving on.
+//
+// Asserted from the source, not by awaiting it: `abortAll` clears the entry, so the promise
+// that settles to this stub has no joiner (the awaiting tool phase gets `null` and spawns a
+// fresh subagent instead). The shape still has to be right — it is the coordinator's declared
+// result for a discarded run — but there is no caller left to observe it.
+{
+  const src = readFileSync(join(SRC, "agent/subagent/task-prefork.ts"), "utf8");
+  const stub = /function cancelledStubResult\(\): SubagentResult \{([\s\S]*?)\n\}/.exec(src);
+  assert.ok(stub, "the discarded-run stub is present");
+  assert.ok(
+    !/output:\s*"\[Task cancelled\.\]"/.test(stub[0]),
+    "the stub's output is not the bare operator-cancel literal"
+  );
+  assert.ok(/output: SUBAGENT_PARENT_RUN_NOTICE/.test(stub[0]), "…it names the parent run instead");
+  assert.ok(/stopReason: "parent-run"/.test(stub[0]), "…and carries the machine-readable reason");
+}
+
+// --- discardRegisteredPrefork is the single discard point the middleware + recovery share ---
+//
+// Asserted as source because the bug was a CALL SITE (a middleware hook discarding at an
+// event that does not mean what it was assumed to mean), and no value assertion can see one.
+{
+  const src = readFileSync(join(SRC, "managers/middleware/task-prefork-middleware.ts"), "utf8");
+  // The per-iteration boundary must NOT discard registered runs.
+  const runStarted = /if \(chunk\.type === "RUN_STARTED"\) \{([\s\S]*?)\n\s{8}\}/.exec(src);
+  assert.ok(runStarted, "the RUN_STARTED branch is present");
+  assert.ok(
+    !/discardRegistered\(|\.abortAll\(/.test(runStarted[1]),
+    "RUN_STARTED drops iteration bookkeeping only — it must not discard registered pre-forks " +
+      "(it fires once per iteration, so that aborted runs the next tool phase was about to join)"
+  );
+  // Every per-run terminal boundary DOES discard.
+  for (const hook of ["onFinish", "onAbort", "onError"]) {
+    const body = new RegExp(`${hook}: async \\(\\) => \\{([\\s\\S]*?)\\n\\s{4}\\}`).exec(src);
+    assert.ok(body, `${hook} is declared`);
+    assert.ok(/discardRegistered\(managed, "run-/.test(body[1]), `${hook} discards the attempt's pre-forks`);
+  }
+  // …and the restart path discards too — the place a restart is actually known.
+  const recovery = readFileSync(join(SRC, "managers/run-stream-recovery.ts"), "utf8");
+  assert.ok(
+    /discardRegisteredPrefork\(options\.managed, "run-start"/.test(recovery),
+    "a restart-style retry discards the dead attempt's pre-forks"
+  );
 }
 
 // --- abortAll(cause) reports what it discarded, with the spawned subagents ---
