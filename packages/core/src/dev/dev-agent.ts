@@ -13,7 +13,7 @@ export {
 } from "../agent/persistence/session-sync-tracker.js";
 export type { SessionSaveReason, SessionSyncSnapshot } from "../agent/persistence/session-sync-tracker.js";
 export { AgentLog, MAX_PENDING_LOG_ENTRIES } from "../agent/agent-log/agent-log.js";
-export { logEntrySchema, logCategorySchema } from "../agent/agent-log/schemas.js";
+export { logEntrySchema, logCategorySchema } from "../agent/log/schemas.js";
 export { AgentUIChannel } from "../agent/ui-channel.js";
 export {
   findToolCallPart,

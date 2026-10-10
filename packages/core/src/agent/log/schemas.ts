@@ -1,5 +1,24 @@
 import { z } from "zod";
 
+/**
+ * Log **entry schemas** — the validation boundary of the log extension, not of the seam.
+ *
+ * These live in `agent/log/` (not `agent/agent-log/`, where they were written) because the only
+ * runtime consumer is `jsonl-file-sink.ts`, which validates every entry before writing it — an
+ * artefact of log *policy*, which the extension owns. Placing them here is what keeps the two log
+ * domains one-directional at the value level:
+ *
+ * - `agent/log/` → `agent-log/`: **types only** (`LogEntry` et al.), so the edge is erased.
+ * - `agent/agent-log/` → `agent/log/`: the sink and this schema, which is the direction the policy
+ *   dependency already runs.
+ *
+ * While the schemas sat under `agent-log/`, `agent/log/` held two value edges into that domain
+ * (`jsonl-file-sink → schemas`, `extension → lifecycle-guards`) against one value edge back
+ * (`agent-log → jsonl-file-sink`) — a directory-level cycle, even though no module-level path ever
+ * closed (the schema and type modules are leaves). The `agent-log/` barrel re-exports these so
+ * existing consumers keep resolving; new code SHOULD import them from here.
+ */
+
 // ============================================================================
 // Zod Schemas
 // ============================================================================

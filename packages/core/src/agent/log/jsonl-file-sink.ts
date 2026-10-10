@@ -1,10 +1,16 @@
 /**
  * JSONL file sink for the log seam.
  *
- * Deliberately its own module, depending only on `env` and the log entry **types**: both the seam
- * (`agent-log.ts`) and the log extension (`agent/log/extension.ts`) build this sink, and routing it
- * through either one would make the other import it and close a cycle
+ * Deliberately its own module, depending only on `env`, the local entry schema and the log entry
+ * **types**: both the seam (`agent-log.ts`) and the log extension (`agent/log/extension.ts`) build
+ * this sink, and routing it through either one would make the other import it and close a cycle
  * (`agent/agent-log ↔ agent/log`).
+ *
+ * The value-level direction is one way. This module imports `agent-log/` only for `LogEntry` /
+ * `AgentLogFileSinkOptions` **types**; the schema it validates with is `./schemas.js`, which lives
+ * here in `agent/log/` precisely so it does not become a second `agent-log` import — as a value that
+ * would have been a runtime edge from `log/` into `agent-log/`, paired with `agent-log.ts`'s value
+ * edge into this file. See the note in `schemas.ts`.
  *
  * Behaviour: one `LogEntry` per line, size-based rotation, writes coalesced behind a flush timer,
  * and a visible divider when re-attaching to a file that already has content (a resumed session
@@ -13,7 +19,8 @@
  */
 
 import { getEnv } from "../../env.js";
-import { logEntrySchema } from "../agent-log/schemas.js";
+
+import { logEntrySchema } from "./schemas.js";
 
 import type { AgentLogFileSinkOptions, LogEntry } from "../agent-log/types.js";
 

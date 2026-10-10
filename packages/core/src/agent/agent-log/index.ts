@@ -2,7 +2,9 @@
 export type { LogLevel, LogCategory, LogEntry } from "./types.js";
 
 // Schemas
-export { logLevelSchema, logCategorySchema, logEntrySchema } from "./schemas.js";
+// The entry schemas are the log extension2019s (they mirror the log policy it enforces), so they
+// live in `agent/log/`. Re-exported here only for the barrel2019s existing consumers.
+export { logLevelSchema, logCategorySchema, logEntrySchema } from "../log/schemas.js";
 
 // AgentLog class
 export { AgentLog, generateLogId, MAX_PENDING_LOG_ENTRIES } from "./agent-log.js";
