@@ -6,6 +6,32 @@ import { resolveSymbolPosition, getSymbolNames } from "../shared/resolve-positio
 
 import type { LspManager } from "../lsp-manager.js";
 
+export interface TruncatedLines {
+  content: string;
+  truncated: boolean;
+  totalLines: number;
+  outputLines: number;
+}
+
+/**
+ * Keep the first `maxLines` lines, optionally capped by an approximate byte
+ * budget, reporting what was dropped. Shares one implementation across the LSP
+ * tools that previously copy-pasted it (`code_overview`, `ast_search`,
+ * `code_rewrite`, `lsp_diagnostics`, `lsp_references`, `lsp_rename`,
+ * `lsp_symbols`).
+ */
+export function truncateHead(text: string, maxLines = 200, maxBytes?: number): TruncatedLines {
+  const lines = text.split("\n");
+  const totalLines = lines.length;
+  let out = lines.slice(0, maxLines).join("\n");
+  if (maxBytes !== undefined && out.length * 2 > maxBytes) {
+    // Approximate byte length (UTF-16 chars * 2 covers ASCII+; fine for truncation)
+    out = out.slice(0, maxBytes);
+  }
+  const truncated = totalLines > maxLines || out !== lines.join("\n");
+  return { content: out, truncated, totalLines, outputLines: Math.min(totalLines, maxLines) };
+}
+
 export interface ResolvedPositionResult {
   line: number;
   character: number;

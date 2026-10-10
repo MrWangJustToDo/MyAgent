@@ -4,20 +4,10 @@
 
 import { formatLocation } from "../shared/format.js";
 
-import { resolvePosition, withResolved } from "./tool-shared.js";
+import { resolvePosition, truncateHead, withResolved } from "./tool-shared.js";
 
 import type { LspManager } from "../lsp-manager.js";
 import type { Location } from "vscode-languageserver-protocol";
-
-function truncateLines(
-  text: string,
-  maxLines = 200
-): { content: string; truncated: boolean; totalLines: number; outputLines: number } {
-  const lines = text.split("\n");
-  const totalLines = lines.length;
-  const out = lines.slice(0, maxLines).join("\n");
-  return { content: out, truncated: totalLines > maxLines, totalLines, outputLines: Math.min(totalLines, maxLines) };
-}
 
 export interface ReferencesToolDeps {
   manager: LspManager;
@@ -78,7 +68,7 @@ export function createReferencesTool(deps: ReferencesToolDeps) {
         const formatted = locations.map((l) => formatLocation(l, rootDir));
         const output = formatted.join("\n");
 
-        const trunc = truncateLines(output);
+        const trunc = truncateHead(output);
         let resultText = `${locations.length} reference(s) found:\n\n${trunc.content}`;
         if (trunc.truncated) {
           resultText += `\n\n[Output truncated: showing ${trunc.outputLines} of ${trunc.totalLines} references]`;

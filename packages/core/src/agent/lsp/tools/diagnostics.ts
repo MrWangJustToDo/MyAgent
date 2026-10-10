@@ -4,8 +4,14 @@
 
 import { AUTO_DIAG_SERVER_WAIT_MS } from "../shared/timing.js";
 
+import { truncateHead } from "./tool-shared.js";
+
 import type { LspManager } from "../lsp-manager.js";
 import type { Diagnostic } from "vscode-languageserver-protocol";
+
+/** Line/byte caps for the diagnostic output shown to the model. */
+const MAX_OUTPUT_LINES = 200;
+const MAX_OUTPUT_BYTES = 12000;
 
 const DIAGNOSTIC_SEVERITY = {
   Error: 1,
@@ -36,24 +42,6 @@ function formatDiagnostic(diag: Diagnostic, filePath: string): string {
   const source = diag.source ? ` [${diag.source}]` : "";
   const code = diag.code !== undefined ? ` (${diag.code})` : "";
   return `${filePath}:${line}:${col} ${sev}: ${diag.message}${code}${source}`;
-}
-
-function truncateHead(
-  text: string,
-  maxLines = 200,
-  maxBytes = 12000
-): { content: string; truncated: boolean; totalLines: number; outputLines: number } {
-  const lines = text.split("\n");
-  const totalLines = lines.length;
-  const outLines = lines.slice(0, maxLines);
-  let out = outLines.join("\n");
-  // Approximate byte length (UTF-16 chars * 2 covers ASCII+; fine for truncation)
-  if (out.length * 2 > maxBytes) {
-    out = out.slice(0, maxBytes);
-  }
-  const truncated =
-    totalLines > maxLines || outLines.join("\n").length !== out.length || out.length !== lines.join("\n").length;
-  return { content: out, truncated, totalLines, outputLines: outLines.length };
 }
 
 export interface DiagnosticsToolDeps {
@@ -126,7 +114,7 @@ export function createDiagnosticsTool(deps: DiagnosticsToolDeps) {
           .filter(Boolean)
           .join(", ");
 
-        const trunc = truncateHead(output);
+        const trunc = truncateHead(output, MAX_OUTPUT_LINES, MAX_OUTPUT_BYTES);
         let resultText = `${summary}\n\n${trunc.content}`;
         if (trunc.truncated) {
           resultText += `\n\n[Output truncated: showing ${trunc.outputLines} of ${trunc.totalLines} diagnostics]`;
@@ -184,7 +172,7 @@ function workspaceDiagnostics(manager: LspManager) {
     return { text: "No diagnostics (clean) across all running LSP servers.", count: 0 };
   }
 
-  const trunc = truncateHead(lines.join("\n"));
+  const trunc = truncateHead(lines.join("\n"), MAX_OUTPUT_LINES, MAX_OUTPUT_BYTES);
   let text = `${totalCount} diagnostic(s) across ${files.size} file(s):\n\n${trunc.content}`;
   if (trunc.truncated) text += `\n\n[Output truncated]`;
   return { text, count: totalCount, files: files.size };

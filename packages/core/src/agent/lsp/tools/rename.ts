@@ -4,7 +4,7 @@
 
 import { fileUriToPath } from "../shared/format.js";
 
-import { resolvePosition, withResolved } from "./tool-shared.js";
+import { resolvePosition, truncateHead, withResolved } from "./tool-shared.js";
 
 import type { LspManager } from "../lsp-manager.js";
 import type { WorkspaceEdit, TextEdit } from "vscode-languageserver-protocol";
@@ -47,16 +47,6 @@ function formatWorkspaceEdit(
   }
 
   return { summary: lines.join("\n"), fileCount, editCount: totalEdits };
-}
-
-function truncateLines(
-  text: string,
-  maxLines = 200
-): { content: string; truncated: boolean; totalLines: number; outputLines: number } {
-  const lines = text.split("\n");
-  const totalLines = lines.length;
-  const out = lines.slice(0, maxLines).join("\n");
-  return { content: out, truncated: totalLines > maxLines, totalLines, outputLines: Math.min(totalLines, maxLines) };
 }
 
 export interface RenameToolDeps {
@@ -119,7 +109,7 @@ export function createRenameTool(deps: RenameToolDeps) {
           return { text: withResolved(resolvedFrom, "No edits needed for this rename."), fileCount: 0, editCount: 0 };
         }
 
-        const trunc = truncateLines(summary);
+        const trunc = truncateHead(summary);
         let text = "";
         if (resolvedFrom) text += `${resolvedFrom}\n\n`;
         text += `Rename "${params.newName}": ${editCount} edit(s) across ${fileCount} file(s)\n\n`;

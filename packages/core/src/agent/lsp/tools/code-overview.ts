@@ -10,6 +10,8 @@
 import { SKIP_DIRS } from "../shared/constants.js";
 import { extractSymbols } from "../tree-sitter/symbol-extractor.js";
 
+import { truncateHead } from "./tool-shared.js";
+
 import type { TreeSitterManager, TreeSitterEnv } from "../tree-sitter/parser-manager.js";
 import type { WorkspaceIndex } from "../tree-sitter/workspace-index.js";
 
@@ -49,16 +51,6 @@ const ENTRY_PATTERNS = [
 
 const MAX_TREE_DEPTH = 3;
 const MAX_TREE_ENTRIES = 200;
-
-function truncateHead(
-  text: string,
-  maxLines = 200
-): { content: string; truncated: boolean; totalLines: number; outputLines: number } {
-  const lines = text.split("\n");
-  const totalLines = lines.length;
-  const out = lines.slice(0, maxLines).join("\n");
-  return { content: out, truncated: totalLines > maxLines, totalLines, outputLines: Math.min(totalLines, maxLines) };
-}
 
 export interface CodeOverviewToolDeps {
   rootDir: string | (() => string);

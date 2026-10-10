@@ -8,17 +8,9 @@
 import { compilePattern } from "../tree-sitter/pattern-compiler.js";
 import { searchFiles } from "../tree-sitter/search-engine.js";
 
-import type { TreeSitterManager, TreeSitterEnv } from "../tree-sitter/parser-manager.js";
+import { truncateHead } from "./tool-shared.js";
 
-function truncateHead(
-  text: string,
-  maxLines = 200
-): { content: string; truncated: boolean; totalLines: number; outputLines: number } {
-  const lines = text.split("\n");
-  const totalLines = lines.length;
-  const out = lines.slice(0, maxLines).join("\n");
-  return { content: out, truncated: totalLines > maxLines, totalLines, outputLines: Math.min(totalLines, maxLines) };
-}
+import type { TreeSitterManager, TreeSitterEnv } from "../tree-sitter/parser-manager.js";
 
 export interface CodeSearchToolDeps {
   rootDir: string | (() => string);

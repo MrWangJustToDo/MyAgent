@@ -4,6 +4,8 @@
 
 import { fileUriToPath } from "../shared/format.js";
 
+import { truncateHead } from "./tool-shared.js";
+
 import type { LspManager } from "../lsp-manager.js";
 import type { WorkspaceIndex } from "../tree-sitter/workspace-index.js";
 import type { DocumentSymbol, SymbolInformation } from "vscode-languageserver-protocol";
@@ -49,16 +51,6 @@ function formatDocumentSymbol(sym: DocumentSymbol, indent = 0): string[] {
     for (const child of sym.children) result.push(...formatDocumentSymbol(child, indent + 1));
   }
   return result;
-}
-
-function truncateLines(
-  text: string,
-  maxLines = 200
-): { content: string; truncated: boolean; totalLines: number; outputLines: number } {
-  const lines = text.split("\n");
-  const totalLines = lines.length;
-  const out = lines.slice(0, maxLines).join("\n");
-  return { content: out, truncated: totalLines > maxLines, totalLines, outputLines: Math.min(totalLines, maxLines) };
 }
 
 export interface SymbolsToolDeps {
@@ -113,7 +105,7 @@ export function createSymbolsTool(deps: SymbolsToolDeps) {
                 : (result as SymbolInformation[]).map((s) => `${kindName(s.kind)} ${s.name}`);
 
             const output = lines.join("\n");
-            const trunc = truncateLines(output);
+            const trunc = truncateHead(output);
             let text = `${lines.length} symbol(s):\n\n${trunc.content}`;
             if (trunc.truncated) text += `\n\n[Truncated: showing ${trunc.outputLines} of ${trunc.totalLines} lines]`;
             return { text, count: lines.length };
@@ -151,7 +143,7 @@ export function createSymbolsTool(deps: SymbolsToolDeps) {
               return `${kindName(s.kind)} ${s.name}${location}`;
             });
             const output = lines.join("\n");
-            const trunc = truncateLines(output);
+            const trunc = truncateHead(output);
             let text = `${result.length} symbol(s) found:\n\n${trunc.content}`;
             if (trunc.truncated) text += `\n\n[Truncated: showing ${trunc.outputLines} of ${trunc.totalLines} lines]`;
             return { text, count: result.length };
@@ -173,7 +165,7 @@ export function createSymbolsTool(deps: SymbolsToolDeps) {
             return `${e.kind} ${e.name} ${rel}:${e.line}`;
           });
           const output = lines.join("\n");
-          const trunc = truncateLines(output);
+          const trunc = truncateHead(output);
           let text = `${results.length} symbol(s) found [tree-sitter]:\n\n${trunc.content}`;
           if (trunc.truncated) text += `\n\n[Truncated: showing ${trunc.outputLines} of ${trunc.totalLines} lines]`;
           return { text, count: results.length, source: "fallback" };
