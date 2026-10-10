@@ -57,6 +57,7 @@ import { keepPolicyProjectionOptions, resolveKeepPolicy } from "../agent/compact
 import { getModelVisibleMessages } from "../agent/compaction/message-chain-projection.js";
 import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-cache.js";
 import { WireProjectionCache } from "../agent/compaction/wire-projection-cache.js";
+import { projectWireFromChannel } from "../agent/compaction/wire-projection.js";
 import {
   createSessionSyncTracker,
   type SessionSaveReason,
@@ -109,7 +110,6 @@ import {
   restoreManagedSession,
   saveSessionUIMessages as saveSessionUIMessagesHelper,
 } from "./managed-agent-session.js";
-import { projectWireFromChannel } from "./middleware/wire-projection.js";
 import { RunCoordinator } from "./run-coordinator.js";
 import { CompactionService } from "./services/compaction-service.js";
 import { ExtensionRegistryService } from "./services/extension-registry-service.js";

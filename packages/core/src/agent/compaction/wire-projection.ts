@@ -16,16 +16,17 @@
 
 import { convertMessagesToModelMessages } from "@tanstack/ai";
 
-import {
-  getModelVisibleMessages,
-  keepPolicyProjectionOptions,
-  policyKeyFromOptions,
-  resolveKeepPolicy,
-  wireSourceFingerprint,
-} from "../../agent/compaction";
+// Direct imports rather than the directory barrel (`./index.js`): this module lives *in*
+// `agent/compaction/`, so reaching for the barrel is a self-referential edge — harmless today
+// (the barrel does not re-export this module) but a cycle the moment someone adds
+// `export { projectWireFromChannel } from "./wire-projection.js"` to it for convenience.
+// The edge is one hop either way, so the barrel buys nothing here.
+import { keepPolicyProjectionOptions, resolveKeepPolicy } from "./keep-policy.js";
+import { getModelVisibleMessages } from "./message-chain-projection.js";
+import { policyKeyFromOptions, wireSourceFingerprint } from "./wire-projection-cache.js";
 
-import type { CompactionConfig } from "../../agent/compaction/types.js";
-import type { WireProjectionCache } from "../../agent/compaction/wire-projection-cache.js";
+import type { CompactionConfig } from "./types.js";
+import type { WireProjectionCache } from "./wire-projection-cache.js";
 import type { ModelMessage } from "@tanstack/ai";
 
 /** Only the channel surface the projection reads — keeps stubs easy to construct. */

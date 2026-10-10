@@ -10,10 +10,11 @@
  * adds the wire-side mirror + stable content-hash id derivation.
  */
 
-import { appendChannelMessages } from "../../agent/channel-write.js";
-import { hashTurnContextPayload } from "../../agent/turn-context/turn-context-message.js";
+import { appendChannelMessages } from "../channel-write.js";
 
-import type { AgentUIChannel } from "../../agent/ui-channel.js";
+import { hashTurnContextPayload } from "./turn-context-message.js";
+
+import type { AgentUIChannel } from "../ui-channel.js";
 import type { ModelMessage, UIMessage } from "@tanstack/ai";
 
 export interface SyntheticMessageEntry {

@@ -1,7 +1,7 @@
 import { commandJobRegistry, type CompletedCommandJob } from "../../agent/tools/util/command-job-registry.js";
+import { injectSyntheticMessages } from "../../agent/turn-context/synthetic-injection.js";
 
 import { defineMiddleware } from "./phase.js";
-import { injectSyntheticMessages } from "./synthetic-injection.js";
 
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { AgentUIChannel } from "../../agent/ui-channel.js";

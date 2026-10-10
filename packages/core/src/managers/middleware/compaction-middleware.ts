@@ -7,9 +7,9 @@ import {
   keepPolicyProjectionOptions,
   resolveKeepPolicy,
 } from "../../agent/compaction";
+import { projectWireFromChannel } from "../../agent/compaction/wire-projection.js";
 
 import { defineMiddleware } from "./phase.js";
-import { projectWireFromChannel } from "./wire-projection.js";
 
 import type { AgentLog } from "../../agent/agent-log";
 import type { WireProjectionCache } from "../../agent/compaction";
@@ -20,7 +20,7 @@ import type { AgentUIChannel } from "../../agent/ui-channel.js";
 import type { AgentManager, AgentStatusController, UsageTracker } from "../../runtime-types";
 import type { EmitAgentTelemetryFn } from "../telemetry/emit-agent-telemetry.js";
 
-export { projectWireFromChannel, type WireProjectionSource } from "./wire-projection.js";
+export { projectWireFromChannel, type WireProjectionSource } from "../../agent/compaction/wire-projection.js";
 
 export interface CompactionMiddlewareDeps {
   agentId: string;

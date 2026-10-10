@@ -1,3 +1,4 @@
+import { injectSyntheticMessages } from "../../agent/turn-context/synthetic-injection.js";
 import {
   TURN_CONTEXT_KINDS,
   findLatestTurnContextSectionHashes,
@@ -8,7 +9,6 @@ import {
 import { buildSystemPromptWithTurnContext, buildProjectInstructionsSection } from "../managed-agent-prompt.js";
 
 import { defineMiddleware } from "./phase.js";
-import { injectSyntheticMessages } from "./synthetic-injection.js";
 
 import type { ToolRunContext } from "../../agent/runner/run-context.js";
 import type { TurnContextSection } from "../../agent/turn-context/turn-context-message.js";

@@ -153,7 +153,7 @@ function makeChannel(ids) {
   );
   assert.match(
     source,
-    /from "\.\/wire-projection\.js"/,
+    /from "\.\.\/\.\.\/agent\/compaction\/wire-projection\.js"/,
     "compaction-middleware must take the projection from the shared module"
   );
 }

@@ -230,7 +230,7 @@ export {
   DEFAULT_REFRESH_MESSAGE_THRESHOLD,
   SUBAGENT_ALLOWED_KINDS,
 } from "../managers/middleware/turn-context-middleware.js";
-export { injectSyntheticMessages, syntheticMessageId } from "../managers/middleware/synthetic-injection.js";
+export { injectSyntheticMessages, syntheticMessageId } from "../agent/turn-context/synthetic-injection.js";
 export { AgentRunner } from "../agent/runner/agent-runner.js";
 export { assertAsyncIterable, formatAgentStreamError } from "../agent/stream/assert-async-iterable.js";
 export {
