@@ -52,6 +52,24 @@ export type AgentEventPayloadMap = {
     /** Count of `media://` refs that could not be hydrated from disk on restore. */
     mediaMissing?: number;
   };
+  /**
+   * The active session id changes while the agent keeps running (a restore).
+   *
+   * Emitted BEFORE the log sink is re-pointed, so it lands in the session being LEFT — the
+   * counterpart to {@link AgentEventPayloadMap}["session:restore"]. Without it a session's log has
+   * arrivals and no departures, so it only exists for sessions that were entered and never records
+   * that they were exited (the reported case: a log ending at the last prompt, with no hint that
+   * another session was resumed from it).
+   */
+  "session:switch": {
+    /** The on-disk id being left; the entries before this one describe this session. */
+    fromSessionId?: string;
+    /** The on-disk id being adopted (announced in full by the following `session:restore`). */
+    toSessionId?: string;
+    /** Transcript size of the session being left. */
+    messageCount?: number;
+    reason?: string;
+  };
   "session:save-error": {
     target?: string;
     error?: string;

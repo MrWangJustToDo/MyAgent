@@ -102,6 +102,20 @@ const TELEMETRY_EVENT_LOG_RULES: Record<keyof AgentEventPayloadMap, EventLogRule
       return `Session restored: ${d.messageCount ?? "?"} messages, ${d.tokenEstimate ?? "?"} tokens${missing}`;
     },
   },
+  // The departure record, written to the session being left. Paired with `session:restore`, which
+  // announces the arrival — without both, a log answers "was this session resumed from?" only by
+  // inference, and "was another session resumed from it?" not at all.
+  "session:switch": {
+    level: "info",
+    category: "system",
+    formatMessage: (event) => {
+      const d = p(event);
+      const from = d.fromSessionId ?? "unknown";
+      const count = typeof d.messageCount === "number" ? ` (${d.messageCount} messages)` : "";
+      const to = d.toSessionId ? ` → ${d.toSessionId}` : "";
+      return `Session switched: leaving ${from}${count}${to}`;
+    },
+  },
   "session:save-error": {
     level: "warn",
     category: "system",

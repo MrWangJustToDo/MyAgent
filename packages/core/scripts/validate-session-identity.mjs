@@ -142,6 +142,17 @@ assert.ok(
   "the transient bootstrap session's log does not receive the resume entry"
 );
 
+// …and the DEPARTURE, which the arrival alone cannot express. A session that is resumed FROM is
+// left behind by a process that is still running, so its log otherwise just stops: the reported
+// case was a log ending at `Agent aborted`, with nothing saying another session had been adopted.
+// Confirmed against the artifact by disabling the emit — the assertion below fails, and no other
+// one does.
+assert.ok((await readLog(first)).includes("Session switched: leaving"), "the session being left records the switch");
+assert.ok(
+  !(await readLog(target.id)).includes("Session switched: leaving"),
+  "the adopted session does not receive the departure entry (that would invert the pair)"
+);
+
 // ----------------------------------------------------------------------------
 // 3. `session.new` swaps it again and broadcasts
 // ----------------------------------------------------------------------------

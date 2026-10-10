@@ -31,6 +31,7 @@ export const AGENT_EVENT_META: Record<AgentEventType, AgentEventMeta> = {
   "session:mcp": { mode: "emit", channel: "mcp", retained: true },
   "session:memory": { mode: "emit" },
   "session:restore": { mode: "emit" },
+  "session:switch": { mode: "emit" },
   "session:save-error": { mode: "emit", channel: "lifecycle" },
 
   // ==========================================================================

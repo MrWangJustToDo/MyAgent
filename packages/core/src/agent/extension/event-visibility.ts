@@ -36,6 +36,7 @@ export const EXTENSION_EVENT_VISIBILITY = {
   "session:mcp": "observable",
   "session:memory": "observable",
   "session:restore": "observable",
+  "session:switch": "observable",
   "session:save-error": "observable",
   // Turn lifecycle
   "prompt:submit": "observable",

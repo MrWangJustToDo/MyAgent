@@ -1728,6 +1728,20 @@ export class ManagedAgent {
       throw new Error(`Session "${sessionId}" is already active in another live session and cannot be resumed here.`);
     }
     try {
+      // Announce the departure BEFORE anything re-points the sink — in particular before the
+      // pre-bind below, which is itself a re-point. Ordering is the whole point: this entry
+      // describes the session being left, so it must be written while the sink still points at it.
+      // A no-op when the id is already the target (a re-resume of the same session), which would
+      // otherwise log a switch from a session to itself.
+      const leavingId = this.getSessionData()?.id;
+      if (leavingId && leavingId !== sessionId) {
+        this.emitEvent("session:switch", {
+          fromSessionId: leavingId,
+          toSessionId: sessionId,
+          messageCount: this.getSessionData()?.uiMessages.length ?? 0,
+          reason: "resume",
+        });
+      }
       // Bind ahead of the restore: `restoreManagedSession` emits `session:restore` (and the
       // restore can log its own failures), so pointing the sink at the target first is what makes
       // "which session was restored" land in that session's log. The target id is passed
