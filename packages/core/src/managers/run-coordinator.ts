@@ -59,7 +59,13 @@ export class RunCoordinator {
         }
         setTimeout(() => this.currentAbortController?.abort(abortSignal.reason));
       } else {
-        const listener = (reason: Event) => {
+        // The listener's argument is the abort **Event**, not the reason — forwarding it as
+        // one (the old signature read `(reason: Event)`) put an Event object on the internal
+        // signals' `signal.reason`, so every downstream consumer that classifies a string
+        // reason (`resolveSubagentStopReason`) saw a non-string and lost the cause. Read the
+        // reason off the signal instead, which is where `abort(reason)` actually puts it.
+        const listener = () => {
+          const reason = abortSignal.reason;
           let item = this.pendingAbortControllers.pop();
           while (item) {
             item.abort(reason);

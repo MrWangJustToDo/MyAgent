@@ -44,14 +44,3 @@ export function applySubagentStopNotice(summary: string, reason: SubagentStopRea
   if (SUBAGENT_STOP_NOTICES.some((notice) => trimmed.includes(notice))) return summary;
   return `${trimmed}\n\n${noticed}`;
 }
-
-/**
- * Back-compat wrapper: apply the notice for a plain `aborted` flag.
- *
- * @deprecated Callers that know *why* the run stopped should classify it with
- * {@link resolveSubagentStopReason} and call {@link applySubagentStopNotice} — this
- * wrapper cannot tell a user cancel from a discarded run and defaults to the former.
- */
-export function applySubagentCancelNotice(summary: string, aborted: boolean): string {
-  return aborted ? applySubagentStopNotice(summary, "user") : summary;
-}

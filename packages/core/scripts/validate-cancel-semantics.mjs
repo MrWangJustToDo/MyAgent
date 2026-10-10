@@ -33,7 +33,7 @@ import { fileURLToPath } from "node:url";
 // was handed; the producers and the projection registry are internal (`dev.mjs`).
 import {
   TOOL_CANCELLED_MESSAGE,
-  applySubagentCancelNotice,
+  applySubagentStopNotice,
   cancelInFlightToolCalls,
   cancelIncompleteToolCalls,
   createTaskTool,
@@ -156,7 +156,7 @@ assert.ok(
     arguments: "{}",
     output: {
       subagentId: "sub_1",
-      summary: applySubagentCancelNotice("Now let me look at…", true),
+      summary: applySubagentStopNotice("Now let me look at…", "user"),
       truncated: false,
       iterations: 1,
       maxIterations: 50,
@@ -486,6 +486,18 @@ assert.equal(taskOutputSchema.shape.cancelled, undefined, "task declares ONE mar
     /aborted\s*\?\s*\{\s*(?:\/\*[\s\S]*?\*\/\s*|\/\/[^\n]*\n\s*)*cancelled:\s*true/.test(runSubagentSrc2),
     "subagent:error leads its abort branch with the cancel flag (the branch it reuses for a cancel)"
   );
+
+  // The stop notice is applied ONLY on the abort path.
+  //
+  // Applying it by class is how every SUCCESSFUL subagent's summary came back carrying
+  // `[Task cancelled.]` — into the transcript and into the parent model's context, as a
+  // cancellation the operator never made. A unit test of `applySubagentStopNotice` cannot
+  // catch that: the bug was never in the function, it was in the caller that reached it. So
+  // the gate is asserted at the call site, where it lives.
+  const noticeCall = /const noticed = ([^;]+);/.exec(runSubagentSrc2)?.[1] ?? "";
+  assert.ok(noticeCall.includes("applySubagentStopNotice"), "the stop notice is applied here");
+  assert.ok(/^aborted\s*\?/.test(noticeCall.trim()), "…and only when the run was aborted");
+  assert.ok(/\boutput\b\s*$/.test(noticeCall.trim()), "a finished run's summary passes through verbatim");
 
   // The log wording follows the flag on all three, so the flag cannot be set without the
   // log changing with it.

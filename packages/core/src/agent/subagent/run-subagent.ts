@@ -272,12 +272,15 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       subagentManaged.getStatus() === "aborted" ||
       Boolean(subagentManaged.run.currentAbortController?.signal.aborted);
 
-    // Why it stopped, read from the abort reason (the one channel every abort path uses).
-    // Without this the summary claimed a user cancel for *any* abort — including a run the
-    // parent restarted, which is the one case an operator needs to tell apart.
+    // Why it stopped, read from the abort reason. TWO signals can carry it and both must be
+    // consulted: the caller's `abortSignal` (the pre-fork route ties the child to the parent
+    // run's controller) and the child's OWN controller — which is where every
+    // `ManagedAgent.abort` / cascade path lands instead. Reading only the first reported a
+    // user Esc on the serial `task` path as a parent-run stop, because that path passes no
+    // `abortSignal` at all.
     const stopReason: SubagentStopReason = resolveSubagentStopReason({
       aborted,
-      reason: abortSignal?.reason,
+      reason: abortSignal?.reason ?? subagentManaged.run.currentAbortController?.signal.reason,
     });
     const outcomeKind = aborted ? "aborted" : "finished";
     subagentManaged.statusController.applyRunOutcome({
@@ -286,7 +289,11 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       path: "detached",
     });
     subagentManaged.finalizeRun(outcomeKind);
-    const noticed = applySubagentStopNotice(output, stopReason);
+    // ONLY on an abort. A finished run has no stop reason, and applying the notice by class
+    // appended `[Task cancelled.]` to every SUCCESSFUL subagent — which then reached the
+    // parent model's context as a cancellation the operator never made. The summary of a
+    // finished run is its output, verbatim.
+    const noticed = aborted ? applySubagentStopNotice(output, stopReason) : output;
     let { summary: finalOutput, truncated } = truncateSummary(noticed, maxOutputLength);
 
     const runStats = deriveSubagentRunStats({
@@ -460,6 +467,10 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       reachedLimit: statusFlags.reachedLimit,
       incomplete: statusFlags.incomplete,
       aborted,
+      // Carried only for an aborted run: it answers "why did this not finish", and a
+      // finished run has nothing to answer. Without this the structured reason never left
+      // the run and only the prose notice reached consumers.
+      ...(aborted ? { stopReason } : {}),
     };
   } finally {
     if (!subagentRunCompleted && autoDestroy) {

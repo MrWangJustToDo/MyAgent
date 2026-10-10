@@ -66,14 +66,16 @@ export { createTaskTool, taskOutputSchema } from "../agent/subagent/task-tool.js
 export { createRunCommandTool } from "../agent/tools/run-command-tool.js";
 export { createWebfetchTool } from "../agent/tools/webfetch-tool.js";
 export { createWebsearchTool } from "../agent/tools/websearch-tool.js";
-export { applySubagentCancelNotice, applySubagentStopNotice, truncateSummary } from "../agent/subagent/subagent-output.js";
+export { applySubagentStopNotice, truncateSummary } from "../agent/subagent/subagent-output.js";
 export {
   resolveSubagentStopReason,
   subagentStopNotice,
+  SUBAGENT_ABORT_REASONS,
   SUBAGENT_ABORTED_NOTICE,
   SUBAGENT_CANCELLED_NOTICE,
   SUBAGENT_PARENT_RUN_NOTICE,
   SUBAGENT_PARENT_STOP_NOTICE,
+  SUBAGENT_RUN_RESTART_REASONS,
   SUBAGENT_STOP_NOTICES,
   SUBAGENT_STOP_REASONS,
 } from "../agent/subagent/subagent-stop-reason.js";
