@@ -57,11 +57,12 @@
 
 ## 6. Docs, specs and final validation
 
-- [ ] 6.1 Update `packages/core/ARCHITECTURE.md`: AgentLog is the emission seam, the log extension owns policy, the wildcard consumer is the log extension, and the teardown/flush contract is documented
-- [ ] 6.2 Update `AGENTS.md`'s AgentLog / Event→Log bridge / `.agents/logs` wording; keep `packages/core/src/agent/skills/builtin/write-extension.md.ts`'s `.agents/logs/<sessionId>/agent.log` debugging instruction valid (re-check the sentence, do not just reword)
-- [ ] 6.3 Confirm the public export surface: `AgentLog`-typed values stay out of core's published entry and stay in `validate-core-imports.mjs`'s forbidden list for app
-- [ ] 6.4 Update `openspec/specs` only through this change's deltas; run `openspec validate logging-as-builtin-extension --strict`
-- [ ] 6.5 Full workspace check: `pnpm build`, `pnpm typecheck`, `pnpm lint`, and `pnpm run validate:all`
+- [x] 6.1 Update `packages/core/ARCHITECTURE.md`: AgentLog is the emission seam, the log extension owns policy, the wildcard consumer is the log extension, and the teardown/flush contract is documented — verified at `ARCHITECTURE.md:587` (seam + policy + `MAX_PENDING_LOG_ENTRIES` + per-`AgentLog` sink handoff), `:1101` (module map), `:869`/`:917` (the log extension is the single `"*"` consumer, wildcard ≡ `observeAny`), `:940`/`:942` (`session:shutdown` → `flush` → `deactivate` order; `settleTeardowns()` for ordered shutdown; the extension's sync exit flush)
+- [x] 6.2 Update `AGENTS.md`'s AgentLog / Event→Log bridge / `.agents/logs` wording (`AGENTS.md:195`, `:506`, `:587`, `:946`); re-checked that `write-extension.md.ts:371`'s `.agents/logs/<sessionId>/agent.log` debugging instruction is still accurate — the sink still writes that path, so the sentence stands as written (not merely reworded)
+- [x] 6.3 Confirm the public export surface: `AgentLog` is **not** exported from `packages/core/src/index.ts` (only the `LogEntry`/`LogCategory`/`LogLevel` types and `installAgentLogProcessGuards`), and it stays in `packages/app/scripts/validate-core-imports.mjs`'s `FORBIDDEN_IDENTIFIERS`
+- [x] 6.4 Update `openspec/specs` only through this change's deltas; run `openspec validate logging-as-builtin-extension --strict` — the five deltas are `agent-event-bus`, `agent-lifecycle-events`, `agent-log-timeline`, `extension-teardown`, `log-extension`; the change validates clean
+- [x] 6.5 Full workspace check: `pnpm build` ✓, `pnpm typecheck` ✓ (0 errors), `pnpm lint` ✓ (clean), `pnpm run validate:all` — **197 passed / 1 failed / 2 skipped**. The single failure is `validate-model-capabilities`, which is unrelated to this change: it is an upstream models.dev corpus drift (the corpus now emits a payload field `ModelsDevModel` does not declare), and this change touches no file under `models/`. The same failure reproduces on a clean checkout.
+
 
 ## Implementation notes (deviations from the plan above)
 

@@ -49,11 +49,10 @@ The system SHALL emit `session:restore` after a session is successfully restored
 
 ### Requirement: Approval requests log only via Event→Log
 
-When tool approvals become pending, the system SHALL emit `agent:tool-approval-request` and MUST NOT also write a duplicate approval entry directly to `AgentLog` at the status-controller emit site. The Event→Log bridge SHALL be the sole core path that turns that event into a log entry.
-
+When tool approvals become pending, the system SHALL emit `agent:tool-approval-request` and MUST NOT also write a duplicate approval entry through the log emission seam at the status-controller emit site. The built-in log extension's bus subscription SHALL be the sole path that turns that event into a log entry, and the status controller MUST NOT call the seam's approval logging directly.
 #### Scenario: Approval pending produces one log path
 - **WHEN** `syncApprovals` observes one or more tools needing approval
-- **THEN** each pending tool causes an `agent:tool-approval-request` emission and the status controller does not call `log.approval` directly
+- **THEN** each pending tool causes an `agent:tool-approval-request` emission and the status controller does not write an approval entry directly through the seam
 
 ### Requirement: Subagent completed payload includes summary
 
@@ -93,15 +92,11 @@ When a subagent run finishes successfully, the system SHALL emit `subagent:compl
 
 ### Requirement: Approval resolution emits lifecycle event
 
-The system SHALL emit `agent:tool-approval-resolved` on the AgentEventBus exactly once per pending approval when it is resolved — whether by user decision or by command-safety auto-decision. The event payload SHALL include `tool_call_id`, `tool_name`, `decision` (`approved` | `denied`), and `reason` when a reason exists. The Event→Log bridge SHALL be the sole core path that turns this event into an `approval` category log entry.
+The system SHALL emit `agent:tool-approval-resolved` on the AgentEventBus exactly once per pending approval when it is resolved — whether by user decision or by command-safety auto-decision. The event payload SHALL include `tool_call_id`, `tool_name`, `decision` (`approved` | `denied`), and `reason` when a reason exists. The built-in log extension SHALL be the sole path that turns this event into an `approval` category log entry.
 
 #### Scenario: Command-safety auto-deny emits resolution
 - **WHEN** command-safety automatically denies a shell command tool call
-- **THEN** `agent:tool-approval-resolved` is emitted with `decision: "denied"` and a reason, and one bridged `approval` log entry is written
-
-#### Scenario: No resolution event for already-resolved approvals
-- **WHEN** a resolution arrives for a tool call that has no pending approval
-- **THEN** no `agent:tool-approval-resolved` event is emitted
+- **THEN** `agent:tool-approval-resolved` is emitted with `decision: "denied"` and a reason, and exactly one `approval` log entry is written by the log extension
 
 ### Requirement: Lifecycle events use typed envelope
 AgentEventBus emissions covered by this spec (tool lifecycle, compaction kind, session restore, subagent destroy/completed, approval requests) SHALL use the shared typed AgentEvent envelope (`ts`, `agentId`, `parentId?`, `payload`) instead of loosely typed `data` bags. Existing emission timing and exclusivity contracts remain in force.
